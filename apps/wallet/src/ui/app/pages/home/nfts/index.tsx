@@ -87,7 +87,11 @@ function NftsPage() {
 						<div className="flex items-center justify-between gap-2 bg-white w-full shadow-summary-card border-solid border-gray-45 rounded-full px-3 py-1">
 							<div className="flex gap-1 items-center">
 								<Check12 className="text-gray-90" />
-								<div>
+								<div
+									onClick={() => {
+										toast.dismiss(t.id);
+									}}
+								>
 									<InlineLink
 										to="/hidden-assets"
 										color="hero"
