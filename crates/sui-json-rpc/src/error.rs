@@ -168,7 +168,7 @@ pub enum ClientError {
     #[error("`{param}` exceeds limit of `{limit}`")]
     SizeLimitExceeded { param: &'static str, limit: usize },
 
-    #[error("Unsupported protocol version requested. Min supported: {0}, max supported: {1}")]
+    #[error("Invalid 'version': unsupported protocol version requested. Min supported: {0}, max supported: {1}")]
     ProtocolVersionUnsupported(u64, u64),
 }
 
