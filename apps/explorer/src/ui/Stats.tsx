@@ -19,7 +19,7 @@ export type StatsProps = {
 	unavailable?: boolean;
 	postfix?: ReactNode;
 	orientation?: 'horizontal' | 'vertical';
-	color?: 'steel-dark' | 'hero-dark';
+	color?: 'steel-darker' | 'hero';
 };
 
 export function Stats({
@@ -30,7 +30,7 @@ export function Stats({
 	postfix,
 	size = 'md',
 	orientation = 'vertical',
-	color = 'steel-dark',
+	color = 'steel-darker',
 }: StatsProps) {
 	return (
 		<div
@@ -39,7 +39,7 @@ export function Stats({
 				orientation === 'horizontal' ? '' : 'flex-col',
 			)}
 		>
-			<div className="flex items-center justify-start gap-1 text-caption text-steel-dark hover:text-steel">
+			<div className="flex items-center justify-start gap-1 text-caption">
 				<div className="flex-shrink-0">
 					<Text variant="caption/semibold" color={color}>
 						{label}
@@ -59,13 +59,13 @@ export function Stats({
 			<div className="flex items-baseline gap-0.5">
 				<Heading
 					variant={size === 'md' ? 'heading2/semibold' : 'heading3/semibold'}
-					color={unavailable ? 'steel-dark' : color}
+					color={unavailable ? 'steel-darker' : color}
 				>
 					{unavailable || children == null ? '--' : children}
 				</Heading>
 
 				{postfix && (
-					<Heading variant="heading4/medium" color={unavailable ? 'steel-dark' : color}>
+					<Heading variant="heading4/medium" color={unavailable ? 'steel-darker' : color}>
 						{postfix}
 					</Heading>
 				)}

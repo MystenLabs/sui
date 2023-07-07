@@ -35,7 +35,7 @@ export function OnTheNetwork() {
 				<Heading variant="heading4/semibold" color="steel-darker">
 					Network Activity
 				</Heading>
-				<div className="flex gap-2">
+				<div className="flex gap-6">
 					<FormattedStatsAmount label="TPS now" amount={networkMetrics?.currentTps} size="sm" />
 					<FormattedStatsAmount
 						label="Peak 30d TPS"
@@ -50,8 +50,8 @@ export function OnTheNetwork() {
 						orientation="horizontal"
 						label="Reference Gas Price"
 						tooltip="The reference gas price of the current epoch"
-						postfix="MIST"
-						color="hero-dark"
+						postfix={gasPriceFormatted !== null ? 'MIST' : null}
+						color="hero"
 						size="sm"
 					>
 						{gasPriceFormatted}
