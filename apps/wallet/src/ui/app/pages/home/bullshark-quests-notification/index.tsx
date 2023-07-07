@@ -8,6 +8,9 @@ import { Portal } from '../../../shared/Portal';
 import { ampli } from '_src/shared/analytics/ampli';
 import ExternalLink from '_src/ui/app/components/external-link';
 
+const setInterstitialDismissed = () =>
+	localStorage.setItem('bullshark-interstitial-dismissed', 'true');
+
 const InterstitialHeading = ({ text }: { text: string }) => {
 	return <div className="[-webkit-text-stroke:2px_black] text-heading1">{text}</div>;
 };
@@ -24,9 +27,11 @@ const InterstitialBanner = ({ lines }: { lines: string[] }) => {
 
 function BullsharkQuestsNotification({ onClose }: { onClose: () => void }) {
 	const navigate = useNavigate();
-	const setInterstitialDismissed = () => {
-		localStorage.setItem('bullshark-interstitial-dismissed', 'true');
-	};
+	setInterstitialDismissed();
+
+	setTimeout(() => {
+		onClose();
+	}, 10000);
 
 	return (
 		<Portal containerId="overlay-portal-container">
