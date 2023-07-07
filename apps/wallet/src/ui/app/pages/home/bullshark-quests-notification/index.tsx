@@ -9,9 +9,6 @@ import { Portal } from '../../../shared/Portal';
 import { ampli } from '_src/shared/analytics/ampli';
 import ExternalLink from '_src/ui/app/components/external-link';
 
-const setInterstitialDismissed = () =>
-	localStorage.setItem('bullshark-interstitial-dismissed', 'true');
-
 const InterstitialHeading = ({ text }: { text: string }) => {
 	return <div className="[-webkit-text-stroke:2px_black] text-heading1">{text}</div>;
 };
@@ -30,7 +27,7 @@ function BullsharkQuestsNotification({ onClose }: { onClose: () => void }) {
 	const navigate = useNavigate();
 
 	useEffect(() => {
-		const t = setTimeout(() => setInterstitialDismissed(), 1000);
+		const t = setTimeout(() => localStorage.setItem('bullshark-interstitial-dismissed', 'true'), 1000);
 		return () => clearTimeout(t);
 	}, []);
 
