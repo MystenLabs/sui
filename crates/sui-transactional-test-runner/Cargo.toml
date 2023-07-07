@@ -40,6 +40,7 @@ sui-types = { workspace = true, features = ["test-utils"]}
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 sui-json-rpc-types.workspace = true
 sui-json-rpc.workspace = true
+sui-framework-snapshot.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 msim.workspace = true
