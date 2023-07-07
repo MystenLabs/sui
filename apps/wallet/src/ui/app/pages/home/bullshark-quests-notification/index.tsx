@@ -10,7 +10,6 @@ import { ampli } from '_src/shared/analytics/ampli';
 import ExternalLink from '_src/ui/app/components/external-link';
 
 const setInterstitialDismissed = () =>
-	//console.log('i would have done it');
 	localStorage.setItem('bullshark-interstitial-dismissed', 'true');
 
 const InterstitialHeading = ({ text }: { text: string }) => {
@@ -51,7 +50,7 @@ function BullsharkQuestsNotification({ onClose }: { onClose: () => void }) {
 		<Portal containerId="overlay-portal-container">
 			<div className="flex flex-col justify-center flex-nowrap items-center bg-[#99dbfb] border-solid border-4 border-black rounded-lg z-50 overflow-hidden absolute top-0 bottom-0 left-0 right-0 backdrop-blur-sm">
 				<div className="flex flex-col font-frankfurter w-full h-full items-center p-4 text-white text-center">
-					<div className="flex flex-col py-6 px-7 border-4 border-black border-solid w-full rounded-md h-full items-center">
+					<div className="flex flex-col py-6 px-7 border-4 border-black border-solid w-full rounded-md h-full items-center overflow-auto">
 						<div className="flex flex-col items-center">
 							<InterstitialHeading text="Join Bullshark Quests!" />
 							<div className="bg-[url('https://quests.mystenlabs.com/_next/static/media/logo.81b4eb8f.svg')] h-40 w-40 bg-cover" />
@@ -67,7 +66,6 @@ function BullsharkQuestsNotification({ onClose }: { onClose: () => void }) {
 								href="https://tech.mystenlabs.com/introducing-bullsharks-quests/"
 								onClick={() => {
 									ampli.clickedBullsharkQuestsCta({ sourceFlow: 'Interstitial' });
-
 									closeInterstitial();
 								}}
 								className="appearance-none no-underline text-white bg-[#EA3389] rounded-lg py-2 w-60 [-webkit-text-stroke:1px_black] leading-none text-heading6"
