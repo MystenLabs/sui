@@ -190,15 +190,6 @@ impl Committee {
         NonZeroU64::new(2 * total_votes / 3 + 1).unwrap()
     }
 
-    /*
-
-    N = 3f + 1
-
-    N - 1 = 3f
-    (N - 1) / 3 = f = 100 -1 / 3 = 99 / 3 = 33
-
-     */
-
     fn calculate_validity_threshold(&self) -> NonZeroU64 {
         // If N = 3f + 1 + k (0 <= k < 3)
         // then (N + 2) / 3 = f + 1 + k/3 = f + 1
