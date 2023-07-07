@@ -35,11 +35,20 @@ CREATE TABLE objects
     has_public_transfer    BOOLEAN       NOT NULL,
     storage_rebate         BIGINT        NOT NULL,
     bcs                    bcs_bytes[]   NOT NULL
-);
+) PARTITION BY HASH (object_id);
 CREATE INDEX objects_owner_address ON objects (owner_type, owner_address);
 CREATE INDEX objects_tx_digest ON objects (previous_transaction);
+CREATE TABLE objects_partition_0 PARTITION OF objects FOR VALUES WITH (MODULUS 10, REMAINDER 0);
+CREATE TABLE objects_partition_1 PARTITION OF objects FOR VALUES WITH (MODULUS 10, REMAINDER 1);
+CREATE TABLE objects_partition_2 PARTITION OF objects FOR VALUES WITH (MODULUS 10, REMAINDER 2);
+CREATE TABLE objects_partition_3 PARTITION OF objects FOR VALUES WITH (MODULUS 10, REMAINDER 3);
+CREATE TABLE objects_partition_4 PARTITION OF objects FOR VALUES WITH (MODULUS 10, REMAINDER 4);
+CREATE TABLE objects_partition_5 PARTITION OF objects FOR VALUES WITH (MODULUS 10, REMAINDER 5);
+CREATE TABLE objects_partition_6 PARTITION OF objects FOR VALUES WITH (MODULUS 10, REMAINDER 6);
+CREATE TABLE objects_partition_7 PARTITION OF objects FOR VALUES WITH (MODULUS 10, REMAINDER 7);
+CREATE TABLE objects_partition_8 PARTITION OF objects FOR VALUES WITH (MODULUS 10, REMAINDER 8);
+CREATE TABLE objects_partition_9 PARTITION OF objects FOR VALUES WITH (MODULUS 10, REMAINDER 9);
 
--- NOTE(gegaowp): remove object history so that it will not be created over DB reset / migration run.
 CREATE TABLE objects_history
 (
     epoch                  BIGINT        NOT NULL,
