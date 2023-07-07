@@ -1791,6 +1791,9 @@ impl AuthorityPerEpochStore {
                 kind: ConsensusTransactionKind::CheckpointSignature(info),
                 ..
             }) => {
+                // We usually call notify_checkpoint_signature in SuiTxValidator, but that step can
+                // be skipped when a batch is already part of a certificate, so we must also
+                // notify here.
                 checkpoint_service.notify_checkpoint_signature(self, info)?;
                 self.record_consensus_transaction_processed(batch, transaction, consensus_index)?;
                 Ok(ConsensusCertificateResult::ConsensusMessage)

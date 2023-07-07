@@ -873,6 +873,7 @@ impl SuiNode {
                 consensus_handler,
                 SuiTxValidator::new(
                     epoch_store,
+                    checkpoint_service.clone(),
                     state.transaction_manager().clone(),
                     sui_tx_validator_metrics.clone(),
                 ),

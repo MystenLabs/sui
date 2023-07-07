@@ -8,6 +8,7 @@ use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::checkpoints::CheckpointServiceNotify;
 use crate::transaction_manager::TransactionManager;
 use async_trait::async_trait;
 use narwhal_types::{validate_batch_version, BatchAPI};
@@ -21,6 +22,7 @@ use tracing::{info, warn};
 #[derive(Clone)]
 pub struct SuiTxValidator {
     epoch_store: Arc<AuthorityPerEpochStore>,
+    checkpoint_service: Arc<dyn CheckpointServiceNotify + Send + Sync>,
     _transaction_manager: Arc<TransactionManager>,
     metrics: Arc<SuiTxValidatorMetrics>,
 }
@@ -28,6 +30,7 @@ pub struct SuiTxValidator {
 impl SuiTxValidator {
     pub fn new(
         epoch_store: Arc<AuthorityPerEpochStore>,
+        checkpoint_service: Arc<dyn CheckpointServiceNotify + Send + Sync>,
         transaction_manager: Arc<TransactionManager>,
         metrics: Arc<SuiTxValidatorMetrics>,
     ) -> Self {
@@ -37,6 +40,7 @@ impl SuiTxValidator {
         );
         Self {
             epoch_store,
+            checkpoint_service,
             _transaction_manager: transaction_manager,
             metrics,
         }
@@ -75,6 +79,7 @@ impl TransactionValidator for SuiTxValidator {
             .collect::<Result<Vec<_>, _>>()?;
 
         let mut cert_batch = Vec::new();
+        let mut ckpt_messages = Vec::new();
         let mut ckpt_batch = Vec::new();
         for tx in txs.into_iter() {
             match tx.kind {
@@ -88,7 +93,8 @@ impl TransactionValidator for SuiTxValidator {
                     // }
                 }
                 ConsensusTransactionKind::CheckpointSignature(signature) => {
-                    ckpt_batch.push(signature.summary)
+                    ckpt_messages.push(signature.clone());
+                    ckpt_batch.push(signature.summary);
                 }
                 ConsensusTransactionKind::EndOfPublish(_)
                 | ConsensusTransactionKind::CapabilityNotification(_) => {}
@@ -108,6 +114,13 @@ impl TransactionValidator for SuiTxValidator {
                     .wrap_err("Malformed batch (failed to verify)")
             })
             .await??;
+
+        // All checkpoint sigs have been verified, forward them to the checkpoint service
+        for ckpt in ckpt_messages {
+            self.checkpoint_service
+                .notify_checkpoint_signature(&self.epoch_store, &ckpt)?;
+        }
+
         self.metrics
             .certificate_signatures_verified
             .inc_by(cert_count as u64);
@@ -154,6 +167,7 @@ impl SuiTxValidatorMetrics {
 #[cfg(test)]
 mod tests {
     use crate::{
+        checkpoints::CheckpointServiceNoop,
         consensus_adapter::consensus_tests::{test_certificates, test_gas_objects},
         consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
     };
@@ -164,6 +178,7 @@ mod tests {
     use sui_types::signature::GenericSignature;
 
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
+    use std::sync::Arc;
     use sui_macros::sim_test;
     use sui_types::crypto::Ed25519SuiSignature;
     use sui_types::messages_consensus::ConsensusTransaction;
@@ -199,6 +214,7 @@ mod tests {
         let metrics = SuiTxValidatorMetrics::new(&Default::default());
         let validator = SuiTxValidator::new(
             state.epoch_store_for_testing().clone(),
+            Arc::new(CheckpointServiceNoop {}),
             state.transaction_manager().clone(),
             metrics,
         );
