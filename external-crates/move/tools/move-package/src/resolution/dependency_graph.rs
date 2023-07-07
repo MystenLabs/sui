@@ -355,8 +355,13 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 // reroot all packages to normalize local paths across all graphs
                 for (_, p) in pkg_graph.package_table.iter_mut() {
                     if modified {
+                        // new sub-graph has been constructed whose paths are already re-rooted with
+                        // respect to its immediate parent
                         p.kind.reroot(parent)?;
                     } else {
+                        // a graph has been read from the lock file and its immediate parent is
+                        // specified in the dependency pointing to this sub-graph which must be used
+                        // for re-rooting
                         p.kind.reroot(&d.kind)?;
                     }
                 }
