@@ -15,6 +15,7 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["sync"] }
 tracing.workspace = true
 parking_lot = "0.12.1"
+base64 = "0.13.0"
 
 config = { path = "../config", package = "narwhal-config" }
 fastcrypto.workspace = true

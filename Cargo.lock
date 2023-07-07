@@ -6194,6 +6194,7 @@ name = "narwhal-consensus"
 version = "0.1.0"
 dependencies = [
  "arc-swap",
+ "base64 0.13.1",
  "bcs",
  "bincode",
  "cfg-if",
