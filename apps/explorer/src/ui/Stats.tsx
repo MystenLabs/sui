@@ -39,12 +39,10 @@ export function Stats({
 				orientation === 'horizontal' ? '' : 'flex-col',
 			)}
 		>
-			<div className="flex items-center justify-start gap-1 text-caption">
-				<div className="flex-shrink-0">
-					<Text variant="caption/semibold" color={color}>
-						{label}
-					</Text>
-				</div>
+			<div className="flex items-center justify-start gap-1 overflow-hidden text-caption">
+				<Text variant="caption/semibold" color={color} truncate>
+					{label}
+				</Text>
 				{tooltip && (
 					<Tooltip
 						tip={unavailable ? 'Coming soon' : tooltip}
