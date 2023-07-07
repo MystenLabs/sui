@@ -11,6 +11,7 @@ use std::{
 
 use crate::{diag, shared::CompilationEnv};
 use move_ir_types::location::*;
+use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 
@@ -19,16 +20,9 @@ use serde::{Deserialize, Serialize};
 //**************************************************************************************************
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
-pub enum Edition {
-    Legacy,
-    E2024(EditionRelease),
-}
-
-#[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
-pub enum EditionRelease {
-    Final,
-    Beta,
-    Alpha,
+pub struct Edition {
+    pub edition: Symbol,
+    pub release: Option<Symbol>,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
@@ -65,24 +59,25 @@ static SUPPORTED_FEATURES: Lazy<BTreeMap<Edition, BTreeSet<FeatureGate>>> =
     Lazy::new(|| BTreeMap::from_iter(Edition::ALL.iter().map(|e| (*e, e.features()))));
 
 impl Edition {
-    pub const LEGACY: &str = "legacy";
-    pub const E2024_PREFIX: &str = "2024";
+    pub const LEGACY: Self = Self {
+        edition: symbol!("legacy"),
+        release: None,
+    };
+    pub const E2024_ALPHA: Self = Self {
+        edition: symbol!("2024"),
+        release: Some(symbol!("alpha")),
+    };
 
-    pub const ALL: &[Self] = &[
-        Self::Legacy,
-        Self::E2024(EditionRelease::Alpha),
-        Self::E2024(EditionRelease::Beta),
-        Self::E2024(EditionRelease::Final),
-    ];
-    pub const SUPPORTED: &[Self] = &[Self::Legacy, Self::E2024(EditionRelease::Alpha)];
+    const SEP: &str = ".";
+
+    pub const ALL: &[Self] = &[Self::LEGACY, Self::E2024_ALPHA];
 
     // Intended only for implementing the lazy static (supported feature map) above
     fn prev(&self) -> Option<Self> {
         match self {
-            Self::Legacy => None,
-            Self::E2024(EditionRelease::Alpha) => Some(Self::Legacy),
-            Self::E2024(EditionRelease::Beta) => Some(Self::E2024(EditionRelease::Alpha)),
-            Self::E2024(EditionRelease::Final) => Some(Self::E2024(EditionRelease::Beta)),
+            &Self::LEGACY => None,
+            &Self::E2024_ALPHA => Some(Self::LEGACY),
+            _ => self.unknown_edition_panic(),
         }
     }
 
@@ -90,20 +85,26 @@ impl Edition {
     // (supported feature map) above
     fn features(&self) -> BTreeSet<FeatureGate> {
         match self {
-            Edition::Legacy => BTreeSet::new(),
-            Edition::E2024(EditionRelease::Alpha) => self.prev().unwrap().features(),
-            Edition::E2024(EditionRelease::Beta) => self.prev().unwrap().features(),
-            Edition::E2024(EditionRelease::Final) => self.prev().unwrap().features(),
+            &Self::LEGACY => BTreeSet::new(),
+            &Self::E2024_ALPHA => self.prev().unwrap().features(),
+            _ => self.unknown_edition_panic(),
         }
     }
-}
 
-impl EditionRelease {
-    pub const ALPHA: &str = "alpha";
-    pub const BETA: &str = "beta";
-    pub const EXT_SEP: &str = ".";
+    fn unknown_edition_panic(&self) -> ! {
+        panic!("{}", self.unknown_edition_error())
+    }
 
-    pub const SUFFIXES: &[Self] = &[Self::Alpha, Self::Beta];
+    fn unknown_edition_error(&self) -> anyhow::Error {
+        anyhow::anyhow!(
+            "Unsupported edition \"{self}\". Current supported editions include: {}",
+            Self::ALL
+                .iter()
+                .map(|e| format!("\"{}\"", e))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
 }
 
 impl Flavor {
@@ -121,67 +122,19 @@ impl FromStr for Edition {
 
     // Required method
     fn from_str(s: &str) -> anyhow::Result<Self> {
-        let edition = if s == Edition::LEGACY {
-            Edition::Legacy
-        } else if let Some(s) = s.strip_prefix(Edition::E2024_PREFIX) {
-            let release = EditionRelease::from_str(s)?;
-            let edition = Edition::E2024(release);
-            edition
+        let (edition, release) = if let Some((edition, release)) = s.split_once(Edition::SEP) {
+            (edition, Some(release))
         } else {
-            anyhow::bail!(
-                "Unknown edition \"{s}\". Expected one of: {}",
-                Self::SUPPORTED
-                    .iter()
-                    .map(|e| format!("\"{}\"", e))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
+            (s, None)
         };
-        if !Self::SUPPORTED.iter().any(|e| *e == edition) {
-            anyhow::bail!(
-                "Unsupported edition \"{s}\". Current supported editions include: {}",
-                Self::SUPPORTED
-                    .iter()
-                    .map(|e| format!("\"{}\"", e))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
+        let edition = Edition {
+            edition: Symbol::from(edition),
+            release: release.map(Symbol::from),
+        };
+        if !Self::ALL.iter().any(|e| e == &edition) {
+            return Err(edition.unknown_edition_error());
         }
         Ok(edition)
-    }
-}
-
-impl FromStr for EditionRelease {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> anyhow::Result<Self> {
-        Ok(if let Some(s) = s.strip_prefix(EditionRelease::EXT_SEP) {
-            match s {
-                Self::ALPHA => Self::Alpha,
-                Self::BETA => Self::Beta,
-                _ => anyhow::bail!(
-                    "Unknown release suffix \"{}{s}\". Expected no suffix, or one of: {}",
-                    Self::EXT_SEP,
-                    Self::SUFFIXES
-                        .iter()
-                        .map(|e| format!("\"{}\"", e))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ),
-            }
-        } else {
-            if !s.is_empty() {
-                anyhow::bail!(
-                    "Unknown release suffix \"{s}\". Expected no suffix, or one of: {}",
-                    Self::SUFFIXES
-                        .iter()
-                        .map(|e| format!("\"{}\"", e))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            }
-            Self::Final
-        })
     }
 }
 
@@ -230,19 +183,9 @@ impl<'de> Deserialize<'de> for Flavor {
 
 impl Display for Edition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Edition::Legacy => write!(f, "{}", Self::LEGACY),
-            Edition::E2024(release) => write!(f, "{}{release}", Self::E2024_PREFIX),
-        }
-    }
-}
-
-impl Display for EditionRelease {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            EditionRelease::Final => write!(f, ""),
-            EditionRelease::Alpha => write!(f, ".{}", Self::ALPHA),
-            EditionRelease::Beta => write!(f, ".{}", Self::BETA),
+        match &self.release {
+            None => write!(f, "{}", self.edition),
+            Some(release) => write!(f, "{}{}{}", self.edition, Self::SEP, release),
         }
     }
 }
@@ -286,7 +229,7 @@ impl Display for FeatureGate {
 
 impl Default for Edition {
     fn default() -> Self {
-        Edition::Legacy
+        Edition::LEGACY
     }
 }
 

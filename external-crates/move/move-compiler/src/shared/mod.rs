@@ -465,8 +465,8 @@ impl Default for PackageConfig {
     fn default() -> Self {
         Self {
             warning_filter: WarningFilters::Empty,
-            flavor: Flavor::GlobalStorage,
-            edition: Edition::Legacy,
+            flavor: Flavor::default(),
+            edition: Edition::default(),
         }
     }
 }
