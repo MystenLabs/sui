@@ -30,8 +30,8 @@ export function OnTheNetwork() {
 	const isSuiTokenCardEnabled = network === Network.MAINNET;
 
 	return (
-		<Card bg="white" spacing="lg" height="full">
-			<div className="flex flex-col gap-5">
+		<Card bg="white" spacing="none">
+			<div className="flex flex-col gap-5 overflow-y-auto p-6 sm:p-8 sm:max-xl:max-h-[270px]">
 				<Heading variant="heading4/semibold" color="steel-darker">
 					Network Activity
 				</Heading>
