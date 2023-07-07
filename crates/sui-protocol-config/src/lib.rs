@@ -710,6 +710,10 @@ pub struct ProtocolConfig {
 
     /// === Execution Version ===
     execution_version: Option<u64>,
+
+    // Dictates the threshold (percentage of stake) that is used to calculate the "bad" nodes to be
+    // swapped when creating the consensus schedule.
+    consensus_bad_nodes_stake_threshold: Option<f64>,
 }
 
 // feature flags
@@ -1175,6 +1179,7 @@ impl ProtocolConfig {
                 gas_rounding_step: None,
 
                 execution_version: None,
+                consensus_bad_nodes_stake_threshold: None
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
@@ -1387,6 +1392,10 @@ impl ProtocolConfig {
     }
     pub fn set_narwhal_new_leader_election_schedule(&mut self, val: bool) {
         self.feature_flags.narwhal_new_leader_election_schedule = val;
+    }
+
+    pub fn set_consensus_bad_nodes_stake_threshold(&mut self, val: f64) {
+        self.consensus_bad_nodes_stake_threshold = Some(val);
     }
 }
 
