@@ -42,7 +42,7 @@ export function useLedgerNotification() {
 			// We'll do this for now since we don't have the time to figure out what exactly is going on
 			setTimeout(() => {
 				toast.success(
-					<div className="flex gap-2 items-center">
+					<div className="flex gap-2 items-center z-49">
 						<div className="shrink-0">
 							<ButtonOrLink
 								className="font-medium appearance-none border-0 cursor-pointer p-0 bg-transparent text-inherit"
