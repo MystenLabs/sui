@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetReferenceGasPrice } from '@mysten/core';
+import { CoinFormat, formatBalance, useGetReferenceGasPrice } from '@mysten/core';
 import { Sui } from '@mysten/icons';
 
 import { FormattedStatsAmount, StatsWrapper } from './FormattedStatsAmount';
-import { useGasPriceFormat } from '../GasPriceCard/utils';
 import { useNetwork } from '~/context';
 import { useGetNetworkMetrics } from '~/hooks/useGetNetworkMetrics';
 import { useSuiCoinData } from '~/hooks/useSuiCoinData';
@@ -17,7 +16,10 @@ import { Network } from '~/utils/api/DefaultRpcClient';
 export function OnTheNetwork() {
 	const { data: networkMetrics } = useGetNetworkMetrics();
 	const { data: referenceGasPrice } = useGetReferenceGasPrice();
-	const gasPriceFormatted = useGasPriceFormat(referenceGasPrice || null, 'MIST');
+	const gasPriceFormatted =
+		typeof referenceGasPrice === 'bigint'
+			? formatBalance(referenceGasPrice, 0, CoinFormat.FULL)
+			: null;
 	const { data: tokenData } = useSuiCoinData();
 	const { currentPrice } = tokenData || {};
 	const formattedPrice = currentPrice
