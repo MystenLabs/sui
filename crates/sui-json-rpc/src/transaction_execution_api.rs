@@ -75,11 +75,11 @@ impl TransactionExecutionApi {
         };
         let tx_data: TransactionData =
             bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| ClientError::Serde {
-                param: "tx_bytes".to_string(),
+                param: "tx_bytes",
                 reason: e.to_string(),
             })?)
             .map_err(|e| ClientError::Serde {
-                param: "tx_bytes".to_string(),
+                param: "tx_bytes",
                 reason: e.to_string(),
             })?;
         let sender = tx_data.sender();
@@ -89,11 +89,11 @@ impl TransactionExecutionApi {
         for sig in signatures {
             sigs.push(
                 GenericSignature::from_bytes(&sig.to_vec().map_err(|e| ClientError::Serde {
-                    param: "signatures".to_string(),
+                    param: "signatures",
                     reason: e.to_string(),
                 })?)
                 .map_err(|e| ClientError::Serde {
-                    param: "signatures".to_string(),
+                    param: "signatures",
                     reason: e.to_string(),
                 })?,
             );
@@ -102,7 +102,7 @@ impl TransactionExecutionApi {
         let digest = *txn.digest();
         let raw_transaction = if opts.show_raw_input {
             bcs::to_bytes(txn.data()).map_err(|e| ClientError::Serde {
-                param: "tx_bytes".to_string(),
+                param: "tx_bytes",
                 reason: e.to_string(),
             })?
         } else {
@@ -253,11 +253,11 @@ impl WriteApiServer for TransactionExecutionApi {
         with_tracing!(async move {
             let tx_kind: TransactionKind =
                 bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| ClientError::Serde {
-                    param: "tx_bytes".to_string(),
+                    param: "tx_bytes",
                     reason: e.to_string(),
                 })?)
                 .map_err(|e| ClientError::Serde {
-                    param: "tx_bytes".to_string(),
+                    param: "tx_bytes",
                     reason: e.to_string(),
                 })?;
             Ok(self

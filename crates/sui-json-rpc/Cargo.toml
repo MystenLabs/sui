@@ -28,6 +28,8 @@ futures.workspace = true
 tokio = { workspace = true, features = ["full"] }
 signature.workspace = true
 thiserror.workspace = true
+strum.workspace = true
+strum_macros.workspace = true
 bcs.workspace = true
 eyre.workspace = true
 num_cpus.workspace = true

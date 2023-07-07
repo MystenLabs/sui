@@ -6,6 +6,8 @@ use hyper::header::InvalidHeaderValue;
 use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::CallError;
 use jsonrpsee::types::ErrorObject;
+use std::fmt;
+use strum_macros::{AsRefStr, EnumString};
 use sui_types::error::{SuiError, SuiObjectResponseError, UserInputError};
 use sui_types::quorum_driver_types::QuorumDriverError;
 use thiserror::Error;
@@ -51,9 +53,6 @@ pub enum Error {
     SuiObjectResponseError(#[from] SuiObjectResponseError),
 
     #[error(transparent)]
-    SuiRpcInputError(#[from] SuiRpcInputError),
-
-    #[error(transparent)]
     ClientError(#[from] ClientError),
 
     #[error(transparent)]
@@ -71,9 +70,6 @@ impl Error {
         match self {
             Error::UserInputError(user_input_error) => {
                 RpcError::Call(CallError::InvalidParams(user_input_error.into()))
-            }
-            Error::SuiRpcInputError(sui_json_rpc_input_error) => {
-                RpcError::Call(CallError::InvalidParams(sui_json_rpc_input_error.into()))
             }
             Error::SuiError(sui_error) => match sui_error {
                 SuiError::TransactionNotFound { .. } | SuiError::TransactionsNotFound { .. } => {
@@ -100,27 +96,6 @@ impl Error {
 }
 
 #[derive(Debug, Error)]
-pub enum SuiRpcInputError {
-    #[error("Input exceeds limit of {0}")]
-    SizeLimitExceeded(String),
-
-    #[error("{0}")]
-    GenericNotFound(String),
-
-    #[error("{0}")]
-    GenericInvalid(String),
-
-    #[error("Unsupported protocol version requested. Min supported: {0}, max supported: {1}")]
-    ProtocolVersionUnsupported(u64, u64),
-
-    #[error("Unable to serialize: {0}")]
-    CannotSerialize(#[from] bcs::Error),
-
-    #[error("{0}")]
-    CannotParseSuiStructTag(String),
-}
-
-#[derive(Debug, Error)]
 pub enum ServerError {
     // do we really need these variants for server-side errors?
     #[error("Serde error")]
@@ -141,11 +116,30 @@ fn to_internal_error(err: impl ToString) -> RpcError {
     RpcError::Call(CallError::Custom(error_object))
 }
 
+// One-to-one of the return type of the RPC method where applicable
+#[derive(Debug, Clone, Copy, AsRefStr, EnumString)]
+pub enum EntityType {
+    DelegatedStake,
+    SuiMoveNormalizedStruct,
+    SuiMoveNormalizedFunction,
+    Object,
+    Package,
+    Product,
+    SuiMoveNormalizedModule,
+    Checkpoint,
+}
+
+impl fmt::Display for EntityType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_ref())
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum ClientError {
     // Any kind of serialization or deserialization error
     #[error("Serialization error on '{param}': {reason}")]
-    Serde { param: String, reason: String },
+    Serde { param: &'static str, reason: String },
 
     #[error("Invalid combination of type and value: {0}")]
     SerdeWithLayout(String),
@@ -154,20 +148,28 @@ pub enum ClientError {
     Domain(#[from] DomainParseError),
 
     #[error("Invalid '{param}': {reason}")]
-    InvalidParam { param: String, reason: String },
+    InvalidParam { param: &'static str, reason: String },
     // maybe InvalidParamMulti or something. param, value, reason
     #[error("`request_type` must set to `None` or `WaitForLocalExecution` if effects is required in the response")]
     InvalidExecuteTransactionRequestType,
 
     #[error("{entity} '{id}' not found")]
-    NotFound { entity: String, id: String },
+    NotFound { entity: EntityType, id: String },
+
+    #[error("{entity} '{id}' not found in {in_entity} '{in_id}'")]
+    NotFoundIn {
+        entity: EntityType,
+        id: String,
+        in_entity: EntityType,
+        in_id: String,
+    },
 
     // For error scenarios that don't fit cleanly into NotFound
     #[error("{0}")]
     NotFoundCustom(String),
 
     #[error("`{param}` exceeds limit of `{limit}`")]
-    SizeLimitExceeded { param: String, limit: usize },
+    SizeLimitExceeded { param: &'static str, limit: usize },
 
     #[error("Unsupported protocol version requested. Min supported: {0}, max supported: {1}")]
     ProtocolVersionUnsupported(u64, u64),
