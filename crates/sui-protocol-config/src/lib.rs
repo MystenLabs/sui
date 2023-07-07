@@ -1320,6 +1320,7 @@ impl ProtocolConfig {
                 // cfg.feature_flags.ban_entry_init = true;
                 // cfg.feature_flags.pack_digest_hash_modules = true;
                 cfg.feature_flags.txn_base_cost_as_multiplier = true;
+                cfg.feature_flags.narwhal_new_leader_election_schedule = true;
                 // this is a multiplier of the gas price
                 cfg.base_tx_cost_fixed = Some(1_000);
                 cfg
