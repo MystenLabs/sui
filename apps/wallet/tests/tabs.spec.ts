@@ -6,7 +6,6 @@ import { createWallet } from './utils/auth';
 
 test('NFTs tab', async ({ page, extensionUrl }) => {
 	await createWallet(page, extensionUrl);
-	await page.getByText(/Read more on the blog/i).click();
 	await page.getByRole('navigation').getByRole('link', { name: 'NFTs' }).click();
 
 	await expect(page.getByRole('main').getByRole('heading')).toHaveText(/NFTs/);
@@ -14,7 +13,6 @@ test('NFTs tab', async ({ page, extensionUrl }) => {
 
 test('Apps tab', async ({ page, extensionUrl }) => {
 	await createWallet(page, extensionUrl);
-	await page.getByText(/Read more on the blog/i).click();
 	await page.getByRole('navigation').getByRole('link', { name: 'Apps' }).click();
 
 	await expect(page.getByRole('main')).toHaveText(
@@ -24,7 +22,6 @@ test('Apps tab', async ({ page, extensionUrl }) => {
 
 test('Activity tab', async ({ page, extensionUrl }) => {
 	await createWallet(page, extensionUrl);
-	await page.getByText(/Read more on the blog/i).click();
 	await page.getByRole('navigation').getByRole('link', { name: 'Activity' }).click();
 
 	await expect(page.getByRole('main').getByRole('heading')).toHaveText(/Your Activity/);

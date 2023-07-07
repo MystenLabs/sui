@@ -52,6 +52,7 @@ function BullsharkQuestsNotification({ onClose }: { onClose: () => void }) {
 								Read more on the blog
 							</ExternalLink>
 							<button
+								data-testid="bullshark-dismiss"
 								className="appearance-none bg-transparent border-none cursor-pointer mt-1"
 								onClick={() => {
 									setInterstitialDismissed();
