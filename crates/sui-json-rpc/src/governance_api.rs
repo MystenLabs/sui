@@ -30,7 +30,7 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::{get_validator_from_table, SuiSystemState};
 
 use crate::api::{GovernanceReadApiServer, JsonRpcMetrics};
-use crate::error::{ClientError, Error, RpcInterimResult, ServerError};
+use crate::error::{ClientError, EntityType, Error, RpcInterimResult, ServerError};
 use crate::{with_tracing, ObjectProvider, SuiRpcModule};
 
 #[derive(Clone)]
@@ -99,7 +99,7 @@ impl GovernanceReadApi {
                         None => {
                             return Err(ClientError::NotFound {
                                 // TODO(wlmyng): not sure if this is actually a client error
-                                entity: "StakedSui".to_string(),
+                                entity: EntityType::DelegatedStake,
                                 id: oref.0.to_string(),
                             }
                             .into());
@@ -108,7 +108,7 @@ impl GovernanceReadApi {
                 }
                 ObjectRead::NotExists(id) => {
                     return Err(ClientError::NotFound {
-                        entity: "StakedSui".to_string(),
+                        entity: EntityType::DelegatedStake,
                         id: id.to_string(),
                     }
                     .into());

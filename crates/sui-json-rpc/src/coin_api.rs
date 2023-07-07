@@ -31,7 +31,7 @@ use sui_types::object::{Object, ObjectRead};
 use sui_types::parse_sui_struct_tag;
 
 use crate::api::{cap_page_limit, CoinReadApiServer, JsonRpcMetrics};
-use crate::error::{ClientError, RpcInterimResult, ServerError};
+use crate::error::{ClientError, EntityType, RpcInterimResult, ServerError};
 use crate::{with_tracing, SuiRpcModule};
 
 #[cfg(test)]
@@ -39,7 +39,7 @@ use mockall::automock;
 
 fn parse_to_struct_tag(coin_type: &str) -> Result<StructTag, ClientError> {
     parse_sui_struct_tag(coin_type).map_err(|e| ClientError::InvalidParam {
-        param: "coin_type".to_string(),
+        param: "coin_type",
         reason: e.to_string(),
     })
 }
@@ -122,7 +122,7 @@ impl CoinReadApiServer for CoinReadApi {
                             let coin_type = obj.coin_type_maybe();
                             if coin_type.is_none() {
                                 Err(ClientError::InvalidParam {
-                                    param: "cursor".to_string(),
+                                    param: "cursor",
                                     reason: "not a coin".to_string(),
                                 })
                             } else {
@@ -130,7 +130,7 @@ impl CoinReadApiServer for CoinReadApi {
                             }
                         }
                         None => Err(ClientError::InvalidParam {
-                            param: "cursor".to_string(),
+                            param: "cursor",
                             reason: "not found".to_string(),
                         }),
                     }
@@ -352,9 +352,12 @@ async fn find_package_object_id(
                 }
             }
         }
-        Err(ClientError::NotFoundCustom(format!(
-            "Cannot find object [{object_struct_tag}] from [{package_id}] package event."
-        ))
+        Err(ClientError::NotFoundIn {
+            entity: EntityType::Object,
+            id: object_struct_tag.to_string(),
+            in_entity: EntityType::Package,
+            in_id: package_id.to_string(),
+        }
         .into())
     })
     .await?

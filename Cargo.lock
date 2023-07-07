@@ -9828,6 +9828,8 @@ dependencies = [
  "serde",
  "shared-crypto",
  "signature 1.6.4",
+ "strum",
+ "strum_macros",
  "sui-config",
  "sui-core",
  "sui-json",

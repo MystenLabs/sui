@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::api::MoveUtilsServer;
-use crate::error::{ClientError, Error};
+use crate::error::{ClientError, EntityType, Error};
 use crate::read_api::{get_move_module, get_move_modules_by_package};
 use crate::{with_tracing, SuiRpcModule};
 use async_trait::async_trait;
@@ -148,13 +148,13 @@ impl MoveUtilsServer for MoveUtils {
             let structs = module.structs;
             let identifier =
                 Identifier::new(struct_name.as_str()).map_err(|e| ClientError::InvalidParam {
-                    param: "struct_name".to_string(),
+                    param: "struct_name",
                     reason: format!("{e}"),
                 })?;
             Ok(match structs.get(&identifier) {
                 Some(struct_) => Ok(struct_.clone().into()),
                 None => Err(ClientError::NotFound {
-                    entity: "Struct".to_string(),
+                    entity: EntityType::SuiMoveNormalizedStruct,
                     id: struct_name.clone(),
                 }),
             }?)
@@ -173,13 +173,13 @@ impl MoveUtilsServer for MoveUtils {
             let functions = module.functions;
             let identifier =
                 Identifier::new(function_name.as_str()).map_err(|e| ClientError::InvalidParam {
-                    param: "function_name".to_string(),
+                    param: "function_name",
                     reason: format!("{e}"),
                 })?;
             Ok(match functions.get(&identifier) {
                 Some(function) => Ok(function.clone().into()),
                 None => Err(ClientError::NotFound {
-                    entity: "Function".to_string(),
+                    entity: EntityType::SuiMoveNormalizedFunction,
                     id: function_name.clone(),
                 }),
             }?)
@@ -209,13 +209,13 @@ impl MoveUtilsServer for MoveUtils {
                         .map_err(Error::from)
                     }
                     _ => Err(ClientError::InvalidParam {
-                        param: "package".to_string(),
+                        param: "package",
                         reason: format!("Object with ID {package} is not a package"),
                     }
                     .into()),
                 },
                 _ => Err(ClientError::NotFound {
-                    entity: "Package".to_string(),
+                    entity: EntityType::Package,
                     id: package.to_string(),
                 }
                 .into()),
@@ -223,7 +223,7 @@ impl MoveUtilsServer for MoveUtils {
 
             let identifier =
                 Identifier::new(function.as_str()).map_err(|e| ClientError::InvalidParam {
-                    param: "function".to_string(),
+                    param: "function",
                     reason: format!("{e}"),
                 })?;
             let parameters = normalized
@@ -303,7 +303,7 @@ mod tests {
             let (package, module_name) = setup();
             let mut mock_internal = MockMoveUtilsInternalTrait::new();
             let expected_error = Error::ClientError(ClientError::NotFound {
-                entity: "Module".to_string(),
+                entity: EntityType::SuiMoveNormalizedModule,
                 id: module_name.clone(),
             });
             mock_internal

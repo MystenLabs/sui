@@ -38,7 +38,7 @@ use crate::api::{
     cap_page_limit, validate_limit, IndexerApiServer, JsonRpcMetrics, ReadApiServer,
     QUERY_MAX_RESULT_LIMIT,
 };
-use crate::error::{ClientError, Error, SuiRpcInputError};
+use crate::error::{ClientError, Error};
 use crate::name_service::Domain;
 use crate::with_tracing;
 use crate::SuiRpcModule;
@@ -309,12 +309,12 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             } = name.clone();
             let layout = TypeLayoutBuilder::build_with_types(&name_type, &self.state.database)
                 .map_err(|e| ClientError::InvalidParam {
-                    param: "field 'type' of 'name'".to_string(),
+                    param: "field 'type' of 'name'",
                     reason: e.to_string(),
                 })?;
             let sui_json_value =
                 SuiJsonValue::new(value).map_err(|e| ClientError::InvalidParam {
-                    param: "field 'value' of 'name'".to_string(),
+                    param: "field 'value' of 'name'",
                     reason: e.to_string(),
                 })?;
             let name_bcs_value = sui_json_value
@@ -363,17 +363,17 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             }));
             let domain = Domain::from_str(&name).map_err(ClientError::Domain)?;
             let domain_bcs_value = bcs::to_bytes(&domain).map_err(|e| ClientError::Serde {
-                param: "name".to_string(),
+                param: "name",
                 reason: e.to_string(),
             })?;
             let record_object_id_option = self
                 .state
                 .get_dynamic_field_object_id(registry_id, name_type_tag, &domain_bcs_value)
                 .map_err(|e| {
-                    Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!(
+                    ClientError::NotFoundCustom(format!(
                         "Unable to lookup name in name service registry with error: {:?}",
                         e
-                    )))
+                    ))
                 })?;
             if let Some(record_object_id) = record_object_id_option {
                 let record_object_read =
@@ -444,7 +444,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
 
             let name_type_tag = TypeTag::Address;
             let addr_bcs_value = bcs::to_bytes(&address).map_err(|e| ClientError::Serde {
-                param: "address".to_string(),
+                param: "address",
                 reason: e.to_string(),
             })?;
 

@@ -49,7 +49,7 @@ use sui_types::transaction::{TransactionData, VerifiedTransaction};
 use crate::api::JsonRpcMetrics;
 use crate::api::{validate_limit, ReadApiServer};
 use crate::api::{QUERY_MAX_RESULT_LIMIT, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS};
-use crate::error::{ClientError, Error, ObjectDisplayError};
+use crate::error::{ClientError, EntityType, Error, ObjectDisplayError};
 use crate::with_tracing;
 use crate::{
     get_balance_changes_from_effect, get_object_changes, ObjectProviderCache, SuiRpcModule,
@@ -141,7 +141,7 @@ impl ReadApi {
         let num_digests = digests.len();
         if num_digests > *QUERY_MAX_RESULT_LIMIT {
             return Err(ClientError::SizeLimitExceeded {
-                param: "digests".to_string(),
+                param: "digests",
                 limit: *QUERY_MAX_RESULT_LIMIT,
             }
             .into());
@@ -161,7 +161,7 @@ impl ReadApi {
             );
         if temp_response.len() < num_digests {
             return Err(ClientError::InvalidParam {
-                param: "digests".to_string(),
+                param: "digests",
                 reason: "contains duplicates".to_string(),
             }
             .into());
@@ -334,7 +334,7 @@ impl ReadApi {
                     resp.effects
                         .as_ref()
                         .ok_or_else(|| ClientError::InvalidParam {
-                            param: "opts".to_string(),
+                            param: "opts",
                             reason: "unable to derive balance changes because effect is empty"
                                 .to_string(),
                         })?,
@@ -361,7 +361,7 @@ impl ReadApi {
                     .effects
                     .as_ref()
                     .ok_or_else(|| ClientError::InvalidParam {
-                        param: "opts".to_string(),
+                        param: "opts",
                         reason: "unable to derive object changes because effect is empty"
                             .to_string(),
                     })?;
@@ -371,7 +371,7 @@ impl ReadApi {
                     resp.transaction
                         .as_ref()
                         .ok_or_else(|| ClientError::InvalidParam {
-                            param: "opts".to_string(),
+                            param: "opts",
                             reason: "unable to derive object changes because transaction is empty"
                                 .to_string(),
                         })?
@@ -507,7 +507,7 @@ impl ReadApiServer for ReadApi {
                 Ok(objects)
             } else {
                 Err(ClientError::SizeLimitExceeded {
-                    param: "object_ids".to_string(),
+                    param: "object_ids",
                     limit: *QUERY_MAX_RESULT_LIMIT,
                 }
                 .into())
@@ -600,7 +600,7 @@ impl ReadApiServer for ReadApi {
                 }
             } else {
                 Err(ClientError::SizeLimitExceeded {
-                    param: "past_objects".to_string(),
+                    param: "past_objects",
                     limit: *QUERY_MAX_RESULT_LIMIT,
                 }
                 .into())
@@ -851,7 +851,7 @@ impl ReadApiServer for ReadApi {
             Ok(self
                 .get_checkpoint_internal(id.clone())
                 .map_err(|_| ClientError::NotFound {
-                    entity: "Checkpoint".to_string(),
+                    entity: EntityType::Checkpoint,
                     id: id.to_string(),
                 })?)
         })
@@ -1017,7 +1017,6 @@ fn to_sui_transaction_events(
     )?)
 }
 
-// everything here is originally from state ...
 fn get_display_fields(
     fullnode_api: &ReadApi,
     original_object: &Object,
@@ -1089,7 +1088,7 @@ pub async fn get_move_module(
     match normalized.get(&module_name) {
         Some(module) => Ok(module.clone()),
         None => Err(Error::ClientError(ClientError::NotFound {
-            entity: "Module".to_string(),
+            entity: EntityType::SuiMoveNormalizedModule,
             id: module_name,
         })),
     }
@@ -1119,13 +1118,13 @@ pub async fn get_move_modules_by_package(
                 })
             }
             _ => Err(ClientError::InvalidParam {
-                param: "package".to_string(),
+                param: "package",
                 reason: "Object is not a package with ID {}".to_string(),
             }
             .into()),
         },
         _ => Err(ClientError::NotFound {
-            entity: "Package".to_string(),
+            entity: EntityType::Package,
             id: package.to_string(),
         }
         .into()),
