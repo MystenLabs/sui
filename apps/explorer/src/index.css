@@ -58,6 +58,12 @@ body,
 		}
 	}
 
+	@screen lg {
+		.home-page-grid-container-top {
+			@apply gap-5;
+		}
+	}
+
 	@screen xl {
 		.home-page-grid-container-top {
 			@apply grid-cols-3;
