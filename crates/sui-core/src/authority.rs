@@ -2509,6 +2509,7 @@ impl AuthorityState {
                      inconsistent",
                 );
                 Err(UserInputError::ObjectNotFound {
+                    // TODO(wlmyng): datastore inconsistency sounds bad
                     object_id: *object_id,
                     version: Some(obj_ref.1),
                 }
@@ -2926,6 +2927,7 @@ impl AuthorityState {
         self.get_checkpoint_store()
             .get_highest_executed_checkpoint_seq_number()?
             .ok_or(SuiError::UserInputError {
+                // TODO(wlmyng):
                 error: UserInputError::LatestCheckpointSequenceNumberNotFound,
             })
     }
