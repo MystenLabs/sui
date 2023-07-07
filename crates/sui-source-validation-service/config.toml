@@ -1,4 +1,6 @@
 [[packages]]
+source = "Repository"
+[packages.values]
 repository = "https://github.com/mystenlabs/sui"
 branch = "mainnet-v1.3.1"
 paths = [
