@@ -58,9 +58,6 @@ macro_rules! exit_main {
 #[macro_export]
 macro_rules! make_invariant_violation {
     ($($args:expr),* $(,)?) => {{
-        if cfg!(debug_assertions) {
-            panic!($($args),*)
-        }
         ExecutionError::invariant_violation(format!($($args),*))
     }}
 }
