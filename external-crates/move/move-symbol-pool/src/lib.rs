@@ -43,6 +43,10 @@ static_symbols!(
     "$spec_domain",
     "Self",
     "friend",
+    "dummy_field",
+    "_",
+    "init",
+    "unit_test",
 );
 
 /// The global, unique cache of strings.

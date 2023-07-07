@@ -2188,7 +2188,7 @@ fn parse_address_block(
         return Err(Box::new(diag!(Syntax::UnexpectedToken, (loc, msg))));
     }
     let addr_name = parse_identifier(context)?;
-    if addr_name.value.as_str() != "address" {
+    if addr_name.value != symbol!("address") {
         let msg = format!("{}. Got '{}'", UNEXPECTED_TOKEN, addr_name.value);
         return Err(Box::new(diag!(
             Syntax::UnexpectedToken,
