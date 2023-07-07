@@ -1408,6 +1408,7 @@
                 "buffer_stake_for_protocol_upgrade_bps": {
                   "u64": "5000"
                 },
+                "consensus_bad_nodes_stake_threshold": null,
                 "crypto_invalid_arguments_cost": {
                   "u64": "100"
                 },
