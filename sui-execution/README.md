@@ -155,11 +155,11 @@ To use this flow:
 ## Making a Cut
 
 Cuts are always made from `latest`, with the process part automated by
-a script: `./scripts/execution-layer`.  To copy the relevant crates for
-a new cut, call:
+a script: `./scripts/execution_layer.py`.  To copy the relevant crates
+for a new cut, call:
 
 ``` shell
-./scripts/execution-layer cut <FEATURE>
+./scripts/execution_layer.py cut <FEATURE>
 ```
 
 Where `<FEATURE>` is the new feature name.  For a versioned snapshot
