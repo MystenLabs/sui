@@ -8,7 +8,8 @@ use crate::bullshark::Bullshark;
 use crate::utils::gc_round;
 use crate::{metrics::ConsensusMetrics, ConsensusError, SequenceNumber};
 use config::{Authority, AuthorityIdentifier, Committee, Stake};
-use fastcrypto::hash::Hash;
+use fastcrypto::hash::HashFunction;
+use fastcrypto::hash::{Digest, Hash};
 use mysten_metrics::metered_channel;
 use mysten_metrics::spawn_logged_monitored_task;
 use parking_lot::RwLock;
@@ -19,6 +20,7 @@ use std::fmt::{Debug, Formatter};
 use std::{
     cmp::{max, Ordering},
     collections::{BTreeMap, BTreeSet, HashMap},
+    fmt,
     sync::Arc,
 };
 use storage::{CertificateStore, ConsensusStore};
@@ -37,6 +39,37 @@ pub mod consensus_tests;
 /// The representation of the DAG in memory.
 pub type Dag = BTreeMap<Round, HashMap<AuthorityIdentifier, (CertificateDigest, Certificate)>>;
 
+#[derive(Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct LeaderSwapTableOutputDigest([u8; crypto::DIGEST_LENGTH]);
+
+impl AsRef<[u8]> for LeaderSwapTableOutputDigest {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl From<LeaderSwapTableOutputDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
+    fn from(d: LeaderSwapTableOutputDigest) -> Self {
+        Digest::new(d.0)
+    }
+}
+
+impl fmt::Debug for LeaderSwapTableOutputDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}", base64::encode(self.0))
+    }
+}
+
+impl fmt::Display for LeaderSwapTableOutputDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(
+            f,
+            "{}",
+            base64::encode(self.0).get(0..16).ok_or(fmt::Error)?
+        )
+    }
+}
+
 #[derive(Default, Clone)]
 pub struct LeaderSwapTable {
     /// The round on which the leader swap table get into effect.
@@ -50,8 +83,32 @@ pub struct LeaderSwapTable {
     bad_nodes: HashMap<AuthorityIdentifier, Authority>,
 }
 
+impl Hash<{ crypto::DIGEST_LENGTH }> for LeaderSwapTable {
+    type TypedDigest = LeaderSwapTableOutputDigest;
+
+    fn digest(&self) -> LeaderSwapTableOutputDigest {
+        let mut hasher = crypto::DefaultHashFunction::new();
+        hasher.update(
+            bcs::to_bytes(&self.round)
+                .unwrap_or_else(|_| panic!("Serialization of {} should not fail", self.round)),
+        );
+        hasher.update(
+            bcs::to_bytes(&self.good_nodes).unwrap_or_else(|_| {
+                panic!("Serialization of {:?} should not fail", self.good_nodes)
+            }),
+        );
+        hasher.update(
+            bcs::to_bytes(&self.bad_nodes).unwrap_or_else(|_| {
+                panic!("Serialization of {:?} should not fail", self.bad_nodes)
+            }),
+        );
+        LeaderSwapTableOutputDigest(hasher.finalize().into())
+    }
+}
+
 impl Debug for LeaderSwapTable {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        /*
         f.write_str(&format!(
             "LeaderSwapTable round:{}, good_nodes:{:?} with stake:{}, bad_nodes:{:?} with stake:{}",
             self.round,
@@ -64,6 +121,13 @@ impl Debug for LeaderSwapTable {
                 .iter()
                 .map(|a| *a.0)
                 .collect::<Vec<AuthorityIdentifier>>(),
+            self.bad_nodes.iter().map(|a| a.1.stake()).sum::<Stake>(),
+        ))
+         */
+        f.write_str(&format!(
+            "LeaderSwapTable round:{}, digest:{}, stake:{}",
+            self.round,
+            self.digest(),
             self.bad_nodes.iter().map(|a| a.1.stake()).sum::<Stake>(),
         ))
     }
