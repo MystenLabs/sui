@@ -32,6 +32,8 @@ pub use write::WriteApiClient;
 pub use write::WriteApiOpenRpc;
 pub use write::WriteApiServer;
 
+use crate::error::InvalidReasons;
+
 mod coin;
 mod extended;
 mod governance;
@@ -60,10 +62,10 @@ pub fn cap_page_limit(limit: Option<usize>) -> usize {
     }
 }
 
-pub fn validate_limit(limit: Option<usize>, max: usize) -> Result<usize, anyhow::Error> {
+pub fn validate_limit(limit: Option<usize>, max: usize) -> Result<usize, InvalidReasons> {
     match limit {
-        Some(l) if l > max => Err(anyhow!("Page size limit {l} exceeds max limit {max}")),
-        Some(0) => Err(anyhow!("Page size limit cannot be smaller than 1")),
+        Some(l) if l > max => Err(InvalidReasons::LimitExceeded(max)),
+        Some(0) => Err(InvalidReasons::LimitTooSmall(1)),
         Some(l) => Ok(l),
         None => Ok(max),
     }

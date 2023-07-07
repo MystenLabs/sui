@@ -133,6 +133,15 @@ impl fmt::Display for EntityType {
 }
 
 #[derive(Debug, Error)]
+pub enum InvalidReasons {
+    #[error("`exceeds limit of `{0}`")]
+    LimitExceeded(usize),
+
+    #[error("must be at least `{0}`")]
+    LimitTooSmall(usize),
+}
+
+#[derive(Debug, Error)]
 pub enum ClientError {
     // Any kind of serialization or deserialization error
     #[error("Serialization error on '{param}': {reason}")]
@@ -166,7 +175,10 @@ pub enum ClientError {
     NotFoundCustom(String),
 
     #[error("`{param}` exceeds limit of `{limit}`")]
-    SizeLimitExceeded { param: &'static str, limit: usize },
+    LimitExceeded { param: &'static str, limit: usize },
+
+    #[error("`{param}` must be at least `{limit}`")]
+    LimitTooSmall { param: &'static str, limit: usize },
 
     #[error("Invalid 'version': unsupported protocol version requested. Min supported: {0}, max supported: {1}")]
     ProtocolVersionUnsupported(u64, u64),

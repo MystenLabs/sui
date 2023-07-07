@@ -112,7 +112,12 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         limit: Option<usize>,
     ) -> RpcResult<ObjectsPage> {
         with_tracing!(async move {
-            let limit = validate_limit(limit, *QUERY_MAX_RESULT_LIMIT)?;
+            let limit = validate_limit(limit, *QUERY_MAX_RESULT_LIMIT).map_err(|e| {
+                ClientError::InvalidParam {
+                    param: "limit",
+                    reason: e.to_string(),
+                }
+            })?;
             self.metrics.get_owned_objects_limit.report(limit as u64);
             let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
             let options = options.unwrap_or_default();

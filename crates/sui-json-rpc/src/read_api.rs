@@ -38,7 +38,7 @@ use sui_types::crypto::default_hash;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::display::DisplayVersionUpdatedEvent;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
-use sui_types::error::SuiObjectResponseError;
+use sui_types::error::{SuiError, SuiObjectResponseError, SuiResult};
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointTimestamp};
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, Object, ObjectRead, PastObjectRead};
@@ -99,7 +99,7 @@ impl ReadApi {
         Self { state, metrics }
     }
 
-    fn get_checkpoint_internal(&self, id: CheckpointId) -> Result<Checkpoint, Error> {
+    fn get_checkpoint_internal(&self, id: CheckpointId) -> SuiResult<Checkpoint> {
         Ok(match id {
             CheckpointId::SequenceNumber(seq) => {
                 let verified_summary =
@@ -140,7 +140,7 @@ impl ReadApi {
     ) -> Result<Vec<SuiTransactionBlockResponse>, Error> {
         let num_digests = digests.len();
         if num_digests > *QUERY_MAX_RESULT_LIMIT {
-            return Err(ClientError::SizeLimitExceeded {
+            return Err(ClientError::LimitExceeded {
                 param: "digests",
                 limit: *QUERY_MAX_RESULT_LIMIT,
             }
@@ -171,7 +171,7 @@ impl ReadApi {
             let state = self.state.clone();
             let digests_clone = digests.clone();
             let transactions =
-                state.multi_get_executed_transactions(&digests_clone).tap_err(
+                state.multi_get_executed_transactions(&digests_clone).tap_err( // TODO(wlmyng): unexpected error
                     |err| debug!(digests=?digests_clone, "Failed to multi get transactions: {:?}", err),
                 )?;
 
@@ -186,7 +186,7 @@ impl ReadApi {
         if opts.require_effects() {
             let state = self.state.clone();
             let digests_clone = digests.clone();
-            let effects_list = state.multi_get_executed_effects(&digests_clone).tap_err(
+            let effects_list = state.multi_get_executed_effects(&digests_clone).tap_err( // TODO(wlmyng): unexpected error
                 |err| debug!(digests=?digests_clone, "Failed to multi get effects for transactions: {:?}", err),
             )?;
             for ((_digest, cache_entry), e) in
@@ -206,7 +206,7 @@ impl ReadApi {
             state
             .database
             .deprecated_multi_get_transaction_checkpoint(&digests_clone)
-            .tap_err(
+            .tap_err( // TODO(wlmyng): unexpected error
                 |err| debug!(digests=?digests_clone, "Failed to multi get checkpoint sequence number: {:?}", err))?;
         for ((_digest, cache_entry), seq) in temp_response
             .iter_mut()
@@ -495,6 +495,7 @@ impl ReadApiServer for ReadApi {
                     .collect();
 
                 let objects = objects_result.map_err(|err| {
+                    // TODO(wlmyng): process underlying errors
                     Error::UnexpectedError(format!("Failed to fetch objects with error: {}", err))
                 })?;
 
@@ -506,7 +507,7 @@ impl ReadApiServer for ReadApi {
                     .inc_by(objects.len() as u64);
                 Ok(objects)
             } else {
-                Err(ClientError::SizeLimitExceeded {
+                Err(ClientError::LimitExceeded {
                     param: "object_ids",
                     limit: *QUERY_MAX_RESULT_LIMIT,
                 }
@@ -599,7 +600,7 @@ impl ReadApiServer for ReadApi {
                     Ok(success)
                 }
             } else {
-                Err(ClientError::SizeLimitExceeded {
+                Err(ClientError::LimitExceeded {
                     param: "past_objects",
                     limit: *QUERY_MAX_RESULT_LIMIT,
                 }
@@ -614,7 +615,7 @@ impl ReadApiServer for ReadApi {
             Ok(self
                 .state
                 .get_total_transaction_blocks()
-                .map_err(Error::from)?
+                .map_err(Error::from)? // TODO(wlmyng): Match SuiError::UnsupportedFeatureError
                 .into()) // converts into BigInt<u64>
         })
     }
@@ -633,6 +634,7 @@ impl ReadApiServer for ReadApi {
             let state = self.state.clone();
             let transaction = spawn_monitored_task!(async move {
                 state.get_transaction_block(digest).await.map_err(|err| {
+                    // TODO(wlmyng): match SuiError::TransactionNotFound
                     debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err);
                     Error::from(err)
                 })
@@ -658,6 +660,7 @@ impl ReadApiServer for ReadApi {
                 temp_response.effects = Some(
                     spawn_monitored_task!(async move {
                         state.get_executed_effects(digest).map_err(|err| {
+                            // TODO(wlmyng): match on SuiError
                             debug!(tx_digest=?digest, "Failed to get effects: {:?}", err);
                             Error::from(err)
                         })
@@ -706,7 +709,7 @@ impl ReadApiServer for ReadApi {
                     let event_digest = *event_digest;
                     let events = spawn_monitored_task!(async move{
                     state
-                    .get_transaction_events(&event_digest)
+                    .get_transaction_events(&event_digest) // match on SuiError::TransactionEventsNotFound
                     .map_err(|e|
                         {
                             error!("Failed to call get transaction events for events digest: {event_digest:?} with error {e:?}");
@@ -799,10 +802,10 @@ impl ReadApiServer for ReadApi {
             let state = self.state.clone();
             spawn_monitored_task!(async move{
             let store = state.load_epoch_store_one_call_per_task();
-            let effect = state.get_executed_effects(transaction_digest).map_err(Error::from)?;
+            let effect = state.get_executed_effects(transaction_digest).map_err(Error::from)?; // TODO(wlmyng): match on SuiError::EffectsNotFound tbh
             let events = if let Some(event_digest) = effect.events_digest() {
             state
-                .get_transaction_events(event_digest)
+                .get_transaction_events(event_digest) // TODO(wlmyng): match TransactionEventsNotFound
                 .map_err(
                     |e| {
                         error!("Failed to get transaction events for event digest {event_digest:?} with error: {e:?}");
@@ -850,9 +853,13 @@ impl ReadApiServer for ReadApi {
         with_tracing!(async move {
             Ok(self
                 .get_checkpoint_internal(id.clone())
-                .map_err(|_| ClientError::NotFound {
-                    entity: EntityType::Checkpoint,
-                    id: id.to_string(),
+                .map_err(|e| match e {
+                    SuiError::UserInputError { .. } => ClientError::NotFound {
+                        entity: EntityType::Checkpoint,
+                        id: id.to_string(),
+                    }
+                    .into(),
+                    _ => Error::SuiError(e), // We only expect TypedStoreError
                 })?)
         })
     }
@@ -866,7 +873,12 @@ impl ReadApiServer for ReadApi {
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
         with_tracing!(async move {
-            let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS)?;
+            let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS).map_err(|e| {
+                ClientError::InvalidParam {
+                    param: "limit",
+                    reason: e.to_string(),
+                }
+            })?;
 
             let state = self.state.clone();
 
@@ -874,6 +886,7 @@ impl ReadApiServer for ReadApi {
 
             let mut data = spawn_monitored_task!(async move {
                 state.get_checkpoints(cursor.map(|s| *s), limit as u64 + 1, descending_order)
+                // TODO(wlmyng): I think this is ok, but double check that there are non-error scenarios where authority.get_latest_checkpoint_sequence_number might be None
             })
             .await
             .map_err(Error::from)?
@@ -954,7 +967,7 @@ impl ReadApiServer for ReadApi {
                         (*v).into(),
                         self.state
                             .get_chain_identifier()
-                            .ok_or(anyhow!("Chain identifier not found"))?
+                            .ok_or(anyhow!("Chain identifier not found"))? // TODO(wlmyng): UnexpectedError
                             .chain(),
                     )
                     .ok_or(Error::ClientError(
@@ -979,7 +992,7 @@ impl ReadApiServer for ReadApi {
             let ci = self
                 .state
                 .get_chain_identifier()
-                .ok_or(anyhow!("Chain identifier not found"))?;
+                .ok_or(anyhow!("Chain identifier not found"))?; // TODO(wlmyng): UnexpectedError
             Ok(ci.to_string())
         })
     }
