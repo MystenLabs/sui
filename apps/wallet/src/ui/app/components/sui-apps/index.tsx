@@ -54,10 +54,10 @@ function AppsPlayGround() {
 
 			{BullsharkInterstitialEnabled && (
 				<div className="font-frankfurter flex flex-col w-full border-2 border-black border-solid bg-[#99DBFB] p-3 rounded-lg items-center text-white gap-1 [-webkit-text-stroke:1px_black] mb-3">
-					<div className="text-heading4">Join bullsharks quests!</div>
+					<div className="text-heading6">Join bullsharks quests!</div>
 					<div className="text-heading3">5 million sui prize pool!</div>
 					<ExternalLink
-						className="appearance-none no-underline text-white bg-[#EA3389] rounded-lg p-2 [-webkit-text-stroke:1px_black]"
+						className="appearance-none no-underline text-white bg-[#EA3389] rounded-lg p-2 [-webkit-text-stroke:1px_black] leading-none text-heading6"
 						href="https://tech.mystenlabs.com/introducing-bullsharks-quests/"
 						onClick={() => ampli.clickedBullsharkQuestsCta({ sourceFlow: 'Banner - Apps tab' })}
 					>
