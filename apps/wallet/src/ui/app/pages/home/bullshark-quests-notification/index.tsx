@@ -35,7 +35,6 @@ function BullsharkQuestsNotification({ onClose }: { onClose: () => void }) {
 	}, []);
 
 	const closeInterstitial = () => {
-		setInterstitialDismissed();
 		onClose();
 		navigate('/apps');
 	};
