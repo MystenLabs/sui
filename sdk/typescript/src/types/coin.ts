@@ -12,8 +12,6 @@ export const CoinStruct = object({
 	version: string(),
 	digest: TransactionDigest,
 	balance: string(),
-	// TODO (jian): remove this when we move to 0.34
-	lockedUntilEpoch: optional(nullable(number())),
 	previousTransaction: TransactionDigest,
 });
 

@@ -149,8 +149,6 @@ export type DelegationData = SuiMoveObject & {
 			id: string;
 			version: number;
 		};
-		// TODO (jian): clean up after 0.34
-		coin_locked_until_epoch: Option<SuiMoveObject>;
 		ending_epoch: Option<number>;
 	};
 };
