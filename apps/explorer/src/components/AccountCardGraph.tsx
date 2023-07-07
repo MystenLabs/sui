@@ -19,8 +19,8 @@ import { Text } from '~/ui/Text';
 
 const formatter = Intl.NumberFormat('en', { notation: 'compact' });
 
-const graphDataField = 'cumulativeAddresses' as const;
-const graphDataText = 'Total accounts';
+const graphDataField = 'cumulativeActiveAddresses' as const;
+const graphDataText = 'Total active accounts';
 
 type AddressMetricsType = Awaited<ReturnType<JsonRpcProvider['getAllEpochAddressMetrics']>>[number];
 
