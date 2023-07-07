@@ -34,13 +34,7 @@ function BullsharkQuestsNotification({ onClose }: { onClose: () => void }) {
 		return () => clearTimeout(t);
 	}, []);
 
-	const timer = setTimeout(() => {
-		onClose();
-		navigate('/apps');
-	}, 10000);
-
 	const closeInterstitial = () => {
-		clearTimeout(timer);
 		setInterstitialDismissed();
 		onClose();
 		navigate('/apps');
