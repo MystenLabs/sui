@@ -17,7 +17,7 @@ import { Text } from '~/ui/Text';
 const formatter = Intl.NumberFormat('en', { notation: 'compact' });
 
 function TooltipContent({
-	data: { epochTotalTransactions, epochStartTimestamp, epoch },
+	data: { epochTotalTransactions, epochStartTimestamp },
 }: {
 	data: {
 		epochTotalTransactions: number;
@@ -30,7 +30,7 @@ function TooltipContent({
 	return (
 		<div className="flex flex-col gap-0.5">
 			<Text variant="subtitleSmallExtra/medium" color="steel-darker">
-				Epoch {epoch} | {dateFormatted}
+				{dateFormatted}
 			</Text>
 			<Heading variant="heading6/semibold" color="steel-darker">
 				{totalFormatted}
