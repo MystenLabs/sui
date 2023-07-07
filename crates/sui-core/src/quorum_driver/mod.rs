@@ -17,6 +17,7 @@ use sui_types::quorum_driver_types::{
     QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResponse, QuorumDriverResult,
 };
 use tap::TapFallible;
+use tokio::sync::Semaphore;
 use tokio::time::{sleep_until, Instant};
 
 use tokio::sync::mpsc::{self, Receiver, Sender};
@@ -41,7 +42,7 @@ use self::reconfig_observer::ReconfigObserver;
 #[cfg(test)]
 mod tests;
 
-const TASK_QUEUE_SIZE: usize = 10000;
+const TASK_QUEUE_SIZE: usize = 2000;
 const EFFECTS_QUEUE_SIZE: usize = 10000;
 const TX_MAX_RETRY_TIMES: u8 = 10;
 
@@ -757,7 +758,14 @@ where
         mut task_receiver: Receiver<QuorumDriverTask>,
         metrics: Arc<QuorumDriverMetrics>,
     ) {
+        let limit = Arc::new(Semaphore::new(TASK_QUEUE_SIZE));
         while let Some(task) = task_receiver.recv().await {
+            let limit = limit.clone();
+            // hold semaphore permit until task completes. unwrap ok because we never close
+            // the semaphore in this context.
+            let limit = limit.clone();
+            let permit = limit.acquire_owned().await.unwrap();
+
             // TODO check reconfig process here
 
             debug!(?task, "Dequeued task");
@@ -771,7 +779,10 @@ where
             }
             metrics.current_requests_in_flight.dec();
             let qd = quorum_driver.clone();
-            spawn_monitored_task!(QuorumDriverHandler::process_task(qd, task));
+            spawn_monitored_task!(async move {
+                let _guard = permit;
+                QuorumDriverHandler::process_task(qd, task).await
+            });
         }
     }
 }
