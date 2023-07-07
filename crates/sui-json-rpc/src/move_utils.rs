@@ -321,7 +321,7 @@ mod tests {
 
             let expected = expect!["-32602"];
             expected.assert_eq(&error_object.code().to_string());
-            let expected = expect!["Module 'test_module' not found"];
+            let expected = expect!["SuiMoveNormalizedModule 'test_module' not found"];
             expected.assert_eq(error_object.message());
         }
     }

@@ -352,6 +352,7 @@ async fn find_package_object_id(
                 }
             }
         }
+
         Err(ClientError::NotFoundIn {
             entity: EntityType::Object,
             id: object_struct_tag.to_string(),
@@ -482,9 +483,11 @@ mod tests {
     use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
     use sui_types::coin::TreasuryCap;
     use sui_types::digests::{ObjectDigest, TransactionDigest};
+    use sui_types::effects::TransactionEffectsV1;
     use sui_types::gas_coin::GAS;
     use sui_types::id::UID;
     use sui_types::object::Object;
+    use sui_types::utils::create_fake_transaction;
     use sui_types::{parse_sui_struct_tag, TypeTag};
 
     fn get_test_owner() -> SuiAddress {
@@ -1318,6 +1321,38 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn test_object_not_found() {
+            let transaction_digest = TransactionDigest::from([0; 32]);
+            let verified_transaction: VerifiedTransaction = create_fake_transaction();
+            let transaction_effects: TransactionEffects =
+                TransactionEffects::V1(TransactionEffectsV1::default());
+
+            let mut mock_state = MockState::new();
+            mock_state
+                .expect_find_publish_txn_digest()
+                .return_once(move |_| Ok(transaction_digest));
+            mock_state
+                .expect_get_executed_transaction_and_effects()
+                .return_once(move |_| Ok((verified_transaction, transaction_effects)));
+
+            let internal = CoinReadInternalImpl {
+                state: Arc::new(mock_state),
+                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+            };
+            let coin_read_api = CoinReadApi {
+                internal: Box::new(internal),
+            };
+
+            let response = coin_read_api
+                .get_coin_metadata("0x2::sui::SUI".to_string())
+                .await;
+
+            assert!(response.is_ok());
+            let result = response.unwrap();
+            assert_eq!(result, None);
+        }
+
+        #[tokio::test]
         async fn test_find_package_object_not_sui_coin_metadata() {
             let package_id = get_test_package_id();
             let coin_name = get_test_coin_type(package_id);
@@ -1399,6 +1434,42 @@ mod tests {
             let result = response.unwrap();
             let expected = expect!["420"];
             expected.assert_eq(&result.value.to_string());
+        }
+
+        #[tokio::test]
+        async fn test_object_not_found() {
+            let package_id = get_test_package_id();
+            let (coin_name, _, _, _, _) = get_test_treasury_cap_peripherals(package_id);
+            let transaction_digest = TransactionDigest::from([0; 32]);
+            let verified_transaction: VerifiedTransaction = create_fake_transaction();
+            let transaction_effects: TransactionEffects =
+                TransactionEffects::V1(TransactionEffectsV1::default());
+
+            let mut mock_state = MockState::new();
+            mock_state
+                .expect_find_publish_txn_digest()
+                .return_once(move |_| Ok(transaction_digest));
+            mock_state
+                .expect_get_executed_transaction_and_effects()
+                .return_once(move |_| Ok((verified_transaction, transaction_effects)));
+
+            let internal = CoinReadInternalImpl {
+                state: Arc::new(mock_state),
+                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+            };
+            let coin_read_api = CoinReadApi {
+                internal: Box::new(internal),
+            };
+
+            let response = coin_read_api.get_total_supply(coin_name.clone()).await;
+
+            assert!(response.is_err());
+            let error_result = response.unwrap_err();
+            let error_object: ErrorObjectOwned = error_result.into();
+            let expected = expect!["-32602"];
+            expected.assert_eq(&error_object.code().to_string());
+            let expected = expect!["Object '0x2::coin::TreasuryCap<0xa0c5eeef6d7735176524b340c17b5329ef818b2d181f354936a79ca8632d8852::test_coin::TEST_COIN>' not found in Package '0xa0c5eeef6d7735176524b340c17b5329ef818b2d181f354936a79ca8632d8852'"];
+            expected.assert_eq(error_object.message());
         }
 
         #[tokio::test]
