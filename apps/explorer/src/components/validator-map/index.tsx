@@ -129,7 +129,7 @@ export default function ValidatorMap({ minHeight }: Props) {
 						</Text>
 					</div>
 
-					<div className="flex gap-6">
+					<div id="validator-map-validator-count" className="flex gap-6">
 						<NodeStat title="Validators">
 							{isLoading && <Placeholder width="60px" height="0.8em" />}
 							{

@@ -14,7 +14,7 @@ export function NetworkTPS() {
 			<Heading color="steel-darker" variant="heading4/semibold">
 				Network TPS
 			</Heading>
-			<div className="mt-8 flex gap-8">
+			<div id="tps-stats" className="mt-8 flex gap-8">
 				<StatsWrapper
 					size="sm"
 					label="TPS Now / Peak 30D"

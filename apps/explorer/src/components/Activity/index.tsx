@@ -48,9 +48,9 @@ export function Activity({ initialTab, initialLimit, disablePagination }: Props)
 			>
 				<div className="relative">
 					<TabsList>
-						<TabsTrigger value="transactions">Transaction Blocks</TabsTrigger>
-						<TabsTrigger value="epochs">Epochs</TabsTrigger>
-						<TabsTrigger value="checkpoints">Checkpoints</TabsTrigger>
+						<TabsTrigger id="transactions-tab" value="transactions">Transaction Blocks</TabsTrigger>
+						<TabsTrigger id="epochs-tab" value="epochs">Epochs</TabsTrigger>
+						<TabsTrigger id="checkpoints-tab" value="checkpoints">Checkpoints</TabsTrigger>
 					</TabsList>
 					<div className="absolute inset-y-0 -top-1 right-0 text-2xl">
 						{/* todo: re-enable this when rpc is stable */}
@@ -74,7 +74,7 @@ export function Activity({ initialTab, initialLimit, disablePagination }: Props)
 						disablePagination={disablePagination}
 					/>
 				</TabsContent>
-				<TabsContent value="checkpoints">
+				<TabsContent  value="checkpoints">
 					<CheckpointsTable
 						refetchInterval={refetchInterval}
 						initialLimit={initialLimit}

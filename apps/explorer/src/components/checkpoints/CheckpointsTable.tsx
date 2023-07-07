@@ -73,7 +73,7 @@ export function CheckpointsTable({
 					colWidths={['100px', '120px', '204px', '90px', '38px']}
 				/>
 			) : (
-				<div>
+				<div id="checkpoints-table-content">
 					<TableCard data={cardData.data} columns={cardData.columns} />
 				</div>
 			)}

@@ -62,7 +62,12 @@ function Home() {
 					<Activity initialLimit={TRANSACTIONS_LIMIT} disablePagination />
 				</ErrorBoundary>
 			</div>
-			<div data-testid="validators-table" style={{ gridArea: 'validators' }} className="mt-5">
+			<div
+				id="validators-table"
+				data-testid="validators-table"
+				style={{ gridArea: 'validators' }}
+				className="mt-5"
+			>
 				<TabHeader title="Validators">
 					<ErrorBoundary>
 						<TopValidatorsCard limit={10} showIcon />
@@ -70,7 +75,7 @@ function Home() {
 				</TabHeader>
 			</div>
 
-			<div style={{ gridArea: 'packages' }}>
+			<div id="top-packages-table" style={{ gridArea: 'packages' }}>
 				<TopPackagesCard />
 			</div>
 		</div>

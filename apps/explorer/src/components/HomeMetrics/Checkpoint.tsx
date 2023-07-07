@@ -14,7 +14,9 @@ export function Checkpoint() {
 			unavailable={isLoading}
 			size="sm"
 		>
-			{data?.currentCheckpoint ? BigInt(data?.currentCheckpoint).toLocaleString() : null}
+			<div id="checkpoint-stat">
+				{data?.currentCheckpoint ? BigInt(data?.currentCheckpoint).toLocaleString() : null}
+			</div>
 		</StatsWrapper>
 	);
 }

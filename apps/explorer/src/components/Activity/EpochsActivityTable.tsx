@@ -61,7 +61,7 @@ export function EpochsActivityTable({
 					colWidths={['100px', '120px', '40px', '204px', '90px', '38px']}
 				/>
 			) : (
-				<div>
+				<div id="epochs-table-content">
 					<TableCard data={cardData.data} columns={cardData.columns} />
 				</div>
 			)}
