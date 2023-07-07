@@ -20,3 +20,10 @@ export const Unpaused: StoryObj<PlayPauseProps> = {
 		paused: true,
 	},
 };
+
+export const Animated: StoryObj<PlayPauseProps> = {
+	args: {
+		paused: false,
+		animateDuration: 10,
+	},
+};
