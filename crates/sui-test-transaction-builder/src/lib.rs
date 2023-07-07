@@ -10,7 +10,7 @@ use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::crypto::{Signature, Signer};
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::{
-    CallArg, ObjectArg, Transaction, TransactionData, VerifiedTransaction,
+    CallArg, ObjectArg, ProgrammableTransaction, Transaction, TransactionData,
     DEFAULT_VALIDATOR_GAS_PRICE, TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
 use sui_types::{TypeTag, SUI_SYSTEM_PACKAGE_ID};
@@ -206,6 +206,11 @@ impl TestTransactionBuilder {
         self.publish(path)
     }
 
+    pub fn programmable(mut self, programmable: ProgrammableTransaction) -> Self {
+        self.test_data = TestTransactionData::Programmable(programmable);
+        self
+    }
+
     pub fn build(self) -> TransactionData {
         match self.test_data {
             TestTransactionData::Move(data) => TransactionData::new_move_call(
@@ -251,18 +256,21 @@ impl TestTransactionBuilder {
                     self.gas_price,
                 )
             }
+            TestTransactionData::Programmable(pt) => TransactionData::new_programmable(
+                self.sender,
+                vec![self.gas_object],
+                pt,
+                self.gas_price * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+                self.gas_price,
+            ),
             TestTransactionData::Empty => {
                 panic!("Cannot build empty transaction");
             }
         }
     }
 
-    pub fn build_and_sign(self, signer: &dyn Signer<Signature>) -> VerifiedTransaction {
-        VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
-            self.build(),
-            Intent::sui_transaction(),
-            vec![signer],
-        ))
+    pub fn build_and_sign(self, signer: &dyn Signer<Signature>) -> Transaction {
+        Transaction::from_data_and_signer(self.build(), Intent::sui_transaction(), vec![signer])
     }
 }
 
@@ -271,6 +279,7 @@ enum TestTransactionData {
     Transfer(TransferData),
     TransferSui(TransferSuiData),
     Publish(PublishData),
+    Programmable(ProgrammableTransaction),
     Empty,
 }
 

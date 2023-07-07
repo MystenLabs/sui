@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { array, boolean, Infer, nullable, number, object, optional, string } from 'superstruct';
-import { ObjectId, TransactionDigest } from './common';
+import type { Infer } from 'superstruct';
+import { array, boolean, nullable, number, object, optional, string } from 'superstruct';
+import { ObjectId, TransactionDigest } from './common.js';
 
 export const CoinStruct = object({
 	coinType: string(),

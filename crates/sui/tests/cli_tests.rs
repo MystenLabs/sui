@@ -43,7 +43,7 @@ use sui_types::crypto::{
 };
 use sui_types::error::SuiObjectResponseError;
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 const TEST_DATA_DIR: &str = "tests/data/";
 
@@ -69,6 +69,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         from_config: None,
         epoch_duration_ms: None,
         benchmark_ips: None,
+        with_faucet: false,
     }
     .execute()
     .await?;
@@ -107,6 +108,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         from_config: None,
         epoch_duration_ms: None,
         benchmark_ips: None,
+        with_faucet: false,
     }
     .execute()
     .await;
@@ -139,6 +141,7 @@ async fn test_genesis_for_benchmarks() -> Result<(), anyhow::Error> {
         from_config: None,
         epoch_duration_ms: None,
         benchmark_ips: Some(benchmark_ips.clone()),
+        with_faucet: false,
     }
     .execute()
     .await?;
@@ -439,6 +442,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await?;
@@ -660,6 +664,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await?;
@@ -729,6 +734,7 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await?;
@@ -797,6 +803,7 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await;
@@ -843,6 +850,7 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await;
@@ -898,6 +906,7 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await;
@@ -940,6 +949,7 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await;
@@ -996,6 +1006,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await?;
@@ -1069,6 +1080,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         legacy_digest: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await?;

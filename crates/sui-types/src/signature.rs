@@ -59,6 +59,10 @@ impl GenericSignature {
     pub fn is_zklogin(&self) -> bool {
         matches!(self, GenericSignature::ZkLoginAuthenticator(_))
     }
+
+    pub fn is_upgraded_multisig(&self) -> bool {
+        matches!(self, GenericSignature::MultiSig(_))
+    }
 }
 
 /// GenericSignature encodes a single signature [enum Signature] as is `flag || signature || pubkey`.

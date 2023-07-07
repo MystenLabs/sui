@@ -3,6 +3,7 @@
 
 import './index.css';
 import '@fontsource/inter/variable.css';
+import '@fontsource/red-hat-mono/variable.css';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { WalletKitProvider } from '@mysten/wallet-kit';

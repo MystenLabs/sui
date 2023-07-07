@@ -1052,7 +1052,7 @@ dependencies = [
  "sync_wrapper",
  "tokio",
  "tower",
- "tower-http 0.3.5",
+ "tower-http",
  "tower-layer",
  "tower-service",
 ]
@@ -1088,7 +1088,7 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tower",
- "tower-http 0.3.5",
+ "tower-http",
  "tower-layer",
  "tower-service",
 ]
@@ -3085,9 +3085,9 @@ checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 
 [[package]]
 name = "expect-test"
-version = "1.4.0"
+version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d4661aca38d826eb7c72fe128e4238220616de4c0cc00db7bfc38e2e1364dd3"
+checksum = "30d9eafeadd538e68fb28016364c9732d78e420b9ff8853fa5e4058861e9f8d3"
 dependencies = [
  "dissimilar",
  "once_cell",
@@ -4357,6 +4357,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonpath_lib"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eaa63191d68230cccb81c5aa23abd53ed64d83337cacbb25a7b8c7979523774f"
+dependencies = [
+ "log",
+ "serde 1.0.152",
+ "serde_json",
+]
+
+[[package]]
 name = "jsonrpsee"
 version = "0.16.2"
 source = "git+https://github.com/wlmyng/jsonrpsee.git?rev=b1b300784795f6a64d0fcdf8f03081a9bc38bde8#b1b300784795f6a64d0fcdf8f03081a9bc38bde8"
@@ -4986,6 +4997,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-bytecode-verifier-v0"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fail",
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-borrow-graph",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph 0.5.1",
+]
+
+[[package]]
 name = "move-bytecode-viewer"
 version = "0.1.0"
 dependencies = [
@@ -5031,6 +5056,7 @@ dependencies = [
  "move-stdlib",
  "move-symbol-pool",
  "move-unit-test",
+ "move-vm-profiler",
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
@@ -5464,6 +5490,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-stdlib-v0"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "hex",
+ "log",
+ "move-binary-format",
+ "move-command-line-common",
+ "move-core-types",
+ "move-docgen",
+ "move-errmapgen",
+ "move-prover",
+ "move-vm-runtime-v0",
+ "move-vm-types",
+ "sha2 0.9.9",
+ "sha3 0.9.1",
+ "smallvec",
+ "walkdir",
+]
+
+[[package]]
 name = "move-symbol-pool"
 version = "0.1.0"
 dependencies = [
@@ -5526,6 +5573,7 @@ dependencies = [
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
  "move-symbol-pool",
+ "move-vm-profiler",
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
@@ -5542,6 +5590,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-vm-profiler"
+version = "0.1.0"
+dependencies = [
+ "move-vm-config",
+ "once_cell",
+ "serde 1.0.152",
+ "serde_json",
+ "serde_with",
+]
+
+[[package]]
 name = "move-vm-runtime"
 version = "0.1.0"
 dependencies = [
@@ -5551,6 +5610,26 @@ dependencies = [
  "move-bytecode-verifier",
  "move-core-types",
  "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-types",
+ "once_cell",
+ "parking_lot 0.11.2",
+ "sha3 0.9.1",
+ "smallvec",
+ "tracing",
+]
+
+[[package]]
+name = "move-vm-runtime-v0"
+version = "0.1.0"
+dependencies = [
+ "better_any",
+ "fail",
+ "move-binary-format",
+ "move-bytecode-verifier-v0",
+ "move-core-types",
+ "move-vm-config",
+ "move-vm-profiler",
  "move-vm-types",
  "once_cell",
  "parking_lot 0.11.2",
@@ -5566,6 +5645,7 @@ dependencies = [
  "anyhow",
  "move-binary-format",
  "move-core-types",
+ "move-vm-profiler",
  "move-vm-types",
  "once_cell",
  "serde 1.0.152",
@@ -5578,6 +5658,7 @@ dependencies = [
  "bcs",
  "move-binary-format",
  "move-core-types",
+ "move-vm-profiler",
  "once_cell",
  "serde 1.0.152",
  "smallvec",
@@ -5731,7 +5812,7 @@ dependencies = [
  "tonic",
  "tonic-health",
  "tower",
- "tower-http 0.3.5",
+ "tower-http",
  "tracing",
  "workspace-hack",
 ]
@@ -5826,6 +5907,7 @@ dependencies = [
  "narwhal-storage",
  "narwhal-test-utils",
  "narwhal-types",
+ "parking_lot 0.12.1",
  "pprof",
  "prometheus",
  "rand 0.8.5",
@@ -9191,7 +9273,7 @@ dependencies = [
  "tap",
  "telemetry-subscribers",
  "tempfile",
- "test-utils",
+ "test-cluster",
  "tokio",
  "tracing",
  "unescape",
@@ -9211,6 +9293,7 @@ dependencies = [
  "move-core-types",
  "move-package",
  "move-vm-config",
+ "move-vm-profiler",
  "move-vm-runtime",
  "move-vm-types",
  "mysten-metrics",
@@ -9235,6 +9318,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-adapter-v0"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "leb128",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier-v0",
+ "move-core-types",
+ "move-package",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-runtime-v0",
+ "move-vm-types",
+ "mysten-metrics",
+ "once_cell",
+ "serde 1.0.152",
+ "sui-macros",
+ "sui-move-natives-v0",
+ "sui-protocol-config",
+ "sui-types",
+ "sui-verifier-v0",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-archival"
 version = "0.1.0"
 dependencies = [
@@ -9246,6 +9357,7 @@ dependencies = [
  "ed25519-consensus",
  "fastcrypto",
  "futures",
+ "indicatif",
  "integer-encoding",
  "more-asserts",
  "move-binary-format",
@@ -9256,7 +9368,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde 1.0.152",
- "sui-core",
+ "sui-config",
  "sui-macros",
  "sui-protocol-config",
  "sui-simulator",
@@ -9320,7 +9432,7 @@ dependencies = [
  "sui-types",
  "sysinfo",
  "telemetry-subscribers",
- "test-utils",
+ "test-cluster",
  "tokio",
  "tokio-util 0.7.4",
  "tracing",
@@ -9362,7 +9474,7 @@ dependencies = [
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
- "test-utils",
+ "test-cluster",
  "tokio",
  "tracing",
  "uuid",
@@ -9457,6 +9569,7 @@ dependencies = [
  "serde_yaml 0.8.26",
  "shared-crypto",
  "signature 1.6.4",
+ "sui-archival",
  "sui-config",
  "sui-execution",
  "sui-framework",
@@ -9499,26 +9612,13 @@ dependencies = [
  "strum_macros",
  "sui-config",
  "sui-core",
+ "sui-json-rpc-types",
  "sui-move-build",
  "sui-swarm-config",
  "sui-test-transaction-builder",
  "sui-types",
- "test-utils",
+ "test-cluster",
  "tokio",
- "workspace-hack",
-]
-
-[[package]]
-name = "sui-cost-tables"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "move-binary-format",
- "move-core-types",
- "move-vm-test-utils",
- "move-vm-types",
- "once_cell",
- "serde 1.0.152",
  "workspace-hack",
 ]
 
@@ -9567,7 +9667,7 @@ dependencies = [
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
- "test-utils",
+ "test-cluster",
  "tokio",
  "tracing",
  "workspace-hack",
@@ -9590,11 +9690,15 @@ dependencies = [
  "move-core-types",
  "move-vm-config",
  "move-vm-runtime",
+ "move-vm-runtime-v0",
  "sui-adapter-latest",
+ "sui-adapter-v0",
  "sui-move-natives-latest",
+ "sui-move-natives-v0",
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
+ "sui-verifier-v0",
  "workspace-hack",
 ]
 
@@ -9641,11 +9745,11 @@ dependencies = [
  "tap",
  "telemetry-subscribers",
  "tempfile",
- "test-utils",
+ "test-cluster",
  "thiserror",
  "tokio",
  "tower",
- "tower-http 0.3.5",
+ "tower-http",
  "tracing",
  "ttl_cache",
  "typed-store",
@@ -9781,7 +9885,7 @@ dependencies = [
  "sui-sdk",
  "sui-types",
  "telemetry-subscribers",
- "test-utils",
+ "test-cluster",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -9820,6 +9924,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "cached",
+ "expect-test",
  "eyre",
  "fastcrypto",
  "futures",
@@ -9859,11 +9964,11 @@ dependencies = [
  "sui-transaction-builder",
  "sui-types",
  "tap",
- "test-utils",
+ "test-cluster",
  "thiserror",
  "tokio",
  "tower",
- "tower-http 0.3.5",
+ "tower-http",
  "tracing",
  "typed-store",
  "workspace-hack",
@@ -9978,7 +10083,6 @@ dependencies = [
  "serde_json",
  "serde_yaml 0.8.26",
  "sui-core",
- "sui-cost-tables",
  "sui-macros",
  "sui-move-build",
  "sui-move-natives-latest",
@@ -9997,12 +10101,15 @@ name = "sui-move-build"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "datatest-stable",
  "fastcrypto",
  "move-binary-format",
  "move-bytecode-utils",
  "move-bytecode-verifier",
+ "move-command-line-common",
  "move-compiler",
  "move-core-types",
+ "move-ir-types",
  "move-package",
  "move-symbol-pool",
  "serde-reflection",
@@ -10035,6 +10142,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-move-natives-v0"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "better_any",
+ "fastcrypto",
+ "fastcrypto-zkp",
+ "linked-hash-map",
+ "move-binary-format",
+ "move-core-types",
+ "move-stdlib-v0",
+ "move-vm-runtime-v0",
+ "move-vm-types",
+ "smallvec",
+ "sui-protocol-config",
+ "sui-types",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-network"
 version = "0.0.0"
 dependencies = [
@@ -10053,12 +10180,14 @@ dependencies = [
  "rand 0.8.5",
  "serde 1.0.152",
  "shared-crypto",
+ "sui-archival",
  "sui-config",
  "sui-storage",
  "sui-swarm-config",
  "sui-types",
  "tap",
  "telemetry-subscribers",
+ "tempfile",
  "tokio",
  "tonic",
  "tonic-build",
@@ -10151,6 +10280,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-oracle"
+version = "1.5.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "bcs",
+ "chrono",
+ "clap 3.2.23",
+ "futures",
+ "jsonpath_lib",
+ "move-core-types",
+ "mysten-metrics",
+ "once_cell",
+ "prometheus",
+ "reqwest",
+ "serde 1.0.152",
+ "serde_json",
+ "serde_with",
+ "sui-config",
+ "sui-json",
+ "sui-json-rpc",
+ "sui-json-rpc-types",
+ "sui-sdk",
+ "sui-types",
+ "tap",
+ "telemetry-subscribers",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-proc-macros"
 version = "0.7.0"
 dependencies = [
@@ -10222,7 +10383,7 @@ dependencies = [
  "telemetry-subscribers",
  "tokio",
  "tower",
- "tower-http 0.4.0",
+ "tower-http",
  "tracing",
  "workspace-hack",
 ]
@@ -10310,7 +10471,7 @@ dependencies = [
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
- "test-utils",
+ "test-cluster",
  "thiserror",
  "tokio",
  "tracing",
@@ -10355,12 +10516,12 @@ dependencies = [
  "tap",
  "telemetry-subscribers",
  "tempfile",
- "test-utils",
+ "test-cluster",
  "thiserror",
  "tokio",
  "tonic",
  "tower",
- "tower-http 0.3.5",
+ "tower-http",
  "tracing",
  "typed-store",
  "typed-store-derive",
@@ -10399,7 +10560,7 @@ dependencies = [
  "sui-transaction-builder",
  "sui-types",
  "tempfile",
- "test-utils",
+ "test-cluster",
  "thiserror",
  "tokio",
  "tracing",
@@ -10477,10 +10638,42 @@ dependencies = [
  "sui-sdk",
  "sui-types",
  "tempfile",
- "test-utils",
+ "test-cluster",
  "thiserror",
  "tokio",
  "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-source-validation-service"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "clap 3.2.23",
+ "expect-test",
+ "fs_extra",
+ "hyper",
+ "move-compiler",
+ "move-core-types",
+ "move-package",
+ "move-symbol-pool",
+ "reqwest",
+ "serde 1.0.152",
+ "serde_json",
+ "sui-config",
+ "sui-move",
+ "sui-move-build",
+ "sui-sdk",
+ "sui-source-validation",
+ "telemetry-subscribers",
+ "tempfile",
+ "test-cluster",
+ "tokio",
+ "toml 0.7.4",
+ "tracing",
+ "url",
  "workspace-hack",
 ]
 
@@ -10554,7 +10747,7 @@ dependencies = [
  "sui-swarm-config",
  "sui-types",
  "telemetry-subscribers",
- "test-utils",
+ "test-cluster",
  "tokio",
  "tracing",
  "workspace-hack",
@@ -10660,7 +10853,7 @@ dependencies = [
  "telemetry-subscribers",
  "tokio",
  "tower",
- "tower-http 0.3.5",
+ "tower-http",
  "workspace-hack",
 ]
 
@@ -10707,6 +10900,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-core-types",
  "move-package",
+ "narwhal-storage",
  "narwhal-types",
  "prometheus",
  "rocksdb",
@@ -10780,6 +10974,7 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-framework",
+ "sui-framework-snapshot",
  "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-protocol-config",
@@ -10814,6 +11009,8 @@ dependencies = [
  "move-core-types",
  "move-disassembler",
  "move-ir-types",
+ "move-vm-profiler",
+ "move-vm-test-utils",
  "move-vm-types",
  "mysten-metrics",
  "mysten-network",
@@ -10837,7 +11034,6 @@ dependencies = [
  "static_assertions",
  "strum",
  "strum_macros",
- "sui-cost-tables",
  "sui-enum-compat-util",
  "sui-macros",
  "sui-protocol-config",
@@ -10885,6 +11081,21 @@ version = "0.1.0"
 dependencies = [
  "datatest-stable",
  "sui-transactional-test-runner",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-verifier-v0"
+version = "0.1.0"
+dependencies = [
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier-v0",
+ "move-core-types",
+ "move-vm-config",
+ "sui-protocol-config",
+ "sui-types",
  "workspace-hack",
 ]
 
@@ -11088,6 +11299,45 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95059e91184749cb66be6dc994f67f182b6d897cb3df74a5bf66b5e709295fd8"
 
 [[package]]
+name = "test-cluster"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "futures",
+ "jsonrpsee",
+ "move-binary-format",
+ "move-core-types",
+ "move-package",
+ "mysten-metrics",
+ "prometheus",
+ "rand 0.8.5",
+ "serde_json",
+ "shared-crypto",
+ "sui",
+ "sui-config",
+ "sui-core",
+ "sui-framework",
+ "sui-json-rpc",
+ "sui-json-rpc-types",
+ "sui-keys",
+ "sui-macros",
+ "sui-move-build",
+ "sui-node",
+ "sui-protocol-config",
+ "sui-sdk",
+ "sui-simulator",
+ "sui-swarm",
+ "sui-swarm-config",
+ "sui-test-transaction-builder",
+ "sui-types",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "test-fuzz"
 version = "3.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11142,45 +11392,6 @@ dependencies = [
  "serde 1.0.152",
  "sha-1 0.10.1",
  "test-fuzz-internal",
-]
-
-[[package]]
-name = "test-utils"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bcs",
- "futures",
- "jsonrpsee",
- "move-binary-format",
- "move-core-types",
- "move-package",
- "mysten-metrics",
- "prometheus",
- "rand 0.8.5",
- "serde_json",
- "shared-crypto",
- "sui",
- "sui-config",
- "sui-core",
- "sui-framework",
- "sui-json-rpc",
- "sui-json-rpc-types",
- "sui-keys",
- "sui-macros",
- "sui-move-build",
- "sui-node",
- "sui-protocol-config",
- "sui-sdk",
- "sui-simulator",
- "sui-swarm",
- "sui-swarm-config",
- "sui-test-transaction-builder",
- "sui-types",
- "tempfile",
- "tokio",
- "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11655,25 +11866,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tower-http"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d1d42a9b3f3ec46ba828e8d376aec14592ea199f70a06a548587ecd1c4ab658"
-dependencies = [
- "bitflags",
- "bytes",
- "futures-core",
- "futures-util",
- "http",
- "http-body",
- "http-range-header",
- "pin-project-lite",
- "tower-layer",
- "tower-service",
- "tracing",
-]
-
-[[package]]
 name = "tower-layer"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11807,7 +11999,7 @@ dependencies = [
  "sui-move-build",
  "sui-protocol-config",
  "sui-types",
- "test-utils",
+ "test-cluster",
  "tokio",
  "tracing",
  "workspace-hack",
@@ -12696,7 +12888,6 @@ dependencies = [
  "bytemuck",
  "byteorder",
  "bytes",
- "bzip2-sys",
  "cached",
  "cached_proc_macro",
  "cached_proc_macro_types",
@@ -12948,6 +13139,7 @@ dependencies = [
  "jemalloc-sys",
  "jobserver",
  "js-sys",
+ "jsonpath_lib",
  "jsonrpsee",
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
@@ -13006,6 +13198,7 @@ dependencies = [
  "move-bytecode-source-map",
  "move-bytecode-utils",
  "move-bytecode-verifier",
+ "move-bytecode-verifier-v0",
  "move-bytecode-viewer",
  "move-cli",
  "move-command-line-common",
@@ -13029,11 +13222,14 @@ dependencies = [
  "move-stackless-bytecode",
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
+ "move-stdlib-v0",
  "move-symbol-pool",
  "move-transactional-test-runner",
  "move-unit-test",
  "move-vm-config",
+ "move-vm-profiler",
  "move-vm-runtime",
+ "move-vm-runtime-v0",
  "move-vm-test-utils",
  "move-vm-types",
  "multiaddr",
@@ -13365,8 +13561,7 @@ dependencies = [
  "tonic-health",
  "toolchain_find",
  "tower",
- "tower-http 0.3.5",
- "tower-http 0.4.0",
+ "tower-http",
  "tower-layer",
  "tower-service",
  "tracing",

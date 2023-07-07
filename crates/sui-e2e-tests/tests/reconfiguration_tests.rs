@@ -24,8 +24,7 @@ use sui_types::sui_system_state::{
     SuiSystemStateTrait,
 };
 use sui_types::transaction::{TransactionDataAPI, TransactionExpiration};
-use test_utils::network::TestCluster;
-use test_utils::network::TestClusterBuilder;
+use test_cluster::{TestCluster, TestClusterBuilder};
 use tokio::time::sleep;
 
 #[sim_test]
@@ -100,7 +99,9 @@ async fn test_transaction_expiration() {
     let result = authority
         .with_async(|node| async {
             let epoch_store = node.state().epoch_store_for_testing();
-            node.state()
+            let state = node.state();
+            let expired_transaction = state.verify_transaction(expired_transaction).unwrap();
+            state
                 .handle_transaction(&epoch_store, expired_transaction)
                 .await
         })
@@ -113,9 +114,9 @@ async fn test_transaction_expiration() {
     authority
         .with_async(|node| async {
             let epoch_store = node.state().epoch_store_for_testing();
-            node.state()
-                .handle_transaction(&epoch_store, transaction)
-                .await
+            let state = node.state();
+            let transaction = state.verify_transaction(transaction).unwrap();
+            state.handle_transaction(&epoch_store, transaction).await
         })
         .await
         .unwrap();
@@ -615,7 +616,7 @@ async fn test_reconfig_with_committee_change_stress() {
             .filter(|node| {
                 node.config
                     .authority_store_pruning_config
-                    .num_epochs_to_retain_for_checkpoints
+                    .num_epochs_to_retain_for_checkpoints()
                     .is_some()
             })
             .take(2)

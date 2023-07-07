@@ -6,12 +6,14 @@ import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useParams, useLocation, Navigate, useNavigate } from 'react-router-dom';
 
-import { useBackgroundClient } from '../../hooks/useBackgroundClient';
-import { Button } from '../../shared/ButtonUI';
 import { SelectQredoAccountsSummaryCard } from './components/SelectQredoAccountsSummaryCard';
 import { useQredoUIPendingRequest } from './hooks';
+import { useBackgroundClient } from '../../hooks/useBackgroundClient';
+import { useQredoInfo } from '../../hooks/useQredoInfo';
+import { Button } from '../../shared/ButtonUI';
 import { PasswordInputDialog } from '_components/menu/content/PasswordInputDialog';
 import Overlay from '_components/overlay';
+import { ampli } from '_src/shared/analytics/ampli';
 import { type Wallet } from '_src/shared/qredo-api';
 
 export function SelectQredoAccountsPage() {
@@ -25,8 +27,25 @@ export function SelectQredoAccountsPage() {
 	// do not call the api if user has not clicked continue in Qredo Connect Info page
 	const fetchAccountsEnabled =
 		!isQredoRequestLoading && (!qredoPendingRequest || qredoRequestReviewed);
-
+	const { data: qredoInfoData } = useQredoInfo(
+		qredoPendingRequest
+			? {
+					identity: {
+						apiUrl: qredoPendingRequest.apiUrl,
+						organization: qredoPendingRequest.organization,
+						origin: qredoPendingRequest.origin,
+						service: qredoPendingRequest.service,
+					},
+			  }
+			: null,
+	);
 	const [selectedAccounts, setSelectedAccounts] = useState<Wallet[]>([]);
+	useEffect(() => {
+		const accounts = qredoInfoData?.qredoInfo?.accounts;
+		if (accounts?.length) {
+			setSelectedAccounts((value) => Array.from(new Set([...value, ...accounts])));
+		}
+	}, [qredoInfoData?.qredoInfo?.accounts]);
 	const [showPassword, setShowPassword] = useState(false);
 	const shouldCloseWindow = (!isQredoRequestLoading && !qredoPendingRequest) || !id;
 	useEffect(() => {
@@ -53,6 +72,11 @@ export function SelectQredoAccountsPage() {
 								qredoID: id,
 								accounts: selectedAccounts,
 								password,
+							});
+
+							ampli.addedAccounts({
+								accountType: 'Qredo',
+								numberOfAccounts: selectedAccounts.length,
 							});
 							toast.success(`Qredo account${selectedAccounts.length > 1 ? 's' : ''} added`);
 							navigate('/tokens?menu=/accounts');

@@ -62,7 +62,7 @@ async fn _split_coins_equally(
     let resp = client
         .quorum_driver_api()
         .execute_transaction_block(
-            tx.clone(),
+            tx.clone().into(),
             SuiTransactionBlockResponseOptions::new().with_effects(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
@@ -118,7 +118,7 @@ async fn _merge_coins(gas_coin: &str, mut wallet: WalletContext) -> Result<(), a
         client
             .quorum_driver_api()
             .execute_transaction_block(
-                tx.clone(),
+                tx.clone().into(),
                 SuiTransactionBlockResponseOptions::new().with_effects(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )

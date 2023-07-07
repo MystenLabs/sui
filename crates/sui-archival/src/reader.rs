@@ -9,14 +9,14 @@ use bytes::buf::Reader;
 use bytes::{Buf, Bytes};
 use futures::{StreamExt, TryStreamExt};
 use object_store::DynObjectStore;
+use rand::seq::SliceRandom;
 use std::future;
-use std::num::NonZeroUsize;
 use std::ops::Range;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use sui_config::node::ArchiveReaderConfig;
 use sui_storage::object_store::util::get;
-use sui_storage::object_store::ObjectStoreConfig;
 use sui_storage::{make_iterator, verify_checkpoint};
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointSequenceNumber,
@@ -27,28 +27,98 @@ use tokio::sync::oneshot::Sender;
 use tokio::sync::{oneshot, Mutex};
 use tracing::info;
 
+// ArchiveReaderBalancer selects archives for reading based on whether they can fulfill a checkpoint request
+#[derive(Default, Debug, Clone)]
+pub struct ArchiveReaderBalancer {
+    readers: Vec<Arc<ArchiveReader>>,
+}
+
+impl ArchiveReaderBalancer {
+    pub fn new(configs: Vec<ArchiveReaderConfig>) -> Result<Self> {
+        let mut readers = vec![];
+        for config in configs.into_iter() {
+            readers.push(Arc::new(ArchiveReader::new(config.clone())?));
+        }
+        Ok(ArchiveReaderBalancer { readers })
+    }
+    pub async fn get_archive_watermark(&self) -> Result<Option<u64>> {
+        let mut checkpoints: Vec<Result<CheckpointSequenceNumber>> = vec![];
+        for reader in self
+            .readers
+            .iter()
+            .filter(|r| r.use_for_pruning_watermark())
+        {
+            let latest_checkpoint = reader.latest_available_checkpoint().await;
+            info!(
+                "Latest archived checkpoint in remote store: {:?} is: {:?}",
+                reader.remote_store_identifier(),
+                latest_checkpoint
+            );
+            checkpoints.push(latest_checkpoint)
+        }
+        let checkpoints: Result<Vec<CheckpointSequenceNumber>> = checkpoints.into_iter().collect();
+        checkpoints.map(|vec| vec.into_iter().min())
+    }
+    pub async fn pick_one_random(
+        &self,
+        checkpoint_range: Range<CheckpointSequenceNumber>,
+    ) -> Option<Arc<ArchiveReader>> {
+        let mut archives_with_complete_range = vec![];
+        for reader in self.readers.iter() {
+            let latest_checkpoint = reader.latest_available_checkpoint().await.unwrap_or(0);
+            if latest_checkpoint >= checkpoint_range.end {
+                archives_with_complete_range.push(reader.clone());
+            }
+        }
+        if !archives_with_complete_range.is_empty() {
+            return Some(
+                archives_with_complete_range
+                    .choose(&mut rand::thread_rng())
+                    .unwrap()
+                    .clone(),
+            );
+        }
+        let mut archives_with_partial_range = vec![];
+        for reader in self.readers.iter() {
+            let latest_checkpoint = reader.latest_available_checkpoint().await.unwrap_or(0);
+            if latest_checkpoint >= checkpoint_range.start {
+                archives_with_partial_range.push(reader.clone());
+            }
+        }
+        if !archives_with_partial_range.is_empty() {
+            return Some(
+                archives_with_partial_range
+                    .choose(&mut rand::thread_rng())
+                    .unwrap()
+                    .clone(),
+            );
+        }
+        None
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct ArchiveReader {
     concurrency: usize,
-    sender: Sender<()>,
+    sender: Arc<Sender<()>>,
     manifest: Arc<Mutex<Manifest>>,
+    use_for_pruning_watermark: bool,
     remote_object_store: Arc<DynObjectStore>,
 }
 
 impl ArchiveReader {
-    pub fn new(
-        remote_store_config: ObjectStoreConfig,
-        download_concurrency: NonZeroUsize,
-    ) -> Result<Self> {
-        let remote_object_store = remote_store_config.make()?;
+    pub fn new(config: ArchiveReaderConfig) -> Result<Self> {
+        let remote_object_store = config.remote_store_config.make()?;
         let (sender, recv) = oneshot::channel();
         let manifest = Arc::new(Mutex::new(Manifest::new(0, 0)));
         // Start a background tokio task to keep local manifest in sync with remote
         Self::spawn_manifest_sync_task(remote_object_store.clone(), manifest.clone(), recv);
         Ok(ArchiveReader {
             manifest,
-            sender,
+            sender: Arc::new(sender),
             remote_object_store,
-            concurrency: download_concurrency.get(),
+            use_for_pruning_watermark: config.use_for_pruning_watermark,
+            concurrency: config.download_concurrency.get(),
         })
     }
 
@@ -57,10 +127,11 @@ impl ArchiveReader {
     /// input range then this call fails with an error otherwise we load as many checkpoints as
     /// possible until the end of the provided checkpoint range.
     pub async fn read<S>(
-        &mut self,
+        &self,
         store: S,
         checkpoint_range: Range<CheckpointSequenceNumber>,
         txn_counter: Arc<AtomicU64>,
+        checkpoint_counter: Arc<AtomicU64>,
     ) -> Result<()>
     where
         S: WriteStore + Clone,
@@ -185,6 +256,7 @@ impl ArchiveReader {
                                 .update_highest_synced_checkpoint(&verified_checkpoint)
                                 .map_err(|e| anyhow!("Failed to update watermark: {e}"))?;
                             txn_counter.fetch_add(contents.size() as u64, Ordering::Relaxed);
+                            checkpoint_counter.fetch_add(1, Ordering::Relaxed);
                             Ok::<(), anyhow::Error>(())
                         })
                 });
@@ -200,6 +272,14 @@ impl ArchiveReader {
             .next_checkpoint_seq_num()
             .checked_sub(1)
             .context("No checkpoint data in archive")
+    }
+
+    pub fn use_for_pruning_watermark(&self) -> bool {
+        self.use_for_pruning_watermark
+    }
+
+    pub fn remote_store_identifier(&self) -> String {
+        self.remote_object_store.to_string()
     }
 
     pub async fn sync_manifest_once(&self) -> Result<()> {

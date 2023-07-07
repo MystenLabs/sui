@@ -3,11 +3,11 @@
 
 import { useSearchParams, useNavigate, Navigate } from 'react-router-dom';
 
+import { DelegationDetailCard } from './DelegationDetailCard';
 import { useActiveAddress } from '../../hooks/useActiveAddress';
 import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { ValidatorLogo } from '../validators/ValidatorLogo';
-import { DelegationDetailCard } from './DelegationDetailCard';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import Overlay from '_components/overlay';
 

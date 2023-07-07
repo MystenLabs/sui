@@ -33,7 +33,12 @@ impl BackingPackageStore for InMemoryStorage {
 }
 
 impl ChildObjectResolver for InMemoryStorage {
-    fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
+    fn read_child_object(
+        &self,
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> SuiResult<Option<Object>> {
         let child_object = match self.persistent.get(child).cloned() {
             None => return Ok(None),
             Some(obj) => obj,
@@ -44,6 +49,12 @@ impl ChildObjectResolver for InMemoryStorage {
                 object: *child,
                 given_parent: parent,
                 actual_owner: child_object.owner,
+            });
+        }
+        if child_object.version() > child_version_upper_bound {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "TODO InMemoryStorage::read_child_object does not yet support bounded reads"
+                    .to_owned(),
             });
         }
         Ok(Some(child_object))

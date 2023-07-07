@@ -20,7 +20,7 @@ use sui_core::test_utils::make_transfer_object_transaction;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair},
-    transaction::VerifiedTransaction,
+    transaction::Transaction,
 };
 
 /// TODO: This should be the amount that is being transferred instead of MAX_GAS.
@@ -65,7 +65,7 @@ impl Payload for TransferObjectTestPayload {
         self.transfer_to = recipient;
         self.gas = updated_gas;
     }
-    fn make_transaction(&mut self) -> VerifiedTransaction {
+    fn make_transaction(&mut self) -> Transaction {
         let (gas_obj, _, keypair) = self.gas.iter().find(|x| x.1 == self.transfer_from).unwrap();
         make_transfer_object_transaction(
             self.transfer_object,

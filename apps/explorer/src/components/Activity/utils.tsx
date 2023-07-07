@@ -5,7 +5,6 @@ import { type EpochPage } from '@mysten/sui.js/src/types/epochs';
 
 import { SuiAmount } from '../Table/SuiAmount';
 import { TxTimeType } from '../tx-time/TxTimeType';
-
 import { HighlightedTableCol } from '~/components/Table/HighlightedTableCol';
 import { CheckpointSequenceLink, EpochLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';

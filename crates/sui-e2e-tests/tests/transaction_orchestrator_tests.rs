@@ -3,6 +3,7 @@
 
 use prometheus::Registry;
 use std::time::Duration;
+use sui_core::authority::EffectsNotifyRead;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_macros::sim_test;
@@ -10,9 +11,8 @@ use sui_types::quorum_driver_types::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
     FinalizedEffects, QuorumDriverError,
 };
-use sui_types::transaction::VerifiedTransaction;
-use test_utils::network::TestClusterBuilder;
-use test_utils::transaction::wait_for_tx;
+use sui_types::transaction::Transaction;
+use test_cluster::TestClusterBuilder;
 use tokio::time::timeout;
 use tracing::info;
 
@@ -54,7 +54,12 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
         .await?;
 
     // Wait for data sync to catch up
-    wait_for_tx(digest, handle.state().clone()).await;
+    handle
+        .state()
+        .db()
+        .notify_read_executed_effects(vec![digest])
+        .await
+        .unwrap();
 
     // Transaction Orchestrator proactivcely executes txn locally
     let txn = txns.swap_remove(0);
@@ -144,7 +149,11 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     .unwrap_err();
 
     // Because the tx did not go through, we expect to see it in the WAL log
-    let pending_txes = orchestrator.load_all_pending_transactions();
+    let pending_txes: Vec<_> = orchestrator
+        .load_all_pending_transactions()
+        .into_iter()
+        .map(|t| t.into_inner())
+        .collect();
     assert_eq!(pending_txes, vec![txn.clone()]);
 
     // Bring up 1 validator, we obtain quorum again and tx should succeed
@@ -243,7 +252,6 @@ async fn test_tx_across_epoch_boundaries() {
 
     let tx_digest = *tx.digest();
     info!(?tx_digest, "Submitting tx");
-    let tx = tx.into_inner();
     tokio::task::spawn(async move {
         match to
             .execute_transaction_block(ExecuteTransactionRequest {
@@ -286,12 +294,12 @@ async fn test_tx_across_epoch_boundaries() {
 
 async fn execute_with_orchestrator(
     orchestrator: &TransactiondOrchestrator<NetworkAuthorityClient>,
-    txn: VerifiedTransaction,
+    txn: Transaction,
     request_type: ExecuteTransactionRequestType,
 ) -> Result<ExecuteTransactionResponse, QuorumDriverError> {
     orchestrator
         .execute_transaction_block(ExecuteTransactionRequest {
-            transaction: txn.into(),
+            transaction: txn,
             request_type,
         })
         .await

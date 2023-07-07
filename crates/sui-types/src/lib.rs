@@ -52,6 +52,7 @@ pub mod message_envelope;
 pub mod messages_checkpoint;
 pub mod messages_consensus;
 pub mod messages_grpc;
+pub mod messages_safe_client;
 pub mod metrics;
 pub mod move_package;
 pub mod multisig;

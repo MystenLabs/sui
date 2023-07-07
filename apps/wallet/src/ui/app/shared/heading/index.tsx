@@ -57,6 +57,10 @@ const headingStyles = cva(
 				true: 'truncate',
 				false: '',
 			},
+			centered: {
+				true: 'text-center',
+				false: '',
+			},
 			/** Fix the header size, and disable responsive sizing of the heading. */
 			fixed: { true: '', false: '' },
 		},

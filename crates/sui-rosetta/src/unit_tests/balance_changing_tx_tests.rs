@@ -34,7 +34,7 @@ use sui_types::transaction::{
     TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN, TEST_ONLY_GAS_UNIT_FOR_STAKING,
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 #[tokio::test]
 async fn test_transfer_sui() {
@@ -456,7 +456,7 @@ async fn test_failed_pay_sui() {
         sender,
         pt,
         vec![coin1, coin2],
-        2000,
+        2000000,
         rgp,
         true,
     )
@@ -716,9 +716,7 @@ async fn test_transaction(
     let response = client
         .quorum_driver_api()
         .execute_transaction_block(
-            Transaction::from_data(data.clone(), Intent::sui_transaction(), vec![signature])
-                .verify()
-                .unwrap(),
+            Transaction::from_data(data.clone(), Intent::sui_transaction(), vec![signature]),
             SuiTransactionBlockResponseOptions::full_content(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )

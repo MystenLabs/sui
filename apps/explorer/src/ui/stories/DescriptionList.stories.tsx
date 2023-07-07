@@ -5,7 +5,6 @@ import { type Meta, type StoryObj } from '@storybook/react';
 import { MemoryRouter } from 'react-router-dom';
 
 import { DescriptionList, DescriptionItem, type DescriptionListProps } from '../DescriptionList';
-
 import { Link } from '~/ui/Link';
 import { Text } from '~/ui/Text';
 

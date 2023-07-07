@@ -6,6 +6,15 @@
 .filter-tags {
 	display: flex;
 	gap: 8px;
+	overflow-x: auto;
+
+	&::-webkit-scrollbar {
+		width: 8px;
+	}
+
+	&::-webkit-scrollbar-thumb {
+		background-color: transparent;
+	}
 
 	.filter {
 		@include utils.typography('Primary/BodySmall-SB');

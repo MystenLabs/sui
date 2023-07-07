@@ -48,6 +48,17 @@ describe('Transaction Reading API', () => {
 			expect(waited.digest).toEqual(digest);
 		});
 
+		it('abort signal doesnt throw after transaction is received', async () => {
+			const { digest } = await setupTransaction();
+
+			const waited = await toolbox.provider.waitForTransactionBlock({ digest });
+			const secondWait = await toolbox.provider.waitForTransactionBlock({ digest, timeout: 2000 });
+			// wait for timeout to expire incase it causes an unhandled rejection
+			await new Promise((resolve) => setTimeout(resolve, 2100));
+			expect(waited.digest).toEqual(digest);
+			expect(secondWait.digest).toEqual(digest);
+		});
+
 		it('can be aborted using the signal', async () => {
 			const { digest } = await setupTransaction();
 

@@ -14,6 +14,7 @@ use crate::scoring_decision::update_low_scoring_authorities;
 use crate::transaction_manager::TransactionManager;
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
+use fastcrypto::hash::Hash as _Hash;
 use fastcrypto::traits::ToFromBytes;
 use lru::LruCache;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
@@ -73,7 +74,12 @@ impl<T> ConsensusHandler<T> {
         committee: Committee,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
-        let last_seen = Mutex::new(Default::default());
+        // last_consensus_index is zero at the beginning of epoch, including for hash.
+        // It needs to be recovered on restart to ensure consistent consensus hash.
+        let last_consensus_index = epoch_store
+            .get_last_consensus_index()
+            .expect("Should be able to read last consensus index");
+        let last_seen = Mutex::new(last_consensus_index);
         let transaction_scheduler =
             AsyncTransactionScheduler::start(transaction_manager, epoch_store.clone());
         Self {
@@ -112,7 +118,7 @@ fn update_hash(
     let hash = hasher.finish();
     // Log hash every 1000th transaction of the subdag
     if index.transaction_index % 1000 == 0 {
-        debug!(
+        info!(
             "Integrity hash for consensus output at subdag {} transaction {} is {:016x}",
             index.sub_dag_index, index.transaction_index, hash
         );
@@ -153,12 +159,19 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
         let timestamp = if timestamp < epoch_start {
             error!(
                 "Unexpected commit timestamp {timestamp} less then epoch start time {epoch_start}, author {leader_author}, round {round}",
-
             );
             epoch_start
         } else {
             timestamp
         };
+
+        info!(
+            "Received consensus output {:?} at leader round {}, subdag index {}, timestamp {} ",
+            consensus_output.digest(),
+            round,
+            consensus_output.sub_dag.sub_dag_index,
+            timestamp,
+        );
 
         let prologue_transaction = self.consensus_commit_prologue_transaction(round, timestamp);
         transactions.push((
@@ -181,14 +194,21 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             .consensus_committed_subdags
             .with_label_values(&[&leader_author.to_string()])
             .inc();
-        for (cert, batches) in consensus_output.batches {
+        for (cert, batches) in consensus_output
+            .sub_dag
+            .certificates
+            .iter()
+            .zip(consensus_output.batches.iter())
+        {
+            assert_eq!(cert.header().payload().len(), batches.len());
             let author = cert.header().author();
             self.metrics
                 .consensus_committed_certificates
                 .with_label_values(&[&author.to_string()])
                 .inc();
-            let output_cert = Arc::new(cert);
+            let output_cert = Arc::new(cert.clone());
             for batch in batches {
+                assert!(output_cert.header().payload().contains_key(&batch.digest()));
                 self.metrics.consensus_handler_processed_batches.inc();
                 for serialized_transaction in batch.transactions() {
                     bytes += serialized_transaction.len();
@@ -198,12 +218,11 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
                     ) {
                         Ok(transaction) => transaction,
                         Err(err) => {
-                            // This should be prevented by batch verification, hence `error` log level
-                            error!(
-                                    "Ignoring unexpected malformed transaction (failed to deserialize) from {}: {}",
-                                    author, err
-                                );
-                            continue;
+                            // This should have been prevented by Narwhal batch verification.
+                            panic!(
+                                "Unexpected malformed transaction (failed to deserialize): {}\nCertificate={:?} BatchDigest={:?} Transaction={:?}",
+                                err, output_cert, batch.digest(), serialized_transaction
+                            );
                         }
                     };
                     self.metrics

@@ -7,7 +7,6 @@ import { type ReactNode } from 'react';
 
 import { IconButton } from './IconButton';
 import { ReactComponent as InfoIcon } from './icons/info.svg';
-
 import { Text } from '~/ui/Text';
 
 const bannerStyles = cva(

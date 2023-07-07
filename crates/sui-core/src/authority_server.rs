@@ -42,7 +42,7 @@ pub(crate) const MAX_TM_QUEUE_LENGTH: usize = 100_000;
 
 // Reject a transaction if the number of pending transactions depending on the object
 // is above the threshold.
-pub(crate) const MAX_PER_OBJECT_QUEUE_LENGTH: usize = 1000;
+pub(crate) const MAX_PER_OBJECT_QUEUE_LENGTH: usize = 200;
 
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
@@ -310,6 +310,15 @@ impl ValidatorService {
             .into());
         }
 
+        if !epoch_store.protocol_config().supports_upgraded_multisig()
+            && transaction.has_upgraded_multisig()
+        {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "upgraded multisig format not enabled on this network".to_string(),
+            }
+            .into());
+        }
+
         // Enforce overall transaction size limit.
         let tx_size = bcs::serialized_size(&transaction).map_err(|e| {
             SuiError::TransactionSerializationError {
@@ -337,13 +346,9 @@ impl ValidatorService {
         let _handle_tx_metrics_guard = metrics.handle_transaction_latency.start_timer();
 
         let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
-        let transaction = epoch_store
-            .signature_verifier
-            .verify_tx(transaction.data())
-            .map(|_| VerifiedTransaction::new_from_verified(transaction))
-            .tap_err(|_| {
-                metrics.signature_errors.inc();
-            })?;
+        let transaction = state.verify_transaction(transaction).tap_err(|_| {
+            metrics.signature_errors.inc();
+        })?;
         drop(tx_verif_metrics_guard);
 
         let tx_digest = transaction.digest();
@@ -401,12 +406,10 @@ impl ValidatorService {
                 TransactionEvents::default()
             };
 
-            let fastpath_input_objects = state.load_fastpath_input_objects(&signed_effects)?;
-
             return Ok(Some(HandleCertificateResponseV2 {
                 signed_effects: signed_effects.into_inner(),
                 events,
-                fastpath_input_objects,
+                fastpath_input_objects: vec![], // fastpath is unused for now
             }));
         }
 
@@ -483,7 +486,6 @@ impl ValidatorService {
         let effects = state
             .execute_certificate(&certificate, &epoch_store)
             .await?;
-        let fastpath_input_objects = state.load_fastpath_input_objects(&effects)?;
         let events = if let Some(event_digest) = effects.events_digest() {
             state.get_transaction_events(event_digest)?
         } else {
@@ -492,7 +494,7 @@ impl ValidatorService {
         Ok(Some(HandleCertificateResponseV2 {
             signed_effects: effects.into_inner(),
             events,
-            fastpath_input_objects,
+            fastpath_input_objects: vec![], // fastpath is unused for now
         }))
     }
 }

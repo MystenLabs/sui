@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::metrics::PrimaryMetrics;
 use config::{AuthorityIdentifier, Committee, Epoch, WorkerId};
+use consensus::consensus::LeaderSchedule;
 use fastcrypto::hash::Hash as _;
 use mysten_metrics::metered_channel::{Receiver, Sender};
 use mysten_metrics::spawn_logged_monitored_task;
@@ -94,6 +95,9 @@ pub struct Proposer {
 
     /// Metrics handler
     metrics: Arc<PrimaryMetrics>,
+    /// The consensus leader schedule to be used in order to resolve the leader needed for the
+    /// protocol advancement.
+    leader_schedule: LeaderSchedule,
 }
 
 impl Proposer {
@@ -115,6 +119,7 @@ impl Proposer {
         tx_narwhal_round_updates: watch::Sender<Round>,
         rx_committed_own_headers: Receiver<(Round, Vec<Round>)>,
         metrics: Arc<PrimaryMetrics>,
+        leader_schedule: LeaderSchedule,
     ) -> JoinHandle<()> {
         let genesis = Certificate::genesis(&committee);
         spawn_logged_monitored_task!(
@@ -142,6 +147,7 @@ impl Proposer {
                     proposed_headers: BTreeMap::new(),
                     rx_committed_own_headers,
                     metrics,
+                    leader_schedule,
                 }
                 .run()
                 .await;
@@ -331,7 +337,7 @@ impl Proposer {
 
     /// Update the last leader certificate.
     fn update_leader(&mut self) -> bool {
-        let leader = self.committee.leader(self.round);
+        let leader = self.leader_schedule.leader(self.round);
         self.last_leader = self
             .last_parents
             .iter()
@@ -352,7 +358,7 @@ impl Proposer {
     /// (i) f+1 votes for the leader, (ii) 2f+1 nodes not voting for the leader,
     /// (iii) there is no leader to vote for.
     fn enough_votes(&self) -> bool {
-        if self.committee.leader(self.round + 1).id() == self.authority_id {
+        if self.leader_schedule.leader(self.round + 1).id() == self.authority_id {
             return true;
         }
 
@@ -419,10 +425,16 @@ impl Proposer {
             let enough_digests = self.digests.len() >= self.header_num_of_batches_threshold;
             let max_delay_timed_out = max_delay_timer.is_elapsed();
             let min_delay_timed_out = min_delay_timer.is_elapsed();
+            let should_create_header = (max_delay_timed_out
+                || ((enough_digests || min_delay_timed_out) && advance))
+                && enough_parents;
 
-            if (max_delay_timed_out || ((enough_digests || min_delay_timed_out) && advance))
-                && enough_parents
-            {
+            debug!(
+                "Proposer loop starts: round={} enough_parents={} enough_digests={} advance={} max_delay_timed_out={} min_delay_timed_out={} should_create_header={}", 
+                self.round, enough_parents, enough_digests, advance, max_delay_timed_out, min_delay_timed_out, should_create_header
+            );
+
+            if should_create_header {
                 if max_delay_timed_out {
                     // It is expected that this timer expires from time to time. If it expires too often, it
                     // either means some validators are Byzantine or that the network is experiencing periods
@@ -434,6 +446,8 @@ impl Proposer {
                 // Advance to the next round.
                 self.round += 1;
                 let _ = self.tx_narwhal_round_updates.send(self.round);
+
+                debug!("Proposer advanced to round {}", self.round);
 
                 // Update the metrics
                 self.metrics.current_round.set(self.round as i64);
@@ -486,9 +500,13 @@ impl Proposer {
                 continue;
             }
 
+            debug!("Proposer waiting for update: round={}", self.round);
+
             tokio::select! {
 
                 () = &mut header_repeat_timer => {
+                    debug!("Proposer header_repeat_timer, round={}", self.round);
+
                     // If the round has not advanced within header_resend_timeout then try to
                     // re-process our own header.
                     if let Some(header) = &opt_latest_header {
@@ -505,6 +523,8 @@ impl Proposer {
                 }
 
                 Some((commit_round, commit_headers)) = self.rx_committed_own_headers.recv() => {
+                    debug!("Proposer committed own header, round={}", self.round);
+
                     // Remove committed headers from the list of pending
                     let mut max_committed_round = 0;
                     for round in commit_headers {
@@ -561,6 +581,8 @@ impl Proposer {
                 },
 
                 Some((parents, round, epoch)) = self.rx_parents.recv() => {
+                    debug!("Proposer received parents, round={} parent.round={} num_parents={}", self.round, round, parents.len());
+
                     // If the core already moved to the next epoch we should pull the next
                     // committee as well.
 
@@ -611,6 +633,7 @@ impl Proposer {
                                 .reset(timer_start);
                         },
                         Ordering::Less => {
+                            debug!("Proposer ignoring older parents, round={} parent.round={}", self.round, round);
                             // Ignore parents from older rounds.
                             continue;
                         },
@@ -634,6 +657,7 @@ impl Proposer {
                     } else {
                         false
                     };
+                    debug!("Proposer advance={} round={}", advance, self.round);
 
                     let round_type = if self.round % 2 == 0 {
                         "even"
@@ -649,6 +673,8 @@ impl Proposer {
 
                 // Receive digests from our workers.
                 Some(mut message) = self.rx_our_digests.recv() => {
+                    debug!("Proposer received digest, round={}", self.round);
+
                     // Signal back to the worker that the batch is recorded on the
                     // primary, and will be tracked until inclusion. This means that
                     // if the primary does not fail it will attempt to send the digest
@@ -661,9 +687,11 @@ impl Proposer {
 
                 // Check whether any timer expired.
                 () = &mut max_delay_timer, if !max_delay_timed_out => {
+                    debug!("Proposer reached max_delay_timer, round={}", self.round);
                     // Continue to next iteration of the loop.
                 }
                 () = &mut min_delay_timer, if !min_delay_timed_out => {
+                    debug!("Proposer reached min_delay_timer, round={}", self.round);
                     // Continue to next iteration of the loop.
                 }
 

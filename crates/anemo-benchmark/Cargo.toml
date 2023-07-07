@@ -9,14 +9,14 @@ edition = "2021"
 [dependencies]
 anemo.workspace = true
 anemo-tower.workspace = true
-anyhow = "1.0.65"
+anyhow.workspace = true
 clap = { version = "4.1.4", features = ["derive"] }
 mysten-network.workspace = true
-rand = "0.8.5"
-sui-types = { path = "../sui-types" }
+rand.workspace= true
+sui-types.workspace = true
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full"] }
-tracing = "0.1.37"
+tracing.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [build-dependencies]

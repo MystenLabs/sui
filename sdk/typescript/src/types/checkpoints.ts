@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { Infer } from 'superstruct';
 import {
 	array,
-	Infer,
 	number,
 	object,
 	string,
@@ -14,7 +14,7 @@ import {
 	nullable,
 } from 'superstruct';
 
-import { TransactionDigest, TransactionEffectsDigest } from './common';
+import { TransactionDigest, TransactionEffectsDigest } from './common.js';
 
 export const GasCostSummary = object({
 	computationCost: string(),

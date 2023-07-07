@@ -9,7 +9,7 @@ import { useMemo } from 'react';
 import { LargeButton } from '_app/shared/LargeButton';
 import { DelegatedAPY } from '_app/shared/delegated-apy';
 import { useGetDelegatedStake } from '_app/staking/useGetDelegatedStake';
-import { trackEvent } from '_src/shared/plausible';
+import { ampli } from '_src/shared/analytics/ampli';
 
 export function TokenIconLink({ accountAddress }: { accountAddress: SuiAddress }) {
 	const { data: delegatedStake, isLoading } = useGetDelegatedStake(accountAddress);
@@ -33,7 +33,10 @@ export function TokenIconLink({ accountAddress }: { accountAddress: SuiAddress }
 		<LargeButton
 			to="/stake"
 			onClick={() => {
-				trackEvent('StakingFromHome');
+				ampli.clickedStakeSui({
+					isCurrentlyStaking: totalActivePendingStake > 0,
+					sourceFlow: 'Home page',
+				});
 			}}
 			loading={isLoading || queryResult.isLoading}
 			before={<WalletActionStake24 />}

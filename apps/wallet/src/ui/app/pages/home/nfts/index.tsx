@@ -11,6 +11,7 @@ import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import LoadingSpinner from '_components/loading/LoadingIndicator';
 import { NFTDisplayCard } from '_components/nft-display';
+import { ampli } from '_src/shared/analytics/ampli';
 import { useGetNFTs } from '_src/ui/app/hooks/useGetNFTs';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
@@ -57,11 +58,17 @@ function NftsPage() {
 				) : null}
 				{nfts?.length ? (
 					<div className="grid w-full grid-cols-2 gap-x-3.5 gap-y-4">
-						{nfts.map(({ objectId }) => (
+						{nfts.map(({ objectId, type }) => (
 							<Link
 								to={`/nft-details?${new URLSearchParams({
 									objectId,
 								}).toString()}`}
+								onClick={() => {
+									ampli.clickedCollectibleCard({
+										objectId,
+										collectibleType: type!,
+									});
+								}}
 								key={objectId}
 								className="no-underline"
 							>

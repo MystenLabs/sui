@@ -162,9 +162,9 @@ where
         // Note: since EffectsCert is not stored today, we need to gather that from validators
         // (and maybe store it for caching purposes)
 
-        let transaction = request
-            .transaction
-            .verify()
+        let transaction = self
+            .validator_state
+            .verify_transaction(request.transaction)
             .map_err(QuorumDriverError::InvalidUserSignature)?;
         let (_in_flight_metrics_guards, good_response_metrics) = self.update_metrics(&transaction);
         let tx_digest = *transaction.digest();
@@ -236,30 +236,52 @@ where
                         false,
                     ))));
                 }
-                let executable_tx = VerifiedExecutableTransaction::new_from_quorum_execution(
-                    transaction,
-                    effects_cert.executed_epoch(),
-                );
 
-                match Self::execute_finalized_tx_locally_with_timeout(
-                    &self.validator_state,
-                    &executable_tx,
-                    &effects_cert,
-                    objects,
-                    &self.metrics,
-                )
-                .await
-                {
-                    Ok(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
+                // TODO: local execution for shared-object txns is disabled due to the fact that
+                // it can cause forks on transactions that read child objects from read-only
+                // parent shared objects.
+                //
+                // This can be re-enabled after MVCC for child objects is merged.
+                if transaction.contains_shared_object() {
+                    self.validator_state
+                        .database
+                        .notify_read_executed_effects_digests(vec![tx_digest])
+                        .await
+                        .map_err(|e| {
+                            warn!(?tx_digest, "notify_read_effects failed: {e:?}");
+                            QuorumDriverError::QuorumDriverInternalError(e)
+                        })?;
+                    Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
                         FinalizedEffects::new_from_effects_cert(effects_cert.into()),
                         response.events,
                         true,
-                    )))),
-                    Err(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        FinalizedEffects::new_from_effects_cert(effects_cert.into()),
-                        response.events,
-                        false,
-                    )))),
+                    ))))
+                } else {
+                    let executable_tx = VerifiedExecutableTransaction::new_from_quorum_execution(
+                        transaction,
+                        effects_cert.executed_epoch(),
+                    );
+
+                    match Self::execute_finalized_tx_locally_with_timeout(
+                        &self.validator_state,
+                        &executable_tx,
+                        &effects_cert,
+                        objects,
+                        &self.metrics,
+                    )
+                    .await
+                    {
+                        Ok(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
+                            FinalizedEffects::new_from_effects_cert(effects_cert.into()),
+                            response.events,
+                            true,
+                        )))),
+                        Err(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
+                            FinalizedEffects::new_from_effects_cert(effects_cert.into()),
+                            response.events,
+                            false,
+                        )))),
+                    }
                 }
             }
         }
@@ -280,7 +302,7 @@ where
         {
             debug!(?tx_digest, "no pending request in flight, submitting.");
             self.quorum_driver()
-                .submit_transaction_no_ticket(transaction.clone())
+                .submit_transaction_no_ticket(transaction.clone().into())
                 .await?;
         }
         // It's possible that the transaction effects is already stored in DB at this point.
@@ -300,7 +322,7 @@ where
                         ?tx_digest,
                         "Effects are available in DB, use quorum driver to get a certificate"
                     );
-                    qd.submit_transaction_no_ticket(transaction).await?;
+                    qd.submit_transaction_no_ticket(transaction.into()).await?;
                     Ok(unfinished_quorum_driver_task.await)
                 }
             }
@@ -395,6 +417,27 @@ where
                         ..
                     },
                 ))) => {
+                    if transaction.contains_shared_object() {
+                        // Do not locally execute transactions with shared objects, as this can
+                        // cause forks until MVCC is merged.
+                        continue;
+                    }
+
+                    // This is a redundant verification, but SignatureVerifier will cache the
+                    // previous result.
+                    let transaction = match validator_state.verify_transaction(transaction) {
+                        Ok(transaction) => transaction,
+                        Err(err) => {
+                            // This should be impossible, since we verified the transaction
+                            // before sending it to quorum driver.
+                            error!(
+                                    ?err,
+                                    "Transaction signature failed to verify after quorum driver execution."
+                                );
+                            continue;
+                        }
+                    };
+
                     let executable_tx = VerifiedExecutableTransaction::new_from_quorum_execution(
                         transaction,
                         effects_cert.executed_epoch(),
@@ -482,6 +525,9 @@ where
     ) {
         let pending_txes = pending_tx_log.load_all_pending_transactions();
         for tx in pending_txes {
+            // TODO: ideally pending_tx_log would not contain VerifiedTransaction, but that
+            // requires a migration.
+            let tx = tx.into_inner();
             let tx_digest = *tx.digest();
             // It's not impossible we fail to enqueue a task but that's not the end of world.
             if let Err(err) = quorum_driver.submit_transaction_no_ticket(tx).await {

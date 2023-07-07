@@ -47,6 +47,7 @@ async function deriveAccountsFromLedger(
 			type: AccountType.LEDGER,
 			address: suiAddress,
 			derivationPath,
+			publicKey: publicKey.toBase64(),
 		});
 	}
 

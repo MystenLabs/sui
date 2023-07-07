@@ -1,0 +1,23 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// correct, wrong struct field type but not one-time witness candidate
+
+//# publish
+module 0x0.m {
+    import 0x2.tx_context;
+
+    struct M has drop { value: u64 }
+
+    init(_ctx: &mut tx_context.TxContext) {
+        label l0:
+        return;
+    }
+
+    foo() {
+        label l0:
+        _ = M { value: 7 };
+        _ = M { value: 42 };
+        return;
+    }
+}

@@ -3,8 +3,8 @@
 
 import { formatAddress, isValidSuiAddress, type SuiAddress } from '@mysten/sui.js';
 
-import { Text } from '../text';
 import { SummaryCardFooter } from './Card';
+import { Text } from '../text';
 import ExplorerLink from '_src/ui/app/components/explorer-link';
 import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerLinkType';
 import { useActiveAddress } from '_src/ui/app/hooks';

@@ -87,14 +87,6 @@ pub fn search_index(
                 termination
             )
         }
-        "timestamps" => {
-            get_db_entries!(
-                db_read_only_handle.timestamps,
-                TransactionDigest::from_str,
-                start,
-                termination
-            )
-        }
         "transaction_order" => {
             get_db_entries!(
                 db_read_only_handle.transaction_order,

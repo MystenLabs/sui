@@ -4,12 +4,13 @@
 import { useState } from 'react';
 // import toast from 'react-hot-toast';
 
-import { CheckpointsTable } from '../checkpoints/CheckpointsTable';
 import { EpochsActivityTable } from './EpochsActivityTable';
 import { TransactionsActivityTable } from './TransactionsActivityTable';
-
+import { CheckpointsTable } from '../checkpoints/CheckpointsTable';
 // import { PlayPause } from '~/ui/PlayPause';
-import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/ui/Tabs';
+
+const VALID_TABS = ['transactions', 'epochs', 'checkpoints'];
 
 type Props = {
 	initialTab?: string | null;
@@ -21,15 +22,7 @@ type Props = {
 const REFETCH_INTERVAL_SECONDS = 10;
 const REFETCH_INTERVAL = REFETCH_INTERVAL_SECONDS * 1000;
 
-const tabs: Record<string, number> = {
-	epochs: 1,
-	checkpoints: 2,
-};
-
 export function Activity({ initialTab, initialLimit, disablePagination }: Props) {
-	const [selectedIndex, setSelectedIndex] = useState(
-		initialTab && tabs[initialTab] ? tabs[initialTab] : 0,
-	);
 	const [paused] = useState(false);
 
 	// const handlePauseChange = () => {
@@ -49,13 +42,16 @@ export function Activity({ initialTab, initialLimit, disablePagination }: Props)
 
 	return (
 		<div>
-			<TabGroup size="lg" selectedIndex={selectedIndex} onChange={setSelectedIndex}>
+			<Tabs
+				size="lg"
+				defaultValue={initialTab && VALID_TABS.includes(initialTab) ? initialTab : 'transactions'}
+			>
 				<div className="relative">
-					<TabList>
-						<Tab>Transaction Blocks</Tab>
-						<Tab>Epochs</Tab>
-						<Tab>Checkpoints</Tab>
-					</TabList>
+					<TabsList>
+						<TabsTrigger value="transactions">Transaction Blocks</TabsTrigger>
+						<TabsTrigger value="epochs">Epochs</TabsTrigger>
+						<TabsTrigger value="checkpoints">Checkpoints</TabsTrigger>
+					</TabsList>
 					<div className="absolute inset-y-0 -top-1 right-0 text-2xl">
 						{/* todo: re-enable this when rpc is stable */}
 						{/* <PlayPause
@@ -64,30 +60,28 @@ export function Activity({ initialTab, initialLimit, disablePagination }: Props)
                         /> */}
 					</div>
 				</div>
-				<TabPanels>
-					<TabPanel>
-						<TransactionsActivityTable
-							refetchInterval={refetchInterval}
-							initialLimit={initialLimit}
-							disablePagination={disablePagination}
-						/>
-					</TabPanel>
-					<TabPanel>
-						<EpochsActivityTable
-							refetchInterval={refetchInterval}
-							initialLimit={initialLimit}
-							disablePagination={disablePagination}
-						/>
-					</TabPanel>
-					<TabPanel>
-						<CheckpointsTable
-							refetchInterval={refetchInterval}
-							initialLimit={initialLimit}
-							disablePagination={disablePagination}
-						/>
-					</TabPanel>
-				</TabPanels>
-			</TabGroup>
+				<TabsContent value="transactions">
+					<TransactionsActivityTable
+						refetchInterval={refetchInterval}
+						initialLimit={initialLimit}
+						disablePagination={disablePagination}
+					/>
+				</TabsContent>
+				<TabsContent value="epochs">
+					<EpochsActivityTable
+						refetchInterval={refetchInterval}
+						initialLimit={initialLimit}
+						disablePagination={disablePagination}
+					/>
+				</TabsContent>
+				<TabsContent value="checkpoints">
+					<CheckpointsTable
+						refetchInterval={refetchInterval}
+						initialLimit={initialLimit}
+						disablePagination={disablePagination}
+					/>
+				</TabsContent>
+			</Tabs>
 		</div>
 	);
 }

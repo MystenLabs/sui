@@ -359,7 +359,6 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             return self.execute_bench_transaction(tx).await;
         }
         let tx_digest = *tx.digest();
-        let tx = tx.verify()?;
         let mut retry_cnt = 0;
         while retry_cnt < 3 {
             let ticket = self.qd.submit_transaction(tx.clone()).await?;
@@ -721,7 +720,6 @@ impl ValidatorProxy for FullNodeProxy {
 
     async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
         let tx_digest = *tx.digest();
-        let tx = tx.verify()?;
         let mut retry_cnt = 0;
         while retry_cnt < 10 {
             // Fullnode could time out after WAIT_FOR_FINALITY_TIMEOUT (30s) in TransactionOrchestrator

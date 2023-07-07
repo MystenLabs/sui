@@ -338,8 +338,7 @@ async fn execute_tx(
     action: &str,
 ) -> anyhow::Result<()> {
     let tx =
-        Transaction::from_data_and_signer(tx_data, Intent::sui_transaction(), vec![account_key])
-            .verify()?;
+        Transaction::from_data_and_signer(tx_data, Intent::sui_transaction(), vec![account_key]);
     info!("Executing {:?}", tx.digest());
     let tx_digest = *tx.digest();
     let resp = sui_client

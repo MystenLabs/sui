@@ -31,7 +31,6 @@ fn test_metered_move_bytecode_verifier() {
     // Default case should pass
     let r = run_metered_move_bytecode_verifier(
         &compiled_modules,
-        &ProtocolConfig::get_for_max_version(),
         &metered_verifier_config,
         &mut meter,
         &bytecode_verifier_metrics,
@@ -122,7 +121,6 @@ fn test_metered_move_bytecode_verifier() {
     let timer_start = Instant::now();
     let r = run_metered_move_bytecode_verifier(
         &compiled_modules,
-        &ProtocolConfig::get_for_max_version(),
         &metered_verifier_config,
         &mut meter,
         &bytecode_verifier_metrics,
@@ -225,7 +223,6 @@ fn test_metered_move_bytecode_verifier() {
 
         run_metered_move_bytecode_verifier(
             modules,
-            &protocol_config,
             &metered_verifier_config,
             &mut meter,
             &bytecode_verifier_metrics,
@@ -251,7 +248,6 @@ fn test_meter_system_packages() {
     for system_package in BuiltInFramework::iter_system_packages() {
         run_metered_move_bytecode_verifier(
             &system_package.modules(),
-            &ProtocolConfig::get_for_max_version(),
             &metered_verifier_config,
             &mut meter,
             &bytecode_verifier_metrics,
@@ -336,7 +332,6 @@ fn test_build_and_verify_programmability_examples() {
         let mut meter = SuiVerifierMeter::new(&metered_verifier_config);
         run_metered_move_bytecode_verifier(
             &modules,
-            &ProtocolConfig::get_for_max_version(),
             &metered_verifier_config,
             &mut meter,
             &bytecode_verifier_metrics,

@@ -1,0 +1,40 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// clock has only key ability
+
+//# publish
+module 0x0.m {
+    import 0x2.clock;
+    import 0x2.transfer;
+
+    t(clock: clock.Clock) {
+        label l0:
+        transfer.transfer<clock.Clock>(move(clock), 0x42);
+        return;
+    }
+}
+
+//# publish
+module 0x0.m {
+    import 0x2.clock;
+    import 0x2.transfer;
+
+    t(clock: clock.Clock) {
+        label l0:
+        transfer.share_object<clock.Clock>(move(clock));
+        return;
+    }
+}
+
+//# publish
+module 0x0.m {
+    import 0x2.clock;
+    import 0x2.transfer;
+
+    t(clock: clock.Clock) {
+        label l0:
+        transfer.freeze_object<clock.Clock>(move(clock));
+        return;
+    }
+}

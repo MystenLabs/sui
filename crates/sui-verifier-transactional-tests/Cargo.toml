@@ -8,8 +8,8 @@ publish = false
 edition = "2021"
 
 [dev-dependencies]
-datatest-stable = "0.1.2"
-sui-transactional-test-runner = { path = "../sui-transactional-test-runner" }
+datatest-stable.workspace = true
+sui-transactional-test-runner.workspace = true
 
 [[test]]
 name = "tests"

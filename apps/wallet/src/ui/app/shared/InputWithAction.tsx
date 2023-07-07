@@ -4,8 +4,8 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { useField, useFormikContext } from 'formik';
 
-import Alert from '../components/alert';
 import { Pill, type PillProps } from './Pill';
+import Alert from '../components/alert';
 import NumberInput from '_components/number-input';
 
 import type { ComponentProps } from 'react';

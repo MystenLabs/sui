@@ -12,7 +12,7 @@ import {
 	TransactionBlock,
 	getObjectFields,
 } from '@mysten/sui.js';
-import { DynamicFieldInfo } from '@mysten/sui.js/dist/types/dynamic_fields';
+import { type DynamicFieldInfo } from '@mysten/sui.js';
 import { bcs } from './bcs';
 import { KIOSK_TYPE, Kiosk, KioskData, KioskListing, RulesEnvironmentParam } from './types';
 import { MAINNET_RULES_PACKAGE_ADDRESS, TESTNET_RULES_PACKAGE_ADDRESS } from './constants';

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use config::{AuthorityIdentifier, BlockSynchronizerParameters, Committee, Parameters};
-use consensus::consensus::ConsensusRound;
+use consensus::consensus::{ConsensusRound, LeaderSchedule, LeaderSwapTable};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use fastcrypto::{hash::Hash, traits::KeyPair as _};
 use indexmap::IndexMap;
@@ -134,6 +134,7 @@ async fn test_get_collections() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     let registry = Registry::new();
@@ -334,6 +335,7 @@ async fn test_remove_collections() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     // Wait for tasks to start
@@ -593,6 +595,7 @@ async fn test_read_causal_signed_certificates() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) =
@@ -642,6 +645,7 @@ async fn test_read_causal_signed_certificates() {
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     // Wait for tasks to start
@@ -822,6 +826,7 @@ async fn test_read_causal_unsigned_certificates() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) =
@@ -865,6 +870,7 @@ async fn test_read_causal_unsigned_certificates() {
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     // Wait for tasks to start
@@ -1045,6 +1051,7 @@ async fn test_get_collections_with_missing_certificates() {
         &mut tx_shutdown,
         tx_feedback_1,
         &Registry::new(),
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     let registry_1 = Registry::new();
@@ -1110,6 +1117,7 @@ async fn test_get_collections_with_missing_certificates() {
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     let registry_2 = Registry::new();

@@ -31,7 +31,7 @@ use crate::ValidatorProxy;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
-use sui_types::transaction::{TransactionDataAPI, VerifiedTransaction};
+use sui_types::transaction::{Transaction, TransactionDataAPI};
 use sysinfo::{CpuExt, System, SystemExt};
 use tokio::sync::Barrier;
 use tokio::{time, time::Instant};
@@ -149,7 +149,7 @@ struct Stats {
     pub bench_stats: BenchmarkStats,
 }
 
-type RetryType = Box<(VerifiedTransaction, Box<dyn Payload>)>;
+type RetryType = Box<(Transaction, Box<dyn Payload>)>;
 
 enum NextOp {
     Response {
@@ -385,7 +385,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                 let committee_cloned = Arc::new(worker.proxy.clone_committee());
                                 let start = Arc::new(Instant::now());
                                 let res = worker.proxy
-                                    .execute_transaction_block(b.0.clone().into())
+                                    .execute_transaction_block(b.0.clone())
                                     .then(|res| async move  {
                                         match res {
                                             Ok(effects) => {
@@ -441,7 +441,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                 // TODO: clone committee for each request is not ideal.
                                 let committee_cloned = Arc::new(worker.proxy.clone_committee());
                                 let res = worker.proxy
-                                    .execute_transaction_block(tx.clone().into())
+                                    .execute_transaction_block(tx.clone())
                                 .then(|res| async move {
                                     match res {
                                         Ok(effects) => {

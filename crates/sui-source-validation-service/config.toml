@@ -1,0 +1,9 @@
+[[packages]]
+repository = "https://github.com/mystenlabs/sui"
+branch = "mainnet-v1.3.1"
+paths = [
+    "crates/sui-framework/packages/deepbook",
+    "crates/sui-framework/packages/move-stdlib",
+    "crates/sui-framework/packages/sui-framework",
+    "crates/sui-framework/packages/sui-system",
+]

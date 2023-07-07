@@ -7,48 +7,48 @@ publish = false
 edition = "2021"
 
 [dependencies]
-integer-encoding = "3.0.1"
-async-trait = "0.1.61"
-futures = "0.3.23"
-num_enum = "0.6.1"
-serde = { version = "1.0.144", features = ["derive"] }
+integer-encoding.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+num_enum.workspace = true
+serde.workspace = true
 tokio = { workspace = true, features = ["full", "tracing"] }
-rocksdb = "0.21.0"
-tracing = "0.1.36"
-byteorder = "1.4.3"
-anyhow = "1.0.64"
-tempfile = "3.3.0"
-tap = "1.0.1"
-object_store = { version = "=0.5.4", features = ["aws", "aws_profile", "gcp", "azure"] }
-backoff = "0.4.0"
-bytes = "1.4.0"
-parking_lot = "0.12.1"
-bcs = "0.1.4"
-prometheus = "0.13.3"
-itertools = "0.10.5"
-zstd = "0.12.3"
-url = "2.3.1"
+rocksdb.workspace = true
+tracing.workspace = true
+byteorder.workspace = true
+anyhow.workspace = true
+tempfile.workspace = true
+tap.workspace = true
+object_store.workspace = true
+backoff.workspace = true
+bytes.workspace = true
+parking_lot.workspace = true
+bcs.workspace = true
+prometheus.workspace = true
+itertools.workspace = true
+zstd.workspace = true
+url.workspace = true
 clap = "4.3.2"
 
-sui-simulator = { path = "../sui-simulator" }
-sui-types = { path = "../sui-types" }
-mysten-metrics = { path = "../mysten-metrics" }
+sui-simulator.workspace = true
+sui-types.workspace = true
+mysten-metrics.workspace = true
 move-core-types.workspace = true
-sui-json-rpc-types = { path = "../sui-json-rpc-types" }
-sui-protocol-config = { path = "../sui-protocol-config" }
+sui-json-rpc-types.workspace = true
+sui-protocol-config.workspace = true
 typed-store.workspace = true
 typed-store-derive.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-eyre = "0.6.8"
-lru = "0.10"
+eyre.workspace = true
+lru.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 
 [dev-dependencies]
-anyhow = "1.0.64"
-criterion = { version = "0.4.0", features = ["async", "async_tokio"] }
-tempfile = "3.3.0"
-num_cpus = "1.14.0"
-pretty_assertions = "1.2.0"
-once_cell = "1.16"
+anyhow.workspace = true
+criterion.workspace = true
+tempfile.workspace = true
+num_cpus.workspace = true
+pretty_assertions.workspace = true
+once_cell.workspace = true

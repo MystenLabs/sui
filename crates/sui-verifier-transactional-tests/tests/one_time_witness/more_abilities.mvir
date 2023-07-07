@@ -1,0 +1,45 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// invalid, struct type has abilities beyond drop
+
+//# init --addresses test=0x0
+
+//# publish
+module 0x0.m {
+    import 0x2.tx_context;
+
+    struct M has drop, copy { dummy: bool }
+
+    init(_otw: Self.M, _ctx: &mut tx_context.TxContext) {
+        label l0:
+        return;
+    }
+
+}
+
+//# publish
+module 0x0.m {
+    import 0x2.tx_context;
+
+    struct M has drop, store { dummy: bool }
+
+    init(_otw: Self.M, _ctx: &mut tx_context.TxContext) {
+        label l0:
+        return;
+    }
+
+}
+
+//# publish
+module 0x0.m {
+    import 0x2.tx_context;
+
+    struct M has drop, copy, store { dummy: bool }
+
+    init(_otw: Self.M, _ctx: &mut tx_context.TxContext) {
+        label l0:
+        return;
+    }
+
+}

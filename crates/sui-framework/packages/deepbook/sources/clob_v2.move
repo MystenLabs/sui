@@ -45,20 +45,15 @@ module deepbook::clob_v2 {
     const EInvalidFee: u64 = 18;
     const EInvalidExpireTimestamp: u64 = 19;
     const EInvalidTickSizeLotSize: u64 = 20;
+    const EInvalidSelfMatchingPreventionArg: u64 = 21;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Constants <<<<<<<<<<<<<<<<<<<<<<<<
     const FLOAT_SCALING: u64 = 1_000_000_000;
     // Self-Trade Prevention option
-    // Cancel smaller order and decrement larger order by the smaller size. If the same size, cancel both.
-    const DECREMENT_AND_CANCEL: u8 = 0;
     // Cancel older (resting) order in full. Continue to execute the newer taking order.
-    const CANCEL_OLDEST: u8 = 1;
-    // Cancel newer (taking) order in full. Let the old resting order remain on the order book.
-    const CANCEL_NEWEST: u8 = 2;
-    // Cancel both orders immediately.
-    const CANCEL_BOTH: u8 = 3;
+    const CANCEL_OLDEST: u8 = 0;
     // Restrictions on limit orders.
     const N_RESTRICTIONS: u8 = 4;
     const NO_RESTRICTION: u8 = 0;
@@ -300,9 +295,31 @@ module deepbook::clob_v2 {
         ctx: &mut TxContext,
     ) {
         assert!(coin::value(&creation_fee) == FEE_AMOUNT_FOR_CREATE_POOL, EInvalidFee);
-        create_pool_<BaseAsset, QuoteAsset>(
+        create_customized_pool<BaseAsset, QuoteAsset>(
+            tick_size,
+            lot_size,
             REFERENCE_TAKER_FEE_RATE,
             REFERENCE_MAKER_REBATE_RATE,
+            creation_fee,
+            ctx,
+        );
+    }
+
+    // Function for creating pool with customized taker fee rate and maker rebate rate.
+    // The taker_fee_rate should be greater than or equal to the maker_rebate_rate, and both should have a scaling of 10^9.
+    // Taker_fee_rate of 0.25% should be 2_500_000 for example
+    public fun create_customized_pool<BaseAsset, QuoteAsset>(
+        tick_size: u64,
+        lot_size: u64,
+        taker_fee_rate: u64,
+        maker_rebate_rate: u64,
+        creation_fee: Coin<SUI>,
+        ctx: &mut TxContext,
+    ) {
+        assert!(coin::value(&creation_fee) == FEE_AMOUNT_FOR_CREATE_POOL, EInvalidFee);
+        create_pool_<BaseAsset, QuoteAsset>(
+            taker_fee_rate,
+            maker_rebate_rate,
             tick_size,
             lot_size,
             coin::into_balance(creation_fee),
@@ -463,7 +480,7 @@ module deepbook::clob_v2 {
                 let maker_base_quantity = maker_order.quantity;
                 let skip_order = false;
 
-                if (maker_order.expire_timestamp <= current_timestamp) {
+                if (maker_order.expire_timestamp <= current_timestamp || account_owner(account_cap) == maker_order.owner) {
                     skip_order = true;
                     custodian::unlock_balance(&mut pool.base_custodian, maker_order.owner, maker_order.quantity);
                     emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, maker_order);
@@ -630,7 +647,7 @@ module deepbook::clob_v2 {
                 let maker_base_quantity = maker_order.quantity;
                 let skip_order = false;
 
-                if (maker_order.expire_timestamp <= current_timestamp) {
+                if (maker_order.expire_timestamp <= current_timestamp || account_owner(account_cap) == maker_order.owner) {
                     skip_order = true;
                     custodian::unlock_balance(&mut pool.base_custodian, maker_order.owner, maker_order.quantity);
                     emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, maker_order);
@@ -752,7 +769,7 @@ module deepbook::clob_v2 {
                 let maker_base_quantity = maker_order.quantity;
                 let skip_order = false;
 
-                if (maker_order.expire_timestamp <= current_timestamp) {
+                if (maker_order.expire_timestamp <= current_timestamp || account_owner(account_cap) == maker_order.owner) {
                     skip_order = true;
                     let maker_quote_quantity = clob_math::mul(maker_order.quantity, maker_order.price);
                     custodian::unlock_balance(&mut pool.quote_custodian, maker_order.owner, maker_quote_quantity);
@@ -1010,6 +1027,7 @@ module deepbook::clob_v2 {
         // Match the bid order against the asks Critbit Tree in the same way as a market order but up until the price level found in the previous step.
         // If the bid order is not completely filled, inject the remaining quantity to the bids Critbit Tree according to the input price and order id.
         // If limit ask order, vice versa.
+        assert!(self_matching_prevention == CANCEL_OLDEST, EInvalidSelfMatchingPreventionArg);
         assert!(quantity > 0, EInvalidQuantity);
         assert!(price > 0, EInvalidPrice);
         assert!(price % pool.tick_size == 0, EInvalidPrice);
@@ -1321,6 +1339,57 @@ module deepbook::clob_v2 {
         }
     }
 
+    /// Clean up expired orders
+    /// Note that this function can reduce gas cost if orders
+    /// with the same price are grouped together in the vector because we would not need the computation to find the tick_index.
+    /// For example, if we have the following order_id to price mapping, {0: 100., 1: 200., 2: 100., 3: 200.}.
+    /// Grouping order_ids like [0, 2, 1, 3] would make it the most gas efficient.
+    /// Order owners should be the owner addresses from the account capacities which placed the orders,
+    /// and they should correspond to the order IDs one by one.
+    public fun clean_up_expired_orders<BaseAsset, QuoteAsset>(
+        pool: &mut Pool<BaseAsset, QuoteAsset>,
+        clock: &Clock,
+        order_ids: vector<u64>,
+        order_owners: vector<address>
+    ) {
+        let pool_id = *object::uid_as_inner(&pool.id);
+        let now = clock::timestamp_ms(clock);
+        let n_order = vector::length(&order_ids);
+        assert!(n_order == vector::length(&order_owners), ENotEqual);
+        let i_order = 0;
+        let tick_index: u64 = 0;
+        let tick_price: u64 = 0;
+        while (i_order < n_order) {
+            let order_id = *vector::borrow(&order_ids, i_order);
+            let owner = *vector::borrow(&order_owners, i_order);
+            if (!table::contains(&pool.usr_open_orders, owner)) { continue };
+            let usr_open_orders = borrow_mut(&mut pool.usr_open_orders, owner);
+            if (!linked_table::contains(usr_open_orders, order_id)) { continue };
+            let new_tick_price = *linked_table::borrow(usr_open_orders, order_id);
+            let is_bid = order_is_bid(order_id);
+            let open_orders = if (is_bid) { &mut pool.bids } else { &mut pool.asks };
+            if (new_tick_price != tick_price) {
+                tick_price = new_tick_price;
+                let (tick_exists, new_tick_index) = find_leaf(
+                    open_orders,
+                    tick_price
+                );
+                assert!(tick_exists, EInvalidTickPrice);
+                tick_index = new_tick_index;
+            };
+            let order = remove_order<BaseAsset, QuoteAsset>(open_orders, usr_open_orders, tick_index, order_id, owner);
+            assert!(order.expire_timestamp < now, EInvalidExpireTimestamp);
+            if (is_bid) {
+                let balance_locked = clob_math::mul(order.quantity, order.price);
+                custodian::unlock_balance(&mut pool.quote_custodian, owner, balance_locked);
+            } else {
+                custodian::unlock_balance(&mut pool.base_custodian, owner, order.quantity);
+            };
+            emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, &order);
+            i_order = i_order + 1;
+        }
+    }
+
     public fun list_open_orders<BaseAsset, QuoteAsset>(
         pool: &Pool<BaseAsset, QuoteAsset>,
         account_cap: &AccountCap
@@ -1344,7 +1413,7 @@ module deepbook::clob_v2 {
                 is_bid: order.is_bid,
                 owner: order.owner,
                 expire_timestamp: order.expire_timestamp,
-                self_matching_prevention: PREVENT_SELF_MATCHING_DEFAULT
+                self_matching_prevention: order.self_matching_prevention
             });
             order_id = linked_table::next(usr_open_order_ids, *option::borrow(order_id));
         };

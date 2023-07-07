@@ -10,8 +10,8 @@ import { createMessage } from '_messages';
 import { KEEP_ALIVE_BG_PORT_NAME } from '_src/content-script/keep-bg-alive';
 import { type QredoConnectPayload } from '_src/shared/messaging/messages/payloads/QredoConnect';
 
-import type { NetworkEnvType } from '../NetworkEnv';
 import type { Connection } from './Connection';
+import type { NetworkEnvType } from '../NetworkEnv';
 import type { SetNetworkPayload } from '_payloads/network';
 import type { Permission } from '_payloads/permissions';
 import type { WalletStatusChange, WalletStatusChangePayload } from '_payloads/wallet-status-change';

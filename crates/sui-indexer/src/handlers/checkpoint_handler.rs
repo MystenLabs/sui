@@ -301,6 +301,7 @@ where
                     object_changes,
                     packages,
                     input_objects,
+                    changed_objects,
                     move_calls,
                     recipients,
                 } = indexed_checkpoint;
@@ -345,7 +346,12 @@ where
                 spawn_monitored_task!(async move {
                     let mut transaction_index_tables_commit_res = tx_index_table_handler
                         .state
-                        .persist_transaction_index_tables(&input_objects, &move_calls, &recipients)
+                        .persist_transaction_index_tables(
+                            &input_objects,
+                            &changed_objects,
+                            &move_calls,
+                            &recipients,
+                        )
                         .await;
                     while let Err(e) = transaction_index_tables_commit_res {
                         warn!(
@@ -360,6 +366,7 @@ where
                             .state
                             .persist_transaction_index_tables(
                                 &input_objects,
+                                &changed_objects,
                                 &move_calls,
                                 &recipients,
                             )
@@ -640,13 +647,17 @@ where
             .into_iter()
             .flatten()
             .collect::<Vec<_>>();
+        let changed_objects = transactions
+            .iter()
+            .flat_map(|tx| tx.get_changed_objects(checkpoint.epoch))
+            .collect();
         let move_calls = transactions
             .iter()
-            .flat_map(|tx| tx.get_move_calls(checkpoint.epoch, checkpoint.sequence_number))
+            .flat_map(|tx| tx.get_move_calls(checkpoint.epoch))
             .collect();
         let recipients = transactions
             .iter()
-            .flat_map(|tx| tx.get_recipients(checkpoint.epoch, checkpoint.sequence_number))
+            .flat_map(|tx| tx.get_recipients(checkpoint.epoch))
             .collect();
 
         // NOTE: Index epoch when object checkpoint index has reached the same checkpoint,
@@ -784,6 +795,7 @@ where
                 object_changes: objects_changes,
                 packages,
                 input_objects,
+                changed_objects,
                 move_calls,
                 recipients,
             },

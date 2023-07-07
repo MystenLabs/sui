@@ -88,4 +88,10 @@ describe('Transaction Serialization and deserialization', () => {
 		});
 		await serializeAndDeserialize(tx, [true]);
 	});
+
+	it('Transaction with expiration', async () => {
+		const tx = new TransactionBlock();
+		tx.setExpiration({ Epoch: 100 });
+		await serializeAndDeserialize(tx, []);
+	});
 });

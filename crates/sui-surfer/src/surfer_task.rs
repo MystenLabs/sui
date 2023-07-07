@@ -9,7 +9,7 @@ use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     object::Owner,
 };
-use test_utils::network::TestCluster;
+use test_cluster::TestCluster;
 use tokio::sync::{watch, RwLock};
 
 use crate::{

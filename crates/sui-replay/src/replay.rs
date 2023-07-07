@@ -45,7 +45,7 @@ use sui_types::digests::TransactionDigest;
 use sui_types::error::ExecutionError;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::gas::SuiGasStatus;
+use sui_types::gas::{GasCharger, SuiGasStatus};
 use sui_types::metrics::LimitsMetrics;
 use sui_types::object::{Data, Object, Owner};
 use sui_types::storage::get_module_by_id;
@@ -74,6 +74,8 @@ pub struct ExecutionSandboxState {
     pub local_exec_effects: SuiTransactionBlockEffects,
     /// Status from executing this locally in `execute_transaction_to_effects`
     pub local_exec_status: Result<(), ExecutionError>,
+    /// Pre exec diag info
+    pub pre_exec_diag: DiagInfo,
 }
 
 impl ExecutionSandboxState {
@@ -217,6 +219,10 @@ pub struct LocalExec {
     // Used for fetching data from the network or remote store
     pub fetcher: Fetchers,
 
+    pub diag: DiagInfo,
+    // One can optionally override the executor version
+    // -1 implies use latest version
+    pub executor_version_override: Option<i64>,
     // Retry policies due to RPC errors
     pub num_retries_for_timeout: u32,
     pub sleep_period_for_timeout: std::time::Duration,
@@ -298,18 +304,25 @@ impl LocalExec {
         tx_digest: TransactionDigest,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
         use_authority: bool,
+        executor_version_override: Option<i64>,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
         async fn inner_exec(
             rpc_url: String,
             tx_digest: TransactionDigest,
             expensive_safety_check_config: ExpensiveSafetyCheckConfig,
             use_authority: bool,
+            executor_version_override: Option<i64>,
         ) -> Result<ExecutionSandboxState, ReplayEngineError> {
             LocalExec::new_from_fn_url(&rpc_url)
                 .await?
                 .init_for_execution()
                 .await?
-                .execute_transaction(&tx_digest, expensive_safety_check_config, use_authority)
+                .execute_transaction(
+                    &tx_digest,
+                    expensive_safety_check_config,
+                    use_authority,
+                    executor_version_override,
+                )
                 .await
         }
 
@@ -320,6 +333,7 @@ impl LocalExec {
                 tx_digest,
                 expensive_safety_check_config.clone(),
                 use_authority,
+                executor_version_override,
             )
             .await
             {
@@ -339,6 +353,7 @@ impl LocalExec {
                 tx_digest,
                 expensive_safety_check_config.clone(),
                 use_authority,
+                executor_version_override,
             )
             .await
             {
@@ -394,17 +409,34 @@ impl LocalExec {
             // TODO: make these configurable
             num_retries_for_timeout: RPC_TIMEOUT_ERR_NUM_RETRIES,
             sleep_period_for_timeout: RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
+            diag: Default::default(),
+            executor_version_override: None,
         })
     }
 
-    pub async fn new_for_state_dump(path: &str) -> Result<Self, ReplayEngineError> {
+    pub async fn new_for_state_dump(
+        path: &str,
+        backup_rpc_url: Option<String>,
+    ) -> Result<Self, ReplayEngineError> {
         // Use a throwaway metrics registry for local execution.
         let registry = prometheus::Registry::new();
         let metrics = Arc::new(LimitsMetrics::new(&registry));
 
         let state = NodeStateDump::read_from_file(&PathBuf::from(path))?;
         let current_protocol_version = state.protocol_version;
-        let fetcher = NodeStateDumpFetcher::from(state);
+        let fetcher = match backup_rpc_url {
+            Some(url) => NodeStateDumpFetcher::new(
+                state,
+                Some(RemoteFetcher::new(
+                    SuiClientBuilder::default()
+                        .request_timeout(RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD)
+                        .max_concurrent_requests(MAX_CONCURRENT_REQUESTS)
+                        .build(url)
+                        .await?,
+                )),
+            ),
+            None => NodeStateDumpFetcher::new(state, None),
+        };
 
         Ok(Self {
             client: None,
@@ -418,6 +450,8 @@ impl LocalExec {
             // TODO: make these configurable
             num_retries_for_timeout: RPC_TIMEOUT_ERR_NUM_RETRIES,
             sleep_period_for_timeout: RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
+            diag: Default::default(),
+            executor_version_override: None,
         })
     }
 
@@ -605,7 +639,12 @@ impl LocalExec {
         let mut succeeded = 0;
         for tx in txs {
             match self
-                .execute_transaction(&tx, expensive_safety_check_config.clone(), use_authority)
+                .execute_transaction(
+                    &tx,
+                    expensive_safety_check_config.clone(),
+                    use_authority,
+                    None,
+                )
                 .await
                 .map(|q| q.check_effects())
             {
@@ -647,6 +686,7 @@ impl LocalExec {
                 local_exec_temporary_store: None,
                 local_exec_effects: effects,
                 local_exec_status: Ok(()),
+                pre_exec_diag: self.diag.clone(),
             });
         }
         // Initialize the state necessary for execution
@@ -660,40 +700,43 @@ impl LocalExec {
         let metrics = self.metrics.clone();
 
         // Extract the epoch start timestamp
-        let (epoch_start_timestamp, _) = self
+        let (epoch_start_timestamp, rgp) = self
             .get_epoch_start_timestamp_and_rgp(tx_info.executed_epoch)
             .await?;
 
-        // Create the gas status
-        let gas_status =
-            SuiGasStatus::new_with_budget(tx_info.gas_budget, tx_info.gas_price, protocol_config);
+        let ov = self.executor_version_override;
 
         // Temp store for data
         let temporary_store =
             self.to_temporary_store(tx_digest, InputObjects::new(input_objects), protocol_config);
 
         // We could probably cache the executor per protocol config
-        let executor = get_executor(protocol_config, expensive_safety_check_config);
+        let executor = get_executor(ov, protocol_config, expensive_safety_check_config);
 
         // All prep done
         let expensive_checks = true;
         let certificate_deny_set = HashSet::new();
-        let res = executor.execute_transaction_to_effects(
-            protocol_config,
-            metrics,
-            expensive_checks,
-            &certificate_deny_set,
-            &tx_info.executed_epoch,
-            epoch_start_timestamp,
-            temporary_store,
-            tx_info.shared_object_refs.clone(),
-            gas_status,
-            &tx_info.gas,
-            override_transaction_kind.unwrap_or(tx_info.kind.clone()),
-            tx_info.sender,
-            *tx_digest,
-            tx_info.dependencies.clone().into_iter().collect(),
-        );
+        let res = if let Ok(gas_status) =
+            SuiGasStatus::new(tx_info.gas_budget, tx_info.gas_price, rgp, protocol_config)
+        {
+            executor.execute_transaction_to_effects(
+                protocol_config,
+                metrics,
+                expensive_checks,
+                &certificate_deny_set,
+                &tx_info.executed_epoch,
+                epoch_start_timestamp,
+                temporary_store,
+                tx_info.shared_object_refs.clone(),
+                &mut GasCharger::new(*tx_digest, tx_info.gas.clone(), gas_status, protocol_config),
+                override_transaction_kind.unwrap_or(tx_info.kind.clone()),
+                tx_info.sender,
+                *tx_digest,
+                tx_info.dependencies.clone().into_iter().collect(),
+            )
+        } else {
+            unreachable!("Transaction was valid so gas status must be valid");
+        };
 
         let all_required_objects = self.storage.all_objects();
         let effects =
@@ -705,6 +748,7 @@ impl LocalExec {
             local_exec_temporary_store: Some(res.0),
             local_exec_effects: effects,
             local_exec_status: res.2,
+            pre_exec_diag: self.diag.clone(),
         })
     }
 
@@ -855,6 +899,7 @@ impl LocalExec {
             local_exec_temporary_store: None, // We dont capture it for cert exec run
             local_exec_effects: effects,
             local_exec_status: exec_res,
+            pre_exec_diag: self.diag.clone(),
         })
     }
 
@@ -910,7 +955,9 @@ impl LocalExec {
         tx_digest: &TransactionDigest,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
         use_authority: bool,
+        executor_version_override: Option<i64>,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
+        self.executor_version_override = executor_version_override;
         if use_authority {
             self.certificate_execute(tx_digest, expensive_safety_check_config.clone())
                 .await
@@ -1522,7 +1569,7 @@ impl LocalExec {
         Ok(resolved_input_objs)
     }
 
-    /// Given the TxInfo, download and store the input objects, and other info necessary
+    /// Given the OnChainTransactionInfo, download and store the input objects, and other info necessary
     /// for execution
     async fn initialize_execution_env_state(
         &mut self,
@@ -1553,6 +1600,7 @@ impl LocalExec {
         // Prep the object runtime for dynamic fields
         // Download the child objects accessed at the version right before the execution of this TX
         let loaded_child_refs = self.fetch_loaded_child_refs(&tx_info.tx_digest).await?;
+        self.diag.loaded_child_objects = loaded_child_refs.clone();
         self.multi_download_and_store(&loaded_child_refs).await?;
 
         Ok(input_objs)
@@ -1587,16 +1635,29 @@ impl BackingPackageStore for LocalExec {
 impl ChildObjectResolver for LocalExec {
     /// This uses `get_object`, which does not download from the network
     /// Hence all objects must be in store already
-    fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
+    fn read_child_object(
+        &self,
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> SuiResult<Option<Object>> {
         fn inner(
             self_: &LocalExec,
             parent: &ObjectID,
             child: &ObjectID,
+            child_version_upper_bound: SequenceNumber,
         ) -> SuiResult<Option<Object>> {
             let child_object = match self_.get_object(child)? {
                 None => return Ok(None),
                 Some(o) => o,
             };
+            let child_version = child_object.version();
+            if child_object.version() > child_version_upper_bound {
+                return Err(SuiError::Unknown(format!(
+                    "Invariant Violation. Replay loaded child_object {child} at version \
+                    {child_version} but expected the version to be <= {child_version_upper_bound}"
+                )));
+            }
             let parent = *parent;
             if child_object.owner != Owner::ObjectOwner(parent.into()) {
                 return Err(SuiError::InvalidChildObjectAccess {
@@ -1608,7 +1669,7 @@ impl ChildObjectResolver for LocalExec {
             Ok(Some(child_object))
         }
 
-        let res = inner(self, parent, child);
+        let res = inner(self, parent, child, child_version_upper_bound);
         self.exec_store_events
             .lock()
             .expect("Unable to lock events list")
@@ -1820,12 +1881,27 @@ impl GetModule for LocalExec {
 // <--------------------- Util functions ----------------------->
 
 pub fn get_executor(
+    executor_version_override: Option<i64>,
     protocol_config: &ProtocolConfig,
     expensive_safety_check_config: ExpensiveSafetyCheckConfig,
 ) -> Arc<dyn Executor + Send + Sync> {
+    let protocol_config = executor_version_override
+        .map(|q| {
+            let ver = if q < 0 {
+                ProtocolConfig::get_for_max_version().execution_version()
+            } else {
+                q as u64
+            };
+
+            let mut c = protocol_config.clone();
+            c.set_execution_version_for_testing(ver);
+            c
+        })
+        .unwrap_or(protocol_config.clone());
+
     let silent = true;
     sui_execution::executor(
-        protocol_config,
+        &protocol_config,
         expensive_safety_check_config.enable_move_vm_paranoid_checks(),
         silent,
     )

@@ -89,6 +89,7 @@ export function Graph({ data, width, height, selectedUnit }: GraphProps) {
 		totalMaxTicksForWidth < 1 ? 1 : totalMaxTicksForWidth,
 	);
 	const firstElementY = adjData.length ? yScale(Number(adjData[0].referenceGasPrice)) : null;
+	const firstElementX = adjData.length ? xScale(adjData[0].epoch) : null;
 	const lastElementX = adjData.length ? xScale(adjData[adjData.length - 1].epoch) : null;
 	const lastElementY = adjData.length
 		? yScale(Number(adjData[adjData.length - 1].referenceGasPrice))
@@ -150,18 +151,24 @@ export function Graph({ data, width, height, selectedUnit }: GraphProps) {
 					fillOpacity="0.1"
 					stroke="transparent"
 				/>
-				{firstElementY !== null ? (
+				{firstElementY !== null && firstElementX !== null ? (
 					<>
 						<rect
 							x="0"
 							y={firstElementY}
-							width={SIDE_MARGIN}
+							width={firstElementX}
 							fill="#F2BD24"
 							fillOpacity="0.1"
 							stroke="transparent"
 							height={graphButton - firstElementY}
 						/>
-						<line x1="0" y1={firstElementY} x2={SIDE_MARGIN} y2={firstElementY} stroke="#F2BD24" />
+						<line
+							x1="0"
+							y1={firstElementY}
+							x2={firstElementX}
+							y2={firstElementY}
+							stroke="#F2BD24"
+						/>
 					</>
 				) : null}
 				{lastElementX !== null && lastElementY !== null ? (
@@ -169,7 +176,7 @@ export function Graph({ data, width, height, selectedUnit }: GraphProps) {
 						<rect
 							x={lastElementX}
 							y={lastElementY}
-							width={SIDE_MARGIN}
+							width={width - lastElementX}
 							fill="#F2BD24"
 							fillOpacity="0.1"
 							stroke="transparent"
@@ -178,7 +185,7 @@ export function Graph({ data, width, height, selectedUnit }: GraphProps) {
 						<line
 							x1={lastElementX}
 							y1={lastElementY}
-							x2={lastElementX + SIDE_MARGIN}
+							x2={width}
 							y2={lastElementY}
 							stroke="#F2BD24"
 						/>
