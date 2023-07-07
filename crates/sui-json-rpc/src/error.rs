@@ -186,7 +186,6 @@ pub enum ClientError {
 
 impl From<ClientError> for RpcError {
     fn from(e: ClientError) -> Self {
-        // TODO(wlmyng): Please check your input and try again text
         RpcError::Call(CallError::InvalidParams(e.into()))
     }
 }

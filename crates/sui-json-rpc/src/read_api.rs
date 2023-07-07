@@ -171,7 +171,7 @@ impl ReadApi {
             let state = self.state.clone();
             let digests_clone = digests.clone();
             let transactions =
-                state.multi_get_executed_transactions(&digests_clone).tap_err( // TODO(wlmyng): unexpected error
+                state.multi_get_executed_transactions(&digests_clone).tap_err(
                     |err| debug!(digests=?digests_clone, "Failed to multi get transactions: {:?}", err),
                 )?;
 
@@ -186,7 +186,7 @@ impl ReadApi {
         if opts.require_effects() {
             let state = self.state.clone();
             let digests_clone = digests.clone();
-            let effects_list = state.multi_get_executed_effects(&digests_clone).tap_err( // TODO(wlmyng): unexpected error
+            let effects_list = state.multi_get_executed_effects(&digests_clone).tap_err(
                 |err| debug!(digests=?digests_clone, "Failed to multi get effects for transactions: {:?}", err),
             )?;
             for ((_digest, cache_entry), e) in
@@ -206,7 +206,7 @@ impl ReadApi {
             state
             .database
             .deprecated_multi_get_transaction_checkpoint(&digests_clone)
-            .tap_err( // TODO(wlmyng): unexpected error
+            .tap_err(
                 |err| debug!(digests=?digests_clone, "Failed to multi get checkpoint sequence number: {:?}", err))?;
         for ((_digest, cache_entry), seq) in temp_response
             .iter_mut()
@@ -495,7 +495,6 @@ impl ReadApiServer for ReadApi {
                     .collect();
 
                 let objects = objects_result.map_err(|err| {
-                    // TODO(wlmyng): process underlying errors
                     Error::UnexpectedError(format!("Failed to fetch objects with error: {}", err))
                 })?;
 
@@ -615,7 +614,7 @@ impl ReadApiServer for ReadApi {
             Ok(self
                 .state
                 .get_total_transaction_blocks()
-                .map_err(Error::from)? // TODO(wlmyng): Match SuiError::UnsupportedFeatureError
+                .map_err(Error::from)?
                 .into()) // converts into BigInt<u64>
         })
     }
@@ -634,7 +633,6 @@ impl ReadApiServer for ReadApi {
             let state = self.state.clone();
             let transaction = spawn_monitored_task!(async move {
                 state.get_transaction_block(digest).await.map_err(|err| {
-                    // TODO(wlmyng): match SuiError::TransactionNotFound
                     debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err);
                     Error::from(err)
                 })
@@ -660,7 +658,6 @@ impl ReadApiServer for ReadApi {
                 temp_response.effects = Some(
                     spawn_monitored_task!(async move {
                         state.get_executed_effects(digest).map_err(|err| {
-                            // TODO(wlmyng): match on SuiError
                             debug!(tx_digest=?digest, "Failed to get effects: {:?}", err);
                             Error::from(err)
                         })
@@ -716,7 +713,6 @@ impl ReadApiServer for ReadApi {
                             Error::from(e)
                         })}).await.map_err(Error::from)??;
                     match to_sui_transaction_events(self, digest, events) {
-                        // TODO(wlmyng): seems like server error
                         Ok(e) => temp_response.events = Some(e),
                         Err(e) => temp_response.errors.push(e.to_string()),
                     };
@@ -802,10 +798,10 @@ impl ReadApiServer for ReadApi {
             let state = self.state.clone();
             spawn_monitored_task!(async move{
             let store = state.load_epoch_store_one_call_per_task();
-            let effect = state.get_executed_effects(transaction_digest).map_err(Error::from)?; // TODO(wlmyng): match on SuiError::EffectsNotFound tbh
+            let effect = state.get_executed_effects(transaction_digest).map_err(Error::from)?;
             let events = if let Some(event_digest) = effect.events_digest() {
             state
-                .get_transaction_events(event_digest) // TODO(wlmyng): match TransactionEventsNotFound
+                .get_transaction_events(event_digest)
                 .map_err(
                     |e| {
                         error!("Failed to get transaction events for event digest {event_digest:?} with error: {e:?}");
@@ -886,7 +882,6 @@ impl ReadApiServer for ReadApi {
 
             let mut data = spawn_monitored_task!(async move {
                 state.get_checkpoints(cursor.map(|s| *s), limit as u64 + 1, descending_order)
-                // TODO(wlmyng): I think this is ok, but double check that there are non-error scenarios where authority.get_latest_checkpoint_sequence_number might be None
             })
             .await
             .map_err(Error::from)?
@@ -967,7 +962,7 @@ impl ReadApiServer for ReadApi {
                         (*v).into(),
                         self.state
                             .get_chain_identifier()
-                            .ok_or(anyhow!("Chain identifier not found"))? // TODO(wlmyng): UnexpectedError
+                            .ok_or(anyhow!("Chain identifier not found"))?
                             .chain(),
                     )
                     .ok_or(Error::ClientError(
@@ -992,7 +987,7 @@ impl ReadApiServer for ReadApi {
             let ci = self
                 .state
                 .get_chain_identifier()
-                .ok_or(anyhow!("Chain identifier not found"))?; // TODO(wlmyng): UnexpectedError
+                .ok_or(anyhow!("Chain identifier not found"))?;
             Ok(ci.to_string())
         })
     }
