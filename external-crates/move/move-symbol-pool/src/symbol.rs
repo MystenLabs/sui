@@ -329,41 +329,48 @@ mod tests {
 }
 
 #[macro_export]
-macro_rules! check_idx {
-    (@step $_rec:expr,) => {};
+macro_rules! static_symbols_with_idx {
+    ($($str:tt => $idx:expr),* $(,)?) => {
+        #[macro_export]
+        macro_rules! symbol {
+            $(($str) => { $crate::symbol::Symbol::pack_static($idx) };)*
+        }
 
-    (@step $rec:expr, $head:expr, $str:expr, $($tail:expr,)*) => {
-        assert!(
-            $rec == $head,
-            std::concat!(
-                "Incorrect symbol index for ",
-                $str
-            )
-        );
-        check_idx!(@step $rec + 1usize, $($tail,)*);
-    };
-
-    ($($idx:expr,$str:expr),*) => {
-        check_idx!(@step 0usize, $($idx, $str,)*);
-    }
-}
-
-#[macro_export]
-macro_rules! static_symbols {
-    ($($idx:tt: $str:tt),* $(,)?) => {
         pub const STATIC_SYMBOLS: &[&str] = &[$($str,)*];
         pub const STATIC_SYMBOL_IDX: phf::Map<&'static str, u32> = phf::phf_map! {
             $($str => $idx,)*
         };
 
 
-        const _CHECK_SYMBOLS: () = {
-            check_idx!($($idx, $str),*);
-        };
+    };
+}
 
-        #[macro_export]
-        macro_rules! symbol {
-            $(($str) => { $crate::symbol::Symbol::pack_static($idx) };)*
+#[macro_export]
+macro_rules! expand_symbol_idxs {
+    ($count:expr, [$s:tt], [$(($accm:tt, $idx:expr)),* $(,)?], $callback:ident) => {
+        $callback! {
+            $s => 0,
+            $($accm => ($count - ($idx))),*
+        }
+    };
+    ($count:expr, [$s:tt, $($rest:tt),+], [$(($acc:tt, $idx:expr)),* $(,)?], $callback:ident) => {
+        expand_symbol_idxs! {
+            1 + $count,
+            [$($rest),+],
+            [($s, $count), $(($acc, $idx)),*],
+            $callback
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! static_symbols {
+    ($($str:tt),* $(,)?) => {
+        expand_symbol_idxs! {
+            0,
+            [$($str),*],
+            [],
+            static_symbols_with_idx
         }
     };
 }
