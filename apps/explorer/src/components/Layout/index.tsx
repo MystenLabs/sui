@@ -65,21 +65,23 @@ export function Layout() {
 							<Header />
 							<GradientContainerContext.Provider value={{ setVisible: setIsGradientVisible }}>
 								<main className="relative z-10 min-h-screen bg-offwhite">
-									<section className={clsx('bg-main', isGradientVisible ? 'block' : 'hidden')}>
-										<div
-											className="mx-auto max-w-[1440px] px-5 py-10 lg:px-10 2xl:px-0"
-											id="gradient-content-container"
-										/>
-									</section>
-									<section className="mx-auto max-w-[1440px] px-5 py-10 lg:px-10 2xl:px-0">
-										{network === Network.MAINNET && data?.degraded && (
-											<div className="pb-2.5">
+									{network === Network.MAINNET && data?.degraded && (
+										<div className={clsx(isGradientVisible && 'bg-[#D2EBFA]')}>
+											<div className="mx-auto max-w-[1440px] px-4 pt-3 lg:px-6 xl:px-10">
 												<Banner variant="warning" border fullWidth>
 													We&rsquo;re sorry that the explorer is running slower than usual.
 													We&rsquo;re working to fix the issue and appreciate your patience.
 												</Banner>
 											</div>
-										)}
+										</div>
+									)}
+									<section className={clsx('bg-main', isGradientVisible ? 'block' : 'hidden')}>
+										<div
+											className="mx-auto max-w-[1440px] px-4 py-8 lg:px-6 xl:px-10 xl:py-12"
+											id="gradient-content-container"
+										/>
+									</section>
+									<section className="mx-auto max-w-[1440px] px-4 py-6 pb-16 lg:px-6 xl:p-10 xl:pb-16">
 										<Outlet />
 									</section>
 								</main>

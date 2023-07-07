@@ -82,6 +82,13 @@ body,
 			'validators'
 			'node-map';
 	}
+
+	@screen lg {
+		.home-page-grid-container-bottom {
+			@apply gap-10;
+		}
+	}
+
 	@screen xl {
 		.home-page-grid-container-bottom {
 			@apply grid grid-cols-2 gap-x-20 gap-y-10;
