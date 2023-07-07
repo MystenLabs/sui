@@ -30,7 +30,7 @@ use crate::storage::WritableObjectStore;
 
 use super::types::*;
 
-const MANAGER_CHANNEL_SIZE:usize = 64;
+const MANAGER_CHANNEL_SIZE:usize = 1024;
 
 pub struct QueuesManager {
     tx_store: HashMap<TransactionDigest, Transaction>,
@@ -420,8 +420,8 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
         let mut epoch_change_tx: Option<Transaction> = None;
 
         // Start timer for TPS computation
-        let now = Instant::now();
         let mut num_tx: usize = 0;
+        let now = Instant::now();
 
         // Start the initial epoch
         let (mut move_vm, mut protocol_config, mut epoch_data, mut reference_gas_price)
@@ -431,7 +431,30 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
         loop {
             tokio::select! {
                 biased;
+                Some(tx_with_results) = tasks_queue.next() => {
+                    num_tx += 1;
+                    epoch_txs_semaphore -= 1;
+                    assert!(epoch_txs_semaphore >= 0);
 
+                    let full_tx = &tx_with_results.full_tx;
+                    if full_tx.checkpoint_seq % 10_000 == 0 {
+                        println!("EW executed {}", full_tx.checkpoint_seq);
+                    }
+
+                    // 1. Critical check: are the effects the same?
+                    let tx_effects = &tx_with_results.tx_effects;
+                    Self::check_effects_match(full_tx, tx_effects);
+
+                    // 2. Update object queues
+                    manager.clean_up(&full_tx).await;
+
+                    // Stop executing when I hit the watermark
+                    // Note that this is the high watermark; there may be lower txns not 
+                    // completed still left in the tasks_queue
+                    if full_tx.checkpoint_seq == exec_watermark-1 {
+                        break;
+                    }
+                },
                 // Must poll from manager_receiver before sw_receiver, to avoid deadlock
                 Some(full_tx) = manager_receiver.recv() => {
                     // Push execution task to futures queue
@@ -466,30 +489,6 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                         panic!("unexpected message");
                     }
                 },
-                Some(tx_with_results) = tasks_queue.next() => {
-                    num_tx += 1;
-                    epoch_txs_semaphore -= 1;
-                    assert!(epoch_txs_semaphore >= 0);
-
-                    let full_tx = &tx_with_results.full_tx;
-                    if full_tx.checkpoint_seq % 10000 == 0 {
-                        println!("EW executed {}", full_tx.checkpoint_seq);
-                    }
-
-                    // 1. Critical check: are the effects the same?
-                    let tx_effects = &tx_with_results.tx_effects;
-                    Self::check_effects_match(full_tx, tx_effects);
-
-                    // 2. Update object queues
-                    manager.clean_up(&full_tx).await;
-
-                    // Stop executing when I hit the watermark
-                    // Note that this is the high watermark; there may be lower txns not 
-                    // completed still left in the tasks_queue
-                    if full_tx.checkpoint_seq == exec_watermark-1 {
-                        break;
-                    }
-                },
                 else => {
                     println!("EW error, abort");
                     break
@@ -509,7 +508,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                 ).await;
 
                 num_tx += 1;
-                if full_tx.checkpoint_seq % 10000 == 0 {
+                if full_tx.checkpoint_seq % 10_000 == 0 {
                     println!("EW executed {}", full_tx.checkpoint_seq);
                 }
 
