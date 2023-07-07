@@ -47,7 +47,7 @@ function BullsharkQuestsNotification({ onClose }: { onClose: () => void }) {
 							<ExternalLink
 								href="https://tech.mystenlabs.com/introducing-bullsharks-quests/"
 								onClick={() => ampli.clickedBullsharkQuestsCta({ sourceFlow: 'Interstitial' })}
-								className="appearance-none no-underline text-white bg-[#EA3389] rounded-lg py-2 w-60 [-webkit-text-stroke:1px_black]"
+								className="appearance-none no-underline text-white bg-[#EA3389] rounded-lg py-2 w-60 [-webkit-text-stroke:1px_black] leading-none text-heading6"
 							>
 								Read more on the blog
 							</ExternalLink>
