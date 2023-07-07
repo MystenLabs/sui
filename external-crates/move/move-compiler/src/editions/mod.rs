@@ -128,7 +128,7 @@ impl FromStr for Edition {
             (s, None)
         };
         let edition = Edition {
-            edition: Symbol::from(edition),
+            edition: symbol!(edition),
             release: release.map(Symbol::from),
         };
         if !Self::ALL.iter().any(|e| e == &edition) {

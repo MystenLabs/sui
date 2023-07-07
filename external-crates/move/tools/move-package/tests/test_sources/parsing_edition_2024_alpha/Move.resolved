@@ -45,9 +45,12 @@ ResolvedGraph {
                         "\"license\"",
                     ),
                     edition: Some(
-                        E2024(
-                            Alpha,
-                        ),
+                        Edition {
+                            edition: "2024",
+                            release: Some(
+                                "alpha",
+                            ),
+                        },
                     ),
                     flavor: None,
                     custom_properties: {},

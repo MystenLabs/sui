@@ -45,7 +45,10 @@ ResolvedGraph {
                         "\"license\"",
                     ),
                     edition: Some(
-                        Legacy,
+                        Edition {
+                            edition: "legacy",
+                            release: None,
+                        },
                     ),
                     flavor: None,
                     custom_properties: {},
