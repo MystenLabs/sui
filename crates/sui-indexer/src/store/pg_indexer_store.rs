@@ -51,7 +51,7 @@ use crate::models::epoch::DBEpochInfo;
 use crate::models::events::Event;
 use crate::models::network_metrics::{DBMoveCallMetrics, DBNetworkMetrics};
 use crate::models::objects::{
-    compose_object_bulk_insert_update_query, group_and_sort_objects, Object,
+    group_and_sort_objects, dedup_objects_with_highest_version, Object,
 };
 use crate::models::packages::Package;
 use crate::models::system_state::DBValidatorSummary;
@@ -1271,39 +1271,23 @@ impl IndexerStore for PgIndexerStore {
             .map(|deleted_object| deleted_object.clone().into())
             .collect();
 
-        let mut mutated_object_groups = group_and_sort_objects(mutated_objects);
         let object_mutation_guard = object_mutation_latency.start_timer();
-        let mut commit_counter = 0;
-        loop {
-            let mutated_object_group = mutated_object_groups
-                .iter_mut()
-                .filter_map(|group| group.pop())
-                .collect::<Vec<_>>();
-            if mutated_object_group.is_empty() {
-                break;
-            }
-
-            let mut handles = vec![];
-            for mutated_object_chunk in mutated_object_group.chunks(PG_COMMIT_CHUNK_SIZE) {
-                let mutation_chunk: Vec<_> = mutated_object_chunk.iter().cloned().collect();
-                let chunk_cp = self.blocking_cp.clone();
-                let handle = tokio::task::spawn(async move {
-                    read_write_blocking!(&chunk_cp, |conn| {
-                        persist_object_mutations(conn, &mutation_chunk)?;
-                        Ok::<(), IndexerError>(())
-                    })
-                });
-                handles.push(handle);
-            }
-            try_join_all(handles)
-                .await
-                .expect("Object commit should not run into errors.");
-            commit_counter += 1;
+        let deduped_mutated_objects = dedup_objects_with_highest_version(mutated_objects);
+        let mut handles = vec![];
+        for mutated_object_chunk in deduped_mutated_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
+            let mutation_chunk: Vec<_> = mutated_object_chunk.iter().cloned().collect();
+            let chunk_cp = self.blocking_cp.clone();
+            let handle = tokio::task::spawn(async move {
+                read_write_blocking!(&chunk_cp, |conn| {
+                    persist_object_mutations(conn, &mutation_chunk)?;
+                    Ok::<(), IndexerError>(())
+                })
+            });
+            handles.push(handle);
         }
-        info!(
-            "Committed {} batches of object mutations.",
-            commit_counter
-        );
+        try_join_all(handles)
+            .await
+            .expect("Object commit should not run into errors.");
         object_mutation_guard.stop_and_record();
 
         let object_deletion_guard = object_deletion_latency.start_timer();
