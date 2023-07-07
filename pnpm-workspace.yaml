@@ -4,4 +4,5 @@ packages:
     - 'dapps/**'
     - '!**/dist/**'
     - '!sdk/typescript/builder'
+    - '!sdk/typescript/faucet'
     - '!sdk/typescript/*/**'
