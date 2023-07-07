@@ -12,13 +12,13 @@ import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 function Header() {
 	const [isScrolled, setIsScrolled] = useState(window.scrollY > 0);
 	useEffect(() => {
-		document.addEventListener(
-			'scroll',
-			() => {
-				setIsScrolled(window.scrollY > 0);
-			},
-			{ passive: true },
-		);
+		const callback = () => {
+			setIsScrolled(window.scrollY > 0);
+		};
+		document.addEventListener('scroll', callback, { passive: true });
+		return () => {
+			document.removeEventListener('scroll', callback);
+		};
 	}, []);
 	return (
 		<header
