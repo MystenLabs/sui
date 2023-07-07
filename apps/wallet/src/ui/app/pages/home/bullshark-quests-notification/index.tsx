@@ -3,7 +3,9 @@
 
 import { X32 } from '@mysten/icons';
 
+import { useNavigate } from 'react-router-dom';
 import { Portal } from '../../../shared/Portal';
+import { ampli } from '_src/shared/analytics/ampli';
 import ExternalLink from '_src/ui/app/components/external-link';
 
 const InterstitialHeading = ({ text }: { text: string }) => {
@@ -21,6 +23,7 @@ const InterstitialBanner = ({ lines }: { lines: string[] }) => {
 };
 
 function BullsharkQuestsNotification({ onClose }: { onClose: () => void }) {
+	const navigate = useNavigate();
 	const setInterstitialDismissed = () => {
 		localStorage.setItem('bullshark-interstitial-dismissed', 'true');
 	};
@@ -43,15 +46,18 @@ function BullsharkQuestsNotification({ onClose }: { onClose: () => void }) {
 						<div className="flex flex-col items-center gap-4 [-webkit-text-stroke:1px_black] w-full mt-5">
 							<ExternalLink
 								href="https://tech.mystenlabs.com/introducing-bullsharks-quests/"
-								className="appearance-none no-underline text-white bg-[#EA3389] rounded-lg py-2 w-60 [-webkit-text-stroke:1px_black]"
+								onClick={() => ampli.clickedBullsharkQuestsCta({ sourceFlow: 'Interstitial' })}
+								className="appearance-none no-underline text-white bg-[#EA3389] rounded-lg py-2 w-60 [-webkit-text-stroke:1px_black] leading-none text-heading6"
 							>
 								Read more on the blog
 							</ExternalLink>
 							<button
+								data-testid="bullshark-dismiss"
 								className="appearance-none bg-transparent border-none cursor-pointer mt-1"
 								onClick={() => {
 									setInterstitialDismissed();
 									onClose();
+									navigate('/apps');
 								}}
 							>
 								<X32 className="text-sui-dark h-8 w-8" />

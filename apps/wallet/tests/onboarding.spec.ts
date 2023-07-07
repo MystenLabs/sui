@@ -7,7 +7,7 @@ import { generateKeypair } from './utils/localnet';
 
 test('create new wallet', async ({ page, extensionUrl }) => {
 	await createWallet(page, extensionUrl);
-	await expect(page.getByTestId('coin-page')).toBeVisible();
+	await expect(page.getByTestId('apps-page')).toBeVisible();
 });
 
 test('import wallet', async ({ page, extensionUrl }) => {
@@ -22,6 +22,8 @@ test('import wallet', async ({ page, extensionUrl }) => {
 	await page.getByLabel('Confirm Password').fill('mystenlabs');
 	await page.getByRole('button', { name: /Import/ }).click();
 	await page.getByRole('link', { name: /Open Sui Wallet/ }).click();
-	await expect(page.getByTestId('coin-page')).toBeVisible();
+	await page.getByTestId('bullshark-dismiss').click();
+	await page.getByRole('navigation').getByRole('link', { name: 'Coins' }).click();
+
 	await expect(page.getByText(keypair.getPublicKey().toSuiAddress().slice(0, 6))).toBeVisible();
 });
