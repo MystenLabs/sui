@@ -89,6 +89,7 @@ impl Error {
                 }
                 _ => RpcError::Call(CallError::Failed(err.into())),
             },
+            Error::ClientError(err) => err.into(),
             Error::ServerError(err) => err.into(),
             _ => RpcError::Call(CallError::Failed(self.into())),
         }
@@ -97,9 +98,6 @@ impl Error {
 
 #[derive(Debug, Error)]
 pub enum SuiRpcInputError {
-    #[error("Input contains duplicates")]
-    ContainsDuplicates,
-
     #[error("Input exceeds limit of {0}")]
     SizeLimitExceeded(String),
 
@@ -130,7 +128,7 @@ pub enum ServerError {
 }
 
 impl From<ServerError> for RpcError {
-    fn from(e: ServerError) -> Self {
+    fn from(_e: ServerError) -> Self {
         to_internal_error("Internal server error, please try again later")
     }
 }
@@ -164,6 +162,12 @@ pub enum ClientError {
     // For error scenarios that don't fit cleanly into NotFound
     #[error("{0}")]
     NotFoundCustom(String),
+
+    #[error("`{param}` exceeds limit of `{limit}`")]
+    SizeLimitExceeded { param: String, limit: usize },
+
+    #[error("Unsupported protocol version requested. Min supported: {0}, max supported: {1}")]
+    ProtocolVersionUnsupported(u64, u64),
 }
 
 impl From<ClientError> for RpcError {
@@ -171,4 +175,22 @@ impl From<ClientError> for RpcError {
         // TODO(wlmyng): Please check your input and try again text
         RpcError::Call(CallError::InvalidParams(e.into()))
     }
+}
+
+#[derive(Debug, Error)]
+pub enum ObjectDisplayError {
+    #[error("Not a move struct")]
+    NotMoveStruct,
+
+    #[error("Failed to extract layout")]
+    Layout,
+
+    #[error("Failed to extract Move object")]
+    MoveObject,
+
+    #[error(transparent)]
+    Deserialization(#[from] SuiError),
+
+    #[error(transparent)] // Failed to deserialize 'VersionUpdatedEvent': {e}
+    Bcs(#[from] bcs::Error),
 }

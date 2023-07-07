@@ -260,9 +260,11 @@ impl MoveUtilsServer for MoveUtils {
 
 #[cfg(test)]
 mod tests {
+    use expect_test::expect;
 
     mod get_normalized_move_module_tests {
         use super::super::*;
+        use super::*;
         use jsonrpsee::types::ErrorObjectOwned;
         use move_binary_format::file_format::basic_test_module;
 
@@ -300,9 +302,10 @@ mod tests {
         async fn test_no_module_found() {
             let (package, module_name) = setup();
             let mut mock_internal = MockMoveUtilsInternalTrait::new();
-            let error_string = format!("No module found with module name {module_name}");
-            let expected_error =
-                Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(error_string.clone()));
+            let expected_error = Error::ClientError(ClientError::NotFound {
+                entity: "Module".to_string(),
+                id: module_name.clone(),
+            });
             mock_internal
                 .expect_get_move_module()
                 .return_once(move |_package, _module_name| Err(expected_error));
@@ -316,8 +319,10 @@ mod tests {
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
 
-            assert_eq!(error_object.code(), -32602);
-            assert_eq!(error_object.message(), &error_string);
+            let expected = expect!["-32602"];
+            expected.assert_eq(&error_object.code().to_string());
+            let expected = expect!["Module 'test_module' not found"];
+            expected.assert_eq(error_object.message());
         }
     }
 }

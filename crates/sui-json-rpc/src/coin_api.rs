@@ -31,7 +31,7 @@ use sui_types::object::{Object, ObjectRead};
 use sui_types::parse_sui_struct_tag;
 
 use crate::api::{cap_page_limit, CoinReadApiServer, JsonRpcMetrics};
-use crate::error::{ClientError, Error, RpcInterimResult, ServerError};
+use crate::error::{ClientError, RpcInterimResult, ServerError};
 use crate::{with_tracing, SuiRpcModule};
 
 #[cfg(test)]
@@ -123,7 +123,7 @@ impl CoinReadApiServer for CoinReadApi {
                             if coin_type.is_none() {
                                 Err(ClientError::InvalidParam {
                                     param: "cursor".to_string(),
-                                    reason: "is not a coin".to_string(),
+                                    reason: "not a coin".to_string(),
                                 })
                             } else {
                                 Ok((coin_type.unwrap().to_string(), object_id))
@@ -752,7 +752,7 @@ mod tests {
             let error_object: ErrorObjectOwned = error_result.into();
             let expected = expect!["-32602"];
             expected.assert_eq(&error_object.code().to_string());
-            let expected = expect!["Invalid struct type: 0x2::invalid::struct::tag. Got error: Expected end of token stream. Got: ::"];
+            let expected = expect!["Invalid 'coin_type': Invalid struct type: 0x2::invalid::struct::tag. Got error: Expected end of token stream. Got: ::"];
             expected.assert_eq(error_object.message());
         }
 
@@ -775,7 +775,7 @@ mod tests {
             let expected = expect!["-32602"];
             expected.assert_eq(&error_object.code().to_string());
             let expected =
-                expect!["Invalid struct type: 0x2::sui:🤵. Got error: unrecognized token: :🤵"];
+                expect!["Invalid 'coin_type': Invalid struct type: 0x2::sui:🤵. Got error: unrecognized token: :🤵"];
             expected.assert_eq(error_object.message());
         }
 
@@ -958,7 +958,7 @@ mod tests {
             assert_eq!(error_object.code(), -32602);
             let expected = expect!["-32602"];
             expected.assert_eq(&error_object.code().to_string());
-            let expected = expect!["cursor is not a coin"];
+            let expected = expect!["Invalid 'cursor': not a coin"];
             expected.assert_eq(error_object.message());
         }
 
@@ -987,7 +987,7 @@ mod tests {
             let error_object: ErrorObjectOwned = error_result.into();
             let expected = expect!["-32602"];
             expected.assert_eq(&error_object.code().to_string());
-            let expected = expect!["cursor not found"];
+            let expected = expect!["Invalid 'cursor': not found"];
             expected.assert_eq(error_object.message());
         }
     }
@@ -1103,7 +1103,7 @@ mod tests {
             let error_object: ErrorObjectOwned = error_result.into();
             let expected = expect!["-32602"];
             expected.assert_eq(&error_object.code().to_string());
-            let expected = expect!["Invalid struct type: 0x2::invalid::struct::tag. Got error: Expected end of token stream. Got: ::"];
+            let expected = expect!["Invalid 'coin_type': Invalid struct type: 0x2::invalid::struct::tag. Got error: Expected end of token stream. Got: ::"];
             expected.assert_eq(error_object.message());
         }
 
@@ -1431,9 +1431,9 @@ mod tests {
             let response = coin_read_api.get_total_supply(coin_name.clone()).await;
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
-            let expected = expect!["-32000"];
+            let expected = expect!["-32603"];
             expected.assert_eq(&error_object.code().to_string());
-            let expected = expect!["Failure deserializing object in the requested format: \"Unable to deserialize TreasuryCap object: remaining input\""];
+            let expected = expect!["Internal server error, please try again later"];
             expected.assert_eq(error_object.message());
         }
     }
