@@ -1,6 +1,6 @@
-When resolving dependencies for package Root, conflicting dependencies found for 'ADep':
+When resolving dependencies for package Root, conflicting dependencies found:
 
 in A
 	no dependencies
 in ADep
-	dependency { name = "ADepDep" } for package { local = "deps_only/ADepDep" }
+	ADep = { local = "deps_only/ADepDep" } (via dependency { name = "ADepDep" })

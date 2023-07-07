@@ -1,3 +1,5 @@
 When resolving dependencies for package Root, conflicting dependencies found:
-in A: ADep = { local = "deps_only/ADep" } # Resolved by ../resolvers/successful.sh
-in B: ADep = { local = "deps_only/ADep", version = "1.0.0" }
+in A
+	ADep = { local = "deps_only/ADep" } # Resolved by ../resolvers/successful.sh
+in B
+	ADep = { local = "deps_only/ADep", version = "1.0.0" }

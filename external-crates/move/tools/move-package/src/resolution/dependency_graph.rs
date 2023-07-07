@@ -608,17 +608,16 @@ impl DependencyGraph {
                             if exisiting_pkg_deps != pkg_deps {
                                 bail!(
                                     "When resolving dependencies for package {}, \
-                                     conflicting dependencies found for '{}':\n{}{}",
+                                     conflicting dependencies found:{}{}",
                                     root_package,
-                                    pkg_name,
-                                    format_deps(existing_dep_name, exisiting_pkg_deps),
-                                    format_deps(*dep_name, pkg_deps),
+                                    format_deps(pkg_name, existing_dep_name, exisiting_pkg_deps),
+                                    format_deps(pkg_name, *dep_name, pkg_deps),
                                 )
                             }
                         } else {
                             bail!(
                                 "When resolving dependencies for package {0}, \
-                                 conflicting dependencies found:\nin {4}: {1} = {2}\nin {5}: {1} = {3}",
+                                 conflicting dependencies found:\nin {4}\n\t{1} = {2}\nin {5}\n\t{1} = {3}",
                                 root_package,
                                 pkg_name,
                                 PackageWithResolverTOML(existing_pkg),
@@ -663,11 +662,10 @@ impl DependencyGraph {
                     if other_pkg_deps != pkg_deps {
                         bail!(
                             "When resolving dependencies for package {}, \
-                                         conflicting dependencies found for '{}':\n{}{}",
+                             conflicting dependencies found:\n{}{}",
                             root_package,
-                            dep_name,
-                            format_deps(*other_dep_name, other_pkg_deps),
-                            format_deps(*dep_name, pkg_deps),
+                            format_deps(*dep_name, *other_dep_name, other_pkg_deps),
+                            format_deps(*dep_name, *dep_name, pkg_deps),
                         )
                     }
                 }
@@ -1373,6 +1371,7 @@ fn path_escape(p: &Path) -> Result<String, fmt::Error> {
 }
 
 fn format_deps(
+    dep_name: PM::PackageName,
     pkg_name: PM::PackageName,
     dependencies: Vec<(&Dependency, PM::PackageName, &Package)>,
 ) -> String {
@@ -1382,9 +1381,10 @@ fn format_deps(
             s.push_str("\n\t");
             s.push_str(
                 format!(
-                    "dependency {} for package {}",
+                    "{} = {} (via dependency {})",
+                    dep_name,
+                    PackageWithResolverTOML(pkg),
                     DependencyTOML(pkg_name, dep),
-                    PackageWithResolverTOML(pkg)
                 )
                 .as_str(),
             );

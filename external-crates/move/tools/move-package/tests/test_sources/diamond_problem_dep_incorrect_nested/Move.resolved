@@ -1,3 +1,5 @@
 Failed to resolve dependencies for package 'Root': When resolving dependencies for package A, conflicting dependencies found:
-in B: D = { local = "deps_only/D", version = "1.0.0" }
-in C: D = { local = "deps_only/D", version = "2.0.0" }
+in B
+	D = { local = "deps_only/D", version = "1.0.0" }
+in C
+	D = { local = "deps_only/D", version = "2.0.0" }
