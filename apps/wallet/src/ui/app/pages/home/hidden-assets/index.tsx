@@ -16,6 +16,7 @@ import Loading from '_components/loading';
 import LoadingSpinner from '_components/loading/LoadingIndicator';
 import { NFTDisplayCard } from '_components/nft-display';
 import { ampli } from '_src/shared/analytics/ampli';
+import { Button } from '_src/ui/app/shared/ButtonUI';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
 const HIDDEN_ASSET_IDS = 'hidden-asset-ids';
@@ -65,15 +66,15 @@ function NftsPage() {
 			};
 
 			const assetShownToast = async (objectId: string) => {
-				toast((t) => (
-					<div className="flex items-center justify-between gap-2">
+				toast.custom((t) => (
+					<div className="flex items-center justify-between gap-2 bg-white w-full shadow-summary-card border-solid border-gray-45 rounded-full px-3 py-1">
 						<div className="flex gap-1 items-center">
 							<Check12 className="text-gray-90" />
 							<div>
 								<InlineLink
 									to="/nfts"
-									color="suiDark"
-									weight="semibold"
+									color="hero"
+									weight="medium"
 									before={
 										<Text variant="body" color="gray-80">
 											Moved to
@@ -91,8 +92,8 @@ function NftsPage() {
 									undoShowAsset(objectId);
 									toast.dismiss(t.id);
 								}}
-								color="suiDark"
-								weight="semibold"
+								color="hero"
+								weight="medium"
 								text="UNDO"
 							/>
 						</div>
@@ -130,13 +131,13 @@ function NftsPage() {
 					</Alert>
 				) : null}
 				{hiddenNfts?.length ? (
-					<div className="flex flex-col gap-3 w-full">
+					<div className="flex flex-col w-full divide-y divide-solid divide-gray-40 divide-x-0 gap-2">
 						{hiddenNfts
 							.filter((nft) => nft && internalHiddenAssetIds.includes(nft.objectId))
-							.map((nft) => {
+							.map((nft, index) => {
 								const { objectId, type } = nft!;
 								return (
-									<div className="flex justify-between items-center" key={objectId}>
+									<div className="flex justify-between items-center pt-2" key={objectId}>
 										<Link
 											to={`/nft-details?${new URLSearchParams({
 												objectId: objectId,
@@ -158,16 +159,16 @@ function NftsPage() {
 												/>
 											</ErrorBoundary>
 										</Link>
-										<button
-											className="appearance-none bg-transparent border-none"
-											onClick={() => {
-												showAsset(objectId);
-											}}
-										>
-											<div className="flex items-center justify-around hover:bg-gray-70 hover:bg-opacity-50 h-4 w-4 text-gray-60 transition-colors duration-200 rounded-md hover:text-sui-dark hover:cursor-pointer">
-												<EyeClose16 />
-											</div>
-										</button>
+										<div>
+											<Button
+												variant="secondarySui"
+												size="icon"
+												onClick={() => {
+													showAsset(objectId);
+												}}
+												after={<EyeClose16 />}
+											/>
+										</div>
 									</div>
 								);
 							})}

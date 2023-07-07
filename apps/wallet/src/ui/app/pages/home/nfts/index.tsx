@@ -82,15 +82,15 @@ function NftsPage() {
 			};
 
 			const showAssetHiddenToast = async (objectId: string) => {
-				toast((t) => (
-					<div className="flex items-center justify-between gap-2">
+				toast.custom((t) => (
+					<div className="flex items-center justify-between gap-2 bg-white w-full shadow-summary-card border-solid border-gray-45 rounded-full px-3 py-1">
 						<div className="flex gap-1 items-center">
 							<Check12 className="text-gray-90" />
 							<div>
 								<InlineLink
 									to="/hidden-assets"
-									color="suiDark"
-									weight="semibold"
+									color="hero"
+									weight="medium"
 									before={
 										<Text variant="body" color="gray-80">
 											Moved to
@@ -108,8 +108,8 @@ function NftsPage() {
 									undoHideAsset(objectId);
 									toast.dismiss(t.id);
 								}}
-								color="suiDark"
-								weight="semibold"
+								color="hero"
+								weight="medium"
 								text="UNDO"
 							/>
 						</div>
@@ -166,11 +166,11 @@ function NftsPage() {
 									key={objectId}
 									className="no-underline relative"
 								>
-									<div className="w-full h-full justify-center z-10 absolute pointer-events-auto text-gray-60 transition-colors duration-200 p-0 opacity-0 hover:opacity-100">
-										<div className="absolute top-2 right-2 hover:bg-gray-35 hover:bg-opacity-75 hover:text-sui-dark rounded-md">
+									<div className="w-full h-full justify-center z-10 absolute pointer-events-auto text-gray-60 transition-colors duration-200 p-0">
+										<div className="absolute top-2 right-3 rounded-md">
 											<Button
-												variant="plain"
-												size="tiny"
+												variant="hidden"
+												size="icon"
 												onClick={(event: any) => hideAsset(objectId, event)}
 												after={<EyeClose16 />}
 											/>

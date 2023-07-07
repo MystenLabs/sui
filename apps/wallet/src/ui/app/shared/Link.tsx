@@ -28,6 +28,7 @@ const styles = cva(
 					'text-hero-dark hover:text-hero-darkest focus:text-hero-darkest disabled:text-hero-dark',
 				],
 				suiDark: ['text-sui-dark'],
+				hero: ['text-hero hover:text-hero-dark focus:text-hero-dark disabled:text-hero-dark'],
 			},
 			weight: {
 				semibold: 'font-semibold',
@@ -58,6 +59,9 @@ const iconStyles = cva(['transition flex'], {
 			],
 			suiDark: [
 				'text-steel group-hover:text-sui-dark group-focus:text-sui-dark group-disabled:text-steel',
+			],
+			hero: [
+				'text-hero group-hover:text-hero-dark group-focus:text-hero-dark group-disabled:text-hero-dark',
 			],
 		},
 	},

@@ -14,19 +14,21 @@ const AssetsOptionsMenu = () => {
 			>
 				<Ooo24 />
 			</Menu.Button>
-			<Menu.Items className="absolute top-3 right-0 mt-2 w-40 bg-white border border-gray-90 divide-y divide-gray-200 rounded shadow-lg z-50">
-				<Menu.Item>
-					{({ active }) => (
-						<div className="py-2 hover:bg-sui-light">
-							<Link
-								to="/hidden-assets"
-								color="suiDark"
-								weight="semibold"
-								text="View Hidden Assets"
-							/>
-						</div>
-					)}
-				</Menu.Item>
+			<Menu.Items className="absolute top-3 right-0 mt-2 w-50 bg-white divide-y divide-gray-200 rounded-md z-50">
+				<div className="rounded-md w-full h-full p-4 shadow-summary-card">
+					<Menu.Item>
+						{({ active }) => (
+							<div className="py-2 hover:bg-sui-light rounded-md">
+								<Link
+									to="/hidden-assets"
+									color="suiDark"
+									weight="semibold"
+									text="View Hidden Assets"
+								/>
+							</div>
+						)}
+					</Menu.Item>
+				</div>
 			</Menu.Items>
 		</Menu>
 	);
