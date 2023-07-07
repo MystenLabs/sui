@@ -1,6 +1,6 @@
 ResolvedGraph {
     graph: DependencyGraph {
-        root_path: "tests/test_sources/multiple_deps_from_lock",
+        root_path: "tests/test_sources/multiple_deps_from_lock_no_manifest",
         root_package: "test",
         package_graph: {
             "test": [
@@ -48,10 +48,10 @@ ResolvedGraph {
             "test",
         },
         manifest_digest: Some(
-            "FE671355454D2C48E232FB7E8E32B2D48AB921C4993F4758705F3CD9BC52792F",
+            "4F4DA8F814AA13D3FFC5C65146C950199B4072CB1D4153D3F7D4F5DD17DBA1F1",
         ),
         deps_digest: Some(
-            "9AE2C7D9835B118893E2BF651D37467EBBC20D37D996AD986866F7351DEF407F",
+            "F71A200A8561E46B0AB065FAA525F57CA5E755F304FE4A0D6AEBC85B594EAD5F",
         ),
     },
     build_options: BuildConfig {
@@ -86,8 +86,8 @@ ResolvedGraph {
                 },
                 addresses: Some(
                     {
-                        "CA": Some(
-                            00000000000000000000000000000001,
+                        "C": Some(
+                            00000000000000000000000000000000,
                         ),
                     },
                 ),
@@ -99,7 +99,7 @@ ResolvedGraph {
             package_path: "ELIDED_FOR_TEST",
             renaming: {},
             resolved_table: {
-                "CA": 00000000000000000000000000000001,
+                "C": 00000000000000000000000000000000,
             },
             source_digest: "ELIDED_FOR_TEST",
         },
@@ -118,8 +118,8 @@ ResolvedGraph {
                 },
                 addresses: Some(
                     {
-                        "DA": Some(
-                            00000000000000000000000000000002,
+                        "D": Some(
+                            00000000000000000000000000000000,
                         ),
                     },
                 ),
@@ -131,7 +131,7 @@ ResolvedGraph {
             package_path: "ELIDED_FOR_TEST",
             renaming: {},
             resolved_table: {
-                "DA": 00000000000000000000000000000002,
+                "D": 00000000000000000000000000000000,
             },
             source_digest: "ELIDED_FOR_TEST",
         },
@@ -151,7 +151,7 @@ ResolvedGraph {
                 addresses: Some(
                     {
                         "A": Some(
-                            00000000000000000000000000000003,
+                            00000000000000000000000000000000,
                         ),
                     },
                 ),
@@ -186,9 +186,9 @@ ResolvedGraph {
             package_path: "ELIDED_FOR_TEST",
             renaming: {},
             resolved_table: {
-                "A": 00000000000000000000000000000003,
-                "CA": 00000000000000000000000000000001,
-                "DA": 00000000000000000000000000000002,
+                "A": 00000000000000000000000000000000,
+                "C": 00000000000000000000000000000000,
+                "D": 00000000000000000000000000000000,
             },
             source_digest: "ELIDED_FOR_TEST",
         },

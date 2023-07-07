@@ -1,0 +1,19 @@
+# The purpose of this test is to make sure that the dependency graph is correctly read from lock
+# files (fast) even if the dependent manifest files have been stripped of their own dependency info
+# (which is of course still available in the respective lock files).
+#
+# The Move.locked file is not generated due to how the test harness works but the graph is correctly
+# included in the Move.resolved file. Please note that while dependency graph is correct, the
+# resolved graph is missing some information as it includes data from manifest files that are now
+# stripped.
+
+[package]
+name = "test"
+version = "0.0.0"
+
+[addresses]
+A = "0x0"
+
+[dependencies]
+C = { local = "./deps_only/C" }
+D = { local = "./deps_only/D" }

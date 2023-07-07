@@ -1,6 +1,7 @@
-# This manifest file is largely empty on purpose to make sure that the dependency graph (with actual
-# dependencies) can simply be read from the lock file (that vis that, Move.lock and Move.locked file
-# in the test directory are the same)
+# This tests proper generation of a dependency graph when lock files are present. The Move.locked
+# file is not generated due to how the test harness works but the graph is correctly included in the
+# Move.resolved file
+
 [package]
 name = "test"
 version = "0.0.0"

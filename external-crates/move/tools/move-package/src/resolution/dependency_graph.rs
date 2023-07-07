@@ -349,12 +349,16 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 // save dependency for cycle detection
                 self.visited_dependencies
                     .push_front((dep_pkg_name, d.clone()));
-                let (mut pkg_graph, _) =
+                let (mut pkg_graph, modified) =
                     self.get_graph(&d.kind, pkg_path.clone(), manifest_string, lock_string)?;
                 self.visited_dependencies.pop_front();
                 // reroot all packages to normalize local paths across all graphs
                 for (_, p) in pkg_graph.package_table.iter_mut() {
-                    p.kind.reroot(parent)?;
+                    if modified {
+                        p.kind.reroot(parent)?;
+                    } else {
+                        p.kind.reroot(&d.kind)?;
+                    }
                 }
                 (pkg_graph, d.dep_override)
             }
