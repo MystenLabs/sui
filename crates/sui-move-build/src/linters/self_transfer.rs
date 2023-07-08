@@ -30,6 +30,8 @@ const TRANSFER_FUNCTIONS: &[(&str, &str, &str)] = &[
     ("sui", "transfer", "transfer"),
 ];
 
+const INVALID_LOC: Loc = Loc::invalid();
+
 const SELF_TRANSFER_DIAG: DiagnosticInfo = custom(
     "Lint ",
     Severity::Warning,
@@ -52,7 +54,7 @@ pub struct SelfTransferVerifierAI {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum Value {
     /// an address read from tx_context:sender()
-    SenderAddress,
+    SenderAddress(Loc),
     #[default]
     Other,
 }
@@ -139,19 +141,28 @@ impl SimpleAbsInt for SelfTransferVerifierAI {
         if TRANSFER_FUNCTIONS
             .iter()
             .any(|(addr, module, fun)| f.is(addr, module, fun))
-            && args[1] == Value::SenderAddress
         {
-            let msg = format!(
-                "Transfer of an object to `tx_context::sender()` in function {}",
-                self.fn_name
-            );
-            let uid_msg = "Returning an object from a function, allows a caller to use the object and enables composability via programmable transactions.";
-            let d = diag!(SELF_TRANSFER_DIAG, (*loc, msg), (self.fn_ret_loc, uid_msg));
-            context.add_diag(d);
+            if let Value::SenderAddress(sender_addr_loc) = args[1] {
+                let msg = format!(
+                    "Transfer of an object to transaction sender address in function {}",
+                    self.fn_name
+                );
+                let uid_msg =
+                    "Returning an object from a function, allows a caller to use the object \
+                               and enables composability via programmable transactions.";
+                let mut d = diag!(SELF_TRANSFER_DIAG, (*loc, msg), (self.fn_ret_loc, uid_msg));
+                if sender_addr_loc != INVALID_LOC {
+                    d.add_secondary_label((
+                        sender_addr_loc,
+                        "Transaction sender address coming from here",
+                    ));
+                }
+                context.add_diag(d);
+            }
             return Some(vec![]);
         }
         if f.is("sui", "tx_context", "sender") {
-            return Some(vec![Value::SenderAddress]);
+            return Some(vec![Value::SenderAddress(*loc)]);
         }
         Some(match &return_ty.value {
             Type_::Unit => vec![],
@@ -198,7 +209,13 @@ impl SimpleDomain for State {
 
     fn join_value(v1: &Value, v2: &Value) -> Value {
         match (v1, v2) {
-            (Value::SenderAddress, Value::SenderAddress) => Value::SenderAddress,
+            (sender @ Value::SenderAddress(loc1), Value::SenderAddress(loc2)) => {
+                if loc1 == loc2 {
+                    *sender
+                } else {
+                    Value::SenderAddress(INVALID_LOC)
+                }
+            }
             (Value::Other, _) | (_, Value::Other) => Value::Other,
         }
     }
