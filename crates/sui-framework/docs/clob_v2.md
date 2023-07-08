@@ -1990,15 +1990,18 @@ Place a market order to the order book.
         quote_coin = <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_from_balance">coin::from_balance</a>(quote_balance_left, ctx);
     } <b>else</b> {
         <b>assert</b>!(quantity &lt;= <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&base_coin), <a href="clob_v2.md#0xdee9_clob_v2_EInsufficientBaseCoin">EInsufficientBaseCoin</a>);
+        <b>let</b> base_coin_to_sell = <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_split">coin::split</a>(&<b>mut</b> base_coin, quantity, ctx);
         <b>let</b> (base_balance_left, quote_balance_filled) = <a href="clob_v2.md#0xdee9_clob_v2_match_ask">match_ask</a>(
             pool,
             account_cap,
             client_order_id,
             <a href="clob_v2.md#0xdee9_clob_v2_MIN_PRICE">MIN_PRICE</a>,
             <a href="../../../.././build/Sui/docs/clock.md#0x2_clock_timestamp_ms">clock::timestamp_ms</a>(<a href="../../../.././build/Sui/docs/clock.md#0x2_clock">clock</a>),
-            <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_into_balance">coin::into_balance</a>(base_coin),
+            <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_into_balance">coin::into_balance</a>(base_coin_to_sell),
         );
-        base_coin = <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_from_balance">coin::from_balance</a>(base_balance_left, ctx);
+        join(
+            &<b>mut</b> base_coin,
+            <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_from_balance">coin::from_balance</a>(base_balance_left, ctx));
         join(
             &<b>mut</b> quote_coin,
             <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_from_balance">coin::from_balance</a>(quote_balance_filled, ctx),
