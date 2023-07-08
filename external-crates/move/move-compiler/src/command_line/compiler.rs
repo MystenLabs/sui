@@ -743,6 +743,36 @@ fn has_compiled_module_magic_number(path: &str) -> bool {
     num_bytes_read == BinaryConstants::MOVE_MAGIC_SIZE && magic == BinaryConstants::MOVE_MAGIC
 }
 
+pub fn move_check_for_errors(
+    comments_and_compiler_res: Result<(CommentMap, SteppedCompiler<'_, PASS_PARSER>), Diagnostics>,
+) -> Diagnostics {
+    fn try_impl(
+        comments_and_compiler_res: Result<
+            (CommentMap, SteppedCompiler<'_, PASS_PARSER>),
+            Diagnostics,
+        >,
+    ) -> Result<(Vec<AnnotatedCompiledUnit>, Diagnostics), Diagnostics> {
+        let (_, compiler) = comments_and_compiler_res?;
+
+        let (mut compiler, cfgir) = compiler.run::<PASS_CFGIR>()?.into_ast();
+        let compilation_env = compiler.compilation_env();
+        if compilation_env.flags().is_testing() {
+            unit_test::plan_builder::construct_test_plan(compilation_env, None, &cfgir);
+        }
+
+        let (units, diags) = compiler.at_cfgir(cfgir).build()?;
+        Ok((units, diags))
+    }
+
+    let (units, inner_diags) = match try_impl(comments_and_compiler_res) {
+        Ok((units, inner_diags)) => (units, inner_diags),
+        Err(inner_diags) => return inner_diags,
+    };
+    let mut diags = compiled_unit::verify_units(&units);
+    diags.extend(inner_diags);
+    diags
+}
+
 //**************************************************************************************************
 // Translations
 //**************************************************************************************************

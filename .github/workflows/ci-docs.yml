@@ -31,7 +31,7 @@ jobs:
           RUSTDOCFLAGS: "--enable-index-page -Zunstable-options"
         with:
           command: doc
-          args: --workspace --no-deps
+          args: --workspace --exclude "sui-benchmark" --no-deps
 
       - name: Deploy documentation
         uses: peaceiris/actions-gh-pages@373f7f263a76c20808c831209c920827a82a2847 # pin@v3

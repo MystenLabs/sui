@@ -347,6 +347,12 @@ impl From<BatchDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
     }
 }
 
+impl AsRef<[u8]> for BatchDigest {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
 impl BatchDigest {
     pub fn new(val: [u8; crypto::DIGEST_LENGTH]) -> BatchDigest {
         BatchDigest(val)

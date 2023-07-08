@@ -6,13 +6,14 @@ import { useTransactionSummary } from '@mysten/core';
 import { TransactionBlock } from '@mysten/sui.js';
 import { useMemo, useState } from 'react';
 
-import { ConfirmationModal } from '../../../shared/ConfirmationModal';
 import { GasFees } from './GasFees';
 import { TransactionDetails } from './TransactionDetails';
+import { ConfirmationModal } from '../../../shared/ConfirmationModal';
 import { UserApproveContainer } from '_components/user-approve-container';
 import { useAppDispatch, useSigner, useTransactionData, useTransactionDryRun } from '_hooks';
 import { type TransactionApprovalRequest } from '_payloads/transactions/ApprovalRequest';
 import { respondToTransactionRequest } from '_redux/slices/transaction-requests';
+import { ampli } from '_src/shared/analytics/ampli';
 import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
 import { PageMainLayoutTitle } from '_src/ui/app/shared/page-main-layout/PageMainLayoutTitle';
 import { TransactionSummary } from '_src/ui/app/shared/transaction-summary';
@@ -60,7 +61,7 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 					if (isLoading) {
 						return;
 					}
-					if (isError) {
+					if (approved && isError) {
 						setConfirmationVisible(true);
 						return;
 					}
@@ -72,6 +73,11 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 							clientIdentifier,
 						}),
 					);
+					ampli.respondedToTransactionRequest({
+						applicationUrl: txRequest.origin,
+						approvedTransaction: approved,
+						receivedFailureWarning: false,
+					});
 				}}
 				address={addressForTransaction}
 				approveLoading={isLoading || isConfirmationVisible}
@@ -109,6 +115,11 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 							clientIdentifier,
 						}),
 					);
+					ampli.respondedToTransactionRequest({
+						applicationUrl: txRequest.origin,
+						approvedTransaction: isConfirmed,
+						receivedFailureWarning: true,
+					});
 					setConfirmationVisible(false);
 				}}
 			/>

@@ -3,8 +3,8 @@
 
 import { configureStore } from '@reduxjs/toolkit';
 
-import { amplitudePersistenceMiddleware } from '../slices/account';
 import { thunkExtras } from './thunk-extras';
+import { amplitudePersistenceMiddleware } from '../slices/account';
 import rootReducer from '_redux/RootReducer';
 
 const store = configureStore({

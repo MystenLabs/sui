@@ -3,7 +3,7 @@
 
 import { expect, test } from './fixtures';
 import { createWallet, importWallet } from './utils/auth';
-import { generateKeypairFromMnemonic, requestingSuiFromFaucet } from './utils/localnet';
+import { generateKeypairFromMnemonic, requestSuiFromFaucet } from './utils/localnet';
 
 const receivedAddressMnemonic = [
 	'beef',
@@ -39,6 +39,7 @@ const COIN_TO_SEND = 20;
 
 test('request SUI from local faucet', async ({ page, extensionUrl }) => {
 	await createWallet(page, extensionUrl);
+	await page.getByRole('navigation').getByRole('link', { name: 'Coins' }).click();
 
 	const originalBalance = await page.getByTestId('coin-balance').textContent();
 	await page.getByTestId('faucet-request-button').click();
@@ -54,8 +55,9 @@ test('send 20 SUI to an address', async ({ page, extensionUrl }) => {
 	const originAddress = originKeypair.getPublicKey().toSuiAddress();
 
 	await importWallet(page, extensionUrl, currentWalletMnemonic);
+	await page.getByRole('navigation').getByRole('link', { name: 'Coins' }).click();
 
-	await requestingSuiFromFaucet(originAddress);
+	await requestSuiFromFaucet(originAddress);
 	await expect(page.getByTestId('coin-balance')).not.toHaveText('0SUI');
 
 	const originalBalance = await page.getByTestId('coin-balance').textContent();
@@ -77,8 +79,9 @@ test('check balance changes in Activity', async ({ page, extensionUrl }) => {
 	const originAddress = originKeypair.getPublicKey().toSuiAddress();
 
 	await importWallet(page, extensionUrl, currentWalletMnemonic);
+	await page.getByRole('navigation').getByRole('link', { name: 'Coins' }).click();
 
-	await requestingSuiFromFaucet(originAddress);
+	await requestSuiFromFaucet(originAddress);
 	await page.getByTestId('nav-activity').click();
 	await page
 		.getByText(/Transaction/i)

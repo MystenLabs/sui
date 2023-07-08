@@ -286,7 +286,7 @@ impl SuiValidatorCommand {
                 };
                 // TODO set key files permission
                 let validator_info_file_name = dir.join("validator.info");
-                let validator_info_bytes = serde_yaml::to_vec(&validator_info)?;
+                let validator_info_bytes = serde_yaml::to_string(&validator_info)?;
                 fs::write(validator_info_file_name.clone(), validator_info_bytes)?;
                 println!(
                     "Generated validator info file: {:?}.",
@@ -637,8 +637,7 @@ async fn call_0x5(
             .config
             .keystore
             .sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
-    let transaction =
-        Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature]).verify()?;
+    let transaction = Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature]);
     let sui_client = context.get_client().await?;
     sui_client
         .quorum_driver_api()

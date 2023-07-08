@@ -17,6 +17,7 @@ import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout'
 import { Text } from '_app/shared/text';
 import { AddressInput } from '_components/address-input';
 import { useSigner } from '_hooks';
+import { ampli } from '_src/shared/analytics/ampli';
 import { QredoActionIgnoredByUser } from '_src/ui/app/QredoSigner';
 import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
 import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
@@ -37,11 +38,9 @@ export function TransferNFTForm({
 	const navigate = useNavigate();
 	const { clientIdentifier, notificationModal } = useQredoTransaction();
 
-	const kioskContents = useGetKioskContents(activeAddress);
+	const { data: kiosk } = useGetKioskContents(activeAddress);
 	const transferKioskItem = useTransferKioskItem({ objectId, objectType });
-	const isContainedInKiosk = kioskContents?.data?.some(
-		(kioskItem) => kioskItem.data?.objectId === objectId,
-	);
+	const isContainedInKiosk = kiosk?.list.some((kioskItem) => kioskItem.data?.objectId === objectId);
 
 	const transferNFT = useMutation({
 		mutationFn: async (to: string) => {
@@ -80,8 +79,11 @@ export function TransferNFTForm({
 		},
 		onSuccess: (response) => {
 			queryClient.invalidateQueries(['object', objectId]);
-			queryClient.invalidateQueries(['get-kiosk-contents']);
+			queryClient.invalidateQueries(['get-kiosk-contents'], { refetchType: 'all' });
 			queryClient.invalidateQueries(['get-owned-objects']);
+
+			ampli.sentCollectible({ objectId });
+
 			return navigate(
 				`/receipt?${new URLSearchParams({
 					txdigest: getTransactionDigest(response),
@@ -119,7 +121,7 @@ export function TransferNFTForm({
 						<Content>
 							<div className="flex gap-2.5 flex-col">
 								<div className="px-2.5 tracking-wider">
-									<Text variant="caption" color="steel-dark" weight="semibold">
+									<Text variant="caption" color="steel" weight="semibold">
 										Enter Recipient Address
 									</Text>
 								</div>

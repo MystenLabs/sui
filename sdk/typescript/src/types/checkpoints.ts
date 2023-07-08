@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { Infer } from 'superstruct';
 import {
 	array,
-	Infer,
 	number,
 	object,
 	string,
@@ -14,7 +14,7 @@ import {
 	nullable,
 } from 'superstruct';
 
-import { TransactionDigest, TransactionEffectsDigest } from './common';
+import { TransactionDigest, TransactionEffectsDigest } from './common.js';
 
 export const GasCostSummary = object({
 	computationCost: string(),
@@ -62,8 +62,7 @@ export const Checkpoint = object({
 	epochRollingGasCostSummary: GasCostSummary,
 	timestampMs: string(),
 	endOfEpochData: optional(EndOfEpochData),
-	// TODO(jian): remove optional after 0.30.0 is released
-	validatorSignature: optional(ValidatorSignature),
+	validatorSignature: ValidatorSignature,
 	transactions: array(TransactionDigest),
 	checkpointCommitments: array(CheckpointCommitment),
 });

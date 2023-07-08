@@ -105,3 +105,9 @@ textarea {
 ::-ms-reveal {
 	display: none;
 }
+
+@font-face {
+	font-family: 'Frankfurter Normal';
+	src: url('../assets/fonts/FrankfurterNormal.woff2') format('woff2'),
+		url('../assets/fonts/FrankfurterNormal.woff') format('woff');
+}

@@ -7,6 +7,8 @@ import {
 	type SignedTransaction,
 	type ExportedKeypair,
 	type SignedMessage,
+	type SuiAddress,
+	type SuiTransactionBlockResponse,
 } from '@mysten/sui.js';
 import { lastValueFrom, map, take } from 'rxjs';
 
@@ -25,12 +27,13 @@ import { setActiveOrigin, changeActiveNetwork } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
 import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
+import { type AccountsPublicInfoUpdates } from '_src/background/keyring/accounts';
+import { type QredoConnectIdentity } from '_src/background/qredo/types';
 import {
 	isQredoConnectPayload,
 	type QredoConnectPayload,
 } from '_src/shared/messaging/messages/payloads/QredoConnect';
 
-import type { SuiAddress, SuiTransactionBlockResponse } from '@mysten/sui.js';
 import type { Message } from '_messages';
 import type { KeyringPayload } from '_payloads/keyring';
 import type { GetPermissionRequests, PermissionResponse } from '_payloads/permissions';
@@ -361,13 +364,16 @@ export class BackgroundClient {
 		);
 	}
 
-	public getQredoConnectionInfo(qredoID: string, refreshAccessToken = false) {
+	public getQredoConnectionInfo(
+		filter: { qredoID: string } | { identity: QredoConnectIdentity },
+		refreshAccessToken = false,
+	) {
 		return lastValueFrom(
 			this.sendMessage(
 				createMessage<QredoConnectPayload<'getQredoInfo'>>({
 					type: 'qredo-connect',
 					method: 'getQredoInfo',
-					args: { qredoID, refreshAccessToken },
+					args: { filter, refreshAccessToken },
 				}),
 			).pipe(
 				take(1),
@@ -400,6 +406,18 @@ export class BackgroundClient {
 					type: 'qredo-connect',
 					method: 'rejectQredoConnection',
 					args,
+				}),
+			).pipe(take(1)),
+		);
+	}
+
+	public updateAccountsPublicInfo(updates: AccountsPublicInfoUpdates) {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<KeyringPayload<'updateAccountPublicInfo'>>({
+					type: 'keyring',
+					method: 'updateAccountPublicInfo',
+					args: { updates },
 				}),
 			).pipe(take(1)),
 		);

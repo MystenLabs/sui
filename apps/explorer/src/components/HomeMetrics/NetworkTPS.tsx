@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { StatsWrapper } from './FormattedStatsAmount';
-
 import { useGetNetworkMetrics } from '~/hooks/useGetNetworkMetrics';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';

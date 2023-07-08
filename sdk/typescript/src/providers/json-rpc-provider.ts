@@ -1,26 +1,36 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { HttpHeaders, JsonRpcClient } from '../rpc/client';
-import {
+import type { HttpHeaders } from '../rpc/client.js';
+import { JsonRpcClient } from '../rpc/client.js';
+import type {
 	ExecuteTransactionRequestType,
 	ObjectId,
+	SuiEventFilter,
+	TransactionDigest,
+	SuiTransactionBlockResponseQuery,
+	Order,
+	CoinMetadata,
+	CheckpointDigest,
+	SuiObjectDataOptions,
+	SuiTransactionBlockResponseOptions,
+	SuiEvent,
+	SuiObjectResponseQuery,
+	TransactionFilter,
+	TransactionEffects,
+	Unsubscribe,
+} from '../types/index.js';
+import {
 	PaginatedTransactionResponse,
 	SuiAddress,
-	SuiEventFilter,
 	SuiMoveFunctionArgTypes,
 	SuiMoveNormalizedFunction,
 	SuiMoveNormalizedModule,
 	SuiMoveNormalizedModules,
 	SuiMoveNormalizedStruct,
 	SuiTransactionBlockResponse,
-	TransactionDigest,
-	SuiTransactionBlockResponseQuery,
 	PaginatedEvents,
-	FaucetResponse,
-	Order,
 	DevInspectResults,
-	CoinMetadata,
 	isValidTransactionDigest,
 	isValidSuiAddress,
 	isValidSuiObjectId,
@@ -32,40 +42,31 @@ import {
 	DelegatedStake,
 	CoinBalance,
 	CoinSupply,
-	CheckpointDigest,
 	Checkpoint,
 	CommitteeInfo,
 	DryRunTransactionBlockResponse,
-	SuiObjectDataOptions,
 	SuiSystemStateSummary,
-	SuiTransactionBlockResponseOptions,
-	SuiEvent,
 	PaginatedObjectsResponse,
-	SuiObjectResponseQuery,
 	ValidatorsApy,
 	MoveCallMetrics,
 	ObjectRead,
-	TransactionFilter,
-	TransactionEffects,
-	Unsubscribe,
 	ResolvedNameServiceNames,
 	ProtocolConfig,
-} from '../types';
-import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
-import {
-	DEFAULT_CLIENT_OPTIONS,
-	WebsocketClient,
-	WebsocketClientOptions,
-} from '../rpc/websocket-client';
-import { requestSuiFromFaucet } from '../rpc/faucet-client';
+} from '../types/index.js';
+import type { DynamicFieldName } from '../types/dynamic_fields.js';
+import { DynamicFieldPage } from '../types/dynamic_fields.js';
+import type { WebsocketClientOptions } from '../rpc/websocket-client.js';
+import { DEFAULT_CLIENT_OPTIONS, WebsocketClient } from '../rpc/websocket-client.js';
 import { any, array, string, nullable } from 'superstruct';
 import { fromB58, toB64, toHEX } from '@mysten/bcs';
-import { SerializedSignature } from '../cryptography/signature';
-import { Connection, devnetConnection } from '../rpc/connection';
-import { TransactionBlock } from '../builder';
-import { CheckpointPage } from '../types/checkpoints';
-import { NetworkMetrics, AddressMetrics } from '../types/metrics';
-import { EpochInfo, EpochPage } from '../types/epochs';
+import type { SerializedSignature } from '../cryptography/signature.js';
+import type { Connection } from '../rpc/connection.js';
+import { devnetConnection } from '../rpc/connection.js';
+import { TransactionBlock } from '../builder/index.js';
+import { CheckpointPage } from '../types/checkpoints.js';
+import { NetworkMetrics, AddressMetrics } from '../types/metrics.js';
+import { EpochInfo, EpochPage } from '../types/epochs.js';
+import { requestSuiFromFaucetV0 } from '../faucet/index.js';
 
 export interface PaginationArguments<Cursor> {
 	/** Optional paging cursor */
@@ -151,14 +152,13 @@ export class JsonRpcProvider {
 		return undefined;
 	}
 
-	async requestSuiFromFaucet(
-		recipient: SuiAddress,
-		httpHeaders?: HttpHeaders,
-	): Promise<FaucetResponse> {
+	/** @deprecated Use `@mysten/sui.js/faucet` instead. */
+	async requestSuiFromFaucet(recipient: SuiAddress, headers?: HttpHeaders) {
 		if (!this.connection.faucet) {
 			throw new Error('Faucet URL is not specified');
 		}
-		return requestSuiFromFaucet(this.connection.faucet, recipient, httpHeaders);
+
+		return requestSuiFromFaucetV0({ host: this.connection.faucet, recipient, headers });
 	}
 
 	/**
@@ -841,6 +841,10 @@ export class JsonRpcProvider {
 		const timeoutSignal = AbortSignal.timeout(timeout);
 		const timeoutPromise = new Promise((_, reject) => {
 			timeoutSignal.addEventListener('abort', () => reject(timeoutSignal.reason));
+		});
+
+		timeoutPromise.catch(() => {
+			// Swallow unhandled rejections that might be thrown after early return
 		});
 
 		while (!timeoutSignal.aborted) {

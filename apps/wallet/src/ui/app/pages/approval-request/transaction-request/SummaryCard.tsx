@@ -25,7 +25,7 @@ export function SummaryCard({
 	return (
 		<div
 			className={clsx(
-				'border border-solid rounded-2xl overflow-hidden',
+				'bg-white border border-solid rounded-2xl overflow-hidden',
 				expanded ? 'border-gray-45' : 'border-gray-40',
 			)}
 		>

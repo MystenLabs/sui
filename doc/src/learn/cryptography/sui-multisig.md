@@ -92,7 +92,7 @@ The response resembles the following:
 This section demonstrates how to use an object that belongs to a MultiSig address and serialize a transfer to be signed. Note that the tx_bytes can be *ANY* serialized transaction data where the sender is the MultiSig address, simply use the `--serialize-unsigned-transaction` flag for supported commands in `sui client -h` (e.g. `publish`, `upgrade`, `call`, `transfer`, `transfer-sui`, `pay`, `pay-all-sui`, `pay-sui`, `split`, `merge-coin`) to output the Base64 encoded transaction bytes. 
 
 ```shell
-$SUI_BINARY client transfer --to $MULTISIG_ADDR --object-id $OBJECT_ID --gas-budget 100000 --serialize-unsigned-transaction
+$SUI_BINARY client transfer --to $SOME_ADDR --object-id $OBJECT_ID --gas-budget 100000 --serialize-unsigned-transaction
 
 Raw tx_bytes to execute: $TX_BYTES
 ```

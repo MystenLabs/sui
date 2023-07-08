@@ -5,14 +5,13 @@ import { Sui, SuiLogoTxt } from '@mysten/icons';
 
 import NetworkSelect from '../network/Network';
 import Search from '../search/Search';
-
 import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
 function Header() {
 	return (
-		<header className="relative z-20 h-header overflow-visible bg-headerNav">
+		<header className="sticky top-0 z-20 h-header overflow-visible bg-headerNav">
 			<div className="mx-auto flex h-full max-w-[1440px] items-center px-5 2xl:p-0">
-				<div className="mr-8">
+				<div className="mr-5">
 					<LinkWithQuery
 						data-testid="nav-logo-button"
 						to="/"

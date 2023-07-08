@@ -4,11 +4,11 @@
 import { cx } from 'class-variance-authority';
 import { useMemo, useState } from 'react';
 
+import { SummaryCard } from './SummaryCard';
+import { WalletListSelectItem, type WalletListSelectItemProps } from './WalletListSelectItem';
 import { useAccounts } from '../hooks/useAccounts';
 import { useDeriveNextAccountMutation } from '../hooks/useDeriveNextAccountMutation';
 import { Link } from '../shared/Link';
-import { SummaryCard } from './SummaryCard';
-import { WalletListSelectItem, type WalletListSelectItemProps } from './WalletListSelectItem';
 
 export type WalletListSelectProps = {
 	title: string;
@@ -17,6 +17,7 @@ export type WalletListSelectProps = {
 	mode?: WalletListSelectItemProps['mode'];
 	disabled?: boolean;
 	onChange: (values: string[]) => void;
+	boxShadow?: boolean;
 };
 
 export function WalletListSelect({
@@ -26,6 +27,7 @@ export function WalletListSelect({
 	mode = 'select',
 	disabled = false,
 	onChange,
+	boxShadow = false,
 }: WalletListSelectProps) {
 	const [newAccounts, setNewAccounts] = useState<string[]>([]);
 	const accounts = useAccounts();
@@ -113,6 +115,7 @@ export function WalletListSelect({
 				) : null
 			}
 			minimalPadding
+			boxShadow={boxShadow}
 		/>
 	);
 }

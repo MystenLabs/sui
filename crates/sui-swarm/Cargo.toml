@@ -7,26 +7,26 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = { version = "1.0.64", features = ["backtrace"] }
-rand = "0.8.5"
-tracing = "0.1.36"
+anyhow.workspace = true
+rand.workspace = true
+tracing.workspace = true
 tokio = { workspace = true, features = ["full"] }
-futures = "0.3.23"
-tempfile = "3.3.0"
-tonic-health = "0.8.0"
-tap = "1.0.1"
-prometheus = "0.13.3"
+futures.workspace = true
+tempfile.workspace = true
+tonic-health.workspace = true
+tap.workspace = true
+prometheus.workspace = true
 
-sui-config = { path = "../sui-config" }
-sui-swarm-config = { path = "../sui-swarm-config" }
-sui-node = { path = "../sui-node" }
-sui-protocol-config = { path = "../sui-protocol-config" }
-sui-types = { path = "../sui-types" }
-mysten-metrics = { path = "../mysten-metrics" }
+sui-config.workspace = true
+sui-swarm-config.workspace = true
+sui-node.workspace = true
+sui-protocol-config.workspace = true
+sui-types.workspace = true
+mysten-metrics.workspace = true
 mysten-network.workspace = true
 telemetry-subscribers.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [target.'cfg(msim)'.dependencies]
-sui-simulator = { path = "../sui-simulator" }
+sui-simulator.workspace = true
 

@@ -29,7 +29,7 @@ use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{self, DynamicFieldInfo};
 use sui_types::effects::TransactionEvents;
 use sui_types::error::{SuiError, SuiResult, UserInputError};
-use sui_types::object::Owner;
+use sui_types::object::{Object, Owner};
 use sui_types::parse_sui_struct_tag;
 use sui_types::temporary_store::TxCoins;
 use tokio::task::spawn_blocking;
@@ -75,6 +75,17 @@ pub struct CoinInfo {
     pub digest: ObjectDigest,
     pub balance: u64,
     pub previous_transaction: TransactionDigest,
+}
+
+impl CoinInfo {
+    pub fn from_object(object: &Object) -> Option<CoinInfo> {
+        object.as_coin_maybe().map(|coin| CoinInfo {
+            version: object.version(),
+            digest: object.digest(),
+            previous_transaction: object.previous_transaction,
+            balance: coin.value(),
+        })
+    }
 }
 
 pub struct IndexStoreMetrics {
@@ -155,6 +166,9 @@ pub struct IndexStoreTables {
     /// **milliseconds** since epoch 1/1/1970). A transaction digest is subjectively time stamped
     /// on a node according to the local machine time, so it varies across nodes.
     /// The timestamping happens when the node sees a txn certificate for the first time.
+    ///
+    /// DEPRECATED. DO NOT USE
+    #[allow(dead_code)]
     #[default_options_override_fn = "timestamps_table_default_config"]
     timestamps: DBMap<TransactionDigest, u64>,
 
@@ -198,6 +212,16 @@ pub struct IndexStoreTables {
     event_by_sender: DBMap<(SuiAddress, EventId), EventIndex>,
     #[default_options_override_fn = "index_table_default_config"]
     event_by_time: DBMap<(u64, EventId), EventIndex>,
+}
+
+impl IndexStoreTables {
+    pub fn owner_index(&self) -> &DBMap<OwnerIndexKey, ObjectInfo> {
+        &self.owner_index
+    }
+
+    pub fn coin_index(&self) -> &DBMap<CoinIndexKey, CoinInfo> {
+        &self.coin_index
+    }
 }
 
 pub struct IndexStore {
@@ -276,6 +300,10 @@ impl IndexStore {
             metrics: Arc::new(metrics),
             max_type_length: max_type_length.unwrap_or(128),
         }
+    }
+
+    pub fn tables(&self) -> &IndexStoreTables {
+        &self.tables
     }
 
     pub async fn index_coin(
@@ -431,7 +459,7 @@ impl IndexStore {
         digest: &TransactionDigest,
         timestamp_ms: u64,
         tx_coins: Option<TxCoins>,
-        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
+        loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
     ) -> SuiResult<u64> {
         let sequence = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
         let mut batch = self.tables.transactions_from_addr.batch();
@@ -481,11 +509,6 @@ impl IndexStore {
                     .ok()
                     .map(|addr| ((addr, sequence), digest))
             }),
-        )?;
-
-        batch.insert_batch(
-            &self.tables.timestamps,
-            std::iter::once((*digest, timestamp_ms)),
         )?;
 
         // Coin Index
@@ -580,7 +603,7 @@ impl IndexStore {
         )?;
 
         // Loaded child objects table
-        let loaded_child_objects: Vec<_> = loaded_child_objects.into_iter().collect();
+        let loaded_child_objects: Vec<_> = loaded_child_objects.clone().into_iter().collect();
         batch.insert_batch(
             &self.tables.loaded_child_object_versions,
             std::iter::once((*digest, loaded_child_objects)),
@@ -702,15 +725,6 @@ impl IndexStore {
             .loaded_child_object_versions
             .get(transaction_digest)
             .map_err(|err| err.into())
-    }
-
-    /// Returns unix timestamp for a transaction if it exists
-    pub fn get_timestamp_ms(
-        &self,
-        transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<u64>> {
-        let ts = self.tables.timestamps.get(transaction_digest)?;
-        Ok(ts)
     }
 
     fn get_transactions_from_index<KeyT: Clone + Serialize + DeserializeOwned + PartialEq>(
@@ -1632,7 +1646,7 @@ mod tests {
                 &TransactionDigest::random(),
                 1234,
                 Some(tx_coins),
-                BTreeMap::new(),
+                &BTreeMap::new(),
             )
             .await?;
 
@@ -1684,7 +1698,7 @@ mod tests {
                 &TransactionDigest::random(),
                 1234,
                 Some(tx_coins),
-                BTreeMap::new(),
+                &BTreeMap::new(),
             )
             .await?;
         let balance_from_db = IndexStore::get_balance_from_db(

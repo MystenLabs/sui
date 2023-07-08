@@ -6,6 +6,8 @@ use std::{
     sync::Arc,
 };
 
+use crate::adapter::{missing_unwrapped_msg, new_native_extensions};
+use crate::error::convert_vm_error;
 use move_binary_format::{
     errors::{Location, VMError, VMResult},
     file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
@@ -15,10 +17,17 @@ use move_core_types::{
     account_address::AccountAddress,
     language_storage::{ModuleId, StructTag, TypeTag},
 };
+#[cfg(debug_assertions)]
+use move_vm_profiler::GasProfiler;
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
+#[cfg(debug_assertions)]
+use move_vm_types::gas::GasMeter;
 use move_vm_types::loaded_data::runtime_types::Type;
-use sui_move_natives::object_runtime::{max_event_error, ObjectRuntime, RuntimeResults};
+use sui_move_natives::object_runtime::{
+    self, get_all_uids, max_event_error, ObjectRuntime, RuntimeResults,
+};
 use sui_protocol_config::ProtocolConfig;
+use sui_types::gas::GasCharger;
 use sui_types::{
     balance::Balance,
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress, TxContext},
@@ -28,7 +37,6 @@ use sui_types::{
         ExecutionResults, ExecutionState, InputObjectMetadata, InputValue, ObjectValue,
         RawValueType, ResultValue, UsageKind,
     },
-    gas::{SuiGasStatus, SuiGasStatusAPI},
     metrics::LimitsMetrics,
     move_package::MovePackage,
     object::{Data, MoveObject, Object, Owner},
@@ -46,9 +54,7 @@ use sui_types::{
     execution_status::CommandArgumentError,
 };
 
-use crate::adapter::{missing_unwrapped_msg, new_native_extensions};
-
-use super::linkage_view::{LinkageInfo, LinkageView, SavedLinkage};
+use super::linkage_view::{LinkageView, SavedLinkage};
 
 sui_macros::checked_arithmetic! {
 
@@ -65,8 +71,8 @@ pub struct ExecutionContext<'vm, 'state, 'a> {
     /// A shared transaction context, contains transaction digest information and manages the
     /// creation of new object IDs
     pub tx_context: &'a mut TxContext,
-    /// The gas status used for metering
-    pub gas_status: &'a mut SuiGasStatus,
+    /// The gas charger used for metering
+    pub gas_charger: &'a mut GasCharger,
     /// The session used for interacting with Move types and calls
     pub session: Session<'state, 'vm, LinkageView<'state>>,
     /// Additional transfers not from the Move runtime
@@ -108,29 +114,22 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
         vm: &'vm MoveVM,
         state_view: &'state dyn ExecutionState,
         tx_context: &'a mut TxContext,
-        gas_status: &'a mut SuiGasStatus,
-        gas_coin_opt: Option<ObjectID>,
+        gas_charger: &'a mut GasCharger,
         inputs: Vec<CallArg>,
     ) -> Result<Self, ExecutionError> {
-        let init_linkage = if protocol_config.package_upgrades_supported() {
-            LinkageInfo::Unset
-        } else {
-            LinkageInfo::Universal
-        };
-
         // we need a new session just for loading types, which is sad
         // TODO remove this
-        let linkage = LinkageView::new(Box::new(state_view.as_sui_resolver()), init_linkage);
+        let linkage = LinkageView::new(Box::new(state_view.as_sui_resolver()));
         let mut tmp_session = new_session(
             vm,
             linkage,
             state_view.as_child_resolver(),
             BTreeMap::new(),
-            !gas_status.is_unmetered(),
+            !gas_charger.is_unmetered(),
             protocol_config,
             metrics.clone(),
         );
-        let mut object_owner_map = BTreeMap::new();
+        let mut input_object_map = BTreeMap::new();
         let inputs = inputs
             .into_iter()
             .map(|call_arg| {
@@ -138,17 +137,17 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
                     vm,
                     state_view,
                     &mut tmp_session,
-                    &mut object_owner_map,
+                    &mut input_object_map,
                     call_arg,
                 )
             })
             .collect::<Result<_, ExecutionError>>()?;
-        let gas = if let Some(gas_coin) = gas_coin_opt {
+        let gas = if let Some(gas_coin) = gas_charger.gas_coin() {
             let mut gas = load_object(
                 vm,
                 state_view,
                 &mut tmp_session,
-                &mut object_owner_map,
+                &mut input_object_map,
                 /* imm override */ false,
                 gas_coin,
             )?;
@@ -161,7 +160,7 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
             })) = &mut gas.inner.value else {
                 invariant_violation!("Gas object should be a populated coin")
             };
-            let max_gas_in_balance = gas_status.gas_budget();
+            let max_gas_in_balance = gas_charger.gas_budget();
             let Some(new_balance) = coin.balance.value().checked_sub(max_gas_in_balance) else {
                 invariant_violation!(
                     "Transaction input checker should check that there is enough gas"
@@ -190,18 +189,27 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
             vm,
             linkage,
             state_view.as_child_resolver(),
-            object_owner_map,
-            !gas_status.is_unmetered(),
+            input_object_map,
+            !gas_charger.is_unmetered(),
             protocol_config,
             metrics.clone(),
         );
+
+        // Set the profiler if in debug mode
+        #[cfg(debug_assertions)]
+        {
+            let tx_digest = tx_context.digest();
+            let remaining_gas: u64 =  move_vm_types::gas::GasMeter::remaining_gas(gas_charger.move_gas_status()).into();
+            gas_charger.move_gas_status_mut().set_profiler(GasProfiler::init(&vm.config().profiler_config, format!("{}", tx_digest), remaining_gas));
+        }
+
         Ok(Self {
             protocol_config,
             metrics,
             vm,
             state_view,
             tx_context,
-            gas_status,
+            gas_charger,
             session,
             gas,
             inputs,
@@ -526,14 +534,13 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
 
     /// Determine the object changes and collect all user events
     pub fn finish<Mode: ExecutionMode>(self) -> Result<ExecutionResults, ExecutionError> {
-        use crate::error::convert_vm_error;
         let Self {
             protocol_config,
             metrics,
             vm,
             state_view,
             tx_context,
-            gas_status,
+            gas_charger,
             session,
             additional_transfers,
             new_packages,
@@ -630,7 +637,7 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
         }
         // Refund unused gas
         if let Some(gas_id) = gas_id_opt {
-            refund_max_gas_budget(&mut additional_writes, gas_status, gas_id)?;
+            refund_max_gas_budget(&mut additional_writes, gas_charger, gas_id)?;
         }
 
         let (res, linkage) = session.finish_with_extensions();
@@ -670,7 +677,7 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
             linkage,
             state_view.as_child_resolver(),
             BTreeMap::new(),
-            !gas_status.is_unmetered(),
+            !gas_charger.is_unmetered(),
             protocol_config,
             metrics,
         );
@@ -772,7 +779,7 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
                     } else {
                         DeleteKindWithOldVersion::Wrap(old_version)
                     }
-                },
+                }
                 DeleteKind::UnwrapThenDelete => {
                     if protocol_config.simplified_unwrap_then_delete() {
                         DeleteKindWithOldVersion::UnwrapThenDelete
@@ -907,7 +914,7 @@ pub(crate) fn new_session<'state, 'vm>(
     vm: &'vm MoveVM,
     linkage: LinkageView<'state>,
     child_resolver: &'state dyn ChildObjectResolver,
-    input_objects: BTreeMap<ObjectID, Owner>,
+    input_objects: BTreeMap<ObjectID, object_runtime::InputObject>,
     is_metered: bool,
     protocol_config: &ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
@@ -1107,7 +1114,7 @@ fn load_object<'vm, 'state>(
     vm: &'vm MoveVM,
     state_view: &'state dyn ExecutionState,
     session: &mut Session<'state, 'vm, LinkageView<'state>>,
-    object_owner_map: &mut BTreeMap<ObjectID, Owner>,
+    input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     override_as_immutable: bool,
     id: ObjectID,
 ) -> Result<InputValue, ExecutionError> {
@@ -1129,16 +1136,36 @@ fn load_object<'vm, 'state>(
             invariant_violation!("ObjectOwner objects cannot be input")
         }
     };
+    let owner = obj.owner;
+    let version = obj.version();
     let object_metadata = InputObjectMetadata {
         id,
         is_mutable_input,
-        owner: obj.owner,
-        version: obj.version(),
+        owner,
+        version,
     };
-    let prev = object_owner_map.insert(id, obj.owner);
+    let obj_value = value_from_object(vm, session, obj)?;
+    let contained_uids = {
+        let fully_annotated_layout = session
+            .type_to_fully_annotated_layout(&obj_value.type_)
+            .map_err(|e| convert_vm_error(e, vm, session.get_resolver()))?;
+        let mut bytes = vec![];
+        obj_value.write_bcs_bytes(&mut bytes);
+        match get_all_uids(&fully_annotated_layout, &bytes) {
+            Err(e) => invariant_violation!(
+                "Unable to retrieve UIDs for object. Got error: {e}"
+            ),
+            Ok(uids) => uids,
+        }
+    };
+    let runtime_input = object_runtime::InputObject {
+        contained_uids,
+        owner,
+        version,
+    };
+    let prev = input_object_map.insert(id, runtime_input);
     // protected by transaction input checker
     assert_invariant!(prev.is_none(), "Duplicate input object {}", id);
-    let obj_value = value_from_object(vm, session, obj)?;
     Ok(InputValue::new_object(object_metadata, obj_value))
 }
 
@@ -1147,13 +1174,13 @@ fn load_call_arg<'vm, 'state>(
     vm: &'vm MoveVM,
     state_view: &'state dyn ExecutionState,
     session: &mut Session<'state, 'vm, LinkageView<'state>>,
-    object_owner_map: &mut BTreeMap<ObjectID, Owner>,
+    input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     call_arg: CallArg,
 ) -> Result<InputValue, ExecutionError> {
     Ok(match call_arg {
         CallArg::Pure(bytes) => InputValue::new_raw(RawValueType::Any, bytes),
         CallArg::Object(obj_arg) => {
-            load_object_arg(vm, state_view, session, object_owner_map, obj_arg)?
+            load_object_arg(vm, state_view, session, input_object_map, obj_arg)?
         }
     })
 }
@@ -1163,7 +1190,7 @@ fn load_object_arg<'vm, 'state>(
     vm: &'vm MoveVM,
     state_view: &'state dyn ExecutionState,
     session: &mut Session<'state, 'vm, LinkageView<'state>>,
-    object_owner_map: &mut BTreeMap<ObjectID, Owner>,
+    input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     obj_arg: ObjectArg,
 ) -> Result<InputValue, ExecutionError> {
     match obj_arg {
@@ -1171,7 +1198,7 @@ fn load_object_arg<'vm, 'state>(
             vm,
             state_view,
             session,
-            object_owner_map,
+            input_object_map,
             /* imm override */ false,
             id,
         ),
@@ -1179,7 +1206,7 @@ fn load_object_arg<'vm, 'state>(
             vm,
             state_view,
             session,
-            object_owner_map,
+            input_object_map,
             /* imm override */ !mutable,
             id,
         ),
@@ -1219,7 +1246,7 @@ fn add_additional_write(
 /// now we return exactly that amount. Gas will be charged by the execution engine
 fn refund_max_gas_budget(
     additional_writes: &mut BTreeMap<ObjectID, AdditionalWrite>,
-    gas_status: &SuiGasStatus,
+    gas_charger: &mut GasCharger,
     gas_id: ObjectID,
 ) -> Result<(), ExecutionError> {
     let Some(AdditionalWrite { bytes,.. }) = additional_writes.get_mut(&gas_id) else {
@@ -1231,7 +1258,7 @@ fn refund_max_gas_budget(
     let Some(new_balance) = coin
         .balance
         .value()
-        .checked_add(gas_status.gas_budget()) else {
+        .checked_add(gas_charger.gas_budget()) else {
             return Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::CoinBalanceOverflow,
                 "Gas coin too large after returning the max gas budget",

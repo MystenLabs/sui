@@ -9,7 +9,6 @@ import React, { type ReactNode, useCallback, useMemo } from 'react';
 
 import { WorldMap } from './WorldMap';
 import { type ValidatorMapResponse, type ValidatorMapValidator } from './types';
-
 import { useNetwork } from '~/context';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';

@@ -11,6 +11,7 @@ import { useAppDispatch } from '_hooks';
 import { createVault, logout } from '_redux/slices/account';
 import { MAIN_UI_URL } from '_shared/utils';
 import { entropyToSerialized, mnemonicToEntropy } from '_shared/utils/bip39';
+import { ampli } from '_src/shared/analytics/ampli';
 
 const initialValues = {
 	mnemonic: Array.from({ length: 12 }, () => ''),
@@ -42,6 +43,11 @@ export function ImportPage({ mode = 'import' }: ImportPageProps) {
 						password,
 					}),
 				).unwrap();
+
+				ampli.importedExistingAccount({
+					sourceFlow: getSourceFlowForAmplitude(mode),
+				});
+
 				if (mode === 'import') {
 					navigate('../backup-imported');
 				} else {
@@ -82,4 +88,15 @@ export function ImportPage({ mode = 'import' }: ImportPageProps) {
 			) : null}
 		</CardLayout>
 	);
+}
+
+function getSourceFlowForAmplitude(mode: 'import' | 'forgot') {
+	switch (mode) {
+		case 'import':
+			return 'Import existing account';
+		case 'forgot':
+			return 'Reset password';
+		default:
+			throw new Error('Encountered unknown mode');
+	}
 }

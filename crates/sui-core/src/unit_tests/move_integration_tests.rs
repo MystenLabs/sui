@@ -560,8 +560,8 @@ async fn test_create_then_delete_parent_child_wrap() {
     // The parent and field are considered deleted, the child doesn't count because it wasn't
     // considered created in the first place.
     assert_eq!(effects.deleted().len(), 2);
-    // The child was never created so it is not unwrapped.
-    assert_eq!(effects.unwrapped_then_deleted().len(), 0);
+    // The child is considered as unwrapped and deleted, even though it was wrapped since creation.
+    assert_eq!(effects.unwrapped_then_deleted().len(), 1);
 
     assert_eq!(
         effects
@@ -2822,7 +2822,7 @@ pub async fn build_and_try_publish_test_package(
     let transaction = to_sender_signed_transaction(data, sender_key);
 
     (
-        transaction.clone().into_inner(),
+        transaction.clone(),
         send_and_confirm_transaction(authority, transaction)
             .await
             .unwrap()

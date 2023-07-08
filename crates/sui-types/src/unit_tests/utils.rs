@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::crypto::{Signer, SuiKeyPair};
+use crate::multisig::{MultiSig, MultiSigPublicKey};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::transaction::{SenderSignedData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER};
 use crate::SuiAddress;
@@ -18,7 +19,7 @@ use crate::{
     },
     object::Object,
     signature::GenericSignature,
-    transaction::{Transaction, TransactionData, VerifiedTransaction},
+    transaction::{Transaction, TransactionData},
     zk_login_authenticator::ZkLoginAuthenticator,
     zk_login_util::AddressParams,
 };
@@ -32,7 +33,7 @@ use fastcrypto_zkp::bn254::zk_login::{
 };
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-use shared_crypto::intent::Intent;
+use shared_crypto::intent::{Intent, IntentMessage};
 use std::collections::BTreeMap;
 
 pub fn make_committee_key<R>(rand: &mut R) -> (Vec<AuthorityKeyPair>, Committee)
@@ -64,7 +65,7 @@ where
 
 // Creates a fake sender-signed transaction for testing. This transaction will
 // not actually work.
-pub fn create_fake_transaction() -> VerifiedTransaction {
+pub fn create_fake_transaction() -> Transaction {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
@@ -110,19 +111,15 @@ pub fn make_transaction(sender: SuiAddress, kp: &SuiKeyPair, intent: Intent) -> 
 pub fn to_sender_signed_transaction(
     data: TransactionData,
     signer: &dyn Signer<Signature>,
-) -> VerifiedTransaction {
+) -> Transaction {
     to_sender_signed_transaction_with_multi_signers(data, vec![signer])
 }
 
 pub fn to_sender_signed_transaction_with_multi_signers(
     data: TransactionData,
     signers: Vec<&dyn Signer<Signature>>,
-) -> VerifiedTransaction {
-    VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
-        data,
-        Intent::sui_transaction(),
-        signers,
-    ))
+) -> Transaction {
+    Transaction::from_data_and_signer(data, Intent::sui_transaction(), signers)
 }
 
 pub fn mock_certified_checkpoint<'a>(
@@ -203,4 +200,40 @@ pub fn make_zklogin_tx() -> (SuiAddress, Transaction, GenericSignature) {
     ));
 
     (user_address, tx, authenticator)
+}
+
+pub fn keys() -> Vec<SuiKeyPair> {
+    let mut seed = StdRng::from_seed([0; 32]);
+    let kp1: SuiKeyPair = SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut seed).1);
+    let kp2: SuiKeyPair = SuiKeyPair::Secp256k1(get_key_pair_from_rng(&mut seed).1);
+    let kp3: SuiKeyPair = SuiKeyPair::Secp256r1(get_key_pair_from_rng(&mut seed).1);
+    vec![kp1, kp2, kp3]
+}
+
+pub fn make_upgraded_multisig_tx() -> Transaction {
+    let keys = keys();
+    let pk1 = &keys[0].public();
+    let pk2 = &keys[1].public();
+    let pk3 = &keys[2].public();
+
+    let multisig_pk = MultiSigPublicKey::new(
+        vec![pk1.clone(), pk2.clone(), pk3.clone()],
+        vec![1, 1, 1],
+        2,
+    )
+    .unwrap();
+    let addr = SuiAddress::from(&multisig_pk);
+    let tx = make_transaction(addr, &keys[0], Intent::sui_transaction());
+
+    let msg = IntentMessage::new(Intent::sui_transaction(), tx.transaction_data().clone());
+    let sig1 = Signature::new_secure(&msg, &keys[0]);
+    let sig2 = Signature::new_secure(&msg, &keys[1]);
+
+    // Any 2 of 3 signatures verifies ok.
+    let multi_sig1 = MultiSig::combine(vec![sig1, sig2], multisig_pk).unwrap();
+    Transaction::new(SenderSignedData::new(
+        tx.transaction_data().clone(),
+        Intent::sui_transaction(),
+        vec![GenericSignature::MultiSig(multi_sig1)],
+    ))
 }

@@ -3,16 +3,19 @@
 
 use prometheus::Registry;
 use std::time::Duration;
+use sui_core::authority::EffectsNotifyRead;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_macros::sim_test;
+use sui_test_transaction_builder::{
+    batch_make_transfer_transactions, make_transfer_sui_transaction,
+};
 use sui_types::quorum_driver_types::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
     FinalizedEffects, QuorumDriverError,
 };
-use sui_types::transaction::VerifiedTransaction;
-use test_utils::network::TestClusterBuilder;
-use test_utils::transaction::wait_for_tx;
+use sui_types::transaction::Transaction;
+use test_cluster::TestClusterBuilder;
 use tokio::time::timeout;
 use tracing::info;
 
@@ -26,7 +29,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let registry = Registry::new();
     // Start orchestrator inside container so that it will be properly shutdown.
     let orchestrator = handle
-        .with_async(|node| {
+        .with(|node| {
             TransactiondOrchestrator::new_with_network_clients(
                 node.state(),
                 node.subscribe_to_epoch_change(),
@@ -34,11 +37,10 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
                 &registry,
             )
         })
-        .await
         .unwrap();
 
     let txn_count = 4;
-    let mut txns = context.batch_make_transfer_transactions(txn_count).await;
+    let mut txns = batch_make_transfer_transactions(context, txn_count).await;
     assert!(
         txns.len() >= txn_count,
         "Expect at least {} txns. Do we generate enough gas objects during genesis?",
@@ -54,7 +56,12 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
         .await?;
 
     // Wait for data sync to catch up
-    wait_for_tx(digest, handle.state().clone()).await;
+    handle
+        .state()
+        .db()
+        .notify_read_executed_effects(vec![digest])
+        .await
+        .unwrap();
 
     // Transaction Orchestrator proactivcely executes txn locally
     let txn = txns.swap_remove(0);
@@ -96,7 +103,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     let registry = Registry::new();
     // Start orchestrator inside container so that it will be properly shutdown.
     let orchestrator = handle
-        .with_async(|node| {
+        .with(|node| {
             TransactiondOrchestrator::new_with_network_clients(
                 node.state(),
                 node.subscribe_to_epoch_change(),
@@ -104,12 +111,11 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
                 &registry,
             )
         })
-        .await
         .unwrap();
 
     let txn_count = 2;
     let context = &mut test_cluster.wallet;
-    let mut txns = context.batch_make_transfer_transactions(txn_count).await;
+    let mut txns = batch_make_transfer_transactions(context, txn_count).await;
     assert!(
         txns.len() >= txn_count,
         "Expect at least {} txns. Do we generate enough gas objects during genesis?",
@@ -144,7 +150,11 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     .unwrap_err();
 
     // Because the tx did not go through, we expect to see it in the WAL log
-    let pending_txes = orchestrator.load_all_pending_transactions();
+    let pending_txes: Vec<_> = orchestrator
+        .load_all_pending_transactions()
+        .into_iter()
+        .map(|t| t.into_inner())
+        .collect();
     assert_eq!(pending_txes, vec![txn.clone()]);
 
     // Bring up 1 validator, we obtain quorum again and tx should succeed
@@ -220,10 +230,7 @@ async fn test_tx_across_epoch_boundaries() {
     let (result_tx, mut result_rx) = tokio::sync::mpsc::channel::<FinalizedEffects>(total_tx_cnt);
 
     let test_cluster = TestClusterBuilder::new().build().await;
-    let tx = test_cluster
-        .wallet
-        .make_transfer_sui_transaction(None, None)
-        .await;
+    let tx = make_transfer_sui_transaction(&test_cluster.wallet, None, None).await;
     let authorities = test_cluster.swarm.validator_node_handles();
 
     // We first let 2 validators stop accepting user cert
@@ -243,7 +250,6 @@ async fn test_tx_across_epoch_boundaries() {
 
     let tx_digest = *tx.digest();
     info!(?tx_digest, "Submitting tx");
-    let tx = tx.into_inner();
     tokio::task::spawn(async move {
         match to
             .execute_transaction_block(ExecuteTransactionRequest {
@@ -286,12 +292,12 @@ async fn test_tx_across_epoch_boundaries() {
 
 async fn execute_with_orchestrator(
     orchestrator: &TransactiondOrchestrator<NetworkAuthorityClient>,
-    txn: VerifiedTransaction,
+    txn: Transaction,
     request_type: ExecuteTransactionRequestType,
 ) -> Result<ExecuteTransactionResponse, QuorumDriverError> {
     orchestrator
         .execute_transaction_block(ExecuteTransactionRequest {
-            transaction: txn.into(),
+            transaction: txn,
             request_type,
         })
         .await

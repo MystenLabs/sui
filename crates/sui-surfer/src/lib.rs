@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use surf_strategy::SurfStrategy;
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 use tokio::sync::watch;
 use tracing::info;
 

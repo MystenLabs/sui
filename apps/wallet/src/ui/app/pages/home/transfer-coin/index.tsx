@@ -18,7 +18,7 @@ import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout'
 import { Text } from '_app/shared/text';
 import { ActiveCoinsCard } from '_components/active-coins-card';
 import Overlay from '_components/overlay';
-import { trackEvent } from '_src/shared/plausible';
+import { ampli } from '_src/shared/analytics/ampli';
 import { QredoActionIgnoredByUser } from '_src/ui/app/QredoSigner';
 import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
 import { useSigner } from '_src/ui/app/hooks';
@@ -59,10 +59,6 @@ function TransferCoinPage() {
 				name: 'send-tokens',
 			});
 			try {
-				trackEvent('TransferCoins', {
-					props: { coinType: coinType! },
-				});
-
 				return signer.signAndExecuteTransactionBlock(
 					{
 						transactionBlock: transaction,
@@ -86,6 +82,11 @@ function TransferCoinPage() {
 		onSuccess: (response) => {
 			queryClient.invalidateQueries(['get-coins']);
 			queryClient.invalidateQueries(['coin-balance']);
+
+			ampli.sentCoins({
+				coinType: coinType!,
+			});
+
 			const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
 				getTransactionDigest(response),
 			)}&from=transactions`;

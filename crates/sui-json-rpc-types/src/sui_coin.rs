@@ -35,7 +35,7 @@ pub struct Balance {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Debug, JsonSchema, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Coin {
     pub coin_type: String,
@@ -56,7 +56,7 @@ impl Coin {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SuiCoinMetadata {
     /// Number of decimal places the coin uses.

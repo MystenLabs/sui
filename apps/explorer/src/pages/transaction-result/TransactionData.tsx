@@ -10,7 +10,6 @@ import {
 } from '@mysten/sui.js';
 
 import { TransactionDetailCard } from './transaction-summary/TransactionDetailCard';
-
 import { GasBreakdown } from '~/components/GasBreakdown';
 import { InputsCard } from '~/pages/transaction-result/programmable-transaction-view/InputsCard';
 import { TransactionsCard } from '~/pages/transaction-result/programmable-transaction-view/TransactionsCard';

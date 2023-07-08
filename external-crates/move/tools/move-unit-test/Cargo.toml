@@ -28,6 +28,7 @@ move-ir-types = { path = "../../move-ir/types" }
 move-symbol-pool = { path = "../../move-symbol-pool" }
 move-vm-types = { path = "../../move-vm/types" }
 move-vm-runtime = { path = "../../move-vm/runtime", features = ["testing"] }
+move-vm-profiler = { path = "../../move-vm/profiler" }
 move-vm-test-utils = { path = "../../move-vm/test-utils" }
 move-resource-viewer = { path = "../move-resource-viewer" }
 move-binary-format = { path = "../../move-binary-format" }

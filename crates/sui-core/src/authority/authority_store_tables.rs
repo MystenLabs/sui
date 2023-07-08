@@ -10,6 +10,7 @@ use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::TransactionEffects;
+use sui_types::storage::MarkerKind;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
 use typed_store::rocks::{
@@ -118,6 +119,13 @@ pub struct AuthorityPerpetualTables {
     /// This could be non-zero due to bugs in earlier protocol versions.
     /// This number is the result of storage_fund_balance - sum(storage_rebate).
     pub(crate) expected_storage_fund_imbalance: DBMap<(), i64>,
+
+    /// Table that stores the set of received objects and deleted shared objects and the version at
+    /// which they were received. This is used to prevent possible race conditions around receiving
+    /// objects (since they are not locked by the transaction manager) and for tracking shared
+    /// objects that have been deleted. This table is meant to be pruned per-epoch, and all
+    /// previous epochs other than the current epoch may be pruned safely.
+    pub(crate) object_per_epoch_marker_table: DBMap<(EpochId, ObjectKey, MarkerKind), ()>,
 }
 
 impl AuthorityPerpetualTables {
@@ -402,6 +410,7 @@ impl AuthorityPerpetualTables {
         self.pruned_checkpoint.clear()?;
         self.expected_network_sui_amount.clear()?;
         self.expected_storage_fund_imbalance.clear()?;
+        self.object_per_epoch_marker_table.clear()?;
         self.objects
             .rocksdb
             .flush()
@@ -579,7 +588,6 @@ fn objects_table_default_config() -> DBOptions {
 fn transactions_table_default_config() -> DBOptions {
     default_db_options()
         .optimize_for_write_throughput()
-        .optimize_for_large_values_no_scan(4 << 10)
         .optimize_for_point_lookup(
             read_size_from_env(ENV_VAR_TRANSACTIONS_BLOCK_CACHE_SIZE).unwrap_or(512),
         )
@@ -588,7 +596,6 @@ fn transactions_table_default_config() -> DBOptions {
 fn effects_table_default_config() -> DBOptions {
     default_db_options()
         .optimize_for_write_throughput()
-        .optimize_for_large_values_no_scan(4 << 10)
         .optimize_for_point_lookup(
             read_size_from_env(ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE).unwrap_or(1024),
         )
@@ -597,7 +604,6 @@ fn effects_table_default_config() -> DBOptions {
 fn events_table_default_config() -> DBOptions {
     default_db_options()
         .optimize_for_write_throughput()
-        .optimize_for_large_values_no_scan(4 << 10)
         .optimize_for_read(read_size_from_env(ENV_VAR_EVENTS_BLOCK_CACHE_SIZE).unwrap_or(1024))
 }
 

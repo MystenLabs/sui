@@ -383,6 +383,10 @@ impl AuthorityEpochTables {
         self.executed_transactions_to_checkpoint.remove(digest)?;
         Ok(())
     }
+
+    pub fn get_last_consensus_index(&self) -> SuiResult<Option<ExecutionIndicesWithHash>> {
+        Ok(self.last_consensus_index.get(&LAST_CONSENSUS_INDEX_ADDR)?)
+    }
 }
 
 pub(crate) const MUTEX_TABLE_SIZE: usize = 1024;
@@ -669,8 +673,7 @@ impl AuthorityPerEpochStore {
 
     pub fn get_last_consensus_index(&self) -> SuiResult<ExecutionIndicesWithHash> {
         self.tables
-            .last_consensus_index
-            .get(&LAST_CONSENSUS_INDEX_ADDR)
+            .get_last_consensus_index()
             .map(|x| x.unwrap_or_default())
             .map_err(SuiError::from)
     }
@@ -1788,6 +1791,9 @@ impl AuthorityPerEpochStore {
                 kind: ConsensusTransactionKind::CheckpointSignature(info),
                 ..
             }) => {
+                // We usually call notify_checkpoint_signature in SuiTxValidator, but that step can
+                // be skipped when a batch is already part of a certificate, so we must also
+                // notify here.
                 checkpoint_service.notify_checkpoint_signature(self, info)?;
                 self.record_consensus_transaction_processed(batch, transaction, consensus_index)?;
                 Ok(ConsensusCertificateResult::ConsensusMessage)

@@ -1,21 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	getObjectFields,
+import type {
 	SuiObjectResponse,
 	SuiMoveObject,
 	SuiObjectInfo,
 	SuiObjectData,
-	getObjectId,
-	getObjectType,
-} from '../types/objects';
-import { normalizeSuiObjectId, ObjectId, SuiAddress } from '../types/common';
+} from '../types/objects.js';
+import { getObjectFields, getObjectId, getObjectType } from '../types/objects.js';
+import type { SuiAddress } from '../types/common.js';
+import { normalizeSuiObjectId, ObjectId } from '../types/common.js';
 
-import { getOption, Option } from '../types/option';
-import { CoinStruct } from '../types/coin';
-import { StructTag } from '../types/sui-bcs';
-import { Infer, nullable, number, object, string } from 'superstruct';
+import type { Option } from '../types/option.js';
+import { getOption } from '../types/option.js';
+import type { CoinStruct } from '../types/coin.js';
+import type { StructTag } from '../types/sui-bcs.js';
+import type { Infer } from 'superstruct';
+import { nullable, number, object, string } from 'superstruct';
 
 export const SUI_SYSTEM_ADDRESS = '0x3';
 export const SUI_FRAMEWORK_ADDRESS = '0x2';
@@ -148,8 +149,6 @@ export type DelegationData = SuiMoveObject & {
 			id: string;
 			version: number;
 		};
-		// TODO (jian): clean up after 0.34
-		coin_locked_until_epoch: Option<SuiMoveObject>;
 		ending_epoch: Option<number>;
 	};
 };

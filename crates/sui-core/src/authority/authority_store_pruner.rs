@@ -5,15 +5,17 @@ use crate::authority::authority_store_types::{ObjectContentDigest, StoreData, St
 use crate::checkpoints::{CheckpointStore, CheckpointWatermark};
 use anyhow::anyhow;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
+use once_cell::sync::Lazy;
 use prometheus::{
     register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
     Registry,
 };
 use rocksdb::LiveFile;
 use std::cmp::{max, min};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::SystemTime;
 use std::{sync::Arc, time::Duration};
+use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_storage::mutex_table::RwLockTable;
 use sui_types::base_types::SequenceNumber;
@@ -34,6 +36,19 @@ use typed_store::{Map, TypedStoreError};
 
 use super::authority_store_tables::AuthorityPerpetualTables;
 
+static PERIODIC_PRUNING_TABLES: Lazy<HashSet<String>> = Lazy::new(|| {
+    [
+        "objects",
+        "effects",
+        "transactions",
+        "events",
+        "executed_effects",
+        "executed_transactions_to_checkpoint",
+    ]
+    .into_iter()
+    .map(|cf| cf.to_string())
+    .collect()
+});
 pub struct AuthorityStorePruner {
     _objects_pruner_cancel_handle: oneshot::Sender<()>,
 }
@@ -131,6 +146,10 @@ impl AuthorityStorePruner {
             }
         }
         for (object_id, (min_version, max_version)) in updates {
+            debug!(
+                "Pruning object {:?} versions {:?} - {:?}",
+                object_id, min_version, max_version
+            );
             let start_range = ObjectKey(object_id, min_version);
             let end_range = ObjectKey(object_id, (max_version.value() + 1).into());
             wb.delete_range(&perpetual_db.objects, &start_range, &end_range)?;
@@ -169,6 +188,7 @@ impl AuthorityStorePruner {
             .flat_map(|content| content.iter().map(|tx| tx.transaction));
         for transaction_digest in transactions {
             if let Some(next_digest) = transaction_digest.next_lexicographical() {
+                debug!("Pruning transaction {:?}", transaction_digest);
                 perpetual_batch.delete_range(
                     &perpetual_db.transactions,
                     &transaction_digest,
@@ -189,6 +209,7 @@ impl AuthorityStorePruner {
 
         for effects in effects_to_prune {
             let effects_digest = effects.digest();
+            debug!("Pruning effects {:?}", effects_digest);
             if let Some(next_digest) = effects.digest().next_lexicographical() {
                 perpetual_batch.delete_range(
                     &perpetual_db.effects,
@@ -212,6 +233,7 @@ impl AuthorityStorePruner {
         for checkpoint_content in checkpoint_content_to_prune {
             let content_digest = *checkpoint_content.digest();
             if let Some(next_digest) = content_digest.next_lexicographical() {
+                debug!("Pruning checkpoint_content {:?}", content_digest);
                 checkpoints_batch.delete_range(
                     &checkpoint_db.checkpoint_content,
                     &content_digest,
@@ -285,18 +307,25 @@ impl AuthorityStorePruner {
         config: AuthorityStorePruningConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
         indirect_objects_threshold: usize,
+        archive_readers: ArchiveReaderBalancer,
     ) -> anyhow::Result<()> {
         let pruned_checkpoint_number =
             checkpoint_store.get_highest_pruned_checkpoint_seq_number()?;
+        let latest_archived_checkpoint = archive_readers
+            .get_archive_watermark()
+            .await?
+            .unwrap_or(u64::MAX);
+        let highest_pruned_checkpoint = perpetual_db.get_highest_pruned_checkpoint()?;
+        info!("Latest archived checkpoint: {latest_archived_checkpoint}, highest pruned checkpoint: {highest_pruned_checkpoint}");
         Self::prune_for_eligible_epochs(
             perpetual_db,
             checkpoint_store,
             PruningMode::Checkpoints,
             config
-                .num_epochs_to_retain_for_checkpoints
+                .num_epochs_to_retain_for_checkpoints()
                 .ok_or_else(|| anyhow!("config value not set"))?,
             pruned_checkpoint_number,
-            perpetual_db.get_highest_pruned_checkpoint()?,
+            min(highest_pruned_checkpoint, latest_archived_checkpoint),
             objects_lock_table,
             config,
             metrics.clone(),
@@ -412,7 +441,7 @@ impl AuthorityStorePruner {
     fn compact_next_sst_file(
         perpetual_db: Arc<AuthorityPerpetualTables>,
         delay_days: usize,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Option<LiveFile>> {
         let db_path = perpetual_db.objects.rocksdb.path();
         let mut sst_file_for_compaction: Option<LiveFile> = None;
         let time_threshold =
@@ -420,8 +449,8 @@ impl AuthorityStorePruner {
         for sst_file in perpetual_db.objects.rocksdb.live_files()? {
             let file_path = db_path.join(sst_file.name.clone().trim_matches('/'));
             let last_modified = std::fs::metadata(file_path)?.modified()?;
-            if sst_file.column_family_name != "objects"
-                || sst_file.level < 2
+            if !PERIODIC_PRUNING_TABLES.contains(&sst_file.column_family_name)
+                || sst_file.level < 1
                 || sst_file.start_key.is_none()
                 || sst_file.end_key.is_none()
                 || last_modified > time_threshold
@@ -435,16 +464,17 @@ impl AuthorityStorePruner {
             }
             sst_file_for_compaction = Some(sst_file);
         }
-        if let Some(sst_file) = sst_file_for_compaction {
-            info!(
-                "Manual compaction of sst file {:?}. Size: {:?}, level: {:?}",
-                sst_file.name, sst_file.size, sst_file.level
-            );
-            let start_key: ObjectKey = bcs::from_bytes(sst_file.start_key.as_ref().unwrap())?;
-            let end_key: ObjectKey = bcs::from_bytes(sst_file.end_key.as_ref().unwrap())?;
-            perpetual_db.objects.compact_range(&start_key, &end_key)?;
-        }
-        Ok(())
+        let Some(sst_file) = sst_file_for_compaction else {return Ok(None);};
+        info!(
+            "Manual compaction of sst file {:?}. Size: {:?}, level: {:?}",
+            sst_file.name, sst_file.size, sst_file.level
+        );
+        perpetual_db.objects.compact_range_raw(
+            &sst_file.column_family_name,
+            sst_file.start_key.clone().unwrap(),
+            sst_file.end_key.clone().unwrap(),
+        )?;
+        Ok(Some(sst_file))
     }
 
     fn setup_pruning(
@@ -455,6 +485,7 @@ impl AuthorityStorePruner {
         objects_lock_table: Arc<RwLockTable<ObjectContentDigest>>,
         metrics: Arc<AuthorityStorePruningMetrics>,
         indirect_objects_threshold: usize,
+        archive_readers: ArchiveReaderBalancer,
     ) -> Sender<()> {
         let (sender, mut recv) = tokio::sync::oneshot::channel();
         debug!(
@@ -487,10 +518,16 @@ impl AuthorityStorePruner {
                         Self::compact_next_sst_file(db, delay_days)
                     })
                     .await;
-                    if let Err(err) = result {
-                        error!("Failed to compact sst file: {:?}", err);
+                    let mut sleep_interval_secs = 1;
+                    match result {
+                        Err(err) => error!("Failed to compact sst file: {:?}", err),
+                        Ok(Err(err)) => error!("Failed to compact sst file: {:?}", err),
+                        Ok(Ok(None)) => {
+                            sleep_interval_secs = 3600;
+                        }
+                        _ => {}
                     }
-                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    tokio::time::sleep(Duration::from_secs(sleep_interval_secs)).await;
                 }
             });
         }
@@ -503,8 +540,8 @@ impl AuthorityStorePruner {
                             error!("Failed to prune objects: {:?}", err);
                         }
                     },
-                    _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints, None | Some(u64::MAX) | Some(0)) => {
-                        if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, &objects_lock_table, config, metrics.clone(), indirect_objects_threshold).await {
+                    _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints(), None | Some(u64::MAX) | Some(0)) => {
+                        if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, &objects_lock_table, config, metrics.clone(), indirect_objects_threshold, archive_readers.clone()).await {
                             error!("Failed to prune checkpoints: {:?}", err);
                         }
                     },
@@ -523,6 +560,7 @@ impl AuthorityStorePruner {
         epoch_duration_ms: u64,
         registry: &Registry,
         indirect_objects_threshold: usize,
+        archive_readers: ArchiveReaderBalancer,
     ) -> Self {
         AuthorityStorePruner {
             _objects_pruner_cancel_handle: Self::setup_pruning(
@@ -533,6 +571,7 @@ impl AuthorityStorePruner {
                 objects_lock_table,
                 AuthorityStorePruningMetrics::new(registry),
                 indirect_objects_threshold,
+                archive_readers,
             ),
         }
     }
@@ -551,7 +590,7 @@ mod tests {
     use std::path::Path;
     use std::time::Duration;
     use std::{collections::HashSet, sync::Arc};
-    use tracing::log::{error, info};
+    use tracing::log::info;
 
     use crate::authority::authority_store_pruner::AuthorityStorePruningMetrics;
     use crate::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -559,11 +598,9 @@ mod tests {
         get_store_object_pair, ObjectContentDigest, StoreData, StoreObject, StoreObjectPair,
         StoreObjectWrapper,
     };
-    #[cfg(not(target_env = "msvc"))]
-    use pprof::Symbol;
     use prometheus::Registry;
     use sui_storage::mutex_table::RwLockTable;
-    use sui_types::base_types::{ObjectDigest, VersionNumber};
+    use sui_types::base_types::ObjectDigest;
     use sui_types::effects::TransactionEffects;
     use sui_types::effects::TransactionEffectsAPI;
     use sui_types::{
@@ -607,54 +644,6 @@ mod tests {
             after_pruning.insert(k);
         }
         Ok(after_pruning)
-    }
-
-    fn is_rocksdb_range_tombstone_frame(vs: &[Symbol]) -> bool {
-        for symbol in vs.iter() {
-            if symbol
-                .name()
-                .contains("rocksdb::FragmentedRangeTombstoneList")
-            {
-                return true;
-            }
-        }
-        false
-    }
-
-    fn insert_keys(
-        objects: &DBMap<ObjectKey, StoreObjectWrapper>,
-    ) -> Result<TransactionEffects, anyhow::Error> {
-        let mut to_delete = vec![];
-        let num_versions_to_keep = 2;
-        let total_unique_object_ids = 100_000;
-        let num_versions_per_object = 10;
-        let ids = ObjectID::in_range(ObjectID::ZERO, total_unique_object_ids)?;
-        for id in ids {
-            for i in (0..num_versions_per_object).rev() {
-                let obj = get_store_object_pair(Object::immutable_with_id_for_testing(id), 0).0;
-                objects.insert(&ObjectKey(id, SequenceNumber::from(i)), &obj)?;
-                if i < num_versions_per_object - num_versions_to_keep {
-                    to_delete.push((id, SequenceNumber::from(i)));
-                }
-                objects.insert(&ObjectKey(id, SequenceNumber::from(i)), &obj)?;
-            }
-        }
-
-        let mut effects = TransactionEffects::default();
-        *effects.modified_at_versions_mut_for_testing() = to_delete;
-        Ok(effects)
-    }
-
-    fn read_keys(
-        objects: &DBMap<ObjectKey, StoreObjectWrapper>,
-        num_reads: u32,
-    ) -> Result<(), anyhow::Error> {
-        let mut i = 0;
-        while i < num_reads {
-            let _res = objects.get(&ObjectKey(ObjectID::random(), VersionNumber::MAX))?;
-            i += 1;
-        }
-        Ok(())
     }
 
     fn generate_test_data(
@@ -701,7 +690,7 @@ mod tests {
         Ok((to_keep, to_delete))
     }
 
-    fn lock_table() -> Arc<RwLockTable<ObjectContentDigest>> {
+    pub(crate) fn lock_table() -> Arc<RwLockTable<ObjectContentDigest>> {
         Arc::new(RwLockTable::new(1))
     }
 
@@ -844,8 +833,84 @@ mod tests {
         ma::assert_le!(after_compaction_size, before_compaction_size);
         Ok(())
     }
+}
 
-    #[cfg(not(target_env = "msvc"))]
+#[cfg(test)]
+#[cfg(not(target_os = "macos"))]
+#[cfg(not(target_env = "msvc"))]
+mod pprof_tests {
+    use crate::authority::authority_store_pruner::tests;
+
+    use std::sync::Arc;
+    use tracing::log::{error, info};
+
+    use crate::authority::authority_store_pruner::tests::lock_table;
+    use crate::authority::authority_store_pruner::AuthorityStorePruningMetrics;
+    use crate::authority::authority_store_tables::AuthorityPerpetualTables;
+    use crate::authority::authority_store_types::{get_store_object_pair, StoreObjectWrapper};
+    use pprof::Symbol;
+    use prometheus::Registry;
+    use sui_types::base_types::VersionNumber;
+    use sui_types::effects::TransactionEffects;
+    use sui_types::effects::TransactionEffectsAPI;
+    use sui_types::{
+        base_types::{ObjectID, SequenceNumber},
+        object::Object,
+        storage::ObjectKey,
+    };
+    use typed_store::rocks::DBMap;
+    use typed_store::Map;
+
+    use super::AuthorityStorePruner;
+
+    fn insert_keys(
+        objects: &DBMap<ObjectKey, StoreObjectWrapper>,
+    ) -> Result<TransactionEffects, anyhow::Error> {
+        let mut to_delete = vec![];
+        let num_versions_to_keep = 2;
+        let total_unique_object_ids = 100_000;
+        let num_versions_per_object = 10;
+        let ids = ObjectID::in_range(ObjectID::ZERO, total_unique_object_ids)?;
+        for id in ids {
+            for i in (0..num_versions_per_object).rev() {
+                let obj = get_store_object_pair(Object::immutable_with_id_for_testing(id), 0).0;
+                objects.insert(&ObjectKey(id, SequenceNumber::from(i)), &obj)?;
+                if i < num_versions_per_object - num_versions_to_keep {
+                    to_delete.push((id, SequenceNumber::from(i)));
+                }
+                objects.insert(&ObjectKey(id, SequenceNumber::from(i)), &obj)?;
+            }
+        }
+
+        let mut effects = TransactionEffects::default();
+        *effects.modified_at_versions_mut_for_testing() = to_delete;
+        Ok(effects)
+    }
+
+    fn read_keys(
+        objects: &DBMap<ObjectKey, StoreObjectWrapper>,
+        num_reads: u32,
+    ) -> Result<(), anyhow::Error> {
+        let mut i = 0;
+        while i < num_reads {
+            let _res = objects.get(&ObjectKey(ObjectID::random(), VersionNumber::MAX))?;
+            i += 1;
+        }
+        Ok(())
+    }
+
+    fn is_rocksdb_range_tombstone_frame(vs: &[Symbol]) -> bool {
+        for symbol in vs.iter() {
+            if symbol
+                .name()
+                .contains("rocksdb::FragmentedRangeTombstoneList")
+            {
+                return true;
+            }
+        }
+        false
+    }
+
     #[tokio::test]
     async fn ensure_no_tombstone_fragmentation_in_stack_frame_with_ignore_tombstones(
     ) -> Result<(), anyhow::Error> {
@@ -861,7 +926,7 @@ mod tests {
         AuthorityStorePruner::prune_objects(
             vec![effects],
             &perpetual_db,
-            &lock_table(),
+            &tests::lock_table(),
             0,
             metrics,
             1,

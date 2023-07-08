@@ -6,7 +6,7 @@ use insta::assert_json_snapshot;
 use sui::sui_commands::SuiCommand;
 use sui_macros::sim_test;
 use sui_sdk::wallet_context::WalletContext;
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 // special constants for substitution in commands
 const ME: &str = "{ME}";

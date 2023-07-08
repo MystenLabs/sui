@@ -7,11 +7,10 @@ import { ParentSize } from '@visx/responsive';
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
 
-import { ErrorBoundary } from '../error-boundary/ErrorBoundary';
 import { Graph } from './Graph';
 import { type EpochGasInfo, type GraphDurationsType, type UnitsType } from './types';
 import { GRAPH_DURATIONS, GRAPH_DURATIONS_MAP, UNITS, isDefined, useGasPriceFormat } from './utils';
-
+import { ErrorBoundary } from '../error-boundary/ErrorBoundary';
 import { Card } from '~/ui/Card';
 import { FilterList } from '~/ui/FilterList';
 import { Heading } from '~/ui/Heading';
@@ -105,11 +104,13 @@ export function GasPriceCard({ useLargeSpacing }: { useLargeSpacing: boolean }) 
 						<Heading variant="heading4/semibold" color="steel-darker">
 							Reference Gas Price
 						</Heading>
-						<ListboxSelect
-							value={selectedGraphDuration}
-							options={GRAPH_DURATIONS}
-							onSelect={setSelectedGraphsDuration}
-						/>
+						{GRAPH_DURATIONS.length > 1 ? (
+							<ListboxSelect
+								value={selectedGraphDuration}
+								options={GRAPH_DURATIONS}
+								onSelect={setSelectedGraphsDuration}
+							/>
+						) : null}
 					</div>
 					<FilterList<UnitsType>
 						lessSpacing

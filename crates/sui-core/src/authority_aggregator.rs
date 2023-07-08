@@ -7,7 +7,6 @@ use crate::authority_client::{
     AuthorityAPI, NetworkAuthorityClient,
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
-use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::ToFromBytes;
 use futures::Future;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
@@ -50,9 +49,9 @@ use sui_types::effects::{
     VerifiedCertifiedTransactionEffects,
 };
 use sui_types::messages_grpc::{
-    HandleCertificateResponseV2, ObjectInfoRequest, PlainTransactionInfoResponse,
-    TransactionInfoRequest,
+    HandleCertificateResponseV2, ObjectInfoRequest, TransactionInfoRequest,
 };
+use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use tap::TapFallible;
 use tokio::time::{sleep, timeout};
 
@@ -1113,7 +1112,7 @@ where
     /// Submits the transaction to a quorum of validators to make a certificate.
     pub async fn process_transaction(
         &self,
-        transaction: VerifiedTransaction,
+        transaction: Transaction,
     ) -> Result<ProcessTransactionResult, AggregatorProcessTransactionError> {
         // Now broadcast the transaction to all authorities.
         let tx_digest = transaction.digest();
@@ -1554,20 +1553,12 @@ where
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
 
-        info!(
+        debug!(
             ?tx_digest,
             quorum_threshold = threshold,
             validity_threshold = validity,
             ?timeout_after_quorum,
-            ?cert_ref,
             "Broadcasting certificate to authorities"
-        );
-        // TODO: We show the below messages for debugging purposes re. incident #267. When this is fixed, we should remove them again.
-        let cert_bytes = fastcrypto::encoding::Base64::encode(bcs::to_bytes(&cert_ref).unwrap());
-        info!(
-            ?tx_digest,
-            ?cert_bytes,
-            "Broadcasting certificate (serialized) to authorities"
         );
         let committee: Arc<Committee> = self.committee.clone();
         let authority_clients = self.authority_clients.clone();
@@ -1582,7 +1573,7 @@ where
                 Box::pin(async move {
                     let _guard = GaugeGuard::acquire(&metrics_clone.inflight_certificate_requests);
                     client
-                        .handle_certificate_v2(cert_ref.clone())
+                        .handle_certificate_v2(cert_ref)
                         .instrument(
                             tracing::trace_span!("handle_certificate", authority =? name.concise()),
                         )
@@ -1788,7 +1779,7 @@ where
 
     pub async fn execute_transaction_block(
         &self,
-        transaction: &VerifiedTransaction,
+        transaction: &Transaction,
     ) -> Result<VerifiedCertifiedTransactionEffects, anyhow::Error> {
         let tx_guard = GaugeGuard::acquire(&self.metrics.inflight_transactions);
         let result = self

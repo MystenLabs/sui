@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { Infer } from 'superstruct';
 import {
 	array,
 	boolean,
@@ -9,13 +10,12 @@ import {
 	object,
 	string,
 	union,
-	Infer,
 	nullable,
 	tuple,
 	optional,
 } from 'superstruct';
-import { ObjectId, SuiAddress } from './common';
-import { AuthorityName, EpochId } from './transactions';
+import { ObjectId, SuiAddress } from './common.js';
+import { AuthorityName, EpochId } from './transactions.js';
 
 /* -------------- Types for the SuiSystemState Rust definition -------------- */
 

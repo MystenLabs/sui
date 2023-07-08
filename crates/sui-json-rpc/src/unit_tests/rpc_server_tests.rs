@@ -29,7 +29,7 @@ use sui_types::digests::ObjectDigest;
 use sui_types::gas_coin::GAS;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_ADDRESS};
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 use tokio::time::sleep;
 
 #[sim_test]
@@ -110,7 +110,7 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let gas = objects.clone().last().unwrap().object().unwrap().object_id;
 
     let transaction_bytes: TransactionBlockBytes = http_client
-        .transfer_object(address, obj, Some(gas), 10_000.into(), address)
+        .transfer_object(address, obj, Some(gas), 1_000_000.into(), address)
         .await?;
 
     let tx = cluster
@@ -200,7 +200,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
             compiled_modules_bytes,
             dependencies,
             Some(gas.object_id),
-            10000.into(),
+            100_000_000.into(),
         )
         .await?;
 
@@ -259,7 +259,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
             type_args![GAS::type_tag()]?,
             call_args!(coin.object_id, 10)?,
             Some(gas.object_id),
-            10_000.into(),
+            10_000_000.into(),
             None,
         )
         .await?;

@@ -360,7 +360,7 @@ mod test {
     use sui_config::genesis::Genesis;
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
     use sui_types::epoch_data::EpochData;
-    use sui_types::gas::SuiGasStatus;
+    use sui_types::gas::GasCharger;
     use sui_types::in_memory_storage::InMemoryStorage;
     use sui_types::metrics::LimitsMetrics;
     use sui_types::sui_system_state::SuiSystemStateTrait;
@@ -390,10 +390,11 @@ mod test {
 
         let genesis_transaction = genesis.transaction().clone();
 
+        let genesis_digest = *genesis_transaction.digest();
         let temporary_store = TemporaryStore::new(
             InMemoryStorage::new(Vec::new()),
             InputObjects::new(vec![]),
-            *genesis_transaction.digest(),
+            genesis_digest,
             &protocol_config,
         );
 
@@ -410,7 +411,7 @@ mod test {
         let epoch = EpochData::new_test();
         let shared_object_refs = vec![];
         let transaction_data = &genesis_transaction.data().intent_message().value;
-        let (kind, signer, gas) = transaction_data.execution_parts();
+        let (kind, signer, _) = transaction_data.execution_parts();
         let transaction_dependencies = BTreeSet::new();
 
         let (_inner_temp_store, effects, _execution_error) = executor
@@ -423,11 +424,10 @@ mod test {
                 epoch.epoch_start_timestamp(),
                 temporary_store,
                 shared_object_refs,
-                SuiGasStatus::new_unmetered(&protocol_config),
-                &gas,
+                &mut GasCharger::new_unmetered(genesis_digest),
                 kind,
                 signer,
-                *genesis_transaction.digest(),
+                genesis_digest,
                 transaction_dependencies,
             );
 

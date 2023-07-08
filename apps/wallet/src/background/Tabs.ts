@@ -211,4 +211,5 @@ class Tabs {
 	}
 }
 
-export default new Tabs();
+const tabs = new Tabs();
+export default tabs;

@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::str::FromStr;
-
 use super::{MultiSigPublicKey, ThresholdUnit, WeightUnit};
 use crate::{
     base_types::SuiAddress,
@@ -13,6 +11,7 @@ use crate::{
     multisig::{as_indices, MultiSig, MAX_SIGNER_IN_MULTISIG},
     multisig_legacy::{bitmap_to_u16, MultiSigLegacy, MultiSigPublicKeyLegacy},
     signature::{AuthenticatorTrait, AuxVerifyData, GenericSignature},
+    utils::keys,
 };
 use fastcrypto::{
     ed25519::{Ed25519KeyPair, Ed25519PrivateKey},
@@ -24,14 +23,7 @@ use once_cell::sync::OnceCell;
 use rand::{rngs::StdRng, SeedableRng};
 use roaring::RoaringBitmap;
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
-
-pub fn keys() -> Vec<SuiKeyPair> {
-    let mut seed = StdRng::from_seed([0; 32]);
-    let kp1: SuiKeyPair = SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut seed).1);
-    let kp2: SuiKeyPair = SuiKeyPair::Secp256k1(get_key_pair_from_rng(&mut seed).1);
-    let kp3: SuiKeyPair = SuiKeyPair::Secp256r1(get_key_pair_from_rng(&mut seed).1);
-    vec![kp1, kp2, kp3]
-}
+use std::str::FromStr;
 
 #[test]
 fn multisig_scenarios() {

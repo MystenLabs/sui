@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use parking_lot::Mutex;
 use std::sync::Arc;
 
 use sui_types::base_types::TransactionDigest;
@@ -29,6 +30,9 @@ pub struct RocksDbStore {
     authority_store: Arc<AuthorityStore>,
     committee_store: Arc<CommitteeStore>,
     checkpoint_store: Arc<CheckpointStore>,
+    // in memory checkpoint watermark sequence numbers
+    highest_verified_checkpoint: Arc<Mutex<Option<u64>>>,
+    highest_synced_checkpoint: Arc<Mutex<Option<u64>>>,
 }
 
 impl RocksDbStore {
@@ -41,6 +45,8 @@ impl RocksDbStore {
             authority_store,
             committee_store,
             checkpoint_store,
+            highest_verified_checkpoint: Arc::new(Mutex::new(None)),
+            highest_synced_checkpoint: Arc::new(Mutex::new(None)),
         }
     }
 }
@@ -169,16 +175,28 @@ impl WriteStore for RocksDbStore {
         &self,
         checkpoint: &VerifiedCheckpoint,
     ) -> Result<(), Self::Error> {
+        let mut locked = self.highest_synced_checkpoint.lock();
+        if locked.is_some() && locked.unwrap() >= checkpoint.sequence_number {
+            return Ok(());
+        }
         self.checkpoint_store
-            .update_highest_synced_checkpoint(checkpoint)
+            .update_highest_synced_checkpoint(checkpoint)?;
+        *locked = Some(checkpoint.sequence_number);
+        Ok(())
     }
 
     fn update_highest_verified_checkpoint(
         &self,
         checkpoint: &VerifiedCheckpoint,
     ) -> Result<(), Self::Error> {
+        let mut locked = self.highest_verified_checkpoint.lock();
+        if locked.is_some() && locked.unwrap() >= checkpoint.sequence_number {
+            return Ok(());
+        }
         self.checkpoint_store
-            .update_highest_verified_checkpoint(checkpoint)
+            .update_highest_verified_checkpoint(checkpoint)?;
+        *locked = Some(checkpoint.sequence_number);
+        Ok(())
     }
 
     fn insert_checkpoint_contents(

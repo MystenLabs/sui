@@ -2,24 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64, toB64 } from '@mysten/bcs';
-import { TransactionBlock } from '../builder';
-import { TransactionBlockDataBuilder } from '../builder/TransactionBlockData';
-import { SerializedSignature } from '../cryptography/signature';
-import { JsonRpcProvider } from '../providers/json-rpc-provider';
-import { HttpHeaders } from '../rpc/client';
-import {
+import { TransactionBlock } from '../builder/index.js';
+import { TransactionBlockDataBuilder } from '../builder/TransactionBlockData.js';
+import type { SerializedSignature } from '../cryptography/signature.js';
+import type { JsonRpcProvider } from '../providers/json-rpc-provider.js';
+import type { HttpHeaders } from '../rpc/client.js';
+import type {
 	ExecuteTransactionRequestType,
-	FaucetResponse,
-	getTotalGasUsedUpperBound,
 	SuiAddress,
 	DevInspectResults,
 	DryRunTransactionBlockResponse,
 	SuiTransactionBlockResponse,
 	SuiTransactionBlockResponseOptions,
-} from '../types';
-import { IntentScope, messageWithIntent } from '../utils/intent';
-import { Signer } from './signer';
-import { SignedTransaction, SignedMessage } from './types';
+} from '../types/index.js';
+import { getTotalGasUsedUpperBound } from '../types/index.js';
+import { IntentScope, messageWithIntent } from '../utils/intent.js';
+import type { Signer } from './signer.js';
+import type { SignedTransaction, SignedMessage } from './types.js';
 
 ///////////////////////////////
 // Exported Abstracts
@@ -48,8 +47,9 @@ export abstract class SignerWithProvider implements Signer {
 	 * Request gas tokens from a faucet server and send to the signer
 	 * address
 	 * @param httpHeaders optional request headers
+	 * @deprecated Use `@mysten/sui.js/faucet` instead.
 	 */
-	async requestSuiFromFaucet(httpHeaders?: HttpHeaders): Promise<FaucetResponse> {
+	async requestSuiFromFaucet(httpHeaders?: HttpHeaders) {
 		return this.provider.requestSuiFromFaucet(await this.getAddress(), httpHeaders);
 	}
 

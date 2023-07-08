@@ -36,7 +36,7 @@ while getopts ":r:b:h" OPT; do
             >&2 echo "                    (Default: $DEFAULT_REMOTE)"
             >&2 echo " -b BRANCH          The branch to depend on."
             >&2 echo "                    (Default: $DEFAULT_BRANCH)"
-            >&2 exit 0
+            exit 0
             ;;
         \?)
             >&2 echo "Unrecognized option '$OPTARG'"

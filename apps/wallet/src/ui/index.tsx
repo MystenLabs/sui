@@ -55,7 +55,6 @@ function renderApp() {
 
 function AppWrapper() {
 	const network = useAppSelector(({ app: { apiEnv, customRPC } }) => `${apiEnv}_${customRPC}`);
-
 	return (
 		<GrowthBookProvider growthbook={growthbook}>
 			<HashRouter>

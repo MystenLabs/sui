@@ -7,6 +7,7 @@ use crate::FileCompression;
 use futures::future::AbortHandle;
 use std::collections::HashSet;
 use std::num::NonZeroUsize;
+use std::sync::Arc;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_protocol_config::ProtocolConfig;
 use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
@@ -77,9 +78,9 @@ async fn test_snapshot_basic() -> Result<(), anyhow::Error> {
         include_wrapped_tombstone,
     )
     .await?;
-    let perpetual_db = AuthorityPerpetualTables::open(&db_path, None);
+    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path, None));
     insert_keys(&perpetual_db, 1000)?;
-    snapshot_writer.write(&perpetual_db).await?;
+    snapshot_writer.write(perpetual_db.clone()).await?;
     let local_store_restore_config = ObjectStoreConfig {
         object_store: Some(ObjectStoreType::File),
         directory: Some(restored_local),
@@ -134,8 +135,8 @@ async fn test_snapshot_empty_db() -> Result<(), anyhow::Error> {
         include_wrapped_tombstone,
     )
     .await?;
-    let perpetual_db = AuthorityPerpetualTables::open(&db_path, None);
-    snapshot_writer.write(&perpetual_db).await?;
+    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path, None));
+    snapshot_writer.write(perpetual_db.clone()).await?;
     let local_store_restore_config = ObjectStoreConfig {
         object_store: Some(ObjectStoreType::File),
         directory: Some(restored_local),
