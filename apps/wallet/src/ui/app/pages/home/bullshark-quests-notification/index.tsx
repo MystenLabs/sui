@@ -68,9 +68,7 @@ function BullsharkQuestsNotification({ onClose }: { onClose: () => void }) {
 							<button
 								data-testid="bullshark-dismiss"
 								className="appearance-none bg-transparent border-none cursor-pointer mt-1"
-								onClick={() => {
-									closeInterstitial();
-								}}
+								onClick={closeInterstitial}
 							>
 								<X32 className="text-sui-dark h-8 w-8" />
 							</button>
