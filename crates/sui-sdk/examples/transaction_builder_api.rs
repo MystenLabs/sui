@@ -1,0 +1,86 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+mod utils;
+
+use shared_crypto::intent::Intent;
+use sui_keys::keystore::{AccountKeystore, InMemKeystore, Keystore};
+use sui_sdk::rpc_types::SuiTransactionBlockResponseOptions;
+use sui_sdk::types::quorum_driver_types::ExecuteTransactionRequestType;
+use sui_sdk::{types::transaction::Transaction, SuiClientBuilder};
+
+use crate::utils::utils::utils::request_tokens_from_faucet;
+
+#[tokio::main]
+async fn main() -> Result<(), anyhow::Error> {
+    let sui = SuiClientBuilder::default().build_localnet().await?;
+
+    // Generate two Sui addresses and corresponding keys in memory
+    let keystore = Keystore::InMem(InMemKeystore::new_insecure_for_tests(2));
+    let addresses = keystore.addresses();
+    let Some(sender) = addresses.get(0) else {panic!("Keystore did not manage to generate two keys in memory. Aborting")};
+    let Some(recipient) = addresses.get(1) else {panic!("Keystore did not manage to generate two keys in memory. Aborting")};
+
+    // Search for the coins in the sender's address
+    let coins = sui
+        .coin_read_api()
+        .get_coins(*sender, None, None, None)
+        .await?;
+
+    println!("Address {sender} has {} coins", coins.data.len());
+    println!();
+    println!();
+    if coins.next_cursor.is_none() {
+        // Add coins to the newly created sender_address
+        request_tokens_from_faucet(*sender).await?;
+    }
+    let Some(coin) = sui
+        .coin_read_api()
+        .get_coins(*sender, None, None, None)
+        .await?.next_cursor else {panic!("Faucet did not work correctly and the provided Sui address has no coins")};
+
+    // Programmable transactions allows the user to bundle a number of actions into one transaction
+    let txb = sui.transaction_builder();
+
+    // Split coin
+    let txb_res = txb
+        .split_coin(*sender, coin, vec![1], None, 5000000)
+        .await?;
+    println!("Split coin transaction data: {:?}", txb_res);
+    println!();
+    println!();
+
+    // Transfer object
+    let txb_res = txb
+        .transfer_object(*sender, coin, None, 5000000, *recipient)
+        .await?;
+    println!("Tranfer object data: {:?}", txb_res);
+    println!();
+    println!();
+
+    // Sign transaction
+    let signature = keystore.sign_secure(&sender, &txb_res, Intent::sui_transaction())?;
+
+    // Execute the transaction
+    print!("Executing the transaction...");
+    let transaction_response = sui
+        .quorum_driver_api()
+        .execute_transaction_block(
+            Transaction::from_data(txb_res, Intent::sui_transaction(), vec![signature]).verify()?,
+            SuiTransactionBlockResponseOptions::full_content(),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
+        .await?;
+    print!("done\n Transaction information: ");
+    println!("{:?}", transaction_response);
+
+    let coins = sui
+        .coin_read_api()
+        .get_coins(*recipient, None, None, None)
+        .await?;
+
+    println!(
+        "After the transfer, the recipient address {recipient} has {} coins",
+        coins.data.len()
+    );
+    Ok(())
+}

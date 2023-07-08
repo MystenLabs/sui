@@ -7,6 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
+reqwest = "0.11.18"
 anyhow.workspace = true
 async-trait.workspace = true
 clap.workspace = true
@@ -23,6 +24,7 @@ thiserror.workspace = true
 
 sui-swarm-config.workspace = true
 sui-json-rpc.workspace = true
+sui-test-transaction-builder.workspace = true
 sui-transaction-builder.workspace = true
 sui-json-rpc-types.workspace = true
 sui-types.workspace = true

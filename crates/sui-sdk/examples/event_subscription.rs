@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::StreamExt;
-use sui_json_rpc_types::EventFilter;
+use sui_sdk::rpc_types::EventFilter;
 use sui_sdk::SuiClientBuilder;
 
 #[tokio::main]
