@@ -87,9 +87,10 @@ B0:
 Command `errmap`:
 Command `info`:
 PackageBasics
-├─ std:0x1
-└─ MoveStdlib
-   └─ std:0x1
+├── std:0x1
+└── MoveStdlib
+    └── std:0x1
+
 Command `test double_two`:
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING PackageBasics
