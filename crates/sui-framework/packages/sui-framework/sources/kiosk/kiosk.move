@@ -428,8 +428,8 @@ module sui::kiosk {
     const EExtensionNotAllowedForType: u64 = 15;
 
     /// The Extension struct contains the data used by the extension and the
-    /// configuration for this extension (not typed on the configuration level,
-    /// instead uses a typed dynamic field `ExtKey<Ext>`).
+    /// configuration for this extension. Stored under the `ExtensionKey`
+    /// dynamic field.
     struct Extension has store {
         /// Storage for the extension, an isolated Bag. By putting the extension
         /// into a single dynamic field, we reduce the amount of fields on the
@@ -452,9 +452,9 @@ module sui::kiosk {
         is_enabled: bool,
     }
 
-    /// The `ExtKey` is a typed dynamic field key used to store the extension
-    /// data. `Ext` is a phantom type that is used to identify the extension
-    /// witness.
+    /// The `ExtensionKey` is a typed dynamic field key used to store the
+    /// extension configuration and data. `Ext` is a phantom type that is used
+    /// to identify the extension witness.
     struct ExtensionKey<phantom Ext> has store, copy, drop {}
 
     /// Add an extension to the Kiosk. Can only be performed by the owner.
