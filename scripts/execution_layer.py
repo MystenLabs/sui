@@ -90,7 +90,7 @@ def do_cut(args):
     update_toml(args.feature)
     generate_impls(args.feature, impl_module)
 
-    with open(Path() / "sui-execution" / "src" / "lib.rs") as lib:
+    with open(Path() / "sui-execution" / "src" / "lib.rs", mode="w") as lib:
         generate_lib(lib)
 
     run(["cargo", "hakari", "generate"])
