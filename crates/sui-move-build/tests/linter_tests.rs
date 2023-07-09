@@ -11,7 +11,9 @@ use move_compiler::{
     command_line::compiler::move_check_for_errors, shared::NumericalAddress, Compiler, PASS_PARSER,
 };
 
-use sui_move_build::linters::share_owned::ShareOwnedVerifier;
+use sui_move_build::linters::{
+    self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier,
+};
 
 const SUI_FRAMEWORK_PATH: &str = "../sui-framework/packages/sui-framework";
 const MOVE_STDLIB_PATH: &str = "../sui-framework/packages/move-stdlib";
@@ -33,7 +35,7 @@ fn run_tests(path: &Path) -> anyhow::Result<()> {
     let exp_path = path.with_extension(EXP_EXT);
 
     let targets: Vec<String> = vec![path.to_str().unwrap().to_owned()];
-    let lint_visitors = vec![ShareOwnedVerifier.into()];
+    let lint_visitors = vec![ShareOwnedVerifier.into(), SelfTransferVerifier.into()];
     let (files, comments_and_compiler_res) = Compiler::from_files(
         targets,
         vec![MOVE_STDLIB_PATH.to_string(), SUI_FRAMEWORK_PATH.to_string()],
