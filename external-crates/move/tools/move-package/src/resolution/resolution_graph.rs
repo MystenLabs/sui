@@ -5,13 +5,13 @@
 use anyhow::{bail, Context, Result};
 use move_command_line_common::files::{find_move_filenames, FileHash};
 use move_core_types::account_address::AccountAddress;
-use ptree::{print_tree, TreeBuilder};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     io::Write,
     path::{Path, PathBuf},
 };
+use treeline::Tree;
 
 use crate::{
     source_package::{
@@ -244,17 +244,21 @@ impl ResolvedGraph {
         order
     }
 
-    fn print_info_dfs(&self, current_node: &PackageName, tree: &mut TreeBuilder) -> Result<()> {
+    fn print_info_dfs(&self, current_node: &PackageName, tree: &mut Tree<String>) -> Result<()> {
         let pkg = self.package_table.get(current_node).unwrap();
 
         for (name, addr) in &pkg.resolved_table {
-            tree.add_empty_child(format!("{}:0x{}", name, addr.short_str_lossless()));
+            tree.push(Tree::root(format!(
+                "{}:0x{}",
+                name,
+                addr.short_str_lossless()
+            )));
         }
 
         for dep in pkg.immediate_dependencies(self) {
-            tree.begin_child(dep.to_string());
-            self.print_info_dfs(&dep, tree)?;
-            tree.end_child();
+            let mut child = Tree::root(dep.to_string());
+            self.print_info_dfs(&dep, &mut child)?;
+            tree.push(child);
         }
 
         Ok(())
@@ -262,10 +266,9 @@ impl ResolvedGraph {
 
     pub fn print_info(&self) -> Result<()> {
         let root = self.root_package();
-        let mut tree = TreeBuilder::new(root.to_string());
+        let mut tree = Tree::root(root.to_string());
         self.print_info_dfs(&root, &mut tree)?;
-        let tree = tree.build();
-        print_tree(&tree)?;
+        println!("{}", tree);
         Ok(())
     }
 
