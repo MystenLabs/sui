@@ -1,6 +1,38 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+
+#[test_only]
+module sui::kiosk_extensions_tests {
+    use sui::kiosk_test_utils::{Self as test};
+    use sui::kiosk;
+    use sui::bag;
+
+    /// The `Ext` witness to use for testing.
+    struct Extension has drop {}
+
+    #[test]
+    fun test_add_extension() {
+        let ctx = &mut test::ctx();
+        let (kiosk, owner_cap) = test::get_kiosk(ctx);
+
+        kiosk::add_extension(
+            Extension {},
+            &mut kiosk,
+            &owner_cap,
+            0,
+            vector[],
+            ctx
+        );
+
+        let bag_mut = kiosk::ext_storage_mut(Extension {}, &mut kiosk);
+
+        bag::add(bag_mut, b"haha", b"yall");
+        test::return_kiosk(kiosk, owner_cap, ctx);
+    }
+}
+
+
 #[test_only]
 /// Kiosk testing strategy:
 /// - [ ] test purchase flow
@@ -328,14 +360,13 @@ module sui::kiosk_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = sui::kiosk::EExtensionsDisabled)]
-    fun test_disallow_extensions_uid() {
+    fun test_disallow_extensions_uid_available() {
         let ctx = &mut test::ctx();
         let (kiosk, owner_cap) = test::get_kiosk(ctx);
 
         kiosk::set_allow_extensions(&mut kiosk, &owner_cap, false);
         let _ = kiosk::uid(&kiosk);
 
-        abort 1337
+        test::return_kiosk(kiosk, owner_cap, ctx);
     }
 }

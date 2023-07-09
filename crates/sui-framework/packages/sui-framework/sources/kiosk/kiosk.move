@@ -31,11 +31,13 @@
 /// be used to implement application-specific transfer rules.
 ///
 module sui::kiosk {
+    use std::vector;
     use std::option::{Self, Option};
-    use sui::object::{Self, UID, ID};
-    use sui::dynamic_object_field as dof;
-    use sui::dynamic_field as df;
+    use std::type_name::{Self, TypeName};
     use sui::tx_context::{TxContext, sender};
+    use sui::dynamic_object_field as dof;
+    use sui::object::{Self, UID, ID};
+    use sui::dynamic_field as df;
     use sui::transfer_policy::{
         Self,
         TransferPolicy,
@@ -43,6 +45,7 @@ module sui::kiosk {
     };
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
+    use sui::bag::{Self, Bag};
     use sui::sui::SUI;
     use sui::event;
 
@@ -413,6 +416,181 @@ module sui::kiosk {
         coin::take(&mut self.profits, amount, ctx)
     }
 
+    // === Kiosk Extensions API ===
+
+    /// Extension is trying to access a permissioned action while being disabled.
+    const EExtensionDisabled: u64 = 13;
+    /// Extension is trying to access a permissioned action while not having
+    /// the required permission.
+    const EExtensionNotAllowed: u64 = 14;
+    /// Extension is trying to access a permissioned action while not being
+    /// authorized to use the type.
+    const EExtensionNotAllowedForType: u64 = 15;
+
+    /// The Extension struct contains the data used by the extension and the
+    /// configuration for this extension (not typed on the configuration level,
+    /// instead uses a typed dynamic field `ExtKey<Ext>`).
+    struct Extension has store {
+        /// Storage for the extension, an isolated Bag. By putting the extension
+        /// into a single dynamic field, we reduce the amount of fields on the
+        /// top level (eg items / listings) while giving extension developers
+        /// the ability to store any data they want.
+        storage: Bag,
+        /// Bitmask of permissions that the extension has (can be revoked any
+        /// moment). It's all or nothing policy - either the extension has the
+        /// required permissions or no permissions at all.
+        permissions: u32,
+        /// List of types that the extension is allowed to use. It only affects
+        /// permissioned actions (eg `place`, `lock`). The Kiosk owner can limit
+        /// an extensions functionality to a set of specified types.
+        types: vector<TypeName>,
+        /// Whether the requested permissions are still available. While the
+        /// owner can't delete the `Bag` storage unless the extension provides
+        /// the functionality, they can revoke the permissions at any time,
+        /// making the extension a harmless storage - similar to Kiosk having an
+        /// exposed UID.
+        is_enabled: bool,
+    }
+
+    /// The `ExtKey` is a typed dynamic field key used to store the extension
+    /// data. `Ext` is a phantom type that is used to identify the extension
+    /// witness.
+    struct ExtensionKey<phantom Ext> has store, copy, drop {}
+
+    /// Add an extension to the Kiosk. Can only be performed by the owner.
+    ///
+    /// Unlike the original implementation, this one uses the `public`
+    /// visibility modifier to allow "owned kiosk" extension. Ideally we don't
+    /// want this function to be called arbitrarily, and to prevent some
+    /// malicious scenarios we now require the extension witness on install.
+    public fun add_extension<Ext: drop>(
+        _ext: Ext,
+        self: &mut Kiosk,
+        cap: &KioskOwnerCap,
+        permissions: u32,
+        types: vector<TypeName>,
+        ctx: &mut TxContext
+    ) {
+        assert!(object::id(self) == cap.for, ENotOwner);
+
+        df::add(&mut self.id, ExtensionKey<Ext> {}, Extension {
+            storage: bag::new(ctx),
+            permissions,
+            types,
+            is_enabled: true,
+        })
+    }
+
+    /// Revoke permissions from the extension. While it does not remove the
+    /// extension completely, it keeps it from performing any protected actions.
+    /// The storage is still available to the extension (until it's removed).
+    public fun disable_extension<Ext: drop>(
+        self: &mut Kiosk,
+        cap: &KioskOwnerCap,
+    ) {
+        assert!(object::id(self) == cap.for, ENotOwner);
+        extension_mut<Ext>(self).is_enabled = false;
+    }
+
+    /// Re-enable permissions for the extension. Can only be performed by the
+    /// owner. The extension can start performing protected actions again.
+    public fun re_enable_extension<Ext: drop>(
+        self: &mut Kiosk,
+        cap: &KioskOwnerCap,
+    ) {
+        assert!(object::id(self) == cap.for, ENotOwner);
+        extension_mut<Ext>(self).is_enabled = true;
+    }
+
+    /// Limit the extension to a set of types. Can only be performed by the
+    /// owner. The extension can only perform protected actions on the types
+    /// specified in the list.
+    public fun limit_extension_for_types<Ext: drop>(
+        self: &mut Kiosk,
+        cap: &KioskOwnerCap,
+        types: vector<TypeName>,
+    ) {
+        assert!(object::id(self) == cap.for, ENotOwner);
+        extension_mut<Ext>(self).types = types;
+    }
+
+    /// Get immutable access to the extension storage. Can only be performed by
+    /// the extension as long as the extension is installed.
+    public fun ext_storage<Ext: drop>(
+        _ext: Ext, self: &mut Kiosk
+    ): &mut Bag {
+        &mut extension_mut<Ext>(self).storage
+    }
+
+    /// Get mutable access to the extension storage. Can only be performed by
+    /// the extension as long as the extension is installed. Removing
+    /// permissions does not prevent the extension from accessing the storage.
+    ///
+    /// Potentially dangerous: extension developer can keep data in a Bag
+    /// therefore never really allowing the KioskOwner to remove the extension.
+    /// However, it is the case with any other solution (1) and this way we
+    /// prevent intentional extension freeze when the owner wants to ruin a
+    /// trade (2) - eg locking extension while an auction is in progress.
+    ///
+    /// Extensions should be crafted carefully, and the KioskOwner should be
+    /// aware of the risks.
+    public fun ext_storage_mut<Ext: drop>(
+        _ext: Ext, self: &mut Kiosk
+    ): &mut Bag {
+        &mut extension_mut<Ext>(self).storage
+    }
+
+    /// Protected action: place an item into the Kiosk. Can be performed by an
+    /// authorized extension. The extension must have the `place` permission
+    /// and the type of the item must be in the list of allowed types.
+    public fun ext_place<Ext: drop, T: key + store>(
+        _ext: Ext, self: &mut Kiosk, item: T
+    ) {
+        let ext = extension<Ext>(self);
+
+        assert!(ext.is_enabled, EExtensionDisabled);
+        assert!(ext.permissions & 1 != 0, EExtensionNotAllowed);
+        assert!(
+            vector::length(&ext.types) == 0
+            || vector::contains(&ext.types, &type_name::get<T>()),
+            EExtensionNotAllowedForType
+        );
+
+        self.item_count = self.item_count + 1;
+        dof::add(&mut self.id, Item { id: object::id(&item) }, item)
+    }
+
+    /// Protected action: lock an item in the Kiosk. Can be performed by an
+    /// authorized extension. The extension must have the `lock` permission
+    /// and the type of the item must be in the list of allowed types.
+    public fun ext_lock<Ext: drop, T: key + store>(
+        _ext: Ext, self: &mut Kiosk, item: T, _policy: &TransferPolicy<T>
+    ) {
+        let ext = extension<Ext>(self);
+
+        assert!(ext.is_enabled, EExtensionDisabled);
+        assert!(ext.permissions & 2 != 0, EExtensionNotAllowed);
+        assert!(
+            vector::length(&ext.types) == 0
+            || vector::contains(&ext.types, &type_name::get<T>()),
+            EExtensionNotAllowedForType
+        );
+
+        self.item_count = self.item_count + 1;
+
+        dof::add(&mut self.id, Item { id: object::id(&item) }, item)
+    }
+
+    /// Internal: get a read-only access to the Extension.
+    fun extension<Ext: drop>(self: &Kiosk): &Extension {
+        df::borrow(&self.id, ExtensionKey<Ext> {})
+    }
+
+    /// Internal: get a mutable access to the Extension.
+    fun extension_mut<Ext: drop>(self: &mut Kiosk): &mut Extension {
+        df::borrow_mut(&mut self.id, ExtensionKey<Ext> {})
+    }
+
     // === Kiosk fields access ===
 
     /// Check whether the `item` is present in the `Kiosk`.
@@ -449,24 +627,28 @@ module sui::kiosk {
     }
 
     /// Access the `UID` using the `KioskOwnerCap`.
-    public fun uid_mut_as_owner(self: &mut Kiosk, cap: &KioskOwnerCap): &mut UID {
+    public fun uid_mut_as_owner(
+        self: &mut Kiosk, cap: &KioskOwnerCap
+    ): &mut UID {
         assert!(object::id(self) == cap.for, ENotOwner);
         &mut self.id
     }
 
-    /// Allow or disallow `uid` and `uid_mut` access via the `allow_extensions` setting.
-    public fun set_allow_extensions(self: &mut Kiosk, cap: &KioskOwnerCap, allow_extensions: bool) {
+    /// Allow or disallow `uid` and `uid_mut` access via the `allow_extensions`
+    /// setting.
+    public fun set_allow_extensions(
+        self: &mut Kiosk, cap: &KioskOwnerCap, allow_extensions: bool
+    ) {
         assert!(object::id(self) == cap.for, ENotOwner);
         self.allow_extensions = allow_extensions;
     }
 
     /// Get the immutable `UID` for dynamic field access.
-    /// Aborts if `allow_extensions` set to `false`.
+    /// Always enabled.
     ///
     /// Given the &UID can be used for reading keys and authorization,
     /// its access
     public fun uid(self: &Kiosk): &UID {
-        assert!(self.allow_extensions, EExtensionsDisabled);
         &self.id
     }
 
@@ -496,6 +678,11 @@ module sui::kiosk {
     public fun profits_mut(self: &mut Kiosk, cap: &KioskOwnerCap): &mut Balance<SUI> {
         assert!(object::id(self) == cap.for, ENotOwner);
         &mut self.profits
+    }
+
+    /// Get the `ID` of the Kiosk this cap is for.
+    public fun kiosk_cap_for(cap: &KioskOwnerCap): ID {
+        cap.for
     }
 
     // === Item borrowing ===
