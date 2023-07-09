@@ -16,12 +16,6 @@ def parse_args():
         prog="execution-layer",
     )
 
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Print the operations, without running them",
-    )
-
     subparsers = parser.add_subparsers(
         description="Tools for managing cuts of the execution-layer",
     )
@@ -33,12 +27,16 @@ def parse_args():
             "the workspace."
         ),
     )
-
     cut.set_defaults(do=do_cut)
     cut.add_argument(
         "feature",
         type=feature,
         help="The name of the new cut to make",
+    )
+    cut.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the operations, without running them",
     )
 
     generate_lib = subparsers.add_parser(
@@ -50,8 +48,26 @@ def parse_args():
             "out to the file, if --dry-run flag is supplied."
         ),
     )
-
     generate_lib.set_defaults(do=do_generate_lib)
+    generate_lib.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the operations, without running them",
+    )
+
+    patch = subparsers.add_parser(
+        "patch",
+        help=(
+            "Print a patch file representing the changes made to FEATURE "
+            "after the commit in which it was cut"
+        ),
+    )
+    patch.set_defaults(do=do_patch)
+    patch.add_argument(
+        "feature",
+        type=feature,
+        help="The name of the cut to generate the patch for.",
+    )
 
     return parser.parse_args()
 
@@ -73,7 +89,7 @@ def do_cut(args):
         print(run(cmd))
         return
 
-    impl_module = Path() / "sui-execution" / "src" / (args.feature + ".rs")
+    impl_module = impl(args.feature)
     if impl_module.is_file():
         raise RuntimeError(
             f"Impl for '{args.feature}' already exists at '{impl_module}'"
@@ -105,6 +121,21 @@ def do_generate_lib(args):
             generate_lib(lib)
 
 
+def do_patch(args):
+    sha = origin_commit(args.feature)
+    if sha is None:
+        return
+
+    patch = run(
+        [
+            *["git", "diff", f"{sha}...HEAD", "--"],
+            *cut_directories(args.feature),
+        ]
+    )
+
+    print(patch)
+
+
 def run(command):
     """Run command, and return its stdout as a UTF-8 string."""
     result = subprocess.run(command, stdout=subprocess.PIPE)
@@ -114,6 +145,29 @@ def run(command):
 def repo_root():
     """Find the repository root, using git."""
     return run(["git", "rev-parse", "--show-toplevel"]).strip()
+
+
+def origin_commit(feature):
+    """Find the commit that introduced cut with name `feature`.
+
+    Returns the commit hash as a string if one can be found.  Returns
+    `None` if the cut exists but hasn't been committed, and raises a
+    `RuntimeError` if the cut does not exist.
+    """
+    impl_module = impl(feature)
+    if not impl_module.is_file():
+        raise RuntimeError(f"Cut '{feature}' does not exist.")
+
+    commit = run(
+        [
+            *["git", "log"],
+            "--pretty=format:%H",
+            "--diff-filter=A",
+            *["--", impl_module],
+        ]
+    ).strip()
+
+    return None if commit == "" else commit
 
 
 def cut_command(f):
@@ -130,6 +184,42 @@ def cut_command(f):
         *["-p", "move-stdlib"],
         *["-p", "move-vm-runtime"],
     ]
+
+
+def cut_directories(feature):
+    """Directories containing crates for `feature`."""
+    sui_base = Path() / "sui-execution"
+    external = Path() / "external-crates"
+
+    crates = [
+        sui_base / feature / "sui-adapter",
+        sui_base / feature / "sui-move-natives",
+        sui_base / feature / "sui-verifier",
+    ]
+
+    if feature == "latest":
+        crates.extend(
+            [
+                external / "move" / "move-bytecode-verifier",
+                external / "move" / "move-stdlib",
+                external / "move" / "move-vm-runtime",
+            ]
+        )
+    else:
+        crates.extend(
+            [
+                external / "move-execution" / feature / "move-bytecode-verifier",
+                external / "move-execution" / feature / "move-stdlib",
+                external / "move-execution" / feature / "move-vm-runtime",
+            ]
+        )
+
+    return crates
+
+
+def impl(feature):
+    """Path to the impl module for this feature"""
+    return Path() / "sui-execution" / "src" / (feature + ".rs")
 
 
 def clean_up_cut(feature):
