@@ -1,6 +1,81 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[test_only]
+module sui::kiosk_marketplace_ext {
+    use sui::bag;
+    use sui::sui::SUI;
+    use sui::coin::{Self, Coin};
+    use sui::object::{Self, ID};
+    use sui::tx_context::TxContext;
+    use sui::kiosk::{Self, KioskOwnerCap, Kiosk, PurchaseCap};
+    use sui::transfer_policy::{Self as policy, TransferRequest};
+
+    /// Trying to access an owner-only action.
+    const ENotOwner: u64 = 0;
+
+    /// The Extension Witness.
+    struct Ext<phantom Market> has drop {}
+
+    /// Add the `Marketplace` extension to the given `Kiosk`.
+    public fun add<Market>(kiosk: &mut Kiosk, cap: &KioskOwnerCap, ctx: &mut TxContext) {
+        kiosk::add_extension(Ext<Market> {}, kiosk, cap, 0, vector[], ctx )
+    }
+
+    /// List an item for sale.
+    public fun list<Market, T: key + store>(
+        kiosk: &mut Kiosk, cap: &KioskOwnerCap, item_id: ID, price: u64, ctx: &mut TxContext
+    ) {
+        let purchase_cap = kiosk::list_with_purchase_cap<T>(
+            kiosk, cap, item_id, price, ctx
+        );
+
+        bag::add(
+            kiosk::ext_storage_mut(Ext<Market> {}, kiosk),
+            item_id,
+            purchase_cap
+        );
+    }
+
+    /// Purchase an item from the Kiosk while following the Marketplace policy.
+    public fun purchase<Market, T: key + store>(
+        kiosk: &mut Kiosk,
+        item_id: ID,
+        payment: Coin<SUI>,
+    ): (T, TransferRequest<T>, TransferRequest<Market>) {
+        let purchase_cap: PurchaseCap<T> = bag::remove(
+            kiosk::ext_storage_mut(Ext<Market> {}, kiosk),
+            item_id
+        );
+
+        let market_request = policy::new_request(item_id, coin::value(&payment), object::id(kiosk));
+        let (item, request) = kiosk::purchase_with_cap(kiosk, purchase_cap, payment);
+
+        (
+            item,
+            request,
+            market_request
+        )
+    }
+
+    /// Delist an item.
+    /// Note: the extension needs to be "trusted" - i.e. having PurchaseCap stored
+    /// in the extension storage is not absolutely secure.
+    public fun delist<Market, T: key + store>(
+        kiosk: &mut Kiosk,
+        cap: &KioskOwnerCap,
+        item_id: ID,
+    ) {
+        assert!(kiosk::has_access(kiosk, cap), ENotOwner);
+        let purchase_cap: PurchaseCap<T> = bag::remove(
+            kiosk::ext_storage_mut(Ext<Market> {}, kiosk),
+            item_id
+        );
+
+        kiosk::return_purchase_cap(kiosk, purchase_cap);
+    }
+}
+
 
 #[test_only]
 module sui::kiosk_extensions_tests {
@@ -348,7 +423,7 @@ module sui::kiosk_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = sui::kiosk::EExtensionsDisabled)]
+    #[expected_failure(abort_code = sui::kiosk::EUidAccessNotAllowed)]
     fun test_disallow_extensions_uid_mut() {
         let ctx = &mut test::ctx();
         let (kiosk, owner_cap) = test::get_kiosk(ctx);
