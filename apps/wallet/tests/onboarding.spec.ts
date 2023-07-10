@@ -26,12 +26,11 @@ test('import wallet', async ({ page, extensionUrl }) => {
 		await page.waitForSelector('[data-testid="bullshark-dismiss"]');
 		const dismissButton = await page.getByTestId('bullshark-dismiss');
 		if (dismissButton) {
-		  await dismissButton.click();
+			await dismissButton.click();
 		}
-	  } catch (error) {
-		// Handle the error if the element is not found within the timeout
-		console.log('No bullshark found. Continuing...');
-	  }
+	} catch (error) {
+		// do nothing
+	}
 	await page.getByRole('navigation').getByRole('link', { name: 'Coins' }).click();
 
 	await expect(page.getByText(keypair.getPublicKey().toSuiAddress().slice(0, 6))).toBeVisible();

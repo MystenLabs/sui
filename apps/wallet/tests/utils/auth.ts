@@ -20,12 +20,11 @@ export async function createWallet(page: Page, extensionUrl: string) {
 		await page.waitForSelector('[data-testid="bullshark-dismiss"]');
 		const dismissButton = await page.getByTestId('bullshark-dismiss');
 		if (dismissButton) {
-		  await dismissButton.click();
+			await dismissButton.click();
 		}
-	  } catch (error) {
-		// Handle the error if the element is not found within the timeout
-		console.log('No bullshark found. Continuing...');
-	  }
+	} catch (error) {
+		// do nothing
+	}
 }
 
 export async function importWallet(page: Page, extensionUrl: string, mnemonic: string[]) {
@@ -46,10 +45,9 @@ export async function importWallet(page: Page, extensionUrl: string, mnemonic: s
 		await page.waitForSelector('[data-testid="bullshark-dismiss"]');
 		const dismissButton = await page.getByTestId('bullshark-dismiss');
 		if (dismissButton) {
-		  await dismissButton.click();
+			await dismissButton.click();
 		}
-	  } catch (error) {
-		// Handle the error if the element is not found within the timeout
-		console.log('No bullshark found. Continuing...');
-	  }
+	} catch (error) {
+		// do nothing
+	}
 }
