@@ -3,15 +3,46 @@
 
 import { AutorefreshPause24, AutorefreshPlay24 } from '@mysten/icons';
 import { motion } from 'framer-motion';
+import { useEffect } from 'react';
+
+const getAnimationVariants = (duration: number) => ({
+	initial: {
+		pathLength: 0,
+	},
+	animate: {
+		pathLength: 1,
+		transition: {
+			duration: duration,
+		},
+	},
+});
 
 export interface PlayPauseProps {
 	paused?: boolean;
 	onChange(): void;
-	animateDuration?: number;
+	animate?: {
+		duration: number;
+		start: boolean;
+		setStart: (bool: boolean) => void;
+	};
 }
 
-export function PlayPause({ paused, onChange, animateDuration }: PlayPauseProps) {
+export function PlayPause({ paused, onChange, animate }: PlayPauseProps) {
 	const Icon = paused ? AutorefreshPlay24 : AutorefreshPause24;
+
+	const isAnimating = animate?.start && !paused;
+
+	useEffect(() => {
+		let timer: NodeJS.Timeout;
+
+		if (isAnimating) {
+			timer = setTimeout(() => {
+				animate.setStart(false);
+			}, animate.duration * 1000);
+		}
+
+		return () => clearTimeout(timer);
+	}, [animate, isAnimating]);
 
 	return (
 		<button
@@ -20,7 +51,7 @@ export function PlayPause({ paused, onChange, animateDuration }: PlayPauseProps)
 			onClick={onChange}
 			className="relative cursor-pointer border-none bg-transparent text-steel hover:text-steel-darker"
 		>
-			{animateDuration && !paused && (
+			{isAnimating && (
 				<motion.svg className="absolute -rotate-90 text-hero" viewBox="0 0 16 16">
 					<motion.circle
 						fill="none"
@@ -30,12 +61,9 @@ export function PlayPause({ paused, onChange, animateDuration }: PlayPauseProps)
 						strokeLinecap="round"
 						strokeWidth={2}
 						stroke="currentColor"
-						pathLength={0}
-						animate={{
-							pathLength: 1,
-							type: 'spring',
-							transition: { duration: animateDuration + 0.5, repeat: Infinity },
-						}}
+						variants={getAnimationVariants(animate.duration)}
+						initial="initial"
+						animate="animate"
 					/>
 				</motion.svg>
 			)}
