@@ -314,7 +314,7 @@ async fn test_consume_oracle_data() {
         assert!(result.effects.unwrap().status().is_ok());
     }
 
-    let (simple_oracle_id, version) = oracles.first().unwrap().clone();
+    let (simple_oracle_id, version) = *oracles.first().unwrap();
 
     // publish test package
     let test_package =
