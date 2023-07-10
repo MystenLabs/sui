@@ -35,4 +35,4 @@ sui-move-build = { path = "../sui-move-build" }
 shared-crypto = { path = "../shared-crypto" }
 bcs = "0.1.5"
 rand = "0.8.5"
-dirs = "5.0.1"
+dirs = "4.0.0"

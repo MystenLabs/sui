@@ -19,6 +19,8 @@ use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::{parse_sui_type_tag, TypeTag};
 
+// Integration tests for SUI Oracle, these test can be run manually on local or remote testnet.
+#[ignore]
 #[tokio::test]
 async fn test_publish_primitive() {
     let (client, keystore, sender) = init_test_client().await;
