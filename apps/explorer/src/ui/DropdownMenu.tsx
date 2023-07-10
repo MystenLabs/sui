@@ -29,7 +29,7 @@ export function DropdownMenu({
 				<RadixDropdownMenu.Content
 					side={side}
 					align={align}
-					className="z-50 min-w-[280px] rounded-md bg-white p-1 shadow-mistyEdge"
+					className="z-10 min-w-[280px] rounded-md bg-white p-1 shadow-mistyEdge"
 				>
 					{content}
 				</RadixDropdownMenu.Content>
