@@ -26,17 +26,8 @@ const InterstitialBanner = ({ lines }: { lines: string[] }) => {
 function BullsharkQuestsNotification({ onClose }: { onClose: () => void }) {
 	const navigate = useNavigate();
 
-	useEffect(() => {
-		const t = setTimeout(
-			() => localStorage.setItem('bullshark-interstitial-dismissed', 'true'),
-			1000,
-		);
-		return () => clearTimeout(t);
-	}, []);
-
-	const closeInterstitial = () => {
-		onClose();
-		navigate('/apps');
+	const setInterstitialDismissed = () => {
+		localStorage.setItem('bullshark-interstitial-dismissed', 'true');
 	};
 
 	return (
@@ -59,7 +50,7 @@ function BullsharkQuestsNotification({ onClose }: { onClose: () => void }) {
 								href="https://tech.mystenlabs.com/introducing-bullsharks-quests/"
 								onClick={() => {
 									ampli.clickedBullsharkQuestsCta({ sourceFlow: 'Interstitial' });
-									closeInterstitial();
+
 								}}
 								className="appearance-none no-underline text-white bg-[#EA3389] rounded-lg py-2 w-60 [-webkit-text-stroke:1px_black] leading-none text-heading6"
 							>
@@ -68,7 +59,9 @@ function BullsharkQuestsNotification({ onClose }: { onClose: () => void }) {
 							<button
 								data-testid="bullshark-dismiss"
 								className="appearance-none bg-transparent border-none cursor-pointer mt-1"
-								onClick={closeInterstitial}
+								onClick={() => {setInterstitialDismissed();
+									onClose();
+									navigate('/apps');}}
 							>
 								<X32 className="text-sui-dark h-8 w-8" />
 							</button>
