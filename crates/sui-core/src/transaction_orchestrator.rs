@@ -16,7 +16,7 @@ use futures::future::{select, Either, Future};
 use futures::FutureExt;
 use mysten_common::sync::notify_read::NotifyRead;
 use mysten_metrics::histogram::{Histogram, HistogramVec};
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{spawn_logged_monitored_task, spawn_monitored_task};
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
 use prometheus::{
@@ -62,7 +62,7 @@ pub struct TransactiondOrchestrator<A: Clone> {
 }
 
 impl TransactiondOrchestrator<NetworkAuthorityClient> {
-    pub async fn new_with_network_clients(
+    pub fn new_with_network_clients(
         validator_state: Arc<AuthorityState>,
         reconfig_channel: Receiver<SuiSystemState>,
         parent_path: &Path,
@@ -90,8 +90,7 @@ impl TransactiondOrchestrator<NetworkAuthorityClient> {
             parent_path,
             prometheus_registry,
             observer,
-        )
-        .await)
+        ))
     }
 }
 
@@ -100,7 +99,7 @@ where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
     OnsiteReconfigObserver: ReconfigObserver<A>,
 {
-    pub async fn new(
+    pub fn new(
         validators: Arc<AuthorityAggregator<A>>,
         validator_state: Arc<AuthorityState>,
         parent_path: &Path,
@@ -137,7 +136,7 @@ where
                 .await;
             })
         };
-        Self::schedule_txes_in_log(&pending_tx_log, &quorum_driver_handler).await;
+        Self::schedule_txes_in_log(pending_tx_log.clone(), quorum_driver_handler.clone());
         Self {
             quorum_driver_handler,
             validator_state,
@@ -520,26 +519,37 @@ where
         )
     }
 
-    async fn schedule_txes_in_log(
-        pending_tx_log: &Arc<WritePathPendingTransactionLog>,
-        quorum_driver: &Arc<QuorumDriverHandler<A>>,
+    fn schedule_txes_in_log(
+        pending_tx_log: Arc<WritePathPendingTransactionLog>,
+        quorum_driver: Arc<QuorumDriverHandler<A>>,
     ) {
-        let pending_txes = pending_tx_log.load_all_pending_transactions();
-        for tx in pending_txes {
-            // TODO: ideally pending_tx_log would not contain VerifiedTransaction, but that
-            // requires a migration.
-            let tx = tx.into_inner();
-            let tx_digest = *tx.digest();
-            // It's not impossible we fail to enqueue a task but that's not the end of world.
-            if let Err(err) = quorum_driver.submit_transaction_no_ticket(tx).await {
-                error!(
-                    ?tx_digest,
-                    "Failed to enqueue transaction in pending_tx_log, err: {err:?}"
-                );
-            } else {
-                info!(?tx_digest, "Enqueued transaction in pending_tx_log");
+        spawn_logged_monitored_task!(async move {
+            let pending_txes = pending_tx_log.load_all_pending_transactions();
+            info!(
+                "Recovering {} pending transactions from pending_tx_log.",
+                pending_txes.len()
+            );
+            for (i, tx) in pending_txes.into_iter().enumerate() {
+                // TODO: ideally pending_tx_log would not contain VerifiedTransaction, but that
+                // requires a migration.
+                let tx = tx.into_inner();
+                let tx_digest = *tx.digest();
+                // It's not impossible we fail to enqueue a task but that's not the end of world.
+                if let Err(err) = quorum_driver.submit_transaction_no_ticket(tx).await {
+                    warn!(
+                        ?tx_digest,
+                        "Failed to enqueue transaction from pending_tx_log, err: {err:?}"
+                    );
+                } else {
+                    debug!(?tx_digest, "Enqueued transaction from pending_tx_log");
+                    if (i + 1) % 1000 == 0 {
+                        info!("Enqueued {} transactions from pending_tx_log.", i + 1);
+                    }
+                }
             }
-        }
+            // Transactions will be cleaned up in loop_execute_finalized_tx_locally() after they
+            // produce effects.
+        });
     }
 
     pub fn load_all_pending_transactions(&self) -> Vec<VerifiedTransaction> {
