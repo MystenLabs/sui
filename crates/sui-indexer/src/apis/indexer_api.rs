@@ -224,8 +224,22 @@ impl<S: IndexerStore> IndexerApi<S> {
                     .get_transaction_sequence_by_digest(cursor_str, is_descending)
                     .await?;
                 self.state
-                    .get_transaction_page_by_transaction_kind(
-                        tx_kind_name,
+                    .get_transaction_page_by_transaction_kinds(
+                        vec![tx_kind_name],
+                        indexer_seq_number,
+                        limit + 1,
+                        is_descending,
+                    )
+                    .await
+            }
+            Some(TransactionFilter::TransactionKindIn(tx_kind_names)) => {
+                let indexer_seq_number = self
+                    .state
+                    .get_transaction_sequence_by_digest(cursor_str, is_descending)
+                    .await?;
+                self.state
+                    .get_transaction_page_by_transaction_kinds(
+                        tx_kind_names,
                         indexer_seq_number,
                         limit + 1,
                         is_descending,

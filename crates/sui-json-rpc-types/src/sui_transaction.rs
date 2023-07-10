@@ -1671,6 +1671,8 @@ pub enum TransactionFilter {
     FromOrToAddress { addr: SuiAddress },
     /// Query by transaction kind
     TransactionKind(String),
+    /// Query transactions of any given kind in the input.
+    TransactionKindIn(Vec<String>),
 }
 
 impl Filter<EffectsWithInput> for TransactionFilter {
@@ -1707,6 +1709,9 @@ impl Filter<EffectsWithInput> for TransactionFilter {
                     && (function.is_none() || matches!(function, Some(f2) if f2 == &f.to_string()))
             }),
             TransactionFilter::TransactionKind(kind) => item.input.kind().to_string() == *kind,
+            TransactionFilter::TransactionKindIn(kinds) => {
+                kinds.contains(&item.input.kind().to_string())
+            }
             // these filters are not supported, rpc will reject these filters on subscription
             TransactionFilter::Checkpoint(_) => false,
             TransactionFilter::FromOrToAddress { addr: _ } => false,
