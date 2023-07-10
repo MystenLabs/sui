@@ -5,13 +5,13 @@
 	"version": "0.37.1",
 	"license": "Apache-2.0",
 	"files": [
-		"builder",
-		"keypairs",
-		"faucet",
 		"dist",
 		"src",
 		"CHANGELOG.md",
-		"api"
+		"builder",
+		"client",
+		"faucet",
+		"keypairs"
 	],
 	"engines": {
 		"node": ">=16"
