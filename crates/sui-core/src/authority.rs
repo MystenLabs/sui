@@ -2493,28 +2493,27 @@ impl AuthorityState {
     }
 
     pub fn get_object_read(&self, object_id: &ObjectID) -> SuiResult<ObjectRead> {
-        let Some(obj_ref) = self.database.get_object_or_tombstone(*object_id)? else {
-            return Ok(ObjectRead::NotExists(*object_id))
+        let Some((object_key, store_object)) = self.database.get_latest_object_or_tombstone(*object_id)? else {
+            return Ok(ObjectRead::NotExists(*object_id));
         };
-
-        if !obj_ref.2.is_alive() {
-            return Ok(ObjectRead::Deleted(obj_ref));
-        }
-
-        match self.read_object_at_version(object_id, obj_ref.1)? {
-            Some((object, layout)) => Ok(ObjectRead::Exists(obj_ref, object, layout)),
-            None => {
-                error!(
-                    "Object with in parent_entry is missing from object store, datastore is \
-                     inconsistent",
-                );
-                Err(UserInputError::ObjectNotFound {
-                    object_id: *object_id,
-                    version: Some(obj_ref.1),
-                }
-                .into())
-            }
-        }
+        if let Some(object_ref) = self
+            .database
+            .perpetual_tables
+            .tombstone_reference(&object_key, &store_object)?
+        {
+            return Ok(ObjectRead::Deleted(object_ref));
+        };
+        let object = self
+            .database
+            .perpetual_tables
+            .object(&object_key, store_object)?
+            .expect("Non tombstone store object could not be converted to object");
+        let layout = self.get_object_layout(&object)?;
+        Ok(ObjectRead::Exists(
+            object.compute_object_reference(),
+            object,
+            layout,
+        ))
     }
 
     /// Chain Identifier is the digest of the genesis checkpoint.
@@ -2577,7 +2576,7 @@ impl AuthorityState {
         version: SequenceNumber,
     ) -> SuiResult<PastObjectRead> {
         // Firstly we see if the object ever existed by getting its latest data
-        let Some(obj_ref) = self.database.get_object_or_tombstone(*object_id)? else {
+        let Some(obj_ref) = self.database.get_latest_object_ref_or_tombstone(*object_id)? else {
             return Ok(PastObjectRead::ObjectNotExists(*object_id));
         };
 
@@ -2630,6 +2629,11 @@ impl AuthorityState {
             return Ok(None);
         };
 
+        let layout = self.get_object_layout(&object)?;
+        Ok(Some((object, layout)))
+    }
+
+    fn get_object_layout(&self, object: &Object) -> SuiResult<Option<MoveStructLayout>> {
         let layout = object
             .data
             .try_as_move()
@@ -2640,8 +2644,7 @@ impl AuthorityState {
                     .get_layout(object, ObjectFormatOptions::default())
             })
             .transpose()?;
-
-        Ok(Some((object, layout)))
+        Ok(layout)
     }
 
     fn get_owner_at_version(
@@ -3565,7 +3568,7 @@ impl AuthorityState {
         &self,
         object_id: ObjectID,
     ) -> SuiResult<Option<ObjectRef>> {
-        self.database.get_object_or_tombstone(object_id)
+        self.database.get_latest_object_ref_or_tombstone(object_id)
     }
 
     /// Ordinarily, protocol upgrades occur when 2f + 1 + (f *
