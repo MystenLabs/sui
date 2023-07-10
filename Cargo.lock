@@ -9222,6 +9222,7 @@ dependencies = [
  "git-version",
  "inquire",
  "jemalloc-ctl",
+ "move-binary-format",
  "move-bytecode-verifier",
  "move-core-types",
  "move-package",

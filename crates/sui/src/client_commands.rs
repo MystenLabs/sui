@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use core::fmt;
+use std::fs;
 use std::{
     fmt::{Debug, Display, Formatter, Write},
     path::PathBuf,
     sync::Arc,
 };
 
-use anyhow::{anyhow, ensure};
+use anyhow::{anyhow, bail, ensure};
 use bip32::DerivationPath;
 use clap::*;
 use colored::Colorize;
@@ -161,7 +162,7 @@ pub enum SuiClientCommands {
     Publish {
         /// Path to directory containing a Move package
         #[clap(
-            name = "package_path",
+            name = "package_or_file_path",
             global = true,
             parse(from_os_str),
             default_value = "."
@@ -737,33 +738,56 @@ impl SuiClientCommands {
                 let sender = sender.unwrap_or(context.active_address()?);
 
                 let client = context.get_client().await?;
-                let (dependencies, compiled_modules, _, _) = compile_package(
-                    &client,
-                    build_config,
-                    package_path,
-                    with_unpublished_dependencies,
-                    skip_dependency_verification,
-                    lint,
-                )
-                .await?;
 
-                let data = client
-                    .transaction_builder()
-                    .publish(
-                        sender,
-                        compiled_modules,
-                        dependencies.published.into_values().collect(),
-                        gas,
-                        gas_budget,
+                if package_path.is_file() {
+                    match package_path.extension() {
+                        Some(ext) if ext == "mv" => {
+                            let input = fs::read(package_path)?;
+                            let data = client
+                                .transaction_builder()
+                                .publish(sender, vec![input], vec![], gas, gas_budget)
+                                .await?;
+                            serialize_or_execute!(
+                                data,
+                                serialize_unsigned_transaction,
+                                serialize_signed_transaction,
+                                context,
+                                Publish
+                            )
+                        }
+                        _ => bail!(
+                            "Unable to find package manifest in '{}' or in its parents",
+                            package_path.to_string_lossy()
+                        ),
+                    }
+                } else {
+                    let (dependencies, compiled_modules, _, _) = compile_package(
+                        &client,
+                        build_config,
+                        package_path,
+                        with_unpublished_dependencies,
+                        skip_dependency_verification,
+                        lint,
                     )
                     .await?;
-                serialize_or_execute!(
-                    data,
-                    serialize_unsigned_transaction,
-                    serialize_signed_transaction,
-                    context,
-                    Publish
-                )
+                    let data = client
+                        .transaction_builder()
+                        .publish(
+                            sender,
+                            compiled_modules,
+                            dependencies.published.into_values().collect(),
+                            gas,
+                            gas_budget,
+                        )
+                        .await?;
+                    serialize_or_execute!(
+                        data,
+                        serialize_unsigned_transaction,
+                        serialize_signed_transaction,
+                        context,
+                        Publish
+                    )
+                }
             }
 
             SuiClientCommands::VerifyBytecodeMeter {
