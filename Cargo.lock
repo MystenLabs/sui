@@ -10554,6 +10554,8 @@ dependencies = [
  "test-cluster",
  "tokio",
  "toml 0.7.4",
+ "tower",
+ "tower-http",
  "tracing",
  "url",
  "workspace-hack",
