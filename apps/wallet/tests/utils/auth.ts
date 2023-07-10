@@ -15,8 +15,8 @@ export async function createWallet(page: Page, extensionUrl: string) {
 	await page.getByRole('button', { name: /Create Wallet/ }).click();
 	await page.locator('label', { has: page.locator('input[type=checkbox]') }).click();
 	await page.getByRole('link', { name: /Open Sui Wallet/ }).click();
-	const dismissBullshark = await page.getByTestId('bullshark-dismiss')
-	if(dismissBullshark) {
+	const dismissBullshark = await page.getByTestId('bullshark-dismiss');
+	if (dismissBullshark) {
 		dismissBullshark.click();
 	}
 }
@@ -35,8 +35,8 @@ export async function importWallet(page: Page, extensionUrl: string, mnemonic: s
 	await page.getByLabel('Confirm Password').fill(PASSWORD);
 	await page.getByRole('button', { name: /Import/ }).click();
 	await page.getByRole('link', { name: /Open Sui Wallet/ }).click();
-	const dismissBullshark = await page.getByTestId('bullshark-dismiss')
-	if(dismissBullshark) {
+	const dismissBullshark = await page.getByTestId('bullshark-dismiss');
+	if (dismissBullshark) {
 		dismissBullshark.click();
 	}
 }
