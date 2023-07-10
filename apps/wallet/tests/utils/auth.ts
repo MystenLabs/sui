@@ -15,10 +15,17 @@ export async function createWallet(page: Page, extensionUrl: string) {
 	await page.getByRole('button', { name: /Create Wallet/ }).click();
 	await page.locator('label', { has: page.locator('input[type=checkbox]') }).click();
 	await page.getByRole('link', { name: /Open Sui Wallet/ }).click();
-	const dismissBullshark = await page.getByTestId('bullshark-dismiss');
-	if (dismissBullshark) {
-		dismissBullshark.click();
-	}
+
+	try {
+		await page.waitForSelector('[data-testid="bullshark-dismiss"]');
+		const dismissButton = await page.getByTestId('bullshark-dismiss');
+		if (dismissButton) {
+		  await dismissButton.click();
+		}
+	  } catch (error) {
+		// Handle the error if the element is not found within the timeout
+		console.log('No bullshark found. Continuing...');
+	  }
 }
 
 export async function importWallet(page: Page, extensionUrl: string, mnemonic: string[]) {
@@ -35,8 +42,14 @@ export async function importWallet(page: Page, extensionUrl: string, mnemonic: s
 	await page.getByLabel('Confirm Password').fill(PASSWORD);
 	await page.getByRole('button', { name: /Import/ }).click();
 	await page.getByRole('link', { name: /Open Sui Wallet/ }).click();
-	const dismissBullshark = await page.getByTestId('bullshark-dismiss');
-	if (dismissBullshark) {
-		dismissBullshark.click();
-	}
+	try {
+		await page.waitForSelector('[data-testid="bullshark-dismiss"]');
+		const dismissButton = await page.getByTestId('bullshark-dismiss');
+		if (dismissButton) {
+		  await dismissButton.click();
+		}
+	  } catch (error) {
+		// Handle the error if the element is not found within the timeout
+		console.log('No bullshark found. Continuing...');
+	  }
 }
