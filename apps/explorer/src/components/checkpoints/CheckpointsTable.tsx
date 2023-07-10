@@ -87,15 +87,18 @@ export function CheckpointsTable({
 						}
 					/>
 				) : (
-					<Link to="/recent?tab=checkpoints" after={<ArrowRight12 />}>
-						More Checkpoints
+					<Link
+						to="/recent?tab=checkpoints"
+						after={<ArrowRight12 className="h-3 w-3 -rotate-45" />}
+					>
+						View all
 					</Link>
 				)}
 
 				<div className="flex items-center space-x-3">
 					<Text variant="body/medium" color="steel-dark">
 						{count ? numberSuffix(Number(count)) : '-'}
-						{` Checkpoints`}
+						{` Total`}
 					</Text>
 					{!disablePagination && (
 						<select

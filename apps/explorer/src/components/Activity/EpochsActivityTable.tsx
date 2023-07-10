@@ -70,15 +70,15 @@ export function EpochsActivityTable({
 				{!disablePagination ? (
 					<Pagination {...pagination} />
 				) : (
-					<Link to="/recent?tab=epochs" after={<ArrowRight12 />}>
-						More Epochs
+					<Link to="/recent?tab=epochs" after={<ArrowRight12 className="h-3 w-3 -rotate-45" />}>
+						View all
 					</Link>
 				)}
 
 				<div className="flex items-center space-x-3">
 					<Text variant="body/medium" color="steel-dark">
 						{count ? numberSuffix(Number(count)) : '-'}
-						{` Epochs`}
+						{` Total`}
 					</Text>
 					{!disablePagination && (
 						<select
