@@ -1,10 +1,11 @@
-// use sui_config::{sui_config_dir, SUI_CLIENT_CONFIG}; // uncomment if using a local wallet
-// use sui_sdk::{wallet_context::WalletContext}; // uncomment if using a local wallet
-
-use std::collections::HashMap;
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 
 use reqwest::Client;
+use std::collections::HashMap;
 use sui_types::base_types::SuiAddress;
+// use sui_config::{sui_config_dir, SUI_CLIENT_CONFIG}; // uncomment if using a local wallet
+// use sui_sdk::{wallet_context::WalletContext}; // uncomment if using a local wallet
 
 #[allow(dead_code)]
 pub(crate) async fn sui_address_for_examples() -> Result<SuiAddress, anyhow::Error> {
