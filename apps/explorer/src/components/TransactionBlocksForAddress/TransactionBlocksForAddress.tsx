@@ -10,7 +10,7 @@ import {
 	useGetTransactionBlocks,
 } from '~/hooks/useGetTransactionBlocks';
 import { Heading } from '~/ui/Heading';
-import { Pagination } from '~/ui/Pagination';
+import { Pagination, useCursorPagination } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { RadioGroup, RadioOption } from '~/ui/Radio';
 import { TableCard } from '~/ui/TableCard';
@@ -80,16 +80,21 @@ function TransactionBlocksForAddress({
 		ChangedObject: 0,
 	});
 
-	const { data, isLoading, isFetching, isFetchingNextPage, fetchNextPage, hasNextPage } =
+	const transactions =
 		useGetTransactionBlocks({
 			[filterValue]: address,
 		} as TransactionFilter);
 
-	const currentPage = currentPageState[filterValue];
-	const cardData =
-		data && data.pages[currentPage]
-			? genTableDataFromTxData(data.pages[currentPage].data)
-			: undefined;
+
+	const { data, isFetching, pagination, isLoading, isError } = useCursorPagination(transactions);
+
+	const cardData = data ? genTableDataFromTxData(data.data) : undefined;
+
+	// const currentPage = currentPageState[filterValue];
+	// const cardData =
+	// 	data && data.pages[currentPage]
+	// 		? genTableDataFromTxData(data.pages[currentPage].data)
+	// 		: undefined;
 
 	return (
 		<div data-testid="tx">
@@ -113,7 +118,7 @@ function TransactionBlocksForAddress({
 			</div>
 
 			<div className="flex flex-col space-y-5 pt-5 text-left xl:pr-10">
-				{isLoading || isFetching || isFetchingNextPage || !cardData ? (
+				{isLoading || isFetching || !cardData ? (
 					<PlaceholderTable
 						rowCount={DEFAULT_TRANSACTIONS_LIMIT}
 						rowHeight="16px"
@@ -126,7 +131,8 @@ function TransactionBlocksForAddress({
 					</div>
 				)}
 
-				{(hasNextPage || (data && data?.pages.length > 1)) && (
+<Pagination {...pagination} />
+				{/* {(hasNextPage || (data && data?.pages.length > 1)) && (
 					<Pagination
 						onNext={() => {
 							if (isLoading || isFetching) {
@@ -148,7 +154,7 @@ function TransactionBlocksForAddress({
 								filterValue,
 							});
 						}}
-						hasNext={Boolean(hasNextPage) && Boolean(data?.pages[currentPage])}
+						hasNext={Boolean(hasNextPage) && Boolean(data?.pages[currentPage] || currentPage < (data?.pages.length ?? 0))}
 						hasPrev={currentPageState[filterValue] !== 0}
 						onPrev={() =>
 							dispatch({
@@ -164,7 +170,7 @@ function TransactionBlocksForAddress({
 							})
 						}
 					/>
-				)}
+				)} */}
 			</div>
 		</div>
 	);
