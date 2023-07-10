@@ -1863,7 +1863,7 @@
           "name": "Read API"
         }
       ],
-      "description": "Return the total number of transactions known to the server.",
+      "description": "Return the total number of transaction blocks known to the server.",
       "params": [],
       "result": {
         "name": "BigInt<u64>",

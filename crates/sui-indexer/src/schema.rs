@@ -69,6 +69,19 @@ diesel::table! {
 }
 
 diesel::table! {
+    checkpoint_metrics (checkpoint) {
+        checkpoint -> Int8,
+        epoch -> Int8,
+        real_time_tps -> Float8,
+        peak_tps_30d -> Float8,
+        rolling_total_transactions -> Int8,
+        rolling_total_transaction_blocks -> Int8,
+        rolling_total_successful_transactions -> Int8,
+        rolling_total_successful_transaction_blocks -> Int8,
+    }
+}
+
+diesel::table! {
     checkpoints (sequence_number) {
         sequence_number -> Int8,
         checkpoint_digest -> Varchar,
@@ -339,6 +352,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     addresses,
     at_risk_validators,
     changed_objects,
+    checkpoint_metrics,
     checkpoints,
     epochs,
     events,
