@@ -36,7 +36,7 @@ use sui_types::crypto::AggregateAuthoritySignature;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::display::DisplayVersionUpdatedEvent;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
-use sui_types::error::{SuiError, SuiObjectResponseError, SuiResult};
+use sui_types::error::{SuiError, SuiObjectResponseError};
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, CheckpointSummary,
     CheckpointTimestamp,
@@ -49,6 +49,7 @@ use sui_types::transaction::TransactionDataAPI;
 use crate::api::JsonRpcMetrics;
 use crate::api::{validate_limit, ReadApiServer};
 use crate::api::{QUERY_MAX_RESULT_LIMIT, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS};
+use crate::authority_state::{StateRead, StateReadError, StateReadResult};
 use crate::error::{Error, RpcInterimResult, SuiRpcInputError};
 use crate::with_tracing;
 use crate::{
@@ -61,7 +62,7 @@ const MAX_DISPLAY_NESTED_LEVEL: usize = 10;
 // Fullnodes.
 #[derive(Clone)]
 pub struct ReadApi {
-    pub state: Arc<AuthorityState>,
+    pub state: Arc<dyn StateRead>,
     pub transaction_kv_store: Arc<TransactionKeyValueStore>,
     pub metrics: Arc<JsonRpcMetrics>,
 }
@@ -138,13 +139,13 @@ impl ReadApi {
     }
 
     pub async fn get_checkpoints_internal(
-        state: Arc<AuthorityState>,
+        state: Arc<dyn StateRead>,
         transaction_kv_store: Arc<TransactionKeyValueStore>,
         // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<CheckpointSequenceNumber>,
         limit: u64,
         descending_order: bool,
-    ) -> SuiResult<Vec<Checkpoint>> {
+    ) -> StateReadResult<Vec<Checkpoint>> {
         let max_checkpoint = state.get_latest_checkpoint_sequence_number()?;
         let checkpoint_numbers =
             calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
@@ -259,7 +260,6 @@ impl ReadApi {
         // when we can tolerate returning None for old txes.
         let checkpoint_seq_list =
             state
-            .database
             .deprecated_multi_get_transaction_checkpoint(&digests_clone)
             .tap_err(
                 |err| debug!(digests=?digests_clone, "Failed to multi get checkpoint sequence number: {:?}", err))?;
@@ -733,7 +733,7 @@ impl ReadApiServer for ReadApi {
                 // is in the epoch store, and thus we risk breaking the read API for txes
                 // from old epochs. Should be migrated once we have indexer support, or
                 // when we can tolerate returning None for old txes.
-                state.database.deprecated_get_transaction_checkpoint(&digest)
+                state.deprecated_get_transaction_checkpoint(&digest)
                     .map_err(|e| {
                         error!("Failed to retrieve checkpoint sequence for transaction {digest:?} with error: {e:?}");
                         Error::from(e)
@@ -874,7 +874,7 @@ impl ReadApiServer for ReadApi {
                 .map_err(
                     |e| {
                         error!("Failed to get transaction events for event digest {event_digest:?} with error: {e:?}");
-                        Error::SuiError(e)
+                        Error::StateReadError(e.into())
                     })?
                 .data
                 .into_iter()
@@ -998,7 +998,7 @@ impl ReadApiServer for ReadApi {
                         error!(
                             "Failed to get loaded child objects at {digest:?} with error: {e:?}"
                         );
-                        Error::SuiError(e)
+                        Error::StateReadError(e)
                     })? {
                     Some(v) => v
                         .into_iter()
@@ -1020,10 +1020,7 @@ impl ReadApiServer for ReadApi {
                 .map(|v| {
                     ProtocolConfig::get_for_version_if_supported(
                         (*v).into(),
-                        self.state
-                            .get_chain_identifier()
-                            .ok_or(anyhow!("Chain identifier not found"))?
-                            .chain(),
+                        self.state.get_chain_identifier()?.chain(),
                     )
                     .ok_or(SuiRpcInputError::ProtocolVersionUnsupported(
                         ProtocolVersion::MIN.as_u64(),
@@ -1043,10 +1040,7 @@ impl ReadApiServer for ReadApi {
     #[instrument(skip(self))]
     async fn get_chain_identifier(&self) -> RpcResult<String> {
         with_tracing!(async move {
-            let ci = self
-                .state
-                .get_chain_identifier()
-                .ok_or(anyhow!("Chain identifier not found"))?;
+            let ci = self.state.get_chain_identifier()?;
             Ok(ci.to_string())
         })
     }
@@ -1100,6 +1094,9 @@ pub enum ObjectDisplayError {
 
     #[error("Failed to deserialize 'VersionUpdatedEvent': {0}")]
     Bcs(#[from] bcs::Error),
+
+    #[error(transparent)]
+    StateReadError(#[from] StateReadError),
 }
 
 async fn get_display_fields(

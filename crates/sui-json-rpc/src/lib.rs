@@ -28,6 +28,7 @@ use crate::metrics::MetricsLogger;
 use crate::routing_layer::RoutingLayer;
 
 pub mod api;
+pub mod authority_state;
 mod balance_changes;
 pub mod coin_api;
 pub mod error;
