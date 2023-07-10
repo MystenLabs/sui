@@ -10,8 +10,6 @@ use sui_sdk::{types::transaction::Transaction, SuiClientBuilder};
 
 use crate::utils::utils::utils::request_tokens_from_faucet;
 
-use crate::utils::utils::utils::request_tokens_from_faucet;
-
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let sui = SuiClientBuilder::default().build_localnet().await?;
@@ -47,8 +45,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let transaction_response = sui
         .quorum_driver_api()
         .execute_transaction_block(
-            Transaction::from_data(transfer_tx, Intent::sui_transaction(), vec![signature])
-                .verify()?,
+            Transaction::from_data(transfer_tx, Intent::sui_transaction(), vec![signature]),
             SuiTransactionBlockResponseOptions::full_content(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
