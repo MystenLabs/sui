@@ -649,9 +649,7 @@ export class TransactionBlock {
 				.filter(([_, obj]) => obj.error)
 				.map(([id, _]) => id);
 			if (invalidObjects.length) {
-				throw new Error(
-					`The following input objects are invalid: ${invalidObjects.join(', ')}`,
-				);
+				throw new Error(`The following input objects are invalid: ${invalidObjects.join(', ')}`);
 			}
 
 			objectsToResolve.forEach(({ id, input, normalizedType }) => {
