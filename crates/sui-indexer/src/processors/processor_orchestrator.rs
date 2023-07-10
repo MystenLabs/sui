@@ -8,6 +8,7 @@ use prometheus::Registry;
 use tracing::{error, info, warn};
 
 use crate::processors::address_processor::AddressProcessor;
+use crate::processors::checkpoint_metrics_processor::CheckpointMetricsProcessor;
 use crate::processors::object_processor::ObjectProcessor;
 use crate::store::IndexerStore;
 
@@ -31,6 +32,7 @@ where
         info!("Processor orchestrator started...");
         let object_processor = ObjectProcessor::new(self.store.clone(), &self.prometheus_registry);
         let address_stats_processor = AddressProcessor::new(self.store.clone());
+        let cp_metrics_processor = CheckpointMetricsProcessor::new(self.store.clone());
 
         // TODOggao: clean up object processor
         let obj_handle = tokio::task::spawn(async move {
@@ -75,7 +77,26 @@ where
                 );
             }
         });
-        try_join_all(vec![obj_handle, addr_handle])
+        let cp_metrics_handle = tokio::task::spawn(async move {
+            let cp_metrics_result = retry(ExponentialBackoff::default(), || async {
+                let cp_metrics_exec_res = cp_metrics_processor.start().await;
+                if let Err(e) = &cp_metrics_exec_res {
+                    warn!(
+                        "Indexer checkpoint metrics processor failed with error: {:?}, retrying...",
+                        e
+                    );
+                }
+                Ok(cp_metrics_exec_res?)
+            })
+            .await;
+            if let Err(e) = cp_metrics_result {
+                error!(
+                    "Indexer checkpoint metrics processor failed after retries with error {:?}",
+                    e
+                );
+            }
+        });
+        try_join_all(vec![obj_handle, addr_handle, cp_metrics_handle])
             .await
             .expect("Processor orchestrator should not run into errors.");
     }
