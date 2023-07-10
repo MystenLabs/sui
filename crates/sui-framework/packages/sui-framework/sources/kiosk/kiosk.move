@@ -63,8 +63,8 @@ module sui::kiosk {
     const EWrongKiosk: u64 = 5;
     /// Tryng to exclusively list an already listed item.
     const EAlreadyListed: u64 = 6;
-    /// Trying to call `uid_mut` when extensions disabled
-    const EExtensionsDisabled: u64 = 7;
+    /// Trying to call `uid_mut` when `allow_extensions` set to false.
+    const EUidAccessNotAllowed: u64 = 7;
     /// Attempt to `take` an item that is locked.
     const EItemLocked: u64 = 8;
     /// Taking or mutably borrowing an item that is listed.
@@ -75,6 +75,14 @@ module sui::kiosk {
     const EItemNotFound: u64 = 11;
     /// Delisting an item that is not listed.
     const ENotListed: u64 = 12;
+    /// Extension is trying to access a permissioned action while being disabled.
+    const EExtensionDisabled: u64 = 13;
+    /// Extension is trying to access a permissioned action while not having
+    /// the required permission.
+    const EExtensionNotAllowed: u64 = 14;
+    /// Extension is trying to access a permissioned action while not being
+    /// authorized to use the type.
+    const EExtensionNotAllowedForType: u64 = 15;
 
     /// An object which allows selling collectibles within "kiosk" ecosystem.
     /// By default gives the functionality to list an item openly - for anyone
@@ -90,8 +98,10 @@ module sui::kiosk {
         /// Number of items stored in a Kiosk. Used to allow unpacking
         /// an empty Kiosk if it was wrapped or has a single owner.
         item_count: u32,
-        /// Whether to open the UID to public. Set to `true` by default
-        /// but the owner can switch the state if necessary.
+        /// Whether to open the UID to public. Set to `false` by default
+        /// but the owner can switch the state if necessary. Keeping the base
+        /// UID read-only prevents the base UID from having too many dynamic
+        /// fields as well as protects from potentially malicious fields.
         allow_extensions: bool
     }
 
@@ -192,7 +202,7 @@ module sui::kiosk {
             profits: balance::zero(),
             owner: sender(ctx),
             item_count: 0,
-            allow_extensions: true
+            allow_extensions: false
         };
 
         let cap = KioskOwnerCap {
@@ -417,15 +427,6 @@ module sui::kiosk {
     }
 
     // === Kiosk Extensions API ===
-
-    /// Extension is trying to access a permissioned action while being disabled.
-    const EExtensionDisabled: u64 = 13;
-    /// Extension is trying to access a permissioned action while not having
-    /// the required permission.
-    const EExtensionNotAllowed: u64 = 14;
-    /// Extension is trying to access a permissioned action while not being
-    /// authorized to use the type.
-    const EExtensionNotAllowedForType: u64 = 15;
 
     /// The Extension struct contains the data used by the extension and the
     /// configuration for this extension. Stored under the `ExtensionKey`
@@ -655,7 +656,7 @@ module sui::kiosk {
     /// Get the mutable `UID` for dynamic field access and extensions.
     /// Aborts if `allow_extensions` set to `false`.
     public fun uid_mut(self: &mut Kiosk): &mut UID {
-        assert!(self.allow_extensions, EExtensionsDisabled);
+        assert!(self.allow_extensions, EUidAccessNotAllowed);
         &mut self.id
     }
 
