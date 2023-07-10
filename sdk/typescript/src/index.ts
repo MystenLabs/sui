@@ -32,6 +32,7 @@ export * from './utils/errors.js';
 export * from './framework/index.js';
 
 export * from './builder/index.js';
+export * from './utils/sui-types.js';
 
 export { fromB64, toB64 } from '@mysten/bcs';
 

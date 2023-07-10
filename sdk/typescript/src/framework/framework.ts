@@ -9,7 +9,7 @@ import type {
 } from '../types/objects.js';
 import { getObjectFields, getObjectId, getObjectType } from '../types/objects.js';
 import type { SuiAddress } from '../types/common.js';
-import { normalizeSuiObjectId, ObjectId } from '../types/common.js';
+import { ObjectId } from '../types/common.js';
 
 import type { Option } from '../types/option.js';
 import { getOption } from '../types/option.js';
@@ -17,6 +17,7 @@ import type { CoinStruct } from '../types/coin.js';
 import type { StructTag } from '../types/sui-bcs.js';
 import type { Infer } from 'superstruct';
 import { nullable, number, object, string } from 'superstruct';
+import { normalizeSuiObjectId } from '../utils/sui-types.js';
 
 export const SUI_SYSTEM_ADDRESS = '0x3';
 export const SUI_FRAMEWORK_ADDRESS = '0x2';

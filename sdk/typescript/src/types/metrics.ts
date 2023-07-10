@@ -12,6 +12,7 @@ export const NetworkMetrics = object({
 	totalObjects: string(),
 	totalPackages: string(),
 });
+export type NetworkMetrics = typeof NetworkMetrics.TYPE;
 
 export const AddressMetrics = object({
 	checkpoint: number(),
@@ -21,3 +22,4 @@ export const AddressMetrics = object({
 	cumulativeActiveAddresses: number(),
 	dailyActiveAddresses: number(),
 });
+export type AddressMetrics = typeof AddressMetrics.TYPE;

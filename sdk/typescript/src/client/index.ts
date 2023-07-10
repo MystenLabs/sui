@@ -1,8 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
-import type { HttpHeaders } from '../rpc/client.js';
-import { JsonRpcClient } from '../rpc/client.js';
 import type {
 	ExecuteTransactionRequestType,
 	ObjectId,
@@ -19,8 +16,6 @@ import type {
 	TransactionFilter,
 	TransactionEffects,
 	Unsubscribe,
-} from '../types/index.js';
-import {
 	PaginatedTransactionResponse,
 	SuiAddress,
 	SuiMoveFunctionArgTypes,
@@ -31,7 +26,6 @@ import {
 	SuiTransactionBlockResponse,
 	PaginatedEvents,
 	DevInspectResults,
-	CoinMetadataStruct,
 	PaginatedCoins,
 	SuiObjectResponse,
 	DelegatedStake,
@@ -47,28 +41,28 @@ import {
 	ObjectRead,
 	ResolvedNameServiceNames,
 	ProtocolConfig,
+	EpochInfo,
+	EpochPage,
+	CheckpointPage,
+	DynamicFieldName,
+	DynamicFieldPage,
+	NetworkMetrics,
+	AddressMetrics,
 } from '../types/index.js';
-import type { DynamicFieldName } from '../types/dynamic_fields.js';
-import { DynamicFieldPage } from '../types/dynamic_fields.js';
-import type { WebsocketClientOptions } from '../rpc/websocket-client.js';
-import { DEFAULT_CLIENT_OPTIONS, WebsocketClient } from '../rpc/websocket-client.js';
-import { any, array, string, nullable } from 'superstruct';
-import { fromB58, toB64, toHEX } from '@mysten/bcs';
-import type { SerializedSignature } from '../cryptography/signature.js';
-import type { Connection } from '../rpc/connection.js';
-import { devnetConnection } from '../rpc/connection.js';
-import { TransactionBlock } from '../builder/index.js';
-import { CheckpointPage } from '../types/checkpoints.js';
-import { NetworkMetrics, AddressMetrics } from '../types/metrics.js';
-import { EpochInfo, EpochPage } from '../types/epochs.js';
-import { requestSuiFromFaucetV0 } from '../faucet/index.js';
 import {
+	isValidTransactionDigest,
 	isValidSuiAddress,
 	isValidSuiObjectId,
-	isValidTransactionDigest,
 	normalizeSuiAddress,
 	normalizeSuiObjectId,
 } from '../utils/sui-types.js';
+import { fromB58, toB64, toHEX } from '@mysten/bcs';
+import type { SerializedSignature } from '../cryptography/signature.js';
+import { TransactionBlock } from '../builder/index.js';
+import { SuiHTTPTransport } from './http-transport.js';
+import type { SuiTransport } from './http-transport.js';
+
+export * from './http-transport.js';
 
 export interface PaginationArguments<Cursor> {
 	/** Optional paging cursor */
@@ -82,85 +76,39 @@ export interface OrderArguments {
 }
 
 /**
- * Configuration options for the JsonRpcProvider. If the value of a field is not provided,
- * value in `DEFAULT_OPTIONS` for that field will be used
+ * Configuration options for the SuiClient
+ * You must provide either a `url` or a `transport`
  */
-export type RpcProviderOptions = {
-	/**
-	 * Configuration options for the websocket connection
-	 * TODO: Move to connection.
-	 */
-	socketOptions?: WebsocketClientOptions;
-	/**
-	 * Cache timeout in seconds for the RPC API Version
-	 */
-	versionCacheTimeoutInSeconds?: number;
+export type SuiClientOptions = NetworkOrTransport;
 
-	/** Allow defining a custom RPC client to use */
-	rpcClient?: JsonRpcClient;
+export type NetworkOrTransport =
+	| {
+			url: string;
+			transport?: never;
+	  }
+	| {
+			transport: SuiTransport;
+			url?: never;
+	  };
 
-	/** Allow defining a custom websocket client to use */
-	websocketClient?: WebsocketClient;
-};
-
-const DEFAULT_OPTIONS: RpcProviderOptions = {
-	socketOptions: DEFAULT_CLIENT_OPTIONS,
-	versionCacheTimeoutInSeconds: 600,
-};
-
-export class JsonRpcProvider {
-	public connection: Connection;
-	protected client: JsonRpcClient;
-	protected wsClient: WebsocketClient;
-	private rpcApiVersion: string | undefined;
-	private cacheExpiry: number | undefined;
+export class SuiClient {
+	protected transport: SuiTransport;
 	/**
 	 * Establish a connection to a Sui RPC endpoint
 	 *
-	 * @param connection The `Connection` object containing configuration for the network.
-	 * @param options configuration options for the provider
+	 * @param options configuration options for the API Client
 	 */
-	constructor(
-		// TODO: Probably remove the default endpoint here:
-		connection: Connection = devnetConnection,
-		public options: RpcProviderOptions = DEFAULT_OPTIONS,
-	) {
-		this.connection = connection;
-
-		const opts = { ...DEFAULT_OPTIONS, ...options };
-		this.options = opts;
-		// TODO: add header for websocket request
-		this.client = opts.rpcClient ?? new JsonRpcClient(this.connection.fullnode);
-
-		this.wsClient =
-			opts.websocketClient ?? new WebsocketClient(this.connection.websocket, opts.socketOptions);
+	constructor(options: SuiClientOptions) {
+		this.transport = options.transport ?? new SuiHTTPTransport({ url: options.url });
 	}
 
 	async getRpcApiVersion(): Promise<string | undefined> {
-		if (this.rpcApiVersion && this.cacheExpiry && this.cacheExpiry <= Date.now()) {
-			return this.rpcApiVersion;
-		}
+		const resp = await this.transport.request<{ info: { version: string } }>({
+			method: 'rpc.discover',
+			params: [],
+		});
 
-		try {
-			const resp = await this.client.requestWithType('rpc.discover', [], any());
-			this.rpcApiVersion = resp.info.version;
-			this.cacheExpiry =
-				// Date.now() is in milliseconds, but the timeout is in seconds
-				Date.now() + (this.options.versionCacheTimeoutInSeconds ?? 0) * 1000;
-			return this.rpcApiVersion;
-		} catch (err) {
-			console.warn('Error fetching version number of the RPC API', err);
-		}
-		return undefined;
-	}
-
-	/** @deprecated Use `@mysten/sui.js/faucet` instead. */
-	async requestSuiFromFaucet(recipient: SuiAddress, headers?: HttpHeaders) {
-		if (!this.connection.faucet) {
-			throw new Error('Faucet URL is not specified');
-		}
-
-		return requestSuiFromFaucetV0({ host: this.connection.faucet, recipient, headers });
+		return resp.info.version;
 	}
 
 	/**
@@ -176,11 +124,10 @@ export class JsonRpcProvider {
 			throw new Error('Invalid Sui address');
 		}
 
-		return await this.client.requestWithType(
-			'suix_getCoins',
-			[input.owner, input.coinType, input.cursor, input.limit],
-			PaginatedCoins,
-		);
+		return await this.transport.request({
+			method: 'suix_getCoins',
+			params: [input.owner, input.coinType, input.cursor, input.limit],
+		});
 	}
 
 	/**
@@ -195,11 +142,10 @@ export class JsonRpcProvider {
 			throw new Error('Invalid Sui address');
 		}
 
-		return await this.client.requestWithType(
-			'suix_getAllCoins',
-			[input.owner, input.cursor, input.limit],
-			PaginatedCoins,
-		);
+		return await this.transport.request({
+			method: 'suix_getAllCoins',
+			params: [input.owner, input.cursor, input.limit],
+		});
 	}
 
 	/**
@@ -213,11 +159,10 @@ export class JsonRpcProvider {
 		if (!input.owner || !isValidSuiAddress(normalizeSuiAddress(input.owner))) {
 			throw new Error('Invalid Sui address');
 		}
-		return await this.client.requestWithType(
-			'suix_getBalance',
-			[input.owner, input.coinType],
-			CoinBalance,
-		);
+		return await this.transport.request({
+			method: 'suix_getBalance',
+			params: [input.owner, input.coinType],
+		});
 	}
 
 	/**
@@ -227,29 +172,27 @@ export class JsonRpcProvider {
 		if (!input.owner || !isValidSuiAddress(normalizeSuiAddress(input.owner))) {
 			throw new Error('Invalid Sui address');
 		}
-		return await this.client.requestWithType(
-			'suix_getAllBalances',
-			[input.owner],
-			array(CoinBalance),
-		);
+		return await this.transport.request({ method: 'suix_getAllBalances', params: [input.owner] });
 	}
 
 	/**
 	 * Fetch CoinMetadata for a given coin type
 	 */
 	async getCoinMetadata(input: { coinType: string }): Promise<CoinMetadata | null> {
-		return await this.client.requestWithType(
-			'suix_getCoinMetadata',
-			[input.coinType],
-			CoinMetadataStruct,
-		);
+		return await this.transport.request({
+			method: 'suix_getCoinMetadata',
+			params: [input.coinType],
+		});
 	}
 
 	/**
 	 *  Fetch total supply for a coin
 	 */
 	async getTotalSupply(input: { coinType: string }): Promise<CoinSupply> {
-		return await this.client.requestWithType('suix_getTotalSupply', [input.coinType], CoinSupply);
+		return await this.transport.request({
+			method: 'suix_getTotalSupply',
+			params: [input.coinType],
+		});
 	}
 
 	/**
@@ -257,8 +200,8 @@ export class JsonRpcProvider {
 	 * @param method the method to be invoked
 	 * @param args the arguments to be passed to the RPC request
 	 */
-	async call(method: string, params: any[]): Promise<any> {
-		return await this.client.request(method, params);
+	async call(method: string, params: unknown[]): Promise<unknown> {
+		return await this.transport.request({ method, params });
 	}
 
 	/**
@@ -269,11 +212,10 @@ export class JsonRpcProvider {
 		module: string;
 		function: string;
 	}): Promise<SuiMoveFunctionArgTypes> {
-		return await this.client.requestWithType(
-			'sui_getMoveFunctionArgTypes',
-			[input.package, input.module, input.function],
-			SuiMoveFunctionArgTypes,
-		);
+		return await this.transport.request({
+			method: 'sui_getMoveFunctionArgTypes',
+			params: [input.package, input.module, input.function],
+		});
 	}
 
 	/**
@@ -283,11 +225,10 @@ export class JsonRpcProvider {
 	async getNormalizedMoveModulesByPackage(input: {
 		package: string;
 	}): Promise<SuiMoveNormalizedModules> {
-		return await this.client.requestWithType(
-			'sui_getNormalizedMoveModulesByPackage',
-			[input.package],
-			SuiMoveNormalizedModules,
-		);
+		return await this.transport.request({
+			method: 'sui_getNormalizedMoveModulesByPackage',
+			params: [input.package],
+		});
 	}
 
 	/**
@@ -297,11 +238,10 @@ export class JsonRpcProvider {
 		package: string;
 		module: string;
 	}): Promise<SuiMoveNormalizedModule> {
-		return await this.client.requestWithType(
-			'sui_getNormalizedMoveModule',
-			[input.package, input.module],
-			SuiMoveNormalizedModule,
-		);
+		return await this.transport.request({
+			method: 'sui_getNormalizedMoveModule',
+			params: [input.package, input.module],
+		});
 	}
 
 	/**
@@ -312,11 +252,10 @@ export class JsonRpcProvider {
 		module: string;
 		function: string;
 	}): Promise<SuiMoveNormalizedFunction> {
-		return await this.client.requestWithType(
-			'sui_getNormalizedMoveFunction',
-			[input.package, input.module, input.function],
-			SuiMoveNormalizedFunction,
-		);
+		return await this.transport.request({
+			method: 'sui_getNormalizedMoveFunction',
+			params: [input.package, input.module, input.function],
+		});
 	}
 
 	/**
@@ -327,11 +266,10 @@ export class JsonRpcProvider {
 		module: string;
 		struct: string;
 	}): Promise<SuiMoveNormalizedStruct> {
-		return await this.client.requestWithType(
-			'sui_getNormalizedMoveStruct',
-			[input.package, input.module, input.struct],
-			SuiMoveNormalizedStruct,
-		);
+		return await this.transport.request({
+			method: 'sui_getNormalizedMoveStruct',
+			params: [input.package, input.module, input.struct],
+		});
 	}
 
 	/**
@@ -347,9 +285,9 @@ export class JsonRpcProvider {
 			throw new Error('Invalid Sui address');
 		}
 
-		return await this.client.requestWithType(
-			'suix_getOwnedObjects',
-			[
+		return await this.transport.request({
+			method: 'suix_getOwnedObjects',
+			params: [
 				input.owner,
 				{
 					filter: input.filter,
@@ -358,8 +296,7 @@ export class JsonRpcProvider {
 				input.cursor,
 				input.limit,
 			],
-			PaginatedObjectsResponse,
-		);
+		});
 	}
 
 	/**
@@ -372,11 +309,10 @@ export class JsonRpcProvider {
 		if (!input.id || !isValidSuiObjectId(normalizeSuiObjectId(input.id))) {
 			throw new Error('Invalid Sui Object id');
 		}
-		return await this.client.requestWithType(
-			'sui_getObject',
-			[input.id, input.options],
-			SuiObjectResponse,
-		);
+		return await this.transport.request({
+			method: 'sui_getObject',
+			params: [input.id, input.options],
+		});
 	}
 
 	async tryGetPastObject(input: {
@@ -384,11 +320,10 @@ export class JsonRpcProvider {
 		version: number;
 		options?: SuiObjectDataOptions;
 	}): Promise<ObjectRead> {
-		return await this.client.requestWithType(
-			'sui_tryGetPastObject',
-			[input.id, input.version, input.options],
-			ObjectRead,
-		);
+		return await this.transport.request({
+			method: 'sui_tryGetPastObject',
+			params: [input.id, input.version, input.options],
+		});
 	}
 
 	/**
@@ -408,11 +343,10 @@ export class JsonRpcProvider {
 			throw new Error(`Duplicate object ids in batch call ${input.ids}`);
 		}
 
-		return await this.client.requestWithType(
-			'sui_multiGetObjects',
-			[input.ids, input.options],
-			array(SuiObjectResponse),
-		);
+		return await this.transport.request({
+			method: 'sui_multiGetObjects',
+			params: [input.ids, input.options],
+		});
 	}
 
 	/**
@@ -423,9 +357,9 @@ export class JsonRpcProvider {
 			PaginationArguments<PaginatedTransactionResponse['nextCursor']> &
 			OrderArguments,
 	): Promise<PaginatedTransactionResponse> {
-		return await this.client.requestWithType(
-			'suix_queryTransactionBlocks',
-			[
+		return await this.transport.request({
+			method: 'suix_queryTransactionBlocks',
+			params: [
 				{
 					filter: input.filter,
 					options: input.options,
@@ -434,8 +368,7 @@ export class JsonRpcProvider {
 				input.limit,
 				(input.order || 'descending') === 'descending',
 			],
-			PaginatedTransactionResponse,
-		);
+		});
 	}
 
 	async getTransactionBlock(input: {
@@ -445,11 +378,10 @@ export class JsonRpcProvider {
 		if (!isValidTransactionDigest(input.digest)) {
 			throw new Error('Invalid Transaction digest');
 		}
-		return await this.client.requestWithType(
-			'sui_getTransactionBlock',
-			[input.digest, input.options],
-			SuiTransactionBlockResponse,
-		);
+		return await this.transport.request({
+			method: 'sui_getTransactionBlock',
+			params: [input.digest, input.options],
+		});
 	}
 
 	async multiGetTransactionBlocks(input: {
@@ -467,11 +399,10 @@ export class JsonRpcProvider {
 			throw new Error(`Duplicate digests in batch call ${input.digests}`);
 		}
 
-		return await this.client.requestWithType(
-			'sui_multiGetTransactionBlocks',
-			[input.digests, input.options],
-			array(SuiTransactionBlockResponse),
-		);
+		return await this.transport.request({
+			method: 'sui_multiGetTransactionBlocks',
+			params: [input.digests, input.options],
+		});
 	}
 
 	async executeTransactionBlock(input: {
@@ -480,9 +411,9 @@ export class JsonRpcProvider {
 		options?: SuiTransactionBlockResponseOptions;
 		requestType?: ExecuteTransactionRequestType;
 	}): Promise<SuiTransactionBlockResponse> {
-		return await this.client.requestWithType(
-			'sui_executeTransactionBlock',
-			[
+		return await this.transport.request({
+			method: 'sui_executeTransactionBlock',
+			params: [
 				typeof input.transactionBlock === 'string'
 					? input.transactionBlock
 					: toB64(input.transactionBlock),
@@ -490,8 +421,7 @@ export class JsonRpcProvider {
 				input.options,
 				input.requestType,
 			],
-			SuiTransactionBlockResponse,
-		);
+		});
 	}
 
 	/**
@@ -499,7 +429,10 @@ export class JsonRpcProvider {
 	 */
 
 	async getTotalTransactionBlocks(): Promise<bigint> {
-		const resp = await this.client.requestWithType('sui_getTotalTransactionBlocks', [], string());
+		const resp = await this.transport.request<string>({
+			method: 'sui_getTotalTransactionBlocks',
+			params: [],
+		});
 		return BigInt(resp);
 	}
 
@@ -507,7 +440,10 @@ export class JsonRpcProvider {
 	 * Getting the reference gas price for the network
 	 */
 	async getReferenceGasPrice(): Promise<bigint> {
-		const resp = await this.client.requestWithType('suix_getReferenceGasPrice', [], string());
+		const resp = await this.transport.request<string>({
+			method: 'suix_getReferenceGasPrice',
+			params: [],
+		});
 		return BigInt(resp);
 	}
 
@@ -518,11 +454,7 @@ export class JsonRpcProvider {
 		if (!input.owner || !isValidSuiAddress(normalizeSuiAddress(input.owner))) {
 			throw new Error('Invalid Sui address');
 		}
-		return await this.client.requestWithType(
-			'suix_getStakes',
-			[input.owner],
-			array(DelegatedStake),
-		);
+		return await this.transport.request({ method: 'suix_getStakes', params: [input.owner] });
 	}
 
 	/**
@@ -534,22 +466,17 @@ export class JsonRpcProvider {
 				throw new Error(`Invalid Sui Stake id ${id}`);
 			}
 		});
-		return await this.client.requestWithType(
-			'suix_getStakesByIds',
-			[input.stakedSuiIds],
-			array(DelegatedStake),
-		);
+		return await this.transport.request({
+			method: 'suix_getStakesByIds',
+			params: [input.stakedSuiIds],
+		});
 	}
 
 	/**
 	 * Return the latest system state content.
 	 */
 	async getLatestSuiSystemState(): Promise<SuiSystemStateSummary> {
-		return await this.client.requestWithType(
-			'suix_getLatestSuiSystemState',
-			[],
-			SuiSystemStateSummary,
-		);
+		return await this.transport.request({ method: 'suix_getLatestSuiSystemState', params: [] });
 	}
 
 	/**
@@ -562,11 +489,15 @@ export class JsonRpcProvider {
 		} & PaginationArguments<PaginatedEvents['nextCursor']> &
 			OrderArguments,
 	): Promise<PaginatedEvents> {
-		return await this.client.requestWithType(
-			'suix_queryEvents',
-			[input.query, input.cursor, input.limit, (input.order || 'descending') === 'descending'],
-			PaginatedEvents,
-		);
+		return await this.transport.request({
+			method: 'suix_queryEvents',
+			params: [
+				input.query,
+				input.cursor,
+				input.limit,
+				(input.order || 'descending') === 'descending',
+			],
+		});
 	}
 
 	/**
@@ -578,7 +509,7 @@ export class JsonRpcProvider {
 		/** function to run when we receive a notification of a new event matching the filter */
 		onMessage: (event: SuiEvent) => void;
 	}): Promise<Unsubscribe> {
-		return this.wsClient.request({
+		return this.transport.subscribe({
 			method: 'suix_subscribeEvent',
 			unsubscribe: 'suix_unsubscribeEvent',
 			params: [input.filter],
@@ -592,7 +523,7 @@ export class JsonRpcProvider {
 		/** function to run when we receive a notification of a new event matching the filter */
 		onMessage: (event: TransactionEffects) => void;
 	}): Promise<Unsubscribe> {
-		return this.wsClient.request({
+		return this.transport.subscribe({
 			method: 'suix_subscribeTransaction',
 			unsubscribe: 'suix_unsubscribeTransaction',
 			params: [input.filter],
@@ -630,11 +561,10 @@ export class JsonRpcProvider {
 			throw new Error('Unknown transaction block format.');
 		}
 
-		return await this.client.requestWithType(
-			'sui_devInspectTransactionBlock',
-			[input.sender, devInspectTxBytes, input.gasPrice, input.epoch],
-			DevInspectResults,
-		);
+		return await this.transport.request({
+			method: 'sui_devInspectTransactionBlock',
+			params: [input.sender, devInspectTxBytes, input.gasPrice, input.epoch],
+		});
 	}
 
 	/**
@@ -643,15 +573,14 @@ export class JsonRpcProvider {
 	async dryRunTransactionBlock(input: {
 		transactionBlock: Uint8Array | string;
 	}): Promise<DryRunTransactionBlockResponse> {
-		return await this.client.requestWithType(
-			'sui_dryRunTransactionBlock',
-			[
+		return await this.transport.request({
+			method: 'sui_dryRunTransactionBlock',
+			params: [
 				typeof input.transactionBlock === 'string'
 					? input.transactionBlock
 					: toB64(input.transactionBlock),
 			],
-			DryRunTransactionBlockResponse,
-		);
+		});
 	}
 
 	/**
@@ -666,11 +595,10 @@ export class JsonRpcProvider {
 		if (!input.parentId || !isValidSuiObjectId(normalizeSuiObjectId(input.parentId))) {
 			throw new Error('Invalid Sui Object id');
 		}
-		return await this.client.requestWithType(
-			'suix_getDynamicFields',
-			[input.parentId, input.cursor, input.limit],
-			DynamicFieldPage,
-		);
+		return await this.transport.request({
+			method: 'suix_getDynamicFields',
+			params: [input.parentId, input.cursor, input.limit],
+		});
 	}
 
 	/**
@@ -682,22 +610,20 @@ export class JsonRpcProvider {
 		/** The name of the dynamic field */
 		name: string | DynamicFieldName;
 	}): Promise<SuiObjectResponse> {
-		return await this.client.requestWithType(
-			'suix_getDynamicFieldObject',
-			[input.parentId, input.name],
-			SuiObjectResponse,
-		);
+		return await this.transport.request({
+			method: 'suix_getDynamicFieldObject',
+			params: [input.parentId, input.name],
+		});
 	}
 
 	/**
 	 * Get the sequence number of the latest checkpoint that has been executed
 	 */
 	async getLatestCheckpointSequenceNumber(): Promise<string> {
-		const resp = await this.client.requestWithType(
-			'sui_getLatestCheckpointSequenceNumber',
-			[],
-			string(),
-		);
+		const resp = await this.transport.request({
+			method: 'sui_getLatestCheckpointSequenceNumber',
+			params: [],
+		});
 		return String(resp);
 	}
 
@@ -708,7 +634,7 @@ export class JsonRpcProvider {
 		/** The checkpoint digest or sequence number */
 		id: CheckpointDigest | string;
 	}): Promise<Checkpoint> {
-		return await this.client.requestWithType('sui_getCheckpoint', [input.id], Checkpoint);
+		return await this.transport.request({ method: 'sui_getCheckpoint', params: [input.id] });
 	}
 
 	/**
@@ -720,12 +646,10 @@ export class JsonRpcProvider {
 			descendingOrder: boolean;
 		} & PaginationArguments<CheckpointPage['nextCursor']>,
 	): Promise<CheckpointPage> {
-		const resp = await this.client.requestWithType(
-			'sui_getCheckpoints',
-			[input.cursor, input?.limit, input.descendingOrder],
-			CheckpointPage,
-		);
-		return resp;
+		return await this.transport.request({
+			method: 'sui_getCheckpoints',
+			params: [input.cursor, input?.limit, input.descendingOrder],
+		});
 	}
 
 	/**
@@ -735,19 +659,18 @@ export class JsonRpcProvider {
 		/** The epoch of interest. If null, default to the latest epoch */
 		epoch?: string | null;
 	}): Promise<CommitteeInfo> {
-		return await this.client.requestWithType(
-			'suix_getCommitteeInfo',
-			[input?.epoch],
-			CommitteeInfo,
-		);
+		return await this.transport.request({
+			method: 'suix_getCommitteeInfo',
+			params: [input?.epoch],
+		});
 	}
 
-	async getNetworkMetrics() {
-		return await this.client.requestWithType('suix_getNetworkMetrics', [], NetworkMetrics);
+	async getNetworkMetrics(): Promise<NetworkMetrics> {
+		return await this.transport.request({ method: 'suix_getNetworkMetrics', params: [] });
 	}
 
-	async getAddressMetrics() {
-		return await this.client.requestWithType('suix_getLatestAddressMetrics', [], AddressMetrics);
+	async getAddressMetrics(): Promise<AddressMetrics> {
+		return await this.transport.request({ method: 'suix_getLatestAddressMetrics', params: [] });
 	}
 
 	/**
@@ -758,32 +681,31 @@ export class JsonRpcProvider {
 			descendingOrder?: boolean;
 		} & PaginationArguments<EpochPage['nextCursor']>,
 	): Promise<EpochPage> {
-		return await this.client.requestWithType(
-			'suix_getEpochs',
-			[input?.cursor, input?.limit, input?.descendingOrder],
-			EpochPage,
-		);
+		return await this.transport.request({
+			method: 'suix_getEpochs',
+			params: [input?.cursor, input?.limit, input?.descendingOrder],
+		});
 	}
 
 	/**
 	 * Returns list of top move calls by usage
 	 */
 	async getMoveCallMetrics(): Promise<MoveCallMetrics> {
-		return await this.client.requestWithType('suix_getMoveCallMetrics', [], MoveCallMetrics);
+		return await this.transport.request({ method: 'suix_getMoveCallMetrics', params: [] });
 	}
 
 	/**
 	 * Return the committee information for the asked epoch
 	 */
 	async getCurrentEpoch(): Promise<EpochInfo> {
-		return await this.client.requestWithType('suix_getCurrentEpoch', [], EpochInfo);
+		return await this.transport.request({ method: 'suix_getCurrentEpoch', params: [] });
 	}
 
 	/**
 	 * Return the Validators APYs
 	 */
 	async getValidatorsApy(): Promise<ValidatorsApy> {
-		return await this.client.requestWithType('suix_getValidatorsApy', [], ValidatorsApy);
+		return await this.transport.request({ method: 'suix_getValidatorsApy', params: [] });
 	}
 
 	// TODO: Migrate this to `sui_getChainIdentifier` once it is widely available.
@@ -794,11 +716,10 @@ export class JsonRpcProvider {
 	}
 
 	async resolveNameServiceAddress(input: { name: string }): Promise<SuiAddress | null> {
-		return await this.client.requestWithType(
-			'suix_resolveNameServiceAddress',
-			[input.name],
-			nullable(SuiAddress),
-		);
+		return await this.transport.request({
+			method: 'suix_resolveNameServiceAddress',
+			params: [input.name],
+		});
 	}
 
 	async resolveNameServiceNames(
@@ -806,19 +727,17 @@ export class JsonRpcProvider {
 			address: string;
 		} & PaginationArguments<ResolvedNameServiceNames['nextCursor']>,
 	): Promise<ResolvedNameServiceNames> {
-		return await this.client.requestWithType(
-			'suix_resolveNameServiceNames',
-			[input.address],
-			ResolvedNameServiceNames,
-		);
+		return await this.transport.request({
+			method: 'suix_resolveNameServiceNames',
+			params: [input.address],
+		});
 	}
 
 	async getProtocolConfig(input?: { version?: string }): Promise<ProtocolConfig> {
-		return await this.client.requestWithType(
-			'sui_getProtocolConfig',
-			[input?.version],
-			ProtocolConfig,
-		);
+		return await this.transport.request({
+			method: 'sui_getProtocolConfig',
+			params: [input?.version],
+		});
 	}
 
 	/**
@@ -839,7 +758,7 @@ export class JsonRpcProvider {
 		timeout?: number;
 		/** The amount of time to wait between checks for the transaction block. Defaults to 2 seconds. */
 		pollInterval?: number;
-	} & Parameters<JsonRpcProvider['getTransactionBlock']>[0]): Promise<SuiTransactionBlockResponse> {
+	} & Parameters<SuiClient['getTransactionBlock']>[0]): Promise<SuiTransactionBlockResponse> {
 		const timeoutSignal = AbortSignal.timeout(timeout);
 		const timeoutPromise = new Promise((_, reject) => {
 			timeoutSignal.addEventListener('abort', () => reject(timeoutSignal.reason));

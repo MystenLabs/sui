@@ -6,8 +6,8 @@ import { fromB64, toB64 } from '@mysten/bcs';
 import type { PublicKeyInitData } from '../../cryptography/publickey.js';
 import { bytesEqual } from '../../cryptography/publickey.js';
 import { SIGNATURE_SCHEME_TO_FLAG } from '../../cryptography/signature.js';
-import { normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '../../types/index.js';
 import { bytesToHex } from '@noble/hashes/utils';
+import { SUI_ADDRESS_LENGTH, normalizeSuiAddress } from '../../utils/sui-types.js';
 
 const PUBLIC_KEY_SIZE = 32;
 
