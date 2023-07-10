@@ -108,9 +108,9 @@ pub trait IndexerStore {
         is_descending: bool,
     ) -> Result<Vec<Transaction>, IndexerError>;
 
-    async fn get_transaction_page_by_transaction_kind(
+    async fn get_transaction_page_by_transaction_kinds(
         &self,
-        kind: String,
+        kind_names: Vec<String>,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,

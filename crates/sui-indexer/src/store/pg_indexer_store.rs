@@ -882,16 +882,16 @@ impl IndexerStore for PgIndexerStore {
         }).context(&format!("Failed reading transaction digests with checkpoint_sequence_number {checkpoint_sequence_number:?} and start_sequence {start_sequence:?} and limit {limit}"))
     }
 
-    async fn get_transaction_page_by_transaction_kind(
+    async fn get_transaction_page_by_transaction_kinds(
         &self,
-        kind: String,
+        kinds: Vec<String>,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
     ) -> Result<Vec<Transaction>, IndexerError> {
         read_only_blocking!(&self.blocking_cp, |conn| {
             let mut boxed_query = transactions::dsl::transactions
-                .filter(transactions::dsl::transaction_kind.eq(kind.clone()))
+                .filter(transactions::dsl::transaction_kind.eq_any(kinds.clone()))
                 .into_boxed();
             if let Some(start_sequence) = start_sequence {
                 if is_descending {
@@ -912,7 +912,7 @@ impl IndexerStore for PgIndexerStore {
                     .limit((limit) as i64)
                     .load::<Transaction>(conn)
             }
-        }).context(&format!("Failed reading transaction digests with kind {kind} and start_sequence {start_sequence:?} and limit {limit}"))
+        }).context(&format!("Failed reading transaction digests with kind {kinds:?} and start_sequence {start_sequence:?} and limit {limit}"))
     }
 
     async fn get_transaction_page_by_sender_address(

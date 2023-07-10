@@ -56,3 +56,4 @@ CREATE INDEX transactions_timestamp_ms ON transactions (timestamp_ms);
 CREATE INDEX transactions_sender ON transactions (sender);
 CREATE INDEX transactions_checkpoint_sequence_number ON transactions (checkpoint_sequence_number);
 CREATE INDEX transactions_execution_success ON transactions (execution_success);
+CREATE INDEX transactions_transaction_kind ON transactions (transaction_kind);
