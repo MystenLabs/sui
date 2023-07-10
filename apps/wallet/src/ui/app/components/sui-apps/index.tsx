@@ -16,7 +16,6 @@ import { ampli } from '_src/shared/analytics/ampli';
 import { FEATURES } from '_src/shared/experimentation/features';
 import { prepareLinkToCompare } from '_src/shared/utils';
 
-// test
 function AppsPlayGround() {
 	const ecosystemApps = useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value;
 	const BullsharkInterstitialEnabled = useFeature<boolean>(
