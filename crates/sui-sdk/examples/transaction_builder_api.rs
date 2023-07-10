@@ -3,9 +3,11 @@
 mod utils;
 use shared_crypto::intent::Intent;
 use sui_keys::keystore::{AccountKeystore, InMemKeystore, Keystore};
-use sui_sdk::rpc_types::SuiTransactionBlockResponseOptions;
-use sui_sdk::types::quorum_driver_types::ExecuteTransactionRequestType;
-use sui_sdk::{types::transaction::Transaction, SuiClientBuilder};
+use sui_sdk::{
+    rpc_types::SuiTransactionBlockResponseOptions,
+    types::{quorum_driver_types::ExecuteTransactionRequestType, transaction::Transaction},
+    SuiClientBuilder,
+};
 use utils::request_tokens_from_faucet;
 
 #[tokio::main]

@@ -14,19 +14,21 @@ use clap::Subcommand;
 use serde::Deserialize;
 
 use shared_crypto::intent::Intent;
-use sui_json_rpc_types::{SuiObjectDataOptions, SuiTransactionBlockResponseOptions};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::{
     json::SuiJsonValue,
-    rpc_types::{SuiData, SuiTransactionBlockEffectsAPI},
+    rpc_types::{
+        SuiData, SuiObjectDataOptions, SuiTransactionBlockEffectsAPI,
+        SuiTransactionBlockResponseOptions,
+    },
     types::{
         base_types::{ObjectID, SuiAddress},
         id::UID,
+        quorum_driver_types::ExecuteTransactionRequestType,
         transaction::Transaction,
     },
     SuiClient, SuiClientBuilder,
 };
-use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {

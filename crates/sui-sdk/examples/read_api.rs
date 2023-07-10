@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod utils;
+
 use sui_sdk::rpc_types::{SuiGetPastObjectRequest, SuiObjectDataOptions};
 use sui_sdk::types::base_types::ObjectID;
 use sui_sdk::SuiClientBuilder;
 use utils::sui_address_for_examples;
+
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let sui_local = SuiClientBuilder::default().build_localnet().await?; // local Sui network

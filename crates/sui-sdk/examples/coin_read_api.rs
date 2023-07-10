@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use futures::future;
-use futures::stream::StreamExt;
 
 mod utils;
+
+use futures::{future, stream::StreamExt};
 use sui_sdk::SuiClientBuilder;
 use utils::sui_address_for_examples;
 

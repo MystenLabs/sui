@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::str::FromStr;
-use sui_json_rpc_types::{SuiObjectDataOptions, SuiObjectResponseQuery};
-use sui_sdk::types::base_types::SuiAddress;
-use sui_sdk::SuiClientBuilder;
+use sui_sdk::{
+    rpc_types::{SuiObjectDataOptions, SuiObjectResponseQuery},
+    types::base_types::SuiAddress,
+    SuiClientBuilder,
+};
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
