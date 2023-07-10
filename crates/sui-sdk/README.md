@@ -4,17 +4,13 @@ This crate provides the Sui Rust SDK. For the crate documentation, see [https://
 
 ## Getting Started
 
-We are currently working on publishing the Sui Rust SDK crate on crates.io. Until then, add the `sui-sdk` dependency as following:
+Add the `sui-sdk` dependency as following:
+
 ```toml
-sui-sdk = { git="https://github.com/mystenlabs/sui" }
+sui-sdk = { git = "https://github.com/mystenlabs/sui" }
 tokio = { version = "1.2", features = ["full"] }
 anyhow = "1.0"
 ```
-<!-- Add the following dependency to your `Cargo.toml` file.  -->
-<!-- 
-```toml
-sui_sdk = "0.1"
-``` -->
 
 The main building block for the Sui Rust SDK is the `SuiClientBuilder`, which provides a simple and straightforward way of connectiong to a Sui network and having access to the different available APIs. 
 
