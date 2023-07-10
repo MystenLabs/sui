@@ -1,6 +1,7 @@
 /crates/sui-types/src/crypto.rs @joyqvq @kchalkias @benr-ml
 /crates/sui-types/src/base_types.rs @joyqvq
 /crates/sui-keys/ @joyqvq @patrickkuo
+/crates/sui-protocol-config @mystenmark
 
 *.md @randall-Mysten @ronny-mysten
 # Omit auto-generated changelogs and changesets from docs review:
