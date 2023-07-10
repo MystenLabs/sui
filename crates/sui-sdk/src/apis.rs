@@ -273,6 +273,7 @@ impl ReadApi {
     ///
     /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
     /// let total_transaction_blocks = sui.read_api().get_total_transaction_blocks().await?;
+    /// ```
     pub async fn get_total_transaction_blocks(&self) -> SuiRpcResult<u64> {
         Ok(*self.api.http.get_total_transaction_blocks().await?)
     }
