@@ -9,18 +9,75 @@ module sui::kiosk_marketplace_ext {
     use sui::object::{Self, ID};
     use sui::tx_context::TxContext;
     use sui::kiosk::{Self, KioskOwnerCap, Kiosk, PurchaseCap};
-    use sui::transfer_policy::{Self as policy, TransferRequest};
+    use sui::transfer_policy::{Self as policy, TransferPolicy, TransferRequest};
 
     /// Trying to access an owner-only action.
     const ENotOwner: u64 = 0;
+    /// Trying to purchase an item with an incorrect amount of SUI.
+    const EIncorrectAmount: u64 = 1;
+    /// Trying to accept a bid from an incorrect Kiosk.
+    const EIncorrectKiosk: u64 = 2;
 
     /// The Extension Witness.
     struct Ext<phantom Market> has drop {}
 
+    /// A Bid on an item of type `T`.
+    struct Bid<phantom T> has copy, store, drop {}
+
     /// Add the `Marketplace` extension to the given `Kiosk`.
+    ///
+    /// Requests all permissions: `b011` - `place` and `lock` to perform collection bidding.
     public fun add<Market>(kiosk: &mut Kiosk, cap: &KioskOwnerCap, ctx: &mut TxContext) {
-        kiosk::add_extension(Ext<Market> {}, kiosk, cap, 0, vector[], ctx )
+        kiosk::add_extension(Ext<Market> {}, kiosk, cap, 3, vector[], ctx)
     }
+
+    // === Collection Bidding ===
+
+    /// Collection bidding: the Kiosk Owner offers a bid (in SUI) for an item of type `T`.
+    ///
+    /// There can be only one bid per type.
+    public fun bid<Market, T: key + store>(
+        kiosk: &mut Kiosk, cap: &KioskOwnerCap, bid: Coin<SUI>
+    ) {
+        assert!(kiosk::has_access(kiosk, cap), ENotOwner);
+
+        bag::add(
+            kiosk::ext_storage_mut(Ext<Market> {}, kiosk),
+            Bid<T> {},
+            bid
+        );
+    }
+
+    /// Collection bidding: offer the `T` and receive the bid.
+    public fun accept_bid<Market, T: key + store>(
+        destination: &mut Kiosk,
+        source: &mut Kiosk,
+        purchase_cap: PurchaseCap<T>,
+        policy: &TransferPolicy<T>
+    ): (TransferRequest<T>, TransferRequest<Market>) {
+        let bid: Coin<SUI> = bag::remove(
+            kiosk::ext_storage_mut(Ext<Market> {}, destination),
+            Bid<T> {}
+        );
+
+        // form the request while we have all the data (not yet consumed)
+        let market_request = policy::new_request(
+            kiosk::purchase_cap_item(&purchase_cap), coin::value(&bid), object::id(source)
+        );
+
+        assert!(kiosk::purchase_cap_kiosk(&purchase_cap) == object::id(source), EIncorrectKiosk);
+        assert!(kiosk::purchase_cap_min_price(&purchase_cap) <= coin::value(&bid), EIncorrectAmount);
+
+        let (item, request) = kiosk::purchase_with_cap(source, purchase_cap, bid);
+        kiosk::ext_lock(Ext<Market> {}, destination, item, policy);
+
+        (
+            request,
+            market_request
+        )
+    }
+
+    // === List / Delist / Purchase ===
 
     /// List an item for sale.
     public fun list<Market, T: key + store>(
@@ -48,6 +105,7 @@ module sui::kiosk_marketplace_ext {
             item_id
         );
 
+        assert!(coin::value(&payment) == kiosk::purchase_cap_min_price(&purchase_cap), EIncorrectAmount);
         let market_request = policy::new_request(item_id, coin::value(&payment), object::id(kiosk));
         let (item, request) = kiosk::purchase_with_cap(kiosk, purchase_cap, payment);
 
