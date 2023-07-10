@@ -204,7 +204,7 @@ export function NetworkSelect({
 	binaryVersion,
 	onChange,
 }: NetworkSelectProps) {
-	const { x, y, reference, floating, strategy } = useFloating({
+	const { x, y, refs, strategy } = useFloating({
 		placement: 'bottom-end',
 		middleware: [offset(5), flip(), shift()],
 		whileElementsMounted: autoUpdate,
@@ -216,7 +216,7 @@ export function NetworkSelect({
 		<Popover>
 			{({ open, close }) => (
 				<>
-					<Popover.Button ref={reference} as={NavItem} afterIcon={<ResponsiveIcon />}>
+					<Popover.Button ref={refs.setReference} as={NavItem} afterIcon={<ResponsiveIcon />}>
 						<span className="hidden md:block">{selected?.label || 'Custom'}</span>
 					</Popover.Button>
 					<FloatingPortal>
@@ -224,7 +224,7 @@ export function NetworkSelect({
 							{open && (
 								<Popover.Panel
 									static
-									ref={floating}
+									ref={refs.setFloating}
 									as={motion.div}
 									initial={{
 										opacity: 0,

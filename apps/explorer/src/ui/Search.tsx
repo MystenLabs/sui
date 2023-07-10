@@ -63,14 +63,14 @@ export function Search({
 	return (
 		<Combobox nullable onChange={onSelectResult} as="div" className="relative w-full">
 			<div className="relative flex items-center">
-				<div className="absolute left-0 ml-3 block items-center text-2xl text-white/20">
+				<div className="absolute left-0 ml-3 block items-center text-2xl text-hero-darkest/80">
 					<Search16 />
 				</div>
 
 				<Combobox.Input
 					spellCheck={false}
 					displayValue={(value: SearchResult) => value?.label}
-					className="w-full rounded-md border border-transparent bg-search-fill/60 pl-10 text-body leading-9 text-white/20 outline-none placeholder:text-xs placeholder:text-white/40 hover:bg-search-fill hover:placeholder:text-white/60 focus:border-sui focus:bg-search-fill focus:text-white focus:placeholder:text-white/60"
+					className="w-full rounded border border-transparent bg-hero-darkest/5 pl-10 font-mono text-body font-medium leading-9 text-hero-darkest/80 outline-none placeholder:text-sm placeholder:text-hero-darkest/40 hover:bg-hero-darkest/10 focus:bg-hero-darkest/10"
 					onChange={onChange}
 					placeholder={placeholder}
 					autoComplete="off"
