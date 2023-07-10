@@ -4,8 +4,9 @@
 import type { Infer } from 'superstruct';
 import { array, boolean, integer, object, string, union } from 'superstruct';
 import type { ObjectId, SharedObjectRef } from '../types/index.js';
-import { normalizeSuiAddress, SuiObjectRef } from '../types/index.js';
+import { SuiObjectRef } from '../types/index.js';
 import { builder } from './bcs.js';
+import { normalizeSuiAddress } from '../utils/sui-types.js';
 
 const ObjectArg = union([
 	object({ ImmOrOwned: SuiObjectRef }),
