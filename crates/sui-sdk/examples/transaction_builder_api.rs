@@ -17,8 +17,12 @@ async fn main() -> Result<(), anyhow::Error> {
     // Generate two Sui addresses and corresponding keys in memory
     let keystore = Keystore::InMem(InMemKeystore::new_insecure_for_tests(2));
     let addresses = keystore.addresses();
-    let Some(sender) = addresses.get(0) else {panic!("Keystore did not manage to generate two keys in memory. Aborting")};
-    let Some(recipient) = addresses.get(1) else {panic!("Keystore did not manage to generate two keys in memory. Aborting")};
+    let sender = addresses
+        .get(0)
+        .expect("Keystore did not manage to generate two keys in memory. Aborting");
+    let recipient = addresses
+        .get(1)
+        .expect("Keystore did not manage to generate two keys in memory. Aborting");
 
     // Search for the coins in the sender's address
     let coins = sui
