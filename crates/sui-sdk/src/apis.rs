@@ -52,7 +52,7 @@ impl ReadApi {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust, no_run
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::SuiAddress;
     /// use std::str::FromStr;
@@ -79,7 +79,7 @@ impl ReadApi {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::{ObjectID, SuiAddress};
     /// use std::str::FromStr;
@@ -113,7 +113,7 @@ impl ReadApi {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::{ObjectID, SuiAddress};
     /// use sui_json_rpc_types::SuiObjectDataOptions;
@@ -161,7 +161,7 @@ impl ReadApi {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::{ObjectID, SuiAddress};
     /// use sui_json_rpc_types::SuiObjectDataOptions;
@@ -202,7 +202,7 @@ impl ReadApi {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::SuiAddress;
     /// use sui_json_rpc_types::SuiObjectDataOptions;
@@ -233,7 +233,7 @@ impl ReadApi {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::SuiAddress;
     /// use sui_json_rpc_types::SuiObjectDataOptions;
@@ -268,7 +268,7 @@ impl ReadApi {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     ///
     /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
@@ -310,7 +310,7 @@ impl ReadApi {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     ///
     /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
@@ -481,7 +481,7 @@ impl CoinReadApi {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::SuiAddress;
     /// use std::str::FromStr;
@@ -507,7 +507,7 @@ impl CoinReadApi {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::SuiAddress;
     /// use std::str::FromStr;
@@ -529,7 +529,7 @@ impl CoinReadApi {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::SuiAddress;
     /// use std::str::FromStr;
@@ -577,7 +577,7 @@ impl CoinReadApi {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::SuiAddress;
     /// use std::str::FromStr;
@@ -615,7 +615,7 @@ impl CoinReadApi {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::SuiAddress;
     /// use std::str::FromStr;
@@ -636,7 +636,7 @@ impl CoinReadApi {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::SuiAddress;
     /// use std::str::FromStr;
@@ -653,8 +653,7 @@ impl CoinReadApi {
     ///
     /// # Examples
     ///
-    /// ```rust
-
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     ///
     /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
@@ -671,7 +670,7 @@ impl CoinReadApi {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     ///
     /// let sui = SuiClientBuilder::default()::build_localnet().await?; // local Sui network
@@ -846,7 +845,7 @@ impl GovernanceApi {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     ///
     /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network

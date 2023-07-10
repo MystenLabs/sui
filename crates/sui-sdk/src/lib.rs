@@ -100,7 +100,7 @@ pub const SUI_TESTNET_URL: &str = "https://fullnode.testnet.sui.io:443";
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust,no_run
 /// use sui_sdk::SuiClientBuilder;
 /// #[tokio::main]
 /// async fn main() -> Result<(), anyhow::Error> {
@@ -156,7 +156,7 @@ impl SuiClientBuilder {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     /// #[tokio::main]
     /// async fn main() -> Result<(), anyhow::Error> {
@@ -231,7 +231,7 @@ impl SuiClientBuilder {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     /// #[tokio::main]
     /// async fn main() -> Result<(), anyhow::Error> {
@@ -253,7 +253,7 @@ impl SuiClientBuilder {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     /// #[tokio::main]
     /// async fn main() -> Result<(), anyhow::Error> {
@@ -275,7 +275,7 @@ impl SuiClientBuilder {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     /// #[tokio::main]
     /// async fn main() -> Result<(), anyhow::Error> {
@@ -346,7 +346,7 @@ impl SuiClientBuilder {
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust,no_run
 /// use sui_sdk::types::base_types::SuiAddress;
 /// use sui_sdk::SuiClientBuilder;
 /// #[tokio::main]
