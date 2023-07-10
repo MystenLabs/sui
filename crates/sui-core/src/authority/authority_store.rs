@@ -644,7 +644,7 @@ impl AuthorityStore {
             (
                 idx,
                 match self
-                    .get_object_or_tombstone(key.0)
+                    .get_latest_object_ref_or_tombstone(key.0)
                     .expect("read cannot fail")
                 {
                     None => false,
@@ -1530,11 +1530,23 @@ impl AuthorityStore {
     /// being wrapped in another object.
     ///
     /// If no entry for the object_id is found, return None.
-    pub fn get_object_or_tombstone(
+    pub fn get_latest_object_ref_or_tombstone(
         &self,
         object_id: ObjectID,
     ) -> Result<Option<ObjectRef>, SuiError> {
-        self.perpetual_tables.get_object_or_tombstone(object_id)
+        self.perpetual_tables
+            .get_latest_object_ref_or_tombstone(object_id)
+    }
+
+    /// Returns the latest object we have for this object_id in the objects table.
+    ///
+    /// If no entry for the object_id is found, return None.
+    pub fn get_latest_object_or_tombstone(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<Option<(ObjectKey, StoreObjectWrapper)>, SuiError> {
+        self.perpetual_tables
+            .get_latest_object_or_tombstone(object_id)
     }
 
     pub fn insert_transaction_and_effects(
@@ -1887,7 +1899,7 @@ impl ChildObjectResolver for AuthorityStore {
 
 impl ParentSync for AuthorityStore {
     fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
-        self.get_object_or_tombstone(object_id)
+        self.get_latest_object_ref_or_tombstone(object_id)
     }
 }
 

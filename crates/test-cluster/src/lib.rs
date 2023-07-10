@@ -228,7 +228,7 @@ impl TestCluster {
             .sui_node
             .state()
             .db()
-            .get_object_or_tombstone(object_id)
+            .get_latest_object_ref_or_tombstone(object_id)
             .unwrap()
             .unwrap()
     }
