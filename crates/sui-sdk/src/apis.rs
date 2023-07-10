@@ -271,15 +271,7 @@ impl ReadApi {
     /// ```rust
     /// use sui_sdk::SuiClientBuilder;
     ///
-<<<<<<< HEAD
-<<<<<<< HEAD
     /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
-=======
-    /// let sui = SuiClientBuilder::default().build_local_network().await?; // local Sui network
->>>>>>> 41d43bcfa8 (Rework the structure, create a utils module, and move the APIs in separate files)
-=======
-    /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
->>>>>>> 69b5eeb949 (Larger refactoring fixing the examples and comments)
     /// let total_transaction_blocks = sui.read_api().get_total_transaction_blocks().await?;
     pub async fn get_total_transaction_blocks(&self) -> SuiRpcResult<u64> {
         Ok(*self.api.http.get_total_transaction_blocks().await?)
@@ -321,15 +313,7 @@ impl ReadApi {
     /// ```rust
     /// use sui_sdk::SuiClientBuilder;
     ///
-<<<<<<< HEAD
-<<<<<<< HEAD
     /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
-=======
-    /// let sui = SuiClientBuilder::default().build_local_network().await?; // local Sui network
->>>>>>> 41d43bcfa8 (Rework the structure, create a utils module, and move the APIs in separate files)
-=======
-    /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
->>>>>>> 69b5eeb949 (Larger refactoring fixing the examples and comments)
     /// let committee_info = sui.read_api().get_committee_info(None).await?;
     /// ```
     pub async fn get_committee_info(
@@ -865,15 +849,7 @@ impl GovernanceApi {
     /// ```rust
     /// use sui_sdk::SuiClientBuilder;
     ///
-<<<<<<< HEAD
-<<<<<<< HEAD
     /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
-=======
-    /// let sui = SuiClientBuilder::default().build_local_network().await?; // local Sui network
->>>>>>> 41d43bcfa8 (Rework the structure, create a utils module, and move the APIs in separate files)
-=======
-    /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
->>>>>>> 69b5eeb949 (Larger refactoring fixing the examples and comments)
     /// let committee_info = sui.read_api().get_committee_info(None).await?;
     /// ```
     pub async fn get_committee_info(
