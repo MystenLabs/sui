@@ -63,8 +63,8 @@ be used to implement application-specific transfer rules.
 -  [Function `withdraw`](#0x2_kiosk_withdraw)
 -  [Function `add_extension`](#0x2_kiosk_add_extension)
 -  [Function `disable_extension`](#0x2_kiosk_disable_extension)
--  [Function `re_enable_extension`](#0x2_kiosk_re_enable_extension)
--  [Function `limit_extension_for_types`](#0x2_kiosk_limit_extension_for_types)
+-  [Function `enable_extension`](#0x2_kiosk_enable_extension)
+-  [Function `set_allowed_types_for_extension`](#0x2_kiosk_set_allowed_types_for_extension)
 -  [Function `ext_storage`](#0x2_kiosk_ext_storage)
 -  [Function `ext_storage_mut`](#0x2_kiosk_ext_storage_mut)
 -  [Function `ext_place`](#0x2_kiosk_ext_place)
@@ -163,8 +163,10 @@ needs to be approved via the <code>TransferPolicy</code>.
 <code>allow_extensions: bool</code>
 </dt>
 <dd>
- Whether to open the UID to public. Set to <code><b>true</b></code> by default
- but the owner can switch the state if necessary.
+ Whether to open the UID to public. Set to <code><b>false</b></code> by default
+ but the owner can switch the state if necessary. Keeping the base
+ UID read-only prevents the base UID from having too many dynamic
+ fields as well as protects from potentially malicious fields.
 </dd>
 </dl>
 
@@ -545,12 +547,20 @@ dynamic field.
 <code>permissions: u32</code>
 </dt>
 <dd>
- Bitmask of permissions that the extension has (can be revoked any
+ Bitmap of permissions that the extension has (can be revoked any
  moment). It's all or nothing policy - either the extension has the
  required permissions or no permissions at all.
+
+ 1st bit - <code>place</code> - allows to place items for sale
+ 2nd bit - <code>lock</code> - allows to lock items
+
+ For example:
+ - <code>11</code> - allows to place items and lock them.
+ - <code>01</code> - allows to place items, but not lock them.
+ - <code>00</code> - no permissions.
 </dd>
 <dt>
-<code><a href="types.md#0x2_types">types</a>: <a href="">vector</a>&lt;<a href="_TypeName">type_name::TypeName</a>&gt;</code>
+<code>allowed_types: <a href="">vector</a>&lt;<a href="_TypeName">type_name::TypeName</a>&gt;</code>
 </dt>
 <dd>
  List of types that the extension is allowed to use. It only affects
@@ -561,11 +571,11 @@ dynamic field.
 <code>is_enabled: bool</code>
 </dt>
 <dd>
- Whether the requested permissions are still available. While the
- owner can't delete the <code>Bag</code> storage unless the extension provides
- the functionality, they can revoke the permissions at any time,
- making the extension a harmless storage - similar to Kiosk having an
- exposed UID.
+ Whether the extension can call protected actions. By default, all
+ extensions are enabled (on <code>add_extension</code> call), however the Kiosk
+ owner can disable them at any time.
+
+ Disabling the extension does not limit its access to the storage.
 </dd>
 </dl>
 
@@ -669,16 +679,6 @@ authorized to use the type.
 
 
 
-<a name="0x2_kiosk_EExtensionsDisabled"></a>
-
-Trying to call <code>uid_mut</code> when extensions disabled
-
-
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EExtensionsDisabled">EExtensionsDisabled</a>: u64 = 7;
-</code></pre>
-
-
-
 <a name="0x2_kiosk_EIncorrectAmount"></a>
 
 Coin paid does not match the offer price.
@@ -759,6 +759,16 @@ Delisting an item that is not listed.
 
 
 
+<a name="0x2_kiosk_EUidAccessNotAllowed"></a>
+
+Trying to call <code>uid_mut</code> when <code>allow_extensions</code> set to false.
+
+
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EUidAccessNotAllowed">EUidAccessNotAllowed</a>: u64 = 7;
+</code></pre>
+
+
+
 <a name="0x2_kiosk_EWrongKiosk"></a>
 
 <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> does not match the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>.
@@ -819,7 +829,7 @@ Creates a new <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code> with a m
         profits: <a href="balance.md#0x2_balance_zero">balance::zero</a>(),
         owner: sender(ctx),
         item_count: 0,
-        allow_extensions: <b>true</b>
+        allow_extensions: <b>false</b>
     };
 
     <b>let</b> cap = <a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a> {
@@ -1334,7 +1344,7 @@ want this function to be called arbitrarily, and to prevent some
 malicious scenarios we now require the extension witness on install.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_add_extension">add_extension</a>&lt;Ext: drop&gt;(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, permissions: u32, <a href="types.md#0x2_types">types</a>: <a href="">vector</a>&lt;<a href="_TypeName">type_name::TypeName</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_add_extension">add_extension</a>&lt;Ext: drop&gt;(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, permissions: u32, allowed_types: <a href="">vector</a>&lt;<a href="_TypeName">type_name::TypeName</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1348,7 +1358,7 @@ malicious scenarios we now require the extension witness on install.
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>,
     cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>,
     permissions: u32,
-    <a href="types.md#0x2_types">types</a>: <a href="">vector</a>&lt;TypeName&gt;,
+    allowed_types: <a href="">vector</a>&lt;TypeName&gt;,
     ctx: &<b>mut</b> TxContext
 ) {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
@@ -1356,7 +1366,7 @@ malicious scenarios we now require the extension witness on install.
     df::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {}, <a href="kiosk.md#0x2_kiosk_Extension">Extension</a> {
         storage: <a href="bag.md#0x2_bag_new">bag::new</a>(ctx),
         permissions,
-        <a href="types.md#0x2_types">types</a>,
+        allowed_types,
         is_enabled: <b>true</b>,
     })
 }
@@ -1397,15 +1407,16 @@ The storage is still available to the extension (until it's removed).
 
 </details>
 
-<a name="0x2_kiosk_re_enable_extension"></a>
+<a name="0x2_kiosk_enable_extension"></a>
 
-## Function `re_enable_extension`
+## Function `enable_extension`
 
-Re-enable permissions for the extension. Can only be performed by the
-owner. The extension can start performing protected actions again.
+Re-enable the extension allowing it to call protected actions (eg
+<code>place</code>, <code>lock</code>). By default, all added extensions are enabled. Kiosk
+owner can disable them via <code>disable_extension</code> call.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_re_enable_extension">re_enable_extension</a>&lt;Ext: drop&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_enable_extension">enable_extension</a>&lt;Ext: drop&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>)
 </code></pre>
 
 
@@ -1414,7 +1425,7 @@ owner. The extension can start performing protected actions again.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_re_enable_extension">re_enable_extension</a>&lt;Ext: drop&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_enable_extension">enable_extension</a>&lt;Ext: drop&gt;(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>,
     cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>,
 ) {
@@ -1427,16 +1438,16 @@ owner. The extension can start performing protected actions again.
 
 </details>
 
-<a name="0x2_kiosk_limit_extension_for_types"></a>
+<a name="0x2_kiosk_set_allowed_types_for_extension"></a>
 
-## Function `limit_extension_for_types`
+## Function `set_allowed_types_for_extension`
 
 Limit the extension to a set of types. Can only be performed by the
 owner. The extension can only perform protected actions on the types
 specified in the list.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_limit_extension_for_types">limit_extension_for_types</a>&lt;Ext: drop&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, <a href="types.md#0x2_types">types</a>: <a href="">vector</a>&lt;<a href="_TypeName">type_name::TypeName</a>&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_set_allowed_types_for_extension">set_allowed_types_for_extension</a>&lt;Ext: drop&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, <a href="types.md#0x2_types">types</a>: <a href="">vector</a>&lt;<a href="_TypeName">type_name::TypeName</a>&gt;)
 </code></pre>
 
 
@@ -1445,13 +1456,13 @@ specified in the list.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_limit_extension_for_types">limit_extension_for_types</a>&lt;Ext: drop&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_set_allowed_types_for_extension">set_allowed_types_for_extension</a>&lt;Ext: drop&gt;(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>,
     cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>,
     <a href="types.md#0x2_types">types</a>: <a href="">vector</a>&lt;TypeName&gt;,
 ) {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
-    <a href="kiosk.md#0x2_kiosk_extension_mut">extension_mut</a>&lt;Ext&gt;(self).<a href="types.md#0x2_types">types</a> = <a href="types.md#0x2_types">types</a>;
+    <a href="kiosk.md#0x2_kiosk_extension_mut">extension_mut</a>&lt;Ext&gt;(self).allowed_types = <a href="types.md#0x2_types">types</a>;
 }
 </code></pre>
 
@@ -1492,8 +1503,8 @@ the extension as long as the extension is installed.
 ## Function `ext_storage_mut`
 
 Get mutable access to the extension storage. Can only be performed by
-the extension as long as the extension is installed. Removing
-permissions does not prevent the extension from accessing the storage.
+the extension as long as the extension is installed. Disabling the
+extension does not prevent it from accessing the storage.
 
 Potentially dangerous: extension developer can keep data in a Bag
 therefore never really allowing the KioskOwner to remove the extension.
@@ -1551,8 +1562,8 @@ and the type of the item must be in the list of allowed types.
     <b>assert</b>!(ext.is_enabled, <a href="kiosk.md#0x2_kiosk_EExtensionDisabled">EExtensionDisabled</a>);
     <b>assert</b>!(ext.permissions & 1 != 0, <a href="kiosk.md#0x2_kiosk_EExtensionNotAllowed">EExtensionNotAllowed</a>);
     <b>assert</b>!(
-        <a href="_length">vector::length</a>(&ext.<a href="types.md#0x2_types">types</a>) == 0
-        || <a href="_contains">vector::contains</a>(&ext.<a href="types.md#0x2_types">types</a>, &<a href="_get">type_name::get</a>&lt;T&gt;()),
+        <a href="_length">vector::length</a>(&ext.allowed_types) == 0
+        || <a href="_contains">vector::contains</a>(&ext.allowed_types, &<a href="_get">type_name::get</a>&lt;T&gt;()),
         <a href="kiosk.md#0x2_kiosk_EExtensionNotAllowedForType">EExtensionNotAllowedForType</a>
     );
 
@@ -1591,8 +1602,8 @@ and the type of the item must be in the list of allowed types.
     <b>assert</b>!(ext.is_enabled, <a href="kiosk.md#0x2_kiosk_EExtensionDisabled">EExtensionDisabled</a>);
     <b>assert</b>!(ext.permissions & 2 != 0, <a href="kiosk.md#0x2_kiosk_EExtensionNotAllowed">EExtensionNotAllowed</a>);
     <b>assert</b>!(
-        <a href="_length">vector::length</a>(&ext.<a href="types.md#0x2_types">types</a>) == 0
-        || <a href="_contains">vector::contains</a>(&ext.<a href="types.md#0x2_types">types</a>, &<a href="_get">type_name::get</a>&lt;T&gt;()),
+        <a href="_length">vector::length</a>(&ext.allowed_types) == 0
+        || <a href="_contains">vector::contains</a>(&ext.allowed_types, &<a href="_get">type_name::get</a>&lt;T&gt;()),
         <a href="kiosk.md#0x2_kiosk_EExtensionNotAllowedForType">EExtensionNotAllowedForType</a>
     );
 
@@ -1913,7 +1924,7 @@ Aborts if <code>allow_extensions</code> set to <code><b>false</b></code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_uid_mut">uid_mut</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>): &<b>mut</b> UID {
-    <b>assert</b>!(self.allow_extensions, <a href="kiosk.md#0x2_kiosk_EExtensionsDisabled">EExtensionsDisabled</a>);
+    <b>assert</b>!(self.allow_extensions, <a href="kiosk.md#0x2_kiosk_EUidAccessNotAllowed">EUidAccessNotAllowed</a>);
     &<b>mut</b> self.id
 }
 </code></pre>

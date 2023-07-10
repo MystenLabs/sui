@@ -437,19 +437,27 @@ module sui::kiosk {
         /// top level (eg items / listings) while giving extension developers
         /// the ability to store any data they want.
         storage: Bag,
-        /// Bitmask of permissions that the extension has (can be revoked any
+        /// Bitmap of permissions that the extension has (can be revoked any
         /// moment). It's all or nothing policy - either the extension has the
         /// required permissions or no permissions at all.
+        ///
+        /// 1st bit - `place` - allows to place items for sale
+        /// 2nd bit - `lock` - allows to lock items
+        ///
+        /// For example:
+        /// - `11` - allows to place items and lock them.
+        /// - `01` - allows to place items, but not lock them.
+        /// - `00` - no permissions.
         permissions: u32,
         /// List of types that the extension is allowed to use. It only affects
         /// permissioned actions (eg `place`, `lock`). The Kiosk owner can limit
         /// an extensions functionality to a set of specified types.
-        types: vector<TypeName>,
-        /// Whether the requested permissions are still available. While the
-        /// owner can't delete the `Bag` storage unless the extension provides
-        /// the functionality, they can revoke the permissions at any time,
-        /// making the extension a harmless storage - similar to Kiosk having an
-        /// exposed UID.
+        allowed_types: vector<TypeName>,
+        /// Whether the extension can call protected actions. By default, all
+        /// extensions are enabled (on `add_extension` call), however the Kiosk
+        /// owner can disable them at any time.
+        ///
+        /// Disabling the extension does not limit its access to the storage.
         is_enabled: bool,
     }
 
@@ -469,7 +477,7 @@ module sui::kiosk {
         self: &mut Kiosk,
         cap: &KioskOwnerCap,
         permissions: u32,
-        types: vector<TypeName>,
+        allowed_types: vector<TypeName>,
         ctx: &mut TxContext
     ) {
         assert!(object::id(self) == cap.for, ENotOwner);
@@ -477,7 +485,7 @@ module sui::kiosk {
         df::add(&mut self.id, ExtensionKey<Ext> {}, Extension {
             storage: bag::new(ctx),
             permissions,
-            types,
+            allowed_types,
             is_enabled: true,
         })
     }
@@ -493,9 +501,10 @@ module sui::kiosk {
         extension_mut<Ext>(self).is_enabled = false;
     }
 
-    /// Re-enable permissions for the extension. Can only be performed by the
-    /// owner. The extension can start performing protected actions again.
-    public fun re_enable_extension<Ext: drop>(
+    /// Re-enable the extension allowing it to call protected actions (eg
+    /// `place`, `lock`). By default, all added extensions are enabled. Kiosk
+    /// owner can disable them via `disable_extension` call.
+    public fun enable_extension<Ext: drop>(
         self: &mut Kiosk,
         cap: &KioskOwnerCap,
     ) {
@@ -506,13 +515,13 @@ module sui::kiosk {
     /// Limit the extension to a set of types. Can only be performed by the
     /// owner. The extension can only perform protected actions on the types
     /// specified in the list.
-    public fun limit_extension_for_types<Ext: drop>(
+    public fun set_allowed_types_for_extension<Ext: drop>(
         self: &mut Kiosk,
         cap: &KioskOwnerCap,
         types: vector<TypeName>,
     ) {
         assert!(object::id(self) == cap.for, ENotOwner);
-        extension_mut<Ext>(self).types = types;
+        extension_mut<Ext>(self).allowed_types = types;
     }
 
     /// Get immutable access to the extension storage. Can only be performed by
@@ -524,8 +533,8 @@ module sui::kiosk {
     }
 
     /// Get mutable access to the extension storage. Can only be performed by
-    /// the extension as long as the extension is installed. Removing
-    /// permissions does not prevent the extension from accessing the storage.
+    /// the extension as long as the extension is installed. Disabling the
+    /// extension does not prevent it from accessing the storage.
     ///
     /// Potentially dangerous: extension developer can keep data in a Bag
     /// therefore never really allowing the KioskOwner to remove the extension.
@@ -552,8 +561,8 @@ module sui::kiosk {
         assert!(ext.is_enabled, EExtensionDisabled);
         assert!(ext.permissions & 1 != 0, EExtensionNotAllowed);
         assert!(
-            vector::length(&ext.types) == 0
-            || vector::contains(&ext.types, &type_name::get<T>()),
+            vector::length(&ext.allowed_types) == 0
+            || vector::contains(&ext.allowed_types, &type_name::get<T>()),
             EExtensionNotAllowedForType
         );
 
@@ -572,8 +581,8 @@ module sui::kiosk {
         assert!(ext.is_enabled, EExtensionDisabled);
         assert!(ext.permissions & 2 != 0, EExtensionNotAllowed);
         assert!(
-            vector::length(&ext.types) == 0
-            || vector::contains(&ext.types, &type_name::get<T>()),
+            vector::length(&ext.allowed_types) == 0
+            || vector::contains(&ext.allowed_types, &type_name::get<T>()),
             EExtensionNotAllowedForType
         );
 
