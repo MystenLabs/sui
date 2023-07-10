@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { AxisBottom, AxisLeft, type TickRendererProps } from '@visx/axis';
-import { curveBasis } from '@visx/curve';
+import { curveCatmullRom as curve } from '@visx/curve';
 import { localPoint } from '@visx/event';
 import { PatternCircles } from '@visx/pattern';
-import { scaleLinear } from '@visx/scale';
+import { scaleLinear, scaleLog } from '@visx/scale';
 import { AreaClosed, LinePath } from '@visx/shape';
 import { useTooltipInPortal, useTooltip } from '@visx/tooltip';
 import clsx from 'clsx';
@@ -98,7 +98,7 @@ export function AreaGraph<D>({
 	);
 	const yScale = useMemo(
 		() =>
-			scaleLinear<number>({
+			scaleLog<number>({
 				domain: extent(data, getY) as [number, number],
 				range: [graphBottom, graphTop],
 				nice: true,
@@ -137,6 +137,7 @@ export function AreaGraph<D>({
 		return null;
 	}
 	const tooltipTopAdj = tooltipTop ? Math.max(tooltipTop - 20, 0) : undefined;
+	console.log('yscale ticks', yScale.ticks(2));
 	return (
 		<div className="relative h-full w-full overflow-hidden" ref={containerRef}>
 			{tooltipOpen && tooltipContentProps && tooltipContent ? (
@@ -186,7 +187,7 @@ export function AreaGraph<D>({
 				</defs>
 				<PatternCircles id={patternID} height={5} width={5} radius={1} fill="#c5e9e0" />
 				<AreaClosed<D>
-					curve={curveBasis}
+					curve={curve}
 					data={data}
 					yScale={yScale}
 					x={(d) => xScale(getX(d))}
@@ -195,7 +196,7 @@ export function AreaGraph<D>({
 					stroke="transparent"
 				/>
 				<AreaClosed<D>
-					curve={curveBasis}
+					curve={curve}
 					data={data}
 					yScale={yScale}
 					x={(d) => xScale(getX(d))}
@@ -204,7 +205,7 @@ export function AreaGraph<D>({
 					stroke="transparent"
 				/>
 				<LinePath<D>
-					curve={curveBasis}
+					curve={curve}
 					data={data}
 					x={(d) => xScale(getX(d))}
 					y={(d) => yScale(getY(d))}
@@ -230,7 +231,7 @@ export function AreaGraph<D>({
 					tickFormat={formatY ? (y) => formatY(y.valueOf()) : String}
 					hideTicks
 					hideAxisLine
-					tickValues={yScale.ticks(6).filter(Number.isInteger)}
+					tickValues={yScale.ticks(2).filter(Number.isInteger)}
 					tickComponent={AxisLeftTick}
 				/>
 				{tooltipContent ? (

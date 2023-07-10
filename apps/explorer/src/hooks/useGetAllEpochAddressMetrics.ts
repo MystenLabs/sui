@@ -12,8 +12,5 @@ export function useGetAllEpochAddressMetrics(
 	return useQuery({
 		queryKey: ['get', 'all', 'epoch', 'addresses', ...input],
 		queryFn: () => rpc.getAllEpochAddressMetrics(...input),
-		cacheTime: 24 * 60 * 60 * 1000,
-		staleTime: Infinity,
-		retry: 5,
 	});
 }
