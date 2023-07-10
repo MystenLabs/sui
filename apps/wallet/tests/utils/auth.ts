@@ -23,7 +23,7 @@ export async function createWallet(page: Page, extensionUrl: string) {
 			await dismissButton.click();
 		}
 	} catch (error) {
-		// do nothing
+		// do nothing here
 	}
 }
 
@@ -48,6 +48,6 @@ export async function importWallet(page: Page, extensionUrl: string, mnemonic: s
 			await dismissButton.click();
 		}
 	} catch (error) {
-		// do nothing
+		// do nothing here
 	}
 }
