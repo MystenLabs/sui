@@ -4,9 +4,10 @@
 import { useRpcClient } from '@mysten/core';
 import { ArrowRight12 } from '@mysten/icons';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 
 import { genTableDataFromTxData } from '../transactions/TxCardUtils';
+import { ActivityContext } from '~/components/Activity/index';
 import { useGetTransactionBlocks } from '~/hooks/useGetTransactionBlocks';
 import { Link } from '~/ui/Link';
 import { Pagination, useCursorPagination } from '~/ui/Pagination';
@@ -15,22 +16,38 @@ import { TableCard } from '~/ui/TableCard';
 import { Text } from '~/ui/Text';
 import { numberSuffix } from '~/utils/numberUtil';
 
-const DEFAULT_TRANSACTIONS_LIMIT = 20;
-
 interface Props {
+	paused?: boolean;
 	disablePagination?: boolean;
 	refetchInterval?: number;
 	initialLimit?: number;
 	transactionKindFilter?: 'ProgrammableTransaction';
+	setPlayPausedAnimation?: (isPaused: boolean) => void;
 }
 
 export function TransactionsActivityTable({
 	disablePagination,
-	refetchInterval,
-	initialLimit = DEFAULT_TRANSACTIONS_LIMIT,
 	transactionKindFilter,
+	setPlayPausedAnimation,
 }: Props) {
-	const [limit, setLimit] = useState(initialLimit);
+	const activityContext = useContext(ActivityContext);
+
+	if (!activityContext) {
+		throw new Error('TransactionsActivityTable must be used within ActivityContext.Provider');
+	}
+
+	const {
+		isFetching,
+		pagination,
+		isLoading,
+		isRefetching,
+		isInitialLoading,
+		isError,
+		cardData,
+		limit,
+		setLimit,
+	} = activityContext.transactionTable;
+
 	const rpc = useRpcClient();
 	const { data: count } = useQuery({
 		queryKey: ['transactions', 'count'],
@@ -38,21 +55,21 @@ export function TransactionsActivityTable({
 		cacheTime: 24 * 60 * 60 * 1000,
 		staleTime: Infinity,
 		retry: false,
-		refetchInterval: refetchInterval,
 	});
-	const transactions = useGetTransactionBlocks(
-		transactionKindFilter ? { TransactionKind: transactionKindFilter } : undefined,
-		limit,
-		refetchInterval,
-	);
-	const { data, isFetching, pagination, isLoading, isError } = useCursorPagination(transactions);
+
 	const goToFirstPageRef = useRef(pagination.onFirst);
 	goToFirstPageRef.current = pagination.onFirst;
-	const cardData = data ? genTableDataFromTxData(data.data) : undefined;
 
 	useEffect(() => {
 		goToFirstPageRef.current();
 	}, [transactionKindFilter]);
+
+	useEffect(() => {
+		if (!isLoading || (!isInitialLoading && isRefetching)) {
+			setPlayPausedAnimation?.(true);
+		}
+	}, [isInitialLoading, isLoading, isRefetching, setPlayPausedAnimation]);
+
 	return (
 		<div data-testid="tx">
 			{isError && (

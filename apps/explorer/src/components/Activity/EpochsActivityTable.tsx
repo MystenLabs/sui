@@ -4,7 +4,7 @@
 import { useRpcClient } from '@mysten/core';
 import { ArrowRight12 } from '@mysten/icons';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { genTableDataFromEpochsData } from './utils';
 import { useGetEpochs } from '~/hooks/useGetEpochs';

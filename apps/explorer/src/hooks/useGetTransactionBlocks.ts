@@ -12,7 +12,7 @@ export const DEFAULT_TRANSACTIONS_LIMIT = 20;
 export function useGetTransactionBlocks(
 	filter?: TransactionFilter,
 	limit = DEFAULT_TRANSACTIONS_LIMIT,
-	refetchInterval?: number,
+	disabled?: boolean,
 ) {
 	const rpc = useRpcClient();
 
@@ -34,7 +34,7 @@ export function useGetTransactionBlocks(
 			staleTime: 10 * 1000,
 			retry: false,
 			keepPreviousData: true,
-			refetchInterval: refetchInterval,
+			enabled: !disabled,
 		},
 	);
 }

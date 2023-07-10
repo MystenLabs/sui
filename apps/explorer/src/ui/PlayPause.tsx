@@ -2,47 +2,59 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { AutorefreshPause24, AutorefreshPlay24 } from '@mysten/icons';
-import { motion } from 'framer-motion';
-import { useEffect } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 
-const getAnimationVariants = (duration: number) => ({
-	initial: {
-		pathLength: 0,
-	},
-	animate: {
-		pathLength: 1,
-		transition: {
-			duration: duration,
-		},
-	},
-});
+import { ActivityContext } from '~/components/Activity';
 
 export interface PlayPauseProps {
 	paused?: boolean;
 	onChange(): void;
-	animate?: {
-		duration: number;
-		start: boolean;
-		setStart: (bool: boolean) => void;
-	};
+	animateDuration: number;
 }
 
-export function PlayPause({ paused, onChange, animate }: PlayPauseProps) {
+export function PlayPause({ paused, onChange, animateDuration }: PlayPauseProps) {
+	const activityContext = useContext(ActivityContext);
+
+	const [progress, setProgress] = useState(0);
+
+	if (!activityContext) {
+		throw new Error('PlayPause must be used within ActivityContext.Provider');
+	}
+
+	const { startAnimationTimestamp } = activityContext.transactionTable;
+	const animationFrameId = useRef<number>();
+
 	const Icon = paused ? AutorefreshPlay24 : AutorefreshPause24;
 
-	const isAnimating = animate?.start && !paused;
+	useEffect(() => {
+		if (paused) {
+			if (animationFrameId.current) {
+				cancelAnimationFrame(animationFrameId.current);
+			}
+			setProgress(0);
+		}
+	}, [paused]);
 
 	useEffect(() => {
-		let timer: NodeJS.Timeout;
+		const onTick = (timestamp: number) => {
+			const progressTime = timestamp - startAnimationTimestamp;
+			const progressPercentage = Math.min((progressTime / animateDuration) * 100, 100);
 
-		if (isAnimating) {
-			timer = setTimeout(() => {
-				animate.setStart(false);
-			}, animate.duration * 1000);
-		}
+			setProgress(progressPercentage);
 
-		return () => clearTimeout(timer);
-	}, [animate, isAnimating]);
+			if (startAnimationTimestamp > timestamp || progressPercentage < 100) {
+				animationFrameId.current = requestAnimationFrame(onTick);
+			}
+		};
+
+		animationFrameId.current = requestAnimationFrame(onTick);
+
+		return () => {
+			if (animationFrameId.current) {
+				cancelAnimationFrame(animationFrameId.current);
+			}
+		};
+	}, [animateDuration, startAnimationTimestamp]);
 
 	return (
 		<button
@@ -51,22 +63,21 @@ export function PlayPause({ paused, onChange, animate }: PlayPauseProps) {
 			onClick={onChange}
 			className="relative cursor-pointer border-none bg-transparent text-steel hover:text-steel-darker"
 		>
-			{isAnimating && (
-				<motion.svg className="absolute -rotate-90 text-hero" viewBox="0 0 16 16">
-					<motion.circle
-						fill="none"
-						cx="8"
-						cy="8"
-						r="7"
-						strokeLinecap="round"
-						strokeWidth={2}
-						stroke="currentColor"
-						variants={getAnimationVariants(animate.duration)}
-						initial="initial"
-						animate="animate"
-					/>
-				</motion.svg>
-			)}
+			<svg className="absolute -rotate-90 text-hero" viewBox="0 0 16 16">
+				<circle
+					fill="none"
+					cx="8"
+					cy="8"
+					r="7"
+					strokeLinecap="round"
+					strokeWidth={2}
+					stroke="currentColor"
+					style={{
+						strokeDasharray: 2 * Math.PI * 7,
+						strokeDashoffset: 2 * Math.PI * 7 - (progress / 100) * (2 * Math.PI * 7),
+					}}
+				/>
+			</svg>
 			<Icon />
 		</button>
 	);

@@ -15,8 +15,15 @@ import { TxTimeType } from '../tx-time/TxTimeType';
 import { HighlightedTableCol } from '~/components/Table/HighlightedTableCol';
 import { AddressLink, TransactionLink } from '~/ui/InternalLink';
 
+type Options = {
+	renderAsTimestamp?: boolean;
+};
+
 // Generate table data from the transaction data
-export const genTableDataFromTxData = (results: SuiTransactionBlockResponse[]) => ({
+export const genTableDataFromTxData = (
+	results: SuiTransactionBlockResponse[],
+	options?: Options,
+) => ({
 	data: results.map((transaction) => {
 		const status = getExecutionStatusType(transaction);
 		const sender = getTransactionSender(transaction);
@@ -24,7 +31,10 @@ export const genTableDataFromTxData = (results: SuiTransactionBlockResponse[]) =
 		return {
 			date: (
 				<HighlightedTableCol>
-					<TxTimeType timestamp={Number(transaction.timestampMs || 0)} />
+					<TxTimeType
+						timestamp={Number(transaction.timestampMs || 0)}
+						renderAsTimestamp={options?.renderAsTimestamp}
+					/>
 				</HighlightedTableCol>
 			),
 			digest: (

@@ -4,7 +4,7 @@
 import { useRpcClient } from '@mysten/core';
 import { ArrowRight12 } from '@mysten/icons';
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { genTableDataFromCheckpointsData } from './utils';
 import { useGetCheckpoints } from '~/hooks/useGetCheckpoints';

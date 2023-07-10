@@ -2,16 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Filter16 } from '@mysten/icons';
-import { useEffect, useState } from 'react';
-
+import { useEffect, useState, createContext, useContext, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
 
 import { EpochsActivityTable } from './EpochsActivityTable';
 import { TransactionsActivityTable } from './TransactionsActivityTable';
 import { CheckpointsTable } from '../checkpoints/CheckpointsTable';
-// import { PlayPause } from '~/ui/PlayPause';
+import { genTableDataFromTxData } from '~/components/transactions/TxCardUtils';
 import { useNetwork } from '~/context';
+import { useGetTransactionBlocks } from '~/hooks/useGetTransactionBlocks';
 import { DropdownMenu, DropdownMenuCheckboxItem } from '~/ui/DropdownMenu';
+import { useCursorPagination } from '~/ui/Pagination';
 import { PlayPause } from '~/ui/PlayPause';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/ui/Tabs';
 import { Network } from '~/utils/api/DefaultRpcClient';
@@ -24,15 +25,30 @@ type Props = {
 	disablePagination?: boolean;
 };
 
+type ActivityContextType = {
+	transactionTable: ReturnType<typeof useTransactionActivityTable>;
+	main: {
+		activeTab: string;
+		setActiveTab: (tab: string) => void;
+		paused: boolean;
+		setPaused: (paused: boolean) => void;
+	};
+};
+
+export const ActivityContext = createContext<ActivityContextType | null>(null);
+
 const AUTO_REFRESH_ID = 'auto-refresh';
 const REFETCH_INTERVAL_SECONDS = 10;
 const REFETCH_INTERVAL = REFETCH_INTERVAL_SECONDS * 1000;
 
-export function Activity({ initialTab, initialLimit, disablePagination }: Props) {
-	const [paused, setPaused] = useState(false);
-	const [activeTab, setActiveTab] = useState(() =>
-		initialTab && VALID_TABS.includes(initialTab) ? initialTab : 'transactions',
-	);
+function ActivityComponent({ initialTab, initialLimit, disablePagination }: Props) {
+	const activityContext = useContext(ActivityContext);
+
+	if (!activityContext) {
+		throw new Error('ActivityComponent must be used within ActivityContext.Provider');
+	}
+
+	const { paused, setPaused, activeTab, setActiveTab } = activityContext.main;
 
 	const handlePauseChange = () => {
 		if (paused) {
@@ -43,7 +59,7 @@ export function Activity({ initialTab, initialLimit, disablePagination }: Props)
 			toast.success('Auto-refresh paused', { id: AUTO_REFRESH_ID });
 		}
 
-		setPaused((paused) => !paused);
+		setPaused(!paused);
 	};
 
 	const refetchInterval = paused ? undefined : REFETCH_INTERVAL;
@@ -68,11 +84,6 @@ export function Activity({ initialTab, initialLimit, disablePagination }: Props)
 						<TabsTrigger value="epochs">Epochs</TabsTrigger>
 						<TabsTrigger value="checkpoints">Checkpoints</TabsTrigger>
 					</TabsList>
-					<div className="absolute inset-y-0 -top-1 right-0 text-2xl">
-						<PlayPause
-							paused={paused}
-							onChange={handlePauseChange}
-						/>
 					<div className="absolute inset-y-0 -top-1 right-0 flex items-center gap-3 text-2xl">
 						{activeTab === 'transactions' && isTransactionKindFilterEnabled ? (
 							<DropdownMenu
@@ -93,9 +104,14 @@ export function Activity({ initialTab, initialLimit, disablePagination }: Props)
 								align="end"
 							/>
 						) : null}
-						<div className="absolute inset-y-0 -top-1 right-0 text-2xl">
-							<PlayPause paused={paused} onChange={handlePauseChange} />
-						</div>
+
+						{activeTab === 'transactions' && (
+							<PlayPause
+								paused={paused}
+								onChange={handlePauseChange}
+								animateDuration={REFETCH_INTERVAL}
+							/>
+						)}
 					</div>
 				</div>
 				<TabsContent value="transactions">
@@ -103,24 +119,108 @@ export function Activity({ initialTab, initialLimit, disablePagination }: Props)
 						refetchInterval={refetchInterval}
 						initialLimit={initialLimit}
 						disablePagination={disablePagination}
+						paused={paused}
 						transactionKindFilter={showSystemTransactions ? undefined : 'ProgrammableTransaction'}
 					/>
 				</TabsContent>
 				<TabsContent value="epochs">
-					<EpochsActivityTable
-						refetchInterval={refetchInterval}
-						initialLimit={initialLimit}
-						disablePagination={disablePagination}
-					/>
+					<EpochsActivityTable initialLimit={initialLimit} disablePagination={disablePagination} />
 				</TabsContent>
 				<TabsContent value="checkpoints">
-					<CheckpointsTable
-						refetchInterval={refetchInterval}
-						initialLimit={initialLimit}
-						disablePagination={disablePagination}
-					/>
+					<CheckpointsTable initialLimit={initialLimit} disablePagination={disablePagination} />
 				</TabsContent>
 			</Tabs>
 		</div>
+	);
+}
+
+const DEFAULT_TRANSACTIONS_LIMIT = 20;
+
+function useTransactionActivityTable({
+	initialLimit = DEFAULT_TRANSACTIONS_LIMIT,
+	transactionKindFilter,
+	paused,
+	disabled,
+}: {
+	initialLimit?: number;
+	transactionKindFilter?: 'ProgrammableTransaction';
+	paused?: boolean;
+	disabled?: boolean;
+}) {
+	const [limit, setLimit] = useState(initialLimit);
+	const [startAnimationTimestamp, setStartAnimationTimestamp] = useState<number | undefined>();
+	const transactions = useGetTransactionBlocks(
+		transactionKindFilter ? { TransactionKind: transactionKindFilter } : undefined,
+		limit,
+		disabled,
+	);
+	const refetchInterval = paused ? undefined : REFETCH_INTERVAL;
+
+	const { data, refetch, ...rest } = useCursorPagination(transactions);
+
+	const handleRefetch = useCallback(async () => {
+		await refetch();
+		setStartAnimationTimestamp(performance.now());
+	}, [refetch]);
+
+	useEffect(() => {
+		if (!paused && !disabled) {
+			handleRefetch();
+		}
+
+		let timer: NodeJS.Timer;
+
+		if (refetchInterval && !disabled) {
+			timer = setInterval(() => {
+				handleRefetch();
+			}, refetchInterval);
+		}
+
+		return () => clearInterval(timer);
+	}, [disabled, handleRefetch, paused, refetch, refetchInterval]);
+
+	const cardData = data
+		? genTableDataFromTxData(data.data, {
+				renderAsTimestamp: paused,
+		  })
+		: undefined;
+
+	return {
+		...rest,
+		cardData,
+		limit,
+		setLimit,
+		startAnimationTimestamp,
+	};
+}
+
+export function Activity(props: Props) {
+	const [paused, setPaused] = useState(false);
+	const { initialTab, initialLimit, disablePagination } = props;
+	const [activeTab, setActiveTab] = useState(() =>
+		initialTab && VALID_TABS.includes(initialTab) ? initialTab : 'transactions',
+	);
+
+	const transactionTable = useTransactionActivityTable({
+		paused,
+		initialLimit,
+		transactionKindFilter: disablePagination ? undefined : 'ProgrammableTransaction',
+		disabled: paused || activeTab !== 'transactions',
+	});
+
+	return (
+		<ActivityContext.Provider
+			value={{
+				transactionTable,
+				main: {
+					activeTab,
+					setActiveTab,
+					paused,
+					setPaused,
+				},
+			}}
+		>
+			<ActivityComponent {...props} />
+		</ActivityContext.Provider>
 	);
 }
