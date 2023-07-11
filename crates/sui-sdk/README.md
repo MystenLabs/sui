@@ -115,12 +115,12 @@ async fn main() -> Result<(), anyhow::Error> {
    let sui_local = SuiClientBuilder::default().build_localnet().await?;
    println!("Sui local network version: {}", sui_local.api_version());
 
-   let active_address = SuiAddress::from_str("sui_address_here")?;
+   let active_address = SuiAddress::from_str("0x0000....0000")?; // change to your Sui address
 
    // Total balance
    let total_balance = sui_local
       .coin_read_api()
-      .get_balance(active_address, None)
+      .get_all_balances(active_address)
       .await?;
    println!("Total balance for address: {active_address} is {}", total_balance);
    Ok(())
