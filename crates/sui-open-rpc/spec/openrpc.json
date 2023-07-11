@@ -145,7 +145,7 @@
           "name": "Write API"
         }
       ],
-      "description": "Return transaction execution effects including the gas cost summary, while the effects are not committed to the chain.",
+      "description": "Simulate running the transaction, including all normally applied checks, without actually running it. This is useful for estimating the gas fees of a transaction before running it, but can also be used to determine the side-effects of a transaction without actually running it.",
       "params": [
         {
           "name": "tx_bytes",
@@ -164,7 +164,7 @@
       },
       "examples": [
         {
-          "name": "Dry runs a transaction block to get back estimated gas fees and other potential effects.",
+          "name": "Simulate running the transaction, including all normally applied checks, without actually running it. This is useful for estimating the gas fees of a transaction before running it, but can also be used to determine the side-effects of a transaction without actually running it.",
           "params": [
             {
               "name": "tx_bytes",
