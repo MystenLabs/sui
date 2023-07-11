@@ -91,11 +91,8 @@ pub struct NarwhalManager {
 impl NarwhalManager {
     pub fn new(config: NarwhalConfiguration, metrics: NarwhalManagerMetrics) -> Self {
         // Create the Narwhal Primary with configuration
-        let primary_node = PrimaryNode::new(
-            config.parameters.clone(),
-            true,
-            config.registry_service.clone(),
-        );
+        let primary_node =
+            PrimaryNode::new(config.parameters.clone(), config.registry_service.clone());
 
         // Create Narwhal Workers with configuration
         let worker_nodes =

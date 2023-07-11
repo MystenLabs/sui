@@ -33,7 +33,7 @@ use tokio::{sync::mpsc::Sender, task::JoinHandle, time::timeout};
 use tracing::{debug, error, info, instrument, trace, warn};
 use types::{
     BatchDigest, Certificate, CertificateAPI, CertificateDigest, ConditionalBroadcastReceiver,
-    GetCertificatesRequest, HeaderAPI, PayloadAvailabilityRequest, PrimaryToPrimaryClient,
+    HeaderAPI, PrimaryToPrimaryClient,
     WorkerSynchronizeMessage,
 };
 

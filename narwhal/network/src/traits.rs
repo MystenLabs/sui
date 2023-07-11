@@ -7,9 +7,8 @@ use crypto::NetworkPublicKey;
 use tokio::task::JoinHandle;
 use types::{
     error::LocalClientError, Batch, BatchDigest, FetchBatchesRequest, FetchBatchesResponse,
-    FetchCertificatesRequest, FetchCertificatesResponse, GetCertificatesRequest,
-    GetCertificatesResponse, RequestBatchesRequest, RequestBatchesResponse,
-    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerOwnBatchMessage,
+    FetchCertificatesRequest, FetchCertificatesResponse, RequestBatchesRequest,
+    RequestBatchesResponse, WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerOwnBatchMessage,
     WorkerSynchronizeMessage,
 };
 
@@ -63,11 +62,6 @@ pub trait ReliableNetwork<Request: Clone + Send + Sync> {
 
 #[async_trait]
 pub trait PrimaryToPrimaryRpc {
-    async fn get_certificates(
-        &self,
-        peer: &NetworkPublicKey,
-        request: impl anemo::types::request::IntoRequest<GetCertificatesRequest> + Send,
-    ) -> Result<GetCertificatesResponse>;
     async fn fetch_certificates(
         &self,
         peer: &NetworkPublicKey,
