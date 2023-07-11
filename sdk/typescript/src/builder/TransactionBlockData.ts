@@ -16,7 +16,7 @@ import {
 	string,
 	union,
 } from 'superstruct';
-import { hashTypedData } from '../cryptography/hash.js';
+import { hashTypedData } from './hash.js';
 import { SuiObjectRef } from '../types/index.js';
 import { builder } from './bcs.js';
 import { TransactionType, TransactionBlockInput } from './Transactions.js';

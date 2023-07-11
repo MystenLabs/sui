@@ -3,7 +3,7 @@
 
 import type { PublicKey } from './publickey.js';
 import type { SignatureScheme } from './signature.js';
-import { IntentScope, messageWithIntent } from '../utils/intent.js';
+import { IntentScope, messageWithIntent } from './intent.js';
 
 export const PRIVATE_KEY_SIZE = 32;
 export const LEGACY_PRIVATE_KEY_SIZE = 64;
@@ -21,7 +21,7 @@ interface SignedMessage {
 /**
  * TODO: Document
  */
-export abstract class Keypair {
+export abstract class BaseSigner {
 	abstract sign(bytes: Uint8Array): Promise<Uint8Array>;
 
 	async signWithIntent(bytes: Uint8Array, intent: IntentScope): Promise<SignedMessage> {
@@ -43,15 +43,20 @@ export abstract class Keypair {
 	}
 
 	/**
-	 * The public key for this keypair
-	 */
-	abstract getPublicKey(): PublicKey;
-
-	/**
 	 * Return the signature for the data.
 	 * Prefer the async verion {@link sign}, as this method will be deprecated in a future release.
 	 */
 	abstract signData(data: Uint8Array): Uint8Array;
+}
+
+/**
+ * TODO: Document
+ */
+export abstract class Keypair extends BaseSigner {
+	/**
+	 * The public key for this keypair
+	 */
+	abstract getPublicKey(): PublicKey;
 
 	/**
 	 * Get the key scheme of the keypair: Secp256k1 or ED25519

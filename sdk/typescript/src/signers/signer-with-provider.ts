@@ -16,7 +16,7 @@ import type {
 	SuiTransactionBlockResponseOptions,
 } from '../types/index.js';
 import { getTotalGasUsedUpperBound } from '../types/index.js';
-import { IntentScope, messageWithIntent } from '../utils/intent.js';
+import { IntentScope, messageWithIntent } from '../cryptography/intent.js';
 import type { Signer } from './signer.js';
 import type { SignedTransaction, SignedMessage } from './types.js';
 
