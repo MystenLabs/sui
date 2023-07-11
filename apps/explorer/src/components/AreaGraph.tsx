@@ -5,7 +5,7 @@ import { AxisBottom, AxisLeft, type TickRendererProps } from '@visx/axis';
 import { curveCatmullRom as curve } from '@visx/curve';
 import { localPoint } from '@visx/event';
 import { PatternCircles } from '@visx/pattern';
-import { scaleLinear, scaleLog } from '@visx/scale';
+import { scaleLinear } from '@visx/scale';
 import { AreaClosed, LinePath } from '@visx/shape';
 import { useTooltipInPortal, useTooltip } from '@visx/tooltip';
 import clsx from 'clsx';
@@ -96,15 +96,14 @@ export function AreaGraph<D>({
 			}),
 		[data, graphRight, graphLeft, getX],
 	);
-	const yScale = useMemo(
-		() =>
-			scaleLog<number>({
-				domain: extent(data, getY) as [number, number],
-				range: [graphBottom, graphTop],
-				nice: true,
-			}),
-		[data, graphTop, graphBottom, getY],
-	);
+	const yScale = useMemo(() => {
+		const [min, max] = extent(data, getY) as [number, number];
+		return scaleLinear<number>({
+			domain: [min - min * 0.3, max],
+			range: [graphBottom, graphTop],
+			nice: true,
+		});
+	}, [data, graphTop, graphBottom, getY]);
 	const handleTooltip = useCallback(
 		(x: number) => {
 			if (!tooltipContent) {
@@ -237,7 +236,7 @@ export function AreaGraph<D>({
 					tickFormat={formatY ? (y) => formatY(y.valueOf()) : String}
 					hideTicks
 					hideAxisLine
-					tickValues={yScale.ticks(2).filter(Number.isInteger)}
+					tickValues={yScale.ticks(4).filter(Number.isInteger)}
 					tickComponent={AxisLeftTick}
 				/>
 				{tooltipContent ? (
