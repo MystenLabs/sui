@@ -180,26 +180,27 @@ function NftsPage() {
 									key={objectId}
 									className="no-underline relative"
 								>
-									<div className="w-full h-full justify-center z-10 absolute pointer-events-auto text-gray-60 transition-colors duration-200 p-0 opacity-0 hover:opacity-100">
-										<div className="absolute top-2 right-3 rounded-md h-8 w-8">
-											<Button
-												variant="hidden"
-												size="icon"
-												onClick={(event: any) => hideAsset(objectId, event)}
-												after={<EyeClose16 />}
-											/>
+									<div className="group">
+										<div className="w-full h-full justify-center z-10 absolute pointer-events-auto text-gray-60 transition-colors duration-200 p-0">
+											<div className="absolute top-2 right-3 rounded-md h-8 w-8 opacity-0 group-hover:opacity-100">
+												<Button
+													variant="hidden"
+													size="icon"
+													onClick={(event: any) => hideAsset(objectId, event)}
+													after={<EyeClose16 />}
+												/>
+											</div>
 										</div>
+										<ErrorBoundary>
+											<NFTDisplayCard
+												objectId={objectId}
+												size="md"
+												showLabel
+												animateHover
+												borderRadius="xl"
+											/>
+										</ErrorBoundary>
 									</div>
-
-									<ErrorBoundary>
-										<NFTDisplayCard
-											objectId={objectId}
-											size="md"
-											showLabel
-											animateHover
-											borderRadius="xl"
-										/>
-									</ErrorBoundary>
 								</Link>
 							))}
 						<div ref={observerElem}>
