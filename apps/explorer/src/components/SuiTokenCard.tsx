@@ -1,16 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Refresh16, Sui } from '@mysten/icons';
+import { Sui } from '@mysten/icons';
 
 import { useSuiCoinData } from '~/hooks/useSuiCoinData';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
-import { Link } from '~/ui/Link';
 import { Text } from '~/ui/Text';
 
 export function SuiTokenCard() {
-	const { data, refetch, isLoading } = useSuiCoinData();
+	const { data } = useSuiCoinData();
 	const { currentPrice } = data || {};
 
 	const formattedPrice = currentPrice
@@ -33,11 +32,6 @@ export function SuiTokenCard() {
 					<Text variant="subtitleSmallExtra/medium" color="steel">
 						via CoinGecko
 					</Text>
-				</div>
-				<div>
-					<Link size="captionSmall" onClick={() => refetch()} disabled={isLoading} gap="gap-1">
-						refresh <Refresh16 className="h-4 w-4" />
-					</Link>
 				</div>
 			</div>
 		</Card>
