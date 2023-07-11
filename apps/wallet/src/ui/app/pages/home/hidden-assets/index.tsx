@@ -21,13 +21,22 @@ import PageTitle from '_src/ui/app/shared/PageTitle';
 
 const HIDDEN_ASSET_IDS = 'hidden-asset-ids';
 
+const extractName = (display?: Record<string, string> | null) => {
+	if (!display || !('name' in display)) return undefined;
+	const name = display.name;
+	if (typeof name === 'string') {
+		return name;
+	}
+	return null;
+};
+
 function NftsPage() {
 	const [internalHiddenAssetIds, internalSetHiddenAssetIds] = useState<string[]>([]);
 
 	const { data, isInitialLoading, isLoading, isError, error } = useMultiGetObjects(
 		// Prevents dupes
 		Array.from(new Set(internalHiddenAssetIds))!,
-		{ showContent: true },
+		{ showContent: true, showDisplay: true },
 	);
 
 	const hiddenNfts = data?.flatMap((data) => data.data) || [];
@@ -148,6 +157,28 @@ function NftsPage() {
 					<div className="flex flex-col w-full divide-y divide-solid divide-gray-40 divide-x-0 gap-2 mb-5">
 						{hiddenNfts
 							.filter((nft) => nft && internalHiddenAssetIds.includes(nft.objectId))
+							.sort((nftA, nftB) => {
+								let nameA = '';
+								let nameB = '';
+								if (nftA && typeof nftA.display?.data !== 'string') {
+									nameA = (nftA && extractName(nftA.display?.data)) || '';
+								} else if (nftA && typeof nftA.display?.data === 'string') {
+									nameA = nftA.display?.data;
+								}
+
+								if (nftB && typeof nftB.display?.data !== 'string') {
+									nameB = (nftB && extractName(nftB.display?.data)) || '';
+								} else if (nftB && typeof nftB.display?.data === 'string') {
+									nameB = nftB.display?.data;
+								}
+
+								if (nameA < nameB) {
+									return -1;
+								} else if (nameA > nameB) {
+									return 1;
+								}
+								return 0;
+							})
 							.map((nft) => {
 								const { objectId, type } = nft!;
 								return (
