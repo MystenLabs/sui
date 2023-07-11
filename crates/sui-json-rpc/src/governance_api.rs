@@ -97,8 +97,7 @@ impl GovernanceReadApi {
                             false,
                         )),
                         None => {
-                            return Err(ClientError::NotFound {
-                                // TODO(wlmyng): not sure if this is actually a client error
+                            return Err(ClientError::Pruned {
                                 entity: EntityType::DelegatedStake,
                                 id: oref.0.to_string(),
                             }

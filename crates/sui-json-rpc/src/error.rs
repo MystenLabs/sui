@@ -94,12 +94,8 @@ impl Error {
 
 #[derive(Debug, Error)]
 pub enum ServerError {
-    // do we really need these variants for server-side errors?
     #[error("Serde error")]
     Serde,
-
-    #[error("Unexpected error")]
-    Unexpected,
 }
 
 impl From<ServerError> for RpcError {
@@ -169,6 +165,9 @@ pub enum ClientError {
         in_entity: EntityType,
         in_id: String,
     },
+
+    #[error("{entity} '{id}' not found most likely due to pruning")]
+    Pruned { entity: EntityType, id: String },
 
     // For error scenarios that don't fit cleanly into NotFound
     #[error("{0}")]
