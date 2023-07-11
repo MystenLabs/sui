@@ -60,29 +60,6 @@ class CommandMaker:
                 f'--parameters {parameters} primary')
 
     @staticmethod
-    def run_no_consensus_primary(
-        primary_keys,
-        primary_network_keys,
-        worker_keys,
-        committee,
-        workers,
-        store,
-        parameters,
-        debug=False
-    ):
-        assert isinstance(primary_keys, str)
-        assert isinstance(primary_network_keys, str)
-        assert isinstance(worker_keys, str)
-        assert isinstance(committee, str)
-        assert isinstance(workers, str)
-        assert isinstance(parameters, str)
-        assert isinstance(debug, bool)
-        v = '-vvv' if debug else '-vv'
-        return (f'./narwhal-node {v} run --primary-keys {primary_keys} --primary-network-keys {primary_network_keys} '
-                f'--worker-keys {worker_keys} --committee {committee} --workers {workers} --store {store} '
-                f'--parameters {parameters} primary --consensus-disabled')
-
-    @staticmethod
     def run_worker(primary_keys, primary_network_keys, worker_keys, committee, workers, store, parameters, id, debug=False):
         assert isinstance(primary_keys, str)
         assert isinstance(primary_network_keys, str)
