@@ -21,7 +21,7 @@ fn temp_dir() -> std::path::PathBuf {
         .into_path()
 }
 
-fn insert_keys(
+pub fn insert_keys(
     db: &AuthorityPerpetualTables,
     total_unique_object_ids: u64,
 ) -> Result<(), anyhow::Error> {
@@ -67,20 +67,18 @@ async fn test_snapshot_basic() -> Result<(), anyhow::Error> {
         directory: Some(remote),
         ..Default::default()
     };
-    let include_wrapped_tombstone =
-        !ProtocolConfig::get_for_max_version().simplified_unwrap_then_delete();
     let snapshot_writer = StateSnapshotWriterV1::new(
-        0,
         &local_store_config,
         &remote_store_config,
         FileCompression::Zstd,
         NonZeroUsize::new(1).unwrap(),
-        include_wrapped_tombstone,
     )
     .await?;
     let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path, None));
     insert_keys(&perpetual_db, 1000)?;
-    snapshot_writer.write(perpetual_db.clone()).await?;
+    snapshot_writer
+        .write_internal(0, true, perpetual_db.clone())
+        .await?;
     let local_store_restore_config = ObjectStoreConfig {
         object_store: Some(ObjectStoreType::File),
         directory: Some(restored_local),
@@ -99,11 +97,7 @@ async fn test_snapshot_basic() -> Result<(), anyhow::Error> {
     snapshot_reader
         .read(&restored_perpetual_db, abort_registration)
         .await?;
-    compare_live_objects(
-        &perpetual_db,
-        &restored_perpetual_db,
-        include_wrapped_tombstone,
-    )?;
+    compare_live_objects(&perpetual_db, &restored_perpetual_db, true)?;
     Ok(())
 }
 
@@ -127,16 +121,16 @@ async fn test_snapshot_empty_db() -> Result<(), anyhow::Error> {
     let include_wrapped_tombstone =
         !ProtocolConfig::get_for_max_version().simplified_unwrap_then_delete();
     let snapshot_writer = StateSnapshotWriterV1::new(
-        0,
         &local_store_config,
         &remote_store_config,
         FileCompression::Zstd,
         NonZeroUsize::new(1).unwrap(),
-        include_wrapped_tombstone,
     )
     .await?;
     let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path, None));
-    snapshot_writer.write(perpetual_db.clone()).await?;
+    snapshot_writer
+        .write_internal(0, true, perpetual_db.clone())
+        .await?;
     let local_store_restore_config = ObjectStoreConfig {
         object_store: Some(ObjectStoreType::File),
         directory: Some(restored_local),

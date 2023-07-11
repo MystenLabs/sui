@@ -34,6 +34,7 @@ sui-storage.workspace = true
 sui-network.workspace = true
 sui-json-rpc.workspace = true
 sui-protocol-config.workspace = true
+sui-snapshot.workspace = true
 sui-telemetry.workspace = true
 sui-types.workspace = true
 mysten-metrics.workspace = true
