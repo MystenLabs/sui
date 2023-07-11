@@ -9,6 +9,7 @@
 		"src",
 		"CHANGELOG.md",
 		"builder",
+		"cryptography",
 		"client",
 		"faucet",
 		"keypairs"
@@ -30,6 +31,11 @@
 			"source": "./src/builder/index.ts",
 			"import": "./dist/esm/builder/index.js",
 			"require": "./dist/cjs/builder/index.js"
+		},
+		"./cryptography": {
+			"source": "./src/cryptography/index.ts",
+			"import": "./dist/esm/cryptography/index.js",
+			"require": "./dist/cjs/cryptography/index.js"
 		},
 		"./keypairs/ed25519": {
 			"source": "./src/keypairs/ed25519/index.ts",

@@ -21,7 +21,7 @@ import {
 import { ObjectId } from '../types/common.js';
 import type { WellKnownEncoding } from './utils.js';
 import { TRANSACTION_TYPE, create } from './utils.js';
-import { TypeTagSerializer } from '../signers/txn-data-serializers/type-tag-serializer.js';
+import { TypeTagSerializer } from './type-tag-serializer.js';
 import { normalizeSuiObjectId } from '../utils/sui-types.js';
 
 const option = <T extends Struct<any, any>>(some: T) =>
