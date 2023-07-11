@@ -21,7 +21,7 @@ export function SuiTokenCard() {
 
 	return (
 		<Card bg="white" spacing="lg" height="full">
-			<div className="flex gap-2">
+			<div className="flex items-center gap-2">
 				<div className="h-5 w-5 flex-shrink-0 rounded-full bg-sui p-1">
 					<Sui className="h-full w-full text-white" />
 				</div>
