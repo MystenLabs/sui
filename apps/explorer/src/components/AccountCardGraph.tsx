@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { formatAmount, formatDate } from '@mysten/core';
-import { type JsonRpcProvider } from '@mysten/sui.js';
+import { type AllEpochsAddressMetrics } from '@mysten/sui.js';
 import { ParentSize } from '@visx/responsive';
 import clsx from 'clsx';
 import { useMemo } from 'react';
@@ -20,9 +20,7 @@ import { Text } from '~/ui/Text';
 const graphDataField = 'cumulativeAddresses' as const;
 const graphDataText = 'Total accounts';
 
-type AddressMetricsType = Awaited<ReturnType<JsonRpcProvider['getAllEpochAddressMetrics']>>[number];
-
-function TooltipContent({ data }: { data: AddressMetricsType }) {
+function TooltipContent({ data }: { data: AllEpochsAddressMetrics[number] }) {
 	const dateFormatted = formatDate(new Date(data.timestampMs), ['day', 'month']);
 	const totalFormatted = formatAmount(data[graphDataField]);
 	return (
