@@ -208,7 +208,7 @@ fn merge_simple() {
     )
     .expect("Reading inner");
 
-    let dep_graphs = BTreeMap::from([(Symbol::from("A"), (inner, false))]);
+    let dep_graphs = BTreeMap::from([(Symbol::from("A"), (inner, false, false))]);
     let dependencies = &BTreeMap::from([(
         Symbol::from("A"),
         Dependency::Internal(InternalDependency {
@@ -257,7 +257,7 @@ fn merge_into_root() {
     )
     .expect("Reading inner");
 
-    let dep_graphs = BTreeMap::from([(Symbol::from("A"), (inner, false))]);
+    let dep_graphs = BTreeMap::from([(Symbol::from("A"), (inner, false, false))]);
     let dependencies = &BTreeMap::from([(
         Symbol::from("A"),
         Dependency::Internal(InternalDependency {
@@ -307,7 +307,7 @@ fn merge_detached() {
     )
     .expect("Reading inner");
 
-    let dep_graphs = BTreeMap::from([(Symbol::from("OtherDep"), (inner, false))]);
+    let dep_graphs = BTreeMap::from([(Symbol::from("OtherDep"), (inner, false, false))]);
     let Err(err) = outer.merge(
         dep_graphs,
         DependencyMode::Always,
@@ -340,7 +340,7 @@ fn merge_after_calculating_always_deps() {
     )
     .expect("Reading inner");
 
-    let dep_graphs = BTreeMap::from([(Symbol::from("A"), (inner, false))]);
+    let dep_graphs = BTreeMap::from([(Symbol::from("A"), (inner, false, false))]);
     let Err(err) = outer.merge(
         dep_graphs,
         DependencyMode::Always,
@@ -377,7 +377,7 @@ fn merge_overlapping() {
     )
     .expect("Reading inner");
 
-    let dep_graphs = BTreeMap::from([(Symbol::from("B"), (inner, false))]);
+    let dep_graphs = BTreeMap::from([(Symbol::from("B"), (inner, false, false))]);
     let dependencies = &BTreeMap::from([(
         Symbol::from("B"),
         Dependency::Internal(InternalDependency {
@@ -432,8 +432,8 @@ fn merge_overlapping_different_deps() {
     .expect("Reading inner2");
 
     let dep_graphs = BTreeMap::from([
-        (Symbol::from("C"), (inner1, false)),
-        (Symbol::from("B"), (inner2, false)),
+        (Symbol::from("C"), (inner1, false, false)),
+        (Symbol::from("B"), (inner2, false, false)),
     ]);
     let dependencies = &BTreeMap::from([(
         Symbol::from("B"),

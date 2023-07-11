@@ -1,6 +1,6 @@
 When resolving dependencies for package Root, conflicting dependencies found:
 
-in A
+At A -> ADep
 	no dependencies
-in ADep
-	ADep = { local = "deps_only/ADepDep" } (via dependency { name = "ADepDep" })
+At ADep
+	ADepDep = { local = "deps_only/ADepDep" } (via dependency { name = "ADepDep" })

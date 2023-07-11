@@ -1,5 +1,5 @@
 When resolving dependencies for package Root, conflicting dependencies found:
-in B
-	A = { local = "deps_only/ADep", version = "1.0.0" } (via dependency { name = "ADep" })
-in C
-	A = { local = "deps_only/ADep" } # Resolved by ../../../resolvers/successful.sh (via dependency { name = "ADep" })
+At B -> A
+	ADep = { local = "deps_only/ADep", version = "1.0.0" } (via dependency { name = "ADep" })
+At C -> A
+	ADep = { local = "deps_only/ADep" } # Resolved by ../../../resolvers/successful.sh (via dependency { name = "ADep" })

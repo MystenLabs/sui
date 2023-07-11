@@ -1,5 +1,5 @@
-When resolving dependencies for package Root, conflicting dependencies found:
-in A
+When resolving dependencies for package Root, conflicting versions of package C found:
+At A -> C
 	C = { local = "deps_only/C", version = "2.0.0" }
-in B
+At B -> C
 	C = { local = "deps_only/C", version = "1.0.0" }

@@ -1,5 +1,5 @@
 When resolving dependencies for package Root, conflicting dependencies found:
-in A
-	C = { local = "deps_only/D", version = "2.0.0" } (via dependency { name = "D" })
-in B
-	C = { local = "deps_only/D", version = "1.0.0" } (via dependency { name = "D" })
+At A -> C
+	D = { local = "deps_only/D", version = "2.0.0" } (via dependency { name = "D" })
+At B -> C
+	D = { local = "deps_only/D", version = "1.0.0" } (via dependency { name = "D" })

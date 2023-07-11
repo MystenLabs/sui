@@ -1,5 +1,5 @@
-Failed to resolve dependencies for package 'Root': Failed to resolve dependencies for package 'A': When resolving dependencies for package C, conflicting dependencies found:
-in E
+Failed to resolve dependencies for package 'Root': Failed to resolve dependencies for package 'A': When resolving dependencies for package C, conflicting versions of package G found:
+At E -> G
 	G = { local = "../G", version = "1.0.0" }
-in F
+At F -> G
 	G = { local = "../G", version = "2.0.0" }

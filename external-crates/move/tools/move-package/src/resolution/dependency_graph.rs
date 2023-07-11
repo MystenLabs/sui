@@ -250,7 +250,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         let overrides = collect_overrides(parent, &root_manifest.dependencies)?;
         let dev_overrides = collect_overrides(parent, &root_manifest.dev_dependencies)?;
 
-        for (dep_name, (g, is_override)) in dep_graphs.iter_mut() {
+        for (dep_name, (g, is_override, _)) in dep_graphs.iter_mut() {
             g.prune_subgraph(
                 root_manifest.package.name,
                 *dep_name,
@@ -260,7 +260,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 &dev_overrides,
             )?;
         }
-        for (dep_name, (g, is_override)) in dev_dep_graphs.iter_mut() {
+        for (dep_name, (g, is_override, _)) in dev_dep_graphs.iter_mut() {
             g.prune_subgraph(
                 root_manifest.package.name,
                 *dep_name,
@@ -301,10 +301,10 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         root_path: PathBuf,
         mode: DependencyMode,
         dependencies: &PM::Dependencies,
-    ) -> Result<BTreeMap<PM::PackageName, (DependencyGraph, bool)>> {
+    ) -> Result<BTreeMap<PM::PackageName, (DependencyGraph, bool, bool)>> {
         let mut dep_graphs = BTreeMap::new();
         for (dep_pkg_name, dep) in dependencies {
-            let (pkg_graph, is_override) = self
+            let (pkg_graph, is_override, is_external) = self
                 .new_for_dep(
                     parent,
                     dep,
@@ -319,7 +319,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                         parent_pkg
                     )
                 })?;
-            dep_graphs.insert(*dep_pkg_name, (pkg_graph, is_override));
+            dep_graphs.insert(*dep_pkg_name, (pkg_graph, is_override, is_external));
         }
         Ok(dep_graphs)
     }
@@ -333,8 +333,8 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         parent_pkg: PM::PackageName,
         dep_pkg_name: PM::PackageName,
         dep_pkg_path: PathBuf,
-    ) -> Result<(DependencyGraph, bool)> {
-        let (pkg_graph, is_override) = match dep {
+    ) -> Result<(DependencyGraph, bool, bool)> {
+        let (pkg_graph, is_override, is_external) = match dep {
             PM::Dependency::Internal(d) => {
                 check_for_dep_cycles(d.clone(), dep_pkg_name, &mut self.visited_dependencies)?;
                 self.dependency_cache
@@ -365,7 +365,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                         p.kind.reroot(&d.kind)?;
                     }
                 }
-                (pkg_graph, d.dep_override)
+                (pkg_graph, d.dep_override, false)
             }
             PM::Dependency::External(resolver) => {
                 let pkg_graph = DependencyGraph::get_external(
@@ -376,10 +376,10 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                     &dep_pkg_path,
                     &mut self.progress_output,
                 )?;
-                (pkg_graph, false)
+                (pkg_graph, false, true)
             }
         };
-        Ok((pkg_graph, is_override))
+        Ok((pkg_graph, is_override, is_external))
     }
 
     /// Computes dependency hashes but may return None if information about some dependencies is not
@@ -581,7 +581,7 @@ impl DependencyGraph {
     /// subgraphs to form the parent dependency graph.
     pub fn merge(
         &mut self,
-        dep_graphs: BTreeMap<PM::PackageName, (DependencyGraph, bool)>,
+        dep_graphs: BTreeMap<PM::PackageName, (DependencyGraph, bool, bool)>,
         mode: DependencyMode,
         root_package: PM::PackageName,
         parent: &PM::DependencyKind,
@@ -593,7 +593,7 @@ impl DependencyGraph {
 
         // collect all package names in all graphs in package table
         let mut all_packages: BTreeSet<PM::PackageName> = BTreeSet::new();
-        for (g, _) in (&dep_graphs).values() {
+        for (g, _, _) in (&dep_graphs).values() {
             all_packages.extend(g.package_table.keys());
         }
 
@@ -601,11 +601,11 @@ impl DependencyGraph {
         // packages represent a conflicting dependency; insert the packages and their respective
         // edges into the combined graph along the way
         for pkg_name in all_packages {
-            let mut existing_pkg_info: Option<(Symbol, &DependencyGraph, &Package)> = None;
-            for (dep_name, (g, _)) in &dep_graphs {
+            let mut existing_pkg_info: Option<(&DependencyGraph, &Package, bool)> = None;
+            for (_, (g, _, is_external)) in &dep_graphs {
                 if let Some(pkg) = g.package_table.get(&pkg_name) {
                     // graph g has a package with name pkg_name
-                    if let Some((existing_dep_name, existing_graph, existing_pkg)) =
+                    if let Some((existing_graph, existing_pkg, existing_is_external)) =
                         existing_pkg_info
                     {
                         // it's the subsequent time package with pkg_name has been encountered
@@ -619,29 +619,45 @@ impl DependencyGraph {
                                     "When resolving dependencies for package {}, \
                                      conflicting dependencies found:{}{}",
                                     root_package,
-                                    format_deps(pkg_name, existing_dep_name, exisiting_pkg_deps),
-                                    format_deps(pkg_name, *dep_name, pkg_deps),
+                                    format_deps(
+                                        dep_path_from_root(
+                                            root_package,
+                                            &existing_graph,
+                                            pkg_name,
+                                            existing_is_external
+                                        )?,
+                                        exisiting_pkg_deps
+                                    ),
+                                    format_deps(
+                                        dep_path_from_root(
+                                            root_package,
+                                            &g,
+                                            pkg_name,
+                                            *is_external,
+                                        )?,
+                                        pkg_deps,
+                                    ),
                                 )
                             }
                         } else {
                             bail!(
                                 "When resolving dependencies for package {0}, \
-                                 conflicting dependencies found:\nin {4}\n\t{1} = {2}\nin {5}\n\t{1} = {3}",
+                                 conflicting versions of package {1} found:\nAt {4}\n\t{1} = {2}\nAt {5}\n\t{1} = {3}",
                                 root_package,
                                 pkg_name,
                                 PackageWithResolverTOML(existing_pkg),
                                 PackageWithResolverTOML(&pkg),
-                                existing_dep_name,
-                                dep_name,
+                                dep_path_from_root(root_package, &existing_graph, pkg_name, existing_is_external)?,
+                                dep_path_from_root(root_package, &g, pkg_name, *is_external)?
                             );
                         }
                     } else {
                         // first time this package was encountered
-                        existing_pkg_info = Some((*dep_name, g, pkg));
+                        existing_pkg_info = Some((g, pkg, *is_external));
                     }
                 }
             }
-            if let Some((_, g, existing_pkg)) = existing_pkg_info {
+            if let Some((g, existing_pkg, _)) = existing_pkg_info {
                 // update combined graph with the new package and its dependencies
                 self.package_table.insert(pkg_name, existing_pkg.clone());
                 for (_, to_pkg_name, sub_dep) in g.package_graph.edges(pkg_name) {
@@ -653,7 +669,7 @@ impl DependencyGraph {
 
         // insert direct dependency edges and (if necessary) packages for the remaining graph nodes
         // (not present in package table)
-        for (dep_name, (g, _)) in &dep_graphs {
+        for (dep_name, (g, _, is_external)) in &dep_graphs {
             let Some(dep) = dependencies.get(dep_name) else {
                 bail!(
                     "Can't merge dependencies for '{}' because nothing depends on it",
@@ -665,7 +681,7 @@ impl DependencyGraph {
                 self.insert_direct_dep(dep, root_package, *dep_name, g, mode, parent)?;
             // make sure that dependencies of the directly dependent package do not differ from
             // the dependencies of the same package in other sub-graphs (if any)
-            for (other_dep_name, (other_g, _)) in &dep_graphs {
+            for (other_dep_name, (other_g, _, is_other_external)) in &dep_graphs {
                 if dep_name != other_dep_name && other_g.package_graph.contains_node(*dep_name) {
                     let (other_pkg_deps, pkg_deps) = deps_equal(*dep_name, &other_g, &g);
                     if other_pkg_deps != pkg_deps {
@@ -673,8 +689,19 @@ impl DependencyGraph {
                             "When resolving dependencies for package {}, \
                              conflicting dependencies found:\n{}{}",
                             root_package,
-                            format_deps(*dep_name, *other_dep_name, other_pkg_deps),
-                            format_deps(*dep_name, *dep_name, pkg_deps),
+                            format_deps(
+                                dep_path_from_root(
+                                    root_package,
+                                    &other_g,
+                                    *dep_name,
+                                    *is_other_external
+                                )?,
+                                other_pkg_deps
+                            ),
+                            format_deps(
+                                dep_path_from_root(root_package, &g, *dep_name, *is_external)?,
+                                pkg_deps
+                            ),
                         )
                     }
                 }
@@ -1380,18 +1407,17 @@ fn path_escape(p: &Path) -> Result<String, fmt::Error> {
 }
 
 fn format_deps(
-    dep_name: PM::PackageName,
-    pkg_name: PM::PackageName,
+    pkg_path: String,
     dependencies: Vec<(&Dependency, PM::PackageName, &Package)>,
 ) -> String {
-    let mut s = format!("\nin {}", pkg_name).to_string();
+    let mut s = format!("\nAt {}", pkg_path).to_string();
     if !dependencies.is_empty() {
         for (dep, pkg_name, pkg) in dependencies {
             s.push_str("\n\t");
             s.push_str(
                 format!(
                     "{} = {} (via dependency {})",
-                    dep_name,
+                    pkg_name,
                     PackageWithResolverTOML(pkg),
                     DependencyTOML(pkg_name, dep),
                 )
@@ -1478,4 +1504,39 @@ fn check_for_dep_cycles(
         bail!(msg);
     }
     Ok(())
+}
+
+/// Find the shortest path from a root of the graph to a given dependency and return it in a string
+/// format.
+fn dep_path_from_root(
+    root_package: PM::PackageName,
+    graph: &DependencyGraph,
+    pkg_name: PM::PackageName,
+    is_external: bool,
+) -> Result<String> {
+    match algo::astar(
+        &graph.package_graph,
+        graph.root_package,
+        |dst| dst == pkg_name,
+        |_| 1,
+        |_| 0,
+    ) {
+        None => bail!(
+            "When resolving dependencies for package {}, \
+             expected a dependency path between {} and {} which does not exist",
+            root_package,
+            graph.root_package,
+            pkg_name
+        ),
+        Some((_, p)) => {
+            let mut p = p.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+            if is_external {
+                // externally resolved graphs contain a path to the package in the enclosing graph -
+                // this package has to be removed from the path for the output to be consistent
+                // between internally and externally resolved graphs
+                p.remove(0);
+            }
+            Ok(format!("{}", p.join(" -> ")))
+        }
+    }
 }
