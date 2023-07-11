@@ -29,6 +29,7 @@ function Home() {
 		<>
 			<GradientContainer>
 				<div
+					data-testid="home-page"
 					className={clsx('home-page-grid-container-top', isSuiTokenCardEnabled && 'with-token')}
 				>
 					<div style={{ gridArea: 'network' }} className="overflow-hidden">
