@@ -177,8 +177,6 @@ The following environment variables are available to be used for each service in
   configuration to use under the `validators` folder.
 - `LOG_LEVEL` is the level of logging for the node defined as number of `v` parameters (ex `-vvv`). The following
   levels are defined according to the number of "v"s provided: `0 | 1 => "error", 2 => "warn", 3 => "info", 4 => "debug", 5 => "trace"`.
-- `CONSENSUS_DISABLED`. This value disables consensus (`Bullshark`) for a primary node and enables the
-  `gRPC` server. The corresponding argument is: `--consensus-disabled`
 - `WORKER_ID` is the ID, as integer, for service when it runs as a worker.
 - `CLEANUP_DISABLED`, when provided with value `true`, will disable the clean up of the validator folder
   from the database and log data. This is useful to preserve the state between multiple Docker Compose runs.

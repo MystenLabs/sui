@@ -132,7 +132,7 @@ class Demo:
 
             # Run the primaries (except the faulty ones).
             for i, address in enumerate(committee.primary_addresses(self.faults)):
-                cmd = CommandMaker.run_no_consensus_primary(
+                cmd = CommandMaker.run_primary(
                     PathMaker.primary_key_file(i),
                     PathMaker.primary_network_key_file(i),
                     PathMaker.worker_key_file(0),
