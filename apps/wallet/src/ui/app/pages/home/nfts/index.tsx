@@ -84,8 +84,8 @@ function NftsPage() {
 			const showAssetHiddenToast = async (objectId: string) => {
 				toast.custom(
 					(t) => (
-						<div className="flex items-center justify-between gap-2 bg-white w-full shadow-md border-solid border-gray-45 rounded-full px-3 py-2">
-							<div className="flex gap-1 items-center">
+						<div className="flex items-center justify-between gap-2 bg-white w-full shadow-summary-card border-solid border-gray-45 rounded-full px-3 py-2">
+							<div className="flex gap-2 items-center">
 								<Check12 className="text-gray-90" />
 								<div
 									onClick={() => {

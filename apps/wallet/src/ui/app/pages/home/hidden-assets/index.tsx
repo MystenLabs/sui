@@ -143,7 +143,7 @@ function NftsPage() {
 					<div className="flex flex-col w-full divide-y divide-solid divide-gray-40 divide-x-0 gap-2 mb-5">
 						{hiddenNfts
 							.filter((nft) => nft && internalHiddenAssetIds.includes(nft.objectId))
-							.map((nft, index) => {
+							.map((nft) => {
 								const { objectId, type } = nft!;
 								return (
 									<div className="flex justify-between items-center pt-2 pr-1" key={objectId}>
