@@ -26,6 +26,7 @@ interface Props {
 
 export function TransactionsActivityTable({
 	disablePagination,
+	refetchInterval,
 	initialLimit = DEFAULT_TRANSACTIONS_LIMIT,
 	transactionKindFilter,
 }: Props) {
@@ -41,6 +42,7 @@ export function TransactionsActivityTable({
 	const transactions = useGetTransactionBlocks(
 		transactionKindFilter ? { TransactionKind: transactionKindFilter } : undefined,
 		limit,
+		refetchInterval,
 	);
 	const { data, isFetching, pagination, isLoading, isError } = useCursorPagination(transactions);
 	const goToFirstPageRef = useRef(pagination.onFirst);
