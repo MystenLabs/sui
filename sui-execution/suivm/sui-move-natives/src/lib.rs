@@ -35,16 +35,24 @@ use self::{
 };
 use better_any::{Tid, TidAble};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{gas_algebra::InternalGas, identifier::Identifier};
+use move_core_types::{
+    gas_algebra::InternalGas,
+    identifier::Identifier,
+    language_storage::{StructTag, TypeTag},
+    value::MoveTypeLayout,
+    vm_status::StatusCode,
+};
 use move_stdlib::natives::{GasParameters, NurseryGasParameters};
-use move_vm_runtime::native_functions::{NativeFunction, NativeFunctionTable};
+use move_vm_runtime::native_functions::{NativeContext, NativeFunction, NativeFunctionTable};
 use move_vm_types::{
+    loaded_data::runtime_types::Type,
     natives::function::NativeResult,
     values::{Struct, Value},
 };
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
+use transfer::TransferReceiveObjectInternalCostParams;
 
 mod address;
 mod crypto;
@@ -129,6 +137,9 @@ pub struct NativesCostTable {
 
     // hmac
     pub hmac_hmac_sha3_256_cost_params: HmacHmacSha3256CostParams,
+
+    // Receive object
+    pub transfer_receive_object_internal_cost_params: TransferReceiveObjectInternalCostParams,
 }
 
 impl NativesCostTable {
@@ -465,6 +476,12 @@ impl NativesCostTable {
                     .hmac_hmac_sha3_256_input_cost_per_block()
                     .into(),
             },
+            transfer_receive_object_internal_cost_params: TransferReceiveObjectInternalCostParams {
+                transfer_receive_object_internal_cost_base: protocol_config
+                    .transfer_receive_object_cost_base_as_option()
+                    .unwrap_or(0)
+                    .into(),
+            },
         }
     }
 }
@@ -642,6 +659,11 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             make_native!(transfer::share_object),
         ),
         (
+            "transfer",
+            "receive_impl",
+            make_native!(transfer::receive_object_internal),
+        ),
+        (
             "tx_context",
             "derive_id",
             make_native!(tx_context::derive_id),
@@ -701,6 +723,12 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
         .collect()
 }
 
+// ID { bytes: address }
+// Extract the first field of the struct to get the address bytes.
+pub fn get_receiver_object_id(object: Value) -> Result<Value, PartialVMError> {
+    get_nested_struct_field(object, &[0])
+}
+
 // Object { id: UID { id: ID { bytes: address } } .. }
 // Extract the first field of the struct 3 times to get the id bytes.
 pub fn get_object_id(object: Value) -> Result<Value, PartialVMError> {
@@ -719,6 +747,29 @@ pub fn get_nested_struct_field(mut v: Value, offsets: &[usize]) -> Result<Value,
 pub fn get_nth_struct_field(v: Value, n: usize) -> Result<Value, PartialVMError> {
     let mut itr = v.value_as::<Struct>()?.unpack()?;
     Ok(itr.nth(n).unwrap())
+}
+
+/// Returns the struct tag, non-annotated type layout, and fully annotated type layout of `ty`.
+pub(crate) fn get_tag_and_layouts(
+    context: &NativeContext,
+    ty: &Type,
+) -> PartialVMResult<Option<(StructTag, MoveTypeLayout, MoveTypeLayout)>> {
+    let tag = match context.type_to_type_tag(ty)? {
+        TypeTag::Struct(s) => s,
+        _ => {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("Sui verifier guarantees this is a struct".to_string()),
+            )
+        }
+    };
+    let Some(layout) = context.type_to_type_layout(ty)? else {
+        return Ok(None)
+    };
+    let Some(annotated_layout) = context.type_to_fully_annotated_layout(ty)? else {
+        return Ok(None)
+    };
+    Ok(Some((*tag, layout, annotated_layout)))
 }
 
 #[macro_export]

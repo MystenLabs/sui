@@ -15,7 +15,9 @@ use std::{
 use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed};
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber},
+    committee::EpochId,
     error::VMMemoryLimitExceededSubStatusCode,
+    execution::LoadedRuntimeObjectMetadata,
     metrics::LimitsMetrics,
     object::{Data, MoveObject, Object, Owner},
     storage::ChildObjectResolver,
@@ -49,9 +51,11 @@ struct Inner<'a> {
     // whether or not this TX is gas metered
     is_metered: bool,
     // Local protocol config used to enforce limits
-    constants: LocalProtocolConfig,
+    local_config: LocalProtocolConfig,
     // Metrics for reporting exceeded limits
     metrics: Arc<LimitsMetrics>,
+    // Epoch ID for the current transaction. Used for receiving objects.
+    current_epoch_id: EpochId,
 }
 
 // maintains the runtime GlobalValues for child objects and manages the fetching of objects
@@ -66,8 +70,6 @@ pub(super) struct ChildObjectStore<'a> {
     store: BTreeMap<ObjectID, ChildObject>,
     // whether or not this TX is gas metered
     is_metered: bool,
-    // Local protocol config used to enforce limits
-    constants: LocalProtocolConfig,
 }
 
 pub(crate) enum ObjectResult<V> {
@@ -77,6 +79,68 @@ pub(crate) enum ObjectResult<V> {
 }
 
 impl<'a> Inner<'a> {
+    fn receive_object_from_store(
+        &self,
+        owner: ObjectID,
+        child: ObjectID,
+        version: SequenceNumber,
+    ) -> PartialVMResult<Option<(MoveObject, LoadedRuntimeObjectMetadata)>> {
+        let child_opt = self
+            .resolver
+            .get_object_received_at_version(&owner, &child, version, self.current_epoch_id)
+            .map_err(|msg| {
+                PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!("{msg}"))
+            })?;
+        let obj_opt = if let Some(object) = child_opt {
+            // guard against bugs in `receive_object_at_version`: if it returns a child object such that
+            // C.parent != parent, we raise an invariant violation since that should be checked by
+            // `receive_object_at_version`.
+            if object.owner != Owner::AddressOwner(owner.into()) {
+                return Err(
+                    PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!(
+                        "Bad owner for {child}. \
+                        Expected owner {owner} but found owner {}",
+                        object.owner
+                    )),
+                );
+            }
+            let loaded_metadata = LoadedRuntimeObjectMetadata {
+                version,
+                digest: object.digest(),
+                storage_rebate: object.storage_rebate,
+                previous_transaction: object.previous_transaction,
+            };
+
+            // `ChildObjectResolver::receive_object_at_version` should return the object at the
+            // version or nothing at all. If it returns an object with a different version, we
+            // should raise an invariant violation since it should be checked by
+            // `receive_object_at_version`.
+            if object.version() != version {
+                return Err(
+                    PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!(
+                        "Bad version for {child}. \
+                        Expected version {version} but found version {}",
+                        object.version()
+                    )),
+                );
+            }
+            match object.data {
+                Data::Package(_) => {
+                    return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
+                        format!(
+                            "Mismatched object type for {child}. \
+                                Expected a Move object but found a Move package"
+                        ),
+                    ))
+                }
+                Data::Move(mo @ MoveObject { .. }) => Some((mo, loaded_metadata)),
+            }
+        } else {
+            None
+        };
+        Ok(obj_opt)
+    }
+
     fn get_or_fetch_object_from_store(
         &mut self,
         parent: ObjectID,
@@ -139,8 +203,8 @@ impl<'a> Inner<'a> {
             if let LimitThresholdCrossed::Hard(_, lim) = check_limit_by_meter!(
                 self.is_metered,
                 cached_objects_count,
-                self.constants.object_runtime_max_num_cached_objects,
-                self.constants
+                self.local_config.object_runtime_max_num_cached_objects,
+                self.local_config
                     .object_runtime_max_num_cached_objects_system_tx,
                 self.metrics.excessive_object_runtime_cached_objects
             ) {
@@ -233,13 +297,42 @@ impl<'a> Inner<'a> {
     }
 }
 
+fn deserialize_move_object(
+    obj: &MoveObject,
+    child_ty: &Type,
+    child_ty_layout: &MoveTypeLayout,
+    child_move_type: MoveObjectType,
+) -> PartialVMResult<ObjectResult<(Type, MoveObjectType, Value)>> {
+    let child_id = obj.id();
+    // object exists, but the type does not match
+    if obj.type_() != &child_move_type {
+        return Ok(ObjectResult::MismatchedType);
+    }
+    let value = match Value::simple_deserialize(obj.contents(), child_ty_layout) {
+        Some(v) => v,
+        None => {
+            return Err(
+                PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_RESOURCE).with_message(
+                    format!("Failed to deserialize object {child_id} with type {child_move_type}",),
+                ),
+            )
+        }
+    };
+    Ok(ObjectResult::Loaded((
+        child_ty.clone(),
+        child_move_type,
+        value,
+    )))
+}
+
 impl<'a> ChildObjectStore<'a> {
     pub(super) fn new(
         resolver: &'a dyn ChildObjectResolver,
         root_version: BTreeMap<ObjectID, SequenceNumber>,
         is_metered: bool,
-        constants: LocalProtocolConfig,
+        local_config: LocalProtocolConfig,
         metrics: Arc<LimitsMetrics>,
+        current_epoch_id: EpochId,
     ) -> Self {
         Self {
             inner: Inner {
@@ -247,13 +340,48 @@ impl<'a> ChildObjectStore<'a> {
                 root_version,
                 cached_objects: BTreeMap::new(),
                 is_metered,
-                constants: constants.clone(),
+                local_config,
                 metrics,
+                current_epoch_id,
             },
             store: BTreeMap::new(),
             is_metered,
-            constants,
         }
+    }
+
+    pub(super) fn receive_object(
+        &mut self,
+        parent: ObjectID,
+        child: ObjectID,
+        child_version: SequenceNumber,
+        child_ty: &Type,
+        child_layout: &MoveTypeLayout,
+        child_fully_annotated_layout: &MoveTypeLayout,
+        child_move_type: MoveObjectType,
+    ) -> PartialVMResult<Option<(ObjectResult<Value>, LoadedRuntimeObjectMetadata)>> {
+        let Some((obj, obj_meta)) = self
+            .inner
+            .receive_object_from_store(parent, child, child_version)? else {
+                return Ok(None)
+            };
+
+        let deserialized_value =
+            match deserialize_move_object(&obj, child_ty, child_layout, child_move_type)? {
+                ObjectResult::MismatchedType => ObjectResult::MismatchedType,
+                ObjectResult::Loaded((_, _, gv)) => ObjectResult::Loaded(gv),
+            };
+        // Find all UIDs inside of the value and update the object parent maps with the contained
+        // UIDs in the received value. They should all have an upper bound version as the receiving object.
+        let contained_uids =
+            get_all_uids(child_fully_annotated_layout, obj.contents()).map_err(|e| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!("Failed to find UIDs for receiving object. ERROR: {e}"),
+                )
+            })?;
+        for id in contained_uids {
+            self.inner.root_version.insert(id, child_version);
+        }
+        Ok(Some((deserialized_value, obj_meta)))
     }
 
     pub(super) fn object_exists(
@@ -314,8 +442,9 @@ impl<'a> ChildObjectStore<'a> {
                 if let LimitThresholdCrossed::Hard(_, lim) = check_limit_by_meter!(
                     self.is_metered,
                     store_entries_count,
-                    self.constants.object_runtime_max_num_store_entries,
-                    self.constants
+                    self.inner.local_config.object_runtime_max_num_store_entries,
+                    self.inner
+                        .local_config
                         .object_runtime_max_num_store_entries_system_tx,
                     self.inner.metrics.excessive_object_runtime_store_entries
                 ) {
@@ -356,19 +485,12 @@ impl<'a> ChildObjectStore<'a> {
         child_move_type: MoveObjectType,
         child_value: Value,
     ) -> PartialVMResult<()> {
-        let mut child_object = ChildObject {
-            owner: parent,
-            ty: child_ty.clone(),
-            move_type: child_move_type,
-            value: GlobalValue::none(),
-        };
-        child_object.value.move_to(child_value).unwrap();
-
         if let LimitThresholdCrossed::Hard(_, lim) = check_limit_by_meter!(
             self.is_metered,
             self.store.len(),
-            self.constants.object_runtime_max_num_store_entries,
-            self.constants
+            self.inner.local_config.object_runtime_max_num_store_entries,
+            self.inner
+                .local_config
                 .object_runtime_max_num_store_entries_system_tx,
             self.inner.metrics.excessive_object_runtime_store_entries
         ) {
@@ -382,8 +504,8 @@ impl<'a> ChildObjectStore<'a> {
                 ));
         };
 
-        if let Some(prev) = self.store.insert(child, child_object) {
-            if prev.value.exists()? {
+        let mut value = if let Some(ChildObject { ty, value, .. }) = self.store.remove(&child) {
+            if value.exists()? {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message(
@@ -395,7 +517,36 @@ impl<'a> ChildObjectStore<'a> {
                         ),
                 );
             }
+            if self.inner.local_config.loaded_child_object_format {
+                // double check format did not change
+                if child_ty != &ty {
+                    let msg = format!("Type changed for child {child} when setting the value back");
+                    return Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .with_message(msg),
+                    );
+                }
+                value
+            } else {
+                GlobalValue::none()
+            }
+        } else {
+            GlobalValue::none()
+        };
+        if let Err((e, _)) = value.move_to(child_value) {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!("Unable to set value for child {child}, with error {e}",),
+                ),
+            );
         }
+        let child_object = ChildObject {
+            owner: parent,
+            ty: child_ty.clone(),
+            move_type: child_move_type,
+            value,
+        };
+        self.store.insert(child, child_object);
         Ok(())
     }
 

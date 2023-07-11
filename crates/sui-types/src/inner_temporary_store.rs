@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::effects::TransactionEvents;
+use crate::execution::LoadedRuntimeObjectMetadata;
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     object::Object,
@@ -10,8 +11,6 @@ use crate::{
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -19,8 +18,7 @@ pub type WrittenObjects = BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>;
 pub type ObjectMap = BTreeMap<ObjectID, Object>;
 pub type TxCoins = (ObjectMap, WrittenObjects);
 
-#[serde_as]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InnerTemporaryStore {
     pub objects: ObjectMap,
     pub mutable_inputs: Vec<ObjectRef>,
@@ -29,7 +27,7 @@ pub struct InnerTemporaryStore {
     // deleted or wrapped or unwrap-then-delete. The sequence number should have been updated to
     // the lamport version.
     pub deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
-    pub loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
+    pub loaded_runtime_objects: BTreeMap<ObjectID, LoadedRuntimeObjectMetadata>,
     pub events: TransactionEvents,
     pub max_binary_format_version: u32,
     pub no_extraneous_module_bytes: bool,

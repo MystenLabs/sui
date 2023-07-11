@@ -3,6 +3,7 @@
 
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_types::{
+    base_types::ObjectRef,
     error::{SuiError, SuiResult, UserInputError},
     storage::BackingPackageStore,
     transaction::{Command, InputObjectKind, TransactionData, TransactionDataAPI},
@@ -29,6 +30,7 @@ macro_rules! deny_if_true {
 pub fn check_transaction_for_signing(
     tx_data: &TransactionData,
     input_objects: &[InputObjectKind],
+    receiving_objects: &[ObjectRef],
     filter_config: &TransactionDenyConfig,
     package_store: &impl BackingPackageStore,
 ) -> SuiResult {
@@ -40,6 +42,25 @@ pub fn check_transaction_for_signing(
 
     check_package_dependencies(filter_config, tx_data, package_store)?;
 
+    check_receiving_objects(filter_config, receiving_objects)?;
+
+    Ok(())
+}
+
+fn check_receiving_objects(
+    filter_config: &TransactionDenyConfig,
+    receiving_objects: &[ObjectRef],
+) -> SuiResult {
+    deny_if_true!(
+        filter_config.receiving_objects_disabled() && !receiving_objects.is_empty(),
+        "Receiving objects is temporarily disabled".to_string()
+    );
+    for (id, _, _) in receiving_objects {
+        deny_if_true!(
+            filter_config.get_object_deny_set().contains(id),
+            format!("Access to object {:?} is temporarily disabled", id)
+        );
+    }
     Ok(())
 }
 

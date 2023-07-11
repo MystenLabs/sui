@@ -33,6 +33,7 @@ mod checked {
         self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
     };
     use sui_protocol_config::ProtocolConfig;
+    use sui_types::committee::EpochId;
     use sui_types::execution::ExecutionResults;
     use sui_types::{
         balance::Balance,
@@ -128,6 +129,7 @@ mod checked {
                 !gas_charger.is_unmetered(),
                 protocol_config,
                 metrics.clone(),
+                tx_context.epoch(),
             );
             let mut input_object_map = BTreeMap::new();
             let inputs = inputs
@@ -194,6 +196,7 @@ mod checked {
                 !gas_charger.is_unmetered(),
                 protocol_config,
                 metrics.clone(),
+                tx_context.epoch(),
             );
 
             // Set the profiler if in debug mode
@@ -376,7 +379,7 @@ mod checked {
             // Immutable objects and shared objects cannot be taken by value
             if matches!(
                 input_metadata_opt,
-                Some(InputObjectMetadata {
+                Some(InputObjectMetadata::InputObject {
                     owner: Owner::Immutable | Owner::Shared { .. },
                     ..
                 })
@@ -420,7 +423,11 @@ mod checked {
                 // error if taken
                 return Err(CommandArgumentError::InvalidValueUsage);
             };
-            if input_metadata_opt.is_some() && !input_metadata_opt.unwrap().is_mutable_input {
+            if let Some(InputObjectMetadata::InputObject {
+                is_mutable_input: false,
+                ..
+            }) = input_metadata_opt
+            {
                 return Err(CommandArgumentError::InvalidObjectByMutRef);
             }
             // if it is copyable, don't take it as we allow for the value to be copied even if
@@ -477,15 +484,28 @@ mod checked {
             The take+restore is an implementation detail of mutable references"
             );
             // restore is exclusively used for mut
-            let Ok((_, value_opt)) = self.borrow_mut_impl(arg, None) else {
+            let Ok((input_object_metadata, value_opt)) = self.borrow_mut_impl(arg, None) else {
                 invariant_violation!("Should be able to borrow argument to restore it")
             };
-            let old_value = value_opt.replace(value);
-            assert_invariant!(
-                old_value.is_none() || old_value.unwrap().is_copyable(),
-                "Should never restore a non-taken value, unless it is copyable. \
+            match input_object_metadata {
+                Some(InputObjectMetadata::Receiving { id, version }) => {
+                    let old_value = value_opt.replace(Value::Receiving(*id, *version));
+                    // If the value is receiving and it's being restored it must have been taken since
+                    // the `Receiving` struct is not copy.
+                    assert_invariant!(
+                        old_value.is_none(),
+                        "Should never restore a receiving value without having taken it"
+                    );
+                }
+                _ => {
+                    let old_value = value_opt.replace(value);
+                    assert_invariant!(
+                        old_value.is_none() || old_value.unwrap().is_copyable(),
+                        "Should never restore a non-taken value, unless it is copyable. \
             The take+restore is an implementation detail of mutable references"
-            );
+                    );
+                }
+            }
             Ok(())
         }
 
@@ -570,12 +590,12 @@ mod checked {
                 ..
             } = self;
             let tx_digest = tx_context.digest();
-            let gas_id_opt = gas.object_metadata.as_ref().map(|info| info.id);
+            let gas_id_opt = gas.object_metadata.as_ref().map(|info| info.id());
             let mut loaded_runtime_objects = BTreeMap::new();
             let mut additional_writes = BTreeMap::new();
             for input in inputs.into_iter().chain(std::iter::once(gas)) {
                 let InputValue {
-                    object_metadata: Some(InputObjectMetadata {
+                    object_metadata: Some(InputObjectMetadata::InputObject {
                         // We are only interested in mutable inputs.
                         is_mutable_input: true,
                         id, owner, version, digest,
@@ -648,6 +668,8 @@ mod checked {
                                     ));
                                 }
                             }
+                            // Receiving arguments can be dropped without being received
+                            Some(Value::Receiving(_, _)) => (),
                         }
                     }
                 }
@@ -703,6 +725,7 @@ mod checked {
                 !gas_charger.is_unmetered(),
                 protocol_config,
                 metrics,
+                tx_context.epoch(),
             );
             for (id, additional_write) in additional_writes {
                 let AdditionalWrite {
@@ -904,6 +927,7 @@ mod checked {
         is_metered: bool,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
+        current_epoch_id: EpochId,
     ) -> Session<'state, 'vm, LinkageView<'state>> {
         vm.new_session_with_extensions(
             linkage,
@@ -913,6 +937,7 @@ mod checked {
                 is_metered,
                 protocol_config,
                 metrics,
+                current_epoch_id,
             ),
         )
     }
@@ -1124,7 +1149,7 @@ mod checked {
         };
         let owner = obj.owner;
         let version = obj.version();
-        let object_metadata = InputObjectMetadata {
+        let object_metadata = InputObjectMetadata::InputObject {
             id,
             is_mutable_input,
             owner,
@@ -1198,6 +1223,9 @@ mod checked {
                 /* imm override */ !mutable,
                 id,
             ),
+            ObjectArg::Receiving((id, version, _)) => {
+                Ok(InputValue::new_receiving_object(id, version))
+            }
         }
     }
 

@@ -7,6 +7,7 @@ use crate::{
     error::ExecutionError,
     execution::{RawValueType, Value},
     transaction::Argument,
+    transfer::Receiving,
     type_resolver::TypeTagResolver,
 };
 
@@ -256,6 +257,10 @@ fn value_to_bytes_and_tag(
             let tag = resolver.get_type_tag(ty)?;
             (tag, bytes.clone())
         }
+        Value::Receiving(id, seqno) => (
+            Receiving::type_tag(),
+            Receiving::new(*id, *seqno).to_bcs_bytes(),
+        ),
     };
     Ok((bytes, type_tag))
 }

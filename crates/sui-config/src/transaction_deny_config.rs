@@ -58,6 +58,10 @@ pub struct TransactionDenyConfig {
 
     #[serde(skip)]
     address_deny_set: OnceCell<HashSet<SuiAddress>>,
+
+    /// Whether receiving objects transferred to other objects is allowed
+    #[serde(default)]
+    receiving_objects_disabled: bool,
     // TODO: We could consider add a deny list for types that we want to disable public transfer.
     // TODO: We could also consider disable more types of commands, such as transfer, split and etc.
 }
@@ -93,6 +97,10 @@ impl TransactionDenyConfig {
     pub fn user_transaction_disabled(&self) -> bool {
         self.user_transaction_disabled
     }
+
+    pub fn receiving_objects_disabled(&self) -> bool {
+        self.receiving_objects_disabled
+    }
 }
 
 #[derive(Default)]
@@ -126,6 +134,11 @@ impl TransactionDenyConfigBuilder {
 
     pub fn disable_package_upgrade(mut self) -> Self {
         self.config.package_upgrade_disabled = true;
+        self
+    }
+
+    pub fn disable_receiving_objects(mut self) -> Self {
+        self.config.receiving_objects_disabled = true;
         self
     }
 

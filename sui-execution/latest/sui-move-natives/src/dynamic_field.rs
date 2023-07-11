@@ -11,7 +11,6 @@ use move_core_types::{
     account_address::AccountAddress,
     gas_algebra::InternalGas,
     language_storage::{StructTag, TypeTag},
-    value::MoveTypeLayout,
     vm_status::StatusCode,
 };
 use move_vm_runtime::native_charge_gas_early_exit;
@@ -39,7 +38,8 @@ macro_rules! get_or_fetch_object {
         );
 
         assert!($ty_args.is_empty());
-        let (tag, layout, annotated_layout) = match get_tag_and_layouts($context, &child_ty)? {
+        let (tag, layout, annotated_layout) = match crate::get_tag_and_layouts($context, &child_ty)?
+        {
             Some(res) => res,
             None => {
                 return Ok(NativeResult::err(
@@ -496,26 +496,4 @@ pub fn has_child_object_with_ty(
         context.gas_used(),
         smallvec![Value::bool(has_child)],
     ))
-}
-
-fn get_tag_and_layouts(
-    context: &NativeContext,
-    ty: &Type,
-) -> PartialVMResult<Option<(StructTag, MoveTypeLayout, MoveTypeLayout)>> {
-    let tag = match context.type_to_type_tag(ty)? {
-        TypeTag::Struct(s) => s,
-        _ => {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Sui verifier guarantees this is a struct".to_string()),
-            )
-        }
-    };
-    let Some(layout) = context.type_to_type_layout(ty)? else {
-        return Ok(None)
-    };
-    let Some(annotated_layout) = context.type_to_fully_annotated_layout(ty)? else {
-        return Ok(None)
-    };
-    Ok(Some((*tag, layout, annotated_layout)))
 }

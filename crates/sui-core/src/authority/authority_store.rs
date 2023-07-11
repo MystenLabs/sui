@@ -23,7 +23,8 @@ use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use sui_types::object::Owner;
 use sui_types::storage::{
-    get_module_by_id, BackingPackageStore, ChildObjectResolver, DeleteKind, ObjectKey, ObjectStore,
+    get_module_by_id, BackingPackageStore, ChildObjectResolver, DeleteKind, MarkerKind, ObjectKey,
+    ObjectStore,
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
@@ -540,6 +541,93 @@ impl AuthorityStore {
         Ok(result)
     }
 
+    pub fn have_received_deleted_or_wrapped_object_at_version(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+        epoch_id: EpochId,
+    ) -> Result<bool, SuiError> {
+        let marker_key = (
+            epoch_id,
+            ObjectKey(*object_id, version),
+            MarkerKind::ReceivedDeletedOrWrappedAtVersion,
+        );
+        Ok(self
+            .perpetual_tables
+            .object_per_epoch_marker_table
+            .get(&marker_key)?
+            .is_some())
+    }
+
+    pub fn have_received_deleted_or_wrapped_object_at_version_or_after(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+        epoch_id: EpochId,
+    ) -> Result<bool, SuiError> {
+        let object_key = ObjectKey::max_for_id(object_id);
+        let marker_key = (
+            epoch_id,
+            object_key,
+            MarkerKind::ReceivedDeletedOrWrappedAtVersion,
+        );
+
+        // Find the most recent version of the object that was received, deleted or wrapped.
+        // Return true if the version is >= `version`. Otherwise return false.
+        let marker_entry = self
+            .perpetual_tables
+            .object_per_epoch_marker_table
+            .unbounded_iter()
+            .skip_prior_to(&marker_key)?
+            .next();
+        match marker_entry {
+            Some(((_, key, _), _)) => Ok(key.0 == *object_id && key.1 >= version),
+            None => Ok(false),
+        }
+    }
+
+    pub fn check_receiving_objects(
+        &self,
+        receiving_objects: &[ObjectRef],
+        input_objects_len: usize,
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> Result<(), SuiError> {
+        let protocol_config = epoch_store.protocol_config();
+        // Count receiving objects towards the input object limit as they are passed in the PTB
+        // args and they will (most likely) incur an object load at runtime.
+        fp_ensure!(
+            receiving_objects.len() + input_objects_len
+                <= protocol_config.max_input_objects() as usize,
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum input and receiving objects in a transaction".to_string(),
+                value: protocol_config.max_input_objects().to_string()
+            }
+            .into()
+        );
+
+        // Since we're at signing we check that every object reference that we are receiving is the
+        // most recent version of that object. If it's been received at the version specified we
+        // let it through to allow the transaction to run and fail to unlock any other objects in
+        // the transaction. Otherwise, we return an error.
+        for (object_id, version, _) in receiving_objects {
+            fp_ensure!(
+                self.get_object(object_id)?
+                    .is_some_and(|x| x.owner.is_address_owned() && x.version() == *version)
+                    || self.have_received_deleted_or_wrapped_object_at_version(
+                        object_id,
+                        *version,
+                        epoch_store.epoch()
+                    )?,
+                UserInputError::ObjectNotFound {
+                    object_id: *object_id,
+                    version: Some(*version),
+                }
+                .into()
+            );
+        }
+        Ok(())
+    }
+
     pub fn check_input_objects(
         &self,
         objects: &[InputObjectKind],
@@ -608,43 +696,73 @@ impl AuthorityStore {
                         } else {
                             LockMode::ReadOnly
                         };
-                        (InputKey(*id, Some(*version)), lock_mode)
+                        (InputKey::VersionedObject{ id: *id, version: *version}, lock_mode)
                     }
                     // TODO: use ReadOnly lock?
-                    InputObjectKind::MovePackage(id) => (InputKey(*id, None), LockMode::Default),
+                    InputObjectKind::MovePackage(id) => (InputKey::Package { id: *id }, LockMode::Default),
                     // Cannot use ReadOnly lock because we do not know if the object is immutable.
-                    InputObjectKind::ImmOrOwnedMoveObject(objref) => (InputKey(objref.0, Some(objref.1)), LockMode::Default),
+                    InputObjectKind::ImmOrOwnedMoveObject(objref) => (InputKey::VersionedObject {id: objref.0, version: objref.1}, LockMode::Default),
                 }
             })
             .collect()
     }
 
     /// Checks if the input object identified by the InputKey exists, with support for non-system
-    /// packages i.e. when version is None.
-    pub fn multi_input_objects_exist(
+    /// packages i.e. when version is None. If the input object doesn't exist and it's a receiving
+    /// object, we also check if the object exists in the object marker table and view it as
+    /// existing if it is in the table.
+    pub fn multi_input_objects_available(
         &self,
         keys: impl Iterator<Item = InputKey> + Clone,
+        receiving_objects: HashSet<InputKey>,
+        epoch_store: &AuthorityPerEpochStore,
     ) -> Result<Vec<bool>, SuiError> {
-        let (keys_with_version, keys_without_version): (Vec<_>, Vec<_>) =
-            keys.enumerate().partition(|(_, key)| key.1.is_some());
+        let (keys_with_version, keys_without_version): (Vec<_>, Vec<_>) = keys
+            .enumerate()
+            .partition(|(_, key)| key.version().is_some());
 
-        let versioned_results = keys_with_version.iter().map(|(idx, _)| *idx).zip(
+        let mut versioned_results = vec![];
+        for ((idx, input_key), has_key) in keys_with_version.iter().zip(
             self.perpetual_tables
                 .objects
-                .multi_get(
+                .multi_contains_keys(
                     keys_with_version
                         .iter()
-                        .map(|(_, k)| ObjectKey(k.0, k.1.unwrap())),
+                        .map(|(_, k)| ObjectKey(k.id(), k.version().unwrap())),
                 )?
-                .into_iter()
-                .map(|o| o.is_some()),
-        );
+                .into_iter(),
+        ) {
+            if has_key {
+                versioned_results.push((*idx, true))
+            } else if receiving_objects.contains(input_key) {
+                // For any objects that are unable to be fetched that are receiving objects, lookup
+                // and determine if the object exists in the object marker table as well. If so we
+                // will then mark it as "available" to let it progress through. If a version of the
+                // object greater than this one exists, then it was mutated by someone else and
+                // then deleted, and we can let it through to let the transaction fail at execution.
+                //
+                // If there's a more recent version of this object, then it was mutated by someone
+                // else and we can let it through to let the transaction fail at execution.
+                let has_received =
+                    self.have_received_deleted_or_wrapped_object_at_version_or_after(
+                        &input_key.id(),
+                        input_key.version().unwrap(),
+                        epoch_store.epoch(),
+                    )? || self
+                        .get_object(&input_key.id())?
+                        .map(|obj| obj.version() >= input_key.version().unwrap())
+                        .unwrap_or(false);
+                versioned_results.push((*idx, has_received));
+            } else {
+                versioned_results.push((*idx, false));
+            }
+        }
 
         let unversioned_results = keys_without_version.into_iter().map(|(idx, key)| {
             (
                 idx,
                 match self
-                    .get_latest_object_ref_or_tombstone(key.0)
+                    .get_latest_object_ref_or_tombstone(key.id())
                     .expect("read cannot fail")
                 {
                     None => false,
@@ -654,6 +772,7 @@ impl AuthorityStore {
         });
 
         let mut results = versioned_results
+            .into_iter()
             .chain(unversioned_results)
             .collect::<Vec<_>>();
         results.sort_by_key(|(idx, _)| *idx);
@@ -1027,8 +1146,8 @@ impl AuthorityStore {
         &self,
         write_batch: &mut DBBatch,
         inner_temporary_store: InnerTemporaryStore,
-        _transaction: &VerifiedTransaction,
-        _epoch_id: EpochId,
+        transaction: &VerifiedTransaction,
+        epoch_id: EpochId,
     ) -> SuiResult {
         let InnerTemporaryStore {
             objects,
@@ -1037,12 +1156,52 @@ impl AuthorityStore {
             deleted,
             events,
             max_binary_format_version: _,
-            loaded_child_objects: _,
+            loaded_runtime_objects: _,
             no_extraneous_module_bytes: _,
             runtime_packages_loaded_from_db: _,
         } = inner_temporary_store;
         trace!(written =? written.values().map(|((obj_id, ver, _), _, _)| (obj_id, ver)).collect::<Vec<_>>(),
                "batch_update_objects: temp store written");
+
+        // Get the list of objects that could be received in this transaction.
+        let possible_to_receive = transaction
+            .transaction_data()
+            .receiving_objects()
+            .unwrap_or(vec![]);
+        // Use this to get the actual set of objects that have been received -- any received
+        // object will show up as a write or delete.
+        let received_objects: Vec<_> = possible_to_receive
+            .into_iter()
+            .filter(|obj_ref| {
+                written.get(&obj_ref.0).is_some() || deleted.get(&obj_ref.0).is_some()
+            })
+            .collect();
+
+        // We record any received or deleted objects since they could be pruned.
+        let markers_to_place = received_objects
+            .iter()
+            .map(|(object_id, version, _)| (object_id, version))
+            .chain(
+                deleted
+                    .iter()
+                    .map(|(object_id, (version, _))| (object_id, version)),
+            )
+            .map(|(object_id, version)| {
+                (
+                    (
+                        epoch_id,
+                        ObjectKey(*object_id, *version),
+                        MarkerKind::ReceivedDeletedOrWrappedAtVersion,
+                    ),
+                    (),
+                )
+            });
+
+        // Insert each received and deleted object into the objects marker table
+        write_batch.insert_batch(
+            &self.perpetual_tables.object_per_epoch_marker_table,
+            markers_to_place,
+        )?;
 
         let owned_inputs: Vec<_> = active_inputs
             .iter()
@@ -1136,7 +1295,12 @@ impl AuthorityStore {
         self.check_owned_object_locks_exist(&owned_inputs)?;
 
         self.initialize_locks_impl(write_batch, &new_locks_to_init, false)?;
-        self.delete_locks(write_batch, &owned_inputs)
+        self.delete_locks(write_batch, &owned_inputs)?;
+
+        // Make sure to delete the locks for any received objects.
+        // Any objects that occur as a `Receiving` argument but have not been received will not
+        // have their locks touched.
+        self.delete_locks(write_batch, &received_objects)
     }
 
     /// Acquires a lock for a transaction on the given objects if they have all been initialized previously
@@ -1829,7 +1993,6 @@ impl AuthorityStore {
         }
     }
 
-    #[cfg(msim)]
     pub fn remove_all_versions_of_object(&self, object_id: ObjectID) {
         let entries: Vec<_> = self
             .perpetual_tables
@@ -1894,6 +2057,35 @@ impl ChildObjectResolver for AuthorityStore {
             });
         }
         Ok(Some(child_object))
+    }
+
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<Object>> {
+        let Some(recv_object) = self.get_object_by_key(receiving_object_id, receive_object_at_version)? else {
+            return Ok(None)
+        };
+
+        // Check for:
+        // * Invalid access -- treat as the object does not exist. Or;
+        // * If we've already received the object at the version -- then treat it as though it doesn't exist.
+        // These two cases must remain indisguishable to the caller otherwise we risk forks in
+        // transaction replay due to possible reordering of transactions during replay.
+        if recv_object.owner != Owner::AddressOwner((*owner).into())
+            || self.have_received_deleted_or_wrapped_object_at_version(
+                receiving_object_id,
+                receive_object_at_version,
+                epoch_id,
+            )?
+        {
+            return Ok(None);
+        }
+
+        Ok(Some(recv_object))
     }
 }
 
@@ -2026,14 +2218,41 @@ impl From<LockDetails> for LockDetailsWrapper {
 
 /// A potential input to a transaction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct InputKey(pub ObjectID, pub Option<SequenceNumber>);
+pub enum InputKey {
+    VersionedObject {
+        id: ObjectID,
+        version: SequenceNumber,
+    },
+    Package {
+        id: ObjectID,
+    },
+}
+
+impl InputKey {
+    pub fn id(&self) -> ObjectID {
+        match self {
+            InputKey::VersionedObject { id, .. } => *id,
+            InputKey::Package { id } => *id,
+        }
+    }
+
+    pub fn version(&self) -> Option<SequenceNumber> {
+        match self {
+            InputKey::VersionedObject { version, .. } => Some(*version),
+            InputKey::Package { .. } => None,
+        }
+    }
+}
 
 impl From<&Object> for InputKey {
     fn from(obj: &Object) -> Self {
         if obj.is_package() {
-            InputKey(obj.id(), None)
+            InputKey::Package { id: obj.id() }
         } else {
-            InputKey(obj.id(), Some(obj.version()))
+            InputKey::VersionedObject {
+                id: obj.id(),
+                version: obj.version(),
+            }
         }
     }
 }

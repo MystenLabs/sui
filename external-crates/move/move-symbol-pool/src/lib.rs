@@ -72,6 +72,8 @@ static_symbols!(
     "SUI",
     "authenticator_state",
     "AuthenticatorState",
+    "transfer",
+    "Receiving",
 );
 
 /// The global, unique cache of strings.

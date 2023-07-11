@@ -829,6 +829,7 @@ fn create_genesis_transaction(
                 &epoch_data.epoch_id(),
                 epoch_data.epoch_start_timestamp(),
                 InputObjects::new(vec![]),
+                vec![],
                 shared_object_refs,
                 vec![],
                 SuiGasStatus::new_unmetered(),

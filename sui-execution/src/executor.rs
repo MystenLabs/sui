@@ -37,6 +37,7 @@ pub trait Executor {
         epoch_timestamp_ms: u64,
         // Transaction Inputs
         input_objects: InputObjects,
+        receiving_objects: Vec<ObjectRef>,
         shared_object_refs: Vec<ObjectRef>,
         // Gas related
         gas_coins: Vec<ObjectRef>,
@@ -65,6 +66,7 @@ pub trait Executor {
         epoch_timestamp_ms: u64,
         // Transaction Inputs
         input_objects: InputObjects,
+        receiving_objects: Vec<ObjectRef>,
         shared_object_refs: Vec<ObjectRef>,
         // Gas related
         gas_coins: Vec<ObjectRef>,

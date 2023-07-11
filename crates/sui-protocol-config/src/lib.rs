@@ -272,6 +272,10 @@ struct FeatureFlags {
     // while charging for storage.
     #[serde(skip_serializing_if = "is_false")]
     simple_conservation_checks: bool,
+
+    // Enable receiving sent objects
+    #[serde(skip_serializing_if = "is_false")]
+    receive_objects: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -641,6 +645,9 @@ pub struct ProtocolConfig {
     transfer_freeze_object_cost_base: Option<u64>,
     // Cost params for the Move native function `share_object<T: key>(obj: T)`
     transfer_share_object_cost_base: Option<u64>,
+    // Cost params for the Move native function
+    // `receive_object<T: key>(p: &mut UID, recv: Receiving<T>T)`
+    transfer_receive_object_cost_base: Option<u64>,
 
     // TxContext
     // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
@@ -776,6 +783,17 @@ impl ProtocolConfig {
         } else {
             Err(Error(format!(
                 "package upgrades are not supported at {:?}",
+                self.version
+            )))
+        }
+    }
+
+    pub fn check_receiving_objects_supported(&self) -> Result<(), Error> {
+        if self.feature_flags.receive_objects {
+            Ok(())
+        } else {
+            Err(Error(format!(
+                "receiving objects is not support at {:?}",
                 self.version
             )))
         }
@@ -1131,6 +1149,7 @@ impl ProtocolConfig {
                 transfer_freeze_object_cost_base: Some(52),
                 // Cost params for the Move native function `share_object<T: key>(obj: T)`
                 transfer_share_object_cost_base: Some(52),
+                transfer_receive_object_cost_base: None,
 
                 // `tx_context` module
                 // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
@@ -1423,6 +1442,7 @@ impl ProtocolConfig {
                         "Twitch".to_string(),
                     ]);
                 }
+
                 cfg
             }
             22 => {
@@ -1434,6 +1454,12 @@ impl ProtocolConfig {
                 let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.simple_conservation_checks = true;
                 cfg.max_publish_or_upgrade_per_ptb = Some(5);
+
+                // TODO(tzakian)[tto] This should only be set in the protocol version that we
+                // release with.
+                cfg.transfer_receive_object_cost_base = Some(52);
+                cfg.feature_flags.receive_objects = true;
+
                 cfg
             }
             // Use this template when making changes:

@@ -417,6 +417,7 @@ mod test {
                 &epoch.epoch_id(),
                 epoch.epoch_start_timestamp(),
                 InputObjects::new(vec![]),
+                vec![],
                 shared_object_refs,
                 vec![],
                 SuiGasStatus::new_unmetered(),

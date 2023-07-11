@@ -41,6 +41,7 @@ use std::{
 };
 use sui_config::node::StateDebugDumpConfig;
 use sui_config::NodeConfig;
+use sui_types::execution::LoadedRuntimeObjectMetadata;
 use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
@@ -1099,7 +1100,16 @@ impl AuthorityState {
         let output_keys: Vec<_> = inner_temporary_store
             .written
             .iter()
-            .map(|(_, ((id, seq, _), obj, _))| InputKey(*id, (!obj.is_package()).then_some(*seq)))
+            .map(|(_, ((id, seq, _), obj, _))| {
+                if obj.is_package() {
+                    InputKey::Package { id: *id }
+                } else {
+                    InputKey::VersionedObject {
+                        id: *id,
+                        version: *seq,
+                    }
+                }
+            })
             .collect();
 
         self.commit_certificate(inner_temporary_store, certificate, effects, epoch_store)
@@ -1184,6 +1194,11 @@ impl AuthorityState {
         let tx_digest = *certificate.digest();
         let protocol_config = epoch_store.protocol_config();
         let shared_object_refs = input_objects.filter_shared_objects();
+        let receiving_objects = certificate
+            .data()
+            .intent_message()
+            .value
+            .receiving_objects()?;
         let transaction_dependencies = input_objects.transaction_dependencies();
         let transaction_data = &certificate.data().intent_message().value;
         let (kind, signer, gas) = transaction_data.execution_parts();
@@ -1203,6 +1218,7 @@ impl AuthorityState {
                     .epoch_data()
                     .epoch_start_timestamp(),
                 input_objects,
+                receiving_objects,
                 shared_object_refs,
                 gas,
                 gas_status,
@@ -1283,6 +1299,7 @@ impl AuthorityState {
 
         let protocol_config = epoch_store.protocol_config();
         let transaction_dependencies = input_objects.transaction_dependencies();
+        let receiving_objects = transaction.receiving_objects()?;
         let (kind, signer, _) = transaction.execution_parts();
 
         let silent = true;
@@ -1306,6 +1323,7 @@ impl AuthorityState {
                     .epoch_data()
                     .epoch_start_timestamp(),
                 input_objects,
+                receiving_objects,
                 shared_object_refs,
                 gas_object_refs,
                 gas_status,
@@ -1409,6 +1427,7 @@ impl AuthorityState {
         let transaction_digest = TransactionDigest::new(default_hash(&data));
         let transaction_kind = data.into_kind();
         let transaction_dependencies = input_objects.transaction_dependencies();
+        let receiving_objects = transaction_kind.receiving_objects()?;
         let silent = true;
         let executor = sui_execution::executor(
             protocol_config,
@@ -1430,6 +1449,7 @@ impl AuthorityState {
                 .epoch_data()
                 .epoch_start_timestamp(),
             input_objects,
+            receiving_objects,
             shared_object_refs,
             vec![gas_object_ref],
             gas_status,
@@ -1473,7 +1493,7 @@ impl AuthorityState {
         tx_coins: Option<TxCoins>,
         written: &WrittenObjects,
         module_resolver: &impl GetModule,
-        loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
+        loaded_child_objects: &BTreeMap<ObjectID, LoadedRuntimeObjectMetadata>,
     ) -> SuiResult<u64> {
         let changes = self
             .process_object_index(effects, written, module_resolver)
@@ -1733,7 +1753,7 @@ impl AuthorityState {
                     tx_coins,
                     written,
                     &module_resolver,
-                    &inner_temporary_store.loaded_child_objects,
+                    &inner_temporary_store.loaded_runtime_objects,
                 )
                 .await
                 .tap_ok(|_| self.metrics.post_processing_total_tx_indexed.inc())
@@ -4243,8 +4263,8 @@ impl NodeStateDump {
         // Record all loaded child objects
         // Child objects which are read but not mutated are not tracked anywhere else
         let mut loaded_child_objects = Vec::new();
-        for (id, ver) in &inner_temporary_store.loaded_child_objects {
-            if let Some(w) = authority_store.get_object_by_key(id, *ver)? {
+        for (id, meta) in &inner_temporary_store.loaded_runtime_objects {
+            if let Some(w) = authority_store.get_object_by_key(id, meta.version)? {
                 loaded_child_objects.push(w)
             }
         }

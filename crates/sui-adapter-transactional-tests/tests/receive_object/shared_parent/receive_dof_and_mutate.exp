@@ -1,0 +1,59 @@
+processed 12 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 6-36:
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 7881200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 38-38:
+created: object(2,0), object(2,1), object(2,2), object(2,3)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 7273200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3 'view-object'. lines 40-40:
+Owner: Object ID: ( fake(2,3) )
+Version: 3
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(2,2)}}
+
+task 4 'view-object'. lines 42-42:
+Owner: Shared
+Version: 3
+Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}, value: 0u64}
+
+task 5 'view-object'. lines 44-44:
+Owner: Object ID: ( fake(2,0) )
+Version: 3
+Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,2)}}, value: 0u64}
+
+task 6 'view-object'. lines 46-46:
+Owner: Account Address ( fake(2,1) )
+Version: 3
+Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,3)}}, value: 0u64}
+
+task 7 'run'. lines 48-48:
+created: object(7,0)
+mutated: object(0,1), object(2,1), object(2,3)
+gas summary: computation_cost: 1000000, storage_cost: 5996400,  storage_rebate: 3506184, non_refundable_storage_fee: 35416
+
+task 8 'view-object'. lines 50-50:
+Owner: Object ID: ( fake(2,3) )
+Version: 3
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(2,2)}}
+
+task 9 'view-object'. lines 52-52:
+Owner: Shared
+Version: 4
+Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}, value: 0u64}
+
+task 10 'view-object'. lines 54-54:
+Owner: Object ID: ( fake(2,0) )
+Version: 3
+Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,2)}}, value: 0u64}
+
+task 11 'view-object'. lines 56-56:
+Owner: Object ID: ( fake(7,0) )
+Version: 4
+Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,3)}}, value: 100u64}

@@ -8,7 +8,7 @@ use crate::digests::{
 };
 use crate::effects::{TransactionEffects, TransactionEvents};
 use crate::error::SuiError;
-use crate::execution::{ExecutionResults, LoadedChildObjectMetadata};
+use crate::execution::{ExecutionResults, LoadedRuntimeObjectMetadata};
 use crate::message_envelope::Message;
 use crate::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, FullCheckpointContents, VerifiedCheckpoint,
@@ -56,9 +56,9 @@ pub enum DeleteKind {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum MarkerKind {
-    /// An object was received at the given version in the transaction and is no longer able
-    /// to be received at that version in subequent transactions.
-    Received,
+    /// An object was received, deleted, or wrapped at the given version in the transaction and is
+    /// no longer able to be received at that version in subequent transactions.
+    ReceivedDeletedOrWrappedAtVersion,
     /// A shared object was deleted by the transaction and is no longer able to be accessed or
     /// used in subsequent transactions.
     SharedObjectDeleted,
@@ -112,11 +112,25 @@ impl<T: Storage + ParentSync + ChildObjectResolver> StorageView for T {}
 /// An abstraction of the (possibly distributed) store for objects. This
 /// API only allows for the retrieval of objects, not any state changes
 pub trait ChildObjectResolver {
+    /// `child` must have an `ObjectOwner` ownership equal to `owner`.
     fn read_child_object(
         &self,
         parent: &ObjectID,
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
+    ) -> SuiResult<Option<Object>>;
+
+    /// `receiving_object_id` must have an `AddressOwner` ownership equal to `owner`.
+    /// `get_object_received_at_version` must be the exact version at which the object will be received,
+    /// and it cannot have been previously received at that version. NB: An object not existing at
+    /// that version, and not having valid access to the object will be treated exactly the same
+    /// and `Ok(None)` must be returned.
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        epoch_id: EpochId,
     ) -> SuiResult<Option<Object>>;
 }
 
@@ -128,9 +142,9 @@ pub trait Storage {
 
     fn record_execution_results(&mut self, results: ExecutionResults);
 
-    fn save_loaded_child_objects(
+    fn save_loaded_runtime_objects(
         &mut self,
-        loaded_child_objects: BTreeMap<ObjectID, LoadedChildObjectMetadata>,
+        loaded_runtime_objects: BTreeMap<ObjectID, LoadedRuntimeObjectMetadata>,
     );
 }
 
@@ -266,6 +280,21 @@ impl<S: ChildObjectResolver> ChildObjectResolver for std::sync::Arc<S> {
             child_version_upper_bound,
         )
     }
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<Object>> {
+        ChildObjectResolver::get_object_received_at_version(
+            self.as_ref(),
+            owner,
+            receiving_object_id,
+            receive_object_at_version,
+            epoch_id,
+        )
+    }
 }
 
 impl<S: ChildObjectResolver> ChildObjectResolver for &S {
@@ -277,6 +306,21 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &S {
     ) -> SuiResult<Option<Object>> {
         ChildObjectResolver::read_child_object(*self, parent, child, child_version_upper_bound)
     }
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<Object>> {
+        ChildObjectResolver::get_object_received_at_version(
+            *self,
+            owner,
+            receiving_object_id,
+            receive_object_at_version,
+            epoch_id,
+        )
+    }
 }
 
 impl<S: ChildObjectResolver> ChildObjectResolver for &mut S {
@@ -287,6 +331,21 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &mut S {
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
         ChildObjectResolver::read_child_object(*self, parent, child, child_version_upper_bound)
+    }
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<Object>> {
+        ChildObjectResolver::get_object_received_at_version(
+            *self,
+            owner,
+            receiving_object_id,
+            receive_object_at_version,
+            epoch_id,
+        )
     }
 }
 
@@ -907,6 +966,16 @@ pub fn transaction_input_object_keys(tx: &SenderSignedData) -> SuiResult<Vec<Obj
             I::MovePackage(_) | I::SharedMoveObject { .. } => None,
             I::ImmOrOwnedMoveObject(obj) => Some(obj.into()),
         })
+        .collect())
+}
+
+pub fn transaction_receiving_object_keys(tx: &SenderSignedData) -> SuiResult<Vec<ObjectKey>> {
+    Ok(tx
+        .intent_message()
+        .value
+        .receiving_objects()?
+        .into_iter()
+        .map(|oref| oref.into())
         .collect())
 }
 

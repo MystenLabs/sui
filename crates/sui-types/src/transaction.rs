@@ -46,7 +46,7 @@ use tracing::trace;
 
 pub const TEST_ONLY_GAS_UNIT_FOR_TRANSFER: u64 = 10_000;
 pub const TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS: u64 = 50_000;
-pub const TEST_ONLY_GAS_UNIT_FOR_PUBLISH: u64 = 50_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_PUBLISH: u64 = 70_000;
 pub const TEST_ONLY_GAS_UNIT_FOR_STAKING: u64 = 50_000;
 pub const TEST_ONLY_GAS_UNIT_FOR_GENERIC: u64 = 50_000;
 pub const TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN: u64 = 10_000;
@@ -100,6 +100,8 @@ pub enum ObjectArg {
         initial_shared_version: SequenceNumber,
         mutable: bool,
     },
+    // A Move object that can be received in this transaction.
+    Receiving(ObjectRef),
 }
 
 fn type_tag_validity_check(
@@ -214,8 +216,19 @@ impl VersionedProtocolMessage for TransactionKind {
         match &self {
             TransactionKind::ChangeEpoch(_)
             | TransactionKind::Genesis(_)
-            | TransactionKind::ConsensusCommitPrologue(_)
-            | TransactionKind::ProgrammableTransaction(_) => Ok(()),
+            | TransactionKind::ConsensusCommitPrologue(_) => Ok(()),
+            TransactionKind::ProgrammableTransaction(pt) => {
+                // NB: we don't use the `receiving_objects` method here since we don't want to check
+                // for any validity requirements such as duplicate receiving inputs at this point.
+                let has_receiving_objects = pt
+                    .inputs
+                    .iter()
+                    .any(|arg| !arg.receiving_objects().is_empty());
+                if has_receiving_objects {
+                    protocol_config.check_receiving_objects_supported()?;
+                }
+                Ok(())
+            }
             TransactionKind::AuthenticatorStateUpdate(_) => {
                 if protocol_config.enable_jwk_consensus_updates() {
                     Ok(())
@@ -250,6 +263,19 @@ impl CallArg {
                     mutable,
                 }]
             }
+            // Receiving objects are not part of the input objects.
+            CallArg::Object(ObjectArg::Receiving(_)) => vec![],
+        }
+    }
+
+    fn receiving_objects(&self) -> Vec<ObjectRef> {
+        match self {
+            CallArg::Pure(_) => vec![],
+            CallArg::Object(o) => match o {
+                ObjectArg::ImmOrOwnedObject(_) => vec![],
+                ObjectArg::SharedObject { .. } => vec![],
+                ObjectArg::Receiving(obj_ref) => vec![*obj_ref],
+            },
         }
     }
 
@@ -334,7 +360,9 @@ impl ObjectArg {
 
     pub fn id(&self) -> ObjectID {
         match self {
-            ObjectArg::ImmOrOwnedObject((id, _, _)) | ObjectArg::SharedObject { id, .. } => *id,
+            ObjectArg::Receiving((id, _, _))
+            | ObjectArg::ImmOrOwnedObject((id, _, _))
+            | ObjectArg::SharedObject { id, .. } => *id,
         }
     }
 }
@@ -646,6 +674,21 @@ impl ProgrammableTransaction {
             .collect())
     }
 
+    fn receiving_objects(&self) -> UserInputResult<Vec<ObjectRef>> {
+        let ProgrammableTransaction { inputs, .. } = self;
+        let receiving_objects = inputs
+            .iter()
+            .flat_map(|arg| arg.receiving_objects())
+            .collect::<Vec<_>>();
+
+        // all objects being received must be unique
+        let mut used = HashSet::new();
+        if !receiving_objects.iter().all(|o| used.insert(o.0)) {
+            return Err(UserInputError::DuplicateObjectRefInput);
+        }
+        Ok(receiving_objects)
+    }
+
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         let ProgrammableTransaction { inputs, commands } = self;
         fp_ensure!(
@@ -682,7 +725,9 @@ impl ProgrammableTransaction {
         self.inputs
             .iter()
             .filter_map(|arg| match arg {
-                CallArg::Pure(_) | CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => None,
+                CallArg::Pure(_)
+                | CallArg::Object(ObjectArg::Receiving(_))
+                | CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => None,
                 CallArg::Object(ObjectArg::SharedObject {
                     id,
                     initial_shared_version,
@@ -892,6 +937,16 @@ impl TransactionKind {
             Self::ProgrammableTransaction(pt) => pt.move_calls(),
             _ => vec![],
         }
+    }
+
+    pub fn receiving_objects(&self) -> UserInputResult<Vec<ObjectRef>> {
+        Ok(match &self {
+            TransactionKind::ChangeEpoch(_)
+            | TransactionKind::Genesis(_)
+            | TransactionKind::ConsensusCommitPrologue(_)
+            | TransactionKind::AuthenticatorStateUpdate(_) => vec![],
+            TransactionKind::ProgrammableTransaction(pt) => pt.receiving_objects()?,
+        })
     }
 
     /// Return the metadata of each of the input objects for the transaction.
@@ -1487,6 +1542,8 @@ pub trait TransactionDataAPI {
 
     fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>>;
 
+    fn receiving_objects(&self) -> UserInputResult<Vec<ObjectRef>>;
+
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult;
 
     fn validity_check_no_gas_check(&self, config: &ProtocolConfig) -> UserInputResult;
@@ -1584,6 +1641,10 @@ impl TransactionDataAPI for TransactionDataV1 {
             );
         }
         Ok(inputs)
+    }
+
+    fn receiving_objects(&self) -> UserInputResult<Vec<ObjectRef>> {
+        self.kind.receiving_objects()
     }
 
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
@@ -2200,12 +2261,14 @@ impl InputObjects {
     }
 
     /// The version to set on objects created by the computation that `self` is input to.
-    /// Guaranteed to be strictly greater than the versions of all input objects.
-    pub fn lamport_timestamp(&self) -> SequenceNumber {
+    /// Guaranteed to be strictly greater than the versions of all input objects and objects
+    /// received in the transaction.
+    pub fn lamport_timestamp(&self, receiving_objects: &[ObjectRef]) -> SequenceNumber {
         let input_versions = self
             .objects
             .iter()
-            .filter_map(|(_, object)| object.data.try_as_move().map(MoveObject::version));
+            .filter_map(|(_, object)| object.data.try_as_move().map(MoveObject::version))
+            .chain(receiving_objects.iter().map(|object_ref| object_ref.1));
 
         SequenceNumber::lamport_increment(input_versions)
     }

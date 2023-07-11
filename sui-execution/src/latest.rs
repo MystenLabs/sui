@@ -89,6 +89,7 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: InputObjects,
+        receiving_objects: Vec<ObjectRef>,
         shared_object_refs: Vec<ObjectRef>,
         gas_coins: Vec<ObjectRef>,
         gas_status: SuiGasStatus,
@@ -101,8 +102,13 @@ impl executor::Executor for Executor {
         TransactionEffects,
         Result<(), ExecutionError>,
     ) {
-        let temporary_store =
-            TemporaryStore::new(store, input_objects, transaction_digest, protocol_config);
+        let temporary_store = TemporaryStore::new(
+            store,
+            input_objects,
+            receiving_objects,
+            transaction_digest,
+            protocol_config,
+        );
         let mut gas_charger =
             GasCharger::new(transaction_digest, gas_coins, gas_status, protocol_config);
         execute_transaction_to_effects::<execution_mode::Normal>(
@@ -133,6 +139,7 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: InputObjects,
+        receiving_objects: Vec<ObjectRef>,
         shared_object_refs: Vec<ObjectRef>,
         gas_coins: Vec<ObjectRef>,
         gas_status: SuiGasStatus,
@@ -148,6 +155,7 @@ impl executor::Executor for Executor {
         let temporary_store = TemporaryStore::new_for_mock_transaction(
             store,
             input_objects,
+            receiving_objects,
             transaction_digest,
             protocol_config,
         );
@@ -180,8 +188,13 @@ impl executor::Executor for Executor {
         input_objects: InputObjects,
         pt: ProgrammableTransaction,
     ) -> Result<InnerTemporaryStore, ExecutionError> {
-        let mut temporary_store =
-            TemporaryStore::new(store, input_objects, tx_context.digest(), protocol_config);
+        let mut temporary_store = TemporaryStore::new(
+            store,
+            input_objects,
+            vec![],
+            tx_context.digest(),
+            protocol_config,
+        );
         let mut gas_charger = GasCharger::new_unmetered(tx_context.digest());
         programmable_transactions::execution::execute::<execution_mode::Genesis>(
             protocol_config,

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::VersionNumber;
+use crate::committee::EpochId;
 use crate::storage::get_module_by_id;
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
@@ -58,6 +59,27 @@ impl ChildObjectResolver for InMemoryStorage {
             });
         }
         Ok(Some(child_object))
+    }
+
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        _epoch_id: EpochId,
+    ) -> SuiResult<Option<Object>> {
+        let recv_object = match self.persistent.get(receiving_object_id).cloned() {
+            None => return Ok(None),
+            Some(obj) => obj,
+        };
+        if recv_object.owner != Owner::AddressOwner((*owner).into()) {
+            return Ok(None);
+        }
+
+        if recv_object.version() != receive_object_at_version {
+            return Ok(None);
+        }
+        Ok(Some(recv_object))
     }
 }
 

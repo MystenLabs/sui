@@ -50,6 +50,7 @@ mod checked {
         },
         storage::get_packages,
         transaction::{Argument, Command, ProgrammableMoveCall, ProgrammableTransaction},
+        transfer::RESOLVED_RECEIVING_STRUCT,
         SUI_FRAMEWORK_ADDRESS,
     };
     use sui_types::{
@@ -89,22 +90,23 @@ mod checked {
             if let Err(err) = execute_command::<Mode>(&mut context, &mut mode_results, command) {
                 let object_runtime: &ObjectRuntime = context.object_runtime();
                 // We still need to record the loaded child objects for replay
-                let loaded_child_objects = object_runtime.loaded_child_objects();
+                let loaded_runtime_objects = object_runtime.loaded_runtime_objects();
                 drop(context);
-                state_view.save_loaded_child_objects(loaded_child_objects);
+                state_view.save_loaded_runtime_objects(loaded_runtime_objects);
                 return Err(err.with_command_index(idx));
             };
         }
 
         // Save loaded objects table in case we fail in post execution
         let object_runtime: &ObjectRuntime = context.object_runtime();
-        // We still need to record the loaded child objects for replay
-        let loaded_child_objects = object_runtime.loaded_child_objects();
+        // Record the objects loaded at runtime (dynamic fields + received) for
+        // storage rebate calculation.
+        let loaded_runtime_objects = object_runtime.loaded_runtime_objects();
 
         // apply changes
         let finished = context.finish::<Mode>();
         // Save loaded objects for debug. We dont want to lose the info
-        state_view.save_loaded_child_objects(loaded_child_objects);
+        state_view.save_loaded_runtime_objects(loaded_runtime_objects);
         state_view.record_execution_results(finished?);
         Ok(mode_results)
     }
@@ -1248,7 +1250,7 @@ mod checked {
         value: &Value,
         param_ty: &Type,
     ) -> Result<(), ExecutionError> {
-        let ty = match value {
+        match value {
             // For dev-spect, allow any BCS bytes. This does mean internal invariants for types can
             // be violated (like for string or Option)
             Value::Raw(RawValueType::Any, _) if Mode::allow_arbitrary_values() => return Ok(()),
@@ -1278,18 +1280,46 @@ mod checked {
                     Mode::allow_arbitrary_values() || !abilities.has_key(),
                     "Raw value should never be an object"
                 );
-                ty
+                if ty != param_ty {
+                    return Err(command_argument_error(
+                        CommandArgumentError::TypeMismatch,
+                        idx,
+                    ));
+                }
             }
-            Value::Object(obj) => &obj.type_,
-        };
-        if ty != param_ty {
-            Err(command_argument_error(
-                CommandArgumentError::TypeMismatch,
-                idx,
-            ))
-        } else {
-            Ok(())
+            Value::Object(obj) => {
+                let ty = &obj.type_;
+                if ty != param_ty {
+                    return Err(command_argument_error(
+                        CommandArgumentError::TypeMismatch,
+                        idx,
+                    ));
+                }
+            }
+            Value::Receiving(_, _) => {
+                let Type::StructInstantiation(sidx, targs) = param_ty else {
+                return Err(command_argument_error(
+                    CommandArgumentError::TypeMismatch,
+                    idx,
+                ))
+            };
+                let Some(s) = context
+                .vm
+                .get_runtime()
+                .get_struct_type(*sidx) else {
+                    invariant_violation!("sui::transfer::Receiving struct not found in session")
+                };
+                let resolved_struct = get_struct_ident(&s);
+
+                if resolved_struct != RESOLVED_RECEIVING_STRUCT || targs.len() != 1 {
+                    return Err(command_argument_error(
+                        CommandArgumentError::TypeMismatch,
+                        idx,
+                    ));
+                }
+            }
         }
+        Ok(())
     }
 
     fn get_struct_ident(s: &StructType) -> (&AccountAddress, &IdentStr, &IdentStr) {

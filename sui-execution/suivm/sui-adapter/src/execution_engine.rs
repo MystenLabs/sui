@@ -192,7 +192,7 @@ mod checked {
         let (inner, effects) = temporary_store.into_effects(
             shared_object_refs,
             &transaction_digest,
-            transaction_dependencies.into_iter().collect(),
+            transaction_dependencies,
             gas_cost_summary,
             status,
             gas_charger,
@@ -522,8 +522,8 @@ mod checked {
                     pt,
                 )
             }
-            TransactionKind::AuthenticatorStateUpdate(_auth_state_update) => {
-                todo!();
+            TransactionKind::AuthenticatorStateUpdate(_) => {
+                todo!()
             }
         }
     }

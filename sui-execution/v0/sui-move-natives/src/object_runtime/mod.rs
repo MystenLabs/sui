@@ -23,7 +23,7 @@ use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolC
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     error::{ExecutionError, ExecutionErrorKind, VMMemoryLimitExceededSubStatusCode},
-    execution::LoadedChildObjectMetadata,
+    execution::LoadedRuntimeObjectMetadata,
     id::UID,
     metrics::LimitsMetrics,
     object::{MoveObject, Owner},
@@ -401,7 +401,7 @@ impl<'a> ObjectRuntime<'a> {
         self.object_store.all_active_objects()
     }
 
-    pub fn loaded_child_objects(&self) -> BTreeMap<ObjectID, LoadedChildObjectMetadata> {
+    pub fn loaded_child_objects(&self) -> BTreeMap<ObjectID, LoadedRuntimeObjectMetadata> {
         self.object_store
             .cached_objects()
             .iter()
@@ -409,10 +409,11 @@ impl<'a> ObjectRuntime<'a> {
                 obj_opt.as_ref().map(|obj| {
                     (
                         *id,
-                        LoadedChildObjectMetadata {
+                        LoadedRuntimeObjectMetadata {
                             version: obj.version(),
                             digest: obj.digest(),
                             storage_rebate: obj.storage_rebate,
+                            previous_transaction: obj.previous_transaction,
                         },
                     )
                 })
