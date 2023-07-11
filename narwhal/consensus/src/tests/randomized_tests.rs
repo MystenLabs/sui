@@ -203,7 +203,7 @@ async fn bullshark_randomised_tests_with_config(protocol_config: ProtocolConfig)
                         run_id,
                         mode,
                         consensus_store,
-                        config
+                        &config
                     );
                 });
 
@@ -504,7 +504,7 @@ fn generate_and_run_execution_plans(
     run_id: u64,
     modes: FailureModes,
     store: Arc<ConsensusStore>,
-    protocol_config: ProtocolConfig,
+    protocol_config: &ProtocolConfig,
 ) {
     println!(
         "Running execution plans for run_id {} for rounds={}, committee={}, gc_depth={}, modes={:?}",
