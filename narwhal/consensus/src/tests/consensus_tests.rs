@@ -18,7 +18,6 @@ use tokio::sync::watch;
 
 use crate::bullshark::Bullshark;
 use crate::consensus::{ConsensusRound, Dag, LeaderSchedule, LeaderSwapTable};
-use crate::consensus_utils::NUM_SUB_DAGS_PER_SCHEDULE;
 use crate::metrics::ConsensusMetrics;
 use crate::Consensus;
 use crate::NUM_SHUTDOWN_RECEIVERS;
@@ -41,7 +40,20 @@ use types::{
 async fn test_consensus_recovery_with_bullshark() {
     let _guard = setup_tracing();
 
+    // TODO: remove once the new leader schedule has been enabled.
+    // Run with default config settings where the new leader schedule is disabled
+    let config: ProtocolConfig = latest_protocol_version();
+    test_consensus_recovery_with_bullshark_with_config(config).await;
+
+    // Run with the new leader election schedule enabled
+    let mut config: ProtocolConfig = latest_protocol_version();
+    config.set_narwhal_new_leader_election_schedule(true);
+    test_consensus_recovery_with_bullshark_with_config(config).await;
+}
+
+async fn test_consensus_recovery_with_bullshark_with_config(config: ProtocolConfig) {
     // GIVEN
+    let num_sub_dags_per_schedule = 3;
     let storage = NodeStorage::reopen(temp_dir(), None);
 
     let consensus_store = storage.consensus_store;
@@ -57,13 +69,8 @@ async fn test_consensus_recovery_with_bullshark() {
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let (certificates, _next_parents) = test_utils::make_optimal_certificates(
-        &committee,
-        &latest_protocol_version(),
-        1..=7,
-        &genesis,
-        &ids,
-    );
+    let (certificates, _next_parents) =
+        test_utils::make_optimal_certificates(&committee, &config, 1..=7, &genesis, &ids);
 
     // AND Spawn the consensus engine.
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(100);
@@ -76,17 +83,14 @@ async fn test_consensus_recovery_with_bullshark() {
 
     let gc_depth = 50;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let leader_schedule = LeaderSchedule::from_store(
-        committee.clone(),
-        consensus_store.clone(),
-        latest_protocol_version(),
-    );
+    let leader_schedule =
+        LeaderSchedule::from_store(committee.clone(), consensus_store.clone(), config.clone());
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
-        latest_protocol_version(),
+        config.clone(),
         metrics.clone(),
-        NUM_SUB_DAGS_PER_SCHEDULE,
+        num_sub_dags_per_schedule,
         leader_schedule.clone(),
     );
 
@@ -178,17 +182,14 @@ async fn test_consensus_recovery_with_bullshark() {
     let consensus_store = storage.consensus_store;
     let certificate_store = storage.certificate_store;
 
-    let leader_schedule = LeaderSchedule::from_store(
-        committee.clone(),
-        consensus_store.clone(),
-        latest_protocol_version(),
-    );
+    let leader_schedule =
+        LeaderSchedule::from_store(committee.clone(), consensus_store.clone(), config.clone());
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
-        latest_protocol_version(),
+        config.clone(),
         metrics.clone(),
-        NUM_SUB_DAGS_PER_SCHEDULE,
+        num_sub_dags_per_schedule,
         leader_schedule,
     );
 
@@ -257,9 +258,9 @@ async fn test_consensus_recovery_with_bullshark() {
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
-        latest_protocol_version(),
+        config.clone(),
         metrics.clone(),
-        NUM_SUB_DAGS_PER_SCHEDULE,
+        num_sub_dags_per_schedule,
         LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
@@ -324,7 +325,7 @@ async fn test_consensus_recovery_with_bullshark() {
         score_with_crash
             .scores_per_authority
             .into_iter()
-            .filter(|(_, score)| *score == 2)
+            .filter(|(_, score)| *score == 1)
             .count(),
         4
     );
