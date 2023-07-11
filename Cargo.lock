@@ -5894,20 +5894,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "narwhal-examples"
-version = "0.1.0"
-dependencies = [
- "base64 0.13.1",
- "clap 2.34.0",
- "prost",
- "protobuf-src",
- "tokio",
- "tonic",
- "tonic-build",
- "workspace-hack",
-]
-
-[[package]]
 name = "narwhal-executor"
 version = "0.1.0"
 dependencies = [

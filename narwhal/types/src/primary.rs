@@ -4,9 +4,7 @@
 use crate::{
     error::{DagError, DagResult},
     serde::NarwhalBitmap,
-    CertificateDigestProto,
 };
-use bytes::Bytes;
 use config::{AuthorityIdentifier, Committee, Epoch, Stake, WorkerCache, WorkerId, WorkerInfo};
 use crypto::{
     to_intent_message, AggregateSignature, AggregateSignatureBytes,
@@ -1216,13 +1214,6 @@ impl From<CertificateDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
         Digest::new(hd.0)
     }
 }
-impl From<CertificateDigest> for CertificateDigestProto {
-    fn from(hd: CertificateDigest) -> Self {
-        CertificateDigestProto {
-            digest: Bytes::from(hd.0.to_vec()),
-        }
-    }
-}
 
 impl fmt::Debug for CertificateDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
@@ -1443,12 +1434,6 @@ pub struct FetchBatchesRequest {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FetchBatchesResponse {
     pub batches: HashMap<BatchDigest, Batch>,
-}
-
-/// Used by the primary to request that the worker delete the specified batches.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct WorkerDeleteBatchesMessage {
-    pub digests: Vec<BatchDigest>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
