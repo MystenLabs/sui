@@ -7,8 +7,10 @@ import { getRulePackageAddress, objArg } from '../utils';
 
 /**
  *  Adds the Kiosk Royalty rule to the Transfer Policy.
- *  You cna provide the percentage, as well as a minimum amount.
+ *  You can pass the percentage, as well as a minimum amount.
  *  The royalty that will be paid is the MAX(percentage, minAmount).
+ * 	You can pass 0 in either value if you want only percentage royalty, or a fixed amount fee.
+ * 	(but you should define at least one of them for the rule to make sense).
  */
 export const attachRoyaltyRule = (
 	tx: TransactionBlock,
@@ -33,6 +35,7 @@ export const attachRoyaltyRule = (
 
 /**
  * Adds the Kiosk Lock Rule to the Transfer Policy.
+ * This Rule forces buyer to lock the item in the kiosk, preserving strong royalties.
  */
 export const attachKioskLockRule = (
 	tx: TransactionBlock,
