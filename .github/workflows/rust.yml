@@ -126,6 +126,9 @@ jobs:
       - name: rustdoc
         run: |
           cargo doc --workspace --no-deps
+      - name: sui-execution
+        run: |
+          ./scripts/execution_layer.py generate-lib
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash

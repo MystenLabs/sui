@@ -20,7 +20,6 @@ pub mod verifier;
 mod tests;
 
 // $FEATURE_CONSTS
-
 pub fn executor(
     protocol_config: &ProtocolConfig,
     paranoid_type_checks: bool,
