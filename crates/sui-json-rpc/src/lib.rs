@@ -7,13 +7,16 @@ use std::str::FromStr;
 
 use hyper::header::HeaderName;
 use hyper::header::HeaderValue;
+use hyper::Body;
 use hyper::Method;
+use hyper::Request;
 use jsonrpsee::server::{AllowHosts, ServerBuilder};
 use jsonrpsee::RpcModule;
 use prometheus::Registry;
 use tap::TapFallible;
 use tokio::runtime::Handle;
 use tower_http::cors::{AllowOrigin, CorsLayer};
+use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
 
 pub use balance_changes::*;
@@ -153,6 +156,23 @@ impl JsonRpcServerBuilder {
         let routing_layer = RoutingLayer::new(routing, disable_routing);
 
         let middleware = tower::ServiceBuilder::new()
+            .layer(
+                TraceLayer::new_for_http()
+                    .make_span_with(|request: &Request<Body>| {
+                        let request_id = request
+                            .headers()
+                            .get("x-req-id")
+                            .and_then(|v| v.to_str().ok())
+                            .map(tracing::field::display);
+
+                        tracing::info_span!("json-rpc-request", "x-req-id" = request_id)
+                    })
+                    .on_request(())
+                    .on_response(())
+                    .on_body_chunk(())
+                    .on_eos(())
+                    .on_failure(()),
+            )
             .layer(cors)
             .layer(routing_layer);
 
