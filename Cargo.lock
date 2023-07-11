@@ -5858,7 +5858,6 @@ dependencies = [
  "mysten-metrics",
  "narwhal-config",
  "narwhal-crypto",
- "narwhal-dag",
  "narwhal-node",
  "narwhal-storage",
  "narwhal-test-utils",
@@ -5891,24 +5890,6 @@ dependencies = [
  "serde-reflection",
  "serde_json",
  "shared-crypto",
- "workspace-hack",
-]
-
-[[package]]
-name = "narwhal-dag"
-version = "0.1.0"
-dependencies = [
- "arc-swap",
- "dashmap",
- "either",
- "fastcrypto",
- "itertools",
- "narwhal-crypto",
- "once_cell",
- "proptest",
- "proptest-derive",
- "rayon",
- "thiserror",
  "workspace-hack",
 ]
 
@@ -6177,7 +6158,6 @@ dependencies = [
  "mysten-util-mem",
  "narwhal-config",
  "narwhal-crypto",
- "narwhal-dag",
  "narwhal-test-utils",
  "once_cell",
  "prometheus",

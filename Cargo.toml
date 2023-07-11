@@ -138,7 +138,6 @@ members = [
     "narwhal/config",
     "narwhal/consensus",
     "narwhal/crypto",
-    "narwhal/dag",
     "narwhal/examples",
     "narwhal/executor",
     "narwhal/network",
@@ -486,7 +485,6 @@ x = { path = "crates/x" }
 narwhal-config = { path = "narwhal/config" }
 narwhal-consensus = { path = "narwhal/consensus" }
 narwhal-crypto = { path = "narwhal/crypto" }
-narwhal-dag = { path = "narwhal/dag" }
 narwhal-examples = { path = "narwhal/examples" }
 narwhal-executor = { path = "narwhal/executor" }
 narwhal-network = { path = "narwhal/network" }

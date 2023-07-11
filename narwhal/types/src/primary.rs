@@ -13,7 +13,6 @@ use crypto::{
     NarwhalAuthorityAggregateSignature, NarwhalAuthoritySignature, NetworkPublicKey, PublicKey,
     Signature,
 };
-use dag::node_dag::Affiliated;
 use derive_builder::Builder;
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{
@@ -1280,23 +1279,6 @@ impl PartialEq for CertificateV1 {
         ret &= self.epoch() == other.epoch();
         ret &= self.origin() == other.origin();
         ret
-    }
-}
-
-impl Affiliated for Certificate {
-    fn parents(&self) -> Vec<<Self as Hash<{ crypto::DIGEST_LENGTH }>>::TypedDigest> {
-        match self {
-            Certificate::V1(data) => data.header().parents().iter().cloned().collect(),
-        }
-    }
-
-    // This makes the genesis certificate and empty blocks compressible,
-    // so that they will never be reported by a DAG walk
-    // (`read_causal`, `node_read_causal`).
-    fn compressible(&self) -> bool {
-        match self {
-            Certificate::V1(data) => data.header().payload().is_empty(),
-        }
     }
 }
 
