@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { formatDate, useGetTotalTransactionBlocks, useRpcClient } from '@mysten/core';
+import { formatAmount, formatDate, useGetTotalTransactionBlocks, useRpcClient } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 import { ParentSize } from '@visx/responsive';
 import clsx from 'clsx';
@@ -14,10 +14,8 @@ import { Heading } from '~/ui/Heading';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Text } from '~/ui/Text';
 
-const formatter = Intl.NumberFormat('en', { notation: 'compact' });
-
 function TooltipContent({
-	data: { epochTotalTransactions, epochStartTimestamp },
+	data: { epochTotalTransactions, epochStartTimestamp, epoch },
 }: {
 	data: {
 		epochTotalTransactions: number;
@@ -26,11 +24,11 @@ function TooltipContent({
 	};
 }) {
 	const dateFormatted = formatDate(new Date(epochStartTimestamp), ['day', 'month']);
-	const totalFormatted = formatter.format(epochTotalTransactions);
+	const totalFormatted = formatAmount(epochTotalTransactions);
 	return (
 		<div className="flex flex-col gap-0.5">
 			<Text variant="subtitleSmallExtra/medium" color="steel-darker">
-				{dateFormatted}
+				{dateFormatted}, Epoch {epoch}
 			</Text>
 			<Heading variant="heading6/semibold" color="steel-darker">
 				{totalFormatted}
@@ -109,7 +107,7 @@ export function TransactionsCardGraph() {
 											getX={({ epoch }) => Number(epoch)}
 											getY={({ epochTotalTransactions }) => Number(epochTotalTransactions)}
 											color="yellow"
-											formatY={formatter.format}
+											formatY={formatAmount}
 											tooltipContent={TooltipContent}
 										/>
 									)}

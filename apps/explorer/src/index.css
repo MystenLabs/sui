@@ -38,12 +38,28 @@ body,
 			'transactions'
 			'accounts';
 	}
+	.home-page-grid-container-top.with-token {
+		grid-template-areas:
+			'network'
+			'epoch'
+			'token'
+			'transactions'
+			'accounts';
+	}
 
 	@screen sm {
 		.home-page-grid-container-top {
 			@apply grid-cols-2;
 			grid-template-areas:
 				'network epoch'
+				'transactions transactions'
+				'accounts accounts';
+		}
+
+		.home-page-grid-container-top.with-token {
+			grid-template-areas:
+				'network epoch'
+				'network token'
 				'transactions transactions'
 				'accounts accounts';
 		}
@@ -56,21 +72,28 @@ body,
 				'network epoch'
 				'transactions accounts';
 		}
-	}
 
-	@screen lg {
-		.home-page-grid-container-top {
-			@apply gap-5;
+		.home-page-grid-container-top.with-token {
+			grid-template-areas:
+				'network epoch'
+				'network token'
+				'transactions accounts';
 		}
 	}
 
 	@screen xl {
 		.home-page-grid-container-top {
-			@apply grid-cols-3;
+			@apply grid-cols-[315px,1fr,1fr];
 			grid-template-areas:
 				'network transactions accounts'
+				'epoch transactions accounts';
+		}
+
+		.home-page-grid-container-top.with-token {
+			grid-template-areas:
 				'network transactions accounts'
-				'epoch   transactions accounts';
+				'epoch   transactions accounts'
+				'token   transactions accounts';
 		}
 	}
 

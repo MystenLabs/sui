@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { formatDate } from '@mysten/core';
+import { formatAmount, formatDate } from '@mysten/core';
 import { type JsonRpcProvider } from '@mysten/sui.js';
 import { ParentSize } from '@visx/responsive';
 import clsx from 'clsx';
@@ -17,20 +17,18 @@ import { Heading } from '~/ui/Heading';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Text } from '~/ui/Text';
 
-const formatter = Intl.NumberFormat('en', { notation: 'compact' });
-
-const graphDataField = 'cumulativeActiveAddresses' as const;
-const graphDataText = 'Total active accounts';
+const graphDataField = 'cumulativeAddresses' as const;
+const graphDataText = 'Total accounts';
 
 type AddressMetricsType = Awaited<ReturnType<JsonRpcProvider['getAllEpochAddressMetrics']>>[number];
 
 function TooltipContent({ data }: { data: AddressMetricsType }) {
 	const dateFormatted = formatDate(new Date(data.timestampMs), ['day', 'month']);
-	const totalFormatted = formatter.format(data[graphDataField]);
+	const totalFormatted = formatAmount(data[graphDataField]);
 	return (
 		<div className="flex flex-col gap-0.5">
 			<Text variant="subtitleSmallExtra/medium" color="steel-darker">
-				{dateFormatted}
+				{dateFormatted}, Epoch {data.epoch}
 			</Text>
 			<Heading variant="heading6/semibold" color="steel-darker">
 				{totalFormatted}
@@ -102,7 +100,7 @@ export function AccountsCardGraph() {
 											getX={({ epoch }) => epoch}
 											getY={(data) => data[graphDataField]}
 											color="blue"
-											formatY={formatter.format}
+											formatY={formatAmount}
 											tooltipContent={TooltipContent}
 										/>
 									)}

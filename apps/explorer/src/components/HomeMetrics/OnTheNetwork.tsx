@@ -2,16 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { CoinFormat, formatBalance, useGetReferenceGasPrice } from '@mysten/core';
-import { Sui } from '@mysten/icons';
 
 import { FormattedStatsAmount, StatsWrapper } from './FormattedStatsAmount';
-import { useNetwork } from '~/context';
 import { useGetNetworkMetrics } from '~/hooks/useGetNetworkMetrics';
-import { useSuiCoinData } from '~/hooks/useSuiCoinData';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
-import { Text } from '~/ui/Text';
-import { Network } from '~/utils/api/DefaultRpcClient';
 
 export function OnTheNetwork() {
 	const { data: networkMetrics } = useGetNetworkMetrics();
@@ -20,20 +15,9 @@ export function OnTheNetwork() {
 		typeof referenceGasPrice === 'bigint'
 			? formatBalance(referenceGasPrice, 0, CoinFormat.FULL)
 			: null;
-	const { data: tokenData } = useSuiCoinData();
-	const { currentPrice } = tokenData || {};
-	const formattedPrice = currentPrice
-		? currentPrice.toLocaleString('en', {
-				style: 'currency',
-				currency: 'USD',
-		  })
-		: '--';
-	const [network] = useNetwork();
-	const isSuiTokenCardEnabled = network === Network.MAINNET;
-
 	return (
-		<Card bg="white" spacing="none">
-			<div className="flex flex-col gap-5 overflow-y-auto p-6 sm:p-8 sm:max-xl:max-h-[270px]">
+		<Card bg="white" spacing="lg" height="full">
+			<div className="flex flex-col gap-5">
 				<Heading variant="heading4/semibold" color="steel-darker">
 					Network Activity
 				</Heading>
@@ -53,7 +37,6 @@ export function OnTheNetwork() {
 						label="Reference Gas Price"
 						tooltip="The reference gas price of the current epoch"
 						postfix={gasPriceFormatted !== null ? 'MIST' : null}
-						color="hero"
 						size="sm"
 					>
 						{gasPriceFormatted}
@@ -73,24 +56,6 @@ export function OnTheNetwork() {
 						size="sm"
 					/>
 				</div>
-				{isSuiTokenCardEnabled ? (
-					<>
-						<hr className="flex-1 border-hero/10" />
-						<div className="flex gap-2">
-							<div className="h-5 w-5 rounded-full bg-sui p-1">
-								<Sui className="h-full w-full text-white" />
-							</div>
-							<div className="flex w-full flex-col gap-0.5">
-								<Heading variant="heading4/semibold" color="steel-darker">
-									1 SUI = {formattedPrice}
-								</Heading>
-								<Text variant="subtitleSmallExtra/medium" color="steel">
-									via CoinGecko
-								</Text>
-							</div>
-						</div>
-					</>
-				) : null}
 			</div>
 		</Card>
 	);

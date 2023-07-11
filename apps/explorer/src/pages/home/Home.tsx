@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import clsx from 'clsx';
 import { lazy, Suspense } from 'react';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
@@ -9,26 +10,38 @@ import { AccountsCardGraph } from '~/components/AccountCardGraph';
 import { Activity } from '~/components/Activity';
 import { CurrentEpoch, OnTheNetwork } from '~/components/HomeMetrics';
 import { GradientContainer } from '~/components/Layout/GradientContainer';
+import { SuiTokenCard } from '~/components/SuiTokenCard';
 import { TransactionsCardGraph } from '~/components/TransactionsCardGraph';
 import { TopPackagesCard } from '~/components/top-packages/TopPackagesCard';
+import { useNetwork } from '~/context';
 import { Card } from '~/ui/Card';
 import { TabHeader } from '~/ui/Tabs';
+import { Network } from '~/utils/api/DefaultRpcClient';
 
 const ValidatorMap = lazy(() => import('../../components/validator-map'));
 
 const TRANSACTIONS_LIMIT = 25;
 
 function Home() {
+	const [network] = useNetwork();
+	const isSuiTokenCardEnabled = network === Network.MAINNET;
 	return (
 		<>
 			<GradientContainer>
-				<div className="home-page-grid-container-top">
+				<div
+					className={clsx('home-page-grid-container-top', isSuiTokenCardEnabled && 'with-token')}
+				>
 					<div style={{ gridArea: 'network' }} className="overflow-hidden">
 						<OnTheNetwork />
 					</div>
 					<div style={{ gridArea: 'epoch' }}>
 						<CurrentEpoch />
 					</div>
+					{isSuiTokenCardEnabled ? (
+						<div style={{ gridArea: 'token' }}>
+							<SuiTokenCard />
+						</div>
+					) : null}
 					<div style={{ gridArea: 'transactions' }}>
 						<TransactionsCardGraph />
 					</div>
@@ -53,7 +66,10 @@ function Home() {
 						</ErrorBoundary>
 					</TabHeader>
 				</div>
-				<div style={{ gridArea: 'node-map' }} className="min-h-[360px]">
+				<div
+					style={{ gridArea: 'node-map' }}
+					className="min-h-[320px] sm:min-h-[380px] lg:min-h-[460px] xl:min-h-[520px]"
+				>
 					<ErrorBoundary>
 						<Suspense fallback={<Card height="full" />}>
 							<ValidatorMap minHeight="100%" />

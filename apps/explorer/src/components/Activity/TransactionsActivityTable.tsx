@@ -57,7 +57,7 @@ export function TransactionsActivityTable({
 					Failed to load Transactions
 				</div>
 			)}
-			<div className="flex flex-col space-y-5 text-left xl:pr-10">
+			<div className="flex flex-col space-y-3 text-left xl:pr-10">
 				{isLoading || isFetching || !cardData ? (
 					<PlaceholderTable
 						rowCount={limit}

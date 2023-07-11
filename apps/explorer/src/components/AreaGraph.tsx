@@ -137,7 +137,6 @@ export function AreaGraph<D>({
 		return null;
 	}
 	const tooltipTopAdj = tooltipTop ? Math.max(tooltipTop - 20, 0) : undefined;
-	console.log('yscale ticks', yScale.ticks(2));
 	return (
 		<div className="relative h-full w-full overflow-hidden" ref={containerRef}>
 			{tooltipOpen && tooltipContentProps && tooltipContent ? (
@@ -171,21 +170,28 @@ export function AreaGraph<D>({
 							</>
 						)}
 					</linearGradient>
-					<linearGradient id={lineGradientID} gradientTransform="rotate(90)">
+					<linearGradient id={lineGradientID}>
 						{color === 'yellow' ? (
 							<>
-								<stop stopColor="#F2BD24" />
-								<stop offset="100%" stopColor="#8D6E15" />
+								<stop stopColor="#8D6E15" />
+								<stop offset="100%" stopColor="#F2BD24" />
 							</>
 						) : (
 							<>
-								<stop stopColor="#00EEAC" />
-								<stop offset="100%" stopColor="#008BE9" />
+								<stop stopColor="#008BE9" />
+								<stop offset="100%" stopColor="#00EEAC" />
 							</>
 						)}
 					</linearGradient>
 				</defs>
-				<PatternCircles id={patternID} height={5} width={5} radius={1} fill="#c5e9e0" />
+				<PatternCircles
+					id={patternID}
+					height={5}
+					width={5}
+					radius={1}
+					fill="#000"
+					className="opacity-5"
+				/>
 				<AreaClosed<D>
 					curve={curve}
 					data={data}
@@ -240,8 +246,8 @@ export function AreaGraph<D>({
 							x1={0}
 							y1={tooltipTopAdj}
 							x2={0}
-							y2={height - 4}
-							className={clsx('stroke-steel/80', tooltipOpen ? 'opacity-100' : 'opacity-0')}
+							y2={height - 20}
+							className={clsx('stroke-steel/40', tooltipOpen ? 'opacity-100' : 'opacity-0')}
 							strokeWidth="1"
 							transform={tooltipLeft ? `translate(${tooltipLeft})` : ''}
 						/>
@@ -250,7 +256,7 @@ export function AreaGraph<D>({
 							y1={0}
 							x2={graphRight}
 							y2={0}
-							className={clsx('stroke-steel/80', tooltipOpen ? 'opacity-100' : 'opacity-0')}
+							className={clsx('stroke-steel/40', tooltipOpen ? 'opacity-100' : 'opacity-0')}
 							strokeWidth="1"
 							transform={tooltipTop ? `translate(0, ${tooltipTop})` : ''}
 						/>

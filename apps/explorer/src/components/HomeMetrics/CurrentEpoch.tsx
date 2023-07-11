@@ -41,24 +41,22 @@ export function CurrentEpoch() {
 			onClick={() => ampli.clickedCurrentEpochCard({ epoch: Number(epoch) })}
 		>
 			<Card bg="white" height="full" spacing="lg">
-				<div className="flex flex-col gap-6">
-					<div className="flex w-full flex-col gap-2 sm:max-xl:gap-5">
-						<Heading color="success-dark" variant="heading4/semibold">
-							Epoch {formatAmountParts(epoch)}
+				<div className="flex flex-col gap-2">
+					<Heading color="success-dark" variant="heading4/semibold">
+						Epoch {formatAmountParts(epoch)}
+					</Heading>
+					<Text variant="pSubtitle/semibold" color="steel-dark">
+						{!progress && end
+							? `End ${formatDate(end)}`
+							: formattedDateString
+							? `Started ${formattedDateString}`
+							: '--'}
+					</Text>
+					<div className="space-y-1.5">
+						<Heading variant="heading6/medium" color="steel-darker">
+							{label ?? '--'}
 						</Heading>
-						<Text variant="pSubtitle/semibold" color="steel-dark">
-							{!progress && end
-								? `End ${formatDate(end)}`
-								: formattedDateString
-								? `Started ${formattedDateString}`
-								: '--'}
-						</Text>
-						<div className="space-y-1.5">
-							<Heading variant="heading6/medium" color="steel-darker">
-								{label ?? '--'}
-							</Heading>
-							<ProgressBar animate progress={progress || 0} />
-						</div>
+						<ProgressBar animate progress={progress || 0} />
 					</div>
 					<Checkpoint />
 				</div>
