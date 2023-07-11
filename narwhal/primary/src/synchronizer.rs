@@ -153,9 +153,9 @@ impl Inner {
 
         let digest = certificate.digest();
 
-        // TODO: remove this validation later to reduce rocksdb access.
+        // Validate that certificates are accepted in causal order.
+        // Currently it is relatively cheap because of certificate store caching.
         if certificate.round() > self.gc_round.load(Ordering::Acquire) + 1 {
-            let _scope = monitored_scope("Synchronizer::accept_certificate_internal::parents");
             let existence = self
                 .certificate_store
                 .multi_contains(certificate.header().parents().iter())?;
@@ -267,7 +267,6 @@ impl Inner {
             return Ok(result);
         }
 
-        let _scope = monitored_scope("Synchronizer::accept_certificate_internal::parents");
         let existence = self
             .certificate_store
             .multi_contains(certificate.header().parents().iter())?;
