@@ -69,7 +69,7 @@ export function NFTDisplayCard({
 						src={nftImageUrl}
 						title={nftMeta?.description || ''}
 						animateHover={true}
-						showLabel={!wideView}
+						showLabel={!wideView && orientation !== 'horizontal'}
 						borderRadius={borderRadius}
 						size={size}
 						video={video}
