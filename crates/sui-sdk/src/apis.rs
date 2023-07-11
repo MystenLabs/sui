@@ -58,7 +58,7 @@ impl ReadApi {
     /// use std::str::FromStr;
     ///
     /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
-    /// let address = SuiAddress::from_str("sui_address_here")?;
+    /// let address = SuiAddress::from_str("0x0000....0000")?; // change to your Sui address
     /// let owned_objects = sui.read_api().get_owned_objects(address, None, None, None).await?;
     /// ```
     pub async fn get_owned_objects(
@@ -120,7 +120,7 @@ impl ReadApi {
     /// use std::str::FromStr;
     ///
     /// let sui = SuiClientBuilder::default().build_localnet().await?; // connect to the local Sui network
-    /// let address = SuiAddress::from_str("sui_address_here")?;
+    /// let address = SuiAddress::from_str("0x0000....0000")?; // change to your Sui address
     /// let owned_objects = sui.read_api().get_owned_objects(address, None, None, None).await?;
     /// // this code example assumes that there are previous owned objects, otherwise it panics
     /// let Some(object) = owned_objects.data.get(0) else { panic!("{}", format!("No owned objects for this address {}", active_address))};
@@ -488,7 +488,7 @@ impl CoinReadApi {
     /// use std::str::FromStr;
     ///
     /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
-    /// let address = SuiAddress::from_str("sui_address_here")?;
+    /// let address = SuiAddress::from_str("0x0000....0000")?; // change to your Sui address
     /// let coins = sui.coin_read_api().get_coins(address, None, None, None).await?;
     /// ```
     pub async fn get_coins(
@@ -514,7 +514,7 @@ impl CoinReadApi {
     /// use std::str::FromStr;
     ///
     /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
-    /// let address = SuiAddress::from_str("sui_address_here")?;
+    /// let address = SuiAddress::from_str("0x0000....0000")?; // change to your Sui address
     /// let coins = sui.coin_read_api().get_all_coins(address, None, None).await?;
     /// ```
     pub async fn get_all_coins(
@@ -536,7 +536,7 @@ impl CoinReadApi {
     /// use std::str::FromStr;
     ///
     /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
-    /// let address = SuiAddress::from_str("sui_address_here")?;
+    /// let address = SuiAddress::from_str("0x0000....0000")?; // change to your Sui address
     /// let coins = sui.coin_read_api().get_coins_stream(address, None);
     /// ```
     pub fn get_coins_stream(
@@ -584,7 +584,7 @@ impl CoinReadApi {
     /// use std::str::FromStr;
     ///
     /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
-    /// let address = SuiAddress::from_str("sui_address_here")?;
+    /// let address = SuiAddress::from_str("0x0000....0000")?; // change to your Sui address
     /// let coins = sui.coin_read_api().select_coins(address, None, 5, vec![]).await?;
     /// ```
     pub async fn select_coins(
@@ -622,7 +622,7 @@ impl CoinReadApi {
     /// use std::str::FromStr;
     ///
     /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
-    /// let address = SuiAddress::from_str("sui_address_here")?;
+    /// let address = SuiAddress::from_str("0x0000....0000")?; // change to your Sui address
     /// let balance = sui.coin_read_api().get_balance(address, None).await?;
     /// ```
     pub async fn get_balance(
@@ -643,7 +643,7 @@ impl CoinReadApi {
     /// use std::str::FromStr;
     ///
     /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
-    /// let address = SuiAddress::from_str("sui_address_here")?;
+    /// let address = SuiAddress::from_str("0x0000....0000")?; // change to your Sui address
     /// let all_balances = sui.coin_read_api().get_all_balances(address).await?;
     /// ```
     pub async fn get_all_balances(&self, owner: SuiAddress) -> SuiRpcResult<Vec<Balance>> {
