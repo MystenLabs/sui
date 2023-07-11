@@ -231,7 +231,7 @@ impl CoinReadApiServer for CoinReadApi {
                 let treasury_cap = TreasuryCap::from_bcs_bytes(
                     treasury_cap_object.data.try_as_move().unwrap().contents(),
                 )
-                .map_err(|_| ServerError::Serde)?;
+                .map_err(|e| ServerError::Serde(e))?;
                 treasury_cap.total_supply
             })
         })
@@ -1323,7 +1323,8 @@ mod tests {
         #[tokio::test]
         async fn test_object_not_found() {
             let transaction_digest = TransactionDigest::from([0; 32]);
-            let verified_transaction: VerifiedTransaction = create_fake_transaction();
+            let verified_transaction =
+                VerifiedTransaction::new_unchecked(create_fake_transaction());
             let transaction_effects: TransactionEffects =
                 TransactionEffects::V1(TransactionEffectsV1::default());
 
@@ -1441,7 +1442,8 @@ mod tests {
             let package_id = get_test_package_id();
             let (coin_name, _, _, _, _) = get_test_treasury_cap_peripherals(package_id);
             let transaction_digest = TransactionDigest::from([0; 32]);
-            let verified_transaction: VerifiedTransaction = create_fake_transaction();
+            let verified_transaction =
+                VerifiedTransaction::new_unchecked(create_fake_transaction());
             let transaction_effects: TransactionEffects =
                 TransactionEffects::V1(TransactionEffectsV1::default());
 

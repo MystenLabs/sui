@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
 use mysten_metrics::histogram::Histogram;
+use thiserror::Error;
 
 pub use coin::CoinReadApiClient;
 pub use coin::CoinReadApiOpenRpc;
@@ -32,8 +32,6 @@ pub use write::WriteApiClient;
 pub use write::WriteApiOpenRpc;
 pub use write::WriteApiServer;
 
-use crate::error::InvalidReasons;
-
 mod coin;
 mod extended;
 mod governance;
@@ -62,10 +60,19 @@ pub fn cap_page_limit(limit: Option<usize>) -> usize {
     }
 }
 
-pub fn validate_limit(limit: Option<usize>, max: usize) -> Result<usize, InvalidReasons> {
+#[derive(Debug, Error)]
+pub enum InvalidLimitReasons {
+    #[error("`exceeds limit of `{0}`")]
+    Exceeded(usize),
+
+    #[error("must be at least `{0}`")]
+    TooSmall(usize),
+}
+
+pub fn validate_limit(limit: Option<usize>, max: usize) -> Result<usize, InvalidLimitReasons> {
     match limit {
-        Some(l) if l > max => Err(InvalidReasons::LimitExceeded(max)),
-        Some(0) => Err(InvalidReasons::LimitTooSmall(1)),
+        Some(l) if l > max => Err(InvalidLimitReasons::Exceeded(max)),
+        Some(0) => Err(InvalidLimitReasons::TooSmall(1)),
         Some(l) => Ok(l),
         None => Ok(max),
     }

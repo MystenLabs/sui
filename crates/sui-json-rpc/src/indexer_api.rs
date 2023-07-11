@@ -367,9 +367,9 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 type_params: vec![],
             }));
             let domain = Domain::from_str(&name).map_err(ClientError::Domain)?;
-            let domain_bcs_value = bcs::to_bytes(&domain).map_err(|e| ClientError::Serde {
+            let domain_bcs_value = bcs::to_bytes(&domain).map_err(|e| ClientError::Bcs {
                 param: "name",
-                reason: e.to_string(),
+                reason: e,
             })?;
             let record_object_id_option = self
                 .state
@@ -448,9 +448,9 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             };
 
             let name_type_tag = TypeTag::Address;
-            let addr_bcs_value = bcs::to_bytes(&address).map_err(|e| ClientError::Serde {
+            let addr_bcs_value = bcs::to_bytes(&address).map_err(|e| ClientError::Bcs {
                 param: "address",
-                reason: e.to_string(),
+                reason: e,
             })?;
 
             let addr_object_id_opt = self

@@ -95,7 +95,10 @@ impl Error {
 #[derive(Debug, Error)]
 pub enum ServerError {
     #[error("Serde error")]
-    Serde,
+    Serde(SuiError),
+
+    #[error("Bcs error")]
+    Bcs(bcs::Error),
 }
 
 impl From<ServerError> for RpcError {
@@ -129,19 +132,25 @@ impl fmt::Display for EntityType {
 }
 
 #[derive(Debug, Error)]
-pub enum InvalidReasons {
-    #[error("`exceeds limit of `{0}`")]
-    LimitExceeded(usize),
-
-    #[error("must be at least `{0}`")]
-    LimitTooSmall(usize),
-}
-
-#[derive(Debug, Error)]
 pub enum ClientError {
     // Any kind of serialization or deserialization error
     #[error("Serialization error on '{param}': {reason}")]
     Serde { param: &'static str, reason: String },
+
+    #[error("Base64 error on '{param}': {reason}")]
+    Base64 { param: &'static str, reason: String },
+
+    #[error("BCS error on '{param}': {reason}")]
+    Bcs {
+        param: &'static str,
+        reason: bcs::Error,
+    },
+
+    #[error("FastCrypto error on '{param}': {reason}")]
+    FastCrypto {
+        param: &'static str,
+        reason: FastCryptoError,
+    },
 
     #[error("Invalid combination of type and value: {0}")]
     SerdeWithLayout(String),

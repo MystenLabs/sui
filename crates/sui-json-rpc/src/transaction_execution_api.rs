@@ -74,13 +74,13 @@ impl TransactionExecutionApi {
             (t, _) => t.unwrap_or_else(|| opts.default_execution_request_type()),
         };
         let tx_data: TransactionData =
-            bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| ClientError::Serde {
+            bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| ClientError::Base64 {
                 param: "tx_bytes",
                 reason: e.to_string(),
             })?)
-            .map_err(|e| ClientError::Serde {
+            .map_err(|e| ClientError::Bcs {
                 param: "tx_bytes",
-                reason: e.to_string(),
+                reason: e,
             })?;
         let sender = tx_data.sender();
         let input_objs = tx_data.input_objects().unwrap_or_default();
@@ -88,22 +88,22 @@ impl TransactionExecutionApi {
         let mut sigs = Vec::new();
         for sig in signatures {
             sigs.push(
-                GenericSignature::from_bytes(&sig.to_vec().map_err(|e| ClientError::Serde {
+                GenericSignature::from_bytes(&sig.to_vec().map_err(|e| ClientError::Base64 {
                     param: "signatures",
                     reason: e.to_string(),
                 })?)
-                .map_err(|e| ClientError::Serde {
+                .map_err(|e| ClientError::FastCrypto {
                     param: "signatures",
-                    reason: e.to_string(),
+                    reason: e,
                 })?,
             );
         }
         let txn = Transaction::from_generic_sig_data(tx_data, Intent::sui_transaction(), sigs);
         let digest = *txn.digest();
         let raw_transaction = if opts.show_raw_input {
-            bcs::to_bytes(txn.data()).map_err(|e| ClientError::Serde {
+            bcs::to_bytes(txn.data()).map_err(|e| ClientError::Bcs {
                 param: "tx_bytes",
-                reason: e.to_string(),
+                reason: e,
             })?
         } else {
             vec![]
@@ -252,13 +252,13 @@ impl WriteApiServer for TransactionExecutionApi {
     ) -> RpcResult<DevInspectResults> {
         with_tracing!(async move {
             let tx_kind: TransactionKind =
-                bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| ClientError::Serde {
+                bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| ClientError::Base64 {
                     param: "tx_bytes",
                     reason: e.to_string(),
                 })?)
-                .map_err(|e| ClientError::Serde {
+                .map_err(|e| ClientError::Bcs {
                     param: "tx_bytes",
-                    reason: e.to_string(),
+                    reason: e,
                 })?;
             Ok(self
                 .state

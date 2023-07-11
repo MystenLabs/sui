@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
@@ -34,7 +35,7 @@ impl<S: IndexerStore> ExtendedApi<S> {
         cursor: Option<CheckpointedObjectID>,
         limit: Option<usize>,
     ) -> Result<QueryObjectsPage, IndexerError> {
-        let limit = validate_limit(limit, *QUERY_MAX_RESULT_LIMIT)?;
+        let limit = validate_limit(limit, *QUERY_MAX_RESULT_LIMIT).map_err(|e| anyhow!(e))?;
 
         let at_checkpoint = if let Some(CheckpointedObjectID {
             at_checkpoint: Some(cp),
@@ -91,7 +92,8 @@ impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<EpochPage> {
-        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS)?;
+        let limit =
+            validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS).map_err(|e| anyhow!(e))?;
         let mut epochs = self
             .state
             .get_epochs(cursor.map(|c| *c), limit + 1, descending_order)

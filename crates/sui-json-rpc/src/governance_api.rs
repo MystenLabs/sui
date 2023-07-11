@@ -83,7 +83,7 @@ impl GovernanceReadApi {
         for stake in stakes_read.into_iter() {
             match stake {
                 ObjectRead::Exists(_, o, _) => stakes.push((
-                    StakedSui::try_from(&o).map_err(|_| ServerError::Serde)?,
+                    StakedSui::try_from(&o).map_err(|e| ServerError::Serde(e))?,
                     true,
                 )),
                 ObjectRead::Deleted(oref) => {
@@ -93,7 +93,7 @@ impl GovernanceReadApi {
                         .await?
                     {
                         Some(o) => stakes.push((
-                            StakedSui::try_from(&o).map_err(|_| ServerError::Serde)?,
+                            StakedSui::try_from(&o).map_err(|e| ServerError::Serde(e))?,
                             false,
                         )),
                         None => {
@@ -360,7 +360,7 @@ async fn exchange_rates(
         None,
         system_state_summary.inactive_pools_size as usize,
     )? {
-        let pool_id: ID = bcs::from_bytes(&df.1.bcs_name).map_err(|_| ServerError::Serde)?;
+        let pool_id: ID = bcs::from_bytes(&df.1.bcs_name).map_err(|e| ServerError::Bcs(e))?;
         let validator = get_validator_from_table(
             state.database.as_ref(),
             system_state_summary.inactive_pools_id,
@@ -383,7 +383,7 @@ async fn exchange_rates(
             .into_iter()
             .map(|df| {
                 let epoch: EpochId =
-                    bcs::from_bytes(&df.1.bcs_name).map_err(|_| ServerError::Serde)?;
+                    bcs::from_bytes(&df.1.bcs_name).map_err(|e| ServerError::Bcs(e))?;
 
                 let exchange_rate: PoolTokenExchangeRate =
                     get_dynamic_field_from_store(state.db().as_ref(), exchange_rates_id, &epoch)?;
