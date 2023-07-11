@@ -121,15 +121,6 @@ fn build_anemo_services(out_dir: &Path) {
                 .codec_path(codec_path)
                 .build(),
         )
-        .method(
-            anemo_build::manual::Method::builder()
-                .name("delete_batches")
-                .route_name("DeleteBatches")
-                .request_type("crate::WorkerDeleteBatchesMessage")
-                .response_type("()")
-                .codec_path(codec_path)
-                .build(),
-        )
         .build();
 
     let worker_to_primary = anemo_build::manual::Service::builder()
