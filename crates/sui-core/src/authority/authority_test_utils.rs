@@ -93,16 +93,42 @@ pub async fn send_and_confirm_transaction_with_execution_error(
         .epoch_store_for_testing()
         .protocol_config()
         .simplified_unwrap_then_delete();
-    let mut state = state_acc.accumulate_live_object_set(include_wrapped_tombstone);
+    let mut state_expected = state_acc.accumulate_live_object_set(include_wrapped_tombstone);
     let (result, execution_error_opt) = authority.try_execute_for_test(&certificate).await?;
     let state_after = state_acc.accumulate_live_object_set(include_wrapped_tombstone);
     let effects_acc = state_acc.accumulate_effects(
         vec![result.inner().data().clone()],
         epoch_store.protocol_config(),
     );
-    state.union(&effects_acc);
+    state_expected.union(&effects_acc);
 
-    assert_eq!(state_after.digest(), state.digest());
+    let state_hash_after = state_after.accumulator().digest();
+    let state_hash_expected = state_expected.accumulator().digest();
+
+    if state_hash_after != state_hash_expected {
+        if state_acc.debug {
+            if let Some(diff) = state_after
+                .diff(&state_expected)
+                .expect("Diff function expected to succeed in debug mode")
+            {
+                panic!(
+                    "Accumulated state ({:?}) does not match expectation ({:?}) after execution of tx {:?}. \
+                    diff(<Actual State> - <Expected State>): {:?}",
+                    state_hash_after,
+                    state_hash_expected,
+                    result.digest(),
+                    diff,
+                );
+            }
+        } else {
+            panic!(
+                "Accumulated state ({:?}) does not match expectation ({:?}) after execution of tx {:?}",
+                state_hash_after,
+                state_hash_expected,
+                result.digest(),
+            );
+        }
+    }
 
     if let Some(fullnode) = fullnode {
         fullnode.try_execute_for_test(&certificate).await?;
