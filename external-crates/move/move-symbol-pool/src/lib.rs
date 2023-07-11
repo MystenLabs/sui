@@ -60,6 +60,15 @@ static_symbols!(
     "sui_system",
     "create",
     "clock",
+    "option",
+    "Option",
+    "string",
+    "ascii",
+    "String",
+    "Clock",
+    "tx_context",
+    "TxContext",
+    "ID",
 );
 
 /// The global, unique cache of strings.

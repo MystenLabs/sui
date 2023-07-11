@@ -19,6 +19,7 @@ use move_binary_format::{
 };
 use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule};
 use move_compiler::{
+    cfgir::visitor::AbstractInterpreterVisitor,
     compiled_unit::{
         AnnotatedCompiledModule, AnnotatedCompiledScript, CompiledUnitEnum, NamedCompiledModule,
     },
@@ -131,7 +132,8 @@ impl BuildConfig {
         let mut fn_info = None;
         let compiled_pkg = build_plan.compile_with_driver(writer, |compiler| {
             let (files, units_res) = if lint {
-                let lint_visitors = vec![ShareOwnedVerifier.into(), SelfTransferVerifier.into()];
+                let lint_visitors =
+                    vec![ShareOwnedVerifier.visitor(), SelfTransferVerifier.visitor()];
                 compiler.add_visitors(lint_visitors).build()?
             } else {
                 compiler.build()?

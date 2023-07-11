@@ -519,6 +519,22 @@ impl BuiltinFunction_ {
     }
 }
 
+impl TypeName_ {
+    pub fn is(
+        &self,
+        address: impl AsRef<str>,
+        module: impl AsRef<str>,
+        name: impl AsRef<str>,
+    ) -> bool {
+        match self {
+            TypeName_::Builtin(_) | TypeName_::Multiple(_) => false,
+            TypeName_::ModuleType(mident, n) => {
+                mident.value.is(address, module) && n == name.as_ref()
+            }
+        }
+    }
+}
+
 impl Type_ {
     pub fn builtin_(b: BuiltinTypeName, ty_args: Vec<Type>) -> Type_ {
         use BuiltinTypeName_ as B;
