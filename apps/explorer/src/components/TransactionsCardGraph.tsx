@@ -34,7 +34,7 @@ function TooltipContent({
 				{totalFormatted}
 			</Heading>
 			<Text variant="subtitleSmallExtra/medium" color="steel-darker" uppercase>
-				Transactions
+				Transaction Blocks
 			</Text>
 		</div>
 	);
@@ -71,7 +71,7 @@ export function TransactionsCardGraph() {
 		<Card bg="white" spacing={!epochMetrics?.length ? 'lg' : 'lgGraph'} height="full">
 			<div className="flex h-full flex-col gap-4 overflow-hidden">
 				<Heading variant="heading4/semibold" color="steel-darker">
-					Transactions
+					Transaction Blocks
 				</Heading>
 				<div className="flex flex-wrap gap-6">
 					<FormattedStatsAmount
