@@ -68,7 +68,7 @@ export function TransactionsCardGraph() {
 	const { data: totalTransactions } = useGetTotalTransactionBlocks();
 	const { data: epochMetrics, isLoading } = useEpochTransactions();
 	return (
-		<Card bg="white" spacing="lgGraph" height="full">
+		<Card bg="white" spacing={!epochMetrics?.length ? 'lg' : 'lgGraph'} height="full">
 			<div className="flex h-full flex-col gap-4 overflow-hidden">
 				<Heading variant="heading4/semibold" color="steel-darker">
 					Transactions
@@ -84,7 +84,7 @@ export function TransactionsCardGraph() {
 				</div>
 				<div
 					className={clsx(
-						'flex min-h-[180px] flex-1 flex-col items-center justify-center rounded-b-xl transition-colors',
+						'flex min-h-[180px] flex-1 flex-col items-center justify-center rounded-xl transition-colors',
 						!epochMetrics?.length && 'bg-gray-40',
 					)}
 				>

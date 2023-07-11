@@ -45,7 +45,7 @@ export function AccountsCardGraph() {
 	});
 	const adjEpochAddressMetrics = useMemo(() => allEpochMetrics?.slice(-30), [allEpochMetrics]);
 	return (
-		<Card bg="white" spacing="lgGraph" height="full">
+		<Card bg="white" spacing={!adjEpochAddressMetrics?.length ? 'lg' : 'lgGraph'} height="full">
 			<div className="flex h-full flex-col gap-4 overflow-hidden">
 				<Heading variant="heading4/semibold" color="steel-darker">
 					Accounts
@@ -75,7 +75,7 @@ export function AccountsCardGraph() {
 				</div>
 				<div
 					className={clsx(
-						'flex min-h-[180px] flex-1 flex-col items-center justify-center rounded-b-xl transition-colors',
+						'flex min-h-[180px] flex-1 flex-col items-center justify-center rounded-xl transition-colors',
 						!adjEpochAddressMetrics?.length && 'bg-gray-40',
 					)}
 				>
