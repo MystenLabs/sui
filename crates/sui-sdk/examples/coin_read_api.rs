@@ -68,7 +68,7 @@ async fn main() -> Result<(), anyhow::Error> {
     // Total balance
     let total_balance = sui_local
         .coin_read_api()
-        .get_balance(active_address, None)
+        .get_all_balances(active_address)
         .await?;
     println!(" *** Balance + Total Balance *** ");
     println!("Balance: {:?}", balance);
@@ -95,6 +95,6 @@ async fn main() -> Result<(), anyhow::Error> {
     println!(" *** Total Supply ***\n ");
 
     // ************ END OF COIN READ API ************ //
-
+    
     Ok(())
 }
