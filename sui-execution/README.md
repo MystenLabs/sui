@@ -47,6 +47,7 @@ is hardcoded in their binary (and may change from release-to-release).
 `sui-execution tests::test_encapsulation` is a test that detects
 potential breaches of this property.
 
+
 ## Kinds of Cut
 
 There are three kinds of cut:
@@ -56,6 +57,7 @@ There are three kinds of cut:
   preserve old behaviour.
 - "feature" cuts, where in-progress features are staged, typically
   named for that feature.
+
 
 ### The `latest` cut
 
@@ -145,10 +147,11 @@ To use this flow:
   from `latest` to preserve its existing behaviour, merge your feature
   into the new `latest`, and delete your feature.
 
+
 ## Making a Cut
 
-Cuts are always made from `latest`, with the process part automated by
-a script: `./scripts/execution_layer.py`.  To copy the relevant crates
+Cuts are always made from `latest`, with the process automated by a
+script: `./scripts/execution_layer.py`.  To copy the relevant crates
 for a new cut, call:
 
 ``` shell
@@ -161,6 +164,20 @@ whereas for feature cuts, it is the feature's name.
 
 The script can be called with `--dry-run` to print a summary of what
 it will do, without actually doing it.
+
+
+## `sui-execution/src/lib.rs`
+
+The entry-point to the execution crate -- `sui-execution/src/lib.rs`
+-- is **automatically generated**.  CI tests will confirm that it has
+not been modified manually.  Any modifications should be made in one
+of two places:
+
+- `sui-execution/src/lib.template.rs` -- a template file with
+  expansion points to be filled in, by
+- function `generate_lib` in `scripts/execution_layer.py`, which fills
+  them in based on the execution modules in the crate.
+
 
 ## Future Improvements
 
