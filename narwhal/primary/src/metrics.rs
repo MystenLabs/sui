@@ -61,8 +61,6 @@ pub struct PrimaryChannelMetrics {
     pub tx_headers: IntGauge,
     /// occupancy of the channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`
     pub tx_certificate_fetcher: IntGauge,
-    /// occupancy of the channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`
-    pub tx_block_synchronizer_commands: IntGauge,
     /// occupancy of the channel from the `Consensus` to the `primary::StateHandler`
     pub tx_committed_certificates: IntGauge,
     /// occupancy of the channel from the `primary::Synchronizer` to the `Consensus`
@@ -86,8 +84,6 @@ pub struct PrimaryChannelMetrics {
     pub tx_headers_total: IntCounter,
     /// total received on channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`
     pub tx_certificate_fetcher_total: IntCounter,
-    /// total received on channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`
-    pub tx_block_synchronizer_commands_total: IntCounter,
     /// total received on channel from the `primary::WorkerReceiverHandler` to the `primary::StateHandler`
     pub tx_state_handler_total: IntCounter,
     /// total received on channel from the `Consensus` to the `primary::StateHandler`
@@ -152,11 +148,6 @@ impl PrimaryChannelMetrics {
                 "occupancy of the channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`",
                 registry
             ).unwrap(),
-            tx_block_synchronizer_commands: register_int_gauge_with_registry!(
-                "tx_block_synchronizer_commands",
-                "occupancy of the channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`",
-                registry
-            ).unwrap(),
             tx_committed_certificates: register_int_gauge_with_registry!(
                 Self::NAME_COMMITTED_CERTS,
                 Self::DESC_COMMITTED_CERTS,
@@ -207,11 +198,6 @@ impl PrimaryChannelMetrics {
             tx_certificate_fetcher_total: register_int_counter_with_registry!(
                 "tx_certificate_fetcher_total",
                 "total received on channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`",
-                registry
-            ).unwrap(),
-            tx_block_synchronizer_commands_total: register_int_counter_with_registry!(
-                "tx_block_synchronizer_commands_total",
-                "total received on channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`",
                 registry
             ).unwrap(),
             tx_state_handler_total: register_int_counter_with_registry!(

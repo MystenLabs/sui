@@ -71,6 +71,7 @@ async fn main() -> Result<(), eyre::Report> {
                 .args_from_usage("--workers=<FILE> 'The file containing worker information'")
                 .args_from_usage("--parameters=[FILE] 'The file containing the node parameters'")
                 .args_from_usage("--store=<PATH> 'The path where to create the data store'")
+                .subcommand(SubCommand::with_name("primary").about("Run a single primary"))
                 .subcommand(
                     SubCommand::with_name("worker")
                         .about("Run a single worker")
@@ -276,7 +277,7 @@ async fn run(
     // Check whether to run a primary, a worker, or an entire authority.
     let (primary, worker) = match matches.subcommand() {
         // Spawn the primary and consensus core.
-        ("primary", Some(_sub_matches)) => {
+        ("primary", _) => {
             let primary = PrimaryNode::new(parameters.clone(), registry_service);
 
             primary
