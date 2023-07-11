@@ -7,7 +7,6 @@
       - NODE_TYPE=primary
       - VALIDATOR_ID={counter}
       - LOG_LEVEL=-vvv
-      - CONSENSUS_DISABLED=--consensus-disabled
     expose:
       - "3000" # Port to listen on messages from other primary nodes
       - "3001" # Port to listen on messages from our worker nodes
