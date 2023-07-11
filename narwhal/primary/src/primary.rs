@@ -196,7 +196,6 @@ impl Primary {
             tx_parents,
             rx_consensus_round_updates.clone(),
             rx_synchronizer_network,
-            dag.clone(),
             node_metrics.clone(),
             &primary_channel_metrics,
         ));
