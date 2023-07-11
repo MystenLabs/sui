@@ -370,7 +370,7 @@ fn function_info_map(
     let local_map = function_source_map
         .make_local_name_to_index_map()
         .into_iter()
-        .map(|(n, v)| (symbol!(n.as_str()), v))
+        .map(|(n, v)| (Symbol::from(n.as_str()), v))
         .collect();
     let (params, specs, attributes) = collected_function_infos.get_(&name).unwrap();
     let parameters = params
@@ -409,7 +409,7 @@ fn script_function_info(
     let local_map = function_source_map
         .make_local_name_to_index_map()
         .into_iter()
-        .map(|(n, v)| (symbol!(n.as_str()), v))
+        .map(|(n, v)| (Symbol::from(n.as_str()), v))
         .collect();
     let parameters = params
         .into_iter()

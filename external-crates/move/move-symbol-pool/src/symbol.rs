@@ -2,7 +2,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{pool::Entry, STATIC_SYMBOLS, STATIC_SYMBOL_IDX, SYMBOL_POOL};
+use crate::{
+    pool::Entry,
+    static_symbols::{STATIC_SYMBOLS, STATIC_SYMBOL_IDX},
+    SYMBOL_POOL,
+};
 use serde::{de::Deserialize, ser::Serialize};
 use std::{borrow::Cow, cmp::Ordering, fmt, num::NonZeroU64, ops::Deref};
 
@@ -242,9 +246,11 @@ fn inline_symbol_slice_mut(x: &mut u64) -> &mut [u8] {
 #[cfg(test)]
 mod tests {
     use crate::{
+        static_symbols::{STATIC_SYMBOLS, STATIC_SYMBOL_IDX},
         symbol::{Tag, MAX_INLINE_LEN},
-        Symbol, STATIC_SYMBOLS, STATIC_SYMBOL_IDX,
+        Symbol,
     };
+
     use std::mem::size_of;
 
     #[test]
@@ -337,18 +343,30 @@ mod tests {
 #[macro_export]
 macro_rules! static_symbols_with_idx {
     ($($str:tt => $idx:expr),* $(,)?) => {
-        #[macro_export]
-        macro_rules! symbol {
-            $(($str) => { $crate::symbol::Symbol::pack_static($idx) };)*
-            ($non_static:expr) => { $crate::symbol::Symbol::from($non_static) };
+        pub mod static_symbols {
+            #[macro_export]
+            macro_rules! symbol {
+                $(($str) => { $crate::static_symbols::StaticSymbolConsts::<{$idx}>::SYMBOL };)*
+                ($non_static:expr) => {
+                    // TODO find a way to link to the file and line number of
+                    // static_symbols! invocation
+                    compile_error!(
+                        "Unknown static symbol. Static symbols can be added to the \
+                        list in move-symbol-pool",
+                    )
+                };
+            }
+
+            pub const STATIC_SYMBOLS: &[&str] = &[$($str,)*];
+            pub const STATIC_SYMBOL_IDX: phf::Map<&'static str, u32> = phf::phf_map! {
+                $($str => $idx,)*
+            };
+
+            pub struct StaticSymbolConsts<const N: u32>;
+            $(impl StaticSymbolConsts<{$idx}> {
+                pub const SYMBOL: $crate::symbol::Symbol = $crate::symbol::Symbol::pack_static($idx);
+            })*
         }
-
-        pub const STATIC_SYMBOLS: &[&str] = &[$($str,)*];
-        pub const STATIC_SYMBOL_IDX: phf::Map<&'static str, u32> = phf::phf_map! {
-            $($str => $idx,)*
-        };
-
-
     };
 }
 

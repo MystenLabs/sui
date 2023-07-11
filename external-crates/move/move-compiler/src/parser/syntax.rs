@@ -730,7 +730,7 @@ fn parse_byte_string(context: &mut Context) -> Result<Value_, Box<Diagnostic>> {
         ));
     }
     let s = context.tokens.content();
-    let text = symbol!(&s[2..s.len() - 1]);
+    let text = Symbol::from(&s[2..s.len() - 1]);
     let value_ = if s.starts_with("x\"") {
         Value_::HexString(text)
     } else {
