@@ -231,7 +231,7 @@ impl CoinReadApiServer for CoinReadApi {
                 let treasury_cap = TreasuryCap::from_bcs_bytes(
                     treasury_cap_object.data.try_as_move().unwrap().contents(),
                 )
-                .map_err(|e| ServerError::Serde(e))?;
+                .map_err(ServerError::Serde)?;
                 treasury_cap.total_supply
             })
         })

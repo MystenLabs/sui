@@ -82,20 +82,17 @@ impl GovernanceReadApi {
         let mut stakes: Vec<(StakedSui, bool)> = vec![];
         for stake in stakes_read.into_iter() {
             match stake {
-                ObjectRead::Exists(_, o, _) => stakes.push((
-                    StakedSui::try_from(&o).map_err(|e| ServerError::Serde(e))?,
-                    true,
-                )),
+                ObjectRead::Exists(_, o, _) => {
+                    stakes.push((StakedSui::try_from(&o).map_err(ServerError::Serde)?, true))
+                }
                 ObjectRead::Deleted(oref) => {
                     match self
                         .state
                         .find_object_lt_or_eq_version(&oref.0, &oref.1.one_before().unwrap())
                         .await?
                     {
-                        Some(o) => stakes.push((
-                            StakedSui::try_from(&o).map_err(|e| ServerError::Serde(e))?,
-                            false,
-                        )),
+                        Some(o) => stakes
+                            .push((StakedSui::try_from(&o).map_err(ServerError::Serde)?, false)),
                         None => {
                             return Err(ClientError::Pruned {
                                 entity: EntityType::DelegatedStake,
@@ -360,7 +357,7 @@ async fn exchange_rates(
         None,
         system_state_summary.inactive_pools_size as usize,
     )? {
-        let pool_id: ID = bcs::from_bytes(&df.1.bcs_name).map_err(|e| ServerError::Bcs(e))?;
+        let pool_id: ID = bcs::from_bytes(&df.1.bcs_name).map_err(ServerError::Bcs)?;
         let validator = get_validator_from_table(
             state.database.as_ref(),
             system_state_summary.inactive_pools_id,
@@ -382,8 +379,7 @@ async fn exchange_rates(
             .get_dynamic_fields(exchange_rates_id, None, exchange_rates_size as usize)?
             .into_iter()
             .map(|df| {
-                let epoch: EpochId =
-                    bcs::from_bytes(&df.1.bcs_name).map_err(|e| ServerError::Bcs(e))?;
+                let epoch: EpochId = bcs::from_bytes(&df.1.bcs_name).map_err(ServerError::Bcs)?;
 
                 let exchange_rate: PoolTokenExchangeRate =
                     get_dynamic_field_from_store(state.db().as_ref(), exchange_rates_id, &epoch)?;
