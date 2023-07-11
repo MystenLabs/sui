@@ -282,6 +282,24 @@ jobs:
       - uses: actions/checkout@v3
       - uses: mystenlabs/cargo-deny-action@main
 
+  sui-excution-cut:
+    name: cutting a new execution layer
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
+    runs-on: [ubuntu-ghcloud]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install cargo-hakari, and cache the binary
+        uses: baptiste0928/cargo-install@30f432979e99f3ea66a8fa2eede53c07063995d8
+        with:
+          crate: cargo-hakari
+          locked: true
+      - name: Make cut
+        run: ./scripts/execution_layer.py cut for_ci_test
+      - name: Check execution builds
+        run: cargo build -p sui-execution
+
+
   #indexer:
   #  name: indexer
   #  needs: diff
