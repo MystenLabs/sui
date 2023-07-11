@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type ObjectId, type SuiAddress, type TransactionDigest } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { useActiveAddress } from './useActiveAddress';
@@ -16,16 +17,16 @@ import { ExplorerLinkType } from '../components/explorer-link/ExplorerLinkType';
 export type ExplorerLinkConfig =
 	| {
 			type: ExplorerLinkType.address;
-			address: string;
+			address: SuiAddress;
 			useActiveAddress?: false;
 	  }
 	| {
 			type: ExplorerLinkType.address;
 			useActiveAddress: true;
 	  }
-	| { type: ExplorerLinkType.object; objectID: string; moduleName?: string }
-	| { type: ExplorerLinkType.transaction; transactionID: string }
-	| { type: ExplorerLinkType.validator; validator: string };
+	| { type: ExplorerLinkType.object; objectID: ObjectId; moduleName?: string }
+	| { type: ExplorerLinkType.transaction; transactionID: TransactionDigest }
+	| { type: ExplorerLinkType.validator; validator: SuiAddress };
 
 function useAddress(linkConfig: ExplorerLinkConfig) {
 	const { type } = linkConfig;

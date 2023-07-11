@@ -3,7 +3,7 @@
 
 // import { Transaction } from '@mysten/sui.js';
 import { useTransactionSummary } from '@mysten/core';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { TransactionBlock } from '@mysten/sui.js';
 import { useMemo, useState } from 'react';
 
 import { GasFees } from './GasFees';
@@ -15,19 +15,12 @@ import { type TransactionApprovalRequest } from '_payloads/transactions/Approval
 import { respondToTransactionRequest } from '_redux/slices/transaction-requests';
 import { ampli } from '_src/shared/analytics/ampli';
 import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
-import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
 import { PageMainLayoutTitle } from '_src/ui/app/shared/page-main-layout/PageMainLayoutTitle';
 import { TransactionSummary } from '_src/ui/app/shared/transaction-summary';
 
 export type TransactionRequestProps = {
 	txRequest: TransactionApprovalRequest;
 };
-
-// Some applications require *a lot* of transactions to interact with, and this
-// eats up our analytics event quota. As a short-term solution so we don't have
-// to stop tracking this event entirely, we'll just manually exclude application
-// origins with this list
-const appOriginsToExcludeFromAnalytics = ['https://sui8192.ethoswallet.xyz'];
 
 export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 	const addressForTransaction = txRequest.tx.account;
@@ -48,12 +41,10 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 		isError: isDryRunError,
 		isLoading: isDryRunLoading,
 	} = useTransactionDryRun(addressForTransaction, transaction);
-	const recognizedPackagesList = useRecognizedPackages();
 
 	const summary = useTransactionSummary({
 		transaction: data,
 		currentAddress: addressForTransaction,
-		recognizedPackagesList,
 	});
 	const { clientIdentifier, notificationModal } = useQredoTransaction(true);
 	if (!signer) {
@@ -82,13 +73,11 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 							clientIdentifier,
 						}),
 					);
-					if (!appOriginsToExcludeFromAnalytics.includes(txRequest.origin)) {
-						ampli.respondedToTransactionRequest({
-							applicationUrl: txRequest.origin,
-							approvedTransaction: approved,
-							receivedFailureWarning: false,
-						});
-					}
+					ampli.respondedToTransactionRequest({
+						applicationUrl: txRequest.origin,
+						approvedTransaction: approved,
+						receivedFailureWarning: false,
+					});
 				}}
 				address={addressForTransaction}
 				approveLoading={isLoading || isConfirmationVisible}

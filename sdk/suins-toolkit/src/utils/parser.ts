@@ -1,8 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiObjectResponse, SuiMoveObject, SuiObjectData } from '@mysten/sui.js/client';
-import { normalizeSuiAddress } from '@mysten/sui.js/utils';
+import {
+    SuiObjectResponse,
+    SuiMoveObject,
+    SuiObjectData,
+    normalizeSuiAddress,
+} from '@mysten/sui.js';
 
 export const camelCase = (string: string) => string.replace(/(_\w)/g, (g) => g[1].toUpperCase());
 

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { formatDate } from '@mysten/core';
-import { Text } from '@mysten/ui';
+
+import { Text } from '~/ui/Text';
 
 export interface DateCardProps {
 	date: Date | number;

@@ -4,7 +4,6 @@
 
 use anyhow::{bail, Context, Result};
 use move_command_line_common::files::{find_move_filenames, FileHash};
-use move_compiler::{diagnostics::WarningFilters, shared::PackageConfig};
 use move_core_types::account_address::AccountAddress;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -439,24 +438,6 @@ impl Package {
             .into_iter()
             .map(FileName::from)
             .collect())
-    }
-
-    pub(crate) fn compiler_config(&self, config: &BuildConfig) -> PackageConfig {
-        PackageConfig {
-            flavor: self
-                .source_package
-                .package
-                .flavor
-                .or(config.default_flavor)
-                .unwrap_or_default(),
-            edition: self
-                .source_package
-                .package
-                .edition
-                .or(config.default_edition)
-                .unwrap_or_default(),
-            warning_filter: WarningFilters::Empty,
-        }
     }
 }
 

@@ -17,30 +17,30 @@ You can also use yarn or pnpm.
 Create an instance of SuinsClient:
 
 ```typescript
-import { SuiClient } from '@mysten/sui.js/client';
+import { JsonRpcProvider } from '@mysten/sui.js';
 import { SuinsClient } from '@mysten/suins-toolkit';
 
-const client = new SuiClient();
-export const suinsClient = new SuinsClient(client);
+const provider = new JsonRpcProvider();
+export const suinsClient = new SuinsClient(provider);
 ```
 
 Choose network type:
 
 ```typescript
-export const suinsClient = new SuinsClient(client, {
+export const suinsClient = new SuinsClient(provider, {
     networkType: 'testnet',
 });
 ```
 
 > **Note:** To ensure best performance, please make sure to create only one instance of the SuinsClient class in your application. Then, import the created `suinsClient` instance to use its functions.
 
-Fetch an address linked to a name:
+Fetch a `SuiAddress` linked to a name:
 
 ```typescript
 const address = await suinsClient.getAddress('suins.sui');
 ```
 
-Fetch the default name of an address:
+Fetch the default name of a `SuiAddress`:
 
 ```typescript
 const defaultName = await suinsClient.getName(

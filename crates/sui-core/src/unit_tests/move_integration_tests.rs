@@ -327,7 +327,7 @@ async fn test_object_owning_another_object() {
     effects.status().unwrap();
     let child_effect = effects
         .mutated()
-        .into_iter()
+        .iter()
         .find(|((id, _, _), _)| id == &child.0)
         .unwrap();
     // Check that the child is now owned by the parent.
@@ -566,7 +566,8 @@ async fn test_create_then_delete_parent_child_wrap() {
     assert_eq!(
         effects
             .modified_at_versions()
-            .into_iter()
+            .iter()
+            .cloned()
             .collect::<HashSet<_>>(),
         HashSet::from([
             (gas_ref.0, gas_ref.1),
@@ -660,7 +661,8 @@ async fn test_remove_child_when_no_prior_version_exists() {
     assert_eq!(
         effects
             .modified_at_versions()
-            .into_iter()
+            .iter()
+            .cloned()
             .collect::<HashSet<_>>(),
         HashSet::from([
             (gas_ref.0, gas_ref.1),
@@ -2879,12 +2881,12 @@ pub async fn build_and_publish_test_package_with_upgrade_cap(
 
     let package = effects
         .created()
-        .into_iter()
+        .iter()
         .find(|(_, owner)| matches!(owner, Owner::Immutable))
         .unwrap();
     let upgrade_cap = effects
         .created()
-        .into_iter()
+        .iter()
         .find(|(_, owner)| matches!(owner, Owner::AddressOwner(_)))
         .unwrap();
 

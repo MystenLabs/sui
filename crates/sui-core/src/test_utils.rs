@@ -68,7 +68,7 @@ pub async fn send_and_confirm_transaction(
     let certificate =
         CertifiedTransaction::new(transaction.into_message(), vec![vote.clone()], &committee)
             .unwrap()
-            .verify_authenticated(&committee, &Default::default())
+            .verify(&committee)
             .unwrap();
 
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
@@ -214,7 +214,7 @@ async fn init_genesis(
     let pkg = Object::new_package(
         &modules,
         TransactionDigest::genesis(),
-        ProtocolConfig::get_for_max_version_UNSAFE().max_move_package_size(),
+        ProtocolConfig::get_for_max_version().max_move_package_size(),
         &genesis_move_packages,
     )
     .unwrap();
@@ -440,7 +440,6 @@ pub fn make_cert_with_large_committee(
         .collect();
 
     let cert = CertifiedTransaction::new(transaction.clone().into_data(), sigs, committee).unwrap();
-    cert.verify_signatures_authenticated(committee, &Default::default())
-        .unwrap();
+    cert.verify_signature(committee).unwrap();
     cert
 }

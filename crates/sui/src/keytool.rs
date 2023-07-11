@@ -3,7 +3,6 @@
 use anyhow::anyhow;
 use bip32::DerivationPath;
 use clap::*;
-use fastcrypto::bls12381::min_pk::BLS12381KeyPair;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding, Hex};
 use fastcrypto::hash::HashFunction;
@@ -41,7 +40,7 @@ use sui_types::crypto::{
 use sui_types::crypto::{DefaultHash, PublicKey, Signature};
 use sui_types::multisig::{MultiSig, MultiSigPublicKey, ThresholdUnit, WeightUnit};
 use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
-use sui_types::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
+use sui_types::signature::{AuthenticatorTrait, AuxVerifyData, GenericSignature};
 use sui_types::transaction::TransactionData;
 use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
 use sui_types::zk_login_util::AddressParams;
@@ -403,7 +402,7 @@ impl KeyToolCommand {
                     Base64::decode(&base64).map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
                 CommandOutput::RawString(format!("{:?}", bytes))
             }
-
+            
             KeyToolCommand::BytesToBase64 { bytes } => {
                 let base64 = Base64::from_bytes(&bytes);
                 CommandOutput::RawString(format!("{:?}", base64))
@@ -414,10 +413,25 @@ impl KeyToolCommand {
                 CommandOutput::RawString(format!("{:?}", hex))
             }
 
-            KeyToolCommand::Convert { value } => {
-                let result = convert_private_key_to_base64(value)?;
-                CommandOutput::PrivateKeyBase64(PrivateKeyBase64 { base64: result })
-            }
+            KeyToolCommand::List => {
+                let keys = keystore
+                    .keys()
+                    .into_iter()
+                    .map(|key| Key {
+                        sui_address: Into::<SuiAddress>::into(&key),
+                        public_base64_key: key.encode_base64(),
+                        key_scheme: key.scheme().to_string(),
+                        mnemonic: None,
+                        flag: key.flag(),
+                        peer_id: {
+                            if let PublicKey::Ed25519(public_key) = key {
+                                Some(anemo::PeerId(public_key.0).to_string())
+                            } else {
+                                None
+                            }
+                        },
+                    })
+                    .collect::<Vec<_>>();
 
             KeyToolCommand::DecodeMultiSig { multisig, tx_bytes } => {
                 let pks = multisig.get_pk().pubkeys();
@@ -480,10 +494,11 @@ impl KeyToolCommand {
                     let tx_bytes = Base64::decode(&tx_bytes.unwrap())
                         .map_err(|e| anyhow!("Invalid base64 tx bytes: {:?}", e))?;
                     let tx_data: TransactionData = bcs::from_bytes(&tx_bytes)?;
-                    let res = GenericSignature::MultiSig(multisig).verify_secure_generic(
+                    let res = GenericSignature::MultiSig(multisig).verify_authenticator(
                         &IntentMessage::new(Intent::sui_transaction(), tx_data),
                         address,
-                        AuxVerifyData::default(),
+                        None,
+                        &VerifyParams::default(),
                     );
                     info!("Verify multisig: {:?}", res);
                     output.transaction_result = format!("{:?}", res);
@@ -1041,6 +1056,14 @@ fn convert_private_key_to_base64(value: String) -> Result<String, anyhow::Error>
 
 fn anemo_styling(pk: &PublicKey) -> Option<String> {
     if let PublicKey::Ed25519(public_key) = pk {
+        Some(anemo::PeerId(public_key.0).to_string())
+    } else {
+        None
+    }
+}
+
+fn anemo_styling(kp: &SuiKeyPair) -> Option<String> {
+    if let PublicKey::Ed25519(public_key) = kp.public() {
         Some(anemo::PeerId(public_key.0).to_string())
     } else {
         None

@@ -3,7 +3,6 @@
 
 import { useRpcClient } from '@mysten/core';
 import { ArrowRight12 } from '@mysten/icons';
-import { Text } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
@@ -13,6 +12,7 @@ import { Link } from '~/ui/Link';
 import { Pagination, useCursorPagination } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
+import { Text } from '~/ui/Text';
 import { numberSuffix } from '~/utils/numberUtil';
 
 const DEFAULT_TRANSACTIONS_LIMIT = 20;
@@ -57,7 +57,7 @@ export function TransactionsActivityTable({
 					Failed to load Transactions
 				</div>
 			)}
-			<div className="flex flex-col space-y-3 text-left xl:pr-10">
+			<div className="flex flex-col space-y-5 text-left xl:pr-10">
 				{isLoading || isFetching || !cardData ? (
 					<PlaceholderTable
 						rowCount={limit}
@@ -75,15 +75,15 @@ export function TransactionsActivityTable({
 					{!disablePagination ? (
 						<Pagination {...pagination} />
 					) : (
-						<Link to="/recent" after={<ArrowRight12 className="h-3 w-3 -rotate-45" />}>
-							View all
+						<Link to="/recent" after={<ArrowRight12 />}>
+							More Transaction Blocks
 						</Link>
 					)}
 
 					<div className="flex items-center space-x-3">
 						<Text variant="body/medium" color="steel-dark">
 							{count ? numberSuffix(Number(count)) : '-'}
-							{` Total`}
+							{` Transaction Blocks`}
 						</Text>
 						{!disablePagination && (
 							<select

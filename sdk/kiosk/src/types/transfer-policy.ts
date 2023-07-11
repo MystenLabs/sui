@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ObjectOwner } from '@mysten/sui.js/client';
+import { ObjectOwner } from '@mysten/sui.js';
 
 /** The Transfer Policy module. */
 export const TRANSFER_POLICY_MODULE = '0x2::transfer_policy';

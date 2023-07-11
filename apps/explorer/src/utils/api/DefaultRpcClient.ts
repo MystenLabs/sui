@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SentryHttpTransport } from '@mysten/core';
-import { SuiClient, SuiHTTPTransport, getFullnodeUrl } from '@mysten/sui.js/client';
+import { SentryRpcClient } from '@mysten/core';
+import { JsonRpcProvider, Connection, localnetConnection } from '@mysten/sui.js';
 
 export enum Network {
 	LOCAL = 'LOCAL',
@@ -11,27 +11,35 @@ export enum Network {
 	MAINNET = 'MAINNET',
 }
 
-const CONNECTIONS: Record<Network, string> = {
-	[Network.LOCAL]: getFullnodeUrl('localnet'),
-	[Network.DEVNET]: 'https://explorer-rpc.devnet.sui.io:443',
-	[Network.TESTNET]: 'https://explorer-rpc.testnet.sui.io:443',
-	[Network.MAINNET]: 'https://explorer-rpc.mainnet.sui.io:443',
+const CONNECTIONS: Record<Network, Connection> = {
+	[Network.LOCAL]: localnetConnection,
+	[Network.DEVNET]: new Connection({
+		fullnode: 'https://explorer-rpc.devnet.sui.io:443',
+	}),
+	[Network.TESTNET]: new Connection({
+		fullnode: 'https://explorer-rpc.testnet.sui.io:443',
+	}),
+	[Network.MAINNET]: new Connection({
+		fullnode: 'https://explorer-rpc.mainnet.sui.io:443',
+	}),
 };
 
-const defaultRpcMap: Map<Network | string, SuiClient> = new Map();
+const defaultRpcMap: Map<Network | string, JsonRpcProvider> = new Map();
 
 // NOTE: This class should not be used directly in React components, prefer to use the useRpcClient() hook instead
 export const DefaultRpcClient = (network: Network | string) => {
 	const existingClient = defaultRpcMap.get(network);
 	if (existingClient) return existingClient;
 
-	const networkUrl = network in Network ? CONNECTIONS[network as Network] : network;
+	const connection =
+		network in Network ? CONNECTIONS[network as Network] : new Connection({ fullnode: network });
 
-	const provider = new SuiClient({
-		transport:
+	const provider = new JsonRpcProvider(connection, {
+		rpcClient:
+			// Only instrument mainnet:
 			network in Network && network === Network.MAINNET
-				? new SentryHttpTransport(networkUrl)
-				: new SuiHTTPTransport({ url: networkUrl }),
+				? new SentryRpcClient(connection.fullnode)
+				: undefined,
 	});
 	defaultRpcMap.set(network, provider);
 	return provider;

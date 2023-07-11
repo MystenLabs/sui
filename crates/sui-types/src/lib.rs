@@ -73,7 +73,7 @@ pub mod zk_login_util;
 
 pub mod epoch_data;
 
-#[cfg(any(test, feature = "test-utils"))]
+#[cfg(feature = "test-utils")]
 #[path = "./unit_tests/utils.rs"]
 pub mod utils;
 

@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getObjectDisplay, getObjectOwner } from '@mysten/sui.js';
-import { SuiClient } from '@mysten/sui.js/client';
+import { JsonRpcProvider, SuiAddress, getObjectDisplay, getObjectOwner } from '@mysten/sui.js';
 
 import { DataFields, NetworkType, NameObject, SuiNSContract } from './types/objects';
 import { DEVNET_JSON_FILE, GCS_URL, TESTNET_JSON_FILE } from './utils/constants';
@@ -12,21 +11,21 @@ import { getAvatar, getOwner } from './utils/queries';
 export const AVATAR_NOT_OWNED = 'AVATAR_NOT_OWNED';
 
 class SuinsClient {
-    private suiClient: SuiClient;
+    private suiProvider: JsonRpcProvider;
     contractObjects: SuiNSContract | undefined;
     networkType: NetworkType | undefined;
 
     constructor(
-        suiClient: SuiClient,
+        suiProvider: JsonRpcProvider,
         options?: {
             contractObjects?: SuiNSContract;
             networkType?: NetworkType;
         },
     ) {
-        if (!suiClient) {
-            throw new Error('SuiClient must be specified.');
+        if (!suiProvider) {
+            throw new Error('Sui JsonRpcProvider must be specified.');
         }
-        this.suiClient = suiClient;
+        this.suiProvider = suiProvider;
         this.contractObjects = options?.contractObjects;
         this.networkType = options?.networkType;
     }
@@ -52,11 +51,11 @@ class SuinsClient {
     }
 
     protected async getDynamicFieldObject(
-        parentObjectId: string,
+        parentObjectId: SuiAddress,
         key: unknown,
         type = '0x1::string::String',
     ) {
-        const dynamicFieldObject = await this.suiClient.getDynamicFieldObject({
+        const dynamicFieldObject = await this.suiProvider.getDynamicFieldObject({
             parentId: parentObjectId,
             name: {
                 type: type,
@@ -69,10 +68,10 @@ class SuinsClient {
         return dynamicFieldObject;
     }
 
-    protected async getNameData(dataObjectId: string, fields: DataFields[] = []) {
+    protected async getNameData(dataObjectId: SuiAddress, fields: DataFields[] = []) {
         if (!dataObjectId) return {};
 
-        const { data: dynamicFields } = await this.suiClient.getDynamicFields({
+        const { data: dynamicFields } = await this.suiProvider.getDynamicFields({
             parentId: dataObjectId,
         });
 
@@ -83,7 +82,7 @@ class SuinsClient {
 
         const data = await Promise.allSettled(
             filteredDynamicFields?.map(({ objectId }) =>
-                this.suiClient
+                this.suiProvider
                     .getObject({
                         id: objectId,
                         options: { showContent: true },
@@ -141,9 +140,9 @@ class SuinsClient {
         // We use Promise.all to do these calls at the same time.
         if (nameObject.nftId && (includeAvatar || options?.showOwner)) {
             const [owner, avatarNft] = await Promise.all([
-                getOwner(this.suiClient, nameObject.nftId),
+                getOwner(this.suiProvider, nameObject.nftId),
                 includeAvatar
-                    ? getAvatar(this.suiClient, nameObject.avatar)
+                    ? getAvatar(this.suiProvider, nameObject.avatar)
                     : Promise.resolve(null),
             ]);
 

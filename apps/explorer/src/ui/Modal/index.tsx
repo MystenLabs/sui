@@ -3,8 +3,9 @@
 
 import { Dialog, Transition } from '@headlessui/react';
 import { X12 } from '@mysten/icons';
-import { Heading } from '@mysten/ui';
 import { Fragment, type ReactNode } from 'react';
+
+import { Heading } from '../Heading';
 
 export interface ModalProps {
 	open: boolean;

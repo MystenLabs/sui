@@ -6,7 +6,7 @@ import { useFormatCoin } from '@mysten/core';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { Text } from '_src/ui/app/shared/text';
 
-import type { GasCostSummary } from '@mysten/sui.js/client';
+import type { GasCostSummary } from '@mysten/sui.js';
 
 type TxnGasSummaryProps = {
 	gasSummary?: GasCostSummary;

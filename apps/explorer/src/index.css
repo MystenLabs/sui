@@ -30,95 +30,124 @@ body,
 }
 
 @layer components {
-	.home-page-grid-container-top {
+	.home-page-grid-container {
 		@apply grid grid-cols-1 gap-4;
 		grid-template-areas:
-			'network'
+			'tps'
 			'epoch'
-			'transactions'
-			'accounts';
+			'gas-price'
+			'node-map'
+			'network'
+			'checkpoint'
+			'activity'
+			'validators'
+			'packages';
 	}
-	.home-page-grid-container-top.with-token {
+
+	.home-page-grid-container-with-sui-token {
 		grid-template-areas:
-			'network'
+			'tps'
 			'epoch'
-			'token'
-			'transactions'
-			'accounts';
+			'gas-price'
+			'node-map'
+			'sui-token'
+			'network'
+			'checkpoint'
+			'activity'
+			'validators'
+			'packages';
 	}
 
 	@screen sm {
-		.home-page-grid-container-top {
-			@apply grid-cols-2;
+		.home-page-grid-container {
+			@apply grid-cols-[200px,auto];
 			grid-template-areas:
-				'network epoch'
-				'transactions transactions'
-				'accounts accounts';
+				'tps         gas-price'
+				'epoch       gas-price'
+				'node-map    node-map'
+				'network     network'
+				'activity    activity'
+				'validators  validators'
+				'packages    packages';
 		}
 
-		.home-page-grid-container-top.with-token {
+		.home-page-grid-container-with-sui-token {
 			grid-template-areas:
-				'network epoch'
-				'network token'
-				'transactions transactions'
-				'accounts accounts';
+				'tps         gas-price'
+				'epoch       gas-price'
+				'node-map    node-map'
+				'sui-token   sui-token'
+				'network     network'
+				'activity    activity'
+				'validators  validators'
+				'packages    packages';
 		}
 	}
 
 	@screen md {
-		.home-page-grid-container-top {
-			@apply grid-cols-2;
+		.home-page-grid-container {
+			@apply grid-cols-[300px,auto];
 			grid-template-areas:
-				'network epoch'
-				'transactions accounts';
+				'tps         gas-price'
+				'epoch       gas-price'
+				'node-map    node-map'
+				'network     network'
+				'activity    activity'
+				'validators  validators'
+				'packages    packages';
 		}
 
-		.home-page-grid-container-top.with-token {
+		.home-page-grid-container-with-sui-token {
 			grid-template-areas:
-				'network epoch'
-				'network token'
-				'transactions accounts';
+				'tps         gas-price'
+				'epoch       gas-price'
+				'node-map    node-map'
+				'sui-token   network'
+				'activity    activity'
+				'validators  validators'
+				'packages    packages';
 		}
-	}
-
-	@screen xl {
-		.home-page-grid-container-top {
-			@apply grid-cols-[315px,1fr,1fr];
-			grid-template-areas:
-				'network transactions accounts'
-				'epoch transactions accounts';
-		}
-
-		.home-page-grid-container-top.with-token {
-			grid-template-areas:
-				'network transactions accounts'
-				'epoch   transactions accounts'
-				'token   transactions accounts';
-		}
-	}
-
-	.home-page-grid-container-bottom {
-		@apply grid grid-cols-1 gap-8;
-		grid-template-areas:
-			'activity'
-			'packages'
-			'validators'
-			'node-map';
 	}
 
 	@screen lg {
-		.home-page-grid-container-bottom {
-			@apply gap-10;
+		.home-page-grid-container {
+			@apply grid-cols-[200px,454px,auto];
+			grid-template-areas:
+				'tps        gas-price node-map'
+				'epoch      gas-price node-map'
+				'epoch      gas-price network'
+				'activity   activity  validators'
+				'activity   activity  packages';
+		}
+
+		.home-page-grid-container-with-sui-token {
+			grid-template-areas:
+				'tps        gas-price node-map'
+				'epoch      gas-price node-map'
+				'epoch      sui-token network'
+				'activity   activity  validators'
+				'activity   activity  packages';
 		}
 	}
 
 	@screen xl {
-		.home-page-grid-container-bottom {
-			@apply grid grid-cols-2 gap-x-20 gap-y-10;
+		.home-page-grid-container {
+			@apply grid-cols-[200px,454px,auto];
 			grid-template-areas:
-				'activity activity'
-				'packages validators'
-				'node-map node-map';
+				'tps        gas-price node-map'
+				'epoch      gas-price node-map'
+				'epoch      gas-price network'
+				'activity   activity  validators'
+				'activity   activity  packages';
+		}
+
+		.home-page-grid-container-with-sui-token {
+			grid-template-areas:
+				'tps        gas-price node-map'
+				'epoch      gas-price node-map'
+				'epoch      sui-token network'
+				'activity   activity  validators'
+				'activity   activity  packages';
 		}
 	}
 }

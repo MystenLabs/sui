@@ -3,7 +3,7 @@
 
 use crate::{
     effects::{SignedTransactionEffects, TransactionEvents},
-    transaction::{CertifiedTransaction, SignedTransaction, Transaction},
+    transaction::{SignedTransaction, Transaction, VerifiedCertificate},
 };
 
 /// This enum represents all possible states of a response returned from
@@ -16,7 +16,7 @@ use crate::{
 pub enum PlainTransactionInfoResponse {
     Signed(SignedTransaction),
     ExecutedWithCert(
-        CertifiedTransaction,
+        VerifiedCertificate,
         SignedTransactionEffects,
         TransactionEvents,
     ),

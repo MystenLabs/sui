@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowUpRight12 } from '@mysten/icons';
+import { type SuiAddress } from '@mysten/sui.js';
 import { cx } from 'class-variance-authority';
 
 import { AccountAddress } from './AccountAddress';
@@ -15,7 +16,7 @@ export type DAppInfoCardProps = {
 	name: string;
 	url: string;
 	iconUrl?: string;
-	connectedAddress?: string;
+	connectedAddress?: SuiAddress;
 };
 
 export function DAppInfoCard({ name, url, iconUrl, connectedAddress }: DAppInfoCardProps) {

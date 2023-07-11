@@ -1,22 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64 } from '@mysten/bcs';
+import { blake2b } from '@noble/hashes/blake2b';
+import { fromB64, toB64 } from '@mysten/bcs';
 import type { PublicKeyInitData } from '../../cryptography/publickey.js';
-import { PublicKey, bytesEqual } from '../../cryptography/publickey.js';
-import type { SerializedSignature } from '../../cryptography/signature.js';
-import {
-	SIGNATURE_SCHEME_TO_FLAG,
-	parseSerializedSignature,
-} from '../../cryptography/signature.js';
-import nacl from 'tweetnacl';
+import { bytesEqual } from '../../cryptography/publickey.js';
+import { SIGNATURE_SCHEME_TO_FLAG } from '../../cryptography/signature.js';
+import { bytesToHex } from '@noble/hashes/utils';
+import { SUI_ADDRESS_LENGTH, normalizeSuiAddress } from '../../utils/sui-types.js';
 
 const PUBLIC_KEY_SIZE = 32;
 
 /**
  * An Ed25519 public key
  */
-export class Ed25519PublicKey extends PublicKey {
+export class Ed25519PublicKey {
 	static SIZE = PUBLIC_KEY_SIZE;
 	private data: Uint8Array;
 
@@ -25,8 +23,6 @@ export class Ed25519PublicKey extends PublicKey {
 	 * @param value ed25519 public key as buffer or base-64 encoded string
 	 */
 	constructor(value: PublicKeyInitData) {
-		super();
-
 		if (typeof value === 'string') {
 			this.data = fromB64(value);
 		} else if (value instanceof Uint8Array) {
@@ -45,15 +41,42 @@ export class Ed25519PublicKey extends PublicKey {
 	/**
 	 * Checks if two Ed25519 public keys are equal
 	 */
-	override equals(publicKey: Ed25519PublicKey): boolean {
-		return super.equals(publicKey);
+	equals(publicKey: Ed25519PublicKey): boolean {
+		return bytesEqual(this.toBytes(), publicKey.toBytes());
+	}
+
+	/**
+	 * Return the base-64 representation of the Ed25519 public key
+	 */
+	toBase64(): string {
+		return toB64(this.toBytes());
 	}
 
 	/**
 	 * Return the byte array representation of the Ed25519 public key
 	 */
-	toRawBytes(): Uint8Array {
+	toBytes(): Uint8Array {
 		return this.data;
+	}
+
+	/**
+	 * Return the base-64 representation of the Ed25519 public key
+	 */
+	toString(): string {
+		return this.toBase64();
+	}
+
+	/**
+	 * Return the Sui address associated with this Ed25519 public key
+	 */
+	toSuiAddress(): string {
+		let tmp = new Uint8Array(PUBLIC_KEY_SIZE + 1);
+		tmp.set([SIGNATURE_SCHEME_TO_FLAG['ED25519']]);
+		tmp.set(this.toBytes(), 1);
+		// Each hex char represents half a byte, hence hex address doubles the length
+		return normalizeSuiAddress(
+			bytesToHex(blake2b(tmp, { dkLen: 32 })).slice(0, SUI_ADDRESS_LENGTH * 2),
+		);
 	}
 
 	/**
@@ -61,28 +84,5 @@ export class Ed25519PublicKey extends PublicKey {
 	 */
 	flag(): number {
 		return SIGNATURE_SCHEME_TO_FLAG['ED25519'];
-	}
-
-	/**
-	 * Verifies that the signature is valid for for the provided message
-	 */
-	async verify(message: Uint8Array, signature: Uint8Array | SerializedSignature): Promise<boolean> {
-		let bytes;
-		if (typeof signature === 'string') {
-			const parsed = parseSerializedSignature(signature);
-			if (parsed.signatureScheme !== 'ED25519') {
-				throw new Error('Invalid signature scheme');
-			}
-
-			if (!bytesEqual(this.toRawBytes(), parsed.publicKey)) {
-				throw new Error('Signature does not match public key');
-			}
-
-			bytes = parsed.signature;
-		} else {
-			bytes = signature;
-		}
-
-		return nacl.sign.detached.verify(message, bytes, this.toRawBytes());
 	}
 }

@@ -20,7 +20,7 @@ const networkLogos = {
 const Logo = ({ networkName }: LogoProps) => {
 	const LogoComponent = networkName ? networkLogos[networkName] : networkLogos[API_ENV.mainnet];
 
-	return <LogoComponent className="h-7 w-walletLogo text-gray-90" />;
+	return <LogoComponent className="h-7 w-walletLogo" />;
 };
 
 export default Logo;

@@ -770,7 +770,7 @@ impl SuiClientCommands {
                 package_path,
                 build_config,
             } => {
-                let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+                let protocol_config = ProtocolConfig::get_for_max_version();
                 let registry = &Registry::new();
                 let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
 

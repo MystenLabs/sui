@@ -5,7 +5,7 @@ import { useMutation } from '@tanstack/react-query';
 
 import { useOwnedKiosk } from '../hooks/kiosk';
 import { OwnedObjectType } from '../components/Inventory/OwnedObjects';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { ObjectId, TransactionBlock } from '@mysten/sui.js';
 import {
 	Kiosk,
 	createKioskAndShare,
@@ -73,7 +73,7 @@ export function usePlaceAndListMutation({ onSuccess, onError }: MutationParams) 
 			item: OwnedObjectType;
 			price: string;
 			shouldPlace?: boolean;
-			kioskId: string;
+			kioskId: ObjectId;
 		}) => {
 			// find active kiosk cap.
 			const cap = findActiveCap(ownedKiosk?.caps, kioskId);

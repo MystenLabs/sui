@@ -16,11 +16,5 @@ module.exports = {
 				tailwindConfig: './apps/explorer/tailwind.config.ts',
 			},
 		},
-		{
-			files: 'sdk/**/*',
-			options: {
-				proseWrap: 'always',
-			},
-		},
 	],
 };

@@ -3,45 +3,38 @@
 
 use expect_test::expect;
 use reqwest::Client;
-use std::fs;
 use std::{collections::BTreeMap, path::PathBuf};
 
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use sui_source_validation_service::{
-    host_port, initialize, serve, verify_packages, AppState, CloneCommand, Config, ErrorResponse,
-    Network, NetworkLookup, PackageSources, RepositorySource, SourceInfo, SourceResponse,
-    SUI_SOURCE_VALIDATION_VERSION_HEADER,
+    initialize, serve, verify_packages, AppState, CloneCommand, Config, PackageSources,
+    RepositorySource, SourceInfo, SourceResponse,
 };
 use test_cluster::TestClusterBuilder;
 
-const LOCALNET_PORT: u16 = 9000;
 const TEST_FIXTURES_DIR: &str = "tests/fixture";
 
 #[tokio::test]
 async fn test_verify_packages() -> anyhow::Result<()> {
-    let _cluster = TestClusterBuilder::new()
-        .with_fullnode_rpc_port(LOCALNET_PORT)
-        .build()
-        .await;
+    let mut cluster = TestClusterBuilder::new().build().await;
+    let context = &mut cluster.wallet;
 
     let config = Config {
         packages: vec![PackageSources::Repository(RepositorySource {
             repository: "https://github.com/mystenlabs/sui".into(),
             branch: "main".into(),
             paths: vec!["move-stdlib".into()],
-            network: Some(Network::Localnet),
         })],
     };
 
     let fixtures = tempfile::tempdir()?;
-    fs::create_dir(fixtures.path().join("localnet"))?;
     fs_extra::dir::copy(
         PathBuf::from(TEST_FIXTURES_DIR).join("sui"),
-        fixtures.path().join("localnet"),
+        fixtures.path(),
         &fs_extra::dir::CopyOptions::default(),
     )?;
-    let result = verify_packages(&config, fixtures.path()).await;
+    let result = verify_packages(context, &config, fixtures.path()).await;
     let truncated_error_message = &result
         .unwrap_err()
         .to_string()
@@ -62,9 +55,11 @@ Multiple source verification errors found:
 
 #[tokio::test]
 async fn test_api_route() -> anyhow::Result<()> {
+    let mut cluster = TestClusterBuilder::new().build().await;
+    let context = &mut cluster.wallet;
     let config = Config { packages: vec![] };
     let tmp_dir = tempfile::tempdir()?;
-    initialize(&config, tmp_dir.path()).await?;
+    initialize(context, &config, tmp_dir.path()).await?;
 
     // set up sample lookup to serve
     let fixtures = tempfile::tempdir()?;
@@ -80,8 +75,8 @@ async fn test_api_route() -> anyhow::Result<()> {
         .into_path()
         .join("sui/move-stdlib/sources/address.move");
 
-    let mut test_lookup = BTreeMap::new();
-    test_lookup.insert(
+    let mut sources = BTreeMap::new();
+    sources.insert(
         (
             AccountAddress::from_hex_literal(address).unwrap(),
             Symbol::from(module),
@@ -91,17 +86,13 @@ async fn test_api_route() -> anyhow::Result<()> {
             source: Some("module address {...}".to_owned()),
         },
     );
-    let mut sources = NetworkLookup::new();
-    sources.insert(Network::Localnet, test_lookup);
     tokio::spawn(serve(AppState { sources }).expect("Cannot start service."));
 
-    let client = Client::new();
-
     // check that serve returns expected sample code
+    let client = Client::new();
     let json = client
         .get(format!(
-            "http://{}/api?address={address}&module={module}&network=localnet",
-            host_port()
+            "http://0.0.0.0:8000/api?address={address}&module={module}"
         ))
         .send()
         .await
@@ -111,24 +102,6 @@ async fn test_api_route() -> anyhow::Result<()> {
 
     let expected = expect!["module address {...}"];
     expected.assert_eq(&json.source);
-
-    // check server rejects bad version header
-    let json = client
-        .get(format!(
-            "http://{}/api?address={address}&module={module}&network=localnet",
-            host_port()
-        ))
-        .header(SUI_SOURCE_VALIDATION_VERSION_HEADER, "bogus")
-        .send()
-        .await
-        .expect("Request failed.")
-        .json::<ErrorResponse>()
-        .await?;
-
-    let expected =
-        expect!["Unsupported version 'bogus' specified in header X-Sui-Source-Validation-Version"];
-    expected.assert_eq(&json.error);
-
     Ok(())
 }
 
@@ -167,7 +140,6 @@ fn test_parse_package_config() -> anyhow::Result<()> {
                     "crates/sui-framework/packages/sui-framework",
                     "crates/sui-framework/packages/sui-system",
                 ],
-                network: None,
             },
         ),
         Directory(
@@ -175,7 +147,6 @@ fn test_parse_package_config() -> anyhow::Result<()> {
                 paths: [
                     "home/user/some/package",
                 ],
-                network: None,
             },
         ),
     ],
@@ -191,10 +162,9 @@ fn test_clone_command() -> anyhow::Result<()> {
         repository: "https://github.com/user/repo".into(),
         branch: "main".into(),
         paths: vec!["a".into(), "b".into()],
-        network: Some(Network::Localnet),
     };
 
-    let command = CloneCommand::new(&source, PathBuf::from("/foo").as_path())?;
+    let command = CloneCommand::new(&source, PathBuf::from("/tmp").as_path())?;
     let expect = expect![
         r#"CloneCommand {
     args: [
@@ -205,11 +175,11 @@ fn test_clone_command() -> anyhow::Result<()> {
             "--filter=tree:0",
             "--branch=main",
             "https://github.com/user/repo",
-            "/foo/localnet/repo",
+            "/tmp/repo",
         ],
         [
             "-C",
-            "/foo/localnet/repo",
+            "/tmp/repo",
             "sparse-checkout",
             "set",
             "--no-cone",
@@ -218,7 +188,7 @@ fn test_clone_command() -> anyhow::Result<()> {
         ],
         [
             "-C",
-            "/foo/localnet/repo",
+            "/tmp/repo",
             "checkout",
         ],
     ],

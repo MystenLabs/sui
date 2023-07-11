@@ -3,7 +3,6 @@
 
 import { useRpcClient } from '@mysten/core';
 import { ArrowRight12 } from '@mysten/icons';
-import { Text } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
@@ -13,6 +12,7 @@ import { Link } from '~/ui/Link';
 import { Pagination, useCursorPagination } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
+import { Text } from '~/ui/Text';
 import { numberSuffix } from '~/utils/numberUtil';
 
 const DEFAULT_CHECKPOINTS_LIMIT = 20;
@@ -59,7 +59,7 @@ export function CheckpointsTable({
 	const cardData = data ? genTableDataFromCheckpointsData(data) : undefined;
 
 	return (
-		<div className="flex flex-col space-y-3 text-left xl:pr-10">
+		<div className="flex flex-col space-y-5 text-left xl:pr-10">
 			{isError && (
 				<div className="pt-2 font-sans font-semibold text-issue-dark">
 					Failed to load Checkpoints
@@ -87,18 +87,15 @@ export function CheckpointsTable({
 						}
 					/>
 				) : (
-					<Link
-						to="/recent?tab=checkpoints"
-						after={<ArrowRight12 className="h-3 w-3 -rotate-45" />}
-					>
-						View all
+					<Link to="/recent?tab=checkpoints" after={<ArrowRight12 />}>
+						More Checkpoints
 					</Link>
 				)}
 
 				<div className="flex items-center space-x-3">
 					<Text variant="body/medium" color="steel-dark">
 						{count ? numberSuffix(Number(count)) : '-'}
-						{` Total`}
+						{` Checkpoints`}
 					</Text>
 					{!disablePagination && (
 						<select

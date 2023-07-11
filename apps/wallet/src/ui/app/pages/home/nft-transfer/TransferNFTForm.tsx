@@ -3,8 +3,7 @@
 
 import { useGetKioskContents, isSuiNSName, useRpcClient, useSuiNSEnabled } from '@mysten/core';
 import { ArrowRight16 } from '@mysten/icons';
-import { getTransactionDigest } from '@mysten/sui.js';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { getTransactionDigest, TransactionBlock } from '@mysten/sui.js';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Form, Field, Formik } from 'formik';
 import { toast } from 'react-hot-toast';
@@ -60,7 +59,7 @@ export function TransferNFTForm({
 			}
 
 			if (isContainedInKiosk) {
-				return transferKioskItem.mutateAsync({ to, clientIdentifier });
+				return transferKioskItem.mutateAsync(to);
 			}
 
 			const tx = new TransactionBlock();
@@ -80,7 +79,7 @@ export function TransferNFTForm({
 		},
 		onSuccess: (response) => {
 			queryClient.invalidateQueries(['object', objectId]);
-			queryClient.invalidateQueries(['get-kiosk-contents']);
+			queryClient.invalidateQueries(['get-kiosk-contents'], { refetchType: 'all' });
 			queryClient.invalidateQueries(['get-owned-objects']);
 
 			ampli.sentCollectible({ objectId });

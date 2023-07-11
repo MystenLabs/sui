@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+	type SerializedSignature,
+	toB64,
 	type SignedTransaction,
+	type ExportedKeypair,
 	type SignedMessage,
+	type SuiAddress,
 	type SuiTransactionBlockResponse,
 } from '@mysten/sui.js';
-
-import { type SerializedSignature, type ExportedKeypair } from '@mysten/sui.js/cryptography';
-import { toB64 } from '@mysten/sui.js/utils';
 import { lastValueFrom, map, take } from 'rxjs';
 
 import { growthbook } from '../experimentation/feature-gating';
@@ -73,7 +74,7 @@ export class BackgroundClient {
 
 	public sendPermissionResponse(
 		id: string,
-		accounts: string[],
+		accounts: SuiAddress[],
 		allowed: boolean,
 		responseDate: string,
 	) {
@@ -132,7 +133,7 @@ export class BackgroundClient {
 	 * @param origin The origin of the dapp
 	 * @param specificAccounts Accounts to disconnect. If not provided or it's an empty array all accounts will be disconnected
 	 */
-	public async disconnectApp(origin: string, specificAccounts?: string[]) {
+	public async disconnectApp(origin: string, specificAccounts?: SuiAddress[]) {
 		await lastValueFrom(
 			this.sendMessage(
 				createMessage<DisconnectApp>({
@@ -225,7 +226,7 @@ export class BackgroundClient {
 		);
 	}
 
-	public signData(address: string, data: Uint8Array): Promise<SerializedSignature> {
+	public signData(address: SuiAddress, data: Uint8Array): Promise<SerializedSignature> {
 		return lastValueFrom(
 			this.sendMessage(
 				createMessage<KeyringPayload<'signData'>>({
@@ -256,7 +257,7 @@ export class BackgroundClient {
 		);
 	}
 
-	public selectAccount(address: string) {
+	public selectAccount(address: SuiAddress) {
 		return lastValueFrom(
 			this.sendMessage(
 				createMessage<KeyringPayload<'switchAccount'>>({
@@ -311,7 +312,7 @@ export class BackgroundClient {
 		);
 	}
 
-	public exportAccount(password: string, accountAddress: string) {
+	public exportAccount(password: string, accountAddress: SuiAddress) {
 		return lastValueFrom(
 			this.sendMessage(
 				createMessage<KeyringPayload<'exportAccount'>>({

@@ -16,7 +16,6 @@ use crate::{
         Command, Command_, Exp, ExpListItem, LValue, LValue_, Label, ModuleCall, Type, Type_,
         UnannotatedExp_, Var,
     },
-    shared::CompilationEnv,
 };
 use move_ir_types::location::*;
 
@@ -25,17 +24,21 @@ pub type AbsIntVisitorObj = Box<dyn AbstractInterpreterVisitor>;
 pub trait AbstractInterpreterVisitor {
     fn verify(
         &mut self,
-        env: &CompilationEnv,
         program: &cfgir::ast::Program,
         context: &CFGContext,
         cfg: &ImmForwardCFG,
     ) -> Diagnostics;
+}
 
-    fn visitor(self) -> Visitor
-    where
-        Self: 'static + Sized,
-    {
-        Visitor::AbsIntVisitor(Box::new(self))
+impl<V: AbstractInterpreterVisitor + 'static> From<V> for AbsIntVisitorObj {
+    fn from(value: V) -> Self {
+        Box::new(value)
+    }
+}
+
+impl<V: AbstractInterpreterVisitor + 'static> From<V> for Visitor {
+    fn from(value: V) -> Self {
+        Visitor::AbsIntVisitor(Box::new(value))
     }
 }
 
@@ -160,7 +163,6 @@ pub trait SimpleAbsIntConstructor: Sized {
     /// Given the initial state/domain, construct a new abstract interpreter.
     /// Return None if it should not be run given this context
     fn new<'a>(
-        env: &CompilationEnv,
         program: &'a cfgir::ast::Program,
         context: &'a CFGContext<'a>,
         init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
@@ -168,7 +170,6 @@ pub trait SimpleAbsIntConstructor: Sized {
 
     fn verify(
         &mut self,
-        env: &CompilationEnv,
         program: &cfgir::ast::Program,
         context: &CFGContext,
         cfg: &ImmForwardCFG,
@@ -191,7 +192,7 @@ pub trait SimpleAbsIntConstructor: Sized {
             );
         }
         let mut init_state = <Self::AI<'_> as SimpleAbsInt>::State::new(context, locals);
-        let Some(mut ai) = Self::new(env, program, context, &mut init_state) else {
+        let Some(mut ai) = Self::new(program, context, &mut init_state) else {
             return Diagnostics::new();
         };
         let (final_state, ds) = ai.analyze_function(cfg, init_state);
@@ -460,11 +461,10 @@ impl<V: SimpleAbsInt> AbstractInterpreter for V {}
 impl<V: SimpleAbsIntConstructor> AbstractInterpreterVisitor for V {
     fn verify(
         &mut self,
-        env: &CompilationEnv,
         program: &cfgir::ast::Program,
         context: &CFGContext,
         cfg: &ImmForwardCFG,
     ) -> Diagnostics {
-        SimpleAbsIntConstructor::verify(self, env, program, context, cfg)
+        SimpleAbsIntConstructor::verify(self, program, context, cfg)
     }
 }

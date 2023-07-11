@@ -3,8 +3,7 @@
 
 import { useFormatCoin, useGetCoinBalance, useResolveSuiNSName } from '@mysten/core';
 import { CheckFill16 } from '@mysten/icons';
-import { SUI_TYPE_ARG } from '@mysten/sui.js';
-import { formatAddress } from '@mysten/sui.js/utils';
+import { formatAddress, type SuiAddress, SUI_TYPE_ARG } from '@mysten/sui.js';
 import cl from 'classnames';
 
 import { useCoinsReFetchingConfig } from '../../hooks';
@@ -12,7 +11,7 @@ import { Text } from '_src/ui/app/shared/text';
 
 type LedgerAccountRowProps = {
 	isSelected: boolean;
-	address: string;
+	address: SuiAddress;
 };
 
 export function LedgerAccountRow({ isSelected, address }: LedgerAccountRowProps) {

@@ -7,16 +7,14 @@ import {
 	type ObjectChangesByOwner,
 	type ObjectChangeSummary,
 	type SuiObjectChangeTypes,
-	useResolveSuiNSName,
 } from '@mysten/core';
 import { ChevronRight12 } from '@mysten/icons';
 import {
 	type SuiObjectChangePublished,
 	type SuiObjectChange,
 	type DisplayFieldsResponse,
-} from '@mysten/sui.js/client';
-import { parseStructTag } from '@mysten/sui.js/utils';
-import { Text } from '@mysten/ui';
+	parseStructTag,
+} from '@mysten/sui.js';
 import * as Collapsible from '@radix-ui/react-collapsible';
 import clsx from 'clsx';
 import { useState, type ReactNode } from 'react';
@@ -24,6 +22,7 @@ import { useState, type ReactNode } from 'react';
 import { ObjectDisplay } from './ObjectDisplay';
 import { ExpandableList, ExpandableListControl, ExpandableListItems } from '~/ui/ExpandableList';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
+import { Text } from '~/ui/Text';
 import { TransactionBlockCard, TransactionBlockCardSection } from '~/ui/TransactionBlockCard';
 
 enum ItemLabels {
@@ -234,32 +233,6 @@ interface ObjectChangeEntriesCardsProps {
 	type: SuiObjectChangeTypes;
 }
 
-function ObjectChangeEntriesCardFooter({
-	ownerType,
-	ownerAddress,
-}: {
-	ownerType: string;
-	ownerAddress: string;
-}) {
-	const { data: suinsDomainName } = useResolveSuiNSName(ownerAddress);
-
-	return (
-		<div className="flex flex-wrap items-center justify-between">
-			<Text variant="pBody/medium" color="steel-dark">
-				Owner
-			</Text>
-
-			{ownerType === 'AddressOwner' && (
-				<AddressLink label={suinsDomainName || undefined} address={ownerAddress} />
-			)}
-
-			{ownerType === 'ObjectOwner' && <ObjectLink objectId={ownerAddress} />}
-
-			{ownerType === 'Shared' && <ObjectLink objectId={ownerAddress} label="Shared" />}
-		</div>
-	);
-}
-
 export function ObjectChangeEntriesCards({ data, type }: ObjectChangeEntriesCardsProps) {
 	if (!data) return null;
 
@@ -275,10 +248,19 @@ export function ObjectChangeEntriesCards({ data, type }: ObjectChangeEntriesCard
 						shadow
 						footer={
 							renderFooter && (
-								<ObjectChangeEntriesCardFooter
-									ownerType={changes.ownerType}
-									ownerAddress={ownerAddress}
-								/>
+								<div className="flex flex-wrap items-center justify-between">
+									<Text variant="pBody/medium" color="steel-dark">
+										Owner
+									</Text>
+
+									{changes.ownerType === 'AddressOwner' && <AddressLink address={ownerAddress} />}
+
+									{changes.ownerType === 'ObjectOwner' && <ObjectLink objectId={ownerAddress} />}
+
+									{changes.ownerType === 'Shared' && (
+										<ObjectLink objectId={ownerAddress} label="Shared" />
+									)}
+								</div>
 							)
 						}
 					>

@@ -1,21 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type Keypair } from '@mysten/sui.js/cryptography';
+import { type Keypair, type SuiAddress } from '@mysten/sui.js';
 
 import { type Account, AccountType } from './Account';
 import { AccountKeypair } from './AccountKeypair';
 
 export type SerializedDerivedAccount = {
 	type: AccountType.DERIVED;
-	address: string;
+	address: SuiAddress;
 	derivationPath: string;
 };
 
 export class DerivedAccount implements Account {
 	readonly accountKeypair: AccountKeypair;
 	readonly type: AccountType;
-	readonly address: string;
+	readonly address: SuiAddress;
 	readonly derivationPath: string;
 
 	constructor({ derivationPath, keypair }: { derivationPath: string; keypair: Keypair }) {

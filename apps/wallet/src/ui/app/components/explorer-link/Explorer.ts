@@ -5,6 +5,8 @@ import { DEFAULT_API_ENV } from '_app/ApiProvider';
 import { getUrlWithDeviceId } from '_src/shared/analytics/amplitude';
 import { API_ENV } from '_src/shared/api-env';
 
+import type { ObjectId, SuiAddress, TransactionDigest } from '@mysten/sui.js';
+
 const API_ENV_TO_EXPLORER_ENV: Record<API_ENV, string | undefined> = {
 	[API_ENV.local]: 'local',
 	[API_ENV.devNet]: 'devnet',
@@ -28,7 +30,7 @@ function getExplorerUrl(path: string, apiEnv: API_ENV = DEFAULT_API_ENV, customR
 }
 
 export function getObjectUrl(
-	objectID: string,
+	objectID: ObjectId,
 	apiEnv: API_ENV,
 	customRPC: string,
 	moduleName?: string | null,
@@ -40,14 +42,14 @@ export function getObjectUrl(
 	);
 }
 
-export function getTransactionUrl(txDigest: string, apiEnv: API_ENV, customRPC: string) {
+export function getTransactionUrl(txDigest: TransactionDigest, apiEnv: API_ENV, customRPC: string) {
 	return getExplorerUrl(`/txblock/${encodeURIComponent(txDigest)}`, apiEnv, customRPC);
 }
 
-export function getAddressUrl(address: string, apiEnv: API_ENV, customRPC: string) {
+export function getAddressUrl(address: SuiAddress, apiEnv: API_ENV, customRPC: string) {
 	return getExplorerUrl(`/address/${address}`, apiEnv, customRPC);
 }
 
-export function getValidatorUrl(address: string, apiEnv: API_ENV, customRPC: string) {
+export function getValidatorUrl(address: SuiAddress, apiEnv: API_ENV, customRPC: string) {
 	return getExplorerUrl(`/validator/${address}`, apiEnv, customRPC);
 }

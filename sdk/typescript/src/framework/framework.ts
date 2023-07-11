@@ -8,11 +8,13 @@ import type {
 	SuiObjectData,
 } from '../types/objects.js';
 import { getObjectFields, getObjectId, getObjectType } from '../types/objects.js';
+import type { SuiAddress } from '../types/common.js';
+import { ObjectId } from '../types/common.js';
 
 import type { Option } from '../types/option.js';
 import { getOption } from '../types/option.js';
 import type { CoinStruct } from '../types/coin.js';
-import type { StructTag } from '../bcs/index.js';
+import type { StructTag } from '../types/sui-bcs.js';
 import type { Infer } from 'superstruct';
 import { nullable, number, object, string } from 'superstruct';
 import { normalizeSuiObjectId } from '../utils/sui-types.js';
@@ -47,7 +49,7 @@ export const CoinMetadataStruct = object({
 	symbol: string(),
 	description: string(),
 	iconUrl: nullable(string()),
-	id: nullable(string()),
+	id: nullable(ObjectId),
 });
 
 export type CoinMetadata = Infer<typeof CoinMetadataStruct>;
@@ -89,7 +91,7 @@ export class Coin {
 		};
 	}
 
-	public static getID(obj: ObjectData): string {
+	public static getID(obj: ObjectData): ObjectId {
 		if ('fields' in obj) {
 			return obj.fields.id.id;
 		}
@@ -143,7 +145,7 @@ export type DelegationData = SuiMoveObject & {
 		active_delegation: Option<number>;
 		delegate_amount: number;
 		next_reward_unclaimed_epoch: number;
-		validator_address: string;
+		validator_address: SuiAddress;
 		info: {
 			id: string;
 			version: number;

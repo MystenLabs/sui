@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { PermissionType } from './PermissionType';
+import type { SuiAddress } from '@mysten/sui.js';
 
 //TODO: add description, name, tags
 //TODO add PageLink for instance where the origin and the wallet landing page are different.
@@ -11,7 +12,7 @@ export interface Permission {
 	origin: string;
 	pagelink?: string | undefined;
 	favIcon: string | undefined;
-	accounts: string[];
+	accounts: SuiAddress[];
 	allowed: boolean | null;
 	permissions: PermissionType[];
 	createdDate: string;

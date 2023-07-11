@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 
 import { getNormalizedFunctionParameterTypeDetails } from '../utils';
 
-import type { SuiMoveNormalizedType } from '@mysten/sui.js/client';
+import type { SuiMoveNormalizedType } from '@mysten/sui.js';
 
 export function useFunctionParamsDetails(
 	params: SuiMoveNormalizedType[],

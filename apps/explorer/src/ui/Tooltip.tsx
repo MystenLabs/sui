@@ -39,7 +39,8 @@ export function Tooltip({ tip, children, onOpen, placement = 'top' }: TooltipPro
 	const {
 		x,
 		y,
-		refs,
+		reference,
+		floating,
 		strategy,
 		context,
 		middlewareData,
@@ -92,7 +93,7 @@ export function Tooltip({ tip, children, onOpen, placement = 'top' }: TooltipPro
 
 	return (
 		<>
-			<div tabIndex={0} className="w-fit" ref={refs.setReference} {...getReferenceProps()}>
+			<div tabIndex={0} className="w-fit" {...getReferenceProps({ ref: reference })}>
 				{children}
 			</div>
 			<FloatingPortal>
@@ -126,8 +127,7 @@ export function Tooltip({ tip, children, onOpen, placement = 'top' }: TooltipPro
 								width: 'max-content',
 								maxWidth: '200px',
 							}}
-							ref={refs.setFloating}
-							{...getFloatingProps()}
+							{...getFloatingProps({ ref: floating })}
 						>
 							<div className="leading-1 flex flex-col flex-nowrap gap-px rounded-md bg-gray-90 p-2 leading-130">
 								{tip}

@@ -13,7 +13,6 @@ import {
 	getSuiObjectData,
 	SUI_TYPE_ARG,
 } from '@mysten/sui.js';
-import { Text } from '@mysten/ui';
 import { useState, useEffect } from 'react';
 
 import { trimStdLibPrefix, genFileTypeMsg } from '../../../utils/stringUtils';
@@ -27,6 +26,7 @@ import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
 import { Link } from '~/ui/Link';
 import { ObjectDetails } from '~/ui/ObjectDetails';
 import { TabHeader } from '~/ui/Tabs';
+import { Text } from '~/ui/Text';
 import { extractName, parseImageURL, parseObjectType } from '~/utils/objectUtils';
 
 export function TokenView({ data }: { data: SuiObjectResponse }) {

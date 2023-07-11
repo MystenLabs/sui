@@ -19,7 +19,6 @@ use move_binary_format::{
 };
 use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule};
 use move_compiler::{
-    cfgir::visitor::AbstractInterpreterVisitor,
     compiled_unit::{
         AnnotatedCompiledModule, AnnotatedCompiledScript, CompiledUnitEnum, NamedCompiledModule,
     },
@@ -53,10 +52,7 @@ use sui_types::{
 };
 use sui_verifier::verifier as sui_bytecode_verifier;
 
-use crate::linters::{
-    custom_state_change::CustomStateChangeVerifier, known_filters,
-    self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier,
-};
+use crate::linters::{self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier};
 
 #[cfg(test)]
 #[path = "unit_tests/build_tests.rs"]
@@ -135,16 +131,8 @@ impl BuildConfig {
         let mut fn_info = None;
         let compiled_pkg = build_plan.compile_with_driver(writer, |compiler| {
             let (files, units_res) = if lint {
-                let lint_visitors = vec![
-                    ShareOwnedVerifier.visitor(),
-                    SelfTransferVerifier.visitor(),
-                    CustomStateChangeVerifier.visitor(),
-                ];
-                let (filter_attr_name, filters) = known_filters();
-                compiler
-                    .add_visitors(lint_visitors)
-                    .add_custom_known_filters(filters, filter_attr_name)
-                    .build()?
+                let lint_visitors = vec![ShareOwnedVerifier.into(), SelfTransferVerifier.into()];
+                compiler.add_visitors(lint_visitors).build()?
             } else {
                 compiler.build()?
             };
@@ -183,20 +171,7 @@ impl BuildConfig {
         )
     }
 
-    pub fn resolution_graph(mut self, path: &Path) -> SuiResult<ResolvedGraph> {
-        use move_compiler::editions::Flavor;
-
-        let flavor = self.config.default_flavor.get_or_insert(Flavor::Sui);
-        if flavor != &Flavor::Sui {
-            return Err(SuiError::ModuleBuildFailure {
-                error: format!(
-                    "The flavor of the Move compiler cannot be overridden with anything but \
-                        \"{}\", but the default override was set to: \"{flavor}\"",
-                    Flavor::Sui,
-                ),
-            });
-        }
-
+    pub fn resolution_graph(self, path: &Path) -> SuiResult<ResolvedGraph> {
         if self.print_diags_to_stderr {
             self.config
                 .resolution_graph_for_package(path, &mut std::io::stderr())
@@ -574,12 +549,8 @@ impl CompiledPackage {
 
 impl Default for BuildConfig {
     fn default() -> Self {
-        let config = MoveBuildConfig {
-            default_flavor: Some(move_compiler::editions::Flavor::Sui),
-            ..MoveBuildConfig::default()
-        };
         BuildConfig {
-            config,
+            config: MoveBuildConfig::default(),
             run_bytecode_verifier: true,
             print_diags_to_stderr: false,
             lint: false,

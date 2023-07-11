@@ -1,13 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiClient } from '@mysten/sui.js/client';
 import {
+	Ed25519PublicKey,
 	type SerializedSignature,
-	toSerializedSignature,
 	type SignatureScheme,
-} from '@mysten/sui.js/cryptography';
-import { Ed25519PublicKey } from '@mysten/sui.js/keypairs/ed25519';
+	type SuiAddress,
+	toSerializedSignature,
+	type JsonRpcProvider,
+} from '@mysten/sui.js';
+
 import { WalletSigner } from './WalletSigner';
 
 import type SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
@@ -21,9 +23,9 @@ export class LedgerSigner extends WalletSigner {
 	constructor(
 		connectToLedger: () => Promise<SuiLedgerClient>,
 		derivationPath: string,
-		client: SuiClient,
+		provider: JsonRpcProvider,
 	) {
-		super(client);
+		super(provider);
 		this.#connectToLedger = connectToLedger;
 		this.#suiLedgerClient = null;
 		this.#derivationPath = derivationPath;
@@ -38,7 +40,7 @@ export class LedgerSigner extends WalletSigner {
 		return this.#suiLedgerClient;
 	}
 
-	async getAddress(): Promise<string> {
+	async getAddress(): Promise<SuiAddress> {
 		const ledgerClient = await this.#initializeSuiLedgerClient();
 		const publicKeyResult = await ledgerClient.getPublicKey(this.#derivationPath);
 		const publicKey = new Ed25519PublicKey(publicKeyResult.publicKey);
@@ -62,7 +64,7 @@ export class LedgerSigner extends WalletSigner {
 		});
 	}
 
-	connect(client: SuiClient) {
-		return new LedgerSigner(this.#connectToLedger, this.#derivationPath, client);
+	connect(provider: JsonRpcProvider) {
+		return new LedgerSigner(this.#connectToLedger, this.#derivationPath, provider);
 	}
 }

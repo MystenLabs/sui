@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { fromB64 } from '@mysten/sui.js/utils';
+import { Ed25519Keypair, fromB64 } from '@mysten/sui.js';
 import mitt from 'mitt';
 import { throttle } from 'throttle-debounce';
 
@@ -36,7 +35,7 @@ import {
 import { type Wallet } from '_src/shared/qredo-api';
 
 import type { UiConnection } from '../connections/UiConnection';
-import type { ExportedKeypair } from '@mysten/sui.js/cryptography';
+import type { SuiAddress, ExportedKeypair } from '@mysten/sui.js';
 import type { Message } from '_messages';
 import type { ErrorPayload } from '_payloads';
 import type { KeyringPayload } from '_payloads/keyring';
@@ -57,8 +56,8 @@ type KeyringEvents = {
 export class Keyring {
 	#events = mitt<KeyringEvents>();
 	#locked = true;
-	#mainDerivedAccount: string | null = null;
-	#accountsMap: Map<string, Account> = new Map();
+	#mainDerivedAccount: SuiAddress | null = null;
+	#accountsMap: Map<SuiAddress, Account> = new Map();
 	public readonly reviveDone: Promise<void>;
 
 	constructor() {
@@ -167,7 +166,7 @@ export class Keyring {
 		return Array.from(this.#accountsMap.values());
 	}
 
-	public async changeActiveAccount(address: string) {
+	public async changeActiveAccount(address: SuiAddress) {
 		if (!this.isLocked && this.#accountsMap.has(address)) {
 			await this.storeActiveAccount(address);
 			this.#events.emit('activeAccountChanged', address);
@@ -185,7 +184,7 @@ export class Keyring {
 	 * @returns null if locked or address not found or the exported keypair
 	 * @throws if wrong password is provided
 	 */
-	public async exportAccountKeypair(address: string, password: string) {
+	public async exportAccountKeypair(address: SuiAddress, password: string) {
 		if (this.isLocked) {
 			return null;
 		}
@@ -426,7 +425,7 @@ export class Keyring {
 			} else if (isKeyringPayload(payload, 'updateAccountPublicInfo') && payload.args) {
 				const { updates } = payload.args;
 				await updateAccountsPublicInfo(payload.args.updates);
-				const ledgerUpdates: Record<string, string> = {};
+				const ledgerUpdates: Record<SuiAddress, string> = {};
 				for (const {
 					accountAddress,
 					changes: { publicKey },
@@ -554,7 +553,7 @@ export class Keyring {
 		return setToLocalStorage(STORAGE_LAST_ACCOUNT_INDEX_KEY, index);
 	}
 
-	private storeActiveAccount(address: string) {
+	private storeActiveAccount(address: SuiAddress) {
 		return setToLocalStorage(STORAGE_ACTIVE_ACCOUNT, address);
 	}
 

@@ -7,16 +7,16 @@ import { WalletKitProvider } from '@mysten/wallet-kit';
 import { Header } from './components/Base/Header';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RpcClientContext } from './context/RpcClientContext';
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { JsonRpcProvider, testnetConnection } from '@mysten/sui.js';
 
 const queryClient = new QueryClient();
-const suiClient = new SuiClient({ url: getFullnodeUrl('testnet') });
+const rpcProvider = new JsonRpcProvider(testnetConnection);
 
 export default function Root() {
 	return (
 		<WalletKitProvider>
 			<QueryClientProvider client={queryClient}>
-				<RpcClientContext.Provider value={suiClient}>
+				<RpcClientContext.Provider value={rpcProvider}>
 					<Header></Header>
 					<div className="min-h-[80vh]">
 						<Outlet />

@@ -21,7 +21,6 @@ move-coverage = { path = "../move-coverage" }
 move-compiler = { path = "../../move-compiler" }
 
 clap = { version = "3.1.8", features = ["derive"] }
-hex = "0.4.3"
 
 [features]
 default = []

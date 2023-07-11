@@ -30,7 +30,7 @@ export function ProgressBar({ progress, animate }: ProgressBarProps) {
 	const isAnimated = animate && progress > ANIMATION_START_THRESHOLD;
 
 	return (
-		<div className="relative w-full rounded-full bg-success-light">
+		<div className="relative w-full rounded-full bg-white">
 			<motion.div
 				variants={getProgressBarVariant(progress)}
 				className={clsx(

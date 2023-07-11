@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SerializedSignature, type ExportedKeypair } from '@mysten/sui.js/cryptography';
 import { isBasePayload } from '_payloads';
 import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
 import { type AccountsPublicInfoUpdates } from '_src/background/keyring/accounts';
 
+import type { ExportedKeypair, SerializedSignature, SuiAddress } from '@mysten/sui.js';
 import type { BasePayload, Payload } from '_payloads';
 import type { SerializedAccount } from '_src/background/keyring/Account';
 
@@ -48,16 +48,16 @@ type MethodToPayloads = {
 		return: void;
 	};
 	signData: {
-		args: { data: string; address: string };
+		args: { data: string; address: SuiAddress };
 		return: SerializedSignature;
 	};
 	switchAccount: {
-		args: { address: string };
+		args: { address: SuiAddress };
 		return: void;
 	};
 	deriveNextAccount: {
 		args: void;
-		return: { accountAddress: string };
+		return: { accountAddress: SuiAddress };
 	};
 	importLedgerAccounts: {
 		args: { ledgerAccounts: SerializedLedgerAccount[] };
@@ -68,7 +68,7 @@ type MethodToPayloads = {
 		return: void;
 	};
 	exportAccount: {
-		args: { password: string; accountAddress: string };
+		args: { password: string; accountAddress: SuiAddress };
 		return: { keyPair: ExportedKeypair };
 	};
 	importPrivateKey: {

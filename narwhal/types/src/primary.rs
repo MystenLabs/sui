@@ -4,13 +4,16 @@
 use crate::{
     error::{DagError, DagResult},
     serde::NarwhalBitmap,
+    CertificateDigestProto,
 };
+use bytes::Bytes;
 use config::{AuthorityIdentifier, Committee, Epoch, Stake, WorkerCache, WorkerId, WorkerInfo};
 use crypto::{
     to_intent_message, AggregateSignature, AggregateSignatureBytes,
     NarwhalAuthorityAggregateSignature, NarwhalAuthoritySignature, NetworkPublicKey, PublicKey,
     Signature,
 };
+use dag::node_dag::Affiliated;
 use derive_builder::Builder;
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{
@@ -1214,6 +1217,13 @@ impl From<CertificateDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
         Digest::new(hd.0)
     }
 }
+impl From<CertificateDigest> for CertificateDigestProto {
+    fn from(hd: CertificateDigest) -> Self {
+        CertificateDigestProto {
+            digest: Bytes::from(hd.0.to_vec()),
+        }
+    }
+}
 
 impl fmt::Debug for CertificateDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
@@ -1273,6 +1283,23 @@ impl PartialEq for CertificateV1 {
     }
 }
 
+impl Affiliated for Certificate {
+    fn parents(&self) -> Vec<<Self as Hash<{ crypto::DIGEST_LENGTH }>>::TypedDigest> {
+        match self {
+            Certificate::V1(data) => data.header().parents().iter().cloned().collect(),
+        }
+    }
+
+    // This makes the genesis certificate and empty blocks compressible,
+    // so that they will never be reported by a DAG walk
+    // (`read_causal`, `node_read_causal`).
+    fn compressible(&self) -> bool {
+        match self {
+            Certificate::V1(data) => data.header().payload().is_empty(),
+        }
+    }
+}
+
 /// Request for broadcasting certificates to peers.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SendCertificateRequest {
@@ -1302,6 +1329,18 @@ pub struct RequestVoteResponse {
 
     // Indicates digests of missing certificates without which a vote cannot be provided.
     pub missing: Vec<CertificateDigest>,
+}
+
+/// Used by the primary to get specific certificates from other primaries.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetCertificatesRequest {
+    pub digests: Vec<CertificateDigest>,
+}
+
+/// Used by the primary to reply to GetCertificatesRequest.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetCertificatesResponse {
+    pub certificates: Vec<Certificate>,
 }
 
 /// Used by the primary to fetch certificates from other primaries.
@@ -1380,6 +1419,25 @@ pub struct FetchCertificatesResponse {
     pub certificates: Vec<Certificate>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct PayloadAvailabilityRequest {
+    pub certificate_digests: Vec<CertificateDigest>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct PayloadAvailabilityResponse {
+    pub payload_availability: Vec<(CertificateDigest, bool)>,
+}
+
+impl PayloadAvailabilityResponse {
+    pub fn available_certificates(&self) -> Vec<CertificateDigest> {
+        self.payload_availability
+            .iter()
+            .filter_map(|(digest, available)| available.then_some(*digest))
+            .collect()
+    }
+}
+
 /// Used by the primary to request that the worker sync the target missing batches.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WorkerSynchronizeMessage {
@@ -1403,6 +1461,12 @@ pub struct FetchBatchesRequest {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FetchBatchesResponse {
     pub batches: HashMap<BatchDigest, Batch>,
+}
+
+/// Used by the primary to request that the worker delete the specified batches.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct WorkerDeleteBatchesMessage {
+    pub digests: Vec<BatchDigest>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

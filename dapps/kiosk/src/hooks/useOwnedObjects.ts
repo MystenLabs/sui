@@ -4,8 +4,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useRpc } from '../context/RpcClientContext';
-import { getObjectId, getObjectType } from '@mysten/sui.js';
-import { PaginatedObjectsResponse } from '@mysten/sui.js/client';
+import { PaginatedObjectsResponse, SuiAddress, getObjectId, getObjectType } from '@mysten/sui.js';
 import { parseObjectDisplays } from '../utils/utils';
 import { TANSTACK_OWNED_OBJECTS_KEY } from '../utils/constants';
 
@@ -14,8 +13,8 @@ export function useOwnedObjects({
 	cursor = undefined,
 	limit = 50,
 }: {
-	address: string;
-	cursor?: string;
+	address: SuiAddress;
+	cursor?: SuiAddress;
 	limit?: number;
 }) {
 	const provider = useRpc();

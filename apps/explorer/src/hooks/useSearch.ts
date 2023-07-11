@@ -7,82 +7,99 @@ import {
 	isValidSuiAddress,
 	isValidSuiObjectId,
 	normalizeSuiObjectId,
+	is,
+	SuiObjectData,
+	type JsonRpcProvider,
 	getTransactionDigest,
 	type SuiSystemStateSummary,
 } from '@mysten/sui.js';
-import { type SuiClient } from '@mysten/sui.js/client';
 import { useQuery } from '@tanstack/react-query';
 
 const isGenesisLibAddress = (value: string): boolean => /^(0x|0X)0{0,39}[12]$/.test(value);
 
-type Results = { id: string; label: string; type: string }[];
-
-const getResultsForTransaction = async (client: SuiClient, query: string) => {
-	if (!isValidTransactionDigest(query)) return null;
-	const txdata = await client.getTransactionBlock({ digest: query });
-	return [
-		{
-			id: getTransactionDigest(txdata),
-			label: getTransactionDigest(txdata),
-			type: 'transaction',
-		},
-	];
+type Result = {
+	label: string;
+	results: { id: string; label: string; type: string }[];
 };
 
-const getResultsForObject = async (client: SuiClient, query: string) => {
+const getResultsForTransaction = async (rpc: JsonRpcProvider, query: string) => {
+	if (!isValidTransactionDigest(query)) return null;
+	const txdata = await rpc.getTransactionBlock({ digest: query });
+	return {
+		label: 'transaction',
+		results: [
+			{
+				id: getTransactionDigest(txdata),
+				label: getTransactionDigest(txdata),
+				type: 'transaction',
+			},
+		],
+	};
+};
+
+const getResultsForObject = async (rpc: JsonRpcProvider, query: string) => {
 	const normalized = normalizeSuiObjectId(query);
 	if (!isValidSuiObjectId(normalized)) return null;
 
-	const { data, error } = await client.getObject({ id: normalized });
-	if (!data || error) return null;
+	const { data, error } = await rpc.getObject({ id: normalized });
+	if (!is(data, SuiObjectData) || error) return null;
 
-	return [
-		{
-			id: data.objectId,
-			label: data.objectId,
-			type: 'object',
-		},
-	];
+	return {
+		label: 'object',
+		results: [
+			{
+				id: data.objectId,
+				label: data.objectId,
+				type: 'object',
+			},
+		],
+	};
 };
 
-const getResultsForCheckpoint = async (client: SuiClient, query: string) => {
+const getResultsForCheckpoint = async (rpc: JsonRpcProvider, query: string) => {
 	// Checkpoint digests have the same format as transaction digests:
 	if (!isValidTransactionDigest(query)) return null;
 
-	const { digest } = await client.getCheckpoint({ id: query });
+	const { digest } = await rpc.getCheckpoint({ id: query });
 	if (!digest) return null;
 
-	return [
-		{
-			id: digest,
-			label: digest,
-			type: 'checkpoint',
-		},
-	];
+	return {
+		label: 'checkpoint',
+		results: [
+			{
+				id: digest,
+				label: digest,
+				type: 'checkpoint',
+			},
+		],
+	};
 };
 
-const getResultsForAddress = async (client: SuiClient, query: string, suiNSEnabled: boolean) => {
+const getResultsForAddress = async (rpc: JsonRpcProvider, query: string, suiNSEnabled: boolean) => {
 	if (suiNSEnabled && isSuiNSName(query)) {
-		const resolved = await client.resolveNameServiceAddress({ name: query });
+		const resolved = await rpc.resolveNameServiceAddress({ name: query });
 		if (!resolved) return null;
-		return [
-			{
-				id: resolved,
-				label: resolved,
-				type: 'address',
-			},
-		];
+		return {
+			label: 'address',
+			results: [
+				{
+					id: resolved,
+					label: resolved,
+					type: 'address',
+				},
+			],
+		};
 	}
 
 	const normalized = normalizeSuiObjectId(query);
 	if (!isValidSuiAddress(normalized) || isGenesisLibAddress(normalized)) return null;
 
 	const [from, to] = await Promise.all([
-		client.queryTransactionBlocks({
+		rpc.queryTransactionBlocks({
 			filter: { FromAddress: normalized },
 			limit: 1,
 		}),
-		client.queryTransactionBlocks({
+		rpc.queryTransactionBlocks({
 			filter: { ToAddress: normalized },
 			limit: 1,
 		}),
@@ -90,13 +107,16 @@ const getResultsForAddress = async (client: SuiClient, query: string, suiNSEnabl
 
 	if (!from.data?.length && !to.data?.length) return null;
 
-	return [
-		{
-			id: normalized,
-			label: normalized,
-			type: 'address',
-		},
-	];
+	return {
+		label: 'address',
+		results: [
+			{
+				id: normalized,
+				label: normalized,
+				type: 'address',
+			},
+		],
+	};
 };
 
 // Query for validator by pool id or sui address.
@@ -115,13 +135,16 @@ const getResultsForValidatorByPoolIdOrSuiAddress = async (
 
 	if (!validator) return null;
 
-	return [
-		{
-			id: validator.suiAddress || validator.stakingPoolId,
-			label: normalized,
-			type: 'validator',
-		},
-	];
+	return {
+		label: 'validator',
+		results: [
+			{
+				id: validator.suiAddress || validator.stakingPoolId,
+				label: normalized,
+				type: 'validator',
+			},
+		],
+	};
 };
 
 export function useSearch(query: string) {
@@ -141,9 +164,9 @@ export function useSearch(query: string) {
 					getResultsForObject(rpc, query),
 					getResultsForValidatorByPoolIdOrSuiAddress(systemStateSummery || null, query),
 				])
-			).filter((r) => r.status === 'fulfilled' && r.value) as PromiseFulfilledResult<Results>[];
+			).filter((r) => r.status === 'fulfilled' && r.value) as PromiseFulfilledResult<Result>[];
 
-			return results.map(({ value }) => value).flat();
+			return results.map(({ value }) => value);
 		},
 		enabled: !!query,
 		cacheTime: 10000,

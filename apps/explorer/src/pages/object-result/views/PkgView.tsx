@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getTransactionSender } from '@mysten/sui.js';
-import { LoadingIndicator, RadioGroup, RadioGroupItem } from '@mysten/ui';
 import { useState } from 'react';
 import { type Direction } from 'react-resizable-panels';
 
@@ -16,6 +15,8 @@ import TransactionBlocksForAddress, {
 	FILTER_VALUES,
 } from '~/components/TransactionBlocksForAddress/TransactionBlocksForAddress';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
+import { RadioGroup, RadioOption } from '~/ui/Radio';
 import { TabHeader, Tabs, TabsContent, TabsList, TabsTrigger } from '~/ui/Tabs';
 
 import styles from './ObjectView.module.css';
@@ -35,7 +36,7 @@ function PkgView({ data }: { data: DataType }) {
 	const { data: txnData, isLoading } = useGetTransaction(data.data.tx_digest!);
 
 	if (isLoading) {
-		return <LoadingIndicator text="Loading data" />;
+		return <LoadingSpinner text="Loading data" />;
 	}
 	const viewedData = {
 		...data,
@@ -86,16 +87,15 @@ function PkgView({ data }: { data: DataType }) {
 					<TabsList>
 						<div className="mt-16 flex w-full justify-between">
 							<TabsTrigger value="modules">Modules</TabsTrigger>
-							<div className="hidden md:block">
+							<div>
 								<RadioGroup
-									aria-label="split-panel-bytecode-viewer"
+									className="hidden gap-0.5 md:flex"
+									ariaLabel="split-panel-bytecode-viewer"
 									value={selectedSplitPanelOrientation}
-									onValueChange={(value) =>
-										setSplitPanelOrientation(value as 'vertical' | 'horizontal')
-									}
+									onChange={setSplitPanelOrientation}
 								>
 									{splitPanelsOrientation.map(({ value, label }) => (
-										<RadioGroupItem key={value} value={value} label={label} />
+										<RadioOption key={value} value={value} label={label} />
 									))}
 								</RadioGroup>
 							</div>

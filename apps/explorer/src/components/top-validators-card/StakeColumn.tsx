@@ -3,7 +3,8 @@
 
 import { useFormatCoin, CoinFormat, formatBalance } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
-import { Text } from '@mysten/ui';
+
+import { Text } from '~/ui/Text';
 
 type StakeColumnProps = {
 	stake: bigint | number | string;

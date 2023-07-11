@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 
 import { useDebouncedValue } from '~/hooks/useDebouncedValue';
 import { useSearch } from '~/hooks/useSearch';
@@ -12,6 +12,10 @@ function Search() {
 	const [query, setQuery] = useState('');
 	const debouncedQuery = useDebouncedValue(query);
 	const { isLoading, data: results } = useSearch(debouncedQuery);
+	const handleTextChange = useCallback(
+		(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.currentTarget.value.trim()),
+		[setQuery],
+	);
 	const navigate = useNavigateWithQuery();
 	const handleSelectResult = useCallback(
 		(result: SearchResult) => {
@@ -39,10 +43,10 @@ function Search() {
 		<div className="max-w flex">
 			<SearchBox
 				queryValue={query}
-				onChange={(value) => setQuery(value?.trim() ?? '')}
+				onChange={handleTextChange}
 				onSelectResult={handleSelectResult}
 				placeholder="Search"
-				isLoading={isLoading || debouncedQuery !== query}
+				isLoading={isLoading}
 				options={results}
 			/>
 		</div>

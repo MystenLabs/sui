@@ -30,7 +30,8 @@ use tokio::{
 };
 use types::{
     BatchDigest, Certificate, CertificateAPI, CertificateDigest, FetchCertificatesRequest,
-    FetchCertificatesResponse, Header, HeaderAPI, HeaderDigest, Metadata,
+    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header, HeaderAPI,
+    HeaderDigest, Metadata, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
     PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
     RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse,
 };
@@ -51,14 +52,18 @@ impl PrimaryToPrimary for NetworkProxy {
             request
         );
     }
-
     async fn request_vote(
         &self,
         _request: anemo::Request<RequestVoteRequest>,
     ) -> Result<anemo::Response<RequestVoteResponse>, anemo::rpc::Status> {
         unimplemented!()
     }
-
+    async fn get_certificates(
+        &self,
+        _request: anemo::Request<GetCertificatesRequest>,
+    ) -> Result<anemo::Response<GetCertificatesResponse>, anemo::rpc::Status> {
+        unimplemented!()
+    }
     async fn fetch_certificates(
         &self,
         request: anemo::Request<FetchCertificatesRequest>,
@@ -70,6 +75,13 @@ impl PrimaryToPrimary for NetworkProxy {
         Ok(anemo::Response::new(
             self.response.lock().await.recv().await.unwrap(),
         ))
+    }
+
+    async fn get_payload_availability(
+        &self,
+        _request: anemo::Request<PayloadAvailabilityRequest>,
+    ) -> Result<anemo::Response<PayloadAvailabilityResponse>, anemo::rpc::Status> {
+        unimplemented!()
     }
 }
 

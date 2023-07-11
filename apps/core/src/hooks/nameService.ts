@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SuiAddress } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 import { useRpcClient } from '../api/RpcClientContext';
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
@@ -34,7 +35,7 @@ export function useResolveSuiNSAddress(name?: string | null) {
 	});
 }
 
-export function useResolveSuiNSName(address?: string | null) {
+export function useResolveSuiNSName(address?: SuiAddress | null) {
 	const rpc = useRpcClient();
 	const enabled = useSuiNSEnabled();
 

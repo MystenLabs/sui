@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 19;
+const MAX_PROTOCOL_VERSION: u64 = 18;
 
 // Record history of protocol version allocations here:
 //
@@ -58,9 +58,6 @@ const MAX_PROTOCOL_VERSION: u64 = 19;
 //             such that the minimum transaction cost is the same as the minimum computation
 //             bucket.
 //             Add a feature flag to indicate the changes semantics of `base_tx_cost_fixed`.
-// Version 19: Changes to sui-system package to enable liquid staking.
-//             Add limit for total size of events.
-//             Increase limit for number of events emitted to 1024.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -428,9 +425,6 @@ pub struct ProtocolConfig {
 
     /// Maximum size of a Move user event. Enforced by the VM during execution.
     max_event_emit_size: Option<u64>,
-
-    /// Maximum size of a Move user event. Enforced by the VM during execution.
-    max_event_emit_size_total: Option<u64>,
 
     /// Maximum length of a vector in Move. Enforced by the VM during execution, and for constants, by the verifier.
     max_move_vector_len: Option<u64>,
@@ -905,19 +899,11 @@ impl ProtocolConfig {
         ProtocolConfig::get_for_version(ProtocolVersion::MIN, Chain::Unknown)
     }
 
-    /// CAREFUL! - You probably want to use `get_for_version` instead.
-    ///
     /// Convenience to get the constants at the current maximum supported version.
-    /// Mainly used by genesis. Note well that this function uses the max version
-    /// supported locally by the node, which is not necessarily the current version
-    /// of the network. ALSO, this function disregards chain specific config (by
-    /// using Chain::Unknown), thereby potentially returning a protocol config that
-    /// is incorrect for some feature flags. Definitely safe for testing and for
-    /// protocol version 11 and prior.
-    #[allow(non_snake_case)]
-    pub fn get_for_max_version_UNSAFE() -> Self {
+    /// Mainly used by genesis.
+    pub fn get_for_max_version() -> Self {
         if Self::load_poison_get_for_min_version() {
-            panic!("get_for_max_version_UNSAFE called on validator");
+            panic!("get_for_max_version called on validator");
         }
         ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown)
     }
@@ -1190,8 +1176,6 @@ impl ProtocolConfig {
                 gas_rounding_step: None,
 
                 execution_version: None,
-
-                max_event_emit_size_total: None,
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
@@ -1332,22 +1316,6 @@ impl ProtocolConfig {
                 cfg.base_tx_cost_fixed = Some(1_000);
                 cfg
             }
-            19 => {
-                let mut cfg = Self::get_for_version_impl(version - 1, chain);
-                cfg.max_num_event_emit = Some(1024);
-                // We maintain the same total size limit for events, but increase the number of
-                // events that can be emitted.
-                cfg.max_event_emit_size_total = Some(
-                    256 /* former event count limit */ * 250 * 1024, /* size limit per event */
-                );
-                cfg
-            }
-            20 => {
-                let mut cfg = Self::get_for_version_impl(version - 1, chain);
-                cfg.feature_flags.commit_root_state_digest = true;
-                cfg
-            }
-
             // Use this template when making changes:
             //
             //     // modify an existing constant.

@@ -120,7 +120,6 @@ impl Test {
             cost_table,
             compute_coverage,
             &mut std::io::stdout(),
-            &mut std::io::stdout(),
         )?;
 
         // Return a non-zero exit code if any test failed
@@ -138,15 +137,14 @@ pub enum UnitTestResult {
     Failure,
 }
 
-pub fn run_move_unit_tests<CW: Write + Send, TW: Write + Send>(
+pub fn run_move_unit_tests<W: Write + Send>(
     pkg_path: &Path,
     mut build_config: move_package::BuildConfig,
     mut unit_test_config: UnitTestingConfig,
     natives: Vec<NativeFunctionRecord>,
     cost_table: Option<CostTable>,
     compute_coverage: bool,
-    compiler_writer: &mut CW,
-    test_writer: &mut TW,
+    writer: &mut W,
 ) -> Result<UnitTestResult> {
     let mut test_plan = None;
     build_config.test_mode = true;
@@ -191,7 +189,7 @@ pub fn run_move_unit_tests<CW: Write + Send, TW: Write + Send>(
     // Move package system, to first grab the compilation env, construct the test plan from it, and
     // then save it, before resuming the rest of the compilation and returning the results and
     // control back to the Move package system.
-    build_plan.compile_with_driver(compiler_writer, |compiler| {
+    build_plan.compile_with_driver(writer, |compiler| {
         let (files, comments_and_compiler_res) = compiler.run::<PASS_CFGIR>().unwrap();
         let (_, compiler) =
             diagnostics::unwrap_or_report_diagnostics(&files, comments_and_compiler_res);
@@ -242,7 +240,7 @@ pub fn run_move_unit_tests<CW: Write + Send, TW: Write + Send>(
     // Run the tests. If any of the tests fail, then we don't produce a coverage report, so cleanup
     // the trace files.
     if !unit_test_config
-        .run_and_report_unit_tests(test_plan, Some(natives), cost_table, test_writer)
+        .run_and_report_unit_tests(test_plan, Some(natives), cost_table, writer)
         .unwrap()
         .1
     {

@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB58, splitGenericParameters } from '@mysten/bcs';
+import type { ObjectId, SuiAddress, TransactionDigest } from '../types/index.js';
 
 const TX_DIGEST_LENGTH = 32;
 
 /** Returns whether the tx digest is valid based on the serialization format */
-export function isValidTransactionDigest(value: string): value is string {
+export function isValidTransactionDigest(value: string): value is TransactionDigest {
 	try {
 		const buffer = fromB58(value);
 		return buffer.length === TX_DIGEST_LENGTH;
@@ -22,7 +23,7 @@ export function isValidTransactionDigest(value: string): value is string {
 // https://github.com/move-language/move/blob/67ec40dc50c66c34fd73512fcc412f3b68d67235/language/move-core/types/src/account_address.rs#L23 .
 
 export const SUI_ADDRESS_LENGTH = 32;
-export function isValidSuiAddress(value: string): value is string {
+export function isValidSuiAddress(value: string): value is SuiAddress {
 	return isHex(value) && getHexByteLength(value) === SUI_ADDRESS_LENGTH;
 }
 
@@ -89,7 +90,7 @@ export function normalizeStructTag(type: string | StructTag): string {
  * setting `forceAdd0x` to true
  *
  */
-export function normalizeSuiAddress(value: string, forceAdd0x: boolean = false): string {
+export function normalizeSuiAddress(value: string, forceAdd0x: boolean = false): SuiAddress {
 	let address = value.toLowerCase();
 	if (!forceAdd0x && address.startsWith('0x')) {
 		address = address.slice(2);
@@ -97,7 +98,7 @@ export function normalizeSuiAddress(value: string, forceAdd0x: boolean = false):
 	return `0x${address.padStart(SUI_ADDRESS_LENGTH * 2, '0')}`;
 }
 
-export function normalizeSuiObjectId(value: string, forceAdd0x: boolean = false): string {
+export function normalizeSuiObjectId(value: string, forceAdd0x: boolean = false): ObjectId {
 	return normalizeSuiAddress(value, forceAdd0x);
 }
 

@@ -2,17 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useOnScreen, useGetCoins } from '@mysten/core';
-import { LoadingIndicator } from '@mysten/ui';
 import { useEffect, useRef } from 'react';
 
 import CoinItem from './CoinItem';
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 type CoinsPanelProps = {
 	coinType: string;
 	id: string;
 };
 
-export default function CoinsPanel({ coinType, id }: CoinsPanelProps) {
+function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
 	const containerRef = useRef(null);
 	const { isIntersecting } = useOnScreen(containerRef);
 	const { data, isLoading, isFetching, fetchNextPage, hasNextPage } = useGetCoins(coinType, id);
@@ -33,9 +33,10 @@ export default function CoinsPanel({ coinType, id }: CoinsPanelProps) {
 				)}
 			{isSpinnerVisible && (
 				<div ref={containerRef}>
-					<LoadingIndicator />
+					<LoadingSpinner />
 				</div>
 			)}
 		</div>
 	);
 }
+export default CoinsPanel;

@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '../api/RpcClientContext';
+import { type SuiAddress } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 
 export function useGetCoinBalance(
 	coinType: string,
-	address?: string | null,
+	address?: SuiAddress | null,
 	refetchInterval?: number,
 	staleTime?: number,
 ) {

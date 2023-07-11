@@ -10,6 +10,7 @@ import {
 
 import { activeAddressSelector } from '../account';
 
+import type { SuiAddress } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { Permission } from '_messages/payloads/permissions';
 import type { RootState } from '_redux/RootReducer';
@@ -26,11 +27,11 @@ const permissionsAdapter = createEntityAdapter<Permission>({
 export const respondToPermissionRequest = createAsyncThunk<
 	{
 		id: string;
-		accounts: string[];
+		accounts: SuiAddress[];
 		allowed: boolean;
 		responseDate: string;
 	},
-	{ id: string; accounts: string[]; allowed: boolean },
+	{ id: string; accounts: SuiAddress[]; allowed: boolean },
 	AppThunkConfig
 >('respond-to-permission-request', ({ id, accounts, allowed }, { extra: { background } }) => {
 	const responseDate = new Date().toISOString();

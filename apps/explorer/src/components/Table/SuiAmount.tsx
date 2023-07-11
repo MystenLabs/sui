@@ -3,7 +3,8 @@
 
 import { CoinFormat, useFormatCoin } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
-import { Text } from '@mysten/ui';
+
+import { Text } from '~/ui/Text';
 
 export function SuiAmount({
 	amount,

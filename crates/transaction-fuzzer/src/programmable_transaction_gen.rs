@@ -12,8 +12,7 @@ use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{Argument, CallArg, Command, ProgrammableTransaction};
 
-static PROTOCOL_CONFIG: Lazy<ProtocolConfig> =
-    Lazy::new(ProtocolConfig::get_for_max_version_UNSAFE);
+static PROTOCOL_CONFIG: Lazy<ProtocolConfig> = Lazy::new(ProtocolConfig::get_for_max_version);
 
 prop_compose! {
     pub fn gen_transfer()

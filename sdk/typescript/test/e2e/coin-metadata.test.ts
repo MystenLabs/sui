@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeEach } from 'vitest';
+import { ObjectId } from '../../src';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Test Coin Metadata', () => {
 	let toolbox: TestToolbox;
-	let packageId: string;
+	let packageId: ObjectId;
 
 	beforeEach(async () => {
 		toolbox = await setup();
@@ -15,7 +16,7 @@ describe('Test Coin Metadata', () => {
 	});
 
 	it('Test accessing coin metadata', async () => {
-		const coinMetadata = (await toolbox.client.getCoinMetadata({
+		const coinMetadata = (await toolbox.signer.provider.getCoinMetadata({
 			coinType: `${packageId}::test::TEST`,
 		}))!;
 		expect(coinMetadata.decimals).to.equal(2);

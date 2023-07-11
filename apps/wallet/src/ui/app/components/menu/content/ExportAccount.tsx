@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64 } from '@mysten/sui.js/utils';
+import { fromB64 } from '@mysten/sui.js';
 import { bytesToHex } from '@noble/hashes/utils';
 import { useMutation } from '@tanstack/react-query';
 import { useMemo } from 'react';

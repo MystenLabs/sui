@@ -1,8 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiObjectData, SuiObjectResponse, getObjectFields } from '@mysten/sui.js';
-import { isValidSuiAddress } from '@mysten/sui.js/utils';
+import {
+	JsonRpcProvider,
+	ObjectId,
+	PaginationArguments,
+	SuiAddress,
+	SuiObjectData,
+	SuiObjectResponse,
+	getObjectFields,
+	isValidSuiAddress,
+} from '@mysten/sui.js';
 import {
 	attachListingsAndPrices,
 	attachLockedItems,
@@ -17,11 +25,10 @@ import {
 	OwnedKiosks,
 	PagedKioskData,
 } from '../types';
-import { SuiClient, PaginationArguments } from '@mysten/sui.js/client';
 
 export async function fetchKiosk(
-	client: SuiClient,
-	kioskId: string,
+	provider: JsonRpcProvider,
+	kioskId: SuiAddress,
 	pagination: PaginationArguments<string>,
 	options: FetchKioskOptions,
 ): Promise<PagedKioskData> {
@@ -29,10 +36,10 @@ export async function fetchKiosk(
 	// response, once we have better RPC support for
 	// type filtering & batch fetching.
 	// This can't work with pagination currently.
-	const data = await getAllDynamicFields(client, kioskId, pagination);
+	const data = await getAllDynamicFields(provider, kioskId, pagination);
 
 	const listings: KioskListing[] = [];
-	const lockedItemIds: string[] = [];
+	const lockedItemIds: ObjectId[] = [];
 
 	// extracted kiosk data.
 	const kioskData = extractKioskData(data, listings, lockedItemIds);
@@ -41,9 +48,9 @@ export async function fetchKiosk(
 	// For items, we usually seek the Display.
 	// For listings we usually seek the DF value (price) / exclusivity.
 	const [kiosk, listingObjects] = await Promise.all([
-		options.withKioskFields ? getKioskObject(client, kioskId) : Promise.resolve(undefined),
+		options.withKioskFields ? getKioskObject(provider, kioskId) : Promise.resolve(undefined),
 		options.withListingPrices
-			? client.multiGetObjects({
+			? provider.multiGetObjects({
 					ids: kioskData.listingIds,
 					options: {
 						showContent: true,
@@ -72,8 +79,8 @@ export async function fetchKiosk(
  * Extra options allow pagination.
  */
 export async function getOwnedKiosks(
-	client: SuiClient,
-	address: string,
+	provider: JsonRpcProvider,
+	address: SuiAddress,
 	options?: {
 		pagination?: PaginationArguments<string>;
 	},
@@ -87,7 +94,7 @@ export async function getOwnedKiosks(
 		};
 
 	// fetch owned kiosk caps, paginated.
-	const { data, hasNextPage, nextCursor } = await client.getOwnedObjects({
+	const { data, hasNextPage, nextCursor } = await provider.getOwnedObjects({
 		owner: address,
 		filter: { StructType: KIOSK_OWNER_CAP },
 		options: {

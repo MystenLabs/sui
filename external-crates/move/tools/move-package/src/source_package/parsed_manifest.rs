@@ -4,7 +4,6 @@
 
 use anyhow::{bail, Result};
 
-use move_compiler::editions::{Edition, Flavor};
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::symbol::Symbol;
 use std::{
@@ -40,8 +39,6 @@ pub struct PackageInfo {
     pub version: Version,
     pub authors: Vec<Symbol>,
     pub license: Option<Symbol>,
-    pub edition: Option<Edition>,
-    pub flavor: Option<Flavor>,
     pub custom_properties: BTreeMap<Symbol, String>,
 }
 

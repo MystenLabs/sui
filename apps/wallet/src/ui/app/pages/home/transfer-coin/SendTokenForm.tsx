@@ -104,7 +104,7 @@ function GasBudgetEstimation({
 			});
 
 			tx.setSender(activeAddress);
-			await tx.build({ client: rpc });
+			await tx.build({ provider: rpc });
 			return tx.blockData.gasConfig.budget;
 		},
 	});

@@ -14,6 +14,8 @@ import {
 	tuple,
 	optional,
 } from 'superstruct';
+import { ObjectId, SuiAddress } from './common.js';
+import { AuthorityName, EpochId } from './transactions.js';
 
 /* -------------- Types for the SuiSystemState Rust definition -------------- */
 
@@ -24,7 +26,7 @@ export type StakeObject = Infer<typeof StakeObject>;
 // APY Response
 export const Apy = object({
 	apy: number(),
-	address: string(),
+	address: SuiAddress,
 });
 
 export const ValidatorsApy = object({
@@ -40,17 +42,17 @@ export const Balance = object({
 });
 
 export const StakeObject = object({
-	stakedSuiId: string(),
-	stakeRequestEpoch: string(),
-	stakeActiveEpoch: string(),
+	stakedSuiId: ObjectId,
+	stakeRequestEpoch: EpochId,
+	stakeActiveEpoch: EpochId,
 	principal: string(),
 	status: union([literal('Active'), literal('Pending'), literal('Unstaked')]),
 	estimatedReward: optional(string()),
 });
 
 export const DelegatedStake = object({
-	validatorAddress: string(),
-	stakingPool: string(),
+	validatorAddress: SuiAddress,
+	stakingPool: ObjectId,
 	stakes: array(StakeObject),
 });
 
@@ -109,16 +111,16 @@ export const DelegationStakingPool = object({
 	fields: DelegationStakingPoolFields,
 });
 
-export const Validators = array(tuple([string(), string()]));
+export const Validators = array(tuple([AuthorityName, string()]));
 
 export const CommitteeInfo = object({
-	epoch: string(),
+	epoch: EpochId,
 	/** Array of (validator public key, stake unit) tuple */
 	validators: Validators,
 });
 
 export const SuiValidatorSummary = object({
-	suiAddress: string(),
+	suiAddress: SuiAddress,
 	protocolPubkeyBytes: string(),
 	networkPubkeyBytes: string(),
 	workerPubkeyBytes: string(),
@@ -197,8 +199,8 @@ export const SuiSystemStateSummary = object({
 	inactivePoolsSize: string(),
 	validatorCandidatesId: string(),
 	validatorCandidatesSize: string(),
-	atRiskValidators: array(tuple([string(), string()])),
-	validatorReportRecords: array(tuple([string(), array(string())])),
+	atRiskValidators: array(tuple([SuiAddress, string()])),
+	validatorReportRecords: array(tuple([SuiAddress, array(SuiAddress)])),
 });
 
 export type SuiSystemStateSummary = Infer<typeof SuiSystemStateSummary>;

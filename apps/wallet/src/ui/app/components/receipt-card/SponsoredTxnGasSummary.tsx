@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFormatCoin } from '@mysten/core';
+import { type SuiAddress } from '@mysten/sui.js';
 
 import { TxnAddressLink } from './TxnAddressLink';
 import { GAS_SYMBOL, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
@@ -9,7 +10,7 @@ import { Text } from '_src/ui/app/shared/text';
 
 type SponsoredTxnGasSummaryProps = {
 	totalGas: number;
-	sponsor: string;
+	sponsor: SuiAddress;
 };
 
 export function SponsoredTxnGasSummary({ totalGas, sponsor }: SponsoredTxnGasSummaryProps) {

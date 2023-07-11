@@ -26,11 +26,9 @@ use move_compiler::{
         Type_, Var,
     },
     parser::ast::Ability_,
-    shared::{CompilationEnv, Identifier},
+    shared::Identifier,
 };
 use std::collections::BTreeMap;
-
-use super::{LINT_WARNING_PREFIX, SHARE_OWNED_DIAG_CATEGORY, SHARE_OWNED_DIAG_CODE};
 
 const SHARE_FUNCTIONS: &[(&str, &str, &str)] = &[
     ("sui", "transfer", "public_share_object"),
@@ -38,10 +36,10 @@ const SHARE_FUNCTIONS: &[(&str, &str, &str)] = &[
 ];
 
 const SHARE_OWNED_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
+    "Lint ",
     Severity::Warning,
-    SHARE_OWNED_DIAG_CATEGORY,
-    SHARE_OWNED_DIAG_CODE,
+    /* category */ 1,
+    /* code */ 1,
     "possible owned object share",
 );
 
@@ -79,7 +77,6 @@ impl SimpleAbsIntConstructor for ShareOwnedVerifier {
     type AI<'a> = ShareOwnedVerifierAI;
 
     fn new<'a>(
-        _env: &CompilationEnv,
         _program: &'a Program,
         context: &'a CFGContext<'a>,
         _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
@@ -206,18 +203,21 @@ impl SimpleAbsInt for ShareOwnedVerifierAI {
     }
 }
 
-fn is_obj(sp!(_, l_): &LValue) -> bool {
+fn is_obj(l: &LValue) -> bool {
+    let sp!(_, l_) = l;
     if let LValue_::Var(_, st) = l_ {
         return is_obj_type(st);
     }
     false
 }
 
-fn is_obj_type(sp!(_, st_): &SingleType) -> bool {
-    let sp!(_, bt_) = match st_ {
+fn is_obj_type(st: &SingleType) -> bool {
+    let sp!(_, st_) = st;
+    let bt = match st_ {
         SingleType_::Base(v) => v,
         SingleType_::Ref(_, v) => v,
     };
+    let sp!(_, bt_) = bt;
     if let BaseType_::Apply(abilities, _, _) = bt_ {
         if abilities.has_ability_(Ability_::Key) {
             return true;

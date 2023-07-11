@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useTransactionSummary } from '@mysten/core';
-import { type SuiTransactionBlockResponse } from '@mysten/sui.js';
+import { type SuiTransactionBlockResponse, type SuiAddress } from '@mysten/sui.js';
 
 import { StakeTxnCard } from './StakeTxnCard';
 import { StatusIcon } from './StatusIcon';
@@ -11,11 +11,10 @@ import { DateCard } from '../../shared/date-card';
 import { TransactionSummary } from '../../shared/transaction-summary';
 import { ExplorerLinkCard } from '../../shared/transaction-summary/cards/ExplorerLink';
 import { GasSummary } from '../../shared/transaction-summary/cards/GasSummary';
-import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
 
 type ReceiptCardProps = {
 	txn: SuiTransactionBlockResponse;
-	activeAddress: string;
+	activeAddress: SuiAddress;
 };
 
 function TransactionStatus({ success, timestamp }: { success: boolean; timestamp?: string }) {
@@ -32,11 +31,9 @@ function TransactionStatus({ success, timestamp }: { success: boolean; timestamp
 
 export function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
 	const { events } = txn;
-	const recognizedPackagesList = useRecognizedPackages();
 	const summary = useTransactionSummary({
 		transaction: txn,
 		currentAddress: activeAddress,
-		recognizedPackagesList,
 	});
 
 	if (!summary) return null;

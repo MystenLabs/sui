@@ -28,8 +28,8 @@ use anyhow::anyhow;
 use eyre::ContextCompat;
 use indicatif::{ProgressBar, ProgressStyle};
 use prometheus::Registry;
-use sui_archival::reader::{ArchiveReader, ArchiveReaderMetrics};
-use sui_archival::{verify_archive_with_checksums, verify_archive_with_genesis_config};
+use sui_archival::reader::ArchiveReader;
+use sui_archival::verify_archive_with_genesis_config;
 use sui_config::node::ArchiveReaderConfig;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::AuthorityStore;
@@ -517,6 +517,22 @@ pub(crate) fn make_anemo_config() -> anemo_cli::Config {
                     ),
                 )
                 .add_method(
+                    "GetPayloadAvailability",
+                    anemo_cli::ron_method!(
+                        PrimaryToPrimaryClient,
+                        get_payload_availability,
+                        PayloadAvailabilityRequest
+                    ),
+                )
+                .add_method(
+                    "GetCertificates",
+                    anemo_cli::ron_method!(
+                        PrimaryToPrimaryClient,
+                        get_certificates,
+                        GetCertificatesRequest
+                    ),
+                )
+                .add_method(
                     "FetchCertificates",
                     anemo_cli::ron_method!(
                         PrimaryToPrimaryClient,
@@ -534,11 +550,11 @@ pub(crate) fn make_anemo_config() -> anemo_cli::Config {
                     anemo_cli::ron_method!(WorkerToWorkerClient, report_batch, WorkerBatchMessage),
                 )
                 .add_method(
-                    "RequestBatches",
+                    "RequestBatch",
                     anemo_cli::ron_method!(
                         WorkerToWorkerClient,
-                        request_batches,
-                        RequestBatchesRequest
+                        request_batch,
+                        RequestBatchRequest
                     ),
                 ),
         )
@@ -627,13 +643,6 @@ pub async fn verify_archive(
     verify_archive_with_genesis_config(genesis, remote_store_config, concurrency, interactive).await
 }
 
-pub async fn verify_archive_by_checksum(
-    remote_store_config: ObjectStoreConfig,
-    concurrency: usize,
-) -> Result<()> {
-    verify_archive_with_checksums(remote_store_config, concurrency).await
-}
-
 pub async fn state_sync_from_archive(
     path: &Path,
     genesis: &Path,
@@ -688,8 +697,7 @@ pub async fn state_sync_from_archive(
         download_concurrency: NonZeroUsize::new(concurrency).unwrap(),
         use_for_pruning_watermark: false,
     };
-    let metrics = ArchiveReaderMetrics::new(&Registry::default());
-    let archive_reader = ArchiveReader::new(archive_reader_config, &metrics)?;
+    let archive_reader = ArchiveReader::new(archive_reader_config)?;
     archive_reader.sync_manifest_once().await?;
     let latest_checkpoint_in_archive = archive_reader.latest_available_checkpoint().await?;
     info!(

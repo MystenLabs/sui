@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::reader::{ArchiveReader, ArchiveReaderMetrics};
+use crate::reader::ArchiveReader;
 use crate::writer::ArchiveWriter;
 use crate::{read_manifest, verify_archive_with_local_store, write_manifest, Manifest};
 use anyhow::{anyhow, Context, Result};
@@ -94,8 +94,7 @@ async fn setup_test_state(temp_dir: PathBuf) -> anyhow::Result<TestState> {
         download_concurrency: NonZeroUsize::new(2).unwrap(),
         use_for_pruning_watermark: false,
     };
-    let metrics = ArchiveReaderMetrics::new(&Registry::default());
-    let archive_reader = ArchiveReader::new(archive_reader_config, &metrics)?;
+    let archive_reader = ArchiveReader::new(archive_reader_config)?;
     let local_store = local_store_config.make()?;
     let remote_store = remote_store_config.make()?;
     Ok(TestState {

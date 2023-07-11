@@ -63,7 +63,6 @@ pub async fn send_and_confirm_transaction_with_execution_error(
     // Make the initial request
     let epoch_store = authority.load_epoch_store_one_call_per_task();
     let transaction = authority.verify_transaction(transaction).unwrap();
-
     let response = authority
         .handle_transaction(&epoch_store, transaction.clone())
         .await?;
@@ -74,19 +73,8 @@ pub async fn send_and_confirm_transaction_with_execution_error(
     let certificate =
         CertifiedTransaction::new(transaction.into_message(), vec![vote.clone()], &committee)
             .unwrap()
-            .verify_authenticated(&committee, &Default::default())
+            .verify(&committee)
             .unwrap();
-
-    // We also check the incremental effects of the transaction on the live object set against StateAccumulator
-    // for testing and regression detection.
-    // We must do this before sending to consensus, otherwise consensus may already
-    // lead to transaction execution and state change.
-    let state_acc = StateAccumulator::new(authority.database.clone());
-    let include_wrapped_tombstone = !authority
-        .epoch_store_for_testing()
-        .protocol_config()
-        .simplified_unwrap_then_delete();
-    let mut state = state_acc.accumulate_live_object_set(include_wrapped_tombstone);
 
     if with_shared {
         send_consensus(authority, &certificate).await;
@@ -97,6 +85,15 @@ pub async fn send_and_confirm_transaction_with_execution_error(
 
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
     // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
+    //
+    // We also check the incremental effects of the transaction on the live object set against StateAccumulator
+    // for testing and regression detection
+    let state_acc = StateAccumulator::new(authority.database.clone());
+    let include_wrapped_tombstone = !authority
+        .epoch_store_for_testing()
+        .protocol_config()
+        .simplified_unwrap_then_delete();
+    let mut state = state_acc.accumulate_live_object_set(include_wrapped_tombstone);
     let (result, execution_error_opt) = authority.try_execute_for_test(&certificate).await?;
     let state_after = state_acc.accumulate_live_object_set(include_wrapped_tombstone);
     let effects_acc = state_acc.accumulate_effects(
@@ -276,7 +273,7 @@ pub fn init_certified_transaction(
         epoch_store.committee(),
     )
     .unwrap()
-    .verify_authenticated(epoch_store.committee(), &Default::default())
+    .verify(epoch_store.committee())
     .unwrap()
 }
 

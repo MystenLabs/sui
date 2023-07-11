@@ -5,62 +5,41 @@ use crate::committee::EpochId;
 use crate::crypto::{SignatureScheme, SuiSignature};
 use crate::multisig_legacy::MultiSigLegacy;
 use crate::zk_login_authenticator::ZkLoginAuthenticator;
-use crate::zk_login_util::OAuthProviderContent;
-use crate::{base_types::SuiAddress, crypto::Signature, error::SuiResult, multisig::MultiSig};
+use crate::{base_types::SuiAddress, crypto::Signature, error::SuiError, multisig::MultiSig};
 pub use enum_dispatch::enum_dispatch;
 use fastcrypto::{
     error::FastCryptoError,
     traits::{EncodeDecodeBase64, ToFromBytes},
 };
-use im::hashmap::HashMap as ImHashMap;
 use schemars::JsonSchema;
 use serde::Serialize;
 use shared_crypto::intent::IntentMessage;
 use std::hash::Hash;
-
 #[derive(Default, Debug, Clone)]
-pub struct VerifyParams {
-    // map from kid => OauthProviderContent
-    pub oauth_provider_jwks: ImHashMap<String, OAuthProviderContent>,
+pub struct AuxVerifyData {
+    pub epoch: Option<EpochId>,
+    pub google_jwk_as_bytes: Option<Vec<u8>>,
 }
 
-impl VerifyParams {
-    pub fn new(oauth_provider_jwks: ImHashMap<String, OAuthProviderContent>) -> Self {
+impl AuxVerifyData {
+    pub fn new(epoch: Option<EpochId>, google_jwk_as_bytes: Option<Vec<u8>>) -> Self {
         Self {
-            oauth_provider_jwks,
+            epoch,
+            google_jwk_as_bytes,
         }
     }
 }
-
 /// A lightweight trait that all members of [enum GenericSignature] implement.
 #[enum_dispatch]
 pub trait AuthenticatorTrait {
-    fn verify_user_authenticator_epoch(&self, epoch: EpochId) -> SuiResult;
-
-    fn verify_claims<T>(
+    fn verify_secure_generic<T>(
         &self,
         value: &IntentMessage<T>,
         author: SuiAddress,
-        aux_verify_data: &VerifyParams,
-    ) -> SuiResult
+        aux_verify_data: AuxVerifyData,
+    ) -> Result<(), SuiError>
     where
         T: Serialize;
-
-    fn verify_authenticator<T>(
-        &self,
-        value: &IntentMessage<T>,
-        author: SuiAddress,
-        epoch: Option<EpochId>,
-        aux_verify_data: &VerifyParams,
-    ) -> SuiResult
-    where
-        T: Serialize,
-    {
-        if let Some(epoch) = epoch {
-            self.verify_user_authenticator_epoch(epoch)?;
-        }
-        self.verify_claims(value, author, aux_verify_data)
-    }
 }
 
 /// Due to the incompatibility of [enum Signature] (which dispatches a trait that
@@ -167,16 +146,12 @@ impl<'de> ::serde::Deserialize<'de> for GenericSignature {
 
 /// This ports the wrapper trait to the verify_secure defined on [enum Signature].
 impl AuthenticatorTrait for Signature {
-    fn verify_user_authenticator_epoch(&self, _: EpochId) -> SuiResult {
-        Ok(())
-    }
-
-    fn verify_claims<T>(
+    fn verify_secure_generic<T>(
         &self,
         value: &IntentMessage<T>,
         author: SuiAddress,
-        _aux_verify_data: &VerifyParams,
-    ) -> SuiResult
+        _aux_verify_data: AuxVerifyData,
+    ) -> Result<(), SuiError>
     where
         T: Serialize,
     {

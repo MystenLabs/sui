@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromExportedKeypair } from '@mysten/sui.js';
-import { mnemonicToSeedHex, type ExportedKeypair, type Keypair } from '@mysten/sui.js/cryptography';
+import { fromExportedKeypair, mnemonicToSeedHex } from '@mysten/sui.js';
 
 import { encrypt, decrypt } from '_shared/cryptography/keystore';
 import {
@@ -12,6 +11,8 @@ import {
 	toEntropy,
 	validateEntropy,
 } from '_shared/utils/bip39';
+
+import type { ExportedKeypair, Keypair } from '@mysten/sui.js';
 
 export const LATEST_VAULT_VERSION = 2;
 

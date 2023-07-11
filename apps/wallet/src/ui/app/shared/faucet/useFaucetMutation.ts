@@ -1,16 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
+import { useRpcClient } from '@mysten/core';
 import { useIsMutating, useMutation, type UseMutationOptions } from '@tanstack/react-query';
 
 import { useActiveAddress } from '../../hooks/useActiveAddress';
 
-type UseFaucetMutationOptions = Pick<UseMutationOptions, 'onError'> & {
-	host: string | null;
-};
+type UseFaucetMutationOptions = Pick<UseMutationOptions, 'onError'>;
 
 export function useFaucetMutation(options?: UseFaucetMutationOptions) {
+	const api = useRpcClient();
 	const address = useActiveAddress();
 	const mutationKey = ['faucet-request-tokens', address];
 	const mutation = useMutation({
@@ -19,15 +18,7 @@ export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 			if (!address) {
 				throw new Error('Failed, wallet address not found.');
 			}
-			if (!options?.host) {
-				throw new Error('Failed, faucet host not found.');
-			}
-
-			const { error, transferredGasObjects } = await requestSuiFromFaucetV0({
-				recipient: address,
-				host: options.host,
-			});
-
+			const { error, transferredGasObjects } = await api.requestSuiFromFaucet(address);
 			if (error) {
 				throw new Error(error);
 			}
@@ -38,7 +29,7 @@ export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 	return {
 		...mutation,
 		/** If the currently-configured endpoint supports faucet: */
-		enabled: !!options?.host,
+		enabled: !!api.connection.faucet,
 		/**
 		 * is any faucet request in progress across different instances of the mutation
 		 */

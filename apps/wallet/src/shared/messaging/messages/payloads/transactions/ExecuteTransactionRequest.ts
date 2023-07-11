@@ -6,6 +6,7 @@ import { type SuiSignTransactionBlockInput } from '@mysten/wallet-standard';
 import { type TransactionDataType } from './ApprovalRequest';
 import { isBasePayload } from '_payloads';
 
+import type { SuiAddress } from '@mysten/sui.js';
 import type { BasePayload, Payload } from '_payloads';
 
 export interface ExecuteTransactionRequest extends BasePayload {
@@ -24,7 +25,7 @@ export type SuiSignTransactionSerialized = Omit<
 	'transaction' | 'account'
 > & {
 	transaction: string;
-	account: string;
+	account: SuiAddress;
 };
 
 export interface SignTransactionRequest extends BasePayload {

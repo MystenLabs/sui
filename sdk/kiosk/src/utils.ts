@@ -1,13 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SharedObjectRef, SuiObjectRef, SuiObjectResponse, getObjectFields } from '@mysten/sui.js';
-import { TransactionBlock, TransactionArgument } from '@mysten/sui.js/transactions';
-import { type DynamicFieldInfo } from '@mysten/sui.js/client';
+import {
+	JsonRpcProvider,
+	ObjectId,
+	PaginationArguments,
+	SharedObjectRef,
+	SuiObjectRef,
+	SuiObjectResponse,
+	TransactionArgument,
+	TransactionBlock,
+	getObjectFields,
+} from '@mysten/sui.js';
+import { type DynamicFieldInfo } from '@mysten/sui.js';
 import { bcs } from './bcs';
 import { KIOSK_TYPE, Kiosk, KioskData, KioskListing, RulesEnvironmentParam } from './types';
 import { MAINNET_RULES_PACKAGE_ADDRESS, TESTNET_RULES_PACKAGE_ADDRESS } from './constants';
-import { SuiClient, PaginationArguments } from '@mysten/sui.js/client';
 
 /* A simple map to the rule package addresses */
 // TODO: Supply the mainnet and devnet addresses.
@@ -48,8 +56,8 @@ export function objArg(
 	throw new Error('Invalid argument type');
 }
 
-export async function getKioskObject(client: SuiClient, id: string): Promise<Kiosk> {
-	const queryRes = await client.getObject({ id, options: { showBcs: true } });
+export async function getKioskObject(provider: JsonRpcProvider, id: string): Promise<Kiosk> {
+	const queryRes = await provider.getObject({ id, options: { showBcs: true } });
 
 	if (!queryRes || queryRes.error || !queryRes.data) {
 		throw new Error(`Kiosk ${id} not found; ${queryRes.error}`);
@@ -114,8 +122,8 @@ export function attachListingsAndPrices(
 ) {
 	// map item listings as {item_id: KioskListing}
 	// for easier mapping on the nex
-	const itemListings = listings.reduce<Record<string, KioskListing>>(
-		(acc: Record<string, KioskListing>, item, idx) => {
+	const itemListings = listings.reduce<Record<ObjectId, KioskListing>>(
+		(acc: Record<ObjectId, KioskListing>, item, idx) => {
 			acc[item.objectId] = { ...item };
 
 			// return in case we don't have any listing objects.
@@ -139,10 +147,10 @@ export function attachListingsAndPrices(
 /**
  * A Helper to attach locked state to items in Kiosk Data.
  */
-export function attachLockedItems(kioskData: KioskData, lockedItemIds: string[]) {
+export function attachLockedItems(kioskData: KioskData, lockedItemIds: ObjectId[]) {
 	// map lock status in an array of type { item_id: true }
-	const lockedStatuses = lockedItemIds.reduce<Record<string, boolean>>(
-		(acc: Record<string, boolean>, item: string) => {
+	const lockedStatuses = lockedItemIds.reduce<Record<ObjectId, boolean>>(
+		(acc: Record<ObjectId, boolean>, item: string) => {
 			acc[item] = true;
 			return acc;
 		},
@@ -174,8 +182,8 @@ export function getRulePackageAddress(environment: RulesEnvironmentParam): strin
  * RPC calls that allow filtering of Type / batch fetching of spec
  */
 export async function getAllDynamicFields(
-	client: SuiClient,
-	parentId: string,
+	provider: JsonRpcProvider,
+	parentId: ObjectId,
 	pagination: PaginationArguments<string>,
 ) {
 	let hasNextPage = true;
@@ -183,7 +191,7 @@ export async function getAllDynamicFields(
 	const data: DynamicFieldInfo[] = [];
 
 	while (hasNextPage) {
-		const result = await client.getDynamicFields({
+		const result = await provider.getDynamicFields({
 			parentId,
 			limit: pagination.limit || undefined,
 			cursor,

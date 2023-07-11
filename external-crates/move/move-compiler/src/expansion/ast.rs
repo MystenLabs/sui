@@ -67,16 +67,6 @@ pub enum AttributeName_ {
     Unknown(Symbol),
     Known(KnownAttribute),
 }
-
-impl AttributeName_ {
-    pub fn name(&self) -> Symbol {
-        match self {
-            Self::Unknown(s) => *s,
-            Self::Known(a) => a.name().into(),
-        }
-    }
-}
-
 pub type AttributeName = Spanned<AttributeName_>;
 
 pub type Attributes = UniqueMap<AttributeName, Attribute>;

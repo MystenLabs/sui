@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use prometheus::{Histogram, IntCounter};
+use prometheus::Histogram;
 
 use move_core_types::identifier::Identifier;
 use sui_json_rpc_types::{
@@ -36,8 +36,7 @@ use crate::types::CheckpointTransactionBlockResponse;
 pub trait IndexerStore {
     type ModuleCache;
 
-    async fn get_latest_tx_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
-    async fn get_latest_object_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
+    async fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
     async fn get_checkpoint(&self, id: CheckpointId) -> Result<RpcCheckpoint, IndexerError>;
     async fn get_checkpoints(
         &self,
@@ -211,18 +210,21 @@ pub trait IndexerStore {
     async fn get_network_metrics(&self) -> Result<NetworkMetrics, IndexerError>;
     async fn get_move_call_metrics(&self) -> Result<MoveCallMetrics, IndexerError>;
 
+    async fn persist_fast_path(
+        &self,
+        tx: Transaction,
+        tx_object_changes: TransactionObjectChanges,
+    ) -> Result<usize, IndexerError>;
     async fn persist_checkpoint_transactions(
         &self,
-        checkpoints: &[Checkpoint],
+        checkpoint: &Checkpoint,
         transactions: &[Transaction],
-        counter_committed_tx: IntCounter,
-    ) -> Result<(), IndexerError>;
+    ) -> Result<usize, IndexerError>;
     async fn persist_object_changes(
         &self,
         tx_object_changes: &[TransactionObjectChanges],
         object_mutation_latency: Histogram,
         object_deletion_latency: Histogram,
-        counter_committed_object: IntCounter,
     ) -> Result<(), IndexerError>;
     async fn persist_events(&self, events: &[Event]) -> Result<(), IndexerError>;
     async fn persist_addresses(
@@ -338,11 +340,11 @@ impl ObjectStore for CheckpointData {
 }
 
 // Per checkpoint indexing
-#[derive(Debug)]
 pub struct TemporaryCheckpointStore {
     pub checkpoint: Checkpoint,
     pub transactions: Vec<Transaction>,
     pub events: Vec<Event>,
+    pub object_changes: Vec<TransactionObjectChanges>,
     pub packages: Vec<Package>,
     pub input_objects: Vec<InputObject>,
     pub changed_objects: Vec<ChangedObject>,
@@ -350,14 +352,13 @@ pub struct TemporaryCheckpointStore {
     pub recipients: Vec<Recipient>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct TransactionObjectChanges {
     pub changed_objects: Vec<Object>,
     pub deleted_objects: Vec<DeletedObject>,
 }
 
 // Per epoch indexing
-#[derive(Clone, Debug)]
 pub struct TemporaryEpochStore {
     pub last_epoch: Option<DBEpochInfo>,
     pub new_epoch: DBEpochInfo,

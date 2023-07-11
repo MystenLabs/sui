@@ -1,11 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	toSerializedSignature,
-	type SerializedSignature,
-	type Keypair,
-} from '@mysten/sui.js/cryptography';
+import { toSerializedSignature, type SerializedSignature, type Keypair } from '@mysten/sui.js';
 import { blake2b } from '@noble/hashes/blake2b';
 
 export class AccountKeypair {

@@ -205,12 +205,12 @@ impl BatchFetcher {
                 digests.len(),
             );
             let deadline = Instant::now() + timeout;
-            let request_guard =
-                PendingGuard::make_inc(&self.metrics.pending_remote_request_batches);
+            let request_batch_guard =
+                PendingGuard::make_inc(&self.metrics.pending_remote_request_batch);
             let response = self
                 .safe_request_batches(digests.clone(), worker.clone(), timeout)
                 .await;
-            drop(request_guard);
+            drop(request_batch_guard);
             match response {
                 Ok(remote_batches) => {
                     self.metrics

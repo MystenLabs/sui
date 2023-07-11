@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isTransactionBlock } from '@mysten/sui.js/transactions';
-import { toB64, fromB64 } from '@mysten/sui.js/utils';
+import { toB64, TransactionBlock, fromB64 } from '@mysten/sui.js';
 import {
 	SUI_CHAINS,
 	ReadonlyWalletAccount,
@@ -234,7 +233,7 @@ export class SuiWallet implements Wallet {
 	};
 
 	#signTransactionBlock: SuiSignTransactionBlockMethod = async (input) => {
-		if (!isTransactionBlock(input.transactionBlock)) {
+		if (!TransactionBlock.is(input.transactionBlock)) {
 			throw new Error(
 				'Unexpect transaction format found. Ensure that you are using the `Transaction` class.',
 			);
@@ -256,7 +255,7 @@ export class SuiWallet implements Wallet {
 	};
 
 	#signAndExecuteTransactionBlock: SuiSignAndExecuteTransactionBlockMethod = async (input) => {
-		if (!isTransactionBlock(input.transactionBlock)) {
+		if (!TransactionBlock.is(input.transactionBlock)) {
 			throw new Error(
 				'Unexpect transaction format found. Ensure that you are using the `Transaction` class.',
 			);

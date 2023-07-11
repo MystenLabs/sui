@@ -17,15 +17,22 @@ import {
 	nullable,
 } from 'superstruct';
 
-import { ObjectOwner, SuiJsonValue } from './common.js';
+import {
+	ObjectId,
+	ObjectOwner,
+	SequenceNumber,
+	SuiAddress,
+	SuiJsonValue,
+	TransactionDigest,
+	TransactionEventDigest,
+} from './common.js';
 import { SuiEvent } from './events.js';
-import { SuiGasData, SuiMovePackage, SuiObjectRef } from './objects.js';
+import { ObjectDigest, SuiGasData, SuiMovePackage, SuiObjectRef } from './objects.js';
 
-/** @deprecated Use `string` instead. */
 export const EpochId = string();
 
 export const SuiChangeEpoch = object({
-	epoch: string(),
+	epoch: EpochId,
 	storage_charge: string(),
 	computation_charge: string(),
 	storage_rebate: string(),
@@ -34,14 +41,14 @@ export const SuiChangeEpoch = object({
 export type SuiChangeEpoch = Infer<typeof SuiChangeEpoch>;
 
 export const SuiConsensusCommitPrologue = object({
-	epoch: string(),
+	epoch: EpochId,
 	round: string(),
 	commit_timestamp_ms: string(),
 });
 export type SuiConsensusCommitPrologue = Infer<typeof SuiConsensusCommitPrologue>;
 
 export const Genesis = object({
-	objects: array(string()),
+	objects: array(ObjectId),
 });
 export type Genesis = Infer<typeof Genesis>;
 
@@ -56,7 +63,7 @@ export type SuiArgument = Infer<typeof SuiArgument>;
 export const MoveCallSuiTransaction = object({
 	arguments: optional(array(SuiArgument)),
 	type_arguments: optional(array(string())),
-	package: string(),
+	package: ObjectId,
 	module: string(),
 	function: string(),
 });
@@ -70,15 +77,15 @@ export const SuiTransaction = union([
 	object({
 		Publish: union([
 			// TODO: Remove this after 0.34 is released:
-			tuple([SuiMovePackage, array(string())]),
-			array(string()),
+			tuple([SuiMovePackage, array(ObjectId)]),
+			array(ObjectId),
 		]),
 	}),
 	object({
 		Upgrade: union([
 			// TODO: Remove this after 0.34 is released:
-			tuple([SuiMovePackage, array(string()), string(), SuiArgument]),
-			tuple([array(string()), string(), SuiArgument]),
+			tuple([SuiMovePackage, array(ObjectId), ObjectId, SuiArgument]),
+			tuple([array(ObjectId), ObjectId, SuiArgument]),
 		]),
 	}),
 	object({ MakeMoveVec: tuple([nullable(string()), array(SuiArgument)]) }),
@@ -93,15 +100,15 @@ export const SuiCallArg = union([
 	object({
 		type: literal('object'),
 		objectType: literal('immOrOwnedObject'),
-		objectId: string(),
-		version: string(),
-		digest: string(),
+		objectId: ObjectId,
+		version: SequenceNumber,
+		digest: ObjectDigest,
 	}),
 	object({
 		type: literal('object'),
 		objectType: literal('sharedObject'),
-		objectId: string(),
-		initialSharedVersion: string(),
+		objectId: ObjectId,
+		initialSharedVersion: SequenceNumber,
 		mutable: boolean(),
 	}),
 ]);
@@ -148,17 +155,16 @@ export const SuiTransactionBlockData = object({
 	// Eventually this will become union(literal('v1'), literal('v2'), ...)
 	messageVersion: literal('v1'),
 	transaction: SuiTransactionBlockKind,
-	sender: string(),
+	sender: SuiAddress,
 	gasData: SuiGasData,
 });
 export type SuiTransactionBlockData = Infer<typeof SuiTransactionBlockData>;
 
-/** @deprecated Use `string` instead. */
 export const AuthoritySignature = string();
-export const GenericAuthoritySignature = union([string(), array(string())]);
+export const GenericAuthoritySignature = union([AuthoritySignature, array(AuthoritySignature)]);
 
 export const AuthorityQuorumSignInfo = object({
-	epoch: string(),
+	epoch: EpochId,
 	signature: GenericAuthoritySignature,
 	signers_map: array(number()),
 });
@@ -187,8 +193,8 @@ export const OwnedObjectRef = object({
 });
 export type OwnedObjectRef = Infer<typeof OwnedObjectRef>;
 export const TransactionEffectsModifiedAtVersions = object({
-	objectId: string(),
-	sequenceNumber: string(),
+	objectId: ObjectId,
+	sequenceNumber: SequenceNumber,
 });
 
 export const TransactionEffects = object({
@@ -198,14 +204,14 @@ export const TransactionEffects = object({
 	/** The status of the execution */
 	status: ExecutionStatus,
 	/** The epoch when this transaction was executed */
-	executedEpoch: string(),
+	executedEpoch: EpochId,
 	/** The version that every modified (mutated or deleted) object had before it was modified by this transaction. **/
 	modifiedAtVersions: optional(array(TransactionEffectsModifiedAtVersions)),
 	gasUsed: GasCostSummary,
 	/** The object references of the shared objects used in this transaction. Empty if no shared objects were used. */
 	sharedObjects: optional(array(SuiObjectRef)),
 	/** The transaction digest */
-	transactionDigest: string(),
+	transactionDigest: TransactionDigest,
 	/** ObjectRef and owner of new objects created */
 	created: optional(array(OwnedObjectRef)),
 	/** ObjectRef and owner of mutated objects, including gas object */
@@ -228,9 +234,9 @@ export const TransactionEffects = object({
 	 */
 	gasObject: OwnedObjectRef,
 	/** The events emitted during execution. Note that only successful transactions emit events */
-	eventsDigest: optional(string()),
+	eventsDigest: optional(TransactionEventDigest),
 	/** The set of transaction digests this transaction depends on */
-	dependencies: optional(array(string())),
+	dependencies: optional(array(TransactionDigest)),
 });
 export type TransactionEffects = Infer<typeof TransactionEffects>;
 
@@ -264,22 +270,19 @@ export type TransactionFilter =
 	| { TransactionKind: string }
 	| {
 			MoveFunction: {
-				package: string;
+				package: ObjectId;
 				module: string | null;
 				function: string | null;
 			};
 	  }
-	| { InputObject: string }
-	| { ChangedObject: string }
-	| { FromAddress: string }
-	| { ToAddress: string };
+	| { InputObject: ObjectId }
+	| { ChangedObject: ObjectId }
+	| { FromAddress: SuiAddress }
+	| { ToAddress: SuiAddress };
 
 export type EmptySignInfo = object;
-
-/** @deprecated Use `string` instead. */
-export const AuthorityName = string();
-/** @deprecated Use `string` instead. */
 export type AuthorityName = Infer<typeof AuthorityName>;
+export const AuthorityName = string();
 
 export const SuiTransactionBlock = object({
 	data: SuiTransactionBlockData,
@@ -289,62 +292,62 @@ export type SuiTransactionBlock = Infer<typeof SuiTransactionBlock>;
 
 export const SuiObjectChangePublished = object({
 	type: literal('published'),
-	packageId: string(),
-	version: string(),
-	digest: string(),
+	packageId: ObjectId,
+	version: SequenceNumber,
+	digest: ObjectDigest,
 	modules: array(string()),
 });
 export type SuiObjectChangePublished = Infer<typeof SuiObjectChangePublished>;
 
 export const SuiObjectChangeTransferred = object({
 	type: literal('transferred'),
-	sender: string(),
+	sender: SuiAddress,
 	recipient: ObjectOwner,
 	objectType: string(),
-	objectId: string(),
-	version: string(),
-	digest: string(),
+	objectId: ObjectId,
+	version: SequenceNumber,
+	digest: ObjectDigest,
 });
 export type SuiObjectChangeTransferred = Infer<typeof SuiObjectChangeTransferred>;
 
 export const SuiObjectChangeMutated = object({
 	type: literal('mutated'),
-	sender: string(),
+	sender: SuiAddress,
 	owner: ObjectOwner,
 	objectType: string(),
-	objectId: string(),
-	version: string(),
-	previousVersion: string(),
-	digest: string(),
+	objectId: ObjectId,
+	version: SequenceNumber,
+	previousVersion: SequenceNumber,
+	digest: ObjectDigest,
 });
 export type SuiObjectChangeMutated = Infer<typeof SuiObjectChangeMutated>;
 
 export const SuiObjectChangeDeleted = object({
 	type: literal('deleted'),
-	sender: string(),
+	sender: SuiAddress,
 	objectType: string(),
-	objectId: string(),
-	version: string(),
+	objectId: ObjectId,
+	version: SequenceNumber,
 });
 export type SuiObjectChangeDeleted = Infer<typeof SuiObjectChangeDeleted>;
 
 export const SuiObjectChangeWrapped = object({
 	type: literal('wrapped'),
-	sender: string(),
+	sender: SuiAddress,
 	objectType: string(),
-	objectId: string(),
-	version: string(),
+	objectId: ObjectId,
+	version: SequenceNumber,
 });
 export type SuiObjectChangeWrapped = Infer<typeof SuiObjectChangeWrapped>;
 
 export const SuiObjectChangeCreated = object({
 	type: literal('created'),
-	sender: string(),
+	sender: SuiAddress,
 	owner: ObjectOwner,
 	objectType: string(),
-	objectId: string(),
-	version: string(),
-	digest: string(),
+	objectId: ObjectId,
+	version: SequenceNumber,
+	digest: ObjectDigest,
 });
 export type SuiObjectChangeCreated = Infer<typeof SuiObjectChangeCreated>;
 
@@ -366,7 +369,7 @@ export const BalanceChange = object({
 });
 
 export const SuiTransactionBlockResponse = object({
-	digest: string(),
+	digest: TransactionDigest,
 	transaction: optional(SuiTransactionBlock),
 	effects: optional(TransactionEffects),
 	events: optional(TransactionEvents),
@@ -397,7 +400,7 @@ export type SuiTransactionBlockResponseOptions = Infer<typeof SuiTransactionBloc
 
 export const PaginatedTransactionResponse = object({
 	data: array(SuiTransactionBlockResponse),
-	nextCursor: nullable(string()),
+	nextCursor: nullable(TransactionDigest),
 	hasNextPage: boolean(),
 });
 export type PaginatedTransactionResponse = Infer<typeof PaginatedTransactionResponse>;
@@ -419,7 +422,7 @@ export function getTransaction(tx: SuiTransactionBlockResponse): SuiTransactionB
 	return tx.transaction;
 }
 
-export function getTransactionDigest(tx: SuiTransactionBlockResponse): string {
+export function getTransactionDigest(tx: SuiTransactionBlockResponse): TransactionDigest {
 	return tx.digest;
 }
 
@@ -429,7 +432,7 @@ export function getTransactionSignature(tx: SuiTransactionBlockResponse): string
 
 /* ----------------------------- TransactionData ---------------------------- */
 
-export function getTransactionSender(tx: SuiTransactionBlockResponse): string | undefined {
+export function getTransactionSender(tx: SuiTransactionBlockResponse): SuiAddress | undefined {
 	return tx.transaction?.data.sender;
 }
 

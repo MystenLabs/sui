@@ -11,8 +11,7 @@ use move_command_line_common::{
 use move_compiler::{
     command_line::compiler::move_check_for_errors,
     diagnostics::*,
-    editions::Flavor,
-    shared::{Flags, NumericalAddress, PackageConfig},
+    shared::{Flags, NumericalAddress},
     Compiler, PASS_PARSER,
 };
 
@@ -23,43 +22,25 @@ const TEST_EXT: &str = "unit_test";
 const VERIFICATION_EXT: &str = "verification";
 const UNUSED_EXT: &str = "unused";
 
-const SUI_MODE_DIR: &str = "sui_mode";
+/// Root of tests which require to set flavor flags.
+const FLAVOR_PATH: &str = "flavors/";
 
-fn default_testing_addresses(flavor: Flavor) -> BTreeMap<String, NumericalAddress> {
-    let mut mapping = vec![
+fn default_testing_addresses() -> BTreeMap<String, NumericalAddress> {
+    let mapping = [
         ("std", "0x1"),
-        ("sui", "0x2"),
         ("M", "0x1"),
         ("A", "0x42"),
         ("B", "0x42"),
         ("K", "0x19"),
-        ("a", "0x42"),
-        ("b", "0x42"),
-        ("k", "0x19"),
+        ("Async", "0x20"),
     ];
-    if flavor == Flavor::Sui {
-        mapping.extend([("sui", "0x2"), ("sui_system", "0x3")]);
-    }
     mapping
-        .into_iter()
+        .iter()
         .map(|(name, addr)| (name.to_string(), NumericalAddress::parse_str(addr).unwrap()))
         .collect()
 }
 
 fn move_check_testsuite(path: &Path) -> datatest_stable::Result<()> {
-    let flavor = if path.components().any(|c| c.as_os_str() == SUI_MODE_DIR) {
-        Flavor::Sui
-    } else {
-        Flavor::default()
-    };
-    let config = PackageConfig {
-        flavor,
-        ..PackageConfig::default()
-    };
-    testsuite(path, config)
-}
-
-fn testsuite(path: &Path, mut config: PackageConfig) -> datatest_stable::Result<()> {
     // A test is marked that it should also be compiled in test mode by having a `path.unit_test`
     // file.
     if path.with_extension(TEST_EXT).exists() {
@@ -73,16 +54,12 @@ fn testsuite(path: &Path, mut config: PackageConfig) -> datatest_stable::Result<
             path.with_extension("").to_string_lossy(),
             OUT_EXT
         );
-        let mut config = config.clone();
-        config
-            .warning_filter
-            .union(&WarningFilters::unused_function_warnings_filter());
         run_test(
             path,
             Path::new(&test_exp_path),
             Path::new(&test_out_path),
             Flags::testing(),
-            config,
+            true,
         )?;
     }
 
@@ -99,16 +76,12 @@ fn testsuite(path: &Path, mut config: PackageConfig) -> datatest_stable::Result<
             path.with_extension("").to_string_lossy(),
             OUT_EXT
         );
-        let mut config = config.clone();
-        config
-            .warning_filter
-            .union(&WarningFilters::unused_function_warnings_filter());
         run_test(
             path,
             Path::new(&verification_exp_path),
             Path::new(&verification_out_path),
             Flags::verification(),
-            config,
+            true,
         )?;
     }
 
@@ -129,45 +102,61 @@ fn testsuite(path: &Path, mut config: PackageConfig) -> datatest_stable::Result<
             Path::new(&unused_exp_path),
             Path::new(&unused_out_path),
             Flags::empty(),
-            config.clone(),
+            false,
         )?;
     }
 
     let exp_path = path.with_extension(EXP_EXT);
     let out_path = path.with_extension(OUT_EXT);
 
-    let flags = Flags::empty();
-
-    config
-        .warning_filter
-        .union(&WarningFilters::unused_function_warnings_filter());
-    run_test(path, &exp_path, &out_path, flags, config)?;
+    let mut flags = Flags::empty();
+    match path.to_str() {
+        Some(p) if p.contains(FLAVOR_PATH) => {
+            // Extract the flavor from the path. Its the directory name of the file.
+            let flavor = path
+                .parent()
+                .expect("has parent")
+                .file_name()
+                .expect("has name")
+                .to_string_lossy()
+                .to_string();
+            flags = flags.set_flavor(flavor)
+        }
+        _ => {}
+    };
+    run_test(path, &exp_path, &out_path, flags, true)?;
     Ok(())
 }
 
 // Runs all tests under the test/testsuite directory.
-pub fn run_test(
+fn run_test(
     path: &Path,
     exp_path: &Path,
     out_path: &Path,
     flags: Flags,
-    default_config: PackageConfig,
+    suppress_unused: bool,
 ) -> anyhow::Result<()> {
     let targets: Vec<String> = vec![path.to_str().unwrap().to_owned()];
+
+    let warning_filter = if suppress_unused {
+        Some(WarningFilters::unused_function_warnings_filter())
+    } else {
+        None
+    };
 
     let (files, comments_and_compiler_res) = Compiler::from_files(
         targets,
         move_stdlib::move_stdlib_files(),
-        default_testing_addresses(default_config.flavor),
+        default_testing_addresses(),
     )
     .set_flags(flags)
-    .set_default_config(default_config)
+    .set_warning_filter(warning_filter)
     .run::<PASS_PARSER>()?;
     let diags = move_check_for_errors(comments_and_compiler_res);
 
     let has_diags = !diags.is_empty();
     let diag_buffer = if has_diags {
-        report_diagnostics_to_buffer(&files, diags)
+        move_compiler::diagnostics::report_diagnostics_to_buffer(&files, diags)
     } else {
         vec![]
     };
@@ -221,4 +210,4 @@ pub fn run_test(
     }
 }
 
-datatest_stable::harness!(move_check_testsuite, "tests/", r".*\.move$");
+datatest_stable::harness!(move_check_testsuite, "tests/move_check", r".*\.move$");

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { TransactionBlock, TransactionArgument } from '@mysten/sui.js/transactions';
+import { SuiAddress, TransactionArgument, TransactionBlock } from '@mysten/sui.js';
 
 import { getTypeWithoutPackageAddress, objArg } from '../utils';
 import { confirmRequest, resolveKioskLockRule, resolveRoyaltyRule } from './transfer-policy';
@@ -96,7 +96,7 @@ export function take(
 	itemType: string,
 	kiosk: ObjectArgument,
 	kioskCap: ObjectArgument,
-	itemId: string,
+	itemId: SuiAddress,
 ): TransactionArgument {
 	let [item] = tx.moveCall({
 		target: `${KIOSK_MODULE}::take`,
@@ -116,7 +116,7 @@ export function list(
 	itemType: string,
 	kiosk: ObjectArgument,
 	kioskCap: ObjectArgument,
-	itemId: string,
+	itemId: SuiAddress,
 	price: string | bigint,
 ): void {
 	tx.moveCall({
@@ -140,7 +140,7 @@ export function delist(
 	itemType: string,
 	kiosk: ObjectArgument,
 	kioskCap: ObjectArgument,
-	itemId: string,
+	itemId: SuiAddress,
 ): void {
 	tx.moveCall({
 		target: `${KIOSK_MODULE}::delist`,
@@ -176,7 +176,7 @@ export function purchase(
 	tx: TransactionBlock,
 	itemType: string,
 	kiosk: ObjectArgument,
-	itemId: string,
+	itemId: SuiAddress,
 	payment: ObjectArgument,
 ): [TransactionArgument, TransactionArgument] {
 	let [item, transferRequest] = tx.moveCall({
@@ -225,7 +225,7 @@ export function borrow(
 	itemType: string,
 	kiosk: ObjectArgument,
 	kioskCap: ObjectArgument,
-	itemId: string,
+	itemId: SuiAddress,
 ): TransactionArgument {
 	let [item] = tx.moveCall({
 		target: `${KIOSK_MODULE}::borrow`,
@@ -245,7 +245,7 @@ export function borrowMut(
 	itemType: string,
 	kiosk: ObjectArgument,
 	kioskCap: ObjectArgument,
-	itemId: string,
+	itemId: SuiAddress,
 ): TransactionArgument {
 	let [item] = tx.moveCall({
 		target: `${KIOSK_MODULE}::borrow_mut`,
@@ -267,7 +267,7 @@ export function borrowValue(
 	itemType: string,
 	kiosk: ObjectArgument,
 	kioskCap: ObjectArgument,
-	itemId: string,
+	itemId: SuiAddress,
 ): [TransactionArgument, TransactionArgument] {
 	let [item, promise] = tx.moveCall({
 		target: `${KIOSK_MODULE}::borrow_val`,
@@ -310,7 +310,7 @@ export function purchaseAndResolvePolicies(
 	itemType: string,
 	price: string,
 	kiosk: ObjectArgument,
-	itemId: string,
+	itemId: SuiAddress,
 	policy: TransferPolicy,
 	environment: RulesEnvironmentParam,
 	extraParams?: PurchaseOptionalParams,

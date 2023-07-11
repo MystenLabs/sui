@@ -6,14 +6,14 @@ import { useMemo } from 'react';
 
 import { getAmount } from '_helpers';
 
-import type { SuiTransactionBlockResponse } from '@mysten/sui.js/client';
+import type { SuiTransactionBlockResponse, SuiAddress } from '@mysten/sui.js';
 
 export function useGetTransferAmount({
 	txn,
 	activeAddress,
 }: {
 	txn: SuiTransactionBlockResponse;
-	activeAddress: string;
+	activeAddress: SuiAddress;
 }) {
 	const { effects, events } = txn;
 	// const { coins } = getEventsSummary(events!, activeAddress);

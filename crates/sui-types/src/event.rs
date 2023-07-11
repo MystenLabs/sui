@@ -140,20 +140,3 @@ impl Event {
         })
     }
 }
-
-impl Event {
-    pub fn random_for_testing() -> Self {
-        Self {
-            package_id: ObjectID::random(),
-            transaction_module: Identifier::new("test").unwrap(),
-            sender: AccountAddress::random().into(),
-            type_: StructTag {
-                address: AccountAddress::random(),
-                module: Identifier::new("test").unwrap(),
-                name: Identifier::new("test").unwrap(),
-                type_params: vec![],
-            },
-            contents: vec![],
-        }
-    }
-}

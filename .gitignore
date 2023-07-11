@@ -48,7 +48,6 @@ next-env.d.ts
 
 # App test artifacts
 coverage/
-test-results/
 playwright-report/
 playwright/.cache/
 

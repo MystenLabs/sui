@@ -3,12 +3,13 @@
 
 import { isBasePayload } from '_payloads';
 
+import type { SuiAddress } from '@mysten/sui.js';
 import type { BasePayload, Payload } from '_payloads';
 
 export interface PermissionResponse extends BasePayload {
 	type: 'permission-response';
 	id: string;
-	accounts: string[];
+	accounts: SuiAddress[];
 	allowed: boolean;
 	responseDate: string;
 }

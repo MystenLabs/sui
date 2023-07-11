@@ -12,7 +12,9 @@ import { useSuiLedgerClient } from '../components/ledger/SuiLedgerClientProvider
 import { thunkExtras } from '_redux/store/thunk-extras';
 import { AccountType } from '_src/background/keyring/Account';
 
-export function useSigner(address?: string): WalletSigner | null {
+import type { SuiAddress } from '@mysten/sui.js';
+
+export function useSigner(address?: SuiAddress): WalletSigner | null {
 	const activeAccount = useActiveAccount();
 	const existingAccounts = useAccounts();
 	const signerAccount = address

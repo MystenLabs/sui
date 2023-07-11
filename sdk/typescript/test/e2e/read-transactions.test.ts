@@ -2,8 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll, vi, afterEach } from 'vitest';
-import { getTransactionDigest, getTransactionKind, SuiTransactionBlockResponse } from '../../src';
-import { TransactionBlock } from '../../src/builder';
+import {
+	getTransactionDigest,
+	getTransactionKind,
+	SuiTransactionBlockResponse,
+	TransactionBlock,
+} from '../../src';
 import { executePaySuiNTimes, setup, TestToolbox } from './utils/setup';
 
 describe('Transaction Reading API', () => {
@@ -13,11 +17,11 @@ describe('Transaction Reading API', () => {
 
 	beforeAll(async () => {
 		toolbox = await setup();
-		transactions = await executePaySuiNTimes(toolbox.client, toolbox.keypair, NUM_TRANSACTIONS);
+		transactions = await executePaySuiNTimes(toolbox.signer, NUM_TRANSACTIONS);
 	});
 
 	it('Get Total Transactions', async () => {
-		const numTransactions = await toolbox.client.getTotalTransactionBlocks();
+		const numTransactions = await toolbox.provider.getTotalTransactionBlocks();
 		expect(numTransactions).toBeGreaterThan(0);
 	});
 
@@ -26,8 +30,7 @@ describe('Transaction Reading API', () => {
 			const tx = new TransactionBlock();
 			const [coin] = tx.splitCoins(tx.gas, [tx.pure(1)]);
 			tx.transferObjects([coin], tx.pure(toolbox.address()));
-			return toolbox.client.signAndExecuteTransactionBlock({
-				signer: toolbox.keypair,
+			return toolbox.signer.signAndExecuteTransactionBlock({
 				transactionBlock: tx,
 				requestType: 'WaitForEffectsCert',
 			});
@@ -41,15 +44,15 @@ describe('Transaction Reading API', () => {
 			const { digest } = await setupTransaction();
 
 			// Should succeed using wait
-			const waited = await toolbox.client.waitForTransactionBlock({ digest });
+			const waited = await toolbox.provider.waitForTransactionBlock({ digest });
 			expect(waited.digest).toEqual(digest);
 		});
 
 		it('abort signal doesnt throw after transaction is received', async () => {
 			const { digest } = await setupTransaction();
 
-			const waited = await toolbox.client.waitForTransactionBlock({ digest });
-			const secondWait = await toolbox.client.waitForTransactionBlock({ digest, timeout: 2000 });
+			const waited = await toolbox.provider.waitForTransactionBlock({ digest });
+			const secondWait = await toolbox.provider.waitForTransactionBlock({ digest, timeout: 2000 });
 			// wait for timeout to expire incase it causes an unhandled rejection
 			await new Promise((resolve) => setTimeout(resolve, 2100));
 			expect(waited.digest).toEqual(digest);
@@ -63,7 +66,7 @@ describe('Transaction Reading API', () => {
 			abortController.abort();
 
 			await expect(
-				toolbox.client.waitForTransactionBlock({
+				toolbox.provider.waitForTransactionBlock({
 					digest,
 					signal: abortController.signal,
 				}),
@@ -72,11 +75,11 @@ describe('Transaction Reading API', () => {
 
 		it('times out when provided an invalid digest', async () => {
 			const spy = vi
-				.spyOn(toolbox.client, 'getTransactionBlock')
+				.spyOn(toolbox.provider, 'getTransactionBlock')
 				.mockImplementation(() => Promise.reject());
 
 			await expect(
-				toolbox.client.waitForTransactionBlock({
+				toolbox.provider.waitForTransactionBlock({
 					digest: 'foobar',
 					pollInterval: 10,
 					timeout: 55,
@@ -90,13 +93,13 @@ describe('Transaction Reading API', () => {
 
 	it('Get Transaction', async () => {
 		const digest = transactions[0].digest;
-		const txn = await toolbox.client.getTransactionBlock({ digest });
+		const txn = await toolbox.provider.getTransactionBlock({ digest });
 		expect(getTransactionDigest(txn)).toEqual(digest);
 	});
 
 	it('Multi Get Pay Transactions', async () => {
 		const digests = transactions.map((t) => t.digest);
-		const txns = await toolbox.client.multiGetTransactionBlocks({
+		const txns = await toolbox.provider.multiGetTransactionBlocks({
 			digests,
 			options: { showBalanceChanges: true },
 		});
@@ -114,12 +117,12 @@ describe('Transaction Reading API', () => {
 			showObjectChanges: true,
 			showBalanceChanges: true,
 		};
-		const resp = await toolbox.client.queryTransactionBlocks({
+		const resp = await toolbox.provider.queryTransactionBlocks({
 			options,
 			limit: 1,
 		});
 		const digest = resp.data[0].digest;
-		const response2 = await toolbox.client.getTransactionBlock({
+		const response2 = await toolbox.provider.getTransactionBlock({
 			digest,
 			options,
 		});
@@ -127,18 +130,18 @@ describe('Transaction Reading API', () => {
 	});
 
 	it('Get Transactions', async () => {
-		const allTransactions = await toolbox.client.queryTransactionBlocks({
+		const allTransactions = await toolbox.provider.queryTransactionBlocks({
 			limit: 10,
 		});
 		expect(allTransactions.data.length).to.greaterThan(0);
 	});
 
 	it('Genesis exists', async () => {
-		const allTransactions = await toolbox.client.queryTransactionBlocks({
+		const allTransactions = await toolbox.provider.queryTransactionBlocks({
 			limit: 1,
 			order: 'ascending',
 		});
-		const resp = await toolbox.client.getTransactionBlock({
+		const resp = await toolbox.provider.getTransactionBlock({
 			digest: allTransactions.data[0].digest,
 			options: { showInput: true },
 		});

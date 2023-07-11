@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 import {
 	DryRunTransactionBlockResponse,
+	type SuiAddress,
 	type SuiTransactionBlockResponse,
+	is,
 	getExecutionStatusType,
 	getTransactionDigest,
 	getTransactionSender,
@@ -22,11 +24,9 @@ import { getObjectDisplayLookup } from '../utils/transaction/getObjectDisplayLoo
 export function useTransactionSummary({
 	transaction,
 	currentAddress,
-	recognizedPackagesList,
 }: {
 	transaction?: SuiTransactionBlockResponse | DryRunTransactionBlockResponse;
-	currentAddress?: string;
-	recognizedPackagesList: string[];
+	currentAddress?: SuiAddress;
 }) {
 	const { objectChanges } = transaction ?? {};
 
@@ -49,11 +49,16 @@ export function useTransactionSummary({
 	const summary = useMemo(() => {
 		if (!transaction) return null;
 		const objectSummary = getObjectChangeSummary(objectChangesWithDisplay);
-		const balanceChangeSummary = getBalanceChangeSummary(transaction, recognizedPackagesList);
+		const balanceChangeSummary = getBalanceChangeSummary(transaction);
 		const gas = getGasSummary(transaction);
 
-		if ('digest' in transaction) {
-			// Non-dry-run transaction:
+		if (is(transaction, DryRunTransactionBlockResponse)) {
+			return {
+				gas,
+				objectSummary,
+				balanceChanges: balanceChangeSummary,
+			};
+		} else {
 			return {
 				gas,
 				sender: getTransactionSender(transaction),
@@ -64,15 +69,8 @@ export function useTransactionSummary({
 				status: getExecutionStatusType(transaction),
 				timestamp: transaction.timestampMs,
 			};
-		} else {
-			// Dry run transaction:
-			return {
-				gas,
-				objectSummary,
-				balanceChanges: balanceChangeSummary,
-			};
 		}
-	}, [transaction, objectChangesWithDisplay, recognizedPackagesList, currentAddress]);
+	}, [transaction, currentAddress, objectChangesWithDisplay]);
 
 	return summary;
 }

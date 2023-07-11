@@ -369,12 +369,12 @@ struct ProcessCertificateState {
 
 #[derive(Debug)]
 pub enum ProcessTransactionResult {
-    Certified(CertifiedTransaction),
+    Certified(VerifiedCertificate),
     Executed(VerifiedCertifiedTransactionEffects, TransactionEvents),
 }
 
 impl ProcessTransactionResult {
-    pub fn into_cert_for_testing(self) -> CertifiedTransaction {
+    pub fn into_cert_for_testing(self) -> VerifiedCertificate {
         match self {
             Self::Certified(cert) => cert,
             Self::Executed(..) => panic!("Wrong type"),
@@ -1409,8 +1409,9 @@ where
                 let ct_bytes = bcs::to_bytes(&ct).expect("to_bytes should never fail");
                 let ct_digest = ct.digest();
                 debug!(?ct, ?ct_bytes, ?ct_digest, "Collected tx certificate");
-                ct.verify_committee_sigs_only(&self.committee)?;
-                Ok(Some(ProcessTransactionResult::Certified(ct)))
+                Ok(Some(ProcessTransactionResult::Certified(
+                    ct.verify(&self.committee)?,
+                )))
             }
         }
     }
@@ -1418,7 +1419,7 @@ where
     fn handle_transaction_response_with_executed(
         &self,
         state: &mut ProcessTransactionState,
-        certificate: Option<CertifiedTransaction>,
+        certificate: Option<VerifiedCertificate>,
         plain_tx_effects: SignedTransactionEffects,
         events: TransactionEvents,
     ) -> SuiResult<Option<ProcessTransactionResult>> {
@@ -1796,7 +1797,7 @@ where
 
         let _cert_guard = GaugeGuard::acquire(&self.metrics.inflight_certificates);
         let response = self
-            .process_certificate(cert.clone())
+            .process_certificate(cert.clone().into())
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
 

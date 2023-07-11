@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiClient } from '@mysten/sui.js/client';
+import { JsonRpcProvider } from '@mysten/sui.js';
 import { bcs } from '../bcs';
 import { TRANSFER_POLICY_CREATED_EVENT, TRANSFER_POLICY_TYPE, TransferPolicy } from '../types';
 
@@ -15,18 +15,18 @@ import { TRANSFER_POLICY_CREATED_EVENT, TRANSFER_POLICY_TYPE, TransferPolicy } f
  * @param type
  */
 export async function queryTransferPolicy(
-	client: SuiClient,
+	provider: JsonRpcProvider,
 	type: string,
 ): Promise<TransferPolicy[]> {
 	// console.log('event type: %s', `${TRANSFER_POLICY_CREATED_EVENT}<${type}>`);
-	const { data } = await client.queryEvents({
+	const { data } = await provider.queryEvents({
 		query: {
 			MoveEventType: `${TRANSFER_POLICY_CREATED_EVENT}<${type}>`,
 		},
 	});
 
 	const search = data.map((event) => event.parsedJson as { id: string });
-	const policies = await client.multiGetObjects({
+	const policies = await provider.multiGetObjects({
 		ids: search.map((policy) => policy.id),
 		options: { showBcs: true, showOwner: true },
 	});

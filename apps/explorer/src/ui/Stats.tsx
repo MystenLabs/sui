@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Heading, Text } from '@mysten/ui';
 import clsx from 'clsx';
 
 import { ReactComponent as InfoSvg } from './icons/info_10x10.svg';
+import { Heading } from '~/ui/Heading';
+import { Text } from '~/ui/Text';
 import { Tooltip } from '~/ui/Tooltip';
 import { ampli } from '~/utils/analytics/ampli';
 
@@ -18,7 +19,6 @@ export type StatsProps = {
 	unavailable?: boolean;
 	postfix?: ReactNode;
 	orientation?: 'horizontal' | 'vertical';
-	color?: 'steel-darker' | 'hero';
 };
 
 export function Stats({
@@ -29,7 +29,6 @@ export function Stats({
 	postfix,
 	size = 'md',
 	orientation = 'vertical',
-	color = 'steel-darker',
 }: StatsProps) {
 	return (
 		<div
@@ -38,10 +37,12 @@ export function Stats({
 				orientation === 'horizontal' ? '' : 'flex-col',
 			)}
 		>
-			<div className="flex items-center justify-start gap-1 overflow-hidden text-caption">
-				<Text variant="caption/semibold" color={color} truncate>
-					{label}
-				</Text>
+			<div className="flex items-center justify-start gap-1 text-caption text-steel-dark hover:text-steel">
+				<div className="flex-shrink-0">
+					<Text variant="caption/semibold" color="steel-dark">
+						{label}
+					</Text>
+				</div>
 				{tooltip && (
 					<Tooltip
 						tip={unavailable ? 'Coming soon' : tooltip}
@@ -55,17 +56,14 @@ export function Stats({
 			</div>
 			<div className="flex items-baseline gap-0.5">
 				<Heading
-					variant={size === 'md' ? 'heading3/semibold' : 'heading6/semibold'}
-					color={unavailable ? 'steel-darker' : color}
+					variant={size === 'md' ? 'heading2/semibold' : 'heading3/semibold'}
+					color={unavailable ? 'steel-dark' : 'steel-darker'}
 				>
 					{unavailable || children == null ? '--' : children}
 				</Heading>
 
 				{postfix && (
-					<Heading
-						variant={size === 'md' ? 'heading3/semibold' : 'heading6/semibold'}
-						color={unavailable ? 'steel-darker' : color}
-					>
+					<Heading variant="heading4/medium" color={unavailable ? 'steel-dark' : 'steel-darker'}>
 						{postfix}
 					</Heading>
 				)}

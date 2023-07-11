@@ -191,7 +191,7 @@ where
                 tx_data = Some(data);
             }
             Ok(PlainTransactionInfoResponse::ExecutedWithCert(cert, _, _)) => {
-                return cert;
+                return cert.into_inner();
             }
             _ => {}
         }
@@ -283,7 +283,7 @@ async fn execute_transaction_with_fault_configs(
     }
 
     authorities
-        .process_certificate(cert.into_cert_for_testing())
+        .process_certificate(cert.into_cert_for_testing().into())
         .await
         .is_ok()
 }
@@ -345,7 +345,9 @@ async fn test_quorum_map_and_reduce_timeout() {
     // Send request with a very small timeout to trigger timeout error
     authorities.timeouts.pre_quorum_timeout = Duration::from_nanos(0);
     authorities.timeouts.post_quorum_timeout = Duration::from_nanos(0);
-    let certified_effects = authorities.process_certificate(certificate.clone()).await;
+    let certified_effects = authorities
+        .process_certificate(certificate.clone().into())
+        .await;
     // Ensure it is an error
     assert!(certified_effects.is_err());
     assert!(matches!(
@@ -741,7 +743,7 @@ async fn test_handle_transaction_panic() {
     set_tx_info_response_with_cert_and_effects(
         &mut clients,
         authority_keys.iter(),
-        Some(&cert_epoch_0),
+        Some(cert_epoch_0.inner()),
         effects,
         1,
     );
@@ -758,7 +760,7 @@ async fn test_handle_transaction_panic() {
     set_tx_info_response_with_cert_and_effects(
         &mut clients,
         authority_keys.iter().skip(2),
-        Some(&cert_epoch_0),
+        Some(cert_epoch_0.inner()),
         TransactionEffects::V1(effects),
         1,
     );
@@ -918,7 +920,7 @@ async fn test_handle_transaction_response() {
     set_tx_info_response_with_cert_and_effects(
         &mut clients,
         authority_keys.iter(),
-        Some(&cert_epoch_0),
+        Some(cert_epoch_0.inner()),
         effects.clone(),
         0,
     );
@@ -934,7 +936,7 @@ async fn test_handle_transaction_response() {
     set_tx_info_response_with_cert_and_effects(
         &mut clients,
         authority_keys.iter(),
-        Some(&cert_epoch_0),
+        Some(cert_epoch_0.inner()),
         effects,
         1,
     );
@@ -957,7 +959,7 @@ async fn test_handle_transaction_response() {
     set_tx_info_response_with_cert_and_effects(
         &mut clients,
         authority_keys.iter().skip(3),
-        Some(&cert_epoch_0),
+        Some(cert_epoch_0.inner()),
         TransactionEffects::V1(effects),
         1,
     );
@@ -1159,7 +1161,7 @@ async fn test_handle_transaction_response() {
     set_tx_info_response_with_cert_and_effects(
         &mut clients,
         authority_keys.iter(),
-        Some(&cert_epoch_1),
+        Some(cert_epoch_1.inner()),
         effects,
         1,
     );

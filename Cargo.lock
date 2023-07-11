@@ -5082,7 +5082,6 @@ dependencies = [
  "once_cell",
  "petgraph 0.5.1",
  "regex",
- "serde",
  "sha3 0.9.1",
  "tempfile",
  "walkdir",
@@ -5137,7 +5136,6 @@ dependencies = [
  "anyhow",
  "clap 3.2.23",
  "colored",
- "hex",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-verifier",
@@ -5488,7 +5486,6 @@ name = "move-symbol-pool"
 version = "0.1.0"
 dependencies = [
  "once_cell",
- "phf",
  "serde",
 ]
 
@@ -5876,6 +5873,7 @@ dependencies = [
  "mysten-metrics",
  "narwhal-config",
  "narwhal-crypto",
+ "narwhal-dag",
  "narwhal-node",
  "narwhal-storage",
  "narwhal-test-utils",
@@ -5908,6 +5906,38 @@ dependencies = [
  "serde-reflection",
  "serde_json",
  "shared-crypto",
+ "workspace-hack",
+]
+
+[[package]]
+name = "narwhal-dag"
+version = "0.1.0"
+dependencies = [
+ "arc-swap",
+ "dashmap",
+ "either",
+ "fastcrypto",
+ "itertools",
+ "narwhal-crypto",
+ "once_cell",
+ "proptest",
+ "proptest-derive",
+ "rayon",
+ "thiserror",
+ "workspace-hack",
+]
+
+[[package]]
+name = "narwhal-examples"
+version = "0.1.0"
+dependencies = [
+ "base64 0.13.1",
+ "clap 2.34.0",
+ "prost",
+ "protobuf-src",
+ "tokio",
+ "tonic",
+ "tonic-build",
  "workspace-hack",
 ]
 
@@ -6162,6 +6192,7 @@ dependencies = [
  "mysten-util-mem",
  "narwhal-config",
  "narwhal-crypto",
+ "narwhal-dag",
  "narwhal-test-utils",
  "once_cell",
  "prometheus",
@@ -6936,7 +6967,6 @@ version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "928c6535de93548188ef63bb7c4036bd415cd8f36ad25af44b9789b2ee72a48c"
 dependencies = [
- "phf_macros",
  "phf_shared",
 ]
 
@@ -6958,19 +6988,6 @@ checksum = "b1181c94580fa345f50f19d738aaa39c0ed30a600d95cb2d3e23f94266f14fbf"
 dependencies = [
  "phf_shared",
  "rand 0.8.5",
-]
-
-[[package]]
-name = "phf_macros"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92aacdc5f16768709a569e913f7451034034178b05bdc8acda226659a3dccc66"
-dependencies = [
- "phf_generator",
- "phf_shared",
- "proc-macro2 1.0.58",
- "quote 1.0.26",
- "syn 1.0.107",
 ]
 
 [[package]]
@@ -9100,7 +9117,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "1.7.0"
+version = "1.6.0"
 dependencies = [
  "anemo",
  "anyhow",
@@ -9422,7 +9439,6 @@ dependencies = [
  "fastcrypto-zkp",
  "fs_extra",
  "futures",
- "im",
  "itertools",
  "lru",
  "more-asserts",
@@ -9450,7 +9466,6 @@ dependencies = [
  "pretty_assertions",
  "prometheus",
  "rand 0.8.5",
- "reqwest",
  "rocksdb",
  "scopeguard",
  "serde",
@@ -9611,7 +9626,7 @@ dependencies = [
 
 [[package]]
 name = "sui-faucet"
-version = "1.7.0"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -9740,7 +9755,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer"
-version = "1.7.0"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9778,7 +9793,6 @@ dependencies = [
  "sui-sdk",
  "sui-test-transaction-builder",
  "sui-types",
- "tap",
  "telemetry-subscribers",
  "test-cluster",
  "thiserror",
@@ -9837,47 +9851,14 @@ dependencies = [
  "num_cpus",
  "once_cell",
  "prometheus",
+ "rand 0.8.5",
+ "reqwest",
  "serde",
  "shared-crypto",
  "signature 1.6.4",
- "sui-core",
- "sui-json",
- "sui-json-rpc-types",
- "sui-open-rpc",
- "sui-open-rpc-macros",
- "sui-protocol-config",
- "sui-storage",
- "sui-swarm-config",
- "sui-transaction-builder",
- "sui-types",
- "tap",
- "thiserror",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "typed-store",
- "workspace-hack",
-]
-
-[[package]]
-name = "sui-json-rpc-tests"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "bcs",
- "hyper",
- "jsonrpsee",
- "jsonrpsee-proc-macros",
- "move-package",
- "prometheus",
- "rand 0.8.5",
- "reqwest",
  "sui-config",
  "sui-core",
  "sui-json",
- "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-keys",
  "sui-macros",
@@ -9887,12 +9868,19 @@ dependencies = [
  "sui-protocol-config",
  "sui-sdk",
  "sui-simulator",
+ "sui-storage",
  "sui-swarm-config",
  "sui-test-transaction-builder",
+ "sui-transaction-builder",
  "sui-types",
+ "tap",
  "test-cluster",
+ "thiserror",
  "tokio",
+ "tower",
+ "tower-http",
  "tracing",
+ "typed-store",
  "workspace-hack",
 ]
 
@@ -9909,7 +9897,6 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
- "mysten-metrics",
  "schemars",
  "serde",
  "serde_json",
@@ -9977,7 +9964,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move"
-version = "1.7.0"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -10121,7 +10108,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "1.7.0"
+version = "1.6.0"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -10150,7 +10137,6 @@ dependencies = [
  "sui-network",
  "sui-protocol-config",
  "sui-simulator",
- "sui-snapshot",
  "sui-storage",
  "sui-telemetry",
  "sui-tls",
@@ -10166,7 +10152,7 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc"
-version = "1.7.0"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -10178,6 +10164,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+ "sui",
  "sui-core",
  "sui-json",
  "sui-json-rpc",
@@ -10204,7 +10191,7 @@ dependencies = [
 
 [[package]]
 name = "sui-oracle"
-version = "1.7.0"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -10405,7 +10392,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-loadgen"
-version = "1.7.0"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -10454,7 +10441,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "1.7.0"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -10472,6 +10459,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "shared-crypto",
+ "sui",
  "sui-config",
  "sui-json",
  "sui-json-rpc",
@@ -10481,6 +10469,7 @@ dependencies = [
  "sui-transaction-builder",
  "sui-types",
  "tempfile",
+ "test-cluster",
  "thiserror",
  "tokio",
  "tracing",
@@ -10552,6 +10541,7 @@ dependencies = [
  "move-package",
  "move-symbol-pool",
  "rand 0.8.5",
+ "sui",
  "sui-json-rpc-types",
  "sui-move-build",
  "sui-sdk",
@@ -10582,6 +10572,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "sui-config",
  "sui-move",
  "sui-move-build",
  "sui-sdk",
@@ -10631,7 +10622,6 @@ dependencies = [
  "serde",
  "sui-json-rpc-types",
  "sui-protocol-config",
- "sui-test-transaction-builder",
  "sui-types",
  "tap",
  "tempfile",
@@ -10646,7 +10636,7 @@ dependencies = [
 
 [[package]]
 name = "sui-surfer"
-version = "1.7.0"
+version = "1.6.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -10804,7 +10794,7 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "1.7.0"
+version = "1.6.0"
 dependencies = [
  "anemo",
  "anemo-cli",
@@ -10924,7 +10914,6 @@ dependencies = [
  "eyre",
  "fastcrypto",
  "fastcrypto-zkp",
- "im",
  "indexmap",
  "itertools",
  "move-binary-format",
@@ -11262,6 +11251,7 @@ dependencies = [
  "rand 0.8.5",
  "serde_json",
  "shared-crypto",
+ "sui",
  "sui-config",
  "sui-core",
  "sui-framework",
@@ -12829,7 +12819,6 @@ dependencies = [
  "bumpalo",
  "byte-slice-cast",
  "bytecode-interpreter-crypto",
- "bytecount",
  "bytemuck",
  "byteorder",
  "bytes",
@@ -13082,7 +13071,6 @@ dependencies = [
  "jemalloc-sys",
  "jobserver",
  "js-sys",
- "json_to_table",
  "jsonpath_lib",
  "jsonrpsee",
  "jsonrpsee-client-transport",
@@ -13224,7 +13212,6 @@ dependencies = [
  "overload",
  "owo-colors",
  "p256",
- "papergrid",
  "parity-scale-codec",
  "parity-scale-codec-derive",
  "parking",
@@ -13250,7 +13237,6 @@ dependencies = [
  "phf",
  "phf_codegen",
  "phf_generator",
- "phf_macros",
  "phf_shared",
  "pin-project",
  "pin-project-internal",
@@ -13449,8 +13435,6 @@ dependencies = [
  "sync_wrapper",
  "synstructure",
  "sysinfo",
- "tabled",
- "tabled_derive",
  "tabular",
  "tap",
  "target-lexicon",

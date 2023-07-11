@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SignedTransaction, SuiTransactionBlockResponse } from '@mysten/sui.js';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { SignedTransaction, SuiTransactionBlockResponse, TransactionBlock } from '@mysten/sui.js';
 import { ConnectButton, useWalletKit } from '@mysten/wallet-kit';
 import { ComponentProps, ReactNode, useMemo, useState } from 'react';
 import { provider } from './utils/rpc';

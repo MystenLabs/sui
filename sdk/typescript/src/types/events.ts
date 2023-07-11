@@ -4,10 +4,11 @@
 import type { Infer } from 'superstruct';
 import { object, string, array, record, any, optional, boolean, nullable } from 'superstruct';
 import type { SuiJsonValue } from './common.js';
+import { ObjectId, SuiAddress, TransactionDigest, SequenceNumber } from './common.js';
 
 export const EventId = object({
-	txDigest: string(),
-	eventSeq: string(),
+	txDigest: TransactionDigest,
+	eventSeq: SequenceNumber,
 });
 
 // event types mirror those in "sui-json-rpc-types/src/sui_event.rs"
@@ -15,11 +16,11 @@ export const EventId = object({
 export const SuiEvent = object({
 	id: EventId,
 	// Move package where this event was emitted.
-	packageId: string(),
+	packageId: ObjectId,
 	// Move module where this event was emitted.
 	transactionModule: string(),
 	// Sender's Sui address.
-	sender: string(),
+	sender: SuiAddress,
 	// Move event type.
 	type: string(),
 	// Parsed json value of the event
@@ -47,11 +48,11 @@ export type EventId = Infer<typeof EventId>;
 
 // mirrors sui_json_rpc_types::SuiEventFilter
 export type SuiEventFilter =
-	| { Package: string }
-	| { MoveModule: { package: string; module: string } }
+	| { Package: ObjectId }
+	| { MoveModule: { package: ObjectId; module: string } }
 	| { MoveEventType: string }
 	| { MoveEventField: MoveEventField }
-	| { Transaction: string }
+	| { Transaction: TransactionDigest }
 	| {
 			TimeRange: {
 				// left endpoint of time interval, milliseconds since epoch, inclusive
@@ -60,7 +61,7 @@ export type SuiEventFilter =
 				endTime: string;
 			};
 	  }
-	| { Sender: string }
+	| { Sender: SuiAddress }
 	| { All: SuiEventFilter[] }
 	| { Any: SuiEventFilter[] }
 	| { And: [SuiEventFilter, SuiEventFilter] }
@@ -75,10 +76,10 @@ export type PaginatedEvents = Infer<typeof PaginatedEvents>;
 
 /* ------------------------------- EventData ------------------------------ */
 
-export function getEventSender(event: SuiEvent): string {
+export function getEventSender(event: SuiEvent): SuiAddress {
 	return event.sender;
 }
 
-export function getEventPackage(event: SuiEvent): string {
+export function getEventPackage(event: SuiEvent): ObjectId {
 	return event.packageId;
 }

@@ -1,9 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Connection, RawSigner, localnetConnection } from '@mysten/sui.js';
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { SuiClient } from '@mysten/sui.js/client';
+import {
+	Ed25519Keypair,
+	JsonRpcProvider,
+	RawSigner,
+	Connection,
+	localnetConnection,
+} from '@mysten/sui.js';
 import { WalletAdapter, WalletAdapterEvents } from '@mysten/wallet-adapter-base';
 import { ReadonlyWalletAccount } from '@mysten/wallet-standard';
 
@@ -15,23 +19,21 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
 	connecting: boolean;
 	connected: boolean;
 
-	#client: SuiClient;
+	#provider: JsonRpcProvider;
 	#keypair: Ed25519Keypair;
 	#signer: RawSigner;
 	#account: ReadonlyWalletAccount;
 
 	constructor(network: Connection = localnetConnection) {
 		this.#keypair = new Ed25519Keypair();
-		this.#client = new SuiClient({
-			url: network.fullnode,
-		});
+		this.#provider = new JsonRpcProvider(network);
 		this.#account = new ReadonlyWalletAccount({
 			address: this.#keypair.getPublicKey().toSuiAddress(),
 			chains: ['sui:unknown'],
 			features: ['sui:signAndExecuteTransactionBlock', 'sui:signTransactionBlock'],
 			publicKey: this.#keypair.getPublicKey().toBytes(),
 		});
-		this.#signer = new RawSigner(this.#keypair, this.#client);
+		this.#signer = new RawSigner(this.#keypair, this.#provider);
 		this.connecting = false;
 		this.connected = false;
 

@@ -12,6 +12,7 @@ import { type Account } from './keyring/Account';
 import { ALL_PERMISSION_TYPES, isValidPermissionTypes } from '_payloads/permissions';
 
 import type { ContentScriptConnection } from './connections/ContentScriptConnection';
+import type { SuiAddress } from '@mysten/sui.js';
 import type { Permission, PermissionResponse, PermissionType } from '_payloads/permissions';
 import type { Observable } from 'rxjs';
 
@@ -22,7 +23,7 @@ const PERMISSION_UI_URL_REGEX = new RegExp(`${PERMISSION_UI_URL}([0-9a-f-]+$)`, 
 type PermissionEvents = {
 	connectedAccountsChanged: {
 		origin: string;
-		accounts: string[];
+		accounts: SuiAddress[];
 	};
 };
 
@@ -194,7 +195,7 @@ class Permissions {
 		origin: string,
 		permissionTypes: readonly PermissionType[],
 		permission?: Permission | null,
-		address?: string,
+		address?: SuiAddress,
 	): Promise<boolean> {
 		const existingPermission = await this.getPermission(origin, permission);
 		return Boolean(
@@ -207,7 +208,7 @@ class Permissions {
 		);
 	}
 
-	public async delete(origin: string, specificAccounts: string[] = []) {
+	public async delete(origin: string, specificAccounts: SuiAddress[] = []) {
 		const allPermissions = await this.getPermissions();
 		const thePermission = allPermissions[origin];
 		if (thePermission) {

@@ -2,16 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeatureValue } from '@growthbook/growthbook-react';
-import {
-	KioskTypes,
-	ORIGINBYTE_KIOSK_OWNER_TOKEN,
-	getKioskIdFromOwnerCap,
-	useGetKioskContents,
-	useGetObject,
-	useRpcClient,
-} from '@mysten/core';
-import { take } from '@mysten/kiosk';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { ORIGINBYTE_KIOSK_OWNER_TOKEN, useGetOwnedObjects, useRpcClient } from '@mysten/core';
+import { type SuiAddress, TransactionBlock } from '@mysten/sui.js';
 import { useMutation } from '@tanstack/react-query';
 
 import { useActiveAddress, useSigner } from '_src/ui/app/hooks';
@@ -29,78 +21,78 @@ export function useTransferKioskItem({
 	const signer = useSigner();
 	const address = useActiveAddress();
 	const obPackageId = useFeatureValue('kiosk-originbyte-packageid', ORIGINBYTE_PACKAGE_ID);
-	const { data: kioskData } = useGetKioskContents(address);
 
-	const objectData = useGetObject(objectId);
+	const { data: kioskOwnerTokens } = useGetOwnedObjects(address, {
+		StructType: ORIGINBYTE_KIOSK_OWNER_TOKEN,
+	});
+	const kioskIds = kioskOwnerTokens?.pages
+		.flatMap((page) => page.data)
+		.map(
+			(obj) => obj.data?.content && 'fields' in obj.data.content && obj.data.content.fields.kiosk,
+		);
 
 	return useMutation({
-		mutationFn: async ({ to, clientIdentifier }: { to: string; clientIdentifier?: string }) => {
+		mutationFn: async (to: SuiAddress) => {
 			if (!to || !signer || !objectType) {
 				throw new Error('Missing data');
 			}
 
-			const kioskId = kioskData?.lookup.get(objectId);
-			const kiosk = kioskData?.kiosks.get(kioskId!);
+			const tx = new TransactionBlock();
 
-			if (!kioskId || !kiosk) {
-				throw new Error('Failed to find object in a kiosk');
-			}
+			// fetch the kiosks for the active address
+			const ownedKiosks = await rpc.multiGetObjects({
+				ids: kioskIds!,
+				options: { showContent: true },
+			});
 
-			if (kiosk.type === KioskTypes.SUI && objectData?.data?.data?.type && kiosk?.ownerCap) {
-				const tx = new TransactionBlock();
-				// take item out of kiosk
-				const obj = take(tx, objectData.data?.data?.type, kioskId, kiosk?.ownerCap, objectId);
-				// transfer as usual
-				tx.transferObjects([obj], tx.pure(to));
-				return signer.signAndExecuteTransactionBlock(
-					{
-						transactionBlock: tx,
-						options: {
-							showInput: true,
-							showEffects: true,
-							showEvents: true,
-						},
-					},
-					clientIdentifier,
-				);
-			}
-
-			if (kiosk.type === KioskTypes.ORIGINBYTE && objectData?.data?.data?.type) {
-				const tx = new TransactionBlock();
-				const recipientKiosks = await rpc.getOwnedObjects({
-					owner: to,
-					options: { showContent: true },
-					filter: { StructType: ORIGINBYTE_KIOSK_OWNER_TOKEN },
+			// find the kiosk id containing the object that we want to transfer
+			const kioskId = ownedKiosks.find(async (kiosk) => {
+				if (!kiosk.data?.objectId) return false;
+				const objects = await rpc.getDynamicFields({
+					parentId: kiosk.data.objectId,
 				});
-				const recipientKiosk = recipientKiosks.data[0];
-				const recipientKioskId = recipientKiosk ? getKioskIdFromOwnerCap(recipientKiosk) : null;
+				return objects.data.some((obj) => obj.objectId === objectId);
+			})?.data?.objectId;
 
-				if (recipientKioskId) {
-					tx.moveCall({
-						target: `${obPackageId}::ob_kiosk::p2p_transfer`,
-						typeArguments: [objectType],
-						arguments: [tx.object(kioskId), tx.object(recipientKioskId), tx.pure(objectId)],
-					});
-				} else {
-					tx.moveCall({
-						target: `${obPackageId}::ob_kiosk::p2p_transfer_and_create_target_kiosk`,
-						typeArguments: [objectType],
-						arguments: [tx.object(kioskId), tx.pure(to), tx.pure(objectId)],
-					});
-				}
-				return signer.signAndExecuteTransactionBlock(
-					{
-						transactionBlock: tx,
-						options: {
-							showInput: true,
-							showEffects: true,
-							showEvents: true,
-						},
-					},
-					clientIdentifier,
-				);
+			if (!kioskId) throw new Error('failed to find kiosk containing object');
+
+			// determine if the recipient address already owns a kiosk
+			const recipientKiosks = await rpc.getOwnedObjects({
+				owner: to,
+				options: { showContent: true },
+				filter: { StructType: ORIGINBYTE_KIOSK_OWNER_TOKEN },
+			});
+
+			const recipientKiosk = recipientKiosks.data[0]?.data;
+
+			if (
+				recipientKiosk &&
+				recipientKiosk.content &&
+				'fields' in recipientKiosk.content &&
+				recipientKiosk.content.fields.kiosk
+			) {
+				const recipientKioskId = recipientKiosk.content.fields.kiosk;
+				tx.moveCall({
+					target: `${obPackageId}::ob_kiosk::p2p_transfer`,
+					typeArguments: [objectType],
+					arguments: [tx.object(kioskId), tx.object(recipientKioskId), tx.pure(objectId)],
+				});
+			} else {
+				tx.moveCall({
+					target: `${obPackageId}::ob_kiosk::p2p_transfer_and_create_target_kiosk`,
+					typeArguments: [objectType],
+					arguments: [tx.object(kioskId), tx.pure(to), tx.pure(objectId)],
+				});
 			}
-			throw new Error('Failed to transfer object');
+
+			return signer.signAndExecuteTransactionBlock({
+				transactionBlock: tx,
+				options: {
+					showInput: true,
+					showEffects: true,
+					showEvents: true,
+				},
+			});
 		},
 	});
 }

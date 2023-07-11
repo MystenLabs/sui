@@ -22,9 +22,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          # Upgrade below after the workspace upgrades to Rust 1.72 or later.
-          # https://substrate.stackexchange.com/a/9069
-          toolchain: nightly-2023-06-15
+          toolchain: nightly
           override: true
 
       - name: Generate documentation

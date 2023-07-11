@@ -11,6 +11,7 @@ services:
       - NODE_TYPE=primary
       - VALIDATOR_ID=0
       - LOG_LEVEL=-vvv
+      - CONSENSUS_DISABLED=--consensus-disabled
     expose:
       - "3000" # Port to listen on messages from other primary nodes
       - "3001" # Port to listen on messages from our worker nodes
@@ -51,6 +52,7 @@ services:
       - NODE_TYPE=primary
       - VALIDATOR_ID=1
       - LOG_LEVEL=-vvv
+      - CONSENSUS_DISABLED=--consensus-disabled
     expose:
       - "3000" # Port to listen on messages from other primary nodes
       - "3001" # Port to listen on messages from our worker nodes
@@ -91,6 +93,7 @@ services:
       - NODE_TYPE=primary
       - VALIDATOR_ID=2
       - LOG_LEVEL=-vvv
+      - CONSENSUS_DISABLED=--consensus-disabled
     expose:
       - "3000" # Port to listen on messages from other primary nodes
       - "3001" # Port to listen on messages from our worker nodes
@@ -131,6 +134,7 @@ services:
       - NODE_TYPE=primary
       - VALIDATOR_ID=3
       - LOG_LEVEL=-vvv
+      - CONSENSUS_DISABLED=--consensus-disabled
     expose:
       - "3000" # Port to listen on messages from other primary nodes
       - "3001" # Port to listen on messages from worker nodes

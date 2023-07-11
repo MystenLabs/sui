@@ -6,20 +6,25 @@ import { execSync } from 'child_process';
 import tmp from 'tmp';
 
 import {
+	Ed25519Keypair,
 	getPublishedObjectChanges,
 	getExecutionStatusType,
+	JsonRpcProvider,
+	localnetConnection,
+	Connection,
 	Coin,
+	TransactionBlock,
+	RawSigner,
+	SuiAddress,
+	ObjectId,
 	UpgradePolicy,
 } from '../../../src';
-import { TransactionBlock } from '../../../src/builder';
-import { Ed25519Keypair } from '../../../src/keypairs/ed25519';
 import { retry } from 'ts-retry-promise';
-import { FaucetRateLimitError, getFaucetHost, requestSuiFromFaucetV0 } from '../../../src/faucet';
-import { SuiClient, getFullnodeUrl } from '../../../src/client';
-import { Keypair } from '../../../src/cryptography';
+import { FaucetRateLimitError } from '../../../src/faucet';
 
-const DEFAULT_FAUCET_URL = import.meta.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');
-const DEFAULT_FULLNODE_URL = import.meta.env.VITE_FULLNODE_URL ?? getFullnodeUrl('localnet');
+const TEST_ENDPOINTS = localnetConnection;
+const DEFAULT_FAUCET_URL = import.meta.env.VITE_FAUCET_URL ?? TEST_ENDPOINTS.faucet;
+const DEFAULT_FULLNODE_URL = import.meta.env.VITE_FULLNODE_URL ?? TEST_ENDPOINTS.fullnode;
 const SUI_BIN = import.meta.env.VITE_SUI_BIN ?? 'cargo run --bin sui';
 
 export const DEFAULT_RECIPIENT =
@@ -31,11 +36,13 @@ export const DEFAULT_SEND_AMOUNT = 1000;
 
 export class TestToolbox {
 	keypair: Ed25519Keypair;
-	client: SuiClient;
+	provider: JsonRpcProvider;
+	signer: RawSigner;
 
-	constructor(keypair: Ed25519Keypair, client: SuiClient) {
+	constructor(keypair: Ed25519Keypair, provider: JsonRpcProvider) {
 		this.keypair = keypair;
-		this.client = client;
+		this.provider = provider;
+		this.signer = new RawSigner(this.keypair, this.provider);
 	}
 
 	address() {
@@ -44,7 +51,7 @@ export class TestToolbox {
 
 	// TODO(chris): replace this with provider.getCoins instead
 	async getGasObjectsOwnedByAddress() {
-		const objects = await this.client.getOwnedObjects({
+		const objects = await this.provider.getOwnedObjects({
 			owner: this.address(),
 			options: {
 				showType: true,
@@ -56,21 +63,25 @@ export class TestToolbox {
 	}
 
 	public async getActiveValidators() {
-		return (await this.client.getLatestSuiSystemState()).activeValidators;
+		return (await this.provider.getLatestSuiSystemState()).activeValidators;
 	}
 }
 
-export function getClient(): SuiClient {
-	return new SuiClient({
-		url: DEFAULT_FULLNODE_URL,
-	});
+export function getProvider(): JsonRpcProvider {
+	return new JsonRpcProvider(
+		new Connection({
+			fullnode: DEFAULT_FULLNODE_URL,
+			faucet: DEFAULT_FAUCET_URL,
+		}),
+		{},
+	);
 }
 
 export async function setup() {
 	const keypair = Ed25519Keypair.generate();
 	const address = keypair.getPublicKey().toSuiAddress();
-	const client = getClient();
-	await retry(() => requestSuiFromFaucetV0({ host: DEFAULT_FAUCET_URL, recipient: address }), {
+	const provider = getProvider();
+	await retry(() => provider.requestSuiFromFaucet(address), {
 		backoff: 'EXPONENTIAL',
 		// overall timeout in 60 seconds
 		timeout: 1000 * 60,
@@ -78,7 +89,7 @@ export async function setup() {
 		retryIf: (error: any) => !(error instanceof FaucetRateLimitError),
 		logger: (msg) => console.warn('Retrying requesting from faucet: ' + msg),
 	});
-	return new TestToolbox(keypair, client);
+	return new TestToolbox(keypair, provider);
 }
 
 export async function publishPackage(packagePath: string, toolbox?: TestToolbox) {
@@ -105,11 +116,10 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 	});
 
 	// Transfer the upgrade capability to the sender so they can upgrade the package later if they want.
-	tx.transferObjects([cap], tx.pure(await toolbox.address()));
+	tx.transferObjects([cap], tx.pure(await toolbox.signer.getAddress()));
 
-	const publishTxn = await toolbox.client.signAndExecuteTransactionBlock({
+	const publishTxn = await toolbox.signer.signAndExecuteTransactionBlock({
 		transactionBlock: tx,
-		signer: toolbox.keypair,
 		options: {
 			showEffects: true,
 			showObjectChanges: true,
@@ -124,14 +134,14 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 
 	expect(packageId).toBeTypeOf('string');
 
-	console.info(`Published package ${packageId} from address ${toolbox.address()}}`);
+	console.info(`Published package ${packageId} from address ${await toolbox.signer.getAddress()}}`);
 
 	return { packageId, publishTxn };
 }
 
 export async function upgradePackage(
-	packageId: string,
-	capId: string,
+	packageId: ObjectId,
+	capId: ObjectId,
 	packagePath: string,
 	toolbox?: TestToolbox,
 ) {
@@ -172,9 +182,8 @@ export async function upgradePackage(
 		arguments: [cap, receipt],
 	});
 
-	const result = await toolbox.client.signAndExecuteTransactionBlock({
+	const result = await toolbox.signer.signAndExecuteTransactionBlock({
 		transactionBlock: tx,
-		signer: toolbox.keypair,
 		options: {
 			showEffects: true,
 			showObjectChanges: true,
@@ -184,7 +193,7 @@ export async function upgradePackage(
 	expect(getExecutionStatusType(result)).toEqual('success');
 }
 
-export function getRandomAddresses(n: number): string[] {
+export function getRandomAddresses(n: number): SuiAddress[] {
 	return Array(n)
 		.fill(null)
 		.map(() => {
@@ -194,12 +203,11 @@ export function getRandomAddresses(n: number): string[] {
 }
 
 export async function paySui(
-	client: SuiClient,
-	signer: Keypair,
+	signer: RawSigner,
 	numRecipients: number = 1,
-	recipients?: string[],
+	recipients?: SuiAddress[],
 	amounts?: number[],
-	coinId?: string,
+	coinId?: ObjectId,
 ) {
 	const tx = new TransactionBlock();
 
@@ -211,8 +219,8 @@ export async function paySui(
 	coinId =
 		coinId ??
 		(
-			await client.getCoins({
-				owner: signer.getPublicKey().toSuiAddress(),
+			await signer.provider.getCoins({
+				owner: await signer.getAddress(),
 				coinType: '0x2::sui::SUI',
 			})
 		).data[0].coinObjectId;
@@ -222,9 +230,8 @@ export async function paySui(
 		tx.transferObjects([coin], tx.pure(recipient));
 	});
 
-	const txn = await client.signAndExecuteTransactionBlock({
+	const txn = await signer.signAndExecuteTransactionBlock({
 		transactionBlock: tx,
-		signer,
 		options: {
 			showEffects: true,
 			showObjectChanges: true,
@@ -235,17 +242,16 @@ export async function paySui(
 }
 
 export async function executePaySuiNTimes(
-	client: SuiClient,
-	signer: Keypair,
+	signer: RawSigner,
 	nTimes: number,
 	numRecipientsPerTxn: number = 1,
-	recipients?: string[],
+	recipients?: SuiAddress[],
 	amounts?: number[],
 ) {
 	const txns = [];
 	for (let i = 0; i < nTimes; i++) {
 		// must await here to make sure the txns are executed in order
-		txns.push(await paySui(client, signer, numRecipientsPerTxn, recipients, amounts));
+		txns.push(await paySui(signer, numRecipientsPerTxn, recipients, amounts));
 	}
 	return txns;
 }

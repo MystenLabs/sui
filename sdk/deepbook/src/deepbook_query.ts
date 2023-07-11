@@ -1,17 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { DevInspectResults } from '@mysten/sui.js';
-import { normalizeSuiObjectId } from '@mysten/sui.js/utils';
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import {
+	DevInspectResults,
+	JsonRpcProvider,
+	normalizeSuiObjectId,
+	testnetConnection,
+	TransactionBlock,
+} from '@mysten/sui.js';
 
 export class DeepBook_query {
-	public provider: SuiClient;
+	public provider: JsonRpcProvider;
 	public currentAddress: string;
 
 	constructor(
-		provider: SuiClient = new SuiClient({ url: getFullnodeUrl('testnet') }),
+		provider: JsonRpcProvider = new JsonRpcProvider(testnetConnection),
 		currentAddress: string,
 	) {
 		this.provider = provider;

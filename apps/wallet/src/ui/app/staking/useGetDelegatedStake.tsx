@@ -4,7 +4,7 @@
 import { useRpcClient } from '@mysten/core';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
-import type { DelegatedStake } from '@mysten/sui.js/client';
+import type { DelegatedStake } from '@mysten/sui.js';
 
 export function useGetDelegatedStake(address: string): UseQueryResult<DelegatedStake[], Error> {
 	const rpc = useRpcClient();

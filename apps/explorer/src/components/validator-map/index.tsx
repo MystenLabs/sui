@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetSystemState, useAppsBackend } from '@mysten/core';
-import { Heading, Text, Placeholder } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 import { ParentSize } from '@visx/responsive';
 import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
@@ -12,6 +11,9 @@ import { WorldMap } from './WorldMap';
 import { type ValidatorMapResponse, type ValidatorMapValidator } from './types';
 import { useNetwork } from '~/context';
 import { Card } from '~/ui/Card';
+import { Heading } from '~/ui/Heading';
+import { Placeholder } from '~/ui/Placeholder';
+import { Text } from '~/ui/Text';
 import { Network } from '~/utils/api/DefaultRpcClient';
 
 type ValidatorsMap = Record<string, ValidatorMapValidator>;

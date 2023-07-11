@@ -30,22 +30,12 @@ const linkStyles = cva([], {
 export interface LinkProps extends ButtonOrLinkProps, VariantProps<typeof linkStyles> {
 	before?: ReactNode;
 	after?: ReactNode;
-	gap?: 'gap-1' | 'gap-2';
 }
 
-export function Link({
-	variant,
-	uppercase,
-	size,
-	before,
-	after,
-	children,
-	gap = 'gap-2',
-	...props
-}: LinkProps) {
+export function Link({ variant, uppercase, size, before, after, children, ...props }: LinkProps) {
 	return (
 		<ButtonOrLink className={linkStyles({ variant, size, uppercase })} {...props}>
-			<div className={`inline-flex flex-nowrap items-center ${gap}`}>
+			<div className="inline-flex flex-nowrap items-center gap-2">
 				{before}
 				{children}
 				{after}

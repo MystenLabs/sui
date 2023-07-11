@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type EpochPage } from '@mysten/sui.js';
-import { Text } from '@mysten/ui';
+import { type EpochPage } from '@mysten/sui.js/src/types/epochs';
 
 import { SuiAmount } from '../Table/SuiAmount';
 import { TxTimeType } from '../tx-time/TxTimeType';
 import { HighlightedTableCol } from '~/components/Table/HighlightedTableCol';
 import { CheckpointSequenceLink, EpochLink } from '~/ui/InternalLink';
+import { Text } from '~/ui/Text';
 import { getEpochStorageFundFlow } from '~/utils/getStorageFundFlow';
 
 // Generate table data from the epochs data

@@ -9,7 +9,12 @@ import {
 	type SuiObjectChangeTypes,
 } from '@mysten/core';
 import { ChevronDown12, ChevronRight12 } from '@mysten/icons';
-import { formatAddress } from '@mysten/sui.js';
+import {
+	SuiObjectChangeTransferred,
+	formatAddress,
+	is,
+	SuiObjectChangePublished,
+} from '@mysten/sui.js';
 import cx from 'classnames';
 
 import { ObjectChangeDisplay } from './objectSummary/ObjectChangeDisplay';
@@ -36,10 +41,9 @@ export function ObjectDetail({
 	ownerKey: string;
 	display?: boolean;
 }) {
-	if (change.type === 'transferred' || change.type === 'published') {
+	if (is(change, SuiObjectChangeTransferred) || is(change, SuiObjectChangePublished)) {
 		return null;
 	}
-
 	const [packageId, moduleName, typeName] = change.objectType?.split('<')[0]?.split('::') || [];
 
 	return (

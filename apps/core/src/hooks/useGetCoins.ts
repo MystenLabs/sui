@@ -4,11 +4,13 @@
 import { useRpcClient } from '../api/RpcClientContext';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
+import type { SuiAddress } from '@mysten/sui.js';
+
 const MAX_COINS_PER_REQUEST = 10;
 
 export function useGetCoins(
 	coinType: string,
-	address?: string | null,
+	address?: SuiAddress | null,
 	maxCoinsPerRequest = MAX_COINS_PER_REQUEST,
 ) {
 	const rpc = useRpcClient();

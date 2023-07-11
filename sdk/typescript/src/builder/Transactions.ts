@@ -18,9 +18,10 @@ import {
 	unknown,
 	record,
 } from 'superstruct';
+import { ObjectId } from '../types/common.js';
 import type { WellKnownEncoding } from './utils.js';
 import { TRANSACTION_TYPE, create } from './utils.js';
-import { TypeTagSerializer } from './type-tag-serializer.js';
+import { TypeTagSerializer } from '../signers/txn-data-serializers/type-tag-serializer.js';
 import { normalizeSuiObjectId } from '../utils/sui-types.js';
 
 const option = <T extends Struct<any, any>>(some: T) =>
@@ -106,7 +107,7 @@ export type MakeMoveVecTransaction = Infer<typeof MakeMoveVecTransaction>;
 export const PublishTransaction = object({
 	kind: literal('Publish'),
 	modules: array(array(integer())),
-	dependencies: array(string()),
+	dependencies: array(ObjectId),
 });
 export type PublishTransaction = Infer<typeof PublishTransaction>;
 
@@ -121,8 +122,8 @@ export enum UpgradePolicy {
 export const UpgradeTransaction = object({
 	kind: literal('Upgrade'),
 	modules: array(array(integer())),
-	dependencies: array(string()),
-	packageId: string(),
+	dependencies: array(ObjectId),
+	packageId: ObjectId,
 	ticket: ObjectTransactionArgument,
 });
 export type UpgradeTransaction = Infer<typeof UpgradeTransaction>;
@@ -185,7 +186,7 @@ export const Transactions = {
 		dependencies,
 	}: {
 		modules: number[][] | string[];
-		dependencies: string[];
+		dependencies: ObjectId[];
 	}): PublishTransaction {
 		return create(
 			{
@@ -205,8 +206,8 @@ export const Transactions = {
 		ticket,
 	}: {
 		modules: number[][] | string[];
-		dependencies: string[];
-		packageId: string;
+		dependencies: ObjectId[];
+		packageId: ObjectId;
 		ticket: TransactionArgument;
 	}): UpgradeTransaction {
 		return create(

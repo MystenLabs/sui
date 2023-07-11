@@ -14,30 +14,13 @@ pub enum Severity {
     Bug = 3,
 }
 
-/// A an optional prefix to distinguish between different types of warnings (internal vs. possibly
-/// multiple externally provided ones).
-type ExternalPrefix = Option<&'static str>;
-
-/// Identifies a warning category. Includes an external prefix to distinguish warnings from
-/// different sources.
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
-pub struct CategoryID {
-    category: u8,
-    external_prefix: ExternalPrefix,
-}
-
-/// Identifies a warning diagnostic through a warning category ID and a warning code.
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
-pub struct DiagnosticsID {
-    category_id: CategoryID,
-    code: u8,
-}
-
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct DiagnosticInfo {
     severity: Severity,
-    id: DiagnosticsID,
+    category: u8,
+    code: u8,
     message: &'static str,
+    external_prefix: Option<&'static str>,
 }
 
 pub(crate) trait DiagnosticCode: Copy {
@@ -53,21 +36,23 @@ pub(crate) trait DiagnosticCode: Copy {
         let (code, message) = self.code_and_message();
         DiagnosticInfo {
             severity,
-            id: DiagnosticsID::new(category, code, None),
+            category,
+            code,
             message,
+            external_prefix: None,
         }
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 /// Represents a single annotation for a diagnostic filter
 pub enum WarningFilter {
     /// Filters all warnings
-    All(ExternalPrefix),
-    /// Filters all warnings of a specific category. Only known filters have names.
-    Category(CategoryID, /* name */ Option<&'static str>),
-    /// Filters a single warning, as defined by codes below. Only known filters have names.
-    Code(DiagnosticsID, /* name */ Option<&'static str>),
+    All,
+    /// Filters all warnings of a specific category
+    Category(Category),
+    /// Filters a single warning, as defined by codes below
+    Code(Category, /* code */ u8),
 }
 
 /// The text used in the attribute for warning suppression
@@ -91,14 +76,10 @@ pub const fn custom(
     assert!(category <= 99);
     DiagnosticInfo {
         severity,
-        id: DiagnosticsID {
-            category_id: CategoryID {
-                category,
-                external_prefix: Some(external_prefix),
-            },
-            code,
-        },
+        category,
+        code,
         message,
+        external_prefix: Some(external_prefix),
     }
 }
 
@@ -303,89 +284,69 @@ codes!(
         BytecodeGeneration: { msg: "BYTECODE GENERATION FAILED", severity: Bug },
         BytecodeVerification: { msg: "BYTECODE VERIFICATION FAILED", severity: Bug },
     ],
-    Editions: [
-        FeatureTooNew: {
-            msg: "feature is not supported in specified edition",
-            severity: BlockingError,
-        },
-    ]
 );
 
 //**************************************************************************************************
 // Warning Filter
 //**************************************************************************************************
 
-impl WarningFilter {
-    pub fn to_str(self) -> Option<&'static str> {
-        match self {
-            Self::All(_) => Some("all"),
-            Self::Category(_, n) => n,
-            Self::Code(_, n) => n,
+macro_rules! warning_filter {
+    ($($str:literal: $category:ident::$code:ident),* $(,)?) => {
+        impl WarningFilter {
+            pub fn from_str(s: &str) -> Option<Self> {
+                Some(match s {
+                    "all" => Self::All,
+                    "unused" => Self::Category(Category::UnusedItem),
+                    $(
+                    $str => {
+                        let category = Category::$category;
+                        let code = $category::$code as u8;
+                        Self::Code(category, code)
+                    }
+                    )*
+                    _ => return None,
+                })
+            }
+
+            pub fn to_str(self) -> Option<&'static str> {
+                Some(match self {
+                    Self::All => "all",
+                    Self::Category(Category::UnusedItem) => "unused",
+                    $(
+                    Self::Code(Category::$category, code) if ($category::$code as u8) == code =>
+                        $str,
+                    )*
+                    _ => return None,
+                })
+            }
         }
-    }
+    };
 }
+
+warning_filter!(
+    "missing_phantom": Declarations::InvalidNonPhantomUse,
+    "unused_use": UnusedItem::Alias,
+    "unused_variable": UnusedItem::Variable,
+    "unused_assignment": UnusedItem::Assignment,
+    "unused_trailing_semi": UnusedItem::TrailingSemi,
+    "unused_attribute": UnusedItem::Attribute,
+    "unused_type_parameter": UnusedItem::StructTypeParam,
+    "unused_function": UnusedItem::Function,
+    "dead_code": UnusedItem::DeadCode,
+);
 
 //**************************************************************************************************
 // impls
 //**************************************************************************************************
 
-impl CategoryID {
-    pub fn new(category: u8, external_prefix: ExternalPrefix) -> Self {
-        CategoryID {
-            category,
-            external_prefix,
-        }
-    }
-
-    pub fn category(&self) -> u8 {
-        self.category
-    }
-
-    pub fn external_prefix(&self) -> Option<&'static str> {
-        self.external_prefix
-    }
-}
-
-impl DiagnosticsID {
-    pub fn new(category: u8, code: u8, external_prefix: ExternalPrefix) -> Self {
-        let category_id = CategoryID {
-            category,
-            external_prefix,
-        };
-        DiagnosticsID { category_id, code }
-    }
-
-    pub fn category(&self) -> u8 {
-        self.category_id.category
-    }
-
-    pub fn code(&self) -> u8 {
-        self.code
-    }
-
-    pub fn external_prefix(&self) -> ExternalPrefix {
-        self.category_id.external_prefix
-    }
-
-    pub fn category_id(&self) -> CategoryID {
-        self.category_id
-    }
-}
-
 impl DiagnosticInfo {
     pub fn render(self) -> (/* code */ String, /* message */ &'static str) {
         let Self {
             severity,
-            id:
-                DiagnosticsID {
-                    category_id:
-                        CategoryID {
-                            category,
-                            external_prefix,
-                        },
-                    code,
-                },
+            category,
+            code,
             message,
+            external_prefix,
         } = self;
         let sev_prefix = match severity {
             Severity::BlockingError | Severity::NonblockingError => "E",
@@ -406,11 +367,11 @@ impl DiagnosticInfo {
     }
 
     pub fn category(&self) -> u8 {
-        self.id.category_id.category
+        self.category
     }
 
     pub fn code(&self) -> u8 {
-        self.id.code
+        self.code
     }
 
     pub fn message(&self) -> &'static str {
@@ -418,15 +379,7 @@ impl DiagnosticInfo {
     }
 
     pub fn is_external(&self) -> bool {
-        self.id.category_id.external_prefix.is_some()
-    }
-
-    pub fn id(&self) -> DiagnosticsID {
-        self.id
-    }
-
-    pub fn category_id(&self) -> CategoryID {
-        self.id.category_id
+        self.external_prefix.is_some()
     }
 }
 

@@ -5,9 +5,12 @@ import type { HttpHeaders } from '../rpc/client.js';
 import { JsonRpcClient } from '../rpc/client.js';
 import type {
 	ExecuteTransactionRequestType,
+	ObjectId,
 	SuiEventFilter,
+	TransactionDigest,
 	SuiTransactionBlockResponseQuery,
 	Order,
+	CoinMetadata,
 	CheckpointDigest,
 	SuiObjectDataOptions,
 	SuiTransactionBlockResponseOptions,
@@ -19,6 +22,7 @@ import type {
 } from '../types/index.js';
 import {
 	PaginatedTransactionResponse,
+	SuiAddress,
 	SuiMoveFunctionArgTypes,
 	SuiMoveNormalizedFunction,
 	SuiMoveNormalizedModule,
@@ -27,6 +31,7 @@ import {
 	SuiTransactionBlockResponse,
 	PaginatedEvents,
 	DevInspectResults,
+	CoinMetadataStruct,
 	PaginatedCoins,
 	SuiObjectResponse,
 	DelegatedStake,
@@ -52,10 +57,9 @@ import { fromB58, toB64, toHEX } from '@mysten/bcs';
 import type { SerializedSignature } from '../cryptography/signature.js';
 import type { Connection } from '../rpc/connection.js';
 import { devnetConnection } from '../rpc/connection.js';
-import type { TransactionBlock } from '../builder/index.js';
-import { isTransactionBlock } from '../builder/index.js';
+import { TransactionBlock } from '../builder/index.js';
 import { CheckpointPage } from '../types/checkpoints.js';
-import { NetworkMetrics, AddressMetrics, AllEpochsAddressMetrics } from '../types/metrics.js';
+import { NetworkMetrics, AddressMetrics } from '../types/metrics.js';
 import { EpochInfo, EpochPage } from '../types/epochs.js';
 import { requestSuiFromFaucetV0 } from '../faucet/index.js';
 import {
@@ -65,8 +69,6 @@ import {
 	normalizeSuiAddress,
 	normalizeSuiObjectId,
 } from '../utils/sui-types.js';
-import type { CoinMetadata } from '../framework/framework.js';
-import { CoinMetadataStruct } from '../framework/framework.js';
 
 export interface PaginationArguments<Cursor> {
 	/** Optional paging cursor */
@@ -153,7 +155,7 @@ export class JsonRpcProvider {
 	}
 
 	/** @deprecated Use `@mysten/sui.js/faucet` instead. */
-	async requestSuiFromFaucet(recipient: string, headers?: HttpHeaders) {
+	async requestSuiFromFaucet(recipient: SuiAddress, headers?: HttpHeaders) {
 		if (!this.connection.faucet) {
 			throw new Error('Faucet URL is not specified');
 		}
@@ -166,7 +168,7 @@ export class JsonRpcProvider {
 	 */
 	async getCoins(
 		input: {
-			owner: string;
+			owner: SuiAddress;
 			coinType?: string | null;
 		} & PaginationArguments<PaginatedCoins['nextCursor']>,
 	): Promise<PaginatedCoins> {
@@ -186,7 +188,7 @@ export class JsonRpcProvider {
 	 */
 	async getAllCoins(
 		input: {
-			owner: string;
+			owner: SuiAddress;
 		} & PaginationArguments<PaginatedCoins['nextCursor']>,
 	): Promise<PaginatedCoins> {
 		if (!input.owner || !isValidSuiAddress(normalizeSuiAddress(input.owner))) {
@@ -204,7 +206,7 @@ export class JsonRpcProvider {
 	 * Get the total coin balance for one coin type, owned by the address owner.
 	 */
 	async getBalance(input: {
-		owner: string;
+		owner: SuiAddress;
 		/** optional fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified. */
 		coinType?: string | null;
 	}): Promise<CoinBalance> {
@@ -221,7 +223,7 @@ export class JsonRpcProvider {
 	/**
 	 * Get the total coin balance for all coin types, owned by the address owner.
 	 */
-	async getAllBalances(input: { owner: string }): Promise<CoinBalance[]> {
+	async getAllBalances(input: { owner: SuiAddress }): Promise<CoinBalance[]> {
 		if (!input.owner || !isValidSuiAddress(normalizeSuiAddress(input.owner))) {
 			throw new Error('Invalid Sui address');
 		}
@@ -337,7 +339,7 @@ export class JsonRpcProvider {
 	 */
 	async getOwnedObjects(
 		input: {
-			owner: string;
+			owner: SuiAddress;
 		} & PaginationArguments<PaginatedObjectsResponse['nextCursor']> &
 			SuiObjectResponseQuery,
 	): Promise<PaginatedObjectsResponse> {
@@ -364,7 +366,7 @@ export class JsonRpcProvider {
 	 * Get details about an object
 	 */
 	async getObject(input: {
-		id: string;
+		id: ObjectId;
 		options?: SuiObjectDataOptions;
 	}): Promise<SuiObjectResponse> {
 		if (!input.id || !isValidSuiObjectId(normalizeSuiObjectId(input.id))) {
@@ -378,7 +380,7 @@ export class JsonRpcProvider {
 	}
 
 	async tryGetPastObject(input: {
-		id: string;
+		id: ObjectId;
 		version: number;
 		options?: SuiObjectDataOptions;
 	}): Promise<ObjectRead> {
@@ -393,7 +395,7 @@ export class JsonRpcProvider {
 	 * Batch get details about a list of objects. If any of the object ids are duplicates the call will fail
 	 */
 	async multiGetObjects(input: {
-		ids: string[];
+		ids: ObjectId[];
 		options?: SuiObjectDataOptions;
 	}): Promise<SuiObjectResponse[]> {
 		input.ids.forEach((id) => {
@@ -437,7 +439,7 @@ export class JsonRpcProvider {
 	}
 
 	async getTransactionBlock(input: {
-		digest: string;
+		digest: TransactionDigest;
 		options?: SuiTransactionBlockResponseOptions;
 	}): Promise<SuiTransactionBlockResponse> {
 		if (!isValidTransactionDigest(input.digest)) {
@@ -451,7 +453,7 @@ export class JsonRpcProvider {
 	}
 
 	async multiGetTransactionBlocks(input: {
-		digests: string[];
+		digests: TransactionDigest[];
 		options?: SuiTransactionBlockResponseOptions;
 	}): Promise<SuiTransactionBlockResponse[]> {
 		input.digests.forEach((d) => {
@@ -512,7 +514,7 @@ export class JsonRpcProvider {
 	/**
 	 * Return the delegated stakes for an address
 	 */
-	async getStakes(input: { owner: string }): Promise<DelegatedStake[]> {
+	async getStakes(input: { owner: SuiAddress }): Promise<DelegatedStake[]> {
 		if (!input.owner || !isValidSuiAddress(normalizeSuiAddress(input.owner))) {
 			throw new Error('Invalid Sui address');
 		}
@@ -526,7 +528,7 @@ export class JsonRpcProvider {
 	/**
 	 * Return the delegated stakes queried by id.
 	 */
-	async getStakesByIds(input: { stakedSuiIds: string[] }): Promise<DelegatedStake[]> {
+	async getStakesByIds(input: { stakedSuiIds: ObjectId[] }): Promise<DelegatedStake[]> {
 		input.stakedSuiIds.forEach((id) => {
 			if (!id || !isValidSuiObjectId(normalizeSuiObjectId(id))) {
 				throw new Error(`Invalid Sui Stake id ${id}`);
@@ -605,14 +607,14 @@ export class JsonRpcProvider {
 	 */
 	async devInspectTransactionBlock(input: {
 		transactionBlock: TransactionBlock | string | Uint8Array;
-		sender: string;
+		sender: SuiAddress;
 		/** Default to use the network reference gas price stored in the Sui System State object */
 		gasPrice?: bigint | number | null;
 		/** optional. Default to use the current epoch number stored in the Sui System State object */
 		epoch?: string | null;
 	}): Promise<DevInspectResults> {
 		let devInspectTxBytes;
-		if (isTransactionBlock(input.transactionBlock)) {
+		if (TransactionBlock.is(input.transactionBlock)) {
 			input.transactionBlock.setSenderIfNotSet(input.sender);
 			devInspectTxBytes = toB64(
 				await input.transactionBlock.build({
@@ -658,7 +660,7 @@ export class JsonRpcProvider {
 	async getDynamicFields(
 		input: {
 			/** The id of the parent object */
-			parentId: string;
+			parentId: ObjectId;
 		} & PaginationArguments<DynamicFieldPage['nextCursor']>,
 	): Promise<DynamicFieldPage> {
 		if (!input.parentId || !isValidSuiObjectId(normalizeSuiObjectId(input.parentId))) {
@@ -676,7 +678,7 @@ export class JsonRpcProvider {
 	 */
 	async getDynamicFieldObject(input: {
 		/** The ID of the quered parent object */
-		parentId: string;
+		parentId: ObjectId;
 		/** The name of the dynamic field */
 		name: string | DynamicFieldName;
 	}): Promise<SuiObjectResponse> {
@@ -748,14 +750,6 @@ export class JsonRpcProvider {
 		return await this.client.requestWithType('suix_getLatestAddressMetrics', [], AddressMetrics);
 	}
 
-	async getAllEpochAddressMetrics(input?: { descendingOrder?: boolean }) {
-		return await this.client.requestWithType(
-			'suix_getAllEpochAddressMetrics',
-			[input?.descendingOrder],
-			AllEpochsAddressMetrics,
-		);
-	}
-
 	/**
 	 * Return the committee information for the asked epoch
 	 */
@@ -799,11 +793,11 @@ export class JsonRpcProvider {
 		return toHEX(bytes.slice(0, 4));
 	}
 
-	async resolveNameServiceAddress(input: { name: string }): Promise<string | null> {
+	async resolveNameServiceAddress(input: { name: string }): Promise<SuiAddress | null> {
 		return await this.client.requestWithType(
 			'suix_resolveNameServiceAddress',
 			[input.name],
-			nullable(string()),
+			nullable(SuiAddress),
 		);
 	}
 
