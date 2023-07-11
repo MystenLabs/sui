@@ -264,7 +264,12 @@ const createPolicyForType = async () => {
 <summary>Attach Rules (Royalty, Kiosk Lock) to the Transfer Policy</summary>
 
 ```typescript
-import { createTransferPolicy, attachKioskLockRule, testnetEnvironment } from '@mysten/kiosk';
+import {
+	createTransferPolicy,
+	attachKioskLockRule,
+	attachRoyaltyRule,
+	testnetEnvironment,
+} from '@mysten/kiosk';
 import { TransactionBlock } from '@mysten/sui.js';
 
 // Attaches a royalty rule of 1% or 0.1 SUI (whichever is bigger)
