@@ -1316,6 +1316,11 @@ impl ProtocolConfig {
                 cfg.base_tx_cost_fixed = Some(1_000);
                 cfg
             }
+            19 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.feature_flags.commit_root_state_digest = true;
+                cfg
+            }
             // Use this template when making changes:
             //
             //     // modify an existing constant.
