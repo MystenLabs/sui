@@ -1,16 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	ORIGINBYTE_KIOSK_MODULE,
-	ORIGINBYTE_KIOSK_OWNER_TOKEN,
-	useGetOwnedObjects,
-	useRpcClient,
-} from '@mysten/core';
+import { useFeatureValue } from '@growthbook/growthbook-react';
+import { ORIGINBYTE_KIOSK_OWNER_TOKEN, useGetOwnedObjects, useRpcClient } from '@mysten/core';
 import { type SuiAddress, TransactionBlock } from '@mysten/sui.js';
 import { useMutation } from '@tanstack/react-query';
 
 import { useActiveAddress, useSigner } from '_src/ui/app/hooks';
+
+const ORIGINBYTE_PACKAGE_ID = '0x083b02db943238dcea0ff0938a54a17d7575f5b48034506446e501e963391480';
 
 export function useTransferKioskItem({
 	objectId,
@@ -22,6 +20,7 @@ export function useTransferKioskItem({
 	const rpc = useRpcClient();
 	const signer = useSigner();
 	const address = useActiveAddress();
+	const obPackageId = useFeatureValue('kiosk-originbyte-packageid', ORIGINBYTE_PACKAGE_ID);
 
 	const { data: kioskOwnerTokens } = useGetOwnedObjects(address, {
 		StructType: ORIGINBYTE_KIOSK_OWNER_TOKEN,
@@ -74,13 +73,13 @@ export function useTransferKioskItem({
 			) {
 				const recipientKioskId = recipientKiosk.content.fields.kiosk;
 				tx.moveCall({
-					target: `${ORIGINBYTE_KIOSK_MODULE}::p2p_transfer`,
+					target: `${obPackageId}::ob_kiosk::p2p_transfer`,
 					typeArguments: [objectType],
 					arguments: [tx.object(kioskId), tx.object(recipientKioskId), tx.pure(objectId)],
 				});
 			} else {
 				tx.moveCall({
-					target: `${ORIGINBYTE_KIOSK_MODULE}::p2p_transfer_and_create_target_kiosk`,
+					target: `${obPackageId}::ob_kiosk::p2p_transfer_and_create_target_kiosk`,
 					typeArguments: [objectType],
 					arguments: [tx.object(kioskId), tx.pure(to), tx.pure(objectId)],
 				});
