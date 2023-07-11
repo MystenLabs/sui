@@ -185,7 +185,6 @@ async fn fetch_certificates_basic() {
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
         rx_synchronizer_network,
-        None,
         metrics.clone(),
         &primary_channel_metrics,
     ));
