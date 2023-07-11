@@ -4,7 +4,7 @@
 import { useRpcClient } from '@mysten/core';
 import { ArrowRight12 } from '@mysten/icons';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { genTableDataFromTxData } from '../transactions/TxCardUtils';
 import { useGetTransactionBlocks } from '~/hooks/useGetTransactionBlocks';
@@ -21,11 +21,13 @@ interface Props {
 	disablePagination?: boolean;
 	refetchInterval?: number;
 	initialLimit?: number;
+	transactionKindFilter?: 'ProgrammableTransaction';
 }
 
 export function TransactionsActivityTable({
 	disablePagination,
 	initialLimit = DEFAULT_TRANSACTIONS_LIMIT,
+	transactionKindFilter,
 }: Props) {
 	const [limit, setLimit] = useState(initialLimit);
 	const rpc = useRpcClient();
@@ -36,12 +38,18 @@ export function TransactionsActivityTable({
 		staleTime: Infinity,
 		retry: false,
 	});
-
-	const transactions = useGetTransactionBlocks(undefined, limit);
+	const transactions = useGetTransactionBlocks(
+		transactionKindFilter ? { TransactionKind: transactionKindFilter } : undefined,
+		limit,
+	);
 	const { data, isFetching, pagination, isLoading, isError } = useCursorPagination(transactions);
-
+	const goToFirstPageRef = useRef(pagination.onFirst);
+	goToFirstPageRef.current = pagination.onFirst;
 	const cardData = data ? genTableDataFromTxData(data.data) : undefined;
 
+	useEffect(() => {
+		goToFirstPageRef.current();
+	}, [transactionKindFilter]);
 	return (
 		<div data-testid="tx">
 			{isError && (

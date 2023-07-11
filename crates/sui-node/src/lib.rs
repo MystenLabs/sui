@@ -398,7 +398,7 @@ impl SuiNode {
                 FileCompression::Zstd,
                 StorageFormat::Blob,
                 Duration::from_secs(600),
-                1024 * 1024 * 1024,
+                256 * 1024 * 1024,
                 &prometheus_registry,
             )
             .await?;
@@ -496,8 +496,7 @@ impl SuiNode {
                     end_of_epoch_receiver,
                     &config.db_path(),
                     &prometheus_registry,
-                )
-                .await?,
+                )?,
             ))
         } else {
             None
@@ -873,6 +872,7 @@ impl SuiNode {
                 consensus_handler,
                 SuiTxValidator::new(
                     epoch_store,
+                    checkpoint_service.clone(),
                     state.transaction_manager().clone(),
                     sui_tx_validator_metrics.clone(),
                 ),

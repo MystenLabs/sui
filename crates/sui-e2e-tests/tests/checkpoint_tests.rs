@@ -3,15 +3,13 @@
 
 use std::time::Duration;
 use sui_macros::sim_test;
+use sui_test_transaction_builder::make_transfer_sui_transaction;
 use test_cluster::TestClusterBuilder;
 
 #[sim_test]
 async fn basic_checkpoints_integration_test() {
     let test_cluster = TestClusterBuilder::new().build().await;
-    let tx = test_cluster
-        .wallet
-        .make_transfer_sui_transaction(None, None)
-        .await;
+    let tx = make_transfer_sui_transaction(&test_cluster.wallet, None, None).await;
     let digest = *tx.digest();
     test_cluster.execute_transaction(tx).await;
 

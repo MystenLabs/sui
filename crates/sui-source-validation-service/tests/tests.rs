@@ -8,8 +8,8 @@ use std::{collections::BTreeMap, path::PathBuf};
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use sui_source_validation_service::{
-    initialize, serve, verify_packages, AppState, CloneCommand, Config, Packages, SourceInfo,
-    SourceResponse,
+    initialize, serve, verify_packages, AppState, CloneCommand, Config, PackageSources,
+    RepositorySource, SourceInfo, SourceResponse,
 };
 use test_cluster::TestClusterBuilder;
 
@@ -21,11 +21,11 @@ async fn test_verify_packages() -> anyhow::Result<()> {
     let context = &mut cluster.wallet;
 
     let config = Config {
-        packages: vec![Packages {
+        packages: vec![PackageSources::Repository(RepositorySource {
             repository: "https://github.com/mystenlabs/sui".into(),
             branch: "main".into(),
             paths: vec!["move-stdlib".into()],
-        }],
+        })],
     };
 
     let fixtures = tempfile::tempdir()?;
@@ -109,6 +109,8 @@ async fn test_api_route() -> anyhow::Result<()> {
 fn test_parse_package_config() -> anyhow::Result<()> {
     let config = r#"
     [[packages]]
+    source = "Repository"
+    [packages.values]
     repository = "https://github.com/mystenlabs/sui"
     branch = "main"
     paths = [
@@ -117,22 +119,36 @@ fn test_parse_package_config() -> anyhow::Result<()> {
         "crates/sui-framework/packages/sui-framework",
         "crates/sui-framework/packages/sui-system",
     ]
+
+    [[packages]]
+    source = "Directory"
+    [packages.values]
+    paths = [ "home/user/some/package" ]
 "#;
 
     let config: Config = toml::from_str(config).unwrap();
     let expect = expect![
         r#"Config {
     packages: [
-        Packages {
-            repository: "https://github.com/mystenlabs/sui",
-            branch: "main",
-            paths: [
-                "crates/sui-framework/packages/deepbook",
-                "crates/sui-framework/packages/move-stdlib",
-                "crates/sui-framework/packages/sui-framework",
-                "crates/sui-framework/packages/sui-system",
-            ],
-        },
+        Repository(
+            RepositorySource {
+                repository: "https://github.com/mystenlabs/sui",
+                branch: "main",
+                paths: [
+                    "crates/sui-framework/packages/deepbook",
+                    "crates/sui-framework/packages/move-stdlib",
+                    "crates/sui-framework/packages/sui-framework",
+                    "crates/sui-framework/packages/sui-system",
+                ],
+            },
+        ),
+        Directory(
+            DirectorySource {
+                paths: [
+                    "home/user/some/package",
+                ],
+            },
+        ),
     ],
 }"#
     ];
@@ -142,13 +158,13 @@ fn test_parse_package_config() -> anyhow::Result<()> {
 
 #[test]
 fn test_clone_command() -> anyhow::Result<()> {
-    let packages = Packages {
+    let source = RepositorySource {
         repository: "https://github.com/user/repo".into(),
         branch: "main".into(),
         paths: vec!["a".into(), "b".into()],
     };
 
-    let command = CloneCommand::new(&packages, PathBuf::from("/tmp").as_path())?;
+    let command = CloneCommand::new(&source, PathBuf::from("/tmp").as_path())?;
     let expect = expect![
         r#"CloneCommand {
     args: [

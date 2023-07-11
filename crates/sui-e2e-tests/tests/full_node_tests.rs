@@ -21,7 +21,11 @@ use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_node::SuiNodeHandle;
 use sui_sdk::wallet_context::WalletContext;
-use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_test_transaction_builder::{
+    batch_make_transfer_transactions, create_devnet_nft, delete_devnet_nft, increment_counter,
+    publish_basics_package, publish_basics_package_and_make_counter, publish_nfts_package,
+    TestTransactionBuilder,
+};
 use sui_tool::restore_from_db_checkpoint;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::base_types::{ObjectRef, SequenceNumber};
@@ -88,11 +92,17 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let context = &mut test_cluster.wallet;
 
     let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
-    let (package_ref, counter_ref) = context.publish_basics_package_and_make_counter().await;
+    let (package_ref, counter_ref) = publish_basics_package_and_make_counter(context).await;
 
-    let response = context
-        .increment_counter(sender, None, package_ref.0, counter_ref.0, counter_ref.1)
-        .await;
+    let response = increment_counter(
+        context,
+        sender,
+        None,
+        package_ref.0,
+        counter_ref.0,
+        counter_ref.1,
+    )
+    .await;
     let digest = response.digest;
     handle
         .sui_node
@@ -182,10 +192,16 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
     let sender = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
-    let (package_ref, counter_ref) = context.publish_basics_package_and_make_counter().await;
-    let response = context
-        .increment_counter(sender, None, package_ref.0, counter_ref.0, counter_ref.1)
-        .await;
+    let (package_ref, counter_ref) = publish_basics_package_and_make_counter(context).await;
+    let response = increment_counter(
+        context,
+        sender,
+        None,
+        package_ref.0,
+        counter_ref.0,
+        counter_ref.1,
+    )
+    .await;
     let digest = response.digest;
 
     let txes = node.state().get_transactions(
@@ -485,7 +501,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
 
     let mut futures = Vec::new();
 
-    let (package_ref, counter_ref) = context.publish_basics_package_and_make_counter().await;
+    let (package_ref, counter_ref) = publish_basics_package_and_make_counter(&context).await;
 
     let context = Arc::new(Mutex::new(context));
 
@@ -534,16 +550,16 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
 
                 let context = &context.lock().await;
                 shared_tx_digest = Some(
-                    context
-                        .increment_counter(
-                            sender,
-                            Some(gas_object_id),
-                            package_ref.0,
-                            counter_ref.0,
-                            counter_ref.1,
-                        )
-                        .await
-                        .digest,
+                    increment_counter(
+                        context,
+                        sender,
+                        Some(gas_object_id),
+                        package_ref.0,
+                        counter_ref.0,
+                        counter_ref.1,
+                    )
+                    .await
+                    .digest,
                 );
             }
             tx.send((owned_tx_digest.unwrap(), shared_tx_digest.unwrap()))
@@ -583,7 +599,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
     let ws_client = fullnode.ws_client;
 
     let context = &mut test_cluster.wallet;
-    let package_id = context.publish_nfts_package().await.0;
+    let package_id = publish_nfts_package(context).await.0;
 
     let struct_tag_str = format!("{package_id}::devnet_nft::MintNFTEvent");
     let struct_tag = parse_struct_tag(&struct_tag_str).unwrap();
@@ -597,7 +613,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
         .await
         .unwrap();
 
-    let (sender, object_id, digest) = context.create_devnet_nft(package_id).await;
+    let (sender, object_id, digest) = create_devnet_nft(context, package_id).await;
     node.state()
         .db()
         .notify_read_executed_effects(vec![digest])
@@ -683,7 +699,7 @@ async fn test_full_node_event_read_api_ok() {
     let node = &test_cluster.fullnode_handle.sui_node;
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
-    let (package_id, gas_id_1, _) = context.publish_nfts_package().await;
+    let (package_id, gas_id_1, _) = publish_nfts_package(context).await;
 
     let (transferred_object, _, _, digest, _) = transfer_coin(context).await.unwrap();
 
@@ -708,7 +724,7 @@ async fn test_full_node_event_read_api_ok() {
     // This is a poor substitute for the post processing taking some time
     sleep(Duration::from_millis(1000)).await;
 
-    let (_sender, _object_id, digest2) = context.create_devnet_nft(package_id).await;
+    let (_sender, _object_id, digest2) = create_devnet_nft(context, package_id).await;
 
     // Add a delay to ensure event processing is done after transaction commits.
     sleep(Duration::from_secs(5)).await;
@@ -733,12 +749,12 @@ async fn test_full_node_event_query_by_module_ok() {
     let context = &mut test_cluster.wallet;
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
-    let (package_id, _, _) = context.publish_nfts_package().await;
+    let (package_id, _, _) = publish_nfts_package(context).await;
 
     // This is a poor substitute for the post processing taking some time
     sleep(Duration::from_millis(1000)).await;
 
-    let (_sender, _object_id, digest2) = context.create_devnet_nft(package_id).await;
+    let (_sender, _object_id, digest2) = create_devnet_nft(context, package_id).await;
 
     // Add a delay to ensure event processing is done after transaction commits.
     sleep(Duration::from_secs(5)).await;
@@ -772,7 +788,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     });
 
     let txn_count = 4;
-    let mut txns = context.batch_make_transfer_transactions(txn_count).await;
+    let mut txns = batch_make_transfer_transactions(context, txn_count).await;
     assert!(
         txns.len() >= txn_count,
         "Expect at least {} txns. Do we generate enough gas objects during genesis?",
@@ -878,7 +894,7 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
     let txn_count = 4;
-    let txns = context.batch_make_transfer_transactions(txn_count).await;
+    let txns = batch_make_transfer_transactions(context, txn_count).await;
     for txn in txns {
         let tx_digest = txn.digest();
         let (tx_bytes, signatures) = txn.to_tx_bytes_and_signatures();
@@ -911,7 +927,7 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
     let txn_count = 4;
-    let mut txns = context.batch_make_transfer_transactions(txn_count).await;
+    let mut txns = batch_make_transfer_transactions(context, txn_count).await;
     assert!(
         txns.len() >= txn_count,
         "Expect at least {} txns. Do we generate enough gas objects during genesis?",
@@ -1002,10 +1018,10 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     let test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let node = &test_cluster.fullnode_handle.sui_node;
-    let package_id = test_cluster.wallet.publish_nfts_package().await.0;
+    let package_id = publish_nfts_package(&test_cluster.wallet).await.0;
 
     // Create the object
-    let (sender, object_id, _) = test_cluster.wallet.create_devnet_nft(package_id).await;
+    let (sender, object_id, _) = create_devnet_nft(&test_cluster.wallet, package_id).await;
 
     let recipient = test_cluster.get_address_1();
     assert_ne!(sender, recipient);
@@ -1036,10 +1052,8 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         .expect("Failed to transfer coins to recipient");
 
     // Delete the object
-    let response = test_cluster
-        .wallet
-        .delete_devnet_nft(recipient, package_id, object_ref_v2)
-        .await;
+    let response =
+        delete_devnet_nft(&test_cluster.wallet, recipient, package_id, object_ref_v2).await;
     assert_eq!(
         *response.effects.unwrap().status(),
         SuiExecutionStatus::Success
@@ -1175,7 +1189,7 @@ async fn test_pass_back_no_object() -> Result<(), anyhow::Error> {
     let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
 
     // TODO: this is publishing the wrong package - we should be publishing the one in `sui-core/src/unit_tests/data` instead.
-    let package_ref = context.publish_basics_package().await;
+    let package_ref = publish_basics_package(context).await;
 
     let gas_obj = context
         .get_one_gas_object_owned_by_address(sender)

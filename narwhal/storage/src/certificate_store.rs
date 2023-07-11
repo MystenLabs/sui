@@ -61,7 +61,12 @@ pub trait Cache {
         &self,
         digests: Vec<CertificateDigest>,
     ) -> Vec<(CertificateDigest, Option<Certificate>)>;
+
+    /// Checks existence of one or more digests.
     fn contains(&self, digest: &CertificateDigest) -> bool;
+    fn multi_contains<'a>(&self, digests: impl Iterator<Item = &'a CertificateDigest>)
+        -> Vec<bool>;
+
     fn remove(&self, digest: &CertificateDigest);
     fn remove_all(&self, digests: Vec<CertificateDigest>);
 }
@@ -136,13 +141,27 @@ impl Cache for CertificateStoreCache {
             .collect()
     }
 
-    /// Checks whether the value exists in the LRU cache. The method does not update the LRU record, thus
-    /// it will not count as a "last access" for the provided digest.
+    // The method does not update the LRU record, thus
+    // it will not count as a "last access" for the provided digest.
     fn contains(&self, digest: &CertificateDigest) -> bool {
         let guard = self.cache.lock();
         guard
             .contains(digest)
             .tap(|result| self.report_result(*result))
+    }
+
+    fn multi_contains<'a>(
+        &self,
+        digests: impl Iterator<Item = &'a CertificateDigest>,
+    ) -> Vec<bool> {
+        let guard = self.cache.lock();
+        digests
+            .map(|digest| {
+                guard
+                    .contains(digest)
+                    .tap(|result| self.report_result(*result))
+            })
+            .collect()
     }
 
     fn remove(&self, digest: &CertificateDigest) {
@@ -184,6 +203,13 @@ impl Cache for NoCache {
 
     fn contains(&self, _digest: &CertificateDigest) -> bool {
         false
+    }
+
+    fn multi_contains<'a>(
+        &self,
+        digests: impl Iterator<Item = &'a CertificateDigest>,
+    ) -> Vec<bool> {
+        digests.map(|_| false).collect()
     }
 
     fn remove(&self, _digest: &CertificateDigest) {
@@ -355,14 +381,35 @@ impl<T: Cache> CertificateStore<T> {
         }
     }
 
-    /// Retrieves a certificate from the store. If not found
-    /// then None is returned as result.
-    pub fn contains(&self, id: &CertificateDigest) -> StoreResult<bool> {
-        if self.cache.contains(id) {
+    pub fn contains(&self, digest: &CertificateDigest) -> StoreResult<bool> {
+        if self.cache.contains(digest) {
             return Ok(true);
         }
+        self.certificates_by_id.contains_key(digest)
+    }
 
-        self.certificates_by_id.contains_key(id)
+    pub fn multi_contains<'a>(
+        &self,
+        digests: impl Iterator<Item = &'a CertificateDigest>,
+    ) -> StoreResult<Vec<bool>> {
+        // Batch checks into the cache and the certificate store.
+        let digests = digests.enumerate().collect::<Vec<_>>();
+        let mut found = self.cache.multi_contains(digests.iter().map(|(_, d)| *d));
+        let store_lookups = digests
+            .iter()
+            .zip(found.iter())
+            .filter_map(|((i, d), hit)| if *hit { None } else { Some((*i, *d)) })
+            .collect::<Vec<_>>();
+        let store_found = self
+            .certificates_by_id
+            .multi_contains_keys(store_lookups.iter().map(|(_, d)| *d))?;
+        for ((i, _d), hit) in store_lookups.into_iter().zip(store_found.into_iter()) {
+            debug_assert!(!found[i]);
+            if hit {
+                found[i] = true;
+            }
+        }
+        Ok(found)
     }
 
     /// Retrieves multiple certificates by their provided ids. The results
@@ -787,16 +834,35 @@ mod test {
         // GIVEN
         // create certificates for 10 rounds
         let certs = certificates(10);
+        let digests = certs.iter().map(|c| c.digest()).collect::<Vec<_>>();
 
-        // store them
+        // verify certs not in the store
+        for cert in &certs {
+            assert!(!store.contains(&cert.digest()).unwrap());
+            assert!(&store.read(cert.digest()).unwrap().is_none());
+        }
+
+        let found = store.multi_contains(digests.iter()).unwrap();
+        assert_eq!(found.len(), certs.len());
+        for hit in found {
+            assert!(!hit);
+        }
+
+        // store the certs
         for cert in &certs {
             store.write(cert.clone()).unwrap();
         }
 
-        // verify
+        // verify certs in the store
         for cert in &certs {
-            store.contains(&cert.digest()).unwrap();
+            assert!(store.contains(&cert.digest()).unwrap());
             assert_eq!(cert, &store.read(cert.digest()).unwrap().unwrap())
+        }
+
+        let found = store.multi_contains(digests.iter()).unwrap();
+        assert_eq!(found.len(), certs.len());
+        for hit in found {
+            assert!(hit);
         }
     }
 
@@ -1139,11 +1205,18 @@ mod test {
             cache.write(cert.clone());
         }
 
+        let digests = certificates.iter().map(|c| c.digest()).collect::<Vec<_>>();
+        let hits = cache.multi_contains(digests.iter());
+
         for (i, cert) in certificates.iter().enumerate() {
             // first 15 certificates should not exist
             if i < 15 {
+                assert!(!hits[i]);
+                assert!(!cache.contains(&cert.digest()));
                 assert!(cache.read(&cert.digest()).is_none());
             } else {
+                assert!(hits[i]);
+                assert!(cache.contains(&cert.digest()));
                 assert!(cache.read(&cert.digest()).is_some());
             }
         }

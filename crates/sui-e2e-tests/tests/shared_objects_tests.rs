@@ -6,7 +6,9 @@ use std::time::{Duration, SystemTime};
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
-use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_test_transaction_builder::{
+    publish_basics_package, publish_basics_package_and_make_counter, TestTransactionBuilder,
+};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, ExecutionStatus};
@@ -44,10 +46,7 @@ async fn shared_object_transaction() {
 #[sim_test]
 async fn call_shared_object_contract() {
     let test_cluster = TestClusterBuilder::new().build().await;
-    let (package, counter) = test_cluster
-        .wallet
-        .publish_basics_package_and_make_counter()
-        .await;
+    let (package, counter) = publish_basics_package_and_make_counter(&test_cluster.wallet).await;
     let package_id = package.0;
     let counter_id = counter.0;
     let counter_initial_shared_version = counter.1;
@@ -194,7 +193,7 @@ async fn call_shared_object_contract() {
 #[sim_test]
 async fn access_clock_object_test() {
     let test_cluster = TestClusterBuilder::new().build().await;
-    let package_id = test_cluster.wallet.publish_basics_package().await.0;
+    let package_id = publish_basics_package(&test_cluster.wallet).await.0;
 
     let transaction = test_cluster.wallet.sign_transaction(
         &test_cluster
@@ -274,7 +273,7 @@ async fn access_clock_object_test() {
 #[sim_test]
 async fn shared_object_sync() {
     let test_cluster = TestClusterBuilder::new().build().await;
-    let package_id = test_cluster.wallet.publish_basics_package().await.0;
+    let package_id = publish_basics_package(&test_cluster.wallet).await.0;
 
     // Since we use submit_transaction_to_validators in this test, which does not go through fullnode,
     // we need to manage gas objects ourselves.
@@ -354,7 +353,7 @@ async fn shared_object_sync() {
 #[sim_test]
 async fn replay_shared_object_transaction() {
     let test_cluster = TestClusterBuilder::new().build().await;
-    let package_id = test_cluster.wallet.publish_basics_package().await.0;
+    let package_id = publish_basics_package(&test_cluster.wallet).await.0;
 
     // Send a transaction to create a counter (only to one authority) -- twice.
     let create_counter_transaction = test_cluster.wallet.sign_transaction(

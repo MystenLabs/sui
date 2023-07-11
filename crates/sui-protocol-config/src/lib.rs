@@ -51,12 +51,13 @@ const MAX_PROTOCOL_VERSION: u64 = 18;
 //             to no longer consult the object store when generating unwrapped_then_deleted in the
 //             effects; this also allows us to stop including wrapped tombstones in accumulator.
 //             Add self-matching prevention for deepbook.
-// Version 17: Introduce execution layer versioning, preserve all existing behaviour in v0.
+// Version 17: Enable upgraded multisig support.
+// Version 18: Introduce execution layer versioning, preserve all existing behaviour in v0.
 //             Gas minimum charges moved to be a multiplier over the reference gas price. In this
 //             protocol version the multiplier is the same as the lowest bucket of computation
 //             such that the minimum transaction cost is the same as the minimum computation
 //             bucket.
-//             Add a feature flag to indicate the changes semantics of `base_tx_cost_fixed`
+//             Add a feature flag to indicate the changes semantics of `base_tx_cost_fixed`.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);

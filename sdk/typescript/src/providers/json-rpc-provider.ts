@@ -31,11 +31,6 @@ import {
 	SuiTransactionBlockResponse,
 	PaginatedEvents,
 	DevInspectResults,
-	isValidTransactionDigest,
-	isValidSuiAddress,
-	isValidSuiObjectId,
-	normalizeSuiAddress,
-	normalizeSuiObjectId,
 	CoinMetadataStruct,
 	PaginatedCoins,
 	SuiObjectResponse,
@@ -67,6 +62,13 @@ import { CheckpointPage } from '../types/checkpoints.js';
 import { NetworkMetrics, AddressMetrics } from '../types/metrics.js';
 import { EpochInfo, EpochPage } from '../types/epochs.js';
 import { requestSuiFromFaucetV0 } from '../faucet/index.js';
+import {
+	isValidSuiAddress,
+	isValidSuiObjectId,
+	isValidTransactionDigest,
+	normalizeSuiAddress,
+	normalizeSuiObjectId,
+} from '../utils/sui-types.js';
 
 export interface PaginationArguments<Cursor> {
 	/** Optional paging cursor */

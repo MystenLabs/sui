@@ -14,6 +14,9 @@ pub mod pg_integration_test {
     use ntest::timeout;
     use std::env;
     use std::str::FromStr;
+    use sui_test_transaction_builder::{
+        create_devnet_nft, delete_devnet_nft, publish_nfts_package,
+    };
     use tokio::task::JoinHandle;
 
     use sui_indexer::errors::IndexerError;
@@ -267,7 +270,7 @@ pub mod pg_integration_test {
         let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
         // Allow indexer to sync genesis
         wait_until_next_checkpoint(&store).await;
-        let (package_id, _, publish_digest) = test_cluster.wallet.publish_nfts_package().await;
+        let (package_id, _, publish_digest) = publish_nfts_package(&test_cluster.wallet).await;
         wait_until_transaction_synced(&store, publish_digest.base58_encode().as_str()).await;
         wait_until_next_checkpoint(&store).await;
 
@@ -275,7 +278,7 @@ pub mod pg_integration_test {
             execute_simple_transfer(&mut test_cluster, &indexer_rpc_client).await?;
 
         wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
-        let (_, _, nft_digest) = test_cluster.wallet.create_devnet_nft(package_id).await;
+        let (_, _, nft_digest) = create_devnet_nft(&test_cluster.wallet, package_id).await;
         wait_until_transaction_synced(&store, nft_digest.base58_encode().as_str()).await;
         wait_until_next_checkpoint(&store).await;
 
@@ -407,12 +410,12 @@ pub mod pg_integration_test {
         let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
         // Allow indexer to sync genesis
         wait_until_next_checkpoint(&store).await;
-        let (package_id, _, publish_digest) = test_cluster.wallet.publish_nfts_package().await;
+        let (package_id, _, publish_digest) = publish_nfts_package(&test_cluster.wallet).await;
         wait_until_transaction_synced(&store, publish_digest.base58_encode().as_str()).await;
         let (tx_response, _, _, _) =
             execute_simple_transfer(&mut test_cluster, &indexer_rpc_client).await?;
         wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
-        let (_, _, nft_digest) = test_cluster.wallet.create_devnet_nft(package_id).await;
+        let (_, _, nft_digest) = create_devnet_nft(&test_cluster.wallet, package_id).await;
         wait_until_transaction_synced(&store, nft_digest.base58_encode().as_str()).await;
 
         let tx_multi_read_tx_response_1 = indexer_rpc_client
@@ -445,12 +448,12 @@ pub mod pg_integration_test {
         wait_until_next_checkpoint(&store).await;
         let nft_creator = test_cluster.get_address_0();
         let context = &mut test_cluster.wallet;
-        let (package_id, _, publish_digest) = context.publish_nfts_package().await;
+        let (package_id, _, publish_digest) = publish_nfts_package(context).await;
         wait_until_transaction_synced(&store, publish_digest.base58_encode().as_str()).await;
 
-        let (_, _, digest_one) = context.create_devnet_nft(package_id).await;
+        let (_, _, digest_one) = create_devnet_nft(context, package_id).await;
         wait_until_transaction_synced(&store, digest_one.base58_encode().as_str()).await;
-        let (sender, _, digest_two) = context.create_devnet_nft(package_id).await;
+        let (sender, _, digest_two) = create_devnet_nft(context, package_id).await;
         wait_until_transaction_synced(&store, digest_two.base58_encode().as_str()).await;
 
         // Test various ways of querying events
@@ -522,24 +525,24 @@ pub mod pg_integration_test {
         // Allow indexer to sync genesis
         wait_until_next_checkpoint(&store).await;
         let context = &mut test_cluster.wallet;
-        let (package_id, _, publish_digest) = context.publish_nfts_package().await;
+        let (package_id, _, publish_digest) = publish_nfts_package(context).await;
         wait_until_transaction_synced(&store, publish_digest.base58_encode().as_str()).await;
 
         for _ in 0..5 {
-            let (sender, object_id, digest) = context.create_devnet_nft(package_id).await;
+            let (sender, object_id, digest) = create_devnet_nft(context, package_id).await;
             wait_until_transaction_synced(&store, digest.base58_encode().as_str()).await;
             let obj_resp = indexer_rpc_client
                 .get_object(object_id, None)
                 .await
                 .unwrap();
             let data = obj_resp.object()?;
-            let result = context
-                .delete_devnet_nft(
-                    sender,
-                    package_id,
-                    (data.object_id, data.version, data.digest),
-                )
-                .await;
+            let result = delete_devnet_nft(
+                context,
+                sender,
+                package_id,
+                (data.object_id, data.version, data.digest),
+            )
+            .await;
             wait_until_transaction_synced(&store, result.digest.base58_encode().as_str()).await;
         }
 

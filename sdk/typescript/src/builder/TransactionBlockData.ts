@@ -17,11 +17,12 @@ import {
 	union,
 } from 'superstruct';
 import { hashTypedData } from '../cryptography/hash.js';
-import { normalizeSuiAddress, SuiObjectRef } from '../types/index.js';
+import { SuiObjectRef } from '../types/index.js';
 import { builder } from './bcs.js';
 import { TransactionType, TransactionBlockInput } from './Transactions.js';
 import { BuilderCallArg, PureCallArg } from './Inputs.js';
 import { create } from './utils.js';
+import { normalizeSuiAddress } from '../utils/sui-types.js';
 
 export const TransactionExpiration = optional(
 	nullable(

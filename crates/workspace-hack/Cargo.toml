@@ -54,7 +54,7 @@ ark-snark = { version = "0.4", default-features = false }
 ark-std = { version = "0.4", features = ["parallel"] }
 arrayref = { version = "0.3", default-features = false }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7" }
-arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5", features = ["array-sizes-33-128"] }
+arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5" }
 asn1-rs = { version = "0.5", features = ["datetime"] }
 assert_cmd = { version = "2", default-features = false }
 async-compression = { version = "0.3", features = ["brotli", "gzip", "tokio", "zlib"] }
@@ -137,7 +137,6 @@ colored = { version = "2", default-features = false }
 colored-diff = { version = "0.2", default-features = false }
 combine = { version = "4" }
 comfy-table = { version = "6" }
-config = { version = "0.11" }
 console = { version = "0.15", default-features = false, features = ["ansi-parsing", "unicode-width"] }
 console-api = { version = "0.4", default-features = false, features = ["transport"] }
 console-subscriber = { version = "0.1" }
@@ -185,7 +184,6 @@ diffus = { version = "0.10" }
 diffy = { version = "0.3", default-features = false }
 digest-274715c4dabd11b0 = { package = "digest", version = "0.9", default-features = false, features = ["std"] }
 digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "oid", "std"] }
-directories = { version = "4", default-features = false }
 dirs = { version = "4", default-features = false }
 dirs-next = { version = "2", default-features = false }
 dirs-sys = { version = "0.3", default-features = false }
@@ -313,10 +311,8 @@ jsonrpsee-wasm-client = { git = "https://github.com/wlmyng/jsonrpsee.git", rev =
 jsonrpsee-ws-client = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8" }
 k256 = { version = "0.11", default-features = false, features = ["ecdsa", "keccak256"] }
 keccak = { version = "0.1", default-features = false }
-lazy_static-6f8ce4dd05d13bba = { package = "lazy_static", version = "0.2", default-features = false }
-lazy_static-dff4ba8e3ae991db = { package = "lazy_static", version = "1", default-features = false, features = ["spin_no_std"] }
+lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
 leb128 = { version = "0.2", default-features = false }
-lexical-core = { version = "0.7" }
 libc = { version = "0.2" }
 libm = { version = "0.2" }
 librocksdb-sys = { version = "0.11", features = ["lz4", "snappy", "zlib", "zstd"] }
@@ -332,7 +328,7 @@ matchers = { version = "0.1", default-features = false }
 matchit-ca01ad9e24f5d932 = { package = "matchit", version = "0.7" }
 matchit-d8f496e17d97b5cb = { package = "matchit", version = "0.5" }
 md-5 = { version = "0.9" }
-memchr = { version = "2", features = ["use_std"] }
+memchr = { version = "2" }
 memoffset-ca01ad9e24f5d932 = { package = "memoffset", version = "0.7" }
 merlin = { version = "3" }
 migrations_internals = { version = "2", default-features = false }
@@ -393,8 +389,7 @@ nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c7876
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5", default-features = false }
 nibble_vec = { version = "0.1", default-features = false }
 no-std-compat = { version = "0.4", default-features = false, features = ["alloc", "std"] }
-nom-15128469a54ed75a = { package = "nom", version = "7" }
-nom-cdf1610d3e1514e9 = { package = "nom", version = "5" }
+nom = { version = "7" }
 nonzero_ext = { version = "0.3" }
 normalize-line-endings = { version = "0.3", default-features = false }
 ntest = { version = "0.9", default-features = false }
@@ -406,8 +401,7 @@ num-complex = { version = "0.4", default-features = false, features = ["std"] }
 num-integer = { version = "0.1", default-features = false, features = ["i128", "std"] }
 num-iter = { version = "0.1", default-features = false, features = ["i128", "std"] }
 num-rational = { version = "0.4", default-features = false, features = ["num-bigint-std", "std"] }
-num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", features = ["i128", "libm"] }
-num-traits-c65f7effa3be6d31 = { package = "num-traits", version = "0.1", default-features = false }
+num-traits = { version = "0.2", features = ["i128", "libm"] }
 num_cpus = { version = "1", default-features = false }
 num_enum = { version = "0.6" }
 number_prefix = { version = "0.4" }
@@ -416,7 +410,6 @@ oid-registry = { version = "0.6", features = ["crypto", "x509"] }
 once_cell = { version = "1" }
 oorandom = { version = "11", default-features = false }
 opaque-debug = { version = "0.3", default-features = false }
-ordered-float = { version = "2" }
 os_str_bytes = { version = "6", default-features = false, features = ["raw_os_str"] }
 ouroboros-274715c4dabd11b0 = { package = "ouroboros", version = "0.9", default-features = false }
 ouroboros-3575ec1268b04181 = { package = "ouroboros", version = "0.15" }
@@ -436,7 +429,7 @@ pem-rfc7468-3b31131e45eafb45 = { package = "pem-rfc7468", version = "0.6", defau
 pem-rfc7468-ca01ad9e24f5d932 = { package = "pem-rfc7468", version = "0.7", default-features = false, features = ["alloc"] }
 percent-encoding = { version = "2" }
 pest = { version = "2" }
-petgraph-3b31131e45eafb45 = { package = "petgraph", version = "0.6" }
+petgraph-3b31131e45eafb45 = { package = "petgraph", version = "0.6", default-features = false, features = ["graphmap"] }
 petgraph-d8f496e17d97b5cb = { package = "petgraph", version = "0.5" }
 phf = { version = "0.11", default-features = false, features = ["uncased"] }
 phf_shared = { version = "0.11", features = ["uncased"] }
@@ -469,7 +462,6 @@ proptest = { version = "1" }
 prost = { version = "0.11" }
 prost-types = { version = "0.11" }
 protobuf = { version = "2", default-features = false, features = ["with-bytes"] }
-ptree = { version = "0.4" }
 quanta = { version = "0.9" }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
 quick-error-f595c2ba2a3f28df = { package = "quick-error", version = "2", default-features = false }
@@ -512,7 +504,6 @@ rusoto_core = { version = "0.48", default-features = false, features = ["rustls"
 rusoto_credential = { version = "0.48", default-features = false }
 rusoto_kms = { version = "0.48", default-features = false, features = ["rustls"] }
 rusoto_signature = { version = "0.48", default-features = false }
-rust-ini = { version = "0.13", default-features = false }
 rust_decimal = { version = "1", default-features = false }
 rustc-demangle = { version = "0.1", default-features = false }
 rustc-hash = { version = "1" }
@@ -537,12 +528,9 @@ secp256k1 = { version = "0.27", features = ["bitcoin_hashes", "global-context", 
 secp256k1-sys = { version = "0.8", default-features = false, features = ["recovery", "std"] }
 semver-dff4ba8e3ae991db = { package = "semver", version = "1", features = ["serde"] }
 send_wrapper = { version = "0.4", default-features = false }
-serde-c38e5c1d305a1b54 = { package = "serde", version = "0.8" }
-serde-dff4ba8e3ae991db = { package = "serde", version = "1", features = ["alloc", "derive", "rc"] }
-serde-hjson = { version = "0.9", default-features = false }
+serde = { version = "1", features = ["alloc", "derive", "rc"] }
 serde-name = { version = "0.2", default-features = false }
 serde-reflection = { version = "0.3", default-features = false }
-serde-value = { version = "0.7", default-features = false }
 serde_bytes = { version = "0.11" }
 serde_json = { version = "1", features = ["alloc", "arbitrary_precision", "preserve_order", "raw_value", "unbounded_depth"] }
 serde_path_to_error = { version = "0.1", default-features = false }
@@ -612,7 +600,6 @@ threadpool = { version = "1", default-features = false }
 time-468e82937335b1c9 = { package = "time", version = "0.3", features = ["formatting", "macros", "parsing"] }
 time-c65f7effa3be6d31 = { package = "time", version = "0.1", default-features = false }
 time-core = { version = "0.1", default-features = false }
-tint = { version = "1", default-features = false }
 tiny-bip39 = { version = "1" }
 tinytemplate = { version = "1", default-features = false }
 tinyvec = { version = "1", features = ["alloc"] }
@@ -643,6 +630,7 @@ tracing-futures = { version = "0.2" }
 tracing-serde = { version = "0.1", default-features = false }
 tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", default-features = false, features = ["ansi", "env-filter", "json", "smallvec", "time"] }
 tracing-subscriber-6f8ce4dd05d13bba = { package = "tracing-subscriber", version = "0.2", default-features = false }
+treeline = { version = "0.1", default-features = false }
 try-lock = { version = "0.2", default-features = false }
 ttl_cache = { version = "0.5" }
 tui = { version = "0.17" }
@@ -743,7 +731,7 @@ ark-snark = { version = "0.4", default-features = false }
 ark-std = { version = "0.4", features = ["parallel"] }
 arrayref = { version = "0.3", default-features = false }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7" }
-arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5", features = ["array-sizes-33-128"] }
+arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5" }
 asn1-rs = { version = "0.5", features = ["datetime"] }
 asn1-rs-derive = { version = "0.4", default-features = false }
 asn1-rs-impl = { version = "0.1", default-features = false }
@@ -842,7 +830,6 @@ colored = { version = "2", default-features = false }
 colored-diff = { version = "0.2", default-features = false }
 combine = { version = "4" }
 comfy-table = { version = "6" }
-config = { version = "0.11" }
 console = { version = "0.15", default-features = false, features = ["ansi-parsing", "unicode-width"] }
 console-api = { version = "0.4", default-features = false, features = ["transport"] }
 console-subscriber = { version = "0.1" }
@@ -904,7 +891,6 @@ diffus = { version = "0.10" }
 diffy = { version = "0.3", default-features = false }
 digest-274715c4dabd11b0 = { package = "digest", version = "0.9", default-features = false, features = ["std"] }
 digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "oid", "std"] }
-directories = { version = "4", default-features = false }
 dirs = { version = "4", default-features = false }
 dirs-next = { version = "2", default-features = false }
 dirs-sys = { version = "0.3", default-features = false }
@@ -1046,11 +1032,9 @@ jsonrpsee-wasm-client = { git = "https://github.com/wlmyng/jsonrpsee.git", rev =
 jsonrpsee-ws-client = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8" }
 k256 = { version = "0.11", default-features = false, features = ["ecdsa", "keccak256"] }
 keccak = { version = "0.1", default-features = false }
-lazy_static-6f8ce4dd05d13bba = { package = "lazy_static", version = "0.2", default-features = false }
-lazy_static-dff4ba8e3ae991db = { package = "lazy_static", version = "1", default-features = false, features = ["spin_no_std"] }
+lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
 lazycell = { version = "1", default-features = false }
 leb128 = { version = "0.2", default-features = false }
-lexical-core = { version = "0.7" }
 libc = { version = "0.2" }
 libloading = { version = "0.7", default-features = false }
 libm = { version = "0.2" }
@@ -1067,7 +1051,7 @@ matchers = { version = "0.1", default-features = false }
 matchit-ca01ad9e24f5d932 = { package = "matchit", version = "0.7" }
 matchit-d8f496e17d97b5cb = { package = "matchit", version = "0.5" }
 md-5 = { version = "0.9" }
-memchr = { version = "2", features = ["use_std"] }
+memchr = { version = "2" }
 memoffset-ca01ad9e24f5d932 = { package = "memoffset", version = "0.7" }
 merlin = { version = "3" }
 migrations_internals = { version = "2", default-features = false }
@@ -1133,8 +1117,7 @@ nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c7876
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5", default-features = false }
 nibble_vec = { version = "0.1", default-features = false }
 no-std-compat = { version = "0.4", default-features = false, features = ["alloc", "std"] }
-nom-15128469a54ed75a = { package = "nom", version = "7" }
-nom-cdf1610d3e1514e9 = { package = "nom", version = "5" }
+nom = { version = "7" }
 nonzero_ext = { version = "0.3" }
 normalize-line-endings = { version = "0.3", default-features = false }
 ntest = { version = "0.9", default-features = false }
@@ -1148,8 +1131,7 @@ num-complex = { version = "0.4", default-features = false, features = ["std"] }
 num-integer = { version = "0.1", default-features = false, features = ["i128", "std"] }
 num-iter = { version = "0.1", default-features = false, features = ["i128", "std"] }
 num-rational = { version = "0.4", default-features = false, features = ["num-bigint-std", "std"] }
-num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", features = ["i128", "libm"] }
-num-traits-c65f7effa3be6d31 = { package = "num-traits", version = "0.1", default-features = false }
+num-traits = { version = "0.2", features = ["i128", "libm"] }
 num_cpus = { version = "1", default-features = false }
 num_enum = { version = "0.6" }
 num_enum_derive = { version = "0.6", default-features = false, features = ["std"] }
@@ -1159,7 +1141,6 @@ oid-registry = { version = "0.6", features = ["crypto", "x509"] }
 once_cell = { version = "1" }
 oorandom = { version = "11", default-features = false }
 opaque-debug = { version = "0.3", default-features = false }
-ordered-float = { version = "2" }
 os_str_bytes = { version = "6", default-features = false, features = ["raw_os_str"] }
 ouroboros-274715c4dabd11b0 = { package = "ouroboros", version = "0.9", default-features = false }
 ouroboros-3575ec1268b04181 = { package = "ouroboros", version = "0.15" }
@@ -1188,7 +1169,7 @@ pest = { version = "2" }
 pest_derive = { version = "2" }
 pest_generator = { version = "2", default-features = false, features = ["std"] }
 pest_meta = { version = "2", default-features = false }
-petgraph-3b31131e45eafb45 = { package = "petgraph", version = "0.6" }
+petgraph-3b31131e45eafb45 = { package = "petgraph", version = "0.6", default-features = false, features = ["graphmap"] }
 petgraph-d8f496e17d97b5cb = { package = "petgraph", version = "0.5" }
 phf = { version = "0.11", default-features = false, features = ["uncased"] }
 phf_codegen = { version = "0.11", default-features = false }
@@ -1235,7 +1216,6 @@ prost-build = { version = "0.11" }
 prost-derive = { version = "0.11", default-features = false }
 prost-types = { version = "0.11" }
 protobuf = { version = "2", default-features = false, features = ["with-bytes"] }
-ptree = { version = "0.4" }
 quanta = { version = "0.9" }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
 quick-error-f595c2ba2a3f28df = { package = "quick-error", version = "2", default-features = false }
@@ -1282,7 +1262,6 @@ rusoto_core = { version = "0.48", default-features = false, features = ["rustls"
 rusoto_credential = { version = "0.48", default-features = false }
 rusoto_kms = { version = "0.48", default-features = false, features = ["rustls"] }
 rusoto_signature = { version = "0.48", default-features = false }
-rust-ini = { version = "0.13", default-features = false }
 rust_decimal = { version = "1", default-features = false }
 rustc-demangle = { version = "0.1", default-features = false }
 rustc-hash = { version = "1" }
@@ -1313,12 +1292,9 @@ semver-a6292c17cd707f01 = { package = "semver", version = "0.11" }
 semver-dff4ba8e3ae991db = { package = "semver", version = "1", features = ["serde"] }
 semver-parser = { version = "0.10", default-features = false }
 send_wrapper = { version = "0.4", default-features = false }
-serde-c38e5c1d305a1b54 = { package = "serde", version = "0.8" }
-serde-dff4ba8e3ae991db = { package = "serde", version = "1", features = ["alloc", "derive", "rc"] }
-serde-hjson = { version = "0.9", default-features = false }
+serde = { version = "1", features = ["alloc", "derive", "rc"] }
 serde-name = { version = "0.2", default-features = false }
 serde-reflection = { version = "0.3", default-features = false }
-serde-value = { version = "0.7", default-features = false }
 serde_bytes = { version = "0.11" }
 serde_derive = { version = "1" }
 serde_derive_internals = { version = "0.26", default-features = false }
@@ -1401,7 +1377,6 @@ time-468e82937335b1c9 = { package = "time", version = "0.3", features = ["format
 time-c65f7effa3be6d31 = { package = "time", version = "0.1", default-features = false }
 time-core = { version = "0.1", default-features = false }
 time-macros = { version = "0.2", default-features = false, features = ["formatting", "parsing"] }
-tint = { version = "1", default-features = false }
 tiny-bip39 = { version = "1" }
 tinytemplate = { version = "1", default-features = false }
 tinyvec = { version = "1", features = ["alloc"] }
@@ -1436,6 +1411,7 @@ tracing-futures = { version = "0.2" }
 tracing-serde = { version = "0.1", default-features = false }
 tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", default-features = false, features = ["ansi", "env-filter", "json", "smallvec", "time"] }
 tracing-subscriber-6f8ce4dd05d13bba = { package = "tracing-subscriber", version = "0.2", default-features = false }
+treeline = { version = "0.1", default-features = false }
 try-lock = { version = "0.2", default-features = false }
 ttl_cache = { version = "0.5" }
 tui = { version = "0.17" }

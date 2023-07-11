@@ -10,11 +10,11 @@ import type { PublicKey } from './publickey.js';
 import { blake2b } from '@noble/hashes/blake2b';
 import { bytesToHex } from '@noble/hashes/utils';
 
-import { normalizeSuiAddress } from '../types/index.js';
 import { Ed25519PublicKey } from '../keypairs/ed25519/publickey.js';
 import { Secp256k1PublicKey } from '../keypairs/secp256k1/publickey.js';
 import { Secp256r1PublicKey } from '../keypairs/secp256r1/publickey.js';
 import { builder } from '../builder/bcs.js';
+import { normalizeSuiAddress } from '../utils/sui-types.js';
 
 export type PubkeyWeightPair = {
 	pubKey: PublicKey;

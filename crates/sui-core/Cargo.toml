@@ -75,7 +75,6 @@ sui-network.workspace = true
 sui-protocol-config.workspace = true
 sui-simulator.workspace = true
 sui-storage.workspace = true
-sui-test-transaction-builder.workspace = true
 sui-types.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
@@ -92,6 +91,7 @@ serde_yaml.workspace = true
 move-symbol-pool.workspace = true
 
 narwhal-test-utils.workspace = true
+sui-test-transaction-builder.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }
 
 [target.'cfg(not(target_env = "msvc"))'.dev-dependencies]

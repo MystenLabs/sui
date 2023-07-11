@@ -23,7 +23,6 @@ thiserror.workspace = true
 
 sui-swarm-config.workspace = true
 sui-json-rpc.workspace = true
-sui-test-transaction-builder.workspace = true
 sui-transaction-builder.workspace = true
 sui-json-rpc-types.workspace = true
 sui-types.workspace = true

@@ -13,8 +13,6 @@ pub struct CheckpointMetrics {
     pub last_certified_checkpoint: IntGauge,
     pub last_constructed_checkpoint: IntGauge,
     pub checkpoint_errors: IntCounter,
-    pub builder_utilization: IntCounter,
-    pub aggregator_utilization: IntCounter,
     pub transactions_included_in_checkpoint: IntCounter,
     pub checkpoint_roots_count: IntCounter,
     pub checkpoint_participation: IntCounterVec,
@@ -55,18 +53,6 @@ impl CheckpointMetrics {
             checkpoint_errors: register_int_counter_with_registry!(
                 "checkpoint_errors",
                 "Checkpoints errors count",
-                registry
-            )
-            .unwrap(),
-            builder_utilization: register_int_counter_with_registry!(
-                "builder_utilization",
-                "Checkpoints builder task utilization",
-                registry
-            )
-            .unwrap(),
-            aggregator_utilization: register_int_counter_with_registry!(
-                "aggregator_utilization",
-                "Checkpoints aggregator task utilization",
                 registry
             )
             .unwrap(),

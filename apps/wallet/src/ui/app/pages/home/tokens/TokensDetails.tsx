@@ -197,7 +197,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 		FEATURES.BULLSHARK_QUESTS_INTERSTITIAL,
 	).value;
 
-	useLedgerNotification();
+	useLedgerNotification(!BullsharkInterstitialEnabled || interstitialDismissed);
 
 	const { providers } = useOnrampProviders();
 

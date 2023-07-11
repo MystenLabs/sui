@@ -8,7 +8,6 @@ use crate::{
     OBJECT_REF_BYTES, REFERENCE_FILE_MAGIC, SEQUENCE_NUM_BYTES,
 };
 use anyhow::{anyhow, Context, Result};
-use backoff::future::retry;
 use byteorder::{BigEndian, ByteOrder};
 use futures::StreamExt;
 use integer_encoding::VarInt;
@@ -31,6 +30,7 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
+use tracing::debug;
 
 /// LiveObjectSetWriterV1 writes live object set. It creates multiple *.obj files and one REFERENCE file
 struct LiveObjectSetWriterV1 {
@@ -46,7 +46,7 @@ struct LiveObjectSetWriterV1 {
 }
 
 impl LiveObjectSetWriterV1 {
-    async fn new(
+    fn new(
         dir_path: PathBuf,
         bucket_num: u32,
         file_compression: FileCompression,
@@ -66,15 +66,15 @@ impl LiveObjectSetWriterV1 {
             file_compression,
         })
     }
-    pub async fn write(&mut self, object: &LiveObject) -> Result<()> {
+    pub fn write(&mut self, object: &LiveObject) -> Result<()> {
         let object_reference = object.object_reference();
-        self.write_object(object).await?;
-        self.write_object_ref(&object_reference).await?;
+        self.write_object(object)?;
+        self.write_object_ref(&object_reference)?;
         Ok(())
     }
-    pub async fn done(mut self) -> Result<Vec<FileMetadata>> {
-        self.finalize().await?;
-        self.finalize_ref().await?;
+    pub fn done(mut self) -> Result<Vec<FileMetadata>> {
+        self.finalize()?;
+        self.finalize_ref()?;
         self.sender = None;
         Ok(self.files.clone())
     }
@@ -132,7 +132,7 @@ impl LiveObjectSetWriterV1 {
         f.seek(SeekFrom::Start(n as u64))?;
         Ok(f)
     }
-    async fn finalize(&mut self) -> Result<()> {
+    fn finalize(&mut self) -> Result<()> {
         self.wbuf.flush()?;
         self.wbuf.get_ref().sync_data()?;
         let off = self.wbuf.get_ref().stream_position()?;
@@ -149,11 +149,11 @@ impl LiveObjectSetWriterV1 {
         )?;
         self.files.push(file_metadata.clone());
         if let Some(sender) = &self.sender {
-            sender.send(file_metadata).await?;
+            sender.blocking_send(file_metadata)?;
         }
         Ok(())
     }
-    async fn finalize_ref(&mut self) -> Result<()> {
+    fn finalize_ref(&mut self) -> Result<()> {
         self.ref_wbuf.flush()?;
         self.ref_wbuf.get_ref().sync_data()?;
         let off = self.ref_wbuf.get_ref().stream_position()?;
@@ -168,12 +168,12 @@ impl LiveObjectSetWriterV1 {
         )?;
         self.files.push(file_metadata.clone());
         if let Some(sender) = &self.sender {
-            sender.send(file_metadata).await?;
+            sender.blocking_send(file_metadata)?;
         }
         Ok(())
     }
-    async fn cut(&mut self) -> Result<()> {
-        self.finalize().await?;
+    fn cut(&mut self) -> Result<()> {
+        self.finalize()?;
         let delim = [0u8; OBJECT_REF_BYTES];
         self.ref_wbuf.write_all(&delim)?;
         let (n, f, part_num) = Self::next_object_file(self.dir_path.clone(), self.bucket_num)?;
@@ -182,19 +182,19 @@ impl LiveObjectSetWriterV1 {
         self.wbuf = BufWriter::new(f);
         Ok(())
     }
-    async fn write_object(&mut self, object: &LiveObject) -> Result<()> {
+    fn write_object(&mut self, object: &LiveObject) -> Result<()> {
         let blob = Blob::encode(object, BlobEncoding::Bcs)?;
         let mut blob_size = blob.data.len().required_space();
         blob_size += BLOB_ENCODING_BYTES;
         blob_size += blob.data.len();
         let cut_new_part_file = (self.n + blob_size) > FILE_MAX_BYTES;
         if cut_new_part_file {
-            self.cut().await?;
+            self.cut()?;
         }
         self.n += blob.write(&mut self.wbuf)?;
         Ok(())
     }
-    async fn write_object_ref(&mut self, object_ref: &ObjectRef) -> Result<()> {
+    fn write_object_ref(&mut self, object_ref: &ObjectRef) -> Result<()> {
         let mut buf = [0u8; OBJECT_REF_BYTES];
         buf[0..ObjectID::LENGTH].copy_from_slice(object_ref.0.as_ref());
         BigEndian::write_u64(
@@ -268,25 +268,34 @@ impl StateSnapshotWriterV1 {
             include_wrapped_tombstone,
         })
     }
-    pub async fn write(mut self, perpetual_db: &AuthorityPerpetualTables) -> Result<()> {
+    pub async fn write(mut self, perpetual_db: Arc<AuthorityPerpetualTables>) -> Result<()> {
         let (sender, receiver) = mpsc::channel::<FileMetadata>(1000);
+        let epoch = self.epoch;
+        let manifest_file_path = self.epoch_dir().child("MANIFEST");
+        let local_staging_dir_root = self.local_staging_dir_root.clone();
+        let local_object_store = self.local_object_store.clone();
+        let remote_object_store = self.remote_object_store.clone();
+
         let upload_handle = self.start_upload(receiver)?;
-        let files = self
-            .write_live_object_set(perpetual_db, sender, Self::bucket_func)
-            .await?;
-        self.local_staging_dir.sync_data()?;
-        self.write_manifest(files)?;
+        let write_handler = tokio::task::spawn_blocking(move || {
+            self.write_live_object_set(perpetual_db, sender, Self::bucket_func)
+        });
+
+        write_handler.await?.context(format!(
+            "Failed to write state snapshot for epoch: {}",
+            &epoch
+        ))?;
+
         upload_handle.await?.context(format!(
             "Failed to upload state snapshot for epoch: {}",
-            &self.epoch
+            &epoch
         ))?;
-        // Upload MANIFEST in the very end
-        let manifest_file_path = self.epoch_dir().child("MANIFEST");
-        copy_file(
-            manifest_file_path.clone(),
-            manifest_file_path.clone(),
-            self.local_object_store,
-            self.remote_object_store,
+
+        Self::sync_file_to_remote(
+            local_staging_dir_root,
+            manifest_file_path,
+            local_object_store,
+            remote_object_store,
         )
         .await?;
         Ok(())
@@ -303,32 +312,17 @@ impl StateSnapshotWriterV1 {
         let join_handle = tokio::spawn(async move {
             let results: Vec<Result<(), anyhow::Error>> = ReceiverStream::new(receiver)
                 .map(|file_metadata| {
-                    let backoff = backoff::ExponentialBackoff::default();
                     let file_path = file_metadata.file_path(&epoch_dir);
                     let remote_object_store = remote_object_store.clone();
                     let local_object_store = local_object_store.clone();
                     let local_dir_path = local_dir_path.clone();
                     async move {
-                        retry(backoff, || async {
-                            copy_file(
-                                file_path.clone(),
-                                file_path.clone(),
-                                local_object_store.clone(),
-                                remote_object_store.clone(),
-                            )
-                            .await
-                            .map_err(|e| anyhow!("Failed to upload state snapshot file: {e}"))
-                            .map_err(backoff::Error::transient)?;
-                            // Delete file from local filesystem as soon as it is done uploading
-                            let local_file_path =
-                                path_to_filesystem(local_dir_path.clone(), &file_path.clone())?;
-                            if local_file_path.exists() {
-                                fs::remove_file(local_file_path)
-                                    .map_err(|e| anyhow!("Failed to delete local file: {e}"))
-                                    .map_err(backoff::Error::transient)?;
-                            }
-                            Ok(())
-                        })
+                        Self::sync_file_to_remote(
+                            local_dir_path.clone(),
+                            file_path.clone(),
+                            local_object_store.clone(),
+                            remote_object_store.clone(),
+                        )
                         .await?;
                         Ok(())
                     }
@@ -343,12 +337,12 @@ impl StateSnapshotWriterV1 {
         });
         Ok(join_handle)
     }
-    async fn write_live_object_set<F>(
+    fn write_live_object_set<F>(
         &mut self,
-        perpetual_db: &AuthorityPerpetualTables,
+        perpetual_db: Arc<AuthorityPerpetualTables>,
         sender: Sender<FileMetadata>,
         bucket_func: F,
-    ) -> Result<Vec<FileMetadata>>
+    ) -> Result<()>
     where
         F: Fn(&LiveObject) -> u32,
     {
@@ -358,26 +352,25 @@ impl StateSnapshotWriterV1 {
         for object in perpetual_db.iter_live_object_set(self.include_wrapped_tombstone) {
             let bucket_num = bucket_func(&object);
             if let Vacant(entry) = object_writers.entry(bucket_num) {
-                entry.insert(
-                    LiveObjectSetWriterV1::new(
-                        local_staging_dir_path.clone(),
-                        bucket_num,
-                        self.file_compression,
-                        sender.clone(),
-                    )
-                    .await?,
-                );
+                entry.insert(LiveObjectSetWriterV1::new(
+                    local_staging_dir_path.clone(),
+                    bucket_num,
+                    self.file_compression,
+                    sender.clone(),
+                )?);
             }
             let writer = object_writers
                 .get_mut(&bucket_num)
                 .context("Unexpected missing bucket writer")?;
-            writer.write(&object).await?;
+            writer.write(&object)?;
         }
         let mut files = vec![];
         for (_, writer) in object_writers.into_iter() {
-            files.extend(writer.done().await?);
+            files.extend(writer.done()?);
         }
-        Ok(files)
+        self.local_staging_dir.sync_data()?;
+        self.write_manifest(files)?;
+        Ok(())
     }
     fn write_manifest(&mut self, file_metadata: Vec<FileMetadata>) -> Result<()> {
         let (f, manifest_file_path) = self.manifest_file()?;
@@ -430,5 +423,17 @@ impl StateSnapshotWriterV1 {
     }
     fn epoch_dir(&self) -> Path {
         Path::from(format!("epoch_{}", self.epoch))
+    }
+
+    async fn sync_file_to_remote(
+        dir: PathBuf,
+        path: Path,
+        from: Arc<DynObjectStore>,
+        to: Arc<DynObjectStore>,
+    ) -> Result<()> {
+        debug!("Syncing snapshot file to remote: {:?}", path);
+        copy_file(path.clone(), path.clone(), from, to).await?;
+        fs::remove_file(path_to_filesystem(dir, &path)?)?;
+        Ok(())
     }
 }

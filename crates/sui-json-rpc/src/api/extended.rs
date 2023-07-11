@@ -60,4 +60,7 @@ pub trait ExtendedApi {
         &self,
         descending_order: Option<bool>,
     ) -> RpcResult<Vec<AddressMetrics>>;
+
+    #[method(name = "getTotalTransactions")]
+    async fn get_total_transactions(&self) -> RpcResult<BigInt<u64>>;
 }

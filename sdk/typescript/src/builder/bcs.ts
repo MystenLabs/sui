@@ -5,9 +5,9 @@ import type { TypeName } from '@mysten/bcs';
 import { BCS } from '@mysten/bcs';
 import { bcs } from '../types/sui-bcs.js';
 import type { TypeTag } from '../types/index.js';
-import { normalizeSuiAddress } from '../types/index.js';
 import { TypeTagSerializer } from '../signers/txn-data-serializers/type-tag-serializer.js';
 import type { TransactionArgument, MoveCallTransaction } from './Transactions.js';
+import { normalizeSuiAddress } from '../utils/sui-types.js';
 
 export const ARGUMENT_INNER = 'Argument';
 export const VECTOR = 'vector';
