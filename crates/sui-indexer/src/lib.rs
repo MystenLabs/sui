@@ -30,7 +30,7 @@ use handlers::checkpoint_handler::CheckpointHandler;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
 use processors::processor_orchestrator::ProcessorOrchestrator;
 use store::IndexerStore;
-use sui_core::event_handler::SubscriptionHandler;
+use sui_core::subscription_handler::SubscriptionHandler;
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, CLIENT_SDK_TYPE_HEADER};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 
@@ -181,7 +181,7 @@ impl Indexer {
             "Sui indexer of version {:?} started...",
             env!("CARGO_PKG_VERSION")
         );
-        let event_handler = Arc::new(SubscriptionHandler::default());
+        let subscription_handler = Arc::new(SubscriptionHandler::new(registry));
 
         if config.rpc_server_worker && config.fullnode_sync_worker {
             info!("Starting indexer with both fullnode sync and RPC server");
@@ -189,7 +189,7 @@ impl Indexer {
             let handle = build_json_rpc_server(
                 registry,
                 store.clone(),
-                event_handler.clone(),
+                subscription_handler.clone(),
                 config,
                 custom_runtime,
             )
@@ -202,13 +202,13 @@ impl Indexer {
             spawn_monitored_task!(processor_orchestrator.run_forever());
 
             backoff::future::retry(ExponentialBackoff::default(), || async {
-                let event_handler_clone = event_handler.clone();
+                let subscription_handler_clone = subscription_handler.clone();
                 let metrics_clone = metrics.clone();
                 let http_client = get_http_client(config.rpc_client_url.as_str())?;
                 let cp = CheckpointHandler::new(
                     store.clone(),
                     http_client,
-                    event_handler_clone,
+                    subscription_handler_clone,
                     metrics_clone,
                     config,
                 );
@@ -223,7 +223,7 @@ impl Indexer {
             let handle = build_json_rpc_server(
                 registry,
                 store.clone(),
-                event_handler.clone(),
+                subscription_handler.clone(),
                 config,
                 custom_runtime,
             )
@@ -237,13 +237,13 @@ impl Indexer {
             spawn_monitored_task!(processor_orchestrator.run_forever());
 
             backoff::future::retry(ExponentialBackoff::default(), || async {
-                let event_handler_clone = event_handler.clone();
+                let subscription_handler_clone = subscription_handler.clone();
                 let metrics_clone = metrics.clone();
                 let http_client = get_http_client(config.rpc_client_url.as_str())?;
                 let cp = CheckpointHandler::new(
                     store.clone(),
                     http_client,
-                    event_handler_clone,
+                    subscription_handler_clone,
                     metrics_clone,
                     config,
                 );
@@ -321,7 +321,7 @@ pub fn get_pg_pool_connection(pool: &PgConnectionPool) -> Result<PgPoolConnectio
 pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clone>(
     prometheus_registry: &Registry,
     state: S,
-    event_handler: Arc<SubscriptionHandler>,
+    subscription_handler: Arc<SubscriptionHandler>,
     config: &IndexerConfig,
     custom_runtime: Option<Handle>,
 ) -> Result<ServerHandle, IndexerError> {
@@ -339,7 +339,7 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
     builder.register_module(IndexerApi::new(
         state.clone(),
         http_client.clone(),
-        event_handler,
+        subscription_handler,
         config.migrated_methods.clone(),
     ))?;
     builder.register_module(WriteApi::new(state.clone(), http_client.clone()))?;

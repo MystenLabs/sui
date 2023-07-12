@@ -9851,6 +9851,7 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
+ "mysten-metrics",
  "schemars",
  "serde",
  "serde_json",
