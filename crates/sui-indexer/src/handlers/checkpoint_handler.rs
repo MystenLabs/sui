@@ -17,7 +17,7 @@ use tokio::task::JoinHandle;
 use tracing::{error, info, warn};
 
 use mysten_metrics::spawn_monitored_task;
-use sui_core::event_handler::SubscriptionHandler;
+use sui_core::subscription_handler::SubscriptionHandler;
 use sui_json_rpc::api::ReadApiClient;
 use sui_json_rpc_types::{
     OwnedObjectRef, SuiGetPastObjectRequest, SuiObjectData, SuiObjectDataOptions, SuiRawData,
@@ -58,7 +58,7 @@ const EPOCH_QUEUE_LIMIT: usize = 2;
 pub struct CheckpointHandler<S> {
     state: S,
     http_client: HttpClient,
-    event_handler: Arc<SubscriptionHandler>,
+    subscription_handler: Arc<SubscriptionHandler>,
     metrics: IndexerMetrics,
     config: IndexerConfig,
     checkpoint_sender: Arc<Mutex<Sender<TemporaryCheckpointStore>>>,
@@ -74,7 +74,7 @@ where
     pub fn new(
         state: S,
         http_client: HttpClient,
-        event_handler: Arc<SubscriptionHandler>,
+        subscription_handler: Arc<SubscriptionHandler>,
         metrics: IndexerMetrics,
         config: &IndexerConfig,
     ) -> Self {
@@ -83,7 +83,7 @@ where
         Self {
             state,
             http_client,
-            event_handler,
+            subscription_handler,
             metrics,
             config: config.clone(),
             checkpoint_sender: Arc::new(Mutex::new(checkpoint_sender)),
@@ -268,7 +268,7 @@ where
                 let ws_guard = self.metrics.subscription_process_latency.start_timer();
                 for tx in &checkpoint.transactions {
                     let data: SenderSignedData = bcs::from_bytes(&tx.raw_transaction)?;
-                    self.event_handler
+                    self.subscription_handler
                         .process_tx(data.transaction_data(), &tx.effects, &tx.events)
                         .await?;
                 }
