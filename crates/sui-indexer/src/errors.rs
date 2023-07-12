@@ -105,3 +105,9 @@ impl From<IndexerError> for RpcError {
         RpcError::Call(CallError::Failed(e.into()))
     }
 }
+
+impl From<tokio::task::JoinError> for IndexerError {
+    fn from(value: tokio::task::JoinError) -> Self {
+        IndexerError::UncategorizedError(anyhow::Error::from(value))
+    }
+}
