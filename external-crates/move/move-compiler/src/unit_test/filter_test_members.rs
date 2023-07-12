@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_ir_types::location::{sp, Loc};
+use move_symbol_pool::Symbol;
 
 use crate::{
     diag,
@@ -99,8 +100,8 @@ impl FilterContext for Context<'_> {
 // Filtering of test-annotated module members
 //***************************************************************************
 
-const UNIT_TEST_MODULE_NAME: &str = "unit_test";
-const STDLIB_ADDRESS_NAME: &str = "std";
+const UNIT_TEST_MODULE_NAME: Symbol = symbol!("unit_test");
+const STDLIB_ADDRESS_NAME: Symbol = symbol!("std");
 
 // This filters out all test, and test-only annotated module member from `prog` if the `test` flag
 // in `compilation_env` is not set. If the test flag is set, no filtering is performed, and instead
@@ -122,13 +123,11 @@ fn check_has_unit_test_module(compilation_env: &mut CompilationEnv, prog: &P::Pr
         .chain(prog.source_definitions.iter())
         .any(|pkg| match &pkg.def {
             P::Definition::Module(mdef) => {
-                mdef.name.0.value.as_str() == UNIT_TEST_MODULE_NAME
+                mdef.name.0.value == UNIT_TEST_MODULE_NAME
                     && mdef.address.is_some()
                     && match &mdef.address.as_ref().unwrap().value {
                         // TODO: remove once named addresses have landed in the stdlib
-                        P::LeadingNameAccess_::Name(name) => {
-                            name.value.as_str() == STDLIB_ADDRESS_NAME
-                        }
+                        P::LeadingNameAccess_::Name(name) => name.value == STDLIB_ADDRESS_NAME,
                         P::LeadingNameAccess_::AnonymousAddress(_) => false,
                     }
             }

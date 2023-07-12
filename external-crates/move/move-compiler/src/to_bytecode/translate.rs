@@ -519,7 +519,7 @@ fn struct_fields(
         HF::Defined(field_vec) if field_vec.is_empty() => {
             // empty fields are not allowed in the bytecode, add a dummy field
             let fake_field = vec![(
-                Field(sp(loc, "dummy_field".into())),
+                Field(sp(loc, symbol!("dummy_field"))),
                 H::BaseType_::bool(loc),
             )];
             struct_fields(context, loc, HF::Defined(fake_field))

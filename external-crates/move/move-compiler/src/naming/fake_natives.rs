@@ -19,6 +19,7 @@ use crate::{
     },
 };
 use move_ir_types::ast as IR;
+use move_symbol_pool::symbol;
 
 pub const FAKE_NATIVE_ATTR: AttributeName_ =
     AttributeName_::Known(KnownAttribute::Native(NativeAttribute::BytecodeInstruction));
@@ -90,7 +91,7 @@ pub fn resolve_builtin(
     // Only resolve if either (a) the address is named "std" or (b) its value is 0x1
     match address {
         Address::Numerical(Some(sp!(_, n)), _) | Address::NamedUnassigned(sp!(_, n))
-            if n.as_str() == "std" => {}
+            if *n == symbol!("std") => {}
         Address::Numerical(_, sp!(_, a)) if a.into_inner() == AccountAddress::ONE => {}
         _ => {
             return None;
