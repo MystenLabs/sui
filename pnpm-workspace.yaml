@@ -7,4 +7,5 @@ packages:
     - '!sdk/typescript/client'
     - '!sdk/typescript/cryptography'
     - '!sdk/typescript/faucet'
+    - '!sdk/typescript/transactions'
     - '!sdk/typescript/*/**'
