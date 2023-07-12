@@ -22,9 +22,6 @@ const TEST_EXT: &str = "unit_test";
 const VERIFICATION_EXT: &str = "verification";
 const UNUSED_EXT: &str = "unused";
 
-/// Root of tests which require to set flavor flags.
-const FLAVOR_PATH: &str = "flavors/";
-
 fn default_testing_addresses() -> BTreeMap<String, NumericalAddress> {
     let mapping = [
         ("std", "0x1"),
@@ -109,21 +106,7 @@ fn move_check_testsuite(path: &Path) -> datatest_stable::Result<()> {
     let exp_path = path.with_extension(EXP_EXT);
     let out_path = path.with_extension(OUT_EXT);
 
-    let mut flags = Flags::empty();
-    match path.to_str() {
-        Some(p) if p.contains(FLAVOR_PATH) => {
-            // Extract the flavor from the path. Its the directory name of the file.
-            let flavor = path
-                .parent()
-                .expect("has parent")
-                .file_name()
-                .expect("has name")
-                .to_string_lossy()
-                .to_string();
-            flags = flags.set_flavor(flavor)
-        }
-        _ => {}
-    };
+    let flags = Flags::empty();
     run_test(path, &exp_path, &out_path, flags, true)?;
     Ok(())
 }

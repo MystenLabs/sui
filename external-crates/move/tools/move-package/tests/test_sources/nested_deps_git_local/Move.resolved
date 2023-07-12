@@ -73,6 +73,8 @@ ResolvedGraph {
         additional_named_addresses: {},
         fetch_deps_only: false,
         skip_fetch_latest_git_deps: false,
+        default_flavor: None,
+        default_edition: None,
     },
     package_table: {
         "MoveNursery": Package {
@@ -86,6 +88,8 @@ ResolvedGraph {
                     ),
                     authors: [],
                     license: None,
+                    edition: None,
+                    flavor: None,
                     custom_properties: {},
                 },
                 addresses: None,
@@ -128,6 +132,8 @@ ResolvedGraph {
                     ),
                     authors: [],
                     license: None,
+                    edition: None,
+                    flavor: None,
                     custom_properties: {},
                 },
                 addresses: Some(
@@ -162,6 +168,8 @@ ResolvedGraph {
                     ),
                     authors: [],
                     license: None,
+                    edition: None,
+                    flavor: None,
                     custom_properties: {},
                 },
                 addresses: Some(

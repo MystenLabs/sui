@@ -47,6 +47,9 @@ static_symbols!(
     "_",
     "init",
     "unit_test",
+    "legacy",
+    "2024",
+    "alpha",
 );
 
 /// The global, unique cache of strings.

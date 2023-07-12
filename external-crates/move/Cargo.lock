@@ -2662,6 +2662,7 @@ dependencies = [
  "once_cell",
  "petgraph 0.5.1",
  "regex",
+ "serde",
  "sha3",
  "tempfile",
  "walkdir",
