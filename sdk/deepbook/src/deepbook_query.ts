@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { DevInspectResults, JsonRpcProvider, normalizeSuiObjectId, testnetConnection, TransactionBlock } from '@mysten/sui.js';
+import {CLOCK, MODULE_CLOB, PACKAGE_ID} from "./utils";
 
 export class DeepBook_query {
 	public provider: JsonRpcProvider;
@@ -30,7 +31,7 @@ export class DeepBook_query {
 		const txb = new TransactionBlock();
 		txb.moveCall({
 			typeArguments: [token1, token2],
-			target: `dee9::clob_v2::get_order_status`,
+			target: `${PACKAGE_ID}::${MODULE_CLOB}::get_order_status`,
 			arguments: [txb.object(poolId), txb.object(orderId), txb.object(accountCap)],
 		});
 		txb.setSender(this.currentAddress);
@@ -56,7 +57,7 @@ export class DeepBook_query {
 		const txb = new TransactionBlock();
 		txb.moveCall({
 			typeArguments: [token1, token2],
-			target: `dee9::clob_v2::account_balance`,
+			target: `${PACKAGE_ID}::${MODULE_CLOB}::account_balance`,
 			arguments: [txb.object(poolId), txb.object(accountCap)],
 		});
 		txb.setSender(this.currentAddress);
@@ -82,7 +83,7 @@ export class DeepBook_query {
 		const txb = new TransactionBlock();
 		txb.moveCall({
 			typeArguments: [token1, token2],
-			target: `dee9::clob_v2::list_open_orders`,
+			target: `${PACKAGE_ID}::${MODULE_CLOB}::list_open_orders`,
 			arguments: [txb.object(poolId), txb.object(accountCap)],
 		});
 		txb.setSender(this.currentAddress);
@@ -103,7 +104,7 @@ export class DeepBook_query {
 		const txb = new TransactionBlock();
 		txb.moveCall({
 			typeArguments: [token1, token2],
-			target: `dee9::clob_v2::get_market_price`,
+			target: `${PACKAGE_ID}::${MODULE_CLOB}::get_market_price`,
 			arguments: [txb.object(poolId)],
 		});
 		return await this.provider.devInspectTransactionBlock({
@@ -133,13 +134,13 @@ export class DeepBook_query {
 		txb.moveCall({
 			typeArguments: [token1, token2],
 			target: is_bid_side
-				? `dee9::clob_v2::get_level2_book_status_bid_side`
-				: `dee9::clob_v2::get_level2_book_status_ask_side`,
+				? `${PACKAGE_ID}::${MODULE_CLOB}::get_level2_book_status_bid_side`
+				: `${PACKAGE_ID}::${MODULE_CLOB}::get_level2_book_status_ask_side`,
 			arguments: [
 				txb.object(poolId),
 				txb.pure(String(lowerPrice)),
 				txb.pure(String(higherPrice)),
-				txb.object(normalizeSuiObjectId('0x6')),
+				txb.object(normalizeSuiObjectId(CLOCK)),
 			],
 		});
 		return await this.provider.devInspectTransactionBlock({
