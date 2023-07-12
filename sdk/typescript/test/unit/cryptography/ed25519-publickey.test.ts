@@ -8,20 +8,23 @@ import { Ed25519PublicKey } from '../../../src';
 // cargo build --bin sui
 // ../sui/target/debug/sui client new-address ed25519
 // ../sui/target/debug/sui keytool list
-let TEST_CASES = new Map<string, string>([
-	[
-		'UdGRWooy48vGTs0HBokIis5NK+DUjiWc9ENUlcfCCBE=',
-		'0xd77a6cd55073e98d4029b1b0b8bd8d88f45f343dad2732fc9a7965094e635c55',
-	],
-	[
-		'0PTAfQmNiabgbak9U/stWZzKc5nsRqokda2qnV2DTfg=',
-		'0x7e8fd489c3d3cd9cc7cbcc577dc5d6de831e654edd9997d95c412d013e6eea23',
-	],
-	[
-		'6L/l0uhGt//9cf6nLQ0+24Uv2qanX/R6tn7lWUJX1Xk=',
-		'0x3a1b4410ebe9c3386a429c349ba7929aafab739c277f97f32622b971972a14a2',
-	],
-]);
+const TEST_CASES = [
+	{
+		rawPublicKey: 'UdGRWooy48vGTs0HBokIis5NK+DUjiWc9ENUlcfCCBE=',
+		suiPublicKey: 'AFHRkVqKMuPLxk7NBwaJCIrOTSvg1I4lnPRDVJXHwggR',
+		suiAddress: '0xd77a6cd55073e98d4029b1b0b8bd8d88f45f343dad2732fc9a7965094e635c55',
+	},
+	{
+		rawPublicKey: '0PTAfQmNiabgbak9U/stWZzKc5nsRqokda2qnV2DTfg=',
+		suiPublicKey: 'AND0wH0JjYmm4G2pPVP7LVmcynOZ7EaqJHWtqp1dg034',
+		suiAddress: '0x7e8fd489c3d3cd9cc7cbcc577dc5d6de831e654edd9997d95c412d013e6eea23',
+	},
+	{
+		rawPublicKey: '6L/l0uhGt//9cf6nLQ0+24Uv2qanX/R6tn7lWUJX1Xk=',
+		suiPublicKey: 'AOi/5dLoRrf//XH+py0NPtuFL9qmp1/0erZ+5VlCV9V5',
+		suiAddress: '0x3a1b4410ebe9c3386a429c349ba7929aafab739c277f97f32622b971972a14a2',
+	},
+];
 
 const VALID_KEY_BASE64 = 'Uz39UFseB/B38iBwjesIU1JZxY6y+TRL9P84JFw41W4=';
 
@@ -68,10 +71,15 @@ describe('Ed25519PublicKey', () => {
 		expect(new Ed25519PublicKey(key.toBytes()).equals(key)).toBe(true);
 	});
 
-	TEST_CASES.forEach((address, base64) => {
-		it(`toSuiAddress from base64 public key ${address}`, () => {
-			const key = new Ed25519PublicKey(base64);
-			expect(key.toSuiAddress()).toEqual(address);
+	TEST_CASES.forEach(({ rawPublicKey, suiPublicKey, suiAddress }) => {
+		it(`toSuiAddress from base64 public key ${suiAddress}`, () => {
+			const key = new Ed25519PublicKey(rawPublicKey);
+			expect(key.toSuiAddress()).toEqual(suiAddress);
+		});
+
+		it(`toSuiPublicKey from base64 public key ${suiAddress}`, () => {
+			const key = new Ed25519PublicKey(rawPublicKey);
+			expect(key.toSuiPublicKey()).toEqual(suiPublicKey);
 		});
 	});
 });

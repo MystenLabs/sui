@@ -80,10 +80,12 @@ export class Secp256r1PublicKey implements PublicKey {
 	}
 
 	/**
-	 * Return the Sui representation of the public key
+	 * Return the Sui representation of the public key encoded in
+	 * base-64. A Sui public key is formed by the concatenation
+	 * of the scheme flag with the raw bytes of the public key
 	 */
 	toSuiPublicKey(): string {
-		const suiPublicKey = new Uint8Array(1 + this.data.length);
+		const suiPublicKey = new Uint8Array(this.data.length + 1);
 		suiPublicKey.set([this.flag()]);
 		suiPublicKey.set(this.data, 1);
 		return toB64(suiPublicKey);
