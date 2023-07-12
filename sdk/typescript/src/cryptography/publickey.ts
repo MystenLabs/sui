@@ -51,6 +51,13 @@ export interface PublicKey {
 	toSuiAddress(): string;
 
 	/**
+	 * Return the Sui representation of the public key encoded in
+	 * base-64. A Sui public key is formed by the concatenation
+	 * of the scheme flag with the raw bytes of the public key
+	 */
+	toSuiPublicKey(): string;
+
+	/**
 	 * Return signature scheme flag of the public key
 	 */
 	flag(): number;
