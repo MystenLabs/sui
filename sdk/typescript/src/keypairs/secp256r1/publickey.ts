@@ -70,11 +70,12 @@ export class Secp256r1PublicKey implements PublicKey {
 	 * Return the Sui address associated with this Secp256r1 public key
 	 */
 	toSuiAddress(): string {
-		const suiPublicKey = this.toSuiPublicKey();
-
+		let tmp = new Uint8Array(SECP256R1_PUBLIC_KEY_SIZE + 1);
+		tmp.set([SIGNATURE_SCHEME_TO_FLAG['Secp256r1']]);
+		tmp.set(this.toBytes(), 1);
 		// Each hex char represents half a byte, hence hex address doubles the length
 		return normalizeSuiAddress(
-			bytesToHex(blake2b(suiPublicKey, { dkLen: 32 })).slice(0, SUI_ADDRESS_LENGTH * 2),
+			bytesToHex(blake2b(tmp, { dkLen: 32 })).slice(0, SUI_ADDRESS_LENGTH * 2),
 		);
 	}
 
@@ -82,10 +83,10 @@ export class Secp256r1PublicKey implements PublicKey {
 	 * Return the Sui representation of the public key
 	 */
 	toSuiPublicKey(): string {
-		const suiPublicKey = new Uint8Array(SECP256R1_PUBLIC_KEY_SIZE + 1);
+		const suiPublicKey = new Uint8Array(1 + this.data.length);
 		suiPublicKey.set([this.flag()]);
 		suiPublicKey.set(this.data, 1);
-		return new Secp256r1PublicKey(suiPublicKey);
+		return toB64(suiPublicKey);
 	}
 
 	/**

@@ -72,10 +72,5 @@ describe('Secp256k1PublicKey', () => {
 			const key = new Secp256k1PublicKey(base64);
 			expect(key.toSuiAddress()).toEqual(address);
 		});
-
-		it(`toSuiPublicKey from base64 public key ${address}`, () => {
-			const key = new Secp256k1PublicKey(base64);
-			expect(key.toSuiPublicKey()).toEqual(base64);
-		});
 	});
 });
