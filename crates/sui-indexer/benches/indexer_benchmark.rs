@@ -44,7 +44,7 @@ fn indexer_benchmark(c: &mut Criterion) {
         let registry = Registry::default();
         let indexer_metrics = IndexerMetrics::new(&registry);
 
-        let store = PgIndexerStore::new(blocking_cp, indexer_metrics).await;
+        let store = PgIndexerStore::new(blocking_cp, indexer_metrics);
 
         let checkpoints = (0..150).map(create_checkpoint).collect::<Vec<_>>();
         (checkpoints, store)

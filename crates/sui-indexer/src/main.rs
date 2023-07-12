@@ -62,7 +62,7 @@ async fn main() -> Result<(), IndexerError> {
             IndexerError::PostgresResetError(db_err_msg)
         })?;
     }
-    let store = PgIndexerStore::new(blocking_cp, indexer_metrics.clone()).await;
+    let store = PgIndexerStore::new(blocking_cp, indexer_metrics.clone());
 
     Indexer::start(&indexer_config, &registry, store, indexer_metrics, None).await
 }

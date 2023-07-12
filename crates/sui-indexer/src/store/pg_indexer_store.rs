@@ -22,14 +22,13 @@ use move_core_types::identifier::Identifier;
 use prometheus::Histogram;
 use tracing::info;
 
-use sui_json_rpc::{ObjectProvider, ObjectProviderCache};
 use sui_json_rpc_types::{
     CheckpointId, EpochInfo, EventFilter, EventPage, MoveCallMetrics, MoveFunctionName,
     NetworkMetrics, SuiEvent, SuiObjectDataFilter,
 };
 use sui_json_rpc_types::{
-    SuiTransactionBlock, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    SuiTransactionBlock, SuiTransactionBlockEffects, SuiTransactionBlockEvents,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::committee::{EpochId, ProtocolVersion};
@@ -66,7 +65,6 @@ use crate::store::module_resolver::IndexerModuleResolver;
 use crate::store::query::DBFilter;
 use crate::store::TransactionObjectChanges;
 use crate::store::{IndexerStore, TemporaryEpochStore};
-use crate::utils::{get_balance_changes_from_effect, get_object_changes};
 use crate::PgConnectionPool;
 
 const MAX_EVENT_PAGE_SIZE: usize = 1000;
@@ -101,19 +99,19 @@ pub struct PgIndexerStore {
 }
 
 impl PgIndexerStore {
-    pub async fn new(blocking_cp: PgConnectionPool, metrics: IndexerMetrics) -> Self {
+    pub fn new(blocking_cp: PgConnectionPool, metrics: IndexerMetrics) -> Self {
         let module_cache = Arc::new(SyncModuleCache::new(IndexerModuleResolver::new(
             blocking_cp.clone(),
         )));
         PgIndexerStore {
             blocking_cp: blocking_cp.clone(),
-            partition_manager: PartitionManager::new(blocking_cp).await.unwrap(),
+            partition_manager: PartitionManager::new(blocking_cp).unwrap(),
             module_cache,
             metrics,
         }
     }
 
-    pub async fn get_sui_types_object(
+    pub fn get_sui_types_object(
         &self,
         object_id: &ObjectID,
         version: &SequenceNumber,
@@ -152,7 +150,7 @@ impl PgIndexerStore {
         }
     }
 
-    pub async fn find_sui_types_object_lt_or_eq_version(
+    pub fn find_sui_types_object_lt_or_eq_version(
         &self,
         id: &ObjectID,
         version: &SequenceNumber,
@@ -193,13 +191,8 @@ impl PgIndexerStore {
             Err(e) => Err(e),
         }
     }
-}
 
-#[async_trait]
-impl IndexerStore for PgIndexerStore {
-    type ModuleCache = SyncModuleCache<IndexerModuleResolver>;
-
-    async fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError> {
+    fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError> {
         read_only_blocking!(&self.blocking_cp, |conn| {
             checkpoints::dsl::checkpoints
                 .select(max(checkpoints::sequence_number))
@@ -210,7 +203,7 @@ impl IndexerStore for PgIndexerStore {
         .context("Failed reading latest checkpoint sequence number from PostgresDB")
     }
 
-    async fn get_checkpoint(
+    fn get_checkpoint(
         &self,
         id: CheckpointId,
     ) -> Result<sui_json_rpc_types::Checkpoint, IndexerError> {
@@ -284,7 +277,7 @@ impl IndexerStore for PgIndexerStore {
         .context(format!("Failed reading checkpoint {:?} from PostgresDB", id).as_str())
     }
 
-    async fn get_checkpoints(
+    fn get_checkpoints(
         &self,
         cursor: Option<CheckpointId>,
         limit: usize,
@@ -319,7 +312,7 @@ impl IndexerStore for PgIndexerStore {
         )
     }
 
-    async fn get_checkpoint_sequence_number(
+    fn get_checkpoint_sequence_number(
         &self,
         digest: CheckpointDigest,
     ) -> Result<CheckpointSequenceNumber, IndexerError> {
@@ -332,7 +325,7 @@ impl IndexerStore for PgIndexerStore {
         )
     }
 
-    async fn get_event(&self, id: EventID) -> Result<Event, IndexerError> {
+    fn get_event(&self, id: EventID) -> Result<Event, IndexerError> {
         read_only_blocking!(&self.blocking_cp, |conn| events::table
             .filter(events::dsl::transaction_digest.eq(id.tx_digest.base58_encode()))
             .filter(events::dsl::event_sequence.eq(id.event_seq as i64))
@@ -340,7 +333,7 @@ impl IndexerStore for PgIndexerStore {
         .context("Failed reading event from PostgresDB")
     }
 
-    async fn get_events(
+    fn get_events(
         &self,
         query: EventFilter,
         cursor: Option<EventID>,
@@ -394,7 +387,7 @@ impl IndexerStore for PgIndexerStore {
 
         let pg_cursor =
             if let Some(cursor) = cursor {
-                Some(self.get_event(cursor).await?.id.ok_or_else(|| {
+                Some(self.get_event(cursor)?.id.ok_or_else(|| {
                     IndexerError::PostgresReadError("Event ID is None".to_string())
                 })?)
             } else {
@@ -434,7 +427,7 @@ impl IndexerStore for PgIndexerStore {
         })
     }
 
-    async fn get_total_transaction_number_from_checkpoints(&self) -> Result<i64, IndexerError> {
+    fn get_total_transaction_number_from_checkpoints(&self) -> Result<i64, IndexerError> {
         let checkpoint: Checkpoint = read_only_blocking!(&self.blocking_cp, |conn| {
             checkpoints::dsl::checkpoints
                 .order(checkpoints::dsl::network_total_transactions.desc())
@@ -444,10 +437,7 @@ impl IndexerStore for PgIndexerStore {
         Ok(checkpoint.network_total_transactions)
     }
 
-    async fn get_transaction_by_digest(
-        &self,
-        tx_digest: &str,
-    ) -> Result<Transaction, IndexerError> {
+    fn get_transaction_by_digest(&self, tx_digest: &str) -> Result<Transaction, IndexerError> {
         read_only_blocking!(&self.blocking_cp, |conn| {
             transactions::dsl::transactions
                 .filter(transactions::dsl::transaction_digest.eq(tx_digest))
@@ -458,7 +448,7 @@ impl IndexerStore for PgIndexerStore {
         ))
     }
 
-    async fn compose_sui_transaction_block_response(
+    fn compose_sui_transaction_block_response(
         &self,
         tx: Transaction,
         options: Option<&SuiTransactionBlockResponseOptions>,
@@ -483,38 +473,42 @@ impl IndexerStore for PgIndexerStore {
                 tx.transaction_digest, e
             ))
         })?;
-        let sender = SuiAddress::from_str(tx.sender.as_str())?;
 
         let (mut tx_opt, mut effects_opt, mut raw_tx) = (None, None, vec![]);
-        let (mut object_changes, mut balance_changes, mut events) = (None, None, None);
+        let (object_changes, balance_changes, mut events) = (None, None, None);
         if let Some(options) = options {
+            //TODO Object changes and balance changes are not supported atm due to async issues
             if options.show_balance_changes {
-                let object_cache = ObjectProviderCache::new(self.clone());
-                balance_changes =
-                    Some(get_balance_changes_from_effect(&object_cache, &effects).await?);
+                return Err(IndexerError::NotSupportedError(
+                    "Object cache is not supported".to_string(),
+                ));
+                // let object_cache = ObjectProviderCache::new(self.clone());
+                // balance_changes =
+                //     Some(get_balance_changes_from_effect(&object_cache, &effects).await?);
             }
             if options.show_object_changes {
-                let object_cache = ObjectProviderCache::new(self.clone());
-                object_changes = Some(
-                    get_object_changes(
-                        &object_cache,
-                        sender,
-                        &effects.modified_at_versions(),
-                        effects.all_changed_objects(),
-                        effects.all_deleted_objects(),
-                    )
-                    .await?,
-                );
+                return Err(IndexerError::NotSupportedError(
+                    "Object cache is not supported".to_string(),
+                ));
+                // let object_cache = ObjectProviderCache::new(self.clone());
+                // object_changes = Some(
+                //     get_object_changes(
+                //         &object_cache,
+                //         sender,
+                //         &effects.modified_at_versions(),
+                //         effects.all_changed_objects(),
+                //         effects.all_deleted_objects(),
+                //     )
+                //     .await?,
+                // );
             }
             if options.show_events {
-                let event_page = self
-                    .get_events(
-                        EventFilter::Transaction(tx_digest),
-                        None,
-                        None,
-                        /* descending_order */ false,
-                    )
-                    .await?;
+                let event_page = self.get_events(
+                    EventFilter::Transaction(tx_digest),
+                    None,
+                    None,
+                    /* descending_order */ false,
+                )?;
                 events = Some(SuiTransactionBlockEvents {
                     data: event_page.data,
                 });
@@ -545,7 +539,7 @@ impl IndexerStore for PgIndexerStore {
         })
     }
 
-    async fn multi_get_transactions_by_digests(
+    fn multi_get_transactions_by_digests(
         &self,
         tx_digests: &[String],
     ) -> Result<Vec<Transaction>, IndexerError> {
@@ -568,7 +562,7 @@ impl IndexerStore for PgIndexerStore {
         Ok(sorted_transactions)
     }
 
-    async fn get_transaction_sequence_by_digest(
+    fn get_transaction_sequence_by_digest(
         &self,
         tx_digest: Option<String>,
         is_descending: bool,
@@ -595,7 +589,7 @@ impl IndexerStore for PgIndexerStore {
         ))
     }
 
-    async fn get_object(
+    fn get_object(
         &self,
         object_id: ObjectID,
         version: Option<SequenceNumber>,
@@ -639,7 +633,7 @@ impl IndexerStore for PgIndexerStore {
         }
     }
 
-    async fn query_objects_history(
+    fn query_objects_history(
         &self,
         filter: SuiObjectDataFilter,
         at_checkpoint: CheckpointSequenceNumber,
@@ -675,7 +669,7 @@ impl IndexerStore for PgIndexerStore {
     }
 
     // NOTE(gegaowp): now only supports query by address owner
-    async fn query_latest_objects(
+    fn query_latest_objects(
         &self,
         filter: SuiObjectDataFilter,
         cursor: Option<ObjectID>,
@@ -709,7 +703,7 @@ impl IndexerStore for PgIndexerStore {
             .collect()
     }
 
-    async fn get_move_call_sequence_by_digest(
+    fn get_move_call_sequence_by_digest(
         &self,
         tx_digest: Option<String>,
         is_descending: bool,
@@ -736,7 +730,7 @@ impl IndexerStore for PgIndexerStore {
         ))
     }
 
-    async fn get_input_object_sequence_by_digest(
+    fn get_input_object_sequence_by_digest(
         &self,
         tx_digest: Option<String>,
         is_descending: bool,
@@ -763,7 +757,7 @@ impl IndexerStore for PgIndexerStore {
         ))
     }
 
-    async fn get_changed_object_sequence_by_digest(
+    fn get_changed_object_sequence_by_digest(
         &self,
         tx_digest: Option<String>,
         is_descending: bool,
@@ -790,7 +784,7 @@ impl IndexerStore for PgIndexerStore {
         ))
     }
 
-    async fn get_recipient_sequence_by_digest(
+    fn get_recipient_sequence_by_digest(
         &self,
         tx_digest: Option<String>,
         is_descending: bool,
@@ -817,7 +811,7 @@ impl IndexerStore for PgIndexerStore {
         ))
     }
 
-    async fn get_all_transaction_page(
+    fn get_all_transaction_page(
         &self,
         start_sequence: Option<i64>,
         limit: usize,
@@ -847,7 +841,7 @@ impl IndexerStore for PgIndexerStore {
         }).context(&format!("Failed reading all transaction digests with start_sequence {start_sequence:?} and limit {limit}"))
     }
 
-    async fn get_transaction_page_by_checkpoint(
+    fn get_transaction_page_by_checkpoint(
         &self,
         checkpoint_sequence_number: i64,
         start_sequence: Option<i64>,
@@ -879,7 +873,7 @@ impl IndexerStore for PgIndexerStore {
         }).context(&format!("Failed reading transaction digests with checkpoint_sequence_number {checkpoint_sequence_number:?} and start_sequence {start_sequence:?} and limit {limit}"))
     }
 
-    async fn get_transaction_page_by_transaction_kind(
+    fn get_transaction_page_by_transaction_kind(
         &self,
         kind: String,
         start_sequence: Option<i64>,
@@ -912,7 +906,7 @@ impl IndexerStore for PgIndexerStore {
         }).context(&format!("Failed reading transaction digests with kind {kind} and start_sequence {start_sequence:?} and limit {limit}"))
     }
 
-    async fn get_transaction_page_by_sender_address(
+    fn get_transaction_page_by_sender_address(
         &self,
         sender_address: String,
         start_sequence: Option<i64>,
@@ -945,7 +939,7 @@ impl IndexerStore for PgIndexerStore {
         }).context(&format!("Failed reading transaction digests by sender address {sender_address} with start_sequence {start_sequence:?} and limit {limit}"))
     }
 
-    async fn get_transaction_page_by_input_object(
+    fn get_transaction_page_by_input_object(
         &self,
         object_id: ObjectID,
         version: Option<i64>,
@@ -981,10 +975,10 @@ impl IndexerStore for PgIndexerStore {
                 .into_iter()
                 .map(|table: TempDigestTable| table.digest_name)
                 .collect();
-        self.multi_get_transactions_by_digests(&tx_digests).await
+        self.multi_get_transactions_by_digests(&tx_digests)
     }
 
-    async fn get_transaction_page_by_changed_object(
+    fn get_transaction_page_by_changed_object(
         &self,
         object_id: ObjectID,
         version: Option<i64>,
@@ -1020,10 +1014,10 @@ impl IndexerStore for PgIndexerStore {
                 .into_iter()
                 .map(|table: TempDigestTable| table.digest_name)
                 .collect();
-        self.multi_get_transactions_by_digests(&tx_digests).await
+        self.multi_get_transactions_by_digests(&tx_digests)
     }
 
-    async fn get_transaction_page_by_move_call(
+    fn get_transaction_page_by_move_call(
         &self,
         package_name: ObjectID,
         module_name: Option<Identifier>,
@@ -1070,10 +1064,10 @@ impl IndexerStore for PgIndexerStore {
                 .into_iter()
                 .map(|table: TempDigestTable| table.digest_name)
                 .collect();
-        self.multi_get_transactions_by_digests(&tx_digests).await
+        self.multi_get_transactions_by_digests(&tx_digests)
     }
 
-    async fn get_transaction_page_by_recipient_address(
+    fn get_transaction_page_by_recipient_address(
         &self,
         from: Option<SuiAddress>,
         to: SuiAddress,
@@ -1083,7 +1077,7 @@ impl IndexerStore for PgIndexerStore {
     ) -> Result<Vec<Transaction>, IndexerError> {
         let sql_query = format!(
             "SELECT transaction_digest as digest_name FROM recipients
-             WHERE recipient = '{}' {} {} 
+             WHERE recipient = '{}' {} {}
              ORDER BY id {} LIMIT {}",
             to,
             if let Some(start_sequence) = start_sequence {
@@ -1108,10 +1102,10 @@ impl IndexerStore for PgIndexerStore {
                 .into_iter()
                 .map(|table: TempDigestTable| table.digest_name)
                 .collect();
-        self.multi_get_transactions_by_digests(&tx_digests).await
+        self.multi_get_transactions_by_digests(&tx_digests)
     }
 
-    async fn get_transaction_page_by_address(
+    fn get_transaction_page_by_address(
         &self,
         address: SuiAddress,
         start_sequence: Option<i64>,
@@ -1141,14 +1135,14 @@ impl IndexerStore for PgIndexerStore {
                 .into_iter()
                 .map(|table: TempDigestTable| table.digest_name)
                 .collect();
-        self.multi_get_transactions_by_digests(&tx_digests).await
+        self.multi_get_transactions_by_digests(&tx_digests)
     }
 
-    async fn get_network_metrics(&self) -> Result<NetworkMetrics, IndexerError> {
-        get_network_metrics_cached(&self.blocking_cp).await
+    fn get_network_metrics(&self) -> Result<NetworkMetrics, IndexerError> {
+        get_network_metrics_cached(&self.blocking_cp)
     }
 
-    async fn get_move_call_metrics(&self) -> Result<MoveCallMetrics, IndexerError> {
+    fn get_move_call_metrics(&self) -> Result<MoveCallMetrics, IndexerError> {
         let metrics = read_only_blocking!(&self.blocking_cp, |conn| {
             diesel::sql_query("SELECT * FROM epoch_move_call_metrics;")
                 .get_results::<DBMoveCallMetrics>(conn)
@@ -1182,7 +1176,7 @@ impl IndexerStore for PgIndexerStore {
         })
     }
 
-    async fn persist_fast_path(
+    fn persist_fast_path(
         &self,
         tx: Transaction,
         tx_object_changes: TransactionObjectChanges,
@@ -1211,7 +1205,7 @@ impl IndexerStore for PgIndexerStore {
         })
     }
 
-    async fn persist_checkpoint_transactions(
+    fn persist_checkpoint_transactions(
         &self,
         checkpoint: &Checkpoint,
         transactions: &[Transaction],
@@ -1244,7 +1238,7 @@ impl IndexerStore for PgIndexerStore {
         })
     }
 
-    async fn persist_object_changes(
+    fn persist_object_changes(
         &self,
         tx_object_changes: &[TransactionObjectChanges],
         object_mutation_latency: Histogram,
@@ -1275,7 +1269,7 @@ impl IndexerStore for PgIndexerStore {
         Ok(())
     }
 
-    async fn persist_events(&self, events: &[Event]) -> Result<(), IndexerError> {
+    fn persist_events(&self, events: &[Event]) -> Result<(), IndexerError> {
         transactional_blocking!(&self.blocking_cp, |conn| {
             for event_chunk in events.chunks(PG_COMMIT_CHUNK_SIZE) {
                 diesel::insert_into(events::table)
@@ -1290,7 +1284,7 @@ impl IndexerStore for PgIndexerStore {
         Ok(())
     }
 
-    async fn persist_addresses(
+    fn persist_addresses(
         &self,
         addresses: &[Address],
         active_addresses: &[ActiveAddress],
@@ -1341,7 +1335,7 @@ impl IndexerStore for PgIndexerStore {
         })?;
         Ok(())
     }
-    async fn persist_packages(&self, packages: &[Package]) -> Result<(), IndexerError> {
+    fn persist_packages(&self, packages: &[Package]) -> Result<(), IndexerError> {
         transactional_blocking!(&self.blocking_cp, |conn| {
             for packages_chunk in packages.chunks(PG_COMMIT_CHUNK_SIZE) {
                 diesel::insert_into(packages::table)
@@ -1356,7 +1350,7 @@ impl IndexerStore for PgIndexerStore {
         Ok(())
     }
 
-    async fn persist_transaction_index_tables(
+    fn persist_transaction_index_tables(
         &self,
         input_objects: &[InputObject],
         changed_objects: &[ChangedObject],
@@ -1408,7 +1402,7 @@ impl IndexerStore for PgIndexerStore {
         Ok(())
     }
 
-    async fn get_network_total_transactions_previous_epoch(
+    fn get_network_total_transactions_previous_epoch(
         &self,
         epoch: i64,
     ) -> Result<i64, IndexerError> {
@@ -1422,18 +1416,17 @@ impl IndexerStore for PgIndexerStore {
         .context("Failed to count network transactions in previous epoch")
     }
 
-    async fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError> {
+    fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError> {
         // MUSTFIX(gegaowp): temporarily disable the epoch advance logic.
         // let last_epoch_cp_id = if data.last_epoch.is_none() {
         //     0
         // } else {
-        //     self.get_current_epoch().await?.first_checkpoint_id as i64
+        //     self.get_current_epoch()?.first_checkpoint_id as i64
         // };
         if data.last_epoch.is_none() {
             let last_epoch_cp_id = 0;
             self.partition_manager
-                .advance_epoch(&data.new_epoch, last_epoch_cp_id)
-                .await?;
+                .advance_epoch(&data.new_epoch, last_epoch_cp_id)?;
         }
         transactional_blocking!(&self.blocking_cp, |conn| {
             if let Some(last_epoch) = &data.last_epoch {
@@ -1491,15 +1484,7 @@ impl IndexerStore for PgIndexerStore {
         Ok(())
     }
 
-    fn module_cache(&self) -> &Self::ModuleCache {
-        &self.module_cache
-    }
-
-    fn indexer_metrics(&self) -> &IndexerMetrics {
-        &self.metrics
-    }
-
-    async fn get_epochs(
+    fn get_epochs(
         &self,
         cursor: Option<EpochId>,
         limit: usize,
@@ -1558,7 +1543,7 @@ impl IndexerStore for PgIndexerStore {
             .collect()
     }
 
-    async fn get_current_epoch(&self) -> Result<EpochInfo, IndexerError> {
+    fn get_current_epoch(&self) -> Result<EpochInfo, IndexerError> {
         let epoch_info: DBEpochInfo = read_only_blocking!(&self.blocking_cp, |conn| {
             epochs::dsl::epochs
                 .order_by(epochs::epoch.desc())
@@ -1577,7 +1562,7 @@ impl IndexerStore for PgIndexerStore {
     }
 
     /// address stats methods
-    async fn get_last_address_processed_checkpoint(&self) -> Result<i64, IndexerError> {
+    fn get_last_address_processed_checkpoint(&self) -> Result<i64, IndexerError> {
         read_only_blocking!(&self.blocking_cp, |conn| {
             address_stats::dsl::address_stats
                 .select(max(address_stats::checkpoint))
@@ -1588,7 +1573,7 @@ impl IndexerStore for PgIndexerStore {
         .context("Failed reading latest object checkpoint from PostgresDB")
     }
 
-    async fn calculate_address_stats(&self, checkpoint: i64) -> Result<AddressStats, IndexerError> {
+    fn calculate_address_stats(&self, checkpoint: i64) -> Result<AddressStats, IndexerError> {
         read_only_blocking!(&self.blocking_cp, |conn| {
             let cp: Checkpoint = checkpoints::dsl::checkpoints
                 .filter(checkpoints::sequence_number.eq(checkpoint))
@@ -1621,7 +1606,7 @@ impl IndexerStore for PgIndexerStore {
         .context("Failed reading latest object checkpoint sequence number from PostgresDB")
     }
 
-    async fn persist_address_stats(&self, addr_stats: &AddressStats) -> Result<(), IndexerError> {
+    fn persist_address_stats(&self, addr_stats: &AddressStats) -> Result<(), IndexerError> {
         transactional_blocking!(&self.blocking_cp, |conn| {
             diesel::insert_into(address_stats::dsl::address_stats)
                 .values(addr_stats)
@@ -1631,7 +1616,7 @@ impl IndexerStore for PgIndexerStore {
         Ok(())
     }
 
-    async fn get_latest_address_stats(&self) -> Result<AddressStats, IndexerError> {
+    fn get_latest_address_stats(&self) -> Result<AddressStats, IndexerError> {
         read_only_blocking!(&self.blocking_cp, |conn| {
             address_stats::dsl::address_stats
                 .order_by(address_stats::checkpoint.desc())
@@ -1640,10 +1625,7 @@ impl IndexerStore for PgIndexerStore {
         .context("Failed reading latest address stats from PostgresDB")
     }
 
-    async fn get_checkpoint_address_stats(
-        &self,
-        checkpoint: i64,
-    ) -> Result<AddressStats, IndexerError> {
+    fn get_checkpoint_address_stats(&self, checkpoint: i64) -> Result<AddressStats, IndexerError> {
         read_only_blocking!(&self.blocking_cp, |conn| {
             address_stats::dsl::address_stats
                 .filter(address_stats::checkpoint.eq(checkpoint))
@@ -1659,7 +1641,7 @@ impl IndexerStore for PgIndexerStore {
         )
     }
 
-    async fn get_all_epoch_address_stats(
+    fn get_all_epoch_address_stats(
         &self,
         descending_order: Option<bool>,
     ) -> Result<Vec<AddressStats>, IndexerError> {
@@ -1672,7 +1654,7 @@ impl IndexerStore for PgIndexerStore {
                 FROM
                   address_stats
               )
-              SELECT 
+              SELECT
                 checkpoint, epoch, timestamp_ms, cumulative_addresses, cumulative_active_addresses, daily_active_addresses
               FROM ranked_rows
               WHERE row_num = 1 ORDER BY epoch {}",
@@ -1688,6 +1670,519 @@ impl IndexerStore for PgIndexerStore {
             .into_iter()
             .map(|db_addr_stats| db_addr_stats.into())
             .collect())
+    }
+
+    async fn spawn_blocking<F, R>(&self, f: F) -> Result<R, IndexerError>
+    where
+        F: FnOnce(Self) -> Result<R, IndexerError> + Send + 'static,
+        R: Send + 'static,
+    {
+        let this = self.clone();
+        tokio::task::spawn_blocking(move || f(this))
+            .await
+            .map_err(Into::into)
+            .and_then(std::convert::identity)
+    }
+}
+
+#[async_trait]
+impl IndexerStore for PgIndexerStore {
+    type ModuleCache = SyncModuleCache<IndexerModuleResolver>;
+
+    async fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError> {
+        self.spawn_blocking(|this| this.get_latest_checkpoint_sequence_number())
+            .await
+    }
+
+    async fn get_checkpoint(
+        &self,
+        id: CheckpointId,
+    ) -> Result<sui_json_rpc_types::Checkpoint, IndexerError> {
+        self.spawn_blocking(move |this| this.get_checkpoint(id))
+            .await
+    }
+
+    async fn get_checkpoints(
+        &self,
+        cursor: Option<CheckpointId>,
+        limit: usize,
+    ) -> Result<Vec<sui_json_rpc_types::Checkpoint>, IndexerError> {
+        self.spawn_blocking(move |this| this.get_checkpoints(cursor, limit))
+            .await
+    }
+
+    async fn get_checkpoint_sequence_number(
+        &self,
+        digest: CheckpointDigest,
+    ) -> Result<CheckpointSequenceNumber, IndexerError> {
+        self.spawn_blocking(move |this| this.get_checkpoint_sequence_number(digest))
+            .await
+    }
+
+    async fn get_event(&self, id: EventID) -> Result<Event, IndexerError> {
+        self.spawn_blocking(move |this| this.get_event(id)).await
+    }
+
+    async fn get_events(
+        &self,
+        query: EventFilter,
+        cursor: Option<EventID>,
+        limit: Option<usize>,
+        descending_order: bool,
+    ) -> Result<EventPage, IndexerError> {
+        self.spawn_blocking(move |this| this.get_events(query, cursor, limit, descending_order))
+            .await
+    }
+
+    async fn get_object(
+        &self,
+        object_id: ObjectID,
+        version: Option<SequenceNumber>,
+    ) -> Result<ObjectRead, IndexerError> {
+        self.spawn_blocking(move |this| this.get_object(object_id, version))
+            .await
+    }
+
+    async fn query_objects_history(
+        &self,
+        filter: SuiObjectDataFilter,
+        at_checkpoint: CheckpointSequenceNumber,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> Result<Vec<ObjectRead>, IndexerError> {
+        self.spawn_blocking(move |this| {
+            this.query_objects_history(filter, at_checkpoint, cursor, limit)
+        })
+        .await
+    }
+
+    async fn query_latest_objects(
+        &self,
+        filter: SuiObjectDataFilter,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> Result<Vec<ObjectRead>, IndexerError> {
+        self.spawn_blocking(move |this| this.query_latest_objects(filter, cursor, limit))
+            .await
+    }
+
+    async fn get_total_transaction_number_from_checkpoints(&self) -> Result<i64, IndexerError> {
+        self.spawn_blocking(move |this| this.get_total_transaction_number_from_checkpoints())
+            .await
+    }
+
+    async fn get_transaction_by_digest(
+        &self,
+        tx_digest: &str,
+    ) -> Result<Transaction, IndexerError> {
+        let tx_digest = tx_digest.to_owned();
+        self.spawn_blocking(move |this| this.get_transaction_by_digest(&tx_digest))
+            .await
+    }
+
+    async fn multi_get_transactions_by_digests(
+        &self,
+        tx_digests: &[String],
+    ) -> Result<Vec<Transaction>, IndexerError> {
+        let tx_digests = tx_digests.to_owned();
+        self.spawn_blocking(move |this| this.multi_get_transactions_by_digests(&tx_digests))
+            .await
+    }
+
+    async fn compose_sui_transaction_block_response(
+        &self,
+        tx: Transaction,
+        options: Option<&SuiTransactionBlockResponseOptions>,
+    ) -> Result<SuiTransactionBlockResponse, IndexerError> {
+        let options = options.cloned();
+        self.spawn_blocking(move |this| {
+            this.compose_sui_transaction_block_response(tx, options.as_ref())
+        })
+        .await
+    }
+
+    async fn get_all_transaction_page(
+        &self,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<Transaction>, IndexerError> {
+        self.spawn_blocking(move |this| {
+            this.get_all_transaction_page(start_sequence, limit, is_descending)
+        })
+        .await
+    }
+
+    async fn get_transaction_page_by_checkpoint(
+        &self,
+        checkpoint_sequence_number: i64,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<Transaction>, IndexerError> {
+        self.spawn_blocking(move |this| {
+            this.get_transaction_page_by_checkpoint(
+                checkpoint_sequence_number,
+                start_sequence,
+                limit,
+                is_descending,
+            )
+        })
+        .await
+    }
+
+    async fn get_transaction_page_by_transaction_kind(
+        &self,
+        kind: String,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<Transaction>, IndexerError> {
+        self.spawn_blocking(move |this| {
+            this.get_transaction_page_by_transaction_kind(
+                kind,
+                start_sequence,
+                limit,
+                is_descending,
+            )
+        })
+        .await
+    }
+
+    async fn get_transaction_page_by_sender_address(
+        &self,
+        sender_address: String,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<Transaction>, IndexerError> {
+        self.spawn_blocking(move |this| {
+            this.get_transaction_page_by_sender_address(
+                sender_address,
+                start_sequence,
+                limit,
+                is_descending,
+            )
+        })
+        .await
+    }
+
+    async fn get_transaction_page_by_recipient_address(
+        &self,
+        sender_address: Option<SuiAddress>,
+        recipient_address: SuiAddress,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<Transaction>, IndexerError> {
+        self.spawn_blocking(move |this| {
+            this.get_transaction_page_by_recipient_address(
+                sender_address,
+                recipient_address,
+                start_sequence,
+                limit,
+                is_descending,
+            )
+        })
+        .await
+    }
+
+    async fn get_transaction_page_by_address(
+        &self,
+        address: SuiAddress,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<Transaction>, IndexerError> {
+        self.spawn_blocking(move |this| {
+            this.get_transaction_page_by_address(address, start_sequence, limit, is_descending)
+        })
+        .await
+    }
+
+    async fn get_transaction_page_by_input_object(
+        &self,
+        object_id: ObjectID,
+        version: Option<i64>,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<Transaction>, IndexerError> {
+        self.spawn_blocking(move |this| {
+            this.get_transaction_page_by_input_object(
+                object_id,
+                version,
+                start_sequence,
+                limit,
+                is_descending,
+            )
+        })
+        .await
+    }
+
+    async fn get_transaction_page_by_changed_object(
+        &self,
+        object_id: ObjectID,
+        version: Option<i64>,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<Transaction>, IndexerError> {
+        self.spawn_blocking(move |this| {
+            this.get_transaction_page_by_changed_object(
+                object_id,
+                version,
+                start_sequence,
+                limit,
+                is_descending,
+            )
+        })
+        .await
+    }
+
+    async fn get_transaction_page_by_move_call(
+        &self,
+        package: ObjectID,
+        module: Option<Identifier>,
+        function: Option<Identifier>,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<Transaction>, IndexerError> {
+        self.spawn_blocking(move |this| {
+            this.get_transaction_page_by_move_call(
+                package,
+                module,
+                function,
+                start_sequence,
+                limit,
+                is_descending,
+            )
+        })
+        .await
+    }
+
+    async fn get_transaction_sequence_by_digest(
+        &self,
+        tx_digest: Option<String>,
+        is_descending: bool,
+    ) -> Result<Option<i64>, IndexerError> {
+        self.spawn_blocking(move |this| {
+            this.get_transaction_sequence_by_digest(tx_digest, is_descending)
+        })
+        .await
+    }
+
+    async fn get_move_call_sequence_by_digest(
+        &self,
+        tx_digest: Option<String>,
+        is_descending: bool,
+    ) -> Result<Option<i64>, IndexerError> {
+        self.spawn_blocking(move |this| {
+            this.get_move_call_sequence_by_digest(tx_digest, is_descending)
+        })
+        .await
+    }
+
+    async fn get_input_object_sequence_by_digest(
+        &self,
+        tx_digest: Option<String>,
+        is_descending: bool,
+    ) -> Result<Option<i64>, IndexerError> {
+        self.spawn_blocking(move |this| {
+            this.get_input_object_sequence_by_digest(tx_digest, is_descending)
+        })
+        .await
+    }
+
+    async fn get_changed_object_sequence_by_digest(
+        &self,
+        tx_digest: Option<String>,
+        is_descending: bool,
+    ) -> Result<Option<i64>, IndexerError> {
+        self.spawn_blocking(move |this| {
+            this.get_changed_object_sequence_by_digest(tx_digest, is_descending)
+        })
+        .await
+    }
+
+    async fn get_recipient_sequence_by_digest(
+        &self,
+        tx_digest: Option<String>,
+        is_descending: bool,
+    ) -> Result<Option<i64>, IndexerError> {
+        self.spawn_blocking(move |this| {
+            this.get_recipient_sequence_by_digest(tx_digest, is_descending)
+        })
+        .await
+    }
+
+    async fn get_network_metrics(&self) -> Result<NetworkMetrics, IndexerError> {
+        self.spawn_blocking(move |this| this.get_network_metrics())
+            .await
+    }
+
+    async fn get_move_call_metrics(&self) -> Result<MoveCallMetrics, IndexerError> {
+        self.spawn_blocking(move |this| this.get_move_call_metrics())
+            .await
+    }
+
+    async fn persist_fast_path(
+        &self,
+        tx: Transaction,
+        tx_object_changes: TransactionObjectChanges,
+    ) -> Result<usize, IndexerError> {
+        self.spawn_blocking(move |this| this.persist_fast_path(tx, tx_object_changes))
+            .await
+    }
+
+    async fn persist_checkpoint_transactions(
+        &self,
+        checkpoint: &Checkpoint,
+        transactions: &[Transaction],
+    ) -> Result<usize, IndexerError> {
+        let checkpoint = checkpoint.to_owned();
+        let transactions = transactions.to_owned();
+        self.spawn_blocking(move |this| {
+            this.persist_checkpoint_transactions(&checkpoint, &transactions)
+        })
+        .await
+    }
+
+    async fn persist_object_changes(
+        &self,
+        tx_object_changes: &[TransactionObjectChanges],
+        object_mutation_latency: Histogram,
+        object_deletion_latency: Histogram,
+    ) -> Result<(), IndexerError> {
+        let tx_object_changes = tx_object_changes.to_owned();
+        self.spawn_blocking(move |this| {
+            this.persist_object_changes(
+                &tx_object_changes,
+                object_mutation_latency,
+                object_deletion_latency,
+            )
+        })
+        .await
+    }
+
+    async fn persist_events(&self, events: &[Event]) -> Result<(), IndexerError> {
+        let events = events.to_owned();
+        self.spawn_blocking(move |this| this.persist_events(&events))
+            .await
+    }
+
+    async fn persist_addresses(
+        &self,
+        addresses: &[Address],
+        active_addresses: &[ActiveAddress],
+    ) -> Result<(), IndexerError> {
+        let addresses = addresses.to_owned();
+        let active_addresses = active_addresses.to_owned();
+        self.spawn_blocking(move |this| this.persist_addresses(&addresses, &active_addresses))
+            .await
+    }
+
+    async fn persist_packages(&self, packages: &[Package]) -> Result<(), IndexerError> {
+        let packages = packages.to_owned();
+        self.spawn_blocking(move |this| this.persist_packages(&packages))
+            .await
+    }
+
+    async fn persist_transaction_index_tables(
+        &self,
+        input_objects: &[InputObject],
+        changed_objects: &[ChangedObject],
+        move_calls: &[MoveCall],
+        recipients: &[Recipient],
+    ) -> Result<(), IndexerError> {
+        let input_objects = input_objects.to_owned();
+        let changed_objects = changed_objects.to_owned();
+        let move_calls = move_calls.to_owned();
+        let recipients = recipients.to_owned();
+        self.spawn_blocking(move |this| {
+            this.persist_transaction_index_tables(
+                &input_objects,
+                &changed_objects,
+                &move_calls,
+                &recipients,
+            )
+        })
+        .await
+    }
+
+    async fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError> {
+        let data = data.to_owned();
+        self.spawn_blocking(move |this| this.persist_epoch(&data))
+            .await
+    }
+
+    async fn get_network_total_transactions_previous_epoch(
+        &self,
+        epoch: i64,
+    ) -> Result<i64, IndexerError> {
+        self.spawn_blocking(move |this| this.get_network_total_transactions_previous_epoch(epoch))
+            .await
+    }
+
+    async fn get_epochs(
+        &self,
+        cursor: Option<EpochId>,
+        limit: usize,
+        descending_order: Option<bool>,
+    ) -> Result<Vec<EpochInfo>, IndexerError> {
+        self.spawn_blocking(move |this| this.get_epochs(cursor, limit, descending_order))
+            .await
+    }
+
+    async fn get_current_epoch(&self) -> Result<EpochInfo, IndexerError> {
+        self.spawn_blocking(move |this| this.get_current_epoch())
+            .await
+    }
+
+    fn module_cache(&self) -> &Self::ModuleCache {
+        &self.module_cache
+    }
+
+    fn indexer_metrics(&self) -> &IndexerMetrics {
+        &self.metrics
+    }
+
+    async fn get_last_address_processed_checkpoint(&self) -> Result<i64, IndexerError> {
+        self.spawn_blocking(move |this| this.get_last_address_processed_checkpoint())
+            .await
+    }
+
+    async fn calculate_address_stats(&self, checkpoint: i64) -> Result<AddressStats, IndexerError> {
+        self.spawn_blocking(move |this| this.calculate_address_stats(checkpoint))
+            .await
+    }
+
+    async fn persist_address_stats(&self, addr_stats: &AddressStats) -> Result<(), IndexerError> {
+        let addr_stats = addr_stats.to_owned();
+        self.spawn_blocking(move |this| this.persist_address_stats(&addr_stats))
+            .await
+    }
+
+    async fn get_latest_address_stats(&self) -> Result<AddressStats, IndexerError> {
+        self.spawn_blocking(move |this| this.get_latest_address_stats())
+            .await
+    }
+
+    async fn get_checkpoint_address_stats(
+        &self,
+        checkpoint: i64,
+    ) -> Result<AddressStats, IndexerError> {
+        self.spawn_blocking(move |this| this.get_checkpoint_address_stats(checkpoint))
+            .await
+    }
+
+    async fn get_all_epoch_address_stats(
+        &self,
+        descending_order: Option<bool>,
+    ) -> Result<Vec<AddressStats>, IndexerError> {
+        self.spawn_blocking(move |this| this.get_all_epoch_address_stats(descending_order))
+            .await
     }
 }
 
@@ -1806,10 +2301,10 @@ struct PartitionManager {
 }
 
 impl PartitionManager {
-    async fn new(cp: PgConnectionPool) -> Result<Self, IndexerError> {
+    fn new(cp: PgConnectionPool) -> Result<Self, IndexerError> {
         // Find all tables with partition
         let manager = Self { cp };
-        let tables = manager.get_table_partitions().await?;
+        let tables = manager.get_table_partitions()?;
         info!(
             "Found {} tables with partitions : [{:?}]",
             tables.len(),
@@ -1820,7 +2315,7 @@ impl PartitionManager {
 
     // MUSTFIX(gegaowp): temporarily disable partition management.
     #[allow(dead_code)]
-    async fn advance_epoch(
+    fn advance_epoch(
         &self,
         new_epoch: &DBEpochInfo,
         last_epoch_start_cp: i64,
@@ -1829,7 +2324,7 @@ impl PartitionManager {
         let last_epoch_id = new_epoch.epoch - 1;
         let next_epoch_start_cp = new_epoch.first_checkpoint_id;
 
-        let tables = self.get_table_partitions().await?;
+        let tables = self.get_table_partitions()?;
 
         let table_updated = transactional_blocking!(&self.cp, |conn| {
             let mut updated_table = vec![];
@@ -1857,7 +2352,7 @@ impl PartitionManager {
         Ok(())
     }
 
-    async fn get_table_partitions(&self) -> Result<BTreeMap<String, u64>, IndexerError> {
+    fn get_table_partitions(&self) -> Result<BTreeMap<String, u64>, IndexerError> {
         #[derive(QueryableByName, Debug, Clone)]
         struct PartitionedTable {
             #[diesel(sql_type = VarChar)]
@@ -1883,37 +2378,10 @@ impl PartitionManager {
 }
 
 #[once(time = 20, result = true)]
-async fn get_network_metrics_cached(cp: &PgConnectionPool) -> Result<NetworkMetrics, IndexerError> {
+fn get_network_metrics_cached(cp: &PgConnectionPool) -> Result<NetworkMetrics, IndexerError> {
     let metrics = read_only_blocking!(cp, |conn| diesel::sql_query(
         "SELECT * FROM network_metrics;"
     )
     .get_result::<DBNetworkMetrics>(conn))?;
     Ok(metrics.into())
-}
-
-#[async_trait]
-impl ObjectProvider for PgIndexerStore {
-    type Error = IndexerError;
-    async fn get_object(
-        &self,
-        _id: &ObjectID,
-        _version: &SequenceNumber,
-    ) -> Result<sui_types::object::Object, Self::Error> {
-        Err(IndexerError::NotSupportedError(
-            "Object cache is not supported".to_string(),
-        ))
-        // self.get_sui_types_object(id, version)
-    }
-
-    async fn find_object_lt_or_eq_version(
-        &self,
-        _id: &ObjectID,
-        _version: &SequenceNumber,
-    ) -> Result<Option<sui_types::object::Object>, Self::Error> {
-        Err(IndexerError::NotSupportedError(
-            "find_object_lt_or_eq_version is not supported".to_string(),
-        ))
-        // self.find_sui_types_object_lt_or_eq_version(id, version)
-        //     .await
-    }
 }
