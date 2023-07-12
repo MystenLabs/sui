@@ -8,8 +8,9 @@ use std::{collections::BTreeMap, path::PathBuf};
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use sui_source_validation_service::{
-    initialize, serve, verify_packages, AppState, CloneCommand, Config, PackageSources,
-    RepositorySource, SourceInfo, SourceResponse,
+    initialize, serve, verify_packages, AppState, CloneCommand, Config, ErrorResponse,
+    PackageSources, RepositorySource, SourceInfo, SourceResponse,
+    SUI_SOURCE_VALIDATION_VERSION_HEADER,
 };
 use test_cluster::TestClusterBuilder;
 
@@ -88,8 +89,9 @@ async fn test_api_route() -> anyhow::Result<()> {
     );
     tokio::spawn(serve(AppState { sources }).expect("Cannot start service."));
 
-    // check that serve returns expected sample code
     let client = Client::new();
+
+    // check that serve returns expected sample code
     let json = client
         .get(format!(
             "http://0.0.0.0:8000/api?address={address}&module={module}"
@@ -102,6 +104,23 @@ async fn test_api_route() -> anyhow::Result<()> {
 
     let expected = expect!["module address {...}"];
     expected.assert_eq(&json.source);
+
+    // check server rejects bad version header
+    let json = client
+        .get(format!(
+            "http://0.0.0.0:8000/api?address={address}&module={module}"
+        ))
+        .header(SUI_SOURCE_VALIDATION_VERSION_HEADER, "bogus")
+        .send()
+        .await
+        .expect("Request failed.")
+        .json::<ErrorResponse>()
+        .await?;
+
+    let expected =
+        expect!["Unsupported version 'bogus' specified in header X-Sui-Source-Validation-Version"];
+    expected.assert_eq(&json.error);
+
     Ok(())
 }
 
