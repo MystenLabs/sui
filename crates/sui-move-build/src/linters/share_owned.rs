@@ -26,7 +26,7 @@ use move_compiler::{
         Type_, Var,
     },
     parser::ast::Ability_,
-    shared::Identifier,
+    shared::{CompilationEnv, Identifier},
 };
 use std::collections::BTreeMap;
 
@@ -77,6 +77,7 @@ impl SimpleAbsIntConstructor for ShareOwnedVerifier {
     type AI<'a> = ShareOwnedVerifierAI;
 
     fn new<'a>(
+        _env: &CompilationEnv,
         _program: &'a Program,
         context: &'a CFGContext<'a>,
         _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
