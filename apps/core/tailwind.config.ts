@@ -82,6 +82,7 @@ export default {
 			colors: {
 				'gradient-blue-start': '#589AEA',
 				'gradient-blue-end': '#4C75A6',
+				'gradient-graph-bg-01-start': '#D2EBFA',
 			},
 			// Line-heights that are found in the design:
 			lineHeight: {

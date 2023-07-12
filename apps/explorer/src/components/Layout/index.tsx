@@ -1,23 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { RpcClientContext, useAppsBackend, useCookieConsentBanner } from '@mysten/core';
+import { RpcClientContext, useCookieConsentBanner } from '@mysten/core';
 import { WalletKitProvider } from '@mysten/wallet-kit';
-import { useQuery } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import clsx from 'clsx';
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useMemo } from 'react';
 import { resolveValue, Toaster, type ToastType } from 'react-hot-toast';
 import { Outlet, ScrollRestoration } from 'react-router-dom';
 
-import { GradientContainerContext } from './GradientContainer';
 import { useInitialPageView } from '../../hooks/useInitialPageView';
-import Footer from '../footer/Footer';
-import Header from '../header/Header';
 import { NetworkContext, useNetwork } from '~/context';
 import { Banner, type BannerProps } from '~/ui/Banner';
 import { persistableStorage } from '~/utils/analytics/amplitude';
-import { DefaultRpcClient, Network } from '~/utils/api/DefaultRpcClient';
+import { DefaultRpcClient } from '~/utils/api/DefaultRpcClient';
 
 const toastVariants: Partial<Record<ToastType, BannerProps['variant']>> = {
 	success: 'positive',
@@ -27,19 +22,6 @@ const toastVariants: Partial<Record<ToastType, BannerProps['variant']>> = {
 export function Layout() {
 	const [network, setNetwork] = useNetwork();
 	const jsonRpcProvider = useMemo(() => DefaultRpcClient(network), [network]);
-	const { request } = useAppsBackend();
-	const { data } = useQuery({
-		queryKey: ['apps-backend', 'monitor-network'],
-		queryFn: () =>
-			request<{ degraded: boolean }>('monitor-network', {
-				project: 'EXPLORER',
-			}),
-		// Keep cached for 2 minutes:
-		staleTime: 2 * 60 * 1000,
-		retry: false,
-		enabled: network === Network.MAINNET,
-	});
-	const [isGradientVisible, setIsGradientVisible] = useState(false);
 
 	useCookieConsentBanner(persistableStorage, {
 		cookie_name: 'sui_explorer_cookie_consent',
@@ -61,34 +43,7 @@ export function Layout() {
 			>
 				<RpcClientContext.Provider value={jsonRpcProvider}>
 					<NetworkContext.Provider value={[network, setNetwork]}>
-						<div className={clsx('w-full', isGradientVisible && 'bg-[#D2EBFA]')}>
-							<Header />
-							<GradientContainerContext.Provider value={{ setVisible: setIsGradientVisible }}>
-								<main className="relative z-10 min-h-screen bg-offwhite">
-									{network === Network.MAINNET && data?.degraded && (
-										<div className={clsx(isGradientVisible && 'bg-[#D2EBFA]')}>
-											<div className="mx-auto max-w-[1440px] px-4 pt-3 lg:px-6 xl:px-10">
-												<Banner variant="warning" border fullWidth>
-													We&rsquo;re sorry that the explorer is running slower than usual.
-													We&rsquo;re working to fix the issue and appreciate your patience.
-												</Banner>
-											</div>
-										</div>
-									)}
-									<section className={clsx('bg-main', isGradientVisible ? 'block' : 'hidden')}>
-										<div
-											className="mx-auto max-w-[1440px] px-4 py-8 lg:px-6 xl:px-10 xl:py-12"
-											id="gradient-content-container"
-										/>
-									</section>
-									<section className="mx-auto max-w-[1440px] px-4 py-6 pb-16 lg:px-6 xl:p-10 xl:pb-16">
-										<Outlet />
-									</section>
-								</main>
-							</GradientContainerContext.Provider>
-							<Footer />
-						</div>
-
+						<Outlet />
 						<Toaster
 							position="bottom-center"
 							gutter={8}

@@ -9,7 +9,7 @@ import { TopValidatorsCard } from '../../components/top-validators-card/TopValid
 import { AccountsCardGraph } from '~/components/AccountCardGraph';
 import { Activity } from '~/components/Activity';
 import { CurrentEpoch, OnTheNetwork } from '~/components/HomeMetrics';
-import { GradientContainer } from '~/components/Layout/GradientContainer';
+import { PageLayout } from '~/components/Layout/PageLayout';
 import { SuiTokenCard } from '~/components/SuiTokenCard';
 import { TransactionsCardGraph } from '~/components/TransactionsCardGraph';
 import { TopPackagesCard } from '~/components/top-packages/TopPackagesCard';
@@ -26,8 +26,8 @@ function Home() {
 	const [network] = useNetwork();
 	const isSuiTokenCardEnabled = network === Network.MAINNET;
 	return (
-		<>
-			<GradientContainer>
+		<PageLayout
+			gradientContent={
 				<div
 					data-testid="home-page"
 					className={clsx('home-page-grid-container-top', isSuiTokenCardEnabled && 'with-token')}
@@ -50,35 +50,37 @@ function Home() {
 						<AccountsCardGraph />
 					</div>
 				</div>
-			</GradientContainer>
-			<div className="home-page-grid-container-bottom">
-				<div style={{ gridArea: 'activity' }}>
-					<ErrorBoundary>
-						<Activity initialLimit={TRANSACTIONS_LIMIT} disablePagination />
-					</ErrorBoundary>
-				</div>
-				<div style={{ gridArea: 'packages' }}>
-					<TopPackagesCard />
-				</div>
-				<div data-testid="validators-table" style={{ gridArea: 'validators' }}>
-					<TabHeader title="Validators">
+			}
+			content={
+				<div className="home-page-grid-container-bottom">
+					<div style={{ gridArea: 'activity' }}>
 						<ErrorBoundary>
-							<TopValidatorsCard limit={10} showIcon />
+							<Activity initialLimit={TRANSACTIONS_LIMIT} disablePagination />
 						</ErrorBoundary>
-					</TabHeader>
+					</div>
+					<div style={{ gridArea: 'packages' }}>
+						<TopPackagesCard />
+					</div>
+					<div data-testid="validators-table" style={{ gridArea: 'validators' }}>
+						<TabHeader title="Validators">
+							<ErrorBoundary>
+								<TopValidatorsCard limit={10} showIcon />
+							</ErrorBoundary>
+						</TabHeader>
+					</div>
+					<div
+						style={{ gridArea: 'node-map' }}
+						className="min-h-[320px] sm:min-h-[380px] lg:min-h-[460px] xl:min-h-[520px]"
+					>
+						<ErrorBoundary>
+							<Suspense fallback={<Card height="full" />}>
+								<ValidatorMap minHeight="100%" />
+							</Suspense>
+						</ErrorBoundary>
+					</div>
 				</div>
-				<div
-					style={{ gridArea: 'node-map' }}
-					className="min-h-[320px] sm:min-h-[380px] lg:min-h-[460px] xl:min-h-[520px]"
-				>
-					<ErrorBoundary>
-						<Suspense fallback={<Card height="full" />}>
-							<ValidatorMap minHeight="100%" />
-						</Suspense>
-					</ErrorBoundary>
-				</div>
-			</div>
-		</>
+			}
+		/>
 	);
 }
 
