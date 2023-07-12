@@ -532,9 +532,16 @@ export class SuiClient {
 	}
 
 	/**
-	 * Runs the transaction block in dev-inspect mode. Which allows for nearly any
-	 * transaction (or Move call) with any arguments. Detailed results are
-	 * provided, including both the transaction effects and any return values.
+	 * Simulates running the transaction, even one that would be normally 
+	 * impossible, against the current state of the network. Nearly any 
+	 * transaction (or Move call) with any arguments can run in dev-inspect; 
+	 * transaction inputs are not checked, entry function verification is 
+	 * skipped, values can be left unused, and returns are not validated. 
+	 * Detailed results are provided, including both the transaction effects 
+	 * and any return values. Dev-inspect is provided to aid in understanding
+	 * the effects of any possible action against the current network state. 
+	 * See dryRunTransactionBlock for a more faithful simulation of what would
+	 * happen if the transaction were actually run.
 	 */
 	async devInspectTransactionBlock(input: {
 		transactionBlock: TransactionBlock | string | Uint8Array;
