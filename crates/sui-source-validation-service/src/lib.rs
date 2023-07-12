@@ -31,7 +31,7 @@ use sui_sdk::SuiClient;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 
 pub const SUI_SOURCE_VALIDATION_VERSION_HEADER: &str = "X-Sui-Source-Validation-Version";
-pub const SUI_SOURCE_VALIDATION_VERSION: &str = "0.0.1";
+pub const SUI_SOURCE_VALIDATION_VERSION: &str = "0.1";
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
@@ -324,6 +324,12 @@ async fn api_route(
         .and_then(|h| h.to_str().ok())
         .map(|s| s.to_string());
 
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        SUI_SOURCE_VALIDATION_VERSION_HEADER,
+        SUI_SOURCE_VALIDATION_VERSION.parse().unwrap(),
+    );
+
     match version {
         Some(v) if v != SUI_SOURCE_VALIDATION_VERSION => {
             let error = format!(
@@ -332,6 +338,7 @@ async fn api_route(
             );
             return (
                 StatusCode::BAD_REQUEST,
+                headers,
                 Json(ErrorResponse { error }).into_response(),
             );
         }
@@ -342,14 +349,15 @@ async fn api_route(
     let symbol = Symbol::from(module);
     let Ok(address) = AccountAddress::from_hex_literal(&address) else {
 	let error = format!("Invalid hex address {address}");
-	return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error }).into_response())
+	return (StatusCode::BAD_REQUEST, headers, Json(ErrorResponse { error }).into_response())
     };
     let Some(SourceInfo {source : Some(source), ..}) = app_state.sources.get(&(address, symbol)) else {
 	let error = format!("No source found for {symbol} at address {address}" );
-	return (StatusCode::NOT_FOUND, Json(ErrorResponse { error }).into_response())
+	return (StatusCode::NOT_FOUND, headers, Json(ErrorResponse { error }).into_response())
     };
     (
         StatusCode::OK,
+        headers,
         Json(SourceResponse {
             source: source.to_owned(),
         })
