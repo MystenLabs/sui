@@ -6,12 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
 	PubkeyWeightPair,
-	SIGNATURE_SCHEME_TO_FLAG,
-	SignaturePubkeyPair,
 	publicKeyFromSerialized,
+  SIGNATURE_FLAG_TO_SCHEME,
 	toB64,
 	toMultiSigAddress,
-	toParsedSignaturePubkeyPair,
+  SignatureScheme,
+  fromB64,
 } from '@mysten/sui.js';
 import { AlertCircle } from 'lucide-react';
 import { useState } from 'react';
@@ -50,7 +50,17 @@ export default function MultiSigAddress() {
 
 		let pks: PubkeyWeightPair[] = [];
 		data.pubKeys.forEach((item: any) => {
-			pks.push({ pubKey: item.pubKey, weight: Number(item.weight) });
+      console.log(item.pubKey);
+      const pkBytes = fromB64(item.pubKey);
+      const flag: number = pkBytes[0];
+      console.log(flag);
+      const rawPkBytes = toB64(pkBytes.slice(1));
+      const schemeFlag = (SIGNATURE_FLAG_TO_SCHEME as {[key: number]: string})[flag]
+      const scheme = schemeFlag as SignatureScheme;
+
+      const pk = publicKeyFromSerialized(scheme, rawPkBytes);
+      console.log(pk);
+      pks.push({ pubKey: pk, weight: Number(1) });
 		});
 		const multisigSuiAddress = toMultiSigAddress(pks, 1);
 		console.log('multisigSuiAddress', multisigSuiAddress);
