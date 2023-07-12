@@ -30,6 +30,25 @@ use std::sync::Mutex;
 
 pub use symbol::Symbol;
 
+static_symbols!(
+    "std",
+    "vector",
+    "u8",
+    "u16",
+    "u32",
+    "u64",
+    "u128",
+    "bool",
+    "address",
+    "$spec_domain",
+    "Self",
+    "friend",
+    "dummy_field",
+    "_",
+    "init",
+    "unit_test",
+);
+
 /// The global, unique cache of strings.
 pub(crate) static SYMBOL_POOL: Lazy<Mutex<Pool>> = Lazy::new(|| Mutex::new(Pool::new()));
 

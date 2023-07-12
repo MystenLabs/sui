@@ -5471,6 +5471,7 @@ name = "move-symbol-pool"
 version = "0.1.0"
 dependencies = [
  "once_cell",
+ "phf",
  "serde",
 ]
 
@@ -6907,6 +6908,7 @@ version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "928c6535de93548188ef63bb7c4036bd415cd8f36ad25af44b9789b2ee72a48c"
 dependencies = [
+ "phf_macros",
  "phf_shared",
 ]
 
@@ -6928,6 +6930,19 @@ checksum = "b1181c94580fa345f50f19d738aaa39c0ed30a600d95cb2d3e23f94266f14fbf"
 dependencies = [
  "phf_shared",
  "rand 0.8.5",
+]
+
+[[package]]
+name = "phf_macros"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92aacdc5f16768709a569e913f7451034034178b05bdc8acda226659a3dccc66"
+dependencies = [
+ "phf_generator",
+ "phf_shared",
+ "proc-macro2 1.0.58",
+ "quote 1.0.26",
+ "syn 1.0.107",
 ]
 
 [[package]]
@@ -13152,6 +13167,7 @@ dependencies = [
  "phf",
  "phf_codegen",
  "phf_generator",
+ "phf_macros",
  "phf_shared",
  "pin-project",
  "pin-project-internal",

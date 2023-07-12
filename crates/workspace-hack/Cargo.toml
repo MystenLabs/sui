@@ -431,7 +431,7 @@ percent-encoding = { version = "2" }
 pest = { version = "2" }
 petgraph-3b31131e45eafb45 = { package = "petgraph", version = "0.6", default-features = false, features = ["graphmap"] }
 petgraph-d8f496e17d97b5cb = { package = "petgraph", version = "0.5" }
-phf = { version = "0.11", default-features = false, features = ["uncased"] }
+phf = { version = "0.11", features = ["macros", "uncased"] }
 phf_shared = { version = "0.11", features = ["uncased"] }
 pin-project = { version = "1", default-features = false }
 pin-project-lite = { version = "0.2", default-features = false }
@@ -1171,9 +1171,10 @@ pest_generator = { version = "2", default-features = false, features = ["std"] }
 pest_meta = { version = "2", default-features = false }
 petgraph-3b31131e45eafb45 = { package = "petgraph", version = "0.6", default-features = false, features = ["graphmap"] }
 petgraph-d8f496e17d97b5cb = { package = "petgraph", version = "0.5" }
-phf = { version = "0.11", default-features = false, features = ["uncased"] }
+phf = { version = "0.11", features = ["macros", "uncased"] }
 phf_codegen = { version = "0.11", default-features = false }
 phf_generator = { version = "0.11", default-features = false }
+phf_macros = { version = "0.11", default-features = false }
 phf_shared = { version = "0.11", features = ["uncased"] }
 pin-project = { version = "1", default-features = false }
 pin-project-internal = { version = "1", default-features = false }
