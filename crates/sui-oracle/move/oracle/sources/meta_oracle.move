@@ -20,17 +20,17 @@ module oracle::meta_oracle {
     const EUnsupportedDataType: u64 = 1;
 
     struct MetaOracle<T> {
-        oracle_datas: vector<Option<Data<T>>>,
-        threshole: u64,
+        oracle_data: vector<Option<Data<T>>>,
+        threshold: u64,
         time_window_ms: u64,
         ticker: String,
         max_timestamp: u64,
     }
 
-    public fun new<T: copy + drop>(threshole: u64, time_window_ms: u64, ticker: String): MetaOracle<T> {
+    public fun new<T: copy + drop>(threshold: u64, time_window_ms: u64, ticker: String): MetaOracle<T> {
         MetaOracle {
-            oracle_datas: vector::empty(),
-            threshole,
+            oracle_data: vector::empty(),
+            threshold,
             time_window_ms,
             ticker,
             max_timestamp: 0,
@@ -42,7 +42,7 @@ module oracle::meta_oracle {
         if (option::is_some(&oracle_data)) {
             meta_oracle.max_timestamp = data::timestamp(option::borrow(&oracle_data));
         };
-        vector::push_back(&mut meta_oracle.oracle_datas, oracle_data);
+        vector::push_back(&mut meta_oracle.oracle_data, oracle_data);
     }
 
     struct TrustedData<T> has copy, drop {
@@ -50,13 +50,13 @@ module oracle::meta_oracle {
         oracles: vector<address>,
     }
 
-    fun combind<T: copy + drop>(meta_oracle: MetaOracle<T>, ): (vector<T>, vector<address>) {
-        let MetaOracle { oracle_datas, threshole, time_window_ms, ticker: _, max_timestamp } = meta_oracle;
+    fun combine<T: copy + drop>(meta_oracle: MetaOracle<T>, ): (vector<T>, vector<address>) {
+        let MetaOracle { oracle_data, threshold, time_window_ms, ticker: _, max_timestamp } = meta_oracle;
         let min_timestamp = max_timestamp - time_window_ms;
         let values = vector<T>[];
         let oracles = vector<address>[];
-        while (vector::length(&oracle_datas) > 0) {
-            let oracle_data = vector::remove(&mut oracle_datas, 0);
+        while (vector::length(&oracle_data) > 0) {
+            let oracle_data = vector::remove(&mut oracle_data, 0);
             if (option::is_some(&oracle_data)) {
                 let oracle_data = option::destroy_some(oracle_data);
                 if (data::timestamp(&oracle_data) > min_timestamp) {
@@ -65,13 +65,13 @@ module oracle::meta_oracle {
                 };
             };
         };
-        assert!(vector::length(&values) >= threshole, EValidDataSizeLessThanThreshold);
+        assert!(vector::length(&values) >= threshold, EValidDataSizeLessThanThreshold);
         (values, oracles)
     }
 
     /// take the median value
     public fun median<T: copy + drop>(meta_oracle: MetaOracle<T>): TrustedData<T> {
-        let (values, oracles) = combind(meta_oracle);
+        let (values, oracles) = combine(meta_oracle);
         let sortedData = quick_sort(values);
         let i = vector::length(&sortedData) / 2;
         let value = vector::remove(&mut sortedData, i);
@@ -166,11 +166,11 @@ module oracle::meta_oracle {
     }
 
     public fun data<T>(meta: &MetaOracle<T>): &vector<Option<Data<T>>> {
-        &meta.oracle_datas
+        &meta.oracle_data
     }
 
     public fun threshold<T>(meta: &MetaOracle<T>): u64 {
-        meta.threshole
+        meta.threshold
     }
 
     public fun time_window_ms<T>(meta: &MetaOracle<T>): u64 {
