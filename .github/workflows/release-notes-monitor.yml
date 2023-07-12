@@ -1,0 +1,75 @@
+name: Release Notes Monitor
+
+on:
+  workflow_dispatch:
+
+jobs:
+  get-list-of-prs:
+    name: Find new PRs to process
+    outputs:
+      matrix: ${{ steps.get-pr-list.outputs.matrix }}
+    runs-on: [self-hosted, self-hosted-arc]
+    
+    steps:
+    - name: Checkout sui repo main branch
+      uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
+      with:
+        fetch-depth: 0
+        ref: main
+
+    - name: Check for a Release Notes tag for this commit
+      uses: nick-fields/retry@3e91a01664abd3c5cd539100d10d33b9c5b68482 # pin@v2
+      with:
+        max_attempts: 2
+        timeout_seconds: 30
+        command: |
+          echo "new_commit_hash=$(git rev-parse HEAD)" >> $GITHUB_ENV
+          echo "existing_tag=$(git tag --points-at ${{ env.commit_hash }} | grep -E 'release_notes_v(.*)' | head -n 1)" >> $GITHUB_ENV
+          echo "sui_version=$(cat Cargo.toml | grep "^version =" | tr -d '"' | awk '{ print $3 }')" >> $GITHUB_ENV
+          [[ -n ${{ env.existing_tag }} ]] && echo "old_commit_hash=$(git show-ref -s ${{ env.existing_tag }})" >> $GITHUB_ENV
+
+    - name: Get list of PRs
+      id: get-pr-list
+      if: ${{ env.old_commit_hash != '' }}
+      working-directory: ./
+      run: |
+        export list_of_prs=$(git log --grep "\[x\]" --pretty=oneline --abbrev-commit d8de3b747ba275542825d3d7dfe78067e3c88df...8c0c8780447e519db3eb3644492343d0bbf179ef -- crates dashboards doc docker external-crates kiosk narwhal nre sui-execution | grep -o '#[0-9]\+' | grep -o '[0-9]\+')
+        echo "::set-output name=matrix::${list_of_prs}"
+  
+  process-prs:
+    name: Processing PRs
+    needs: [ get-list-of-prs ]
+    runs-on: [self-hosted, self-hosted-arc]
+    strategy:
+      matrix:
+         pr: ${{fromJson(needs.get-list-of-prs.outputs.matrix)}}
+
+    steps:
+    - name: Process PRs
+      run: |
+        echo "Processing ${{ matrix.pr }} PR"
+        echo "pr_body=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/"${{ matrix.pr }}}" --jq ".body")" >> $GITHUB_ENV 
+        echo "release_notes='${pr_body#*### Release notes}'" >> $GITHUB_ENV
+    
+    - name: Post to a Slack channel
+      uses: slackapi/slack-github-action@34c3fd73326693ef04728f8611669d918a2d781d # pin@v1.19.0
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      with:
+        channel-id: '#test-notifications'
+        payload: |
+          {
+            "text": "PR *${{ matrix.pr }}* Release Notes",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "${{ env.release_notes }}"
+                }
+              },
+              {
+                "type": "divider"
+              }
+            ]
+          }
