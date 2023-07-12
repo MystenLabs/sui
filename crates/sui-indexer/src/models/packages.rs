@@ -10,7 +10,7 @@ use crate::models::objects::NamedBcsBytes;
 use sui_json_rpc_types::SuiRawMovePackage;
 use sui_types::base_types::SuiAddress;
 
-#[derive(Queryable, Insertable, Debug, Identifiable)]
+#[derive(Queryable, Insertable, Clone, Debug, Identifiable)]
 #[diesel(table_name = packages, primary_key(package_id, version))]
 pub struct Package {
     pub package_id: String,

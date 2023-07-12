@@ -352,13 +352,14 @@ pub struct TemporaryCheckpointStore {
     pub recipients: Vec<Recipient>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TransactionObjectChanges {
     pub changed_objects: Vec<Object>,
     pub deleted_objects: Vec<DeletedObject>,
 }
 
 // Per epoch indexing
+#[derive(Clone, Debug)]
 pub struct TemporaryEpochStore {
     pub last_epoch: Option<DBEpochInfo>,
     pub new_epoch: DBEpochInfo,
