@@ -1,10 +1,6 @@
 use core::panic;
 use std::collections::{HashSet, HashMap, VecDeque};
 use std::sync::Arc;
-use std::pin::Pin;
-use std::future::Future;
-use futures::StreamExt;
-use futures::stream::FuturesUnordered;
 
 use sui_adapter::{adapter, execution_engine, execution_mode, adapter::MoveVM};
 use sui_config::genesis::Genesis;
@@ -24,6 +20,7 @@ use sui_types::gas::SuiGasStatus;
 use sui_move_natives;
 use move_bytecode_utils::module_cache::GetModule;
 use tokio::sync::mpsc;
+use tokio::task::JoinSet;
 use tokio::time::Instant;
 
 use crate::storage::WritableObjectStore;
@@ -124,12 +121,15 @@ pub struct ExecutionWorkerState
         + BackingPackageStore 
         + ParentSync 
         + ChildObjectResolver 
-        + GetModule> 
+        + GetModule
+        + Send
+        + Sync
+        + 'static> 
 {
     pub memory_store: Arc<S>,
 }
 
-impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + ChildObjectResolver + GetModule> 
+impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + ChildObjectResolver + GetModule + Send + Sync + 'static> 
     ExecutionWorkerState<S> {
     pub fn new(new_store: S) -> Self {
         Self {
@@ -407,7 +407,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
         // Initialize channels
         let (manager_sender, mut manager_receiver) = mpsc::channel(MANAGER_CHANNEL_SIZE);
         let mut manager = QueuesManager::new(manager_sender);
-        let mut tasks_queue = FuturesUnordered::<Pin<Box<dyn Future<Output = TransactionWithResults>>>>::new();
+        let mut tasks_queue: JoinSet<TransactionWithResults> = JoinSet::new();
 
         /* Semaphore to keep track of un-executed transactions in the current epoch, used
         * to schedule epoch change:
@@ -431,7 +431,8 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
         loop {
             tokio::select! {
                 biased;
-                Some(tx_with_results) = tasks_queue.next() => {
+                Some(tx_with_results) = tasks_queue.join_next() => {
+                    let tx_with_results = tx_with_results.expect("tx task failed");
                     num_tx += 1;
                     epoch_txs_semaphore -= 1;
                     assert!(epoch_txs_semaphore >= 0);
@@ -461,18 +462,24 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                 },
                 // Must poll from manager_receiver before sw_receiver, to avoid deadlock
                 Some(full_tx) = manager_receiver.recv() => {
+                    let mem_store = self.memory_store.clone();
+                    let move_vm = move_vm.clone();
+                    let epoch_data = epoch_data.clone();
+                    let protocol_config = protocol_config.clone();
+                    let metrics = metrics.clone();
+
                     // Push execution task to futures queue
-                    tasks_queue.push(Box::pin(
+                    tasks_queue.spawn(Box::pin(async move {
                         Self::async_exec(
                             full_tx,
-                            self.memory_store.clone(),
-                            move_vm.clone(),
+                            mem_store,
+                            move_vm,
                             reference_gas_price,
-                            epoch_data.clone(),
-                            protocol_config.clone(),
-                            metrics.clone(),
-                        ))
-                    );
+                            epoch_data,
+                            protocol_config,
+                            metrics,
+                        ).await
+                    }));
                 },
                 Some(msg) = sw_receiver.recv() => {
                     // New tx from sequencer; enqueue to manager
