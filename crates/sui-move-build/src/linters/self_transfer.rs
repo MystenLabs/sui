@@ -21,6 +21,7 @@ use move_compiler::{
         Diagnostic, Diagnostics,
     },
     hlir::ast::{Command, Exp, LValue, Label, ModuleCall, Type, Type_, Var},
+    shared::CompilationEnv,
 };
 use move_symbol_pool::Symbol;
 use std::collections::BTreeMap;
@@ -76,6 +77,7 @@ impl SimpleAbsIntConstructor for SelfTransferVerifier {
     type AI<'a> = SelfTransferVerifierAI;
 
     fn new<'a>(
+        _env: &CompilationEnv,
         _program: &'a Program,
         context: &'a CFGContext<'a>,
         _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
