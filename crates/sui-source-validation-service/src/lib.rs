@@ -30,8 +30,16 @@ use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 
+pub const HOST_PORT_ENV: &str = "HOST_PORT";
 pub const SUI_SOURCE_VALIDATION_VERSION_HEADER: &str = "X-Sui-Source-Validation-Version";
 pub const SUI_SOURCE_VALIDATION_VERSION: &str = "0.1";
+
+pub fn host_port() -> String {
+    match option_env!("HOST_PORT") {
+        Some(v) => v.to_string(),
+        None => String::from("0.0.0.0:8000"),
+    }
+}
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
@@ -293,7 +301,7 @@ pub fn serve(app_state: AppState) -> anyhow::Result<Server<AddrIncoming, IntoMak
                     .allow_origin(tower_http::cors::Any),
             ),
         );
-    let listener = TcpListener::bind("0.0.0.0:8000")?;
+    let listener = TcpListener::bind(host_port())?;
     Ok(Server::from_tcp(listener)?.serve(app.into_make_service()))
 }
 

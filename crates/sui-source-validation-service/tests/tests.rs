@@ -8,7 +8,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use sui_source_validation_service::{
-    initialize, serve, verify_packages, AppState, CloneCommand, Config, ErrorResponse,
+    host_port, initialize, serve, verify_packages, AppState, CloneCommand, Config, ErrorResponse,
     PackageSources, RepositorySource, SourceInfo, SourceResponse,
     SUI_SOURCE_VALIDATION_VERSION_HEADER,
 };
@@ -94,7 +94,8 @@ async fn test_api_route() -> anyhow::Result<()> {
     // check that serve returns expected sample code
     let json = client
         .get(format!(
-            "http://0.0.0.0:8000/api?address={address}&module={module}"
+            "http://{}/api?address={address}&module={module}",
+            host_port()
         ))
         .send()
         .await
@@ -108,7 +109,8 @@ async fn test_api_route() -> anyhow::Result<()> {
     // check server rejects bad version header
     let json = client
         .get(format!(
-            "http://0.0.0.0:8000/api?address={address}&module={module}"
+            "http://{}/api?address={address}&module={module}",
+            host_port()
         ))
         .header(SUI_SOURCE_VALIDATION_VERSION_HEADER, "bogus")
         .send()
