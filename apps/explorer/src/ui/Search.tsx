@@ -13,7 +13,7 @@ export type SearchResult = {
 };
 
 export interface SearchProps {
-	onChange: (value?: string) => void;
+	onChange: (value: string) => void;
 	onSelectResult?: (result: SearchResult) => void;
 	placeholder?: string;
 	isLoading: boolean;
@@ -109,23 +109,4 @@ export function Search({
 			)}
 		</Command>
 	);
-
-	// 		{queryValue && (
-	// 			<Combobox.Options className="absolute mt-1 w-full list-none space-y-2 rounded-md bg-white p-3.5 shadow-md">
-	// 				{isLoading ? (
-	// 					<div className="flex items-center justify-center">
-	// 						<LoadingSpinner />
-	// 					</div>
-	// 				) : hasOptions ? (
-	// 					options.map(({ label, results }) => (
-	// 						<div key={label}>
-	// 							{results?.map((item) => (
-	// 								<SearchItem key={item.id} value={item} />
-	// 							))}
-	// 						</div>
-	// 					))
-	// 			</Combobox.Options>
-	// 		)}
-	// 	</Combobox>
-	// );
 }
