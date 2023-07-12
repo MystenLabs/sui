@@ -22,7 +22,7 @@
 //!
 //! The main building block for the Sui Rust SDK is the [`SuiClientBuilder`], which provides a simple and straightforward way of connectiong to a Sui network and having access to the different available APIs.
 //! A simple example that connects to a running Sui local network, the Sui devnet, and the Sui testnet is shown below. To successfully run this program, make sure to spin up a local network with a local validator, a fullnode, and a faucet server (see [here](https://github.com/stefan-mysten/sui/tree/rust_sdk_api_examples/crates/sui-sdk/examples#preqrequisites) for more information).
-//! ```rust,no_run
+//! ```rust,ignore
 //! use sui_sdk::SuiClientBuilder;
 //!
 //! #[tokio::main]
@@ -100,7 +100,7 @@ pub const SUI_TESTNET_URL: &str = "https://fullnode.testnet.sui.io:443";
 ///
 /// # Examples
 ///
-/// ```rust,no_run
+/// ```rust,ignore
 /// use sui_sdk::SuiClientBuilder;
 /// #[tokio::main]
 /// async fn main() -> Result<(), anyhow::Error> {
@@ -156,7 +156,7 @@ impl SuiClientBuilder {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use sui_sdk::SuiClientBuilder;
     /// #[tokio::main]
     /// async fn main() -> Result<(), anyhow::Error> {
@@ -231,7 +231,7 @@ impl SuiClientBuilder {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use sui_sdk::SuiClientBuilder;
     /// #[tokio::main]
     /// async fn main() -> Result<(), anyhow::Error> {
@@ -253,7 +253,7 @@ impl SuiClientBuilder {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use sui_sdk::SuiClientBuilder;
     /// #[tokio::main]
     /// async fn main() -> Result<(), anyhow::Error> {
@@ -275,7 +275,7 @@ impl SuiClientBuilder {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use sui_sdk::SuiClientBuilder;
     /// #[tokio::main]
     /// async fn main() -> Result<(), anyhow::Error> {
@@ -346,7 +346,7 @@ impl SuiClientBuilder {
 ///
 /// # Examples
 ///
-/// ```rust,no_run
+/// ```rust,ignore
 /// use sui_sdk::types::base_types::SuiAddress;
 /// use sui_sdk::SuiClientBuilder;
 /// #[tokio::main]

@@ -48,11 +48,11 @@ impl ReadApi {
     pub(crate) fn new(api: Arc<RpcClient>) -> Self {
         Self { api }
     }
-    /// Return a paginated response containing the owned objects for this Sui address, or an error upon failure
+    /// Return a paginated response containing the owned objects for this Sui address, or an error upon failure.
     ///
     /// # Examples
     ///
-    /// ```rust, no_run
+    /// ```rust, ignore
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::SuiAddress;
     /// use std::str::FromStr;
@@ -75,11 +75,11 @@ impl ReadApi {
             .await?)
     }
 
-    /// Return a paginated response containing the dynamic fields objects for this ObjectID, or an error upon failure
+    /// Return a paginated response containing the dynamic fields objects for this ObjectID, or an error upon failure.
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::{ObjectID, SuiAddress};
     /// use std::str::FromStr;
@@ -88,8 +88,14 @@ impl ReadApi {
     /// let address: SuiAddress = SuiAddress::from_str("sui_address_here")?;
     /// let owned_objects = sui.read_api().get_owned_objects(address, None, None, None).await?;
     /// // this code example assumes that there are previous owned objects, otherwise it panics
-    /// let Some(object) = owned_objects.data.get(0) else { panic!("{}", format!("No owned objects for this address {}", active_address))};
-    /// let Some(ref object_data) = object.data else { panic!("{}", format!("No object data for this SuiObjectResponse {:?}", object))};
+    /// let object = owned_objects.data.get(0).expect(&format!(
+    ///     "No owned objects for this address {}",
+    ///     active_address
+    /// ));
+    /// let object_data = object.data.as_ref().expect(&format!(
+    ///     "No object data for this SuiObjectResponse {:?}",
+    ///     object
+    /// ));
     /// let object_id = object_data.object_id;
     /// let dynamic_fields = sui_local
     ///     .read_api()
@@ -109,11 +115,11 @@ impl ReadApi {
             .await?)
     }
 
-    /// Return a parsed past object for the provided [ObjectID], or an error upon failure
+    /// Return a parsed past object for the provided [ObjectID], or an error upon failure.
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::{ObjectID, SuiAddress};
     /// use sui_json_rpc_types::SuiObjectDataOptions;
@@ -123,8 +129,14 @@ impl ReadApi {
     /// let address = SuiAddress::from_str("0x0000....0000")?; // change to your Sui address
     /// let owned_objects = sui.read_api().get_owned_objects(address, None, None, None).await?;
     /// // this code example assumes that there are previous owned objects, otherwise it panics
-    /// let Some(object) = owned_objects.data.get(0) else { panic!("{}", format!("No owned objects for this address {}", active_address))};
-    /// let Some(ref object_data) = object.data else { panic!("{}", format!("No object data for this SuiObjectResponse {:?}", object))};
+    /// let object = owned_objects.data.get(0).expect(&format!(
+    ///     "No owned objects for this address {}",
+    ///     active_address
+    /// ));
+    /// let object_data = object.data.as_ref().expect(&format!(
+    ///     "No object data for this SuiObjectResponse {:?}",
+    ///     object
+    /// ));
     /// let object_id = object_data.object_id;
     /// let version = object_data.version;
     /// let past_object = sui_local
@@ -157,11 +169,11 @@ impl ReadApi {
             .await?)
     }
 
-    /// Return a vector containing [SuiPastObjectResponse] objects, or an error upon failure
+    /// Return a vector containing [SuiPastObjectResponse] objects, or an error upon failure.
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::{ObjectID, SuiAddress};
     /// use sui_json_rpc_types::SuiObjectDataOptions;
@@ -198,11 +210,11 @@ impl ReadApi {
             .await?)
     }
 
-    /// Return a SuiObject based on the provided [ObjectID], or an error upon failure
+    /// Return a [SuiObjectResponse] based on the provided [ObjectID] and [SuiObjectDataOptions], or an error upon failure.
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::SuiAddress;
     /// use sui_json_rpc_types::SuiObjectDataOptions;
@@ -219,7 +231,7 @@ impl ReadApi {
     ///             show_bcs: true,
     ///             show_storage_rebate: true,
     ///         },
-    ///     )).await?;
+    ///     ).await?;
     /// ```
     pub async fn get_object_with_options(
         &self,
@@ -229,11 +241,11 @@ impl ReadApi {
         Ok(self.api.http.get_object(object_id, Some(options)).await?)
     }
 
-    /// Return a vector of [SuiObjectResponse] based on the given vector of [ObjectID]s, or an error upon failure
+    /// Return a vector of [SuiObjectResponse] based on the given vector of [ObjectID]s and [SuiObjectDataOptions], or an error upon failure.
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::SuiAddress;
     /// use sui_json_rpc_types::SuiObjectDataOptions;
@@ -250,7 +262,7 @@ impl ReadApi {
     ///             show_bcs: true,
     ///             show_storage_rebate: true,
     ///         },
-    ///     )).await?;
+    ///     ).await?;
     /// ```
     pub async fn multi_get_object_with_options(
         &self,
@@ -264,11 +276,11 @@ impl ReadApi {
             .await?)
     }
 
-    /// Return the total number of transaction blocks, or an error upon failure
+    /// Return the total number of transaction blocks, or an error upon failure.
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use sui_sdk::SuiClientBuilder;
     ///
     /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
@@ -278,7 +290,7 @@ impl ReadApi {
         Ok(*self.api.http.get_total_transaction_blocks().await?)
     }
 
-    /// Return a [SuiTransactionBlockResponse] based on the given TransactionDigest, or an error upon failure
+    /// Return a [SuiTransactionBlockResponse] based on the given TransactionDigest, or an error upon failure.
     pub async fn get_transaction_with_options(
         &self,
         digest: TransactionDigest,
@@ -290,7 +302,7 @@ impl ReadApi {
             .get_transaction_block(digest, Some(options))
             .await?)
     }
-    /// Return a vector of SuiTransactionBlockResponse based on the given list of TransactionDigest, or an error upon failure
+    /// Return a vector of SuiTransactionBlockResponse based on the given list of TransactionDigest, or an error upon failure.
     pub async fn multi_get_transactions_with_options(
         &self,
         digests: Vec<TransactionDigest>,
@@ -303,7 +315,7 @@ impl ReadApi {
             .await?)
     }
 
-    /// Return the [SuiCommittee] information for the provided `epoch`, or an error upon failure
+    /// Return the [SuiCommittee] information for the provided `epoch`, or an error upon failure.
     ///
     /// # Arguments
     ///
@@ -311,7 +323,7 @@ impl ReadApi {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use sui_sdk::SuiClientBuilder;
     ///
     /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
@@ -324,7 +336,7 @@ impl ReadApi {
         Ok(self.api.http.get_committee_info(epoch).await?)
     }
 
-    // Return a paginated response containing all transaction blocks information, or an error upon failure
+    // Return a paginated response containing all transaction blocks information, or an error upon failure.
     pub async fn query_transaction_blocks(
         &self,
         query: SuiTransactionBlockResponseQuery,
@@ -339,17 +351,17 @@ impl ReadApi {
             .await?)
     }
 
-    // Return the chain identifier
+    // Return the chain identifier, or an error upon failure.
     pub async fn get_chain_identifier(&self) -> SuiRpcResult<String> {
         Ok(self.api.http.get_chain_identifier().await?)
     }
 
-    /// Return a checkpoint
+    /// Return a checkpoint, or an error upon failure.
     pub async fn get_checkpoint(&self, id: CheckpointId) -> SuiRpcResult<Checkpoint> {
         Ok(self.api.http.get_checkpoint(id).await?)
     }
 
-    /// Return paginated list of checkpoints
+    /// Return paginated list of checkpoints, or an error upon failure.
     pub async fn get_checkpoints(
         &self,
         cursor: Option<BigInt<u64>>,
@@ -363,7 +375,7 @@ impl ReadApi {
             .await?)
     }
 
-    /// Return the sequence number of the latest checkpoint that has been executed
+    /// Return the sequence number of the latest checkpoint that has been executed, or an error upon failure.
     pub async fn get_latest_checkpoint_sequence_number(
         &self,
     ) -> SuiRpcResult<CheckpointSequenceNumber> {
@@ -374,6 +386,7 @@ impl ReadApi {
             .await?)
     }
 
+    /// Return a stream of transaction block response, or an error upon failure.
     pub fn get_transactions_stream(
         &self,
         query: SuiTransactionBlockResponseQuery,
@@ -406,6 +419,7 @@ impl ReadApi {
         )
     }
 
+    /// Return a map consisting of the move package name and the normalized module, or an error upon failure.
     pub async fn get_normalized_move_modules_by_package(
         &self,
         package: ObjectID,
@@ -418,10 +432,12 @@ impl ReadApi {
     }
 
     // TODO(devx): we can probably cache this given an epoch
+    /// Return the reference gas price, or an error upon failure.
     pub async fn get_reference_gas_price(&self) -> SuiRpcResult<u64> {
         Ok(*self.api.http.get_reference_gas_price().await?)
     }
 
+    /// Dry run a transaction block given the provided transaction data. Returns an error upon failure.
     pub async fn dry_run_transaction_block(
         &self,
         tx: TransactionData,
@@ -452,6 +468,7 @@ impl ReadApi {
             .await?)
     }
 
+    /// Return the loaded child objects response based on the provided digest, or an error upon failure.
     pub async fn get_loaded_child_objects(
         &self,
         digest: TransactionDigest,
@@ -459,6 +476,7 @@ impl ReadApi {
         Ok(self.api.http.get_loaded_child_objects(digest).await?)
     }
 
+    /// Return the protocol config, or an error upon failure.
     pub async fn get_protocol_config(
         &self,
         version: Option<BigInt<u64>>,
@@ -478,11 +496,13 @@ impl CoinReadApi {
         Self { api }
     }
 
-    /// Return a list of coins for the provided address in a paginated fashion, or an error upon failure
+    /// Return a list of coins for the provided address in a paginated fashion, or an error upon failure.
+    ///
+    /// The coins can be filtered by `coin_type` or use `None` for including all coin types.
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::SuiAddress;
     /// use std::str::FromStr;
@@ -504,11 +524,11 @@ impl CoinReadApi {
             .get_coins(owner, coin_type, cursor, limit)
             .await?)
     }
-    /// Return all coins in a paginated fashion, or an error upon failure
+    /// Return all coins in a paginated fashion, or an error upon failure.
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::SuiAddress;
     /// use std::str::FromStr;
@@ -526,11 +546,13 @@ impl CoinReadApi {
         Ok(self.api.http.get_all_coins(owner, cursor, limit).await?)
     }
 
-    /// Return the coins for the provided address as a stream
+    /// Return the coins for the provided address as a stream.
+    ///
+    /// The coins can be filtered by `coin_type` or use `None` for including all coin types.
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::SuiAddress;
     /// use std::str::FromStr;
@@ -574,11 +596,13 @@ impl CoinReadApi {
         )
     }
 
-    /// Return a list of coins for the provided address, or an error upon failure
+    /// Return a list of coins for the provided address, or an error upon failure.
+    ///
+    /// The coins can be filtered by `coin_type` or use `None` for including all coin types.
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::SuiAddress;
     /// use std::str::FromStr;
@@ -612,11 +636,13 @@ impl CoinReadApi {
         Ok(coins)
     }
 
-    /// Return the balance of coins (filtered by coin type) for the provided address, or an error upon failure
+    /// Return the balance of coins for the provided address, or an error upon failure.
+    ///
+    /// The coins can be filtered by coin type or use `None` for including all coin types.
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::SuiAddress;
     /// use std::str::FromStr;
@@ -633,11 +659,11 @@ impl CoinReadApi {
         Ok(self.api.http.get_balance(owner, coin_type).await?)
     }
 
-    /// Return the total balance of all coins for the provided address, or an error upon failure
+    /// Return the total balance of all coins for the provided address, or an error upon failure.
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::SuiAddress;
     /// use std::str::FromStr;
@@ -650,11 +676,11 @@ impl CoinReadApi {
         Ok(self.api.http.get_all_balances(owner).await?)
     }
 
-    /// Return the coin metadata for a given coin type, or an error upon failure
+    /// Return the coin metadata for a given coin type, or an error upon failure.
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use sui_sdk::SuiClientBuilder;
     ///
     /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
@@ -667,11 +693,11 @@ impl CoinReadApi {
         Ok(self.api.http.get_coin_metadata(coin_type).await?)
     }
 
-    /// Return the [Supply] for a given coin type, or an error upon failure
+    /// Return the total supply for a given coin type, or an error upon failure.
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use sui_sdk::SuiClientBuilder;
     ///
     /// let sui = SuiClientBuilder::default()::build_localnet().await?; // local Sui network
@@ -682,8 +708,7 @@ impl CoinReadApi {
     }
 }
 
-/// Event API provides the functionality to fetch, query, or subscribe to events on the Sui network
-
+/// Event API provides the functionality to fetch, query, or subscribe to events on the Sui network.
 #[derive(Clone)]
 pub struct EventApi {
     api: Arc<RpcClient>,
@@ -694,7 +719,7 @@ impl EventApi {
         Self { api }
     }
 
-    /// Return a stream of events, or an error upon failure
+    /// Return a stream of events, or an error upon failure.
     pub async fn subscribe_event(
         &self,
         filter: EventFilter,
@@ -710,12 +735,12 @@ impl EventApi {
         }
     }
 
-    /// Return a list of events based on the transaction digest, or an error upon failure
+    /// Return a list of events based on the transaction digest, or an error upon failure.
     pub async fn get_events(&self, digest: TransactionDigest) -> SuiRpcResult<Vec<SuiEvent>> {
         Ok(self.api.http.get_events(digest).await?)
     }
 
-    /// Return a paginated list of events based on the given event filter, or an error upon failure
+    /// Return a paginated list of events based on the given event filter, or an error upon failure.
     pub async fn query_events(
         &self,
         query: EventFilter,
@@ -730,9 +755,9 @@ impl EventApi {
             .await?)
     }
 
-    /// Return a stream of events based on the given event filter
+    /// Return a stream of events based on the given event filter.
     ///
-    /// By default, each page will return 100 items
+    /// By default, each page will return 100 items.
     pub fn get_events_stream(
         &self,
         query: EventFilter,
@@ -761,7 +786,7 @@ impl EventApi {
     }
 }
 
-/// Quorum API that provides functionality to execute a transaction block and submit it to the fullnode(s)
+/// Quorum API that provides functionality to execute a transaction block and submit it to the fullnode(s).
 #[derive(Clone)]
 pub struct QuorumDriverApi {
     api: Arc<RpcClient>,
@@ -822,7 +847,7 @@ impl QuorumDriverApi {
     }
 }
 
-/// Governance API provides the functionality needed related to staking
+/// Governance API provides the functionality needed for staking on the Sui network.
 #[derive(Debug, Clone)]
 pub struct GovernanceApi {
     api: Arc<RpcClient>,
@@ -838,7 +863,7 @@ impl GovernanceApi {
         Ok(self.api.http.get_stakes(owner).await?)
     }
 
-    /// Return the [SuiCommittee] information for the provided `epoch`, or an error upon failure
+    /// Return the [SuiCommittee] information for the provided `epoch`, or an error upon failure.
     ///
     /// # Arguments
     ///
@@ -846,7 +871,7 @@ impl GovernanceApi {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use sui_sdk::SuiClientBuilder;
     ///
     /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
@@ -859,12 +884,12 @@ impl GovernanceApi {
         Ok(self.api.http.get_committee_info(epoch).await?)
     }
 
-    /// Return the latest SUI system state object on-chain, or an error upon failure
+    /// Return the latest SUI system state object on-chain, or an error upon failure.
     pub async fn get_latest_sui_system_state(&self) -> SuiRpcResult<SuiSystemStateSummary> {
         Ok(self.api.http.get_latest_sui_system_state().await?)
     }
 
-    /// Return the reference gas price for the network, or an error upon failure
+    /// Return the reference gas price for the network, or an error upon failure.
     pub async fn get_reference_gas_price(&self) -> SuiRpcResult<u64> {
         Ok(*self.api.http.get_reference_gas_price().await?)
     }

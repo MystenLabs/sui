@@ -34,8 +34,14 @@ async fn main() -> Result<(), anyhow::Error> {
     println!("{:?}", dynamic_fields);
     println!(" *** Dynamic Fields ***\n");
 
-    let Some(object) = owned_objects.data.get(0) else { panic!("{}", format!("No owned objects for this address {}", active_address))};
-    let Some(ref object_data) = object.data else { panic!("{}", format!("No object data for this SuiObjectResponse {:?}", object))};
+    let object = owned_objects.data.get(0).expect(&format!(
+        "No owned objects for this address {}",
+        active_address
+    ));
+    let object_data = object.data.as_ref().expect(&format!(
+        "No object data for this SuiObjectResponse {:?}",
+        object
+    ));
     let object_id = object_data.object_id;
     let version = object_data.version;
 
@@ -108,6 +114,12 @@ async fn main() -> Result<(), anyhow::Error> {
     println!("{:?}", sui_local.read_api().get_chain_identifier().await?);
     println!(" *** Chain identifier ***\n ");
 
+    println!(" *** Protocol Config *** ");
+    println!(
+        "{:?}",
+        sui_local.read_api().get_protocol_config(None).await?
+    );
+    println!(" *** Protocol Config ***\n ");
     // ************ END OF READ API ************ //
 
     Ok(())
