@@ -69,6 +69,7 @@
 -  [Function `active_validators`](#0x3_validator_set_active_validators)
 -  [Function `is_validator_candidate`](#0x3_validator_set_is_validator_candidate)
 -  [Function `is_inactive_validator`](#0x3_validator_set_is_inactive_validator)
+-  [Function `active_validator_addresses`](#0x3_validator_set_active_validator_addresses)
 -  [Module Specification](#@Module_Specification_1)
 
 
@@ -2856,6 +2857,39 @@ Returns true if the staking pool identified by <code>staking_pool_id</code> is o
 
 <pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_is_inactive_validator">is_inactive_validator</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, staking_pool_id: ID): bool {
     <a href="../../../.././build/Sui/docs/table.md#0x2_table_contains">table::contains</a>(&self.inactive_validators, staking_pool_id)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_validator_set_active_validator_addresses"></a>
+
+## Function `active_validator_addresses`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_active_validator_addresses">active_validator_addresses</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>): <a href="">vector</a>&lt;<b>address</b>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_active_validator_addresses">active_validator_addresses</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>): <a href="">vector</a>&lt;<b>address</b>&gt; {
+    <b>let</b> vs = &self.active_validators;
+    <b>let</b> res = <a href="">vector</a>[];
+    <b>let</b> i = 0;
+    <b>let</b> length = <a href="_length">vector::length</a>(vs);
+    <b>while</b> (i &lt; length) {
+        <b>let</b> validator_address = <a href="validator.md#0x3_validator_sui_address">validator::sui_address</a>(<a href="_borrow">vector::borrow</a>(vs, i));
+        <a href="_push_back">vector::push_back</a>(&<b>mut</b> res, validator_address);
+        i = i + 1;
+    };
+    res
 }
 </code></pre>
 

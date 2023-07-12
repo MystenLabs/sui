@@ -1047,6 +1047,11 @@ module sui_system::sui_system_state_inner {
         validator_set::pool_exchange_rates(validators, pool_id)
     }
 
+    public(friend) fun active_validator_addresses(self: &SuiSystemStateInnerV2): vector<address> {
+        let validator_set = &self.validators;
+        validator_set::active_validator_addresses(validator_set)
+    }
+
     /// Extract required Balance from vector of Coin<SUI>, transfer the remainder back to sender.
     fun extract_coin_balance(coins: vector<Coin<SUI>>, amount: option::Option<u64>, ctx: &mut TxContext): Balance<SUI> {
         let merged_coin = vector::pop_back(&mut coins);
