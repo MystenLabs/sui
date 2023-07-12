@@ -718,9 +718,9 @@ impl KeyToolCommand {
                 let multisig = MultiSigLegacy::combine(sigs, multisig_pk)?;
                 let generic_sig: GenericSignature = multisig.into();
                 let multisig_legacy_serialized = generic_sig.encode_base64();
-                println!("MultiSig address: {address}");
-                println!("MultiSig legacy parsed: {:?}", generic_sig);
-                println!("MultiSig legacy serialized: {multisig_legacy_serialized}",);
+                eprintln!("MultiSig address: {address}");
+                eprintln!("MultiSig legacy parsed: {:?}", generic_sig);
+                eprintln!("MultiSig legacy serialized: {multisig_legacy_serialized}",);
 
                 CommandOutput::MultiSigCombinePartialSigLegacy(
                     MultiSigCombinePartialSigLegacyOutput {
@@ -737,19 +737,33 @@ impl KeyToolCommand {
                 let bitmap = multisig.get_indices()?;
                 let address = SuiAddress::from(multisig.get_pk());
 
+                let pub_keys = pks
+                    .iter()
+                    .map(|(pk, w)| MultiSigOutput {
+                        address: (pk).into(),
+                        public_base64_key: pk.encode_base64(),
+                        weight: *w,
+                    })
+                    .collect::<Vec<MultiSigOutput>>();
+
+                let threshold = *multisig.get_pk().threshold() as usize;
+
                 let mut output = DecodedMultiSigOutput {
                     multisig_address: address,
-                    public_keys: vec![],
+                    participating_keys_signatures: vec![],
+                    pub_keys,
+                    threshold,
                     transaction_result: "".to_string(),
                 };
 
-                println!(
+                eprintln!(
                     "All pubkeys: {:?}, threshold: {:?}",
                     pks.iter()
                         .map(|(pk, w)| format!("{:?} - {:?}", pk.encode_base64(), w))
                         .collect::<Vec<String>>(),
                     multisig.get_pk().threshold()
                 );
+
                 eprintln!("Participating signatures and pubkeys");
                 eprintln!(
                     " {0: ^45} | {1: ^45} | {2: ^6}",
@@ -766,7 +780,7 @@ impl KeyToolCommand {
                         pk.encode_base64(),
                         w
                     );
-                    output.public_keys.push(DecodedMultiSig {
+                    output.participating_keys_signatures.push(DecodedMultiSig {
                         public_base64_key: Base64::encode(sig.as_ref()).clone(),
                         sig_base64: pk.encode_base64().clone(),
                         weight: w.to_string(),
@@ -874,7 +888,7 @@ fn convert_private_key_to_base64(value: String) -> Result<String, anyhow::Error>
     match Base64::decode(&value) {
         Ok(decoded) => {
             if decoded.len() != 33 {
-                return Err(anyhow!(format!("Private key is malformed and cannot base64 decode it. Expected 33 length but got {}", decoded.len())));
+                return Err(anyhow!(format!("Private key is malformed and cannot base64 decode it. Fed 33 length but got {}", decoded.len())));
             }
             Ok(Hex::encode(&decoded[1..]))
         }
@@ -985,7 +999,9 @@ pub struct DecodedMultiSig {
 #[serde(rename_all = "camelCase")]
 pub struct DecodedMultiSigOutput {
     multisig_address: SuiAddress,
-    public_keys: Vec<DecodedMultiSig>,
+    participating_keys_signatures: Vec<DecodedMultiSig>,
+    pub_keys: Vec<MultiSigOutput>,
+    threshold: usize,
     transaction_result: String,
 }
 
