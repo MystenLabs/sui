@@ -4,7 +4,7 @@
 import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
-import { useInitialPageView } from './hooks/useInitialPageView';
+import { useAmplitudeUserProperties } from './hooks/useAmplitudeUserProperties';
 import { QredoConnectInfoPage } from './pages/qredo-connect/QredoConnectInfoPage';
 import { SelectQredoAccountsPage } from './pages/qredo-connect/SelectQredoAccountsPage';
 import { RestrictedPage } from './pages/restricted';
@@ -56,7 +56,7 @@ const App = () => {
 		dispatch(setNavVisibility(menuVisible));
 	}, [location, dispatch]);
 
-	useInitialPageView();
+	useAmplitudeUserProperties();
 
 	return (
 		<Routes>

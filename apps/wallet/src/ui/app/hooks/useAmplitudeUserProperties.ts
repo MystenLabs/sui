@@ -10,7 +10,7 @@ import useAppSelector from './useAppSelector';
 import { AppType } from '../redux/slices/app/AppType';
 import { ampli } from '_src/shared/analytics/ampli';
 
-export function useInitialPageView() {
+export function useAmplitudeUserProperties() {
 	const activeAccount = useActiveAccount();
 	const location = useLocation();
 	const { apiEnv, customRPC, activeOrigin, appType } = useAppSelector((state) => state.app);
@@ -28,8 +28,4 @@ export function useInitialPageView() {
 			walletVersion: Browser.runtime.getManifest().version,
 		});
 	}, [activeAccount?.type, activeNetwork, activeOrigin, isFullScreen, location]);
-
-	useEffect(() => {
-		ampli.openedWalletExtension();
-	}, []);
 }
