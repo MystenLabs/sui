@@ -437,6 +437,30 @@ export class DeepBook_sdk {
 	}
 
 	/**
+	 * @param token1 Full coin type of the base asset, eg: "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::wbtc::WBTC"
+	 * @param token2 Full coin type of quote asset, eg: "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::usdt::USDT"
+	 * @param poolId Object id of pool, created after invoking createPool, eg: "0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4"
+	 * @param orderIds array of expire order ids to clean, eg: ["0", "1", "2"]
+	 * @param orderOwners array of Order owners, should be the owner addresses from the account capacities which placed the orders
+	 */
+	public cleanUpExpiredOrders(
+		token1: string,
+		token2: string,
+		poolId: string,
+		orderIds: string[],
+		orderOwners: string[],
+	): TransactionBlock {
+		const txb = new TransactionBlock();
+		txb.moveCall({
+			typeArguments: [token1, token2],
+			target: `${PACKAGE_ID}::${MODULE_CLOB}::clean_up_expired_orders`,
+			arguments: [txb.object(poolId),  txb.object(normalizeSuiObjectId(CLOCK)), txb.pure(orderIds), txb.pure(orderOwners)],
+		});
+		txb.setGasBudget(defaultGasBudget);
+		return txb;
+	}
+
+	/**
 	 * @param tokenInObject the tokenObject you want to swap
 	 * @param tokenOut the token you want to swap to
 	 * @param client_order_id an id which identify who make the order, you can define it by yourself, eg: "1" , "2", ...
