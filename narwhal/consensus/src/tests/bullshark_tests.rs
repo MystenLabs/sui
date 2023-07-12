@@ -10,7 +10,6 @@ use crate::consensus_utils::NUM_SUB_DAGS_PER_SCHEDULE;
 use crate::consensus_utils::*;
 use crate::{metrics::ConsensusMetrics, Consensus, NUM_SHUTDOWN_RECEIVERS};
 use config::AuthorityIdentifier;
-use dag::node_dag::Affiliated;
 #[allow(unused_imports)]
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
@@ -364,7 +363,6 @@ async fn test_long_period_of_asynchrony_for_leader_schedule_change() {
         },
     );
 
-
     leader_configs.insert(
         10,
         test_utils::TestLeaderConfiguration {
@@ -415,20 +413,22 @@ async fn test_long_period_of_asynchrony_for_leader_schedule_change() {
 
     let mut total = 0;
     for certificate in certificates {
-        let (outcome, committed) = bullshark
+        let (outcome, _committed) = bullshark
             .process_certificate(&mut state, certificate.clone())
             .unwrap();
 
-        if certificate.round() == 7 || certificate.round() == 9 || certificate.round() == 11 || certificate.round() == 13 {
+        if certificate.round() == 7
+            || certificate.round() == 9
+            || certificate.round() == 11
+            || certificate.round() == 13
+        {
             assert_eq!(outcome, Outcome::NotEnoughSupportForLeader);
         }
 
         if certificate.round() == 15 {
             total += 1;
 
-            if total == 2 {
-
-            }
+            if total == 2 {}
         }
     }
 }
