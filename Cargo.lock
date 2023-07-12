@@ -10271,6 +10271,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-raw-transaction-builder"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "clap 3.2.23",
+ "fastcrypto",
+ "move-core-types",
+ "sui-sdk",
+ "sui-types",
+ "tokio",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-replay"
 version = "0.1.0"
 dependencies = [

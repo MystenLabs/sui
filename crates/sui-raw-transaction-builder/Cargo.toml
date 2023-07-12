@@ -1,0 +1,19 @@
+[package]
+name = "sui-raw-transaction-builder"
+version = "0.1.0"
+authors = ["Mysten Labs <eng@mystenlabs.com>"]
+description = "Tool to build raw unsigned Sui programmable transaction blocks"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow = { version = "1.0.64", features = ["backtrace"] }
+bcs.workspace = true
+clap = { version = "3.2.17", features = ["derive"] }
+fastcrypto.workspace = true
+move-core-types.workspace = true
+sui-types.workspace = true
+sui-sdk = { path = "../sui-sdk" }
+tokio = { workspace = true, features = ["full"] }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

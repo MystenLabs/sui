@@ -106,6 +106,7 @@ members = [
     "crates/sui-protocol-config",
     "crates/sui-protocol-config-macros",
     "crates/sui-proxy",
+    "crates/sui-raw-transaction-builder",
     "crates/sui-replay",
     "crates/sui-rosetta",
     "crates/sui-rpc-loadgen",
