@@ -39,10 +39,6 @@ validator_configs:
           payload_synchronize_timeout: 30000ms
           payload_availability_timeout: 30000ms
           handler_certificate_deliver_timeout: 30000ms
-        consensus_api_grpc:
-          socket_addr: ""
-          get_collections_timeout: 5000ms
-          remove_collections_timeout: 5000ms
         max_concurrent_requests: 500000
         prometheus_metrics:
           socket_addr: /ip4/127.0.0.1/tcp/1234
@@ -133,10 +129,6 @@ validator_configs:
           payload_synchronize_timeout: 30000ms
           payload_availability_timeout: 30000ms
           handler_certificate_deliver_timeout: 30000ms
-        consensus_api_grpc:
-          socket_addr: ""
-          get_collections_timeout: 5000ms
-          remove_collections_timeout: 5000ms
         max_concurrent_requests: 500000
         prometheus_metrics:
           socket_addr: /ip4/127.0.0.1/tcp/1234
@@ -227,10 +219,6 @@ validator_configs:
           payload_synchronize_timeout: 30000ms
           payload_availability_timeout: 30000ms
           handler_certificate_deliver_timeout: 30000ms
-        consensus_api_grpc:
-          socket_addr: ""
-          get_collections_timeout: 5000ms
-          remove_collections_timeout: 5000ms
         max_concurrent_requests: 500000
         prometheus_metrics:
           socket_addr: /ip4/127.0.0.1/tcp/1234
@@ -321,10 +309,6 @@ validator_configs:
           payload_synchronize_timeout: 30000ms
           payload_availability_timeout: 30000ms
           handler_certificate_deliver_timeout: 30000ms
-        consensus_api_grpc:
-          socket_addr: ""
-          get_collections_timeout: 5000ms
-          remove_collections_timeout: 5000ms
         max_concurrent_requests: 500000
         prometheus_metrics:
           socket_addr: /ip4/127.0.0.1/tcp/1234
@@ -415,10 +399,6 @@ validator_configs:
           payload_synchronize_timeout: 30000ms
           payload_availability_timeout: 30000ms
           handler_certificate_deliver_timeout: 30000ms
-        consensus_api_grpc:
-          socket_addr: ""
-          get_collections_timeout: 5000ms
-          remove_collections_timeout: 5000ms
         max_concurrent_requests: 500000
         prometheus_metrics:
           socket_addr: /ip4/127.0.0.1/tcp/1234
@@ -509,10 +489,6 @@ validator_configs:
           payload_synchronize_timeout: 30000ms
           payload_availability_timeout: 30000ms
           handler_certificate_deliver_timeout: 30000ms
-        consensus_api_grpc:
-          socket_addr: ""
-          get_collections_timeout: 5000ms
-          remove_collections_timeout: 5000ms
         max_concurrent_requests: 500000
         prometheus_metrics:
           socket_addr: /ip4/127.0.0.1/tcp/1234
@@ -603,10 +579,6 @@ validator_configs:
           payload_synchronize_timeout: 30000ms
           payload_availability_timeout: 30000ms
           handler_certificate_deliver_timeout: 30000ms
-        consensus_api_grpc:
-          socket_addr: ""
-          get_collections_timeout: 5000ms
-          remove_collections_timeout: 5000ms
         max_concurrent_requests: 500000
         prometheus_metrics:
           socket_addr: /ip4/127.0.0.1/tcp/1234

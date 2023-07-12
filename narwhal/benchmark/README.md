@@ -53,11 +53,6 @@ node_params = {
         'payload_availability_timeout': '30s',
         'handler_certificate_deliver_timeout': '30s'
     },
-    "consensus_api_grpc": {
-        "socket_addr": "/ip4/127.0.0.1/tcp/0/http",
-        "get_collections_timeout": "5_000ms",
-        "remove_collections_timeout": "5_000ms"
-    },
     'max_concurrent_requests': 500_000
 }
 ```

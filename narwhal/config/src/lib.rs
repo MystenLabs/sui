@@ -160,9 +160,6 @@ pub struct Parameters {
     /// The parameters for the block synchronizer
     #[serde(default = "BlockSynchronizerParameters::default")]
     pub block_synchronizer: BlockSynchronizerParameters,
-    /// The parameters for the Consensus API gRPC server
-    #[serde(default = "ConsensusAPIGrpcParameters::default")]
-    pub consensus_api_grpc: ConsensusAPIGrpcParameters,
     /// The maximum number of concurrent requests for messages accepted from an un-trusted entity
     #[serde(default = "Parameters::default_max_concurrent_requests")]
     pub max_concurrent_requests: usize,
@@ -303,40 +300,6 @@ impl PrometheusMetricsParameters {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct ConsensusAPIGrpcParameters {
-    /// Socket address the server should be listening to.
-    pub socket_addr: Multiaddr,
-    /// The timeout configuration when requesting batches from workers.
-    #[serde(with = "duration_format")]
-    pub get_collections_timeout: Duration,
-    /// The timeout configuration when removing batches from workers.
-    #[serde(with = "duration_format")]
-    pub remove_collections_timeout: Duration,
-}
-
-impl Default for ConsensusAPIGrpcParameters {
-    fn default() -> Self {
-        let host = "127.0.0.1";
-        Self {
-            socket_addr: format!("/ip4/{}/tcp/{}/http", host, get_available_port(host))
-                .parse()
-                .unwrap(),
-            get_collections_timeout: Duration::from_millis(5_000),
-            remove_collections_timeout: Duration::from_millis(5_000),
-        }
-    }
-}
-
-impl ConsensusAPIGrpcParameters {
-    fn with_available_port(&self) -> Self {
-        let mut params = self.clone();
-        let default = Self::default();
-        params.socket_addr = default.socket_addr;
-        params
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct BlockSynchronizerParameters {
     /// The timeout configuration for synchronizing certificate digests from a starting round.
@@ -426,7 +389,6 @@ impl Default for Parameters {
             batch_size: Parameters::default_batch_size(),
             max_batch_delay: Parameters::default_max_batch_delay(),
             block_synchronizer: BlockSynchronizerParameters::default(),
-            consensus_api_grpc: ConsensusAPIGrpcParameters::default(),
             max_concurrent_requests: Parameters::default_max_concurrent_requests(),
             prometheus_metrics: PrometheusMetricsParameters::default(),
             network_admin_server: NetworkAdminServerParameters::default(),
@@ -438,7 +400,6 @@ impl Default for Parameters {
 impl Parameters {
     pub fn with_available_ports(&self) -> Self {
         let mut params = self.clone();
-        params.consensus_api_grpc = params.consensus_api_grpc.with_available_port();
         params.prometheus_metrics = params.prometheus_metrics.with_available_port();
         params.network_admin_server = params.network_admin_server.with_available_port();
         params
@@ -494,20 +455,7 @@ impl Parameters {
                 .payload_synchronize_timeout
                 .as_secs()
         );
-        info!(
-            "Consensus API gRPC Server set to listen on on {}",
-            self.consensus_api_grpc.socket_addr
-        );
-        info!(
-            "Get collections timeout set to {} ms",
-            self.consensus_api_grpc.get_collections_timeout.as_millis()
-        );
-        info!(
-            "Remove collections timeout set to {} ms",
-            self.consensus_api_grpc
-                .remove_collections_timeout
-                .as_millis()
-        );
+
         info!(
             "Handler certificate deliver timeout set to {} s",
             self.block_synchronizer
