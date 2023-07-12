@@ -82,7 +82,7 @@ export class Ed25519PublicKey {
 	/**
 	 * Return the Sui representation of the public key encoded in
 	 * base-64. A Sui public key is formed by the concatenation
-	 * of the scheme flag with the raw bytes of the public key.
+	 * of the scheme flag with the raw bytes of the public key
 	 */
 	toSuiPublicKey(): string {
 		const suiPublicKey = new Uint8Array(this.data.length + 1);
