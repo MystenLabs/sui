@@ -17,7 +17,7 @@ def parse_args():
     )
 
     subparsers = parser.add_subparsers(
-        description="Tools for managing cuts of the execution-layer",
+        description="Tools for managing cuts of the execution-layer.",
     )
 
     cut = subparsers.add_parser(
@@ -31,12 +31,12 @@ def parse_args():
     cut.add_argument(
         "feature",
         type=feature,
-        help="The name of the new cut to make",
+        help="The name of the new cut to make.",
     )
     cut.add_argument(
         "--dry-run",
         action="store_true",
-        help="Print the operations, without running them",
+        help="Print the operations, without running them.",
     )
 
     generate_lib = subparsers.add_parser(
@@ -52,7 +52,7 @@ def parse_args():
     generate_lib.add_argument(
         "--dry-run",
         action="store_true",
-        help="Print the operations, without running them",
+        help="Print the operations, without running them.",
     )
 
     merge = subparsers.add_parser(
@@ -60,8 +60,8 @@ def parse_args():
         help="Apply the changes made to FEATURE since it was cut, to BASE.",
     )
     merge.set_defaults(cmd="Merge", do=do_merge)
-    merge.add_argument("base", type=feature, help="The cut to merge into")
-    merge.add_argument("feature", type=feature, help="The cut to take from")
+    merge.add_argument("base", type=feature, help="The cut to merge into.")
+    merge.add_argument("feature", type=feature, help="The cut to take from.")
     merge.add_argument(
         "--dry-run",
         action="store_true",
@@ -82,7 +82,7 @@ def parse_args():
         "patch",
         help=(
             "Print a patch file representing the changes made to FEATURE "
-            "after the commit in which it was cut"
+            "after the commit in which it was cut."
         ),
     )
     patch.set_defaults(do=do_patch)

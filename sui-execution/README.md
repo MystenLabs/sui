@@ -181,7 +181,7 @@ of two places:
 
 ## Rebasing Cuts
 
-A cut can be `rebase`-d against `latest using the following command:
+A cut can be `rebase`-d against `latest` using the following command:
 
 ```shell
 ./scripts/execution_layer.py rebase <FEATURE>
@@ -205,7 +205,7 @@ Cuts support a rudimentary form of `merge`, using patch files:
 
 The `merge` command attempts to merge the changes from `<FEATURE>`
 onto the cut at `<BASE>` (It modifies `<BASE>` and leaves `<FEATURE>`
-untouched).  Because it operates using patch files, any conflicts will
+untouched).  Because it operates using patch files, any conflicts
 result in a failure to apply the patch.  This can be resolved in two
 ways:
 
