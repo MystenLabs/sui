@@ -4,7 +4,7 @@
 import { useMultiGetObjects } from '@mysten/core';
 import { Check12, EyeClose16 } from '@mysten/icons';
 import { get, set } from 'idb-keyval';
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 
@@ -39,7 +39,33 @@ function NftsPage() {
 		{ showContent: true, showDisplay: true },
 	);
 
-	const hiddenNfts = data?.flatMap((data) => data.data) || [];
+	const filteredAndSortedNfts = useMemo(() => {
+		const hiddenNfts = data?.flatMap((data) => data.data) || [];
+		return hiddenNfts
+			?.filter((nft) => nft && internalHiddenAssetIds.includes(nft.objectId))
+			.sort((nftA, nftB) => {
+				let nameA = '';
+				let nameB = '';
+				if (nftA && typeof nftA.display?.data !== 'string') {
+					nameA = (nftA && extractName(nftA.display?.data)) || '';
+				} else if (nftA && typeof nftA.display?.data === 'string') {
+					nameA = nftA.display?.data;
+				}
+
+				if (nftB && typeof nftB.display?.data !== 'string') {
+					nameB = (nftB && extractName(nftB.display?.data)) || '';
+				} else if (nftB && typeof nftB.display?.data === 'string') {
+					nameB = nftB.display?.data;
+				}
+
+				if (nameA < nameB) {
+					return -1;
+				} else if (nameA > nameB) {
+					return 1;
+				}
+				return 0;
+			});
+	}, [internalHiddenAssetIds, data]);
 
 	useEffect(() => {
 		(async () => {
@@ -153,70 +179,46 @@ function NftsPage() {
 						<small>{(error as Error).message}</small>
 					</Alert>
 				) : null}
-				{hiddenNfts?.length ? (
+				{filteredAndSortedNfts?.length ? (
 					<div className="flex flex-col w-full divide-y divide-solid divide-gray-40 divide-x-0 gap-2 mb-5">
-						{hiddenNfts
-							.filter((nft) => nft && internalHiddenAssetIds.includes(nft.objectId))
-							.sort((nftA, nftB) => {
-								let nameA = '';
-								let nameB = '';
-								if (nftA && typeof nftA.display?.data !== 'string') {
-									nameA = (nftA && extractName(nftA.display?.data)) || '';
-								} else if (nftA && typeof nftA.display?.data === 'string') {
-									nameA = nftA.display?.data;
-								}
-
-								if (nftB && typeof nftB.display?.data !== 'string') {
-									nameB = (nftB && extractName(nftB.display?.data)) || '';
-								} else if (nftB && typeof nftB.display?.data === 'string') {
-									nameB = nftB.display?.data;
-								}
-
-								if (nameA < nameB) {
-									return -1;
-								} else if (nameA > nameB) {
-									return 1;
-								}
-								return 0;
-							})
-							.map((nft) => {
-								const { objectId, type } = nft!;
-								return (
-									<div className="flex justify-between items-center pt-2 pr-1" key={objectId}>
-										<Link
-											to={`/nft-details?${new URLSearchParams({
-												objectId: objectId,
-											}).toString()}`}
-											onClick={() => {
-												ampli.clickedCollectibleCard({
-													objectId,
-													collectibleType: type!,
-												});
-											}}
-											className="no-underline relative truncate"
-										>
-											<ErrorBoundary>
-												<NFTDisplayCard
-													objectId={objectId}
-													size="xs"
-													showLabel
-													orientation="horizontal"
-												/>
-											</ErrorBoundary>
-										</Link>
-										<div className="h-8 w-8">
-											<Button
-												variant="secondarySui"
-												size="icon"
-												onClick={() => {
-													showAsset(objectId);
-												}}
-												after={<EyeClose16 />}
+						{filteredAndSortedNfts.map((nft) => {
+							const { objectId, type } = nft!;
+							return (
+								<div className="flex justify-between items-center pt-2 pr-1" key={objectId}>
+									<Link
+										to={`/nft-details?${new URLSearchParams({
+											objectId: objectId,
+										}).toString()}`}
+										onClick={() => {
+											ampli.clickedCollectibleCard({
+												objectId,
+												collectibleType: type!,
+											});
+										}}
+										className="no-underline relative truncate"
+									>
+										<ErrorBoundary>
+											<NFTDisplayCard
+												objectId={objectId}
+												size="xs"
+												showLabel
+												orientation="horizontal"
 											/>
-										</div>
+										</ErrorBoundary>
+									</Link>
+									<div className="h-8 w-8">
+										<Button
+											variant="secondarySui"
+											size="icon"
+											onClick={() => {
+												showAsset(objectId);
+											}}
+											after={<EyeClose16 />}
+										/>
 									</div>
-								);
-							})}
+								</div>
+							);
+						})}
 					</div>
 				) : (
 					<div className="flex flex-1 items-center self-center text-caption font-semibold text-steel-darker">
