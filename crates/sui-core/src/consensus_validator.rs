@@ -98,7 +98,8 @@ impl TransactionValidator for SuiTxValidator {
                         && !epoch_store.is_tx_cert_consensus_message_processed(&certificate)?
                     {
                         // new_unchecked safety: we do not use the certs in this list until all
-                        // have had their signatures verified.
+                        // have had their signatures verified. All certs in cert_batch must be
+                        // verified by signature_verifier, or the entire batch will be rejected.
                         owned_tx_certs.push(VerifiedCertificate::new_unchecked(*certificate));
                     }
                 }
