@@ -272,7 +272,10 @@ async fn access_clock_object_test() {
 
 #[sim_test]
 async fn shared_object_sync() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(7)
+        .build()
+        .await;
     let package_id = publish_basics_package(&test_cluster.wallet).await.0;
 
     // Since we use submit_transaction_to_validators in this test, which does not go through fullnode,
@@ -289,7 +292,21 @@ async fn shared_object_sync() {
     let validators = test_cluster.get_validator_pubkeys();
     let (slow_validators, fast_validators): (Vec<_>, Vec<_>) =
         validators.iter().partition(|name| {
-            position_submit_certificate(&committee, name, create_counter_transaction.digest()) > 0
+            let position =
+                position_submit_certificate(&committee, name, create_counter_transaction.digest());
+            tracing::info!(?name, tx_digest = ?create_counter_transaction.digest(), ?position, "position");
+            position > 1
+        });
+
+    slow_validators
+        .iter()
+        .for_each(|n: &sui_types::base_types::AuthorityName| {
+            tracing::info!("slow validator: {:?}", n.concise())
+        });
+    fast_validators
+        .iter()
+        .for_each(|n: &sui_types::base_types::AuthorityName| {
+            tracing::info!("fast validator: {:?}", n.concise())
         });
 
     let (effects, _, _) = test_cluster
@@ -335,7 +352,7 @@ async fn shared_object_sync() {
 
     // Let's submit the transaction to the original set of validators, except the first.
     let (effects, _, _) = test_cluster
-        .submit_transaction_to_validators(increment_counter_transaction.clone(), &validators[1..])
+        .submit_transaction_to_validators(increment_counter_transaction.clone(), &slow_validators)
         .await
         .unwrap();
     assert!(effects.status().is_ok());
@@ -343,7 +360,7 @@ async fn shared_object_sync() {
     // Submit transactions to the out-of-date authority.
     // It will succeed because we share owned object certificates through narwhal
     let (effects, _, _) = test_cluster
-        .submit_transaction_to_validators(increment_counter_transaction, &validators[0..1])
+        .submit_transaction_to_validators(increment_counter_transaction, &fast_validators)
         .await
         .unwrap();
     assert!(effects.status().is_ok());
