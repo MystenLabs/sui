@@ -80,6 +80,16 @@ export class Secp256r1PublicKey implements PublicKey {
 	}
 
 	/**
+	 * Return the Sui representation of the public key
+	 */
+	toSuiPublicKey(): string {
+		const suiPublicKey = new Uint8Array(1 + this.data.length);
+		suiPublicKey.set([this.flag()]);
+		suiPublicKey.set(this.data, 1);
+		return toB64(suiPublicKey);
+	}
+
+	/**
 	 * Return the Sui address associated with this Secp256r1 public key
 	 */
 	flag(): number {

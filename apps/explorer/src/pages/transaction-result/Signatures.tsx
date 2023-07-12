@@ -27,9 +27,9 @@ function SignaturePanel({ title, signature }: { title: string; signature: Signat
 						{signature.signatureScheme}
 					</Text>
 				</DescriptionItem>
-				<DescriptionItem title="Public Key" align="start" labelWidth="sm">
+				<DescriptionItem title="Sui Public Key" align="start" labelWidth="sm">
 					<Text variant="pBody/medium" color="steel-darker">
-						{signature.pubKey.toString()}
+						{signature.pubKey.toSuiPublicKey()}
 					</Text>
 				</DescriptionItem>
 				<DescriptionItem title="Address" align="start" labelWidth="sm">

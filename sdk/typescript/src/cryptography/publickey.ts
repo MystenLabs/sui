@@ -51,6 +51,11 @@ export interface PublicKey {
 	toSuiAddress(): string;
 
 	/**
+	 * Return the Sui representation of the public key
+	 */
+	toSuiPublicKey(): string;
+
+	/**
 	 * Return signature scheme flag of the public key
 	 */
 	flag(): number;
