@@ -70,12 +70,11 @@ export class Ed25519PublicKey {
 	 * Return the Sui address associated with this Ed25519 public key
 	 */
 	toSuiAddress(): string {
-		let tmp = new Uint8Array(PUBLIC_KEY_SIZE + 1);
-		tmp.set([SIGNATURE_SCHEME_TO_FLAG['ED25519']]);
-		tmp.set(this.toBytes(), 1);
+		const suiPublicKey = this.toSuiPublicKey();
+
 		// Each hex char represents half a byte, hence hex address doubles the length
 		return normalizeSuiAddress(
-			bytesToHex(blake2b(tmp, { dkLen: 32 })).slice(0, SUI_ADDRESS_LENGTH * 2),
+			bytesToHex(blake2b(suiPublicKey, { dkLen: 32 })).slice(0, SUI_ADDRESS_LENGTH * 2),
 		);
 	}
 
@@ -83,10 +82,10 @@ export class Ed25519PublicKey {
 	 * Return the Sui representation of the public key
 	 */
 	toSuiPublicKey(): string {
-		const suiPublicKey = new Uint8Array(1 + this.data.length);
+		const suiPublicKey = new Uint8Array(PUBLIC_KEY_SIZE + 1);
 		suiPublicKey.set([this.flag()]);
 		suiPublicKey.set(this.data, 1);
-		return toB64(suiPublicKey);
+		return new Ed25519PublicKey(suiPublicKey);
 	}
 
 	/**
