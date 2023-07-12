@@ -15,7 +15,7 @@ use move_core_types::account_address::AccountAddress;
 use serde::Serialize;
 use sui_json::SuiJsonValue;
 use sui_types::error::SuiObjectResponseError;
-use tracing::{instrument, warn};
+use tracing::{debug, instrument, warn};
 
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
@@ -62,11 +62,15 @@ where
     spawn_monitored_task!(async move {
         match sink.pipe_from_stream(rx).await {
             SubscriptionClosed::Success => {
+                debug!("Subscription completed.");
                 sink.close(SubscriptionClosed::Success);
             }
-            SubscriptionClosed::RemotePeerAborted => (),
+            SubscriptionClosed::RemotePeerAborted => {
+                debug!("Subscription aborted by remote peer.");
+                sink.close(SubscriptionClosed::RemotePeerAborted);
+            }
             SubscriptionClosed::Failed(err) => {
-                warn!(error = ?err, "Event subscription closed.");
+                debug!("Subscription failed: {err:?}");
                 sink.close(err);
             }
         };
