@@ -17,6 +17,7 @@ const ObjectArg = union([
 			mutable: boolean(),
 		}),
 	}),
+	object({ Receiving: SuiObjectRef }),
 ]);
 
 export const PureCallArg = object({ Pure: array(integer()) });
@@ -60,6 +61,17 @@ export const Inputs = {
 			},
 		};
 	},
+	ReceivingRef({ objectId, digest, version }: SuiObjectRef): ObjectCallArg {
+		return {
+			Object: {
+				Receiving: {
+					digest,
+					version,
+					objectId: normalizeSuiAddress(objectId),
+				},
+			},
+		};
+	},
 };
 
 export function getIdFromCallArg(arg: string | ObjectCallArg) {
@@ -69,6 +81,11 @@ export function getIdFromCallArg(arg: string | ObjectCallArg) {
 	if ('ImmOrOwned' in arg.Object) {
 		return normalizeSuiAddress(arg.Object.ImmOrOwned.objectId);
 	}
+
+	if ('Receiving' in arg.Object) {
+		return normalizeSuiAddress(arg.Object.Receiving.objectId);
+	}
+
 	return normalizeSuiAddress(arg.Object.Shared.objectId);
 }
 
