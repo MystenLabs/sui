@@ -54,13 +54,18 @@ export default function MultiSigAddress() {
   renderCount++;
 
   return (
+    
+		<div className="flex flex-col gap-4">
+			<h2 className="scroll-m-20 text-4xl font-extrabold tracking-tight lg:text-5xl">
+				MultiSig Address Creator
+			</h2>
+    
+    
     <form 
       className="flex flex-col gap-4"
       onSubmit={handleSubmit(onSubmit)}>
-      <h1>MultiSig Address Generator</h1>
-      <p>The following demo allow you to create Sui MultiSig addressesd, prepend items</p>
-      <span className="counter">Render Count: {renderCount}</span>
-      <ul>
+      <p>The following demo allow you to create Sui MultiSig addresses.</p>
+      <ul className="grid w-full gap-1.5">
         {fields.map((item, index) => {
           return (
             <li key={item.id}>
@@ -156,6 +161,7 @@ export default function MultiSigAddress() {
 
       <input type="submit" />
     </form>
+    </div>
   );
 }
 
