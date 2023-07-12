@@ -14,7 +14,7 @@ use axum::routing::{get, IntoMakeService};
 use axum::{Json, Router, Server};
 use hyper::http::Method;
 use hyper::server::conn::AddrIncoming;
-use hyper::StatusCode;
+use hyper::{HeaderMap, StatusCode};
 use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
 use tracing::info;
@@ -29,6 +29,9 @@ use sui_move_build::{BuildConfig, SuiPackageHooks};
 use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
+
+pub const SUI_SOURCE_VALIDATION_VERSION_HEADER: &str = "X-Sui-Source-Validation-Version";
+pub const SUI_SOURCE_VALIDATION_VERSION: &str = "0.0.1";
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
@@ -311,9 +314,31 @@ pub struct ErrorResponse {
 }
 
 async fn api_route(
+    headers: HeaderMap,
     State(app_state): State<Arc<AppState>>,
     Query(Request { address, module }): Query<Request>,
 ) -> impl IntoResponse {
+    let version = headers
+        .get(SUI_SOURCE_VALIDATION_VERSION_HEADER)
+        .as_ref()
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_string());
+
+    match version {
+        Some(v) if v != SUI_SOURCE_VALIDATION_VERSION => {
+            let error = format!(
+                "Unsupported version '{v}' specified in header \
+		 {SUI_SOURCE_VALIDATION_VERSION_HEADER}"
+            );
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse { error }).into_response(),
+            );
+        }
+        Some(_) => (),
+        None => info!("No version set, using {SUI_SOURCE_VALIDATION_VERSION}"),
+    };
+
     let symbol = Symbol::from(module);
     let Ok(address) = AccountAddress::from_hex_literal(&address) else {
 	let error = format!("Invalid hex address {address}");
