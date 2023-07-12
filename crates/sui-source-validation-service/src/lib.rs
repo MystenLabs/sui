@@ -26,7 +26,6 @@ use move_package::BuildConfig as MoveBuildConfig;
 use move_symbol_pool::Symbol;
 use sui_move::build::resolve_lock_file_path;
 use sui_move_build::{BuildConfig, SuiPackageHooks};
-use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 
@@ -231,7 +230,7 @@ pub async fn clone_repositories(repos: Vec<&RepositorySource>, dir: &Path) -> an
 }
 
 pub async fn initialize(
-    context: &WalletContext,
+    client: &SuiClient,
     config: &Config,
     dir: &Path,
 ) -> anyhow::Result<SourceLookup> {
@@ -243,11 +242,11 @@ pub async fn initialize(
         }
     }
     clone_repositories(repos, dir).await?;
-    verify_packages(context, config, dir).await
+    verify_packages(client, config, dir).await
 }
 
 pub async fn verify_packages(
-    context: &WalletContext,
+    client: &SuiClient,
     config: &Config,
     dir: &Path,
 ) -> anyhow::Result<SourceLookup> {
@@ -259,7 +258,7 @@ pub async fn verify_packages(
                 let packages_dir = dir.join(repo_name);
                 for p in &p.paths {
                     let package_path = packages_dir.join(p).clone();
-                    let client = context.get_client().await?;
+                    let client = client.clone();
                     info!("verifying {p}");
                     let t =
                         tokio::spawn(async move { verify_package(&client, package_path).await });
@@ -269,7 +268,7 @@ pub async fn verify_packages(
             PackageSources::Directory(packages_dir) => {
                 for p in &packages_dir.paths {
                     let package_path = PathBuf::from(p);
-                    let client = context.get_client().await?;
+                    let client = client.clone();
                     info!("verifying {p}");
                     let t =
                         tokio::spawn(async move { verify_package(&client, package_path).await });

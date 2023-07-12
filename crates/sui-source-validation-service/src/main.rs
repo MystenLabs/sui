@@ -24,8 +24,9 @@ pub async fn main() -> anyhow::Result<()> {
     let package_config = parse_config(args.config_path)?;
     let sui_config = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
     let context = WalletContext::new(&sui_config, None, None).await?;
+    let client = context.get_client().await?;
     let tmp_dir = tempfile::tempdir()?;
-    let sources = initialize(&context, &package_config, tmp_dir.path()).await?;
+    let sources = initialize(&client, &package_config, tmp_dir.path()).await?;
     info!("verification complete");
     info!("serving on {}", host_port());
     serve(AppState { sources })?

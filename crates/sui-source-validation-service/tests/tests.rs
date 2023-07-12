@@ -20,6 +20,7 @@ const TEST_FIXTURES_DIR: &str = "tests/fixture";
 async fn test_verify_packages() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
+    let client = context.get_client().await?;
 
     let config = Config {
         packages: vec![PackageSources::Repository(RepositorySource {
@@ -35,7 +36,7 @@ async fn test_verify_packages() -> anyhow::Result<()> {
         fixtures.path(),
         &fs_extra::dir::CopyOptions::default(),
     )?;
-    let result = verify_packages(context, &config, fixtures.path()).await;
+    let result = verify_packages(&client, &config, fixtures.path()).await;
     let truncated_error_message = &result
         .unwrap_err()
         .to_string()
@@ -58,9 +59,10 @@ Multiple source verification errors found:
 async fn test_api_route() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
+    let client = context.get_client().await?;
     let config = Config { packages: vec![] };
     let tmp_dir = tempfile::tempdir()?;
-    initialize(context, &config, tmp_dir.path()).await?;
+    initialize(&client, &config, tmp_dir.path()).await?;
 
     // set up sample lookup to serve
     let fixtures = tempfile::tempdir()?;
