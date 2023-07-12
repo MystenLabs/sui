@@ -762,7 +762,7 @@ fn visit_function(
     let mut ds = Diagnostics::new();
     for visitor in &context.env.visitors().abs_int {
         let mut v = visitor.borrow_mut();
-        ds.extend(v.verify(prog, &function_context, &cfg));
+        ds.extend(v.verify(&context.env, prog, &function_context, &cfg));
     }
     context.env.add_diags(ds)
 }

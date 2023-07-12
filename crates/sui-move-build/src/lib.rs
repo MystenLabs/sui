@@ -174,18 +174,15 @@ impl BuildConfig {
     pub fn resolution_graph(mut self, path: &Path) -> SuiResult<ResolvedGraph> {
         use move_compiler::editions::Flavor;
 
-        if let Some(flavor) = &self.config.default_flavor {
-            if flavor != &Flavor::Sui {
-                return Err(SuiError::ModuleBuildFailure {
-                    error: format!(
-                        "The flavor of the Move compiler cannot be overridden with anything but \
+        let flavor = self.config.default_flavor.get_or_insert(Flavor::Sui);
+        if flavor != &Flavor::Sui {
+            return Err(SuiError::ModuleBuildFailure {
+                error: format!(
+                    "The flavor of the Move compiler cannot be overridden with anything but \
                         \"{}\", but the default override was set to: \"{flavor}\"",
-                        Flavor::Sui,
-                    ),
-                });
-            }
-        } else {
-            self.config.default_flavor = Some(Flavor::Sui);
+                    Flavor::Sui,
+                ),
+            });
         }
 
         if self.print_diags_to_stderr {
