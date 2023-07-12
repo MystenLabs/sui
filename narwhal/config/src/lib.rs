@@ -157,9 +157,6 @@ pub struct Parameters {
         default = "Parameters::default_max_batch_delay"
     )]
     pub max_batch_delay: Duration,
-    /// The parameters for the block synchronizer
-    #[serde(default = "BlockSynchronizerParameters::default")]
-    pub block_synchronizer: BlockSynchronizerParameters,
     /// The maximum number of concurrent requests for messages accepted from an un-trusted entity
     #[serde(default = "Parameters::default_max_concurrent_requests")]
     pub max_concurrent_requests: usize,
@@ -299,83 +296,6 @@ impl PrometheusMetricsParameters {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(default)]
-pub struct BlockSynchronizerParameters {
-    /// The timeout configuration for synchronizing certificate digests from a starting round.
-    #[serde(
-        with = "duration_format",
-        default = "BlockSynchronizerParameters::default_range_synchronize_timeout"
-    )]
-    pub range_synchronize_timeout: Duration,
-    /// The timeout configuration when requesting certificates from peers.
-    #[serde(
-        with = "duration_format",
-        default = "BlockSynchronizerParameters::default_certificates_synchronize_timeout"
-    )]
-    pub certificates_synchronize_timeout: Duration,
-    /// Timeout when has requested the payload for a certificate and is
-    /// waiting to receive them.
-    #[serde(
-        with = "duration_format",
-        default = "BlockSynchronizerParameters::default_payload_synchronize_timeout"
-    )]
-    pub payload_synchronize_timeout: Duration,
-    /// The timeout configuration when for when we ask the other peers to
-    /// discover who has the payload available for the dictated certificates.
-    #[serde(
-        with = "duration_format",
-        default = "BlockSynchronizerParameters::default_payload_availability_timeout"
-    )]
-    pub payload_availability_timeout: Duration,
-    /// When a certificate is fetched on the fly from peers, it is submitted
-    /// from the block synchronizer handler for further processing to core
-    /// to validate and ensure parents are available and history is causal
-    /// complete. This property is the timeout while we wait for core to
-    /// perform this processes and the certificate to become available to
-    /// the handler to consume.
-    #[serde(
-        with = "duration_format",
-        default = "BlockSynchronizerParameters::default_handler_certificate_deliver_timeout"
-    )]
-    pub handler_certificate_deliver_timeout: Duration,
-}
-
-impl BlockSynchronizerParameters {
-    fn default_range_synchronize_timeout() -> Duration {
-        Duration::from_secs(30)
-    }
-    fn default_certificates_synchronize_timeout() -> Duration {
-        Duration::from_secs(30)
-    }
-    fn default_payload_synchronize_timeout() -> Duration {
-        Duration::from_secs(30)
-    }
-    fn default_payload_availability_timeout() -> Duration {
-        Duration::from_secs(30)
-    }
-    fn default_handler_certificate_deliver_timeout() -> Duration {
-        Duration::from_secs(30)
-    }
-}
-
-impl Default for BlockSynchronizerParameters {
-    fn default() -> Self {
-        Self {
-            range_synchronize_timeout:
-                BlockSynchronizerParameters::default_range_synchronize_timeout(),
-            certificates_synchronize_timeout:
-                BlockSynchronizerParameters::default_certificates_synchronize_timeout(),
-            payload_synchronize_timeout:
-                BlockSynchronizerParameters::default_payload_synchronize_timeout(),
-            payload_availability_timeout:
-                BlockSynchronizerParameters::default_payload_availability_timeout(),
-            handler_certificate_deliver_timeout:
-                BlockSynchronizerParameters::default_handler_certificate_deliver_timeout(),
-        }
-    }
-}
-
 impl Default for Parameters {
     fn default() -> Self {
         Self {
@@ -388,7 +308,6 @@ impl Default for Parameters {
             sync_retry_nodes: Parameters::default_sync_retry_nodes(),
             batch_size: Parameters::default_batch_size(),
             max_batch_delay: Parameters::default_max_batch_delay(),
-            block_synchronizer: BlockSynchronizerParameters::default(),
             max_concurrent_requests: Parameters::default_max_concurrent_requests(),
             prometheus_metrics: PrometheusMetricsParameters::default(),
             network_admin_server: NetworkAdminServerParameters::default(),
@@ -432,35 +351,6 @@ impl Parameters {
         info!(
             "Max batch delay set to {} ms",
             self.max_batch_delay.as_millis()
-        );
-        info!(
-            "Synchronize range timeout set to {} s",
-            self.block_synchronizer.range_synchronize_timeout.as_secs()
-        );
-        info!(
-            "Synchronize certificates timeout set to {} s",
-            self.block_synchronizer
-                .certificates_synchronize_timeout
-                .as_secs()
-        );
-        info!(
-            "Payload (batches) availability timeout set to {} s",
-            self.block_synchronizer
-                .payload_availability_timeout
-                .as_secs()
-        );
-        info!(
-            "Synchronize payload (batches) timeout set to {} s",
-            self.block_synchronizer
-                .payload_synchronize_timeout
-                .as_secs()
-        );
-
-        info!(
-            "Handler certificate deliver timeout set to {} s",
-            self.block_synchronizer
-                .handler_certificate_deliver_timeout
-                .as_secs()
         );
         info!(
             "Max concurrent requests set to {}",

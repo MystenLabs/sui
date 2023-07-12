@@ -188,12 +188,6 @@ fn parameters_import_snapshot_matches() {
          "sync_retry_nodes": 3,
          "batch_size": 500000,
          "max_batch_delay": "100ms",
-         "block_synchronizer": {
-             "range_synchronize_timeout": "30s",
-             "certificates_synchronize_timeout": "2s",
-             "payload_synchronize_timeout": "3_000ms",
-             "payload_availability_timeout": "4_000ms"
-         },
          "max_concurrent_requests": 500000,
          "prometheus_metrics": {
             "socket_addr": "/ip4/127.0.0.1/tcp/0/http"

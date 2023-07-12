@@ -46,13 +46,6 @@ node_params = {
     'sync_retry_nodes': 3,
     'batch_size': 500_000,
     'max_batch_delay': '100ms',
-    'block_synchronizer': {
-        'range_synchronize_timeout': '30s',
-        'certificates_synchronize_timeout': '30s',
-        'payload_synchronize_timeout': '30s',
-        'payload_availability_timeout': '30s',
-        'handler_certificate_deliver_timeout': '30s'
-    },
     'max_concurrent_requests': 500_000
 }
 ```
