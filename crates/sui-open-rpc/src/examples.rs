@@ -273,7 +273,7 @@ impl RpcExampleProvider {
         Examples::new(
             "sui_dryRunTransactionBlock",
             vec![ExamplePairing::new(
-                "Dry runs a transaction block to get back estimated gas fees and other potential effects.",
+                "Simulate running the transaction, including all normally applied checks, without actually running it. This is useful for estimating the gas fees of a transaction before running it, but can also be used to determine the side-effects of a transaction without actually running it.",
                 vec![
                     ("tx_bytes", json!(tx_bytes.tx_bytes)),
                 ],
@@ -296,7 +296,7 @@ impl RpcExampleProvider {
         Examples::new(
             "sui_devInspectTransactionBlock",
             vec![ExamplePairing::new(
-                "Runs the transaction in dev-inspect mode. Which allows for nearly any transaction (or Move call) with any arguments. Detailed results are provided, including both the transaction effects and any return values.",
+                "Simulates running the transaction, even one that would be normally impossible, against the current state of the network. Nearly any transaction (or Move call) with any arguments can run in dev-inspect; transaction inputs are not checked, entry function verification is skipped, values can be left unused, and returns are not validated. Detailed results are provided, including both the transaction effects and any return values. Dev-inspect is provided to aid in understanding the effects of any possible action against the current network state. See dryRunTransactionBlock for a more faithful simulation of what would happen if the transaction were actually run.",
                 vec![
                     ("sender_address", json!(SuiAddress::from(ObjectID::new(self.rng.gen())))),
                     ("tx_bytes", json!(tx_bytes.tx_bytes)),

@@ -40,9 +40,16 @@ pub trait WriteApi {
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> RpcResult<SuiTransactionBlockResponse>;
 
-    /// Runs the transaction in dev-inspect mode. Which allows for nearly any
-    /// transaction (or Move call) with any arguments. Detailed results are
-    /// provided, including both the transaction effects and any return values.
+    /// Simulates running the transaction, even one that would be normally
+    /// impossible, against the current state of the network. Nearly any
+    /// transaction (or Move call) with any arguments can run in dev-inspect;
+    /// transaction inputs are not checked, entry function verification is
+    /// skipped, values can be left unused, and returns are not validated.
+    /// Detailed results are provided, including both the transaction effects
+    /// and any return values. Dev-inspect is provided to aid in understanding
+    /// the effects of any possible action against the current network state.
+    /// See dryRunTransactionBlock for a more faithful simulation of what would
+    /// happen if the transaction were actually run.
     #[method(name = "devInspectTransactionBlock")]
     async fn dev_inspect_transaction_block(
         &self,
@@ -55,8 +62,11 @@ pub trait WriteApi {
         epoch: Option<BigInt<u64>>,
     ) -> RpcResult<DevInspectResults>;
 
-    /// Return transaction execution effects including the gas cost summary,
-    /// while the effects are not committed to the chain.
+    /// Simulate running the transaction, including all normally applied
+    /// checks, without actually running it. This is useful for estimating
+    /// the gas fees of a transaction before running it, but can also be used
+    /// to determine the side-effects of a transaction without actually running
+    /// it.
     #[method(name = "dryRunTransactionBlock")]
     async fn dry_run_transaction_block(
         &self,
