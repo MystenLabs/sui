@@ -137,21 +137,19 @@ impl TransactionValidator for SuiTxValidator {
         self.metrics
             .checkpoint_signatures_verified
             .inc_by(ckpt_count as u64);
-        // todo - we should un-comment line below once we have a way to revert those transactions at the end of epoch
-        // all certificates had valid signatures, schedule them for execution prior to sequencing
-        // which is unnecessary for owned object transactions.
-        // It is unnecessary to write to pending_certificates table because the certs will be written
-        // via Narwhal output.
+
         let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();
         if reconfiguration_lock.should_accept_user_certs() {
-            for cert in owned_tx_certs.iter() {
-                let transaction =
-                    ConsensusTransaction::new_certificate_message(&self.name, cert.clone().into());
-                epoch_store.insert_pending_consensus_transactions(
-                    &transaction,
-                    Some(&reconfiguration_lock),
-                )?;
-            }
+            let consensus_transactions: Vec<_> = owned_tx_certs
+                .iter()
+                .map(|cert| {
+                    ConsensusTransaction::new_certificate_message(&self.name, cert.clone().into())
+                })
+                .collect();
+            epoch_store.insert_pending_consensus_transactions(
+                &consensus_transactions,
+                Some(&reconfiguration_lock),
+            )?;
             self.transaction_manager
                 .enqueue_certificates(owned_tx_certs, &epoch_store)
                 .wrap_err("Failed to schedule certificates for execution")?;
