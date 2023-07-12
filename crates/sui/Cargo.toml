@@ -7,8 +7,8 @@ publish = false
 edition = "2021"
 
 [dependencies]
-json_to_table = { git = "https://github.com/zhiburt/tabled/", rev = "e449317a1c02eb6b29e409ad6617e5d9eb7b3bd4"}
-tabled = "0.12"
+json_to_table.workspace = true
+tabled.workspace = true
 anemo.workspace = true
 anyhow.workspace = true
 serde.workspace = true
