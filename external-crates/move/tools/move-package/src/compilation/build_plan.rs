@@ -95,6 +95,7 @@ impl BuildPlan {
                     immediate_dependencies_names.contains(&package_name),
                     dep_source_paths,
                     &dep_package.resolved_table,
+                    dep_package.compiler_config(&self.resolution_graph.build_options),
                 )
             })
             .collect();

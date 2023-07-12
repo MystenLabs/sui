@@ -1,0 +1,1 @@
+Error parsing '[package]' section of manifest: Invalid 'edition'. Unsupported edition "2024.final". Current supported editions include: "legacy", "2024.alpha"
