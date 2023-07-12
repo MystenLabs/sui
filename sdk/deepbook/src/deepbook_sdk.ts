@@ -59,6 +59,35 @@ export class DeepBook_sdk {
 	}
 
 	/**
+	 * @description: Create pool for trading pair
+	 * @param token1 Full coin type of the base asset, eg: "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::wbtc::WBTC"
+	 * @param token2 Full coin type of quote asset, eg: "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::usdt::USDT"
+	 * @param tickSize Minimal Price Change Accuracy of this pool, eg: 10000000
+	 * @param lotSize Minimal Lot Change Accuracy of this pool, eg: 10000
+	 * @param takerFeeRate Customized taker fee rate, 10^9 scaling, Taker_fee_rate of 0.25% should be 2_500_000 for example
+	 * @param makerRebateRate Customized maker rebate rate, 10^9 scaling,  should be less than or equal to the taker_rebate_rate
+	 */
+	public createCustomizedPool(
+		token1: string,
+		token2: string,
+		tickSize: number,
+		lotSize: number,
+		takerFeeRate: number,
+		makerRebateRate: number
+	): TransactionBlock {
+		const txb = new TransactionBlock();
+		// create a pool with CREATION_FEE
+		const [coin] = txb.splitCoins(txb.gas, [txb.pure(CREATION_FEE)]);
+		txb.moveCall({
+			typeArguments: [token1, token2],
+			target: `${PACKAGE_ID}::${MODULE_CLOB}::create_customized_pool`,
+			arguments: [txb.pure(`${tickSize}`), txb.pure(`${lotSize}`), txb.pure(`${takerFeeRate}`), txb.pure(`${makerRebateRate}`), coin],
+		});
+		txb.setGasBudget(this.gasBudget);
+		return txb;
+	}
+
+	/**
 	 * @description: Create and Transfer custodian account to user
 	 * @param currentAddress: current user address, eg: "0xbddc9d4961b46a130c2e1f38585bbc6fa8077ce54bcb206b26874ac08d607966"
 	 */
