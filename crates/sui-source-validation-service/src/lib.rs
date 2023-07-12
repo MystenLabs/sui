@@ -14,7 +14,7 @@ use axum::routing::{get, IntoMakeService};
 use axum::{Json, Router, Server};
 use hyper::http::Method;
 use hyper::server::conn::AddrIncoming;
-use hyper::StatusCode;
+use hyper::{HeaderMap, StatusCode};
 use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
 use tracing::info;
@@ -29,6 +29,9 @@ use sui_move_build::{BuildConfig, SuiPackageHooks};
 use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
+
+pub const SUI_SOURCE_VALIDATION_VERSION_HEADER: &str = "X-Sui-Source-Validation-Version";
+pub const SUI_SOURCE_VALIDATION_VERSION: &str = "0.1";
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
@@ -311,20 +314,50 @@ pub struct ErrorResponse {
 }
 
 async fn api_route(
+    headers: HeaderMap,
     State(app_state): State<Arc<AppState>>,
     Query(Request { address, module }): Query<Request>,
 ) -> impl IntoResponse {
+    let version = headers
+        .get(SUI_SOURCE_VALIDATION_VERSION_HEADER)
+        .as_ref()
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_string());
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        SUI_SOURCE_VALIDATION_VERSION_HEADER,
+        SUI_SOURCE_VALIDATION_VERSION.parse().unwrap(),
+    );
+
+    match version {
+        Some(v) if v != SUI_SOURCE_VALIDATION_VERSION => {
+            let error = format!(
+                "Unsupported version '{v}' specified in header \
+		 {SUI_SOURCE_VALIDATION_VERSION_HEADER}"
+            );
+            return (
+                StatusCode::BAD_REQUEST,
+                headers,
+                Json(ErrorResponse { error }).into_response(),
+            );
+        }
+        Some(_) => (),
+        None => info!("No version set, using {SUI_SOURCE_VALIDATION_VERSION}"),
+    };
+
     let symbol = Symbol::from(module);
     let Ok(address) = AccountAddress::from_hex_literal(&address) else {
 	let error = format!("Invalid hex address {address}");
-	return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error }).into_response())
+	return (StatusCode::BAD_REQUEST, headers, Json(ErrorResponse { error }).into_response())
     };
     let Some(SourceInfo {source : Some(source), ..}) = app_state.sources.get(&(address, symbol)) else {
 	let error = format!("No source found for {symbol} at address {address}" );
-	return (StatusCode::NOT_FOUND, Json(ErrorResponse { error }).into_response())
+	return (StatusCode::NOT_FOUND, headers, Json(ErrorResponse { error }).into_response())
     };
     (
         StatusCode::OK,
+        headers,
         Json(SourceResponse {
             source: source.to_owned(),
         })
