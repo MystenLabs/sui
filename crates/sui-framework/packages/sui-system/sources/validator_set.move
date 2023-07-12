@@ -1253,8 +1253,7 @@ module sui_system::validator_set {
         table::contains(&self.inactive_validators, staking_pool_id)
     }
 
-    #[test_only]
-    public fun active_validator_addresses(self: &ValidatorSet): vector<address> {
+    public(friend) fun active_validator_addresses(self: &ValidatorSet): vector<address> {
         let vs = &self.active_validators;
         let res = vector[];
         let i = 0;

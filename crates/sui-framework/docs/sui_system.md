@@ -79,6 +79,7 @@ the SuiSystemStateInner version, or vice versa.
 -  [Function `update_validator_next_epoch_network_pubkey`](#0x3_sui_system_update_validator_next_epoch_network_pubkey)
 -  [Function `update_candidate_validator_network_pubkey`](#0x3_sui_system_update_candidate_validator_network_pubkey)
 -  [Function `pool_exchange_rates`](#0x3_sui_system_pool_exchange_rates)
+-  [Function `active_validator_addresses`](#0x3_sui_system_active_validator_addresses)
 -  [Function `advance_epoch`](#0x3_sui_system_advance_epoch)
 -  [Function `load_system_state`](#0x3_sui_system_load_system_state)
 -  [Function `load_system_state_mut`](#0x3_sui_system_load_system_state_mut)
@@ -1315,6 +1316,32 @@ Getter of the pool token exchange rate of a staking pool. Works for both active 
 ): &Table&lt;u64, PoolTokenExchangeRate&gt;  {
     <b>let</b> self = <a href="sui_system.md#0x3_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
     <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_pool_exchange_rates">sui_system_state_inner::pool_exchange_rates</a>(self, pool_id)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_sui_system_active_validator_addresses"></a>
+
+## Function `active_validator_addresses`
+
+Getter returning addresses of the currently active validators.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x3_sui_system_active_validator_addresses">active_validator_addresses</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): <a href="">vector</a>&lt;<b>address</b>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x3_sui_system_active_validator_addresses">active_validator_addresses</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>): <a href="">vector</a>&lt;<b>address</b>&gt; {
+    <b>let</b> self = <a href="sui_system.md#0x3_sui_system_load_system_state">load_system_state</a>(wrapper);
+    <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_active_validator_addresses">sui_system_state_inner::active_validator_addresses</a>(self)
 }
 </code></pre>
 

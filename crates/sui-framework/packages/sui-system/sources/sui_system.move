@@ -527,6 +527,12 @@ module sui_system::sui_system {
         sui_system_state_inner::pool_exchange_rates(self, pool_id)
     }
 
+    /// Getter returning addresses of the currently active validators.
+    public fun active_validator_addresses(wrapper: &mut SuiSystemState): vector<address> {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::active_validator_addresses(self)
+    }
+
     /// This function should be called at the end of an epoch, and advances the system to the next epoch.
     /// It does the following things:
     /// 1. Add storage charge to the storage fund.
