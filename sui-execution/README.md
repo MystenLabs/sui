@@ -179,9 +179,39 @@ of two places:
   them in based on the execution modules in the crate.
 
 
-## Future Improvements
+## Rebasing Cuts
 
-- The process of merging a feature cut back into `latest` is fiddly if
-  done manually.  It can be done using patch files, so it behaves
-  similarly to a `git rebase`, but this is also difficult to get
-  right, and could be automated.
+A cut can be `rebase`-d against `latest` using the following command:
+
+```shell
+./scripts/execution_layer.py rebase <FEATURE>
+
+```
+
+This saves all the changes that were made to the cut after it was
+made, and replays them on a fresh cut from `latest`.  As a precaution,
+it will not run if the working directory is not clean (because if it
+goes wrong, it will be harder to recover), but this can be overridden
+with `--force`.
+
+
+## Merging Cuts
+
+Cuts support a rudimentary form of `merge`, using patch files:
+
+```shell
+./scripts/execution_layer.py merge <BASE> <FEATURE>
+```
+
+The `merge` command attempts to merge the changes from `<FEATURE>`
+onto the cut at `<BASE>` (It modifies `<BASE>` and leaves `<FEATURE>`
+untouched).  Because it operates using patch files, any conflicts
+result in a failure to apply the patch.  This can be resolved in two
+ways:
+
+- (Recommended) If merging into `latest`, `rebase` the `<FEATURE>`
+  first, which will give you an opportunity to resolve all merge
+  conflicts during the rebase, to create a clean patch.
+- Use the `--dry-run` option of `merge` to output the patch file
+  instead of attempting to apply it, so you can manually modify it
+  (cut it into pieces, fix conflicts) before applying it.

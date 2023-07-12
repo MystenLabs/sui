@@ -17,7 +17,7 @@ def parse_args():
     )
 
     subparsers = parser.add_subparsers(
-        description="Tools for managing cuts of the execution-layer",
+        description="Tools for managing cuts of the execution-layer.",
     )
 
     cut = subparsers.add_parser(
@@ -31,12 +31,12 @@ def parse_args():
     cut.add_argument(
         "feature",
         type=feature,
-        help="The name of the new cut to make",
+        help="The name of the new cut to make.",
     )
     cut.add_argument(
         "--dry-run",
         action="store_true",
-        help="Print the operations, without running them",
+        help="Print the operations, without running them.",
     )
 
     generate_lib = subparsers.add_parser(
@@ -52,14 +52,37 @@ def parse_args():
     generate_lib.add_argument(
         "--dry-run",
         action="store_true",
-        help="Print the operations, without running them",
+        help="Print the operations, without running them.",
+    )
+
+    merge = subparsers.add_parser(
+        "merge",
+        help="Apply the changes made to FEATURE since it was cut, to BASE.",
+    )
+    merge.set_defaults(cmd="Merge", do=do_merge)
+    merge.add_argument("base", type=feature, help="The cut to merge into.")
+    merge.add_argument("feature", type=feature, help="The cut to take from.")
+    merge.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the patch file to apply to BASE without applying it.",
+    )
+    merge.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        help=(
+            "Merge regardless of warnings that the working directory is "
+            "not clean.  If the merge fails at this point, it may be "
+            "difficult to recover from."
+        ),
     )
 
     patch = subparsers.add_parser(
         "patch",
         help=(
             "Print a patch file representing the changes made to FEATURE "
-            "after the commit in which it was cut"
+            "after the commit in which it was cut."
         ),
     )
     patch.set_defaults(do=do_patch)
@@ -87,7 +110,7 @@ def parse_args():
         "--force",
         action="store_true",
         help=(
-            "Rebase regardless of warnings of that the working directory is "
+            "Rebase regardless of warnings that the working directory is "
             "not clean.  If the rebase fails at this point, it may be "
             "difficult to recover from."
         ),
@@ -144,6 +167,44 @@ def do_generate_lib(args):
         lib_path = Path() / "sui-execution" / "src" / "lib.rs"
         with open(lib_path, mode="w") as lib:
             generate_lib(lib)
+
+
+def do_merge(args):
+    from_module = impl(args.feature)
+    if not from_module.is_file():
+        raise Exception(f"'{args.feature}' does not exist.")
+
+    to_module = impl(args.base)
+    if not to_module.is_file():
+        raise Exception(f"'{args.base}' does not exist.")
+
+    print("Calculating change...", file=stderr)
+    changes = patch(args.feature)
+    if not changes:
+        print("No changes.", file=stderr)
+        return
+
+    print("Porting feature to base...", file=stderr)
+    adapted = change_patch_directories(changes, args.feature, args.base)
+
+    if args.dry_run:
+        print(adapted)
+        return
+
+    if not args.force and not is_repo_clean():
+        raise Exception(
+            "Working directory or index is not clean, not merging.  Re-run "
+            "with --force to ignore warning."
+        )
+
+    print("Applying changes...", file=stderr)
+    subprocess.run(
+        ["git", "apply", "-"],
+        input=adapted,
+        text=True,
+        stdout=stdout,
+        stderr=stderr,
+    )
 
 
 def do_patch(args):
@@ -241,6 +302,43 @@ def patch(feature):
             *["git", "diff", f"{sha}...HEAD", "--"],
             *cut_directories(args.feature),
         ]
+    )
+
+
+def change_patch_directories(patch, feature, base):
+    """Fix-up patch referring to `feature` to refer to `base`.
+
+    Look for references to directories in cut `feature` in the
+    metadata of patch and replace them with references to the
+    equivalent directories in `base`.
+    """
+
+    def is_metadata(line):
+        return (
+            line.startswith("+++")
+            or line.startswith("---")
+            or line.startswith("diff --git")
+        )
+
+    # Mapping from directories that might appear in the patch file to
+    # the directories they should be replaced by.  Represented as a
+    # list of pairs as it will be iterated over.
+    mapping = list(
+        zip(
+            map(str, cut_directories(feature)),
+            map(str, cut_directories(base)),
+        )
+    )
+
+    def sub(line):
+        for feat, base in mapping:
+            line = line.replace(feat, base)
+        return line
+
+    return "".join(
+        (sub(line) if is_metadata(line) else line) + "\n"
+        for line in patch.splitlines()
+        if not line.startswith("index")
     )
 
 
