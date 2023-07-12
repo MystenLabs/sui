@@ -136,7 +136,7 @@ module oracle::meta_oracle {
         0
     }
 
-    fun quick_sort<T: drop + copy>(data: vector<T>): vector<T> {
+    public fun quick_sort<T: drop + copy>(data: vector<T>): vector<T> {
         if (vector::length(&data) <= 1) {
             return data
         };
