@@ -14,9 +14,9 @@ anyhow = "1.0"
 
 The main building block for the Sui Rust SDK is the `SuiClientBuilder`, which provides a simple and straightforward way of connectiong to a Sui network and having access to the different available APIs. 
 
-An example that connects to a running Sui local network and available Sui networks follows. If you want to run this program, make sure to spin up a local network with a local validator, a Full node, and a faucet server (see [preqrequisites](README.md) for more inforrmation).
+An example that connects to a running Sui local network and available Sui networks follows. If you want to run this program, make sure to spin up a local network with a local validator, a Full node, and a faucet server (see [preqrequisites](README.md) for more information).
 
-```rust, ignore
+```rust
 use sui_sdk::SuiClientBuilder;
 
 #[tokio::main]
@@ -46,13 +46,14 @@ async fn main() -> Result<(), anyhow::Error> {
 # Rust SDK examples
 
 The [examples](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk/examples) folder provides both basic and advanced examples.
-There are five files ending in `_api.rs` which provide code examples of the corresponding APIs and their methods. These showcase how to use the Sui Rust SDK, and can all be run locally against a local running Sui network. Below are instructions on the prerequisites and how to run these examples.  
+
+There are five files ending in `_api.rs` which provide code examples of the corresponding APIs and their methods. These showcase how to use the Sui Rust SDK, and can all be run locally against a local running Sui network. Below are instructions on the prerequisites and how to run these examples.
+
 ## Preqrequisites
 
 Unless otherwise specified, most of these examples assume that Sui is installed, and that there is a local network running.
 
-* Install `sui` binary following the [Sui installation](https://github.com/MystenLabs/sui/blob/main/doc/src/build/install.md##install-sui-binaries) docs.
-* For local development, after you install the `sui` binary, run `sui-test-validator` (or `cargo run --bin sui-test-validator` in the [cloned Git repository](https://github.com/mystenlabs/sui) if you don't want to install `Sui`) to spin up a local network with a local validator, a Full node, and a faucet server. Refer to [this guide](https://docs.sui.io/build/sui-local-network) for more information. The local network will be up and running on `http://127.0.0.1:9000` and the faucet server on `http://127.0.0.1:9123`. 
+For running a local Sui network, please follow [this guide](https://docs.sui.io/build/sui-local-network) for installing Sui and [this guide](https://docs.sui.io/build/sui-local-network#start-the-local-network) for starting the local Sui network. 
 
 ## Running the examples
 
@@ -63,6 +64,7 @@ In the root folder of the `sui` repository (or in the `sui-sdk` crate folder), y
 * `cargo run --example governance_api`
 * `cargo run --example read_api`
 * `cargo run --example transaction_builder_api`
+
 ## Basic Examples
 
 ### Connecting to Sui Network
@@ -75,7 +77,7 @@ The `SuiClientBuilder` struct provides a connection to the JSON-RPC server that 
 
 For all available servers, see [here](https://sui.io/networkinfo). 
 
-```rust, ignore
+```rust
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -105,7 +107,7 @@ async fn main() -> Result<(), anyhow::Error> {
 ```
 
 ### Reading the total balance for an address
-```rust, ignore
+```rust
 use std::str::FromStr;
 use sui_sdk::types::base_types::SuiAddress;
 use sui_sdk::{ SuiClientBuilder};
@@ -131,7 +133,6 @@ async fn main() -> Result<(), anyhow::Error> {
 ## Advanced examples
 
 See the transaction builder [example](examples/transaction_builder_api.rs).
-
 
 ## Games examples
 
