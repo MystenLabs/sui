@@ -34,14 +34,14 @@ async fn main() -> Result<(), anyhow::Error> {
     println!("{:?}", dynamic_fields);
     println!(" *** Dynamic Fields ***\n");
 
-    let object = owned_objects.data.get(0).expect(&format!(
-        "No owned objects for this address {}",
-        active_address
-    ));
-    let object_data = object.data.as_ref().expect(&format!(
-        "No object data for this SuiObjectResponse {:?}",
-        object
-    ));
+    let object = owned_objects
+        .data
+        .get(0)
+        .unwrap_or_else(|| panic!("No owned objects for this address {}", active_address));
+    let object_data = object
+        .data
+        .as_ref()
+        .unwrap_or_else(|| panic!("No object data for this SuiObjectResponse {:?}", object));
     let object_id = object_data.object_id;
     let version = object_data.version;
 

@@ -95,6 +95,5 @@ async fn main() -> Result<(), anyhow::Error> {
     println!(" *** Total Supply ***\n ");
 
     // ************ END OF COIN READ API ************ //
-    
     Ok(())
 }
