@@ -8,7 +8,7 @@ import {
 	TransactionArgument,
 	TransactionBlock,
 } from '@mysten/sui.js';
-import {CLOCK, CREATION_FEE, getPoolInfoByRecords, MODULE_CLOB, PACKAGE_ID} from './utils';
+import {CLOCK, CREATION_FEE, getPoolInfoByRecords, MODULE_CLOB, MODULE_CUSTODIAN, PACKAGE_ID} from './utils';
 import { PoolInfo, Records } from './utils';
 import { defaultGasBudget } from './utils';
 
@@ -101,6 +101,27 @@ export class DeepBook_sdk {
 			arguments: [],
 		});
 		txb.transferObjects([cap], txb.pure(currentAddress));
+		txb.setSenderIfNotSet(currentAddress);
+		txb.setGasBudget(this.gasBudget);
+		return txb;
+	}
+
+	/**
+	 * @description: Create and Transfer custodian account to user
+	 * @param currentAddress: current user address, eg: "0xbddc9d4961b46a130c2e1f38585bbc6fa8077ce54bcb206b26874ac08d607966"
+	 * @param accountCap: Object id of Account Capacity under user address, created after invoking createAccount, eg: "0x6f699fef193723277559c8f499ca3706121a65ac96d273151b8e52deb29135d3"
+	 */
+	public createChildAccountCap(
+		currentAddress: string,
+		accountCap: string
+	): TransactionBlock {
+		const txb = new TransactionBlock();
+		let [child_cap] = txb.moveCall({
+			typeArguments: [],
+			target: `${PACKAGE_ID}::${MODULE_CUSTODIAN}::create_child_account_cap`,
+			arguments: [txb.object(accountCap)],
+		});
+		txb.transferObjects([child_cap], txb.pure(currentAddress));
 		txb.setSenderIfNotSet(currentAddress);
 		txb.setGasBudget(this.gasBudget);
 		return txb;
