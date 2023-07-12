@@ -355,9 +355,7 @@ impl KeyToolCommand {
                 let flag = keypair.public().flag();
                 let out_str = format!(
                     "address: {}\nkeypair: {}\nflag: {}",
-                    format!("{}", sui_address),
-                    public_base64_key,
-                    flag
+                    sui_address, public_base64_key, flag
                 );
                 fs::write(path, out_str).unwrap();
                 CommandOutput::Show(Key {
