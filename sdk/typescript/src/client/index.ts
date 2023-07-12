@@ -63,6 +63,7 @@ import { SuiHTTPTransport } from './http-transport.js';
 import type { SuiTransport } from './http-transport.js';
 
 export * from './http-transport.js';
+export * from './network.js';
 
 export interface PaginationArguments<Cursor> {
 	/** Optional paging cursor */
