@@ -90,7 +90,7 @@ jobs:
   tag:
     name: Tag processed sui commit
     needs: [ get-list-of-prs, process-prs ]
-    uses: mystenlabs/.github/workflows/tag.yml@main
+    uses: mystenlabs/sui/.github/workflows/tag.yml@main
     with:
       sui_commit: ${{ needs.get-list-of-prs.outputs.new_commit_hash }}
       tag_name: ${{ needs.get-list-of-prs.outputs.new_tag }}
