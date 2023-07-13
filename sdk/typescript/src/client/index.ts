@@ -61,6 +61,7 @@ import type { SerializedSignature } from '../cryptography/signature.js';
 import { TransactionBlock } from '../builder/index.js';
 import { SuiHTTPTransport } from './http-transport.js';
 import type { SuiTransport } from './http-transport.js';
+import type { Keypair } from '../cryptography/index.js';
 
 export * from './http-transport.js';
 export * from './network.js';
@@ -201,7 +202,7 @@ export class SuiClient {
 	 * @param method the method to be invoked
 	 * @param args the arguments to be passed to the RPC request
 	 */
-	async call(method: string, params: unknown[]): Promise<unknown> {
+	async call<T = unknown>(method: string, params: unknown[]): Promise<T> {
 		return await this.transport.request({ method, params });
 	}
 
@@ -425,6 +426,34 @@ export class SuiClient {
 		});
 	}
 
+	async signAndExecuteTransactionBlock({
+		transactionBlock,
+		signer,
+		...input
+	}: {
+		transactionBlock: Uint8Array | TransactionBlock;
+		signer: Keypair;
+		options?: SuiTransactionBlockResponseOptions;
+		requestType?: ExecuteTransactionRequestType;
+	}): Promise<SuiTransactionBlockResponse> {
+		let transactionBytes;
+
+		if (transactionBlock instanceof Uint8Array) {
+			transactionBytes = transactionBlock;
+		} else {
+			transactionBlock.setSenderIfNotSet(await signer.getPublicKey().toSuiAddress());
+			transactionBytes = await transactionBlock.build({ client: this });
+		}
+
+		const { signature, bytes } = await signer.signTransactionBlock(transactionBytes);
+
+		return this.executeTransactionBlock({
+			transactionBlock: bytes,
+			signature,
+			...input,
+		});
+	}
+
 	/**
 	 * Get total number of transactions
 	 */
@@ -550,7 +579,7 @@ export class SuiClient {
 			input.transactionBlock.setSenderIfNotSet(input.sender);
 			devInspectTxBytes = toB64(
 				await input.transactionBlock.build({
-					provider: this,
+					client: this,
 					onlyTransactionKind: true,
 				}),
 			);

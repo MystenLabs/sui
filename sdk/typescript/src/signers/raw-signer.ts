@@ -3,17 +3,18 @@
 
 import { blake2b } from '@noble/hashes/blake2b';
 import type { Keypair } from '../cryptography/keypair.js';
+import { toSerializedSignature } from '../cryptography/signature.js';
 import type { SerializedSignature } from '../cryptography/signature.js';
 import type { JsonRpcProvider } from '../providers/json-rpc-provider.js';
 import type { SuiAddress } from '../types/index.js';
 import { SignerWithProvider } from './signer-with-provider.js';
-import { toSerializedSignature } from '../cryptography/utils.js';
+import type { SuiClient } from '../client/index.js';
 
 export class RawSigner extends SignerWithProvider {
 	private readonly keypair: Keypair;
 
-	constructor(keypair: Keypair, provider: JsonRpcProvider) {
-		super(provider);
+	constructor(keypair: Keypair, client: JsonRpcProvider | SuiClient) {
+		super(client);
 		this.keypair = keypair;
 	}
 
@@ -34,7 +35,7 @@ export class RawSigner extends SignerWithProvider {
 		});
 	}
 
-	connect(provider: JsonRpcProvider): SignerWithProvider {
-		return new RawSigner(this.keypair, provider);
+	connect(client: SuiClient | JsonRpcProvider): SignerWithProvider {
+		return new RawSigner(this.keypair, client);
 	}
 }

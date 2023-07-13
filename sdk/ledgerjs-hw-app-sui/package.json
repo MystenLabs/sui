@@ -67,6 +67,6 @@
 		"size-limit": "^8.2.4",
 		"tsup": "^6.7.0",
 		"typescript": "^5.0.4",
-		"vitest": "^0.32.0"
+		"vitest": "^0.33.0"
 	}
 }
