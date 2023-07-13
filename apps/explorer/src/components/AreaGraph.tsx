@@ -158,13 +158,13 @@ export function AreaGraph<D>({
 						{color === 'yellow' ? (
 							<>
 								<stop stopColor="#F2BD24" />
-								<stop offset="59%" stopColor="#F2BD24" stopOpacity="40%" />
+								<stop offset="40%" stopColor="#F2BD24" stopOpacity="40%" />
 								<stop offset="100%" stopColor="#FFF8E2" stopOpacity="0%" />
 							</>
 						) : (
 							<>
 								<stop stopColor="#00F9FB" />
-								<stop offset="59%" stopColor="#7CE7FF" stopOpacity="28%" />
+								<stop offset="40%" stopColor="#7CE7FF" stopOpacity="28%" />
 								<stop offset="100%" stopColor="#FBF1FD" stopOpacity="0%" />
 							</>
 						)}
