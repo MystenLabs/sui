@@ -302,23 +302,12 @@ impl Primary {
             .into_inner();
 
         let anemo_config = {
-            let mut quic_config = anemo::QuicConfig::default();
-            // Allow more concurrent streams for burst activity.
-            quic_config.max_concurrent_bidi_streams = Some(10_000);
-            // Increase send and receive buffer sizes on the primary, since the primary also
-            // needs to fetch payloads.
-            // With 200MiB buffer size and ~500ms RTT, the max throughput ~400MiB/s.
-            quic_config.stream_receive_window = Some(100 << 20);
-            quic_config.receive_window = Some(200 << 20);
-            quic_config.send_window = Some(200 << 20);
-            quic_config.crypto_buffer_size = Some(1 << 20);
-            quic_config.socket_receive_buffer_size = Some(20 << 20);
-            quic_config.socket_send_buffer_size = Some(20 << 20);
-            quic_config.allow_failed_socket_buffer_size_setting = true;
-            quic_config.max_idle_timeout_ms = Some(30_000);
-            // Enable keep alives every 5s
-            quic_config.keep_alive_interval_ms = Some(5_000);
+            let mut tls_config = anemo::TlsConfig::default();
+            tls_config.socket_receive_buffer_size = Some(20 << 20);
+            tls_config.socket_send_buffer_size = Some(20 << 20);
+            tls_config.allow_failed_socket_buffer_size_setting = false;
             let mut config = anemo::Config::default();
+            config.transport = Some(anemo::TransportConfig::Tls(tls_config));
             // Set the max_frame_size to be 1 GB to work around the issue of there being too many
             // delegation events in the epoch change txn.
             config.max_frame_size = Some(1 << 30);

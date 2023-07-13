@@ -155,8 +155,14 @@ async fn main() {
 
     let (network, peers) = start_server(config, args.port, args.addrs.clone()).await;
     println!("network started");
-    println!("socket recieve buffer size: {:?}", network.socket_receive_buf_size());
-    println!("socket send buffer size: {:?}", network.socket_send_buf_size());
+    println!(
+        "socket recieve buffer size: {:?}",
+        network.socket_receive_buf_size()
+    );
+    println!(
+        "socket send buffer size: {:?}",
+        network.socket_send_buf_size()
+    );
 
     let rng = rand::thread_rng();
     let send_bytes: Vec<_> = rng
