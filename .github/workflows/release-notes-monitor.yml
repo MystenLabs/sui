@@ -30,7 +30,6 @@ jobs:
 
     - name: Get list of PRs
       id: get-pr-list
-      if: ${{ env.old_commit_hash != '' }}
       working-directory: ./
       run: |
         export list_of_prs=$(git log --grep "\[x\]" --pretty=oneline --abbrev-commit d8de3b747ba275542825d3d7dfe78067e3c88df...8c0c8780447e519db3eb3644492343d0bbf179ef -- crates dashboards doc docker external-crates kiosk narwhal nre sui-execution | grep -o '#[0-9]\+' | grep -o '[0-9]\+')
