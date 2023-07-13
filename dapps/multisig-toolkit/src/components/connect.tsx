@@ -58,7 +58,7 @@ function ConnectedButton() {
 								disconnect();
 							}}
 						>
-							Logout
+							Disconnect
 						</CommandItem>
 					</CommandGroup>
 				</Command>
