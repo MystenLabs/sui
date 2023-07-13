@@ -8,7 +8,7 @@ jobs:
     name: Find new PRs to process
     outputs:
       matrix: ${{ steps.get-pr-list.outputs.matrix }}
-      new_commit_hash: ${{ steps.tagged.outputs.new_commit_hash }}
+      new_commit_hash: ${{ steps.get-pr-list.outputs.new_commit_hash }}
       new_tag: ${{ steps.get-pr-list.outputs.new_tag }}
     runs-on: [self-hosted, self-hosted-arc]
     
@@ -20,14 +20,12 @@ jobs:
         ref: main
 
     - name: Check for a Release Notes tag for this commit
-      id: tagged
       uses: nick-fields/retry@3e91a01664abd3c5cd539100d10d33b9c5b68482 # pin@v2
       with:
         max_attempts: 2
         timeout_seconds: 30
         command: |
           echo "new_commit_hash=$(git rev-parse HEAD)" >> $GITHUB_ENV
-          echo "::set-output name=new_commit_hash::${new_commit_hash}"
           echo "existing_tag=$(git tag --points-at ${new_commit_hash} | grep -E 'sui_v(.*)_rel_notes' | head -n 1)" >> $GITHUB_ENV
 
     - name: Get list of PRs
@@ -40,6 +38,7 @@ jobs:
 
         export list_of_prs=$(git log --grep "\[x\]" --pretty=oneline --abbrev-commit ${previous_commit_hash}...${{ env.new_commit_hash }} -- crates dashboards doc docker external-crates kiosk narwhal nre sui-execution | grep -o '#[0-9]\+' | grep -o '[0-9]\+' | jq -R -s -c 'split("\n")[:-1]')
         echo "::set-output name=matrix::${list_of_prs}"
+        echo "::set-output name=new_commit_hash::${{ env.new_commit_hash }}"
 
         sui_crate_version=$(cat Cargo.toml | grep "^version =" | tr -d '"' | awk '{ print $3 }')
         export new_tag=$(echo "sui_v${sui_crate_version}_$(date +%s)_rel_notes")
