@@ -30,7 +30,7 @@ const extractName = (display?: Record<string, string> | null) => {
 	return null;
 };
 
-function NftsPage() {
+function HiddenNftsPage() {
 	const [internalHiddenAssetIds, internalSetHiddenAssetIds] = useState<string[]>([]);
 
 	const { data, isInitialLoading, isLoading, isError, error } = useMultiGetObjects(
@@ -230,4 +230,4 @@ function NftsPage() {
 	);
 }
 
-export default NftsPage;
+export default HiddenNftsPage;
