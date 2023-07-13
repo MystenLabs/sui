@@ -31,11 +31,12 @@ const extractName = (display?: Record<string, string> | null) => {
 };
 
 function HiddenNftsPage() {
-	const [internalHiddenAssetIds, internalSetHiddenAssetIds] = useState<string[]>([]);
+	const [hiddenAssetIds, setHiddenAssetIds] = useState<string[]>([]);
+	const [internalHiddenAssetIds, setInternalHiddenAssetIds] = useState<string[]>([]);
 
 	const { data, isInitialLoading, isLoading, isError, error } = useMultiGetObjects(
 		// Prevents dupes
-		Array.from(new Set(internalHiddenAssetIds))!,
+		Array.from(new Set(hiddenAssetIds))!,
 		{ showContent: true, showDisplay: true },
 	);
 
@@ -71,7 +72,8 @@ function HiddenNftsPage() {
 		(async () => {
 			const hiddenAssets = await get<string[]>(HIDDEN_ASSET_IDS);
 			if (hiddenAssets) {
-				internalSetHiddenAssetIds(hiddenAssets);
+				setHiddenAssetIds(hiddenAssets);
+				setInternalHiddenAssetIds(hiddenAssets);
 			}
 		})();
 	}, []);
@@ -82,19 +84,19 @@ function HiddenNftsPage() {
 
 			try {
 				const updatedHiddenAssetIds = internalHiddenAssetIds.filter((id) => id !== newAssetId);
-				internalSetHiddenAssetIds(updatedHiddenAssetIds);
+				setInternalHiddenAssetIds(updatedHiddenAssetIds);
 				await set(HIDDEN_ASSET_IDS, updatedHiddenAssetIds);
 			} catch (error) {
 				// Handle any error that occurred during the unhide process
 				toast.error('Failed to show asset.');
 				// Restore the asset ID back to the hidden asset IDs list
-				internalSetHiddenAssetIds([...internalHiddenAssetIds, newAssetId]);
+				setInternalHiddenAssetIds([...internalHiddenAssetIds, newAssetId]);
 				await set(HIDDEN_ASSET_IDS, internalHiddenAssetIds);
 			}
 
 			const undoShowAsset = async (assetId: string) => {
 				let newHiddenAssetIds;
-				internalSetHiddenAssetIds((prevIds) => {
+				setInternalHiddenAssetIds((prevIds) => {
 					return (newHiddenAssetIds = [...prevIds, assetId]);
 				});
 				await set(HIDDEN_ASSET_IDS, newHiddenAssetIds);
