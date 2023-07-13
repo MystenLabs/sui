@@ -30,7 +30,7 @@ function PageTitle({ title = '', back, after }: PageTitleProps) {
 		<div className="flex items-center relative gap-5 w-full">
 			{after && !back ? <div className="basis-8" /> : null}
 			{back ? (
-				<div className="flex">
+				<div className="flex h-8 items-center">
 					<Button
 						to={typeof back === 'string' ? back : undefined}
 						onClick={backOnClick}
