@@ -2640,7 +2640,8 @@ impl PartitionManager {
     }
 }
 
-#[once(time = 20, result = true)]
+// Run this function only once every `time` seconds
+#[once(time = 60, sync_writes = true, result = true)]
 fn get_network_metrics_cached(cp: &PgConnectionPool) -> Result<NetworkMetrics, IndexerError> {
     let metrics = read_only_blocking!(cp, |conn| diesel::sql_query(
         "SELECT * FROM network_metrics;"
