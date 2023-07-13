@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use hyper::body::HttpBody;
+use jsonrpsee::types::error::{CALL_EXECUTION_FAILED_CODE, INTERNAL_ERROR_CODE};
 use std::collections::HashSet;
 use std::net::SocketAddr;
 
