@@ -5,7 +5,7 @@ on:
 
 jobs:
   get-list-of-prs:
-    name: Find new PRs to process
+    name: Get Release Notes for new PRs
     outputs:
       matrix: ${{ steps.get-pr-list.outputs.matrix }}
       new_commit_hash: ${{ steps.get-pr-list.outputs.new_commit_hash }}
@@ -45,7 +45,7 @@ jobs:
         echo "::set-output name=new_tag::${new_tag}"
         
   process-prs:
-    name: Processing PRs
+    name: Processing PR
     needs: [ get-list-of-prs ]
     if: ${{ needs.get-list-of-prs.outputs.new_tag != '' }}
     runs-on: [self-hosted, self-hosted-arc]
@@ -89,7 +89,7 @@ jobs:
   tag:
     name: Tag processed sui commit
     needs: [ get-list-of-prs, process-prs ]
-    uses: mystenlabs/sui/.github/workflows/tag.yml@main
+    uses: mystenlabs/sui/.github/workflows/tag.yml@eugene/release_notes_monitor_work
     with:
       sui_commit: ${{ needs.get-list-of-prs.outputs.new_commit_hash }}
       tag_name: ${{ needs.get-list-of-prs.outputs.new_tag }}
