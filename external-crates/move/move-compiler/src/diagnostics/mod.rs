@@ -6,7 +6,9 @@ pub mod codes;
 
 use crate::{
     command_line::COLOR_MODE_ENV_VAR,
-    diagnostics::codes::{Category, DiagnosticCode, DiagnosticInfo, Severity, WarningFilter},
+    diagnostics::codes::{
+        Category, DiagnosticCode, DiagnosticInfo, DiagnosticsID, Severity, WarningFilter,
+    },
     shared::ast_debug::AstDebug,
 };
 use codespan_reporting::{
@@ -63,7 +65,7 @@ pub enum WarningFilters {
     Specified {
         category: BTreeSet</* category */ u8>,
         /// Remove specific diags
-        codes: BTreeSet<(/* category */ u8, /* code */ u8)>,
+        codes: BTreeSet<DiagnosticsID>,
     },
     /// No filter
     Empty,
@@ -376,8 +378,7 @@ impl WarningFilters {
             WarningFilters::All => info.severity() == Severity::Warning,
             WarningFilters::Specified { category, codes } => {
                 info.severity() == Severity::Warning
-                    && (category.contains(&info.category())
-                        || codes.contains(&(info.category(), info.code())))
+                    && (category.contains(&info.category()) || codes.contains(&info.id()))
             }
             WarningFilters::Empty => false,
         }
@@ -402,11 +403,12 @@ impl WarningFilters {
             ) => {
                 category.extend(other_category);
                 // remove any codes covered by the category level filter
-                codes.extend(
-                    other_codes
-                        .iter()
-                        .filter(|(codes_cat, _)| !category.contains(codes_cat)),
-                );
+                codes.extend(other_codes.iter().filter(
+                    |DiagnosticsID {
+                         category: codes_cat,
+                         code: _,
+                     }| !category.contains(codes_cat),
+                ));
             }
         }
     }
@@ -427,13 +429,21 @@ impl WarningFilters {
                     let cat = cat as u8;
                     category.insert(cat);
                     // remove any codes now covered by this category
-                    codes.retain(|(codes_cat, _)| codes_cat != &cat);
+                    codes.retain(
+                        |DiagnosticsID {
+                             category: codes_cat,
+                             code: _,
+                         }| codes_cat != &cat,
+                    );
                 }
                 WarningFilter::Code(cat, code) => {
                     let cat = cat as u8;
                     // no need to add the filter if already covered by the category
                     if !category.contains(&cat) {
-                        codes.insert((cat, code));
+                        codes.insert(DiagnosticsID {
+                            category: cat,
+                            code,
+                        });
                     }
                 }
             },
@@ -442,8 +452,10 @@ impl WarningFilters {
 
     pub fn unused_function_warnings_filter() -> Self {
         let unused_fn_info = UnusedItem::Function.into_info();
-        let filtered_codes =
-            BTreeSet::from([(unused_fn_info.category() as u8, unused_fn_info.code())]);
+        let filtered_codes = BTreeSet::from([DiagnosticsID {
+            category: unused_fn_info.category() as u8,
+            code: unused_fn_info.code(),
+        }]);
         WarningFilters::Specified {
             category: BTreeSet::new(),
             codes: filtered_codes,
@@ -495,9 +507,14 @@ impl AstDebug for WarningFilters {
                     .iter()
                     .copied()
                     .map(|cat| WarningFilter::Category(Category::try_from(cat).unwrap()))
-                    .chain(codes.iter().copied().map(|(cat, code)| {
-                        WarningFilter::Code(Category::try_from(cat).unwrap(), code)
-                    }));
+                    .chain(codes.iter().copied().map(
+                        |DiagnosticsID {
+                             category: cat,
+                             code,
+                         }| {
+                            WarningFilter::Code(Category::try_from(cat).unwrap(), code)
+                        },
+                    ));
                 w.list(items, ",", |w, filter| {
                     w.write(filter.to_str().unwrap());
                     false

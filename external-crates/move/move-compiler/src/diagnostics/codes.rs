@@ -14,11 +14,16 @@ pub enum Severity {
     Bug = 3,
 }
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
+pub struct DiagnosticsID {
+    pub category: u8,
+    pub code: u8,
+}
+
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct DiagnosticInfo {
     severity: Severity,
-    category: u8,
-    code: u8,
+    id: DiagnosticsID,
     message: &'static str,
     external_prefix: Option<&'static str>,
 }
@@ -36,8 +41,7 @@ pub(crate) trait DiagnosticCode: Copy {
         let (code, message) = self.code_and_message();
         DiagnosticInfo {
             severity,
-            category,
-            code,
+            id: DiagnosticsID { category, code },
             message,
             external_prefix: None,
         }
@@ -76,8 +80,7 @@ pub const fn custom(
     assert!(category <= 99);
     DiagnosticInfo {
         severity,
-        category,
-        code,
+        id: DiagnosticsID { category, code },
         message,
         external_prefix: Some(external_prefix),
     }
@@ -349,8 +352,7 @@ impl DiagnosticInfo {
     pub fn render(self) -> (/* code */ String, /* message */ &'static str) {
         let Self {
             severity,
-            category,
-            code,
+            id: DiagnosticsID { category, code },
             message,
             external_prefix,
         } = self;
@@ -373,11 +375,11 @@ impl DiagnosticInfo {
     }
 
     pub fn category(&self) -> u8 {
-        self.category
+        self.id.category
     }
 
     pub fn code(&self) -> u8 {
-        self.code
+        self.id.code
     }
 
     pub fn message(&self) -> &'static str {
@@ -386,6 +388,10 @@ impl DiagnosticInfo {
 
     pub fn is_external(&self) -> bool {
         self.external_prefix.is_some()
+    }
+
+    pub fn id(&self) -> DiagnosticsID {
+        self.id
     }
 }
 
