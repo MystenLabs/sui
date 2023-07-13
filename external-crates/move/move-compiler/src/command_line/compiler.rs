@@ -14,7 +14,9 @@ use crate::{
         CompilationEnv, Flags, IndexedPackagePath, NamedAddressMap, NamedAddressMaps,
         NumericalAddress, PackageConfig, PackagePaths,
     },
-    to_bytecode, typing, unit_test, verification,
+    to_bytecode,
+    typing::{self, visitor::TypingVisitorObj},
+    unit_test, verification,
 };
 use move_command_line_common::files::{
     extension_equals, find_filenames, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
@@ -89,6 +91,7 @@ pub struct FullyCompiledProgram {
 }
 
 pub enum Visitor {
+    TypingVisitor(TypingVisitorObj),
     AbsIntVisitor(AbsIntVisitorObj),
 }
 

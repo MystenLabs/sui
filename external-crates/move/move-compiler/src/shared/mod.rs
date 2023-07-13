@@ -12,6 +12,7 @@ use crate::{
     editions::{Edition, Flavor},
     naming::ast::ModuleDefinition,
     sui_mode,
+    typing::visitor::TypingVisitorObj,
 };
 use clap::*;
 use move_ir_types::location::*;
@@ -22,6 +23,7 @@ use std::{
     collections::BTreeMap,
     fmt,
     hash::Hash,
+    rc::Rc,
     sync::atomic::{AtomicUsize, Ordering as AtomicOrdering},
 };
 
@@ -182,7 +184,7 @@ pub struct CompilationEnv {
     // filters warnings when added.
     warning_filter: Vec<WarningFilters>,
     diags: Diagnostics,
-    visitors: Visitors,
+    visitors: Rc<Visitors>,
     package_configs: BTreeMap<Symbol, PackageConfig>,
     /// Config for any package not found in `package_configs`, or for inputs without a package.
     default_config: PackageConfig,
@@ -202,7 +204,7 @@ impl CompilationEnv {
             flags,
             warning_filter: vec![],
             diags: Diagnostics::new(),
-            visitors: Visitors::new(visitors),
+            visitors: Rc::new(Visitors::new(visitors)),
             package_configs,
             default_config: default_config.unwrap_or_default(),
         }
@@ -305,8 +307,8 @@ impl CompilationEnv {
         &self.flags
     }
 
-    pub fn visitors(&self) -> &Visitors {
-        &self.visitors
+    pub fn visitors(&self) -> Rc<Visitors> {
+        self.visitors.clone()
     }
 
     pub fn package_config(&self, package: Option<Symbol>) -> &PackageConfig {
@@ -484,16 +486,21 @@ impl Default for PackageConfig {
 //**************************************************************************************************
 
 pub struct Visitors {
+    pub typing: Vec<RefCell<TypingVisitorObj>>,
     pub abs_int: Vec<RefCell<AbsIntVisitorObj>>,
 }
 
 impl Visitors {
     pub fn new(passes: Vec<cli::compiler::Visitor>) -> Self {
         use cli::compiler::Visitor;
-        let mut vs = Visitors { abs_int: vec![] };
+        let mut vs = Visitors {
+            typing: vec![],
+            abs_int: vec![],
+        };
         for pass in passes {
             match pass {
                 Visitor::AbsIntVisitor(f) => vs.abs_int.push(RefCell::new(f)),
+                Visitor::TypingVisitor(f) => vs.typing.push(RefCell::new(f)),
             }
         }
         vs
