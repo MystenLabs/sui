@@ -26,7 +26,7 @@ jobs:
           echo "new_commit_hash=$(git rev-parse HEAD)"
           echo "existing_tag=$(git tag --points-at ${new_commit_hash} | grep -E 'release_notes_v(.*)' | head -n 1)"
           echo "sui_version=$(cat Cargo.toml | grep "^version =" | tr -d '"' | awk '{ print $3 }')"
-          [[ -n ${existing_tag} ]] && echo "old_commit_hash=$(git show-ref -s ${existing_tag})" >> $GITHUB_ENV
+          [[ -n ${existing_tag} ]] && echo "old_commit_hash=$(git show-ref -s ${existing_tag})" || echo "" >> $GITHUB_ENV
 
     - name: Get list of PRs
       id: get-pr-list
