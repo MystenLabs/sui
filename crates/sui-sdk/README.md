@@ -43,22 +43,23 @@ async fn main() -> Result<(), anyhow::Error> {
 
 ```
 
+
+
 # Rust SDK examples
 
 The [examples](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk/examples) folder provides both basic and advanced examples.
 
-There are five files ending in `_api.rs` which provide code examples of the corresponding APIs and their methods. These showcase how to use the Sui Rust SDK, and can all be run locally against a local running Sui network. Below are instructions on the prerequisites and how to run these examples.
+There are five files ending in `_api.rs` which provide code examples of the corresponding APIs and their methods. These showcase how to use the Sui Rust SDK, and can run against the Sui testnet. Below are instructions on the prerequisites and how to run these examples.
 
 ## Preqrequisites
 
-Unless otherwise specified, most of these examples assume that Sui is installed, and that there is a local network running.
-
-For running a local Sui network, please follow [this guide](https://docs.sui.io/build/sui-local-network) for installing Sui and [this guide](https://docs.sui.io/build/sui-local-network#start-the-local-network) for starting the local Sui network. 
+Unless otherwise specified, most of these examples assume `Rust` and `cargo` are installed, and that there is an available internet connection. The examples connect to the Sui testnet (`https://fullnode.testnet.sui.io:443`) and execute different APIs. 
 
 ## Running the examples
 
 In the root folder of the `sui` repository (or in the `sui-sdk` crate folder), you can individually run examples using the command  `cargo run --example filename` (without `.rs` extension). For example:
-* `cargo run --example sui_client`
+* `cargo run --example sui_client` -- this one requires a local Sui network running (see [here](#Connecting to Sui Network
+)). If you do not have a local Sui network running, please skip this example.
 * `cargo run --example coin_read_api`
 * `cargo run --example event_api`
 * `cargo run --example governance_api`
@@ -76,6 +77,9 @@ The `SuiClientBuilder` struct provides a connection to the JSON-RPC server that 
 - Mainnet: https://fullnode.mainnet.sui.io:443
 
 For all available servers, see [here](https://sui.io/networkinfo). 
+
+For running a local Sui network, please follow [this guide](https://docs.sui.io/build/sui-local-network) for installing Sui and [this guide](https://docs.sui.io/build/sui-local-network#start-the-local-network) for starting the local Sui network. 
+
 
 ```rust
 // Copyright (c) Mysten Labs, Inc.
