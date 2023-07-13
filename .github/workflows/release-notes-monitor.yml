@@ -23,10 +23,10 @@ jobs:
         max_attempts: 2
         timeout_seconds: 30
         command: |
-          echo "new_commit_hash=$(git rev-parse HEAD)" >> $GITHUB_ENV
-          echo "existing_tag=$(git tag --points-at ${{ env.commit_hash }} | grep -E 'release_notes_v(.*)' | head -n 1)" >> $GITHUB_ENV
-          echo "sui_version=$(cat Cargo.toml | grep "^version =" | tr -d '"' | awk '{ print $3 }')" >> $GITHUB_ENV
-          [[ -n ${{ env.existing_tag }} ]] && echo "old_commit_hash=$(git show-ref -s ${{ env.existing_tag }})" >> $GITHUB_ENV
+          echo "new_commit_hash=$(git rev-parse HEAD)"
+          echo "existing_tag=$(git tag --points-at ${new_commit_hash} | grep -E 'release_notes_v(.*)' | head -n 1)"
+          echo "sui_version=$(cat Cargo.toml | grep "^version =" | tr -d '"' | awk '{ print $3 }')"
+          [[ -n ${existing_tag} ]] && echo "old_commit_hash=$(git show-ref -s ${existing_tag})" >> $GITHUB_ENV
 
     - name: Get list of PRs
       id: get-pr-list
