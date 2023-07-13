@@ -47,7 +47,7 @@ jobs:
     - name: Process PRs
       run: |
         echo "Processing ${{ matrix.pr }} PR"
-        echo "pr_body=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/"${{ matrix.pr }}}" --jq ".body")" >> $GITHUB_ENV 
+        echo "pr_body=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }}} --jq ".body")" >> $GITHUB_ENV 
         echo "release_notes='${pr_body#*### Release notes}'" >> $GITHUB_ENV
     
     - name: Post to a Slack channel
