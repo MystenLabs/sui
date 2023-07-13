@@ -9,15 +9,12 @@ use sui_sdk::SuiClientBuilder;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let sui_local = SuiClientBuilder::default()
-        // .ws_url("ws://127.0.0.1:9001")
-        .build_localnet()
-        .await?;
-    println!("Sui local version: {:?}", sui_local.api_version());
+    let sui = SuiClientBuilder::default().build_testnet().await?; // testnet Sui network
+    println!("Sui testnet version{:?}", sui.api_version());
 
     // TODO - make this work
     // Subscribe event
-    // let mut subscribe_all = sui_local
+    // let mut subscribe_all = sui
     //     .event_api()
     //     .subscribe_event(EventFilter::All(vec![]))
     //     .await?;
@@ -30,11 +27,11 @@ async fn main() -> Result<(), anyhow::Error> {
     println!(" *** Get events *** ");
     // for demonstration purposes, we set to make a transaction
     let digest = TransactionDigest::from_str("FQyf6npjF5m9kg7o52zjLxnFMNQdFX2adMAnY4T7QTzp")?;
-    let events = sui_local.event_api().get_events(digest).await?;
+    let events = sui.event_api().get_events(digest).await?;
     println!("{:?}", events);
     println!(" *** Get events ***\n ");
 
-    let query_events = sui_local
+    let query_events = sui
         .event_api()
         .query_events(EventFilter::All(vec![]), None, Some(5), true) // query first 5 events in descending order
         .await?;

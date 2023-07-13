@@ -8,42 +8,36 @@ use utils::sui_address_for_examples;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let sui_local = SuiClientBuilder::default().build_localnet().await?; // local Sui network
-    println!("Sui local version{:?}", sui_local.api_version());
+    let sui = SuiClientBuilder::default().build_testnet().await?; // testnet Sui network
+    println!("Sui testnet version{:?}", sui.api_version());
     // create a random Sui address for examples. Check utils module if you want to use a local wallet, or use SuiAddress::from_str("sui_address") for a specific address
     let active_address = sui_address_for_examples().await?;
 
     // ************ GOVERNANCE API ************ //
 
     // Stakes
-    let stakes = sui_local
-        .governance_api()
-        .get_stakes(active_address)
-        .await?;
+    let stakes = sui.governance_api().get_stakes(active_address).await?;
 
     println!(" *** Stakes ***");
     println!("{:?}", stakes);
     println!(" *** Stakes ***\n");
 
     // Committee Info
-    let committee = sui_local.governance_api().get_committee_info(None).await?; // None defaults to the last epoch
+    let committee = sui.governance_api().get_committee_info(None).await?; // None defaults to the last epoch
 
     println!(" *** Committee Info ***");
     println!("{:?}", committee);
     println!(" *** Committee Info ***\n");
 
     // Latest Sui System State
-    let sui_system_state = sui_local
-        .governance_api()
-        .get_latest_sui_system_state()
-        .await?;
+    let sui_system_state = sui.governance_api().get_latest_sui_system_state().await?;
 
     println!(" *** Sui System State ***");
     println!("{:?}", sui_system_state);
     println!(" *** Sui System State ***\n");
 
     // Reference Gas Price
-    let reference_gas_price = sui_local.governance_api().get_reference_gas_price().await?;
+    let reference_gas_price = sui.governance_api().get_reference_gas_price().await?;
 
     println!(" *** Reference Gas Price ***");
     println!("{:?}", reference_gas_price);

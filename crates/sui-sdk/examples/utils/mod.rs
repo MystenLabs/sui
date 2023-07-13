@@ -36,7 +36,8 @@ pub(crate) async fn request_tokens_from_faucet(address: SuiAddress) -> Result<()
     // make the request to the faucet JSON RPC API for coins
     let client = Client::new();
     let _res = client
-        .post("http://127.0.0.1:9123/gas")
+        // .post("http://127.0.0.1:9123/gas")
+        .post("https://faucet.devnet.sui.io/gas")
         .header("Content-Type", "application/json")
         .json(&map)
         .send()

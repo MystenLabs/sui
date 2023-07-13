@@ -12,7 +12,8 @@ use utils::request_tokens_from_faucet;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let sui = SuiClientBuilder::default().build_localnet().await?;
+    let sui = SuiClientBuilder::default().build_testnet().await?; // testnet Sui network
+    println!("Sui testnet version{:?}", sui.api_version());
 
     // Generate two Sui addresses and corresponding keys in memory
     let keystore = Keystore::InMem(InMemKeystore::new_insecure_for_tests(2));

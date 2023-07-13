@@ -10,14 +10,15 @@ use utils::sui_address_for_examples;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let sui_local = SuiClientBuilder::default().build_localnet().await?; // local Sui network
+    let sui = SuiClientBuilder::default().build_testnet().await?; // testnet Sui network
+    println!("Sui testnet version{:?}", sui.api_version());
     let active_address = sui_address_for_examples().await?; // get a random address for examples. Check utils module if you want to use a local wallet
 
     // ************ READ API ************ //
 
     println!("// ************ READ API ************ //\n");
     // Owned Objects
-    let owned_objects = sui_local
+    let owned_objects = sui
         .read_api()
         .get_owned_objects(active_address, None, None, Some(5))
         .await?;
@@ -26,7 +27,7 @@ async fn main() -> Result<(), anyhow::Error> {
     println!(" *** Owned Objects ***\n");
 
     // Dynamic Fields
-    let dynamic_fields = sui_local
+    let dynamic_fields = sui
         .read_api()
         .get_dynamic_fields(ObjectID::from_address(active_address.into()), None, None)
         .await?;
@@ -45,7 +46,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let object_id = object_data.object_id;
     let version = object_data.version;
 
-    let past_object = sui_local
+    let past_object = sui
         .read_api()
         .try_get_parsed_past_object(
             object_id,
@@ -67,7 +68,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // try_multi_get_parsed_past_object
     let sui_get_past_object_request = past_object.clone().into_object()?;
-    let multi_past_object = sui_local
+    let multi_past_object = sui
         .read_api()
         .try_multi_get_parsed_past_object(
             vec![SuiGetPastObjectRequest {
@@ -90,7 +91,7 @@ async fn main() -> Result<(), anyhow::Error> {
     println!(" *** Multi Past Object ***\n");
 
     // Object with options
-    let object_with_options = sui_local
+    let object_with_options = sui
         .read_api()
         .get_object_with_options(
             sui_get_past_object_request.object_id,
@@ -111,14 +112,11 @@ async fn main() -> Result<(), anyhow::Error> {
     println!(" *** Object with Options ***\n");
 
     println!(" *** Chain identifier *** ");
-    println!("{:?}", sui_local.read_api().get_chain_identifier().await?);
+    println!("{:?}", sui.read_api().get_chain_identifier().await?);
     println!(" *** Chain identifier ***\n ");
 
     println!(" *** Protocol Config *** ");
-    println!(
-        "{:?}",
-        sui_local.read_api().get_protocol_config(None).await?
-    );
+    println!("{:?}", sui.read_api().get_protocol_config(None).await?);
     println!(" *** Protocol Config ***\n ");
     // ************ END OF READ API ************ //
 
