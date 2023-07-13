@@ -52,14 +52,18 @@ impl ReadApi {
     ///
     /// # Examples
     ///
-    /// ```rust, ignore
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::SuiAddress;
     /// use std::str::FromStr;
     ///
-    /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
-    /// let address = SuiAddress::from_str("0x0000....0000")?; // change to your Sui address
-    /// let owned_objects = sui.read_api().get_owned_objects(address, None, None, None).await?;
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), anyhow::Error> {
+    ///     let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
+    ///     let address = SuiAddress::from_str("0x0000....0000")?; // change to your Sui address
+    ///     let owned_objects = sui.read_api().get_owned_objects(address, None, None, None).await?;
+    ///     Ok(())
+    /// }
     /// ```
     pub async fn get_owned_objects(
         &self,
@@ -84,23 +88,27 @@ impl ReadApi {
     /// use sui_types::base_types::{ObjectID, SuiAddress};
     /// use std::str::FromStr;
     ///
-    /// let sui: SuiClient = SuiClientBuilder::default().build_localnet().await?; // connect to the local Sui network
-    /// let address: SuiAddress = SuiAddress::from_str("sui_address_here")?;
-    /// let owned_objects = sui.read_api().get_owned_objects(address, None, None, None).await?;
-    /// // this code example assumes that there are previous owned objects, otherwise it panics
-    /// let object = owned_objects.data.get(0).expect(&format!(
-    ///     "No owned objects for this address {}",
-    ///     active_address
-    /// ));
-    /// let object_data = object.data.as_ref().expect(&format!(
-    ///     "No object data for this SuiObjectResponse {:?}",
-    ///     object
-    /// ));
-    /// let object_id = object_data.object_id;
-    /// let dynamic_fields = sui_local
-    ///     .read_api()
-    ///     .get_dynamic_fields(object_id, None, None)
-    ///     .await?;
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), anyhow::Error> {
+    ///     let sui = SuiClientBuilder::default().build_localnet().await?; // connect to the local Sui network
+    ///     let address = SuiAddress::from_str("0x0000....0000")?;
+    ///     let owned_objects = sui.read_api().get_owned_objects(address, None, None, None).await?;
+    ///     // this code example assumes that there are previous owned objects, otherwise it panics
+    ///     let object = owned_objects.data.get(0).expect(&format!(
+    ///         "No owned objects for this address {}",
+    ///         address
+    ///     ));
+    ///     let object_data = object.data.as_ref().expect(&format!(
+    ///         "No object data for this SuiObjectResponse {:?}",
+    ///         object
+    ///     ));
+    ///     let object_id = object_data.object_id;
+    ///     let dynamic_fields = sui
+    ///         .read_api()
+    ///         .get_dynamic_fields(object_id, None, None)
+    ///         .await?;
+    ///     Ok(())
+    /// }
     /// ```
     pub async fn get_dynamic_fields(
         &self,
@@ -125,37 +133,41 @@ impl ReadApi {
     /// use sui_json_rpc_types::SuiObjectDataOptions;
     /// use std::str::FromStr;
     ///
-    /// let sui = SuiClientBuilder::default().build_localnet().await?; // connect to the local Sui network
-    /// let address = SuiAddress::from_str("0x0000....0000")?; // change to your Sui address
-    /// let owned_objects = sui.read_api().get_owned_objects(address, None, None, None).await?;
-    /// // this code example assumes that there are previous owned objects, otherwise it panics
-    /// let object = owned_objects.data.get(0).expect(&format!(
-    ///     "No owned objects for this address {}",
-    ///     active_address
-    /// ));
-    /// let object_data = object.data.as_ref().expect(&format!(
-    ///     "No object data for this SuiObjectResponse {:?}",
-    ///     object
-    /// ));
-    /// let object_id = object_data.object_id;
-    /// let version = object_data.version;
-    /// let past_object = sui_local
-    ///     .read_api()
-    ///     .try_get_parsed_past_object(
-    ///         object_id,
-    ///         version,
-    ///         SuiObjectDataOptions {
-    ///             show_type: true,
-    ///             show_owner: true,
-    ///             show_previous_transaction: true,
-    ///             show_display: true,
-    ///             show_content: true,
-    ///             show_bcs: true,
-    ///             show_storage_rebate: true,
-    ///         },
-    ///     )
-    ///     .await?;
-    /// ```
+    /// #[tokio::main]
+    ///     async fn main() -> Result<(), anyhow::Error> {
+    ///     let sui = SuiClientBuilder::default().build_localnet().await?; // connect to the local Sui network
+    ///     let address = SuiAddress::from_str("0x0000....0000")?; // change to your Sui address
+    ///     let owned_objects = sui.read_api().get_owned_objects(address, None, None, None).await?;
+    ///     // this code example assumes that there are previous owned objects, otherwise it panics
+    ///     let object = owned_objects.data.get(0).expect(&format!(
+    ///         "No owned objects for this address {}",
+    ///         address
+    ///     ));
+    ///     let object_data = object.data.as_ref().expect(&format!(
+    ///         "No object data for this SuiObjectResponse {:?}",
+    ///         object
+    ///     ));
+    ///     let object_id = object_data.object_id;
+    ///     let version = object_data.version;
+    ///     let past_object = sui
+    ///         .read_api()
+    ///         .try_get_parsed_past_object(
+    ///             object_id,
+    ///             version,
+    ///             SuiObjectDataOptions {
+    ///                 show_type: true,
+    ///                 show_owner: true,
+    ///                 show_previous_transaction: true,
+    ///                 show_display: true,
+    ///                 show_content: true,
+    ///                 show_bcs: true,
+    ///                 show_storage_rebate: true,
+    ///             },
+    ///         )
+    ///         .await?;
+    ///     Ok(())
+    /// }
+    ///```
     pub async fn try_get_parsed_past_object(
         &self,
         object_id: ObjectID,
@@ -176,28 +188,63 @@ impl ReadApi {
     /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::{ObjectID, SuiAddress};
-    /// use sui_json_rpc_types::SuiObjectDataOptions;
+    /// use sui_json_rpc_types::{SuiObjectDataOptions, SuiGetPastObjectRequest};
+    /// use std::str::FromStr;
     ///
-    /// let sui = SuiClientBuilder::default().build_localnet().await?; // connect to the local Sui network
-    /// let sui_past_object = // some SuiPastObjectResponse object here
-    /// let multi_past_object = sui
-    ///     .read_api()
-    ///     .try_multi_get_parsed_past_object(
-    ///         vec![SuiGetPastObjectRequest {
-    ///             object_id: sui_past_object.object_id,
-    ///             version: sui_past_object.version,
-    ///         }],
-    ///         SuiObjectDataOptions {
-    ///             show_type: true,
-    ///             show_owner: true,
-    ///             show_previous_transaction: true,
-    ///             show_display: true,
-    ///             show_content: true,
-    ///             show_bcs: true,
-    ///             show_storage_rebate: true,
-    ///         },
-    ///     )
-    ///     .await?;
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), anyhow::Error> {
+    ///     let sui = SuiClientBuilder::default().build_localnet().await?; // connect to the local Sui network
+    ///     let address = SuiAddress::from_str("0x0000....0000")?; // change to your Sui address
+    ///     let owned_objects = sui.read_api().get_owned_objects(address, None, None, None).await?;
+    ///     // this code example assumes that there are previous owned objects, otherwise it panics
+    ///     let object = owned_objects.data.get(0).expect(&format!(
+    ///         "No owned objects for this address {}",
+    ///         address
+    ///     ));
+    ///     let object_data = object.data.as_ref().expect(&format!(
+    ///         "No object data for this SuiObjectResponse {:?}",
+    ///         object
+    ///     ));
+    ///     let object_id = object_data.object_id;
+    ///     let version = object_data.version;
+    ///     let past_object = sui
+    ///         .read_api()
+    ///         .try_get_parsed_past_object(
+    ///             object_id,
+    ///             version,
+    ///             SuiObjectDataOptions {
+    ///                 show_type: true,
+    ///                 show_owner: true,
+    ///                 show_previous_transaction: true,
+    ///                 show_display: true,
+    ///                 show_content: true,
+    ///                 show_bcs: true,
+    ///                 show_storage_rebate: true,
+    ///             },
+    ///         )
+    ///         .await?;
+    ///     let past_object = past_object.into_object()?;
+    ///     let multi_past_object = sui
+    ///         .read_api()
+    ///         .try_multi_get_parsed_past_object(
+    ///             vec![SuiGetPastObjectRequest {
+    ///                 object_id: past_object.object_id,
+    ///                 version: past_object.version,
+    ///             }],
+    ///             SuiObjectDataOptions {
+    ///                 show_type: true,
+    ///                 show_owner: true,
+    ///                 show_previous_transaction: true,
+    ///                 show_display: true,
+    ///                 show_content: true,
+    ///                 show_bcs: true,
+    ///                 show_storage_rebate: true,
+    ///             },
+    ///         )
+    ///         .await?;
+    ///     Ok(())
+    /// }
+    /// ```
     pub async fn try_multi_get_parsed_past_object(
         &self,
         past_objects: Vec<SuiGetPastObjectRequest>,
@@ -218,20 +265,36 @@ impl ReadApi {
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::SuiAddress;
     /// use sui_json_rpc_types::SuiObjectDataOptions;
+    /// use std::str::FromStr;
     ///
-    /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
-    /// let object_id = // ObjectID type here
-    /// let object = sui.read_api().get_object_with_options(object_id,
-    ///         SuiObjectDataOptions {
-    ///             show_type: true,
-    ///             show_owner: true,
-    ///             show_previous_transaction: true,
-    ///             show_display: true,
-    ///             show_content: true,
-    ///             show_bcs: true,
-    ///             show_storage_rebate: true,
-    ///         },
-    ///     ).await?;
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), anyhow::Error> {
+    ///     let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
+    ///     let address = SuiAddress::from_str("0x0000....0000")?; // change to your Sui address
+    ///     let owned_objects = sui.read_api().get_owned_objects(address, None, None, None).await?;
+    ///     // this code example assumes that there are previous owned objects, otherwise it panics
+    ///     let object = owned_objects.data.get(0).expect(&format!(
+    ///         "No owned objects for this address {}",
+    ///         address
+    ///     ));
+    ///     let object_data = object.data.as_ref().expect(&format!(
+    ///         "No object data for this SuiObjectResponse {:?}",
+    ///         object
+    ///     ));
+    ///     let object_id = object_data.object_id;
+    ///     let object = sui.read_api().get_object_with_options(object_id,
+    ///             SuiObjectDataOptions {
+    ///                 show_type: true,
+    ///                 show_owner: true,
+    ///                 show_previous_transaction: true,
+    ///                 show_display: true,
+    ///                 show_content: true,
+    ///                 show_bcs: true,
+    ///                 show_storage_rebate: true,
+    ///             },
+    ///         ).await?;
+    ///     Ok(())
+    /// }
     /// ```
     pub async fn get_object_with_options(
         &self,
@@ -249,20 +312,36 @@ impl ReadApi {
     /// use sui_sdk::SuiClientBuilder;
     /// use sui_types::base_types::SuiAddress;
     /// use sui_json_rpc_types::SuiObjectDataOptions;
-    ///
-    /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
-    /// let object_id = vec![object_id1, object_id2, ...]// ObjectIDs
-    /// let object = sui.read_api().get_object_with_options(object_id,
-    ///         SuiObjectDataOptions {
-    ///             show_type: true,
-    ///             show_owner: true,
-    ///             show_previous_transaction: true,
-    ///             show_display: true,
-    ///             show_content: true,
-    ///             show_bcs: true,
-    ///             show_storage_rebate: true,
-    ///         },
-    ///     ).await?;
+    /// use std::str::FromStr;
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), anyhow::Error> {
+    ///     let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
+    ///     let address = SuiAddress::from_str("0x0000....0000")?; // change to your Sui address
+    ///     let owned_objects = sui.read_api().get_owned_objects(address, None, None, None).await?;
+    ///     // this code example assumes that there are previous owned objects, otherwise it panics
+    ///     let object = owned_objects.data.get(0).expect(&format!(
+    ///         "No owned objects for this address {}",
+    ///         address
+    ///     ));
+    ///     let object_data = object.data.as_ref().expect(&format!(
+    ///         "No object data for this SuiObjectResponse {:?}",
+    ///         object
+    ///     ));
+    ///     let object_id = object_data.object_id;
+    ///     let object_ids = vec![object_id]; // and other object ids
+    ///     let object = sui.read_api().multi_get_object_with_options(object_ids,
+    ///             SuiObjectDataOptions {
+    ///                 show_type: true,
+    ///                 show_owner: true,
+    ///                 show_previous_transaction: true,
+    ///                 show_display: true,
+    ///                 show_content: true,
+    ///                 show_bcs: true,
+    ///                 show_storage_rebate: true,
+    ///             },
+    ///         ).await?;
+    ///     Ok(())
+    /// }
     /// ```
     pub async fn multi_get_object_with_options(
         &self,
@@ -283,8 +362,12 @@ impl ReadApi {
     /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     ///
-    /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
-    /// let total_transaction_blocks = sui.read_api().get_total_transaction_blocks().await?;
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), anyhow::Error> {
+    ///     let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
+    ///     let total_transaction_blocks = sui.read_api().get_total_transaction_blocks().await?;
+    ///     Ok(())
+    /// }
     /// ```
     pub async fn get_total_transaction_blocks(&self) -> SuiRpcResult<u64> {
         Ok(*self.api.http.get_total_transaction_blocks().await?)
@@ -326,8 +409,12 @@ impl ReadApi {
     /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     ///
-    /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
-    /// let committee_info = sui.read_api().get_committee_info(None).await?;
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), anyhow::Error> {
+    ///     let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
+    ///     let committee_info = sui.read_api().get_committee_info(None).await?;
+    ///     Ok(())
+    /// }
     /// ```
     pub async fn get_committee_info(
         &self,
@@ -663,9 +750,13 @@ impl CoinReadApi {
     /// use sui_types::base_types::SuiAddress;
     /// use std::str::FromStr;
     ///
-    /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
-    /// let address = SuiAddress::from_str("0x0000....0000")?; // change to your Sui address
-    /// let balance = sui.coin_read_api().get_balance(address, None).await?;
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), anyhow::Error> {
+    ///     let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
+    ///     let address = SuiAddress::from_str("0x0000....0000")?; // change to your Sui address
+    ///     let balance = sui.coin_read_api().get_balance(address, None).await?;
+    ///     Ok(())
+    /// }
     /// ```
     pub async fn get_balance(
         &self,
@@ -684,9 +775,13 @@ impl CoinReadApi {
     /// use sui_types::base_types::SuiAddress;
     /// use std::str::FromStr;
     ///
-    /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
-    /// let address = SuiAddress::from_str("0x0000....0000")?; // change to your Sui address
-    /// let all_balances = sui.coin_read_api().get_all_balances(address).await?;
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), anyhow::Error> {
+    ///     let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
+    ///     let address = SuiAddress::from_str("0x0000....0000")?; // change to your Sui address
+    ///     let all_balances = sui.coin_read_api().get_all_balances(address).await?;
+    ///     Ok(())
+    /// }
     /// ```
     pub async fn get_all_balances(&self, owner: SuiAddress) -> SuiRpcResult<Vec<Balance>> {
         Ok(self.api.http.get_all_balances(owner).await?)
@@ -698,9 +793,12 @@ impl CoinReadApi {
     ///
     /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
-    ///
-    /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
-    /// let coin_metadata = sui.coin_read_api().get_coin_metadata("0x2::sui::SUI".to_string()).await?;
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), anyhow::Error> {
+    ///     let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
+    ///     let coin_metadata = sui.coin_read_api().get_coin_metadata("0x2::sui::SUI".to_string()).await?;
+    ///     Ok(())
+    /// }
     /// ```
     pub async fn get_coin_metadata(
         &self,
@@ -716,8 +814,12 @@ impl CoinReadApi {
     /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     ///
-    /// let sui = SuiClientBuilder::default()::build_localnet().await?; // local Sui network
-    /// let total_supply = sui.coin_read_api().get_total_supply("0x2::sui::SUI".to_string()).await?;
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), anyhow::Error> {
+    ///     let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
+    ///     let total_supply = sui.coin_read_api().get_total_supply("0x2::sui::SUI".to_string()).await?;
+    ///     Ok(())
+    /// }
     /// ```
     pub async fn get_total_supply(&self, coin_type: String) -> SuiRpcResult<Supply> {
         Ok(self.api.http.get_total_supply(coin_type).await?)
@@ -890,8 +992,12 @@ impl GovernanceApi {
     /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
     ///
-    /// let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
-    /// let committee_info = sui.read_api().get_committee_info(None).await?;
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), anyhow::Error> {     
+    ///     let sui = SuiClientBuilder::default().build_localnet().await?; // local Sui network
+    ///     let committee_info = sui.read_api().get_committee_info(None).await?;
+    ///     Ok(())
+    /// }
     /// ```
     pub async fn get_committee_info(
         &self,
