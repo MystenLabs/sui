@@ -964,22 +964,28 @@ impl AuthorityPerEpochStore {
     /// and verify that it allows new user certificates
     pub fn insert_pending_consensus_transactions(
         &self,
-        transaction: &ConsensusTransaction,
+        transactions: &[ConsensusTransaction],
         lock: Option<&RwLockReadGuard<ReconfigState>>,
     ) -> SuiResult {
-        self.tables
-            .pending_consensus_transactions
-            .insert(&transaction.key(), transaction)?;
-        if let ConsensusTransactionKind::UserTransaction(cert) = &transaction.kind {
-            let state = lock.expect("Must pass reconfiguration lock when storing certificate");
-            // Caller is responsible for performing graceful check
-            assert!(
-                state.should_accept_user_certs(),
-                "Reconfiguration state should allow accepting user transactions"
-            );
-            self.pending_consensus_certificates
-                .lock()
-                .insert(*cert.digest());
+        let mut batch = self.tables.pending_consensus_transactions.batch();
+        batch.insert_batch(
+            &self.tables.pending_consensus_transactions,
+            transactions.iter().map(|t| (t.key(), t)),
+        )?;
+        batch.write()?;
+
+        for transaction in transactions {
+            if let ConsensusTransactionKind::UserTransaction(cert) = &transaction.kind {
+                let state = lock.expect("Must pass reconfiguration lock when storing certificate");
+                // Caller is responsible for performing graceful check
+                assert!(
+                    state.should_accept_user_certs(),
+                    "Reconfiguration state should allow accepting user transactions"
+                );
+                self.pending_consensus_certificates
+                    .lock()
+                    .insert(*cert.digest());
+            }
         }
         Ok(())
     }

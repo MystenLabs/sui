@@ -68,7 +68,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_with_reconfig() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 1000).await;
+        let test_cluster = build_test_cluster(4, 5000).await;
         test_simulated_load(TestInitData::new(&test_cluster).await, 60).await;
     }
 
@@ -97,7 +97,7 @@ mod test {
         // TODO added to invalidate a failing test seed in CI. Remove me
         tokio::time::sleep(Duration::from_secs(1)).await;
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = Arc::new(build_test_cluster(4, 1000).await);
+        let test_cluster = Arc::new(build_test_cluster(4, 5000).await);
         let node_restarter = test_cluster
             .random_node_restarter()
             .with_kill_interval_secs(5, 15)
@@ -185,7 +185,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_with_crashes_and_delays() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 1000).await;
+        let test_cluster = build_test_cluster(4, 5000).await;
 
         let dead_validator_orig: Arc<Mutex<Option<DeadValidator>>> = Default::default();
 
@@ -243,7 +243,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_crashes_during_epoch_change() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 10000).await;
+        let test_cluster = build_test_cluster(4, 5000).await;
 
         let dead_validator: Arc<Mutex<Option<DeadValidator>>> = Default::default();
         let keep_alive_nodes = get_keep_alive_nodes(&test_cluster);
@@ -255,7 +255,7 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_checkpoint_pruning() {
-        let test_cluster = build_test_cluster(4, 1000).await;
+        let test_cluster = build_test_cluster(4, 5000).await;
         test_simulated_load(TestInitData::new(&test_cluster).await, 30).await;
 
         let swarm_dir = test_cluster.swarm.dir().join(AUTHORITIES_DB_NAME);

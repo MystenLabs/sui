@@ -72,6 +72,7 @@ pub struct QuorumDriver<A: Clone> {
     notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
     metrics: Arc<QuorumDriverMetrics>,
     max_retry_times: u8,
+    max_retry_delay: Option<Duration>,
 }
 
 impl<A: Clone> QuorumDriver<A> {
@@ -82,6 +83,7 @@ impl<A: Clone> QuorumDriver<A> {
         notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
         metrics: Arc<QuorumDriverMetrics>,
         max_retry_times: u8,
+        max_retry_delay: Option<Duration>,
     ) -> Self {
         Self {
             validators,
@@ -90,6 +92,7 @@ impl<A: Clone> QuorumDriver<A> {
             notifier,
             metrics,
             max_retry_times,
+            max_retry_delay,
         }
     }
 
@@ -143,8 +146,12 @@ impl<A: Clone> QuorumDriver<A> {
             );
             return Ok(());
         }
-        let next_retry_after =
-            Instant::now() + Duration::from_millis(200 * u64::pow(2, old_retry_times.into()));
+        let mut next_retry_after = Duration::from_millis(200 * u64::pow(2, old_retry_times.into()));
+        if let Some(max_retry_delay) = self.max_retry_delay {
+            next_retry_after = std::cmp::min(next_retry_after, max_retry_delay);
+        }
+        let next_retry_after = Instant::now() + next_retry_after;
+
         sleep_until(next_retry_after).await;
 
         let tx_cert = match tx_cert {
@@ -541,6 +548,7 @@ where
         reconfig_observer: Arc<dyn ReconfigObserver<A> + Sync + Send>,
         metrics: Arc<QuorumDriverMetrics>,
         max_retry_times: u8,
+        max_retry_delay: Option<Duration>,
     ) -> Self {
         let (task_tx, task_rx) = mpsc::channel::<QuorumDriverTask>(TASK_QUEUE_SIZE);
         let (subscriber_tx, subscriber_rx) =
@@ -552,6 +560,7 @@ where
             notifier,
             metrics.clone(),
             max_retry_times,
+            max_retry_delay,
         ));
         let metrics_clone = metrics.clone();
         let processor_handle = {
@@ -612,6 +621,7 @@ where
             notifier: Arc::new(NotifyRead::new()),
             metrics: self.quorum_driver_metrics.clone(),
             max_retry_times: self.quorum_driver.max_retry_times,
+            max_retry_delay: self.quorum_driver.max_retry_delay,
         });
         let metrics = self.quorum_driver_metrics.clone();
         let processor_handle = {
@@ -792,6 +802,7 @@ pub struct QuorumDriverHandlerBuilder<A: Clone> {
     notifier: Option<Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>>,
     reconfig_observer: Option<Arc<dyn ReconfigObserver<A> + Sync + Send>>,
     max_retry_times: u8,
+    max_retry_delay: Option<Duration>,
 }
 
 impl<A> QuorumDriverHandlerBuilder<A>
@@ -805,6 +816,7 @@ where
             notifier: None,
             reconfig_observer: None,
             max_retry_times: TX_MAX_RETRY_TIMES,
+            max_retry_delay: None,
         }
     }
 
@@ -830,6 +842,13 @@ where
         self
     }
 
+    /// Used in test with short epoch durations - too long retry delays make it impossible for
+    /// transactions to ever complete when epochs are very short.
+    pub fn with_max_retry_delay(mut self, max_retry_delay: Duration) -> Self {
+        self.max_retry_delay = Some(max_retry_delay);
+        self
+    }
+
     pub fn start(self) -> QuorumDriverHandler<A> {
         QuorumDriverHandler::new(
             self.validators,
@@ -840,6 +859,7 @@ where
                 .expect("Reconfig observer is missing"),
             self.metrics,
             self.max_retry_times,
+            self.max_retry_delay,
         )
     }
 }
