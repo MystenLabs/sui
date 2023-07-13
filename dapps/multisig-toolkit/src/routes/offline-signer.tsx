@@ -17,7 +17,7 @@ import {
 import { useWalletKit } from '@mysten/wallet-kit';
 import { AlertCircle, Terminal } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function OfflineSigner() {
 	const { currentAccount, signTransactionBlock } = useWalletKit();
@@ -49,7 +49,7 @@ export default function OfflineSigner() {
 		error,
 		reset,
 	} = useMutation({
-		mutationKey: ['dry-run', currentAccount],
+		mutationKey: ['dry-run'],
 		mutationFn: async () => {
 			if (!currentAccount?.chains[0]) throw new Error('No chain detected for the account.');
 			const provider = new JsonRpcProvider(connections[currentAccount?.chains.filter(x => x.startsWith('sui'))[0]]);
