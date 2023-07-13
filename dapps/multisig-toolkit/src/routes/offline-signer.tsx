@@ -49,10 +49,10 @@ export default function OfflineSigner() {
 		error,
 		reset,
 	} = useMutation({
-		mutationKey: ['dry-run'],
+		mutationKey: ['dry-run', currentAccount],
 		mutationFn: async () => {
 			if (!currentAccount?.chains[0]) throw new Error('No chain detected for the account.');
-			const provider = new JsonRpcProvider(connections[currentAccount?.chains[0]]);
+			const provider = new JsonRpcProvider(connections[currentAccount?.chains.filter(x => x.startsWith('sui'))[0]]);
 
 			const transactionBlock = TransactionBlock.from(bytes);
 
@@ -125,11 +125,11 @@ export default function OfflineSigner() {
 					<div className="border text-mono break-all rounded p-4">{data?.signature}</div>
 				</TabsContent>
 			</Tabs>
-			{error && (
+			{error as Error && (
 				<Alert variant="default">
 					<AlertCircle className="h-4 w-4" />
 					<AlertTitle>Error</AlertTitle>
-					<AlertDescription>{error.message}</AlertDescription>
+					<AlertDescription>{(error as Error).message}</AlertDescription>
 				</Alert>
 			)}
 		</div>
