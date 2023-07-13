@@ -953,7 +953,7 @@ pub mod pg_integration_test {
         let pg_port = env::var("POSTGRES_PORT").unwrap_or_else(|_| "32770".into());
         let pw = env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "postgrespw".into());
         let db_url = format!("postgres://postgres:{pw}@{pg_host}:{pg_port}");
-        let pg_connection_pool = new_pg_connection_pool(&db_url).await.unwrap();
+        let pg_connection_pool = new_pg_connection_pool(&db_url).unwrap();
         let mut pg_pool_conn = get_pg_pool_connection(&pg_connection_pool).unwrap();
 
         let lot_of_data = (1..10000)
@@ -1014,7 +1014,7 @@ pub mod pg_integration_test {
         let pg_port = env::var("POSTGRES_PORT").unwrap_or_else(|_| "32770".into());
         let pw = env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "postgrespw".into());
         let db_url = format!("postgres://postgres:{pw}@{pg_host}:{pg_port}");
-        let pg_connection_pool = new_pg_connection_pool(&db_url).await.unwrap();
+        let pg_connection_pool = new_pg_connection_pool(&db_url).unwrap();
         let mut pg_pool_conn = get_pg_pool_connection(&pg_connection_pool).unwrap();
 
         let bulk_data = (1..=10000)
