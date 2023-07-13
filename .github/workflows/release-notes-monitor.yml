@@ -36,7 +36,7 @@ jobs:
       working-directory: ./
       run: |
         export previous_tag=$(git tag | grep -E 'sui_v1(.*)_rel_notes' | sort -r | head -1)
-        export previous_commit_hash=$(git rev-list -n 1 ${previous_tag}))
+        export previous_commit_hash=$(git rev-list -n 1 ${previous_tag})
 
         export list_of_prs=$(git log --grep "\[x\]" --pretty=oneline --abbrev-commit ${previous_commit_hash}...${{ env.new_commit_hash }} -- crates dashboards doc docker external-crates kiosk narwhal nre sui-execution | grep -o '#[0-9]\+' | grep -o '[0-9]\+' | jq -R -s -c 'split("\n")[:-1]')
         echo "::set-output name=matrix::${list_of_prs}"
