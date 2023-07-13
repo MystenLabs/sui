@@ -14,22 +14,13 @@ anyhow = "1.0"
 
 The main building block for the Sui Rust SDK is the `SuiClientBuilder`, which provides a simple and straightforward way of connectiong to a Sui network and having access to the different available APIs. 
 
-An example that connects to a running Sui local network and available Sui networks follows. If you want to run this program, make sure to spin up a local network with a local validator, a Full node, and a faucet server (see [preqrequisites](README.md) for more information).
+An example that connects to the Sui `testnet` and `devnet` networks follows.
 
 ```rust
 use sui_sdk::SuiClientBuilder;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let sui = SuiClientBuilder::default()
-        .build("http://127.0.0.1:9000") // local network address
-        .await?;
-    println!("Sui local network version: {}", sui.api_version());
-
-    // local Sui network, like the above one but using the dedicated function
-    let sui_local = SuiClientBuilder::default().build_localnet().await?;
-    println!("Sui local network version: {}", sui_local.api_version());
-
     // Sui devnet -- https://fullnode.devnet.sui.io:443
     let sui_devnet = SuiClientBuilder::default().build_devnet().await?;
     println!("Sui devnet version: {}", sui_devnet.api_version());
@@ -118,11 +109,10 @@ use sui_sdk::{ SuiClientBuilder};
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
 
-   // local Sui network, like the above one but using the dedicated function
    let sui_local = SuiClientBuilder::default().build_localnet().await?;
    println!("Sui local network version: {}", sui_local.api_version());
 
-   let active_address = SuiAddress::from_str("0x0000....0000")?; // change to your Sui address
+   let active_address = SuiAddress::from_str("<YOUR SUI ADDRESS>")?; // change to your Sui address
 
    // Total balance
    let total_balance = sui_local
