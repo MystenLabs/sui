@@ -134,16 +134,18 @@ export function TopValidatorsCard({ limit, showIcon }: TopValidatorsCardProps) {
 			{isSuccess && tableData && (
 				<>
 					<TableCard data={tableData.data} columns={tableData.columns} />
-					{limit && (
-						<div className="mt-3">
-							<Link to="/validators">
-								<div className="flex items-center gap-2">
-									More Validators
-									<ArrowRight12 fill="currentColor" />
-								</div>
-							</Link>
-						</div>
-					)}
+					<div className="mt-3 flex justify-between">
+						<Link to="/validators">
+							<div className="flex items-center gap-2">
+								View all
+								<ArrowRight12 fill="currentColor" className="h-3 w-3 -rotate-45" />
+							</div>
+						</Link>
+						<Text variant="body/medium" color="steel-dark">
+							{data ? data.activeValidators.length : '-'}
+							{` Total`}
+						</Text>
+					</div>
 				</>
 			)}
 		</>

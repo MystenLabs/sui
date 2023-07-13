@@ -82,6 +82,7 @@ export default {
 			colors: {
 				'gradient-blue-start': '#589AEA',
 				'gradient-blue-end': '#4C75A6',
+				'gradient-graph-bg-01-start': '#D2EBFA',
 			},
 			// Line-heights that are found in the design:
 			lineHeight: {
@@ -175,6 +176,7 @@ export default {
 				placeholderGradient01: 'linear-gradient(165.96deg, #e6f5ff 10%, #ebecff 95%)',
 				placeholderShimmer:
 					'linear-gradient(90deg, #ecf1f4 -24.18%, rgba(237 242 245 / 40%) 73.61%, #f3f7f9 114.81%, #ecf1f4 114.82%)',
+				main: 'linear-gradient(176deg, #D2EBFA 51.68%, #D5F7EE 100%)',
 			},
 			rotate: {
 				135: '135deg',

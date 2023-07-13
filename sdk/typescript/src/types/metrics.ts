@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { number, object, string } from 'superstruct';
+import { array, number, object, string } from 'superstruct';
 
 export const NetworkMetrics = object({
 	currentTps: number(),
@@ -23,3 +23,6 @@ export const AddressMetrics = object({
 	dailyActiveAddresses: number(),
 });
 export type AddressMetrics = typeof AddressMetrics.TYPE;
+
+export const AllEpochsAddressMetrics = array(AddressMetrics);
+export type AllEpochsAddressMetrics = typeof AllEpochsAddressMetrics.TYPE;

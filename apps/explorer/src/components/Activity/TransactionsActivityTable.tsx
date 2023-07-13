@@ -57,7 +57,7 @@ export function TransactionsActivityTable({
 					Failed to load Transactions
 				</div>
 			)}
-			<div className="flex flex-col space-y-5 text-left xl:pr-10">
+			<div className="flex flex-col space-y-3 text-left xl:pr-10">
 				{isLoading || isFetching || !cardData ? (
 					<PlaceholderTable
 						rowCount={limit}
@@ -75,15 +75,15 @@ export function TransactionsActivityTable({
 					{!disablePagination ? (
 						<Pagination {...pagination} />
 					) : (
-						<Link to="/recent" after={<ArrowRight12 />}>
-							More Transaction Blocks
+						<Link to="/recent" after={<ArrowRight12 className="h-3 w-3 -rotate-45" />}>
+							View all
 						</Link>
 					)}
 
 					<div className="flex items-center space-x-3">
 						<Text variant="body/medium" color="steel-dark">
 							{count ? numberSuffix(Number(count)) : '-'}
-							{` Transaction Blocks`}
+							{` Total`}
 						</Text>
 						{!disablePagination && (
 							<select
