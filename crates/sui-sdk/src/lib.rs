@@ -394,7 +394,7 @@ impl Debug for RpcClient {
     }
 }
 
-/// ServerInfo contains all the useful information regarding the version and the available RPC calls and subscriptions
+/// ServerInfo contains all the useful information regarding the API version, the available RPC calls, and subscriptions.
 struct ServerInfo {
     rpc_methods: Vec<String>,
     subscriptions: Vec<String>,
@@ -402,22 +402,22 @@ struct ServerInfo {
 }
 
 impl SuiClient {
-    /// Returns a list of available RPC calls
+    /// Returns a list of available RPC calls.
     pub fn available_rpc_methods(&self) -> &Vec<String> {
         &self.api.info.rpc_methods
     }
 
-    /// Returns a list of available subscriptions
+    /// Returns a list of available subscriptions.
     pub fn available_subscriptions(&self) -> &Vec<String> {
         &self.api.info.subscriptions
     }
 
-    /// Returns the API version information
+    /// Returns the API version information.
     pub fn api_version(&self) -> &str {
         &self.api.info.version
     }
 
-    /// Verifies if the API version matches the server version and returns an error if they do not match
+    /// Verifies if the API version matches the server version and returns an error if they do not match.
     pub fn check_api_version(&self) -> SuiRpcResult<()> {
         let server_version = self.api_version();
         let client_version = env!("CARGO_PKG_VERSION");
@@ -430,32 +430,32 @@ impl SuiClient {
         Ok(())
     }
 
-    /// Returns a reference to the coin read API
+    /// Returns a reference to the coin read API.
     pub fn coin_read_api(&self) -> &CoinReadApi {
         &self.coin_read_api
     }
 
-    /// Returns a reference to the event API
+    /// Returns a reference to the event API.
     pub fn event_api(&self) -> &EventApi {
         &self.event_api
     }
 
-    /// Returns a reference to the governance API
+    /// Returns a reference to the governance API.
     pub fn governance_api(&self) -> &GovernanceApi {
         &self.governance_api
     }
 
-    /// Returns a reference to the quorum driver API
+    /// Returns a reference to the quorum driver API.
     pub fn quorum_driver_api(&self) -> &QuorumDriverApi {
         &self.quorum_driver_api
     }
 
-    /// Returns a reference to the read API
+    /// Returns a reference to the read API.
     pub fn read_api(&self) -> &ReadApi {
         &self.read_api
     }
 
-    /// Returns a reference to the transaction builder API
+    /// Returns a reference to the transaction builder API.
     pub fn transaction_builder(&self) -> &TransactionBuilder {
         &self.transaction_builder
     }

@@ -22,5 +22,8 @@ async fn main() -> Result<(), anyhow::Error> {
     let sui_testnet = SuiClientBuilder::default().build_testnet().await?;
     println!("Sui testnet version: {}", sui_testnet.api_version());
 
+    println!("{:?}", sui_local.available_rpc_methods());
+    println!("{:?}", sui_local.available_subscriptions());
+
     Ok(())
 }
