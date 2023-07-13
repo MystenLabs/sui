@@ -107,6 +107,7 @@ function NftsPage() {
 											</Text>
 										}
 										text="Hidden Assets"
+										onClick={() => toast.dismiss(t.id)}
 									/>
 								</div>
 							</div>
