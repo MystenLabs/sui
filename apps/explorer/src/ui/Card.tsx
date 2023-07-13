@@ -11,6 +11,7 @@ const cardStyles = cva('overflow-hidden', {
 			highlight: 'bg-success-light',
 			lightBlue: 'bg-sui/10',
 			white: 'bg-white',
+			'white/80': 'bg-white/80',
 		},
 		height: {
 			full: 'h-full',
@@ -34,6 +35,9 @@ const cardStyles = cva('overflow-hidden', {
 		shadow: {
 			true: 'shadow',
 		},
+		growOnHover: {
+			true: 'hover:scale-101 ease-in-out duration-200',
+		},
 	},
 	defaultVariants: {
 		bg: 'default',
@@ -46,7 +50,16 @@ export interface CardProps extends VariantProps<typeof cardStyles> {
 	children?: ReactNode;
 }
 
-export function Card({ spacing, rounded, bg, border, shadow, children, height }: CardProps) {
+export function Card({
+	spacing,
+	rounded,
+	bg,
+	border,
+	shadow,
+	children,
+	height,
+	growOnHover,
+}: CardProps) {
 	return (
 		<div
 			className={cardStyles({
@@ -56,6 +69,7 @@ export function Card({ spacing, rounded, bg, border, shadow, children, height }:
 				border,
 				shadow,
 				height,
+				growOnHover,
 			})}
 		>
 			{children}

@@ -45,7 +45,7 @@ export function AccountsCardGraph() {
 	});
 	const adjEpochAddressMetrics = useMemo(() => allEpochMetrics?.slice(-30), [allEpochMetrics]);
 	return (
-		<Card bg="white" spacing={!adjEpochAddressMetrics?.length ? 'lg' : 'lgGraph'} height="full">
+		<Card bg="white/80" spacing={!adjEpochAddressMetrics?.length ? 'lg' : 'lgGraph'} height="full">
 			<div className="flex h-full flex-col gap-4 overflow-hidden">
 				<Heading variant="heading4/semibold" color="steel-darker">
 					Accounts
@@ -56,21 +56,21 @@ export function AccountsCardGraph() {
 						label="Total"
 						tooltip="Number of accounts that have sent or received transactions since network genesis"
 						amount={addressMetrics?.cumulativeAddresses}
-						size="sm"
+						size="md"
 					/>
 					<FormattedStatsAmount
 						orientation="vertical"
 						label="Total Active"
 						tooltip="Total number of accounts that have signed transactions since network genesis"
 						amount={addressMetrics?.cumulativeActiveAddresses}
-						size="sm"
+						size="md"
 					/>
 					<FormattedStatsAmount
 						orientation="vertical"
 						label="Daily Active"
 						tooltip="Number of accounts that have sent or received transactions in the last epoch"
 						amount={addressMetrics?.dailyActiveAddresses}
-						size="sm"
+						size="md"
 					/>
 				</div>
 				<div

@@ -5,8 +5,10 @@ import { Sui } from '@mysten/icons';
 
 import { useSuiCoinData } from '~/hooks/useSuiCoinData';
 import { Card } from '~/ui/Card';
-import { Heading } from '~/ui/Heading';
 import { Text } from '~/ui/Text';
+import { ButtonOrLink } from '~/ui/utils/ButtonOrLink';
+
+const COIN_GECKO_SUI_URL = 'https://www.coingecko.com/en/coins/sui';
 
 export function SuiTokenCard() {
 	const { data } = useSuiCoinData();
@@ -20,20 +22,22 @@ export function SuiTokenCard() {
 		: '--';
 
 	return (
-		<Card bg="white" spacing="lg" height="full">
-			<div className="flex items-center gap-2">
-				<div className="h-5 w-5 flex-shrink-0 rounded-full bg-sui p-1">
-					<Sui className="h-full w-full text-white" />
+		<ButtonOrLink href={COIN_GECKO_SUI_URL}>
+			<Card growOnHover bg="white/80" spacing="lg" height="full">
+				<div className="flex items-center gap-2">
+					<div className="h-5 w-5 flex-shrink-0 rounded-full bg-sui p-1">
+						<Sui className="h-full w-full text-white" />
+					</div>
+					<div className="flex w-full flex-col gap-0.5">
+						<Text variant="body/semibold" color="steel-darker">
+							1 SUI = {formattedPrice}
+						</Text>
+						<Text variant="subtitleSmallExtra/medium" color="steel">
+							via CoinGecko
+						</Text>
+					</div>
 				</div>
-				<div className="flex w-full flex-col gap-0.5">
-					<Heading variant="heading4/semibold" color="steel-darker">
-						1 SUI = {formattedPrice}
-					</Heading>
-					<Text variant="subtitleSmallExtra/medium" color="steel">
-						via CoinGecko
-					</Text>
-				</div>
-			</div>
-		</Card>
+			</Card>
+		</ButtonOrLink>
 	);
 }
