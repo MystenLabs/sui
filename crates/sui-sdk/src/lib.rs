@@ -22,7 +22,7 @@
 //!
 //! The main building block for the Sui Rust SDK is the [`SuiClientBuilder`], which provides a simple and straightforward way of connectiong to a Sui network and having access to the different available APIs.
 //! A simple example that connects to a running Sui local network, the Sui devnet, and the Sui testnet is shown below. To successfully run this program, make sure to spin up a local network with a local validator, a fullnode, and a faucet server (see [here](https://github.com/stefan-mysten/sui/tree/rust_sdk_api_examples/crates/sui-sdk/examples#preqrequisites) for more information).
-//! ```rust,ignore
+//! ```rust,no_run
 //! use sui_sdk::SuiClientBuilder;
 //!
 //! #[tokio::main]
@@ -100,7 +100,7 @@ pub const SUI_TESTNET_URL: &str = "https://fullnode.testnet.sui.io:443";
 ///
 /// # Examples
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use sui_sdk::SuiClientBuilder;
 /// #[tokio::main]
 /// async fn main() -> Result<(), anyhow::Error> {
@@ -156,8 +156,9 @@ impl SuiClientBuilder {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
+    ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), anyhow::Error> {
     ///     let sui = SuiClientBuilder::default()
@@ -231,8 +232,9 @@ impl SuiClientBuilder {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
+    ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), anyhow::Error> {
     ///     let sui = SuiClientBuilder::default()
@@ -253,8 +255,9 @@ impl SuiClientBuilder {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
+    ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), anyhow::Error> {
     ///     let sui = SuiClientBuilder::default()
@@ -275,8 +278,9 @@ impl SuiClientBuilder {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
     /// use sui_sdk::SuiClientBuilder;
+    ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), anyhow::Error> {
     ///     let sui = SuiClientBuilder::default()
@@ -346,9 +350,11 @@ impl SuiClientBuilder {
 ///
 /// # Examples
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use sui_sdk::types::base_types::SuiAddress;
 /// use sui_sdk::SuiClientBuilder;
+/// use std::str::FromStr;
+///
 /// #[tokio::main]
 /// async fn main() -> Result<(), anyhow::Error> {
 ///     let sui = SuiClientBuilder::default()
@@ -360,7 +366,7 @@ impl SuiClientBuilder {
 ///     println!("{:?}", sui.api_version());
 ///
 ///     let sui_read_api = sui.read_api();
-///     let address = SuiAddress::random_for_testing_only(); // generate a random SuiAddress for demonstration purposes
+///     let address = SuiAddress::from_str("0x0000....0000")?; // generate a random SuiAddress for demonstration purposes
 ///     let owned_objects = sui_read_api.get_owned_objects(address, None, None, None).await?;
 ///     println!("{:?}", owned_objects); // this will be empty as the random generated address has no coins or other objects
 ///    
