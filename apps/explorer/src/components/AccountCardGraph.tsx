@@ -54,21 +54,21 @@ export function AccountsCardGraph() {
 					<FormattedStatsAmount
 						orientation="vertical"
 						label="Total"
-						tooltip="Addresses that have participated in at least one transaction since network genesis"
+						tooltip="Accounts that have participated in at least one transaction since network genesis"
 						amount={addressMetrics?.cumulativeAddresses}
 						size="sm"
 					/>
 					<FormattedStatsAmount
 						orientation="vertical"
 						label="Total Active"
-						tooltip="Total active addresses"
+						tooltip="Total active accounts"
 						amount={addressMetrics?.cumulativeActiveAddresses}
 						size="sm"
 					/>
 					<FormattedStatsAmount
 						orientation="vertical"
 						label="Daily Active"
-						tooltip="Total daily active addresses"
+						tooltip="Total daily active accounts"
 						amount={addressMetrics?.dailyActiveAddresses}
 						size="sm"
 					/>
