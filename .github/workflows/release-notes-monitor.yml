@@ -68,7 +68,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "${{ toJSON(steps.rel-notes.outputs.release_notes) }}"
+                  "text": ${{ toJSON(steps.rel-notes.outputs.release_notes) }}
                 }
               },
               {
