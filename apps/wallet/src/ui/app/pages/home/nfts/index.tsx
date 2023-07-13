@@ -4,7 +4,7 @@
 import { useOnScreen } from '@mysten/core';
 import { Check12, EyeClose16 } from '@mysten/icons';
 import { get, set } from 'idb-keyval';
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 
@@ -142,6 +142,10 @@ function NftsPage() {
 		hideAssetId(objectId);
 	};
 
+	const filteredNFTs = useMemo(() => {
+		return nfts?.filter((nft) => !internalHiddenAssetIds.includes(nft.objectId));
+	}, [nfts, internalHiddenAssetIds]);
+
 	if (isInitialLoading) {
 		return (
 			<div className="mt-1 flex w-full justify-center">
@@ -162,47 +166,45 @@ function NftsPage() {
 						<small>{(error as Error).message}</small>
 					</Alert>
 				) : null}
-				{nfts?.length ? (
+				{filteredNFTs?.length ? (
 					<div className="grid w-full grid-cols-2 gap-x-3.5 gap-y-4 mb-5">
-						{nfts
-							.filter((nft) => !internalHiddenAssetIds.includes(nft.objectId))
-							.map(({ objectId, type }) => (
-								<Link
-									to={`/nft-details?${new URLSearchParams({
+						{filteredNFTs.map(({ objectId, type }) => (
+							<Link
+								to={`/nft-details?${new URLSearchParams({
+									objectId,
+								}).toString()}`}
+								onClick={() => {
+									ampli.clickedCollectibleCard({
 										objectId,
-									}).toString()}`}
-									onClick={() => {
-										ampli.clickedCollectibleCard({
-											objectId,
-											collectibleType: type!,
-										});
-									}}
-									key={objectId}
-									className="no-underline relative"
-								>
-									<div className="group">
-										<div className="w-full h-full justify-center z-10 absolute pointer-events-auto text-gray-60 transition-colors duration-200 p-0">
-											<div className="absolute top-2 right-3 rounded-md h-8 w-8 opacity-0 group-hover:opacity-100">
-												<Button
-													variant="hidden"
-													size="icon"
-													onClick={(event: any) => hideAsset(objectId, event)}
-													after={<EyeClose16 />}
-												/>
-											</div>
-										</div>
-										<ErrorBoundary>
-											<NFTDisplayCard
-												objectId={objectId}
-												size="md"
-												showLabel
-												animateHover
-												borderRadius="xl"
+										collectibleType: type!,
+									});
+								}}
+								key={objectId}
+								className="no-underline relative"
+							>
+								<div className="group">
+									<div className="w-full h-full justify-center z-10 absolute pointer-events-auto text-gray-60 transition-colors duration-200 p-0">
+										<div className="absolute top-2 right-3 rounded-md h-8 w-8 opacity-0 group-hover:opacity-100">
+											<Button
+												variant="hidden"
+												size="icon"
+												onClick={(event: any) => hideAsset(objectId, event)}
+												after={<EyeClose16 />}
 											/>
-										</ErrorBoundary>
+										</div>
 									</div>
-								</Link>
-							))}
+									<ErrorBoundary>
+										<NFTDisplayCard
+											objectId={objectId}
+											size="md"
+											showLabel
+											animateHover
+											borderRadius="xl"
+										/>
+									</ErrorBoundary>
+								</div>
+							</Link>
+						))}
 						<div ref={observerElem}>
 							{isSpinnerVisible ? (
 								<div className="mt-1 flex w-full justify-center">

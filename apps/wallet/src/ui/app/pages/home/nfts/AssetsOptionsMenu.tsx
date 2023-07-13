@@ -9,8 +9,13 @@ const AssetsOptionsMenu = () => {
 	return (
 		<Menu>
 			<Menu.Button
-				className="cursor-pointer appearance-none border"
-				style={{ border: 'none', background: 'none', height: '32px', width: '32px' }}
+				style={{
+					border: 'none',
+					background: 'none',
+					height: '32px',
+					width: '32px',
+					cursor: 'pointer',
+				}}
 			>
 				<Ooo24 className="text-gray-90 w-full h-full" />
 			</Menu.Button>
