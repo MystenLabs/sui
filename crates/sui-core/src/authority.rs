@@ -2029,7 +2029,8 @@ impl AuthorityState {
         config: NodeConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
     ) -> anyhow::Result<()> {
-        let archive_readers = ArchiveReaderBalancer::new(config.archive_reader_config())?;
+        let archive_readers =
+            ArchiveReaderBalancer::new(config.archive_reader_config(), &Registry::default())?;
         AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
             &self.database.perpetual_tables,
             &self.checkpoint_store,
