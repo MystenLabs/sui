@@ -9,6 +9,7 @@ use bytes::buf::Reader;
 use bytes::{Buf, Bytes};
 use futures::{StreamExt, TryStreamExt};
 use object_store::DynObjectStore;
+use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
 use rand::seq::SliceRandom;
 use std::future;
 use std::ops::Range;
@@ -27,6 +28,34 @@ use tokio::sync::oneshot::Sender;
 use tokio::sync::{oneshot, Mutex};
 use tracing::info;
 
+#[derive(Debug)]
+pub struct ArchiveReaderMetrics {
+    pub archive_txns_read: IntCounterVec,
+    pub archive_checkpoints_read: IntCounterVec,
+}
+
+impl ArchiveReaderMetrics {
+    pub fn new(registry: &Registry) -> Arc<Self> {
+        let this = Self {
+            archive_txns_read: register_int_counter_vec_with_registry!(
+                "archive_txns_read",
+                "Number of transactions read from archive",
+                &["bucket"],
+                registry
+            )
+            .unwrap(),
+            archive_checkpoints_read: register_int_counter_vec_with_registry!(
+                "archive_checkpoints_read",
+                "Number of checkpoints read from archive",
+                &["bucket"],
+                registry
+            )
+            .unwrap(),
+        };
+        Arc::new(this)
+    }
+}
+
 // ArchiveReaderBalancer selects archives for reading based on whether they can fulfill a checkpoint request
 #[derive(Default, Debug, Clone)]
 pub struct ArchiveReaderBalancer {
@@ -34,10 +63,11 @@ pub struct ArchiveReaderBalancer {
 }
 
 impl ArchiveReaderBalancer {
-    pub fn new(configs: Vec<ArchiveReaderConfig>) -> Result<Self> {
+    pub fn new(configs: Vec<ArchiveReaderConfig>, registry: &Registry) -> Result<Self> {
         let mut readers = vec![];
+        let metrics = ArchiveReaderMetrics::new(registry);
         for config in configs.into_iter() {
-            readers.push(Arc::new(ArchiveReader::new(config.clone())?));
+            readers.push(Arc::new(ArchiveReader::new(config.clone(), &metrics)?));
         }
         Ok(ArchiveReaderBalancer { readers })
     }
@@ -99,26 +129,35 @@ impl ArchiveReaderBalancer {
 
 #[derive(Debug, Clone)]
 pub struct ArchiveReader {
+    bucket: String,
     concurrency: usize,
     sender: Arc<Sender<()>>,
     manifest: Arc<Mutex<Manifest>>,
     use_for_pruning_watermark: bool,
     remote_object_store: Arc<DynObjectStore>,
+    archive_reader_metrics: Arc<ArchiveReaderMetrics>,
 }
 
 impl ArchiveReader {
-    pub fn new(config: ArchiveReaderConfig) -> Result<Self> {
+    pub fn new(config: ArchiveReaderConfig, metrics: &Arc<ArchiveReaderMetrics>) -> Result<Self> {
+        let bucket = config
+            .remote_store_config
+            .bucket
+            .clone()
+            .unwrap_or("unknown".to_string());
         let remote_object_store = config.remote_store_config.make()?;
         let (sender, recv) = oneshot::channel();
         let manifest = Arc::new(Mutex::new(Manifest::new(0, 0)));
         // Start a background tokio task to keep local manifest in sync with remote
         Self::spawn_manifest_sync_task(remote_object_store.clone(), manifest.clone(), recv);
         Ok(ArchiveReader {
+            bucket,
             manifest,
             sender: Arc::new(sender),
             remote_object_store,
             use_for_pruning_watermark: config.use_for_pruning_watermark,
             concurrency: config.download_concurrency.get(),
+            archive_reader_metrics: metrics.clone(),
         })
     }
 
@@ -256,7 +295,15 @@ impl ArchiveReader {
                                 .update_highest_synced_checkpoint(&verified_checkpoint)
                                 .map_err(|e| anyhow!("Failed to update watermark: {e}"))?;
                             txn_counter.fetch_add(contents.size() as u64, Ordering::Relaxed);
+                            self.archive_reader_metrics
+                                .archive_txns_read
+                                .with_label_values(&[&self.bucket])
+                                .inc_by(contents.size() as u64);
                             checkpoint_counter.fetch_add(1, Ordering::Relaxed);
+                            self.archive_reader_metrics
+                                .archive_checkpoints_read
+                                .with_label_values(&[&self.bucket])
+                                .inc_by(1);
                             Ok::<(), anyhow::Error>(())
                         })
                 });
