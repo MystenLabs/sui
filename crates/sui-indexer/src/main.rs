@@ -38,7 +38,7 @@ async fn main() -> Result<(), IndexerError> {
             e
         ))
     })?;
-    let blocking_cp = new_pg_connection_pool(&db_url).await.map_err(|e| {
+    let blocking_cp = new_pg_connection_pool(&db_url).map_err(|e| {
         error!(
             "Failed creating Postgres connection pool with error {:?}",
             e

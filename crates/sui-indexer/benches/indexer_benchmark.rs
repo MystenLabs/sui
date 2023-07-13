@@ -39,7 +39,7 @@ fn indexer_benchmark(c: &mut Criterion) {
 
     let rt: Runtime = Runtime::new().unwrap();
     let (mut _checkpoints, store) = rt.block_on(async {
-        let blocking_cp = new_pg_connection_pool(&db_url).await.unwrap();
+        let blocking_cp = new_pg_connection_pool(&db_url).unwrap();
         reset_database(&mut blocking_cp.get().unwrap(), true).unwrap();
         let registry = Registry::default();
         let indexer_metrics = IndexerMetrics::new(&registry);

@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #![recursion_limit = "256"]
 
-use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::{collections::HashMap, time::Duration};
 
 use anyhow::{anyhow, Result};
 use axum::{extract::Extension, http::StatusCode, routing::get, Router};
@@ -293,24 +293,81 @@ fn get_http_client(rpc_client_url: &str) -> Result<HttpClient, IndexerError> {
         })
 }
 
-pub async fn new_pg_connection_pool(db_url: &str) -> Result<PgConnectionPool, IndexerError> {
+pub fn new_pg_connection_pool(db_url: &str) -> Result<PgConnectionPool, IndexerError> {
+    let pool_config = PgConectionPoolConfig::default();
     let manager = ConnectionManager::<PgConnection>::new(db_url);
-    // default connection pool max size is 10
-    let blocking_conn_pool = diesel::r2d2::Pool::builder().build(manager).map_err(|e| {
-        IndexerError::PgConnectionPoolInitError(format!(
-            "Failed to initialize connection pool with error: {:?}",
-            e
+
+    diesel::r2d2::Pool::builder()
+        .max_size(pool_config.pool_size)
+        .connection_timeout(pool_config.connection_timeout)
+        .connection_customizer(Box::new(pool_config.connection_config()))
+        .build(manager)
+        .map_err(|e| {
+            IndexerError::PgConnectionPoolInitError(format!(
+                "Failed to initialize connection pool with error: {:?}",
+                e
+            ))
+        })
+}
+
+#[derive(Debug, Clone, Copy)]
+struct PgConectionPoolConfig {
+    pool_size: u32,
+    connection_timeout: Duration,
+    statement_timeout: Duration,
+}
+
+impl PgConectionPoolConfig {
+    const DEFAULT_POOL_SIZE: u32 = 10;
+    const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_secs(30);
+    const DEFAULT_STATEMENT_TIMEOUT: Duration = Duration::from_secs(5);
+
+    fn connection_config(&self) -> PgConnectionConfig {
+        PgConnectionConfig {
+            statement_timeout: self.statement_timeout,
+        }
+    }
+}
+
+impl Default for PgConectionPoolConfig {
+    fn default() -> Self {
+        Self {
+            pool_size: Self::DEFAULT_POOL_SIZE,
+            connection_timeout: Self::DEFAULT_CONNECTION_TIMEOUT,
+            statement_timeout: Self::DEFAULT_STATEMENT_TIMEOUT,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct PgConnectionConfig {
+    statement_timeout: Duration,
+    // read_only: bool,
+}
+
+impl diesel::r2d2::CustomizeConnection<PgConnection, diesel::r2d2::Error> for PgConnectionConfig {
+    fn on_acquire(&self, conn: &mut PgConnection) -> std::result::Result<(), diesel::r2d2::Error> {
+        use diesel::{sql_query, RunQueryDsl};
+
+        sql_query(format!(
+            "SET statement_timeout = {}",
+            self.statement_timeout.as_millis(),
         ))
-    })?;
-    Ok(blocking_conn_pool)
+        .execute(conn)
+        .map_err(diesel::r2d2::Error::QueryError)?;
+
+        // if self.read_only {
+        //     sql_query("SET default_transaction_read_only = 't'")
+        //         .execute(conn)
+        //         .map_err(r2d2::Error::QueryError)?;
+        // }
+
+        Ok(())
+    }
 }
 
 pub fn get_pg_pool_connection(pool: &PgConnectionPool) -> Result<PgPoolConnection, IndexerError> {
-    backoff::retry(ExponentialBackoff::default(), || {
-        let pool_conn = pool.get()?;
-        Ok(pool_conn)
-    })
-    .map_err(|e| {
+    pool.get().map_err(|e| {
         IndexerError::PgPoolConnectionError(format!(
             "Failed to get connection from PG connection pool with error: {:?}",
             e
