@@ -52,7 +52,14 @@ function ConnectedButton() {
 							</CommandItem>
 						))}
 
-						<CommandItem className="cursor-pointer" onSelect={(()=>{disconnect()})}>Logout</CommandItem>
+						<CommandItem
+							className="cursor-pointer"
+							onSelect={() => {
+								disconnect();
+							}}
+						>
+							Logout
+						</CommandItem>
 					</CommandGroup>
 				</Command>
 			</PopoverContent>

@@ -6,7 +6,14 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import { Connection, JsonRpcProvider, TransactionBlock, devnetConnection, mainnetConnection, testnetConnection } from '@mysten/sui.js';
+import {
+	Connection,
+	JsonRpcProvider,
+	TransactionBlock,
+	devnetConnection,
+	mainnetConnection,
+	testnetConnection,
+} from '@mysten/sui.js';
 import { useWalletKit } from '@mysten/wallet-kit';
 import { AlertCircle, Terminal } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
@@ -27,39 +34,34 @@ export default function OfflineSigner() {
 		},
 	});
 
-	const [dryRunResult, setDryRunResult] = useState('');
-	const [error, setError] = useState<Error | null>(null);
-
 	// supported connections.
 	const connections: Record<`${string}:${string}`, Connection> = {
 		'sui:testnet': testnetConnection,
 		'sui:mainnet': mainnetConnection,
-		'sui:devnet': devnetConnection
-	}
+		'sui:devnet': devnetConnection,
+	};
 
 	// runs a dry-run for the transaction based on the connected wallet.
-	const { mutate: dryRun, data: dryRunData, isLoading: dryRunLoading } = useMutation({
+	const {
+		mutate: dryRun,
+		data: dryRunData,
+		isLoading: dryRunLoading,
+		error,
+		reset,
+	} = useMutation({
 		mutationKey: ['dry-run'],
 		mutationFn: async () => {
-			setError(null);
-			setDryRunResult('');
-			if (!currentAccount?.chains[0]) throw new Error("No chain detected for the account.")
+			if (!currentAccount?.chains[0]) throw new Error('No chain detected for the account.');
 			const provider = new JsonRpcProvider(connections[currentAccount?.chains[0]]);
 
 			const transactionBlock = TransactionBlock.from(bytes);
 
 			return await provider.devInspectTransactionBlock({
 				transactionBlock,
-				sender: currentAccount?.address
+				sender: currentAccount?.address,
 			});
 		},
-		onSuccess(val) {
-			setDryRunResult(JSON.stringify(val, null, 4))
-		},
-		onError(e: Error) {
-			setError(e);
-		}
-	})
+	});
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -100,16 +102,22 @@ export default function OfflineSigner() {
 							<Button disabled={!currentAccount || !bytes || isLoading} onClick={() => mutate()}>
 								Sign Transaction
 							</Button>
-							<Button variant="outline" disabled={!currentAccount || !bytes || dryRunLoading} onClick={() => dryRun()}>
+							<Button
+								variant="outline"
+								disabled={!currentAccount || !bytes || dryRunLoading}
+								onClick={() => dryRun()}
+							>
 								Preview Effects
 							</Button>
 						</div>
-						{dryRunResult &&
+						{dryRunData && (
 							<>
-								<Button variant="link" size="sm" onClick={() => setDryRunResult('')}>Hide</Button>
-								<Textarea value={dryRunResult} rows={20} />
+								<Button variant="link" size="sm" onClick={() => reset()}>
+									Hide
+								</Button>
+								<Textarea value={JSON.stringify(dryRunData, null, 4)} rows={20} />
 							</>
-						}
+						)}
 					</div>
 				</TabsContent>
 
