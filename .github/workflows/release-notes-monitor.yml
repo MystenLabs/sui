@@ -67,7 +67,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "*PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|${{ matrix.pr }}> <@U03LRLPR1QX> please review release notes needs to be reviewed. \n *Release Notes:* ${{ steps.rel-notes.outputs.release_notes }}"
+                  "text": "*PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|${{ matrix.pr }}>\n <@U03LRLPR1QX> and <@U03Q2MN3XHP> please review release notes. \n *Release Notes:*\n${{ steps.rel-notes.outputs.release_notes }}\n"
                 }
               },
               {
