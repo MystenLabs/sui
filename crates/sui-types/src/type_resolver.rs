@@ -5,6 +5,7 @@ use crate::{
     error::{ExecutionError, SuiError},
     object::{MoveObject, ObjectFormatOptions},
 };
+use move_core_types::language_storage::StructTag;
 use move_core_types::{language_storage::TypeTag, value::MoveStructLayout};
 use move_vm_types::loaded_data::runtime_types::Type;
 
@@ -12,6 +13,12 @@ pub trait LayoutResolver {
     fn get_layout(
         &mut self,
         object: &MoveObject,
+        format: ObjectFormatOptions,
+    ) -> Result<MoveStructLayout, SuiError>;
+
+    fn get_layout_from_struct_tag(
+        &mut self,
+        struct_tag: &StructTag,
         format: ObjectFormatOptions,
     ) -> Result<MoveStructLayout, SuiError>;
 }

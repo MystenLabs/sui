@@ -42,6 +42,7 @@ use sui_types::transaction::{
     ProgrammableTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
     TransactionKind, VersionedProtocolMessage,
 };
+use sui_types::type_resolver::LayoutResolver;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 // similar to EpochId of sui-types but BigInt
@@ -705,7 +706,7 @@ impl SuiTransactionBlockEvents {
         events: TransactionEvents,
         tx_digest: TransactionDigest,
         timestamp_ms: Option<u64>,
-        resolver: &impl GetModule,
+        resolver: &mut impl LayoutResolver,
     ) -> SuiResult<Self> {
         Ok(Self {
             data: events

@@ -9840,6 +9840,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "sui-enum-compat-util",
+ "sui-execution",
  "sui-json",
  "sui-macros",
  "sui-protocol-config",

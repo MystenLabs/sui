@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto::encoding::Base58;
-use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use schemars::JsonSchema;
@@ -14,6 +13,7 @@ use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::error::SuiResult;
 use sui_types::event::{Event, EventEnvelope, EventID};
 use sui_types::sui_serde::BigInt;
+use sui_types::type_resolver::LayoutResolver;
 
 use crate::{type_and_fields_from_move_struct, Page};
 use sui_types::sui_serde::SuiStructTag;
@@ -84,13 +84,13 @@ impl From<SuiEvent> for Event {
     }
 }
 
-impl SuiEvent {
+impl<'state, 'vm> SuiEvent {
     pub fn try_from(
         event: Event,
         tx_digest: TransactionDigest,
         event_seq: u64,
         timestamp_ms: Option<u64>,
-        resolver: &impl GetModule,
+        resolver: &mut impl LayoutResolver,
     ) -> SuiResult<Self> {
         let Event {
             package_id,
@@ -102,7 +102,7 @@ impl SuiEvent {
 
         let bcs = contents.to_vec();
 
-        let move_struct = Event::move_event_to_move_struct(&type_, &contents, resolver)?;
+        let move_struct = Event::content_bytes_to_move_struct(&type_, &contents, resolver)?;
         let (type_, field) = type_and_fields_from_move_struct(&type_, move_struct);
 
         Ok(SuiEvent {

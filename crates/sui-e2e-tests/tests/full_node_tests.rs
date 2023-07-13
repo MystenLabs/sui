@@ -642,10 +642,10 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
         other => panic!("Failed to get SuiEvent, but {:?}", other),
     };
     let type_tag = parse_struct_tag(&struct_tag_str).unwrap();
-    let expected_parsed_event = Event::move_event_to_move_struct(
+    let expected_parsed_event = Event::content_bytes_to_move_struct(
         &type_tag,
         &bcs,
-        &**node.state().epoch_store_for_testing().module_cache(),
+        &mut node.state().get_layout_resolver_epoch_boundary_unsafe(),
     )
     .unwrap();
     let (_, expected_parsed_event) =

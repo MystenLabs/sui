@@ -4,7 +4,7 @@
 use std::str::FromStr;
 
 use anyhow::ensure;
-use move_bytecode_utils::module_cache::GetModule;
+// use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::IdentStr;
 use move_core_types::identifier::Identifier;
@@ -18,9 +18,10 @@ use serde_with::Bytes;
 
 use crate::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use crate::error::{SuiError, SuiResult};
-use crate::object::{MoveObject, ObjectFormatOptions};
+use crate::object::ObjectFormatOptions;
 use crate::sui_serde::BigInt;
 use crate::sui_serde::Readable;
+use crate::type_resolver::LayoutResolver;
 
 /// A universal Sui event type encapsulating different types of events
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -123,16 +124,14 @@ impl Event {
             contents,
         }
     }
-    pub fn move_event_to_move_struct(
-        type_: &StructTag,
+
+    pub fn content_bytes_to_move_struct(
+        struct_tag: &StructTag,
         contents: &[u8],
-        resolver: &impl GetModule,
+        resolver: &mut impl LayoutResolver,
     ) -> SuiResult<MoveStruct> {
-        let layout = MoveObject::get_layout_from_struct_tag(
-            type_.clone(),
-            ObjectFormatOptions::default(),
-            resolver,
-        )?;
+        let layout =
+            resolver.get_layout_from_struct_tag(struct_tag, ObjectFormatOptions::default())?;
         MoveStruct::simple_deserialize(contents, &layout).map_err(|e| {
             SuiError::ObjectSerializationError {
                 error: e.to_string(),

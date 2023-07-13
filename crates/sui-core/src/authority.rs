@@ -1291,6 +1291,7 @@ impl AuthorityState {
         let executor =
             sui_execution::executor(protocol_config, enable_move_vm_paranoid_checks, silent)
                 .expect("Creating an executor should not fail here");
+        let layout_resolver = executor.type_layout_resolver(Box::new(self.database.as_ref()));
 
         let expensive_checks = false;
         let (inner_temp_store, effects, _execution_error) = executor
@@ -1342,7 +1343,7 @@ impl AuthorityState {
                     inner_temp_store.events.clone(),
                     tx_digest,
                     None,
-                    &module_cache,
+                    &mut layout_resolver,
                 )?,
                 object_changes,
                 balance_changes,
@@ -1763,6 +1764,7 @@ impl AuthorityState {
                         events.clone(),
                         *tx_digest,
                         Some(timestamp_ms),
+                        &mutself.get_layout_resolver_epoch_boundary_unsafe(),
                         &module_resolver,
                     )?,
                 )
@@ -1843,9 +1845,7 @@ impl AuthorityState {
             (request.object_format_options, object.data.try_as_move())
         {
             Some(
-                self.load_epoch_store_one_call_per_task()
-                    .executor()
-                    .type_layout_resolver(Box::new(self.database.as_ref()))
+                self.get_layout_resolver_epoch_boundary_unsafe()
                     .get_layout(move_obj, format)?,
             )
         } else {
@@ -2638,13 +2638,17 @@ impl AuthorityState {
             .data
             .try_as_move()
             .map(|object| {
-                self.load_epoch_store_one_call_per_task()
-                    .executor()
-                    .type_layout_resolver(Box::new(self.database.as_ref()))
+                self.get_layout_resolver_epoch_boundary_unsafe()
                     .get_layout(object, ObjectFormatOptions::default())
             })
             .transpose()?;
         Ok(layout)
+    }
+
+    fn get_layout_resolver_epoch_boundary_unsafe(&self) -> Box<dyn LayoutResolver> {
+        self.load_epoch_store_one_call_per_task()
+            .executor()
+            .type_layout_resolver(Box::new(self.database.as_ref()))
     }
 
     fn get_owner_at_version(
@@ -3215,7 +3219,7 @@ impl AuthorityState {
                 tx_digest,
                 event_seq as u64,
                 Some(timestamp),
-                &**self.epoch_store.load().module_cache(),
+                &mut self.get_layout_resolver_epoch_boundary_unsafe(),
             )?)
         }
         Ok(events)
