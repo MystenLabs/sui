@@ -3,6 +3,7 @@
 
 import { useMultiGetObjects } from '@mysten/core';
 import { Check12, EyeClose16 } from '@mysten/icons';
+import { getObjectDisplay } from '@mysten/sui.js';
 import { get, set } from 'idb-keyval';
 import { useEffect, useCallback, useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
@@ -18,7 +19,6 @@ import { NFTDisplayCard } from '_components/nft-display';
 import { ampli } from '_src/shared/analytics/ampli';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import PageTitle from '_src/ui/app/shared/PageTitle';
-import { getObjectDisplay } from '@mysten/sui.js';
 
 const HIDDEN_ASSET_IDS = 'hidden-asset-ids';
 
