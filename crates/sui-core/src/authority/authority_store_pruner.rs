@@ -183,40 +183,24 @@ impl AuthorityStorePruner {
         let _scope = monitored_scope("EffectsLivePruner");
 
         let mut perpetual_batch = perpetual_db.objects.batch();
-        let transactions = checkpoint_content_to_prune
+        let transactions: Vec<_> = checkpoint_content_to_prune
             .iter()
-            .flat_map(|content| content.iter().map(|tx| tx.transaction));
-        for transaction_digest in transactions {
-            if let Some(next_digest) = transaction_digest.next_lexicographical() {
-                debug!("Pruning transaction {:?}", transaction_digest);
-                perpetual_batch.delete_range(
-                    &perpetual_db.transactions,
-                    &transaction_digest,
-                    &next_digest,
-                )?;
-                perpetual_batch.delete_range(
-                    &perpetual_db.executed_effects,
-                    &transaction_digest,
-                    &next_digest,
-                )?;
-                perpetual_batch.delete_range(
-                    &perpetual_db.executed_transactions_to_checkpoint,
-                    &transaction_digest,
-                    &next_digest,
-                )?;
-            }
-        }
+            .flat_map(|content| content.iter().map(|tx| tx.transaction))
+            .collect();
 
+        perpetual_batch.delete_batch(&perpetual_db.transactions, transactions.iter())?;
+        perpetual_batch.delete_batch(&perpetual_db.executed_effects, transactions.iter())?;
+        perpetual_batch.delete_batch(
+            &perpetual_db.executed_transactions_to_checkpoint,
+            transactions,
+        )?;
+
+        let mut effect_digests = vec![];
         for effects in effects_to_prune {
             let effects_digest = effects.digest();
             debug!("Pruning effects {:?}", effects_digest);
-            if let Some(next_digest) = effects.digest().next_lexicographical() {
-                perpetual_batch.delete_range(
-                    &perpetual_db.effects,
-                    &effects_digest,
-                    &next_digest,
-                )?;
-            }
+            effect_digests.push(effects_digest);
+
             if let Some(event_digest) = effects.events_digest() {
                 if let Some(next_digest) = event_digest.next_lexicographical() {
                     perpetual_batch.delete_range(
@@ -227,34 +211,24 @@ impl AuthorityStorePruner {
                 }
             }
         }
+        perpetual_batch.delete_batch(&perpetual_db.effects, effect_digests)?;
 
         let mut checkpoints_batch = checkpoint_db.certified_checkpoints.batch();
 
-        for checkpoint_content in checkpoint_content_to_prune {
-            let content_digest = *checkpoint_content.digest();
-            if let Some(next_digest) = content_digest.next_lexicographical() {
-                debug!("Pruning checkpoint_content {:?}", content_digest);
-                checkpoints_batch.delete_range(
-                    &checkpoint_db.checkpoint_content,
-                    &content_digest,
-                    &next_digest,
-                )?;
-                checkpoints_batch.delete_range(
-                    &checkpoint_db.checkpoint_sequence_by_contents_digest,
-                    &content_digest,
-                    &next_digest,
-                )?;
-            }
-        }
-        for checkpoint_digest in checkpoints_to_prune {
-            if let Some(next_digest) = checkpoint_digest.next_lexicographical() {
-                checkpoints_batch.delete_range(
-                    &checkpoint_db.checkpoint_by_digest,
-                    &checkpoint_digest,
-                    &next_digest,
-                )?;
-            }
-        }
+        let checkpoint_content_digests =
+            checkpoint_content_to_prune.iter().map(|ckpt| ckpt.digest());
+        checkpoints_batch.delete_batch(
+            &checkpoint_db.checkpoint_content,
+            checkpoint_content_digests.clone(),
+        )?;
+        checkpoints_batch.delete_batch(
+            &checkpoint_db.checkpoint_sequence_by_contents_digest,
+            checkpoint_content_digests,
+        )?;
+
+        checkpoints_batch
+            .delete_batch(&checkpoint_db.checkpoint_by_digest, checkpoints_to_prune)?;
+
         checkpoints_batch.insert_batch(
             &checkpoint_db.watermarks,
             [(
