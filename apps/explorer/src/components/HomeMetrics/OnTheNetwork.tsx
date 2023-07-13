@@ -22,7 +22,11 @@ export function OnTheNetwork() {
 					Network Activity
 				</Heading>
 				<div className="flex gap-6">
-					<FormattedStatsAmount label="TPS now" amount={networkMetrics?.currentTps} size="sm" />
+					<FormattedStatsAmount
+						label="TPS now"
+						amount={networkMetrics?.currentTps ? Math.floor(networkMetrics.currentTps) : undefined}
+						size="sm"
+					/>
 					<FormattedStatsAmount
 						label="Peak 30d TPS"
 						tooltip="Peak TPS in the past 30 days excluding this epoch"
