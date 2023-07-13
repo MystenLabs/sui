@@ -18,17 +18,9 @@ import { NFTDisplayCard } from '_components/nft-display';
 import { ampli } from '_src/shared/analytics/ampli';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import PageTitle from '_src/ui/app/shared/PageTitle';
+import { getObjectDisplay } from '@mysten/sui.js';
 
 const HIDDEN_ASSET_IDS = 'hidden-asset-ids';
-
-const extractName = (display?: Record<string, string> | null) => {
-	if (!display || !('name' in display)) return undefined;
-	const name = display.name;
-	if (typeof name === 'string') {
-		return name;
-	}
-	return null;
-};
 
 function HiddenNftsPage() {
 	const [hiddenAssetIds, setHiddenAssetIds] = useState<string[]>([]);
@@ -41,23 +33,19 @@ function HiddenNftsPage() {
 	);
 
 	const filteredAndSortedNfts = useMemo(() => {
-		const hiddenNfts = data?.flatMap((data) => data.data) || [];
-		return hiddenNfts
-			?.filter((nft) => nft && internalHiddenAssetIds.includes(nft.objectId))
-			.sort((nftA, nftB) => {
-				let nameA = '';
-				let nameB = '';
-				if (nftA && typeof nftA.display?.data !== 'string') {
-					nameA = (nftA && extractName(nftA.display?.data)) || '';
-				} else if (nftA && typeof nftA.display?.data === 'string') {
-					nameA = nftA.display?.data;
-				}
+		const hiddenNfts =
+			data?.flatMap((data) => {
+				return {
+					data: data.data,
+					display: getObjectDisplay(data).data,
+				};
+			}) || [];
 
-				if (nftB && typeof nftB.display?.data !== 'string') {
-					nameB = (nftB && extractName(nftB.display?.data)) || '';
-				} else if (nftB && typeof nftB.display?.data === 'string') {
-					nameB = nftB.display?.data;
-				}
+		return hiddenNfts
+			?.filter((nft) => nft.data && internalHiddenAssetIds.includes(nft?.data?.objectId))
+			.sort((nftA, nftB) => {
+				let nameA = nftA.display?.name || '';
+				let nameB = nftB.display?.name || '';
 
 				if (nameA < nameB) {
 					return -1;
@@ -184,7 +172,7 @@ function HiddenNftsPage() {
 				{filteredAndSortedNfts?.length ? (
 					<div className="flex flex-col w-full divide-y divide-solid divide-gray-40 divide-x-0 gap-2 mb-5">
 						{filteredAndSortedNfts.map((nft) => {
-							const { objectId, type } = nft!;
+							const { objectId, type } = nft.data!;
 							return (
 								<div className="flex justify-between items-center pt-2 pr-1" key={objectId}>
 									<Link
