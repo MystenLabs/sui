@@ -15,7 +15,7 @@ describe('Dynamic Fields Reading API', () => {
 		const packagePath = __dirname + '/./data/dynamic_fields';
 		({ packageId } = await publishPackage(packagePath, toolbox));
 
-		await toolbox.provider
+		await toolbox.client
 			.getOwnedObjects({
 				owner: toolbox.address(),
 				options: { showType: true },
@@ -28,13 +28,13 @@ describe('Dynamic Fields Reading API', () => {
 	});
 
 	it('get all dynamic fields', async () => {
-		const dynamicFields = await toolbox.provider.getDynamicFields({
+		const dynamicFields = await toolbox.client.getDynamicFields({
 			parentId: parentObjectId,
 		});
 		expect(dynamicFields.data.length).toEqual(2);
 	});
 	it('limit response in page', async () => {
-		const dynamicFields = await toolbox.provider.getDynamicFields({
+		const dynamicFields = await toolbox.client.getDynamicFields({
 			parentId: parentObjectId,
 			limit: 1,
 		});
@@ -42,12 +42,12 @@ describe('Dynamic Fields Reading API', () => {
 		expect(dynamicFields.nextCursor).not.toEqual(null);
 	});
 	it('go to next cursor', async () => {
-		return await toolbox.provider
+		return await toolbox.client
 			.getDynamicFields({ parentId: parentObjectId, limit: 1 })
 			.then(async function (dynamicFields) {
 				expect(dynamicFields.nextCursor).not.toEqual(null);
 
-				const dynamicFieldsCursor = await toolbox.provider.getDynamicFields({
+				const dynamicFieldsCursor = await toolbox.client.getDynamicFields({
 					parentId: parentObjectId,
 					cursor: dynamicFields.nextCursor,
 				});
@@ -55,13 +55,13 @@ describe('Dynamic Fields Reading API', () => {
 			});
 	});
 	it('get dynamic object field', async () => {
-		const dynamicFields = await toolbox.provider.getDynamicFields({
+		const dynamicFields = await toolbox.client.getDynamicFields({
 			parentId: parentObjectId,
 		});
 		for (const data of dynamicFields.data) {
 			const objName = data.name;
 
-			const object = await toolbox.provider.getDynamicFieldObject({
+			const object = await toolbox.client.getDynamicFieldObject({
 				parentId: parentObjectId,
 				name: objName,
 			});
