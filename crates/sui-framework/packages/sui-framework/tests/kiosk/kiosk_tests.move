@@ -24,6 +24,9 @@ module sui::kiosk_marketplace_ext {
     /// A Bid on an item of type `T`.
     struct Bid<phantom T> has copy, store, drop {}
 
+    /// A Hot-Potato ensuring the item is placed or locked in the destination.
+    struct PlaceOrLock<phantom T> { id: ID }
+
     /// Add the `Marketplace` extension to the given `Kiosk`.
     ///
     /// Requests all permissions: `b011` - `place` and `lock` to perform collection bidding.
@@ -53,7 +56,8 @@ module sui::kiosk_marketplace_ext {
         destination: &mut Kiosk,
         source: &mut Kiosk,
         purchase_cap: PurchaseCap<T>,
-        policy: &TransferPolicy<T>
+        policy: &TransferPolicy<T>,
+        lock: bool
     ): (TransferRequest<T>, TransferRequest<Market>) {
         let bid: Coin<SUI> = bag::remove(
             kiosk::ext_storage_mut(Ext<Market> {}, destination),
@@ -69,7 +73,11 @@ module sui::kiosk_marketplace_ext {
         assert!(kiosk::purchase_cap_min_price(&purchase_cap) <= coin::value(&bid), EIncorrectAmount);
 
         let (item, request) = kiosk::purchase_with_cap(source, purchase_cap, bid);
-        kiosk::ext_lock(Ext<Market> {}, destination, item, policy);
+
+        // lock or place the item into the Kiosk (chosen by the caller, however
+        // TransferPolicy<T> will ensure that the right action is taken).
+        if (lock) kiosk::ext_lock(Ext<Market> {}, destination, item, policy)
+        else kiosk::ext_place(Ext<Market> {}, destination, item);
 
         (
             request,

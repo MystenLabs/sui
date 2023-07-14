@@ -259,8 +259,7 @@ module sui::kiosk {
         self: &mut Kiosk, cap: &KioskOwnerCap, item: T
     ) {
         assert!(object::id(self) == cap.for, ENotOwner);
-        self.item_count = self.item_count + 1;
-        dof::add(&mut self.id, Item { id: object::id(&item) }, item)
+        place_internal(self, item)
     }
 
     /// Place an item to the `Kiosk` and issue a `Lock` for it. Once placed this
@@ -272,8 +271,8 @@ module sui::kiosk {
     public fun lock<T: key + store>(
         self: &mut Kiosk, cap: &KioskOwnerCap, _policy: &TransferPolicy<T>, item: T
     ) {
-        df::add(&mut self.id, Lock { id: object::id(&item) }, true);
-        place(self, cap, item)
+        assert!(object::id(self) == cap.for, ENotOwner);
+        lock_internal(self, item)
     }
 
     /// Take any object from the Kiosk.
@@ -560,14 +559,9 @@ module sui::kiosk {
 
         assert!(ext.is_enabled, EExtensionDisabled);
         assert!(ext.permissions & 1 != 0, EExtensionNotAllowed);
-        assert!(
-            vector::length(&ext.allowed_types) == 0
-            || vector::contains(&ext.allowed_types, &type_name::get<T>()),
-            EExtensionNotAllowedForType
-        );
+        assert!(is_type_allowed<T>(ext), EExtensionNotAllowedForType);
 
-        self.item_count = self.item_count + 1;
-        dof::add(&mut self.id, Item { id: object::id(&item) }, item)
+        place_internal(self, item)
     }
 
     /// Protected action: lock an item in the Kiosk. Can be performed by an
@@ -580,15 +574,9 @@ module sui::kiosk {
 
         assert!(ext.is_enabled, EExtensionDisabled);
         assert!(ext.permissions & 2 != 0, EExtensionNotAllowed);
-        assert!(
-            vector::length(&ext.allowed_types) == 0
-            || vector::contains(&ext.allowed_types, &type_name::get<T>()),
-            EExtensionNotAllowedForType
-        );
+        assert!(is_type_allowed<T>(ext), EExtensionNotAllowedForType);
 
-        self.item_count = self.item_count + 1;
-
-        dof::add(&mut self.id, Item { id: object::id(&item) }, item)
+        lock_internal(self, item)
     }
 
     /// Internal: get a read-only access to the Extension.
@@ -599,6 +587,26 @@ module sui::kiosk {
     /// Internal: get a mutable access to the Extension.
     fun extension_mut<Ext: drop>(self: &mut Kiosk): &mut Extension {
         df::borrow_mut(&mut self.id, ExtensionKey<Ext> {})
+    }
+
+    /// Internal: check if the type is explicitly allowed by extension.
+    fun is_type_allowed<T: key + store>(ext: &Extension): bool {
+        vector::length(&ext.allowed_types) == 0
+        || vector::contains(&ext.allowed_types, &type_name::get<T>())
+    }
+
+    // === Internal Core ===
+
+    /// Internal: "lock" an item disabling the `take` action.
+    fun lock_internal<T: key + store>(self: &mut Kiosk, item: T) {
+        df::add(&mut self.id, Lock { id: object::id(&item) }, true);
+        place_internal(self, item)
+    }
+
+    /// Internal: "place" an item to the Kiosk and increment the item count.
+    fun place_internal<T: key + store>(self: &mut Kiosk, item: T) {
+        self.item_count = self.item_count + 1;
+        dof::add(&mut self.id, Item { id: object::id(&item) }, item)
     }
 
     // === Kiosk fields access ===
@@ -634,6 +642,11 @@ module sui::kiosk {
     /// Check whether the `KioskOwnerCap` matches the `Kiosk`.
     public fun has_access(self: &mut Kiosk, cap: &KioskOwnerCap): bool {
         object::id(self) == cap.for
+    }
+
+    /// Check whether an extension of type `Ext` is installed.
+    public fun has_extension<Ext: drop>(self: &Kiosk): bool {
+        df::exists_(&self.id, ExtensionKey<Ext> {})
     }
 
     /// Access the `UID` using the `KioskOwnerCap`.
