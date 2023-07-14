@@ -108,7 +108,7 @@
 		"typescript": "^5.0.4",
 		"vite": "^4.2.3",
 		"vite-plugin-svgr": "^2.4.0",
-		"vitest": "^0.32.0"
+		"vitest": "^0.33.0"
 	},
 	"browserslist": {
 		"production": [
