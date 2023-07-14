@@ -1,5 +1,5 @@
 # ignore everything by default
-/*
+# /*
 # Enable prettier for apps, dapps and sdk
 !/apps
 !/sdk
