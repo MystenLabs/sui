@@ -5,7 +5,7 @@ title: Sui Partner Package Matrix
 The following table lists the package ID for Sui Foundation partner packages available on Mainnet. If you have or know of a package that should be listed, edit the table and submit a pull request to get it added. If the package is an update, leave any previous versions in the list and just add a reference to the new version.
 
 | Package name | Version | Vertical | Package ID |
-| --- | --- | --- |
+| --- | --- | --- | --- |
 | [Wormhole](https://www.portalbridge.com/sui/) | 1 | Bridge | [0x5306f64e312b581766351c07af79c72fcb1cd25147157fdc2f8ad76de9a3fb6a](https://suiexplorer.com/object/0x5306f64e312b581766351c07af79c72fcb1cd25147157fdc2f8ad76de9a3fb6a) |
 | Wormhole | 1 | Bridge | [0x26efee2b51c911237888e5dc6702868abca3c7ac12c53f76ef8eba0697695e3d](https://suiexplorer.com/object/0x26efee2b51c911237888e5dc6702868abca3c7ac12c53f76ef8eba0697695e3d) |
 | [Typus](https://typus.finance/) | 1 | DeFi | [0xa76499eda1d37751473de5f30e106f35943ada2f6ea764861243e7f5aa5bcc97](https://suiexplorer.com/object/0xa76499eda1d37751473de5f30e106f35943ada2f6ea764861243e7f5aa5bcc97) |
