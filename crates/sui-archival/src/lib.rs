@@ -8,7 +8,7 @@ pub mod writer;
 #[cfg(test)]
 mod tests;
 
-use crate::reader::ArchiveReader;
+use crate::reader::{ArchiveReader, ArchiveReaderMetrics};
 use anyhow::{anyhow, Result};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bytes::Bytes;
@@ -18,6 +18,7 @@ use num_enum::IntoPrimitive;
 use num_enum::TryFromPrimitive;
 use object_store::path::Path;
 use object_store::DynObjectStore;
+use prometheus::Registry;
 use serde::{Deserialize, Serialize};
 use std::io::{BufWriter, Cursor, Read, Seek, SeekFrom, Write};
 use std::num::NonZeroUsize;
@@ -321,12 +322,13 @@ where
     S: WriteStore + Clone + Send + 'static,
     <S as ReadStore>::Error: std::error::Error,
 {
+    let metrics = ArchiveReaderMetrics::new(&Registry::default());
     let config = ArchiveReaderConfig {
         remote_store_config,
         download_concurrency: NonZeroUsize::new(concurrency).unwrap(),
         use_for_pruning_watermark: false,
     };
-    let archive_reader = ArchiveReader::new(config)?;
+    let archive_reader = ArchiveReader::new(config, &metrics)?;
     archive_reader.sync_manifest_once().await?;
     let latest_checkpoint_in_archive = archive_reader.latest_available_checkpoint().await?;
     info!(
