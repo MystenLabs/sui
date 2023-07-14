@@ -26,8 +26,8 @@ on:
         required: true
 
 env:
-  SUI_COMMIT: "${{ github.event.client_payload.sui_commit || github.event.inputs.sui_commit }}"
-  TAG_NAME: "${{ github.event.client_payload.tag_name || github.event.inputs.tag_name }}"
+  SUI_COMMIT: "${{ github.event.client_payload.sui_commit || inputs.sui_commit }}"
+  TAG_NAME: "${{ github.event.client_payload.tag_name || inputs.tag_name }}"
 
 jobs:
   tag:
