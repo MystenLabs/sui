@@ -6,7 +6,10 @@ use crate::{
     cfgir::visitor::{AbsIntVisitorObj, AbstractInterpreterVisitor},
     command_line as cli,
     diagnostics::{
-        codes::{Category, Severity, WarningFilter, WARNING_FILTER_ATTR},
+        codes::{
+            Category, Declarations, DiagnosticsID, Severity, UnusedItem, WarningFilter,
+            WARNING_FILTER_ATTR,
+        },
         Diagnostic, Diagnostics, WarningFilters,
     },
     editions::{Edition, Flavor},
@@ -139,6 +142,18 @@ pub fn shortest_cycle<'a, T: Ord + Hash>(
 // Compilation Env
 //**************************************************************************************************
 
+pub const FILTER_ALL: &str = "all";
+pub const FILTER_UNUSED: &str = "unused";
+pub const FILTER_MISSING_PHANTOM: &str = "missing_phantom";
+pub const FILTER_UNUSED_USE: &str = "unused_use";
+pub const FILTER_UNUSED_VARIABLE: &str = "unused_variable";
+pub const FILTER_UNUSED_ASSIGNMENT: &str = "unused_assignment";
+pub const FILTER_UNUSED_TRAILING_SEMI: &str = "unused_trailing_semi";
+pub const FILTER_UNUSED_ATTRIBUTE: &str = "unused_attribute";
+pub const FILTER_UNUSED_TYPE_PARAMETER: &str = "unused_type_parameter";
+pub const FILTER_UNUSED_FUNCTION: &str = "unused_function";
+pub const FILTER_DEAD_CODE: &str = "dead_code";
+
 pub type NamedAddressMap = BTreeMap<Symbol, NumericalAddress>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -188,6 +203,10 @@ pub struct CompilationEnv {
     package_configs: BTreeMap<Symbol, PackageConfig>,
     /// Config for any package not found in `package_configs`, or for inputs without a package.
     default_config: PackageConfig,
+    /// Maps warning filter name to the filter itself
+    known_filters: BTreeMap<String, WarningFilter>,
+    /// Maps a diagnostics ID to a known filter name
+    known_filter_names: BTreeMap<DiagnosticsID, String>,
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
 }
@@ -203,6 +222,115 @@ impl CompilationEnv {
             sui_mode::id_leak::IDLeakVerifier.visitor(),
             sui_mode::typing::SuiTypeChecks.visitor(),
         ]);
+        let known_filters = BTreeMap::from([
+            (FILTER_ALL.to_string(), WarningFilter::All),
+            (
+                FILTER_UNUSED.to_string(),
+                WarningFilter::Category(Category::UnusedItem),
+            ),
+            (
+                FILTER_MISSING_PHANTOM.to_string(),
+                WarningFilter::Code(
+                    DiagnosticsID {
+                        category: Category::Declarations as u8,
+                        code: Declarations::InvalidNonPhantomUse as u8,
+                    },
+                    Some(FILTER_MISSING_PHANTOM),
+                ),
+            ),
+            (
+                FILTER_UNUSED_USE.to_string(),
+                WarningFilter::Code(
+                    DiagnosticsID {
+                        category: Category::UnusedItem as u8,
+                        code: UnusedItem::Alias as u8,
+                    },
+                    Some(FILTER_UNUSED_USE),
+                ),
+            ),
+            (
+                FILTER_UNUSED_VARIABLE.to_string(),
+                WarningFilter::Code(
+                    DiagnosticsID {
+                        category: Category::UnusedItem as u8,
+                        code: UnusedItem::Variable as u8,
+                    },
+                    Some(FILTER_UNUSED_VARIABLE),
+                ),
+            ),
+            (
+                FILTER_UNUSED_ASSIGNMENT.to_string(),
+                WarningFilter::Code(
+                    DiagnosticsID {
+                        category: Category::UnusedItem as u8,
+                        code: UnusedItem::Assignment as u8,
+                    },
+                    Some(FILTER_UNUSED_ASSIGNMENT),
+                ),
+            ),
+            (
+                FILTER_UNUSED_TRAILING_SEMI.to_string(),
+                WarningFilter::Code(
+                    DiagnosticsID {
+                        category: Category::UnusedItem as u8,
+                        code: UnusedItem::TrailingSemi as u8,
+                    },
+                    Some(FILTER_UNUSED_TRAILING_SEMI),
+                ),
+            ),
+            (
+                FILTER_UNUSED_ATTRIBUTE.to_string(),
+                WarningFilter::Code(
+                    DiagnosticsID {
+                        category: Category::UnusedItem as u8,
+                        code: UnusedItem::Attribute as u8,
+                    },
+                    Some(FILTER_UNUSED_ATTRIBUTE),
+                ),
+            ),
+            (
+                FILTER_UNUSED_TYPE_PARAMETER.to_string(),
+                WarningFilter::Code(
+                    DiagnosticsID {
+                        category: Category::UnusedItem as u8,
+                        code: UnusedItem::StructTypeParam as u8,
+                    },
+                    Some(FILTER_UNUSED_TYPE_PARAMETER),
+                ),
+            ),
+            (
+                FILTER_UNUSED_FUNCTION.to_string(),
+                WarningFilter::Code(
+                    DiagnosticsID {
+                        category: Category::UnusedItem as u8,
+                        code: UnusedItem::Function as u8,
+                    },
+                    Some(FILTER_UNUSED_FUNCTION),
+                ),
+            ),
+            (
+                FILTER_DEAD_CODE.to_string(),
+                WarningFilter::Code(
+                    DiagnosticsID {
+                        category: Category::UnusedItem as u8,
+                        code: UnusedItem::DeadCode as u8,
+                    },
+                    Some(FILTER_DEAD_CODE),
+                ),
+            ),
+        ]);
+
+        let known_filter_names: BTreeMap<DiagnosticsID, String> = known_filters
+            .iter()
+            .filter_map(|(k, v)| {
+                if let WarningFilter::Code(diag_id, _) = v {
+                    Some((*diag_id, k.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
         Self {
             flags,
             warning_filter: vec![],
@@ -210,6 +338,8 @@ impl CompilationEnv {
             visitors: Rc::new(Visitors::new(visitors)),
             package_configs,
             default_config: default_config.unwrap_or_default(),
+            known_filters,
+            known_filter_names,
         }
     }
 
@@ -223,11 +353,7 @@ impl CompilationEnv {
             // add help to suppress warning, if applicable
             // TODO do we want a centralized place for tips like this?
             if diag.info().severity() == Severity::Warning && !diag.info().is_external() {
-                let possible_filter = WarningFilter::Code(
-                    Category::try_from(diag.info().category()).unwrap(),
-                    diag.info().code(),
-                );
-                if let Some(filter_name) = possible_filter.to_str() {
+                if let Some(filter_name) = self.known_filter_names.get(&diag.info().id()) {
                     let help = format!(
                         "This warning can be suppressed with '#[{}({})]' \
                         applied to the 'module' or module member ('const', 'fun', or 'struct')",
@@ -304,6 +430,10 @@ impl CompilationEnv {
 
     pub fn pop_warning_filter_scope(&mut self) {
         self.warning_filter.pop().unwrap();
+    }
+
+    pub fn filter_from_str(&self, s: &str) -> Option<WarningFilter> {
+        self.known_filters.get(s).cloned()
     }
 
     pub fn flags(&self) -> &Flags {

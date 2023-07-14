@@ -763,7 +763,7 @@ fn warning_filter(
                 n
             }
         };
-        let Some(filter) = WarningFilter::from_str(name_.as_str()) else {
+        let Some(filter) = context.env.filter_from_str(name_.as_str()) else {
             let msg = format!("Unknown warning filter '{name_}'");
             context
                 .env

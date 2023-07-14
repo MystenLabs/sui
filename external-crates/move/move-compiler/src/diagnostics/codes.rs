@@ -48,15 +48,15 @@ pub(crate) trait DiagnosticCode: Copy {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
 /// Represents a single annotation for a diagnostic filter
 pub enum WarningFilter {
     /// Filters all warnings
     All,
     /// Filters all warnings of a specific category
     Category(Category),
-    /// Filters a single warning, as defined by codes below
-    Code(Category, /* code */ u8),
+    /// Filters a single warning, as defined by codes below. Only known filters have names.
+    Code(DiagnosticsID, /* name */ Option<&'static str>),
 }
 
 /// The text used in the attribute for warning suppression
@@ -299,50 +299,16 @@ codes!(
 // Warning Filter
 //**************************************************************************************************
 
-macro_rules! warning_filter {
-    ($($str:literal: $category:ident::$code:ident),* $(,)?) => {
-        impl WarningFilter {
-            pub fn from_str(s: &str) -> Option<Self> {
-                Some(match s {
-                    "all" => Self::All,
-                    "unused" => Self::Category(Category::UnusedItem),
-                    $(
-                    $str => {
-                        let category = Category::$category;
-                        let code = $category::$code as u8;
-                        Self::Code(category, code)
-                    }
-                    )*
-                    _ => return None,
-                })
-            }
-
-            pub fn to_str(self) -> Option<&'static str> {
-                Some(match self {
-                    Self::All => "all",
-                    Self::Category(Category::UnusedItem) => "unused",
-                    $(
-                    Self::Code(Category::$category, code) if ($category::$code as u8) == code =>
-                        $str,
-                    )*
-                    _ => return None,
-                })
-            }
+impl WarningFilter {
+    pub fn to_str(self) -> Option<&'static str> {
+        match self {
+            Self::All => Some("all"),
+            Self::Category(Category::UnusedItem) => Some("unused"),
+            Self::Code(_, n) => n,
+            _ => None,
         }
-    };
+    }
 }
-
-warning_filter!(
-    "missing_phantom": Declarations::InvalidNonPhantomUse,
-    "unused_use": UnusedItem::Alias,
-    "unused_variable": UnusedItem::Variable,
-    "unused_assignment": UnusedItem::Assignment,
-    "unused_trailing_semi": UnusedItem::TrailingSemi,
-    "unused_attribute": UnusedItem::Attribute,
-    "unused_type_parameter": UnusedItem::StructTypeParam,
-    "unused_function": UnusedItem::Function,
-    "dead_code": UnusedItem::DeadCode,
-);
 
 //**************************************************************************************************
 // impls
