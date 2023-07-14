@@ -42,6 +42,8 @@ export abstract class PublicKey {
 	}
 
 	/**
+	 * @deprecated use toBase64 instead.
+	 *
 	 * Return the base-64 representation of the public key
 	 */
 	toString() {
