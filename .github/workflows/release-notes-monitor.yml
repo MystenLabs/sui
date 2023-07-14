@@ -2,6 +2,8 @@ name: Release Notes Monitor
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 */3 * * *'  # every 3 hours
 
 jobs:
   get-list-of-prs:
@@ -88,7 +90,7 @@ jobs:
     name: Adding git tag to processed commit
     needs: [ get-list-of-prs ]
     if: ${{ needs.get-list-of-prs.outputs.existing_commit_tag == '' }}
-    uses: mystenlabs/sui/.github/workflows/tag.yml@eugene/release_notes_monitor_work
+    uses: mystenlabs/sui/.github/workflows/tag.yml@main
     with:
       sui_commit: ${{ needs.get-list-of-prs.outputs.new_commit_hash }}
       tag_name: ${{ needs.get-list-of-prs.outputs.new_tag }}
