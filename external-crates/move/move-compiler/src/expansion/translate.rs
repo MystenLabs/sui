@@ -726,51 +726,53 @@ fn warning_filter(
     attributes: &UniqueMap<E::AttributeName, E::Attribute>,
 ) -> WarningFilters {
     use crate::diagnostics::codes::Category;
-    use known_attributes::{DiagnosticAttribute, KnownAttribute};
-    let allow = E::AttributeName_::Known(KnownAttribute::Diagnostic(DiagnosticAttribute::Allow));
+    use known_attributes::DiagnosticAttribute;
     let mut warning_filters = WarningFilters::new();
-    let Some(attr) = attributes.get_(&allow) else {
-        return warning_filters
-    };
-    let inners = match &attr.value {
-        E::Attribute_::Parameterized(_, inner) if !inner.is_empty() => inner,
-        _ => {
-            let msg = format!(
-                "Expected list of warnings, e.g. '{}({})'",
-                DiagnosticAttribute::ALLOW,
-                WarningFilter::Category(Category::UnusedItem)
-                    .to_str()
-                    .unwrap(),
-            );
-            context
-                .env
-                .add_diag(diag!(Attributes::InvalidValue, (attr.loc, msg)));
-            return warning_filters;
-        }
-    };
-    for (inner_attr_loc, _, inner_attr) in inners {
-        let sp!(_, name_) = match inner_attr.value {
-            E::Attribute_::Name(n) => n,
-            E::Attribute_::Assigned(n, _) | E::Attribute_::Parameterized(n, _) => {
+    let filter_attribute_names = context.env.filter_attributes().clone();
+    for allow in filter_attribute_names {
+        let Some(attr) = attributes.get_(&allow) else {
+            continue;
+        };
+        let inners = match &attr.value {
+            E::Attribute_::Parameterized(_, inner) if !inner.is_empty() => inner,
+            _ => {
                 let msg = format!(
-                    "Expected a stand alone warning filter identifier, e.g. '{}({})'",
+                    "Expected list of warnings, e.g. '{}({})'",
                     DiagnosticAttribute::ALLOW,
-                    n
+                    WarningFilter::Category(Category::UnusedItem)
+                        .to_str()
+                        .unwrap(),
                 );
                 context
                     .env
-                    .add_diag(diag!(Attributes::InvalidValue, (inner_attr_loc, msg)));
-                n
+                    .add_diag(diag!(Attributes::InvalidValue, (attr.loc, msg)));
+                continue;
             }
         };
-        let Some(filter) = context.env.filter_from_str(name_.as_str()) else {
-            let msg = format!("Unknown warning filter '{name_}'");
-            context
-                .env
-                .add_diag(diag!(Attributes::InvalidValue, (attr.loc, msg)));
-            continue
-        };
-        warning_filters.add(filter);
+        for (inner_attr_loc, _, inner_attr) in inners {
+            let sp!(_, name_) = match inner_attr.value {
+                E::Attribute_::Name(n) => n,
+                E::Attribute_::Assigned(n, _) | E::Attribute_::Parameterized(n, _) => {
+                    let msg = format!(
+                        "Expected a stand alone warning filter identifier, e.g. '{}({})'",
+                        DiagnosticAttribute::ALLOW,
+                        n
+                    );
+                    context
+                        .env
+                        .add_diag(diag!(Attributes::InvalidValue, (inner_attr_loc, msg)));
+                    n
+                }
+            };
+            let Some(filter) = context.env.filter_from_str(name_.to_string(), allow.clone()) else {
+                let msg = format!("Unknown warning filter '{name_}'");
+                context
+                    .env
+                    .add_diag(diag!(Attributes::InvalidValue, (attr.loc, msg)));
+                continue
+            };
+            warning_filters.add(filter);
+        }
     }
     warning_filters
 }

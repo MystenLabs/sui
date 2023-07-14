@@ -13,6 +13,7 @@ use crate::{
         Diagnostic, Diagnostics, WarningFilters,
     },
     editions::{Edition, Flavor},
+    expansion as E,
     naming::ast::ModuleDefinition,
     sui_mode,
     typing::visitor::{TypingVisitor, TypingVisitorObj},
@@ -23,7 +24,7 @@ use move_symbol_pool::Symbol;
 use petgraph::{algo::astar as petgraph_astar, graphmap::DiGraphMap};
 use std::{
     cell::RefCell,
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fmt,
     hash::Hash,
     rc::Rc,
@@ -194,6 +195,21 @@ pub struct IndexedPackagePath {
 
 pub type AttributeDeriver = dyn Fn(&mut CompilationEnv, &mut ModuleDefinition);
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct KnownFilterKey {
+    name: String,
+    attribute_name: E::ast::AttributeName_,
+}
+
+impl KnownFilterKey {
+    pub fn new(name: String, attribute_name: E::ast::AttributeName_) -> Self {
+        KnownFilterKey {
+            name,
+            attribute_name,
+        }
+    }
+}
+
 pub struct CompilationEnv {
     flags: Flags,
     // filters warnings when added.
@@ -203,10 +219,12 @@ pub struct CompilationEnv {
     package_configs: BTreeMap<Symbol, PackageConfig>,
     /// Config for any package not found in `package_configs`, or for inputs without a package.
     default_config: PackageConfig,
-    /// Maps warning filter name to the filter itself
-    known_filters: BTreeMap<String, WarningFilter>,
-    /// Maps a diagnostics ID to a known filter name
+    /// Maps warning filter key (filter name and filter attribute name) to the filter itself.
+    known_filters: BTreeMap<KnownFilterKey, WarningFilter>,
+    /// Maps a diagnostics ID to a known filter name.
     known_filter_names: BTreeMap<DiagnosticsID, String>,
+    /// Attribute names (including externally provided ones) identifying warning filters.
+    filter_attributes: BTreeSet<E::ast::AttributeName_>,
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
 }
@@ -222,14 +240,22 @@ impl CompilationEnv {
             sui_mode::id_leak::IDLeakVerifier.visitor(),
             sui_mode::typing::SuiTypeChecks.visitor(),
         ]);
+        let filter_attr_name =
+            E::ast::AttributeName_::Known(known_attributes::KnownAttribute::Diagnostic(
+                known_attributes::DiagnosticAttribute::Allow,
+            ));
+        let filter_attributes = BTreeSet::from([filter_attr_name]);
         let known_filters = BTreeMap::from([
-            (FILTER_ALL.to_string(), WarningFilter::All),
             (
-                FILTER_UNUSED.to_string(),
+                KnownFilterKey::new(FILTER_ALL.to_string(), filter_attr_name.clone()),
+                WarningFilter::All,
+            ),
+            (
+                KnownFilterKey::new(FILTER_UNUSED.to_string(), filter_attr_name.clone()),
                 WarningFilter::Category(Category::UnusedItem),
             ),
             (
-                FILTER_MISSING_PHANTOM.to_string(),
+                KnownFilterKey::new(FILTER_MISSING_PHANTOM.to_string(), filter_attr_name.clone()),
                 WarningFilter::Code(
                     DiagnosticsID {
                         category: Category::Declarations as u8,
@@ -239,7 +265,7 @@ impl CompilationEnv {
                 ),
             ),
             (
-                FILTER_UNUSED_USE.to_string(),
+                KnownFilterKey::new(FILTER_UNUSED_USE.to_string(), filter_attr_name.clone()),
                 WarningFilter::Code(
                     DiagnosticsID {
                         category: Category::UnusedItem as u8,
@@ -249,7 +275,7 @@ impl CompilationEnv {
                 ),
             ),
             (
-                FILTER_UNUSED_VARIABLE.to_string(),
+                KnownFilterKey::new(FILTER_UNUSED_VARIABLE.to_string(), filter_attr_name.clone()),
                 WarningFilter::Code(
                     DiagnosticsID {
                         category: Category::UnusedItem as u8,
@@ -259,7 +285,10 @@ impl CompilationEnv {
                 ),
             ),
             (
-                FILTER_UNUSED_ASSIGNMENT.to_string(),
+                KnownFilterKey::new(
+                    FILTER_UNUSED_ASSIGNMENT.to_string(),
+                    filter_attr_name.clone(),
+                ),
                 WarningFilter::Code(
                     DiagnosticsID {
                         category: Category::UnusedItem as u8,
@@ -269,7 +298,10 @@ impl CompilationEnv {
                 ),
             ),
             (
-                FILTER_UNUSED_TRAILING_SEMI.to_string(),
+                KnownFilterKey::new(
+                    FILTER_UNUSED_TRAILING_SEMI.to_string(),
+                    filter_attr_name.clone(),
+                ),
                 WarningFilter::Code(
                     DiagnosticsID {
                         category: Category::UnusedItem as u8,
@@ -279,7 +311,10 @@ impl CompilationEnv {
                 ),
             ),
             (
-                FILTER_UNUSED_ATTRIBUTE.to_string(),
+                KnownFilterKey::new(
+                    FILTER_UNUSED_ATTRIBUTE.to_string(),
+                    filter_attr_name.clone(),
+                ),
                 WarningFilter::Code(
                     DiagnosticsID {
                         category: Category::UnusedItem as u8,
@@ -289,7 +324,10 @@ impl CompilationEnv {
                 ),
             ),
             (
-                FILTER_UNUSED_TYPE_PARAMETER.to_string(),
+                KnownFilterKey::new(
+                    FILTER_UNUSED_TYPE_PARAMETER.to_string(),
+                    filter_attr_name.clone(),
+                ),
                 WarningFilter::Code(
                     DiagnosticsID {
                         category: Category::UnusedItem as u8,
@@ -299,7 +337,7 @@ impl CompilationEnv {
                 ),
             ),
             (
-                FILTER_UNUSED_FUNCTION.to_string(),
+                KnownFilterKey::new(FILTER_UNUSED_FUNCTION.to_string(), filter_attr_name.clone()),
                 WarningFilter::Code(
                     DiagnosticsID {
                         category: Category::UnusedItem as u8,
@@ -309,7 +347,7 @@ impl CompilationEnv {
                 ),
             ),
             (
-                FILTER_DEAD_CODE.to_string(),
+                KnownFilterKey::new(FILTER_DEAD_CODE.to_string(), filter_attr_name.clone()),
                 WarningFilter::Code(
                     DiagnosticsID {
                         category: Category::UnusedItem as u8,
@@ -322,13 +360,21 @@ impl CompilationEnv {
 
         let known_filter_names: BTreeMap<DiagnosticsID, String> = known_filters
             .iter()
-            .filter_map(|(k, v)| {
-                if let WarningFilter::Code(diag_id, _) = v {
-                    Some((*diag_id, k.clone()))
-                } else {
-                    None
-                }
-            })
+            .filter_map(
+                |(
+                    KnownFilterKey {
+                        name,
+                        attribute_name: _,
+                    },
+                    v,
+                )| {
+                    if let WarningFilter::Code(diag_id, _) = v {
+                        Some((*diag_id, name.clone()))
+                    } else {
+                        None
+                    }
+                },
+            )
             .collect();
 
         Self {
@@ -340,6 +386,7 @@ impl CompilationEnv {
             default_config: default_config.unwrap_or_default(),
             known_filters,
             known_filter_names,
+            filter_attributes,
         }
     }
 
@@ -432,8 +479,18 @@ impl CompilationEnv {
         self.warning_filter.pop().unwrap();
     }
 
-    pub fn filter_from_str(&self, s: &str) -> Option<WarningFilter> {
-        self.known_filters.get(s).cloned()
+    pub fn filter_from_str(
+        &self,
+        name: String,
+        attribute_name: E::ast::AttributeName_,
+    ) -> Option<WarningFilter> {
+        self.known_filters
+            .get(&KnownFilterKey::new(name, attribute_name))
+            .cloned()
+    }
+
+    pub fn filter_attributes(&self) -> &BTreeSet<E::ast::AttributeName_> {
+        &self.filter_attributes
     }
 
     pub fn flags(&self) -> &Flags {
