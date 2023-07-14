@@ -108,26 +108,18 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for LeaderSwapTable {
 
 impl Debug for LeaderSwapTable {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        /*
         f.write_str(&format!(
             "LeaderSwapTable round:{}, good_nodes:{:?} with stake:{}, bad_nodes:{:?} with stake:{}",
             self.round,
             self.good_nodes
                 .iter()
-                .map(|a| a.id())
-                .collect::<Vec<AuthorityIdentifier>>(),
+                .map(|a| a.hostname().to_string())
+                .collect::<Vec<String>>(),
             self.good_nodes.iter().map(|a| a.stake()).sum::<Stake>(),
             self.bad_nodes
                 .iter()
-                .map(|a| *a.0)
-                .collect::<Vec<AuthorityIdentifier>>(),
-            self.bad_nodes.iter().map(|a| a.1.stake()).sum::<Stake>(),
-        ))
-         */
-        f.write_str(&format!(
-            "LeaderSwapTable round:{}, digest:{}, stake:{}",
-            self.round,
-            self.digest(),
+                .map(|a| a.1.hostname().to_string())
+                .collect::<Vec<String>>(),
             self.bad_nodes.iter().map(|a| a.1.stake()).sum::<Stake>(),
         ))
     }
@@ -157,7 +149,33 @@ impl LeaderSwapTable {
         .map(|authority| (authority.id(), authority))
         .collect::<HashMap<AuthorityIdentifier, Authority>>();
 
-        debug!("Reputation scores on round {round}: {reputation_scores:?}");
+        // print the good nodes
+        for good_node in &good_nodes {
+            debug!(
+                "Good node on round {}: {} -> {}",
+                round,
+                good_node.hostname(),
+                reputation_scores
+                    .scores_per_authority
+                    .get(&good_node.id())
+                    .unwrap()
+            );
+        }
+
+        // print the bad nodes
+        for bad_node in bad_nodes.values() {
+            debug!(
+                "Bad node on round {}: {} -> {}",
+                round,
+                bad_node.hostname(),
+                reputation_scores
+                    .scores_per_authority
+                    .get(&bad_node.id())
+                    .unwrap()
+            );
+        }
+
+        // debug!("Reputation scores on round {round}: {reputation_scores:?}");
 
         Self {
             round,
@@ -187,8 +205,8 @@ impl LeaderSwapTable {
 
             trace!(
                 "Swapping bad leader {} -> {} for round {}",
-                leader,
-                good_node.id(),
+                self.bad_nodes.get(leader).unwrap().hostname(),
+                good_node.hostname(),
                 leader_round
             );
 
