@@ -237,14 +237,14 @@ impl Proposer {
         .await;
 
         let leader_and_support = if this_round % 2 == 0 {
-            let authority = self.committee.leader(this_round);
+            let authority = self.leader_schedule.leader(this_round);
             if self.authority_id == authority.id() {
                 "even_round_is_leader"
             } else {
                 "even_round_not_leader"
             }
         } else {
-            let authority = self.committee.leader(this_round - 1);
+            let authority = self.leader_schedule.leader(this_round - 1);
             if parents.iter().any(|c| c.origin() == authority.id()) {
                 "odd_round_gives_support"
             } else {
