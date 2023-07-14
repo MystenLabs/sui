@@ -213,7 +213,28 @@ impl AuthorityPerpetualTables {
         Ok(obj_ref)
     }
 
-    pub fn get_object_or_tombstone(
+    pub fn tombstone_reference(
+        &self,
+        object_key: &ObjectKey,
+        store_object: &StoreObjectWrapper,
+    ) -> Result<Option<ObjectRef>, SuiError> {
+        let obj_ref = match store_object.inner() {
+            StoreObject::Deleted => Some((
+                object_key.0,
+                object_key.1,
+                ObjectDigest::OBJECT_DIGEST_DELETED,
+            )),
+            StoreObject::Wrapped => Some((
+                object_key.0,
+                object_key.1,
+                ObjectDigest::OBJECT_DIGEST_WRAPPED,
+            )),
+            _ => None,
+        };
+        Ok(obj_ref)
+    }
+
+    pub fn get_latest_object_ref_or_tombstone(
         &self,
         object_id: ObjectID,
     ) -> Result<Option<ObjectRef>, SuiError> {
@@ -225,6 +246,23 @@ impl AuthorityPerpetualTables {
         if let Some((object_key, value)) = iterator.next() {
             if object_key.0 == object_id {
                 return Ok(Some(self.object_reference(&object_key, value)?));
+            }
+        }
+        Ok(None)
+    }
+
+    pub fn get_latest_object_or_tombstone(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<Option<(ObjectKey, StoreObjectWrapper)>, SuiError> {
+        let mut iterator = self
+            .objects
+            .unbounded_iter()
+            .skip_prior_to(&ObjectKey::max_for_id(&object_id))?;
+
+        if let Some((object_key, value)) = iterator.next() {
+            if object_key.0 == object_id {
+                return Ok(Some((object_key, value)));
             }
         }
         Ok(None)
@@ -359,7 +397,7 @@ impl AuthorityPerpetualTables {
             &(object.0, object.1, ObjectDigest::MIN),
             &(object.0, object.1, ObjectDigest::MAX),
         )?;
-        let object_ref = self.get_object_or_tombstone(object.0)?.unwrap();
+        let object_ref = self.get_latest_object_ref_or_tombstone(object.0)?.unwrap();
         wb.insert_batch(&self.owned_object_transaction_locks, [(object_ref, None)])?;
         Ok(object_ref)
     }

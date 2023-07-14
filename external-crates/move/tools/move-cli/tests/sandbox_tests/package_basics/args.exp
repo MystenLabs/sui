@@ -61,7 +61,7 @@ B0:
 B1:
 [4]	4: Branch(7)
 B2:
-[2]	5: LdConst[0](U64: [0, 0, 0, 0, 0, 0, 0, 0])
+[2]	5: LdConst[0](U64: 00000000..)
 [2]	6: Abort
 B3:
 [4]	7: CopyLoc[0](x#0#0: u64)
@@ -69,6 +69,10 @@ B3:
 [4]	9: Mul
 [4]	10: Ret
 }
+
+Constants [
+	0 => u64: 0000000000000000
+]
 }
 Command `disassemble --package MoveStdlib --name signer`:
 // Move bytecode v6
@@ -87,9 +91,10 @@ B0:
 Command `errmap`:
 Command `info`:
 PackageBasics
-├─ std:0x1
-└─ MoveStdlib
-   └─ std:0x1
+├── std:0x1
+└── MoveStdlib
+    └── std:0x1
+
 Command `test double_two`:
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING PackageBasics

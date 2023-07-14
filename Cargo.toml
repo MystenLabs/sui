@@ -138,8 +138,6 @@ members = [
     "narwhal/config",
     "narwhal/consensus",
     "narwhal/crypto",
-    "narwhal/dag",
-    "narwhal/examples",
     "narwhal/executor",
     "narwhal/network",
     "narwhal/node",
@@ -160,7 +158,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates.
-version = "1.5.0"
+version = "1.6.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -486,8 +484,6 @@ x = { path = "crates/x" }
 narwhal-config = { path = "narwhal/config" }
 narwhal-consensus = { path = "narwhal/consensus" }
 narwhal-crypto = { path = "narwhal/crypto" }
-narwhal-dag = { path = "narwhal/dag" }
-narwhal-examples = { path = "narwhal/examples" }
 narwhal-executor = { path = "narwhal/executor" }
 narwhal-network = { path = "narwhal/network" }
 narwhal-node = { path = "narwhal/node" }

@@ -12,6 +12,7 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_types::ObjectChange;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::{Balance, SuiTransactionBlockResponseOptions};
+use sui_test_transaction_builder::make_staking_transaction;
 use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::gas_coin::GAS;
 use sui_types::object::Owner;
@@ -103,10 +104,7 @@ impl TestCaseImpl for CoinIndexTest {
             .get(0)
             .unwrap()
             .sui_address;
-        let txn = ctx
-            .get_wallet()
-            .make_staking_transaction(validator_addr)
-            .await;
+        let txn = make_staking_transaction(ctx.get_wallet(), validator_addr).await;
 
         let response = client
             .quorum_driver_api()

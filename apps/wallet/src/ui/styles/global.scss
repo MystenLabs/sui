@@ -111,3 +111,15 @@ textarea {
 	src: url('../assets/fonts/FrankfurterNormal.woff2') format('woff2'),
 		url('../assets/fonts/FrankfurterNormal.woff') format('woff');
 }
+
+@keyframes fade-in-up {
+	0% {
+		opacity: 0.2;
+		transform: translateY(10px);
+	}
+
+	100% {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}

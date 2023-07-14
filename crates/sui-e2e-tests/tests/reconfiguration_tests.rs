@@ -12,7 +12,7 @@ use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::ProtocolConfig;
 use sui_swarm_config::genesis_config::{ValidatorGenesisConfig, ValidatorGenesisConfigBuilder};
-use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_test_transaction_builder::{make_transfer_sui_transaction, TestTransactionBuilder};
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::SuiError;
@@ -404,10 +404,7 @@ async fn test_validator_resign_effects() {
     // in previous epochs. This allows authority aggregator to form a new effects certificate
     // in the new epoch.
     let test_cluster = TestClusterBuilder::new().build().await;
-    let tx = test_cluster
-        .wallet
-        .make_transfer_sui_transaction(None, None)
-        .await;
+    let tx = make_transfer_sui_transaction(&test_cluster.wallet, None, None).await;
     let effects0 = test_cluster
         .execute_transaction(tx.clone())
         .await
@@ -644,6 +641,7 @@ async fn test_reconfig_with_committee_change_stress() {
 #[cfg(msim)]
 #[sim_test]
 async fn safe_mode_reconfig_test() {
+    use sui_test_transaction_builder::make_staking_transaction;
     use sui_types::sui_system_state::advance_epoch_result_injection;
 
     const EPOCH_DURATION: u64 = 10000;
@@ -690,10 +688,7 @@ async fn safe_mode_reconfig_test() {
         .into_sui_system_state_summary()
         .active_validators[0]
         .sui_address;
-    let txn = test_cluster
-        .wallet
-        .make_staking_transaction(validator_address)
-        .await;
+    let txn = make_staking_transaction(&test_cluster.wallet, validator_address).await;
     test_cluster.execute_transaction(txn).await;
 
     // Now remove the override and check that in the next epoch we are no longer in safe mode.

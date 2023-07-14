@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::{self, Display, Formatter, Write};
-
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
 use crate::{Filter, Page, SuiEvent, SuiObjectRef};
@@ -15,9 +13,11 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use move_core_types::value::MoveTypeLayout;
+use mysten_metrics::monitored_scope;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::fmt::{self, Display, Formatter, Write};
 use sui_json::{primitive_type, SuiJsonValue};
 use sui_types::base_types::{
     EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -1671,10 +1671,13 @@ pub enum TransactionFilter {
     FromOrToAddress { addr: SuiAddress },
     /// Query by transaction kind
     TransactionKind(String),
+    /// Query transactions of any given kind in the input.
+    TransactionKindIn(Vec<String>),
 }
 
 impl Filter<EffectsWithInput> for TransactionFilter {
     fn matches(&self, item: &EffectsWithInput) -> bool {
+        let _scope = monitored_scope("TransactionFilter::matches");
         match self {
             TransactionFilter::InputObject(o) => {
                 let Ok(input_objects) = item.input.input_objects() else {
@@ -1707,6 +1710,9 @@ impl Filter<EffectsWithInput> for TransactionFilter {
                     && (function.is_none() || matches!(function, Some(f2) if f2 == &f.to_string()))
             }),
             TransactionFilter::TransactionKind(kind) => item.input.kind().to_string() == *kind,
+            TransactionFilter::TransactionKindIn(kinds) => {
+                kinds.contains(&item.input.kind().to_string())
+            }
             // these filters are not supported, rpc will reject these filters on subscription
             TransactionFilter::Checkpoint(_) => false,
             TransactionFilter::FromOrToAddress { addr: _ } => false,

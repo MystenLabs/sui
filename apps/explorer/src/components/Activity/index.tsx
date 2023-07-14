@@ -1,14 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState } from 'react';
+import { Filter16 } from '@mysten/icons';
+import { useEffect, useState } from 'react';
 // import toast from 'react-hot-toast';
 
 import { EpochsActivityTable } from './EpochsActivityTable';
 import { TransactionsActivityTable } from './TransactionsActivityTable';
 import { CheckpointsTable } from '../checkpoints/CheckpointsTable';
 // import { PlayPause } from '~/ui/PlayPause';
+import { useNetwork } from '~/context';
+import { DropdownMenu, DropdownMenuCheckboxItem } from '~/ui/DropdownMenu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/ui/Tabs';
+import { Network } from '~/utils/api/DefaultRpcClient';
 
 const VALID_TABS = ['transactions', 'epochs', 'checkpoints'];
 
@@ -24,6 +28,9 @@ const REFETCH_INTERVAL = REFETCH_INTERVAL_SECONDS * 1000;
 
 export function Activity({ initialTab, initialLimit, disablePagination }: Props) {
 	const [paused] = useState(false);
+	const [activeTab, setActiveTab] = useState(() =>
+		initialTab && VALID_TABS.includes(initialTab) ? initialTab : 'transactions',
+	);
 
 	// const handlePauseChange = () => {
 	//     if (paused) {
@@ -39,20 +46,47 @@ export function Activity({ initialTab, initialLimit, disablePagination }: Props)
 	// };
 
 	const refetchInterval = paused ? undefined : REFETCH_INTERVAL;
+	// TODO remove network check when querying transactions with TransactionKind filter is fixed on devnet and testnet
+	const [network] = useNetwork();
+	const isTransactionKindFilterEnabled = Network.MAINNET === network || Network.LOCAL === network;
+	const [showSystemTransactions, setShowSystemTransaction] = useState(
+		!isTransactionKindFilterEnabled,
+	);
+	useEffect(() => {
+		if (!isTransactionKindFilterEnabled) {
+			setShowSystemTransaction(true);
+		}
+	}, [isTransactionKindFilterEnabled]);
 
 	return (
 		<div>
-			<Tabs
-				size="lg"
-				defaultValue={initialTab && VALID_TABS.includes(initialTab) ? initialTab : 'transactions'}
-			>
+			<Tabs size="lg" value={activeTab} onValueChange={setActiveTab}>
 				<div className="relative">
 					<TabsList>
 						<TabsTrigger value="transactions">Transaction Blocks</TabsTrigger>
 						<TabsTrigger value="epochs">Epochs</TabsTrigger>
 						<TabsTrigger value="checkpoints">Checkpoints</TabsTrigger>
 					</TabsList>
-					<div className="absolute inset-y-0 -top-1 right-0 text-2xl">
+					<div className="absolute inset-y-0 -top-1 right-0 flex items-center gap-3 text-2xl">
+						{activeTab === 'transactions' && isTransactionKindFilterEnabled ? (
+							<DropdownMenu
+								trigger={<Filter16 className="p-1" />}
+								content={
+									<DropdownMenuCheckboxItem
+										checked={showSystemTransactions}
+										label="Show System Transactions"
+										onSelect={(e) => {
+											e.preventDefault();
+										}}
+										onCheckedChange={() => {
+											setShowSystemTransaction((value) => !value);
+										}}
+									/>
+								}
+								modal={false}
+								align="end"
+							/>
+						) : null}
 						{/* todo: re-enable this when rpc is stable */}
 						{/* <PlayPause
                             paused={paused}
@@ -65,6 +99,7 @@ export function Activity({ initialTab, initialLimit, disablePagination }: Props)
 						refetchInterval={refetchInterval}
 						initialLimit={initialLimit}
 						disablePagination={disablePagination}
+						transactionKindFilter={showSystemTransactions ? undefined : 'ProgrammableTransaction'}
 					/>
 				</TabsContent>
 				<TabsContent value="epochs">

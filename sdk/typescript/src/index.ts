@@ -16,7 +16,7 @@ export * from './rpc/client.js';
 export * from './rpc/websocket-client.js';
 export * from './rpc/connection.js';
 
-export * from './signers/txn-data-serializers/type-tag-serializer.js';
+export * from './builder/type-tag-serializer.js';
 
 export * from './signers/signer.js';
 export * from './signers/raw-signer.js';
@@ -25,13 +25,14 @@ export * from './signers/types.js';
 
 export * from './types/index.js';
 export * from './utils/format.js';
-export * from './utils/intent.js';
+export * from './cryptography/intent.js';
 export * from './utils/verify.js';
 export * from './utils/errors.js';
 
 export * from './framework/index.js';
 
 export * from './builder/index.js';
+export * from './utils/sui-types.js';
 
 export { fromB64, toB64 } from '@mysten/bcs';
 

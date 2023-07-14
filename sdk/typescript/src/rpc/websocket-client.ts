@@ -20,6 +20,7 @@ type NotificationMessageParams = {
 
 type SubscriptionRequest<T = any> = {
 	id?: number;
+	initialId?: number;
 	method: string;
 	unsubscribe: string;
 	params: any[];
@@ -116,21 +117,21 @@ export class WebsocketClient {
 			{ method: input.method, params: input.params },
 			this.options.callTimeout,
 		);
-
-		// If an input ID is provided, this is a reconnect and we need to use that ID instead:
-		this.#subscriptions.set(input.id || id, {
+		const initialId = input.initialId || id;
+		this.#subscriptions.set(initialId, {
 			...input,
 			// Always set the latest actual subscription ID:
 			id,
+			initialId,
 		});
 
 		return async () => {
 			const client = this.#setupClient();
 			// NOTE: Due to reconnects, the inner subscription ID could have actually changed:
-			const subscription = this.#subscriptions.get(id);
+			const subscription = this.#subscriptions.get(initialId);
 			if (!subscription) return false;
 
-			this.#subscriptions.delete(id);
+			this.#subscriptions.delete(initialId);
 
 			return client.request(
 				{ method: input.unsubscribe, params: [subscription.id] },

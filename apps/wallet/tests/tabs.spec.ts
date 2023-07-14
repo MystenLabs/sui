@@ -4,11 +4,11 @@
 import { test, expect } from './fixtures';
 import { createWallet } from './utils/auth';
 
-test('NFTs tab', async ({ page, extensionUrl }) => {
+test('Assets tab', async ({ page, extensionUrl }) => {
 	await createWallet(page, extensionUrl);
-	await page.getByRole('navigation').getByRole('link', { name: 'NFTs' }).click();
+	await page.getByRole('navigation').getByRole('link', { name: 'Assets' }).click();
 
-	await expect(page.getByRole('main').getByRole('heading')).toHaveText(/NFTs/);
+	await expect(page.getByRole('main').getByRole('heading')).toHaveText(/Assets/);
 });
 
 test('Apps tab', async ({ page, extensionUrl }) => {

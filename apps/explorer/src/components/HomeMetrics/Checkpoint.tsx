@@ -13,6 +13,7 @@ export function Checkpoint() {
 			tooltip="The current checkpoint"
 			unavailable={isLoading}
 			size="sm"
+			orientation="horizontal"
 		>
 			{data?.currentCheckpoint ? BigInt(data?.currentCheckpoint).toLocaleString() : null}
 		</StatsWrapper>

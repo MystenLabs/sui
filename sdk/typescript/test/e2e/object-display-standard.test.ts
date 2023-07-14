@@ -17,7 +17,7 @@ describe('Test Object Display Standard', () => {
 
 	it('Test getting Display fields with error object', async () => {
 		const resp = (
-			await toolbox.provider.getOwnedObjects({
+			await toolbox.client.getOwnedObjects({
 				owner: toolbox.address(),
 				options: { showDisplay: true, showType: true },
 				filter: { StructType: `${packageId}::boars::Boar` },
@@ -26,7 +26,7 @@ describe('Test Object Display Standard', () => {
 		const data = resp[0].data as SuiObjectData;
 		const boarId = data.objectId;
 		const display = getObjectDisplay(
-			await toolbox.provider.getObject({
+			await toolbox.client.getObject({
 				id: boarId,
 				options: { showDisplay: true },
 			}),
@@ -58,7 +58,7 @@ describe('Test Object Display Standard', () => {
 		const coin = (await toolbox.getGasObjectsOwnedByAddress())[0].data as SuiObjectData;
 		const coinId = coin.objectId;
 		const display = getObjectDisplay(
-			await toolbox.provider.getObject({
+			await toolbox.client.getObject({
 				id: coinId,
 				options: { showDisplay: true },
 			}),

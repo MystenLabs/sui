@@ -31,11 +31,6 @@ import {
 	SuiTransactionBlockResponse,
 	PaginatedEvents,
 	DevInspectResults,
-	isValidTransactionDigest,
-	isValidSuiAddress,
-	isValidSuiObjectId,
-	normalizeSuiAddress,
-	normalizeSuiObjectId,
 	CoinMetadataStruct,
 	PaginatedCoins,
 	SuiObjectResponse,
@@ -64,9 +59,16 @@ import type { Connection } from '../rpc/connection.js';
 import { devnetConnection } from '../rpc/connection.js';
 import { TransactionBlock } from '../builder/index.js';
 import { CheckpointPage } from '../types/checkpoints.js';
-import { NetworkMetrics, AddressMetrics } from '../types/metrics.js';
+import { NetworkMetrics, AddressMetrics, AllEpochsAddressMetrics } from '../types/metrics.js';
 import { EpochInfo, EpochPage } from '../types/epochs.js';
 import { requestSuiFromFaucetV0 } from '../faucet/index.js';
+import {
+	isValidSuiAddress,
+	isValidSuiObjectId,
+	isValidTransactionDigest,
+	normalizeSuiAddress,
+	normalizeSuiObjectId,
+} from '../utils/sui-types.js';
 
 export interface PaginationArguments<Cursor> {
 	/** Optional paging cursor */
@@ -746,6 +748,14 @@ export class JsonRpcProvider {
 
 	async getAddressMetrics() {
 		return await this.client.requestWithType('suix_getLatestAddressMetrics', [], AddressMetrics);
+	}
+
+	async getAllEpochAddressMetrics(input?: { descendingOrder?: boolean }) {
+		return await this.client.requestWithType(
+			'suix_getAllEpochAddressMetrics',
+			[input?.descendingOrder],
+			AllEpochsAddressMetrics,
+		);
 	}
 
 	/**

@@ -3283,7 +3283,9 @@ async fn test_store_revert_transfer_sui() {
         Owner::AddressOwner(sender),
     );
     assert_eq!(
-        db.get_object_or_tombstone(gas_object_id).unwrap().unwrap(),
+        db.get_latest_object_ref_or_tombstone(gas_object_id)
+            .unwrap()
+            .unwrap(),
         gas_object_ref
     );
     // Transaction should not be deleted on revert in case it's needed

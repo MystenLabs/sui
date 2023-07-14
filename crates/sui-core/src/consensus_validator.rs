@@ -8,11 +8,14 @@ use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::checkpoints::CheckpointServiceNotify;
 use crate::transaction_manager::TransactionManager;
 use async_trait::async_trait;
 use narwhal_types::{validate_batch_version, BatchAPI};
 use narwhal_worker::TransactionValidator;
+use sui_types::base_types::AuthorityName;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
+use sui_types::transaction::VerifiedCertificate;
 use tap::TapFallible;
 use tokio::runtime::Handle;
 use tracing::{info, warn};
@@ -20,14 +23,18 @@ use tracing::{info, warn};
 /// Allows verifying the validity of transactions
 #[derive(Clone)]
 pub struct SuiTxValidator {
+    name: AuthorityName,
     epoch_store: Arc<AuthorityPerEpochStore>,
-    _transaction_manager: Arc<TransactionManager>,
+    checkpoint_service: Arc<dyn CheckpointServiceNotify + Send + Sync>,
+    transaction_manager: Arc<TransactionManager>,
     metrics: Arc<SuiTxValidatorMetrics>,
 }
 
 impl SuiTxValidator {
     pub fn new(
+        name: AuthorityName,
         epoch_store: Arc<AuthorityPerEpochStore>,
+        checkpoint_service: Arc<dyn CheckpointServiceNotify + Send + Sync>,
         transaction_manager: Arc<TransactionManager>,
         metrics: Arc<SuiTxValidatorMetrics>,
     ) -> Self {
@@ -36,8 +43,10 @@ impl SuiTxValidator {
             epoch_store.epoch()
         );
         Self {
+            name,
             epoch_store,
-            _transaction_manager: transaction_manager,
+            checkpoint_service,
+            transaction_manager,
             metrics,
         }
     }
@@ -74,21 +83,29 @@ impl TransactionValidator for SuiTxValidator {
             .map(|tx| tx_from_bytes(tx))
             .collect::<Result<Vec<_>, _>>()?;
 
+        let epoch_store = self.epoch_store.clone();
+
+        let mut owned_tx_certs = Vec::new();
         let mut cert_batch = Vec::new();
+        let mut ckpt_messages = Vec::new();
         let mut ckpt_batch = Vec::new();
         for tx in txs.into_iter() {
             match tx.kind {
                 ConsensusTransactionKind::UserTransaction(certificate) => {
-                    cert_batch.push(*certificate);
+                    cert_batch.push(*certificate.clone());
 
-                    // if !certificate.contains_shared_object() {
-                    //     // new_unchecked safety: we do not use the certs in this list until all
-                    //     // have had their signatures verified.
-                    //     owned_tx_certs.push(VerifiedCertificate::new_unchecked(*certificate));
-                    // }
+                    if !certificate.contains_shared_object()
+                        && !epoch_store.is_tx_cert_consensus_message_processed(&certificate)?
+                    {
+                        // new_unchecked safety: we do not use the certs in this list until all
+                        // have had their signatures verified. All certs in cert_batch must be
+                        // verified by signature_verifier, or the entire batch will be rejected.
+                        owned_tx_certs.push(VerifiedCertificate::new_unchecked(*certificate));
+                    }
                 }
                 ConsensusTransactionKind::CheckpointSignature(signature) => {
-                    ckpt_batch.push(signature.summary)
+                    ckpt_messages.push(signature.clone());
+                    ckpt_batch.push(signature.summary);
                 }
                 ConsensusTransactionKind::EndOfPublish(_)
                 | ConsensusTransactionKind::CapabilityNotification(_) => {}
@@ -98,32 +115,48 @@ impl TransactionValidator for SuiTxValidator {
         // verify the certificate signatures as a batch
         let cert_count = cert_batch.len();
         let ckpt_count = ckpt_batch.len();
-        let epoch_store = self.epoch_store.clone();
+        let epoch_store_clone = epoch_store.clone();
         Handle::current()
             .spawn_blocking(move || {
-                epoch_store
+                epoch_store_clone
                     .signature_verifier
                     .verify_certs_and_checkpoints(cert_batch, ckpt_batch)
                     .tap_err(|e| warn!("batch verification error: {}", e))
                     .wrap_err("Malformed batch (failed to verify)")
             })
             .await??;
+
+        // All checkpoint sigs have been verified, forward them to the checkpoint service
+        for ckpt in ckpt_messages {
+            self.checkpoint_service
+                .notify_checkpoint_signature(&self.epoch_store, &ckpt)?;
+        }
+
         self.metrics
             .certificate_signatures_verified
             .inc_by(cert_count as u64);
         self.metrics
             .checkpoint_signatures_verified
             .inc_by(ckpt_count as u64);
-        Ok(())
 
-        // todo - we should un-comment line below once we have a way to revert those transactions at the end of epoch
-        // all certificates had valid signatures, schedule them for execution prior to sequencing
-        // which is unnecessary for owned object transactions.
-        // It is unnecessary to write to pending_certificates table because the certs will be written
-        // via Narwhal output.
-        // self.transaction_manager
-        //     .enqueue_certificates(owned_tx_certs, &self.epoch_store)
-        //     .wrap_err("Failed to schedule certificates for execution")
+        let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();
+        if reconfiguration_lock.should_accept_user_certs() {
+            let consensus_transactions: Vec<_> = owned_tx_certs
+                .iter()
+                .map(|cert| {
+                    ConsensusTransaction::new_certificate_message(&self.name, cert.clone().into())
+                })
+                .collect();
+            epoch_store.insert_pending_consensus_transactions(
+                &consensus_transactions,
+                Some(&reconfiguration_lock),
+            )?;
+            self.transaction_manager
+                .enqueue_certificates(owned_tx_certs, &epoch_store)
+                .wrap_err("Failed to schedule certificates for execution")?;
+        }
+
+        Ok(())
     }
 }
 
@@ -154,6 +187,7 @@ impl SuiTxValidatorMetrics {
 #[cfg(test)]
 mod tests {
     use crate::{
+        checkpoints::CheckpointServiceNoop,
         consensus_adapter::consensus_tests::{test_certificates, test_gas_objects},
         consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
     };
@@ -164,6 +198,7 @@ mod tests {
     use sui_types::signature::GenericSignature;
 
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
+    use std::sync::Arc;
     use sui_macros::sim_test;
     use sui_types::crypto::Ed25519SuiSignature;
     use sui_types::messages_consensus::ConsensusTransaction;
@@ -198,7 +233,9 @@ mod tests {
 
         let metrics = SuiTxValidatorMetrics::new(&Default::default());
         let validator = SuiTxValidator::new(
+            state.name,
             state.epoch_store_for_testing().clone(),
+            Arc::new(CheckpointServiceNoop {}),
             state.transaction_manager().clone(),
             metrics,
         );

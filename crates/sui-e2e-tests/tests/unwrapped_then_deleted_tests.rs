@@ -9,6 +9,7 @@ mod sim_only_tests {
     use sui_macros::sim_test;
     use sui_node::SuiNode;
     use sui_protocol_config::{ProtocolConfig, ProtocolVersion, SupportedProtocolVersions};
+    use sui_test_transaction_builder::publish_package;
     use sui_types::base_types::ObjectID;
     use test_cluster::{TestCluster, TestClusterBuilder};
 
@@ -146,14 +147,13 @@ mod sim_only_tests {
     async fn publish_package_and_create_parent_object(
         test_cluster: &TestCluster,
     ) -> (ObjectID, ObjectID) {
-        let package_id = test_cluster
-            .wallet
-            .publish_package(
-                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                    .join("../sui-surfer/tests/move_building_blocks"),
-            )
-            .await
-            .0;
+        let package_id = publish_package(
+            &test_cluster.wallet,
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../sui-surfer/tests/move_building_blocks"),
+        )
+        .await
+        .0;
 
         let object_id = test_cluster
             .sign_and_execute_transaction(

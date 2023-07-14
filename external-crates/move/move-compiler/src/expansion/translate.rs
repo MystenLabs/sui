@@ -400,7 +400,10 @@ fn module_(
         members,
     } = mdef;
     let attributes = flatten_attributes(context, AttributePosition::Module, attributes);
-    let warning_filter = warning_filter(context, &attributes);
+    let mut warning_filter = warning_filter(context, &attributes);
+    let config = context.env.package_config(package_name);
+    warning_filter.union(&config.warning_filter);
+
     context.env.add_warning_filter_scope(warning_filter.clone());
     assert!(context.address.is_none());
     assert!(address.is_none());
@@ -495,7 +498,10 @@ fn script_(context: &mut Context, package_name: Option<Symbol>, pscript: P::Scri
     } = pscript;
 
     let attributes = flatten_attributes(context, AttributePosition::Script, attributes);
-    let warning_filter = warning_filter(context, &attributes);
+    let mut warning_filter = warning_filter(context, &attributes);
+    let config = context.env.package_config(package_name);
+    warning_filter.union(&config.warning_filter);
+
     context.env.add_warning_filter_scope(warning_filter.clone());
     let new_scope = uses(context, puses);
     let old_aliases = context.aliases.add_and_shadow_all(new_scope);

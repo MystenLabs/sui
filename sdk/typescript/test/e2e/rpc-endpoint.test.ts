@@ -3,6 +3,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { setup, TestToolbox } from './utils/setup';
+import { GasData } from '../../src';
 
 describe('Invoke any RPC endpoint', () => {
 	let toolbox: TestToolbox;
@@ -12,21 +13,23 @@ describe('Invoke any RPC endpoint', () => {
 	});
 
 	it('suix_getOwnedObjects', async () => {
-		const gasObjectsExpected = await toolbox.provider.getOwnedObjects({
+		const gasObjectsExpected = await toolbox.client.getOwnedObjects({
 			owner: toolbox.address(),
 		});
-		const gasObjects = await toolbox.provider.call('suix_getOwnedObjects', [toolbox.address()]);
+		const gasObjects = await toolbox.client.call<{ data: GasData }>('suix_getOwnedObjects', [
+			toolbox.address(),
+		]);
 		expect(gasObjects.data).toStrictEqual(gasObjectsExpected.data);
 	});
 
 	it('sui_getObjectOwnedByAddress Error', async () => {
-		expect(toolbox.provider.call('suix_getOwnedObjects', [])).rejects.toThrowError();
+		expect(toolbox.client.call('suix_getOwnedObjects', [])).rejects.toThrowError();
 	});
 
 	it('suix_getCommitteeInfo', async () => {
-		const committeeInfoExpected = await toolbox.provider.getCommitteeInfo();
+		const committeeInfoExpected = await toolbox.client.getCommitteeInfo();
 
-		const committeeInfo = await toolbox.provider.call('suix_getCommitteeInfo', []);
+		const committeeInfo = await toolbox.client.call('suix_getCommitteeInfo', []);
 
 		expect(committeeInfo).toStrictEqual(committeeInfoExpected);
 	});

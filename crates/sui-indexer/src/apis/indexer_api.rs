@@ -12,7 +12,7 @@ use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::{RpcModule, SubscriptionSink};
 
 use move_core_types::identifier::Identifier;
-use sui_core::event_handler::SubscriptionHandler;
+use sui_core::subscription_handler::SubscriptionHandler;
 use sui_json_rpc::api::{cap_page_limit, IndexerApiClient, IndexerApiServer};
 use sui_json_rpc::indexer_api::spawn_subscription;
 use sui_json_rpc::SuiRpcModule;
@@ -41,13 +41,13 @@ impl<S: IndexerStore> IndexerApi<S> {
     pub fn new(
         state: S,
         fullnode_client: HttpClient,
-        event_handler: Arc<SubscriptionHandler>,
+        subscription_handler: Arc<SubscriptionHandler>,
         migrated_methods: Vec<String>,
     ) -> Self {
         Self {
             state,
             fullnode: fullnode_client,
-            subscription_handler: event_handler,
+            subscription_handler,
             migrated_methods,
         }
     }
@@ -224,8 +224,22 @@ impl<S: IndexerStore> IndexerApi<S> {
                     .get_transaction_sequence_by_digest(cursor_str, is_descending)
                     .await?;
                 self.state
-                    .get_transaction_page_by_transaction_kind(
-                        tx_kind_name,
+                    .get_transaction_page_by_transaction_kinds(
+                        vec![tx_kind_name],
+                        indexer_seq_number,
+                        limit + 1,
+                        is_descending,
+                    )
+                    .await
+            }
+            Some(TransactionFilter::TransactionKindIn(tx_kind_names)) => {
+                let indexer_seq_number = self
+                    .state
+                    .get_transaction_sequence_by_digest(cursor_str, is_descending)
+                    .await?;
+                self.state
+                    .get_transaction_page_by_transaction_kinds(
+                        tx_kind_names,
                         indexer_seq_number,
                         limit + 1,
                         is_descending,

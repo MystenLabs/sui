@@ -913,15 +913,18 @@ module deepbook::clob_v2 {
             quote_coin = coin::from_balance(quote_balance_left, ctx);
         } else {
             assert!(quantity <= coin::value(&base_coin), EInsufficientBaseCoin);
+            let base_coin_to_sell = coin::split(&mut base_coin, quantity, ctx);
             let (base_balance_left, quote_balance_filled) = match_ask(
                 pool,
                 account_cap,
                 client_order_id,
                 MIN_PRICE,
                 clock::timestamp_ms(clock),
-                coin::into_balance(base_coin),
+                coin::into_balance(base_coin_to_sell),
             );
-            base_coin = coin::from_balance(base_balance_left, ctx);
+            join(
+                &mut base_coin,
+                coin::from_balance(base_balance_left, ctx));
             join(
                 &mut quote_coin,
                 coin::from_balance(quote_balance_filled, ctx),

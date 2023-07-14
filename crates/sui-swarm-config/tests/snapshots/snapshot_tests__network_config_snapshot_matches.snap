@@ -33,16 +33,6 @@ validator_configs:
         sync_retry_nodes: 3
         batch_size: 5000000
         max_batch_delay: 100ms
-        block_synchronizer:
-          range_synchronize_timeout: 30000ms
-          certificates_synchronize_timeout: 30000ms
-          payload_synchronize_timeout: 30000ms
-          payload_availability_timeout: 30000ms
-          handler_certificate_deliver_timeout: 30000ms
-        consensus_api_grpc:
-          socket_addr: ""
-          get_collections_timeout: 5000ms
-          remove_collections_timeout: 5000ms
         max_concurrent_requests: 500000
         prometheus_metrics:
           socket_addr: /ip4/127.0.0.1/tcp/1234
@@ -95,6 +85,8 @@ validator_configs:
       concurrency: 0
       use-for-pruning-watermark: false
     state-archive-read-config: []
+    state-snapshot-write-config:
+      concurrency: 0
   - protocol-key-pair:
       value: avYcyVgYMXTyaUYh9IRwLK0gSzl7YF6ZQDAbrS1Bhvo=
     worker-key-pair:
@@ -125,16 +117,6 @@ validator_configs:
         sync_retry_nodes: 3
         batch_size: 5000000
         max_batch_delay: 100ms
-        block_synchronizer:
-          range_synchronize_timeout: 30000ms
-          certificates_synchronize_timeout: 30000ms
-          payload_synchronize_timeout: 30000ms
-          payload_availability_timeout: 30000ms
-          handler_certificate_deliver_timeout: 30000ms
-        consensus_api_grpc:
-          socket_addr: ""
-          get_collections_timeout: 5000ms
-          remove_collections_timeout: 5000ms
         max_concurrent_requests: 500000
         prometheus_metrics:
           socket_addr: /ip4/127.0.0.1/tcp/1234
@@ -187,6 +169,8 @@ validator_configs:
       concurrency: 0
       use-for-pruning-watermark: false
     state-archive-read-config: []
+    state-snapshot-write-config:
+      concurrency: 0
   - protocol-key-pair:
       value: OXnx3yM1C/ppgnDMx/o1d49fJs7E05kq11mXNae/O+I=
     worker-key-pair:
@@ -217,16 +201,6 @@ validator_configs:
         sync_retry_nodes: 3
         batch_size: 5000000
         max_batch_delay: 100ms
-        block_synchronizer:
-          range_synchronize_timeout: 30000ms
-          certificates_synchronize_timeout: 30000ms
-          payload_synchronize_timeout: 30000ms
-          payload_availability_timeout: 30000ms
-          handler_certificate_deliver_timeout: 30000ms
-        consensus_api_grpc:
-          socket_addr: ""
-          get_collections_timeout: 5000ms
-          remove_collections_timeout: 5000ms
         max_concurrent_requests: 500000
         prometheus_metrics:
           socket_addr: /ip4/127.0.0.1/tcp/1234
@@ -279,6 +253,8 @@ validator_configs:
       concurrency: 0
       use-for-pruning-watermark: false
     state-archive-read-config: []
+    state-snapshot-write-config:
+      concurrency: 0
   - protocol-key-pair:
       value: CyNkjqNVr3HrHTH7f/NLs7u5lUHJzuPAw0PqMTD2y2s=
     worker-key-pair:
@@ -309,16 +285,6 @@ validator_configs:
         sync_retry_nodes: 3
         batch_size: 5000000
         max_batch_delay: 100ms
-        block_synchronizer:
-          range_synchronize_timeout: 30000ms
-          certificates_synchronize_timeout: 30000ms
-          payload_synchronize_timeout: 30000ms
-          payload_availability_timeout: 30000ms
-          handler_certificate_deliver_timeout: 30000ms
-        consensus_api_grpc:
-          socket_addr: ""
-          get_collections_timeout: 5000ms
-          remove_collections_timeout: 5000ms
         max_concurrent_requests: 500000
         prometheus_metrics:
           socket_addr: /ip4/127.0.0.1/tcp/1234
@@ -371,6 +337,8 @@ validator_configs:
       concurrency: 0
       use-for-pruning-watermark: false
     state-archive-read-config: []
+    state-snapshot-write-config:
+      concurrency: 0
   - protocol-key-pair:
       value: X/I/kM+KvHcxAKEf2UU6Sr7SpN3bhiE9nP5CuM/iIY0=
     worker-key-pair:
@@ -401,16 +369,6 @@ validator_configs:
         sync_retry_nodes: 3
         batch_size: 5000000
         max_batch_delay: 100ms
-        block_synchronizer:
-          range_synchronize_timeout: 30000ms
-          certificates_synchronize_timeout: 30000ms
-          payload_synchronize_timeout: 30000ms
-          payload_availability_timeout: 30000ms
-          handler_certificate_deliver_timeout: 30000ms
-        consensus_api_grpc:
-          socket_addr: ""
-          get_collections_timeout: 5000ms
-          remove_collections_timeout: 5000ms
         max_concurrent_requests: 500000
         prometheus_metrics:
           socket_addr: /ip4/127.0.0.1/tcp/1234
@@ -463,6 +421,8 @@ validator_configs:
       concurrency: 0
       use-for-pruning-watermark: false
     state-archive-read-config: []
+    state-snapshot-write-config:
+      concurrency: 0
   - protocol-key-pair:
       value: N272EiFDyKtxRbDKbyN6ujenJ+skPcRoc/XolpOLGnU=
     worker-key-pair:
@@ -493,16 +453,6 @@ validator_configs:
         sync_retry_nodes: 3
         batch_size: 5000000
         max_batch_delay: 100ms
-        block_synchronizer:
-          range_synchronize_timeout: 30000ms
-          certificates_synchronize_timeout: 30000ms
-          payload_synchronize_timeout: 30000ms
-          payload_availability_timeout: 30000ms
-          handler_certificate_deliver_timeout: 30000ms
-        consensus_api_grpc:
-          socket_addr: ""
-          get_collections_timeout: 5000ms
-          remove_collections_timeout: 5000ms
         max_concurrent_requests: 500000
         prometheus_metrics:
           socket_addr: /ip4/127.0.0.1/tcp/1234
@@ -555,6 +505,8 @@ validator_configs:
       concurrency: 0
       use-for-pruning-watermark: false
     state-archive-read-config: []
+    state-snapshot-write-config:
+      concurrency: 0
   - protocol-key-pair:
       value: a74f03IOjL8ZFSWFChFVEi+wiMwHNwNCPDGIYkGfgjs=
     worker-key-pair:
@@ -585,16 +537,6 @@ validator_configs:
         sync_retry_nodes: 3
         batch_size: 5000000
         max_batch_delay: 100ms
-        block_synchronizer:
-          range_synchronize_timeout: 30000ms
-          certificates_synchronize_timeout: 30000ms
-          payload_synchronize_timeout: 30000ms
-          payload_availability_timeout: 30000ms
-          handler_certificate_deliver_timeout: 30000ms
-        consensus_api_grpc:
-          socket_addr: ""
-          get_collections_timeout: 5000ms
-          remove_collections_timeout: 5000ms
         max_concurrent_requests: 500000
         prometheus_metrics:
           socket_addr: /ip4/127.0.0.1/tcp/1234
@@ -647,6 +589,8 @@ validator_configs:
       concurrency: 0
       use-for-pruning-watermark: false
     state-archive-read-config: []
+    state-snapshot-write-config:
+      concurrency: 0
 account_keys:
   - Hloy4pnf8pWEHGP+4OFsXz56bLdIJhkD2O+OdKMqCA4=
   - pvMScjoMR/DaN0M5IOxS2VpGC59N6kv6gDm63ufLQ5w=

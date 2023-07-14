@@ -16,8 +16,8 @@ use tracing::{debug, trace};
 use types::{
     now, validate_batch_version, Batch, BatchAPI, BatchDigest, FetchBatchesRequest,
     FetchBatchesResponse, MetadataAPI, PrimaryToWorker, RequestBatchRequest, RequestBatchResponse,
-    RequestBatchesRequest, RequestBatchesResponse, WorkerBatchMessage, WorkerDeleteBatchesMessage,
-    WorkerOthersBatchMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
+    RequestBatchesRequest, RequestBatchesResponse, WorkerBatchMessage, WorkerOthersBatchMessage,
+    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
 };
 
 use crate::{batch_fetcher::BatchFetcher, TransactionValidator};
@@ -279,17 +279,5 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
             .fetch(request.digests, request.known_workers)
             .await;
         Ok(anemo::Response::new(FetchBatchesResponse { batches }))
-    }
-
-    async fn delete_batches(
-        &self,
-        request: anemo::Request<WorkerDeleteBatchesMessage>,
-    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-        for digest in request.into_body().digests {
-            self.store.remove(&digest).map_err(|e| {
-                anemo::rpc::Status::internal(format!("failed to remove from batch store: {e:?}"))
-            })?;
-        }
-        Ok(anemo::Response::new(()))
     }
 }

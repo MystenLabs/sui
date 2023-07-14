@@ -79,9 +79,13 @@ export default {
 		},
 
 		extend: {
+			scale: {
+				'101': '1.01',
+			},
 			colors: {
 				'gradient-blue-start': '#589AEA',
 				'gradient-blue-end': '#4C75A6',
+				'gradient-graph-bg-01-start': '#D2EBFA',
 			},
 			// Line-heights that are found in the design:
 			lineHeight: {
@@ -99,6 +103,8 @@ export default {
 				DEFAULT: '0px 5px 30px rgba(86, 104, 115, 0.2), 0px 0px 0px 1px rgba(160, 182, 195, 0.08)',
 				glow: '0 0px 6px 4px rgba(213,247,238,1)',
 				drop: '0px 0px 10px rgba(111, 188, 240, 0.2)',
+				mistyEdge:
+					'0px 0px 0px 1px rgba(160, 182, 195, 0.08), 0px 5px 30px 0px rgba(86, 104, 115, 0.20)',
 			},
 			fontSize: {
 				// Text sizes:
@@ -173,6 +179,7 @@ export default {
 				placeholderGradient01: 'linear-gradient(165.96deg, #e6f5ff 10%, #ebecff 95%)',
 				placeholderShimmer:
 					'linear-gradient(90deg, #ecf1f4 -24.18%, rgba(237 242 245 / 40%) 73.61%, #f3f7f9 114.81%, #ecf1f4 114.82%)',
+				main: 'linear-gradient(176deg, #D2EBFA 51.68%, #D5F7EE 100%)',
 			},
 			rotate: {
 				135: '135deg',

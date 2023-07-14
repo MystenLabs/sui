@@ -4,11 +4,13 @@
 
 use crate::{package_hooks, source_package::parsed_manifest as PM};
 use anyhow::{anyhow, bail, format_err, Context, Result};
+use move_compiler::editions::{Edition, Flavor};
 use move_core_types::account_address::{AccountAddress, AccountAddressParseError};
 use move_symbol_pool::symbol::Symbol;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
+    str::FromStr,
 };
 use toml::Value as TV;
 
@@ -111,7 +113,7 @@ pub fn parse_package_info(tval: TV) -> Result<PM::PackageInfo> {
         TV::Table(mut table) => {
             check_for_required_field_names(&table, &["name", "version"])?;
             let hook_names = package_hooks::custom_package_info_fields();
-            let known_names = ["name", "version", "authors", "license"]
+            let known_names = ["name", "version", "authors", "license", "edition", "flavor"]
                 .into_iter()
                 .chain(hook_names.iter().map(|s| s.as_str()))
                 .collect::<Vec<_>>();
@@ -150,6 +152,24 @@ pub fn parse_package_info(tval: TV) -> Result<PM::PackageInfo> {
                         .collect::<Result<_>>()?
                 }
             };
+            let edition = table
+                .remove("edition")
+                .map(|v| {
+                    let s = v
+                        .as_str()
+                        .ok_or_else(|| format_err!("'edition' must be a string"))?;
+                    Edition::from_str(s).map_err(|err| format_err!("Invalid 'edition'. {err}"))
+                })
+                .transpose()?;
+            let flavor = table
+                .remove("flavor")
+                .map(|v| {
+                    let s = v
+                        .as_str()
+                        .ok_or_else(|| format_err!("'flavor' must be a string"))?;
+                    Flavor::from_str(s).map_err(|err| format_err!("Invalid 'flavor'. {err}"))
+                })
+                .transpose()?;
             // Turn the remaining entries into custom properties. For those which are not
             // supported (also in the presence of hooks) we have warned above.
             let mut custom_properties: BTreeMap<Symbol, String> = Default::default();
@@ -166,6 +186,8 @@ pub fn parse_package_info(tval: TV) -> Result<PM::PackageInfo> {
                 authors,
                 license,
                 custom_properties,
+                edition,
+                flavor,
             })
         }
         x => bail!(

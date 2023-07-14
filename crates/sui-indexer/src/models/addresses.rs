@@ -12,7 +12,7 @@ use sui_json_rpc_types::AddressMetrics;
 use crate::schema::{active_addresses, address_stats, addresses};
 use crate::types::AddressData;
 
-#[derive(Queryable, Insertable, Debug)]
+#[derive(Queryable, Insertable, Clone, Debug)]
 #[diesel(table_name = addresses, primary_key(account_address))]
 pub struct Address {
     pub account_address: String,
@@ -22,7 +22,7 @@ pub struct Address {
     pub last_appearance_time: i64,
 }
 
-#[derive(Queryable, Insertable, Debug)]
+#[derive(Queryable, Insertable, Clone, Debug)]
 #[diesel(table_name = active_addresses, primary_key(account_address))]
 pub struct ActiveAddress {
     pub account_address: String,
@@ -88,7 +88,7 @@ pub fn dedup_from_addresses(from_addrs: Vec<AddressData>) -> Vec<ActiveAddress> 
     active_addr_map.into_values().collect()
 }
 
-#[derive(Queryable, Insertable, Debug)]
+#[derive(Queryable, Insertable, Clone, Debug)]
 #[diesel(table_name = address_stats, primary_key(checkpoint))]
 pub struct AddressStats {
     pub checkpoint: i64,

@@ -6,6 +6,7 @@
 mod tests;
 
 mod reader;
+pub mod uploader;
 mod writer;
 
 use anyhow::Result;

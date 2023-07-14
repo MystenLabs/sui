@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::{ffi::OsString, fs, path::Path, process::Command};
@@ -11,11 +12,11 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use axum::routing::{get, IntoMakeService};
 use axum::{Json, Router, Server};
+use hyper::http::Method;
 use hyper::server::conn::AddrIncoming;
-use hyper::StatusCode;
+use hyper::{HeaderMap, StatusCode};
 use serde::{Deserialize, Serialize};
-use std::net::TcpListener;
-use sui_sdk::SuiClient;
+use tower::ServiceBuilder;
 use tracing::info;
 use url::Url;
 
@@ -26,17 +27,41 @@ use move_symbol_pool::Symbol;
 use sui_move::build::resolve_lock_file_path;
 use sui_move_build::{BuildConfig, SuiPackageHooks};
 use sui_sdk::wallet_context::WalletContext;
+use sui_sdk::SuiClient;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
+
+pub const HOST_PORT_ENV: &str = "HOST_PORT";
+pub const SUI_SOURCE_VALIDATION_VERSION_HEADER: &str = "X-Sui-Source-Validation-Version";
+pub const SUI_SOURCE_VALIDATION_VERSION: &str = "0.1";
+
+pub fn host_port() -> String {
+    match option_env!("HOST_PORT") {
+        Some(v) => v.to_string(),
+        None => String::from("0.0.0.0:8000"),
+    }
+}
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
-    pub packages: Vec<Packages>,
+    pub packages: Vec<PackageSources>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(tag = "source", content = "values")]
+pub enum PackageSources {
+    Repository(RepositorySource),
+    Directory(DirectorySource),
 }
 
 #[derive(Clone, Deserialize, Debug)]
-pub struct Packages {
+pub struct RepositorySource {
     pub repository: String,
     pub branch: String,
+    pub paths: Vec<String>,
+}
+
+#[derive(Clone, Deserialize, Debug)]
+pub struct DirectorySource {
     pub paths: Vec<String>,
 }
 
@@ -121,7 +146,7 @@ pub struct CloneCommand {
 }
 
 impl CloneCommand {
-    pub fn new(p: &Packages, dest: &Path) -> anyhow::Result<CloneCommand> {
+    pub fn new(p: &RepositorySource, dest: &Path) -> anyhow::Result<CloneCommand> {
         let repo_name = repo_name_from_url(&p.repository)?;
         let dest = dest.join(repo_name).into_os_string();
 
@@ -190,9 +215,9 @@ impl CloneCommand {
 }
 
 /// Clones repositories and checks out packages as per `config` at the directory `dir`.
-pub async fn clone_repositories(config: &Config, dir: &Path) -> anyhow::Result<()> {
+pub async fn clone_repositories(repos: Vec<&RepositorySource>, dir: &Path) -> anyhow::Result<()> {
     let mut tasks = vec![];
-    for p in &config.packages {
+    for p in &repos {
         let command = CloneCommand::new(p, dir)?;
         info!("cloning {} to {}", &p.repository, dir.display());
         let t = tokio::spawn(async move { command.run().await });
@@ -210,7 +235,14 @@ pub async fn initialize(
     config: &Config,
     dir: &Path,
 ) -> anyhow::Result<SourceLookup> {
-    clone_repositories(config, dir).await?;
+    let mut repos = vec![];
+    for s in &config.packages {
+        match s {
+            PackageSources::Repository(r) => repos.push(r),
+            PackageSources::Directory(_) => (), /* skip cloning */
+        }
+    }
+    clone_repositories(repos, dir).await?;
     verify_packages(context, config, dir).await
 }
 
@@ -221,14 +253,29 @@ pub async fn verify_packages(
 ) -> anyhow::Result<SourceLookup> {
     let mut tasks = vec![];
     for p in &config.packages {
-        let repo_name = repo_name_from_url(&p.repository)?;
-        let packages_dir = dir.join(repo_name);
-        for p in &p.paths {
-            let package_path = packages_dir.join(p).clone();
-            let client = context.get_client().await?;
-            info!("verifying {p}");
-            let t = tokio::spawn(async move { verify_package(&client, package_path).await });
-            tasks.push(t)
+        match p {
+            PackageSources::Repository(p) => {
+                let repo_name = repo_name_from_url(&p.repository)?;
+                let packages_dir = dir.join(repo_name);
+                for p in &p.paths {
+                    let package_path = packages_dir.join(p).clone();
+                    let client = context.get_client().await?;
+                    info!("verifying {p}");
+                    let t =
+                        tokio::spawn(async move { verify_package(&client, package_path).await });
+                    tasks.push(t)
+                }
+            }
+            PackageSources::Directory(packages_dir) => {
+                for p in &packages_dir.paths {
+                    let package_path = PathBuf::from(p);
+                    let client = context.get_client().await?;
+                    info!("verifying {p}");
+                    let t =
+                        tokio::spawn(async move { verify_package(&client, package_path).await });
+                    tasks.push(t)
+                }
+            }
         }
     }
 
@@ -245,8 +292,16 @@ pub struct AppState {
 }
 
 pub fn serve(app_state: AppState) -> anyhow::Result<Server<AddrIncoming, IntoMakeService<Router>>> {
-    let app = Router::new().route("/api", get(api_route).with_state(Arc::new(app_state)));
-    let listener = TcpListener::bind("0.0.0.0:8000")?;
+    let app = Router::new()
+        .route("/api", get(api_route).with_state(Arc::new(app_state)))
+        .layer(
+            ServiceBuilder::new().layer(
+                tower_http::cors::CorsLayer::new()
+                    .allow_methods([Method::GET])
+                    .allow_origin(tower_http::cors::Any),
+            ),
+        );
+    let listener = TcpListener::bind(host_port())?;
     Ok(Server::from_tcp(listener)?.serve(app.into_make_service()))
 }
 
@@ -267,20 +322,50 @@ pub struct ErrorResponse {
 }
 
 async fn api_route(
+    headers: HeaderMap,
     State(app_state): State<Arc<AppState>>,
     Query(Request { address, module }): Query<Request>,
 ) -> impl IntoResponse {
+    let version = headers
+        .get(SUI_SOURCE_VALIDATION_VERSION_HEADER)
+        .as_ref()
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_string());
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        SUI_SOURCE_VALIDATION_VERSION_HEADER,
+        SUI_SOURCE_VALIDATION_VERSION.parse().unwrap(),
+    );
+
+    match version {
+        Some(v) if v != SUI_SOURCE_VALIDATION_VERSION => {
+            let error = format!(
+                "Unsupported version '{v}' specified in header \
+		 {SUI_SOURCE_VALIDATION_VERSION_HEADER}"
+            );
+            return (
+                StatusCode::BAD_REQUEST,
+                headers,
+                Json(ErrorResponse { error }).into_response(),
+            );
+        }
+        Some(_) => (),
+        None => info!("No version set, using {SUI_SOURCE_VALIDATION_VERSION}"),
+    };
+
     let symbol = Symbol::from(module);
     let Ok(address) = AccountAddress::from_hex_literal(&address) else {
 	let error = format!("Invalid hex address {address}");
-	return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error }).into_response())
+	return (StatusCode::BAD_REQUEST, headers, Json(ErrorResponse { error }).into_response())
     };
     let Some(SourceInfo {source : Some(source), ..}) = app_state.sources.get(&(address, symbol)) else {
 	let error = format!("No source found for {symbol} at address {address}" );
-	return (StatusCode::NOT_FOUND, Json(ErrorResponse { error }).into_response())
+	return (StatusCode::NOT_FOUND, headers, Json(ErrorResponse { error }).into_response())
     };
     (
         StatusCode::OK,
+        headers,
         Json(SourceResponse {
             source: source.to_owned(),
         })

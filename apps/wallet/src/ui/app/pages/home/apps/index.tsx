@@ -67,7 +67,7 @@ function AppsPage() {
 	};
 
 	return (
-		<div className={st.container}>
+		<div className={st.container} data-testid="apps-page">
 			<Content>
 				<section>
 					<FiltersPortal firstLastMargin tags={allFilterTags} callback={handleFiltersPortalClick} />

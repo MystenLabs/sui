@@ -7,10 +7,14 @@
 #[macro_use(sp)]
 extern crate move_ir_types;
 
+#[macro_use(symbol)]
+extern crate move_symbol_pool;
+
 pub mod cfgir;
 pub mod command_line;
 pub mod compiled_unit;
 pub mod diagnostics;
+pub mod editions;
 pub mod expansion;
 pub mod hlir;
 pub mod interface_generator;

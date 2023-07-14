@@ -33,7 +33,6 @@ anyhow.workspace = true
 config = { path = "../config", package = "narwhal-config" }
 fastcrypto.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
-dag = { path = "../dag", package = "narwhal-dag" }
 anemo.workspace = true
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 sui-protocol-config.workspace = true

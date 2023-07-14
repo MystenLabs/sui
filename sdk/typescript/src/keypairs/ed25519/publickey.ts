@@ -2,19 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { blake2b } from '@noble/hashes/blake2b';
-import { fromB64, toB64 } from '@mysten/bcs';
+import { fromB64 } from '@mysten/bcs';
 import type { PublicKeyInitData } from '../../cryptography/publickey.js';
-import { bytesEqual } from '../../cryptography/publickey.js';
+import { PublicKey } from '../../cryptography/publickey.js';
 import { SIGNATURE_SCHEME_TO_FLAG } from '../../cryptography/signature.js';
-import { normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '../../types/index.js';
 import { bytesToHex } from '@noble/hashes/utils';
+import { SUI_ADDRESS_LENGTH, normalizeSuiAddress } from '../../utils/sui-types.js';
 
 const PUBLIC_KEY_SIZE = 32;
 
 /**
  * An Ed25519 public key
  */
-export class Ed25519PublicKey {
+export class Ed25519PublicKey extends PublicKey {
 	static SIZE = PUBLIC_KEY_SIZE;
 	private data: Uint8Array;
 
@@ -23,6 +23,8 @@ export class Ed25519PublicKey {
 	 * @param value ed25519 public key as buffer or base-64 encoded string
 	 */
 	constructor(value: PublicKeyInitData) {
+		super();
+
 		if (typeof value === 'string') {
 			this.data = fromB64(value);
 		} else if (value instanceof Uint8Array) {
@@ -41,15 +43,8 @@ export class Ed25519PublicKey {
 	/**
 	 * Checks if two Ed25519 public keys are equal
 	 */
-	equals(publicKey: Ed25519PublicKey): boolean {
-		return bytesEqual(this.toBytes(), publicKey.toBytes());
-	}
-
-	/**
-	 * Return the base-64 representation of the Ed25519 public key
-	 */
-	toBase64(): string {
-		return toB64(this.toBytes());
+	override equals(publicKey: Ed25519PublicKey): boolean {
+		return super.equals(publicKey);
 	}
 
 	/**
@@ -57,13 +52,6 @@ export class Ed25519PublicKey {
 	 */
 	toBytes(): Uint8Array {
 		return this.data;
-	}
-
-	/**
-	 * Return the base-64 representation of the Ed25519 public key
-	 */
-	toString(): string {
-		return this.toBase64();
 	}
 
 	/**
