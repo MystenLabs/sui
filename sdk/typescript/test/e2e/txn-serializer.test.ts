@@ -36,7 +36,7 @@ describe('Transaction Serialization and deserialization', () => {
 	async function serializeAndDeserialize(tx: TransactionBlock, mutable: boolean[]) {
 		tx.setSender(await toolbox.address());
 		const transactionBlockBytes = await tx.build({
-			provider: toolbox.provider,
+			client: toolbox.client,
 		});
 		const deserializedTxnBuilder = TransactionBlockDataBuilder.fromBytes(transactionBlockBytes);
 		expect(

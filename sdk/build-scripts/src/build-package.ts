@@ -10,6 +10,7 @@ import { execSync } from 'child_process';
 interface PackageJSON {
 	name: string;
 	exports?: Record<string, string | Record<string, string>>;
+	files?: string[];
 }
 
 const ignorePatterns = [/\.test.ts$/];
@@ -104,12 +105,22 @@ async function buildImportDirectories({ exports }: PackageJSON) {
 		return;
 	}
 
+	const exportDirs = new Set<string>();
+	const ignoredWorkspaces = [];
+
 	for (const [exportName, exportMap] of Object.entries(exports)) {
 		if (typeof exportMap !== 'object' || !exportName.match(/^\.\/[\w\-_/]+$/)) {
 			continue;
 		}
 
 		const exportDir = path.join(process.cwd(), exportName);
+		const parts = exportName.split('/');
+		exportDirs.add(parts[1]);
+
+		if (parts.length === 2) {
+			ignoredWorkspaces.push(path.relative(path.resolve(process.cwd(), '../..'), exportDir));
+		}
+
 		await createEmptyDir(exportDir);
 		await fs.writeFile(
 			path.join(exportDir, 'package.json'),
@@ -121,10 +132,13 @@ async function buildImportDirectories({ exports }: PackageJSON) {
 					main: (exportMap.require ?? exportMap.default)?.replace(/^\.\//, '../'),
 				},
 				null,
-				2,
-			).replace(/^ {2}/gm, '\t')}\n`,
+				'\t',
+			)}\n`,
 		);
 	}
+
+	await addPackageFiles([...exportDirs]);
+	await addIgnoredWorkspaces(ignoredWorkspaces);
 }
 
 async function createEmptyDir(path: string) {
@@ -139,4 +153,43 @@ async function readPackageJson() {
 	return JSON.parse(
 		await fs.readFile(path.join(process.cwd(), 'package.json'), 'utf-8'),
 	) as PackageJSON;
+}
+
+async function addPackageFiles(paths: string[]) {
+	const json = await readPackageJson();
+
+	if (!json.files) {
+		return;
+	}
+
+	for (const path of paths) {
+		if (!json.files.includes(path)) {
+			json.files.push(path);
+		}
+	}
+
+	json.files.sort();
+
+	await fs.writeFile(
+		path.join(process.cwd(), 'package.json'),
+		`${JSON.stringify(json, null, '\t')}\n`,
+	);
+}
+
+async function addIgnoredWorkspaces(paths: string[]) {
+	const file = await fs.readFile(path.join(process.cwd(), '../../pnpm-workspace.yaml'), 'utf-8');
+	const lines = file.split('\n').filter(Boolean);
+	let changed = false;
+
+	for (const path of paths) {
+		if (!lines.find((line) => line.includes(`!${path}`))) {
+			changed = true;
+			lines.push(`    - '!${path}'`);
+		}
+	}
+
+	if (changed) {
+		lines.push('');
+		await fs.writeFile(path.join(process.cwd(), '../../pnpm-workspace.yaml'), lines.join('\n'));
+	}
 }

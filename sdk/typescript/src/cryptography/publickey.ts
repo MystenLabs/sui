@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { toB64 } from '@mysten/bcs';
+
 /**
  * Value to be converted into public key.
  */
@@ -24,41 +26,55 @@ export function bytesEqual(a: Uint8Array, b: Uint8Array) {
 /**
  * A public key
  */
-export interface PublicKey {
+export abstract class PublicKey {
 	/**
 	 * Checks if two public keys are equal
 	 */
-	equals(publicKey: PublicKey): boolean;
+	equals(publicKey: PublicKey) {
+		return bytesEqual(this.toBytes(), publicKey.toBytes());
+	}
 
 	/**
 	 * Return the base-64 representation of the public key
 	 */
-	toBase64(): string;
+	toBase64() {
+		return toB64(this.toBytes());
+	}
 
 	/**
-	 * Return the byte array representation of the public key
-	 */
-	toBytes(): Uint8Array;
-
-	/**
+	 * @deprecated use toBase64 instead.
+	 *
 	 * Return the base-64 representation of the public key
 	 */
-	toString(): string;
-
-	/**
-	 * Return the Sui address associated with this public key
-	 */
-	toSuiAddress(): string;
+	toString() {
+		return this.toBase64();
+	}
 
 	/**
 	 * Return the Sui representation of the public key encoded in
 	 * base-64. A Sui public key is formed by the concatenation
 	 * of the scheme flag with the raw bytes of the public key
 	 */
-	toSuiPublicKey(): string;
+	toSuiPublicKey(): string {
+		const bytes = this.toBytes();
+		const suiPublicKey = new Uint8Array(bytes.length + 1);
+		suiPublicKey.set([this.flag()]);
+		suiPublicKey.set(bytes, 1);
+		return toB64(suiPublicKey);
+	}
+
+	/**
+	 * Return the byte array representation of the public key
+	 */
+	abstract toBytes(): Uint8Array;
+
+	/**
+	 * Return the Sui address associated with this public key
+	 */
+	abstract toSuiAddress(): string;
 
 	/**
 	 * Return signature scheme flag of the public key
 	 */
-	flag(): number;
+	abstract flag(): number;
 }

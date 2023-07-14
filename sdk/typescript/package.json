@@ -5,13 +5,15 @@
 	"version": "0.37.1",
 	"license": "Apache-2.0",
 	"files": [
-		"dist",
-		"src",
 		"CHANGELOG.md",
 		"builder",
 		"client",
+		"cryptography",
+		"dist",
 		"faucet",
-		"keypairs"
+		"keypairs",
+		"src",
+		"transactions"
 	],
 	"engines": {
 		"node": ">=16"
@@ -30,6 +32,11 @@
 			"source": "./src/builder/index.ts",
 			"import": "./dist/esm/builder/index.js",
 			"require": "./dist/cjs/builder/index.js"
+		},
+		"./cryptography": {
+			"source": "./src/cryptography/index.ts",
+			"import": "./dist/esm/cryptography/index.js",
+			"require": "./dist/cjs/cryptography/index.js"
 		},
 		"./keypairs/ed25519": {
 			"source": "./src/keypairs/ed25519/index.ts",
@@ -55,6 +62,11 @@
 			"source": "./src/client/index.ts",
 			"import": "./dist/esm/client/index.js",
 			"require": "./dist/cjs/client/index.js"
+		},
+		"./transactions": {
+			"source": "./src/builder/export.ts",
+			"import": "./dist/esm/builder/export.js",
+			"require": "./dist/cjs/builder/export.js"
 		}
 	},
 	"scripts": {
@@ -114,7 +126,7 @@
 		"typedoc": "^0.24.1",
 		"typescript": "^5.0.4",
 		"vite": "^4.2.3",
-		"vitest": "^0.32.0",
+		"vitest": "^0.33.0",
 		"wait-on": "^7.0.1"
 	},
 	"dependencies": {

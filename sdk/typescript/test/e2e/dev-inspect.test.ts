@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { RawSigner, SuiObjectData, TransactionBlock } from '../../src';
+import { SuiObjectData, TransactionBlock } from '../../src';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
+import { Keypair } from '../../src/cryptography';
+import { SuiClient } from '../../src/client';
 
 describe('Test dev inspect', () => {
 	let toolbox: TestToolbox;
@@ -19,7 +21,7 @@ describe('Test dev inspect', () => {
 		const tx = new TransactionBlock();
 		const coin = tx.splitCoins(tx.gas, [tx.pure(10)]);
 		tx.transferObjects([coin], tx.pure(toolbox.address()));
-		await validateDevInspectTransaction(toolbox.signer, tx, 'success');
+		await validateDevInspectTransaction(toolbox.client, toolbox.keypair, tx, 'success');
 	});
 
 	it('Move Call that returns struct', async () => {
@@ -36,7 +38,7 @@ describe('Test dev inspect', () => {
 		// TODO: Ideally dev inspect transactions wouldn't need this, but they do for now
 		tx.transferObjects([obj], tx.pure(toolbox.address()));
 
-		await validateDevInspectTransaction(toolbox.signer, tx, 'success');
+		await validateDevInspectTransaction(toolbox.client, toolbox.keypair, tx, 'success');
 	});
 
 	it('Move Call that aborts', async () => {
@@ -47,15 +49,19 @@ describe('Test dev inspect', () => {
 			arguments: [],
 		});
 
-		await validateDevInspectTransaction(toolbox.signer, tx, 'failure');
+		await validateDevInspectTransaction(toolbox.client, toolbox.keypair, tx, 'failure');
 	});
 });
 
 async function validateDevInspectTransaction(
-	signer: RawSigner,
+	client: SuiClient,
+	signer: Keypair,
 	transactionBlock: TransactionBlock,
 	status: 'success' | 'failure',
 ) {
-	const result = await signer.devInspectTransactionBlock({ transactionBlock });
+	const result = await client.devInspectTransactionBlock({
+		transactionBlock,
+		sender: signer.getPublicKey().toSuiAddress(),
+	});
 	expect(result.effects.status.status).toEqual(status);
 }

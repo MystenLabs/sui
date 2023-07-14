@@ -3,8 +3,8 @@
 
 import { fromB64 } from '@mysten/bcs';
 import nacl from 'tweetnacl';
-import type { IntentScope } from './intent.js';
-import { messageWithIntent } from './intent.js';
+import type { IntentScope } from '../cryptography/intent.js';
+import { messageWithIntent } from '../cryptography/intent.js';
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { sha256 } from '@noble/hashes/sha256';
 import type { SerializedSignature } from '../cryptography/signature.js';

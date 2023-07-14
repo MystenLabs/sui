@@ -10,7 +10,6 @@ import {
 	getSharedObjectInitialVersion,
 	getTransactionDigest,
 	ObjectId,
-	RawSigner,
 	SuiTransactionBlockResponse,
 	SUI_SYSTEM_STATE_OBJECT_ID,
 	TransactionBlock,
@@ -19,6 +18,7 @@ import {
 	SUI_CLOCK_OBJECT_ID,
 	SuiObjectChangeCreated,
 } from '../../src';
+import type { Keypair } from '../../src/cryptography';
 import {
 	DEFAULT_RECIPIENT,
 	DEFAULT_GAS_BUDGET,
@@ -27,6 +27,7 @@ import {
 	publishPackage,
 	upgradePackage,
 } from './utils/setup';
+import { SuiClient } from '../../src/client';
 
 describe('Transaction Builders', () => {
 	let toolbox: TestToolbox;
@@ -54,7 +55,7 @@ describe('Transaction Builders', () => {
 
 		const coin = tx.splitCoins(tx.object(coin_0.objectId), [tx.pure(DEFAULT_GAS_BUDGET * 2)]);
 		tx.transferObjects([coin], tx.pure(toolbox.address()));
-		await validateTransaction(toolbox.signer, tx);
+		await validateTransaction(toolbox.client, toolbox.keypair, tx);
 	});
 
 	it('MergeCoins', async () => {
@@ -63,7 +64,7 @@ describe('Transaction Builders', () => {
 		const coin_1 = coins[1].data as SuiObjectData;
 		const tx = new TransactionBlock();
 		tx.mergeCoins(tx.object(coin_0.objectId), [tx.object(coin_1.objectId)]);
-		await validateTransaction(toolbox.signer, tx);
+		await validateTransaction(toolbox.client, toolbox.keypair, tx);
 	});
 
 	it('MoveCall', async () => {
@@ -75,7 +76,7 @@ describe('Transaction Builders', () => {
 			typeArguments: ['0x2::sui::SUI'],
 			arguments: [tx.object(coin_0.objectId), tx.pure(DEFAULT_GAS_BUDGET * 2)],
 		});
-		await validateTransaction(toolbox.signer, tx);
+		await validateTransaction(toolbox.client, toolbox.keypair, tx);
 	});
 
 	it(
@@ -96,7 +97,7 @@ describe('Transaction Builders', () => {
 				],
 			});
 
-			await validateTransaction(toolbox.signer, tx);
+			await validateTransaction(toolbox.client, toolbox.keypair, tx);
 		},
 		{
 			// TODO: This test is currently flaky, so adding a retry to unblock merging
@@ -108,13 +109,13 @@ describe('Transaction Builders', () => {
 		const tx = new TransactionBlock();
 		const coin = tx.splitCoins(tx.gas, [tx.pure(1)]);
 		tx.transferObjects([coin], tx.pure(DEFAULT_RECIPIENT));
-		await validateTransaction(toolbox.signer, tx);
+		await validateTransaction(toolbox.client, toolbox.keypair, tx);
 	});
 
 	it('TransferObjects gas object', async () => {
 		const tx = new TransactionBlock();
 		tx.transferObjects([tx.gas], tx.pure(DEFAULT_RECIPIENT));
-		await validateTransaction(toolbox.signer, tx);
+		await validateTransaction(toolbox.client, toolbox.keypair, tx);
 	});
 
 	it('TransferObject', async () => {
@@ -123,7 +124,7 @@ describe('Transaction Builders', () => {
 		const coin_0 = coins[2].data as SuiObjectData;
 
 		tx.transferObjects([tx.object(coin_0.objectId)], tx.pure(DEFAULT_RECIPIENT));
-		await validateTransaction(toolbox.signer, tx);
+		await validateTransaction(toolbox.client, toolbox.keypair, tx);
 	});
 
 	it('Move Shared Object Call with mixed usage of mutable and immutable references', async () => {
@@ -136,7 +137,7 @@ describe('Transaction Builders', () => {
 			target: `${packageId}::serializer_tests::set_value`,
 			arguments: [tx.object(sharedObjectId)],
 		});
-		await validateTransaction(toolbox.signer, tx);
+		await validateTransaction(toolbox.client, toolbox.keypair, tx);
 	});
 
 	it('immutable clock', async () => {
@@ -145,7 +146,7 @@ describe('Transaction Builders', () => {
 			target: `${packageId}::serializer_tests::use_clock`,
 			arguments: [tx.object(SUI_CLOCK_OBJECT_ID)],
 		});
-		await validateTransaction(toolbox.signer, tx);
+		await validateTransaction(toolbox.client, toolbox.keypair, tx);
 	});
 
 	it(
@@ -185,7 +186,7 @@ describe('Transaction Builders', () => {
 				target: `${packageId}::serializer_tests::set_value`,
 				arguments: [callOrigTx.object(sharedObjectId)],
 			});
-			await validateTransaction(toolbox.signer, callOrigTx);
+			await validateTransaction(toolbox.client, toolbox.keypair, callOrigTx);
 
 			// Step 3. Publish the upgrade for the package.
 			const upgradedPackagePath = __dirname + '/./data/serializer_upgrade';
@@ -201,9 +202,11 @@ describe('Transaction Builders', () => {
 	);
 });
 
-async function validateTransaction(signer: RawSigner, tx: TransactionBlock) {
-	const localDigest = await signer.getTransactionBlockDigest(tx);
-	const result = await signer.signAndExecuteTransactionBlock({
+async function validateTransaction(client: SuiClient, signer: Keypair, tx: TransactionBlock) {
+	tx.setSenderIfNotSet(signer.getPublicKey().toSuiAddress());
+	const localDigest = await tx.getDigest({ client });
+	const result = await client.signAndExecuteTransactionBlock({
+		signer,
 		transactionBlock: tx,
 		options: {
 			showEffects: true,

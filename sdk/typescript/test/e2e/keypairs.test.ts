@@ -1,20 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
 	Ed25519Keypair,
 	fromB64,
 	IntentScope,
 	messageWithIntent,
-	RawSigner,
 	Secp256k1Keypair,
 	toB64,
 	toSingleSignaturePubkeyPair,
 	verifyMessage,
 } from '../../src';
 
-import { setup, TestToolbox } from './utils/setup';
 import { blake2b } from '@noble/hashes/blake2b';
 
 const TX_BYTES =
@@ -75,13 +73,7 @@ const TEST_CASES_SECP256K1 = [
 	],
 ];
 
-describe('RawSigner', () => {
-	let toolbox: TestToolbox;
-
-	beforeAll(async () => {
-		toolbox = await setup();
-	});
-
+describe('Keypairs', () => {
 	it('Ed25519 keypair signData', async () => {
 		const tx_bytes = fromB64(TX_BYTES);
 		const intentMessage = messageWithIntent(IntentScope.TransactionData, tx_bytes);
@@ -93,8 +85,7 @@ describe('RawSigner', () => {
 			expect(keypair.getPublicKey().toBase64()).toEqual(t[1]);
 			expect(keypair.getPublicKey().toSuiAddress()).toEqual(t[2]);
 
-			const signer = new RawSigner(keypair, toolbox.provider);
-			const serializedSignature = await signer.signData(intentMessage);
+			const { signature: serializedSignature } = await keypair.signTransactionBlock(tx_bytes);
 			const { signature } = toSingleSignaturePubkeyPair(serializedSignature);
 			expect(toB64(signature)).toEqual(t[3]);
 
@@ -110,8 +101,8 @@ describe('RawSigner', () => {
 	it('Ed25519 keypair signMessage', async () => {
 		const keypair = new Ed25519Keypair();
 		const signData = new TextEncoder().encode('hello world');
-		const signer = new RawSigner(keypair, toolbox.provider);
-		const { signature } = await signer.signMessage({ message: signData });
+
+		const { signature } = await keypair.signMessage(signData);
 		const isValid = await verifyMessage(signData, signature, IntentScope.PersonalMessage);
 		expect(isValid).toBe(true);
 	});
@@ -119,8 +110,8 @@ describe('RawSigner', () => {
 	it('Ed25519 keypair invalid signMessage', async () => {
 		const keypair = new Ed25519Keypair();
 		const signData = new TextEncoder().encode('hello world');
-		const signer = new RawSigner(keypair, toolbox.provider);
-		const { signature } = await signer.signMessage({ message: signData });
+
+		const { signature } = await keypair.signMessage(signData);
 		const isValid = await verifyMessage(
 			new TextEncoder().encode('hello worlds'),
 			signature,
@@ -140,8 +131,7 @@ describe('RawSigner', () => {
 			expect(keypair.getPublicKey().toBase64()).toEqual(t[1]);
 			expect(keypair.getPublicKey().toSuiAddress()).toEqual(t[2]);
 
-			const signer = new RawSigner(keypair, toolbox.provider);
-			const serializedSignature = await signer.signData(intentMessage);
+			const { signature: serializedSignature } = await keypair.signTransactionBlock(tx_bytes);
 			const { signature } = toSingleSignaturePubkeyPair(serializedSignature);
 			expect(toB64(signature)).toEqual(t[3]);
 
@@ -157,8 +147,8 @@ describe('RawSigner', () => {
 	it('Secp256k1 keypair signMessage', async () => {
 		const keypair = new Secp256k1Keypair();
 		const signData = new TextEncoder().encode('hello world');
-		const signer = new RawSigner(keypair, toolbox.provider);
-		const { signature } = await signer.signMessage({ message: signData });
+
+		const { signature } = await keypair.signMessage(signData);
 
 		const isValid = await verifyMessage(signData, signature, IntentScope.PersonalMessage);
 		expect(isValid).toBe(true);
