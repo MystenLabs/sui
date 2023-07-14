@@ -97,7 +97,7 @@ pub async fn execution_process(
             loop {
                 attempts += 1;
                 let res = authority
-                    .try_execute_immediately(&certificate, expected_effects_digest, &epoch_store)
+                    .try_execute_immediately(&certificate, expected_effects_digest, epoch_store.clone())
                     .await;
                 if let Err(e) = res {
                     if attempts == EXECUTION_MAX_ATTEMPTS {

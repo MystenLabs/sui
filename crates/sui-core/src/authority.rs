@@ -103,7 +103,7 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 pub use sui_types::temporary_store::TemporaryStore;
 use sui_types::temporary_store::{
     InnerTemporaryStore, ObjectMap, TemporaryLayoutResolver, TemporaryModuleResolver, TxCoins,
-    WrittenObjects,
+    WrittenObjects, TemporaryLayoutResolver2,
 };
 use sui_types::{
     base_types::*,
@@ -869,7 +869,7 @@ impl AuthorityState {
         &self,
         certificate: &VerifiedExecutableTransaction,
         expected_effects_digest: Option<TransactionEffectsDigest>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let _scope = monitored_scope("Execution::try_execute_immediately");
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
@@ -898,7 +898,7 @@ impl AuthorityState {
             .try_execute_immediately(
                 &VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
                 None,
-                &epoch_store,
+                epoch_store.clone(),
             )
             .await?;
         let signed_effects = self.sign_effects(effects, &epoch_store)?;
@@ -962,7 +962,7 @@ impl AuthorityState {
         tx_guard: CertTxGuard,
         certificate: &VerifiedExecutableTransaction,
         expected_effects_digest: Option<TransactionEffectsDigest>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let digest = *certificate.digest();
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
@@ -1002,7 +1002,7 @@ impl AuthorityState {
         // this function occur before we have written anything to the db, so we commit the tx
         // guard and rely on the client to retry the tx (if it was transient).
         let (inner_temporary_store, effects, execution_error_opt) = match self
-            .prepare_certificate(&execution_guard, certificate, epoch_store)
+            .prepare_certificate(&execution_guard, certificate, &epoch_store)
             .await
         {
             Err(e) => {
@@ -1071,7 +1071,7 @@ impl AuthorityState {
         effects: &TransactionEffects,
         tx_guard: CertTxGuard,
         _execution_guard: ExecutionLockReadGuard<'_>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         let _scope: Option<mysten_metrics::MonitoredScopeGuard> =
             monitored_scope("Execution::commit_cert_and_notify");
@@ -1088,7 +1088,7 @@ impl AuthorityState {
             .map(|(_, ((id, seq, _), obj, _))| InputKey(*id, (!obj.is_package()).then_some(*seq)))
             .collect();
 
-        self.commit_certificate(inner_temporary_store, certificate, effects, epoch_store)
+        self.commit_certificate(inner_temporary_store, certificate, effects, epoch_store.clone())
             .await?;
 
         // commit_certificate finished, the tx is fully committed to the store.
@@ -1102,7 +1102,7 @@ impl AuthorityState {
         // objects into storage. Otherwise, the transaction manager may schedule a transaction
         // before the output objects are actually available.
         self.transaction_manager
-            .notify_commit(&digest, output_keys, epoch_store);
+            .notify_commit(&digest, output_keys, &epoch_store);
 
         // Update metrics.
         self.metrics.total_effects.inc();
@@ -1160,7 +1160,7 @@ impl AuthorityState {
         // check_certificate_input also checks shared object locks when loading the shared objects.
         let (gas_status, input_objects) = transaction_input_checker::check_certificate_input(
             &self.database,
-            epoch_store,
+            &epoch_store,
             certificate,
         )
         .await?;
@@ -1486,7 +1486,7 @@ impl AuthorityState {
         cert: &VerifiedExecutableTransaction,
         effects: &TransactionEffects,
         inner_temporary_store: &InnerTemporaryStore,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
         timestamp_ms: u64,
         tx_coins: Option<TxCoins>,
     ) -> SuiResult<u64> {
@@ -1732,7 +1732,7 @@ impl AuthorityState {
         certificate: &VerifiedExecutableTransaction,
         effects: &TransactionEffects,
         inner_temporary_store: &InnerTemporaryStore,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         if self.indexes.is_none() {
             return Ok(());
@@ -1743,16 +1743,9 @@ impl AuthorityState {
         let events = &inner_temporary_store.events;
         let written = &inner_temporary_store.written;
 
-        let mut layout_resolver =
-            epoch_store
-                .executor()
-                .type_layout_resolver(Box::new(TemporaryLayoutResolver::new(
-                    inner_temporary_store,
-                    self.database.as_ref(),
-                )));
 
         let tx_coins =
-            self.fullnode_only_get_tx_coins_for_indexing(inner_temporary_store, epoch_store);
+            self.fullnode_only_get_tx_coins_for_indexing(inner_temporary_store, &epoch_store);
 
         // Index tx
         if let Some(indexes) = &self.indexes {
@@ -1763,7 +1756,7 @@ impl AuthorityState {
                     certificate,
                     effects,
                     inner_temporary_store,
-                    epoch_store,
+                    epoch_store.clone(),
                     timestamp_ms,
                     tx_coins,
                 )
@@ -1773,11 +1766,20 @@ impl AuthorityState {
                 .expect("Indexing tx should not fail");
 
             let effects: SuiTransactionBlockEffects = effects.clone().try_into()?;
-            let sui_events = &SuiTransactionBlockEvents::try_from(
+            let mut layout_resolver =
+            epoch_store
+                .executor()
+                .type_layout_resolver(Box::new(TemporaryLayoutResolver2::new(
+                    Arc::new(inner_temporary_store.clone()),
+                    self.database.clone(),
+                )));
+
+            let sui_events = &SuiTransactionBlockEvents::try_from_2(
                 events.clone(),
                 *tx_digest,
                 Some(timestamp_ms),
-                layout_resolver.as_mut(),
+                // layout_resolver.as_mut(),
+                Arc::new(std::sync::Mutex::new(layout_resolver))
             )?;
             // Emit events
             self.subscription_handler
@@ -3465,13 +3467,13 @@ impl AuthorityState {
         inner_temporary_store: InnerTemporaryStore,
         certificate: &VerifiedExecutableTransaction,
         effects: &TransactionEffects,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         let _metrics_guard = self.metrics.commit_certificate_latency.start_timer();
 
         let tx_digest = certificate.digest();
         // Only need to sign effects if we are a validator.
-        let effects_sig = if self.is_validator(epoch_store) {
+        let effects_sig = if self.is_validator(&epoch_store) {
             Some(AuthoritySignInfo::new(
                 epoch_store.epoch(),
                 effects,
@@ -3485,7 +3487,7 @@ impl AuthorityState {
 
         // index certificate
         let _ = self
-            .post_process_one_tx(certificate, effects, &inner_temporary_store, epoch_store)
+            .post_process_one_tx(certificate, effects, &inner_temporary_store, epoch_store.clone())
             .await
             .tap_err(|e| {
                 self.metrics.post_processing_total_failures.inc();

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt::{self, Display, Formatter, Write};
-
+use std::sync::{Arc, Mutex};
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
 use crate::{Filter, Page, SuiEvent, SuiObjectRef};
@@ -718,6 +718,25 @@ impl SuiTransactionBlockEvents {
                 })
                 .collect::<Result<_, _>>()?,
         })
+    }
+
+    pub fn try_from_2(
+        events: TransactionEvents,
+        tx_digest: TransactionDigest,
+        timestamp_ms: Option<u64>,
+        layout_resolver: Arc<Mutex<dyn LayoutResolver>>,
+    ) -> SuiResult<Self> {
+        unreachable!()
+        // Ok(Self {
+        //     data: events
+        //         .data
+        //         .into_iter()
+        //         .enumerate()
+        //         .map(|(seq, event)| {
+        //             SuiEvent::try_from(event, tx_digest, seq as u64, timestamp_ms, layout_resolver)
+        //         })
+        //         .collect::<Result<_, _>>()?,
+        // })
     }
 }
 

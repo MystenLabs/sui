@@ -249,7 +249,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                     genesis.checkpoint().sequence_number,
                 ),
                 None,
-                &state.epoch_store_for_testing(),
+                state.epoch_store_for_testing().clone(),
             )
             .await
             .unwrap();
