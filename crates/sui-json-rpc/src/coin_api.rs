@@ -31,19 +31,20 @@ use sui_types::object::{Object, ObjectRead};
 use sui_types::parse_sui_struct_tag;
 
 use crate::api::{cap_page_limit, CoinReadApiServer, JsonRpcMetrics};
-use crate::error::{Error, RpcInterimResult, SuiRpcInputError};
+use crate::error::{ClientError, EntityType, RpcInterimResult, ServerError};
 use crate::{with_tracing, SuiRpcModule};
 
 #[cfg(test)]
 use mockall::automock;
 
-fn parse_to_struct_tag(coin_type: &str) -> Result<StructTag, Error> {
-    parse_sui_struct_tag(coin_type).map_err(|e| {
-        Error::SuiRpcInputError(SuiRpcInputError::CannotParseSuiStructTag(format!("{e}")))
+fn parse_to_struct_tag(coin_type: &str) -> Result<StructTag, ClientError> {
+    parse_sui_struct_tag(coin_type).map_err(|e| ClientError::InvalidParam {
+        param: "coin_type",
+        reason: e.to_string(),
     })
 }
 
-fn parse_to_type_tag(coin_type: Option<String>) -> Result<TypeTag, Error> {
+fn parse_to_type_tag(coin_type: Option<String>) -> Result<TypeTag, ClientError> {
     Ok(TypeTag::Struct(Box::new(match coin_type {
         Some(c) => parse_to_struct_tag(&c)?,
         None => GAS::type_(),
@@ -120,16 +121,18 @@ impl CoinReadApiServer for CoinReadApi {
                         Some(obj) => {
                             let coin_type = obj.coin_type_maybe();
                             if coin_type.is_none() {
-                                Err(Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(
-                                    "cursor is not a coin".to_string(),
-                                )))
+                                Err(ClientError::InvalidParam {
+                                    param: "cursor",
+                                    reason: "not a coin".to_string(),
+                                })
                             } else {
                                 Ok((coin_type.unwrap().to_string(), object_id))
                             }
                         }
-                        None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(
-                            "cursor not found".to_string(),
-                        ))),
+                        None => Err(ClientError::InvalidParam {
+                            param: "cursor",
+                            reason: "not found".to_string(),
+                        }),
                     }
                 }
                 None => {
@@ -228,7 +231,7 @@ impl CoinReadApiServer for CoinReadApi {
                 let treasury_cap = TreasuryCap::from_bcs_bytes(
                     treasury_cap_object.data.try_as_move().unwrap().contents(),
                 )
-                .map_err(Error::from)?;
+                .map_err(ServerError::Serde)?;
                 treasury_cap.total_supply
             })
         })
@@ -349,10 +352,13 @@ async fn find_package_object_id(
                 }
             }
         }
-        Err(SuiRpcInputError::GenericNotFound(format!(
-            "Cannot find object [{}] from [{}] package event.",
-            object_struct_tag, package_id,
-        ))
+
+        Err(ClientError::NotFoundIn {
+            entity: EntityType::Object,
+            id: object_struct_tag.to_string(),
+            in_entity: EntityType::Package,
+            in_id: package_id.to_string(),
+        }
         .into())
     })
     .await?
@@ -477,9 +483,11 @@ mod tests {
     use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
     use sui_types::coin::TreasuryCap;
     use sui_types::digests::{ObjectDigest, TransactionDigest};
+    use sui_types::effects::TransactionEffectsV1;
     use sui_types::gas_coin::GAS;
     use sui_types::id::UID;
     use sui_types::object::Object;
+    use sui_types::utils::create_fake_transaction;
     use sui_types::{parse_sui_struct_tag, TypeTag};
 
     fn get_test_owner() -> SuiAddress {
@@ -750,7 +758,7 @@ mod tests {
             let error_object: ErrorObjectOwned = error_result.into();
             let expected = expect!["-32602"];
             expected.assert_eq(&error_object.code().to_string());
-            let expected = expect!["Invalid struct type: 0x2::invalid::struct::tag. Got error: Expected end of token stream. Got: ::"];
+            let expected = expect!["Invalid 'coin_type': Invalid struct type: 0x2::invalid::struct::tag. Got error: Expected end of token stream. Got: ::"];
             expected.assert_eq(error_object.message());
         }
 
@@ -773,7 +781,7 @@ mod tests {
             let expected = expect!["-32602"];
             expected.assert_eq(&error_object.code().to_string());
             let expected =
-                expect!["Invalid struct type: 0x2::sui:🤵. Got error: unrecognized token: :🤵"];
+                expect!["Invalid 'coin_type': Invalid struct type: 0x2::sui:🤵. Got error: unrecognized token: :🤵"];
             expected.assert_eq(error_object.message());
         }
 
@@ -956,7 +964,7 @@ mod tests {
             assert_eq!(error_object.code(), -32602);
             let expected = expect!["-32602"];
             expected.assert_eq(&error_object.code().to_string());
-            let expected = expect!["cursor is not a coin"];
+            let expected = expect!["Invalid 'cursor': not a coin"];
             expected.assert_eq(error_object.message());
         }
 
@@ -985,7 +993,7 @@ mod tests {
             let error_object: ErrorObjectOwned = error_result.into();
             let expected = expect!["-32602"];
             expected.assert_eq(&error_object.code().to_string());
-            let expected = expect!["cursor not found"];
+            let expected = expect!["Invalid 'cursor': not found"];
             expected.assert_eq(error_object.message());
         }
     }
@@ -1101,7 +1109,7 @@ mod tests {
             let error_object: ErrorObjectOwned = error_result.into();
             let expected = expect!["-32602"];
             expected.assert_eq(&error_object.code().to_string());
-            let expected = expect!["Invalid struct type: 0x2::invalid::struct::tag. Got error: Expected end of token stream. Got: ::"];
+            let expected = expect!["Invalid 'coin_type': Invalid struct type: 0x2::invalid::struct::tag. Got error: Expected end of token stream. Got: ::"];
             expected.assert_eq(error_object.message());
         }
 
@@ -1313,6 +1321,39 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn test_object_not_found() {
+            let transaction_digest = TransactionDigest::from([0; 32]);
+            let verified_transaction =
+                VerifiedTransaction::new_unchecked(create_fake_transaction());
+            let transaction_effects: TransactionEffects =
+                TransactionEffects::V1(TransactionEffectsV1::default());
+
+            let mut mock_state = MockState::new();
+            mock_state
+                .expect_find_publish_txn_digest()
+                .return_once(move |_| Ok(transaction_digest));
+            mock_state
+                .expect_get_executed_transaction_and_effects()
+                .return_once(move |_| Ok((verified_transaction, transaction_effects)));
+
+            let internal = CoinReadInternalImpl {
+                state: Arc::new(mock_state),
+                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+            };
+            let coin_read_api = CoinReadApi {
+                internal: Box::new(internal),
+            };
+
+            let response = coin_read_api
+                .get_coin_metadata("0x2::sui::SUI".to_string())
+                .await;
+
+            assert!(response.is_ok());
+            let result = response.unwrap();
+            assert_eq!(result, None);
+        }
+
+        #[tokio::test]
         async fn test_find_package_object_not_sui_coin_metadata() {
             let package_id = get_test_package_id();
             let coin_name = get_test_coin_type(package_id);
@@ -1397,6 +1438,43 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn test_object_not_found() {
+            let package_id = get_test_package_id();
+            let (coin_name, _, _, _, _) = get_test_treasury_cap_peripherals(package_id);
+            let transaction_digest = TransactionDigest::from([0; 32]);
+            let verified_transaction =
+                VerifiedTransaction::new_unchecked(create_fake_transaction());
+            let transaction_effects: TransactionEffects =
+                TransactionEffects::V1(TransactionEffectsV1::default());
+
+            let mut mock_state = MockState::new();
+            mock_state
+                .expect_find_publish_txn_digest()
+                .return_once(move |_| Ok(transaction_digest));
+            mock_state
+                .expect_get_executed_transaction_and_effects()
+                .return_once(move |_| Ok((verified_transaction, transaction_effects)));
+
+            let internal = CoinReadInternalImpl {
+                state: Arc::new(mock_state),
+                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+            };
+            let coin_read_api = CoinReadApi {
+                internal: Box::new(internal),
+            };
+
+            let response = coin_read_api.get_total_supply(coin_name.clone()).await;
+
+            assert!(response.is_err());
+            let error_result = response.unwrap_err();
+            let error_object: ErrorObjectOwned = error_result.into();
+            let expected = expect!["-32602"];
+            expected.assert_eq(&error_object.code().to_string());
+            let expected = expect!["Object '0x2::coin::TreasuryCap<0xa0c5eeef6d7735176524b340c17b5329ef818b2d181f354936a79ca8632d8852::test_coin::TEST_COIN>' not found in Package '0xa0c5eeef6d7735176524b340c17b5329ef818b2d181f354936a79ca8632d8852'"];
+            expected.assert_eq(error_object.message());
+        }
+
+        #[tokio::test]
         async fn test_find_package_object_not_treasury_cap() {
             let package_id = get_test_package_id();
             let (coin_name, input_coin_struct, treasury_cap_struct, _, _) =
@@ -1429,9 +1507,9 @@ mod tests {
             let response = coin_read_api.get_total_supply(coin_name.clone()).await;
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
-            let expected = expect!["-32000"];
+            let expected = expect!["-32603"];
             expected.assert_eq(&error_object.code().to_string());
-            let expected = expect!["Failure deserializing object in the requested format: \"Unable to deserialize TreasuryCap object: remaining input\""];
+            let expected = expect!["Internal server error, please try again later"];
             expected.assert_eq(error_object.message());
         }
     }

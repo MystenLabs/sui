@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::api::MoveUtilsServer;
-use crate::error::{Error, SuiRpcInputError};
+use crate::error::{ClientError, EntityType, Error};
 use crate::read_api::{get_move_module, get_move_modules_by_package};
 use crate::{with_tracing, SuiRpcModule};
 use async_trait::async_trait;
@@ -146,14 +146,17 @@ impl MoveUtilsServer for MoveUtils {
         with_tracing!(async move {
             let module = self.internal.get_move_module(package, module_name).await?;
             let structs = module.structs;
-            let identifier = Identifier::new(struct_name.as_str()).map_err(|e| {
-                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!("{e}")))
-            })?;
+            let identifier =
+                Identifier::new(struct_name.as_str()).map_err(|e| ClientError::InvalidParam {
+                    param: "struct_name",
+                    reason: format!("{e}"),
+                })?;
             Ok(match structs.get(&identifier) {
                 Some(struct_) => Ok(struct_.clone().into()),
-                None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
-                    format!("No struct was found with struct name {}", struct_name),
-                ))),
+                None => Err(ClientError::NotFound {
+                    entity: EntityType::SuiMoveNormalizedStruct,
+                    id: struct_name.clone(),
+                }),
             }?)
         })
     }
@@ -168,14 +171,17 @@ impl MoveUtilsServer for MoveUtils {
         with_tracing!(async move {
             let module = self.internal.get_move_module(package, module_name).await?;
             let functions = module.functions;
-            let identifier = Identifier::new(function_name.as_str()).map_err(|e| {
-                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!("{e}")))
-            })?;
+            let identifier =
+                Identifier::new(function_name.as_str()).map_err(|e| ClientError::InvalidParam {
+                    param: "function_name",
+                    reason: format!("{e}"),
+                })?;
             Ok(match functions.get(&identifier) {
                 Some(function) => Ok(function.clone().into()),
-                None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
-                    format!("No function was found with function name {}", function_name),
-                ))),
+                None => Err(ClientError::NotFound {
+                    entity: EntityType::SuiMoveNormalizedFunction,
+                    id: function_name.clone(),
+                }),
             }?)
         })
     }
@@ -202,18 +208,24 @@ impl MoveUtilsServer for MoveUtils {
                         )
                         .map_err(Error::from)
                     }
-                    _ => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(
-                        format!("Object is not a package with ID {}", package),
-                    ))),
+                    _ => Err(ClientError::InvalidParam {
+                        param: "package",
+                        reason: format!("Object with ID {package} is not a package"),
+                    }
+                    .into()),
                 },
-                _ => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
-                    format!("Package object does not exist with ID {}", package),
-                ))),
+                _ => Err(ClientError::NotFound {
+                    entity: EntityType::Package,
+                    id: package.to_string(),
+                }
+                .into()),
             }?;
 
-            let identifier = Identifier::new(function.as_str()).map_err(|e| {
-                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!("{e}")))
-            })?;
+            let identifier =
+                Identifier::new(function.as_str()).map_err(|e| ClientError::InvalidParam {
+                    param: "function",
+                    reason: format!("{e}"),
+                })?;
             let parameters = normalized
                 .get(&module)
                 .and_then(|m| m.functions.get(&identifier).map(|f| f.parameters.clone()));
@@ -237,8 +249,9 @@ impl MoveUtilsServer for MoveUtils {
                         _ => MoveFunctionArgType::Pure,
                     })
                     .collect::<Vec<MoveFunctionArgType>>()),
-                None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
-                    format!("No parameters found for function {}", function),
+                None => Err(ClientError::NotFoundCustom(format!(
+                    "No parameters found for function {}",
+                    function
                 ))),
             }?)
         })
@@ -247,9 +260,11 @@ impl MoveUtilsServer for MoveUtils {
 
 #[cfg(test)]
 mod tests {
+    use expect_test::expect;
 
     mod get_normalized_move_module_tests {
         use super::super::*;
+        use super::*;
         use jsonrpsee::types::ErrorObjectOwned;
         use move_binary_format::file_format::basic_test_module;
 
@@ -287,9 +302,10 @@ mod tests {
         async fn test_no_module_found() {
             let (package, module_name) = setup();
             let mut mock_internal = MockMoveUtilsInternalTrait::new();
-            let error_string = format!("No module found with module name {module_name}");
-            let expected_error =
-                Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(error_string.clone()));
+            let expected_error = Error::ClientError(ClientError::NotFound {
+                entity: EntityType::SuiMoveNormalizedModule,
+                id: module_name.clone(),
+            });
             mock_internal
                 .expect_get_move_module()
                 .return_once(move |_package, _module_name| Err(expected_error));
@@ -303,8 +319,10 @@ mod tests {
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
 
-            assert_eq!(error_object.code(), -32602);
-            assert_eq!(error_object.message(), &error_string);
+            let expected = expect!["-32602"];
+            expected.assert_eq(&error_object.code().to_string());
+            let expected = expect!["SuiMoveNormalizedModule 'test_module' not found"];
+            expected.assert_eq(error_object.message());
         }
     }
 }

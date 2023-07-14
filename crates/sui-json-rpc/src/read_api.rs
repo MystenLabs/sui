@@ -38,7 +38,7 @@ use sui_types::crypto::default_hash;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::display::DisplayVersionUpdatedEvent;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
-use sui_types::error::SuiObjectResponseError;
+use sui_types::error::{SuiError, SuiObjectResponseError, SuiResult};
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointTimestamp};
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, Object, ObjectRead, PastObjectRead};
@@ -49,7 +49,7 @@ use sui_types::transaction::{TransactionData, VerifiedTransaction};
 use crate::api::JsonRpcMetrics;
 use crate::api::{validate_limit, ReadApiServer};
 use crate::api::{QUERY_MAX_RESULT_LIMIT, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS};
-use crate::error::{Error, SuiRpcInputError};
+use crate::error::{ClientError, EntityType, Error, ObjectDisplayError};
 use crate::with_tracing;
 use crate::{
     get_balance_changes_from_effect, get_object_changes, ObjectProviderCache, SuiRpcModule,
@@ -99,7 +99,7 @@ impl ReadApi {
         Self { state, metrics }
     }
 
-    fn get_checkpoint_internal(&self, id: CheckpointId) -> Result<Checkpoint, Error> {
+    fn get_checkpoint_internal(&self, id: CheckpointId) -> SuiResult<Checkpoint> {
         Ok(match id {
             CheckpointId::SequenceNumber(seq) => {
                 let verified_summary =
@@ -140,9 +140,11 @@ impl ReadApi {
     ) -> Result<Vec<SuiTransactionBlockResponse>, Error> {
         let num_digests = digests.len();
         if num_digests > *QUERY_MAX_RESULT_LIMIT {
-            return Err(Error::SuiRpcInputError(
-                SuiRpcInputError::SizeLimitExceeded(QUERY_MAX_RESULT_LIMIT.to_string()),
-            ));
+            return Err(ClientError::LimitExceeded {
+                param: "digests",
+                limit: *QUERY_MAX_RESULT_LIMIT,
+            }
+            .into());
         }
         self.metrics
             .get_tx_blocks_limit
@@ -158,9 +160,11 @@ impl ReadApi {
                     .map(|k| (k, IntermediateTransactionResponse::new(*k))),
             );
         if temp_response.len() < num_digests {
-            return Err(Error::SuiRpcInputError(
-                SuiRpcInputError::ContainsDuplicates,
-            ));
+            return Err(ClientError::InvalidParam {
+                param: "digests",
+                reason: "contains duplicates".to_string(),
+            }
+            .into());
         }
 
         if opts.require_input() {
@@ -327,11 +331,13 @@ impl ReadApi {
                 };
                 results.push(get_balance_changes_from_effect(
                     &object_cache,
-                    resp.effects.as_ref().ok_or_else(|| {
-                        Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
-                            "unable to derive balance changes because effect is empty".to_string(),
-                        ))
-                    })?,
+                    resp.effects
+                        .as_ref()
+                        .ok_or_else(|| ClientError::InvalidParam {
+                            param: "opts",
+                            reason: "unable to derive balance changes because effect is empty"
+                                .to_string(),
+                        })?,
                     input_objects,
                     None,
                 ));
@@ -351,21 +357,23 @@ impl ReadApi {
         if opts.show_object_changes {
             let mut results = vec![];
             for resp in temp_response.values() {
-                let effects = resp.effects.as_ref().ok_or_else(|| {
-                    Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
-                        "unable to derive object changes because effect is empty".to_string(),
-                    ))
-                })?;
+                let effects = resp
+                    .effects
+                    .as_ref()
+                    .ok_or_else(|| ClientError::InvalidParam {
+                        param: "opts",
+                        reason: "unable to derive object changes because effect is empty"
+                            .to_string(),
+                    })?;
 
                 results.push(get_object_changes(
                     &object_cache,
                     resp.transaction
                         .as_ref()
-                        .ok_or_else(|| {
-                            Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
-                                "unable to derive object changes because transaction is empty"
-                                    .to_string(),
-                            ))
+                        .ok_or_else(|| ClientError::InvalidParam {
+                            param: "opts",
+                            reason: "unable to derive object changes because transaction is empty"
+                                .to_string(),
                         })?
                         .data()
                         .intent_message()
@@ -498,9 +506,10 @@ impl ReadApiServer for ReadApi {
                     .inc_by(objects.len() as u64);
                 Ok(objects)
             } else {
-                Err(Error::SuiRpcInputError(SuiRpcInputError::SizeLimitExceeded(
-                    QUERY_MAX_RESULT_LIMIT.to_string(),
-                ))
+                Err(ClientError::LimitExceeded {
+                    param: "object_ids",
+                    limit: *QUERY_MAX_RESULT_LIMIT,
+                }
                 .into())
             }
         })
@@ -529,12 +538,14 @@ impl ReadApiServer for ReadApi {
                 PastObjectRead::VersionFound(object_ref, o, layout) => {
                     let display_fields = if options.show_display {
                         // TODO (jian): api breaking change to also modify past objects.
-                        Some(get_display_fields(self, &o, &layout)?)
+                        Some(get_display_fields(self, &o, &layout).map_err(|_| {
+                            Error::UnexpectedError("Unable to render past object".to_string())
+                        })?)
                     } else {
                         None
                     };
                     Ok(SuiPastObjectResponse::VersionFound(
-                        (object_ref, o, layout, options, display_fields).try_into()?,
+                        (object_ref, o, layout, options, display_fields).try_into()?, // these seem like server errors
                     ))
                 }
                 PastObjectRead::ObjectDeleted(oref) => {
@@ -588,9 +599,10 @@ impl ReadApiServer for ReadApi {
                     Ok(success)
                 }
             } else {
-                Err(Error::SuiRpcInputError(SuiRpcInputError::SizeLimitExceeded(
-                    QUERY_MAX_RESULT_LIMIT.to_string(),
-                ))
+                Err(ClientError::LimitExceeded {
+                    param: "past_objects",
+                    limit: *QUERY_MAX_RESULT_LIMIT,
+                }
                 .into())
             }
         })
@@ -659,7 +671,7 @@ impl ReadApiServer for ReadApi {
             if let Some((_, seq)) = spawn_monitored_task!(async move {
                 // TODO: this is reading from a deprecated DB. The replacement DB however
                 // is in the epoch store, and thus we risk breaking the read API for txes
-                // from old epochs. Should be migrated once we have indexer support, or 
+                // from old epochs. Should be migrated once we have indexer support, or
                 // when we can tolerate returning None for old txes.
                 state.database.deprecated_get_transaction_checkpoint(&digest)
                     .map_err(|e| {
@@ -824,9 +836,9 @@ impl ReadApiServer for ReadApi {
                 .state
                 .get_latest_checkpoint_sequence_number()
                 .map_err(|e| {
-                    Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(format!(
+                    Error::UnexpectedError(format!(
                         "Latest checkpoint sequence number was not found with error :{e}"
-                    )))
+                    ))
                 })?
                 .into())
         })
@@ -834,7 +846,18 @@ impl ReadApiServer for ReadApi {
 
     #[instrument(skip(self))]
     async fn get_checkpoint(&self, id: CheckpointId) -> RpcResult<Checkpoint> {
-        with_tracing!(async move { Ok(self.get_checkpoint_internal(id)?) })
+        with_tracing!(async move {
+            Ok(self
+                .get_checkpoint_internal(id.clone())
+                .map_err(|e| match e {
+                    SuiError::UserInputError { .. } => ClientError::NotFound {
+                        entity: EntityType::Checkpoint,
+                        id: id.to_string(),
+                    }
+                    .into(),
+                    _ => Error::SuiError(e),
+                })?)
+        })
     }
 
     #[instrument(skip(self))]
@@ -846,7 +869,12 @@ impl ReadApiServer for ReadApi {
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
         with_tracing!(async move {
-            let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS)?;
+            let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS).map_err(|e| {
+                ClientError::InvalidParam {
+                    param: "limit",
+                    reason: e.to_string(),
+                }
+            })?;
 
             let state = self.state.clone();
 
@@ -937,8 +965,8 @@ impl ReadApiServer for ReadApi {
                             .ok_or(anyhow!("Chain identifier not found"))?
                             .chain(),
                     )
-                    .ok_or(Error::SuiRpcInputError(
-                        SuiRpcInputError::ProtocolVersionUnsupported(
+                    .ok_or(Error::ClientError(
+                        ClientError::ProtocolVersionUnsupported(
                             ProtocolVersion::MIN.as_u64(),
                             ProtocolVersion::MAX.as_u64(),
                         ),
@@ -1001,7 +1029,7 @@ fn get_display_fields(
     fullnode_api: &ReadApi,
     original_object: &Object,
     original_layout: &Option<MoveStructLayout>,
-) -> Result<DisplayFieldsResponse, Error> {
+) -> Result<DisplayFieldsResponse, ObjectDisplayError> {
     let Some((object_type, layout)) = get_object_type_and_struct(original_object, original_layout)? else {
         return Ok(DisplayFieldsResponse { data: None, error: None });
     };
@@ -1018,7 +1046,7 @@ fn get_display_object_by_type(
     fullnode_api: &ReadApi,
     object_type: &StructTag,
     // TODO: add query version support
-) -> Result<Option<DisplayVersionUpdatedEvent>, Error> {
+) -> Result<Option<DisplayVersionUpdatedEvent>, ObjectDisplayError> {
     let mut events = fullnode_api.state.query_events(
         EventFilter::MoveEventType(DisplayVersionUpdatedEvent::type_(object_type)),
         None,
@@ -1029,9 +1057,7 @@ fn get_display_object_by_type(
     // If there's any recent version of Display, give it to the client.
     // TODO: add support for version query.
     if let Some(event) = events.pop() {
-        let display: DisplayVersionUpdatedEvent = bcs::from_bytes(&event.bcs[..])
-            .map_err(|e| anyhow!("Failed to deserialize 'VersionUpdatedEvent': {e}"))?; // TODO: currently, this is called on a value returned from state. Is this a client or server error?
-
+        let display: DisplayVersionUpdatedEvent = bcs::from_bytes(&event.bcs[..])?;
         Ok(Some(display))
     } else {
         Ok(None)
@@ -1041,7 +1067,7 @@ fn get_display_object_by_type(
 fn get_object_type_and_struct(
     o: &Object,
     layout: &Option<MoveStructLayout>,
-) -> Result<Option<(StructTag, MoveStruct)>, Error> {
+) -> Result<Option<(StructTag, MoveStruct)>, ObjectDisplayError> {
     if let Some(object_type) = o.type_() {
         let move_struct = get_move_struct(o, layout)?;
         Ok(Some((object_type.clone().into(), move_struct)))
@@ -1050,19 +1076,14 @@ fn get_object_type_and_struct(
     }
 }
 
-fn get_move_struct(o: &Object, layout: &Option<MoveStructLayout>) -> Result<MoveStruct, Error> {
-    let layout = layout.as_ref().ok_or_else(|| {
-        Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
-            "Failed to extract layout".to_string(),
-        ))
-    })?;
+fn get_move_struct(
+    o: &Object,
+    layout: &Option<MoveStructLayout>,
+) -> Result<MoveStruct, ObjectDisplayError> {
+    let layout = layout.as_ref().ok_or_else(|| ObjectDisplayError::Layout)?;
     Ok(o.data
         .try_as_move()
-        .ok_or_else(|| {
-            Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
-                "Failed to extract Move object".to_string(),
-            ))
-        })?
+        .ok_or_else(|| ObjectDisplayError::MoveObject)?
         .to_move_struct(layout)?)
 }
 
@@ -1072,13 +1093,13 @@ pub async fn get_move_module(
     module_name: String,
 ) -> Result<NormalizedModule, Error> {
     let normalized = get_move_modules_by_package(state, package).await?;
-    Ok(match normalized.get(&module_name) {
+    match normalized.get(&module_name) {
         Some(module) => Ok(module.clone()),
-        None => Err(SuiRpcInputError::GenericNotFound(format!(
-            "No module found with module name {}",
-            module_name
-        ))),
-    }?)
+        None => Err(Error::ClientError(ClientError::NotFound {
+            entity: EntityType::SuiMoveNormalizedModule,
+            id: module_name,
+        })),
+    }
 }
 
 pub async fn get_move_modules_by_package(
@@ -1104,21 +1125,24 @@ pub async fn get_move_modules_by_package(
                     Error::from(e)
                 })
             }
-            _ => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(
-                format!("Object is not a package with ID {}", package),
-            ))),
+            _ => Err(ClientError::InvalidParam {
+                param: "package",
+                reason: "Object is not a package with ID {}".to_string(),
+            }
+            .into()),
         },
-        _ => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
-            format!("Package object does not exist with ID {}", package),
-        ))),
+        _ => Err(ClientError::NotFound {
+            entity: EntityType::Package,
+            id: package.to_string(),
+        }
+        .into()),
     }
 }
 
 pub fn get_transaction_data_and_digest(
     tx_bytes: Base64,
-) -> Result<(TransactionData, TransactionDigest), Error> {
-    let tx_data =
-        bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(Error::from)?; // TODO: is this a client or server error? Only used by dry_run_transaction_block
+) -> Result<(TransactionData, TransactionDigest), anyhow::Error> {
+    let tx_data = bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?)?;
     let intent_msg = IntentMessage::new(
         Intent {
             version: IntentVersion::V0,
@@ -1134,7 +1158,7 @@ pub fn get_transaction_data_and_digest(
 pub fn get_rendered_fields(
     fields: VecMap<String, String>,
     move_struct: &MoveStruct,
-) -> Result<DisplayFieldsResponse, Error> {
+) -> Result<DisplayFieldsResponse, ObjectDisplayError> {
     let sui_move_value: SuiMoveValue = MoveValue::Struct(move_struct.clone()).into();
     if let SuiMoveValue::Struct(move_struct) = sui_move_value {
         let fields =
@@ -1166,9 +1190,7 @@ pub fn get_rendered_fields(
             error,
         });
     }
-    Err(SuiRpcInputError::GenericInvalid(
-        "Failed to parse move struct".to_string(),
-    ))?
+    Err(ObjectDisplayError::NotMoveStruct)?
 }
 
 fn parse_template(template: &str, move_struct: &SuiMoveStruct) -> Result<String, Error> {

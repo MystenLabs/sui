@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use crate::Page;
 use fastcrypto::encoding::Base64;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::fmt;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::EpochId;
 use sui_types::crypto::AggregateAuthoritySignature;
@@ -119,6 +119,15 @@ pub enum CheckpointId {
         CheckpointSequenceNumber,
     ),
     Digest(CheckpointDigest),
+}
+
+impl fmt::Display for CheckpointId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CheckpointId::SequenceNumber(value) => write!(f, "{}", value),
+            CheckpointId::Digest(value) => write!(f, "{}", value),
+        }
+    }
 }
 
 impl From<CheckpointSequenceNumber> for CheckpointId {

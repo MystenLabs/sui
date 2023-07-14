@@ -38,7 +38,7 @@ use crate::api::{
     cap_page_limit, validate_limit, IndexerApiServer, JsonRpcMetrics, ReadApiServer,
     QUERY_MAX_RESULT_LIMIT,
 };
-use crate::error::{Error, SuiRpcInputError};
+use crate::error::{ClientError, Error};
 use crate::name_service::Domain;
 use crate::with_tracing;
 use crate::SuiRpcModule;
@@ -116,7 +116,12 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         limit: Option<usize>,
     ) -> RpcResult<ObjectsPage> {
         with_tracing!(async move {
-            let limit = validate_limit(limit, *QUERY_MAX_RESULT_LIMIT)?;
+            let limit = validate_limit(limit, *QUERY_MAX_RESULT_LIMIT).map_err(|e| {
+                ClientError::InvalidParam {
+                    param: "limit",
+                    reason: e.to_string(),
+                }
+            })?;
             self.metrics.get_owned_objects_limit.report(limit as u64);
             let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
             let options = options.unwrap_or_default();
@@ -311,9 +316,20 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 type_: name_type,
                 value,
             } = name.clone();
-            let layout = TypeLayoutBuilder::build_with_types(&name_type, &self.state.database)?;
-            let sui_json_value = SuiJsonValue::new(value)?;
-            let name_bcs_value = sui_json_value.to_bcs_bytes(&layout)?;
+            let layout = TypeLayoutBuilder::build_with_types(&name_type, &self.state.database)
+                .map_err(|e| ClientError::InvalidParam {
+                    param: "field 'type' of 'name'",
+                    reason: e.to_string(),
+                })?;
+            let sui_json_value =
+                SuiJsonValue::new(value).map_err(|e| ClientError::InvalidParam {
+                    param: "field 'value' of 'name'",
+                    reason: e.to_string(),
+                })?;
+            let name_bcs_value = sui_json_value
+                .to_bcs_bytes(&layout)
+                .map_err(|e| ClientError::SerdeWithLayout(e.to_string()))?;
+
             let id = self
                 .state
                 .get_dynamic_field_object_id(parent_object_id, name_type, &name_bcs_value)
@@ -354,26 +370,19 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 name: NAME_SERVICE_DOMAIN_STRUCT.to_owned(),
                 type_params: vec![],
             }));
-            let domain = Domain::from_str(&name).map_err(|e| {
-                Error::UnexpectedError(format!(
-                    "Failed to parse NameService Domain with error: {:?}",
-                    e
-                ))
-            })?;
-            let domain_bcs_value = bcs::to_bytes(&domain).map_err(|e| {
-                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!(
-                    "Unable to serialize name: {:?} with error: {:?}",
-                    domain, e
-                )))
+            let domain = Domain::from_str(&name).map_err(ClientError::Domain)?;
+            let domain_bcs_value = bcs::to_bytes(&domain).map_err(|e| ClientError::Bcs {
+                param: "name",
+                reason: e,
             })?;
             let record_object_id_option = self
                 .state
                 .get_dynamic_field_object_id(registry_id, name_type_tag, &domain_bcs_value)
                 .map_err(|e| {
-                    Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!(
+                    ClientError::NotFoundCustom(format!(
                         "Unable to lookup name in name service registry with error: {:?}",
                         e
-                    )))
+                    ))
                 })?;
             if let Some(record_object_id) = record_object_id_option {
                 let record_object_read =
@@ -443,11 +452,9 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             };
 
             let name_type_tag = TypeTag::Address;
-            let addr_bcs_value = bcs::to_bytes(&address).map_err(|e| {
-                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!(
-                    "Unable to serialize address: {:?} with error: {:?}",
-                    address, e
-                )))
+            let addr_bcs_value = bcs::to_bytes(&address).map_err(|e| ClientError::Bcs {
+                param: "address",
+                reason: e,
             })?;
 
             let addr_object_id_opt = self

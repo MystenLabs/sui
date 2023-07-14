@@ -20,7 +20,6 @@ use sui_open_rpc::Module;
 use sui_types::base_types::{MoveObjectType, ObjectID, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::dynamic_field::get_dynamic_field_from_store;
-use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::governance::StakedSui;
 use sui_types::id::ID;
 use sui_types::object::ObjectRead;
@@ -31,7 +30,7 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::{get_validator_from_table, SuiSystemState};
 
 use crate::api::{GovernanceReadApiServer, JsonRpcMetrics};
-use crate::error::{Error, SuiRpcInputError};
+use crate::error::{ClientError, EntityType, Error, RpcInterimResult, ServerError};
 use crate::{with_tracing, ObjectProvider, SuiRpcModule};
 
 #[derive(Clone)]
@@ -83,27 +82,32 @@ impl GovernanceReadApi {
         let mut stakes: Vec<(StakedSui, bool)> = vec![];
         for stake in stakes_read.into_iter() {
             match stake {
-                ObjectRead::Exists(_, o, _) => stakes.push((StakedSui::try_from(&o)?, true)),
+                ObjectRead::Exists(_, o, _) => {
+                    stakes.push((StakedSui::try_from(&o).map_err(ServerError::Serde)?, true))
+                }
                 ObjectRead::Deleted(oref) => {
                     match self
                         .state
                         .find_object_lt_or_eq_version(&oref.0, &oref.1.one_before().unwrap())
                         .await?
                     {
-                        Some(o) => stakes.push((StakedSui::try_from(&o)?, false)),
+                        Some(o) => stakes
+                            .push((StakedSui::try_from(&o).map_err(ServerError::Serde)?, false)),
                         None => {
-                            return Err(Error::UserInputError(UserInputError::ObjectNotFound {
-                                object_id: oref.0,
-                                version: None,
-                            }));
+                            return Err(ClientError::Pruned {
+                                entity: EntityType::DelegatedStake,
+                                id: oref.0.to_string(),
+                            }
+                            .into());
                         }
                     }
                 }
                 ObjectRead::NotExists(id) => {
-                    return Err(Error::UserInputError(UserInputError::ObjectNotFound {
-                        object_id: id,
-                        version: None,
-                    }));
+                    return Err(ClientError::NotFound {
+                        entity: EntityType::DelegatedStake,
+                        id: id.to_string(),
+                    }
+                    .into());
                 }
             }
         }
@@ -157,7 +161,7 @@ impl GovernanceReadApi {
         for (pool_id, stakes) in pools {
             // Rate table and rate can be null when the pool is not active
             let rate_table = rates.get(&pool_id).ok_or_else(|| {
-                SuiRpcInputError::GenericNotFound(
+                ClientError::NotFoundCustom(
                     "Cannot find rates for staking pool {pool_id}".to_string(),
                 )
             })?;
@@ -330,7 +334,7 @@ fn calculate_apy((rate_e, rate_e_1): (&PoolTokenExchangeRate, &PoolTokenExchange
 async fn exchange_rates(
     state: &Arc<AuthorityState>,
     _current_epoch: EpochId,
-) -> SuiResult<Vec<ValidatorExchangeRates>> {
+) -> RpcInterimResult<Vec<ValidatorExchangeRates>> {
     let system_state = state.database.get_sui_system_state_object()?;
     let system_state_summary: SuiSystemStateSummary = system_state.into_sui_system_state_summary();
 
@@ -353,10 +357,7 @@ async fn exchange_rates(
         None,
         system_state_summary.inactive_pools_size as usize,
     )? {
-        let pool_id: ID =
-            bcs::from_bytes(&df.1.bcs_name).map_err(|e| SuiError::ObjectDeserializationError {
-                error: e.to_string(),
-            })?;
+        let pool_id: ID = bcs::from_bytes(&df.1.bcs_name).map_err(ServerError::Bcs)?;
         let validator = get_validator_from_table(
             state.database.as_ref(),
             system_state_summary.inactive_pools_id,
@@ -378,16 +379,11 @@ async fn exchange_rates(
             .get_dynamic_fields(exchange_rates_id, None, exchange_rates_size as usize)?
             .into_iter()
             .map(|df| {
-                let epoch: EpochId = bcs::from_bytes(&df.1.bcs_name).map_err(|e| {
-                    SuiError::ObjectDeserializationError {
-                        error: e.to_string(),
-                    }
-                })?;
+                let epoch: EpochId = bcs::from_bytes(&df.1.bcs_name).map_err(ServerError::Bcs)?;
 
                 let exchange_rate: PoolTokenExchangeRate =
                     get_dynamic_field_from_store(state.db().as_ref(), exchange_rates_id, &epoch)?;
-
-                Ok::<_, SuiError>((epoch, exchange_rate))
+                Ok::<_, Error>((epoch, exchange_rate))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
