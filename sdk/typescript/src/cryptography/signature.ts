@@ -15,6 +15,7 @@ export type SignaturePubkeyPair = {
 	signature: Uint8Array;
 	/** Base64-encoded public key */
 	pubKey: PublicKey;
+	weight?: number;
 };
 
 /**

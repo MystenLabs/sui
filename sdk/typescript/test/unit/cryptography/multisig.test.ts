@@ -5,7 +5,9 @@ import { describe, it, expect } from 'vitest';
 import {
 	combinePartialSigs,
 	decodeMultiSig,
+	parseMultiSig,
 	toMultiSigAddress,
+	verifyMultisig,
 } from '../../../src/cryptography/multisig';
 import { Ed25519Keypair, Secp256k1Keypair, toSerializedSignature } from '../../../src';
 import { blake2b } from '@noble/hashes/blake2b';
@@ -34,6 +36,7 @@ describe('multisig address and combine sigs', () => {
 			signature: k1.signData(digest),
 			signatureScheme: k1.getKeyScheme(),
 			pubKey: pk1,
+			weight: 1,
 		};
 
 		const ser_sig1 = toSerializedSignature(sig1);
@@ -42,9 +45,19 @@ describe('multisig address and combine sigs', () => {
 			signature: k2.signData(digest),
 			signatureScheme: k2.getKeyScheme(),
 			pubKey: pk2,
+			weight: 2,
 		};
 
 		const ser_sig2 = toSerializedSignature(sig2);
+
+		const sig3 = {
+			signature: k3.signData(digest),
+			signatureScheme: k3.getKeyScheme(),
+			pubKey: pk3,
+			weight: 3,
+		};
+		const ser_sig3 = toSerializedSignature(sig3);
+
 		expect(
 			toMultiSigAddress(
 				[
@@ -71,5 +84,32 @@ describe('multisig address and combine sigs', () => {
 
 		let decoded = decodeMultiSig(multisig);
 		expect(decoded).toEqual([sig1, sig2]);
+
+		// multisig (sig1 + sig2 weight 1+2 >= threshold ) verifies ok
+		expect(verifyMultisig(parseMultiSig(multisig), data)).toEqual(true);
+
+		let multisig_2 = combinePartialSigs(
+			[ser_sig3],
+			[
+				{ pubKey: pk1, weight: 1 },
+				{ pubKey: pk2, weight: 2 },
+				{ pubKey: pk3, weight: 3 },
+			],
+			3,
+		);
+		// multisig (sig3 only weight = 3 >= threshold) verifies ok
+		expect(verifyMultisig(parseMultiSig(multisig_2), data)).toEqual(true);
+
+		let multisig_3 = combinePartialSigs(
+			[ser_sig2],
+			[
+				{ pubKey: pk1, weight: 1 },
+				{ pubKey: pk2, weight: 2 },
+				{ pubKey: pk3, weight: 3 },
+			],
+			3,
+		);
+		// multisig (sig2 only weight = 2 < threshold) verify fails
+		expect(verifyMultisig(parseMultiSig(multisig_3), data)).toEqual(false);
 	});
 });
