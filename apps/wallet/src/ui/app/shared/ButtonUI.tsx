@@ -66,7 +66,7 @@ const styles = cva(
 					'disabled:text-steel-dark/50',
 				],
 				hidden: [
-					'bg-gray-45 bg-opacity-25 text-gray-60 hover:text-sui-dark hover:bg-gray-35 hover:bg-opacity-75 border-none h-full w-full',
+					'bg-gray-45 bg-opacity-25 text-gray-60 hover:text-sui-dark hover:bg-gray-35 hover:bg-opacity-75 border-none h-full w-full backdrop-blur-md',
 				],
 			},
 			size: {
