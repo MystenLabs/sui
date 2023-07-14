@@ -11,6 +11,7 @@ jobs:
       new_commit_hash: ${{ steps.get-pr-list.outputs.new_commit_hash }}
       existing_commit_tag: ${{ steps.get-pr-list.outputs.existing_commit_tag }}
       new_tag: ${{ steps.get-pr-list.outputs.new_tag }}
+      sui_version: ${{ steps.get-pr-list.outputs.sui_version }}
     runs-on: [self-hosted, self-hosted-arc]
     
     steps:
@@ -39,6 +40,7 @@ jobs:
         export sui_crate_version=$(cat Cargo.toml | grep "^version =" | tr -d '"' | awk '{ print $3 }')
         export new_tag=$(echo "sui_v${sui_crate_version}_$(date +%s)_rel_notes")
         echo "::set-output name=new_tag::${new_tag}"
+        echo "::set-output name=sui_version::${sui_crate_version}"
         
   process-prs:
     name: Processing PR
@@ -73,7 +75,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "*PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|${{ matrix.pr }}>\n <@U03LRLPR1QX> and <@U03Q2MN3XHP> please review release notes. \n *Release Notes:*\n${{ steps.rel-notes.outputs.release_notes }}\n"
+                  "text": "*PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|${{ matrix.pr }}>\n <@U03LRLPR1QX> and <@U03Q2MN3XHP> please review release notes for upcoming `v${{ needs.get-list-of-prs.outputs.sui_version }}` release.\n *Release Notes:*\n${{ steps.rel-notes.outputs.release_notes }}\n"
                 }
               },
               {
