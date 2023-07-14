@@ -98,7 +98,7 @@ function NftsPage() {
 									}}
 								>
 									<InlineLink
-										to="/hidden-assets"
+										to="/nfts/hidden-assets"
 										color="hero"
 										weight="medium"
 										before={
