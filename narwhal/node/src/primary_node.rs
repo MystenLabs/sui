@@ -5,7 +5,7 @@ use crate::{try_join_all, FuturesUnordered, NodeError};
 use anemo::PeerId;
 use config::{AuthorityIdentifier, Committee, Parameters, WorkerCache};
 use consensus::bullshark::Bullshark;
-use consensus::consensus::{ConsensusRound, LeaderSchedule, LeaderSwapTable};
+use consensus::consensus::{ConsensusRound, LeaderSchedule};
 use consensus::metrics::{ChannelMetrics, ConsensusMetrics};
 use consensus::Consensus;
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
