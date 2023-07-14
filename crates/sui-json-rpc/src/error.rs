@@ -82,9 +82,7 @@ impl Error {
             Error::UserInputError(user_input_error) => {
                 RpcError::Call(CallError::InvalidParams(user_input_error.into()))
             }
-            Error::SuiRpcInputError(sui_json_rpc_input_error) => {
-                RpcError::Call(CallError::InvalidParams(sui_json_rpc_input_error.into()))
-            }
+            Error::SuiRpcInputError(err) => err.into(),
             Error::SuiError(sui_error) => match sui_error {
                 SuiError::TransactionNotFound { .. } | SuiError::TransactionsNotFound { .. } => {
                     RpcError::Call(CallError::InvalidParams(sui_error.into()))
@@ -124,9 +122,27 @@ pub enum SuiRpcInputError {
     #[error("Unsupported protocol version requested. Min supported: {0}, max supported: {1}")]
     ProtocolVersionUnsupported(u64, u64),
 
-    #[error("Unable to serialize: {0}")]
-    CannotSerialize(#[from] bcs::Error),
-
     #[error("{0}")]
     CannotParseSuiStructTag(String),
+
+    #[error(transparent)]
+    Base64(#[from] eyre::Report),
+
+    #[error("Deserialization error: {0}")]
+    Bcs(#[from] bcs::Error),
+
+    #[error(transparent)]
+    FastCryptoError(#[from] FastCryptoError),
+
+    #[error(transparent)]
+    Anyhow(#[from] anyhow::Error),
+
+    #[error(transparent)]
+    UserInputError(#[from] UserInputError),
+}
+
+impl From<SuiRpcInputError> for RpcError {
+    fn from(e: SuiRpcInputError) -> Self {
+        RpcError::Call(CallError::InvalidParams(e.into()))
+    }
 }
