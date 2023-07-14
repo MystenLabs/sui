@@ -53,8 +53,8 @@ pub(crate) trait DiagnosticCode: Copy {
 pub enum WarningFilter {
     /// Filters all warnings
     All,
-    /// Filters all warnings of a specific category
-    Category(Category),
+    /// Filters all warnings of a specific category. Only known filters have names.
+    Category(Category, /* name */ Option<&'static str>),
     /// Filters a single warning, as defined by codes below. Only known filters have names.
     Code(DiagnosticsID, /* name */ Option<&'static str>),
 }
@@ -303,9 +303,8 @@ impl WarningFilter {
     pub fn to_str(self) -> Option<&'static str> {
         match self {
             Self::All => Some("all"),
-            Self::Category(Category::UnusedItem) => Some("unused"),
+            Self::Category(_, n) => n,
             Self::Code(_, n) => n,
-            _ => None,
         }
     }
 }
