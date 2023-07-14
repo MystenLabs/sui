@@ -1501,6 +1501,7 @@ checksum = "4e246206a63c9830e118d12c894f56a82033da1a2361f5544deeee3df85c99d9"
 dependencies = [
  "async-trait",
  "axum-core",
+ "base64 0.21.2",
  "bitflags 1.3.2",
  "bytes",
  "futures-util",
@@ -1519,8 +1520,10 @@ dependencies = [
  "serde_json",
  "serde_path_to_error",
  "serde_urlencoded",
+ "sha1",
  "sync_wrapper",
  "tokio",
+ "tokio-tungstenite",
  "tower",
  "tower-http",
  "tower-layer",
@@ -3933,10 +3936,6 @@ name = "futures-timer"
 version = "3.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e64b03909df88034c26dc1547e8970b91f98bdb65165d6a4e9110d94263dbb2c"
-dependencies = [
- "gloo-timers",
- "send_wrapper",
-]
 
 [[package]]
 name = "futures-util"
@@ -4056,51 +4055,6 @@ dependencies = [
  "bitflags 1.3.2",
  "ignore",
  "walkdir",
-]
-
-[[package]]
-name = "gloo-net"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9050ff8617e950288d7bf7f300707639fdeda5ca0d0ecf380cff448cfd52f4a6"
-dependencies = [
- "futures-channel",
- "futures-core",
- "futures-sink",
- "gloo-utils",
- "js-sys",
- "pin-project",
- "serde",
- "serde_json",
- "thiserror",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
-]
-
-[[package]]
-name = "gloo-timers"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98c4a8d6391675c6b2ee1a6c8d06e8e2d03605c44cec1270675985a4c2a5500b"
-dependencies = [
- "futures-channel",
- "futures-core",
- "js-sys",
- "wasm-bindgen",
-]
-
-[[package]]
-name = "gloo-utils"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8e8fc851e9c7b9852508bc6e3f690f452f474417e8545ec9857b7f7377036b5"
-dependencies = [
- "js-sys",
- "serde",
- "serde_json",
- "wasm-bindgen",
- "web-sys",
 ]
 
 [[package]]
@@ -4890,13 +4844,11 @@ name = "jsonrpsee"
 version = "0.16.2"
 source = "git+https://github.com/wlmyng/jsonrpsee.git?rev=b1b300784795f6a64d0fcdf8f03081a9bc38bde8#b1b300784795f6a64d0fcdf8f03081a9bc38bde8"
 dependencies = [
- "jsonrpsee-client-transport",
  "jsonrpsee-core",
  "jsonrpsee-http-client",
  "jsonrpsee-proc-macros",
  "jsonrpsee-server",
  "jsonrpsee-types",
- "jsonrpsee-wasm-client",
  "jsonrpsee-ws-client",
  "tracing",
 ]
@@ -4906,11 +4858,7 @@ name = "jsonrpsee-client-transport"
 version = "0.16.2"
 source = "git+https://github.com/wlmyng/jsonrpsee.git?rev=b1b300784795f6a64d0fcdf8f03081a9bc38bde8#b1b300784795f6a64d0fcdf8f03081a9bc38bde8"
 dependencies = [
- "anyhow",
- "futures-channel",
- "futures-timer",
  "futures-util",
- "gloo-net",
  "http",
  "jsonrpsee-core",
  "jsonrpsee-types",
@@ -4950,7 +4898,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "wasm-bindgen-futures",
 ]
 
 [[package]]
@@ -5015,16 +4962,6 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tracing",
-]
-
-[[package]]
-name = "jsonrpsee-wasm-client"
-version = "0.16.2"
-source = "git+https://github.com/wlmyng/jsonrpsee.git?rev=b1b300784795f6a64d0fcdf8f03081a9bc38bde8#b1b300784795f6a64d0fcdf8f03081a9bc38bde8"
-dependencies = [
- "jsonrpsee-client-transport",
- "jsonrpsee-core",
- "jsonrpsee-types",
 ]
 
 [[package]]
@@ -9029,12 +8966,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "send_wrapper"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f638d531eccd6e23b980caf34876660d38e265409d8e99b397ab71eb3612fad0"
-
-[[package]]
 name = "serde"
 version = "1.0.152"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10392,6 +10323,8 @@ dependencies = [
  "anyhow",
  "arc-swap",
  "async-trait",
+ "axum",
+ "axum-server",
  "bcs",
  "cached",
  "expect-test",
@@ -10412,6 +10345,7 @@ dependencies = [
  "once_cell",
  "prometheus",
  "serde",
+ "serde_json",
  "shared-crypto",
  "signature 1.6.4",
  "sui-core",
@@ -10425,6 +10359,7 @@ dependencies = [
  "sui-transaction-builder",
  "sui-types",
  "tap",
+ "telemetry-subscribers",
  "thiserror",
  "tokio",
  "tower",
@@ -10463,6 +10398,7 @@ dependencies = [
  "sui-swarm-config",
  "sui-test-transaction-builder",
  "sui-types",
+ "telemetry-subscribers",
  "test-cluster",
  "tokio",
  "tracing",
@@ -10922,6 +10858,7 @@ dependencies = [
  "clap 4.3.3",
  "colored",
  "futures",
+ "http",
  "jsonrpsee",
  "lru",
  "move-binary-format",
@@ -12180,6 +12117,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-tungstenite"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54319c93411147bced34cb5609a80e0a8e44c5999c93903a81cd866630ec0bfd"
+dependencies = [
+ "futures-util",
+ "log",
+ "tokio",
+ "tungstenite",
+]
+
+[[package]]
 name = "tokio-util"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12586,6 +12535,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "tungstenite"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30ee6ab729cd4cf0fd55218530c4522ed30b7b6081752839b68fcec8d0960788"
+dependencies = [
+ "base64 0.13.1",
+ "byteorder",
+ "bytes",
+ "http",
+ "httparse",
+ "log",
+ "rand 0.8.5",
+ "sha1",
+ "thiserror",
+ "url",
+ "utf-8",
+]
+
+[[package]]
 name = "twox-hash"
 version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12856,6 +12824,12 @@ name = "urlencoding"
 version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8db7427f936968176eaa7cdf81b7f98b980b18495ec28f1b5791ac3bfe3eea9"
+
+[[package]]
+name = "utf-8"
+version = "0.7.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
 
 [[package]]
 name = "utf8parse"
@@ -13463,7 +13437,6 @@ dependencies = [
  "bs58",
  "bstr",
  "bulletproofs",
- "bumpalo",
  "byte-slice-cast",
  "bytecode-interpreter-crypto",
  "bytecount",
@@ -13655,9 +13628,6 @@ dependencies = [
  "glob",
  "globset",
  "globwalk",
- "gloo-net",
- "gloo-timers",
- "gloo-utils",
  "governor",
  "group 0.12.1",
  "group 0.13.0",
@@ -13723,7 +13693,6 @@ dependencies = [
  "jemalloc-ctl",
  "jemalloc-sys",
  "jobserver",
- "js-sys",
  "json_to_table",
  "jsonpath_lib",
  "jsonrpsee",
@@ -13733,7 +13702,6 @@ dependencies = [
  "jsonrpsee-proc-macros",
  "jsonrpsee-server",
  "jsonrpsee-types",
- "jsonrpsee-wasm-client",
  "jsonrpsee-ws-client",
  "k256",
  "keccak",
@@ -14024,7 +13992,6 @@ dependencies = [
  "semver 0.11.0",
  "semver 1.0.16",
  "semver-parser",
- "send_wrapper",
  "serde",
  "serde-name",
  "serde-reflection",
@@ -14131,6 +14098,7 @@ dependencies = [
  "tokio-rustls 0.23.4",
  "tokio-rustls 0.24.0",
  "tokio-stream",
+ "tokio-tungstenite",
  "tokio-util 0.7.4",
  "toml 0.5.10",
  "toml 0.7.4",
@@ -14159,6 +14127,7 @@ dependencies = [
  "try-lock",
  "ttl_cache",
  "tui",
+ "tungstenite",
  "twox-hash",
  "typed-arena",
  "typenum",
@@ -14188,6 +14157,7 @@ dependencies = [
  "unzip-n",
  "url",
  "urlencoding",
+ "utf-8",
  "utf8parse",
  "uuid",
  "variant_count",
@@ -14202,13 +14172,6 @@ dependencies = [
  "waker-fn",
  "walkdir",
  "want",
- "wasm-bindgen",
- "wasm-bindgen-backend",
- "wasm-bindgen-futures",
- "wasm-bindgen-macro",
- "wasm-bindgen-macro-support",
- "wasm-bindgen-shared",
- "web-sys",
  "webpki",
  "webpki-roots",
  "which",
