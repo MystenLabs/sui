@@ -2,7 +2,7 @@
 title: Sui Partner Package Matrix
 ---
 
-The following table lists the package ID for Sui Foundation partner packages available on Mainnet. If you have or know of a package that should be listed, edit the table and submit a pull request to get it added. If the package is an update, leave any previous versions in the list and just add a reference to the new version.
+The following table lists the package ID for Sui Foundation partner packages available on Mainnet. If you have or know of a package that should be listed, edit the table using the Source Code link at the bottom of this page to get it added. If the package is an update, leave any previous versions in the list and just add a reference to the new version.
 
 | Package name | Version | Vertical | Package ID |
 | --- | --- | --- | --- |
