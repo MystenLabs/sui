@@ -24,7 +24,7 @@ jobs:
       id: get-pr-list
       working-directory: ./
       run: |
-        echo "new_commit_hash=$(git rev-parse HEAD)"
+        export new_commit_hash=$(git rev-parse HEAD)
         echo "existing_commit_tag=$(git tag --points-at ${new_commit_hash} | grep -E 'sui_v(.*)_rel_notes' | head -n 1)"
 
         export previous_tag=$(git tag | grep -E 'sui_v1(.*)_rel_notes' | sort -r | head -1)
@@ -35,7 +35,7 @@ jobs:
         echo "::set-output name=new_commit_hash::${new_commit_hash}"
         echo "::set-output name=existing_commit_tag::${existing_commit_tag}"
         
-        sui_crate_version=$(cat Cargo.toml | grep "^version =" | tr -d '"' | awk '{ print $3 }')
+        export sui_crate_version=$(cat Cargo.toml | grep "^version =" | tr -d '"' | awk '{ print $3 }')
         export new_tag=$(echo "sui_v${sui_crate_version}_$(date +%s)_rel_notes")
         echo "::set-output name=new_tag::${new_tag}"
         
