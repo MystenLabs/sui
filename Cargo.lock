@@ -5122,6 +5122,7 @@ dependencies = [
  "anyhow",
  "clap 3.2.23",
  "colored",
+ "hex",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-verifier",

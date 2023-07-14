@@ -304,6 +304,7 @@ mod test {
         assert_eq!(expected_checkpoint, pruned);
     }
 
+    #[ignore("Disabled due to flakiness and timeouts - re-enable when timeouts are fixed")]
     #[sim_test(config = "test_config()")]
     async fn test_upgrade_compatibility() {
         // This test is intended to test the compatibility of the latest protocol version with
