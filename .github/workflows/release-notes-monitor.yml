@@ -21,7 +21,6 @@ jobs:
         ref: main
 
     - name: Get list of PRs
-      if: ${{ env.existing_commit_tag == '' }}
       id: get-pr-list
       working-directory: ./
       run: |
@@ -33,7 +32,7 @@ jobs:
         export list_of_prs=$(git log --grep "\[x\]" --pretty=oneline --abbrev-commit ${previous_commit_hash}...${new_commit_hash} -- crates dashboards doc docker external-crates kiosk narwhal nre sui-execution | grep -o '#[0-9]\+' | grep -o '[0-9]\+' | jq -R -s -c 'split("\n")[:-1]')
 
         echo "::set-output name=matrix::${list_of_prs}"
-        echo "::set-output name=new_commit_hash::${env.new_commit_hash}"
+        echo "::set-output name=new_commit_hash::${new_commit_hash}"
         echo "::set-output name=existing_commit_tag::${existing_commit_tag}"
         
         sui_crate_version=$(cat Cargo.toml | grep "^version =" | tr -d '"' | awk '{ print $3 }')
