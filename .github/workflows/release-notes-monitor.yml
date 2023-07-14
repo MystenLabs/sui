@@ -47,7 +47,7 @@ jobs:
   process-prs:
     name: Processing PR
     needs: [ get-list-of-prs ]
-    if: ${{ needs.get-list-of-prs.outputs.new_tag != '' }}
+    if: ${{ needs.get-list-of-prs.outputs.matrix != '[]' && needs.get-list-of-prs.outputs.matrix != '' }}
     runs-on: [self-hosted, self-hosted-arc]
     strategy:
       matrix:
