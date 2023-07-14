@@ -35,14 +35,14 @@ jobs:
         
         export list_of_prs=$(git log --grep "\[x\]" --pretty=oneline --abbrev-commit ${previous_commit_hash}...${new_commit_hash} -- crates dashboards doc docker external-crates kiosk narwhal nre sui-execution | grep -o '#[0-9]\+' | grep -o '[0-9]\+' | jq -R -s -c 'split("\n")[:-1]')
 
-        echo "matrix=${list_of_prs}" >> $GITHUB_STATE
-        echo "new_commit_hash=${new_commit_hash}" >> $GITHUB_STATE
-        echo "existing_commit_tag=${existing_commit_tag}" >> $GITHUB_STATE
+        echo "matrix=${list_of_prs}" >> $GITHUB_OUTPUT
+        echo "new_commit_hash=${new_commit_hash}" >> $GITHUB_OUTPUT
+        echo "existing_commit_tag=${existing_commit_tag}" >> $GITHUB_OUTPUT
         
         export sui_crate_version=$(cat Cargo.toml | grep "^version =" | tr -d '"' | awk '{ print $3 }')
         export new_tag=$(echo "sui_v${sui_crate_version}_$(date +%s)_rel_notes")
-        echo "new_tag=${new_tag}" >> $GITHUB_STATE
-        echo "sui_version=${sui_crate_version}" >> $GITHUB_STATE
+        echo "new_tag=${new_tag}" >> $GITHUB_OUTPUT
+        echo "sui_version=${sui_crate_version}" >> $GITHUB_OUTPUT
         
   process-prs:
     name: Processing PR
