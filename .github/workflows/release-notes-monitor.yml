@@ -87,7 +87,7 @@ jobs:
           }
 
   tag:
-    name: Adding ${{ needs.get-list-of-prs.outputs.new_tag }} git tag to  ${{ needs.get-list-of-prs.outputs.new_commit_hash }} commit
+    name: Adding git tag to processed commit
     needs: [ get-list-of-prs, process-prs ]
     uses: mystenlabs/sui/.github/workflows/tag.yml@eugene/release_notes_monitor_work
     with:
