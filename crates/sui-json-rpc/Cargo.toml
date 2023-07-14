@@ -14,6 +14,7 @@ hyper.workspace = true
 itertools.workspace = true
 linked-hash-map.workspace = true
 tower.workspace = true
+axum.workspace = true
 tower-http.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
@@ -32,6 +33,8 @@ bcs.workspace = true
 eyre.workspace = true
 num_cpus.workspace = true
 once_cell.workspace = true
+axum-server.workspace = true
+serde_json.workspace = true
 
 tap.workspace = true
 
@@ -55,3 +58,4 @@ cached.workspace = true
 mockall.workspace = true
 expect-test.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }
+telemetry-subscribers.workspace = true

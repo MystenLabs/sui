@@ -28,6 +28,7 @@ sui-protocol-config.workspace = true
 sui-swarm-config.workspace = true
 sui-types.workspace = true
 test-cluster.workspace = true
+telemetry-subscribers.workspace = true
 
 anyhow.workspace = true
 async-trait.workspace = true

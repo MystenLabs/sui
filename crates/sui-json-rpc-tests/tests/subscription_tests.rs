@@ -21,7 +21,7 @@ async fn test_subscribe_transaction() -> Result<(), anyhow::Error> {
     let address = &cluster.get_address_0();
     let wallet = cluster.wallet;
 
-    let ws_client = cluster.fullnode_handle.ws_client;
+    let ws_client = cluster.fullnode_handle.ws_client().await;
 
     let package_id = publish_nfts_package(&wallet).await.0;
 

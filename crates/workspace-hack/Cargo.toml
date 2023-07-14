@@ -89,7 +89,7 @@ aws-smithy-query = { version = "0.55", default-features = false }
 aws-smithy-types = { version = "0.55", default-features = false }
 aws-smithy-xml = { version = "0.55", default-features = false }
 aws-types = { version = "0.55", default-features = false }
-axum = { version = "0.6", default-features = false, features = ["form", "headers", "http1", "http2", "json", "matched-path", "original-uri", "query", "tokio"] }
+axum = { version = "0.6", default-features = false, features = ["form", "headers", "http1", "http2", "json", "matched-path", "original-uri", "query", "ws"] }
 axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
 axum-server = { version = "0.4", default-features = false, features = ["tls-rustls"] }
@@ -268,7 +268,7 @@ futures-io = { version = "0.3", features = ["unstable"] }
 futures-lite = { version = "1" }
 futures-sink = { version = "0.3" }
 futures-task = { version = "0.3", default-features = false, features = ["std", "unstable"] }
-futures-timer = { version = "3", default-features = false, features = ["wasm-bindgen"] }
+futures-timer = { version = "3", default-features = false }
 futures-util = { version = "0.3", default-features = false, features = ["async-await-macro", "bilock", "channel", "io", "sink", "unstable"] }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "serde", "zeroize"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
@@ -279,9 +279,6 @@ git-version = { version = "0.3", default-features = false }
 glob = { version = "0.3", default-features = false }
 globset = { version = "0.4" }
 globwalk = { version = "0.8", default-features = false }
-gloo-net = { version = "0.2", default-features = false, features = ["json", "websocket"] }
-gloo-timers = { version = "0.2", features = ["futures"] }
-gloo-utils = { version = "0.1", default-features = false, features = ["serde"] }
 governor = { version = "0.5" }
 group-594e8ee84c453af0 = { package = "group", version = "0.13", default-features = false, features = ["alloc"] }
 group-5ef9efb8ec2df382 = { package = "group", version = "0.12", default-features = false }
@@ -334,16 +331,14 @@ iri-string = { version = "0.4" }
 is-terminal = { version = "0.4", default-features = false }
 itertools = { version = "0.10" }
 itoa = { version = "1", default-features = false }
-js-sys = { version = "0.3", default-features = false }
 json_to_table = { git = "https://github.com/zhiburt/tabled/", rev = "e449317a1c02eb6b29e409ad6617e5d9eb7b3bd4", default-features = false }
 jsonpath_lib = { version = "0.3", default-features = false }
-jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", default-features = false, features = ["full"] }
-jsonrpsee-client-transport = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", default-features = false, features = ["tls", "web", "ws"] }
-jsonrpsee-core = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = ["async-client", "async-wasm-client", "http-helpers", "server", "soketto"] }
+jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", default-features = false, features = ["http-client", "macros", "server", "ws-client"] }
+jsonrpsee-client-transport = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", default-features = false, features = ["tls", "ws"] }
+jsonrpsee-core = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = ["async-client", "http-helpers", "server", "soketto"] }
 jsonrpsee-http-client = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8" }
 jsonrpsee-server = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", default-features = false }
 jsonrpsee-types = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", default-features = false }
-jsonrpsee-wasm-client = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", default-features = false }
 jsonrpsee-ws-client = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8" }
 k256 = { version = "0.11", default-features = false, features = ["ecdsa", "keccak256"] }
 keccak = { version = "0.1", default-features = false }
@@ -567,7 +562,6 @@ sec1-ca01ad9e24f5d932 = { package = "sec1", version = "0.7", features = ["pem", 
 secp256k1 = { version = "0.27", features = ["bitcoin_hashes", "global-context", "rand-std", "recovery"] }
 secp256k1-sys = { version = "0.8", default-features = false, features = ["recovery", "std"] }
 semver-dff4ba8e3ae991db = { package = "semver", version = "1", features = ["serde"] }
-send_wrapper = { version = "0.4", default-features = false }
 serde = { version = "1", features = ["alloc", "derive", "rc"] }
 serde-name = { version = "0.2", default-features = false }
 serde-reflection = { version = "0.3", default-features = false }
@@ -652,6 +646,7 @@ tokio-retry = { version = "0.3", default-features = false }
 tokio-rustls-2b5c6dc72f624058 = { package = "tokio-rustls", version = "0.23" }
 tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24", default-features = false, features = ["logging", "tls12"] }
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
+tokio-tungstenite = { version = "0.18" }
 tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
 toml-ca01ad9e24f5d932 = { package = "toml", version = "0.7", features = ["preserve_order"] }
 toml-d8f496e17d97b5cb = { package = "toml", version = "0.5", features = ["preserve_order"] }
@@ -677,6 +672,7 @@ treeline = { version = "0.1", default-features = false }
 try-lock = { version = "0.2", default-features = false }
 ttl_cache = { version = "0.5" }
 tui = { version = "0.17" }
+tungstenite = { version = "0.18", default-features = false, features = ["handshake"] }
 twox-hash = { version = "1", default-features = false }
 typed-arena = { version = "2" }
 typenum = { version = "1", default-features = false }
@@ -703,6 +699,7 @@ unsigned-varint = { version = "0.7", default-features = false, features = ["std"
 untrusted = { version = "0.7", default-features = false }
 url = { version = "2", features = ["serde"] }
 urlencoding = { version = "2", default-features = false }
+utf-8 = { version = "0.7", default-features = false }
 utf8parse = { version = "0.2" }
 uuid = { version = "1", features = ["fast-rng", "v4"] }
 vec_map = { version = "0.8", default-features = false }
@@ -713,9 +710,6 @@ wait-timeout = { version = "0.2", default-features = false }
 waker-fn = { version = "1", default-features = false }
 walkdir = { version = "2", default-features = false }
 want = { version = "0.3", default-features = false }
-wasm-bindgen = { version = "0.2" }
-wasm-bindgen-futures = { version = "0.4", default-features = false }
-web-sys = { version = "0.3", default-features = false, features = ["AddEventListenerOptions", "BinaryType", "Blob", "CloseEvent", "CloseEventInit", "Document", "ErrorEvent", "FileReader", "History", "HtmlHeadElement", "Location", "MessageEvent", "ProgressEvent", "WebSocket", "Window"] }
 webpki = { version = "0.22", default-features = false, features = ["std"] }
 webpki-roots = { version = "0.22", default-features = false }
 whoami = { version = "1" }
@@ -819,7 +813,7 @@ aws-smithy-query = { version = "0.55", default-features = false }
 aws-smithy-types = { version = "0.55", default-features = false }
 aws-smithy-xml = { version = "0.55", default-features = false }
 aws-types = { version = "0.55", default-features = false }
-axum = { version = "0.6", default-features = false, features = ["form", "headers", "http1", "http2", "json", "matched-path", "original-uri", "query", "tokio"] }
+axum = { version = "0.6", default-features = false, features = ["form", "headers", "http1", "http2", "json", "matched-path", "original-uri", "query", "ws"] }
 axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
 axum-server = { version = "0.4", default-features = false, features = ["tls-rustls"] }
@@ -861,7 +855,6 @@ brotli-decompressor = { version = "2", default-features = false, features = ["st
 bs58 = { version = "0.4", features = ["check"] }
 bstr = { version = "1" }
 bulletproofs = { version = "4" }
-bumpalo = { version = "3" }
 byte-slice-cast = { version = "1" }
 bytecode-interpreter-crypto = { path = "../../external-crates/move/move-prover/interpreter/crypto" }
 bytecount = { version = "0.6", default-features = false }
@@ -1027,7 +1020,7 @@ futures-lite = { version = "1" }
 futures-macro = { version = "0.3", default-features = false }
 futures-sink = { version = "0.3" }
 futures-task = { version = "0.3", default-features = false, features = ["std", "unstable"] }
-futures-timer = { version = "3", default-features = false, features = ["wasm-bindgen"] }
+futures-timer = { version = "3", default-features = false }
 futures-util = { version = "0.3", default-features = false, features = ["async-await-macro", "bilock", "channel", "io", "sink", "unstable"] }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "serde", "zeroize"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
@@ -1039,9 +1032,6 @@ git-version-macro = { version = "0.3", default-features = false }
 glob = { version = "0.3", default-features = false }
 globset = { version = "0.4" }
 globwalk = { version = "0.8", default-features = false }
-gloo-net = { version = "0.2", default-features = false, features = ["json", "websocket"] }
-gloo-timers = { version = "0.2", features = ["futures"] }
-gloo-utils = { version = "0.1", default-features = false, features = ["serde"] }
 governor = { version = "0.5" }
 group-594e8ee84c453af0 = { package = "group", version = "0.13", default-features = false, features = ["alloc"] }
 group-5ef9efb8ec2df382 = { package = "group", version = "0.12", default-features = false }
@@ -1102,17 +1092,15 @@ is-terminal = { version = "0.4", default-features = false }
 itertools = { version = "0.10" }
 itoa = { version = "1", default-features = false }
 jobserver = { version = "0.1", default-features = false }
-js-sys = { version = "0.3", default-features = false }
 json_to_table = { git = "https://github.com/zhiburt/tabled/", rev = "e449317a1c02eb6b29e409ad6617e5d9eb7b3bd4", default-features = false }
 jsonpath_lib = { version = "0.3", default-features = false }
-jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", default-features = false, features = ["full"] }
-jsonrpsee-client-transport = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", default-features = false, features = ["tls", "web", "ws"] }
-jsonrpsee-core = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = ["async-client", "async-wasm-client", "http-helpers", "server", "soketto"] }
+jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", default-features = false, features = ["http-client", "macros", "server", "ws-client"] }
+jsonrpsee-client-transport = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", default-features = false, features = ["tls", "ws"] }
+jsonrpsee-core = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = ["async-client", "http-helpers", "server", "soketto"] }
 jsonrpsee-http-client = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8" }
 jsonrpsee-proc-macros = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", default-features = false }
 jsonrpsee-server = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", default-features = false }
 jsonrpsee-types = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", default-features = false }
-jsonrpsee-wasm-client = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", default-features = false }
 jsonrpsee-ws-client = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8" }
 k256 = { version = "0.11", default-features = false, features = ["ecdsa", "keccak256"] }
 keccak = { version = "0.1", default-features = false }
@@ -1380,7 +1368,6 @@ secp256k1-sys = { version = "0.8", default-features = false, features = ["recove
 semver-a6292c17cd707f01 = { package = "semver", version = "0.11" }
 semver-dff4ba8e3ae991db = { package = "semver", version = "1", features = ["serde"] }
 semver-parser = { version = "0.10", default-features = false }
-send_wrapper = { version = "0.4", default-features = false }
 serde = { version = "1", features = ["alloc", "derive", "rc"] }
 serde-name = { version = "0.2", default-features = false }
 serde-reflection = { version = "0.3", default-features = false }
@@ -1480,6 +1467,7 @@ tokio-retry = { version = "0.3", default-features = false }
 tokio-rustls-2b5c6dc72f624058 = { package = "tokio-rustls", version = "0.23" }
 tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24", default-features = false, features = ["logging", "tls12"] }
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
+tokio-tungstenite = { version = "0.18" }
 tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
 toml-ca01ad9e24f5d932 = { package = "toml", version = "0.7", features = ["preserve_order"] }
 toml-d8f496e17d97b5cb = { package = "toml", version = "0.5", features = ["preserve_order"] }
@@ -1508,6 +1496,7 @@ treeline = { version = "0.1", default-features = false }
 try-lock = { version = "0.2", default-features = false }
 ttl_cache = { version = "0.5" }
 tui = { version = "0.17" }
+tungstenite = { version = "0.18", default-features = false, features = ["handshake"] }
 twox-hash = { version = "1", default-features = false }
 typed-arena = { version = "2" }
 typenum = { version = "1", default-features = false }
@@ -1537,6 +1526,7 @@ untrusted = { version = "0.7", default-features = false }
 unzip-n = { version = "0.1", default-features = false }
 url = { version = "2", features = ["serde"] }
 urlencoding = { version = "2", default-features = false }
+utf-8 = { version = "0.7", default-features = false }
 utf8parse = { version = "0.2" }
 uuid = { version = "1", features = ["fast-rng", "v4"] }
 variant_count = { version = "1", default-features = false }
@@ -1550,13 +1540,6 @@ wait-timeout = { version = "0.2", default-features = false }
 waker-fn = { version = "1", default-features = false }
 walkdir = { version = "2", default-features = false }
 want = { version = "0.3", default-features = false }
-wasm-bindgen = { version = "0.2" }
-wasm-bindgen-backend = { version = "0.2", default-features = false, features = ["spans"] }
-wasm-bindgen-futures = { version = "0.4", default-features = false }
-wasm-bindgen-macro = { version = "0.2", default-features = false, features = ["spans"] }
-wasm-bindgen-macro-support = { version = "0.2", default-features = false, features = ["spans"] }
-wasm-bindgen-shared = { version = "0.2", default-features = false }
-web-sys = { version = "0.3", default-features = false, features = ["AddEventListenerOptions", "BinaryType", "Blob", "CloseEvent", "CloseEventInit", "Document", "ErrorEvent", "FileReader", "History", "HtmlHeadElement", "Location", "MessageEvent", "ProgressEvent", "WebSocket", "Window"] }
 webpki = { version = "0.22", default-features = false, features = ["std"] }
 webpki-roots = { version = "0.22", default-features = false }
 which = { version = "4", default-features = false }
@@ -1614,7 +1597,6 @@ str_stack = { version = "0.1", default-features = false }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
-web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 
 [target.aarch64-apple-darwin.build-dependencies]
 ahash-c38e5c1d305a1b54 = { package = "ahash", version = "0.8" }
@@ -1657,7 +1639,6 @@ str_stack = { version = "0.1", default-features = false }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
-web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 ahash-c38e5c1d305a1b54 = { package = "ahash", version = "0.8" }
@@ -1695,7 +1676,6 @@ str_stack = { version = "0.1", default-features = false }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
-web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
 ahash-c38e5c1d305a1b54 = { package = "ahash", version = "0.8" }
@@ -1735,7 +1715,6 @@ str_stack = { version = "0.1", default-features = false }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
-web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]
 anstyle-wincon = { version = "1", default-features = false }
@@ -1754,7 +1733,6 @@ raw-cpuid = { version = "10", default-features = false }
 schannel = { version = "0.1", default-features = false }
 str-buf = { version = "1", default-features = false }
 tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
-web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 widestring = { version = "0.5" }
 winapi = { version = "0.3", default-features = false, features = ["basetsd", "cfg", "combaseapi", "consoleapi", "errhandlingapi", "evntrace", "fileapi", "handleapi", "heapapi", "ifdef", "impl-debug", "impl-default", "in6addr", "inaddr", "ioapiset", "iphlpapi", "knownfolders", "libloaderapi", "lmaccess", "lmapibuf", "lmcons", "memoryapi", "minwinbase", "minwindef", "namedpipeapi", "netioapi", "ntdef", "ntlsa", "ntsecapi", "ntstatus", "objbase", "objidl", "oleauto", "pdh", "powerbase", "processenv", "processthreadsapi", "profileapi", "psapi", "rpcdce", "securitybaseapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "wbemcli", "winbase", "wincon", "windef", "winerror", "winioctl", "winnt", "winreg", "winsock2", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
@@ -1784,7 +1762,6 @@ schannel = { version = "0.1", default-features = false }
 str-buf = { version = "1", default-features = false }
 tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
 vcpkg = { version = "0.2", default-features = false }
-web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 widestring = { version = "0.5" }
 winapi = { version = "0.3", default-features = false, features = ["basetsd", "cfg", "combaseapi", "consoleapi", "errhandlingapi", "evntrace", "fileapi", "handleapi", "heapapi", "ifdef", "impl-debug", "impl-default", "in6addr", "inaddr", "ioapiset", "iphlpapi", "knownfolders", "libloaderapi", "lmaccess", "lmapibuf", "lmcons", "memoryapi", "minwinbase", "minwindef", "namedpipeapi", "netioapi", "ntdef", "ntlsa", "ntsecapi", "ntstatus", "objbase", "objidl", "oleauto", "pdh", "powerbase", "processenv", "processthreadsapi", "profileapi", "psapi", "rpcdce", "securitybaseapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "wbemcli", "winbase", "wincon", "windef", "winerror", "winioctl", "winnt", "winreg", "winsock2", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
