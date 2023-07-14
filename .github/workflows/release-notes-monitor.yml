@@ -9,6 +9,7 @@ jobs:
     outputs:
       matrix: ${{ steps.get-pr-list.outputs.matrix }}
       new_commit_hash: ${{ steps.get-pr-list.outputs.new_commit_hash }}
+      existing_commit_tag: ${{ steps.get-pr-list.outputs.existing_commit_tag }}
       new_tag: ${{ steps.get-pr-list.outputs.new_tag }}
     runs-on: [self-hosted, self-hosted-arc]
     
@@ -26,20 +27,21 @@ jobs:
         timeout_seconds: 30
         command: |
           echo "new_commit_hash=$(git rev-parse HEAD)" >> $GITHUB_ENV
-          echo "existing_tag=$(git tag --points-at ${new_commit_hash} | grep -E 'sui_v(.*)_rel_notes' | head -n 1)" >> $GITHUB_ENV
+          echo "existing_commit_tag=$(git tag --points-at ${new_commit_hash} | grep -E 'sui_v(.*)_rel_notes' | head -n 1)" >> $GITHUB_ENV
 
     - name: Get list of PRs
-      if: ${{ env.existing_tag == '' }}
+      if: ${{ env.existing_commit_tag == '' }}
       id: get-pr-list
       working-directory: ./
       run: |
         export previous_tag=$(git tag | grep -E 'sui_v1(.*)_rel_notes' | sort -r | head -1)
         export previous_commit_hash=$(git rev-list -n 1 ${previous_tag})
-
         export list_of_prs=$(git log --grep "\[x\]" --pretty=oneline --abbrev-commit ${previous_commit_hash}...${{ env.new_commit_hash }} -- crates dashboards doc docker external-crates kiosk narwhal nre sui-execution | grep -o '#[0-9]\+' | grep -o '[0-9]\+' | jq -R -s -c 'split("\n")[:-1]')
+
         echo "::set-output name=matrix::${list_of_prs}"
         echo "::set-output name=new_commit_hash::${{ env.new_commit_hash }}"
-
+        echo "::set-output name=existing_commit_tag::${{ env.existing_commit_tag }}"
+        
         sui_crate_version=$(cat Cargo.toml | grep "^version =" | tr -d '"' | awk '{ print $3 }')
         export new_tag=$(echo "sui_v${sui_crate_version}_$(date +%s)_rel_notes")
         echo "::set-output name=new_tag::${new_tag}"
@@ -89,6 +91,7 @@ jobs:
   tag:
     name: Adding git tag to processed commit
     needs: [ get-list-of-prs ]
+    if: ${{ needs.get-list-of-prs.outputs.existing_commit_tag == '' }}
     uses: mystenlabs/sui/.github/workflows/tag.yml@eugene/release_notes_monitor_work
     with:
       sui_commit: ${{ needs.get-list-of-prs.outputs.new_commit_hash }}
