@@ -706,7 +706,7 @@ impl SuiTransactionBlockEvents {
         events: TransactionEvents,
         tx_digest: TransactionDigest,
         timestamp_ms: Option<u64>,
-        resolver: &mut impl LayoutResolver,
+        layout_resolver: &mut dyn LayoutResolver,
     ) -> SuiResult<Self> {
         Ok(Self {
             data: events
@@ -714,7 +714,7 @@ impl SuiTransactionBlockEvents {
                 .into_iter()
                 .enumerate()
                 .map(|(seq, event)| {
-                    SuiEvent::try_from(event, tx_digest, seq as u64, timestamp_ms, resolver)
+                    SuiEvent::try_from(event, tx_digest, seq as u64, timestamp_ms, layout_resolver)
                 })
                 .collect::<Result<_, _>>()?,
         })
@@ -761,7 +761,7 @@ impl DevInspectResults {
         effects: TransactionEffects,
         events: TransactionEvents,
         return_values: Result<Vec<ExecutionResult>, ExecutionError>,
-        resolver: &impl GetModule,
+        layout_resolver: &mut dyn LayoutResolver,
     ) -> SuiResult<Self> {
         let tx_digest = *effects.transaction_digest();
         let mut error = None;
@@ -792,7 +792,7 @@ impl DevInspectResults {
         };
         Ok(Self {
             effects: effects.try_into()?,
-            events: SuiTransactionBlockEvents::try_from(events, tx_digest, None, resolver)?,
+            events: SuiTransactionBlockEvents::try_from(events, tx_digest, None, layout_resolver)?,
             results,
             error,
         })

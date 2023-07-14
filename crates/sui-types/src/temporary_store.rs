@@ -100,6 +100,7 @@ impl InnerTemporaryStore {
     }
 }
 
+#[derive(Clone)]
 pub struct TemporaryModuleResolver<'a, R> {
     temp_store: &'a InnerTemporaryStore,
     fallback: R,
@@ -113,6 +114,42 @@ impl<'a, R> TemporaryModuleResolver<'a, R> {
         }
     }
 }
+
+impl<R> ModuleResolver for TemporaryModuleResolver<'_, R>
+where
+    R: ModuleResolver<Error = SuiError>,
+{
+    type Error = SuiError;
+
+    fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+        let obj = self.temp_store.written.get(&ObjectID::from(*id.address()));
+        if let Some((_, o, _)) = obj {
+            if let Some(p) = o.data.try_as_package() {
+                return Ok(p.serialized_module_map().get(id.name().as_str()).cloned());
+            }
+        }
+        self.fallback.get_module(id)
+    }
+}
+
+impl<R: BackingPackageStore> BackingPackageStore for TemporaryModuleResolver<'_, R> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+        let obj = self.temp_store.written.get(package_id);
+        if let Some((_, o, _)) = obj {
+            debug_assert!(
+                o.is_package(),
+                "Requested package object {} in InnerTemporaryStore is non-package",
+                package_id
+            );
+            return Ok(Some(o.clone()));
+        }
+        self.fallback.get_package_object(package_id)
+    }
+}
+// impl<R> TypeLayoutStore for TemporaryModuleResolver<'_, R>
+// where
+//     R: ModuleResolver<Error = SuiError> + BackingPackageStore,
+// {}
 
 impl<R> GetModule for TemporaryModuleResolver<'_, R>
 where
@@ -133,6 +170,53 @@ where
             }
         }
         self.fallback.get_module_by_id(id)
+    }
+}
+
+#[derive(Clone)]
+pub struct TemporaryLayoutResolver<'a, R> {
+    temp_store: &'a InnerTemporaryStore,
+    fallback: R,
+}
+
+impl<'a, R> TemporaryLayoutResolver<'a, R> {
+    pub fn new(temp_store: &'a InnerTemporaryStore, fallback: R) -> Self {
+        Self {
+            temp_store,
+            fallback,
+        }
+    }
+}
+
+impl<R> ModuleResolver for TemporaryLayoutResolver<'_, R>
+where
+    R: ModuleResolver<Error = SuiError>,
+{
+    type Error = SuiError;
+
+    fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+        let obj = self.temp_store.written.get(&ObjectID::from(*id.address()));
+        if let Some((_, o, _)) = obj {
+            if let Some(p) = o.data.try_as_package() {
+                return Ok(p.serialized_module_map().get(id.name().as_str()).cloned());
+            }
+        }
+        self.fallback.get_module(id)
+    }
+}
+
+impl<R: BackingPackageStore> BackingPackageStore for TemporaryLayoutResolver<'_, R> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+        let obj = self.temp_store.written.get(package_id);
+        if let Some((_, o, _)) = obj {
+            debug_assert!(
+                o.is_package(),
+                "Requested package object {} in InnerTemporaryStore is non-package",
+                package_id
+            );
+            return Ok(Some(o.clone()));
+        }
+        self.fallback.get_package_object(package_id)
     }
 }
 

@@ -23,6 +23,24 @@ pub trait LayoutResolver {
     ) -> Result<MoveStructLayout, SuiError>;
 }
 
+impl LayoutResolver for Box<dyn LayoutResolver> {
+    fn get_layout(
+        &mut self,
+        object: &MoveObject,
+        format: ObjectFormatOptions,
+    ) -> Result<MoveStructLayout, SuiError> {
+        self.as_mut().get_layout(object, format)
+    }
+
+    fn get_layout_from_struct_tag(
+        &mut self,
+        struct_tag: &StructTag,
+        format: ObjectFormatOptions,
+    ) -> Result<MoveStructLayout, SuiError> {
+        self.as_mut().get_layout_from_struct_tag(struct_tag, format)
+    }
+}
+
 pub trait TypeTagResolver {
     fn get_type_tag(&self, type_: &Type) -> Result<TypeTag, ExecutionError>;
 }

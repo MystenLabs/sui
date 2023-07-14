@@ -84,13 +84,13 @@ impl From<SuiEvent> for Event {
     }
 }
 
-impl<'state, 'vm> SuiEvent {
+impl SuiEvent {
     pub fn try_from(
         event: Event,
         tx_digest: TransactionDigest,
         event_seq: u64,
         timestamp_ms: Option<u64>,
-        resolver: &mut impl LayoutResolver,
+        resolver: &mut dyn LayoutResolver,
     ) -> SuiResult<Self> {
         let Event {
             package_id,

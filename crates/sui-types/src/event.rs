@@ -128,7 +128,7 @@ impl Event {
     pub fn content_bytes_to_move_struct(
         struct_tag: &StructTag,
         contents: &[u8],
-        resolver: &mut impl LayoutResolver,
+        resolver: &mut dyn LayoutResolver,
     ) -> SuiResult<MoveStruct> {
         let layout =
             resolver.get_layout_from_struct_tag(struct_tag, ObjectFormatOptions::default())?;

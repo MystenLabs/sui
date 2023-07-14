@@ -159,6 +159,7 @@ impl StressTestRunner {
         let state = self.state();
 
         let epoch_store = state.load_epoch_store_one_call_per_task();
+        let foo = state.database.as_ref();
         let mut layout_resolver = epoch_store
             .executor()
             .type_layout_resolver(Box::new(state.database.as_ref()));
