@@ -346,7 +346,7 @@ fn test_move_package_size_for_gas_metering() {
     let package = Object::new_package(
         &[module],
         TransactionDigest::genesis(),
-        ProtocolConfig::get_for_max_version().max_move_package_size(),
+        ProtocolConfig::get_for_max_version_UNSAFE().max_move_package_size(),
         &[], // empty dependencies for empty package (no modules)
     )
     .unwrap();

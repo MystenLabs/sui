@@ -104,7 +104,7 @@ fn test_upgraded() {
         .new_upgraded(
             c_id2,
             &build_test_modules("Cv2"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap();
@@ -132,7 +132,7 @@ fn test_depending_on_upgrade() {
         .new_upgraded(
             c_id2,
             &build_test_modules("Cv2"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap();
@@ -157,7 +157,7 @@ fn test_upgrade_upgrades_linkage() {
         .new_upgraded(
             c_id2,
             &build_test_modules("Cv2"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap();
@@ -169,7 +169,7 @@ fn test_upgrade_upgrades_linkage() {
         .new_upgraded(
             b_id2,
             &build_test_modules("B"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [&c_new],
         )
         .unwrap();
@@ -199,7 +199,7 @@ fn test_upgrade_linkage_digest_to_new_dep() {
         .new_upgraded(
             c_id2,
             &build_test_modules("Cv2"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap();
@@ -211,7 +211,7 @@ fn test_upgrade_linkage_digest_to_new_dep() {
         .new_upgraded(
             b_id2,
             &build_test_modules("B"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [&c_new],
         )
         .unwrap();
@@ -253,7 +253,7 @@ fn test_upgrade_downngrades_linkage() {
         .new_upgraded(
             c_id2,
             &build_test_modules("Cv2"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap();
@@ -265,7 +265,7 @@ fn test_upgrade_downngrades_linkage() {
         .new_upgraded(
             b_id2,
             &build_test_modules("B"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [&c_pkg],
         )
         .unwrap();
@@ -295,7 +295,7 @@ fn test_transitively_depending_on_upgrade() {
         .new_upgraded(
             c_id2,
             &build_test_modules("Cv2"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap();
@@ -324,7 +324,7 @@ fn package_digest_changes_with_dep_upgrades_and_in_sync_with_move_package_digest
         .new_upgraded(
             c_id2,
             &build_test_modules("Cv2"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap();
@@ -384,7 +384,7 @@ fn test_fail_on_transitive_dependency_downgrade() {
         .new_upgraded(
             c_id2,
             &build_test_modules("Cv2"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap();
@@ -409,7 +409,7 @@ fn test_fail_on_upgrade_missing_type() {
         .new_upgraded(
             c_id2,
             &build_test_modules("Cv1"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap_err();

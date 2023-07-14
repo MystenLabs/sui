@@ -22,10 +22,11 @@ use sui_types::{base_types::dbg_addr, crypto::get_key_pair};
 
 // The cost table is used only to get the max budget available which is not dependent on
 // the gas price
-static MAX_GAS_BUDGET: Lazy<u64> = Lazy::new(|| ProtocolConfig::get_for_max_version().max_tx_gas());
+static MAX_GAS_BUDGET: Lazy<u64> =
+    Lazy::new(|| ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas());
 // MIN_GAS_BUDGET_PRE_RGP has to be multiplied by the RGP to get the proper minimum
 static MIN_GAS_BUDGET_PRE_RGP: Lazy<u64> =
-    Lazy::new(|| ProtocolConfig::get_for_max_version().base_tx_cost_fixed());
+    Lazy::new(|| ProtocolConfig::get_for_max_version_UNSAFE().base_tx_cost_fixed());
 
 #[tokio::test]
 async fn test_tx_less_than_minimum_gas_budget() {
@@ -756,7 +757,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
 
     // Create a transaction with budget DELTA less than the gas cost required.
     let total_gas_used = gas_cost.net_gas_usage() as u64;
-    let config = ProtocolConfig::get_for_max_version();
+    let config = ProtocolConfig::get_for_max_version_UNSAFE();
     let delta: u64 =
         gas_size as u64 * config.obj_data_cost_refundable() * config.storage_gas_price() + 1000;
     let budget = if delta < total_gas_used {

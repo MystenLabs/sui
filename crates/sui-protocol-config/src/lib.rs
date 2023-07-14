@@ -899,11 +899,19 @@ impl ProtocolConfig {
         ProtocolConfig::get_for_version(ProtocolVersion::MIN, Chain::Unknown)
     }
 
+    /// CAREFUL! - You probably want to use `get_for_version` instead.
+    ///
     /// Convenience to get the constants at the current maximum supported version.
-    /// Mainly used by genesis.
-    pub fn get_for_max_version() -> Self {
+    /// Mainly used by genesis. Note well that this function uses the max version
+    /// supported locally by the node, which is not necessarily the current version
+    /// of the network. ALSO, this function disregards chain specific config (by
+    /// using Chain::Unknown), thereby potentially returning a protocol config that
+    /// is incorrect for some feature flags. Definitely safe for testing and for
+    /// protocol version 11 and prior.
+    #[allow(non_snake_case)]
+    pub fn get_for_max_version_UNSAFE() -> Self {
         if Self::load_poison_get_for_min_version() {
-            panic!("get_for_max_version called on validator");
+            panic!("get_for_max_version_UNSAFE called on validator");
         }
         ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown)
     }
