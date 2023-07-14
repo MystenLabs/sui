@@ -6,6 +6,7 @@ import { CoinFormat, formatBalance, useGetReferenceGasPrice } from '@mysten/core
 import { FormattedStatsAmount, StatsWrapper } from './FormattedStatsAmount';
 import { useGetNetworkMetrics } from '~/hooks/useGetNetworkMetrics';
 import { Card } from '~/ui/Card';
+import { Divider } from '~/ui/Divider';
 import { Heading } from '~/ui/Heading';
 
 export function OnTheNetwork() {
@@ -16,8 +17,8 @@ export function OnTheNetwork() {
 			? formatBalance(referenceGasPrice, 0, CoinFormat.FULL)
 			: null;
 	return (
-		<Card bg="white" spacing="lg" height="full">
-			<div className="flex flex-col gap-5">
+		<Card bg="white/80" spacing="lg" height="full">
+			<div className="flex flex-col gap-4">
 				<Heading variant="heading4/semibold" color="steel-darker">
 					Network Activity
 				</Heading>
@@ -25,37 +26,39 @@ export function OnTheNetwork() {
 					<FormattedStatsAmount
 						label="TPS now"
 						amount={networkMetrics?.currentTps ? Math.floor(networkMetrics.currentTps) : undefined}
-						size="sm"
+						size="md"
 					/>
 					<FormattedStatsAmount
 						label="Peak 30d TPS"
 						tooltip="Peak TPS in the past 30 days excluding this epoch"
 						amount={networkMetrics?.tps30Days ? Math.floor(networkMetrics?.tps30Days) : undefined}
-						size="sm"
+						size="md"
 					/>
 				</div>
-				<hr className="flex-1 border-hero/10" />
+				<Divider color="hero/10" />
+
+				<StatsWrapper
+					orientation="horizontal"
+					label="Reference Gas Price"
+					tooltip="The reference gas price of the current epoch"
+					postfix={gasPriceFormatted !== null ? 'MIST' : null}
+					size="sm"
+				>
+					{gasPriceFormatted}
+				</StatsWrapper>
+
+				<Divider color="hero/10" />
+
 				<div className="flex flex-1 flex-col gap-2">
-					<StatsWrapper
-						orientation="horizontal"
-						label="Reference Gas Price"
-						tooltip="The reference gas price of the current epoch"
-						postfix={gasPriceFormatted !== null ? 'MIST' : null}
-						size="sm"
-					>
-						{gasPriceFormatted}
-					</StatsWrapper>
 					<FormattedStatsAmount
 						orientation="horizontal"
 						label="Total Packages"
-						tooltip="Total packages counter"
 						amount={networkMetrics?.totalPackages}
 						size="sm"
 					/>
 					<FormattedStatsAmount
 						orientation="horizontal"
 						label="Objects"
-						tooltip="Total objects counter"
 						amount={networkMetrics?.totalObjects}
 						size="sm"
 					/>

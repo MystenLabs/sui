@@ -68,7 +68,7 @@ export function TransactionsCardGraph() {
 	const { data: totalTransactions } = useGetTotalTransactionBlocks();
 	const { data: epochMetrics, isLoading } = useEpochTransactions();
 	return (
-		<Card bg="white" spacing={!epochMetrics?.length ? 'lg' : 'lgGraph'} height="full">
+		<Card bg="white/80" spacing={!epochMetrics?.length ? 'lg' : 'lgGraph'} height="full">
 			<div className="flex h-full flex-col gap-4 overflow-hidden">
 				<Heading variant="heading4/semibold" color="steel-darker">
 					Transaction Blocks
@@ -79,7 +79,7 @@ export function TransactionsCardGraph() {
 						label="Total"
 						tooltip="Total transaction blocks"
 						amount={totalTransactions}
-						size="sm"
+						size="md"
 					/>
 				</div>
 				<div
