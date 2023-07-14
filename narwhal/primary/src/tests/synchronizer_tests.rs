@@ -90,13 +90,6 @@ async fn accept_certificates() {
     }
 
     // Ensure the Synchronizer sends the parents of the certificates to the proposer.
-    //
-    // The first messages are the Synchronizer letting us know about the round of parent certificates
-    for _i in 0..3 {
-        let received = rx_parents.recv().await.unwrap();
-        assert_eq!(received, (vec![], 0, 0));
-    }
-    // the next message actually contains the parents
     let received = rx_parents.recv().await.unwrap();
     assert_eq!(received, (certificates.clone(), 1, 0));
 
@@ -451,11 +444,6 @@ async fn synchronizer_recover_partial_certs() {
         synchronizer.try_accept_certificate(cert).await.unwrap();
     }
     tokio::time::sleep(Duration::from_secs(5)).await;
-
-    for _ in 0..2 {
-        let received = rx_parents.recv().await.unwrap();
-        assert_eq!(received, (vec![], 0, 0));
-    }
 
     // the recovery flow sends message that contains the parents
     let received = rx_parents.recv().await.unwrap();
