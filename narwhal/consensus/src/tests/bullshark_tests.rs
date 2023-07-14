@@ -10,7 +10,6 @@ use crate::consensus_utils::NUM_SUB_DAGS_PER_SCHEDULE;
 use crate::consensus_utils::*;
 use crate::{metrics::ConsensusMetrics, Consensus, NUM_SHUTDOWN_RECEIVERS};
 use config::AuthorityIdentifier;
-use dag::node_dag::Affiliated;
 #[allow(unused_imports)]
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
@@ -248,13 +247,6 @@ async fn not_enough_support_with_leader_schedule_change() {
         leader_configs,
     );
     certificates.extend(out);
-
-    for certificate in &certificates {
-        println!("[{}] {}", certificate.round(), certificate.digest());
-        for parent in certificate.parents() {
-            println!("\t->{}", parent);
-        }
-    }
 
     let mut config: ProtocolConfig = latest_protocol_version();
     config.set_narwhal_new_leader_election_schedule(true);
