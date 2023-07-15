@@ -6,9 +6,7 @@ pub mod codes;
 
 use crate::{
     command_line::COLOR_MODE_ENV_VAR,
-    diagnostics::codes::{
-        Category, DiagnosticCode, DiagnosticInfo, DiagnosticsID, Severity, WarningFilter,
-    },
+    diagnostics::codes::{DiagnosticCode, DiagnosticInfo, DiagnosticsID, Severity, WarningFilter},
     shared::{ast_debug::AstDebug, FILTER_UNUSED_FUNCTION},
 };
 use codespan_reporting::{
@@ -508,7 +506,7 @@ impl AstDebug for WarningFilters {
                 w.write(&format!("#[{}(", WARNING_FILTER_ATTR,));
                 let items = category
                     .iter()
-                    .map(|(cat, n)| WarningFilter::Category(Category::try_from(*cat).unwrap(), *n))
+                    .map(|(cat, n)| WarningFilter::Category(*cat, *n))
                     .chain(
                         codes
                             .iter()

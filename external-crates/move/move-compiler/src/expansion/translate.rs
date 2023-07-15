@@ -739,7 +739,7 @@ fn warning_filter(
                 let msg = format!(
                     "Expected list of warnings, e.g. '{}({})'",
                     DiagnosticAttribute::ALLOW,
-                    WarningFilter::Category(Category::UnusedItem, Some(FILTER_UNUSED))
+                    WarningFilter::Category(Category::UnusedItem as u8, Some(FILTER_UNUSED))
                         .to_str()
                         .unwrap(),
                 );

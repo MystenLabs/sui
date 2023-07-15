@@ -252,7 +252,7 @@ impl CompilationEnv {
             ),
             (
                 KnownFilterKey::new(FILTER_UNUSED.to_string(), filter_attr_name.clone()),
-                WarningFilter::Category(Category::UnusedItem, Some(FILTER_UNUSED)),
+                WarningFilter::Category(Category::UnusedItem as u8, Some(FILTER_UNUSED)),
             ),
             (
                 KnownFilterKey::new(FILTER_MISSING_PHANTOM.to_string(), filter_attr_name.clone()),

@@ -54,7 +54,7 @@ pub enum WarningFilter {
     /// Filters all warnings
     All,
     /// Filters all warnings of a specific category. Only known filters have names.
-    Category(Category, /* name */ Option<&'static str>),
+    Category(/* category */ u8, /* name */ Option<&'static str>),
     /// Filters a single warning, as defined by codes below. Only known filters have names.
     Code(DiagnosticsID, /* name */ Option<&'static str>),
 }
