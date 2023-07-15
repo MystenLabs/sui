@@ -94,6 +94,7 @@ be used to implement application-specific transfer rules.
 -  [Function `borrow_mut`](#0x2_kiosk_borrow_mut)
 -  [Function `borrow_val`](#0x2_kiosk_borrow_val)
 -  [Function `return_val`](#0x2_kiosk_return_val)
+-  [Function `kiosk_owner_cap_for`](#0x2_kiosk_kiosk_owner_cap_for)
 -  [Function `purchase_cap_kiosk`](#0x2_kiosk_purchase_cap_kiosk)
 -  [Function `purchase_cap_item`](#0x2_kiosk_purchase_cap_item)
 -  [Function `purchase_cap_min_price`](#0x2_kiosk_purchase_cap_min_price)
@@ -909,7 +910,7 @@ in a third party module.
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_set_owner">set_owner</a>(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, ctx: &TxContext
 ) {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     self.owner = sender(ctx);
 }
 </code></pre>
@@ -938,7 +939,7 @@ implementing a custom logic that relies on the <code><a href="kiosk.md#0x2_kiosk
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_set_owner_custom">set_owner_custom</a>(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, owner: <b>address</b>
 ) {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     self.owner = owner
 }
 </code></pre>
@@ -967,7 +968,7 @@ Performs an authorization check to make sure only owner can do that.
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place">place</a>&lt;T: key + store&gt;(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, item: T
 ) {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <a href="kiosk.md#0x2_kiosk_place_internal">place_internal</a>(self, item)
 }
 </code></pre>
@@ -1000,7 +1001,7 @@ and the item can be sold, otherwise the asset might be locked forever.
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_lock">lock</a>&lt;T: key + store&gt;(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, _policy: &TransferPolicy&lt;T&gt;, item: T
 ) {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <a href="kiosk.md#0x2_kiosk_lock_internal">lock_internal</a>(self, item)
 }
 </code></pre>
@@ -1029,7 +1030,7 @@ Performs an authorization check to make sure only owner can do that.
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_take">take</a>&lt;T: key + store&gt;(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID
 ): T {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(!<a href="kiosk.md#0x2_kiosk_is_locked">is_locked</a>(self, id), <a href="kiosk.md#0x2_kiosk_EItemLocked">EItemLocked</a>);
     <b>assert</b>!(!<a href="kiosk.md#0x2_kiosk_is_listed_exclusively">is_listed_exclusively</a>(self, id), <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>);
     <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_item">has_item</a>(self, id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
@@ -1064,7 +1065,7 @@ Performs an authorization check to make sure only owner can sell.
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_list">list</a>&lt;T: key + store&gt;(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID, price: u64
 ) {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_item_with_type">has_item_with_type</a>&lt;T&gt;(self, id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
     <b>assert</b>!(!<a href="kiosk.md#0x2_kiosk_is_listed_exclusively">is_listed_exclusively</a>(self, id), <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>);
 
@@ -1126,7 +1127,7 @@ user Kiosk. Can only be performed by the owner of the <code><a href="kiosk.md#0x
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_delist">delist</a>&lt;T: key + store&gt;(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID
 ) {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_item_with_type">has_item_with_type</a>&lt;T&gt;(self, id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
     <b>assert</b>!(!<a href="kiosk.md#0x2_kiosk_is_listed_exclusively">is_listed_exclusively</a>(self, id), <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>);
     <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_is_listed">is_listed</a>(self, id), <a href="kiosk.md#0x2_kiosk_ENotListed">ENotListed</a>);
@@ -1170,8 +1171,8 @@ finalized.
 
     self.item_count = self.item_count - 1;
     <b>assert</b>!(price == <a href="coin.md#0x2_coin_value">coin::value</a>(&payment), <a href="kiosk.md#0x2_kiosk_EIncorrectAmount">EIncorrectAmount</a>);
-    <a href="coin.md#0x2_coin_put">coin::put</a>(&<b>mut</b> self.profits, payment);
     df::remove_if_exists&lt;<a href="kiosk.md#0x2_kiosk_Lock">Lock</a>, bool&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Lock">Lock</a> { id });
+    <a href="coin.md#0x2_coin_put">coin::put</a>(&<b>mut</b> self.profits, payment);
 
     <a href="event.md#0x2_event_emit">event::emit</a>(<a href="kiosk.md#0x2_kiosk_ItemPurchased">ItemPurchased</a>&lt;T&gt; { <a href="kiosk.md#0x2_kiosk">kiosk</a>: <a href="object.md#0x2_object_id">object::id</a>(self), id, price });
 
@@ -1203,18 +1204,17 @@ for any price equal or higher than the <code>min_price</code>.
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_list_with_purchase_cap">list_with_purchase_cap</a>&lt;T: key + store&gt;(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID, min_price: u64, ctx: &<b>mut</b> TxContext
 ): <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a>&lt;T&gt; {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_item_with_type">has_item_with_type</a>&lt;T&gt;(self, id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
     <b>assert</b>!(!<a href="kiosk.md#0x2_kiosk_is_listed">is_listed</a>(self, id), <a href="kiosk.md#0x2_kiosk_EAlreadyListed">EAlreadyListed</a>);
 
-    <b>let</b> uid = <a href="object.md#0x2_object_new">object::new</a>(ctx);
     df::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>true</b> }, min_price);
 
     <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a>&lt;T&gt; {
-        id: uid,
-        item_id: id,
-        kiosk_id: cap.for,
         min_price,
+        item_id: id,
+        id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
+        kiosk_id: <a href="object.md#0x2_object_id">object::id</a>(self),
     }
 }
 </code></pre>
@@ -1317,7 +1317,7 @@ Withdraw profits from the Kiosk.
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_withdraw">withdraw</a>(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, amount: Option&lt;u64&gt;, ctx: &<b>mut</b> TxContext
 ): Coin&lt;SUI&gt; {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
 
     <b>let</b> amount = <b>if</b> (<a href="_is_some">option::is_some</a>(&amount)) {
         <b>let</b> amt = <a href="_destroy_some">option::destroy_some</a>(amount);
@@ -1364,7 +1364,7 @@ malicious scenarios we now require the extension witness on install.
     allowed_types: <a href="">vector</a>&lt;TypeName&gt;,
     ctx: &<b>mut</b> TxContext
 ) {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
 
     df::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {}, <a href="kiosk.md#0x2_kiosk_Extension">Extension</a> {
         storage: <a href="bag.md#0x2_bag_new">bag::new</a>(ctx),
@@ -1401,7 +1401,7 @@ The storage is still available to the extension (until it's removed).
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>,
     cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>,
 ) {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <a href="kiosk.md#0x2_kiosk_extension_mut">extension_mut</a>&lt;Ext&gt;(self).is_enabled = <b>false</b>;
 }
 </code></pre>
@@ -1432,7 +1432,7 @@ owner can disable them via <code>disable_extension</code> call.
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>,
     cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>,
 ) {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <a href="kiosk.md#0x2_kiosk_extension_mut">extension_mut</a>&lt;Ext&gt;(self).is_enabled = <b>true</b>;
 }
 </code></pre>
@@ -1464,7 +1464,7 @@ specified in the list.
     cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>,
     <a href="types.md#0x2_types">types</a>: <a href="">vector</a>&lt;TypeName&gt;,
 ) {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <a href="kiosk.md#0x2_kiosk_extension_mut">extension_mut</a>&lt;Ext&gt;(self).allowed_types = <a href="types.md#0x2_types">types</a>;
 }
 </code></pre>
@@ -1934,7 +1934,7 @@ Access the <code>UID</code> using the <code><a href="kiosk.md#0x2_kiosk_KioskOwn
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_uid_mut_as_owner">uid_mut_as_owner</a>(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>
 ): &<b>mut</b> UID {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     &<b>mut</b> self.id
 }
 </code></pre>
@@ -1963,7 +1963,7 @@ setting.
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_set_allow_extensions">set_allow_extensions</a>(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, allow_extensions: bool
 ) {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     self.allow_extensions = allow_extensions;
 }
 </code></pre>
@@ -2120,7 +2120,7 @@ Get mutable access to <code>profits</code> - useful for extendability.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_profits_mut">profits_mut</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>): &<b>mut</b> Balance&lt;SUI&gt; {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     &<b>mut</b> self.profits
 }
 </code></pre>
@@ -2205,7 +2205,7 @@ Item can be <code>borrow_mut</code>ed only if it's not <code>is_listed</code>.
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_borrow_mut">borrow_mut</a>&lt;T: key + store&gt;(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID
 ): &<b>mut</b> T {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_item">has_item</a>(self, id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
     <b>assert</b>!(!<a href="kiosk.md#0x2_kiosk_is_listed">is_listed</a>(self, id), <a href="kiosk.md#0x2_kiosk_EItemIsListed">EItemIsListed</a>);
 
@@ -2237,7 +2237,7 @@ Item can be <code>borrow_val</code>-ed only if it's not <code>is_listed</code>.
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_borrow_val">borrow_val</a>&lt;T: key + store&gt;(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID
 ): (T, <a href="kiosk.md#0x2_kiosk_Borrow">Borrow</a>) {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_item">has_item</a>(self, id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
     <b>assert</b>!(!<a href="kiosk.md#0x2_kiosk_is_listed">is_listed</a>(self, id), <a href="kiosk.md#0x2_kiosk_EItemIsListed">EItemIsListed</a>);
 
@@ -2278,6 +2278,31 @@ if <code>borrow_val</code> is used.
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(&item) == item_id, <a href="kiosk.md#0x2_kiosk_EItemMismatch">EItemMismatch</a>);
 
     dof::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Item">Item</a> { id: item_id }, item);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_kiosk_kiosk_owner_cap_for"></a>
+
+## Function `kiosk_owner_cap_for`
+
+Get the <code>for</code> field of the <code><a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a></code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_kiosk_owner_cap_for">kiosk_owner_cap_for</a>(cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>): <a href="object.md#0x2_object_ID">object::ID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_kiosk_owner_cap_for">kiosk_owner_cap_for</a>(cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>): ID {
+    cap.for
 }
 </code></pre>
 
