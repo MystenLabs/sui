@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 
+
 exclude = [
     "external-crates/move-execution/v0/move-bytecode-verifier",
     "external-crates/move-execution/v0/move-stdlib",
