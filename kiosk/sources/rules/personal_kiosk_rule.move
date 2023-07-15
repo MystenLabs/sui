@@ -1,7 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module kiosk::owned_kiosk_rule {
+/// Description:
+/// This module defines a Rule which checks that the Kiosk is "personal" meaning
+/// that the owner cannot change. By default, `KioskOwnerCap` can be transferred
+/// and owned by an application therefore the owner of the Kiosk is not fixed.
+///
+/// Configuration:
+/// - None
+///
+/// Use cases:
+/// - Strong royalty enforcement - personal Kiosks cannot be transferred with
+/// the assets inside which means that the item will never change the owner.
+///
+/// Notes:
+/// - Combination of `kiosk_lock_rule` and `personal_kiosk_rule` can be used to
+/// enforce policies on every trade (item can be transferred only through a
+/// trade + Kiosk is fixed to the owner).
+///
+module kiosk::personal_kiosk_rule {
     use sui::kiosk::{Self, Kiosk};
     use sui::transfer_policy::{
         Self as policy,
@@ -10,7 +27,7 @@ module kiosk::owned_kiosk_rule {
         TransferRequest
     };
 
-    use kiosk::owned_kiosk;
+    use kiosk::personal_kiosk;
 
     /// An item hasn't been placed into the Kiosk before the call.
     const EItemNotInKiosk: u64 = 0;
@@ -27,11 +44,10 @@ module kiosk::owned_kiosk_rule {
 
     /// Make sure that the destination Kiosk has the Owner key. Item is already
     /// placed by the time this check is performed - otherwise fails.
-    public fun confirm<T>(kiosk: &Kiosk, request: &mut TransferRequest<T>) {
+    public fun prove<T>(kiosk: &Kiosk, request: &mut TransferRequest<T>) {
         assert!(kiosk::has_item(kiosk, policy::item(request)), EItemNotInKiosk);
-        assert!(owned_kiosk::is_owned(kiosk), EKioskNotOwned);
+        assert!(personal_kiosk::is_personal(kiosk), EKioskNotOwned);
 
         policy::add_receipt(Rule {}, request)
     }
-
 }
