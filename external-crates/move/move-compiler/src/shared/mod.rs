@@ -13,7 +13,7 @@ use crate::{
         Diagnostic, Diagnostics, WarningFilters,
     },
     editions::{Edition, Flavor},
-    expansion as E,
+    expansion::ast as E,
     naming::ast::ModuleDefinition,
     sui_mode,
     typing::visitor::{TypingVisitor, TypingVisitorObj},
@@ -198,11 +198,11 @@ pub type AttributeDeriver = dyn Fn(&mut CompilationEnv, &mut ModuleDefinition);
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct KnownFilterKey {
     name: String,
-    attribute_name: E::ast::AttributeName_,
+    attribute_name: E::AttributeName_,
 }
 
 impl KnownFilterKey {
-    pub fn new(name: String, attribute_name: E::ast::AttributeName_) -> Self {
+    pub fn new(name: String, attribute_name: E::AttributeName_) -> Self {
         KnownFilterKey {
             name,
             attribute_name,
@@ -223,8 +223,8 @@ pub struct CompilationEnv {
     known_filters: BTreeMap<KnownFilterKey, WarningFilter>,
     /// Maps a diagnostics ID to a known filter name.
     known_filter_names: BTreeMap<DiagnosticsID, String>,
-    /// Attribute names (including externally provided ones) identifying warning filters.
-    filter_attributes: BTreeSet<E::ast::AttributeName_>,
+    /// Attribute names (including externally provided ones) identifying known warning filters.
+    known_filter_attributes: BTreeSet<E::AttributeName_>,
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
 }
@@ -241,7 +241,7 @@ impl CompilationEnv {
             sui_mode::typing::SuiTypeChecks.visitor(),
         ]);
         let filter_attr_name =
-            E::ast::AttributeName_::Known(known_attributes::KnownAttribute::Diagnostic(
+            E::AttributeName_::Known(known_attributes::KnownAttribute::Diagnostic(
                 known_attributes::DiagnosticAttribute::Allow,
             ));
         let filter_attributes = BTreeSet::from([filter_attr_name]);
@@ -386,7 +386,7 @@ impl CompilationEnv {
             default_config: default_config.unwrap_or_default(),
             known_filters,
             known_filter_names,
-            filter_attributes,
+            known_filter_attributes: filter_attributes,
         }
     }
 
@@ -482,15 +482,53 @@ impl CompilationEnv {
     pub fn filter_from_str(
         &self,
         name: String,
-        attribute_name: E::ast::AttributeName_,
+        attribute_name: E::AttributeName_,
     ) -> Option<WarningFilter> {
         self.known_filters
             .get(&KnownFilterKey::new(name, attribute_name))
             .cloned()
     }
 
-    pub fn filter_attributes(&self) -> &BTreeSet<E::ast::AttributeName_> {
-        &self.filter_attributes
+    pub fn filter_attributes(&self) -> &BTreeSet<E::AttributeName_> {
+        &self.known_filter_attributes
+    }
+
+    pub fn add_custom_known_filters(
+        &mut self,
+        filters: Vec<WarningFilter>,
+        filter_attr_name: E::AttributeName_,
+    ) -> anyhow::Result<()> {
+        self.known_filter_attributes.insert(filter_attr_name);
+        for filter in filters {
+            match filter {
+                WarningFilter::All => {
+                    self.known_filters.insert(
+                        KnownFilterKey::new(FILTER_ALL.to_string(), filter_attr_name.clone()),
+                        filter,
+                    );
+                }
+                WarningFilter::Category(_, name) => {
+                    let Some(n) = name else {
+                        anyhow::bail!("A known Category warning filter must have a name specified");
+                    };
+                    self.known_filters.insert(
+                        KnownFilterKey::new(n.to_string(), filter_attr_name.clone()),
+                        filter,
+                    );
+                }
+                WarningFilter::Code(diag_id, name) => {
+                    let Some(n) = name else {
+                        anyhow::bail!("A known Code warning filter must have a name specified");
+                    };
+                    self.known_filters.insert(
+                        KnownFilterKey::new(n.to_string(), filter_attr_name.clone()),
+                        filter,
+                    );
+                    self.known_filter_names.insert(diag_id, n.to_string());
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn flags(&self) -> &Flags {
