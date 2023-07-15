@@ -13,8 +13,12 @@ module kiosk::personal_kiosk {
     use sui::tx_context::{sender, TxContext};
     use sui::dynamic_field as df;
 
+    /// Trying to return the Cap / Borrow to a wrong PersonalKioskCap object.
     const EIncorrectCapObject: u64 = 0;
+    /// Trying to return the Cap / Borrow to a wrong PersonalKioskCap object.
     const EIncorrectOwnedObject: u64 = 1;
+    /// Trying to get the owner of a non-personal Kiosk.
+    const EKioskNotOwned: u64 = 2;
 
     /// A key-only wrapper for the KioskOwnerCap. Makes sure that the Kiosk can
     /// not be traded altogether with its contents.
@@ -30,8 +34,17 @@ module kiosk::personal_kiosk {
     /// checks through the Kiosk).
     struct OwnerMarker has copy, store, drop {}
 
+    /// The default setup for the PersonalKioskCap.
+    entry fun default(kiosk: &mut Kiosk, cap: KioskOwnerCap, ctx: &mut TxContext) {
+        transfer_to_sender(new(kiosk, cap, ctx), ctx);
+    }
+
     /// Wrap the KioskOwnerCap making the Kiosk "owned" and non-transferable.
-    public fun new(kiosk: &mut Kiosk, cap: KioskOwnerCap, ctx: &mut TxContext) {
+    /// The `PersonalKioskCap` is returned to allow chaining within a PTB, but
+    /// the value must be consumed by the `transfer_to_sender` call in any case.
+    public fun new(
+        kiosk: &mut Kiosk, cap: KioskOwnerCap, ctx: &mut TxContext
+    ): PersonalKioskCap {
         let owner = sender(ctx);
 
         // set the owner property of the Kiosk
@@ -45,11 +58,11 @@ module kiosk::personal_kiosk {
             owner
         );
 
-        // wrap the Cap in the PersonalKioskCap
-        transfer::transfer(PersonalKioskCap {
+        // wrap the Cap in the `PersonalKioskCap`
+        PersonalKioskCap {
             id: object::new(ctx),
             cap: option::some(cap)
-        }, sender(ctx));
+        }
     }
 
     /// Borrow the `KioskOwnerCap` from the `PersonalKioskCap` object.
@@ -87,13 +100,19 @@ module kiosk::personal_kiosk {
         option::fill(&mut self.cap, cap)
     }
 
-    /// Check if the Kiosk is "owned".
+    /// Check if the Kiosk is "personal".
     public fun is_personal(kiosk: &Kiosk): bool {
         df::exists_(kiosk::uid(kiosk), OwnerMarker {})
     }
 
-    /// Get the owner of the Kiosk if the Kiosk is "owned".
+    /// Get the owner of the Kiosk if the Kiosk is "personal". Aborts otherwise.
     public fun owner(kiosk: &Kiosk): address {
+        assert!(is_personal(kiosk), EKioskNotOwned);
         *df::borrow(kiosk::uid(kiosk), OwnerMarker {})
+    }
+
+    /// Transfer the `PersonalKioskCap` to the transaction sender.
+    public fun transfer_to_sender(self: PersonalKioskCap, ctx: &mut TxContext) {
+        transfer::transfer(self, sender(ctx));
     }
 }
