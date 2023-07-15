@@ -3,13 +3,14 @@
 
 import { fromB64 } from '@mysten/bcs';
 import nacl from 'tweetnacl';
-import type { IntentScope } from '../cryptography/intent.js';
+import { IntentScope } from '../cryptography/intent.js';
 import { messageWithIntent } from '../cryptography/intent.js';
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { sha256 } from '@noble/hashes/sha256';
-import type { SerializedSignature } from '../cryptography/signature.js';
+import type { SerializedSignature, SignatureScheme } from '../cryptography/signature.js';
 import { blake2b } from '@noble/hashes/blake2b';
 import { toSingleSignaturePubkeyPair } from '../cryptography/utils.js';
+import { bcs } from '../types/sui-bcs.js';
 
 // TODO: This might actually make sense to eventually move to the `Keypair` instances themselves, as
 // it could allow the Sui.js to be tree-shaken a little better, possibly allowing keypairs that are
@@ -22,21 +23,64 @@ export async function verifyMessage(
 	scope: IntentScope,
 ) {
 	const signature = toSingleSignaturePubkeyPair(serializedSignature);
+
+	if (scope === IntentScope.PersonalMessage) {
+		const messageBytes = messageWithIntent(
+			scope,
+			bcs.ser(['vector', 'u8'], typeof message === 'string' ? fromB64(message) : message).toBytes(),
+		);
+
+		if (
+			verifySignature(
+				blake2b(messageBytes, { dkLen: 32 }),
+				signature.signature,
+				signature.pubKey.toBytes(),
+				signature.signatureScheme,
+			)
+		) {
+			return true;
+		}
+
+		// Fallback for backwards compatibility, old versions of the SDK
+		// did not properly wrap PersonalMessages in a PersonalMessage bcs Struct
+		const unwrappedMessageBytes = messageWithIntent(
+			scope,
+			typeof message === 'string' ? fromB64(message) : message,
+		);
+
+		return verifySignature(
+			blake2b(unwrappedMessageBytes, { dkLen: 32 }),
+			signature.signature,
+			signature.pubKey.toBytes(),
+			signature.signatureScheme,
+		);
+	}
+
 	const messageBytes = messageWithIntent(
 		scope,
 		typeof message === 'string' ? fromB64(message) : message,
 	);
-	const digest = blake2b(messageBytes, { dkLen: 32 });
-	switch (signature.signatureScheme) {
+
+	return verifySignature(
+		blake2b(messageBytes, { dkLen: 32 }),
+		signature.signature,
+		signature.pubKey.toBytes(),
+		signature.signatureScheme,
+	);
+}
+
+function verifySignature(
+	bytes: Uint8Array,
+	signature: Uint8Array,
+	publicKey: Uint8Array,
+	signatureScheme: SignatureScheme,
+) {
+	switch (signatureScheme) {
 		case 'ED25519':
-			return nacl.sign.detached.verify(digest, signature.signature, signature.pubKey.toBytes());
+			return nacl.sign.detached.verify(bytes, signature, publicKey);
 		case 'Secp256k1':
-			return secp256k1.verify(
-				secp256k1.Signature.fromCompact(signature.signature),
-				sha256(digest),
-				signature.pubKey.toBytes(),
-			);
+			return secp256k1.verify(secp256k1.Signature.fromCompact(signature), sha256(bytes), publicKey);
 		default:
-			throw new Error(`Unknown signature scheme: "${signature.signatureScheme}"`);
+			throw new Error(`Unknown signature scheme: "${signatureScheme}"`);
 	}
 }

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toB64 } from '@mysten/bcs';
+import { fromB64, toB64 } from '@mysten/bcs';
 import type { PublicKey } from './publickey.js';
 
 export type SignatureScheme = 'ED25519' | 'Secp256k1' | 'Secp256r1' | 'MultiSig';
@@ -30,6 +30,12 @@ export const SIGNATURE_SCHEME_TO_FLAG = {
 	MultiSig: 0x03,
 };
 
+export const SIGNATURE_SCHEME_TO_SIZE = {
+	ED25519: 32,
+	Secp256k1: 33,
+	Secp256r1: 33,
+};
+
 export const SIGNATURE_FLAG_TO_SCHEME = {
 	0x00: 'ED25519',
 	0x01: 'Secp256k1',
@@ -50,4 +56,26 @@ export function toSerializedSignature({
 	serializedSignature.set(signature, 1);
 	serializedSignature.set(pubKeyBytes, 1 + signature.length);
 	return toB64(serializedSignature);
+}
+
+export function parseSerializedSignature(serializedSignature: SerializedSignature) {
+	const bytes = fromB64(serializedSignature);
+
+	const signatureScheme =
+		SIGNATURE_FLAG_TO_SCHEME[bytes[0] as keyof typeof SIGNATURE_FLAG_TO_SCHEME];
+
+	if (!(signatureScheme in SIGNATURE_SCHEME_TO_SIZE)) {
+		throw new Error('Unsupported signature scheme');
+	}
+
+	const size = SIGNATURE_SCHEME_TO_SIZE[signatureScheme as keyof typeof SIGNATURE_SCHEME_TO_SIZE];
+
+	const signature = bytes.slice(1, bytes.length - size);
+	const publicKey = bytes.slice(1 + signature.length);
+
+	return {
+		signatureScheme,
+		signature,
+		publicKey,
+	};
 }

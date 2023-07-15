@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs } from '../types/sui-bcs.js';
-
 // See: sui/crates/sui-types/src/intent.rs
 export enum AppId {
 	Sui = 0,
@@ -26,15 +24,9 @@ function intentWithScope(scope: IntentScope): Intent {
 }
 
 export function messageWithIntent(scope: IntentScope, message: Uint8Array) {
-	let serialized_msg = message;
-	// Serialize the personal message with BCS vector to match with rust
-	// See: `struct PersonalMessage` in sui/crates/sui-types/src/intent.rs
-	if (scope === IntentScope.PersonalMessage) {
-		serialized_msg = bcs.ser(['vector', 'u8'], message).toBytes();
-	}
 	const intent = intentWithScope(scope);
-	const intentMessage = new Uint8Array(intent.length + serialized_msg.length);
+	const intentMessage = new Uint8Array(intent.length + message.length);
 	intentMessage.set(intent);
-	intentMessage.set(serialized_msg, intent.length);
+	intentMessage.set(message, intent.length);
 	return intentMessage;
 }

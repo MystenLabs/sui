@@ -102,7 +102,7 @@ describe('Keypairs', () => {
 		const keypair = new Ed25519Keypair();
 		const signData = new TextEncoder().encode('hello world');
 
-		const { signature } = await keypair.signMessage(signData);
+		const { signature } = await keypair.signPersonalMessage(signData);
 		const isValid = await verifyMessage(signData, signature, IntentScope.PersonalMessage);
 		expect(isValid).toBe(true);
 	});
@@ -111,7 +111,7 @@ describe('Keypairs', () => {
 		const keypair = new Ed25519Keypair();
 		const signData = new TextEncoder().encode('hello world');
 
-		const { signature } = await keypair.signMessage(signData);
+		const { signature } = await keypair.signPersonalMessage(signData);
 		const isValid = await verifyMessage(
 			new TextEncoder().encode('hello worlds'),
 			signature,
@@ -148,7 +148,7 @@ describe('Keypairs', () => {
 		const keypair = new Secp256k1Keypair();
 		const signData = new TextEncoder().encode('hello world');
 
-		const { signature } = await keypair.signMessage(signData);
+		const { signature } = await keypair.signPersonalMessage(signData);
 
 		const isValid = await verifyMessage(signData, signature, IntentScope.PersonalMessage);
 		expect(isValid).toBe(true);

@@ -20,6 +20,7 @@ import { IntentScope, messageWithIntent } from '../cryptography/intent.js';
 import type { Signer } from './signer.js';
 import type { SignedTransaction, SignedMessage } from './types.js';
 import type { SuiClient } from '../client/index.js';
+import { bcs } from '../types/sui-bcs.js';
 
 ///////////////////////////////
 // Exported Abstracts
@@ -74,7 +75,10 @@ export abstract class SignerWithProvider implements Signer {
 	 */
 	async signMessage(input: { message: Uint8Array }): Promise<SignedMessage> {
 		const signature = await this.signData(
-			messageWithIntent(IntentScope.PersonalMessage, input.message),
+			messageWithIntent(
+				IntentScope.PersonalMessage,
+				bcs.ser(['vector', 'u8'], input.message).toBytes(),
+			),
 		);
 
 		return {

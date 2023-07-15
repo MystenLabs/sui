@@ -9,3 +9,4 @@ packages:
     - '!sdk/typescript/faucet'
     - '!sdk/typescript/transactions'
     - '!sdk/typescript/client'
+    - '!sdk/typescript/verify'
