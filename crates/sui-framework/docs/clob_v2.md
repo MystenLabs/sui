@@ -9,6 +9,7 @@
 -  [Struct `OrderPlaced`](#0xdee9_clob_v2_OrderPlaced)
 -  [Struct `OrderCanceled`](#0xdee9_clob_v2_OrderCanceled)
 -  [Struct `OrderFilled`](#0xdee9_clob_v2_OrderFilled)
+-  [Struct `TakerBalanceChange`](#0xdee9_clob_v2_TakerBalanceChange)
 -  [Struct `DepositAsset`](#0xdee9_clob_v2_DepositAsset)
 -  [Struct `WithdrawAsset`](#0xdee9_clob_v2_WithdrawAsset)
 -  [Struct `Order`](#0xdee9_clob_v2_Order)
@@ -369,6 +370,76 @@ Emitted only when a maker order is filled.
 </dd>
 <dt>
 <code>maker_rebates: u64</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0xdee9_clob_v2_TakerBalanceChange"></a>
+
+## Struct `TakerBalanceChange`
+
+Emitted only when a taker order is filled.
+
+
+<pre><code><b>struct</b> <a href="clob_v2.md#0xdee9_clob_v2_TakerBalanceChange">TakerBalanceChange</a>&lt;BaseAsset, QuoteAsset&gt; <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>pool_id: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+ object ID of the pool the order was placed on
+</dd>
+<dt>
+<code>is_bid: bool</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>client_order_id: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>taker_address: <b>address</b></code>
+</dt>
+<dd>
+ owner ID of the <code>AccountCap</code> that filled the order
+</dd>
+<dt>
+<code>base_or_quote: bool</code>
+</dt>
+<dd>
+ indicate whether the original_quantity is quoted in the base asset(true) or the quote asset(false)
+</dd>
+<dt>
+<code>original_quantity: u64</code>
+</dt>
+<dd>
+ original quantity that user want to sell or buy
+</dd>
+<dt>
+<code>base_asset_quantity_changed: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>quote_asset_quantity_changed: u64</code>
 </dt>
 <dd>
 
@@ -1432,7 +1503,8 @@ Emitted when user withdraw asset from custodian
     ctx: &<b>mut</b> TxContext,
 ): (Coin&lt;BaseAsset&gt;, Coin&lt;QuoteAsset&gt;, u64) {
     <b>assert</b>!(quantity &gt; 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidQuantity">EInvalidQuantity</a>);
-    <b>assert</b>!(<a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&quote_coin) &gt;= quantity, <a href="clob_v2.md#0xdee9_clob_v2_EInsufficientQuoteCoin">EInsufficientQuoteCoin</a>);
+    <b>let</b> quote_asset_original = <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&quote_coin);
+    <b>assert</b>!(quote_asset_original &gt;= quantity, <a href="clob_v2.md#0xdee9_clob_v2_EInsufficientQuoteCoin">EInsufficientQuoteCoin</a>);
     <b>let</b> (base_asset_balance, quote_asset_balance) = <a href="clob_v2.md#0xdee9_clob_v2_match_bid_with_quote_quantity">match_bid_with_quote_quantity</a>(
         pool,
         account_cap,
@@ -1443,6 +1515,16 @@ Emitted when user withdraw asset from custodian
         <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_into_balance">coin::into_balance</a>(quote_coin)
     );
     <b>let</b> val = <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&base_asset_balance);
+    <a href="../../../.././build/Sui/docs/event.md#0x2_event_emit">event::emit</a>(<a href="clob_v2.md#0xdee9_clob_v2_TakerBalanceChange">TakerBalanceChange</a>&lt;BaseAsset, QuoteAsset&gt;{
+        pool_id: *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id),
+        is_bid: <b>true</b>,
+        client_order_id,
+        original_quantity: quantity,
+        base_or_quote: <b>false</b>,
+        taker_address: account_owner(account_cap),
+        base_asset_quantity_changed: val,
+        quote_asset_quantity_changed: quote_asset_original - <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&quote_asset_balance)
+    });
     (<a href="../../../.././build/Sui/docs/coin.md#0x2_coin_from_balance">coin::from_balance</a>(base_asset_balance, ctx), <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_from_balance">coin::from_balance</a>(quote_asset_balance, ctx), val)
 }
 </code></pre>
@@ -1973,6 +2055,8 @@ Place a market order to the order book.
     // Then iterate over the price levels in descending order until the market order is completely filled.
     <b>assert</b>!(quantity % pool.lot_size == 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidQuantity">EInvalidQuantity</a>);
     <b>assert</b>!(quantity != 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidQuantity">EInvalidQuantity</a>);
+    <b>let</b> base_quantity_original= <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&base_coin);
+    <b>let</b> quote_quantity_original= <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&quote_coin);
     <b>if</b> (is_bid) {
         <b>let</b> (base_balance_filled, quote_balance_left) = <a href="clob_v2.md#0xdee9_clob_v2_match_bid">match_bid</a>(
             pool,
@@ -2007,6 +2091,20 @@ Place a market order to the order book.
             <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_from_balance">coin::from_balance</a>(quote_balance_filled, ctx),
         );
     };
+    <b>let</b> base_quantity_remaining = <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&base_coin);
+    <b>let</b> quote_quantity_remaining = <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&quote_coin);
+    <a href="../../../.././build/Sui/docs/event.md#0x2_event_emit">event::emit</a>(<a href="clob_v2.md#0xdee9_clob_v2_TakerBalanceChange">TakerBalanceChange</a>&lt;BaseAsset, QuoteAsset&gt;{
+        pool_id: *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id),
+        is_bid,
+        client_order_id,
+        taker_address: account_owner(account_cap),
+        base_or_quote: <b>true</b>,
+        original_quantity: quantity,
+        base_asset_quantity_changed: <b>if</b> (is_bid) { base_quantity_remaining - base_quantity_original}
+        <b>else</b> {base_quantity_original - base_quantity_remaining},
+        quote_asset_quantity_changed: <b>if</b> (is_bid) { quote_quantity_original - quote_quantity_remaining}
+        <b>else</b> {quote_quantity_remaining - quote_quantity_original},
+    });
     (base_coin, quote_coin)
 }
 </code></pre>
