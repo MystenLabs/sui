@@ -67,35 +67,35 @@ async fn test_get_transaction_block() -> Result<(), anyhow::Error> {
         tx_responses.push(response);
     }
 
-    // TODO(chris): re-enable after rewriting get_transactions_in_range_deprecated with query_transactions
-    // test get_transaction_batch
-    // let batch_responses: Vec<SuiTransactionBlockResponse> = http_client
-    //     .multi_get_transaction_blocks(tx, Some(SuiTransactionBlockResponseOptions::new()))
-    //     .await?;
+    //TODO(chris): re-enable after rewriting get_transactions_in_range_deprecated with query_transactions
+    //test get_transaction_batch
+    let batch_responses: Vec<SuiTransactionBlockResponse> = http_client
+        .multi_get_transaction_blocks(tx, Some(SuiTransactionBlockResponseOptions::new()))
+        .await?;
 
-    // assert_eq!(5, batch_responses.len());
+    assert_eq!(5, batch_responses.len());
 
-    // for r in batch_responses.iter().skip(1) {
-    //     assert!(tx_responses
-    //         .iter()
-    //         .any(|resp| matches!(resp, SuiTransactionBlockResponse {digest, ..} if *digest == r.digest)))
-    // }
+    for r in batch_responses.iter().skip(1) {
+        assert!(tx_responses.iter().any(
+            |resp| matches!(resp, SuiTransactionBlockResponse {digest, ..} if *digest == r.digest)
+        ))
+    }
 
-    // // test get_transaction
-    // for tx_digest in tx {
-    //     let response: SuiTransactionBlockResponse = http_client
-    //         .get_transaction_block(
-    //             tx_digest,
-    //             Some(SuiTransactionBlockResponseOptions::new().with_raw_input()),
-    //         )
-    //         .await?;
-    //     assert!(tx_responses.iter().any(
-    //         |resp| matches!(resp, SuiTransactionBlockResponse {digest, ..} if *digest == response.digest)
-    //     ));
-    //     let sender_signed_data: SenderSignedData =
-    //         bcs::from_bytes(&response.raw_transaction).unwrap();
-    //     assert_eq!(sender_signed_data.digest(), tx_digest);
-    // }
+    // test get_transaction
+    for tx_digest in tx {
+        let response: SuiTransactionBlockResponse = http_client
+            .get_transaction_block(
+                tx_digest,
+                Some(SuiTransactionBlockResponseOptions::new().with_raw_input()),
+            )
+            .await?;
+        assert!(tx_responses.iter().any(
+            |resp| matches!(resp, SuiTransactionBlockResponse {digest, ..} if *digest == response.digest)
+        ));
+        let sender_signed_data: SenderSignedData =
+            bcs::from_bytes(&response.raw_transaction).unwrap();
+        assert_eq!(sender_signed_data.digest(), tx_digest);
+    }
 
     Ok(())
 }
