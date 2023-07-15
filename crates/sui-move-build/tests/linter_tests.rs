@@ -16,7 +16,7 @@ use move_compiler::{
 };
 
 use sui_move_build::linters::{
-    self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier,
+    known_filters, self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier,
 };
 
 const SUI_FRAMEWORK_PATH: &str = "../sui-framework/packages/sui-framework";
@@ -40,6 +40,7 @@ fn run_tests(path: &Path) -> anyhow::Result<()> {
 
     let targets: Vec<String> = vec![path.to_str().unwrap().to_owned()];
     let lint_visitors = vec![ShareOwnedVerifier.visitor(), SelfTransferVerifier.visitor()];
+    let (filter_attr_name, filters) = known_filters();
     let (files, comments_and_compiler_res) = Compiler::from_files(
         targets,
         vec![MOVE_STDLIB_PATH.to_string(), SUI_FRAMEWORK_PATH.to_string()],
@@ -50,6 +51,7 @@ fn run_tests(path: &Path) -> anyhow::Result<()> {
         flavor: Flavor::Sui,
         ..PackageConfig::default()
     })
+    .add_custom_known_filters(filters, filter_attr_name)
     .run::<PASS_PARSER>()?;
 
     let diags = move_check_for_errors(comments_and_compiler_res);

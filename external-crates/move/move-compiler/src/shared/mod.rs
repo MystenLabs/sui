@@ -399,7 +399,7 @@ impl CompilationEnv {
         if !is_filtered {
             // add help to suppress warning, if applicable
             // TODO do we want a centralized place for tips like this?
-            if diag.info().severity() == Severity::Warning && !diag.info().is_external() {
+            if diag.info().severity() == Severity::Warning {
                 if let Some(filter_name) = self.known_filter_names.get(&diag.info().id()) {
                     let help = format!(
                         "This warning can be suppressed with '#[{}({})]' \
