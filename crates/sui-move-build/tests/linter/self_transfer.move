@@ -47,4 +47,9 @@ module 0x42::test {
         transfer::public_transfer(S1 { id: object::new(ctx), }, xfer_address);
         transfer::transfer(S1 { id: object::new(ctx), }, xfer_address);
     }
+
+    #[linter_allow(self_transfer)]
+    public fun public_transfer_bad_suppressed(ctx: &mut TxContext) {
+        transfer::public_transfer(S1 { id: object::new(ctx), }, tx_context::sender(ctx))
+    }
 }

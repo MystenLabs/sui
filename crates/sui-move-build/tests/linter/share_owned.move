@@ -35,4 +35,11 @@ module 0x42::test2 {
         transfer::public_share_object(o);
         object::delete(id);
     }
+
+    #[linter_allow(share_owned)]
+    public entry fun unpack_obj_suppressed(w: Wrapper) {
+        let Wrapper { id, i: _, o } = w;
+        transfer::public_share_object(o);
+        object::delete(id);
+    }
 }

@@ -9,6 +9,8 @@ warning[Lint W01001]: possible owned object share
    │         │                             │
    │         │                             Creating a fresh object and sharing it within the same function will ensure this does not abort.
    │         Potential abort from a (potentially) owned object created by a different transaction.
+   │
+   = This warning can be suppressed with '#[allow(share_owned)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W01001]: possible owned object share
    ┌─ tests/linter/share_owned.move:35:9
@@ -20,4 +22,6 @@ warning[Lint W01001]: possible owned object share
    │         │                             │
    │         │                             Creating a fresh object and sharing it within the same function will ensure this does not abort.
    │         Potential abort from a (potentially) owned object created by a different transaction.
+   │
+   = This warning can be suppressed with '#[allow(share_owned)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
