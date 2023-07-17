@@ -25,7 +25,6 @@ serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.88"
 url = "2.3.1"
 
-sui-config = { path = "../../crates/sui-config" }
 sui-move = { path = "../../crates/sui-move", features = ["all"] }
 sui-move-build = { path = "../../crates/sui-move-build" }
 sui-sdk = { path = "../../crates/sui-sdk" }
