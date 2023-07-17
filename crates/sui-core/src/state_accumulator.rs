@@ -5,6 +5,7 @@ use itertools::Itertools;
 use mysten_metrics::monitored_scope;
 use serde::Serialize;
 use sui_protocol_config::ProtocolConfig;
+use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber};
 use sui_types::committee::EpochId;
 use sui_types::digests::{ObjectDigest, TransactionDigest};
@@ -15,22 +16,26 @@ use tracing::debug;
 use typed_store::Map;
 
 use std::collections::{HashMap, HashSet};
+use std::env;
 use std::sync::Arc;
 
 use fastcrypto::hash::MultisetHash;
-use sui_types::accumulator::Accumulator;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::SuiResult;
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, ECMHLiveObjectSetDigest};
+use sui_types::transparent_accumulator::TransparentAccumulator;
 use typed_store::rocks::TypedStoreError;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store_tables::LiveObject;
 use crate::authority::AuthorityStore;
 
+const ENV_VAR_SUI_ACCUMULATOR_DEBUG: &str = "SUI_ACCUMULATOR_DEBUG";
+
 pub struct StateAccumulator {
     authority_store: Arc<AuthorityStore>,
+    pub debug: bool,
 }
 
 pub trait AccumulatorReadStore {
@@ -108,15 +113,16 @@ pub fn accumulate_effects<T, S>(
     store: S,
     effects: Vec<TransactionEffects>,
     protocol_config: &ProtocolConfig,
-) -> Accumulator
+    debug: bool,
+) -> TransparentAccumulator<Vec<u8>>
 where
     S: std::ops::Deref<Target = T>,
     T: AccumulatorReadStore,
 {
     if protocol_config.simplified_unwrap_then_delete() {
-        accumulate_effects_v2(store, effects)
+        accumulate_effects_v2(store, effects, debug)
     } else {
-        accumulate_effects_v1(store, effects, protocol_config)
+        accumulate_effects_v1(store, effects, protocol_config, debug)
     }
 }
 
@@ -124,12 +130,13 @@ fn accumulate_effects_v1<T, S>(
     store: S,
     effects: Vec<TransactionEffects>,
     protocol_config: &ProtocolConfig,
-) -> Accumulator
+    debug: bool,
+) -> TransparentAccumulator<Vec<u8>>
 where
     S: std::ops::Deref<Target = T>,
     T: AccumulatorReadStore,
 {
-    let mut acc = Accumulator::default();
+    let mut acc: TransparentAccumulator<Vec<u8>> = TransparentAccumulator::new(debug);
 
     // process insertions to the set
     acc.insert_all(
@@ -138,11 +145,15 @@ where
             .flat_map(|fx| {
                 fx.created()
                     .iter()
-                    .map(|(oref, _)| oref.2)
-                    .chain(fx.unwrapped().iter().map(|(oref, _)| oref.2))
-                    .chain(fx.mutated().iter().map(|(oref, _)| oref.2))
+                    .map(|(oref, _)| oref.2.inner().to_vec())
+                    .chain(
+                        fx.unwrapped()
+                            .iter()
+                            .map(|(oref, _)| oref.2.inner().to_vec()),
+                    )
+                    .chain(fx.mutated().iter().map(|(oref, _)| oref.2.inner().to_vec()))
             })
-            .collect::<Vec<ObjectDigest>>(),
+            .collect::<Vec<Vec<u8>>>(),
     );
 
     // insert wrapped tombstones. We use a custom struct in order to contain the tombstone
@@ -216,7 +227,7 @@ where
         .map(|(obj, key)| {
             obj.unwrap_or_else(|| panic!("Object for key {:?} from modified_at_versions effects does not exist in objects table", key))
                 .compute_object_reference()
-                .2
+                .2.inner().to_vec()
         })
         .collect();
     acc.remove_all(modified_at_digests);
@@ -256,12 +267,16 @@ where
     acc
 }
 
-fn accumulate_effects_v2<T, S>(store: S, effects: Vec<TransactionEffects>) -> Accumulator
+fn accumulate_effects_v2<T, S>(
+    store: S,
+    effects: Vec<TransactionEffects>,
+    debug: bool,
+) -> TransparentAccumulator<Vec<u8>>
 where
     S: std::ops::Deref<Target = T>,
     T: AccumulatorReadStore,
 {
-    let mut acc = Accumulator::default();
+    let mut acc: TransparentAccumulator<Vec<u8>> = TransparentAccumulator::new(debug);
 
     // process insertions to the set
     acc.insert_all(
@@ -270,11 +285,15 @@ where
             .flat_map(|fx| {
                 fx.created()
                     .iter()
-                    .map(|(oref, _)| oref.2)
-                    .chain(fx.unwrapped().iter().map(|(oref, _)| oref.2))
-                    .chain(fx.mutated().iter().map(|(oref, _)| oref.2))
+                    .map(|(oref, _)| oref.2.inner().to_vec())
+                    .chain(
+                        fx.unwrapped()
+                            .iter()
+                            .map(|(oref, _)| oref.2.inner().to_vec()),
+                    )
+                    .chain(fx.mutated().iter().map(|(oref, _)| oref.2.inner().to_vec()))
             })
-            .collect::<Vec<ObjectDigest>>(),
+            .collect::<Vec<Vec<u8>>>(),
     );
 
     // Collect keys from modified_at_versions to remove from the accumulator.
@@ -295,7 +314,7 @@ where
         .map(|(obj, key)| {
             obj.unwrap_or_else(|| panic!("Object for key {:?} from modified_at_versions effects does not exist in objects table", key))
                 .compute_object_reference()
-                .2
+                .2.inner().to_vec()
         })
         .collect();
     acc.remove_all(modified_at_digests);
@@ -305,7 +324,11 @@ where
 
 impl StateAccumulator {
     pub fn new(authority_store: Arc<AuthorityStore>) -> Self {
-        Self { authority_store }
+        let debug = env::var(ENV_VAR_SUI_ACCUMULATOR_DEBUG).is_ok();
+        Self {
+            authority_store,
+            debug,
+        }
     }
 
     /// Accumulates the effects of a single checkpoint and persists the accumulator.
@@ -320,16 +343,17 @@ impl StateAccumulator {
             return Ok(acc);
         }
 
-        let acc = self.accumulate_effects(effects, epoch_store.protocol_config());
+        let transparent_acc = self.accumulate_effects(effects, epoch_store.protocol_config());
+        let acc = transparent_acc.accumulator();
 
-        epoch_store.insert_state_hash_for_checkpoint(&checkpoint_seq_num, &acc)?;
+        epoch_store.insert_state_hash_for_checkpoint(&checkpoint_seq_num, acc)?;
         debug!("Accumulated checkpoint {}", checkpoint_seq_num);
 
         epoch_store
             .checkpoint_state_notify_read
-            .notify(&checkpoint_seq_num, &acc);
+            .notify(&checkpoint_seq_num, acc);
 
-        Ok(acc)
+        Ok(acc.clone())
     }
 
     /// Accumulates given effects and returns the accumulator without side effects.
@@ -337,8 +361,8 @@ impl StateAccumulator {
         &self,
         effects: Vec<TransactionEffects>,
         protocol_config: &ProtocolConfig,
-    ) -> Accumulator {
-        accumulate_effects(&*self.authority_store, effects, protocol_config)
+    ) -> TransparentAccumulator<Vec<u8>> {
+        accumulate_effects(&*self.authority_store, effects, protocol_config, self.debug)
     }
 
     /// Unions all checkpoint accumulators at the end of the epoch to generate the
@@ -427,15 +451,18 @@ impl StateAccumulator {
     }
 
     /// Returns the result of accumulating the live object set, without side effects
-    pub fn accumulate_live_object_set(&self, include_wrapped_tombstone: bool) -> Accumulator {
-        let mut acc = Accumulator::default();
+    pub fn accumulate_live_object_set(
+        &self,
+        include_wrapped_tombstone: bool,
+    ) -> TransparentAccumulator<Vec<u8>> {
+        let mut acc: TransparentAccumulator<Vec<u8>> = TransparentAccumulator::new(self.debug);
         for live_object in self
             .authority_store
             .iter_live_object_set(include_wrapped_tombstone)
         {
             match live_object {
                 LiveObject::Normal(object) => {
-                    acc.insert(object.compute_object_reference().2);
+                    acc.insert(object.compute_object_reference().2.inner().to_vec());
                 }
                 LiveObject::Wrapped(key) => {
                     acc.insert(
@@ -453,7 +480,7 @@ impl StateAccumulator {
         include_wrapped_tombstone: bool,
     ) -> ECMHLiveObjectSetDigest {
         let acc = self.accumulate_live_object_set(include_wrapped_tombstone);
-        acc.digest().into()
+        acc.accumulator().digest().into()
     }
 
     pub async fn digest_epoch(

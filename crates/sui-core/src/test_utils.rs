@@ -90,7 +90,10 @@ pub async fn send_and_confirm_transaction(
     );
     state.union(&effects_acc);
 
-    assert_eq!(state_after.digest(), state.digest());
+    assert_eq!(
+        state_after.accumulator().digest(),
+        state.accumulator().digest()
+    );
 
     if let Some(fullnode) = fullnode {
         fullnode.try_execute_for_test(&certificate).await?;
