@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
+import { Button } from '@mysten/ui';
 import {
 	ConnectButton,
 	useWalletKit,
@@ -9,8 +10,6 @@ import {
 	type WalletWithFeatures,
 } from '@mysten/wallet-kit';
 import { useParams } from 'react-router-dom';
-
-import { Button } from '~/ui/Button';
 
 // This is a custom feature supported by the Sui Wallet:
 type StakeInput = { validatorAddress: string };
@@ -44,11 +43,14 @@ export function StakeButton() {
 
 	if (!stakeSupportedWallets.length) {
 		return (
-			<Button
-				size="lg"
-				href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil"
-			>
-				Install Sui Wallet to stake SUI
+			<Button size="lg" asChild>
+				<a
+					href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil"
+					target="_blank"
+					rel="noreferrer noopener"
+				>
+					Install Sui Wallet to stake SUI
+				</a>
 			</Button>
 		);
 	}
