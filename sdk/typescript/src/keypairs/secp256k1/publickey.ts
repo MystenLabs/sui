@@ -86,8 +86,4 @@ export class Secp256k1PublicKey extends PublicKey {
 			this.toBytes(),
 		);
 	}
-
-	static fromBytes(bytes: Uint8Array): Secp256k1PublicKey {
-		return new Secp256k1PublicKey(bytes);
-	}
 }

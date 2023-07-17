@@ -10,45 +10,47 @@ import { Secp256r1PublicKey } from '../keypairs/secp256r1/publickey.js';
 export async function verifySignature(
 	bytes: Uint8Array,
 	signature: SerializedSignature,
-): Promise<false | PublicKey> {
+): Promise<PublicKey> {
 	const parsedSignature = parseSignature(signature);
 
-	if (await parsedSignature.publicKey.verify(bytes, parsedSignature.signature)) {
-		return parsedSignature.publicKey;
+	if (!(await parsedSignature.publicKey.verify(bytes, parsedSignature.signature))) {
+		throw new Error(`Signature is not valid for the provided data`);
 	}
 
-	return false;
+	return parsedSignature.publicKey;
 }
 
 export async function verifyPersonalMessage(
 	message: Uint8Array,
 	signature: SerializedSignature,
-): Promise<false | PublicKey> {
+): Promise<PublicKey> {
 	const parsedSignature = parseSignature(signature);
 
-	if (await parsedSignature.publicKey.verifyPersonalMessage(message, parsedSignature.signature)) {
-		return parsedSignature.publicKey;
+	if (
+		!(await parsedSignature.publicKey.verifyPersonalMessage(message, parsedSignature.signature))
+	) {
+		throw new Error(`Signature is not valid for the provided message`);
 	}
 
-	return false;
+	return parsedSignature.publicKey;
 }
 
 export async function verifyTransactionBlock(
 	transactionBlock: Uint8Array,
 	signature: SerializedSignature,
-): Promise<false | PublicKey> {
+): Promise<PublicKey> {
 	const parsedSignature = parseSignature(signature);
 
 	if (
-		await parsedSignature.publicKey.verifyTransactionBlock(
+		!(await parsedSignature.publicKey.verifyTransactionBlock(
 			transactionBlock,
 			parsedSignature.signature,
-		)
+		))
 	) {
-		return parsedSignature.publicKey;
+		throw new Error(`Signature is not valid for the provided TransactionBlock`);
 	}
 
-	return false;
+	return parsedSignature.publicKey;
 }
 
 function parseSignature(signature: SerializedSignature) {
@@ -57,13 +59,13 @@ function parseSignature(signature: SerializedSignature) {
 
 	switch (parsedSignature.signatureScheme) {
 		case 'ED25519':
-			publicKey = Ed25519PublicKey.fromBytes(parsedSignature.publicKey);
+			publicKey = new Ed25519PublicKey(parsedSignature.publicKey);
 			break;
 		case 'Secp256k1':
-			publicKey = Secp256k1PublicKey.fromBytes(parsedSignature.publicKey);
+			publicKey = new Secp256k1PublicKey(parsedSignature.publicKey);
 			break;
 		case 'Secp256r1':
-			publicKey = Secp256r1PublicKey.fromBytes(parsedSignature.publicKey);
+			publicKey = new Secp256r1PublicKey(parsedSignature.publicKey);
 			break;
 		default:
 			throw new Error(`Unsupported signature scheme ${parsedSignature.signatureScheme}`);

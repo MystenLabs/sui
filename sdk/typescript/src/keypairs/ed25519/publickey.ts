@@ -81,8 +81,4 @@ export class Ed25519PublicKey extends PublicKey {
 	async verify(message: Uint8Array, signature: Uint8Array): Promise<boolean> {
 		return nacl.sign.detached.verify(message, signature, this.toBytes());
 	}
-
-	static fromBytes(bytes: Uint8Array): Ed25519PublicKey {
-		return new Ed25519PublicKey(bytes);
-	}
 }
