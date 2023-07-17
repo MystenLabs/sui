@@ -220,6 +220,7 @@ fn execute_transaction<Mode: ExecutionMode>(
         gas_charger.no_charges(),
         "No gas charges must be applied yet"
     );
+
     let is_genesis_tx = matches!(transaction_kind, TransactionKind::Genesis(_));
     let advance_epoch_gas_summary = transaction_kind.get_advance_epoch_tx_gas_summary();
 
@@ -244,69 +245,25 @@ fn execute_transaction<Mode: ExecutionMode>(
             )
         };
 
-        let effects_estimated_size = temporary_store.estimate_effects_size_upperbound();
+        let meter_check = check_meter_limit(
+            temporary_store,
+            gas_charger,
+            protocol_config,
+            metrics.clone(),
+        );
+        if let Err(e) = meter_check {
+            execution_result = Err(e);
+        }
 
-        // Check if a limit threshold was crossed.
-        // For metered transactions, there is not soft limit.
-        // For system transactions, we allow a soft limit with alerting, and a hard limit where we terminate
-        match check_limit_by_meter!(
-            !gas_charger.is_unmetered(),
-            effects_estimated_size,
-            protocol_config.max_serialized_tx_effects_size_bytes(),
-            protocol_config.max_serialized_tx_effects_size_bytes_system_tx(),
-            metrics.excessive_estimated_effects_size
-        ) {
-            LimitThresholdCrossed::None => (),
-            LimitThresholdCrossed::Soft(_, limit) => {
-                warn!(
-                    effects_estimated_size = effects_estimated_size,
-                    soft_limit = limit,
-                    "Estimated transaction effects size crossed soft limit",
-                )
-            }
-            LimitThresholdCrossed::Hard(_, lim) => {
-                execution_result = Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::EffectsTooLarge {
-                        current_size: effects_estimated_size as u64,
-                        max_size: lim as u64,
-                    },
-                    "Transaction effects are too large",
-                ))
-            }
-        };
         if execution_result.is_ok() {
-            // This limit is only present in Version 3 and up, so use this to gate it
-            if let (Some(normal_lim), Some(system_lim)) = (
-                protocol_config.max_size_written_objects_as_option(),
-                protocol_config.max_size_written_objects_system_tx_as_option(),
-            ) {
-                let written_objects_size = temporary_store.written_objects_size();
-
-                match check_limit_by_meter!(
-                    !gas_charger.is_unmetered(),
-                    written_objects_size,
-                    normal_lim,
-                    system_lim,
-                    metrics.excessive_written_objects_size
-                ) {
-                    LimitThresholdCrossed::None => (),
-                    LimitThresholdCrossed::Soft(_, limit) => {
-                        warn!(
-                            written_objects_size = written_objects_size,
-                            soft_limit = limit,
-                            "Written objects size crossed soft limit",
-                        )
-                    }
-                    LimitThresholdCrossed::Hard(_, lim) => {
-                        execution_result = Err(ExecutionError::new_with_source(
-                            ExecutionErrorKind::WrittenObjectsTooLarge {
-                                current_size: written_objects_size as u64,
-                                max_size: lim as u64,
-                            },
-                            "Written objects size crossed hard limit",
-                        ))
-                    }
-                };
+            let gas_check = check_written_objects_limit::<Mode>(
+                temporary_store,
+                gas_charger,
+                protocol_config,
+                metrics,
+            );
+            if let Err(e) = gas_check {
+                execution_result = Err(e);
             }
         }
 
@@ -314,6 +271,34 @@ fn execute_transaction<Mode: ExecutionMode>(
     });
 
     let cost_summary = gas_charger.charge_gas(temporary_store, &mut result);
+
+    if let Err(e) = run_conservation_checks::<Mode>(
+        temporary_store,
+        gas_charger,
+        tx_ctx,
+        move_vm,
+        enable_expensive_checks,
+        &cost_summary,
+        is_genesis_tx,
+        advance_epoch_gas_summary,
+    ) {
+        result = Err(e);
+    }
+
+    (cost_summary, result)
+}
+
+#[instrument(name = "run_conservation_checks", level = "debug", skip_all)]
+fn run_conservation_checks<Mode: ExecutionMode>(
+    temporary_store: &mut TemporaryStore<'_>,
+    gas_charger: &mut GasCharger,
+    tx_ctx: &mut TxContext,
+    move_vm: &Arc<MoveVM>,
+    enable_expensive_checks: bool,
+    cost_summary: &GasCostSummary,
+    is_genesis_tx: bool,
+    advance_epoch_gas_summary: Option<(u64, u64)>,
+) -> Result<(), ExecutionError> {
     // === begin SUI conservation checks ===
     // For advance epoch transaction, we need to provide epoch rewards and rebates as extra
     // information provided to check_sui_conserved, because we mint rewards, and burn
@@ -322,13 +307,14 @@ fn execute_transaction<Mode: ExecutionMode>(
     // We could probably clean up the code a bit.
     // Put all the storage rebate accumulated in the system transaction
     // to the 0x5 object so that it's not lost.
+    let mut result: std::result::Result<(), sui_types::error::ExecutionError> = Ok(());
     temporary_store.conserve_unmetered_storage_rebate(gas_charger.unmetered_storage_rebate());
     if !is_genesis_tx && !Mode::allow_arbitrary_values() {
         // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
         let conservation_result = {
             let mut layout_resolver = TypeLayoutResolver::new(move_vm, Box::new(&*temporary_store));
             temporary_store.check_sui_conserved(
-                &cost_summary,
+                cost_summary,
                 advance_epoch_gas_summary,
                 &mut layout_resolver,
                 enable_expensive_checks,
@@ -343,7 +329,7 @@ fn execute_transaction<Mode: ExecutionMode>(
             // check conservation once more more
             let mut layout_resolver = TypeLayoutResolver::new(move_vm, Box::new(&*temporary_store));
             if let Err(recovery_err) = temporary_store.check_sui_conserved(
-                &cost_summary,
+                cost_summary,
                 advance_epoch_gas_summary,
                 &mut layout_resolver,
                 enable_expensive_checks,
@@ -362,7 +348,89 @@ fn execute_transaction<Mode: ExecutionMode>(
     } // else, we're in the genesis transaction which mints the SUI supply, and hence does not satisfy SUI conservation, or
       // we're in the non-production dev inspect mode which allows us to violate conservation
       // === end SUI conservation checks ===
-    (cost_summary, result)
+    result
+}
+
+#[instrument(name = "check_meter_limit", level = "debug", skip_all)]
+fn check_meter_limit(
+    temporary_store: &mut TemporaryStore<'_>,
+    gas_charger: &mut GasCharger,
+    protocol_config: &ProtocolConfig,
+    metrics: Arc<LimitsMetrics>,
+) -> Result<(), ExecutionError> {
+    let effects_estimated_size = temporary_store.estimate_effects_size_upperbound();
+
+    // Check if a limit threshold was crossed.
+    // For metered transactions, there is not soft limit.
+    // For system transactions, we allow a soft limit with alerting, and a hard limit where we terminate
+    match check_limit_by_meter!(
+        !gas_charger.is_unmetered(),
+        effects_estimated_size,
+        protocol_config.max_serialized_tx_effects_size_bytes(),
+        protocol_config.max_serialized_tx_effects_size_bytes_system_tx(),
+        metrics.excessive_estimated_effects_size
+    ) {
+        LimitThresholdCrossed::None => Ok(()),
+        LimitThresholdCrossed::Soft(_, limit) => {
+            warn!(
+                effects_estimated_size = effects_estimated_size,
+                soft_limit = limit,
+                "Estimated transaction effects size crossed soft limit",
+            );
+            Ok(())
+        }
+        LimitThresholdCrossed::Hard(_, lim) => Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::EffectsTooLarge {
+                current_size: effects_estimated_size as u64,
+                max_size: lim as u64,
+            },
+            "Transaction effects are too large",
+        )),
+    }
+
+}
+
+#[instrument(name = "check_written_objects_limit", level = "debug", skip_all)]
+fn check_written_objects_limit<Mode: ExecutionMode>(
+    temporary_store: &mut TemporaryStore<'_>,
+    gas_charger: &mut GasCharger,
+    protocol_config: &ProtocolConfig,
+    metrics: Arc<LimitsMetrics>,
+) -> Result<(), ExecutionError> {
+    if let (Some(normal_lim), Some(system_lim)) = (
+        protocol_config.max_size_written_objects_as_option(),
+        protocol_config.max_size_written_objects_system_tx_as_option(),
+    ) {
+        let written_objects_size = temporary_store.written_objects_size();
+
+        match check_limit_by_meter!(
+            !gas_charger.is_unmetered(),
+            written_objects_size,
+            normal_lim,
+            system_lim,
+            metrics.excessive_written_objects_size
+        ) {
+            LimitThresholdCrossed::None => (),
+            LimitThresholdCrossed::Soft(_, limit) => {
+                warn!(
+                    written_objects_size = written_objects_size,
+                    soft_limit = limit,
+                    "Written objects size crossed soft limit",
+                )
+            }
+            LimitThresholdCrossed::Hard(_, lim) => {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::WrittenObjectsTooLarge {
+                        current_size: written_objects_size as u64,
+                        max_size: lim as u64,
+                    },
+                    "Written objects size crossed hard limit",
+                ))
+            }
+        };
+    }
+
+    Ok(())
 }
 
 fn execution_loop<Mode: ExecutionMode>(
@@ -735,6 +803,6 @@ fn setup_consensus_commit(
         gas_charger,
         pt,
     )
-}
 
+    }
 }

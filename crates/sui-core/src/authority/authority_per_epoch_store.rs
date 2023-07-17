@@ -951,9 +951,9 @@ impl AuthorityPerEpochStore {
         self.set_assigned_shared_object_versions(
             certificate,
             &effects
-                .shared_objects()
-                .iter()
-                .map(|(id, version, _)| (*id, *version))
+                .input_shared_objects()
+                .into_iter()
+                .map(|(obj_ref, _)| (obj_ref.0, obj_ref.1))
                 .collect(),
             parent_sync_store,
         )
@@ -964,28 +964,22 @@ impl AuthorityPerEpochStore {
     /// and verify that it allows new user certificates
     pub fn insert_pending_consensus_transactions(
         &self,
-        transactions: &[ConsensusTransaction],
+        transaction: &ConsensusTransaction,
         lock: Option<&RwLockReadGuard<ReconfigState>>,
     ) -> SuiResult {
-        let mut batch = self.tables.pending_consensus_transactions.batch();
-        batch.insert_batch(
-            &self.tables.pending_consensus_transactions,
-            transactions.iter().map(|t| (t.key(), t)),
-        )?;
-        batch.write()?;
-
-        for transaction in transactions {
-            if let ConsensusTransactionKind::UserTransaction(cert) = &transaction.kind {
-                let state = lock.expect("Must pass reconfiguration lock when storing certificate");
-                // Caller is responsible for performing graceful check
-                assert!(
-                    state.should_accept_user_certs(),
-                    "Reconfiguration state should allow accepting user transactions"
-                );
-                self.pending_consensus_certificates
-                    .lock()
-                    .insert(*cert.digest());
-            }
+        self.tables
+            .pending_consensus_transactions
+            .insert(&transaction.key(), transaction)?;
+        if let ConsensusTransactionKind::UserTransaction(cert) = &transaction.kind {
+            let state = lock.expect("Must pass reconfiguration lock when storing certificate");
+            // Caller is responsible for performing graceful check
+            assert!(
+                state.should_accept_user_certs(),
+                "Reconfiguration state should allow accepting user transactions"
+            );
+            self.pending_consensus_certificates
+                .lock()
+                .insert(*cert.digest());
         }
         Ok(())
     }
