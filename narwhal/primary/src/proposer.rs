@@ -315,9 +315,7 @@ impl Proposer {
     fn max_delay(&self) -> Duration {
         // If this node is going to be the leader of the next round, we set a lower max
         // timeout value to increase its chance of being included in the dag.
-        if (self.round + 1) % 2 == 0
-            && self.leader_schedule.leader(self.round + 1).id() == self.authority_id
-        {
+        if self.leader_schedule.leader(self.round + 1).id() == self.authority_id {
             self.max_header_delay / 2
         } else {
             self.max_header_delay
@@ -329,7 +327,6 @@ impl Proposer {
         // 1 primary in the committee, we use a lower min delay value to increase the chance
         // of committing the leader.
         if self.committee.size() > 1
-            && (self.round + 1) % 2 == 0
             && self.leader_schedule.leader(self.round + 1).id() == self.authority_id
         {
             Duration::ZERO
