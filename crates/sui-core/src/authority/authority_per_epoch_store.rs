@@ -951,9 +951,9 @@ impl AuthorityPerEpochStore {
         self.set_assigned_shared_object_versions(
             certificate,
             &effects
-                .shared_objects()
-                .iter()
-                .map(|(id, version, _)| (*id, *version))
+                .input_shared_objects()
+                .into_iter()
+                .map(|(obj_ref, _)| (obj_ref.0, obj_ref.1))
                 .collect(),
             parent_sync_store,
         )

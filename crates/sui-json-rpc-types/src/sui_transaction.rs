@@ -607,7 +607,13 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
                         })
                         .collect(),
                     gas_used: effect.gas_cost_summary().clone(),
-                    shared_objects: to_sui_object_ref(effect.shared_objects().to_vec()),
+                    shared_objects: to_sui_object_ref(
+                        effect
+                            .input_shared_objects()
+                            .into_iter()
+                            .map(|(obj_ref, _)| obj_ref)
+                            .collect(),
+                    ),
                     transaction_digest: *effect.transaction_digest(),
                     created: to_owned_ref(effect.created().to_vec()),
                     mutated: to_owned_ref(effect.mutated().to_vec()),

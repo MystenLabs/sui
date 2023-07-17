@@ -5,12 +5,15 @@ use crate::base_types::{
     random_object_ref, EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
 use crate::digests::TransactionEventsDigest;
-use crate::effects::{TransactionEffectsAPI, TransactionEffectsDebugSummary};
+use crate::effects::{
+    InputSharedObjectKind, TransactionEffectsAPI, TransactionEffectsDebugSummary,
+};
 use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
 use crate::object::Owner;
 use crate::storage::{DeleteKind, WriteKind};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fmt::{Display, Formatter, Write};
 
 /// The response from processing a transaction or a certified transaction
@@ -65,9 +68,22 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     fn modified_at_versions(&self) -> &[(ObjectID, SequenceNumber)] {
         &self.modified_at_versions
     }
-    fn shared_objects(&self) -> &[ObjectRef] {
-        &self.shared_objects
+
+    fn input_shared_objects(&self) -> Vec<(ObjectRef, InputSharedObjectKind)> {
+        let modified: HashSet<_> = self.modified_at_versions.iter().map(|(r, _)| r).collect();
+        self.shared_objects
+            .iter()
+            .map(|r| {
+                let kind = if modified.contains(&r.0) {
+                    InputSharedObjectKind::Mutate
+                } else {
+                    InputSharedObjectKind::ReadOnly
+                };
+                (*r, kind)
+            })
+            .collect()
     }
+
     fn created(&self) -> &[(ObjectRef, Owner)] {
         &self.created
     }
@@ -176,9 +192,21 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     fn dependencies_mut_for_testing(&mut self) -> &mut Vec<TransactionDigest> {
         &mut self.dependencies
     }
-    fn shared_objects_mut_for_testing(&mut self) -> &mut Vec<ObjectRef> {
-        &mut self.shared_objects
+
+    fn unsafe_add_input_shared_object_for_testing(
+        &mut self,
+        obj_ref: ObjectRef,
+        kind: InputSharedObjectKind,
+    ) {
+        self.shared_objects.push(obj_ref);
+        match kind {
+            InputSharedObjectKind::Mutate => {
+                self.modified_at_versions.push((obj_ref.0, obj_ref.1));
+            }
+            InputSharedObjectKind::ReadOnly => (),
+        }
     }
+
     fn modified_at_versions_mut_for_testing(&mut self) -> &mut Vec<(ObjectID, SequenceNumber)> {
         &mut self.modified_at_versions
     }
