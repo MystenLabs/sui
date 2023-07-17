@@ -82,7 +82,6 @@ function NftsPage() {
 			};
 
 			const showAssetHiddenToast = async (objectId: string) => {
-				ampli.addedAccounts;
 				toast.custom(
 					(t) => (
 						<div
