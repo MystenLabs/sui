@@ -213,7 +213,7 @@ pub trait TransactionEffectsAPI {
     fn deleted(&self) -> &[ObjectRef];
     fn unwrapped_then_deleted(&self) -> &[ObjectRef];
     fn wrapped(&self) -> &[ObjectRef];
-    fn gas_object(&self) -> &(ObjectRef, Owner);
+    fn gas_object(&self) -> (ObjectRef, Owner);
     fn events_digest(&self) -> Option<&TransactionEventsDigest>;
     fn dependencies(&self) -> &[TransactionDigest];
     // All changed objects include created, mutated and unwrapped objects,

@@ -102,8 +102,8 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     fn wrapped(&self) -> &[ObjectRef] {
         &self.wrapped
     }
-    fn gas_object(&self) -> &(ObjectRef, Owner) {
-        &self.gas_object
+    fn gas_object(&self) -> (ObjectRef, Owner) {
+        self.gas_object
     }
     fn events_digest(&self) -> Option<&TransactionEventsDigest> {
         self.events_digest.as_ref()
