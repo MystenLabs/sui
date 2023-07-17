@@ -5,7 +5,6 @@ import { type TransactionFilter } from '@mysten/sui.js';
 import { useReducer, useState } from 'react';
 
 import { genTableDataFromTxData } from '../transactions/TxCardUtils';
-
 import {
 	DEFAULT_TRANSACTIONS_LIMIT,
 	useGetTransactionBlocks,
@@ -149,7 +148,10 @@ function TransactionBlocksForAddress({
 								filterValue,
 							});
 						}}
-						hasNext={Boolean(hasNextPage) && Boolean(data?.pages[currentPage])}
+						hasNext={
+							(Boolean(hasNextPage) && Boolean(data?.pages[currentPage])) ||
+							currentPage < (data?.pages.length ?? 0) - 1
+						}
 						hasPrev={currentPageState[filterValue] !== 0}
 						onPrev={() =>
 							dispatch({

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::NUM_SHUTDOWN_RECEIVERS;
+use consensus::consensus::LeaderSwapTable;
 use indexmap::IndexMap;
 use prometheus::Registry;
 use test_utils::{fixture_payload, latest_protocol_version, CommitteeFixture};
@@ -42,6 +43,7 @@ async fn propose_empty() {
         tx_narwhal_round_updates,
         rx_committed_own_headers,
         metrics,
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     // Ensure the proposer makes a correct empty header.
@@ -90,6 +92,7 @@ async fn propose_payload_and_repropose_after_n_seconds() {
         tx_narwhal_round_updates,
         rx_committed_own_headers,
         metrics,
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     // Send enough digests for the header payload.
@@ -211,6 +214,7 @@ async fn equivocation_protection() {
         tx_narwhal_round_updates,
         rx_committed_own_headers,
         metrics,
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     // Send enough digests for the header payload.
@@ -282,6 +286,7 @@ async fn equivocation_protection() {
         tx_narwhal_round_updates,
         rx_committed_own_headers,
         metrics,
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     // Send enough digests for the header payload.

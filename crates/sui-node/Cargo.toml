@@ -9,37 +9,38 @@ edition = "2021"
 [dependencies]
 anemo.workspace = true
 anemo-tower.workspace = true
-arc-swap = "1.5.1"
+arc-swap.workspace = true
 axum.workspace = true
-anyhow = { version = "1.0.64", features = ["backtrace"] }
-clap = { version = "3.2.17", features = ["derive"] }
-prometheus = "0.13.3"
+anyhow.workspace = true
+clap.workspace = true
+prometheus.workspace = true
 tokio = { workspace = true, features = ["full"] }
-tracing = "0.1.36"
-futures = "0.3.23"
-tower = "0.4.13"
-reqwest = { version = "0.11.13", default_features= false, features = ["blocking", "json", "rustls-tls"] }
-tap = "1.0.1"
-serde = { version = "1.0.144", features = ["derive"] }
-snap = "1.1.0"
-git-version = "0.3.5"
-const-str = "0.5.3"
+tracing.workspace = true
+futures.workspace = true
+tower.workspace = true
+reqwest.workspace = true
+tap.workspace = true
+serde.workspace = true
+snap.workspace = true
+git-version.workspace = true
+const-str.workspace = true
 
-sui-archival = { path = "../sui-archival" }
-sui-tls = { path = "../sui-tls" }
-sui-macros = { path = "../sui-macros" }
-sui-config = { path = "../sui-config" }
-sui-core = { path = "../sui-core" }
-sui-storage = { path = "../sui-storage" }
-sui-network = { path = "../sui-network" }
-sui-json-rpc = { path = "../sui-json-rpc" }
-sui-protocol-config = { path = "../sui-protocol-config" }
-sui-telemetry = { path = "../sui-telemetry" }
-sui-types = { path = "../sui-types" }
-mysten-metrics = { path = "../mysten-metrics" }
-mysten-common = { path = "../mysten-common" }
-narwhal-network = { path = "../../narwhal/network" }
-narwhal-types = { path = "../../narwhal/types" }
+sui-archival.workspace = true
+sui-tls.workspace = true
+sui-macros.workspace = true
+sui-config.workspace = true
+sui-core.workspace = true
+sui-storage.workspace = true
+sui-network.workspace = true
+sui-json-rpc.workspace = true
+sui-protocol-config.workspace = true
+sui-snapshot.workspace = true
+sui-telemetry.workspace = true
+sui-types.workspace = true
+mysten-metrics.workspace = true
+mysten-common.workspace = true
+narwhal-network.workspace = true
+narwhal-types.workspace = true
 typed-store.workspace = true
 mysten-network.workspace = true
 telemetry-subscribers.workspace = true
@@ -47,4 +48,4 @@ fastcrypto.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [target.'cfg(msim)'.dependencies]
-sui-simulator = { path = "../sui-simulator" }
+sui-simulator.workspace = true

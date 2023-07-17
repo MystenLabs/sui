@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { it, describe, expect } from 'vitest';
-import { TypeTagSerializer } from '../../../../src/signers/txn-data-serializers/type-tag-serializer';
+import { TypeTagSerializer } from '../../../../src/builder/type-tag-serializer.js';
 
 describe('parseFromStr', () => {
 	it('parses nested struct type from a string', () => {

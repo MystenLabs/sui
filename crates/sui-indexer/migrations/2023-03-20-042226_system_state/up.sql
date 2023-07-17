@@ -78,16 +78,41 @@ CREATE TABLE at_risk_validators
     CONSTRAINT at_risk_validators_pk PRIMARY KEY (EPOCH, address)
 );
 
+-- NOTE: this assumes that over the past 100 checkpoints, there are at least 
+-- 2 checkpoints with different timestamps.
+-- This is an optimization to avoid fetching & calculating all checkpoints.
+CREATE OR REPLACE VIEW real_time_tps AS 
+WITH recent_checkpoints AS (
+  SELECT
+    sequence_number,
+    total_successful_transactions,
+    timestamp_ms
+  FROM
+    checkpoints
+  ORDER BY
+    timestamp_ms DESC
+  LIMIT 100
+),
+diff_checkpoints AS (
+  SELECT
+    MAX(sequence_number) as sequence_number,
+    SUM(total_successful_transactions) as total_successful_transactions,
+    LAG(timestamp_ms) OVER (ORDER BY timestamp_ms DESC) - timestamp_ms AS time_diff
+  FROM
+    recent_checkpoints
+  GROUP BY
+    timestamp_ms
+)
+SELECT
+  (total_successful_transactions * 1000.0 / time_diff)::float8 as recent_tps
+FROM
+  diff_checkpoints
+WHERE 
+  time_diff IS NOT NULL
+ORDER BY sequence_number DESC LIMIT 1;
+
 CREATE OR REPLACE VIEW network_metrics AS
-SELECT (SELECT COALESCE(SUM(
-            CASE
-                WHEN execution_success = true THEN transaction_count
-                ELSE 1
-            END    
-        )::float8 / 10, 0)
-        FROM transactions
-        WHERE timestamp_ms >
-              (SELECT timestamp_ms FROM checkpoints ORDER BY sequence_number DESC LIMIT 1) - 10000) AS current_tps,
+SELECT (SELECT recent_tps from real_time_tps)                                                       AS current_tps,
        (SELECT COALESCE(tps_30_days, 0) FROM epoch_network_metrics)                                 AS tps_30_days,
        (SELECT COUNT(1) FROM addresses)                                                             AS total_addresses,
        -- row estimation

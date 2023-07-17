@@ -20,7 +20,7 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::crypto::get_key_pair;
 use sui_types::{
     base_types::{ObjectDigest, ObjectID, SequenceNumber},
-    transaction::VerifiedTransaction,
+    transaction::Transaction,
 };
 use tracing::{debug, error, info};
 
@@ -51,7 +51,7 @@ impl Payload for SharedCounterTestPayload {
         }
         self.gas.0 = effects.gas_object().0;
     }
-    fn make_transaction(&mut self) -> VerifiedTransaction {
+    fn make_transaction(&mut self) -> Transaction {
         let rgp = self
             .system_state_observer
             .state
@@ -220,10 +220,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                 .build_and_sign(keypair.as_ref());
             let proxy_ref = proxy.clone();
             futures.push(async move {
-                if let Ok(effects) = proxy_ref
-                    .execute_transaction_block(transaction.into())
-                    .await
-                {
+                if let Ok(effects) = proxy_ref.execute_transaction_block(transaction).await {
                     effects.created()[0].0
                 } else {
                     panic!("Failed to create shared counter!");

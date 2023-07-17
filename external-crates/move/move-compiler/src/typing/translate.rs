@@ -44,7 +44,13 @@ pub fn program(
     assert!(context.constraints.is_empty());
     recursive_structs::modules(context.env, &modules);
     infinite_instantiations::modules(context.env, &modules);
-    T::Program { modules, scripts }
+    let module_info = context.modules;
+    let mut prog = T::Program { modules, scripts };
+    for v in &compilation_env.visitors().typing {
+        let mut v = v.borrow_mut();
+        v.visit(compilation_env, &module_info, &mut prog);
+    }
+    prog
 }
 
 fn modules(
@@ -2301,7 +2307,11 @@ fn gen_unused_warnings(context: &mut Context, mdef: &T::ModuleDefinition) {
                 // functions with #[test] attribute are implicitly used
                 continue;
             }
-
+            if *name == symbol!("init") {
+                // a Sui-specific hack (until we can implement this properly on the Sui side) to
+                // avoid signaling that the init function is unused (not called by the runtime
+                continue;
+            }
             context
                 .env
                 .add_warning_filter_scope(fun.warning_filter.clone());

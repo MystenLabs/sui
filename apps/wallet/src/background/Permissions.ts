@@ -316,4 +316,5 @@ class Permissions {
 	}
 }
 
-export default new Permissions();
+const permissions = new Permissions();
+export default permissions;

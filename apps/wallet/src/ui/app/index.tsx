@@ -4,6 +4,8 @@
 import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
+import { useInitialPageView } from './hooks/useInitialPageView';
+import AssetsPage from './pages/home/assets';
 import { QredoConnectInfoPage } from './pages/qredo-connect/QredoConnectInfoPage';
 import { SelectQredoAccountsPage } from './pages/qredo-connect/SelectQredoAccountsPage';
 import { RestrictedPage } from './pages/restricted';
@@ -14,7 +16,6 @@ import LockedPage from '_app/wallet/locked-page';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { ApprovalRequestPage } from '_pages/approval-request';
 import HomePage, {
-	NftsPage,
 	TokensPage,
 	TransactionBlocksPage,
 	TransferCoinPage,
@@ -55,11 +56,13 @@ const App = () => {
 		dispatch(setNavVisibility(menuVisible));
 	}, [location, dispatch]);
 
+	useInitialPageView();
+
 	return (
 		<Routes>
 			<Route path="/*" element={<HomePage />}>
 				<Route path="tokens/*" element={<TokensPage />} />
-				<Route path="nfts" element={<NftsPage />} />
+				<Route path="nfts/*" element={<AssetsPage />} />
 				<Route path="apps/*" element={<AppsPage />} />
 				<Route path="nft-details" element={<NFTDetailsPage />} />
 				<Route path="nft-transfer/:nftId" element={<NftTransferPage />} />

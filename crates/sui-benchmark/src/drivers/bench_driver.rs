@@ -31,7 +31,7 @@ use crate::ValidatorProxy;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
-use sui_types::transaction::{TransactionDataAPI, VerifiedTransaction};
+use sui_types::transaction::{Transaction, TransactionDataAPI};
 use sysinfo::{CpuExt, System, SystemExt};
 use tokio::sync::Barrier;
 use tokio::{time, time::Instant};
@@ -149,7 +149,7 @@ struct Stats {
     pub bench_stats: BenchmarkStats,
 }
 
-type RetryType = Box<(VerifiedTransaction, Box<dyn Payload>)>;
+type RetryType = Box<(Transaction, Box<dyn Payload>)>;
 
 enum NextOp {
     Response {
@@ -203,16 +203,17 @@ impl BenchDriver {
         start_time: Instant,
         interval: Interval,
         gas_used: u64,
+        increment_by_value: u64,
         progress_bar: Arc<ProgressBar>,
     ) {
         match interval {
             Interval::Count(count) => {
-                progress_bar.inc(1);
+                progress_bar.inc(increment_by_value);
                 if progress_bar.position() >= count {
                     progress_bar.finish_and_clear();
                 }
             }
-            Interval::Time(Duration::MAX) => progress_bar.inc(1),
+            Interval::Time(Duration::MAX) => progress_bar.inc(increment_by_value),
             Interval::Time(duration) => {
                 let elapsed_secs = (Instant::now() - start_time).as_secs();
                 progress_bar.set_position(std::cmp::min(duration.as_secs(), elapsed_secs));
@@ -373,6 +374,10 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                             latency_histogram.reset();
                         }
                         _ = request_interval.tick() => {
+                            BenchDriver::update_progress(*start_time, run_duration, total_gas_used, 0, progress_cloned.clone());
+                            if progress_cloned.is_finished() {
+                                break;
+                            }
 
                             // If a retry is available send that
                             // (sending retries here subjects them to our rate limit)
@@ -385,7 +390,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                 let committee_cloned = Arc::new(worker.proxy.clone_committee());
                                 let start = Arc::new(Instant::now());
                                 let res = worker.proxy
-                                    .execute_transaction_block(b.0.clone().into())
+                                    .execute_transaction_block(b.0.clone())
                                     .then(|res| async move  {
                                         match res {
                                             Ok(effects) => {
@@ -441,7 +446,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                 // TODO: clone committee for each request is not ideal.
                                 let committee_cloned = Arc::new(worker.proxy.clone_committee());
                                 let res = worker.proxy
-                                    .execute_transaction_block(tx.clone().into())
+                                    .execute_transaction_block(tx.clone())
                                 .then(|res| async move {
                                     match res {
                                         Ok(effects) => {
@@ -483,7 +488,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                             match op {
                                 NextOp::Retry(b) => {
                                     retry_queue.push_back(b);
-                                    BenchDriver::update_progress(*start_time, run_duration, total_gas_used, progress_cloned.clone());
+                                    BenchDriver::update_progress(*start_time, run_duration, total_gas_used, 1, progress_cloned.clone());
                                     if progress_cloned.is_finished() {
                                         break;
                                     }
@@ -495,7 +500,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                     total_gas_used += gas_used;
                                     free_pool.push_back(payload);
                                     latency_histogram.saturating_record(latency.as_millis().try_into().unwrap());
-                                    BenchDriver::update_progress(*start_time, run_duration, total_gas_used, progress_cloned.clone());
+                                    BenchDriver::update_progress(*start_time, run_duration, total_gas_used, 1, progress_cloned.clone());
                                     if progress_cloned.is_finished() {
                                         break;
                                     }

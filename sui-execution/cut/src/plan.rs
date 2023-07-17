@@ -9,7 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 use toml::value::Value;
-use toml_edit::{Document, Item};
+use toml_edit::{self, Document, Item};
 
 use crate::args::Args;
 use crate::path::{deep_copy, normalize_path, path_relative_to, shortest_new_prefix};
@@ -100,7 +100,7 @@ impl CutPlan {
 
         struct Walker {
             feature: String,
-            ws: Workspace,
+            ws: Option<Workspace>,
             planned_packages: BTreeMap<String, CutPackage>,
             pending_packages: HashSet<String>,
             make_directories: BTreeSet<PathBuf>,
@@ -182,7 +182,11 @@ impl CutPlan {
                         dst_name,
                         dst_path,
                         src_path: src.to_path_buf(),
-                        ws_state: self.ws.state(src)?,
+                        ws_state: if let Some(ws) = &self.ws {
+                            ws.state(src)?
+                        } else {
+                            WorkspaceState::Unknown
+                        },
                     },
                 );
 
@@ -192,7 +196,11 @@ impl CutPlan {
 
         let mut walker = Walker {
             feature: args.feature,
-            ws: Workspace::read(&root)?,
+            ws: if args.workspace_update {
+                Some(Workspace::read(&root)?)
+            } else {
+                None
+            },
             planned_packages: BTreeMap::new(),
             pending_packages: args.packages.into_iter().collect(),
             make_directories: BTreeSet::new(),
@@ -437,7 +445,7 @@ impl CutPlan {
             .and_then(|w| w.get_mut("members"))
             .and_then(|m| m.as_array_mut())
         {
-            format_array_of_strings(members)
+            format_array_of_strings("members", members)?
         }
 
         if let Some(exclude) = toml
@@ -445,7 +453,7 @@ impl CutPlan {
             .and_then(|w| w.get_mut("exclude"))
             .and_then(|m| m.as_array_mut())
         {
-            format_array_of_strings(exclude)
+            format_array_of_strings("exclude", exclude)?
         }
 
         fs::write(&path, toml.to_string())?;
@@ -620,21 +628,25 @@ where
 
 /// Format a TOML array of strings: Splits elements over multiple lines, indents them, sorts them,
 /// and adds a trailing comma.
-fn format_array_of_strings(array: &mut toml_edit::Array) {
-    let mut items: Vec<_> = array.iter().cloned().collect();
-    items.sort_by(|i, j| i.as_str().cmp(&j.as_str()));
+fn format_array_of_strings(field: &'static str, array: &mut toml_edit::Array) -> Result<()> {
+    let mut strs = BTreeSet::new();
+    for item in &*array {
+        let Some(s) = item.as_str() else {
+            bail!(Error::NotAStringArray(field));
+        };
+
+        strs.insert(s.to_owned());
+    }
 
     array.set_trailing_comma(true);
     array.set_trailing("\n");
     array.clear();
 
-    for mut item in items {
-        let decor = item.decor_mut();
-        decor.set_prefix("\n    ");
-        decor.set_suffix("");
-
-        array.push_formatted(item);
+    for s in strs {
+        array.push_formatted(toml_edit::Value::from(s).decorated("\n    ", ""));
     }
+
+    Ok(())
 }
 
 fn package_name<P: AsRef<Path>>(path: P) -> Result<Option<String>> {
@@ -787,6 +799,7 @@ mod tests {
 
         let plan = CutPlan::discover(Args {
             dry_run: false,
+            workspace_update: true,
             feature: "feature".to_string(),
             root: None,
             directories: vec![
@@ -888,6 +901,7 @@ mod tests {
         // directory, and expect that the resulting plan's `directories` only contains one entry.
         let plan = CutPlan::discover(Args {
             dry_run: false,
+            workspace_update: true,
             feature: "feature".to_string(),
             root: None,
             directories: vec![
@@ -978,6 +992,7 @@ mod tests {
 
         let err = CutPlan::discover(Args {
             dry_run: false,
+            workspace_update: true,
             feature: "feature".to_string(),
             root: Some(tmp.path().to_owned()),
             directories: vec![Directory {
@@ -1015,6 +1030,7 @@ mod tests {
 
         let err = CutPlan::discover(Args {
             dry_run: false,
+            workspace_update: true,
             feature: "feature".to_string(),
             root: Some(tmp.path().to_owned()),
             directories: vec![
@@ -1059,6 +1075,7 @@ mod tests {
 
         let err = CutPlan::discover(Args {
             dry_run: false,
+            workspace_update: true,
             feature: "feature".to_string(),
             root: Some(tmp.path().to_owned()),
             directories: vec![
@@ -1103,6 +1120,7 @@ mod tests {
 
         let err = CutPlan::discover(Args {
             dry_run: false,
+            workspace_update: true,
             feature: "feature".to_string(),
             root: Some(tmp.path().to_owned()),
             directories: vec![Directory {
@@ -1202,6 +1220,7 @@ mod tests {
 
         let plan = CutPlan::discover(Args {
             dry_run: false,
+            workspace_update: true,
             feature: "cut".to_string(),
             root: Some(tmp.path().to_owned()),
             directories: vec![Directory {
@@ -1279,6 +1298,79 @@ mod tests {
 
         plan.rollback();
         assert!(!root.join("cut").exists())
+    }
+
+    #[test]
+    fn test_cut_plan_no_workspace_update() {
+        let cut = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+        let plan = CutPlan::discover(Args {
+            dry_run: false,
+            workspace_update: false,
+            feature: "feature".to_string(),
+            root: None,
+            directories: vec![
+                Directory {
+                    src: cut.join("../latest"),
+                    dst: cut.join("../exec-cut"),
+                    suffix: Some("-latest".to_string()),
+                },
+                Directory {
+                    src: cut.clone(),
+                    dst: cut.join("../cut-cut"),
+                    suffix: None,
+                },
+                Directory {
+                    src: cut.join("../../external-crates/move/move-core"),
+                    dst: cut.join("../cut-move-core"),
+                    suffix: None,
+                },
+            ],
+            packages: vec![
+                "move-core-types".to_string(),
+                "sui-adapter-latest".to_string(),
+                "sui-execution-cut".to_string(),
+                "sui-verifier-latest".to_string(),
+            ],
+        })
+        .unwrap();
+
+        expect![[r#"
+            CutPlan {
+                root: "$PATH",
+                directories: {
+                    "$PATH/sui-execution/cut-cut",
+                    "$PATH/sui-execution/cut-move-core",
+                    "$PATH/sui-execution/exec-cut",
+                },
+                packages: {
+                    "move-core-types": CutPackage {
+                        dst_name: "move-core-types-feature",
+                        src_path: "$PATH/external-crates/move/move-core/types",
+                        dst_path: "$PATH/sui-execution/cut-move-core/types",
+                        ws_state: Unknown,
+                    },
+                    "sui-adapter-latest": CutPackage {
+                        dst_name: "sui-adapter-feature",
+                        src_path: "$PATH/sui-execution/latest/sui-adapter",
+                        dst_path: "$PATH/sui-execution/exec-cut/sui-adapter",
+                        ws_state: Unknown,
+                    },
+                    "sui-execution-cut": CutPackage {
+                        dst_name: "sui-execution-cut-feature",
+                        src_path: "$PATH/sui-execution/cut",
+                        dst_path: "$PATH/sui-execution/cut-cut",
+                        ws_state: Unknown,
+                    },
+                    "sui-verifier-latest": CutPackage {
+                        dst_name: "sui-verifier-feature",
+                        src_path: "$PATH/sui-execution/latest/sui-verifier",
+                        dst_path: "$PATH/sui-execution/exec-cut/sui-verifier",
+                        ws_state: Unknown,
+                    },
+                },
+            }"#]]
+        .assert_eq(&debug_for_test(&plan));
     }
 
     /// Print with pretty-printed debug formatting, with repo paths scrubbed out for consistency.

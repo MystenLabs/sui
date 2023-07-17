@@ -15,15 +15,14 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
 
+import { NavItem } from './NavItem';
 import { Text } from '../Text';
 import { ReactComponent as CheckIcon } from '../icons/check_16x16.svg';
 import { ReactComponent as ChevronDownIcon } from '../icons/chevron_down.svg';
 import { ReactComponent as MenuIcon } from '../icons/menu.svg';
-import { NavItem } from './NavItem';
+import { useZodForm } from '~/hooks/useZodForm';
 
 import type { ComponentProps, ReactNode } from 'react';
-
-import { useZodForm } from '~/hooks/useZodForm';
 
 export interface NetworkOption {
 	id: string;
@@ -205,7 +204,7 @@ export function NetworkSelect({
 	binaryVersion,
 	onChange,
 }: NetworkSelectProps) {
-	const { x, y, reference, floating, strategy } = useFloating({
+	const { x, y, refs, strategy } = useFloating({
 		placement: 'bottom-end',
 		middleware: [offset(5), flip(), shift()],
 		whileElementsMounted: autoUpdate,
@@ -217,7 +216,7 @@ export function NetworkSelect({
 		<Popover>
 			{({ open, close }) => (
 				<>
-					<Popover.Button ref={reference} as={NavItem} afterIcon={<ResponsiveIcon />}>
+					<Popover.Button ref={refs.setReference} as={NavItem} afterIcon={<ResponsiveIcon />}>
 						<span className="hidden md:block">{selected?.label || 'Custom'}</span>
 					</Popover.Button>
 					<FloatingPortal>
@@ -225,7 +224,7 @@ export function NetworkSelect({
 							{open && (
 								<Popover.Panel
 									static
-									ref={floating}
+									ref={refs.setFloating}
 									as={motion.div}
 									initial={{
 										opacity: 0,

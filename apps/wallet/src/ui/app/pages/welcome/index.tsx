@@ -11,6 +11,7 @@ import Loading from '_components/loading';
 import Logo from '_components/logo';
 import { useInitializedGuard } from '_hooks';
 import PageLayout from '_pages/layout';
+import { ampli } from '_src/shared/analytics/ampli';
 
 const VALUE_PROP = [
 	'Send, receive tokens and NFTs',
@@ -29,7 +30,7 @@ const WelcomePage = () => {
 					<div className="rounded-20 bg-sui-lightest shadow-wallet-content flex flex-col flex-nowrap items-center justify-center w-popup-width h-popup-height">
 						<BottomMenuLayout>
 							<Content className="flex flex-col flex-nowrap items-center p-7.5 pb-0">
-								<div className="mt-7.5 text-hero">
+								<div className="mt-7.5">
 									<Logo />
 								</div>
 
@@ -65,6 +66,7 @@ const WelcomePage = () => {
 							<div className="flex sticky pb-10 m-auto w-[300px] -bottom-px bg-sui-lightest">
 								<Button
 									to="/initialize/select"
+									onClick={() => ampli.clickedGetStarted()}
 									size="tall"
 									text="Get Started"
 									after={<ArrowRight16 />}

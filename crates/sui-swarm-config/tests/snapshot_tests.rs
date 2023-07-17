@@ -136,10 +136,6 @@ fn network_config_snapshot_matches() {
             consensus_config.internal_worker_address = Some(Multiaddr::empty());
             consensus_config
                 .narwhal_config
-                .consensus_api_grpc
-                .socket_addr = Multiaddr::empty();
-            consensus_config
-                .narwhal_config
                 .prometheus_metrics
                 .socket_addr = metrics_addr;
             consensus_config

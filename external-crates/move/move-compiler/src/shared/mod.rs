@@ -9,7 +9,10 @@ use crate::{
         codes::{Category, Severity, WarningFilter, WARNING_FILTER_ATTR},
         Diagnostic, Diagnostics, WarningFilters,
     },
+    editions::{Edition, Flavor},
     naming::ast::ModuleDefinition,
+    sui_mode,
+    typing::visitor::TypingVisitorObj,
 };
 use clap::*;
 use move_ir_types::location::*;
@@ -20,6 +23,7 @@ use std::{
     collections::BTreeMap,
     fmt,
     hash::Hash,
+    rc::Rc,
     sync::atomic::{AtomicUsize, Ordering as AtomicOrdering},
 };
 
@@ -161,7 +165,7 @@ impl NamedAddressMaps {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PackagePaths<Path: Into<Symbol> = Symbol, NamedAddress: Into<Symbol> = Symbol> {
-    pub name: Option<Symbol>,
+    pub name: Option<(Symbol, PackageConfig)>,
     pub paths: Vec<Path>,
     pub named_address_map: BTreeMap<NamedAddress, NumericalAddress>,
 }
@@ -180,18 +184,29 @@ pub struct CompilationEnv {
     // filters warnings when added.
     warning_filter: Vec<WarningFilters>,
     diags: Diagnostics,
-    visitors: Visitors,
+    visitors: Rc<Visitors>,
+    package_configs: BTreeMap<Symbol, PackageConfig>,
+    /// Config for any package not found in `package_configs`, or for inputs without a package.
+    default_config: PackageConfig,
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
 }
 
 impl CompilationEnv {
-    pub fn new(flags: Flags, visitors: Vec<cli::compiler::Visitor>) -> Self {
+    pub fn new(
+        flags: Flags,
+        mut visitors: Vec<cli::compiler::Visitor>,
+        package_configs: BTreeMap<Symbol, PackageConfig>,
+        default_config: Option<PackageConfig>,
+    ) -> Self {
+        visitors.extend([sui_mode::id_leak::IDLeakVerifier.into()]);
         Self {
             flags,
             warning_filter: vec![],
             diags: Diagnostics::new(),
-            visitors: Visitors::new(visitors),
+            visitors: Rc::new(Visitors::new(visitors)),
+            package_configs,
+            default_config: default_config.unwrap_or_default(),
         }
     }
 
@@ -292,8 +307,14 @@ impl CompilationEnv {
         &self.flags
     }
 
-    pub fn visitors(&self) -> &Visitors {
-        &self.visitors
+    pub fn visitors(&self) -> Rc<Visitors> {
+        self.visitors.clone()
+    }
+
+    pub fn package_config(&self, package: Option<Symbol>) -> &PackageConfig {
+        package
+            .and_then(|p| self.package_configs.get(&p))
+            .unwrap_or(&self.default_config)
     }
 }
 
@@ -348,12 +369,6 @@ pub struct Flags {
     )]
     verify: bool,
 
-    /// Compilation flavor.
-    #[clap(
-        long = cli::FLAVOR,
-    )]
-    flavor: String,
-
     /// Bytecode version.
     #[clap(
         long = cli::BYTECODE_VERSION,
@@ -381,7 +396,6 @@ impl Flags {
             test: false,
             verify: false,
             shadow: false,
-            flavor: "".to_string(),
             bytecode_version: None,
             keep_testing_functions: false,
         }
@@ -392,7 +406,6 @@ impl Flags {
             test: true,
             verify: false,
             shadow: false,
-            flavor: "".to_string(),
             bytecode_version: None,
             keep_testing_functions: false,
         }
@@ -403,16 +416,8 @@ impl Flags {
             test: false,
             verify: true,
             shadow: true, // allows overlapping between sources and deps
-            flavor: "".to_string(),
             bytecode_version: None,
             keep_testing_functions: false,
-        }
-    }
-
-    pub fn set_flavor(self, flavor: impl ToString) -> Self {
-        Self {
-            flavor: flavor.to_string(),
-            ..self
         }
     }
 
@@ -450,12 +455,29 @@ impl Flags {
         self.shadow
     }
 
-    pub fn has_flavor(&self, flavor: &str) -> bool {
-        self.flavor == flavor
-    }
-
     pub fn bytecode_version(&self) -> Option<u32> {
         self.bytecode_version
+    }
+}
+
+//**************************************************************************************************
+// Package Level Config
+//**************************************************************************************************
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct PackageConfig {
+    pub warning_filter: WarningFilters,
+    pub flavor: Flavor,
+    pub edition: Edition,
+}
+
+impl Default for PackageConfig {
+    fn default() -> Self {
+        Self {
+            warning_filter: WarningFilters::Empty,
+            flavor: Flavor::default(),
+            edition: Edition::default(),
+        }
     }
 }
 
@@ -464,16 +486,21 @@ impl Flags {
 //**************************************************************************************************
 
 pub struct Visitors {
+    pub typing: Vec<RefCell<TypingVisitorObj>>,
     pub abs_int: Vec<RefCell<AbsIntVisitorObj>>,
 }
 
 impl Visitors {
     pub fn new(passes: Vec<cli::compiler::Visitor>) -> Self {
         use cli::compiler::Visitor;
-        let mut vs = Visitors { abs_int: vec![] };
+        let mut vs = Visitors {
+            typing: vec![],
+            abs_int: vec![],
+        };
         for pass in passes {
             match pass {
                 Visitor::AbsIntVisitor(f) => vs.abs_int.push(RefCell::new(f)),
+                Visitor::TypingVisitor(f) => vs.typing.push(RefCell::new(f)),
             }
         }
         vs

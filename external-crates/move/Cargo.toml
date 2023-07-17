@@ -47,6 +47,7 @@ members = [
     "move-vm/integration-tests",
     "move-vm/paranoid-tests",
     "move-vm/runtime",
+    "move-vm/profiler",
     "move-vm/test-utils",
     "move-vm/transactional-tests",
     "move-vm/types",

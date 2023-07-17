@@ -4,12 +4,12 @@
 import clsx from 'clsx';
 
 import { ReactComponent as InfoSvg } from './icons/info_10x10.svg';
-
-import type { ReactNode } from 'react';
-
 import { Heading } from '~/ui/Heading';
 import { Text } from '~/ui/Text';
 import { Tooltip } from '~/ui/Tooltip';
+import { ampli } from '~/utils/analytics/ampli';
+
+import type { ReactNode } from 'react';
 
 export type StatsProps = {
 	size?: 'sm' | 'md';
@@ -19,6 +19,7 @@ export type StatsProps = {
 	unavailable?: boolean;
 	postfix?: ReactNode;
 	orientation?: 'horizontal' | 'vertical';
+	color?: 'steel-darker' | 'hero';
 };
 
 export function Stats({
@@ -29,6 +30,7 @@ export function Stats({
 	postfix,
 	size = 'md',
 	orientation = 'vertical',
+	color = 'steel-darker',
 }: StatsProps) {
 	return (
 		<div
@@ -37,28 +39,34 @@ export function Stats({
 				orientation === 'horizontal' ? '' : 'flex-col',
 			)}
 		>
-			<div className="flex items-center justify-start gap-1 text-caption text-steel-dark hover:text-steel">
-				<div className="flex-shrink-0">
-					<Text variant="caption/semibold" color="steel-dark">
-						{label}
-					</Text>
-				</div>
+			<div className="flex items-center justify-start gap-1 overflow-hidden text-caption">
+				<Text variant="caption/semibold" color={color} truncate>
+					{label}
+				</Text>
 				{tooltip && (
-					<Tooltip tip={unavailable ? 'Coming soon' : tooltip}>
+					<Tooltip
+						tip={unavailable ? 'Coming soon' : tooltip}
+						onOpen={() => {
+							ampli.activatedTooltip({ tooltipLabel: label });
+						}}
+					>
 						<InfoSvg />
 					</Tooltip>
 				)}
 			</div>
 			<div className="flex items-baseline gap-0.5">
 				<Heading
-					variant={size === 'md' ? 'heading2/semibold' : 'heading3/semibold'}
-					color={unavailable ? 'steel-dark' : 'steel-darker'}
+					variant={size === 'md' ? 'heading3/semibold' : 'heading6/semibold'}
+					color={unavailable ? 'steel-darker' : color}
 				>
 					{unavailable || children == null ? '--' : children}
 				</Heading>
 
 				{postfix && (
-					<Heading variant="heading4/medium" color={unavailable ? 'steel-dark' : 'steel-darker'}>
+					<Heading
+						variant={size === 'md' ? 'heading3/semibold' : 'heading6/semibold'}
+						color={unavailable ? 'steel-darker' : color}
+					>
 						{postfix}
 					</Heading>
 				)}

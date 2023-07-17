@@ -74,14 +74,18 @@ jobs:
         shell: bash
         run: |
           export PR_NUMBER=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
-          DESCRIPTION=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          export DESCRIPTION=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/MystenLabs/sui/pulls/${PR_NUMBER}" \
             | jq --raw-output .body)
-          
-          if [[ $DESCRIPTION =~ \[x\].*Release[[:space:]]notes.*[[:space:]]+.* ]]; then
-            echo "At least one '[x]' was checked under 'Type of Change (Check all that apply)', you need to add a blob under the 'Release Notes' section."
-            exit 1
-          fi     
+
+          if [[ "${DESCRIPTION}" == *"[x]"*  ]]; then
+            if [[ "${DESCRIPTION}" =~ Release[[:space:]]notes[[:space:]]+.* ]]; then
+              exit 0
+            else
+              echo "At least one '[x]' was checked under 'Type of Change (Check all that apply)', you need to add a blob under the 'Release Notes' section."
+              exit 1
+            fi
+          fi
 
   test:
     needs: diff
@@ -122,6 +126,9 @@ jobs:
       - name: rustdoc
         run: |
           cargo doc --workspace --no-deps
+      - name: sui-execution
+        run: |
+          ./scripts/execution_layer.py generate-lib
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
@@ -274,6 +281,24 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: mystenlabs/cargo-deny-action@main
+
+  sui-excution-cut:
+    name: cutting a new execution layer
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
+    runs-on: [ubuntu-ghcloud]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install cargo-hakari, and cache the binary
+        uses: baptiste0928/cargo-install@30f432979e99f3ea66a8fa2eede53c07063995d8
+        with:
+          crate: cargo-hakari
+          locked: true
+      - name: Make cut
+        run: ./scripts/execution_layer.py cut for_ci_test
+      - name: Check execution builds
+        run: cargo build -p sui-execution
+
 
   #indexer:
   #  name: indexer

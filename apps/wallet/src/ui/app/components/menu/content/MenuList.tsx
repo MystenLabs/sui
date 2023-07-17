@@ -5,6 +5,7 @@ import { useResolveSuiNSName } from '@mysten/core';
 import {
 	Account24,
 	ArrowUpRight12,
+	ArrowUpRight16,
 	Domain24,
 	Version24,
 	CopyArchiveDoNotUse24,
@@ -14,17 +15,19 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Browser from 'webextension-polyfill';
 
-import LoadingIndicator from '../../loading/LoadingIndicator';
 import { MenuLayout } from './MenuLayout';
 import MenuListItem from './MenuListItem';
+import LoadingIndicator from '../../loading/LoadingIndicator';
 import { API_ENV_TO_INFO } from '_app/ApiProvider';
 import { Button } from '_app/shared/ButtonUI';
 import { lockWallet } from '_app/wallet/actions';
 import { useNextMenuUrl } from '_components/menu/hooks';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { ToS_LINK, FAQ_LINK } from '_src/shared/constants';
+import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerLinkType';
 import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 import { useAutoLockInterval } from '_src/ui/app/hooks/useAutoLockInterval';
+import { useExplorerLink } from '_src/ui/app/hooks/useExplorerLink';
 import { logout } from '_src/ui/app/redux/slices/account';
 import { ConfirmationModal } from '_src/ui/app/shared/ConfirmationModal';
 import { Link } from '_src/ui/app/shared/Link';
@@ -45,16 +48,35 @@ function MenuList() {
 	const navigate = useNavigate();
 	const [logoutInProgress, setLogoutInProgress] = useState(false);
 	const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
+	const explorerAddress = useExplorerLink({
+		type: ExplorerLinkType.address,
+		address: address || '',
+	});
 	return (
 		<>
 			<MenuLayout title="Wallet Settings">
 				<div className="flex flex-col divide-y divide-x-0 divide-solid divide-gray-45">
-					<MenuListItem
-						to={accountUrl}
-						icon={<Account24 />}
-						title={'Accounts'}
-						subtitle={domainName ?? (address ? formatAddress(address) : '')}
-					/>
+					<div className="flex flex-col mb-3">
+						<MenuListItem
+							to={accountUrl}
+							icon={<Account24 />}
+							title={'Accounts'}
+							subtitle={domainName ?? (address ? formatAddress(address) : '')}
+						/>
+						{explorerAddress && (
+							<Button
+								variant="secondary"
+								size="narrow"
+								href={explorerAddress}
+								text={
+									<Text variant="bodySmall" weight="medium" color="steel-darker">
+										View account on Sui Explorer
+									</Text>
+								}
+								after={<ArrowUpRight16 className="text-steel w-4 h-4" />}
+							/>
+						)}
+					</div>
 					<MenuListItem
 						to={networkUrl}
 						icon={<Domain24 />}

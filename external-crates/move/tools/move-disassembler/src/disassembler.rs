@@ -11,7 +11,7 @@ use move_binary_format::{
     binary_views::BinaryIndexedView,
     control_flow_graph::{ControlFlowGraph, VMControlFlowGraph},
     file_format::{
-        Ability, AbilitySet, Bytecode, CodeUnit, FieldHandleIndex, FunctionDefinition,
+        Ability, AbilitySet, Bytecode, CodeUnit, Constant, FieldHandleIndex, FunctionDefinition,
         FunctionDefinitionIndex, FunctionHandle, ModuleHandle, Signature, SignatureIndex,
         SignatureToken, StructDefinition, StructDefinitionIndex, StructFieldInformation,
         StructTypeParameter, TableIndex, TypeSignature, Visibility,
@@ -460,6 +460,14 @@ impl<'a> Disassembler<'a> {
         }
     }
 
+    fn preview_const(slice: &[u8]) -> String {
+        if slice.len() <= 4 {
+            format!("{}", hex::encode(slice))
+        } else {
+            format!("{}..", hex::encode(&slice[..4]))
+        }
+    }
+
     //***************************************************************************
     // Disassemblers
     //***************************************************************************
@@ -546,8 +554,10 @@ impl<'a> Disassembler<'a> {
             Bytecode::LdConst(idx) => {
                 let constant = self.source_mapper.bytecode.constant_at(*idx);
                 Ok(format!(
-                    "LdConst[{}]({:?}: {:?})",
-                    idx, &constant.type_, &constant.data
+                    "LdConst[{}]({:?}: {})",
+                    idx,
+                    &constant.type_,
+                    Self::preview_const(&constant.data),
                 ))
             }
             Bytecode::CopyLoc(local_idx) => {
@@ -1245,6 +1255,16 @@ impl<'a> Disassembler<'a> {
         ))
     }
 
+    pub fn disassemble_constant(
+        &self,
+        constant_index: usize,
+        Constant { type_, data }: &Constant,
+    ) -> Result<String> {
+        let type_str = self.disassemble_sig_tok(type_.clone(), &[])?;
+        let data_str = hex::encode(data);
+        Ok(format!("\t{constant_index} => {}: {}", type_str, data_str))
+    }
+
     pub fn disassemble(&self) -> Result<String> {
         let name_opt = self.source_mapper.source_map.module_name_opt.as_ref();
         let name = name_opt.map(|(addr, n)| format!("{}.{}", addr.short_str_lossless(), n));
@@ -1267,6 +1287,15 @@ impl<'a> Disassembler<'a> {
             .struct_defs()
             .map_or(0, |d| d.len()))
             .map(|i| self.disassemble_struct_def(StructDefinitionIndex(i as TableIndex)))
+            .collect::<Result<Vec<String>>>()?;
+
+        let constants: Vec<String> = self
+            .source_mapper
+            .bytecode
+            .constant_pool()
+            .iter()
+            .enumerate()
+            .map(|(i, constant)| self.disassemble_constant(i, constant))
             .collect::<Result<Vec<String>>>()?;
 
         let function_defs: Vec<String> = match self.source_mapper.bytecode {
@@ -1310,13 +1339,21 @@ impl<'a> Disassembler<'a> {
         } else {
             format!("\n{}\n\n", imports.join("\n"))
         };
+        let constant_pool_string = if constants.is_empty() {
+            "".to_string()
+        } else {
+            format!(
+                "\nConstants [\n{constants}\n]\n",
+                constants = constants.join("\n")
+            )
+        };
         Ok(format!(
-            "// Move bytecode v{version}\n{header} {{{imports}\n{struct_defs}\n\n{function_defs}\n}}",
+            "// Move bytecode v{version}\n{header} {{{imports}\n{struct_defs}\n\n{function_defs}\n{constant_pool_string}}}",
             version = version,
             header = header,
             imports = &imports_str,
             struct_defs = &struct_defs.join("\n"),
-            function_defs = &function_defs.join("\n")
+            function_defs = &function_defs.join("\n"),
         ))
     }
 }

@@ -43,6 +43,7 @@ use mysten_metrics::{spawn_monitored_task, RegistryService};
 use mysten_network::server::ServerBuilder;
 use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
+use sui_archival::reader::ArchiveReaderBalancer;
 use sui_archival::writer::ArchiveWriter;
 use sui_config::node::DBCheckpointConfig;
 use sui_config::node_config_metrics::NodeConfigMetrics;
@@ -92,6 +93,7 @@ use sui_network::discovery;
 use sui_network::discovery::TrustedPeerChangeEvent;
 use sui_network::state_sync;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
+use sui_snapshot::uploader::StateSnapshotUploader;
 use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use sui_storage::{FileCompression, IndexStore, StorageFormat};
 use sui_types::base_types::{AuthorityName, EpochId};
@@ -158,6 +160,8 @@ pub struct SuiNode {
     sim_state: SimState,
 
     _state_archive_handle: Option<broadcast::Sender<()>>,
+
+    _state_snapshot_uploader_handle: Option<oneshot::Sender<()>>,
 }
 
 impl fmt::Debug for SuiNode {
@@ -365,12 +369,15 @@ impl SuiNode {
         // Create network
         // TODO only configure validators as seed/preferred peers for validators and not for
         // fullnodes once we've had a chance to re-work fullnode configuration generation.
+        let archive_readers =
+            ArchiveReaderBalancer::new(config.archive_reader_config(), &prometheus_registry)?;
         let (trusted_peer_change_tx, trusted_peer_change_rx) = watch::channel(Default::default());
         let (p2p_network, discovery_handle, state_sync_handle) = Self::create_p2p_network(
             &config,
             state_sync_store.clone(),
             chain_identifier,
             trusted_peer_change_rx,
+            archive_readers.clone(),
             &prometheus_registry,
         )?;
         // We must explicitly send this instead of relying on the initial value to trigger
@@ -381,57 +388,20 @@ impl SuiNode {
             epoch_store.epoch_start_state(),
         )
         .expect("Initial trusted peers must be set");
-        let state_archive_handle =
-            if let Some(remote_store_config) = &config.state_archive_config.object_store_config {
-                let local_store_config = ObjectStoreConfig {
-                    object_store: Some(ObjectStoreType::File),
-                    directory: Some(config.archive_path()),
-                    ..Default::default()
-                };
-                let archive_writer = ArchiveWriter::new(
-                    local_store_config,
-                    remote_store_config.clone(),
-                    FileCompression::Zstd,
-                    StorageFormat::Blob,
-                    Duration::from_secs(600),
-                    1024 * 1024 * 1024,
-                    &prometheus_registry,
-                )
-                .await?;
-                Some(archive_writer.start(state_sync_store).await?)
-            } else {
-                None
-            };
-        let db_checkpoint_config = if config.db_checkpoint_config.checkpoint_path.is_none() {
-            DBCheckpointConfig {
-                checkpoint_path: Some(config.db_checkpoint_path()),
-                ..config.db_checkpoint_config.clone()
-            }
-        } else {
-            config.db_checkpoint_config.clone()
-        };
 
-        let db_checkpoint_handle = match db_checkpoint_config
-            .checkpoint_path
-            .as_ref()
-            .zip(db_checkpoint_config.object_store_config.as_ref())
-        {
-            Some((path, object_store_config)) => {
-                let handler = DBCheckpointHandler::new(
-                    path,
-                    object_store_config,
-                    60,
-                    db_checkpoint_config
-                        .prune_and_compact_before_upload
-                        .unwrap_or(true),
-                    config.indirect_objects_threshold,
-                    config.authority_store_pruning_config,
-                    &prometheus_registry,
-                )?;
-                Some(handler.start())
-            }
-            None => None,
-        };
+        // Start archiving local state to remote store
+        let state_archive_handle =
+            Self::start_state_archival(&config, &prometheus_registry, state_sync_store).await?;
+
+        // Start uploading state snapshot to remote store
+        let state_snapshot_handle = Self::start_state_snapshot(&config, &prometheus_registry)?;
+
+        // Start uploading db checkpoints to remote store
+        let (db_checkpoint_config, db_checkpoint_handle) = Self::start_db_checkpoint(
+            &config,
+            &prometheus_registry,
+            state_snapshot_handle.is_some(),
+        )?;
 
         let state = AuthorityState::new(
             config.protocol_public_key(),
@@ -451,6 +421,7 @@ impl SuiNode {
             config.certificate_deny_config.clone(),
             config.indirect_objects_threshold,
             config.state_debug_dump_config.clone(),
+            archive_readers,
         )
         .await;
         // ensure genesis txn was executed
@@ -471,6 +442,16 @@ impl SuiNode {
                 .unwrap();
         }
 
+        if config
+            .expensive_safety_check_config
+            .enable_secondary_index_checks()
+        {
+            if let Some(indexes) = state.indexes.clone() {
+                sui_core::verify_indexes::verify_indexes(state.database.clone(), indexes)
+                    .expect("secondary indexes are inconsistent");
+            }
+        }
+
         let (end_of_epoch_channel, end_of_epoch_receiver) =
             broadcast::channel(config.end_of_epoch_broadcast_channel_capacity);
 
@@ -481,8 +462,7 @@ impl SuiNode {
                     end_of_epoch_receiver,
                     &config.db_path(),
                     &prometheus_registry,
-                )
-                .await?,
+                )?,
             ))
         } else {
             None
@@ -575,6 +555,7 @@ impl SuiNode {
             },
 
             _state_archive_handle: state_archive_handle,
+            _state_snapshot_uploader_handle: state_snapshot_handle,
         };
 
         info!("SuiNode started!");
@@ -642,16 +623,101 @@ impl SuiNode {
         self.close_epoch(&epoch_store).await
     }
 
+    async fn start_state_archival(
+        config: &NodeConfig,
+        prometheus_registry: &Registry,
+        state_sync_store: RocksDbStore,
+    ) -> Result<Option<tokio::sync::broadcast::Sender<()>>> {
+        if let Some(remote_store_config) = &config.state_archive_write_config.object_store_config {
+            let local_store_config = ObjectStoreConfig {
+                object_store: Some(ObjectStoreType::File),
+                directory: Some(config.archive_path()),
+                ..Default::default()
+            };
+            let archive_writer = ArchiveWriter::new(
+                local_store_config,
+                remote_store_config.clone(),
+                FileCompression::Zstd,
+                StorageFormat::Blob,
+                Duration::from_secs(600),
+                256 * 1024 * 1024,
+                prometheus_registry,
+            )
+            .await?;
+            Ok(Some(archive_writer.start(state_sync_store).await?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn start_state_snapshot(
+        config: &NodeConfig,
+        prometheus_registry: &Registry,
+    ) -> Result<Option<oneshot::Sender<()>>> {
+        if let Some(remote_store_config) = &config.state_snapshot_write_config.object_store_config {
+            let snapshot_uploader = StateSnapshotUploader::new(
+                &config.db_checkpoint_path(),
+                &config.snapshot_path(),
+                remote_store_config.clone(),
+                60,
+                prometheus_registry,
+            )?;
+            Ok(Some(snapshot_uploader.start()))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn start_db_checkpoint(
+        config: &NodeConfig,
+        prometheus_registry: &Registry,
+        state_snapshot_enabled: bool,
+    ) -> Result<(DBCheckpointConfig, Option<oneshot::Sender<()>>)> {
+        let db_checkpoint_config = if config.db_checkpoint_config.checkpoint_path.is_none() {
+            DBCheckpointConfig {
+                checkpoint_path: Some(config.db_checkpoint_path()),
+                ..config.db_checkpoint_config.clone()
+            }
+        } else {
+            config.db_checkpoint_config.clone()
+        };
+
+        match db_checkpoint_config
+            .checkpoint_path
+            .as_ref()
+            .zip(db_checkpoint_config.object_store_config.as_ref())
+        {
+            Some((path, object_store_config)) => {
+                let handler = DBCheckpointHandler::new(
+                    path,
+                    object_store_config,
+                    60,
+                    db_checkpoint_config
+                        .prune_and_compact_before_upload
+                        .unwrap_or(true),
+                    config.indirect_objects_threshold,
+                    config.authority_store_pruning_config,
+                    prometheus_registry,
+                    state_snapshot_enabled,
+                )?;
+                Ok((db_checkpoint_config, Some(handler.start())))
+            }
+            None => Ok((db_checkpoint_config, None)),
+        }
+    }
+
     fn create_p2p_network(
         config: &NodeConfig,
         state_sync_store: RocksDbStore,
         chain_identifier: ChainIdentifier,
         trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>,
+        archive_readers: ArchiveReaderBalancer,
         prometheus_registry: &Registry,
     ) -> Result<(Network, discovery::Handle, state_sync::Handle)> {
         let (state_sync, state_sync_server) = state_sync::Builder::new()
             .config(config.p2p_config.state_sync.clone().unwrap_or_default())
             .store(state_sync_store)
+            .archive_readers(archive_readers)
             .with_metrics(prometheus_registry)
             .build();
 
@@ -711,18 +777,14 @@ impl SuiNode {
             anemo_config.quic = Some(quic_config);
 
             let server_name = format!("sui-{}", chain_identifier);
-            let alt_server_name = "sui";
             let network = Network::bind(config.p2p_config.listen_address)
                 .server_name(&server_name)
-                // TODO remove alternate_server_name once transition stabilizes
-                .alternate_server_name(alt_server_name)
                 .private_key(config.network_key_pair().copy().private().0.to_bytes())
                 .config(anemo_config)
                 .outbound_request_layer(outbound_layer)
                 .start(service)?;
             info!(
                 server_name = server_name,
-                alt_server_name = alt_server_name,
                 "P2p network started on {}",
                 network.local_addr()
             );
@@ -860,6 +922,7 @@ impl SuiNode {
                 consensus_handler,
                 SuiTxValidator::new(
                     epoch_store,
+                    checkpoint_service.clone(),
                     state.transaction_manager().clone(),
                     sui_tx_validator_metrics.clone(),
                 ),
@@ -1245,7 +1308,7 @@ impl SuiNode {
             if !matches!(
                 self.config
                     .authority_store_pruning_config
-                    .num_epochs_to_retain_for_checkpoints,
+                    .num_epochs_to_retain_for_checkpoints(),
                 None | Some(u64::MAX) | Some(0)
             ) {
                 self.state

@@ -1,0 +1,97 @@
+name: Release Notes Monitor
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */3 * * *'  # every 3 hours
+
+jobs:
+  get-list-of-prs:
+    name: Get Release Notes for new PRs
+    outputs:
+      matrix: ${{ steps.get-pr-list.outputs.matrix }}
+      new_commit_hash: ${{ steps.get-pr-list.outputs.new_commit_hash }}
+      existing_commit_tag: ${{ steps.get-pr-list.outputs.existing_commit_tag }}
+      new_tag: ${{ steps.get-pr-list.outputs.new_tag }}
+      sui_version: ${{ steps.get-pr-list.outputs.sui_version }}
+    runs-on: [self-hosted, self-hosted-arc]
+    
+    steps:
+    - name: Checkout sui repo main branch
+      uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
+      with:
+        fetch-depth: 0
+        ref: main
+
+    - name: Get list of PRs
+      id: get-pr-list
+      working-directory: ./
+      run: |
+        export new_commit_hash=$(git rev-parse HEAD)
+        export existing_commit_tag=$(git tag --points-at ${new_commit_hash} | grep -E 'sui_v(.*)_rel_notes' | head -n 1)
+
+        export previous_tag=$(git tag | grep -E 'sui_v1(.*)_rel_notes' | sort -r | head -1)
+        export previous_commit_hash=$(git rev-list -n 1 ${previous_tag})
+        
+        export list_of_prs=$(git log --grep "\[x\]" --pretty=oneline --abbrev-commit ${previous_commit_hash}...${new_commit_hash} -- crates dashboards doc docker external-crates kiosk narwhal nre sui-execution | grep -o '#[0-9]\+' | grep -o '[0-9]\+' | jq -R -s -c 'split("\n")[:-1]')
+
+        echo "matrix=${list_of_prs}" >> $GITHUB_OUTPUT
+        echo "new_commit_hash=${new_commit_hash}" >> $GITHUB_OUTPUT
+        echo "existing_commit_tag=${existing_commit_tag}" >> $GITHUB_OUTPUT
+        
+        export sui_crate_version=$(cat Cargo.toml | grep "^version =" | tr -d '"' | awk '{ print $3 }')
+        export new_tag=$(echo "sui_v${sui_crate_version}_$(date +%s)_rel_notes")
+        echo "new_tag=${new_tag}" >> $GITHUB_OUTPUT
+        echo "sui_version=${sui_crate_version}" >> $GITHUB_OUTPUT
+        
+  process-prs:
+    name: Processing PR
+    needs: [ get-list-of-prs ]
+    if: ${{ needs.get-list-of-prs.outputs.matrix != '[]' && needs.get-list-of-prs.outputs.matrix != '' }}
+    runs-on: [self-hosted, self-hosted-arc]
+    strategy:
+      matrix:
+         pr: ${{ fromJson(needs.get-list-of-prs.outputs.matrix) }}
+
+    steps:
+    - name: Reading Release notes
+      id: rel-notes
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        echo "Processing ${{ matrix.pr }} PR"
+        export rel_notes=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }}} --jq ".body" | awk '/### Release notes/{p=1; next} p' | grep '\S')
+        echo "::set-output name=release_notes::${rel_notes}"
+    
+    - name: Post to a Slack channel
+      uses: slackapi/slack-github-action@34c3fd73326693ef04728f8611669d918a2d781d # pin@v1.19.0
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      with:
+        channel-id: '#ext-mysten-release-notes'
+        payload: |
+          {
+            "text": "PR *${{ matrix.pr }}* Release Notes",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|${{ matrix.pr }}>\n <@U03LRLPR1QX> and <@U03Q2MN3XHP> please review release notes for upcoming `v${{ needs.get-list-of-prs.outputs.sui_version }}` release.\n *Release Notes:*\n${{ steps.rel-notes.outputs.release_notes }}\n"
+                }
+              },
+              {
+                "type": "divider"
+              }
+            ]
+          }
+
+  tag:
+    name: Adding git tag to processed commit
+    needs: [ get-list-of-prs ]
+    if: ${{ needs.get-list-of-prs.outputs.existing_commit_tag == '' }}
+    uses: mystenlabs/sui/.github/workflows/tag.yml@main
+    with:
+      sui_commit: ${{ needs.get-list-of-prs.outputs.new_commit_hash }}
+      tag_name: ${{ needs.get-list-of-prs.outputs.new_tag }}
+    secrets: inherit

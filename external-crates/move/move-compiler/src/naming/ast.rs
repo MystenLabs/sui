@@ -349,8 +349,8 @@ static BUILTIN_TYPE_ALL_NAMES: Lazy<BTreeSet<Symbol>> = Lazy::new(|| {
         BuiltinTypeName_::BOOL,
         BuiltinTypeName_::VECTOR,
     ]
-    .iter()
-    .map(|n| Symbol::from(*n))
+    .into_iter()
+    .map(Symbol::from)
     .collect()
 });
 
@@ -363,8 +363,7 @@ static BUILTIN_TYPE_NUMERIC: Lazy<BTreeSet<BuiltinTypeName_>> = Lazy::new(|| {
         BuiltinTypeName_::U128,
         BuiltinTypeName_::U256,
     ]
-    .iter()
-    .cloned()
+    .into_iter()
     .collect()
 });
 
@@ -475,8 +474,8 @@ static BUILTIN_FUNCTION_ALL_NAMES: Lazy<BTreeSet<Symbol>> = Lazy::new(|| {
         BuiltinFunction_::FREEZE,
         BuiltinFunction_::ASSERT_MACRO,
     ]
-    .iter()
-    .map(|n| Symbol::from(*n))
+    .into_iter()
+    .map(Symbol::from)
     .collect()
 });
 

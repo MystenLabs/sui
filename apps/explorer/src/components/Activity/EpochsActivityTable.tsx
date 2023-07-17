@@ -7,7 +7,6 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { genTableDataFromEpochsData } from './utils';
-
 import { useGetEpochs } from '~/hooks/useGetEpochs';
 import { Link } from '~/ui/Link';
 import { Pagination, useCursorPagination } from '~/ui/Pagination';
@@ -43,7 +42,7 @@ export function EpochsActivityTable({
 	const cardData = data ? genTableDataFromEpochsData(data) : undefined;
 
 	return (
-		<div className="flex flex-col space-y-5 text-left xl:pr-10">
+		<div className="flex flex-col space-y-3 text-left xl:pr-10">
 			{isError && (
 				<div className="pt-2 font-sans font-semibold text-issue-dark">Failed to load Epochs</div>
 			)}
@@ -71,15 +70,15 @@ export function EpochsActivityTable({
 				{!disablePagination ? (
 					<Pagination {...pagination} />
 				) : (
-					<Link to="/recent?tab=epochs" after={<ArrowRight12 />}>
-						More Epochs
+					<Link to="/recent?tab=epochs" after={<ArrowRight12 className="h-3 w-3 -rotate-45" />}>
+						View all
 					</Link>
 				)}
 
 				<div className="flex items-center space-x-3">
 					<Text variant="body/medium" color="steel-dark">
 						{count ? numberSuffix(Number(count)) : '-'}
-						{` Epochs`}
+						{` Total`}
 					</Text>
 					{!disablePagination && (
 						<select

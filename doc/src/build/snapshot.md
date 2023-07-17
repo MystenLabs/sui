@@ -38,9 +38,13 @@ To restore from a snapshot, follow these steps:
 
 1. Download the snapshot for the epoch you want to restore to your local disk. There is one snapshot per epoch in s3 bucket.
 1. Place the snapshot into the directory that the `db-config` value points to in your sui-node.yaml file. For example, if the `db-config` value points to `/opt/sui/db/authorities_db/full_node_db` and you want to restore from epoch 10, then copy the snapshot to the directory with this command:
-   `aws s3 cp s3://<BUCKET_NAME>/epoch_10 /opt/sui/db/authorities_db/full_node_db/live --recursive`
+
+   `aws s3 cp s3://<BUCKET_NAME>/epoch_10 /opt/sui/db/authorities_db/full_node_db/live --recursive --no-sign-request`.
+   
+   Use `--no-sign-request` to bypass setting AWS credentials for the CLI.
+
 1. Make sure you update the ownership of the downloaded directory to the sui user (whichever linux user you run `sui-node` as)
-   `sudo chown -R sui:sui  /opt/sui/db/authorities_db/full_node_db/live`
+   `sudo chown -R sui:sui  /opt/sui/db/authorities_db/full_node_db/live`.
 1. Start the Sui node.
 
 **Note:** when you restore a Full node from a snapshot, write it to the path `/opt/sui/db/authorities_db/full_node_db/live`. To restore a Validator node, use the path `/opt/sui/db/authorities_db/live`

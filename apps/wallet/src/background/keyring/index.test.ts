@@ -4,14 +4,14 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import { Keyring } from '.';
-import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
 import { type DerivedAccount } from './DerivedAccount';
 import { VaultStorage } from './VaultStorage';
+import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
 import Alarm from '_src/background/Alarms';
 import {
 	testEd25519,
 	testEd25519Serialized,
-	testMnemonic,
+	testMnemonicSeedHex,
 	testSecp256k1,
 	testSecp256k1Address,
 	testSecp256k1Serialized,
@@ -46,7 +46,7 @@ describe('Keyring', () => {
 
 		beforeEach(async () => {
 			vaultStorageMock.revive.mockResolvedValue(true);
-			vaultStorageMock.getMnemonic.mockReturnValue(testMnemonic);
+			vaultStorageMock.getMnemonicSeedHex.mockReturnValue(testMnemonicSeedHex);
 			vaultStorageMock.getImportedKeys.mockReturnValue([testSecp256k1]);
 			k = new Keyring();
 			await k.reviveDone;

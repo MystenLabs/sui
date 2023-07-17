@@ -152,6 +152,14 @@ impl ConsensusStore {
 
         Ok(sub_dags)
     }
+
+    /// Load consensus commit with a given sequence number.
+    pub fn read_consensus_commit(
+        &self,
+        seq: &SequenceNumber,
+    ) -> StoreResult<Option<ConsensusCommit>> {
+        self.committed_sub_dags_by_index_v2.get(seq)
+    }
 }
 
 #[cfg(test)]

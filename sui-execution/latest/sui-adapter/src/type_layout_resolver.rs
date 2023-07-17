@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::programmable_transactions::context::new_session_for_linkage;
-use crate::programmable_transactions::{
-    context::load_type,
-    linkage_view::{LinkageInfo, LinkageView},
-};
+use crate::programmable_transactions::{context::load_type, linkage_view::LinkageView};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use move_core_types::resolver::{ModuleResolver, ResourceResolver};
@@ -35,10 +32,8 @@ struct NullSuiResolver<'state>(Box<dyn TypeLayoutStore + 'state>);
 
 impl<'state, 'vm> TypeLayoutResolver<'state, 'vm> {
     pub fn new(vm: &'vm MoveVM, state_view: Box<dyn TypeLayoutStore + 'state>) -> Self {
-        let session = new_session_for_linkage(
-            vm,
-            LinkageView::new(Box::new(NullSuiResolver(state_view)), LinkageInfo::Unset),
-        );
+        let session =
+            new_session_for_linkage(vm, LinkageView::new(Box::new(NullSuiResolver(state_view))));
         Self { session }
     }
 }

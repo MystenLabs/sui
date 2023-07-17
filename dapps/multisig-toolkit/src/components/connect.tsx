@@ -11,7 +11,7 @@ import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 function ConnectedButton() {
-	const { accounts, currentAccount, selectAccount } = useWalletKit();
+	const { accounts, currentAccount, selectAccount, disconnect } = useWalletKit();
 	const [open, setOpen] = useState(false);
 
 	return (
@@ -36,6 +36,7 @@ function ConnectedButton() {
 							<CommandItem
 								key={account.address}
 								value={account.address}
+								className="cursor-pointer"
 								onSelect={() => {
 									selectAccount(account);
 									setOpen(false);
@@ -50,6 +51,15 @@ function ConnectedButton() {
 								{formatAddress(account.address)}
 							</CommandItem>
 						))}
+
+						<CommandItem
+							className="cursor-pointer"
+							onSelect={() => {
+								disconnect();
+							}}
+						>
+							Logout
+						</CommandItem>
 					</CommandGroup>
 				</Command>
 			</PopoverContent>

@@ -30,4 +30,8 @@ export class ImportedAccount implements Account {
 			derivationPath: null,
 		};
 	}
+
+	getPublicKey() {
+		return this.accountKeypair.publicKey.toBase64();
+	}
 }

@@ -7,7 +7,6 @@ import { type SuiValidatorSummary } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { StakeColumn } from './StakeColumn';
-
 import { HighlightedTableCol } from '~/components/Table/HighlightedTableCol';
 import { Banner } from '~/ui/Banner';
 import { ImageIcon } from '~/ui/ImageIcon';
@@ -16,6 +15,7 @@ import { Link } from '~/ui/Link';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 import { Text } from '~/ui/Text';
+import { ampli } from '~/utils/analytics/ampli';
 
 const NUMBER_OF_VALIDATORS = 10;
 
@@ -46,7 +46,17 @@ const validatorsTable = (
 					<div className="flex items-center gap-2.5">
 						{showIcon && <ImageIcon src={logo} size="sm" fallback={name} label={name} circle />}
 
-						<ValidatorLink address={address} label={name} />
+						<ValidatorLink
+							address={address}
+							label={name}
+							onClick={() =>
+								ampli.clickedValidatorRow({
+									sourceFlow: 'Top validators - validator name',
+									validatorAddress: address,
+									validatorName: name,
+								})
+							}
+						/>
 					</div>
 				</HighlightedTableCol>
 			),
@@ -58,7 +68,17 @@ const validatorsTable = (
 			),
 			address: (
 				<HighlightedTableCol>
-					<AddressLink address={address} noTruncate={!limit} />
+					<AddressLink
+						address={address}
+						noTruncate={!limit}
+						onClick={() =>
+							ampli.clickedValidatorRow({
+								sourceFlow: 'Top validators - validator address',
+								validatorAddress: address,
+								validatorName: name,
+							})
+						}
+					/>
 				</HighlightedTableCol>
 			),
 		})),
@@ -114,16 +134,18 @@ export function TopValidatorsCard({ limit, showIcon }: TopValidatorsCardProps) {
 			{isSuccess && tableData && (
 				<>
 					<TableCard data={tableData.data} columns={tableData.columns} />
-					{limit && (
-						<div className="mt-3">
-							<Link to="/validators">
-								<div className="flex items-center gap-2">
-									More Validators
-									<ArrowRight12 fill="currentColor" />
-								</div>
-							</Link>
-						</div>
-					)}
+					<div className="mt-3 flex justify-between">
+						<Link to="/validators">
+							<div className="flex items-center gap-2">
+								View all
+								<ArrowRight12 fill="currentColor" className="h-3 w-3 -rotate-45" />
+							</div>
+						</Link>
+						<Text variant="body/medium" color="steel-dark">
+							{data ? data.activeValidators.length : '-'}
+							{` Total`}
+						</Text>
+					</div>
 				</>
 			)}
 		</>

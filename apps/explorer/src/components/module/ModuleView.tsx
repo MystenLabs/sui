@@ -7,12 +7,12 @@ import Highlight, { defaultProps, Prism } from 'prism-react-renderer';
 import 'prism-themes/themes/prism-one-light.css';
 import { useMemo } from 'react';
 
+import { useNormalizedMoveModule } from '~/hooks/useNormalizedMoveModule';
+import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
+
 import type { Language } from 'prism-react-renderer';
 
 import styles from './ModuleView.module.css';
-
-import { useNormalizedMoveModule } from '~/hooks/useNormalizedMoveModule';
-import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
 // Include Rust language support.
 // TODO: Write a custom prismjs syntax for Move Bytecode.

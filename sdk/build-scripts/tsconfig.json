@@ -1,0 +1,12 @@
+{
+	"extends": "./tsconfig.shared.json",
+	"include": ["src"],
+	"compilerOptions": {
+		"module": "NodeNext",
+		// match output dir to input dir. e.g. dist/index instead of dist/src/index
+		"rootDir": "src",
+		"outDir": "dist/types",
+		"emitDeclarationOnly": false,
+		"noEmit": true
+	}
+}

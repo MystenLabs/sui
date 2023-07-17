@@ -52,6 +52,7 @@ const NUM_SHARDS: usize = 4096;
 struct AuthorityStoreMetrics {
     sui_conservation_check_latency: IntGauge,
     sui_conservation_live_object_count: IntGauge,
+    sui_conservation_live_object_size: IntGauge,
     sui_conservation_imbalance: IntGauge,
     sui_conservation_storage_fund: IntGauge,
     sui_conservation_storage_fund_imbalance: IntGauge,
@@ -69,6 +70,11 @@ impl AuthorityStoreMetrics {
             sui_conservation_live_object_count: register_int_gauge_with_registry!(
                 "sui_conservation_live_object_count",
                 "Number of live objects in the store",
+                registry,
+            ).unwrap(),
+            sui_conservation_live_object_size: register_int_gauge_with_registry!(
+                "sui_conservation_live_object_size",
+                "Size in bytes of live objects in the store",
                 registry,
             ).unwrap(),
             sui_conservation_imbalance: register_int_gauge_with_registry!(
@@ -638,7 +644,7 @@ impl AuthorityStore {
             (
                 idx,
                 match self
-                    .get_object_or_tombstone(key.0)
+                    .get_latest_object_ref_or_tombstone(key.0)
                     .expect("read cannot fail")
                 {
                     None => false,
@@ -793,7 +799,7 @@ impl AuthorityStore {
     /// to the object store, this would cause the reference counting to be incorrect.
     ///
     /// TODO: handle this in a more resilient way.
-    pub(crate) fn fullnode_fast_path_insert_objects_to_object_store_maybe(
+    pub(crate) fn _fullnode_fast_path_insert_objects_to_object_store_maybe(
         &self,
         objects: &Vec<Object>,
     ) -> SuiResult {
@@ -938,6 +944,7 @@ impl AuthorityStore {
         inner_temporary_store: InnerTemporaryStore,
         transaction: &VerifiedTransaction,
         effects: &TransactionEffects,
+        epoch_id: EpochId,
     ) -> SuiResult {
         let _locks = self
             .acquire_read_locks_for_indirect_objects(&inner_temporary_store)
@@ -954,8 +961,13 @@ impl AuthorityStore {
 
         // Add batched writes for objects and locks.
         let effects_digest = effects.digest();
-        self.update_objects_and_locks(&mut write_batch, inner_temporary_store)
-            .await?;
+        self.update_objects_and_locks(
+            &mut write_batch,
+            inner_temporary_store,
+            transaction,
+            epoch_id,
+        )
+        .await?;
 
         // Store the signed effects of the transaction
         // We can't write this until after sequencing succeeds (which happens in
@@ -977,6 +989,8 @@ impl AuthorityStore {
         // test crashing before notifying
         fail_point_async!("crash");
 
+        self.executed_effects_digests_notify_read
+            .notify(transaction_digest, &effects_digest);
         self.executed_effects_notify_read
             .notify(transaction_digest, effects);
 
@@ -1013,6 +1027,8 @@ impl AuthorityStore {
         &self,
         write_batch: &mut DBBatch,
         inner_temporary_store: InnerTemporaryStore,
+        _transaction: &VerifiedTransaction,
+        _epoch_id: EpochId,
     ) -> SuiResult {
         let InnerTemporaryStore {
             objects,
@@ -1411,7 +1427,7 @@ impl AuthorityStore {
         info!(?tx_digest, ?effects, "reverting transaction");
 
         // We should never be reverting shared object transactions.
-        assert!(effects.shared_objects().is_empty());
+        assert!(effects.input_shared_objects().is_empty());
 
         let mut write_batch = self.perpetual_tables.transactions.batch();
         write_batch.delete_batch(
@@ -1514,11 +1530,23 @@ impl AuthorityStore {
     /// being wrapped in another object.
     ///
     /// If no entry for the object_id is found, return None.
-    pub fn get_object_or_tombstone(
+    pub fn get_latest_object_ref_or_tombstone(
         &self,
         object_id: ObjectID,
     ) -> Result<Option<ObjectRef>, SuiError> {
-        self.perpetual_tables.get_object_or_tombstone(object_id)
+        self.perpetual_tables
+            .get_latest_object_ref_or_tombstone(object_id)
+    }
+
+    /// Returns the latest object we have for this object_id in the objects table.
+    ///
+    /// If no entry for the object_id is found, return None.
+    pub fn get_latest_object_or_tombstone(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<Option<(ObjectKey, StoreObjectWrapper)>, SuiError> {
+        self.perpetual_tables
+            .get_latest_object_or_tombstone(object_id)
     }
 
     pub fn insert_transaction_and_effects(
@@ -1624,32 +1652,20 @@ impl AuthorityStore {
         }
 
         let executor = old_epoch_store.executor();
-        let chain_identifier = old_epoch_store.get_chain_identifier();
-
-        let protocol_version = ProtocolVersion::new(
-            self.get_sui_system_state_object()
-                .expect("Read sui system state object cannot fail")
-                .protocol_version(),
-        );
-        let protocol_config =
-            ProtocolConfig::get_for_version(protocol_version, chain_identifier.chain());
-        // Prior to gas model v2, SUI conservation is not guaranteed.
-        if protocol_config.gas_model_version() <= 1 {
-            return Ok(());
-        }
-
         info!("Starting SUI conservation check. This may take a while..");
         let cur_time = Instant::now();
         let mut pending_objects = vec![];
         let mut count = 0;
+        let mut size = 0;
         let package_cache = PackageObjectCache::new(self.clone());
         let (mut total_sui, mut total_storage_rebate) = thread::scope(|s| {
             let pending_tasks = FuturesUnordered::new();
             for o in self.iter_live_object_set(false) {
                 match o {
                     LiveObject::Normal(object) => {
-                        pending_objects.push(object);
+                        size += object.object_size_for_gas_metering();
                         count += 1;
+                        pending_objects.push(object);
                         if count % 1_000_000 == 0 {
                             let mut task_objects = vec![];
                             mem::swap(&mut pending_objects, &mut task_objects);
@@ -1698,6 +1714,9 @@ impl AuthorityStore {
         self.metrics
             .sui_conservation_live_object_count
             .set(count as i64);
+        self.metrics
+            .sui_conservation_live_object_size
+            .set(size as i64);
         self.metrics
             .sui_conservation_check_latency
             .set(cur_time.elapsed().as_secs() as i64);
@@ -1854,11 +1873,18 @@ impl ObjectStore for AuthorityStore {
 }
 
 impl ChildObjectResolver for AuthorityStore {
-    fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
-        let child_object = match self.get_object(child)? {
-            None => return Ok(None),
-            Some(o) => o,
+    fn read_child_object(
+        &self,
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> SuiResult<Option<Object>> {
+        let Some(child_object) =
+            self.find_object_lt_or_eq_version(*child, child_version_upper_bound)
+        else {
+            return Ok(None)
         };
+
         let parent = *parent;
         if child_object.owner != Owner::ObjectOwner(parent.into()) {
             return Err(SuiError::InvalidChildObjectAccess {
@@ -1873,7 +1899,7 @@ impl ChildObjectResolver for AuthorityStore {
 
 impl ParentSync for AuthorityStore {
     fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
-        self.get_object_or_tombstone(object_id)
+        self.get_latest_object_ref_or_tombstone(object_id)
     }
 }
 

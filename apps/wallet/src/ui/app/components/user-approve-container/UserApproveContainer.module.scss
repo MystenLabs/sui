@@ -10,15 +10,10 @@
 
 .scroll-body {
 	flex: 1;
-	padding: 24px;
 	padding-bottom: 0;
 	display: flex;
 	flex-flow: column;
 	gap: 15px;
-
-	&.scrollable {
-		overflow-y: auto;
-	}
 }
 
 .children {
@@ -26,6 +21,7 @@
 	display: flex;
 	flex-flow: column;
 	gap: 15px;
+	padding: 24px;
 
 	&.scrollable {
 		overflow-y: hidden;
@@ -126,6 +122,24 @@
 	display: flex;
 	align-items: center;
 	gap: 10px;
+	position: relative;
+	z-index: 1;
+}
+
+.blur-border {
+	// Styling for the blurred top border on the actions
+	&::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 5px;
+		background-color: colors.$sui-alice-blue;
+		box-shadow: 0 0 20px 10px rgba(241 248 253 / 70%);
+		filter: blur(5px);
+		z-index: -1;
+	}
 
 	&.flip-actions {
 		flex-direction: row-reverse;
@@ -187,4 +201,8 @@
 			font-weight: 300;
 		}
 	}
+}
+
+.blended {
+	background-color: colors.$sui-alice-blue;
 }

@@ -326,6 +326,10 @@
 			{
 				"label": "Sui Framework Reference",
 				"fileName": "reference/framework/index"
+			},
+			{
+				"label": "Sui Partner Package Matrix",
+				"fileName": "reference/partner-matrix"
 			}
 		],
 		"explore": [

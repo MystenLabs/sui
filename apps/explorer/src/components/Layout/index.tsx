@@ -1,22 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { RpcClientContext, useAppsBackend, useCookieConsentBanner } from '@mysten/core';
+import { RpcClientContext, useCookieConsentBanner } from '@mysten/core';
 import { WalletKitProvider } from '@mysten/wallet-kit';
-import { useQuery } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Fragment, useMemo } from 'react';
 import { resolveValue, Toaster, type ToastType } from 'react-hot-toast';
 import { Outlet, ScrollRestoration } from 'react-router-dom';
 
-import { usePageView } from '../../hooks/usePageView';
-import Footer from '../footer/Footer';
-import Header from '../header/Header';
-
+import { useInitialPageView } from '../../hooks/useInitialPageView';
 import { NetworkContext, useNetwork } from '~/context';
 import { Banner, type BannerProps } from '~/ui/Banner';
 import { persistableStorage } from '~/utils/analytics/amplitude';
-import { DefaultRpcClient, Network } from '~/utils/api/DefaultRpcClient';
+import { DefaultRpcClient } from '~/utils/api/DefaultRpcClient';
 
 const toastVariants: Partial<Record<ToastType, BannerProps['variant']>> = {
 	success: 'positive',
@@ -26,18 +22,6 @@ const toastVariants: Partial<Record<ToastType, BannerProps['variant']>> = {
 export function Layout() {
 	const [network, setNetwork] = useNetwork();
 	const jsonRpcProvider = useMemo(() => DefaultRpcClient(network), [network]);
-	const { request } = useAppsBackend();
-	const { data } = useQuery({
-		queryKey: ['apps-backend', 'monitor-network'],
-		queryFn: () =>
-			request<{ degraded: boolean }>('monitor-network', {
-				project: 'EXPLORER',
-			}),
-		// Keep cached for 2 minutes:
-		staleTime: 2 * 60 * 1000,
-		retry: false,
-		enabled: network === Network.MAINNET,
-	});
 
 	useCookieConsentBanner(persistableStorage, {
 		cookie_name: 'sui_explorer_cookie_consent',
@@ -47,7 +31,7 @@ export function Layout() {
 		},
 	});
 
-	usePageView();
+	useInitialPageView(network);
 
 	return (
 		// NOTE: We set a top-level key here to force the entire react tree to be re-created when the network changes:
@@ -59,24 +43,7 @@ export function Layout() {
 			>
 				<RpcClientContext.Provider value={jsonRpcProvider}>
 					<NetworkContext.Provider value={[network, setNetwork]}>
-						<div className="w-full">
-							<Header />
-							<main className="relative z-10 min-h-screen bg-offwhite">
-								<section className="mx-auto max-w-[1440px] px-5 py-10 lg:px-10 2xl:px-0">
-									{network === Network.MAINNET && data?.degraded && (
-										<div className="pb-2.5">
-											<Banner variant="warning" border fullWidth>
-												We&rsquo;re sorry that the explorer is running slower than usual.
-												We&rsquo;re working to fix the issue and appreciate your patience.
-											</Banner>
-										</div>
-									)}
-									<Outlet />
-								</section>
-							</main>
-							<Footer />
-						</div>
-
+						<Outlet />
 						<Toaster
 							position="bottom-center"
 							gutter={8}

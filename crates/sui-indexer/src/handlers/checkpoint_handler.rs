@@ -17,7 +17,7 @@ use tokio::task::JoinHandle;
 use tracing::{error, info, warn};
 
 use mysten_metrics::spawn_monitored_task;
-use sui_core::event_handler::SubscriptionHandler;
+use sui_core::subscription_handler::SubscriptionHandler;
 use sui_json_rpc::api::ReadApiClient;
 use sui_json_rpc_types::{
     OwnedObjectRef, SuiGetPastObjectRequest, SuiObjectData, SuiObjectDataOptions, SuiRawData,
@@ -58,7 +58,7 @@ const EPOCH_QUEUE_LIMIT: usize = 2;
 pub struct CheckpointHandler<S> {
     state: S,
     http_client: HttpClient,
-    event_handler: Arc<SubscriptionHandler>,
+    subscription_handler: Arc<SubscriptionHandler>,
     metrics: IndexerMetrics,
     config: IndexerConfig,
     checkpoint_sender: Arc<Mutex<Sender<TemporaryCheckpointStore>>>,
@@ -74,7 +74,7 @@ where
     pub fn new(
         state: S,
         http_client: HttpClient,
-        event_handler: Arc<SubscriptionHandler>,
+        subscription_handler: Arc<SubscriptionHandler>,
         metrics: IndexerMetrics,
         config: &IndexerConfig,
     ) -> Self {
@@ -83,7 +83,7 @@ where
         Self {
             state,
             http_client,
-            event_handler,
+            subscription_handler,
             metrics,
             config: config.clone(),
             checkpoint_sender: Arc::new(Mutex::new(checkpoint_sender)),
@@ -268,7 +268,7 @@ where
                 let ws_guard = self.metrics.subscription_process_latency.start_timer();
                 for tx in &checkpoint.transactions {
                     let data: SenderSignedData = bcs::from_bytes(&tx.raw_transaction)?;
-                    self.event_handler
+                    self.subscription_handler
                         .process_tx(data.transaction_data(), &tx.effects, &tx.events)
                         .await?;
                 }
@@ -301,6 +301,7 @@ where
                     object_changes,
                     packages,
                     input_objects,
+                    changed_objects,
                     move_calls,
                     recipients,
                 } = indexed_checkpoint;
@@ -345,7 +346,12 @@ where
                 spawn_monitored_task!(async move {
                     let mut transaction_index_tables_commit_res = tx_index_table_handler
                         .state
-                        .persist_transaction_index_tables(&input_objects, &move_calls, &recipients)
+                        .persist_transaction_index_tables(
+                            &input_objects,
+                            &changed_objects,
+                            &move_calls,
+                            &recipients,
+                        )
                         .await;
                     while let Err(e) = transaction_index_tables_commit_res {
                         warn!(
@@ -360,6 +366,7 @@ where
                             .state
                             .persist_transaction_index_tables(
                                 &input_objects,
+                                &changed_objects,
                                 &move_calls,
                                 &recipients,
                             )
@@ -640,13 +647,17 @@ where
             .into_iter()
             .flatten()
             .collect::<Vec<_>>();
+        let changed_objects = transactions
+            .iter()
+            .flat_map(|tx| tx.get_changed_objects(checkpoint.epoch))
+            .collect();
         let move_calls = transactions
             .iter()
-            .flat_map(|tx| tx.get_move_calls(checkpoint.epoch, checkpoint.sequence_number))
+            .flat_map(|tx| tx.get_move_calls(checkpoint.epoch))
             .collect();
         let recipients = transactions
             .iter()
-            .flat_map(|tx| tx.get_recipients(checkpoint.epoch, checkpoint.sequence_number))
+            .flat_map(|tx| tx.get_recipients(checkpoint.epoch))
             .collect();
 
         // NOTE: Index epoch when object checkpoint index has reached the same checkpoint,
@@ -784,6 +795,7 @@ where
                 object_changes: objects_changes,
                 packages,
                 input_objects,
+                changed_objects,
                 move_calls,
                 recipients,
             },

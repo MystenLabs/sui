@@ -1,20 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toB64 } from '@mysten/bcs';
-import {
-	SIGNATURE_SCHEME_TO_FLAG,
-	SerializedSignature,
-	SignaturePubkeyPair,
-	SignatureScheme,
-	toSingleSignaturePubkeyPair,
-} from './signature';
-import { PublicKey } from './publickey';
+import { fromB64, toB64 } from '@mysten/bcs';
+import type { SerializedSignature, SignaturePubkeyPair, SignatureScheme } from './signature.js';
+import { SIGNATURE_SCHEME_TO_FLAG } from './signature.js';
+// eslint-disable-next-line import/no-cycle
+import { toSingleSignaturePubkeyPair } from './utils.js';
+import type { PublicKey } from './publickey.js';
 import { blake2b } from '@noble/hashes/blake2b';
 import { bytesToHex } from '@noble/hashes/utils';
 
-import { normalizeSuiAddress } from '../types';
-import { Ed25519PublicKey, Secp256k1PublicKey, Secp256r1PublicKey, builder, fromB64 } from '..';
+import { Ed25519PublicKey } from '../keypairs/ed25519/publickey.js';
+import { Secp256k1PublicKey } from '../keypairs/secp256k1/publickey.js';
+import { Secp256r1PublicKey } from '../keypairs/secp256r1/publickey.js';
+import { builder } from '../builder/bcs.js';
+import { normalizeSuiAddress } from '../utils/sui-types.js';
 
 export type PubkeyWeightPair = {
 	pubKey: PublicKey;

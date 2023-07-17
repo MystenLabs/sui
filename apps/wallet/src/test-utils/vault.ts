@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromExportedKeypair } from '@mysten/sui.js';
+import { fromExportedKeypair, mnemonicToSeedHex } from '@mysten/sui.js';
 
 import { EPHEMERAL_PASSWORD_KEY, EPHEMERAL_VAULT_KEY } from '_src/background/keyring/VaultStorage';
 import { toEntropy } from '_src/shared/utils/bip39';
@@ -10,6 +10,7 @@ import type { Keypair } from '@mysten/sui.js';
 
 export const testMnemonic =
 	'loud eye weather change muffin brisk episode dance mirror smart image energy';
+export const testMnemonicSeedHex = mnemonicToSeedHex(testMnemonic);
 export const testEntropySerialized = '842a27e29319123892f9ba8d9991c525';
 export const testEntropy = toEntropy(testEntropySerialized);
 export const testEd25519SerializedLegacy = Object.freeze({
@@ -40,6 +41,7 @@ type TestDataVault = typeof testDataVault1;
  */
 export const testDataVault1 = Object.freeze({
 	mnemonic: testMnemonic as string,
+	testMnemonicSeedHex,
 	entropy: testEntropy,
 	entropySerialized: testEntropySerialized as string,
 	keypairs: [testEd25519, testSecp256k1] as Keypair[],
@@ -52,7 +54,7 @@ export const testDataVault1 = Object.freeze({
 		},
 		v2: {
 			v: 2 as const,
-			data: '{"data":"2A1AuR8RUzdfcrKuAm+AgOsCHkA+6XHpxHI8SrWKSmzzCyHbUdxPXI65lR55+uHPVKi9Sk9q+wTaM3Dgr9hzUFJ2wX43bcjZxhBJ2Xo/RqNI5tLQWyx4Y6xKSrB8MjbDf/Zq29AEArIPOoTz36Tsr8GR0m92y/9xAtskctOIlQKKiNgvZ8z3eN7AfeO0PgTJVTiEkBxruqzL0A9XDNW4xNySKkig5UbzfhNXa1pBieDyXWcmpNnOe+7RVxXMZX9FAro31+KI5SexoAJ6TE3L/hv9b0zQgND1otAjPu6AB5d3VG6BaOKlEHxqBeoGNya4iCoYSg0CB6kViGCwhWyjiylkABJ3Q++dDxxXyCP2nuw0rxbiB6VoElEEIwaraVS/c8Q0","iv":"bBKS/FT16UqyHPNnjnBS5Q==","salt":"1ViXZMKEQ2kxwq761j2SY8SHgHxQ8kiWil8hd3Ni5CI="}',
+			data: '{"data":"duteNkmpItSCH53t2qJB2DS2i0tmavGhVHf5zBZP+2C+2dtsrZ8MWcAh2V7HgKJjPJ5sqiZf/ZULa0qtSdYKDhPTXNQNe14Q0IXza+6McUBZIzscWVzRkiSPoQLz72rOiIswgtBOW8pmn4tFlkApClIksRVeENJzkHPFOz8MqQWzipXVXpcYzv0lpBgQtOm1H+8ArAD+TATM1ggvgv9WXvDvsKqBPO6n1+fLysDqT6OQUoLZoGtvDxrAD/50bnOn5tcASVF5P2IeHVlep/fjHY8dL9f8elbwtA42FDGbXv8vKnSIRIGWNyqjRpkiMxjQwibBEOAyyl15Xjmn5ydyHUmXhu+TXy5SRFANy8Dy/MX0nxRGAoH+RCE8mGnMZJcsn/cdm0ZQ9YMuZB0ng9lCGRpkKONOmNfeeM4nirAsPbQ0f05DwCCzIp1jHQJuPEgy/OwJFYWQIBeAHsiBD9Ivi0+WIQC3z1hBA9yVmL1nThQ700InZOK2qCwuTJOpd/FOkqnO/94AYmq1v/t4HasptkjpvuxJOFxB6X0DwPY=","iv":"pW8cbFYE1mbAC0Nml4d35A==","salt":"s1Qfqw+7pJx04zDfRsFHGIu9Xv9LTizvTDRNOKhFAEs="}',
 		},
 	},
 	sessionStorage: {
@@ -69,6 +71,7 @@ export const testDataVault1 = Object.freeze({
  */
 export const testDataVault2: TestDataVault = Object.freeze({
 	mnemonic: testMnemonic,
+	testMnemonicSeedHex,
 	entropy: testEntropy,
 	entropySerialized: testEntropySerialized,
 	keypairs: [],
@@ -78,7 +81,7 @@ export const testDataVault2: TestDataVault = Object.freeze({
 		v1: testDataVault1.encrypted.v1,
 		v2: {
 			v: 2 as const,
-			data: '{"data":"5Oua+5DkH7OWWkvNseCqAECC9PF6Csxl5E4zDEdV5/uthNgI3/c1WjZCswsYEXMxeBoxnfUIzjKLthAHKvZOdYbvISzlCjtXmDoWeRnFvrWiXKWV","iv":"K5uVmJUkArzVzU58VGzIuw==","salt":"IM7Y1aRpJ5WQajQbmdGHI8+D2cZXHblEc58aoHfISfg="}',
+			data: '{"data":"KYIbJX9kKqFXoG5cxHluU6dcmaYtuAoJNaJ++RxBBJX3OapJluLj9dJ+xkUy8bm63jxATyfE2RzRKYRnxzn5uLIkpBgXvh46nIumKM9ehat2IZTCgAxA8/RN5QLh59+4TeNpMv8CwnNkNLPTA1Ve7bXI5uhv3Kd2xQ1n1VvqsY2xrt8QROyESQNRpmTec3dOAzA5U+ztoXfvp5itKLDVTcAgeceNwKgR2qdu7QF45yKTDWDCxqrPMHPuYnxTq2iJ9EgYLMpvMIoZ3nXcrP1/4gSI3idwA+rma3j+uVQpneDvVp5x7NUajDfyH44fkrN0cOtwRNoVclqDZg==","iv":"W++5n5xGIJJtbhbGUo3LeA==","salt":"PN3JEwTAO5aGi60zmXU0P6b6sWZDX7IdJVudnbHpv6w="}',
 		},
 	},
 	sessionStorage: {

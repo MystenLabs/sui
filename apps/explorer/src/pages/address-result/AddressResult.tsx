@@ -6,7 +6,7 @@ import { useParams } from 'react-router-dom';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import { TransactionsForAddress } from '../../components/transactions/TransactionsForAddress';
-
+import { PageLayout } from '~/components/Layout/PageLayout';
 import { OwnedCoins } from '~/components/OwnedCoins';
 import { OwnedObjects } from '~/components/OwnedObjects';
 import { Heading } from '~/ui/Heading';
@@ -62,10 +62,11 @@ function SuiNSAddressResult({ name }: { name: string }) {
 
 export default function AddressResultPage() {
 	const { id } = useParams();
-
-	if (isSuiNSName(id!)) {
-		return <SuiNSAddressResult name={id!} />;
-	}
-
-	return <AddressResult address={id!} />;
+	return (
+		<PageLayout
+			content={
+				isSuiNSName(id!) ? <SuiNSAddressResult name={id!} /> : <AddressResult address={id!} />
+			}
+		/>
+	);
 }

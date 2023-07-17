@@ -2,7 +2,7 @@
     "name": "@mysten/suins-toolkit",
     "author": "Mysten Labs <build@mystenlabs.com>",
     "description": "SuiNS TypeScript SDK",
-    "version": "0.2.1",
+    "version": "0.2.3",
     "license": "Apache-2.0",
     "files": [
         "dist",
@@ -43,7 +43,7 @@
         "ts-node": "^10.9.1",
         "tsup": "^6.7.0",
         "typescript": "^5.0.4",
-        "vitest": "^0.32.0"
+        "vitest": "^0.33.0"
     },
     "dependencies": {
         "@mysten/sui.js": "workspace:*"

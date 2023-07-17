@@ -8,21 +8,34 @@ pub mod writer;
 #[cfg(test)]
 mod tests;
 
+use crate::reader::{ArchiveReader, ArchiveReaderMetrics};
 use anyhow::{anyhow, Result};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bytes::Bytes;
 use fastcrypto::hash::{HashFunction, Sha3_256};
+use indicatif::{ProgressBar, ProgressStyle};
 use num_enum::IntoPrimitive;
 use num_enum::TryFromPrimitive;
 use object_store::path::Path;
 use object_store::DynObjectStore;
+use prometheus::Registry;
 use serde::{Deserialize, Serialize};
 use std::io::{BufWriter, Cursor, Read, Seek, SeekFrom, Write};
+use std::num::NonZeroUsize;
 use std::ops::Range;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
+use sui_config::genesis::Genesis;
+use sui_config::node::ArchiveReaderConfig;
 use sui_storage::blob::{Blob, BlobEncoding};
 use sui_storage::object_store::util::{get, put};
+use sui_storage::object_store::ObjectStoreConfig;
 use sui_storage::{compute_sha3_checksum, SHA3_BYTES};
+use sui_types::base_types::ExecutionData;
+use sui_types::messages_checkpoint::{FullCheckpointContents, VerifiedCheckpointContents};
+use sui_types::storage::{ReadStore, SingleCheckpointSharedInMemoryStore, WriteStore};
+use tracing::info;
 
 /// Checkpoints and summaries are persisted as blob files. Files are committed to local store
 /// by duration or file size. Committed files are synced with the remote store continuously. Files are
@@ -271,5 +284,100 @@ pub async fn write_manifest(manifest: Manifest, remote_store: Arc<DynObjectStore
     buf.write_all(&computed_digest)?;
     let bytes = Bytes::from(buf.into_inner()?);
     put(&path, bytes, remote_store).await?;
+    Ok(())
+}
+
+pub async fn verify_archive_with_genesis_config(
+    genesis: &std::path::Path,
+    remote_store_config: ObjectStoreConfig,
+    concurrency: usize,
+    interactive: bool,
+) -> Result<()> {
+    let genesis = Genesis::load(genesis).unwrap();
+    let genesis_committee = genesis.committee()?;
+    let mut store = SingleCheckpointSharedInMemoryStore::default();
+    let contents = genesis.checkpoint_contents();
+    let fullcheckpoint_contents = FullCheckpointContents::from_contents_and_execution_data(
+        contents.clone(),
+        std::iter::once(ExecutionData::new(
+            genesis.transaction().clone(),
+            genesis.effects().clone(),
+        )),
+    );
+    store.insert_genesis_state(
+        genesis.checkpoint(),
+        VerifiedCheckpointContents::new_unchecked(fullcheckpoint_contents),
+        genesis_committee,
+    );
+    verify_archive_with_local_store(store, remote_store_config, concurrency, interactive).await
+}
+
+pub async fn verify_archive_with_local_store<S>(
+    store: S,
+    remote_store_config: ObjectStoreConfig,
+    concurrency: usize,
+    interactive: bool,
+) -> Result<()>
+where
+    S: WriteStore + Clone + Send + 'static,
+    <S as ReadStore>::Error: std::error::Error,
+{
+    let metrics = ArchiveReaderMetrics::new(&Registry::default());
+    let config = ArchiveReaderConfig {
+        remote_store_config,
+        download_concurrency: NonZeroUsize::new(concurrency).unwrap(),
+        use_for_pruning_watermark: false,
+    };
+    let archive_reader = ArchiveReader::new(config, &metrics)?;
+    archive_reader.sync_manifest_once().await?;
+    let latest_checkpoint_in_archive = archive_reader.latest_available_checkpoint().await?;
+    info!(
+        "Latest available checkpoint in archive store: {}",
+        latest_checkpoint_in_archive
+    );
+    let latest_checkpoint = store
+        .get_highest_synced_checkpoint()
+        .map_err(|_| anyhow!("Failed to read highest synced checkpoint"))?
+        .sequence_number;
+    info!("Highest synced checkpoint in db: {latest_checkpoint}");
+    let txn_counter = Arc::new(AtomicU64::new(0));
+    let checkpoint_counter = Arc::new(AtomicU64::new(0));
+    let progress_bar = if interactive {
+        let progress_bar = ProgressBar::new(latest_checkpoint_in_archive).with_style(
+            ProgressStyle::with_template("[{elapsed_precise}] {wide_bar} {pos}/{len}({msg})")
+                .unwrap(),
+        );
+        let cloned_progress_bar = progress_bar.clone();
+        let cloned_counter = txn_counter.clone();
+        let cloned_checkpoint_counter = checkpoint_counter.clone();
+        let instant = Instant::now();
+        tokio::spawn(async move {
+            loop {
+                let total_checkpoints_loaded = cloned_checkpoint_counter.load(Ordering::Relaxed);
+                let total_checkpoints_per_sec =
+                    total_checkpoints_loaded as f64 / instant.elapsed().as_secs_f64();
+                let total_txns_per_sec =
+                    cloned_counter.load(Ordering::Relaxed) as f64 / instant.elapsed().as_secs_f64();
+                cloned_progress_bar.set_position(latest_checkpoint + total_checkpoints_loaded);
+                cloned_progress_bar.set_message(format!(
+                    "checkpoints/s: {}, txns/s: {}",
+                    total_checkpoints_per_sec, total_txns_per_sec
+                ));
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        });
+        Some(progress_bar)
+    } else {
+        None
+    };
+    archive_reader
+        .read(store.clone(), 1..u64::MAX, txn_counter, checkpoint_counter)
+        .await?;
+    progress_bar.iter().for_each(|p| p.finish_and_clear());
+    let end = store
+        .get_highest_synced_checkpoint()
+        .map_err(|_| anyhow!("Failed to read watermark"))?
+        .sequence_number;
+    info!("Highest verified checkpoint: {}", end);
     Ok(())
 }

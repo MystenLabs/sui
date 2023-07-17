@@ -31,7 +31,7 @@ use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     gas_coin::GasCoin,
-    transaction::{Transaction, TransactionData, VerifiedTransaction},
+    transaction::{Transaction, TransactionData},
 };
 use tokio::sync::{
     mpsc::{self, Receiver, Sender},
@@ -350,9 +350,7 @@ impl SimpleFaucet {
             .keystore
             .sign_secure(&self.active_address, &tx_data, Intent::sui_transaction())
             .map_err(FaucetError::internal)?;
-        let tx = Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature])
-            .verify()
-            .unwrap();
+        let tx = Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature]);
         let tx_digest = *tx.digest();
         info!(
             ?tx_digest,
@@ -487,7 +485,7 @@ impl SimpleFaucet {
 
     async fn execute_pay_sui_txn_with_retries(
         &self,
-        tx: &VerifiedTransaction,
+        tx: &Transaction,
         coin_id: ObjectID,
         recipient: SuiAddress,
         uuid: Uuid,
@@ -517,7 +515,7 @@ impl SimpleFaucet {
 
     async fn execute_pay_sui_txn(
         &self,
-        tx: &VerifiedTransaction,
+        tx: &Transaction,
         coin_id: ObjectID,
         recipient: SuiAddress,
         uuid: Uuid,
@@ -805,7 +803,20 @@ impl Faucet for SimpleFaucet {
                 id: coin_id,
             });
         }
-        Ok(FaucetReceipt { sent })
+
+        // Store into status map that the txn was successful for backwards compatibility
+        let faucet_receipt = FaucetReceipt { sent };
+        let mut task_map = self.task_id_cache.lock().await;
+        task_map.insert(
+            id,
+            BatchSendStatus {
+                status: BatchSendStatusType::SUCCEEDED,
+                transferred_gas_objects: Some(faucet_receipt.clone()),
+            },
+            Duration::from_secs(self.ttl_expiration),
+        );
+
+        Ok(faucet_receipt)
     }
 
     async fn batch_send(
@@ -988,7 +999,7 @@ mod tests {
     use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
     use sui_json_rpc_types::SuiExecutionStatus;
     use sui_sdk::wallet_context::WalletContext;
-    use test_utils::network::TestClusterBuilder;
+    use test_cluster::TestClusterBuilder;
 
     use super::*;
 
@@ -1016,6 +1027,7 @@ mod tests {
         let discarded = faucet.metrics.total_discarded_coins.get();
 
         test_basic_interface(&faucet).await;
+        test_send_interface_has_success_status(&faucet).await;
 
         assert_eq!(available, faucet.metrics.total_available_coins.get());
         assert_eq!(discarded, faucet.metrics.total_discarded_coins.get());
@@ -1733,6 +1745,27 @@ mod tests {
                 assert_eq!(amt.amount, amount_to_send);
             }
         }
+    }
+
+    async fn test_send_interface_has_success_status(faucet: &impl Faucet) {
+        let recipient = SuiAddress::random_for_testing_only();
+        let amounts = vec![1, 2, 3];
+        let uuid_test = Uuid::new_v4();
+
+        faucet.send(uuid_test, recipient, &amounts).await.unwrap();
+
+        let status = faucet.get_batch_send_status(uuid_test).await.unwrap();
+        let mut actual_amounts: Vec<u64> = status
+            .transferred_gas_objects
+            .unwrap()
+            .sent
+            .iter()
+            .map(|c| c.amount)
+            .collect();
+        actual_amounts.sort_unstable();
+
+        assert_eq!(actual_amounts, amounts);
+        assert_eq!(status.status, BatchSendStatusType::SUCCEEDED);
     }
 
     async fn test_basic_interface(faucet: &impl Faucet) {

@@ -1,0 +1,62 @@
+processed 14 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 8-121:
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 12220800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'programmable'. lines 123-125:
+created: object(2,0), object(2,1), object(2,2), object(2,3), object(2,4), object(2,5), object(2,6), object(2,7), object(2,8)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 15640800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3 'view-object'. lines 127-127:
+Owner: Account Address ( A )
+Version: 2
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,8)}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}, wrapped: test::m::Wrapped {id: sui::object::UID {id: sui::object::ID {bytes: _}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}}, many: vector[test::m::Wrapped {id: sui::object::UID {id: sui::object::ID {bytes: _}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}}, test::m::Wrapped {id: sui::object::UID {id: sui::object::ID {bytes: _}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}}]}
+
+task 4 'programmable'. lines 129-130:
+mutated: object(0,0), object(2,0), object(2,1), object(2,2), object(2,3), object(2,4), object(2,5), object(2,6), object(2,7), object(2,8)
+gas summary: computation_cost: 1000000, storage_cost: 15640800,  storage_rebate: 15484392, non_refundable_storage_fee: 156408
+
+task 5 'view-object'. lines 132-132:
+Owner: Account Address ( A )
+Version: 3
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,8)}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}, wrapped: test::m::Wrapped {id: sui::object::UID {id: sui::object::ID {bytes: _}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}}, many: vector[test::m::Wrapped {id: sui::object::UID {id: sui::object::ID {bytes: _}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}}, test::m::Wrapped {id: sui::object::UID {id: sui::object::ID {bytes: _}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}}]}
+
+task 6 'programmable'. lines 134-135:
+mutated: object(0,0), object(2,8)
+deleted: object(2,0), object(2,1), object(2,2), object(2,3), object(2,4), object(2,5), object(2,6), object(2,7)
+gas summary: computation_cost: 1000000, storage_cost: 3906400,  storage_rebate: 15484392, non_refundable_storage_fee: 156408
+
+task 7 'view-object'. lines 137-140:
+Owner: Account Address ( A )
+Version: 4
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,8)}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}, wrapped: test::m::Wrapped {id: sui::object::UID {id: sui::object::ID {bytes: _}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}}, many: vector[test::m::Wrapped {id: sui::object::UID {id: sui::object::ID {bytes: _}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}}, test::m::Wrapped {id: sui::object::UID {id: sui::object::ID {bytes: _}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}}]}
+
+task 8 'programmable'. lines 142-143:
+mutated: object(_), object(2,8)
+gas summary: computation_cost: 500000, storage_cost: 3906400,  storage_rebate: 2889216, non_refundable_storage_fee: 29184
+
+task 9 'programmable'. lines 145-146:
+mutated: object(_), object(2,8)
+gas summary: computation_cost: 500000, storage_cost: 3906400,  storage_rebate: 2889216, non_refundable_storage_fee: 29184
+
+task 10 'programmable'. lines 148-152:
+mutated: object(_), object(2,8)
+gas summary: computation_cost: 500000, storage_cost: 3906400,  storage_rebate: 2889216, non_refundable_storage_fee: 29184
+
+task 11 'programmable'. lines 154-155:
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 10, instruction: 12, function_name: Some("check_") }, 0) in command 0
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 10, instruction: 12, function_name: Some("check_") }, 0) in command 0
+
+task 12 'programmable'. lines 157-158:
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 11, instruction: 0, function_name: Some("borrow_child_object") }, 1) in command 0
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 11, instruction: 0, function_name: Some("borrow_child_object") }, 1) in command 0
+
+task 13 'programmable'. lines 160-161:
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 10, instruction: 21, function_name: Some("check_") }, 0) in command 0
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 10, instruction: 21, function_name: Some("check_") }, 0) in command 0

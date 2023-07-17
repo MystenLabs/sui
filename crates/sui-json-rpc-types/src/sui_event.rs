@@ -5,6 +5,7 @@ use fastcrypto::encoding::Base58;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
+use mysten_metrics::monitored_scope;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -228,6 +229,7 @@ impl EventFilter {
 
 impl Filter<SuiEvent> for EventFilter {
     fn matches(&self, item: &SuiEvent) -> bool {
+        let _scope = monitored_scope("EventFilter::matches");
         self.try_matches(item).unwrap_or_default()
     }
 }

@@ -83,6 +83,11 @@ pub enum SuiCommand {
             help = "A list of ip addresses to generate a genesis suitable for benchmarks"
         )]
         benchmark_ips: Option<Vec<String>>,
+        #[clap(
+            long,
+            help = "Creates an extra faucet configuration for sui-test-validator persisted runs."
+        )]
+        with_faucet: bool,
     },
     GenesisCeremony(Ceremony),
     /// Sui keystore tool.
@@ -161,7 +166,7 @@ impl SuiCommand {
             } => {
                 // Auto genesis if path is none and sui directory doesn't exists.
                 if config.is_none() && !sui_config_dir()?.join(SUI_NETWORK_CONFIG).exists() {
-                    genesis(None, None, None, false, None, None).await?;
+                    genesis(None, None, None, false, None, None, false).await?;
                 }
 
                 // Load the config of the Sui authority.
@@ -239,6 +244,7 @@ impl SuiCommand {
                 write_config,
                 epoch_duration_ms,
                 benchmark_ips,
+                with_faucet,
             } => {
                 genesis(
                     from_config,
@@ -247,6 +253,7 @@ impl SuiCommand {
                     force,
                     epoch_duration_ms,
                     benchmark_ips,
+                    with_faucet,
                 )
                 .await
             }
@@ -318,6 +325,7 @@ async fn genesis(
     force: bool,
     epoch_duration_ms: Option<u64>,
     benchmark_ips: Option<Vec<String>>,
+    with_faucet: bool,
 ) -> Result<(), anyhow::Error> {
     let sui_config_dir = &match working_dir {
         // if a directory is specified, it must exist (it
@@ -403,6 +411,12 @@ async fn genesis(
             }
         }
     };
+
+    // Adds an extra faucet account to the genesis
+    if with_faucet {
+        info!("Adding faucet account in genesis config...");
+        genesis_conf = genesis_conf.add_faucet_account();
+    }
 
     if let Some(path) = write_config {
         let persisted = genesis_conf.persisted(&path);

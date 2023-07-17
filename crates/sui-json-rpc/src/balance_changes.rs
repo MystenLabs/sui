@@ -34,7 +34,7 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
     // Only charge gas when tx fails, skip all object parsing
     if effects.status() != &ExecutionStatus::Success {
         return Ok(vec![BalanceChange {
-            owner: *gas_owner,
+            owner: gas_owner,
             coin_type: GAS::type_tag(),
             amount: effects.gas_cost_summary().net_gas_usage().neg() as i128,
         }]);

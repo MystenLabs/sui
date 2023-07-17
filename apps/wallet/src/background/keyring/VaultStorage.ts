@@ -4,6 +4,9 @@
 import { fromExportedKeypair } from '@mysten/sui.js';
 import { randomBytes } from '@noble/hashes/utils';
 
+import { type DerivedAccount } from './DerivedAccount';
+import { type ImportedAccount } from './ImportedAccount';
+import { Vault } from './Vault';
 import {
 	getFromLocalStorage,
 	getFromSessionStorage,
@@ -11,9 +14,6 @@ import {
 	setToLocalStorage,
 	setToSessionStorage,
 } from '../storage-utils';
-import { type DerivedAccount } from './DerivedAccount';
-import { type ImportedAccount } from './ImportedAccount';
-import { Vault } from './Vault';
 import { getRandomEntropy, toEntropy } from '_shared/utils/bip39';
 
 import type { StoredData } from './Vault';
@@ -97,12 +97,12 @@ class VaultStorageClass {
 		return !!(await getFromLocalStorage<StoredData>(VAULT_KEY));
 	}
 
-	public getMnemonic() {
-		return this.#vault?.getMnemonic() || null;
-	}
-
 	public get entropy() {
 		return this.#vault?.entropy || null;
+	}
+
+	public getMnemonicSeedHex() {
+		return this.#vault?.mnemonicSeedHex || null;
 	}
 
 	public async verifyPassword(password: string) {

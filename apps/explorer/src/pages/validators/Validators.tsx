@@ -12,6 +12,7 @@ import {
 import { type SuiEvent, type SuiValidatorSummary } from '@mysten/sui.js';
 import { lazy, Suspense, useMemo } from 'react';
 
+import { PageLayout } from '~/components/Layout/PageLayout';
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import { StakeColumn } from '~/components/top-validators-card/StakeColumn';
 import { DelegationAmount } from '~/components/validator/DelegationAmount';
@@ -26,6 +27,7 @@ import { TableCard } from '~/ui/TableCard';
 import { TableHeader } from '~/ui/TableHeader';
 import { Text } from '~/ui/Text';
 import { Tooltip } from '~/ui/Tooltip';
+import { ampli } from '~/utils/analytics/ampli';
 import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';
 import { VALIDATOR_LOW_STAKE_GRACE_PERIOD } from '~/utils/validatorConstants';
 
@@ -97,7 +99,16 @@ export function validatorsTableData(
 				cell: (props: any) => {
 					const { name, logo } = props.getValue();
 					return (
-						<Link to={`/validator/${encodeURIComponent(props.row.original.address)}`}>
+						<Link
+							to={`/validator/${encodeURIComponent(props.row.original.address)}`}
+							onClick={() =>
+								ampli.clickedValidatorRow({
+									sourceFlow: 'Epoch details',
+									validatorAddress: props.row.original.address,
+									validatorName: name,
+								})
+							}
+						>
 							<div className="flex items-center gap-2.5">
 								<ImageIcon src={logo} size="sm" label={name} fallback={name} circle />
 								<Text variant="bodySmall/medium" color="steel-darker">
@@ -181,11 +192,19 @@ export function validatorsTableData(
 				accessorKey: 'atRisk',
 				cell: (props: any) => {
 					const atRisk = props.getValue();
+					const label = 'At Risk';
 					return atRisk !== null ? (
-						<Tooltip tip="Staked SUI is below the minimum SUI stake threshold to remain a validator.">
+						<Tooltip
+							tip="Staked SUI is below the minimum SUI stake threshold to remain a validator."
+							onOpen={() =>
+								ampli.activatedTooltip({
+									tooltipLabel: label,
+								})
+							}
+						>
 							<div className="flex cursor-pointer flex-nowrap items-center">
 								<Text color="issue" variant="bodySmall/medium">
-									At Risk
+									{label}
 								</Text>
 								&nbsp;
 								<Text uppercase variant="bodySmall/medium" color="steel-dark">
@@ -263,86 +282,92 @@ function ValidatorPageResult() {
 		);
 	}, [data, validatorEvents, validatorsApy]);
 
-	if (isError || validatorEventError) {
-		return (
-			<Banner variant="error" fullWidth>
-				Validator data could not be loaded
-			</Banner>
-		);
-	}
-
 	return (
-		<div>
-			<div className="grid gap-5 md:grid-cols-2">
-				<Card spacing="lg">
-					<div className="flex w-full basis-full flex-col gap-8">
-						<Heading as="div" variant="heading4/semibold" color="steel-darker">
-							Validators
-						</Heading>
+		<PageLayout
+			content={
+				isError || validatorEventError ? (
+					<Banner variant="error" fullWidth>
+						Validator data could not be loaded
+					</Banner>
+				) : (
+					<>
+						<div className="grid gap-5 md:grid-cols-2">
+							<Card spacing="lg">
+								<div className="flex w-full basis-full flex-col gap-8">
+									<Heading as="div" variant="heading4/semibold" color="steel-darker">
+										Validators
+									</Heading>
 
-						<div className="flex flex-col gap-8 md:flex-row">
-							<div className="flex flex-col gap-8">
-								<Stats label="Participation" tooltip="Coming soon" unavailable />
+									<div className="flex flex-col gap-8 md:flex-row">
+										<div className="flex flex-col gap-8">
+											<Stats label="Participation" tooltip="Coming soon" unavailable />
 
-								<Stats
-									label="Last Epoch Rewards"
-									tooltip="The stake rewards collected during the last epoch."
-									unavailable={lastEpochRewardOnAllValidators === null}
-								>
-									<DelegationAmount
-										amount={
-											typeof lastEpochRewardOnAllValidators === 'number'
-												? lastEpochRewardOnAllValidators
-												: 0n
-										}
-										isStats
-									/>
-								</Stats>
-							</div>
-							<div className="flex flex-col gap-8">
-								<Stats
-									label="Total SUI Staked"
-									tooltip="The total SUI staked on the network by validators and delegators to validate the network and earn rewards."
-									unavailable={totalStaked <= 0}
-								>
-									<DelegationAmount amount={totalStaked || 0n} isStats />
-								</Stats>
-								<Stats
-									label="AVG APY"
-									tooltip="The global average of annualized percentage yield of all participating validators."
-									unavailable={averageAPY === null}
-								>
-									{averageAPY}%
-								</Stats>
-							</div>
+											<Stats
+												label="Last Epoch Rewards"
+												tooltip="The stake rewards collected during the last epoch."
+												unavailable={lastEpochRewardOnAllValidators === null}
+											>
+												<DelegationAmount
+													amount={
+														typeof lastEpochRewardOnAllValidators === 'number'
+															? lastEpochRewardOnAllValidators
+															: 0n
+													}
+													isStats
+												/>
+											</Stats>
+										</div>
+										<div className="flex flex-col gap-8">
+											<Stats
+												label="Total SUI Staked"
+												tooltip="The total SUI staked on the network by validators and delegators to validate the network and earn rewards."
+												unavailable={totalStaked <= 0}
+											>
+												<DelegationAmount amount={totalStaked || 0n} isStats />
+											</Stats>
+											<Stats
+												label="AVG APY"
+												tooltip="The global average of annualized percentage yield of all participating validators."
+												unavailable={averageAPY === null}
+											>
+												{averageAPY}%
+											</Stats>
+										</div>
+									</div>
+								</div>
+							</Card>
+
+							<ErrorBoundary>
+								<Suspense fallback={null}>
+									<ValidatorMap minHeight={230} />
+								</Suspense>
+							</ErrorBoundary>
 						</div>
-					</div>
-				</Card>
+						<div className="mt-8">
+							<ErrorBoundary>
+								<TableHeader>All Validators</TableHeader>
+								{(isLoading || validatorsEventsLoading) && (
+									<PlaceholderTable
+										rowCount={20}
+										rowHeight="13px"
+										colHeadings={['Name', 'Address', 'Stake']}
+										colWidths={['220px', '220px', '220px']}
+									/>
+								)}
 
-				<ErrorBoundary>
-					<Suspense fallback={null}>
-						<ValidatorMap minHeight={230} />
-					</Suspense>
-				</ErrorBoundary>
-			</div>
-			<div className="mt-8">
-				<ErrorBoundary>
-					<TableHeader>All Validators</TableHeader>
-					{(isLoading || validatorsEventsLoading) && (
-						<PlaceholderTable
-							rowCount={20}
-							rowHeight="13px"
-							colHeadings={['Name', 'Address', 'Stake']}
-							colWidths={['220px', '220px', '220px']}
-						/>
-					)}
-
-					{isSuccess && validatorsTable?.data && (
-						<TableCard data={validatorsTable.data} columns={validatorsTable.columns} sortTable />
-					)}
-				</ErrorBoundary>
-			</div>
-		</div>
+								{isSuccess && validatorsTable?.data && (
+									<TableCard
+										data={validatorsTable.data}
+										columns={validatorsTable.columns}
+										sortTable
+									/>
+								)}
+							</ErrorBoundary>
+						</div>
+					</>
+				)
+			}
+		/>
 	);
 }
 

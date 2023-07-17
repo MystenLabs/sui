@@ -36,7 +36,7 @@ describe('Transaction Serialization and deserialization', () => {
 	async function serializeAndDeserialize(tx: TransactionBlock, mutable: boolean[]) {
 		tx.setSender(await toolbox.address());
 		const transactionBlockBytes = await tx.build({
-			provider: toolbox.provider,
+			client: toolbox.client,
 		});
 		const deserializedTxnBuilder = TransactionBlockDataBuilder.fromBytes(transactionBlockBytes);
 		expect(
@@ -87,5 +87,11 @@ describe('Transaction Serialization and deserialization', () => {
 			arguments: [tx.object(sharedObjectId)],
 		});
 		await serializeAndDeserialize(tx, [true]);
+	});
+
+	it('Transaction with expiration', async () => {
+		const tx = new TransactionBlock();
+		tx.setExpiration({ Epoch: 100 });
+		await serializeAndDeserialize(tx, []);
 	});
 });

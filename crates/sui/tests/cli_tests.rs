@@ -7,6 +7,7 @@ use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
 use expect_test::expect;
 use serde_json::json;
+use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::object::Owner;
 use sui_types::transaction::{
     TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
@@ -42,7 +43,7 @@ use sui_types::crypto::{
 };
 use sui_types::error::SuiObjectResponseError;
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 const TEST_DATA_DIR: &str = "tests/data/";
 
@@ -68,6 +69,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         from_config: None,
         epoch_duration_ms: None,
         benchmark_ips: None,
+        with_faucet: false,
     }
     .execute()
     .await?;
@@ -106,6 +108,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         from_config: None,
         epoch_duration_ms: None,
         benchmark_ips: None,
+        with_faucet: false,
     }
     .execute()
     .await;
@@ -377,6 +380,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await?;
@@ -598,6 +602,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await?;
@@ -667,6 +672,7 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await?;
@@ -735,6 +741,7 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await;
@@ -781,6 +788,7 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await;
@@ -836,6 +844,7 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await;
@@ -878,6 +887,7 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await;
@@ -934,6 +944,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await?;
@@ -1007,6 +1018,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         legacy_digest: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await?;
@@ -1782,7 +1794,7 @@ async fn test_signature_flag() -> Result<(), anyhow::Error> {
 async fn test_execute_signed_tx() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let context = &mut test_cluster.wallet;
-    let mut txns = context.batch_make_transfer_transactions(1).await;
+    let mut txns = batch_make_transfer_transactions(context, 1).await;
     let txn = txns.swap_remove(0);
 
     let (tx_data, signatures) = txn.to_tx_bytes_and_signatures();

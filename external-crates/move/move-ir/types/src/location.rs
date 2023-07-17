@@ -43,6 +43,14 @@ impl Loc {
         }
     }
 
+    pub const fn invalid() -> Loc {
+        Loc {
+            file_hash: FileHash::empty(),
+            start: 0,
+            end: 0,
+        }
+    }
+
     pub fn file_hash(self) -> FileHash {
         self.file_hash
     }

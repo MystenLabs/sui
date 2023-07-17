@@ -1,7 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::EndpointMetrics;
-use mysten_network::metrics::MetricsCallbackProvider;
 use network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use prometheus::{
     core::{AtomicI64, GenericGauge},
@@ -11,8 +9,6 @@ use prometheus::{
     register_int_gauge_with_registry, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge,
     IntGaugeVec, Registry,
 };
-use std::time::Duration;
-use tonic::Code;
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.4,
@@ -22,7 +18,6 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 
 #[derive(Clone)]
 pub(crate) struct Metrics {
-    pub(crate) endpoint_metrics: Option<EndpointMetrics>,
     pub(crate) inbound_network_metrics: Option<NetworkMetrics>,
     pub(crate) outbound_network_metrics: Option<NetworkMetrics>,
     pub(crate) primary_channel_metrics: Option<PrimaryChannelMetrics>,
@@ -32,9 +27,6 @@ pub(crate) struct Metrics {
 
 /// Initialises the metrics
 pub(crate) fn initialise_metrics(metrics_registry: &Registry) -> Metrics {
-    // The metrics used for the gRPC primary node endpoints we expose to the external consensus
-    let endpoint_metrics = EndpointMetrics::new(metrics_registry);
-
     // The metrics used for communicating over the network
     let inbound_network_metrics = NetworkMetrics::new("primary", "inbound", metrics_registry);
     let outbound_network_metrics = NetworkMetrics::new("primary", "outbound", metrics_registry);
@@ -50,7 +42,6 @@ pub(crate) fn initialise_metrics(metrics_registry: &Registry) -> Metrics {
 
     Metrics {
         node_metrics: Some(node_metrics),
-        endpoint_metrics: Some(endpoint_metrics),
         primary_channel_metrics: Some(primary_channel_metrics),
         inbound_network_metrics: Some(inbound_network_metrics),
         outbound_network_metrics: Some(outbound_network_metrics),
@@ -70,8 +61,6 @@ pub struct PrimaryChannelMetrics {
     pub tx_headers: IntGauge,
     /// occupancy of the channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`
     pub tx_certificate_fetcher: IntGauge,
-    /// occupancy of the channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`
-    pub tx_block_synchronizer_commands: IntGauge,
     /// occupancy of the channel from the `Consensus` to the `primary::StateHandler`
     pub tx_committed_certificates: IntGauge,
     /// occupancy of the channel from the `primary::Synchronizer` to the `Consensus`
@@ -95,8 +84,6 @@ pub struct PrimaryChannelMetrics {
     pub tx_headers_total: IntCounter,
     /// total received on channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`
     pub tx_certificate_fetcher_total: IntCounter,
-    /// total received on channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`
-    pub tx_block_synchronizer_commands_total: IntCounter,
     /// total received on channel from the `primary::WorkerReceiverHandler` to the `primary::StateHandler`
     pub tx_state_handler_total: IntCounter,
     /// total received on channel from the `Consensus` to the `primary::StateHandler`
@@ -161,11 +148,6 @@ impl PrimaryChannelMetrics {
                 "occupancy of the channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`",
                 registry
             ).unwrap(),
-            tx_block_synchronizer_commands: register_int_gauge_with_registry!(
-                "tx_block_synchronizer_commands",
-                "occupancy of the channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`",
-                registry
-            ).unwrap(),
             tx_committed_certificates: register_int_gauge_with_registry!(
                 Self::NAME_COMMITTED_CERTS,
                 Self::DESC_COMMITTED_CERTS,
@@ -216,11 +198,6 @@ impl PrimaryChannelMetrics {
             tx_certificate_fetcher_total: register_int_counter_with_registry!(
                 "tx_certificate_fetcher_total",
                 "total received on channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`",
-                registry
-            ).unwrap(),
-            tx_block_synchronizer_commands_total: register_int_counter_with_registry!(
-                "tx_block_synchronizer_commands_total",
-                "total received on channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`",
                 registry
             ).unwrap(),
             tx_state_handler_total: register_int_counter_with_registry!(
@@ -541,59 +518,6 @@ impl PrimaryMetrics {
 }
 
 impl Default for PrimaryMetrics {
-    fn default() -> Self {
-        Self::new(default_registry())
-    }
-}
-
-#[derive(Clone)]
-pub struct PrimaryEndpointMetrics {
-    /// Counter of requests, route is a label (ie separate timeseries per route)
-    requests_by_route: IntCounterVec,
-    /// Request latency, route is a label
-    req_latency_by_route: HistogramVec,
-}
-
-impl PrimaryEndpointMetrics {
-    pub fn new(registry: &Registry) -> Self {
-        Self {
-            requests_by_route: register_int_counter_vec_with_registry!(
-                "primary_requests_by_route",
-                "Number of requests by route",
-                &["route", "status", "grpc_status_code"],
-                registry
-            )
-            .unwrap(),
-            req_latency_by_route: register_histogram_vec_with_registry!(
-                "primary_req_latency_by_route",
-                "Latency of a request by route",
-                &["route", "status", "grpc_status_code"],
-                registry
-            )
-            .unwrap(),
-        }
-    }
-}
-
-impl MetricsCallbackProvider for PrimaryEndpointMetrics {
-    fn on_request(&self, _path: String) {
-        // For now we just do nothing
-    }
-
-    fn on_response(&self, path: String, latency: Duration, status: u16, grpc_status_code: Code) {
-        let code: i32 = grpc_status_code.into();
-        let labels = [path.as_str(), &status.to_string(), &code.to_string()];
-
-        self.requests_by_route.with_label_values(&labels).inc();
-
-        let req_latency_secs = latency.as_secs_f64();
-        self.req_latency_by_route
-            .with_label_values(&labels)
-            .observe(req_latency_secs);
-    }
-}
-
-impl Default for PrimaryEndpointMetrics {
     fn default() -> Self {
         Self::new(default_registry())
     }

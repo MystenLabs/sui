@@ -3,11 +3,13 @@
 
 import { fromB64 } from '@mysten/bcs';
 import nacl from 'tweetnacl';
-import { IntentScope, messageWithIntent } from './intent';
+import type { IntentScope } from '../cryptography/intent.js';
+import { messageWithIntent } from '../cryptography/intent.js';
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { sha256 } from '@noble/hashes/sha256';
-import { SerializedSignature, toSingleSignaturePubkeyPair } from '../cryptography/signature';
+import type { SerializedSignature } from '../cryptography/signature.js';
 import { blake2b } from '@noble/hashes/blake2b';
+import { toSingleSignaturePubkeyPair } from '../cryptography/utils.js';
 
 // TODO: This might actually make sense to eventually move to the `Keypair` instances themselves, as
 // it could allow the Sui.js to be tree-shaken a little better, possibly allowing keypairs that are

@@ -111,6 +111,9 @@ pub struct FaucetConfig {
 
     #[clap(long, default_value_t = 300)]
     pub ttl_expiration: u64,
+
+    #[clap(long, default_value_t = false)]
+    pub batch_enabled: bool,
 }
 
 impl Default for FaucetConfig {
@@ -128,6 +131,7 @@ impl Default for FaucetConfig {
             max_request_queue_length: 10000,
             batch_request_size: 500,
             ttl_expiration: 300,
+            batch_enabled: false,
         }
     }
 }

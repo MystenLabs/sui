@@ -154,6 +154,19 @@ impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<
             .map(AddressMetrics::from)
             .collect())
     }
+
+    async fn get_total_transactions(&self) -> RpcResult<BigInt<u64>> {
+        let latest_cp_metrics = self.state.get_latest_checkpoint_metrics().await?;
+        // NOTE: tx are counted as:
+        // - if a tx is successful, it is counted as # of commands in the tx
+        // - otherwise, it is counted as 1.
+        let total_txes = latest_cp_metrics.rolling_total_successful_transactions
+            + latest_cp_metrics.rolling_total_transaction_blocks
+            - latest_cp_metrics.rolling_total_successful_transaction_blocks;
+        // NOTE: no underflow b/c rolling_total_transaction_blocks is greater than or equal to
+        // rolling_total_successful_transaction_blocks.
+        Ok((total_txes as u64).into())
+    }
 }
 
 impl<S> SuiRpcModule for ExtendedApi<S>

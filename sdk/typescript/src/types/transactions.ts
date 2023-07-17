@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { Infer } from 'superstruct';
 import {
 	is,
 	array,
-	Infer,
 	literal,
 	number,
 	object,
@@ -25,9 +25,9 @@ import {
 	SuiJsonValue,
 	TransactionDigest,
 	TransactionEventDigest,
-} from './common';
-import { SuiEvent } from './events';
-import { ObjectDigest, SuiGasData, SuiMovePackage, SuiObjectRef } from './objects';
+} from './common.js';
+import { SuiEvent } from './events.js';
+import { ObjectDigest, SuiGasData, SuiMovePackage, SuiObjectRef } from './objects.js';
 
 export const EpochId = string();
 
@@ -264,6 +264,7 @@ export type SuiTransactionBlockResponseQuery = {
 };
 
 export type TransactionFilter =
+	| { FromOrToAddress: { addr: string } }
 	| { Checkpoint: string }
 	| { FromAndToAddress: { from: string; to: string } }
 	| { TransactionKind: string }

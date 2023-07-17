@@ -5,14 +5,24 @@ import { Ed25519Keypair, fromB64 } from '@mysten/sui.js';
 import mitt from 'mitt';
 import { throttle } from 'throttle-debounce';
 
-import { getAllQredoConnections } from '../qredo/storage';
-import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
-import { type Account, isImportedOrDerivedAccount, isQredoAccount } from './Account';
+import {
+	type Account,
+	isImportedOrDerivedAccount,
+	isQredoAccount,
+	isLedgerAccount,
+} from './Account';
 import { DerivedAccount } from './DerivedAccount';
 import { ImportedAccount } from './ImportedAccount';
 import { LedgerAccount, type SerializedLedgerAccount } from './LedgerAccount';
 import { QredoAccount } from './QredoAccount';
 import { VaultStorage } from './VaultStorage';
+import {
+	type AccountsPublicInfoUpdates,
+	getStoredAccountsPublicInfo,
+	updateAccountsPublicInfo,
+} from './accounts';
+import { getAllQredoConnections } from '../qredo/storage';
+import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
 import { createMessage } from '_messages';
 import { isKeyringPayload } from '_payloads/keyring';
 import { entropyToSerialized } from '_shared/utils/bip39';
@@ -114,13 +124,13 @@ export class Keyring {
 		if (this.isLocked) {
 			return null;
 		}
-		const mnemonic = VaultStorage.getMnemonic();
-		if (!mnemonic) {
+		const mnemonicSeedHex = VaultStorage.getMnemonicSeedHex();
+		if (!mnemonicSeedHex) {
 			return null;
 		}
 		const nextIndex = (await this.getLastDerivedIndex()) + 1;
 		await this.storeLastDerivedIndex(nextIndex);
-		const account = this.deriveAccount(nextIndex, mnemonic);
+		const account = this.deriveAccount(nextIndex, mnemonicSeedHex);
 		this.#accountsMap.set(account.address, account);
 		this.notifyAccountsChanged();
 		return account;
@@ -132,14 +142,20 @@ export class Keyring {
 		}
 
 		await this.storeLedgerAccounts(ledgerAccounts);
-
+		const accountsPublicInfoUpdates = [];
 		for (const ledgerAccount of ledgerAccounts) {
 			const account = new LedgerAccount({
 				derivationPath: ledgerAccount.derivationPath,
 				address: ledgerAccount.address,
+				publicKey: ledgerAccount.publicKey,
+			});
+			accountsPublicInfoUpdates.push({
+				accountAddress: account.address,
+				changes: { publicKey: ledgerAccount.publicKey },
 			});
 			this.#accountsMap.set(ledgerAccount.address, account);
 		}
+		await updateAccountsPublicInfo(accountsPublicInfoUpdates);
 		this.notifyAccountsChanged();
 	}
 
@@ -204,6 +220,14 @@ export class Keyring {
 				keypair: added,
 			});
 			this.#accountsMap.set(importedAccount.address, importedAccount);
+			await updateAccountsPublicInfo([
+				{
+					accountAddress: importedAccount.address,
+					changes: {
+						publicKey: importedAccount.accountKeypair.publicKey.toBase64(),
+					},
+				},
+			]);
 			this.notifyAccountsChanged();
 		}
 		return added;
@@ -224,15 +248,22 @@ export class Keyring {
 				this.#accountsMap.delete(anAccount.address);
 			}
 		});
-		newAccounts.forEach(({ address, labels, walletID }) => {
+		const accountsPublicInfoUpdates: AccountsPublicInfoUpdates = [];
+		newAccounts.forEach(({ address, labels, walletID, publicKey }) => {
 			const newAccount = new QredoAccount({
 				address,
 				qredoConnectionID: qredoID,
 				qredoWalletID: walletID,
 				labels,
+				publicKey,
+			});
+			accountsPublicInfoUpdates.push({
+				accountAddress: newAccount.address,
+				changes: { publicKey: newAccount.publicKey },
 			});
 			this.#accountsMap.set(newAccount.address, newAccount);
 		});
+		await updateAccountsPublicInfo(accountsPublicInfoUpdates);
 		this.notifyAccountsChanged();
 	}
 
@@ -337,6 +368,14 @@ export class Keyring {
 				if (!nextAccount) {
 					throw new Error('Failed to derive next account');
 				}
+				await updateAccountsPublicInfo([
+					{
+						accountAddress: nextAccount.address,
+						changes: {
+							publicKey: nextAccount.accountKeypair.publicKey.toBase64(),
+						},
+					},
+				]);
 				uiConnection.send(
 					createMessage<KeyringPayload<'deriveNextAccount'>>(
 						{
@@ -383,6 +422,31 @@ export class Keyring {
 					throw new Error('Duplicate account not imported');
 				}
 				uiConnection.send(createMessage({ type: 'done' }, id));
+			} else if (isKeyringPayload(payload, 'updateAccountPublicInfo') && payload.args) {
+				const { updates } = payload.args;
+				await updateAccountsPublicInfo(payload.args.updates);
+				const ledgerUpdates: Record<SuiAddress, string> = {};
+				for (const {
+					accountAddress,
+					changes: { publicKey },
+				} of updates) {
+					const anAccount = this.#accountsMap.get(accountAddress);
+					if (publicKey && anAccount && isLedgerAccount(anAccount) && !anAccount.getPublicKey()) {
+						anAccount.setPublicKey(publicKey);
+						ledgerUpdates[accountAddress] = publicKey;
+					}
+				}
+				if (Object.keys(ledgerUpdates).length) {
+					const allStoredLedgerAccounts = await this.getSavedLedgerAccounts();
+					for (let anAccount of allStoredLedgerAccounts) {
+						if (!anAccount.publicKey && ledgerUpdates[anAccount.address]) {
+							anAccount.publicKey = ledgerUpdates[anAccount.address];
+						}
+					}
+					await this.storeLedgerAccounts(allStoredLedgerAccounts);
+					this.notifyAccountsChanged();
+				}
+				uiConnection.send(createMessage({ type: 'done' }, id));
 			}
 		} catch (e) {
 			uiConnection.send(
@@ -423,14 +487,14 @@ export class Keyring {
 	}
 
 	private async unlocked() {
-		let mnemonic = VaultStorage.getMnemonic();
-		if (!mnemonic) {
+		let mnemonicSeedHex = VaultStorage.getMnemonicSeedHex();
+		if (!mnemonicSeedHex) {
 			return;
 		}
 		Alarms.setLockAlarm();
 		const lastAccountIndex = await this.getLastDerivedIndex();
 		for (let i = 0; i <= lastAccountIndex; i++) {
-			const account = this.deriveAccount(i, mnemonic);
+			const account = this.deriveAccount(i, mnemonicSeedHex);
 			this.#accountsMap.set(account.address, account);
 			if (i === 0) {
 				this.#mainDerivedAccount = account.address;
@@ -443,16 +507,18 @@ export class Keyring {
 				new LedgerAccount({
 					derivationPath: savedLedgerAccount.derivationPath,
 					address: savedLedgerAccount.address,
+					publicKey: savedLedgerAccount.publicKey || null,
 				}),
 			);
 		}
 		for (const aQredoConnection of await getAllQredoConnections()) {
-			aQredoConnection.accounts.forEach(({ address, labels, walletID }) => {
+			aQredoConnection.accounts.forEach(({ address, labels, walletID, publicKey }) => {
 				const account = new QredoAccount({
 					address,
 					qredoConnectionID: aQredoConnection.id,
 					labels,
 					qredoWalletID: walletID,
+					publicKey,
 				});
 				this.#accountsMap.set(account.address, account);
 			});
@@ -467,14 +533,15 @@ export class Keyring {
 				this.#accountsMap.set(account.address, account);
 			}
 		});
-		mnemonic = null;
+		mnemonicSeedHex = null;
 		this.#locked = false;
+		this.storeAccountsPublicInfo();
 		this.notifyLockedStatusUpdate(this.#locked);
 	}
 
-	private deriveAccount(accountIndex: number, mnemonic: string) {
+	private deriveAccount(accountIndex: number, mnemonicSeedHex: string) {
 		const derivationPath = this.makeDerivationPath(accountIndex);
-		const keypair = Ed25519Keypair.deriveKeypair(mnemonic, derivationPath);
+		const keypair = Ed25519Keypair.deriveKeypairFromSeed(mnemonicSeedHex, derivationPath);
 		return new DerivedAccount({ keypair, derivationPath });
 	}
 
@@ -510,6 +577,25 @@ export class Keyring {
 	private notifyAccountsChanged() {
 		this.#events.emit('accountsChanged', this.getAccounts() || []);
 	}
+
+	/**
+	 * Do this on first unlock after the account is created to store the public info of the accounts
+	 * the first derived if it's a new one (or for accounts that already have been created before this to migrate the storage)
+	 */
+	private async storeAccountsPublicInfo() {
+		if (!Object.keys(await getStoredAccountsPublicInfo()).length) {
+			const allAccounts = this.getAccounts();
+			if (allAccounts) {
+				await updateAccountsPublicInfo(
+					allAccounts.map((anAccount) => ({
+						accountAddress: anAccount.address,
+						changes: { publicKey: anAccount.getPublicKey() },
+					})),
+				);
+			}
+		}
+	}
 }
 
-export default new Keyring();
+const keyring = new Keyring();
+export default keyring;

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFormatCoin, useGetTimeBeforeEpochNumber } from '@mysten/core';
-import { SUI_TYPE_ARG, type SuiAddress } from '@mysten/sui.js';
+import { SUI_TYPE_ARG, type SuiAddress, type StakeObject } from '@mysten/sui.js';
 import { cx, cva, type VariantProps } from 'class-variance-authority';
 import { Link } from 'react-router-dom';
 
@@ -12,7 +12,6 @@ import { CountDownTimer } from '_src/ui/app/shared/countdown-timer';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
 
-import type { StakeObject } from '@mysten/sui.js';
 import type { ReactNode } from 'react';
 
 export enum StakeState {

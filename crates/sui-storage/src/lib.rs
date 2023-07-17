@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+#![allow(dead_code)]
 
 pub mod indexes;
 
@@ -7,15 +8,15 @@ use crate::blob::BlobIter;
 use anyhow::{anyhow, Result};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bytes::{Buf, Bytes};
+use fastcrypto::hash::{HashFunction, Sha3_256};
 pub use indexes::{IndexStore, IndexStoreTables};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{BufReader, Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::{fs, io};
-use sui_simulator::fastcrypto::hash::{HashFunction, Sha3_256};
 use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, VerifiedCheckpoint};
 use sui_types::storage::{ReadStore, WriteStore};
 use tracing::debug;
@@ -212,4 +213,78 @@ where
         checkpoint.clone()
     })?;
     Ok(VerifiedCheckpoint::new_unchecked(checkpoint))
+}
+
+fn hard_link(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
+    fs::create_dir_all(&dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            hard_link(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        } else {
+            fs::hard_link(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::hard_link;
+    use tempfile::TempDir;
+    use typed_store::rocks::DBMap;
+    use typed_store::rocks::ReadWriteOptions;
+    use typed_store::rocks::{open_cf, MetricConf};
+    use typed_store::{reopen, Map};
+
+    #[tokio::test]
+    pub async fn test_db_hard_link() -> anyhow::Result<()> {
+        let input = TempDir::new()?;
+        let input_path = input.path();
+
+        let output = TempDir::new()?;
+        let output_path = output.path();
+
+        const FIRST_CF: &str = "First_CF";
+        const SECOND_CF: &str = "Second_CF";
+
+        let db_a = open_cf(
+            input_path,
+            None,
+            MetricConf::default(),
+            &[FIRST_CF, SECOND_CF],
+        )
+        .unwrap();
+
+        let (db_map_1, db_map_2) = reopen!(&db_a, FIRST_CF;<i32, String>, SECOND_CF;<i32, String>);
+
+        let keys_vals_cf1 = (1..100).map(|i| (i, i.to_string()));
+        let keys_vals_cf2 = (1..100).map(|i| (i, i.to_string()));
+
+        assert!(db_map_1.multi_insert(keys_vals_cf1).is_ok());
+        assert!(db_map_2.multi_insert(keys_vals_cf2).is_ok());
+
+        // set up db hard link
+        hard_link(input_path, output_path)?;
+        let db_b = open_cf(
+            output_path,
+            None,
+            MetricConf::default(),
+            &[FIRST_CF, SECOND_CF],
+        )
+        .unwrap();
+
+        let (db_map_1, db_map_2) = reopen!(&db_b, FIRST_CF;<i32, String>, SECOND_CF;<i32, String>);
+        for i in 1..100 {
+            assert!(db_map_1
+                .contains_key(&i)
+                .expect("Failed to call contains key"));
+            assert!(db_map_2
+                .contains_key(&i)
+                .expect("Failed to call contains key"));
+        }
+
+        Ok(())
+    }
 }

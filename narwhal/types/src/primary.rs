@@ -4,16 +4,13 @@
 use crate::{
     error::{DagError, DagResult},
     serde::NarwhalBitmap,
-    CertificateDigestProto,
 };
-use bytes::Bytes;
 use config::{AuthorityIdentifier, Committee, Epoch, Stake, WorkerCache, WorkerId, WorkerInfo};
 use crypto::{
     to_intent_message, AggregateSignature, AggregateSignatureBytes,
     NarwhalAuthorityAggregateSignature, NarwhalAuthoritySignature, NetworkPublicKey, PublicKey,
     Signature,
 };
-use dag::node_dag::Affiliated;
 use derive_builder::Builder;
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{
@@ -344,6 +341,12 @@ impl fmt::Display for BatchDigest {
 impl From<BatchDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
     fn from(digest: BatchDigest) -> Self {
         Digest::new(digest.0)
+    }
+}
+
+impl AsRef<[u8]> for BatchDigest {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
     }
 }
 
@@ -1211,13 +1214,6 @@ impl From<CertificateDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
         Digest::new(hd.0)
     }
 }
-impl From<CertificateDigest> for CertificateDigestProto {
-    fn from(hd: CertificateDigest) -> Self {
-        CertificateDigestProto {
-            digest: Bytes::from(hd.0.to_vec()),
-        }
-    }
-}
 
 impl fmt::Debug for CertificateDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
@@ -1274,23 +1270,6 @@ impl PartialEq for CertificateV1 {
         ret &= self.epoch() == other.epoch();
         ret &= self.origin() == other.origin();
         ret
-    }
-}
-
-impl Affiliated for Certificate {
-    fn parents(&self) -> Vec<<Self as Hash<{ crypto::DIGEST_LENGTH }>>::TypedDigest> {
-        match self {
-            Certificate::V1(data) => data.header().parents().iter().cloned().collect(),
-        }
-    }
-
-    // This makes the genesis certificate and empty blocks compressible,
-    // so that they will never be reported by a DAG walk
-    // (`read_causal`, `node_read_causal`).
-    fn compressible(&self) -> bool {
-        match self {
-            Certificate::V1(data) => data.header().payload().is_empty(),
-        }
     }
 }
 
@@ -1455,12 +1434,6 @@ pub struct FetchBatchesRequest {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FetchBatchesResponse {
     pub batches: HashMap<BatchDigest, Batch>,
-}
-
-/// Used by the primary to request that the worker delete the specified batches.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct WorkerDeleteBatchesMessage {
-    pub digests: Vec<BatchDigest>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

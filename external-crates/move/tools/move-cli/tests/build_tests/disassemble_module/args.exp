@@ -12,12 +12,17 @@ struct As {
 
 public zf(): u64 {
 B0:
-	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
+	0: LdConst[0](U64: 01000000..)
 	1: Ret
 }
-public af(): u64 {
+public af(): u32 {
 B0:
-	0: LdConst[1](U64: [0, 0, 0, 0, 0, 0, 0, 0])
+	0: LdConst[1](U32: 00000000)
 	1: Ret
 }
+
+Constants [
+	0 => u64: 0100000000000000
+	1 => u32: 00000000
+]
 }

@@ -683,7 +683,7 @@ impl TransactionManager {
     /// Notifies TransactionManager that the given objects are available in the objects table.
     /// Useful when transactions associated with the objects are not known, e.g. after checking
     /// object availability from storage, or for testing.
-    pub(crate) fn fastpath_objects_available(
+    pub(crate) fn _fastpath_objects_available(
         &self,
         input_keys: Vec<InputKey>,
         epoch_store: &AuthorityPerEpochStore,

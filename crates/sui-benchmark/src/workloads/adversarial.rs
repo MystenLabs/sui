@@ -31,7 +31,7 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::transaction::Command;
 use sui_types::transaction::{CallArg, ObjectArg};
 use sui_types::{base_types::ObjectID, object::Owner};
-use sui_types::{base_types::SuiAddress, crypto::get_key_pair, transaction::VerifiedTransaction};
+use sui_types::{base_types::SuiAddress, crypto::get_key_pair, transaction::Transaction};
 use sui_types::{transaction::TransactionData, utils::to_sender_signed_transaction};
 use tracing::debug;
 
@@ -176,7 +176,7 @@ impl Payload for AdversarialTestPayload {
         self.state.update(effects);
     }
 
-    fn make_transaction(&mut self) -> VerifiedTransaction {
+    fn make_transaction(&mut self) -> Transaction {
         let payload_type = self.adversarial_payload_cfg.payload_type;
 
         self.create_transaction(
@@ -203,7 +203,7 @@ impl AdversarialTestPayload {
         &self,
         payload_type: &AdversarialPayloadType,
         protocol_config: &ProtocolConfig,
-    ) -> VerifiedTransaction {
+    ) -> Transaction {
         let args = self.get_payload_args(payload_type, protocol_config);
         let module_name = "adversarial";
         let account = self.state.account(&self.sender).unwrap();
@@ -464,10 +464,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
         let transaction = TestTransactionBuilder::new(gas.1, gas.0, reference_gas_price)
             .publish(path)
             .build_and_sign(gas.2.as_ref());
-        let effects = proxy
-            .execute_transaction_block(transaction.into())
-            .await
-            .unwrap();
+        let effects = proxy.execute_transaction_block(transaction).await.unwrap();
         let created = effects.created();
         // should only create the package object, upgrade cap, dynamic field top level obj, and NUM_DYNAMIC_FIELDS df objects. otherwise, there are some object initializers running and we will need to disambiguate
         assert_eq!(
@@ -514,10 +511,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
             reference_gas_price,
         );
 
-        let effects = proxy
-            .execute_transaction_block(transaction.into())
-            .await
-            .unwrap();
+        let effects = proxy.execute_transaction_block(transaction).await.unwrap();
 
         let created = effects.created();
         assert_eq!(created.len() as u64, num_shared_objs);

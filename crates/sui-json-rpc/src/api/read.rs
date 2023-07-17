@@ -132,7 +132,7 @@ pub trait ReadApi {
         transaction_digest: TransactionDigest,
     ) -> RpcResult<Vec<SuiEvent>>;
 
-    /// Return the total number of transactions known to the server.
+    /// Return the total number of transaction blocks known to the server.
     #[method(name = "getTotalTransactionBlocks")]
     async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt<u64>>;
 
@@ -149,7 +149,7 @@ pub trait ReadApi {
         version: Option<BigInt<u64>>,
     ) -> RpcResult<ProtocolConfigResponse>;
 
-    /// Return the chain's identifier
+    /// Return the first four bytes of the chain's genesis checkpoint digest.
     #[method(name = "getChainIdentifier")]
     async fn get_chain_identifier(&self) -> RpcResult<String>;
 }

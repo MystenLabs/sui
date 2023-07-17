@@ -11,7 +11,7 @@ use crate::errors::IndexerError;
 use crate::schema::transactions;
 use crate::types::TemporaryTransactionBlockResponseStore;
 
-#[derive(Clone, Debug, Queryable, Insertable)]
+#[derive(Clone, Debug, Queryable, Insertable, QueryableByName)]
 #[diesel(table_name = transactions)]
 pub struct Transaction {
     #[diesel(deserialize_as = i64)]

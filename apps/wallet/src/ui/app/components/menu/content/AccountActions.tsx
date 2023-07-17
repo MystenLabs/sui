@@ -3,9 +3,9 @@
 
 import { type ReactNode } from 'react';
 
+import { VerifyLedgerConnectionStatus } from './VerifyLedgerConnectionStatus';
 import { BadgeLabel } from '../../BadgeLabel';
 import { useNextMenuUrl } from '../hooks';
-import { VerifyLedgerConnectionStatus } from './VerifyLedgerConnectionStatus';
 import { AccountType, type SerializedAccount } from '_src/background/keyring/Account';
 import { Link } from '_src/ui/app/shared/Link';
 

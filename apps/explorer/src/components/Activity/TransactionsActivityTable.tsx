@@ -4,10 +4,9 @@
 import { useRpcClient } from '@mysten/core';
 import { ArrowRight12 } from '@mysten/icons';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { genTableDataFromTxData } from '../transactions/TxCardUtils';
-
 import { useGetTransactionBlocks } from '~/hooks/useGetTransactionBlocks';
 import { Link } from '~/ui/Link';
 import { Pagination, useCursorPagination } from '~/ui/Pagination';
@@ -22,11 +21,13 @@ interface Props {
 	disablePagination?: boolean;
 	refetchInterval?: number;
 	initialLimit?: number;
+	transactionKindFilter?: 'ProgrammableTransaction';
 }
 
 export function TransactionsActivityTable({
 	disablePagination,
 	initialLimit = DEFAULT_TRANSACTIONS_LIMIT,
+	transactionKindFilter,
 }: Props) {
 	const [limit, setLimit] = useState(initialLimit);
 	const rpc = useRpcClient();
@@ -37,12 +38,18 @@ export function TransactionsActivityTable({
 		staleTime: Infinity,
 		retry: false,
 	});
-
-	const transactions = useGetTransactionBlocks(undefined, limit);
+	const transactions = useGetTransactionBlocks(
+		transactionKindFilter ? { TransactionKind: transactionKindFilter } : undefined,
+		limit,
+	);
 	const { data, isFetching, pagination, isLoading, isError } = useCursorPagination(transactions);
-
+	const goToFirstPageRef = useRef(pagination.onFirst);
+	goToFirstPageRef.current = pagination.onFirst;
 	const cardData = data ? genTableDataFromTxData(data.data) : undefined;
 
+	useEffect(() => {
+		goToFirstPageRef.current();
+	}, [transactionKindFilter]);
 	return (
 		<div data-testid="tx">
 			{isError && (
@@ -50,7 +57,7 @@ export function TransactionsActivityTable({
 					Failed to load Transactions
 				</div>
 			)}
-			<div className="flex flex-col space-y-5 text-left xl:pr-10">
+			<div className="flex flex-col space-y-3 text-left xl:pr-10">
 				{isLoading || isFetching || !cardData ? (
 					<PlaceholderTable
 						rowCount={limit}
@@ -68,15 +75,15 @@ export function TransactionsActivityTable({
 					{!disablePagination ? (
 						<Pagination {...pagination} />
 					) : (
-						<Link to="/recent" after={<ArrowRight12 />}>
-							More Transaction Blocks
+						<Link to="/recent" after={<ArrowRight12 className="h-3 w-3 -rotate-45" />}>
+							View all
 						</Link>
 					)}
 
 					<div className="flex items-center space-x-3">
 						<Text variant="body/medium" color="steel-dark">
 							{count ? numberSuffix(Number(count)) : '-'}
-							{` Transaction Blocks`}
+							{` Total`}
 						</Text>
 						{!disablePagination && (
 							<select
