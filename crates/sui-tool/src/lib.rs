@@ -517,22 +517,6 @@ pub(crate) fn make_anemo_config() -> anemo_cli::Config {
                     ),
                 )
                 .add_method(
-                    "GetPayloadAvailability",
-                    anemo_cli::ron_method!(
-                        PrimaryToPrimaryClient,
-                        get_payload_availability,
-                        PayloadAvailabilityRequest
-                    ),
-                )
-                .add_method(
-                    "GetCertificates",
-                    anemo_cli::ron_method!(
-                        PrimaryToPrimaryClient,
-                        get_certificates,
-                        GetCertificatesRequest
-                    ),
-                )
-                .add_method(
                     "FetchCertificates",
                     anemo_cli::ron_method!(
                         PrimaryToPrimaryClient,
