@@ -111,7 +111,7 @@ impl AuthorityStorePruner {
         let mut object_keys_to_prune = vec![];
         for effects in &transaction_effects {
             for (object_id, seq_number) in effects.modified_at_versions() {
-                object_keys_to_prune.push(ObjectKey(*object_id, *seq_number));
+                object_keys_to_prune.push(ObjectKey(object_id, seq_number));
             }
         }
         metrics
@@ -138,11 +138,11 @@ impl AuthorityStorePruner {
         for effects in transaction_effects {
             for (object_id, seq_number) in effects.modified_at_versions() {
                 updates
-                    .entry(*object_id)
+                    .entry(object_id)
                     .and_modify(|range| {
-                        *range = (min(range.0, *seq_number), max(range.1, *seq_number))
+                        *range = (min(range.0, seq_number), max(range.1, seq_number))
                     })
-                    .or_insert((*seq_number, *seq_number));
+                    .or_insert((seq_number, seq_number));
             }
         }
         for (object_id, (min_version, max_version)) in updates {
@@ -686,8 +686,13 @@ mod tests {
             )
             .unwrap();
             let mut effects = TransactionEffects::default();
-            *effects.modified_at_versions_mut_for_testing() =
-                to_delete.into_iter().map(|o| (o.0, o.1)).collect();
+            for object in to_delete {
+                effects.unsafe_add_deleted_object_for_testing((
+                    object.0,
+                    object.1,
+                    ObjectDigest::MIN,
+                ));
+            }
             AuthorityStorePruner::prune_objects(vec![effects], &db, &lock_table(), 0, metrics, 1)
                 .await
                 .unwrap();
@@ -782,7 +787,9 @@ mod tests {
         let before_compaction_size = get_sst_size(&db_path);
 
         let mut effects = TransactionEffects::default();
-        *effects.modified_at_versions_mut_for_testing() = to_delete;
+        for object in to_delete {
+            effects.unsafe_add_deleted_object_for_testing((object.0, object.1, ObjectDigest::MIN));
+        }
         let registry = Registry::default();
         let metrics = AuthorityStorePruningMetrics::new(&registry);
         let total_pruned = AuthorityStorePruner::prune_objects(
@@ -824,6 +831,7 @@ mod pprof_tests {
     use crate::authority::authority_store_types::{get_store_object_pair, StoreObjectWrapper};
     use pprof::Symbol;
     use prometheus::Registry;
+    use sui_types::base_types::ObjectDigest;
     use sui_types::base_types::VersionNumber;
     use sui_types::effects::TransactionEffects;
     use sui_types::effects::TransactionEffectsAPI;
@@ -857,7 +865,9 @@ mod pprof_tests {
         }
 
         let mut effects = TransactionEffects::default();
-        *effects.modified_at_versions_mut_for_testing() = to_delete;
+        for object in to_delete {
+            effects.unsafe_add_deleted_object_for_testing((object.0, object.1, ObjectDigest::MIN));
+        }
         Ok(effects)
     }
 
