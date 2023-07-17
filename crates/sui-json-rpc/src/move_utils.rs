@@ -149,12 +149,12 @@ impl MoveUtilsServer for MoveUtils {
             let identifier = Identifier::new(struct_name.as_str()).map_err(|e| {
                 Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!("{e}")))
             })?;
-            Ok(match structs.get(&identifier) {
+            match structs.get(&identifier) {
                 Some(struct_) => Ok(struct_.clone().into()),
                 None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
                     format!("No struct was found with struct name {}", struct_name),
                 ))),
-            }?)
+            }
         })
     }
 
@@ -171,12 +171,12 @@ impl MoveUtilsServer for MoveUtils {
             let identifier = Identifier::new(function_name.as_str()).map_err(|e| {
                 Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!("{e}")))
             })?;
-            Ok(match functions.get(&identifier) {
+            match functions.get(&identifier) {
                 Some(function) => Ok(function.clone().into()),
                 None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
                     format!("No function was found with function name {}", function_name),
                 ))),
-            }?)
+            }
         })
     }
 
@@ -218,7 +218,7 @@ impl MoveUtilsServer for MoveUtils {
                 .get(&module)
                 .and_then(|m| m.functions.get(&identifier).map(|f| f.parameters.clone()));
 
-            Ok(match parameters {
+            match parameters {
                 Some(parameters) => Ok(parameters
                     .iter()
                     .map(|p| match p {
@@ -240,7 +240,7 @@ impl MoveUtilsServer for MoveUtils {
                 None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
                     format!("No parameters found for function {}", function),
                 ))),
-            }?)
+            }
         })
     }
 }

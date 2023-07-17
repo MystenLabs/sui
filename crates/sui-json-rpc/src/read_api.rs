@@ -49,7 +49,7 @@ use sui_types::transaction::{TransactionData, VerifiedTransaction};
 use crate::api::JsonRpcMetrics;
 use crate::api::{validate_limit, ReadApiServer};
 use crate::api::{QUERY_MAX_RESULT_LIMIT, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS};
-use crate::error::{Error, SuiRpcInputError};
+use crate::error::{Error, RpcInterimResult, SuiRpcInputError};
 use crate::with_tracing;
 use crate::{
     get_balance_changes_from_effect, get_object_changes, ObjectProviderCache, SuiRpcModule,
@@ -498,10 +498,9 @@ impl ReadApiServer for ReadApi {
                     .inc_by(objects.len() as u64);
                 Ok(objects)
             } else {
-                Err(Error::SuiRpcInputError(SuiRpcInputError::SizeLimitExceeded(
-                    QUERY_MAX_RESULT_LIMIT.to_string(),
+                Err(Error::SuiRpcInputError(
+                    SuiRpcInputError::SizeLimitExceeded(QUERY_MAX_RESULT_LIMIT.to_string()),
                 ))
-                .into())
             }
         })
     }
@@ -588,10 +587,9 @@ impl ReadApiServer for ReadApi {
                     Ok(success)
                 }
             } else {
-                Err(Error::SuiRpcInputError(SuiRpcInputError::SizeLimitExceeded(
-                    QUERY_MAX_RESULT_LIMIT.to_string(),
+                Err(Error::SuiRpcInputError(
+                    SuiRpcInputError::SizeLimitExceeded(QUERY_MAX_RESULT_LIMIT.to_string()),
                 ))
-                .into())
             }
         })
     }
@@ -659,7 +657,7 @@ impl ReadApiServer for ReadApi {
             if let Some((_, seq)) = spawn_monitored_task!(async move {
                 // TODO: this is reading from a deprecated DB. The replacement DB however
                 // is in the epoch store, and thus we risk breaking the read API for txes
-                // from old epochs. Should be migrated once we have indexer support, or 
+                // from old epochs. Should be migrated once we have indexer support, or
                 // when we can tolerate returning None for old txes.
                 state.database.deprecated_get_transaction_checkpoint(&digest)
                     .map_err(|e| {
@@ -770,13 +768,13 @@ impl ReadApiServer for ReadApi {
     ) -> RpcResult<Vec<SuiTransactionBlockResponse>> {
         with_tracing!(async move {
             let cloned_self = self.clone();
-            Ok(spawn_monitored_task!(async move {
+            spawn_monitored_task!(async move {
                 cloned_self
                     .multi_get_transaction_blocks_internal(digests, opts)
                     .await
             })
             .await
-            .map_err(Error::from)??)
+            .map_err(Error::from)?
         })
     }
 
@@ -834,7 +832,7 @@ impl ReadApiServer for ReadApi {
 
     #[instrument(skip(self))]
     async fn get_checkpoint(&self, id: CheckpointId) -> RpcResult<Checkpoint> {
-        with_tracing!(async move { Ok(self.get_checkpoint_internal(id)?) })
+        with_tracing!(async move { self.get_checkpoint_internal(id) })
     }
 
     #[instrument(skip(self))]
@@ -893,6 +891,7 @@ impl ReadApiServer for ReadApi {
         with_tracing!(async move {
             self.get_checkpoints(cursor, limit.map(|l| *l as usize), descending_order)
                 .await
+                .map_err(Error::from)
         })
     }
 
@@ -928,7 +927,7 @@ impl ReadApiServer for ReadApi {
         version: Option<BigInt<u64>>,
     ) -> RpcResult<ProtocolConfigResponse> {
         with_tracing!(async move {
-            Ok(version
+            version
                 .map(|v| {
                     ProtocolConfig::get_for_version_if_supported(
                         (*v).into(),
@@ -949,7 +948,7 @@ impl ReadApiServer for ReadApi {
                     .load_epoch_store_one_call_per_task()
                     .protocol_config()
                     .clone()))
-                .map(ProtocolConfigResponse::from)?)
+                .map(ProtocolConfigResponse::from)
         })
     }
 
@@ -1269,7 +1268,7 @@ fn convert_to_response(
     cache: IntermediateTransactionResponse,
     opts: &SuiTransactionBlockResponseOptions,
     module_cache: &impl GetModule,
-) -> RpcResult<SuiTransactionBlockResponse> {
+) -> RpcInterimResult<SuiTransactionBlockResponse> {
     let mut response = SuiTransactionBlockResponse::new(cache.digest);
     response.errors = cache.errors;
 
