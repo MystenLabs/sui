@@ -276,7 +276,7 @@ async fn test_dry_run_no_gas_big_transfer() {
         sender,
         vec![],
         pt,
-        ProtocolConfig::get_for_max_version().max_tx_gas(),
+        ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas(),
         fullnode.reference_gas_price_for_testing().unwrap(),
     );
 
@@ -4752,7 +4752,7 @@ fn test_choose_next_system_packages() {
 
     let committee = Committee::new_simple_test_committee().0;
     let v = &committee.voting_rights;
-    let mut protocol_config = ProtocolConfig::get_for_max_version();
+    let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
     protocol_config.set_advance_to_highest_supported_protocol_version_for_testing(false);
     protocol_config.set_buffer_stake_for_protocol_upgrade_bps_for_testing(7500);
 

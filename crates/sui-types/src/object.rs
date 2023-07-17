@@ -724,7 +724,7 @@ impl Object {
         Self::new_package(
             modules,
             previous_transaction,
-            ProtocolConfig::get_for_max_version().max_move_package_size(),
+            ProtocolConfig::get_for_max_version_UNSAFE().max_move_package_size(),
             &dependencies,
         )
     }
