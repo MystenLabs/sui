@@ -29,6 +29,12 @@ use super::types::*;
 
 const MANAGER_CHANNEL_SIZE:usize = 1024;
 
+
+pub struct QueueCell {
+    read_only: bool,
+    txns: HashSet<TransactionDigest>,
+}
+
 pub struct QueuesManager {
     tx_store: HashMap<TransactionDigest, Transaction>,
     obj_queues: HashMap<ObjectID, VecDeque<TransactionDigest>>,
@@ -51,6 +57,10 @@ impl QueuesManager {
 		// Store tx
         let txid = *full_tx.tx.digest();
 		self.tx_store.insert(txid, full_tx.clone());
+
+        // Get the read set
+        // let read_set = full_tx.get
+        
 
         // Get RW set
         let rw_set = full_tx.get_read_write_set();
@@ -444,6 +454,17 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                     let full_tx = &tx_with_results.full_tx;
                     if full_tx.checkpoint_seq % 10_000 == 0 {
                         println!("EW executed {}", full_tx.checkpoint_seq);
+                    }
+
+                    // Print some statistics
+                    let read_set = full_tx.get_read_set();
+                    if read_set.len() == 0 {
+                        println!("empty");
+                    } else {
+                        for id in read_set.iter() {
+                            print!("{}, ", id)
+                        }
+                        println!("");
                     }
 
                     // 1. Critical check: are the effects the same?

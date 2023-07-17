@@ -36,7 +36,7 @@ impl Transaction {
     /// Specifically, this is the set of input objects to the transaction. It excludes 
     /// child objects that are determined at runtime, but includes all owned objects inputs
     /// that must have their version numbers bumped.
-    fn get_read_set(&self) -> HashSet<ObjectID> {
+    pub fn get_read_set(&self) -> HashSet<ObjectID> {
         let tx_data = self.tx.data().transaction_data();
         let input_object_kinds = tx_data
             .input_objects()
@@ -58,7 +58,7 @@ impl Transaction {
     /// TODO: This makes use of ground_truth_effects, which is illegal; it is not something that is 
     /// known a-priori before execution
     /// Returns the write set of a transction
-    fn get_write_set(&self) -> HashSet<ObjectID> {
+    pub fn get_write_set(&self) -> HashSet<ObjectID> {
 
         let mut write_set: HashSet<ObjectID> = HashSet::new();
 
