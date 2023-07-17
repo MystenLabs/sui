@@ -1797,11 +1797,7 @@ impl AuthorityStore {
         cur_epoch_store: &AuthorityPerEpochStore,
         panic: bool,
     ) {
-        let live_object_set_hash = accumulator.digest_live_object_set(
-            !cur_epoch_store
-                .protocol_config()
-                .simplified_unwrap_then_delete(),
-        );
+        let live_object_set_hash = accumulator.digest_live_object_set(false);
 
         let root_state_hash = self
             .get_root_state_hash(cur_epoch_store.epoch())
