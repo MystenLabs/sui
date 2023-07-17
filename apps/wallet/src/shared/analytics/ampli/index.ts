@@ -139,6 +139,17 @@ export interface ClickedCollectibleCardProperties {
 	objectId: string;
 }
 
+export interface ClickedHideAssetProperties {
+	/**
+	 * The object type of a collectible.
+	 */
+	collectibleType: string;
+	/**
+	 * The ID of an object on Sui.
+	 */
+	objectId: string;
+}
+
 export interface ClickedStakeSuiProperties {
 	/**
 	 * Whether or not the user is already staking some SUI.
@@ -387,6 +398,14 @@ export class ClickedCreateNewWallet implements BaseEvent {
 
 export class ClickedGetStarted implements BaseEvent {
 	event_type = 'clicked get started';
+}
+
+export class ClickedHideAsset implements BaseEvent {
+	event_type = 'clicked hide asset';
+
+	constructor(public event_properties: ClickedHideAssetProperties) {
+		this.event_properties = event_properties;
+	}
 }
 
 export class ClickedImportExistingWallet implements BaseEvent {
@@ -758,6 +777,23 @@ export class Ampli {
     options?: EventOptions,
   ) {
     return this.track(new ClickedGetStarted(), options);
+  }
+
+  /**
+   * clicked hide asset
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/clicked%20hide%20asset)
+   *
+   * Event has no description in tracking plan.
+   *
+   * @param properties The event's properties (e.g. collectibleType)
+   * @param options Amplitude event options.
+   */
+  clickedHideAsset(
+    properties: ClickedHideAssetProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new ClickedHideAsset(properties), options);
   }
 
   /**
