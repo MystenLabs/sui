@@ -1,11 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { Search16 } from '@mysten/icons';
-import { LoadingIndicator, Text } from '@mysten/ui';
-import { Command } from 'cmdk';
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { Text } from '@mysten/ui';
 
-import { useOnClickOutside } from '~/hooks/useOnClickOutside';
+import { Combobox, ComboboxInput, ComboboxList } from './Combobox';
 
 export type SearchResult = {
 	id: string;
@@ -22,30 +20,6 @@ export interface SearchProps {
 	queryValue: string;
 }
 
-interface SearchResultProps {
-	value: SearchResult;
-	onSelect: (value: SearchResult) => void;
-}
-
-function SearchItem({ value, onSelect }: SearchResultProps) {
-	return (
-		<Command.Item
-			value={`${value.type}/${value.id}`}
-			className="group mb-2 cursor-pointer rounded-md px-2 py-1.5 last:mb-0 data-[selected]:bg-sui/10 data-[selected]:shadow-sm"
-			onSelect={() => onSelect(value)}
-		>
-			<div className="flex w-full items-center justify-between">
-				<div className="text-body font-medium text-steel-dark group-data-[selected]:text-hero">
-					{value.label}
-				</div>
-				<Text variant="caption/medium" color="steel">
-					{value.type}
-				</Text>
-			</div>
-		</Command.Item>
-	);
-}
-
 export function Search({
 	onChange,
 	onSelectResult,
@@ -54,81 +28,35 @@ export function Search({
 	isLoading = false,
 	queryValue,
 }: SearchProps) {
-	const [visible, setVisible] = useState(false);
-	const listRef = useRef<HTMLDivElement>(null);
-	const inputRef = useRef<HTMLInputElement>(null);
-
-	useEffect(() => {
-		const handler = (e: KeyboardEvent) => {
-			if (e.key === 'Escape') {
-				setVisible(false);
-				inputRef.current?.blur();
-			}
-		};
-
-		document.addEventListener('keydown', handler);
-
-		return () => {
-			document.removeEventListener('keydown', handler);
-		};
-	}, []);
-
-	const handleClickOutside = useCallback((e: MouseEvent | TouchEvent) => {
-		if (listRef.current?.contains(e.target as Node)) {
-			return;
-		}
-		setVisible(false);
-	}, []);
-
-	useOnClickOutside(inputRef, handleClickOutside);
-
-	const hasOptions = !!options.length;
-
 	return (
-		<Command label="Command Menu" className="relative w-full" shouldFilter={false}>
+		<Combobox value={queryValue} onValueChange={onChange}>
 			<div className="relative flex items-center">
 				<div className="absolute left-0 ml-3 block items-center text-2xl text-hero-darkest/80">
 					<Search16 />
 				</div>
 
-				<Command.Input
-					ref={inputRef}
-					value={queryValue}
-					onValueChange={onChange}
-					spellCheck={false}
+				<ComboboxInput
 					className="w-full rounded border border-transparent bg-hero-darkest/5 pl-10 font-mono text-body font-medium leading-9 text-hero-darkest/80 outline-none placeholder:text-sm placeholder:text-hero-darkest/40 hover:bg-hero-darkest/10 focus:bg-hero-darkest/10"
-					onFocus={() => setVisible(true)}
+					placeholder={placeholder}
 				/>
 			</div>
 
-			{visible && queryValue && (
-				<Command.List
-					ref={listRef}
-					className="absolute mt-1 w-full list-none rounded-md bg-white p-3.5 shadow-md"
-				>
-					{isLoading ? (
-						<Command.Loading>
-							<div className="flex items-center justify-center">
-								<LoadingIndicator />
-							</div>
-						</Command.Loading>
-					) : hasOptions ? (
-						options.map((item) => (
-							<SearchItem
-								key={`${item.type}/${item.id}`}
-								value={item}
-								onSelect={(value) => onSelectResult?.(value)}
-							/>
-						))
-					) : (
-						<Command.Item className="flex items-center justify-center" disabled>
-							<Text variant="body/medium" italic color="steel-darker">
-								No Results
-							</Text>
-						</Command.Item>
-					)}
-				</Command.List>
-			)}
-		</Command>
+			<ComboboxList
+				isLoading={isLoading}
+				onSelect={({ item }) => {
+					onSelectResult?.(item);
+				}}
+				options={options.map((item) => ({
+					item,
+					value: `${item.type}/${item.id}`,
+					label: item.label,
+					after: (
+						<Text variant="caption/medium" color="steel">
+							{item.type}
+						</Text>
+					),
+				}))}
+			/>
+		</Combobox>
 	);
 }
