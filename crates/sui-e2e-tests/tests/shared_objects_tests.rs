@@ -215,11 +215,11 @@ async fn access_clock_object_test() {
     assert_eq!(
         objects.first().unwrap().compute_object_reference(),
         effects
-            .shared_objects()
-            .iter()
-            .find(|(id, _, _)| *id == SUI_CLOCK_OBJECT_ID)
+            .input_shared_objects()
+            .into_iter()
+            .find(|((id, _, _), _)| id == &SUI_CLOCK_OBJECT_ID)
+            .map(|(obj_ref, _)| obj_ref)
             .unwrap()
-            .clone()
     );
 
     let finish = SystemTime::now()

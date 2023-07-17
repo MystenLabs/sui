@@ -190,13 +190,23 @@ impl TransactionEffects {
     }
 }
 
+pub enum InputSharedObjectKind {
+    Mutate,
+    ReadOnly,
+}
+
 #[enum_dispatch]
 pub trait TransactionEffectsAPI {
     fn status(&self) -> &ExecutionStatus;
     fn into_status(self) -> ExecutionStatus;
     fn executed_epoch(&self) -> EpochId;
     fn modified_at_versions(&self) -> &[(ObjectID, SequenceNumber)];
-    fn shared_objects(&self) -> &[ObjectRef];
+    /// Returns the list of shared objects used in the input, with full object reference
+    /// and use kind. This is needed in effects because in transaction we only have object ID
+    /// for shared objects. Their version and digest can only be figured out after sequencing.
+    /// Also provides the use kind to indicate whether the object was mutated or read-only.
+    /// Down the road it could also indicate use-of-deleted.
+    fn input_shared_objects(&self) -> Vec<(ObjectRef, InputSharedObjectKind)>;
     fn created(&self) -> &[(ObjectRef, Owner)];
     fn mutated(&self) -> &[(ObjectRef, Owner)];
     fn unwrapped(&self) -> &[(ObjectRef, Owner)];
@@ -226,7 +236,11 @@ pub trait TransactionEffectsAPI {
     fn gas_cost_summary_mut_for_testing(&mut self) -> &mut GasCostSummary;
     fn transaction_digest_mut_for_testing(&mut self) -> &mut TransactionDigest;
     fn dependencies_mut_for_testing(&mut self) -> &mut Vec<TransactionDigest>;
-    fn shared_objects_mut_for_testing(&mut self) -> &mut Vec<ObjectRef>;
+    fn unsafe_add_input_shared_object_for_testing(
+        &mut self,
+        obj_ref: ObjectRef,
+        kind: InputSharedObjectKind,
+    );
     fn modified_at_versions_mut_for_testing(&mut self) -> &mut Vec<(ObjectID, SequenceNumber)>;
 }
 

@@ -383,8 +383,9 @@ where
         // For now, validators only pass back input shared object.
         let fastpath_input_objects = if !response.fastpath_input_objects.is_empty() {
             let input_shared_objects = signed_effects
-                .shared_objects()
-                .iter()
+                .input_shared_objects()
+                .into_iter()
+                .map(|(obj_ref, _kind)| obj_ref)
                 .collect::<HashSet<_>>();
             for object in &response.fastpath_input_objects {
                 let obj_ref = object.compute_object_reference();
