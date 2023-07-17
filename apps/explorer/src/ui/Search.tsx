@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 import { Search16 } from '@mysten/icons';
 import { LoadingIndicator, Text } from '@mysten/ui';
-import { type KeyboardEvent } from 'react';
 import { Command } from 'cmdk';
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+
+import { useOnClickOutside } from '~/hooks/useOnClickOutside';
 
 export type SearchResult = {
 	id: string;
@@ -54,6 +55,33 @@ export function Search({
 	queryValue,
 }: SearchProps) {
 	const [visible, setVisible] = useState(false);
+	const listRef = useRef<HTMLDivElement>(null);
+	const inputRef = useRef<HTMLInputElement>(null);
+
+	useEffect(() => {
+		const handler = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') {
+				setVisible(false);
+				inputRef.current?.blur();
+			}
+		};
+
+		document.addEventListener('keydown', handler);
+
+		return () => {
+			document.removeEventListener('keydown', handler);
+		};
+	}, []);
+
+	const handleClickOutside = useCallback((e: MouseEvent | TouchEvent) => {
+		if (listRef.current?.contains(e.target as Node)) {
+			return;
+		}
+		setVisible(false);
+	}, []);
+
+	useOnClickOutside(inputRef, handleClickOutside);
+
 	const hasOptions = !!options.length;
 
 	return (
@@ -63,27 +91,21 @@ export function Search({
 					<Search16 />
 				</div>
 
-				<Combobox.Input
-					onChange={onChange}
-					placeholder={placeholder}
-					autoComplete="off"
-					onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-						if (e.code === 'Enter' && !hasOptions) {
-							e.stopPropagation();
-							e.preventDefault();
-						}
-					}}
+				<Command.Input
+					ref={inputRef}
 					value={queryValue}
 					onValueChange={onChange}
 					spellCheck={false}
 					className="w-full rounded border border-transparent bg-hero-darkest/5 pl-10 font-mono text-body font-medium leading-9 text-hero-darkest/80 outline-none placeholder:text-sm placeholder:text-hero-darkest/40 hover:bg-hero-darkest/10 focus:bg-hero-darkest/10"
 					onFocus={() => setVisible(true)}
-					onBlur={() => setVisible(false)}
 				/>
 			</div>
 
 			{visible && queryValue && (
-				<Command.List className="absolute mt-1 w-full list-none rounded-md bg-white p-3.5 shadow-md">
+				<Command.List
+					ref={listRef}
+					className="absolute mt-1 w-full list-none rounded-md bg-white p-3.5 shadow-md"
+				>
 					{isLoading ? (
 						<Command.Loading>
 							<div className="flex items-center justify-center">

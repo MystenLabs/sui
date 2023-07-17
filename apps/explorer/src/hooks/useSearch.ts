@@ -135,6 +135,7 @@ export function useSearch(query: string) {
 		// eslint-disable-next-line @tanstack/query/exhaustive-deps
 		queryKey: ['search', query],
 		queryFn: async () => {
+			console.log('searching');
 			const results = (
 				await Promise.allSettled([
 					getResultsForTransaction(rpc, query),

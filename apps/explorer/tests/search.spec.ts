@@ -9,6 +9,7 @@ import { faucet, split_coin } from './utils/localnet';
 async function search(page: Page, text: string) {
 	const searchbar = page.getByRole('combobox');
 	await searchbar.fill(text);
+	// await searchbar.press('Enter');
 	const result = page.getByRole('option').first();
 	await result.click();
 }
