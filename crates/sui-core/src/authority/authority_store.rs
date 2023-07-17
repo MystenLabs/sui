@@ -1427,7 +1427,7 @@ impl AuthorityStore {
         info!(?tx_digest, ?effects, "reverting transaction");
 
         // We should never be reverting shared object transactions.
-        assert!(effects.shared_objects().is_empty());
+        assert!(effects.input_shared_objects().is_empty());
 
         let mut write_batch = self.perpetual_tables.transactions.batch();
         write_batch.delete_batch(

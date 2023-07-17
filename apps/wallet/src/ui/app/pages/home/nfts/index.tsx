@@ -189,7 +189,10 @@ function NftsPage() {
 											<Button
 												variant="hidden"
 												size="icon"
-												onClick={(event: any) => hideAsset(objectId, event)}
+												onClick={(event: any) => {
+													ampli.clickedHideAsset({ objectId, collectibleType: type! });
+													hideAsset(objectId, event);
+												}}
 												after={<EyeClose16 />}
 											/>
 										</div>

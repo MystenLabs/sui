@@ -1076,7 +1076,7 @@ impl AuthorityState {
             monitored_scope("Execution::commit_cert_and_notify");
 
         let input_object_count = inner_temporary_store.objects.len();
-        let shared_object_count = effects.shared_objects().len();
+        let shared_object_count = effects.input_shared_objects().len();
         let digest = *certificate.digest();
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
@@ -1899,16 +1899,17 @@ impl AuthorityState {
         // to make sure not to mess up object pruning.
 
         let clock_ref = effects
-            .shared_objects()
-            .iter()
-            .find(|(id, _, _)| id.is_clock());
+            .input_shared_objects()
+            .into_iter()
+            .find(|(obj_ref, _)| obj_ref.0.is_clock())
+            .map(|(obj_ref, _)| obj_ref);
 
         if let Some((id, version, digest)) = clock_ref {
-            let clock_obj = self.database.get_object_by_key(id, *version)?;
+            let clock_obj = self.database.get_object_by_key(&id, version)?;
             debug_assert!(clock_obj.is_some());
             debug_assert_eq!(
                 clock_obj.as_ref().unwrap().compute_object_reference().2,
-                *digest
+                digest
             );
             Ok(clock_obj
                 .tap_none(|| error!("Clock object not found: {:?}", clock_ref))
@@ -4370,8 +4371,8 @@ impl NodeStateDump {
 
         // Record all the shared objects
         let mut shared_objects = Vec::new();
-        for (id, ver, _) in effects.shared_objects() {
-            if let Some(w) = authority_store.get_object_by_key(id, *ver)? {
+        for (obj_ref, _kind) in effects.input_shared_objects() {
+            if let Some(w) = authority_store.get_object_by_key(&obj_ref.0, obj_ref.1)? {
                 shared_objects.push(w)
             }
         }

@@ -68,7 +68,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_with_reconfig() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 5000).await;
+        let test_cluster = build_test_cluster(4, 1000).await;
         test_simulated_load(TestInitData::new(&test_cluster).await, 60).await;
     }
 
@@ -97,7 +97,7 @@ mod test {
         // TODO added to invalidate a failing test seed in CI. Remove me
         tokio::time::sleep(Duration::from_secs(1)).await;
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = Arc::new(build_test_cluster(4, 5000).await);
+        let test_cluster = Arc::new(build_test_cluster(4, 1000).await);
         let node_restarter = test_cluster
             .random_node_restarter()
             .with_kill_interval_secs(5, 15)
@@ -185,7 +185,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_with_crashes_and_delays() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 5000).await;
+        let test_cluster = build_test_cluster(4, 1000).await;
 
         let dead_validator_orig: Arc<Mutex<Option<DeadValidator>>> = Default::default();
 
@@ -243,7 +243,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_crashes_during_epoch_change() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 5000).await;
+        let test_cluster = build_test_cluster(4, 10000).await;
 
         let dead_validator: Arc<Mutex<Option<DeadValidator>>> = Default::default();
         let keep_alive_nodes = get_keep_alive_nodes(&test_cluster);
@@ -255,7 +255,7 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_checkpoint_pruning() {
-        let test_cluster = build_test_cluster(4, 5000).await;
+        let test_cluster = build_test_cluster(4, 1000).await;
         test_simulated_load(TestInitData::new(&test_cluster).await, 30).await;
 
         let swarm_dir = test_cluster.swarm.dir().join(AUTHORITIES_DB_NAME);
@@ -304,7 +304,6 @@ mod test {
         assert_eq!(expected_checkpoint, pruned);
     }
 
-    #[ignore("Disabled due to flakiness and timeouts - re-enable when timeouts are fixed")]
     #[sim_test(config = "test_config()")]
     async fn test_upgrade_compatibility() {
         // This test is intended to test the compatibility of the latest protocol version with
@@ -354,7 +353,7 @@ mod test {
                 info!("Targeting protocol version: {}", version);
                 test_cluster.wait_for_all_nodes_upgrade_to(version).await;
                 info!("All nodes are at protocol version: {}", version);
-                // Let all nodes run for a bit at this version.
+                // Let all nodes run for a few epochs at this version.
                 tokio::time::sleep(Duration::from_secs(50)).await;
                 if version == max_ver {
                     let stake_subsidy_start_epoch = test_cluster
@@ -393,12 +392,14 @@ mod test {
         });
 
         test_simulated_load(test_init_data_clone, 120).await;
-        loop {
+        for _ in 0..30 {
             if finished.load(Ordering::Relaxed) {
                 break;
             }
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
+
+        assert!(finished.load(Ordering::SeqCst));
     }
 
     async fn build_test_cluster(
