@@ -10529,7 +10529,6 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "sui-config",
  "sui-move",
  "sui-move-build",
  "sui-sdk",
