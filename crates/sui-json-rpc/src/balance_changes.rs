@@ -40,14 +40,14 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
         }]);
     }
 
-    let all_mutated: Vec<(&ObjectRef, &Owner, WriteKind)> = effects.all_changed_objects();
-    let all_mutated = all_mutated
-        .iter()
+    let all_mutated = effects
+        .all_changed_objects()
+        .into_iter()
         .filter_map(|((id, version, digest), _, _)| {
-            if matches!(mocked_coin, Some(coin) if *id == coin) {
+            if matches!(mocked_coin, Some(coin) if id == coin) {
                 return None;
             }
-            Some((*id, *version, Some(*digest)))
+            Some((id, version, Some(digest)))
         })
         .collect::<Vec<_>>();
 

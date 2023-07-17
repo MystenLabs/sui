@@ -207,24 +207,24 @@ pub trait TransactionEffectsAPI {
     /// Also provides the use kind to indicate whether the object was mutated or read-only.
     /// Down the road it could also indicate use-of-deleted.
     fn input_shared_objects(&self) -> Vec<(ObjectRef, InputSharedObjectKind)>;
-    fn created(&self) -> &[(ObjectRef, Owner)];
-    fn mutated(&self) -> &[(ObjectRef, Owner)];
-    fn unwrapped(&self) -> &[(ObjectRef, Owner)];
-    fn deleted(&self) -> &[ObjectRef];
-    fn unwrapped_then_deleted(&self) -> &[ObjectRef];
-    fn wrapped(&self) -> &[ObjectRef];
+    fn created(&self) -> Vec<(ObjectRef, Owner)>;
+    fn mutated(&self) -> Vec<(ObjectRef, Owner)>;
+    fn unwrapped(&self) -> Vec<(ObjectRef, Owner)>;
+    fn deleted(&self) -> Vec<ObjectRef>;
+    fn unwrapped_then_deleted(&self) -> Vec<ObjectRef>;
+    fn wrapped(&self) -> Vec<ObjectRef>;
     fn gas_object(&self) -> (ObjectRef, Owner);
     fn events_digest(&self) -> Option<&TransactionEventsDigest>;
     fn dependencies(&self) -> &[TransactionDigest];
     // All changed objects include created, mutated and unwrapped objects,
     // they do NOT include wrapped and deleted.
-    fn all_changed_objects(&self) -> Vec<(&ObjectRef, &Owner, WriteKind)>;
+    fn all_changed_objects(&self) -> Vec<(ObjectRef, Owner, WriteKind)>;
 
-    fn all_deleted(&self) -> Vec<(&ObjectRef, DeleteKind)>;
+    fn all_deleted(&self) -> Vec<(ObjectRef, DeleteKind)>;
 
     fn transaction_digest(&self) -> &TransactionDigest;
 
-    fn mutated_excluding_gas(&self) -> Vec<&(ObjectRef, Owner)>;
+    fn mutated_excluding_gas(&self) -> Vec<(ObjectRef, Owner)>;
 
     fn gas_cost_summary(&self) -> &GasCostSummary;
 

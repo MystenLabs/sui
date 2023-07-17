@@ -174,11 +174,11 @@ pub async fn get_object_changes<P: ObjectProvider<Error = E>, E>(
         })
         .collect();
     let all_changed_objects = all_changed
-        .iter()
-        .map(|(obj_ref, owner, write_kind)| (obj_ref, owner, *write_kind))
+        .into_iter()
+        .map(|(obj_ref, owner, write_kind)| (obj_ref, owner, write_kind))
         .collect();
 
-    let all_deleted: Vec<(ObjectRef, DeleteKind)> = all_deleted
+    let all_deleted_objects: Vec<(ObjectRef, DeleteKind)> = all_deleted
         .into_iter()
         .map(|(obj_ref, delete_kind)| {
             (
@@ -186,10 +186,6 @@ pub async fn get_object_changes<P: ObjectProvider<Error = E>, E>(
                 delete_kind,
             )
         })
-        .collect();
-    let all_deleted_objects = all_deleted
-        .iter()
-        .map(|(obj_ref, delete_kind)| (obj_ref, *delete_kind))
         .collect();
 
     sui_json_rpc::get_object_changes(

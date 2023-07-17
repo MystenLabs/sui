@@ -1503,7 +1503,7 @@ impl AuthorityState {
                 effects
                     .all_changed_objects()
                     .into_iter()
-                    .map(|(obj_ref, owner, _kind)| (*obj_ref, *owner)),
+                    .map(|(obj_ref, owner, _kind)| (obj_ref, owner)),
                 cert.data()
                     .intent_message()
                     .value
@@ -1537,16 +1537,16 @@ impl AuthorityState {
         let tx_digest = effects.transaction_digest();
         let mut deleted_owners = vec![];
         let mut deleted_dynamic_fields = vec![];
-        for (id, _, _) in effects.deleted().iter().chain(effects.wrapped()) {
-            let old_version = modified_at_version.get(id).unwrap();
+        for (id, _, _) in effects.deleted().into_iter().chain(effects.wrapped()) {
+            let old_version = modified_at_version.get(&id).unwrap();
             // When we process the index, the latest object hasn't been written yet so
             // the old object must be present.
-            match self.get_owner_at_version(id, *old_version).unwrap_or_else(
+            match self.get_owner_at_version(&id, *old_version).unwrap_or_else(
                 |e| panic!("tx_digest={:?}, error processing object owner index, cannot find owner for object {:?} at version {:?}. Err: {:?}", tx_digest, id, old_version, e),
             ) {
-                Owner::AddressOwner(addr) => deleted_owners.push((addr, *id)),
+                Owner::AddressOwner(addr) => deleted_owners.push((addr, id)),
                 Owner::ObjectOwner(object_id) => {
-                    deleted_dynamic_fields.push((ObjectID::from(object_id), *id))
+                    deleted_dynamic_fields.push((ObjectID::from(object_id), id))
                 }
                 _ => {}
             }
@@ -1567,7 +1567,7 @@ impl AuthorityState {
                 let Some(old_object) = self.database.get_object_by_key(id, *old_version)? else {
                     panic!("tx_digest={:?}, error processing object owner index, cannot find owner for object {:?} at version {:?}", tx_digest, id, old_version);
                 };
-                if &old_object.owner != owner {
+                if old_object.owner != owner {
                     match old_object.owner {
                         Owner::AddressOwner(addr) => {
                             deleted_owners.push((addr, *id));
@@ -1595,13 +1595,13 @@ impl AuthorityState {
                         .unwrap_or(ObjectType::Package);
 
                     new_owners.push((
-                        (*addr, *id),
+                        (addr, *id),
                         ObjectInfo {
                             object_id: *id,
                             version: oref.1,
                             digest: oref.2,
                             type_,
-                            owner: *owner,
+                            owner,
                             previous_transaction: *effects.transaction_digest(),
                         },
                     ));
@@ -1617,7 +1617,7 @@ impl AuthorityState {
                         // Skip indexing for non dynamic field objects.
                         continue;
                     };
-                    new_dynamic_fields.push(((ObjectID::from(*owner), *id), df_info))
+                    new_dynamic_fields.push(((ObjectID::from(owner), *id), df_info))
                 }
                 _ => {}
             }
