@@ -9,7 +9,7 @@ use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     object::Owner,
 };
-use test_utils::network::TestCluster;
+use test_cluster::TestCluster;
 use tokio::sync::{watch, RwLock};
 
 use crate::{
@@ -34,19 +34,19 @@ impl SurferTask {
         let shared_objects: SharedObjects = Arc::new(RwLock::new(HashMap::new()));
 
         let mut accounts: HashMap<SuiAddress, (Option<ObjectRef>, OwnedObjects)> = cluster
-            .accounts
+            .get_addresses()
             .iter()
             .map(|address| (*address, (None, HashMap::new())))
             .collect();
         let validator = cluster
             .swarm
-            .validators()
+            .validator_nodes()
             .next()
             .unwrap()
             .get_node_handle()
             .unwrap();
         let all_live_objects: Vec<_> =
-            validator.with(|node| node.state().db().iter_live_object_set().collect());
+            validator.with(|node| node.state().db().iter_live_object_set(false).collect());
         for obj in all_live_objects {
             match obj {
                 LiveObject::Normal(obj) => {
@@ -89,7 +89,7 @@ impl SurferTask {
                         }
                     }
                 }
-                LiveObject::Wrapped(_) => (),
+                LiveObject::Wrapped(_) => unreachable!("Explicitly skipped wrapped objects"),
             }
         }
         let entry_functions = Arc::new(RwLock::new(vec![]));

@@ -194,9 +194,14 @@ impl ReadApi {
 
         let state = self.state.clone();
         let digests_clone = digests.clone();
+        // TODO: this is reading from a deprecated DB. The replacement DB however
+        // is in the epoch store, and thus we risk breaking the read API for txes
+        // from old epochs. Should be migrated once we have indexer support, or
+        // when we can tolerate returning None for old txes.
         let checkpoint_seq_list =
             state
-            .multi_get_transaction_checkpoint(&digests_clone)
+            .database
+            .deprecated_multi_get_transaction_checkpoint(&digests_clone)
             .tap_err(
                 |err| debug!(digests=?digests_clone, "Failed to multi get checkpoint sequence number: {:?}", err))?;
         for ((_digest, cache_entry), seq) in temp_response
@@ -651,12 +656,17 @@ impl ReadApiServer for ReadApi {
             }
 
             let state = self.state.clone();
-            if let Some((_, seq)) = spawn_monitored_task!(async move{
-            state.get_transaction_checkpoint_sequence(&digest)
-            .map_err(|e| {
-                error!("Failed to retrieve checkpoint sequence for transaction {digest:?} with error: {e:?}");
-                Error::from(e)
-            })}).await.map_err(Error::from)??
+            if let Some((_, seq)) = spawn_monitored_task!(async move {
+                // TODO: this is reading from a deprecated DB. The replacement DB however
+                // is in the epoch store, and thus we risk breaking the read API for txes
+                // from old epochs. Should be migrated once we have indexer support, or 
+                // when we can tolerate returning None for old txes.
+                state.database.deprecated_get_transaction_checkpoint(&digest)
+                    .map_err(|e| {
+                        error!("Failed to retrieve checkpoint sequence for transaction {digest:?} with error: {e:?}");
+                        Error::from(e)
+                    })
+            }).await.map_err(Error::from)??
         {
             temp_response.checkpoint_seq = Some(seq);
         }
@@ -920,12 +930,19 @@ impl ReadApiServer for ReadApi {
         with_tracing!(async move {
             Ok(version
                 .map(|v| {
-                    ProtocolConfig::get_for_version_if_supported((*v).into()).ok_or(
-                        Error::SuiRpcInputError(SuiRpcInputError::ProtocolVersionUnsupported(
+                    ProtocolConfig::get_for_version_if_supported(
+                        (*v).into(),
+                        self.state
+                            .get_chain_identifier()
+                            .ok_or(anyhow!("Chain identifier not found"))?
+                            .chain(),
+                    )
+                    .ok_or(Error::SuiRpcInputError(
+                        SuiRpcInputError::ProtocolVersionUnsupported(
                             ProtocolVersion::MIN.as_u64(),
                             ProtocolVersion::MAX.as_u64(),
-                        )),
-                    )
+                        ),
+                    ))
                 })
                 .unwrap_or(Ok(self
                     .state

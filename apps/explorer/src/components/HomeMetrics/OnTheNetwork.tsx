@@ -1,64 +1,69 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetTotalTransactionBlocks } from '@mysten/core';
-import { Svg3D32, Nft232, Staking32 } from '@mysten/icons';
+import { CoinFormat, formatBalance, useGetReferenceGasPrice } from '@mysten/core';
 
-import { FormattedStatsAmount } from './FormattedStatsAmount';
-
+import { FormattedStatsAmount, StatsWrapper } from './FormattedStatsAmount';
 import { useGetNetworkMetrics } from '~/hooks/useGetNetworkMetrics';
 import { Card } from '~/ui/Card';
+import { Divider } from '~/ui/Divider';
 import { Heading } from '~/ui/Heading';
 
 export function OnTheNetwork() {
-    const { data: networkMetrics } = useGetNetworkMetrics();
-    const { data: transactionCount } = useGetTotalTransactionBlocks();
-    return (
-        <Card bg="lightBlue" spacing="lg" height="full">
-            <Heading color="steel-darker" variant="heading4/semibold">
-                On the Network
-            </Heading>
-            <div className="-mb-3 -mr-8 mt-8 flex gap-8 overflow-x-auto pb-3">
-                <div className="flex gap-8 lg:max-xl:gap-12">
-                    <div className="flex flex-shrink-0 gap-1">
-                        <Svg3D32 className="h-8 w-8 font-normal text-steel-dark" />
-                        <FormattedStatsAmount
-                            label="Packages"
-                            tooltip="Total packages counter"
-                            amount={networkMetrics?.totalPackages}
-                            size="sm"
-                        />
-                    </div>
-                    <div className="flex flex-shrink-0 gap-1">
-                        <Nft232 className="h-8 w-8 text-steel-dark" />
-                        <FormattedStatsAmount
-                            label="Objects"
-                            tooltip="Total objects counter"
-                            amount={networkMetrics?.totalObjects}
-                            size="sm"
-                        />
-                    </div>
-                    {/* TODO: Comment this out once addresses are available post-mainnet */}
-                    {/* <div className="flex flex-shrink-0 gap-1">
-                        <Wallet32 className="h-8 w-8 text-steel-dark" />
-                        <FormattedStatsAmount
-                            label="Addresses"
-                            tooltip="Addresses that have participated in at least one transaction since network genesis"
-                            amount={networkMetrics?.totalAddresses}
-                            size="sm"
-                        />
-                    </div> */}
-                    <div className="flex flex-shrink-0 gap-1 pr-2">
-                        <Staking32 className="h-8 w-8 text-steel-dark" />
-                        <FormattedStatsAmount
-                            label="Transaction Blocks"
-                            tooltip="Total transaction blocks counter"
-                            amount={transactionCount}
-                            size="sm"
-                        />
-                    </div>
-                </div>
-            </div>
-        </Card>
-    );
+	const { data: networkMetrics } = useGetNetworkMetrics();
+	const { data: referenceGasPrice } = useGetReferenceGasPrice();
+	const gasPriceFormatted =
+		typeof referenceGasPrice === 'bigint'
+			? formatBalance(referenceGasPrice, 0, CoinFormat.FULL)
+			: null;
+	return (
+		<Card bg="white/80" spacing="lg" height="full">
+			<div className="flex flex-col gap-4">
+				<Heading variant="heading4/semibold" color="steel-darker">
+					Network Activity
+				</Heading>
+				<div className="flex gap-6">
+					<FormattedStatsAmount
+						label="TPS now"
+						amount={networkMetrics?.currentTps ? Math.floor(networkMetrics.currentTps) : undefined}
+						size="md"
+					/>
+					<FormattedStatsAmount
+						label="Peak 30d TPS"
+						tooltip="Peak TPS in the past 30 days excluding this epoch"
+						amount={networkMetrics?.tps30Days ? Math.floor(networkMetrics?.tps30Days) : undefined}
+						size="md"
+					/>
+				</div>
+				<Divider color="hero/10" />
+
+				<StatsWrapper
+					orientation="horizontal"
+					label="Reference Gas Price"
+					tooltip="The reference gas price of the current epoch"
+					postfix={gasPriceFormatted !== null ? 'MIST' : null}
+					size="sm"
+				>
+					{gasPriceFormatted}
+				</StatsWrapper>
+
+				<Divider color="hero/10" />
+
+				<div className="flex flex-1 flex-col gap-2">
+					<FormattedStatsAmount
+						orientation="horizontal"
+						label="Total Packages"
+						amount={networkMetrics?.totalPackages}
+						size="sm"
+					/>
+					<FormattedStatsAmount
+						orientation="horizontal"
+						label="Objects"
+						amount={networkMetrics?.totalObjects}
+						size="sm"
+					/>
+				</div>
+			</div>
+		</Card>
+	);
 }

@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[macro_use(sp)]
+extern crate move_ir_types;
+
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     io::Write,
@@ -40,7 +43,6 @@ use move_package::{
 };
 use move_symbol_pool::Symbol;
 use serde_reflection::Registry;
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::{
     base_types::ObjectID,
     error::{SuiError, SuiResult},
@@ -50,9 +52,13 @@ use sui_types::{
 };
 use sui_verifier::verifier as sui_bytecode_verifier;
 
+use crate::linters::{self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier};
+
 #[cfg(test)]
 #[path = "unit_tests/build_tests.rs"]
 mod build_tests;
+
+pub mod linters;
 
 /// Wrapper around the core Move `CompiledPackage` with some Sui-specific traits and info
 #[derive(Debug)]
@@ -74,6 +80,8 @@ pub struct BuildConfig {
     pub run_bytecode_verifier: bool,
     /// If true, print build diagnostics to stderr--no printing if false
     pub print_diags_to_stderr: bool,
+    /// If true, run linters
+    pub lint: bool,
 }
 
 impl BuildConfig {
@@ -116,12 +124,18 @@ impl BuildConfig {
 
     fn compile_package<W: Write>(
         resolution_graph: ResolvedGraph,
+        lint: bool,
         writer: &mut W,
     ) -> anyhow::Result<(MoveCompiledPackage, FnInfoMap)> {
         let build_plan = BuildPlan::create(resolution_graph)?;
         let mut fn_info = None;
         let compiled_pkg = build_plan.compile_with_driver(writer, |compiler| {
-            let (files, units_res) = compiler.build()?;
+            let (files, units_res) = if lint {
+                let lint_visitors = vec![ShareOwnedVerifier.into(), SelfTransferVerifier.into()];
+                compiler.add_visitors(lint_visitors).build()?
+            } else {
+                compiler.build()?
+            };
             match units_res {
                 Ok((units, warning_diags)) => {
                     report_warnings(&files, warning_diags);
@@ -144,6 +158,7 @@ impl BuildConfig {
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
     pub fn build(self, path: PathBuf) -> SuiResult<CompiledPackage> {
+        let lint = self.lint;
         let print_diags_to_stderr = self.print_diags_to_stderr;
         let run_bytecode_verifier = self.run_bytecode_verifier;
         let resolution_graph = self.resolution_graph(&path)?;
@@ -152,10 +167,24 @@ impl BuildConfig {
             resolution_graph,
             run_bytecode_verifier,
             print_diags_to_stderr,
+            lint,
         )
     }
 
-    pub fn resolution_graph(self, path: &Path) -> SuiResult<ResolvedGraph> {
+    pub fn resolution_graph(mut self, path: &Path) -> SuiResult<ResolvedGraph> {
+        use move_compiler::editions::Flavor;
+
+        let flavor = self.config.default_flavor.get_or_insert(Flavor::Sui);
+        if flavor != &Flavor::Sui {
+            return Err(SuiError::ModuleBuildFailure {
+                error: format!(
+                    "The flavor of the Move compiler cannot be overridden with anything but \
+                        \"{}\", but the default override was set to: \"{flavor}\"",
+                    Flavor::Sui,
+                ),
+            });
+        }
+
         if self.print_diags_to_stderr {
             self.config
                 .resolution_graph_for_package(path, &mut std::io::stderr())
@@ -174,13 +203,14 @@ pub fn build_from_resolution_graph(
     resolution_graph: ResolvedGraph,
     run_bytecode_verifier: bool,
     print_diags_to_stderr: bool,
+    lint: bool,
 ) -> SuiResult<CompiledPackage> {
     let (published_at, dependency_ids) = gather_published_ids(&resolution_graph);
 
     let result = if print_diags_to_stderr {
-        BuildConfig::compile_package(resolution_graph, &mut std::io::stderr())
+        BuildConfig::compile_package(resolution_graph, lint, &mut std::io::stderr())
     } else {
-        BuildConfig::compile_package(resolution_graph, &mut std::io::sink())
+        BuildConfig::compile_package(resolution_graph, lint, &mut std::io::sink())
     };
     // write build failure diagnostics to stderr, convert `error` to `String` using `Debug`
     // format to include anyhow's error context chain.
@@ -200,12 +230,7 @@ pub fn build_from_resolution_graph(
                     error: err.to_string(),
                 }
             })?;
-            // TODO make this configurable
-            sui_bytecode_verifier::sui_verify_module_unmetered(
-                &ProtocolConfig::get_for_version(ProtocolVersion::MAX),
-                m,
-                &fn_info,
-            )?;
+            sui_bytecode_verifier::sui_verify_module_unmetered(m, &fn_info)?;
         }
         // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
     }
@@ -537,10 +562,15 @@ impl CompiledPackage {
 
 impl Default for BuildConfig {
     fn default() -> Self {
+        let config = MoveBuildConfig {
+            default_flavor: Some(move_compiler::editions::Flavor::Sui),
+            ..MoveBuildConfig::default()
+        };
         BuildConfig {
-            config: MoveBuildConfig::default(),
+            config,
             run_bytecode_verifier: true,
             print_diags_to_stderr: false,
+            lint: false,
         }
     }
 }

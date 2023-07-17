@@ -3,10 +3,14 @@ warning[W09005]: dead or unreachable code
   │
 6 │             0 + continue;
   │                 ^^^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09005]: dead or unreachable code
    ┌─ tests/move_check/typing/continue_any_type.move:12:17
    │
 12 │             foo(continue)
    │                 ^^^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

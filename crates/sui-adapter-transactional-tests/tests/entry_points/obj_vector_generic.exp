@@ -29,7 +29,7 @@ mutated: object(0,0), object(4,0)
 gas summary: computation_cost: 1000000, storage_cost: 6665200,  storage_rebate: 2573208, non_refundable_storage_fee: 25992
 
 task 6 'run'. lines 129-133:
-Error: Object 0x56e028b7e51ce99acd6648be76b1d542f2e143bdbc9efc0f40a090c7d4a4825c is owned by object 0x67f73cc9f78eec11a5f083f400d92fe89b575d21520bcfc6c15403ce29585970. Objects owned by other objects cannot be used as input arguments.
+Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: 0xc7f065f57e819836de7be3316b9106fb484b971ea18fdbd5034904850342d3ca, parent_id: 0xffddb920cb12e53ca4fb828fb0ecad515e6e889d3f183889a4e10908cb39b2e0 }
 
 task 7 'run'. lines 135-135:
 created: object(7,0)
@@ -61,7 +61,7 @@ gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 
 
 task 13 'run'. lines 153-156:
 Error: Transaction Effects Status: Invalid command argument at 0. Immutable and shared objects cannot be passed by-value.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidObjectByValue }, source: None, command: Some(0) } }
+Cannot return execution error with shared objects. Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidObjectByValue } at command Some(0)
 
 task 14 'run'. lines 158-158:
 created: object(14,0)

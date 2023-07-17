@@ -173,7 +173,8 @@ class Committee:
                 'protocol_key': name,
                 'protocol_key_bytes': name,
                 'primary_address': primary_addr,
-                'network_key': network_name
+                'network_key': network_name,
+                'hostname': host
             }
 
     def primary_addresses(self, faults=0):

@@ -1,2 +1,0 @@
-build -v --arch ethereum
-build -v --arch ethereum

@@ -5,13 +5,13 @@ use crate::{try_join_all, FuturesUnordered, NodeError};
 use anemo::PeerId;
 use config::{AuthorityIdentifier, Committee, Parameters, WorkerCache};
 use consensus::bullshark::Bullshark;
-use consensus::consensus::ConsensusRound;
-use consensus::dag::Dag;
+use consensus::consensus::{ConsensusRound, LeaderSchedule, LeaderSwapTable};
 use consensus::metrics::{ChannelMetrics, ConsensusMetrics};
 use consensus::Consensus;
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::{get_restored_consensus_output, ExecutionState, Executor, SubscriberResult};
 use fastcrypto::traits::{KeyPair as _, VerifyingKey};
+use mysten_metrics::metered_channel;
 use mysten_metrics::{RegistryID, RegistryService};
 use network::client::NetworkClient;
 use primary::{Primary, PrimaryChannelMetrics, NUM_SHUTDOWN_RECEIVERS};
@@ -22,20 +22,12 @@ use storage::NodeStorage;
 use sui_protocol_config::ProtocolConfig;
 use tokio::sync::{watch, RwLock};
 use tokio::task::JoinHandle;
-use tracing::{debug, info, instrument};
-use types::{
-    metered_channel, Certificate, ConditionalBroadcastReceiver, PreSubscribedBroadcastSender, Round,
-};
+use tracing::{info, instrument};
+use types::{Certificate, ConditionalBroadcastReceiver, PreSubscribedBroadcastSender, Round};
 
 struct PrimaryNodeInner {
     // The configuration parameters.
     parameters: Parameters,
-    // Whether to run consensus (and an executor client) or not.
-    // If true, an internal consensus will be used, else an external consensus will be used.
-    // If an external consensus will be used, then this bool will also ensure that the
-    // corresponding gRPC server that is used for communication between narwhal and
-    // external consensus is also spawned.
-    internal_consensus: bool,
     // A prometheus RegistryService to use for the metrics
     registry_service: RegistryService,
     // The latest registry id & registry used for the node
@@ -48,8 +40,6 @@ struct PrimaryNodeInner {
     tx_shutdown: Option<PreSubscribedBroadcastSender>,
     // Peer ID used for local connections.
     own_peer_id: Option<PeerId>,
-    // The protocol configuration.
-    protocol_config: ProtocolConfig,
 }
 
 impl PrimaryNodeInner {
@@ -70,6 +60,7 @@ impl PrimaryNodeInner {
         network_keypair: NetworkKeyPair,
         // The committee information.
         committee: Committee,
+        protocol_config: ProtocolConfig,
         // The worker information cache.
         worker_cache: WorkerCache,
         // Client for communications.
@@ -103,10 +94,9 @@ impl PrimaryNodeInner {
             worker_cache,
             client,
             store,
+            protocol_config.clone(),
             self.parameters.clone(),
-            self.internal_consensus,
             execution_state,
-            self.protocol_config.clone(),
             &registry,
             &mut tx_shutdown,
         )
@@ -199,18 +189,11 @@ impl PrimaryNodeInner {
         client: NetworkClient,
         // The node's storage.
         store: &NodeStorage,
+        protocol_config: ProtocolConfig,
         // The configuration parameters.
         parameters: Parameters,
-        // Whether to run consensus (and an executor client) or not.
-        // If true, an internal consensus will be used, else an external consensus will be used.
-        // If an external consensus will be used, then this bool will also ensure that the
-        // corresponding gRPC server that is used for communication between narwhal and
-        // external consensus is also spawned.
-        internal_consensus: bool,
         // The state used by the client to execute transactions.
         execution_state: Arc<State>,
-        // The protocol configuration.
-        protocol_config: ProtocolConfig,
         // A prometheus exporter Registry to use for the metrics
         registry: &Registry,
         // The channel to send the shutdown signal
@@ -248,41 +231,24 @@ impl PrimaryNodeInner {
         let mut handles = Vec::new();
         let (tx_consensus_round_updates, rx_consensus_round_updates) =
             watch::channel(ConsensusRound::new(0, 0));
-        let dag = if !internal_consensus {
-            debug!("Consensus is disabled: the primary will run w/o Bullshark");
-            let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
-            let (handle, dag) = Dag::new(
-                &committee,
-                rx_new_certificates,
-                consensus_metrics,
-                tx_shutdown.subscribe(),
-            );
 
-            handles.push(handle);
-
-            Some(Arc::new(dag))
-        } else {
-            let consensus_handles = Self::spawn_consensus(
-                authority.id(),
-                worker_cache.clone(),
-                committee.clone(),
-                client.clone(),
-                store,
-                parameters.clone(),
-                execution_state,
-                tx_shutdown.subscribe_n(3),
-                rx_new_certificates,
-                tx_committed_certificates.clone(),
-                tx_consensus_round_updates,
-                registry,
-                &protocol_config,
-            )
-            .await?;
-
-            handles.extend(consensus_handles);
-
-            None
-        };
+        let (consensus_handles, leader_schedule) = Self::spawn_consensus(
+            authority.id(),
+            worker_cache.clone(),
+            committee.clone(),
+            client.clone(),
+            store,
+            &protocol_config,
+            parameters.clone(),
+            execution_state,
+            tx_shutdown.subscribe_n(3),
+            rx_new_certificates,
+            tx_committed_certificates.clone(),
+            tx_consensus_round_updates,
+            registry,
+        )
+        .await?;
+        handles.extend(consensus_handles);
 
         // TODO: the same set of variables are sent to primary, consensus and downstream
         // components. Consider using a holder struct to pass them around.
@@ -294,6 +260,7 @@ impl PrimaryNodeInner {
             network_keypair,
             committee.clone(),
             worker_cache.clone(),
+            protocol_config.clone(),
             parameters.clone(),
             client,
             store.header_store.clone(),
@@ -304,11 +271,10 @@ impl PrimaryNodeInner {
             tx_new_certificates,
             rx_committed_certificates,
             rx_consensus_round_updates,
-            dag,
             tx_shutdown,
             tx_committed_certificates,
             registry,
-            protocol_config.clone(),
+            leader_schedule,
         );
         handles.extend(primary_handles);
 
@@ -322,6 +288,7 @@ impl PrimaryNodeInner {
         committee: Committee,
         client: NetworkClient,
         store: &NodeStorage,
+        protocol_config: &ProtocolConfig,
         parameters: Parameters,
         execution_state: State,
         mut shutdown_receivers: Vec<ConditionalBroadcastReceiver>,
@@ -329,8 +296,7 @@ impl PrimaryNodeInner {
         tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
         tx_consensus_round_updates: watch::Sender<ConsensusRound>,
         registry: &Registry,
-        protocol_config: &ProtocolConfig,
-    ) -> SubscriberResult<Vec<JoinHandle<()>>>
+    ) -> SubscriberResult<(Vec<JoinHandle<()>>, LeaderSchedule)>
     where
         PublicKey: VerifyingKey,
         State: ExecutionState + Send + Sync + 'static,
@@ -359,12 +325,21 @@ impl PrimaryNodeInner {
             .recovered_consensus_output
             .inc_by(num_sub_dags);
 
+        // TODO: restore the LeaderSchedule when recovering from storage to ensure that the correct one
+        // will be used
+        // Using a LeaderSwapTable::default() will just adhere to the original schedule without any swaps.
+        // That means, whatever authority is elected for a round from the Committee::leader method, that's the
+        // one that will be used.
+        let leader_schedule = LeaderSchedule::new(committee.clone(), LeaderSwapTable::default());
+
         // Spawn the consensus core who only sequences transactions.
         let ordering_engine = Bullshark::new(
             committee.clone(),
             store.consensus_store.clone(),
+            protocol_config.clone(),
             consensus_metrics.clone(),
             Self::CONSENSUS_SCHEDULE_CHANGE_SUB_DAGS,
+            leader_schedule.clone(),
         );
         let consensus_handles = Consensus::spawn(
             committee.clone(),
@@ -386,19 +361,21 @@ impl PrimaryNodeInner {
             authority_id,
             worker_cache,
             committee.clone(),
+            protocol_config,
             client,
             execution_state,
             shutdown_receivers,
             rx_sequence,
             registry,
             restored_consensus_output,
-            protocol_config,
         )?;
 
-        Ok(executor_handles
+        let handles = executor_handles
             .into_iter()
             .chain(std::iter::once(consensus_handles))
-            .collect())
+            .collect();
+
+        Ok((handles, leader_schedule))
     }
 }
 
@@ -408,22 +385,15 @@ pub struct PrimaryNode {
 }
 
 impl PrimaryNode {
-    pub fn new(
-        parameters: Parameters,
-        internal_consensus: bool,
-        registry_service: RegistryService,
-        protocol_config: ProtocolConfig,
-    ) -> PrimaryNode {
+    pub fn new(parameters: Parameters, registry_service: RegistryService) -> PrimaryNode {
         let inner = PrimaryNodeInner {
             parameters,
-            internal_consensus,
             registry_service,
             registry: None,
             handles: FuturesUnordered::new(),
             client: None,
             tx_shutdown: None,
             own_peer_id: None,
-            protocol_config,
         };
 
         Self {
@@ -438,6 +408,7 @@ impl PrimaryNode {
         network_keypair: NetworkKeyPair,
         // The committee information.
         committee: Committee,
+        protocol_config: ProtocolConfig,
         // The worker information cache.
         worker_cache: WorkerCache,
         // Client for communications.
@@ -458,6 +429,7 @@ impl PrimaryNode {
                 keypair,
                 network_keypair,
                 committee,
+                protocol_config,
                 worker_cache,
                 client,
                 store,

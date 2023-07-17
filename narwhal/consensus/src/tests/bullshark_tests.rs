@@ -9,6 +9,7 @@ use crate::consensus::ConsensusRound;
 use crate::consensus_utils::NUM_SUB_DAGS_PER_SCHEDULE;
 use crate::consensus_utils::*;
 use crate::{metrics::ConsensusMetrics, Consensus, NUM_SHUTDOWN_RECEIVERS};
+use config::AuthorityIdentifier;
 #[allow(unused_imports)]
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
@@ -35,27 +36,27 @@ async fn commit_one() {
         .collect::<BTreeSet<_>>();
     let (mut certificates, next_parents) = test_utils::make_optimal_certificates(
         &committee,
+        &latest_protocol_version(),
         1..=2,
         &genesis,
         &ids,
-        &latest_protocol_version(),
     );
 
     // Make two certificate (f+1) with round 3 to trigger the commits.
     let (_, certificate) = test_utils::mock_certificate(
         &committee,
+        &latest_protocol_version(),
         ids[0],
         3,
         next_parents.clone(),
-        &latest_protocol_version(),
     );
     certificates.push_back(certificate);
     let (_, certificate) = test_utils::mock_certificate(
         &committee,
+        &latest_protocol_version(),
         ids[1],
         3,
         next_parents,
-        &latest_protocol_version(),
     );
     certificates.push_back(certificate);
 
@@ -75,8 +76,10 @@ async fn commit_one() {
     let bullshark = Bullshark::new(
         committee.clone(),
         store.clone(),
+        latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     let _consensus_handle = Consensus::spawn(
@@ -138,10 +141,10 @@ async fn dead_node() {
 
     let (mut certificates, _) = test_utils::make_optimal_certificates(
         &committee,
+        &latest_protocol_version(),
         1..=11,
         &genesis,
         &ids,
-        &latest_protocol_version(),
     );
 
     // Spawn the consensus engine and sink the primary channel.
@@ -160,8 +163,10 @@ async fn dead_node() {
     let bullshark = Bullshark::new(
         committee.clone(),
         store.clone(),
+        latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     let _consensus_handle = Consensus::spawn(
@@ -251,10 +256,10 @@ async fn not_enough_support() {
     let nodes: Vec<_> = ids.iter().take(3).cloned().collect();
     let (out, parents) = test_utils::make_optimal_certificates(
         &committee,
+        &latest_protocol_version(),
         1..=1,
         &genesis,
         &nodes,
-        &latest_protocol_version(),
     );
     certificates.extend(out);
 
@@ -262,20 +267,20 @@ async fn not_enough_support() {
     // round is the only one with 4 certificates.
     let (leader_2_digest, certificate) = test_utils::mock_certificate(
         &committee,
+        &latest_protocol_version(),
         ids[0],
         2,
         parents.clone(),
-        &latest_protocol_version(),
     );
     certificates.push_back(certificate);
 
     let nodes: Vec<_> = ids.iter().skip(1).cloned().collect();
     let (out, mut parents) = test_utils::make_optimal_certificates(
         &committee,
+        &latest_protocol_version(),
         2..=2,
         &parents,
         &nodes,
-        &latest_protocol_version(),
     );
     certificates.extend(out);
 
@@ -285,10 +290,10 @@ async fn not_enough_support() {
     let name = ids[1];
     let (digest, certificate) = test_utils::mock_certificate(
         &committee,
+        &latest_protocol_version(),
         name,
         3,
         parents.clone(),
-        &latest_protocol_version(),
     );
     certificates.push_back(certificate);
     next_parents.insert(digest);
@@ -296,10 +301,10 @@ async fn not_enough_support() {
     let name = ids[2];
     let (digest, certificate) = test_utils::mock_certificate(
         &committee,
+        &latest_protocol_version(),
         name,
         3,
         parents.clone(),
-        &latest_protocol_version(),
     );
     certificates.push_back(certificate);
     next_parents.insert(digest);
@@ -308,10 +313,10 @@ async fn not_enough_support() {
     parents.insert(leader_2_digest);
     let (digest, certificate) = test_utils::mock_certificate(
         &committee,
+        &latest_protocol_version(),
         name,
         3,
         parents.clone(),
-        &latest_protocol_version(),
     );
     certificates.push_back(certificate);
     next_parents.insert(digest);
@@ -322,24 +327,24 @@ async fn not_enough_support() {
     let nodes: Vec<_> = ids.to_vec();
     let (out, parents) = test_utils::make_optimal_certificates(
         &committee,
+        &latest_protocol_version(),
         4..=4,
         &parents,
         &nodes,
-        &latest_protocol_version(),
     );
     certificates.extend(out);
 
     // Round 5: Send f+1 certificates to trigger the commit of leader 4.
     let (_, certificate) = test_utils::mock_certificate(
         &committee,
+        &latest_protocol_version(),
         ids[0],
         5,
         parents.clone(),
-        &latest_protocol_version(),
     );
     certificates.push_back(certificate);
     let (_, certificate) =
-        test_utils::mock_certificate(&committee, ids[1], 5, parents, &latest_protocol_version());
+        test_utils::mock_certificate(&committee, &latest_protocol_version(), ids[1], 5, parents);
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
@@ -358,8 +363,10 @@ async fn not_enough_support() {
     let bullshark = Bullshark::new(
         committee.clone(),
         store.clone(),
+        latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     let _consensus_handle = Consensus::spawn(
@@ -449,34 +456,34 @@ async fn missing_leader() {
     let nodes: Vec<_> = ids.iter().skip(1).cloned().collect();
     let (out, parents) = test_utils::make_optimal_certificates(
         &committee,
+        &latest_protocol_version(),
         1..=2,
         &genesis,
         &nodes,
-        &latest_protocol_version(),
     );
     certificates.extend(out);
 
     // Add back the leader for rounds 3 and 4.
     let (out, parents) = test_utils::make_optimal_certificates(
         &committee,
+        &latest_protocol_version(),
         3..=4,
         &parents,
         &ids,
-        &latest_protocol_version(),
     );
     certificates.extend(out);
 
     // Add f+1 certificates of round 5 to commit the leader of round 4.
     let (_, certificate) = test_utils::mock_certificate(
         &committee,
+        &latest_protocol_version(),
         ids[0],
         5,
         parents.clone(),
-        &latest_protocol_version(),
     );
     certificates.push_back(certificate);
     let (_, certificate) =
-        test_utils::mock_certificate(&committee, ids[1], 5, parents, &latest_protocol_version());
+        test_utils::mock_certificate(&committee, &latest_protocol_version(), ids[1], 5, parents);
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
@@ -495,8 +502,10 @@ async fn missing_leader() {
     let bullshark = Bullshark::new(
         committee.clone(),
         store.clone(),
+        latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     let _consensus_handle = Consensus::spawn(
@@ -558,11 +567,11 @@ async fn committed_round_after_restart() {
         .collect::<BTreeSet<_>>();
     let (certificates, _) = test_utils::make_certificates_with_epoch(
         &committee,
+        &latest_protocol_version(),
         1..=11,
         epoch,
         &genesis,
         &ids,
-        &latest_protocol_version(),
     );
 
     let store = make_consensus_store(&test_utils::temp_dir());
@@ -582,8 +591,10 @@ async fn committed_round_after_restart() {
         let bullshark = Bullshark::new(
             committee.clone(),
             store.clone(),
+            latest_protocol_version(),
             metrics.clone(),
             NUM_SUB_DAGS_PER_SCHEDULE,
+            LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
         );
 
         let handle = Consensus::spawn(
@@ -663,16 +674,23 @@ async fn delayed_certificates_are_rejected() {
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let (certificates, _) = test_utils::make_certificates_with_epoch(
         &committee,
+        &latest_protocol_version(),
         1..=5,
         epoch,
         &genesis,
         &ids,
-        &latest_protocol_version(),
     );
 
     let store = make_consensus_store(&test_utils::temp_dir());
     let mut state = ConsensusState::new(metrics.clone(), gc_depth);
-    let mut bullshark = Bullshark::new(committee, store, metrics, NUM_SUB_DAGS_PER_SCHEDULE);
+    let mut bullshark = Bullshark::new(
+        committee.clone(),
+        store,
+        latest_protocol_version(),
+        metrics,
+        NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee, LeaderSwapTable::default()),
+    );
 
     // Populate DAG with the rounds up to round 5 so we trigger commits
     let mut all_subdags = Vec::new();
@@ -715,17 +733,23 @@ async fn submitting_equivocating_certificate_should_error() {
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let (certificates, _) = test_utils::make_certificates_with_epoch(
         &committee,
+        &latest_protocol_version(),
         1..=1,
         epoch,
         &genesis,
         &ids,
-        &latest_protocol_version(),
     );
 
     let store = make_consensus_store(&test_utils::temp_dir());
     let mut state = ConsensusState::new(metrics.clone(), gc_depth);
-    let mut bullshark =
-        Bullshark::new(committee.clone(), store, metrics, NUM_SUB_DAGS_PER_SCHEDULE);
+    let mut bullshark = Bullshark::new(
+        committee.clone(),
+        store,
+        latest_protocol_version(),
+        metrics,
+        NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
+    );
 
     // Populate DAG with all the certificates
     for certificate in certificates.clone() {
@@ -745,11 +769,11 @@ async fn submitting_equivocating_certificate_should_error() {
     // them with different epoch as a way to trigger the difference)
     let (certificates, _) = test_utils::make_certificates_with_epoch(
         &committee,
+        &latest_protocol_version(),
         1..=1,
         100,
         &genesis,
         &ids,
-        &latest_protocol_version(),
     );
     assert_eq!(certificates.len(), 4);
 
@@ -785,16 +809,23 @@ async fn reset_consensus_scores_on_every_schedule_change() {
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let (certificates, _) = test_utils::make_certificates_with_epoch(
         &committee,
+        &latest_protocol_version(),
         1..=50,
         epoch,
         &genesis,
         &ids,
-        &latest_protocol_version(),
     );
 
     let store = make_consensus_store(&test_utils::temp_dir());
     let mut state = ConsensusState::new(metrics.clone(), gc_depth);
-    let mut bullshark = Bullshark::new(committee, store, metrics, NUM_SUB_DAGS_PER_SCHEDULE);
+    let mut bullshark = Bullshark::new(
+        committee.clone(),
+        store,
+        latest_protocol_version(),
+        metrics,
+        NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee, LeaderSwapTable::default()),
+    );
 
     // Populate DAG with the rounds up to round 50 so we trigger commits
     let mut all_subdags = Vec::new();
@@ -863,8 +894,10 @@ async fn restart_with_new_committee() {
         let bullshark = Bullshark::new(
             committee.clone(),
             store.clone(),
+            latest_protocol_version(),
             metrics.clone(),
             NUM_SUB_DAGS_PER_SCHEDULE,
+            LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
         );
 
         let handle = Consensus::spawn(
@@ -889,30 +922,30 @@ async fn restart_with_new_committee() {
             .collect::<BTreeSet<_>>();
         let (mut certificates, next_parents) = test_utils::make_certificates_with_epoch(
             &committee,
+            &latest_protocol_version(),
             1..=2,
             epoch,
             &genesis,
             &ids,
-            &latest_protocol_version(),
         );
 
         // Make two certificate (f+1) with round 3 to trigger the commits.
         let (_, certificate) = test_utils::mock_certificate_with_epoch(
             &committee,
+            &latest_protocol_version(),
             ids[0],
             3,
             epoch,
             next_parents.clone(),
-            &latest_protocol_version(),
         );
         certificates.push_back(certificate);
         let (_, certificate) = test_utils::mock_certificate_with_epoch(
             &committee,
+            &latest_protocol_version(),
             ids[1],
             3,
             epoch,
             next_parents,
-            &latest_protocol_version(),
         );
         certificates.push_back(certificate);
 
@@ -973,11 +1006,11 @@ async fn garbage_collection_basic() {
     let slow_nodes = vec![(slow_node, 0.0_f64)];
     let (certificates, _round_5_certificates) = test_utils::make_certificates_with_slow_nodes(
         &committee,
+        &latest_protocol_version(),
         1..=7,
         genesis,
         &ids,
         slow_nodes.as_slice(),
-        &latest_protocol_version(),
     );
 
     // Create Bullshark consensus engine
@@ -985,7 +1018,14 @@ async fn garbage_collection_basic() {
 
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let mut state = ConsensusState::new(metrics.clone(), GC_DEPTH);
-    let mut bullshark = Bullshark::new(committee, store, metrics, NUM_SUB_DAGS_PER_SCHEDULE);
+    let mut bullshark = Bullshark::new(
+        committee.clone(),
+        store,
+        latest_protocol_version(),
+        metrics,
+        NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee, LeaderSwapTable::default()),
+    );
 
     // Now start feeding the certificates per round
     for c in certificates {
@@ -1062,11 +1102,11 @@ async fn slow_node() {
     let slow_nodes = vec![(slow_node, 0.0_f64)];
     let (certificates, round_8_certificates) = test_utils::make_certificates_with_slow_nodes(
         &committee,
+        &latest_protocol_version(),
         1..=8,
         genesis,
         &ids,
         slow_nodes.as_slice(),
-        &latest_protocol_version(),
     );
 
     let mut certificates: VecDeque<Certificate> = certificates;
@@ -1086,8 +1126,14 @@ async fn slow_node() {
     let store = make_consensus_store(&test_utils::temp_dir());
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let mut state = ConsensusState::new(metrics.clone(), GC_DEPTH);
-    let mut bullshark =
-        Bullshark::new(committee.clone(), store, metrics, NUM_SUB_DAGS_PER_SCHEDULE);
+    let mut bullshark = Bullshark::new(
+        committee.clone(),
+        store,
+        latest_protocol_version(),
+        metrics,
+        NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
+    );
 
     // Now start feeding the certificates per round up to 8. We expect to have
     // triggered a commit up to round 6 and gc round 1 & 2.
@@ -1122,11 +1168,11 @@ async fn slow_node() {
     // know the leader of each round.
     let (certificates, _) = test_utils::make_certificates_with_slow_nodes(
         &committee,
+        &latest_protocol_version(),
         9..=9,
         round_8_certificates,
         &ids,
         &[],
-        &latest_protocol_version(),
     );
 
     // send the certificates - they should trigger a commit.
@@ -1195,11 +1241,11 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
 
     let (mut certificates, round_2_certificates) = test_utils::make_certificates_with_slow_nodes(
         &committee,
+        &latest_protocol_version(),
         1..=2,
         genesis,
         &keys_with_dead_node,
         &slow_nodes,
-        &latest_protocol_version(),
     );
 
     // on round 3 we'll create certificates that don't provide f+1 support to round 2.
@@ -1214,10 +1260,10 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
                 .collect::<BTreeSet<_>>();
             let (_, certificate) = test_utils::mock_certificate(
                 &committee,
+                &latest_protocol_version(),
                 *id,
                 3,
                 parents,
-                &latest_protocol_version(),
             );
             round_3_certificates.push(certificate);
         } else {
@@ -1229,10 +1275,10 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
                 .collect::<BTreeSet<_>>();
             let (_, certificate) = test_utils::mock_certificate(
                 &committee,
+                &latest_protocol_version(),
                 *id,
                 3,
                 parents,
-                &latest_protocol_version(),
             );
             round_3_certificates.push(certificate);
         }
@@ -1247,7 +1293,7 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
             .map(|cert| cert.digest())
             .collect::<BTreeSet<_>>();
         let (_, certificate) =
-            test_utils::mock_certificate(&committee, *id, 4, parents, &latest_protocol_version());
+            test_utils::mock_certificate(&committee, &latest_protocol_version(), *id, 4, parents);
         round_4_certificates.push(certificate);
     }
 
@@ -1259,11 +1305,11 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
     let (certificates_5_to_7, _round_7_certificates) =
         test_utils::make_certificates_with_slow_nodes(
             &committee,
+            &latest_protocol_version(),
             5..=7,
             round_4_certificates.clone(),
             &ids,
             &slow_nodes,
-            &latest_protocol_version(),
         );
 
     // now send all certificates to Bullshark
@@ -1275,7 +1321,14 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
     let store = make_consensus_store(&test_utils::temp_dir());
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let mut state = ConsensusState::new(metrics.clone(), GC_DEPTH);
-    let mut bullshark = Bullshark::new(committee, store, metrics, NUM_SUB_DAGS_PER_SCHEDULE);
+    let mut bullshark = Bullshark::new(
+        committee.clone(),
+        store,
+        latest_protocol_version(),
+        metrics,
+        NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee, LeaderSwapTable::default()),
+    );
 
     let mut committed = false;
     for c in &certificates {

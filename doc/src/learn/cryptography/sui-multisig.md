@@ -55,7 +55,7 @@ $ADDR_3     | $PK_3               | ed25519
 
 ## Step 2: Create a MultiSig address
 
-To create a MultiSig address, input a list of public keys to use for the MultiSig address and list their corresponding weights.
+To create a MultiSig address, input a list of public keys to use for the MultiSig address and a list their corresponding weights and the threshold.
 
 ```shell
 $SUI_BINARY keytool multi-sig-address --pks $PK_1 $PK_2 $PK_3 --weights 1 2 3 --threshold 3
@@ -89,10 +89,10 @@ The response resembles the following:
 
 ## Step 3: Serialize ANY transaction
 
-This section demonstrates how to use an object that belongs to a MultiSig address and serialize a transfer to be signed. Note that the tx_bytes can be *ANY* serialized transaction data where the sender is the MultiSig address, simply use the `--serialize-output` flag for supported commands in `sui client -h` (e.g. `publish`, `upgrade`, `call`, `transfer`, `transfer-sui`, `pay`, `pay-all-sui`, `pay-sui`, `split`, `merge-coin`) to output the Base64 encoded transaction bytes. 
+This section demonstrates how to use an object that belongs to a MultiSig address and serialize a transfer to be signed. Note that the tx_bytes can be *ANY* serialized transaction data where the sender is the MultiSig address, simply use the `--serialize-unsigned-transaction` flag for supported commands in `sui client -h` (e.g. `publish`, `upgrade`, `call`, `transfer`, `transfer-sui`, `pay`, `pay-all-sui`, `pay-sui`, `split`, `merge-coin`) to output the Base64 encoded transaction bytes. 
 
 ```shell
-$SUI_BINARY client transfer --to $MULTISIG_ADDR --object-id $OBJECT_ID --gas-budget 1000 --serialize-output
+$SUI_BINARY client transfer --to $SOME_ADDR --object-id $OBJECT_ID --gas-budget 100000 --serialize-unsigned-transaction
 
 Raw tx_bytes to execute: $TX_BYTES
 ```
@@ -123,6 +123,8 @@ MultiSig address: $MULTISIG_ADDRESS # Informational
 MultiSig parsed: $HUMAN_READABLE_STRUCT # Informational
 MultiSig serialized: $SERIALIZED_MULTISIG
 ```
+
+Note that only the signatures of the participating signers whose sum of weights `>=k` are needed. All public keys and their weights and the threshold that defined the MultiSig address are required to be provided. 
 
 ## Step 6: Execute a transaction with MultiSig
 

@@ -14,66 +14,46 @@ import type { SuiMoveNormalizedType } from '@mysten/sui.js';
  * @returns
  */
 export function normalizedFunctionParameterTypeToString(
-    param: SuiMoveNormalizedType,
-    functionTypeArgNames?: string[],
-    str = ''
+	param: SuiMoveNormalizedType,
+	functionTypeArgNames?: string[],
+	str = '',
 ): string {
-    if (typeof param === 'string') {
-        return str + param;
-    }
-    if ('TypeParameter' in param) {
-        return (
-            str +
-            (functionTypeArgNames?.[param.TypeParameter] ??
-                `T${param.TypeParameter}`)
-        );
-    }
-    if ('Reference' in param || 'MutableReference' in param) {
-        const p =
-            'Reference' in param ? param.Reference : param.MutableReference;
-        return normalizedFunctionParameterTypeToString(
-            p,
-            functionTypeArgNames,
-            str
-        );
-    }
-    if ('Vector' in param) {
-        return (
-            normalizedFunctionParameterTypeToString(
-                param.Vector,
-                functionTypeArgNames,
-                `${str}Vector<`
-            ) + '>'
-        );
-    }
-    if ('Struct' in param) {
-        const theType = param.Struct;
-        const theTypeArgs = theType.typeArguments;
-        const theTypeArgsStr = theTypeArgs
-            .map((aTypeArg) =>
-                normalizedFunctionParameterTypeToString(
-                    aTypeArg,
-                    functionTypeArgNames
-                )
-            )
-            .join(', ');
-        return `${[theType.address, theType.module, theType.name].join('::')}${
-            theTypeArgsStr ? `<${theTypeArgsStr}>` : ''
-        }`;
-    }
-    return str;
+	if (typeof param === 'string') {
+		return str + param;
+	}
+	if ('TypeParameter' in param) {
+		return str + (functionTypeArgNames?.[param.TypeParameter] ?? `T${param.TypeParameter}`);
+	}
+	if ('Reference' in param || 'MutableReference' in param) {
+		const p = 'Reference' in param ? param.Reference : param.MutableReference;
+		return normalizedFunctionParameterTypeToString(p, functionTypeArgNames, str);
+	}
+	if ('Vector' in param) {
+		return (
+			normalizedFunctionParameterTypeToString(param.Vector, functionTypeArgNames, `${str}Vector<`) +
+			'>'
+		);
+	}
+	if ('Struct' in param) {
+		const theType = param.Struct;
+		const theTypeArgs = theType.typeArguments;
+		const theTypeArgsStr = theTypeArgs
+			.map((aTypeArg) => normalizedFunctionParameterTypeToString(aTypeArg, functionTypeArgNames))
+			.join(', ');
+		return `${[theType.address, theType.module, theType.name].join('::')}${
+			theTypeArgsStr ? `<${theTypeArgsStr}>` : ''
+		}`;
+	}
+	return str;
 }
 
 export function getNormalizedFunctionParameterTypeDetails(
-    param: SuiMoveNormalizedType,
-    functionTypeArgNames?: string[]
+	param: SuiMoveNormalizedType,
+	functionTypeArgNames?: string[],
 ) {
-    const paramTypeText = normalizedFunctionParameterTypeToString(
-        param,
-        functionTypeArgNames
-    );
-    return {
-        isTxContext: paramTypeText === '0x2::tx_context::TxContext',
-        paramTypeText,
-    };
+	const paramTypeText = normalizedFunctionParameterTypeToString(param, functionTypeArgNames);
+	return {
+		isTxContext: paramTypeText === '0x2::tx_context::TxContext',
+		paramTypeText,
+	};
 }

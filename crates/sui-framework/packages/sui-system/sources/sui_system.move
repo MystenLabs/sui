@@ -41,7 +41,7 @@
 module sui_system::sui_system {
     use sui::balance::Balance;
 
-    use sui::coin::Coin;
+    use sui::coin::{Self, Coin};
     use sui::object::UID;
     use sui_system::staking_pool::StakedSui;
     use sui::sui::SUI;
@@ -261,6 +261,16 @@ module sui_system::sui_system {
         staked_sui: StakedSui,
         ctx: &mut TxContext,
     ) {
+        let withdrawn_stake = request_withdraw_stake_non_entry(wrapper, staked_sui, ctx);
+        transfer::public_transfer(coin::from_balance(withdrawn_stake, ctx), tx_context::sender(ctx));
+    }
+
+    /// Non-entry version of `request_withdraw_stake` that returns the withdrawn SUI instead of transferring it to the sender.
+    public fun request_withdraw_stake_non_entry(
+        wrapper: &mut SuiSystemState,
+        staked_sui: StakedSui,
+        ctx: &mut TxContext,
+    ) : Balance<SUI> {
         let self = load_system_state_mut(wrapper);
         sui_system_state_inner::request_withdraw_stake(self, staked_sui, ctx)
     }

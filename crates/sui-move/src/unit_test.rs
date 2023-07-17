@@ -13,12 +13,11 @@ use move_vm_runtime::native_extensions::NativeContextExtensions;
 use once_cell::sync::Lazy;
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 use sui_core::authority::TemporaryStore;
-use sui_cost_tables::bytecode_tables::initial_cost_schedule_for_unit_tests;
 use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    digests::TransactionDigest, in_memory_storage::InMemoryStorage, metrics::LimitsMetrics,
-    transaction::InputObjects,
+    digests::TransactionDigest, gas_model::tables::initial_cost_schedule_for_unit_tests,
+    in_memory_storage::InMemoryStorage, metrics::LimitsMetrics, transaction::InputObjects,
 };
 
 // Move unit tests will halt after executing this many steps. This is a protection to avoid divergence
@@ -28,6 +27,9 @@ const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 1_000_000;
 pub struct Test {
     #[clap(flatten)]
     pub test: test::Test,
+    /// If `true`, enable linters
+    #[clap(long, global = true)]
+    pub lint: bool,
 }
 
 impl Test {
@@ -54,6 +56,7 @@ impl Test {
             legacy_digest,
             dump_bytecode_as_base64,
             generate_struct_layouts,
+            self.lint,
         )?;
         run_move_unit_tests(
             rerooted_path,
@@ -63,6 +66,15 @@ impl Test {
         )
     }
 }
+
+static TEST_STORE: Lazy<TemporaryStore> = Lazy::new(|| {
+    TemporaryStore::new(
+        InMemoryStorage::new(vec![]),
+        InputObjects::new(vec![]),
+        TransactionDigest::random(),
+        &ProtocolConfig::get_for_min_version(),
+    )
+});
 
 static SET_EXTENSION_HOOK: Lazy<()> =
     Lazy::new(|| set_extension_hook(Box::new(new_testing_object_and_natives_cost_runtime)));
@@ -86,29 +98,25 @@ pub fn run_move_unit_tests(
         build_config,
         UnitTestingConfig {
             report_stacktrace_on_abort: true,
+            ignore_compile_warnings: true,
             ..config
         },
         sui_move_natives::all_natives(/* silent */ false),
         Some(initial_cost_schedule_for_unit_tests()),
         compute_coverage,
+        &mut std::io::sink(),
         &mut std::io::stdout(),
     )
 }
 
 fn new_testing_object_and_natives_cost_runtime(ext: &mut NativeContextExtensions) {
-    let store = InMemoryStorage::new(vec![]);
-    let state_view = TemporaryStore::new(
-        store,
-        InputObjects::new(vec![]),
-        TransactionDigest::random(),
-        &ProtocolConfig::get_for_min_version(),
-    );
     // Use a throwaway metrics registry for testing.
     let registry = prometheus::Registry::new();
     let metrics = Arc::new(LimitsMetrics::new(&registry));
+    let store = Lazy::force(&TEST_STORE);
 
     ext.add(ObjectRuntime::new(
-        Box::new(state_view),
+        store,
         BTreeMap::new(),
         false,
         &ProtocolConfig::get_for_min_version(),

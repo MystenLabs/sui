@@ -13,6 +13,8 @@ edition = "2021"
 move-core-types = { path = "../../move-core/types" }
 move-binary-format = { path = "../../move-binary-format" }
 move-bytecode-utils = { path = "../move-bytecode-utils" }
+enum-compat-util = { path = "../../testing-infra/enum-compat-util"}
+move-proc-macros = { path = "../../testing-infra/move-proc-macros"}
 serde = { version = "1.0.124", features = ["derive", "rc"] }
 
 bcs.workspace = true

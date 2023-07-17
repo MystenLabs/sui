@@ -62,7 +62,7 @@ async fn _split_coins_equally(
     let resp = client
         .quorum_driver_api()
         .execute_transaction_block(
-            tx.clone(),
+            tx.clone().into(),
             SuiTransactionBlockResponseOptions::new().with_effects(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
@@ -77,6 +77,7 @@ async fn _merge_coins(gas_coin: &str, mut wallet: WalletContext) -> Result<(), a
         .active_address()
         .map_err(|err| FaucetError::Wallet(err.to_string()))?;
     let client = wallet.get_client().await?;
+    // Pick a gas coin here that isn't in use by the faucet otherwise there will be some contention.
     let small_coins = wallet
         .gas_objects(active_address)
         .await
@@ -117,7 +118,7 @@ async fn _merge_coins(gas_coin: &str, mut wallet: WalletContext) -> Result<(), a
         client
             .quorum_driver_api()
             .execute_transaction_block(
-                tx.clone(),
+                tx.clone().into(),
                 SuiTransactionBlockResponseOptions::new().with_effects(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )

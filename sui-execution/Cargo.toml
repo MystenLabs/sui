@@ -1,0 +1,37 @@
+[package]
+name = "sui-execution"
+version = "0.1.0"
+authors = ["Mysten Labs <eng@mystenlabs.com>"]
+description = "Multiplexer to choose between multiple versions of sui and move execution crates."
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+sui-protocol-config.workspace = true
+sui-types.workspace = true
+
+move-binary-format.workspace = true
+move-bytecode-utils.workspace = true
+move-core-types.workspace = true
+move-vm-config.workspace = true
+
+sui-adapter-latest = { path = "latest/sui-adapter" }
+sui-adapter-v0 = { path = "v0/sui-adapter" }
+# sui-adapter-$CUT = { path = "$CUT/sui-adapter" }
+sui-move-natives-latest = { path = "latest/sui-move-natives" }
+sui-move-natives-v0 = { path = "v0/sui-move-natives" }
+# sui-move-natives-$CUT = { path = "$CUT/sui-move-natives" }
+sui-verifier-latest = { path = "latest/sui-verifier" }
+sui-verifier-v0 = { path = "v0/sui-verifier" }
+# sui-verifier-$CUT = { path = "$CUT/sui-verifier" }
+
+move-vm-runtime-latest = { path = "../external-crates/move/move-vm/runtime", package = "move-vm-runtime" }
+move-vm-runtime-v0 = { path = "../external-crates/move-execution/v0/move-vm/runtime" }
+# move-vm-runtime-$CUT = { path = "../external-crates/move-execution/$CUT/move-vm/runtime" }
+
+workspace-hack = { version = "0.1", path = "../crates/workspace-hack" }
+
+[dev-dependencies]
+cargo_metadata = "0.15.4"
+petgraph = "0.5.1"

@@ -6,7 +6,9 @@ use anemo_tower::{inflight_limit, rate_limit};
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
+    time::Duration,
 };
+use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::p2p::StateSyncConfig;
 use sui_types::{messages_checkpoint::VerifiedCheckpoint, storage::ReadStore};
 use tap::Pipe;
@@ -26,6 +28,7 @@ pub struct Builder<S> {
     store: Option<S>,
     config: Option<StateSyncConfig>,
     metrics: Option<Metrics>,
+    archive_readers: Option<ArchiveReaderBalancer>,
 }
 
 impl Builder<()> {
@@ -35,6 +38,7 @@ impl Builder<()> {
             store: None,
             config: None,
             metrics: None,
+            archive_readers: None,
         }
     }
 }
@@ -45,6 +49,7 @@ impl<S> Builder<S> {
             store: Some(store),
             config: self.config,
             metrics: self.metrics,
+            archive_readers: self.archive_readers,
         }
     }
 
@@ -55,6 +60,11 @@ impl<S> Builder<S> {
 
     pub fn with_metrics(mut self, registry: &prometheus::Registry) -> Self {
         self.metrics = Some(Metrics::enabled(registry));
+        self
+    }
+
+    pub fn archive_readers(mut self, archive_readers: ArchiveReaderBalancer) -> Self {
+        self.archive_readers = Some(archive_readers);
         self
     }
 }
@@ -117,10 +127,12 @@ where
             store,
             config,
             metrics,
+            archive_readers,
         } = self;
         let store = store.unwrap();
         let config = config.unwrap_or_default();
         let metrics = metrics.unwrap_or_else(Metrics::disabled);
+        let archive_readers = archive_readers.unwrap_or_default();
 
         let (sender, mailbox) = mpsc::channel(config.mailbox_capacity());
         let (checkpoint_event_sender, _receiver) =
@@ -134,6 +146,7 @@ where
             peers: HashMap::new(),
             unprocessed_checkpoints: HashMap::new(),
             sequence_number_to_digest: HashMap::new(),
+            wait_interval_when_no_peer_to_sync_content: Duration::from_secs(10),
         }
         .pipe(RwLock::new)
         .pipe(Arc::new);
@@ -154,6 +167,7 @@ where
                 peer_heights,
                 checkpoint_event_sender,
                 metrics,
+                archive_readers,
             },
             server,
         )
@@ -169,6 +183,7 @@ pub struct UnstartedStateSync<S> {
     pub(super) peer_heights: Arc<RwLock<PeerHeights>>,
     pub(super) checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
     pub(super) metrics: Metrics,
+    pub(super) archive_readers: ArchiveReaderBalancer,
 }
 
 impl<S> UnstartedStateSync<S>
@@ -186,6 +201,7 @@ where
             peer_heights,
             checkpoint_event_sender,
             metrics,
+            archive_readers,
         } = self;
 
         (
@@ -202,6 +218,8 @@ where
                 checkpoint_event_sender,
                 network,
                 metrics,
+                archive_readers,
+                sync_checkpoint_from_archive_task: None,
             },
             handle,
         )

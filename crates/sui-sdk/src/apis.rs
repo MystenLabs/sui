@@ -19,7 +19,7 @@ use sui_json_rpc::api::{
     CoinReadApiClient, IndexerApiClient, MoveUtilsClient, ReadApiClient, WriteApiClient,
 };
 use sui_json_rpc_types::{
-    Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake,
+    Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake, DevInspectResults,
     DryRunTransactionBlockResponse, DynamicFieldPage, EventFilter, EventPage, ObjectsPage,
     ProtocolConfigResponse, SuiCoinMetadata, SuiCommittee, SuiEvent, SuiGetPastObjectRequest,
     SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
@@ -34,7 +34,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::sui_serde::BigInt;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
-use sui_types::transaction::{TransactionData, VerifiedTransaction};
+use sui_types::transaction::{Transaction, TransactionData, TransactionKind};
 
 const WAIT_FOR_LOCAL_EXECUTION_RETRY_COUNT: u8 = 3;
 
@@ -262,6 +262,25 @@ impl ReadApi {
             .await?)
     }
 
+    pub async fn dev_inspect_transaction_block(
+        &self,
+        sender_address: SuiAddress,
+        tx: TransactionKind,
+        gas_price: Option<BigInt<u64>>,
+        epoch: Option<BigInt<u64>>,
+    ) -> SuiRpcResult<DevInspectResults> {
+        Ok(self
+            .api
+            .http
+            .dev_inspect_transaction_block(
+                sender_address,
+                Base64::from_bytes(&bcs::to_bytes(&tx)?),
+                gas_price,
+                epoch,
+            )
+            .await?)
+    }
+
     pub async fn get_loaded_child_objects(
         &self,
         digest: TransactionDigest,
@@ -483,7 +502,7 @@ impl QuorumDriverApi {
     /// still fails, it will return an error.
     pub async fn execute_transaction_block(
         &self,
-        tx: VerifiedTransaction,
+        tx: Transaction,
         options: SuiTransactionBlockResponseOptions,
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> SuiRpcResult<SuiTransactionBlockResponse> {

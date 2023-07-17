@@ -5,129 +5,120 @@
 html,
 body,
 #root {
-    height: 100%;
-    width: 100%;
-    position: relative;
+	height: 100%;
+	width: 100%;
+	position: relative;
 }
 
 /* Define some colors as CSS variables for use outside of the Tailwind class context: */
 :root {
-    --success-light: theme('colors.success.light');
-    --success-dark: theme('colors.success.dark');
-    --warning-light: theme('colors.warning.light');
-    --warning-dark: theme('colors.warning.dark');
-    --issue-light: theme('colors.issue.light');
-    --issue-dark: theme('colors.issue.dark');
-    --steel: theme('colors.steel.DEFAULT');
-    --steel-dark: theme('colors.steel.dark');
+	--success-light: theme('colors.success.light');
+	--success-dark: theme('colors.success.dark');
+	--warning-light: theme('colors.warning.light');
+	--warning-dark: theme('colors.warning.dark');
+	--issue-light: theme('colors.issue.light');
+	--issue-dark: theme('colors.issue.dark');
+	--steel: theme('colors.steel.DEFAULT');
+	--steel-dark: theme('colors.steel.dark');
 }
 
 @layer base {
-    body {
-        @apply antialiased;
-        @apply font-sans text-offblack;
-    }
+	body {
+		@apply antialiased;
+		@apply font-sans text-offblack;
+	}
 }
 
 @layer components {
-    .home-page-grid-container {
-        @apply grid grid-cols-1 gap-4;
-        grid-template-areas:
-            'tps'
-            'epoch'
-            'network'
-            'checkpoint'
-            'gas-price'
-            'node-map'
-            'activity'
-            'validators'
-            'packages';
-    }
+	.home-page-grid-container-top {
+		@apply grid grid-cols-1 gap-4;
+		grid-template-areas:
+			'network'
+			'epoch'
+			'transactions'
+			'accounts';
+	}
+	.home-page-grid-container-top.with-token {
+		grid-template-areas:
+			'network'
+			'epoch'
+			'token'
+			'transactions'
+			'accounts';
+	}
 
-    .home-page-grid-container-with-sui-token {
-        grid-template-areas:
-            'tps'
-            'sui-token'
-            'epoch'
-            'network'
-            'checkpoint'
-            'gas-price'
-            'node-map'
-            'activity'
-            'validators'
-            'packages';
-    }
+	@screen sm {
+		.home-page-grid-container-top {
+			@apply grid-cols-2;
+			grid-template-areas:
+				'network epoch'
+				'transactions transactions'
+				'accounts accounts';
+		}
 
-    @screen sm {
-        .home-page-grid-container {
-            @apply grid-cols-[200px,auto];
-            grid-template-areas:
-                'tps         tps'
-                'network     network'
-                'epoch       gas-price'
-                'checkpoint  gas-price'
-                'node-map    node-map'
-                'activity    activity'
-                'validators  validators'
-                'packages    packages';
-        }
+		.home-page-grid-container-top.with-token {
+			grid-template-areas:
+				'network epoch'
+				'network token'
+				'transactions transactions'
+				'accounts accounts';
+		}
+	}
 
-        .home-page-grid-container-with-sui-token {
-            grid-template-areas:
-                'tps         sui-token'
-                'network     network'
-                'epoch       gas-price'
-                'checkpoint  gas-price'
-                'node-map    node-map'
-                'activity    activity'
-                'validators  validators'
-                'packages    packages';
-        }
-    }
+	@screen md {
+		.home-page-grid-container-top {
+			@apply grid-cols-2;
+			grid-template-areas:
+				'network epoch'
+				'transactions accounts';
+		}
 
-    @screen lg {
-        .home-page-grid-container {
-            @apply grid-cols-[200px,390px,auto];
-            grid-template-areas:
-                'tps        network    network'
-                'epoch      gas-price  gas-price'
-                'checkpoint gas-price  gas-price'
-                'node-map   node-map   node-map'
-                'activity   activity   activity'
-                'validators validators validators'
-                'packages   packages   packages';
-        }
+		.home-page-grid-container-top.with-token {
+			grid-template-areas:
+				'network epoch'
+				'network token'
+				'transactions accounts';
+		}
+	}
 
-        .home-page-grid-container-with-sui-token {
-            grid-template-areas:
-                'tps        sui-token  network'
-                'epoch      gas-price  gas-price'
-                'checkpoint gas-price  gas-price'
-                'node-map   node-map   node-map'
-                'activity   activity   activity'
-                'validators validators validators'
-                'packages   packages   packages';
-        }
-    }
+	@screen xl {
+		.home-page-grid-container-top {
+			@apply grid-cols-[315px,1fr,1fr];
+			grid-template-areas:
+				'network transactions accounts'
+				'epoch transactions accounts';
+		}
 
-    @screen xl {
-        .home-page-grid-container {
-            @apply grid-cols-[200px,454px,auto];
-            grid-template-areas:
-                'tps        gas-price network'
-                'epoch      gas-price node-map'
-                'checkpoint gas-price node-map'
-                'activity   activity  validators'
-                'activity   activity  packages';
-        }
+		.home-page-grid-container-top.with-token {
+			grid-template-areas:
+				'network transactions accounts'
+				'epoch   transactions accounts'
+				'token   transactions accounts';
+		}
+	}
 
-        .home-page-grid-container-with-sui-token {
-            grid-template-areas:
-                'tps        sui-token network'
-                'epoch      gas-price node-map'
-                'checkpoint gas-price node-map'
-                'activity   activity  validators'
-                'activity   activity  packages';
-        }
-    }
+	.home-page-grid-container-bottom {
+		@apply grid grid-cols-1 gap-8;
+		grid-template-areas:
+			'activity'
+			'packages'
+			'validators'
+			'node-map';
+	}
+
+	@screen lg {
+		.home-page-grid-container-bottom {
+			@apply gap-10;
+		}
+	}
+
+	@screen xl {
+		.home-page-grid-container-bottom {
+			@apply grid grid-cols-2 gap-x-20 gap-y-10;
+			grid-template-areas:
+				'activity activity'
+				'packages validators'
+				'node-map node-map';
+		}
+	}
 }

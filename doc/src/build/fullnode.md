@@ -47,7 +47,7 @@ Suggested minimum hardware to run a Sui Full node:
 
 - CPUs: 8 physical cores / 16 vCPUs
 - RAM: 128 GB
-- Storage (SSD): 2 TB NVMe drive
+- Storage (SSD): 4 TB NVMe drive
 
 ### Software requirements
 
@@ -190,7 +190,6 @@ Open a Terminal or Console to the `sui` directory you downloaded in the previous
      num-epochs-to-retain: 0
      max-checkpoints-in-batch: 10
      max-transactions-in-batch: 1000
-     use-range-deletion: true
    ```
 
 ### Starting services

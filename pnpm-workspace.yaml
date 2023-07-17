@@ -1,5 +1,11 @@
 packages:
-  - "sdk/**"
-  - "apps/**"
-  - "dapps/sponsored-transactions"
-  - "dapps/offline-signer-helper"
+    - 'sdk/**'
+    - 'apps/**'
+    - 'dapps/**'
+    - '!**/dist/**'
+    - '!sdk/typescript/*/**'
+    - '!sdk/typescript/builder'
+    - '!sdk/typescript/cryptography'
+    - '!sdk/typescript/faucet'
+    - '!sdk/typescript/transactions'
+    - '!sdk/typescript/client'

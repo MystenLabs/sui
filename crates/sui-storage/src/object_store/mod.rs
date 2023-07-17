@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{anyhow, Context};
+use clap::*;
 use object_store::aws::AmazonS3Builder;
 use object_store::DynObjectStore;
 use serde::{Deserialize, Serialize};
@@ -13,7 +14,7 @@ use tracing::info;
 pub mod util;
 
 /// Object-store type.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Deserialize, Serialize, ValueEnum)]
 pub enum ObjectStoreType {
     /// Local file system
     File,
@@ -25,49 +26,61 @@ pub enum ObjectStoreType {
     Azure,
 }
 
-#[derive(Default, Debug, Clone, Deserialize, Serialize)]
+#[derive(Default, Debug, Clone, Deserialize, Serialize, Args)]
 #[serde(rename_all = "kebab-case")]
 pub struct ObjectStoreConfig {
     /// Which object storage to use. If not specified, defaults to local file system.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[clap(value_enum)]
     pub object_store: Option<ObjectStoreType>,
     /// Path of the local directory. Only relevant is `--object-store` is File
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[clap(long)]
     pub directory: Option<PathBuf>,
     /// Name of the bucket to use for the object store. Must also set
     /// `--object-store` to a cloud object storage to have any effect.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[clap(long)]
     pub bucket: Option<String>,
     /// When using Amazon S3 as the object store, set this to an access key that
     /// has permission to read from and write to the specified S3 bucket.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[clap(long)]
     pub aws_access_key_id: Option<String>,
     /// When using Amazon S3 as the object store, set this to the secret access
     /// key that goes with the specified access key ID.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[clap(long)]
     pub aws_secret_access_key: Option<String>,
     /// When using Amazon S3 as the object store, set this to the region
     /// that goes with the specified bucket
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[clap(long)]
     pub aws_region: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[clap(long)]
     pub aws_profile: Option<String>,
     /// Allow unencrypted HTTP connection to AWS.
     #[serde(default)]
+    #[clap(long, default_value_t = false)]
     pub aws_allow_http: bool,
     /// When using Google Cloud Storage as the object store, set this to the
     /// path to the JSON file that contains the Google credentials.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[clap(long)]
     pub google_service_account: Option<String>,
     /// When using Microsoft Azure as the object store, set this to the
     /// azure account name
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[clap(long)]
     pub azure_storage_account: Option<String>,
     /// When using Microsoft Azure as the object store, set this to one of the
     /// keys in storage account settings
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[clap(long)]
     pub azure_storage_access_key: Option<String>,
     #[serde(default = "default_object_store_connection_limit")]
+    #[clap(long, default_value_t = 20)]
     pub object_store_connection_limit: usize,
 }
 

@@ -48,7 +48,7 @@ mod tests {
     use protobuf::RepeatedField;
     use std::net::TcpListener;
     use std::time::Duration;
-    use sui_tls::{CertVerifier, TlsAcceptor, TlsConnectionInfo};
+    use sui_tls::{CertVerifier, TlsAcceptor};
 
     async fn run_dummy_remote_write(listener: TcpListener) {
         /// i accept everything, send me the trash
@@ -97,17 +97,16 @@ mod tests {
             )
             .unwrap();
 
-        let client = admin::make_reqwest_client(RemoteWriteConfig {
-            url: dummy_remote_write_url.to_owned(),
-            username: "bar".into(),
-            password: "foo".into(),
-            ..Default::default()
-        });
+        let client = admin::make_reqwest_client(
+            RemoteWriteConfig {
+                url: dummy_remote_write_url.to_owned(),
+                username: "bar".into(),
+                password: "foo".into(),
+                ..Default::default()
+            },
+            "dummy user agent",
+        );
 
-        // add handler to server
-        async fn handler(tls_info: axum::Extension<TlsConnectionInfo>) -> String {
-            tls_info.public_key().unwrap().to_string()
-        }
         let app = admin::app(
             Labels {
                 network: "unittest-network".into(),

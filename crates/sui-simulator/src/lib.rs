@@ -4,6 +4,8 @@
 #[cfg(msim)]
 pub use msim::*;
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 // Re-export things used by sui-macros
 pub use anemo;
 pub use anemo_tower;
@@ -101,6 +103,35 @@ pub mod configs {
             info!("Using default test config");
             default
         }
+    }
+}
+
+thread_local! {
+    static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
+}
+
+pub struct NodeLeakDetector(());
+
+impl NodeLeakDetector {
+    pub fn new() -> Self {
+        NODE_COUNT.with(|c| c.fetch_add(1, Ordering::SeqCst));
+        Self(())
+    }
+
+    pub fn get_current_node_count() -> usize {
+        NODE_COUNT.with(|c| c.load(Ordering::SeqCst))
+    }
+}
+
+impl Default for NodeLeakDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Drop for NodeLeakDetector {
+    fn drop(&mut self) {
+        NODE_COUNT.with(|c| c.fetch_sub(1, Ordering::SeqCst));
     }
 }
 

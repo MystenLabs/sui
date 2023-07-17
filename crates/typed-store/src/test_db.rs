@@ -270,7 +270,7 @@ where
         locked.is_empty()
     }
 
-    fn iter(&'a self) -> Self::Iterator {
+    fn unbounded_iter(&'a self) -> Self::Iterator {
         unimplemented!("umplemented API");
     }
 

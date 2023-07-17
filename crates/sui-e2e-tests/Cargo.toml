@@ -1,0 +1,59 @@
+[package]
+name = "sui-e2e-tests"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+version = "0.1.0"
+
+[dependencies]
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tempfile.workspace = true
+futures.workspace = true
+prometheus.workspace = true
+fs_extra.workspace = true
+indexmap.workspace = true
+insta.workspace = true
+jsonrpsee.workspace = true
+test-cluster.workspace = true
+rand.workspace = true
+expect-test.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+assert_cmd.workspace = true
+serde.workspace = true
+bcs.workspace = true
+anyhow.workspace = true
+async-trait.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+
+move-binary-format.workspace = true
+move-package.workspace = true
+telemetry-subscribers.workspace = true
+fastcrypto.workspace = true
+move-core-types.workspace = true
+
+sui-core.workspace = true
+sui-framework.workspace = true
+sui-json-rpc.workspace = true
+sui-node.workspace = true
+sui-macros.workspace = true
+sui-simulator.workspace = true
+mysten-metrics.workspace = true
+sui-tool.workspace = true
+sui-protocol-config.workspace = true
+sui-types.workspace = true
+sui-move-build.workspace = true
+sui-swarm-config.workspace = true
+sui-swarm.workspace = true
+sui-test-transaction-builder.workspace = true
+sui-config.workspace = true
+sui-json-rpc-types.workspace = true
+sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
+sui.workspace = true
+sui-sdk.workspace = true
+sui-keys.workspace = true
+workspace-hack.workspace = true

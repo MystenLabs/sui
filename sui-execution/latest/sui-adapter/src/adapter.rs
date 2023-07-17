@@ -6,14 +6,17 @@ use std::{collections::BTreeMap, sync::Arc};
 use anyhow::Result;
 use move_binary_format::{access::ModuleAccess, file_format::CompiledModule};
 use move_bytecode_verifier::meter::Meter;
-use move_bytecode_verifier::{verify_module_with_config_metered, VerifierConfig};
+use move_bytecode_verifier::verify_module_with_config_metered;
 use move_core_types::account_address::AccountAddress;
-pub use move_vm_runtime::move_vm::MoveVM;
+use move_vm_config::{
+    runtime::{VMConfig, VMRuntimeLimitsConfig},
+    verifier::VerifierConfig,
+};
 use move_vm_runtime::{
-    config::{VMConfig, VMRuntimeLimitsConfig},
-    native_extensions::NativeContextExtensions,
+    move_vm::MoveVM, native_extensions::NativeContextExtensions,
     native_functions::NativeFunctionTable,
 };
+use sui_move_natives::object_runtime;
 use sui_types::metrics::BytecodeVerifierMetrics;
 use sui_verifier::check_for_verifier_timeout;
 use tracing::instrument;
@@ -25,7 +28,6 @@ use sui_types::{
     error::ExecutionError,
     error::{ExecutionErrorKind, SuiError},
     metrics::LimitsMetrics,
-    object::Owner,
     storage::ChildObjectResolver,
 };
 use sui_verifier::verifier::sui_verify_module_metered_check_timeout_only;
@@ -92,26 +94,30 @@ pub fn new_move_vm(
             paranoid_type_checks,
             runtime_limits_config: VMRuntimeLimitsConfig {
                 vector_len_max: protocol_config.max_move_vector_len(),
+                max_value_nest_depth: protocol_config.max_move_value_depth_as_option(),
             },
             enable_invariant_violation_check_in_swap_loc: !protocol_config
                 .disable_invariant_violation_check_in_swap_loc(),
             check_no_extraneous_bytes_during_deserialization: protocol_config
                 .no_extraneous_module_bytes(),
+            #[cfg(debug_assertions)] profiler_config: std::default::Default::default(),
+            // Don't augment errors with execution state on-chain
+            error_execution_state: false,
         },
     )
     .map_err(|_| SuiError::ExecutionInvariantViolation)
 }
 
 pub fn new_native_extensions<'r>(
-    child_resolver: &'r impl ChildObjectResolver,
-    input_objects: BTreeMap<ObjectID, Owner>,
+    child_resolver: &'r dyn ChildObjectResolver,
+    input_objects: BTreeMap<ObjectID, object_runtime::InputObject>,
     is_metered: bool,
     protocol_config: &ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
 ) -> NativeContextExtensions<'r> {
     let mut extensions = NativeContextExtensions::default();
     extensions.add(ObjectRuntime::new(
-        Box::new(child_resolver),
+        child_resolver,
         input_objects,
         is_metered,
         protocol_config,
@@ -164,73 +170,69 @@ pub fn missing_unwrapped_msg(id: &ObjectID) -> String {
 }
 
 /// Run the bytecode verifier with a meter limit
-/// This function only fails if the verification does not complete within the limit
+///
+/// This function only fails if the verification does not complete within the limit.  If the
+/// modules fail to verify but verification completes within the meter limit, the function
+/// succeeds.
 #[instrument(level = "trace", skip_all)]
 pub fn run_metered_move_bytecode_verifier(
-    module_bytes: &[Vec<u8>],
-    protocol_config: &ProtocolConfig,
-    metered_verifier_config: &VerifierConfig,
-    meter: &mut impl Meter,
-    metrics: &Arc<BytecodeVerifierMetrics>
-) -> Result<(), SuiError> {
-    let modules_stat = module_bytes
-        .iter()
-        .map(|b| {
-            CompiledModule::deserialize_with_config(
-                b,
-                protocol_config.move_binary_format_version(),
-                protocol_config.no_extraneous_module_bytes(),
-            )
-            .map_err(|e| e.finish(move_binary_format::errors::Location::Undefined))
-        })
-        .collect::<move_binary_format::errors::VMResult<Vec<CompiledModule>>>();
-    let modules = if let Ok(m) = modules_stat {
-        m
-    } else {
-        // Although we failed, we dont care since it failed withing the timeout
-        return Ok(());
-    };
-
-    run_metered_move_bytecode_verifier_impl(
-        &modules,
-        protocol_config,
-        metered_verifier_config,
-        meter,
-        metrics,
-    )
-}
-
-pub fn run_metered_move_bytecode_verifier_impl(
     modules: &[CompiledModule],
-    protocol_config: &ProtocolConfig,
     verifier_config: &VerifierConfig,
     meter: &mut impl Meter,
-    metrics: &Arc<BytecodeVerifierMetrics>
+    metrics: &Arc<BytecodeVerifierMetrics>,
 ) -> Result<(), SuiError> {
     // run the Move verifier
     for module in modules.iter() {
-        let per_module_meter_verifier_timer = metrics.verifier_runtime_per_module_success_latency.start_timer();
+        let per_module_meter_verifier_timer = metrics
+            .verifier_runtime_per_module_success_latency
+            .start_timer();
 
         if let Err(e) = verify_module_with_config_metered(verifier_config, module, meter) {
             // Check that the status indicates mtering timeout
             if check_for_verifier_timeout(&e.major_status()) {
                 // Discard success timer, but record timeout/failure timer
-                metrics.verifier_runtime_per_module_timeout_latency.observe(per_module_meter_verifier_timer.stop_and_discard());
-                metrics.verifier_timeout_metrics.with_label_values(&[BytecodeVerifierMetrics::MOVE_VERIFIER_TAG, BytecodeVerifierMetrics::TIMEOUT_TAG]).inc();
+                metrics
+                    .verifier_runtime_per_module_timeout_latency
+                    .observe(per_module_meter_verifier_timer.stop_and_discard());
+                metrics
+                    .verifier_timeout_metrics
+                    .with_label_values(&[
+                        BytecodeVerifierMetrics::MOVE_VERIFIER_TAG,
+                        BytecodeVerifierMetrics::TIMEOUT_TAG,
+                    ])
+                    .inc();
                 return Err(SuiError::ModuleVerificationFailure {
                     error: format!("Verification timedout: {}", e),
                 });
             };
-        } else if let Err(err) = sui_verify_module_metered_check_timeout_only(protocol_config, module, &BTreeMap::new(), meter) {
+        } else if let Err(err) = sui_verify_module_metered_check_timeout_only(
+            module,
+            &BTreeMap::new(),
+            meter,
+        ) {
             // We only checked that the failure was due to timeout
             // Discard success timer, but record timeout/failure timer
-            metrics.verifier_runtime_per_module_timeout_latency.observe(per_module_meter_verifier_timer.stop_and_discard());
-            metrics.verifier_timeout_metrics.with_label_values(&[ BytecodeVerifierMetrics::SUI_VERIFIER_TAG, BytecodeVerifierMetrics::TIMEOUT_TAG]).inc();
+            metrics
+                .verifier_runtime_per_module_timeout_latency
+                .observe(per_module_meter_verifier_timer.stop_and_discard());
+            metrics
+                .verifier_timeout_metrics
+                .with_label_values(&[
+                    BytecodeVerifierMetrics::SUI_VERIFIER_TAG,
+                    BytecodeVerifierMetrics::TIMEOUT_TAG,
+                ])
+                .inc();
             return Err(err.into());
         }
         // Save the success timer
         per_module_meter_verifier_timer.stop_and_record();
-        metrics.verifier_timeout_metrics.with_label_values(&[BytecodeVerifierMetrics::OVERALL_TAG, BytecodeVerifierMetrics::SUCCESS_TAG]).inc();
+        metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::OVERALL_TAG,
+                BytecodeVerifierMetrics::SUCCESS_TAG,
+            ])
+            .inc();
     }
     Ok(())
 }

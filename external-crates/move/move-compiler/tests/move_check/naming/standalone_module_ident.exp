@@ -3,6 +3,8 @@ warning[W09001]: unused alias
   │
 6 │     use 0x2::X;
   │              ^ Unused 'use' of alias 'X'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E03005]: unbound unscoped name
   ┌─ tests/move_check/naming/standalone_module_ident.move:8:17

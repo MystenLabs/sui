@@ -29,6 +29,11 @@ pub struct Checkpoint {
     pub total_computation_cost: i64,
     pub total_storage_cost: i64,
     pub total_storage_rebate: i64,
+    // NOTE: we should use the following formula as tps_total_transactions for TPS calculation:
+    // total_successful_transactions + total_transaction_blocks - total_successful_transaction_blocks
+    // such that:
+    /// - a successful transaction block is counted as (number of commands in the block);
+    /// - a failed transaction block is counted as 1.
     pub total_transaction_blocks: i64,
     pub total_transactions: i64,
     pub total_successful_transaction_blocks: i64,

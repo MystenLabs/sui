@@ -13,13 +13,14 @@ Sui Full nodes process all objects of the type `T` by matching the `Display` def
 ## Display properties
 
 The basic set of properties suggested includes:
-**name** - A name for the object. The name is displayed when users view the object.
-**description** - A description for the object. The description is displayed when users view the object.
-**link** - A link to the object to use in an application.
-**image_url** - A URL or a blob with the image for the object.
-**thumbnail_url** - A URL to a **smaller** image to use in wallets, explorers, and other products as a preview.
-**project_url** - A link to a website associated with the object or creator.
-**creator** - A string that indicates the object creator.
+
+- `name` - A name for the object. The name is displayed when users view the object.
+- `description` - A description for the object. The description is displayed when users view the object.
+- `link` - A link to the object to use in an application.
+- `image_url` - A URL or a blob with the image for the object.
+- `thumbnail_url` - A URL to a **smaller** image to use in wallets, explorers, and other products as a preview.
+- `project_url` - A link to a website associated with the object or creator.
+- `creator` - A string that indicates the object creator.
 
 
 ### An example Sui Hero module

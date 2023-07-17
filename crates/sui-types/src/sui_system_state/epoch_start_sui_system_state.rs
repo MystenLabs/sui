@@ -142,6 +142,7 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
                 validator.voting_power as narwhal_config::Stake,
                 validator.narwhal_primary_address.clone(),
                 validator.narwhal_network_pubkey.clone(),
+                validator.hostname.clone(),
             );
         }
 

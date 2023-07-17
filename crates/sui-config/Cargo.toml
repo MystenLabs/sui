@@ -8,33 +8,34 @@ edition = "2021"
 
 [dependencies]
 anemo.workspace = true
-anyhow = { version = "1.0.64", features = ["backtrace"] }
-bcs = "0.1.4"
-csv = "1.2.1"
-dirs = "4.0.0"
+anyhow = { workspace = true, features = ["backtrace"] }
+bcs.workspace = true
+csv.workspace = true
+dirs.workspace = true
 fastcrypto.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
-once_cell = "1.16"
-rand = "0.8.5"
-serde = { version = "1.0.144", features = ["derive", "rc"] }
-serde_with = "2.1.0"
-serde_yaml = "0.8.26"
-tempfile = "3.3.0"
-tracing = "0.1.36"
-prometheus = "0.13.3"
+once_cell.workspace = true
+rand.workspace = true
+serde = { workspace = true, features = ["derive", "rc"] }
+serde_with.workspace = true
+serde_yaml.workspace = true
+tempfile.workspace = true
+tracing.workspace = true
+prometheus.workspace = true
 
-narwhal-config = { path = "../../narwhal/config" }
-shared-crypto = { path = "../shared-crypto" }
-sui-keys = { path = "../sui-keys" }
-sui-protocol-config = { path = "../sui-protocol-config" }
-sui-storage = { path = "../sui-storage" }
-sui-types = { path = "../sui-types" }
+narwhal-config.workspace = true
+shared-crypto.workspace = true
+sui-keys.workspace = true
+sui-protocol-config.workspace = true
+sui-storage.workspace = true
+sui-types.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
 [target.'cfg(msim)'.dependencies]
-sui-simulator = { path = "../sui-simulator" }
+sui-simulator.workspace = true
 
 [dev-dependencies]
-insta = { version = "1.21.1", features = ["redactions", "yaml"] }
-tempfile = "3.3.0"
-sui-types = { path = "../sui-types", features = ["test-utils"] }
+insta.workspace = true
+tempfile.workspace = true
+sui-types = { workspace = true, features = ["test-utils"] }

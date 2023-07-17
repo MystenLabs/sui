@@ -18,6 +18,7 @@ use uuid::Uuid;
 
 mod guards;
 pub mod histogram;
+pub mod metered_channel;
 pub use guards::*;
 
 pub const TX_TYPE_SINGLE_WRITER_TX: &str = "single_writer";
@@ -27,6 +28,7 @@ pub const TX_TYPE_SHARED_OBJ_TX: &str = "shared_object";
 pub struct Metrics {
     pub tasks: IntGaugeVec,
     pub futures: IntGaugeVec,
+    pub channels: IntGaugeVec,
     pub scope_iterations: IntGaugeVec,
     pub scope_duration_ns: IntGaugeVec,
     pub scope_entrance: IntGaugeVec,
@@ -46,6 +48,13 @@ impl Metrics {
                 "monitored_futures",
                 "Number of pending futures per callsite.",
                 &["callsite"],
+                registry,
+            )
+            .unwrap(),
+            channels: register_int_gauge_vec_with_registry!(
+                "monitored_channels",
+                "Size of channels.",
+                &["name"],
                 registry,
             )
             .unwrap(),

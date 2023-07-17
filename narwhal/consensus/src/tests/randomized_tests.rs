@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::bullshark::Bullshark;
-use crate::consensus::ConsensusState;
+use crate::consensus::{ConsensusState, LeaderSchedule, LeaderSwapTable};
 use crate::consensus_utils::make_consensus_store;
 use crate::consensus_utils::NUM_SUB_DAGS_PER_SCHEDULE;
 use crate::metrics::ConsensusMetrics;
@@ -416,11 +416,11 @@ pub fn make_certificates_with_parameters(
             // Now create the certificate with the provided parents
             let (_, certificate) = mock_certificate_with_rand(
                 committee,
+                &latest_protocol_version(),
                 authority.id(),
                 round,
                 parents_digests.clone(),
                 &mut rand,
-                &latest_protocol_version(),
             );
 
             // group certificates by round for easy access
@@ -500,8 +500,10 @@ fn generate_and_run_execution_plans(
         let mut bullshark = Bullshark::new(
             committee.clone(),
             store.clone(),
+            latest_protocol_version(),
             metrics.clone(),
             NUM_SUB_DAGS_PER_SCHEDULE,
+            LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
         );
 
         let mut inserted_certificates = HashSet::new();

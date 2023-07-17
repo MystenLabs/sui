@@ -7,6 +7,7 @@ use crate::TransactionValidator;
 use async_trait::async_trait;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use mysten_metrics::metered_channel::Sender;
 use mysten_metrics::spawn_logged_monitored_task;
 use mysten_network::server::Server;
 use mysten_network::Multiaddr;
@@ -16,7 +17,6 @@ use tokio::task::JoinHandle;
 use tokio::time::{sleep, timeout};
 use tonic::{Request, Response, Status};
 use tracing::{error, info, warn};
-use types::metered_channel::Sender;
 use types::{
     ConditionalBroadcastReceiver, Empty, Transaction, TransactionProto, Transactions,
     TransactionsServer, TxResponse,

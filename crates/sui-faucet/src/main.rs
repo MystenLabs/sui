@@ -20,7 +20,8 @@ use std::{
 };
 use sui_config::{sui_config_dir, SUI_CLIENT_CONFIG};
 use sui_faucet::{
-    Faucet, FaucetConfig, FaucetRequest, FaucetResponse, RequestMetricsLayer, SimpleFaucet,
+    BatchFaucetResponse, BatchStatusFaucetResponse, Faucet, FaucetConfig, FaucetError,
+    FaucetRequest, FaucetResponse, RequestMetricsLayer, SimpleFaucet,
 };
 use sui_sdk::wallet_context::WalletContext;
 use tower::{limit::RateLimitLayer, ServiceBuilder};
@@ -30,10 +31,9 @@ use uuid::Uuid;
 
 const CONCURRENCY_LIMIT: usize = 30;
 
-struct AppState<F = SimpleFaucet> {
+struct AppState<F = Arc<SimpleFaucet>> {
     faucet: F,
     config: FaucetConfig,
-    // TODO: add counter
 }
 
 const PROM_PORT_ADDR: &str = "0.0.0.0:9184";
@@ -69,7 +69,6 @@ async fn main() -> Result<(), anyhow::Error> {
     info!("Starting Prometheus HTTP endpoint at {}", prom_binding);
     let registry_service = sui_node::metrics::start_prometheus_server(prom_binding);
     let prometheus_registry = registry_service.default_registry();
-
     let app_state = Arc::new(AppState {
         faucet: SimpleFaucet::new(
             context,
@@ -91,6 +90,8 @@ async fn main() -> Result<(), anyhow::Error> {
     let app = Router::new()
         .route("/", get(health))
         .route("/gas", post(request_gas))
+        .route("/v1/gas", post(batch_request_gas))
+        .route("/v1/status", post(request_status))
         .layer(
             ServiceBuilder::new()
                 .layer(HandleErrorLayer::new(handle_error))
@@ -129,6 +130,121 @@ async fn health() -> &'static str {
     "OK"
 }
 
+/// handler for batch_request_gas requests
+async fn batch_request_gas(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(payload): Json<FaucetRequest>,
+) -> impl IntoResponse {
+    let id = Uuid::new_v4();
+    // ID for traceability
+    info!(uuid = ?id, "Got new gas request.");
+
+    let FaucetRequest::FixedAmountRequest(request) = payload else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(BatchFaucetResponse::from(FaucetError::Internal(
+                "Input Error.".to_string(),
+            ))),
+        )
+    };
+
+    if state.config.batch_enabled {
+        let result = spawn_monitored_task!(async move {
+            state
+                .faucet
+                .batch_send(
+                    id,
+                    request.recipient,
+                    &vec![state.config.amount; state.config.num_coins],
+                )
+                .await
+        })
+        .await
+        .unwrap();
+
+        match result {
+            Ok(v) => {
+                info!(uuid =?id, "Request is successfully served");
+                (StatusCode::ACCEPTED, Json(BatchFaucetResponse::from(v)))
+            }
+            Err(v) => {
+                warn!(uuid =?id, "Failed to request gas: {:?}", v);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(BatchFaucetResponse::from(v)),
+                )
+            }
+        }
+    } else {
+        // TODO (jian): remove this feature gate when batch has proven to be baked long enough
+        info!(uuid = ?id, "Falling back to v1 implementation");
+        let result = spawn_monitored_task!(async move {
+            state
+                .faucet
+                .send(
+                    id,
+                    request.recipient,
+                    &vec![state.config.amount; state.config.num_coins],
+                )
+                .await
+        })
+        .await
+        .unwrap();
+
+        match result {
+            Ok(_) => {
+                info!(uuid =?id, "Request is successfully served");
+                (StatusCode::ACCEPTED, Json(BatchFaucetResponse::from(id)))
+            }
+            Err(v) => {
+                warn!(uuid =?id, "Failed to request gas: {:?}", v);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(BatchFaucetResponse::from(v)),
+                )
+            }
+        }
+    }
+}
+
+/// handler for batch_get_status requests
+async fn request_status(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(payload): Json<FaucetRequest>,
+) -> impl IntoResponse {
+    match payload {
+        FaucetRequest::GetBatchSendStatusRequest(requests) => {
+            match Uuid::parse_str(&requests.task_id) {
+                Ok(task_id) => {
+                    let result = state.faucet.get_batch_send_status(task_id).await;
+                    match result {
+                        Ok(v) => (
+                            StatusCode::CREATED,
+                            Json(BatchStatusFaucetResponse::from(v)),
+                        ),
+                        Err(v) => (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(BatchStatusFaucetResponse::from(v)),
+                        ),
+                    }
+                }
+                Err(e) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(BatchStatusFaucetResponse::from(FaucetError::Internal(
+                        e.to_string(),
+                    ))),
+                ),
+            }
+        }
+        _ => (
+            StatusCode::BAD_REQUEST,
+            Json(BatchStatusFaucetResponse::from(FaucetError::Internal(
+                "Input Error.".to_string(),
+            ))),
+        ),
+    }
+}
+
 /// handler for all the request_gas requests
 async fn request_gas(
     Extension(state): Extension<Arc<AppState>>,
@@ -140,7 +256,7 @@ async fn request_gas(
     let result = match payload {
         FaucetRequest::FixedAmountRequest(requests) => {
             // We spawn a tokio task for this such that connection drop will not interrupt
-            // it and impact the reclycing of coins
+            // it and impact the recycling of coins
             spawn_monitored_task!(async move {
                 state
                     .faucet
@@ -153,6 +269,14 @@ async fn request_gas(
             })
             .await
             .unwrap()
+        }
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(FaucetResponse::from(FaucetError::Internal(
+                    "Input Error.".to_string(),
+                ))),
+            )
         }
     };
     match result {

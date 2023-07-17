@@ -8,14 +8,16 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-anyhow = "1.0.64"
-bcs = "0.1.4"
-bimap = "0.6.2"
-clap = { version = "3.1.8", features = ["derive"] }
-once_cell = "1.16"
-rand = "0.8.5"
-prometheus = "0.13.3"
-tempfile = "3.2.0"
+anyhow.workspace = true
+bcs.workspace = true
+bimap.workspace = true
+clap.workspace = true
+once_cell.workspace = true
+rand.workspace = true
+prometheus.workspace = true
+tempfile.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
 
 fastcrypto.workspace = true
 move-binary-format.workspace = true
@@ -23,16 +25,22 @@ move-bytecode-utils.workspace = true
 move-command-line-common.workspace = true
 move-compiler.workspace = true
 move-core-types.workspace = true
-move-stdlib.workspace = true
 move-symbol-pool.workspace = true
 move-transactional-test-runner.workspace = true
-move-vm-runtime.workspace = true
 
-sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
-sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
+move-stdlib = { path = "../../external-crates/move/move-stdlib" }
+move-vm-runtime = { path = "../../external-crates/move/move-vm/runtime" }
 
-sui-core = { path = "../sui-core" }
-sui-framework = { path = "../sui-framework" }
-sui-protocol-config = { path = "../sui-protocol-config" }
-sui-types = { path = "../sui-types", features = ["test-utils"]}
+sui-config.workspace = true
+sui-swarm-config.workspace = true
+sui-core = { workspace = true, features = ["test-utils"] }
+sui-framework.workspace = true
+sui-protocol-config.workspace = true
+sui-types = { workspace = true, features = ["test-utils"]}
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+sui-json-rpc-types.workspace = true
+sui-json-rpc.workspace = true
+sui-framework-snapshot.workspace = true
+
+[target.'cfg(msim)'.dependencies]
+msim.workspace = true

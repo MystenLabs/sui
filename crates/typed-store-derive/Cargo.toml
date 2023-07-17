@@ -12,15 +12,15 @@ publish = false
 proc-macro = true
 
 [dependencies]
-proc-macro2 = "1.0.47"
-quote = "1.0.23"
-syn = { version = "1.0.104", features = ["full"] }
+proc-macro2.workspace = true
+quote.workspace = true
+syn.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 
 [dev-dependencies]
-eyre = "0.6.8"
-rocksdb = { version = "0.20.1", features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"], default-features = false }
-tempfile = "3.3.0"
+eyre.workspace = true
+rocksdb.workspace = true
+tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
-typed-store = { path = "../typed-store" }
+typed-store.workspace = true

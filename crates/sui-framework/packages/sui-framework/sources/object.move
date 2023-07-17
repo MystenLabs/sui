@@ -72,6 +72,7 @@ module sui::object {
 
     // === uid ===
 
+    #[allow(unused_function)]
     /// Create the `UID` for the singleton `SuiSystemState` object.
     /// This should only be called once from `sui_system`.
     fun sui_system_state(ctx: &TxContext): UID {

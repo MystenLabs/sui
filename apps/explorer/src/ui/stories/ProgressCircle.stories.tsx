@@ -7,19 +7,19 @@ import { ProgressCircle, type ProgressCircleProps } from '../ProgressCircle';
 import { Text } from '../Text';
 
 export default {
-    component: ProgressCircle,
+	component: ProgressCircle,
 } as Meta;
 
 export const Default: StoryObj<ProgressCircleProps> = {
-    args: {
-        progress: 50,
-    },
-    render: (args) => (
-        <div className="justify flex items-center text-steel-darker">
-            <div className="w-4">
-                <ProgressCircle {...args} />
-            </div>
-            <Text variant="bodySmall/medium">50%</Text>
-        </div>
-    ),
+	args: {
+		progress: 50,
+	},
+	render: (args) => (
+		<div className="justify flex items-center text-steel-darker">
+			<div className="w-4">
+				<ProgressCircle {...args} />
+			</div>
+			<Text variant="bodySmall/medium">50%</Text>
+		</div>
+	),
 };

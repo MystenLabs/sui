@@ -17,6 +17,7 @@ A basic scalable vector library implemented using <code>Table</code>.
 -  [Function `borrow_mut`](#0x2_table_vec_borrow_mut)
 -  [Function `pop_back`](#0x2_table_vec_pop_back)
 -  [Function `destroy_empty`](#0x2_table_vec_destroy_empty)
+-  [Function `drop`](#0x2_table_vec_drop)
 
 
 <pre><code><b>use</b> <a href="table.md#0x2_table">0x2::table</a>;
@@ -308,6 +309,33 @@ Aborts if <code>t</code> is not empty.
     <b>assert</b>!(<a href="table_vec.md#0x2_table_vec_length">length</a>(&t) == 0, <a href="table_vec.md#0x2_table_vec_ETableNonEmpty">ETableNonEmpty</a>);
     <b>let</b> <a href="table_vec.md#0x2_table_vec_TableVec">TableVec</a> { contents } = t;
     <a href="table.md#0x2_table_destroy_empty">table::destroy_empty</a>(contents);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_table_vec_drop"></a>
+
+## Function `drop`
+
+Drop a possibly non-empty TableVec <code>t</code>.
+Usable only if the value type <code>Element</code> has the <code>drop</code> ability
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="table_vec.md#0x2_table_vec_drop">drop</a>&lt;Element: drop, store&gt;(t: <a href="table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="table_vec.md#0x2_table_vec_drop">drop</a>&lt;Element: drop + store&gt;(t: <a href="table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;) {
+    <b>let</b> <a href="table_vec.md#0x2_table_vec_TableVec">TableVec</a> { contents } = t;
+    <a href="table.md#0x2_table_drop">table::drop</a>(contents)
 }
 </code></pre>
 

@@ -9,10 +9,14 @@ use super::{
 use crate::{
     diag,
     diagnostics::{codes::*, Diagnostic},
-    expansion::ast::{Fields, ModuleIdent, Value_},
+    expansion::ast::{AttributeName_, Fields, ModuleIdent, Value_, Visibility},
     naming::ast::{self as N, TParam, TParamID, Type, TypeName_, Type_},
     parser::ast::{Ability_, BinOp_, ConstantName, Field, FunctionName, StructName, UnaryOp_},
-    shared::{unique_map::UniqueMap, *},
+    shared::{
+        known_attributes::{KnownAttribute, TestingAttribute},
+        unique_map::UniqueMap,
+        *,
+    },
     typing::ast as T,
     FullyCompiledProgram,
 };
@@ -40,7 +44,13 @@ pub fn program(
     assert!(context.constraints.is_empty());
     recursive_structs::modules(context.env, &modules);
     infinite_instantiations::modules(context.env, &modules);
-    T::Program { modules, scripts }
+    let module_info = context.modules;
+    let mut prog = T::Program { modules, scripts };
+    for v in &compilation_env.visitors().typing {
+        let mut v = v.borrow_mut();
+        v.visit(compilation_env, &module_info, &mut prog);
+    }
+    prog
 }
 
 fn modules(
@@ -56,8 +66,11 @@ fn module(
     mdef: N::ModuleDefinition,
 ) -> T::ModuleDefinition {
     assert!(context.current_script_constants.is_none());
+    assert!(context.called_fns.is_empty());
+
     context.current_module = Some(ident);
     let N::ModuleDefinition {
+        warning_filter,
         package_name,
         attributes,
         is_source_module,
@@ -67,13 +80,16 @@ fn module(
         functions: nfunctions,
         constants: nconstants,
     } = mdef;
+    context.env.add_warning_filter_scope(warning_filter.clone());
     structs
         .iter_mut()
         .for_each(|(_, _, s)| struct_def(context, s));
     let constants = nconstants.map(|name, c| constant(context, name, c));
     let functions = nfunctions.map(|name, f| function(context, name, f, false));
     assert!(context.constraints.is_empty());
-    T::ModuleDefinition {
+    context.env.pop_warning_filter_scope();
+    let typed_module = T::ModuleDefinition {
+        warning_filter,
         package_name,
         attributes,
         is_source_module,
@@ -82,7 +98,12 @@ fn module(
         structs,
         constants,
         functions,
-    }
+    };
+    gen_unused_warnings(context, &typed_module);
+    // reset called functions set so that it's ready to be be populated with values from
+    // a single module only
+    context.called_fns.clear();
+    typed_module
 }
 
 fn scripts(
@@ -99,6 +120,7 @@ fn script(context: &mut Context, nscript: N::Script) -> T::Script {
     assert!(context.current_script_constants.is_none());
     context.current_module = None;
     let N::Script {
+        warning_filter,
         package_name,
         attributes,
         loc,
@@ -106,11 +128,14 @@ fn script(context: &mut Context, nscript: N::Script) -> T::Script {
         function_name,
         function: nfunction,
     } = nscript;
+    context.env.add_warning_filter_scope(warning_filter.clone());
     context.bind_script_constants(&nconstants);
     let constants = nconstants.map(|name, c| constant(context, name, c));
     let function = function(context, function_name, nfunction, true);
     context.current_script_constants = None;
+    context.env.pop_warning_filter_scope();
     T::Script {
+        warning_filter,
         package_name,
         attributes,
         loc,
@@ -132,6 +157,7 @@ fn function(
 ) -> T::Function {
     let loc = name.loc();
     let N::Function {
+        warning_filter,
         index,
         attributes,
         visibility,
@@ -140,6 +166,7 @@ fn function(
         body: n_body,
         acquires,
     } = f;
+    context.env.add_warning_filter_scope(warning_filter.clone());
     assert!(context.constraints.is_empty());
     context.reset_for_module_item();
     context.current_function = Some(name);
@@ -165,7 +192,9 @@ fn function(
 
     let body = function_body(context, &acquires, n_body);
     context.current_function = None;
+    context.env.pop_warning_filter_scope();
     T::Function {
+        warning_filter,
         index,
         attributes,
         visibility,
@@ -231,12 +260,14 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
     context.reset_for_module_item();
 
     let N::Constant {
+        warning_filter,
         index,
         attributes,
         loc,
         signature,
         value: nvalue,
     } = nconstant;
+    context.env.add_warning_filter_scope(warning_filter.clone());
 
     // Don't need to add base type constraint, as it is checked in `check_valid_constant::signature`
     let mut signature = core::instantiate(context, signature);
@@ -264,8 +295,10 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
     expand::exp(context, &mut value);
 
     check_valid_constant::exp(context, &value);
+    context.env.pop_warning_filter_scope();
 
     T::Constant {
+        warning_filter,
         index,
         attributes,
         loc,
@@ -502,6 +535,9 @@ mod check_valid_constant {
 fn struct_def(context: &mut Context, s: &mut N::StructDefinition) {
     assert!(context.constraints.is_empty());
     context.reset_for_module_item();
+    context
+        .env
+        .add_warning_filter_scope(s.warning_filter.clone());
 
     let field_map = match &mut s.fields {
         N::StructFields::Native(_) => return,
@@ -543,8 +579,8 @@ fn struct_def(context: &mut Context, s: &mut N::StructDefinition) {
     for (_field_loc, _field_, idx_ty) in field_map.iter_mut() {
         expand::type_(context, &mut idx_ty.1);
     }
-
     check_type_params_usage(context, &s.type_parameters, field_map);
+    context.env.pop_warning_filter_scope();
 }
 
 fn check_type_params_usage(
@@ -2034,6 +2070,9 @@ fn module_call(
         parameter_types: params_ty_list,
         acquires,
     };
+    if context.is_current_module(&m) {
+        context.called_fns.insert(f.value());
+    }
     (ret_ty, T::UnannotatedExp_::ModuleCall(Box::new(call)))
 }
 
@@ -2245,4 +2284,54 @@ fn make_arg_types<S: std::fmt::Display, F: Fn() -> S>(
         given.pop();
     }
     given
+}
+
+//**************************************************************************************************
+// Module-wide warnings
+//**************************************************************************************************
+
+/// Generates warnings for unused struct types and unused (private) functions.
+fn gen_unused_warnings(context: &mut Context, mdef: &T::ModuleDefinition) {
+    if mdef.is_source_module {
+        // generate warnings only for modules compiled in this pass rather than for all modules
+        // including pre-compiled libraries for which we do not have source code available and
+        // cannot be analyzed in this pass
+        context
+            .env
+            .add_warning_filter_scope(mdef.warning_filter.clone());
+
+        for (loc, name, fun) in &mdef.functions {
+            if fun.attributes.iter().any(|(_, n, _)| {
+                n == &AttributeName_::Known(KnownAttribute::Testing(TestingAttribute::Test))
+            }) {
+                // functions with #[test] attribute are implicitly used
+                continue;
+            }
+            if *name == symbol!("init") {
+                // a Sui-specific hack (until we can implement this properly on the Sui side) to
+                // avoid signaling that the init function is unused (not called by the runtime
+                continue;
+            }
+            context
+                .env
+                .add_warning_filter_scope(fun.warning_filter.clone());
+            if !context.called_fns.contains(name)
+                && fun.entry.is_none()
+                && matches!(fun.visibility, Visibility::Internal)
+            {
+                // TODO: postponing handling of friend functions until we decide what to do with them
+                // vis-a-vis ideas around package-private
+                let msg = format!(
+                    "The non-'public', non-'entry' function '{name}' is never called. \
+                           Consider removing it."
+                );
+                context
+                    .env
+                    .add_diag(diag!(UnusedItem::Function, (loc, msg)))
+            }
+            context.env.pop_warning_filter_scope();
+        }
+
+        context.env.pop_warning_filter_scope();
+    }
 }

@@ -9,10 +9,11 @@ use move_command_line_common::{
     testing::{add_update_baseline_fix, format_diff, read_env_update_baseline, EXP_EXT, OUT_EXT},
 };
 use move_compiler::{
-    compiled_unit::AnnotatedCompiledUnit,
+    command_line::compiler::move_check_for_errors,
     diagnostics::*,
-    shared::{Flags, NumericalAddress},
-    unit_test, CommentMap, Compiler, SteppedCompiler, PASS_CFGIR, PASS_PARSER,
+    editions::Flavor,
+    shared::{Flags, NumericalAddress, PackageConfig},
+    Compiler, PASS_PARSER,
 };
 
 /// Shared flag to keep any temporary results of the test
@@ -20,26 +21,45 @@ const KEEP_TMP: &str = "KEEP";
 
 const TEST_EXT: &str = "unit_test";
 const VERIFICATION_EXT: &str = "verification";
+const UNUSED_EXT: &str = "unused";
 
-/// Root of tests which require to set flavor flags.
-const FLAVOR_PATH: &str = "flavors/";
+const SUI_MODE_DIR: &str = "sui_mode";
 
-fn default_testing_addresses() -> BTreeMap<String, NumericalAddress> {
-    let mapping = [
+fn default_testing_addresses(flavor: Flavor) -> BTreeMap<String, NumericalAddress> {
+    let mut mapping = vec![
         ("std", "0x1"),
+        ("sui", "0x2"),
         ("M", "0x1"),
         ("A", "0x42"),
         ("B", "0x42"),
         ("K", "0x19"),
-        ("Async", "0x20"),
+        ("a", "0x42"),
+        ("b", "0x42"),
+        ("k", "0x19"),
     ];
+    if flavor == Flavor::Sui {
+        mapping.extend([("sui", "0x2"), ("sui_system", "0x3")]);
+    }
     mapping
-        .iter()
+        .into_iter()
         .map(|(name, addr)| (name.to_string(), NumericalAddress::parse_str(addr).unwrap()))
         .collect()
 }
 
 fn move_check_testsuite(path: &Path) -> datatest_stable::Result<()> {
+    let flavor = if path.components().any(|c| c.as_os_str() == SUI_MODE_DIR) {
+        Flavor::Sui
+    } else {
+        Flavor::default()
+    };
+    let config = PackageConfig {
+        flavor,
+        ..PackageConfig::default()
+    };
+    testsuite(path, config)
+}
+
+fn testsuite(path: &Path, mut config: PackageConfig) -> datatest_stable::Result<()> {
     // A test is marked that it should also be compiled in test mode by having a `path.unit_test`
     // file.
     if path.with_extension(TEST_EXT).exists() {
@@ -53,11 +73,16 @@ fn move_check_testsuite(path: &Path) -> datatest_stable::Result<()> {
             path.with_extension("").to_string_lossy(),
             OUT_EXT
         );
+        let mut config = config.clone();
+        config
+            .warning_filter
+            .union(&WarningFilters::unused_function_warnings_filter());
         run_test(
             path,
             Path::new(&test_exp_path),
             Path::new(&test_out_path),
             Flags::testing(),
+            config,
         )?;
     }
 
@@ -74,52 +99,75 @@ fn move_check_testsuite(path: &Path) -> datatest_stable::Result<()> {
             path.with_extension("").to_string_lossy(),
             OUT_EXT
         );
+        let mut config = config.clone();
+        config
+            .warning_filter
+            .union(&WarningFilters::unused_function_warnings_filter());
         run_test(
             path,
             Path::new(&verification_exp_path),
             Path::new(&verification_out_path),
             Flags::verification(),
+            config,
+        )?;
+    }
+
+    // A cross-module unused case that should run without unused warnings suppression
+    if path.with_extension(UNUSED_EXT).exists() {
+        let unused_exp_path = format!(
+            "{}.unused.{}",
+            path.with_extension("").to_string_lossy(),
+            EXP_EXT
+        );
+        let unused_out_path = format!(
+            "{}.unused.{}",
+            path.with_extension("").to_string_lossy(),
+            OUT_EXT
+        );
+        run_test(
+            path,
+            Path::new(&unused_exp_path),
+            Path::new(&unused_out_path),
+            Flags::empty(),
+            config.clone(),
         )?;
     }
 
     let exp_path = path.with_extension(EXP_EXT);
     let out_path = path.with_extension(OUT_EXT);
 
-    let mut flags = Flags::empty();
-    match path.to_str() {
-        Some(p) if p.contains(FLAVOR_PATH) => {
-            // Extract the flavor from the path. Its the directory name of the file.
-            let flavor = path
-                .parent()
-                .expect("has parent")
-                .file_name()
-                .expect("has name")
-                .to_string_lossy()
-                .to_string();
-            flags = flags.set_flavor(flavor)
-        }
-        _ => {}
-    };
-    run_test(path, &exp_path, &out_path, flags)?;
+    let flags = Flags::empty();
+
+    config
+        .warning_filter
+        .union(&WarningFilters::unused_function_warnings_filter());
+    run_test(path, &exp_path, &out_path, flags, config)?;
     Ok(())
 }
 
 // Runs all tests under the test/testsuite directory.
-fn run_test(path: &Path, exp_path: &Path, out_path: &Path, flags: Flags) -> anyhow::Result<()> {
+pub fn run_test(
+    path: &Path,
+    exp_path: &Path,
+    out_path: &Path,
+    flags: Flags,
+    default_config: PackageConfig,
+) -> anyhow::Result<()> {
     let targets: Vec<String> = vec![path.to_str().unwrap().to_owned()];
 
     let (files, comments_and_compiler_res) = Compiler::from_files(
         targets,
         move_stdlib::move_stdlib_files(),
-        default_testing_addresses(),
+        default_testing_addresses(default_config.flavor),
     )
     .set_flags(flags)
+    .set_default_config(default_config)
     .run::<PASS_PARSER>()?;
     let diags = move_check_for_errors(comments_and_compiler_res);
 
     let has_diags = !diags.is_empty();
     let diag_buffer = if has_diags {
-        move_compiler::diagnostics::report_diagnostics_to_buffer(&files, diags)
+        report_diagnostics_to_buffer(&files, diags)
     } else {
         vec![]
     };
@@ -173,33 +221,4 @@ fn run_test(path: &Path, exp_path: &Path, out_path: &Path, flags: Flags) -> anyh
     }
 }
 
-fn move_check_for_errors(
-    comments_and_compiler_res: Result<(CommentMap, SteppedCompiler<'_, PASS_PARSER>), Diagnostics>,
-) -> Diagnostics {
-    fn try_impl(
-        comments_and_compiler_res: Result<
-            (CommentMap, SteppedCompiler<'_, PASS_PARSER>),
-            Diagnostics,
-        >,
-    ) -> Result<(Vec<AnnotatedCompiledUnit>, Diagnostics), Diagnostics> {
-        let (_, compiler) = comments_and_compiler_res?;
-        let (mut compiler, cfgir) = compiler.run::<PASS_CFGIR>()?.into_ast();
-        let compilation_env = compiler.compilation_env();
-        if compilation_env.flags().is_testing() {
-            unit_test::plan_builder::construct_test_plan(compilation_env, None, &cfgir);
-        }
-
-        let (units, diags) = compiler.at_cfgir(cfgir).build()?;
-        Ok((units, diags))
-    }
-
-    let (units, inner_diags) = match try_impl(comments_and_compiler_res) {
-        Ok((units, inner_diags)) => (units, inner_diags),
-        Err(inner_diags) => return inner_diags,
-    };
-    let mut diags = move_compiler::compiled_unit::verify_units(&units);
-    diags.extend(inner_diags);
-    diags
-}
-
-datatest_stable::harness!(move_check_testsuite, "tests/move_check", r".*\.move$");
+datatest_stable::harness!(move_check_testsuite, "tests/", r".*\.move$");

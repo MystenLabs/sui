@@ -1,5 +1,65 @@
 # @mysten/sui.js
 
+## 0.37.1
+
+### Patch Changes
+
+- 34cc7d610: Fix unhandled rejections thrown by waitForTransaction
+
+## 0.37.0
+
+### Minor Changes
+
+- 93794f9f2: Update build to avoid bundling for better modularity
+- a17d3678a: Add keypair exports to allow modular imports for various keypair types
+
+### Patch Changes
+
+- 36f2edff3: Use splitGenericParamaters util from bcs
+- 75d1a190d: Fix bug that prevented deserializing transaction blocks with a set expiration
+- c3a4ec57c: Add explicit dependency on events package
+- 2f37537d5: Update `SuiEventFilter` structure for `TimeRange` query.
+- 00484bcc3: add method to create Ed25519Keypair from a mnemonic seed
+- Updated dependencies [36f2edff3]
+  - @mysten/bcs@0.7.3
+
+## 0.36.0
+
+### Minor Changes
+
+- 3ea9adb71a: Add multisig support
+- 1cfb1c9da3: The `TransactionBlock` builder now uses the protocol config from the chain when constructing and validating transactions, instead of using hard-coded limits. If you wish to perform signing offline (without a provider), you can either define a `protocolConfig` option when building a transaction, or explicitly set `limits`, which will be used instead of the protocol config.
+- fb3bb9118a: Remove logging of RPCValidation errors when typescript types do not match RPC response types
+
+### Patch Changes
+
+- 1cfb1c9da3: Added `getProtocolConfig()` method to the provider.
+- Updated dependencies [ca5c72815d]
+- Updated dependencies [fdb569464e]
+  - @mysten/bcs@0.7.2
+
+## 0.35.1
+
+### Patch Changes
+
+- 09d77325a9: Add new SuiNS Toolkit package.
+
+## 0.35.0
+
+### Minor Changes
+
+- 470c27af50: Added network address metrics
+- 671faefe3c: Add `getChainIdentifier` method
+- 9ce7e051b4: Update internal client to use `@open-rpc/client-js` instead of `jayson` and `rpc-websockets`. This results in a more consistent experience and better error messaging.
+
+### Patch Changes
+
+- 4ea96d909a: the event BCS data is a base64 string
+- bcbb178c44: Fixes BCS definition so it matches the RPC one
+- 03828224c9: Previously, effects had an unwrapped_then_deleted field on ts-sdk. This is an issue since jsonrpc returns the field as unwrappedThenDeleted. Update the transaction type definition to use camelcase.
+- 9ce7e051b4: Add `subscribeTransaction` method.
+- bb50698551: Fixes BCS type definition in the type layout
+
 ## 0.34.1
 
 ### Patch Changes
@@ -175,7 +235,7 @@
 
 ### Minor Changes
 
-- a67cc044b: Transaction signatures are now serialized into a single string, and all APIs that previously took the public key, signature, and scheme now just take the single serialized signature string. To help make parsing this easier, there are new `toSerializedSignature` and `fromSerializedSignature` methods exposed as well.
+- a67cc044b: Transaction signatures are now serialized into a single string, and all APIs that previously took the public key, signature, and scheme now just take the single serialized signature string. To help make parsing this easier, there are new `toSerializedSignature` and `toParsedSignaturePubkeyPair` methods exposed as well.
 - a67cc044b: The RawSigner now provides a `signTransaction` function, which can be used to sign a transaction without submitting it to the network.
 - a67cc044b: The RawSigner now provides a `signMessage` function that can be used to sign personal messages. The SDK also now exports a `verifyMessage` function that can be used to easily verify a message signed with `signMessage`.
 

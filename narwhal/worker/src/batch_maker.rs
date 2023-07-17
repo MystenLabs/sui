@@ -2,11 +2,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::metrics::WorkerMetrics;
 use config::WorkerId;
 use fastcrypto::hash::Hash;
 use futures::future::BoxFuture;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use mysten_metrics::metered_channel::{Receiver, Sender};
 use mysten_metrics::{monitored_scope, spawn_logged_monitored_task};
 use network::{client::NetworkClient, WorkerToPrimaryClient};
 use std::sync::Arc;
@@ -18,13 +20,9 @@ use tokio::{
 };
 use tracing::{error, warn};
 use types::{
-    error::DagError,
-    metered_channel::{Receiver, Sender},
-    now, Batch, BatchAPI, BatchDigest, ConditionalBroadcastReceiver, MetadataAPI, Transaction,
-    TxResponse, WorkerOurBatchMessage, WorkerOurBatchMessageV2,
+    error::DagError, now, Batch, BatchAPI, BatchDigest, ConditionalBroadcastReceiver, MetadataAPI,
+    Transaction, TxResponse, WorkerOurBatchMessage, WorkerOwnBatchMessage,
 };
-
-use crate::metrics::WorkerMetrics;
 
 #[cfg(feature = "trace_transaction")]
 use byteorder::{BigEndian, ReadBytesExt};
@@ -61,7 +59,6 @@ pub struct BatchMaker {
     client: NetworkClient,
     /// The batch store to store our own batches.
     store: DBMap<BatchDigest, Batch>,
-    // The protocol configuration.
     protocol_config: ProtocolConfig,
 }
 
@@ -271,7 +268,7 @@ impl BatchMaker {
         let store = self.store.clone();
         let worker_id = self.id;
 
-        // TODO: Remove once we have upgraded to protocol version 11.
+        // TODO: Remove once we have upgraded to protocol version 12.
         if self.protocol_config.narwhal_versioned_metadata() {
             // The batch has been sealed so we can officially set its creation time
             // for latency calculations.
@@ -296,12 +293,12 @@ impl BatchMaker {
                 let _ = done_sending.await;
 
                 // Send the batch to the primary.
-                let message = WorkerOurBatchMessageV2 {
+                let message = WorkerOwnBatchMessage {
                     digest,
                     worker_id,
                     metadata,
                 };
-                if let Err(e) = client.report_our_batch_v2(message).await {
+                if let Err(e) = client.report_own_batch(message).await {
                     warn!("Failed to report our batch: {}", e);
                     // Drop all response handers to signal error, since we
                     // cannot ensure the primary has actually signaled the

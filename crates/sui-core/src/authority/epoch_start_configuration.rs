@@ -21,6 +21,7 @@ pub trait EpochStartConfigTrait {
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum EpochFlag {
     InMemoryCheckpointRoots,
+    PerEpochFinalizedTransactions,
 }
 
 /// Parameters of the epoch fixed at epoch start.
@@ -139,7 +140,10 @@ impl EpochStartConfigTrait for EpochStartConfigurationV2 {
 
 impl EpochFlag {
     pub fn default_flags_for_new_epoch() -> Vec<Self> {
-        vec![EpochFlag::InMemoryCheckpointRoots]
+        vec![
+            EpochFlag::InMemoryCheckpointRoots,
+            EpochFlag::PerEpochFinalizedTransactions,
+        ]
     }
 }
 
@@ -148,6 +152,7 @@ impl fmt::Display for EpochFlag {
         // Important - implementation should return low cardinality values because this is used as metric key
         match self {
             EpochFlag::InMemoryCheckpointRoots => write!(f, "InMemoryCheckpointRoots"),
+            EpochFlag::PerEpochFinalizedTransactions => write!(f, "PerEpochFinalizedTransactions"),
         }
     }
 }

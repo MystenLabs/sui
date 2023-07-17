@@ -1,38 +1,38 @@
 .txresults {
-    @apply mt-2 w-[100%] font-mono;
+	@apply mt-2 w-[100%] font-mono;
 }
 
 .txheader {
-    @apply hidden bg-offblack py-2 text-offwhite md:grid md:grid-cols-12;
+	@apply hidden bg-offblack py-2 text-offwhite md:grid md:grid-cols-12;
 }
 
 .txrow {
-    @apply mb-10 md:mb-2 md:grid md:grid-cols-12;
+	@apply mb-10 md:mb-2 md:grid md:grid-cols-12;
 }
 
 .txheader > div,
 .txrow > div {
-    @apply mx-[0.5vw] break-all;
+	@apply mx-[0.5vw] break-all;
 }
 
 .txid {
-    @apply col-span-3;
+	@apply col-span-3;
 }
 
 .txadd {
-    @apply col-span-3;
+	@apply col-span-3;
 }
 
 .txtype,
 .txstatus,
 .txage {
-    @apply col-span-2;
+	@apply col-span-2;
 }
 
 .failure {
-    @apply text-red-300;
+	@apply text-red-300;
 }
 
 .success {
-    @apply text-green-400;
+	@apply text-green-400;
 }

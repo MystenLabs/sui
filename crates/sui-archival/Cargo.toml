@@ -1,0 +1,50 @@
+[package]
+name = "sui-archival"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "Apache-2.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+
+[dependencies]
+indicatif.workspace = true
+integer-encoding.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+bcs.workspace = true
+byteorder.workspace = true
+tracing.workspace = true
+bytes.workspace = true
+tokio-stream.workspace = true
+num_enum.workspace = true
+futures.workspace = true
+backoff.workspace = true
+rand.workspace = true
+object_store.workspace = true
+prometheus.workspace = true
+zstd.workspace = true
+typed-store.workspace = true
+typed-store-derive.workspace = true
+sui-config.workspace = true
+sui-types.workspace = true
+sui-storage.workspace = true
+sui-protocol-config.workspace = true
+fastcrypto = { workspace = true, features = ["copy_key"] }
+tokio = { workspace = true, features = ["full"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tempfile.workspace = true
+more-asserts.workspace = true
+telemetry-subscribers.workspace = true
+move-binary-format.workspace = true
+move-core-types.workspace = true
+move-package.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
+ed25519-consensus.workspace = true
+fastcrypto = { workspace = true }
+sui-swarm-config.workspace = true
+sui-macros.workspace = true
+
+[target.'cfg(msim)'.dependencies]
+sui-simulator.workspace = true

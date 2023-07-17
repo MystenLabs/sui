@@ -2,5 +2,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module.exports = {
-    plugins: ['postcss-preset-env', 'tailwindcss'],
+	plugins: ['postcss-preset-env', 'tailwindcss'],
 };

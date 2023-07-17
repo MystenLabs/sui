@@ -18,6 +18,7 @@ use colored::*;
 use move_binary_format::{errors::VMResult, file_format::CompiledModule};
 use move_bytecode_utils::Modules;
 use move_compiler::{
+    diagnostics::WarningFilters,
     shared::{Flags, NumericalAddress, PackagePaths},
     unit_test::{ExpectedFailure, ModuleTestPlan, TestCase, TestPlan},
 };
@@ -38,24 +39,19 @@ use move_stackless_bytecode_interpreter::{
     shared::bridge::{adapt_move_vm_change_set, adapt_move_vm_result},
     StacklessBytecodeInterpreter,
 };
+#[cfg(debug_assertions)]
+use move_vm_profiler::GasProfiler;
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use move_vm_test_utils::{
     gas_schedule::{unit_cost_schedule, CostTable, Gas, GasStatus},
     InMemoryStorage,
 };
+#[cfg(debug_assertions)]
+use move_vm_types::gas::GasMeter;
 use rayon::prelude::*;
 use std::{collections::BTreeMap, io::Write, marker::Send, sync::Mutex, time::Instant};
 
 use move_vm_runtime::native_extensions::NativeContextExtensions;
-#[cfg(feature = "evm-backend")]
-use {
-    evm::{backend::MemoryVicinity, ExitReason},
-    evm_exec_utils::exec::{ExecuteResult, Executor},
-    move_to_yul,
-    primitive_types::{H160, U256},
-    std::convert::TryInto,
-    std::time::Duration,
-};
 
 /// Test state common to all tests
 pub struct SharedTestingConfig {
@@ -70,9 +66,6 @@ pub struct SharedTestingConfig {
     check_stackless_vm: bool,
     verbose: bool,
     record_writeset: bool,
-
-    #[cfg(feature = "evm-backend")]
-    evm: bool,
 }
 
 pub struct TestRunner {
@@ -143,7 +136,6 @@ impl TestRunner {
         cost_table: Option<CostTable>,
         named_address_values: BTreeMap<String, NumericalAddress>,
         record_writeset: bool,
-        #[cfg(feature = "evm-backend")] evm: bool,
     ) -> Result<Self> {
         let source_files = tests
             .files
@@ -176,8 +168,6 @@ impl TestRunner {
                 verbose,
                 named_address_values,
                 record_writeset,
-                #[cfg(feature = "evm-backend")]
-                evm,
             },
             num_threads,
             tests,
@@ -278,6 +268,12 @@ impl SharedTestingConfig {
         let mut session =
             move_vm.new_session_with_extensions(&self.starting_storage_state, extensions);
         let mut gas_meter = GasStatus::new(&self.cost_table, Gas::new(self.execution_bound));
+        #[cfg(debug_assertions)]
+        gas_meter.set_profiler(GasProfiler::init_default_cfg(
+            function_name.to_owned(),
+            self.execution_bound,
+        ));
+
         // TODO: collect VM logs if the verbose flag (i.e, `self.verbose`) is set
 
         let now = Instant::now();
@@ -389,6 +385,7 @@ impl SharedTestingConfig {
                 vec![],
                 ModelBuilderOptions::default(),
                 Flags::testing(),
+                Some(WarningFilters::unused_function_warnings_filter()),
             )
             .unwrap_or_else(|e| panic!("Unable to build stackless bytecode: {}", e));
 
@@ -583,221 +580,6 @@ impl SharedTestingConfig {
         stats
     }
 
-    #[cfg(feature = "evm-backend")]
-    fn execute_via_evm(&self, yul_source: &str) -> (ExecuteResult, Duration) {
-        let (code, _) = evm_exec_utils::compile::solc_yul(yul_source, false).expect(
-            "Failed to compile yul source into EVM bytecode. This should not have happened.",
-        );
-
-        let vicinity = MemoryVicinity {
-            gas_price: 0.into(),
-            origin: H160::zero(),
-            chain_id: 0.into(),
-            block_hashes: vec![],
-            block_number: 0.into(),
-            block_coinbase: H160::zero(),
-            block_timestamp: 0.into(),
-            block_difficulty: 0.into(),
-            block_gas_limit: U256::MAX,
-            block_base_fee_per_gas: 0.into(),
-        };
-
-        let mut exec = Executor::new(&vicinity);
-
-        let now = Instant::now();
-        let res = exec.execute_custom_code(H160::zero(), H160::zero(), code, vec![]);
-        let elapsed = now.elapsed();
-
-        (res, elapsed)
-    }
-
-    #[cfg(feature = "evm-backend")]
-    fn exec_module_tests_evm(
-        &self,
-        test_plan: &ModuleTestPlan,
-        output: &TestOutput<impl Write>,
-    ) -> TestStatistics {
-        use move_binary_format::errors::Location;
-
-        let mut stats = TestStatistics::new();
-
-        // TODO: Somehow, paths of some temporary Move interface files are being passed in after those files
-        // have been removed. This is a dirty hack to work around the problem while we investigate the root
-        // cause.
-        let filtered_sources = self
-            .source_files
-            .iter()
-            .filter(|s| !s.contains("mv_interfaces"))
-            .cloned()
-            .collect::<Vec<_>>();
-
-        let model = run_model_builder_with_options_and_compilation_flags(
-            vec![PackagePaths {
-                name: None,
-                paths: filtered_sources,
-                named_address_map: self.named_address_values.clone(),
-            }],
-            vec![],
-            ModelBuilderOptions::default(),
-            Flags::testing(),
-        )
-        .unwrap_or_else(|e| panic!("Unable to build move model: {}", e));
-
-        if model.has_errors() {
-            panic!("Move model has errors");
-        }
-
-        let gen_options = move_to_yul::options::Options::default();
-        for (function_name, test_info) in &test_plan.tests {
-            let yul_code = match move_to_yul::generator::Generator::run_for_unit_test(
-                &gen_options,
-                &model,
-                &test_plan.module_id,
-                IdentStr::new(function_name).unwrap(),
-                &test_info.arguments,
-            ) {
-                Ok(yul_code) => yul_code,
-                Err(diagnostics) => {
-                    // Failed to generate yul code due to some user errors.
-                    // Mark test as failed.
-                    output.fail(function_name);
-                    stats.test_failure(
-                        TestFailure::new(
-                            FailureReason::move_to_evm_error(diagnostics),
-                            TestRunInfo::new(function_name.to_string(), Duration::ZERO, 0),
-                            None,
-                            None,
-                        ),
-                        test_plan,
-                    );
-                    return stats;
-                }
-            };
-
-            let (res, duration) = self.execute_via_evm(&yul_code);
-
-            let abort_code = || -> u64 {
-                assert!(res.return_value.len() == 8);
-
-                u64::from_be_bytes(res.return_value.as_slice().try_into().unwrap())
-            };
-
-            let test_run_info =
-                || -> TestRunInfo { TestRunInfo::new(function_name.to_string(), duration, 0) };
-
-            // TODO: gas/timeout
-            // TODO: arguments
-            // TODO: locations
-
-            match (test_info.expected_failure.as_ref(), &res.exit_reason) {
-                // Test expected to succeed or abort with a specific abort code, but ran into an internal error.
-                (
-                    None
-                    | Some(
-                        ExpectedFailure::ExpectedWithCodeDEPRECATED(_)
-                        | ExpectedFailure::ExpectedWithError(_),
-                    ),
-                    ExitReason::Revert(_),
-                ) if abort_code() == u64::MAX => {
-                    output.fail(function_name);
-                    stats.test_failure(
-                        TestFailure::new(
-                            FailureReason::unexpected_error(MoveError(
-                                StatusCode::UNKNOWN_STATUS,
-                                None,
-                                Location::Undefined,
-                            )),
-                            test_run_info(),
-                            None,
-                            None,
-                        ),
-                        test_plan,
-                    );
-                }
-
-                // Test expected to succeed, but aborted.
-                (None, ExitReason::Revert(_)) => {
-                    output.fail(function_name);
-                    stats.test_failure(
-                        TestFailure::new(
-                            FailureReason::unexpected_error(MoveError(
-                                StatusCode::ABORTED,
-                                Some(abort_code()),
-                                Location::Undefined,
-                            )),
-                            test_run_info(),
-                            None,
-                            None,
-                        ),
-                        test_plan,
-                    )
-                }
-
-                // Expect the test to abort with a specific code.
-                (
-                    Some(
-                        ExpectedFailure::ExpectedWithError(MoveError(_, Some(exp_abort_code), _))
-                        | ExpectedFailure::ExpectedWithCodeDEPRECATED(exp_abort_code),
-                    ),
-                    ExitReason::Revert(_),
-                ) => {
-                    let abort_code = abort_code();
-                    if abort_code == *exp_abort_code {
-                        output.pass(function_name);
-                        stats.test_success(test_run_info(), test_plan);
-                    } else {
-                        output.fail(function_name);
-                        stats.test_failure(
-                            TestFailure::new(
-                                FailureReason::wrong_abort_deprecated(
-                                    *exp_abort_code,
-                                    MoveError(
-                                        StatusCode::ABORTED,
-                                        Some(abort_code),
-                                        Location::Undefined,
-                                    ),
-                                ),
-                                test_run_info(),
-                                None,
-                                None,
-                            ),
-                            test_plan,
-                        );
-                    }
-                }
-
-                // Test expected to abort but succeeded.
-                (
-                    Some(
-                        ExpectedFailure::Expected
-                        | ExpectedFailure::ExpectedWithCodeDEPRECATED(_)
-                        | ExpectedFailure::ExpectedWithError(_),
-                    ),
-                    ExitReason::Succeed(_),
-                ) => {
-                    output.fail(function_name);
-                    stats.test_failure(
-                        TestFailure::new(FailureReason::no_error(), test_run_info(), None, None),
-                        test_plan,
-                    )
-                }
-
-                // Test succeeded or failed as expected.
-                (None, ExitReason::Succeed(_))
-                | (Some(ExpectedFailure::Expected), ExitReason::Revert(_)) => {
-                    output.pass(function_name);
-                    stats.test_success(test_run_info(), test_plan);
-                }
-
-                (exp, reason) => {
-                    unreachable!("Unexpected (exp, exit reason) pair: ({:?}, {:?}). This should not have happened.", exp, reason)
-                }
-            }
-        }
-
-        stats
-    }
-
     // TODO: comparison of results via different backends
 
     fn exec_module_tests(
@@ -806,11 +588,6 @@ impl SharedTestingConfig {
         writer: &Mutex<impl Write>,
     ) -> TestStatistics {
         let output = TestOutput { test_plan, writer };
-
-        #[cfg(feature = "evm-backend")]
-        if self.evm {
-            return self.exec_module_tests_evm(test_plan, &output);
-        }
 
         self.exec_module_tests_move_vm_and_stackless_vm(test_plan, &output)
     }

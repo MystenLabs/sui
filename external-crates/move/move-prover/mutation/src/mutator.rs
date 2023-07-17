@@ -136,6 +136,7 @@ fn apply_mutation(
             named_address_map: addrs,
         }],
         ModelBuilderOptions::default(),
+        None,
     )?;
     let mut error_writer = StandardStream::stderr(ColorChoice::Auto);
     let mut options = if let Some(config_file) = config_file_opt {

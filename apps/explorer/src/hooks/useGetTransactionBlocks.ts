@@ -10,31 +10,29 @@ export const DEFAULT_TRANSACTIONS_LIMIT = 20;
 
 // Fetch transaction blocks
 export function useGetTransactionBlocks(
-    filter?: TransactionFilter,
-    limit = DEFAULT_TRANSACTIONS_LIMIT
+	filter?: TransactionFilter,
+	limit = DEFAULT_TRANSACTIONS_LIMIT,
 ) {
-    const rpc = useRpcClient();
+	const rpc = useRpcClient();
 
-    return useInfiniteQuery(
-        ['get-transaction-blocks', filter, limit],
-        async ({ pageParam }) =>
-            await rpc.queryTransactionBlocks({
-                filter,
-                cursor: pageParam,
-                order: 'descending',
-                limit,
-                options: {
-                    showEffects: true,
-                    showBalanceChanges: true,
-                    showInput: true,
-                },
-            }),
-        {
-            getNextPageParam: (lastPage) =>
-                lastPage?.hasNextPage ? lastPage.nextCursor : false,
-            staleTime: 10 * 1000,
-            retry: false,
-            keepPreviousData: true,
-        }
-    );
+	return useInfiniteQuery(
+		['get-transaction-blocks', filter, limit],
+		async ({ pageParam }) =>
+			await rpc.queryTransactionBlocks({
+				filter,
+				cursor: pageParam,
+				order: 'descending',
+				limit,
+				options: {
+					showEffects: true,
+					showInput: true,
+				},
+			}),
+		{
+			getNextPageParam: (lastPage) => (lastPage?.hasNextPage ? lastPage.nextCursor : false),
+			staleTime: 10 * 1000,
+			retry: false,
+			keepPreviousData: true,
+		},
+	);
 }

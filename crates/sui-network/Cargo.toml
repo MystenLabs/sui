@@ -9,35 +9,37 @@ edition = "2021"
 [dependencies]
 anemo.workspace = true
 anemo-tower.workspace = true
-governor = "0.5.1"
-serde = { version = "1.0.144", features = ["derive"] }
-tonic = "0.8"
-dashmap = "5.4.0"
-tower = "0.4.13"
+governor.workspace = true
+serde.workspace = true
+tonic.workspace = true
+dashmap.workspace = true
+tower.workspace = true
 
-sui-types = { path = "../sui-types" }
-sui-config = { path = "../sui-config" }
-shared-crypto = { path = "../shared-crypto" }
-sui-swarm-config = { path = "../sui-swarm-config" }
+sui-archival.workspace = true
+sui-storage.workspace = true
+sui-types.workspace = true
+sui-config.workspace = true
+shared-crypto.workspace = true
+sui-swarm-config.workspace = true
 
 mysten-network.workspace = true
-
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 tokio = { workspace = true, features = ["full"] }
-tracing = "0.1.37"
-futures = "0.3.24"
-tap = "1.0.1"
-rand = "0.8.5"
-anyhow = "1.0.65"
-prometheus = "0.13.3"
-mysten-metrics = { path = "../mysten-metrics" }
+tracing.workspace = true
+futures.workspace = true
+tap.workspace = true
+rand.workspace = true
+anyhow.workspace = true
+prometheus.workspace = true
+mysten-metrics.workspace = true
 
 [build-dependencies]
 anemo-build.workspace = true
-tonic-build = { version = "0.8.2", features = [ "transport" ] }
+tonic-build.workspace = true
 
 [dev-dependencies]
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
-ed25519-consensus = { version = "2.0.1" }
+ed25519-consensus.workspace = true
 fastcrypto = { workspace = true }
+tempfile = "3.3.0"

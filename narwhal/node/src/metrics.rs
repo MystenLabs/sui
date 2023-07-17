@@ -3,7 +3,7 @@
 use axum::{http::StatusCode, routing::get, Extension, Router};
 use config::{AuthorityIdentifier, WorkerId};
 use mysten_metrics::spawn_logged_monitored_task;
-use mysten_network::multiaddr::{to_socket_addr, Multiaddr};
+use mysten_network::multiaddr::Multiaddr;
 use prometheus::{Registry, TextEncoder};
 use std::collections::HashMap;
 use tokio::task::JoinHandle;
@@ -37,7 +37,9 @@ pub fn start_prometheus_server(addr: Multiaddr, registry: &Registry) -> JoinHand
         .route(METRICS_ROUTE, get(metrics))
         .layer(Extension(registry.clone()));
 
-    let socket_addr = to_socket_addr(&addr).expect("failed to convert Multiaddr to SocketAddr");
+    let socket_addr = addr
+        .to_socket_addr()
+        .expect("failed to convert Multiaddr to SocketAddr");
 
     spawn_logged_monitored_task!(
         async move {

@@ -25,12 +25,14 @@ use tokio::{
 };
 use tracing::debug;
 use types::{
-    now, Batch, BatchAPI, BatchDigest, MetadataAPI, RequestBatchesRequest, RequestBatchesResponse,
+    now, validate_batch_version, Batch, BatchAPI, BatchDigest, MetadataAPI, RequestBatchesRequest,
+    RequestBatchesResponse,
 };
 
 use crate::metrics::WorkerMetrics;
 
 const REMOTE_PARALLEL_FETCH_INTERVAL: Duration = Duration::from_secs(2);
+const WORKER_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 
 pub struct BatchFetcher {
     name: NetworkPublicKey,
@@ -120,7 +122,7 @@ impl BatchFetcher {
                             // Also persist the batches, so they are available after restarts.
                             let mut write_batch = self.batch_store.batch();
 
-                            // TODO: Remove once we have upgraded to protocol version 11.
+                            // TODO: Remove once we have upgraded to protocol version 12.
                             if self.protocol_config.narwhal_versioned_metadata() {
                                 // Set received_at timestamp for remote batches.
                                 let mut updated_new_batches = HashMap::new();
@@ -142,12 +144,14 @@ impl BatchFetcher {
                             }
                         }
                     }
-                    _ = interval.as_mut() => { /* continue to fire out another fetch */ }
+                    _ = interval.as_mut() => {
+                    }
                 }
             }
 
             // After all known remote workers have been tried, restart the outer loop to fetch
-            // from local storage then remain workers again.
+            // from local storage then remote workers again.
+            sleep(WORKER_RETRY_INTERVAL).await;
         }
     }
 
@@ -271,6 +275,10 @@ impl BatchFetcher {
             )
             .await?;
         for batch in batches {
+            // TODO: Remove once we have upgraded to protocol version 12.
+            validate_batch_version(&batch, &self.protocol_config)
+                .map_err(|err| anyhow::anyhow!("[Protocol violation] Invalid batch: {err}"))?;
+
             let batch_digest = batch.digest();
             if !digests_to_fetch.contains(&batch_digest) {
                 bail!(
@@ -343,7 +351,173 @@ mod tests {
     use itertools::Itertools;
     use rand::rngs::StdRng;
     use std::collections::HashMap;
-    use test_utils::latest_protocol_version;
+    use test_utils::{get_protocol_config, latest_protocol_version};
+    use tokio::time::timeout;
+
+    // TODO: Remove once we have upgraded to protocol version 12.
+    // Case #1: Receive BatchV1 and network has not upgraded to 12 so we are okay
+    #[tokio::test]
+    pub async fn test_fetcher_with_batch_v1_and_network_v11() {
+        let mut network = TestRequestBatchesNetwork::new();
+        let batch_store = test_utils::create_batch_store();
+        let v11_protocol_config = get_protocol_config(11);
+        let batchv1_1 = Batch::new(vec![vec![1]], &v11_protocol_config);
+        let batchv1_2 = Batch::new(vec![vec![2]], &v11_protocol_config);
+        let (digests, known_workers) = (
+            HashSet::from_iter(vec![batchv1_1.digest(), batchv1_2.digest()]),
+            HashSet::from_iter(test_pks(&[1, 2])),
+        );
+        network.put(&[1, 2], batchv1_1.clone());
+        network.put(&[2, 3], batchv1_2.clone());
+        let fetcher = BatchFetcher {
+            name: test_pk(0),
+            network: Arc::new(network.clone()),
+            batch_store: batch_store.clone(),
+            metrics: Arc::new(WorkerMetrics::default()),
+            protocol_config: v11_protocol_config,
+        };
+        let expected_batches = HashMap::from_iter(vec![
+            (batchv1_1.digest(), batchv1_1.clone()),
+            (batchv1_2.digest(), batchv1_2.clone()),
+        ]);
+        let fetched_batches = fetcher.fetch(digests, known_workers).await;
+        assert_eq!(fetched_batches, expected_batches);
+        assert_eq!(
+            batch_store
+                .get(&batchv1_1.digest())
+                .unwrap()
+                .unwrap()
+                .digest(),
+            batchv1_1.digest()
+        );
+        assert_eq!(
+            batch_store
+                .get(&batchv1_2.digest())
+                .unwrap()
+                .unwrap()
+                .digest(),
+            batchv1_2.digest()
+        );
+    }
+
+    // TODO: Remove once we have upgraded to protocol version 12.
+    // Case #2: Receive BatchV1 but network has upgraded to 12 so we fail because we expect BatchV2
+    #[tokio::test]
+    pub async fn test_fetcher_with_batch_v1_and_network_v12() {
+        telemetry_subscribers::init_for_testing();
+        let mut network = TestRequestBatchesNetwork::new();
+        let batch_store = test_utils::create_batch_store();
+        let latest_protocol_config = latest_protocol_version();
+        let v11_protocol_config = &get_protocol_config(11);
+        let batchv1_1 = Batch::new(vec![vec![1]], v11_protocol_config);
+        let batchv1_2 = Batch::new(vec![vec![2]], v11_protocol_config);
+        let (digests, known_workers) = (
+            HashSet::from_iter(vec![batchv1_1.digest(), batchv1_2.digest()]),
+            HashSet::from_iter(test_pks(&[1, 2])),
+        );
+        network.put(&[1, 2], batchv1_1.clone());
+        network.put(&[2, 3], batchv1_2.clone());
+        let fetcher = BatchFetcher {
+            name: test_pk(0),
+            network: Arc::new(network.clone()),
+            batch_store: batch_store.clone(),
+            metrics: Arc::new(WorkerMetrics::default()),
+            protocol_config: latest_protocol_config,
+        };
+        let fetch_result = timeout(
+            Duration::from_secs(1),
+            fetcher.fetch(digests, known_workers),
+        )
+        .await;
+        assert!(fetch_result.is_err());
+    }
+
+    // TODO: Remove once we have upgraded to protocol version 12.
+    // Case #3: Receive BatchV2 but network is still in v11 so we fail because we expect BatchV1
+    #[tokio::test]
+    pub async fn test_fetcher_with_batch_v2_and_network_v11() {
+        telemetry_subscribers::init_for_testing();
+        let mut network = TestRequestBatchesNetwork::new();
+        let batch_store = test_utils::create_batch_store();
+        let latest_protocol_config = &latest_protocol_version();
+        let v11_protocol_config = get_protocol_config(11);
+        let batchv2_1 = Batch::new(vec![vec![1]], latest_protocol_config);
+        let batchv2_2 = Batch::new(vec![vec![2]], latest_protocol_config);
+        let (digests, known_workers) = (
+            HashSet::from_iter(vec![batchv2_1.digest(), batchv2_2.digest()]),
+            HashSet::from_iter(test_pks(&[1, 2])),
+        );
+        network.put(&[1, 2], batchv2_1.clone());
+        network.put(&[2, 3], batchv2_2.clone());
+        let fetcher = BatchFetcher {
+            name: test_pk(0),
+            network: Arc::new(network.clone()),
+            batch_store: batch_store.clone(),
+            metrics: Arc::new(WorkerMetrics::default()),
+            protocol_config: v11_protocol_config,
+        };
+        let fetch_result = timeout(
+            Duration::from_secs(1),
+            fetcher.fetch(digests, known_workers),
+        )
+        .await;
+        assert!(fetch_result.is_err());
+    }
+
+    // TODO: Remove once we have upgraded to protocol version 12.
+    // Case #4: Receive BatchV2 and network is upgraded to 12 so we are okay
+    #[tokio::test]
+    pub async fn test_fetcher_with_batch_v2_and_network_v12() {
+        let mut network = TestRequestBatchesNetwork::new();
+        let batch_store = test_utils::create_batch_store();
+        let latest_protocol_config = &latest_protocol_version();
+        let batchv2_1 = Batch::new(vec![vec![1]], latest_protocol_config);
+        let batchv2_2 = Batch::new(vec![vec![2]], latest_protocol_config);
+        let (digests, known_workers) = (
+            HashSet::from_iter(vec![batchv2_1.digest(), batchv2_2.digest()]),
+            HashSet::from_iter(test_pks(&[1, 2])),
+        );
+        network.put(&[1, 2], batchv2_1.clone());
+        network.put(&[2, 3], batchv2_2.clone());
+        let fetcher = BatchFetcher {
+            name: test_pk(0),
+            network: Arc::new(network.clone()),
+            batch_store: batch_store.clone(),
+            metrics: Arc::new(WorkerMetrics::default()),
+            protocol_config: latest_protocol_version(),
+        };
+        let mut expected_batches = HashMap::from_iter(vec![
+            (batchv2_1.digest(), batchv2_1.clone()),
+            (batchv2_2.digest(), batchv2_2.clone()),
+        ]);
+        let mut fetched_batches = fetcher.fetch(digests, known_workers).await;
+        // Reset metadata from the fetched and expected batches
+        for batch in fetched_batches.values_mut() {
+            // assert received_at was set to some value before resetting.
+            assert!(batch.versioned_metadata().received_at().is_some());
+            batch.versioned_metadata_mut().set_received_at(0);
+        }
+        for batch in expected_batches.values_mut() {
+            batch.versioned_metadata_mut().set_received_at(0);
+        }
+        assert_eq!(fetched_batches, expected_batches);
+        assert_eq!(
+            batch_store
+                .get(&batchv2_1.digest())
+                .unwrap()
+                .unwrap()
+                .digest(),
+            batchv2_1.digest()
+        );
+        assert_eq!(
+            batch_store
+                .get(&batchv2_2.digest())
+                .unwrap()
+                .unwrap()
+                .digest(),
+            batchv2_2.digest()
+        );
+    }
 
     #[tokio::test]
     pub async fn test_fetcher() {

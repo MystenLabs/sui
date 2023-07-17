@@ -73,15 +73,12 @@ impl SuiSystemStateWrapper {
         }
     }
 
-    pub fn advance_epoch_safe_mode<S>(
+    pub fn advance_epoch_safe_mode(
         &self,
         params: &AdvanceEpochParams,
-        object_store: &S,
+        object_store: &dyn ObjectStore,
         protocol_config: &ProtocolConfig,
-    ) -> Object
-    where
-        S: ObjectStore,
-    {
+    ) -> Object {
         let id = self.id.id.bytes;
         let mut field_object = get_dynamic_field_object_from_store(object_store, id, &self.version)
             .expect("Dynamic field object of wrapper should always be present in the object store");
@@ -220,10 +217,9 @@ impl SuiSystemState {
     }
 }
 
-pub fn get_sui_system_state_wrapper<S>(object_store: &S) -> Result<SuiSystemStateWrapper, SuiError>
-where
-    S: ObjectStore,
-{
+pub fn get_sui_system_state_wrapper(
+    object_store: &dyn ObjectStore,
+) -> Result<SuiSystemStateWrapper, SuiError> {
     let wrapper = object_store
         .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)?
         // Don't panic here on None because object_store is a generic store.
@@ -240,10 +236,7 @@ where
     Ok(result)
 }
 
-pub fn get_sui_system_state<S>(object_store: &S) -> Result<SuiSystemState, SuiError>
-where
-    S: ObjectStore,
-{
+pub fn get_sui_system_state(object_store: &dyn ObjectStore) -> Result<SuiSystemState, SuiError> {
     let wrapper = get_sui_system_state_wrapper(object_store)?;
     let id = wrapper.id.id.bytes;
     match wrapper.version {

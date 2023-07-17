@@ -6,7 +6,8 @@ pub mod codes;
 
 use crate::{
     command_line::COLOR_MODE_ENV_VAR,
-    diagnostics::codes::{DiagnosticCode, DiagnosticInfo, Severity},
+    diagnostics::codes::{Category, DiagnosticCode, DiagnosticInfo, Severity, WarningFilter},
+    shared::ast_debug::AstDebug,
 };
 use codespan_reporting::{
     self as csr,
@@ -21,10 +22,12 @@ use move_command_line_common::{env::read_env_var, files::FileHash};
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     iter::FromIterator,
     ops::Range,
 };
+
+use self::codes::{UnusedItem, WARNING_FILTER_ATTR};
 
 //**************************************************************************************************
 // Types
@@ -49,6 +52,21 @@ pub struct Diagnostic {
 pub struct Diagnostics {
     diagnostics: Vec<Diagnostic>,
     severity_count: BTreeMap<Severity, usize>,
+}
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+/// Used to filter out diagnostics, specifically used for warning suppression
+pub enum WarningFilters {
+    /// Remove all warnings
+    All,
+    /// Remove all diags of this category
+    Specified {
+        category: BTreeSet</* category */ u8>,
+        /// Remove specific diags
+        codes: BTreeSet<(/* category */ u8, /* code */ u8)>,
+    },
+    /// No filter
+    Empty,
 }
 
 //**************************************************************************************************
@@ -166,7 +184,7 @@ fn render_diagnostic(
     let mut diag = csr::diagnostic::Diagnostic::new(info.severity().into_codespan_severity());
     let (code, message) = info.render();
     diag = diag.with_code(code);
-    diag = diag.with_message(message);
+    diag = diag.with_message(message.to_string());
     diag = diag.with_labels(vec![mk_lbl(LabelStyle::Primary, primary_label)]);
     diag = diag.with_labels(
         secondary_labels
@@ -264,13 +282,13 @@ impl Diagnostics {
 
 impl Diagnostic {
     pub fn new(
-        code: impl DiagnosticCode,
+        code: impl Into<DiagnosticInfo>,
         (loc, label): (Loc, impl ToString),
         secondary_labels: impl IntoIterator<Item = (Loc, impl ToString)>,
         notes: impl IntoIterator<Item = impl ToString>,
     ) -> Self {
         Diagnostic {
-            info: code.into_info(),
+            info: code.into(),
             primary_label: (loc, label.to_string()),
             secondary_labels: secondary_labels
                 .into_iter()
@@ -280,8 +298,8 @@ impl Diagnostic {
         }
     }
 
-    pub fn set_code(mut self, code: impl DiagnosticCode) -> Self {
-        self.info = code.into_info();
+    pub fn set_code(mut self, code: impl Into<DiagnosticInfo>) -> Self {
+        self.info = code.into();
         self
     }
 
@@ -314,6 +332,10 @@ impl Diagnostic {
     pub fn add_note(&mut self, msg: impl ToString) {
         self.notes.push(msg.to_string())
     }
+
+    pub fn info(&self) -> &DiagnosticInfo {
+        &self.info
+    }
 }
 
 #[macro_export]
@@ -338,6 +360,95 @@ macro_rules! diag {
             std::iter::empty::<String>(),
         )
     }};
+}
+
+impl WarningFilters {
+    pub fn new() -> Self {
+        Self::Empty
+    }
+
+    pub fn is_filtered(&self, diag: &Diagnostic) -> bool {
+        self.is_filtered_by_info(&diag.info)
+    }
+
+    fn is_filtered_by_info(&self, info: &DiagnosticInfo) -> bool {
+        match self {
+            WarningFilters::All => info.severity() == Severity::Warning,
+            WarningFilters::Specified { category, codes } => {
+                info.severity() == Severity::Warning
+                    && (category.contains(&info.category())
+                        || codes.contains(&(info.category(), info.code())))
+            }
+            WarningFilters::Empty => false,
+        }
+    }
+
+    pub fn union(&mut self, other: &WarningFilters) {
+        match (self, other) {
+            // if self is empty, just take the other filter
+            (s @ Self::Empty, _) => *s = other.clone(),
+            // if other is empty, or self is ALL, no change to the filter
+            (_, Self::Empty) => (),
+            (Self::All, _) => (),
+            // if other is all, self is now all
+            (s, Self::All) => *s = Self::All,
+            // category and code level union
+            (
+                Self::Specified { category, codes },
+                Self::Specified {
+                    category: other_category,
+                    codes: other_codes,
+                },
+            ) => {
+                category.extend(other_category);
+                // remove any codes covered by the category level filter
+                codes.extend(
+                    other_codes
+                        .iter()
+                        .filter(|(codes_cat, _)| !category.contains(codes_cat)),
+                );
+            }
+        }
+    }
+
+    pub fn add(&mut self, filter: WarningFilter) {
+        match self {
+            WarningFilters::All => (),
+            WarningFilters::Empty => {
+                *self = WarningFilters::Specified {
+                    category: BTreeSet::new(),
+                    codes: BTreeSet::new(),
+                };
+                return self.add(filter);
+            }
+            WarningFilters::Specified { category, codes } => match filter {
+                WarningFilter::All => *self = WarningFilters::All,
+                WarningFilter::Category(cat) => {
+                    let cat = cat as u8;
+                    category.insert(cat);
+                    // remove any codes now covered by this category
+                    codes.retain(|(codes_cat, _)| codes_cat != &cat);
+                }
+                WarningFilter::Code(cat, code) => {
+                    let cat = cat as u8;
+                    // no need to add the filter if already covered by the category
+                    if !category.contains(&cat) {
+                        codes.insert((cat, code));
+                    }
+                }
+            },
+        }
+    }
+
+    pub fn unused_function_warnings_filter() -> Self {
+        let unused_fn_info = UnusedItem::Function.into_info();
+        let filtered_codes =
+            BTreeSet::from([(unused_fn_info.category() as u8, unused_fn_info.code())]);
+        WarningFilters::Specified {
+            category: BTreeSet::new(),
+            codes: filtered_codes,
+        }
+    }
 }
 
 //**************************************************************************************************
@@ -367,5 +478,39 @@ impl From<Vec<Diagnostic>> for Diagnostics {
 impl From<Option<Diagnostic>> for Diagnostics {
     fn from(diagnostic_opt: Option<Diagnostic>) -> Self {
         Diagnostics::from(diagnostic_opt.map_or_else(Vec::new, |diag| vec![diag]))
+    }
+}
+
+impl AstDebug for WarningFilters {
+    fn ast_debug(&self, w: &mut crate::shared::ast_debug::AstWriter) {
+        match self {
+            WarningFilters::All => w.write(&format!(
+                "#[{}({})]",
+                WARNING_FILTER_ATTR,
+                WarningFilter::All.to_str().unwrap(),
+            )),
+            WarningFilters::Specified { category, codes } => {
+                w.write(&format!("#[{}(", WARNING_FILTER_ATTR,));
+                let items = category
+                    .iter()
+                    .copied()
+                    .map(|cat| WarningFilter::Category(Category::try_from(cat).unwrap()))
+                    .chain(codes.iter().copied().map(|(cat, code)| {
+                        WarningFilter::Code(Category::try_from(cat).unwrap(), code)
+                    }));
+                w.list(items, ",", |w, filter| {
+                    w.write(filter.to_str().unwrap());
+                    false
+                });
+                w.write(")]")
+            }
+            WarningFilters::Empty => (),
+        }
+    }
+}
+
+impl<C: DiagnosticCode> From<C> for DiagnosticInfo {
+    fn from(value: C) -> Self {
+        value.into_info()
     }
 }

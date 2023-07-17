@@ -67,7 +67,9 @@ fn verification_attributes(
         .filter_map(
             |attr| match KnownAttribute::resolve(attr.value.attribute_name().value)? {
                 KnownAttribute::Verification(verify_attr) => Some((attr.loc, verify_attr)),
-                KnownAttribute::Testing(_) | KnownAttribute::Native(_) => None,
+                KnownAttribute::Testing(_)
+                | KnownAttribute::Native(_)
+                | KnownAttribute::Diagnostic(_) => None,
             },
         )
         .collect()

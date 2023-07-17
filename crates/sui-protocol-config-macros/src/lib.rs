@@ -122,8 +122,7 @@ pub fn getters_macro(input: TokenStream) -> TokenStream {
         _ => panic!("Only structs supported."),
     };
     let (getters, (value_lookup, field_names_str)): (Vec<_>, (Vec<_>, Vec<_>)) = tokens.unzip();
-    let inner_types1 = Vec::from_iter(seen_types);
-    let inner_types2: Vec<_> = inner_types1.clone();
+    let inner_types = Vec::from_iter(seen_types);
     let output = quote! {
         // For each getter, expand it out into a function in the impl block
         impl #struct_name {
@@ -158,7 +157,7 @@ pub fn getters_macro(input: TokenStream) -> TokenStream {
         #[allow(non_camel_case_types)]
         #[derive(Clone, Serialize, Debug, PartialEq, Deserialize, schemars::JsonSchema)]
         pub enum ProtocolConfigValue {
-            #(#inner_types1(#inner_types1),)*
+            #(#inner_types(#inner_types),)*
         }
 
         impl std::fmt::Display for ProtocolConfigValue {
@@ -167,7 +166,7 @@ pub fn getters_macro(input: TokenStream) -> TokenStream {
                 let mut writer = String::new();
                 match self {
                     #(
-                        ProtocolConfigValue::#inner_types2(x) => {
+                        ProtocolConfigValue::#inner_types(x) => {
                             write!(writer, "{}", x)?;
                         }
                     )*

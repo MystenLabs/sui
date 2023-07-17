@@ -9,14 +9,15 @@ use std::{
 
 use move_binary_format::{
     access::ModuleAccess,
+    compatibility::{Compatibility, InclusionCheck},
     errors::{Location, PartialVMResult, VMResult},
     file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
-    CompiledModule,
+    normalized, CompiledModule,
 };
 use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
-    language_storage::{ModuleId, StructTag, TypeTag},
+    language_storage::{ModuleId, TypeTag},
     u256::U256,
 };
 use move_vm_runtime::{
@@ -33,46 +34,46 @@ use sui_types::{
         RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
     },
     coin::Coin,
-    error::{ExecutionError, ExecutionErrorKind},
+    error::{command_argument_error, ExecutionError, ExecutionErrorKind},
     event::Event,
-    gas::{SuiGasStatus, SuiGasStatusAPI},
+    execution::{
+        CommandKind, ExecutionResults, ExecutionState, ObjectContents, ObjectValue, RawValueType,
+        Value,
+    },
+    gas::GasCharger,
     id::{RESOLVED_SUI_ID, UID},
     metrics::LimitsMetrics,
     move_package::{
-        normalize_deserialized_modules, MovePackage, TypeOrigin, UpgradeCap, UpgradePolicy,
-        UpgradeReceipt, UpgradeTicket,
+        normalize_deserialized_modules, MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt,
+        UpgradeTicket,
     },
+    storage::get_packages,
     transaction::{Argument, Command, ProgrammableMoveCall, ProgrammableTransaction},
-    Identifier, SUI_FRAMEWORK_ADDRESS,
+    SUI_FRAMEWORK_ADDRESS,
 };
 use sui_types::{
+    execution_mode::ExecutionMode,
     execution_status::{CommandArgumentError, PackageUpgradeError},
-    storage::BackingPackageStore,
 };
 use sui_verifier::{
     private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
     INIT_FN_NAME,
 };
 
-use crate::{adapter::substitute_package_id, execution_mode::ExecutionMode};
-
-use super::{context::*, types::*};
+use super::context::*;
+use crate::adapter::substitute_package_id;
 
 sui_macros::checked_arithmetic! {
 
-pub fn execute<S: StorageView, Mode: ExecutionMode>(
+pub fn execute<Mode: ExecutionMode>(
     protocol_config: &ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
     vm: &MoveVM,
-    state_view: &mut S,
+    state_view: &mut dyn ExecutionState,
     tx_context: &mut TxContext,
-    gas_status: &mut SuiGasStatus,
-    gas_coin: Option<ObjectID>,
+    gas_charger: &mut GasCharger,
     pt: ProgrammableTransaction,
-) -> Result<Mode::ExecutionResults, ExecutionError>
-where
-    for<'state> &'state S: SuiResolver,
-{
+) -> Result<Mode::ExecutionResults, ExecutionError> {
     let ProgrammableTransaction { inputs, commands } = pt;
     let mut context = ExecutionContext::new(
         protocol_config,
@@ -80,14 +81,13 @@ where
         vm,
         state_view,
         tx_context,
-        gas_status,
-        gas_coin,
+        gas_charger,
         inputs,
     )?;
     // execute commands
     let mut mode_results = Mode::empty_results();
     for (idx, command) in commands.into_iter().enumerate() {
-        if let Err(err) = execute_command::<_, Mode>(&mut context, &mut mode_results, command) {
+        if let Err(err) = execute_command::<Mode>(&mut context, &mut mode_results, command) {
             let object_runtime: &ObjectRuntime = context.session.get_native_extensions().get();
             // We still need to record the loaded child objects for replay
             let loaded_child_objects = object_runtime.loaded_child_objects();
@@ -125,14 +125,11 @@ where
 }
 
 /// Execute a single command
-fn execute_command<'vm, 'state, 'a, S: StorageView, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+fn execute_command<Mode: ExecutionMode>(
+    context: &mut ExecutionContext<'_, '_, '_>,
     mode_results: &mut Mode::ExecutionResults,
     command: Command,
-) -> Result<(), ExecutionError>
-where
-    &'state S: SuiResolver,
-{
+) -> Result<(), ExecutionError> {
     let mut argument_updates = Mode::empty_arguments();
     let results = match command {
         Command::MakeMoveVec(tag_opt, args) if args.is_empty() => {
@@ -183,7 +180,7 @@ where
             };
             for (idx, arg) in arg_iter {
                 let value: Value = context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
-                check_param_type::<_, Mode>(context, idx, &value, &elem_ty)?;
+                check_param_type::<Mode>(context, idx, &value, &elem_ty)?;
                 used_in_non_entry_move_call =
                     used_in_non_entry_move_call || value.was_used_in_non_entry_move_call();
                 value.write_bcs_bytes(&mut res);
@@ -303,7 +300,7 @@ where
 
             let original_address = context.set_link_context(package)?;
             let runtime_id = ModuleId::new(original_address, module);
-            let return_values = execute_move_call::<_, Mode>(
+            let return_values = execute_move_call::<Mode>(
                 context,
                 &mut argument_updates,
                 &runtime_id,
@@ -317,10 +314,10 @@ where
             return_values?
         }
         Command::Publish(modules, dep_ids) => {
-            execute_move_publish::<_, Mode>(context, &mut argument_updates, modules, dep_ids)?
+            execute_move_publish::<Mode>(context, &mut argument_updates, modules, dep_ids)?
         }
         Command::Upgrade(modules, dep_ids, current_package_id, upgrade_ticket) => {
-            execute_move_upgrade::<_, Mode>(
+            execute_move_upgrade::<Mode>(
                 context,
                 modules,
                 dep_ids,
@@ -336,18 +333,15 @@ where
 }
 
 /// Execute a single Move call
-fn execute_move_call<'vm, 'state, 'a, S: StorageView, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+fn execute_move_call<Mode: ExecutionMode>(
+    context: &mut ExecutionContext<'_, '_, '_>,
     argument_updates: &mut Mode::ArgumentUpdates,
     module_id: &ModuleId,
     function: &IdentStr,
     type_arguments: Vec<Type>,
     arguments: Vec<Argument>,
     is_init: bool,
-) -> Result<Vec<Value>, ExecutionError>
-where
-    &'state S: SuiResolver,
-{
+) -> Result<Vec<Value>, ExecutionError> {
     // check that the function is either an entry function or a valid public function
     let LoadedFunctionInfo {
         kind,
@@ -355,7 +349,7 @@ where
         return_value_kinds,
         index,
         last_instr,
-    } = check_visibility_and_signature::<_, Mode>(
+    } = check_visibility_and_signature::<Mode>(
         context,
         module_id,
         function,
@@ -364,7 +358,7 @@ where
     )?;
     // build the arguments, storing meta data about by-mut-ref args
     let (tx_context_kind, by_mut_ref, serialized_arguments) =
-        build_move_args::<_, Mode>(context, module_id, function, kind, &signature, &arguments)?;
+        build_move_args::<Mode>(context, module_id, function, kind, &signature, &arguments)?;
     // invoke the VM
     let SerializedReturnValues {
         mutable_reference_outputs,
@@ -390,7 +384,7 @@ where
     // write back mutable inputs. We also update if they were used in non entry Move calls
     // though we do not care for immutable usages of objects or other values
     let used_in_non_entry_move_call = kind == FunctionKind::NonEntry;
-    let res = write_back_results::<_, Mode>(
+    let res = write_back_results::<Mode>(
         context,
         argument_updates,
         &arguments,
@@ -407,8 +401,8 @@ where
     res
 }
 
-fn write_back_results<'vm, 'state, 'a, S: StorageView, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+fn write_back_results<Mode: ExecutionMode>(
+    context: &mut ExecutionContext<'_, '_, '_>,
     argument_updates: &mut Mode::ArgumentUpdates,
     arguments: &[Argument],
     non_entry_move_call: bool,
@@ -416,10 +410,7 @@ fn write_back_results<'vm, 'state, 'a, S: StorageView, Mode: ExecutionMode>(
     mut_ref_kinds: impl IntoIterator<Item = (u8, ValueKind)>,
     return_values: impl IntoIterator<Item = Vec<u8>>,
     return_value_kinds: impl IntoIterator<Item = ValueKind>,
-) -> Result<Vec<Value>, ExecutionError>
-where
-    &'state S: SuiResolver,
-{
+) -> Result<Vec<Value>, ExecutionError> {
     for ((i, bytes), (j, kind)) in mut_ref_values.into_iter().zip(mut_ref_kinds) {
         assert_invariant!(i == j, "lost mutable input");
         let arg_idx = i as usize;
@@ -439,20 +430,17 @@ where
         .collect()
 }
 
-fn make_value<'vm, 'state, 'a, S: StorageView>(
-    context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+fn make_value(
+    context: &mut ExecutionContext<'_, '_, '_>,
     value_info: ValueKind,
     bytes: Vec<u8>,
     used_in_non_entry_move_call: bool,
-) -> Result<Value, ExecutionError>
-where
-    &'state S: SuiResolver
-{
+) -> Result<Value, ExecutionError> {
     Ok(match value_info {
         ValueKind::Object {
             type_,
             has_public_transfer,
-        } => Value::Object(ObjectValue::new(
+        } => Value::Object(make_object_value(
             context.vm,
             &mut context.session,
             type_,
@@ -473,24 +461,21 @@ where
 
 /// Publish Move modules and call the init functions.  Returns an `UpgradeCap` for the newly
 /// published package on success.
-fn execute_move_publish<'vm, 'state, 'a, S: StorageView, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+fn execute_move_publish<Mode: ExecutionMode>(
+    context: &mut ExecutionContext<'_, '_, '_>,
     argument_updates: &mut Mode::ArgumentUpdates,
     module_bytes: Vec<Vec<u8>>,
     dep_ids: Vec<ObjectID>,
-) -> Result<Vec<Value>, ExecutionError>
-where
-    &'state S: SuiResolver,
-{
+) -> Result<Vec<Value>, ExecutionError> {
     assert_invariant!(
         !module_bytes.is_empty(),
         "empty package is checked in transaction input checker"
     );
     context
-        .gas_status
+        .gas_charger
         .charge_publish_package(module_bytes.iter().map(|v| v.len()).sum())?;
 
-    let mut modules = deserialize_modules::<_, Mode>(context, &module_bytes)?;
+    let mut modules = deserialize_modules::<Mode>(context, &module_bytes)?;
 
     // It should be fine that this does not go through ExecutionContext::fresh_id since the Move
     // runtime does not to know about new packages created, since Move objects and Move packages
@@ -506,33 +491,18 @@ where
 
     // For newly published packages, runtime ID matches storage ID.
     let storage_id = runtime_id;
+    let dependencies = fetch_packages(context, &dep_ids)?;
+    let package_obj = context.new_package(&modules, &dependencies)?;
 
-    // Preserve the old order of operations when package upgrades are not supported, because it
-    // affects the order in which error cases are checked.
-    let package_obj = if context.protocol_config.package_upgrades_supported() {
-        let dependencies = fetch_packages(context, &dep_ids)?;
-        let package_obj = context.new_package(&modules, &dependencies)?;
-
-        let Some(package) = package_obj.data.try_as_package() else {
-            invariant_violation!("Newly created package object is not a package");
-        };
-
-        context.set_linkage(package)?;
-        let res = publish_and_verify_modules(context, runtime_id, &modules)
-            .and_then(|_| init_modules::<_, Mode>(context, argument_updates, &modules));
-        context.reset_linkage();
-        res?;
-
-        package_obj
-    } else {
-        // FOR THE LOVE OF ALL THAT IS GOOD DO NOT RE-ORDER THIS.  It looks redundant, but is
-        // required to maintain backwards compatibility.
-        publish_and_verify_modules(context, runtime_id, &modules)?;
-        let dependencies = fetch_packages(context, &dep_ids)?;
-        let package = context.new_package(&modules, &dependencies)?;
-        init_modules::<_, Mode>(context, argument_updates, &modules)?;
-        package
+    let Some(package) = package_obj.data.try_as_package() else {
+        invariant_violation!("Newly created package object is not a package");
     };
+
+    context.set_linkage(package)?;
+    let res = publish_and_verify_modules(context, runtime_id, &modules)
+        .and_then(|_| init_modules::<Mode>(context, argument_updates, &modules));
+    context.reset_linkage();
+    res?;
 
     context.write_package(package_obj)?;
     let values = if Mode::packages_are_predefined() {
@@ -540,7 +510,7 @@ where
         vec![]
     } else {
         let cap = &UpgradeCap::new(context.fresh_id()?, storage_id);
-        vec![Value::Object(ObjectValue::new(
+        vec![Value::Object(make_object_value(
             context.vm,
             &mut context.session,
             UpgradeCap::type_().into(),
@@ -553,22 +523,14 @@ where
 }
 
 /// Upgrade a Move package.  Returns an `UpgradeReceipt` for the upgraded package on success.
-fn execute_move_upgrade<'vm, 'state, 'a, S: StorageView, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+fn execute_move_upgrade<Mode: ExecutionMode>(
+    context: &mut ExecutionContext<'_, '_, '_>,
     module_bytes: Vec<Vec<u8>>,
     dep_ids: Vec<ObjectID>,
     current_package_id: ObjectID,
     upgrade_ticket_arg: Argument,
 ) -> Result<Vec<Value>, ExecutionError>
-where
-    &'state S: SuiResolver,
 {
-    // Check that package upgrades are supported.
-    context
-        .protocol_config
-        .check_package_upgrades_supported()
-        .map_err(|_| ExecutionError::from_kind(ExecutionErrorKind::FeatureNotYetSupported))?;
-
     assert_invariant!(
         !module_bytes.is_empty(),
         "empty package is checked in transaction input checker"
@@ -585,7 +547,7 @@ where
         let mut ticket_bytes = Vec::new();
         let ticket_val: Value =
             context.by_value_arg(CommandKind::Upgrade, 0, upgrade_ticket_arg)?;
-        check_param_type::<_, Mode>(context, 0, &ticket_val, &upgrade_ticket_type)?;
+        check_param_type::<Mode>(context, 0, &ticket_val, &upgrade_ticket_type)?;
         ticket_val.write_bcs_bytes(&mut ticket_bytes);
         bcs::from_bytes(&ticket_bytes).map_err(|_| {
             ExecutionError::from_kind(ExecutionErrorKind::CommandArgumentError {
@@ -608,10 +570,11 @@ where
     }
 
     // Check digest.
+    let hash_modules = true;
     let computed_digest = MovePackage::compute_digest_for_modules_and_deps(
         &module_bytes,
         &dep_ids,
-        context.protocol_config.package_digest_hash_module(),
+        hash_modules,
     )
     .to_vec();
     if computed_digest != upgrade_ticket.digest {
@@ -627,7 +590,7 @@ where
     // Check that this package ID points to a package and get the package we're upgrading.
     let current_package = fetch_package(context, &upgrade_ticket.package.bytes)?;
 
-    let mut modules = deserialize_modules::<_, Mode>(context, &module_bytes)?;
+    let mut modules = deserialize_modules::<Mode>(context, &module_bytes)?;
     let runtime_id = current_package.original_package_id();
     substitute_package_id(&mut modules, runtime_id)?;
 
@@ -641,38 +604,6 @@ where
     let Some(package) = package_obj.data.try_as_package() else {
         invariant_violation!("Newly created package object is not a package");
     };
-
-    // Populate loader with all previous types.
-    if !context
-        .protocol_config
-        .disallow_adding_abilities_on_upgrade()
-    {
-        for TypeOrigin {
-            module_name,
-            struct_name,
-            package: origin,
-        } in package.type_origin_table()
-        {
-            if package.id() == *origin {
-                continue;
-            }
-
-            let Ok(module) = Identifier::new(module_name.as_str()) else {
-                continue;
-            };
-
-            let Ok(name) = Identifier::new(struct_name.as_str()) else {
-                continue;
-            };
-
-            let _ = context.load_type(&TypeTag::Struct(Box::new(StructTag {
-                address: (*origin).into(),
-                module,
-                name,
-                type_params: vec![],
-            })));
-        }
-    }
 
     context.set_linkage(package)?;
     let res = publish_and_verify_modules(context, runtime_id, &modules);
@@ -692,8 +623,8 @@ where
     )])
 }
 
-fn check_compatibility<'a, S: StorageView>(
-    context: &ExecutionContext<S>,
+fn check_compatibility<'a>(
+    context: &ExecutionContext,
     existing_package: &MovePackage,
     upgrading_modules: impl IntoIterator<Item = &'a CompiledModule>,
     policy: u8,
@@ -707,44 +638,69 @@ fn check_compatibility<'a, S: StorageView>(
         ));
     };
 
-    let Ok(current_normalized) = existing_package.normalize(context.protocol_config.move_binary_format_version(), context.protocol_config.no_extraneous_module_bytes()) else {
+    let Ok(current_normalized) = existing_package
+        .normalize(
+            context.protocol_config.move_binary_format_version(),
+            context.protocol_config.no_extraneous_module_bytes(),
+        )
+    else {
         invariant_violation!("Tried to normalize modules in existing package but failed")
     };
 
     let mut new_normalized = normalize_deserialized_modules(upgrading_modules.into_iter());
     for (name, cur_module) in current_normalized {
-        let msg = format!("Existing module {name} not found in next version of package");
         let Some(new_module) = new_normalized.remove(&name) else {
             return Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::PackageUpgradeError {
                     upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
                 },
-                msg,
+                format!("Existing module {name} not found in next version of package"),
             ));
         };
 
-        if let Err(e) =
-            policy.check_compatibility(&cur_module, &new_module, context.protocol_config)
-        {
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::PackageUpgradeError {
-                    upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
-                },
-                e,
-            ));
-        }
+        check_module_compatibility(
+            &policy,
+            &cur_module,
+            &new_module,
+        )?;
     }
 
     Ok(())
 }
 
-fn fetch_package<'vm, 'state, 'a, S: StorageView>(
-    context: &ExecutionContext<'vm, 'state, 'a, S>,
+fn check_module_compatibility(
+    policy: &UpgradePolicy,
+    cur_module: &normalized::Module,
+    new_module: &normalized::Module,
+) -> Result<(), ExecutionError> {
+    match policy {
+        UpgradePolicy::Additive => InclusionCheck::Subset.check(cur_module, new_module),
+        UpgradePolicy::DepOnly => InclusionCheck::Equal.check(cur_module, new_module),
+        UpgradePolicy::Compatible => {
+            let compatibility = Compatibility {
+                check_struct_and_pub_function_linking: true,
+                check_struct_layout: true,
+                check_friend_linking: false,
+                check_private_entry_linking: false,
+                disallowed_new_abilities: AbilitySet::ALL,
+                disallow_change_struct_type_params: true,
+            };
+
+            compatibility.check(cur_module, new_module)
+        }
+    }
+    .map_err(|e| ExecutionError::new_with_source(
+        ExecutionErrorKind::PackageUpgradeError {
+            upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
+        },
+        e,
+    ))
+}
+
+fn fetch_package(
+    context: &ExecutionContext<'_, '_, '_>,
     package_id: &ObjectID,
-) -> Result<MovePackage, ExecutionError>
-where
-    &'state S: SuiResolver,
-{
+) -> Result<MovePackage, ExecutionError> {
     let mut fetched_packages = fetch_packages(context, vec![package_id])?;
     assert_invariant!(
         fetched_packages.len() == 1,
@@ -758,15 +714,12 @@ where
     }
 }
 
-fn fetch_packages<'ctx, 'vm, 'state, 'a, S: StorageView>(
-    context: &'ctx ExecutionContext<'vm, 'state, 'a, S>,
+fn fetch_packages<'ctx, 'vm, 'state, 'a>(
+    context: &'ctx ExecutionContext<'vm, 'state, 'a>,
     package_ids: impl IntoIterator<Item = &'ctx ObjectID>,
-) -> Result<Vec<MovePackage>, ExecutionError>
-where
-    &'state S: SuiResolver,
-{
+) -> Result<Vec<MovePackage>, ExecutionError> {
     let package_ids: BTreeSet<_> = package_ids.into_iter().collect();
-    match context.state_view.get_packages(package_ids) {
+    match get_packages(&context.state_view, package_ids) {
         Err(e) => Err(ExecutionError::new_with_source(
             ExecutionErrorKind::PublishUpgradeMissingDependency,
             e,
@@ -793,17 +746,14 @@ where
  * Move execution
  **************************************************************************************************/
 
-fn vm_move_call<'vm, 'state, 'a, S: StorageView>(
-    context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+fn vm_move_call(
+    context: &mut ExecutionContext<'_, '_, '_>,
     module_id: &ModuleId,
     function: &IdentStr,
     type_arguments: Vec<Type>,
     tx_context_kind: TxContextKind,
     mut serialized_arguments: Vec<Vec<u8>>,
-) -> Result<SerializedReturnValues, ExecutionError>
-where
-    &'state S: SuiResolver,
-{
+) -> Result<SerializedReturnValues, ExecutionError> {
     match tx_context_kind {
         TxContextKind::None => (),
         TxContextKind::Mutable | TxContextKind::Immutable => {
@@ -818,7 +768,7 @@ where
             function,
             type_arguments,
             serialized_arguments,
-            context.gas_status.move_gas_status(),
+            context.gas_charger.move_gas_status_mut(),
         )
         .map_err(|e| context.convert_vm_error(e))?;
 
@@ -843,13 +793,11 @@ where
     Ok(result)
 }
 
-fn deserialize_modules<'vm, 'state, 'a, S: StorageView, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+#[allow(clippy::extra_unused_type_parameters)]
+fn deserialize_modules<Mode: ExecutionMode>(
+    context: &mut ExecutionContext<'_, '_, '_>,
     module_bytes: &[Vec<u8>],
-) -> Result<Vec<CompiledModule>, ExecutionError>
-where
-    &'state S: SuiResolver,
-{
+) -> Result<Vec<CompiledModule>, ExecutionError> {
     let modules = module_bytes
         .iter()
         .map(|b| {
@@ -871,14 +819,11 @@ where
     Ok(modules)
 }
 
-fn publish_and_verify_modules<'vm, 'state, 'a, S: StorageView>(
-    context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+fn publish_and_verify_modules(
+    context: &mut ExecutionContext<'_, '_, '_>,
     package_id: ObjectID,
     modules: &[CompiledModule],
-) -> Result<(), ExecutionError>
-where
-    &'state S: SuiResolver,
-{
+) -> Result<(), ExecutionError> {
     // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
     let new_module_bytes: Vec<_> = modules
         .iter()
@@ -895,7 +840,7 @@ where
             AccountAddress::from(package_id),
             // TODO: publish_module_bundle() currently doesn't charge gas.
             // Do we want to charge there?
-            context.gas_status.move_gas_status(),
+            context.gas_charger.move_gas_status_mut(),
         )
         .map_err(|e| context.convert_vm_error(e))?;
 
@@ -904,7 +849,6 @@ where
         // Run Sui bytecode verifier, which runs some additional checks that assume the Move
         // bytecode verifier has passed.
         sui_verifier::verifier::sui_verify_module_unmetered(
-            context.protocol_config,
             module,
             &BTreeMap::new(),
         )?;
@@ -913,14 +857,11 @@ where
     Ok(())
 }
 
-fn init_modules<'vm, 'state, 'a, S: StorageView, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+fn init_modules<Mode: ExecutionMode>(
+    context: &mut ExecutionContext<'_, '_, '_>,
     argument_updates: &mut Mode::ArgumentUpdates,
     modules: &[CompiledModule],
-) -> Result<(), ExecutionError>
-where
-    &'state S: SuiResolver,
-{
+) -> Result<(), ExecutionError> {
     let modules_to_init = modules.iter().filter_map(|module| {
         for fdef in &module.function_defs {
             let fhandle = module.function_handle_at(fdef.function);
@@ -933,7 +874,7 @@ where
     });
 
     for module_id in modules_to_init {
-        let return_values = execute_move_call::<_, Mode>(
+        let return_values = execute_move_call::<Mode>(
             context,
             argument_updates,
             &module_id,
@@ -991,16 +932,13 @@ struct LoadedFunctionInfo {
 /// - an entry function
 /// - a public function that does not return references
 /// - module init (only internal usage)
-fn check_visibility_and_signature<'vm, 'state, 'a, S: StorageView, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+fn check_visibility_and_signature<Mode: ExecutionMode>(
+    context: &mut ExecutionContext<'_, '_, '_>,
     module_id: &ModuleId,
     function: &IdentStr,
     type_arguments: &[Type],
     from_init: bool,
-) -> Result<LoadedFunctionInfo, ExecutionError>
-where
-    &'state S: SuiResolver,
-{
+) -> Result<LoadedFunctionInfo, ExecutionError> {
     if from_init {
         // the session is weird and does not load the module on publishing. This is a temporary
         // work around, since loading the function through the session will cause the module
@@ -1080,7 +1018,7 @@ where
             vec![]
         }
         FunctionKind::PrivateEntry | FunctionKind::PublicEntry | FunctionKind::NonEntry => {
-            check_non_entry_signature::<_, Mode>(context, module_id, function, &signature)?
+            check_non_entry_signature::<Mode>(context, module_id, function, &signature)?
         }
     };
     check_private_generics(context, module_id, function, type_arguments)?;
@@ -1120,15 +1058,12 @@ fn subst_signature(
 
 /// Checks that the non-entry function does not return references. And marks the return values
 /// as object or non-object return values
-fn check_non_entry_signature<'vm, 'state, 'a, S: StorageView, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+fn check_non_entry_signature<Mode: ExecutionMode>(
+    context: &mut ExecutionContext<'_, '_, '_>,
     _module_id: &ModuleId,
     _function: &IdentStr,
     signature: &LoadedFunctionInstantiation,
-) -> Result<Vec<ValueKind>, ExecutionError>
-where
-    &'state S: SuiResolver,
-{
+) -> Result<Vec<ValueKind>, ExecutionError> {
     signature
         .return_
         .iter()
@@ -1185,8 +1120,8 @@ where
         .collect()
 }
 
-fn check_private_generics<S: StorageView>(
-    _context: &mut ExecutionContext<S>,
+fn check_private_generics(
+    _context: &mut ExecutionContext,
     module_id: &ModuleId,
     function: &IdentStr,
     _type_arguments: &[Type],
@@ -1226,17 +1161,14 @@ type ArgInfo = (
 
 /// Serializes the arguments into BCS values for Move. Performs the necessary type checking for
 /// each value
-fn build_move_args<'vm, 'state, 'a, S: StorageView, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+fn build_move_args<Mode: ExecutionMode>(
+    context: &mut ExecutionContext<'_, '_, '_>,
     module_id: &ModuleId,
     function: &IdentStr,
     function_kind: FunctionKind,
     signature: &LoadedFunctionInstantiation,
     args: &[Argument],
-) -> Result<ArgInfo, ExecutionError>
-where
-    &'state S: SuiResolver,
-{
+) -> Result<ArgInfo, ExecutionError> {
     // check the arity
     let parameters = &signature.parameters;
     let tx_ctx_kind = match parameters.last() {
@@ -1327,7 +1259,7 @@ where
                 idx,
             ));
         }
-        check_param_type::<_, Mode>(context, idx, &value, non_ref_param_ty)?;
+        check_param_type::<Mode>(context, idx, &value, non_ref_param_ty)?;
         let bytes = {
             let mut v = vec![];
             value.write_bcs_bytes(&mut v);
@@ -1339,15 +1271,12 @@ where
 }
 
 /// checks that the value is compatible with the specified type
-fn check_param_type<'vm, 'state, 'a, S: StorageView, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+fn check_param_type<Mode: ExecutionMode>(
+    context: &mut ExecutionContext<'_, '_, '_>,
     idx: usize,
     value: &Value,
     param_ty: &Type,
-) -> Result<(), ExecutionError>
-where
-    &'state S: SuiResolver,
-{
+) -> Result<(), ExecutionError> {
     let ty = match value {
         // For dev-spect, allow any BCS bytes. This does mean internal invariants for types can
         // be violated (like for string or Option)
@@ -1405,13 +1334,10 @@ fn get_struct_ident(s: &StructType) -> (&AccountAddress, &IdentStr, &IdentStr) {
 // Returns Some(kind) if the type is a reference to the TxnContext. kind being Mutable with
 // a MutableReference, and Immutable otherwise.
 // Returns None for all other types
-pub fn is_tx_context<'vm, 'state, 'a, S: StorageView>(
-    context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+pub fn is_tx_context(
+    context: &mut ExecutionContext<'_, '_, '_>,
     t: &Type,
-) -> Result<TxContextKind, ExecutionError>
-where
-    &'state S: SuiResolver,
-{
+) -> Result<TxContextKind, ExecutionError> {
     let (is_mut, inner) = match t {
         Type::MutableReference(inner) => (true, inner),
         Type::Reference(inner) => (false, inner),
@@ -1437,13 +1363,10 @@ where
 }
 
 /// Returns Some(layout) iff it is a primitive, an ID, a String, or an option/vector of a valid type
-fn primitive_serialization_layout<'vm, 'state, 'a, S: StorageView>(
-    context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+fn primitive_serialization_layout(
+    context: &mut ExecutionContext<'_, '_, '_>,
     param_ty: &Type,
-) -> Result<Option<PrimitiveArgumentLayout>, ExecutionError>
-where
-    &'state S: SuiResolver,
-{
+) -> Result<Option<PrimitiveArgumentLayout>, ExecutionError> {
     Ok(match param_ty {
         Type::Signer => return Ok(None),
         Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {

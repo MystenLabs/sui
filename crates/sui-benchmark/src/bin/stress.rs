@@ -7,6 +7,7 @@ use clap::*;
 use prometheus::Registry;
 use rand::seq::SliceRandom;
 use rand::Rng;
+use sui_protocol_config::Chain;
 use tokio::time::sleep;
 
 use std::sync::Arc;
@@ -58,8 +59,8 @@ async fn main() -> Result<()> {
 
     // TODO: query the network for the current protocol version.
     let protocol_config = match opts.protocol_version {
-        Some(v) => ProtocolConfig::get_for_version(ProtocolVersion::new(v)),
-        None => ProtocolConfig::get_for_max_version(),
+        Some(v) => ProtocolConfig::get_for_version(ProtocolVersion::new(v), Chain::Unknown),
+        None => ProtocolConfig::get_for_max_version_UNSAFE(),
     };
 
     let max_num_new_move_object_ids = protocol_config.max_num_new_move_object_ids();

@@ -15,7 +15,7 @@ async fn test_restore_from_disk() {
     // nodes logs.
     let _guard = setup_tracing();
 
-    let mut cluster = Cluster::new(None, true);
+    let mut cluster = Cluster::new(None);
 
     // start the cluster
     cluster.start(Some(4), Some(1), None).await;
@@ -102,7 +102,7 @@ async fn test_read_causal_signed_certificates() {
     // nodes logs.
     let _guard = setup_tracing();
 
-    let mut cluster = Cluster::new(None, true);
+    let mut cluster = Cluster::new(None);
 
     // start the cluster
     cluster.start(Some(4), Some(1), None).await;

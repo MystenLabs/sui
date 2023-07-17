@@ -1,0 +1,23 @@
+[package]
+name = "sui-execution-cut"
+version = "0.1.0"
+edition = "2021"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+clap = { version = "4.3.1", features = ["derive"] }
+thiserror.workspace = true
+toml.workspace = true
+toml_edit.workspace = true
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+expect-test.workspace = true
+tempfile.workspace = true
+
+[[bin]]
+name = "cut"
+path = "src/main.rs"

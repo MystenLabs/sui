@@ -29,6 +29,8 @@ pub struct Metrics {
     req_latency_by_route: HistogramVec,
     /// Failed requests by route
     errors_by_route: IntCounterVec,
+    server_errors_by_route: IntCounterVec,
+    client_errors_by_route: IntCounterVec,
     /// Client info
     client: IntCounterVec,
     /// Connection count
@@ -78,11 +80,25 @@ impl MetricsLogger {
                 registry,
             )
             .unwrap(),
-            errors_by_route: register_int_counter_vec_with_registry!(
-                "errors_by_route",
-                "Number of errors by route",
+            client_errors_by_route: register_int_counter_vec_with_registry!(
+                "client_errors_by_route",
+                "Number of client errors by route",
                 &["route"],
                 registry,
+            )
+            .unwrap(),
+            server_errors_by_route: register_int_counter_vec_with_registry!(
+                "server_errors_by_route",
+                "Number of server errors by route",
+                &["route"],
+                registry,
+            )
+            .unwrap(),
+            errors_by_route: register_int_counter_vec_with_registry!(
+                "errors_by_route",
+                "Number of client and server errors by route",
+                &["route"],
+                registry
             )
             .unwrap(),
             client: register_int_counter_vec_with_registry!(
@@ -188,7 +204,8 @@ impl Logger for MetricsLogger {
     fn on_result(
         &self,
         method_name: &str,
-        success: bool,
+        _success: bool,
+        error_code: Option<i32>,
         started_at: Self::Instant,
         _transport: TransportProtocol,
     ) {
@@ -203,7 +220,18 @@ impl Logger for MetricsLogger {
             .with_label_values(&[method_name])
             .observe(req_latency_secs);
 
-        if !success {
+        if let Some(code) = error_code {
+            if code == -32000 {
+                self.metrics
+                    .server_errors_by_route
+                    .with_label_values(&[method_name])
+                    .inc();
+            } else {
+                self.metrics
+                    .client_errors_by_route
+                    .with_label_values(&[method_name])
+                    .inc();
+            }
             self.metrics
                 .errors_by_route
                 .with_label_values(&[method_name])

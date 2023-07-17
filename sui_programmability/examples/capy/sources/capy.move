@@ -134,6 +134,7 @@ module capy::capy {
 
     // ======== Functions =========
 
+    #[allow(unused_function)]
     /// Create a shared CapyRegistry and give its creator the capability
     /// to manage the game.
     fun init(ctx: &mut TxContext) {

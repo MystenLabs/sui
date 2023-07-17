@@ -8,6 +8,7 @@ use crate::{
     identifier::{IdentStr, Identifier},
     parser::{parse_struct_tag, parse_type_tag},
 };
+use move_proc_macros::test_variant_order;
 use once_cell::sync::Lazy;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
@@ -28,6 +29,7 @@ pub static TYPETAG_ENUM_ABSTRACT_SIZE: Lazy<AbstractMemorySize> =
     Lazy::new(|| ENUM_BASE_ABSTRACT_SIZE + BOX_ABSTRACT_SIZE);
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Hash, Eq, Clone, PartialOrd, Ord)]
+#[test_variant_order(src/unit_tests/staged_enum_variant_order/type_tag.yaml)]
 pub enum TypeTag {
     // alias for compatibility with old json serialized data.
     #[serde(rename = "bool", alias = "Bool")]

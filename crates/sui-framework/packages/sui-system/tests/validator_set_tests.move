@@ -14,6 +14,7 @@ module sui_system::validator_set_tests {
     use std::ascii;
     use std::option;
     use sui::test_utils::{Self, assert_eq};
+    use sui::transfer;
 
     const MIST_PER_SUI: u64 = 1_000_000_000; // used internally for stakes.
 
@@ -374,11 +375,13 @@ module sui_system::validator_set_tests {
         test_scenario::next_tx(scenario, @0x42);
         {
             let stake = test_scenario::take_from_sender<StakedSui>(scenario);
-            validator_set::request_withdraw_stake(
+            let ctx = test_scenario::ctx(scenario);
+            let withdrawn_balance = validator_set::request_withdraw_stake(
                 &mut validator_set,
                 stake,
-                test_scenario::ctx(scenario),
+                ctx,
             );
+            transfer::public_transfer(coin::from_balance(withdrawn_balance, ctx), @0x42);
         };
 
         // Now @0x4 gets kicked out after 3 grace days are used at the 4th epoch change.

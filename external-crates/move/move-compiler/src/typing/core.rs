@@ -15,6 +15,7 @@ use crate::{
     FullyCompiledProgram,
 };
 use move_ir_types::location::*;
+use move_symbol_pool::Symbol;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 //**************************************************************************************************
@@ -78,6 +79,9 @@ pub struct Context<'env> {
     pub constraints: Constraints,
 
     loop_info: LoopInfo,
+
+    /// collects all called functions in the current module
+    pub called_fns: BTreeSet<Symbol>,
 }
 
 impl<'env> Context<'env> {
@@ -117,6 +121,7 @@ impl<'env> Context<'env> {
             (mident, minfo)
         }))
         .unwrap();
+
         Context {
             subst: Subst::empty(),
             current_module: None,
@@ -128,6 +133,7 @@ impl<'env> Context<'env> {
             loop_info: LoopInfo(LoopInfo_::NotInLoop),
             modules,
             env,
+            called_fns: BTreeSet::new(),
         }
     }
 

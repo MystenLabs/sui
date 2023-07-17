@@ -1,5 +1,18 @@
 # Change Log
 
+## 0.7.3
+
+### Patch Changes
+
+- 36f2edff3: Fix an issue with parsing struct types with nested type parameters
+
+## 0.7.2
+
+### Patch Changes
+
+- ca5c72815d: Fix a bcs decoding bug for u128 and u256 values
+- fdb569464e: Fixes an issue with a top level generic in a nested vector
+
 ## 0.7.1
 
 ### Patch Changes
@@ -21,15 +34,15 @@
 
   ```js
   // new syntax
-  bcs.registerStructType(["VecMap", "K", "V"], {
-    keys: ["vector", "K"],
-    values: ["vector", "V"],
+  bcs.registerStructType(['VecMap', 'K', 'V'], {
+  	keys: ['vector', 'K'],
+  	values: ['vector', 'V'],
   });
 
   // is identical to an old string definition
-  bcs.registerStructType("VecMap<K, V>", {
-    keys: "vector<K>",
-    values: "vector<V>",
+  bcs.registerStructType('VecMap<K, V>', {
+  	keys: 'vector<K>',
+  	values: 'vector<V>',
   });
   ```
 
@@ -49,15 +62,15 @@
 
 ```js
 // new syntax
-bcs.registerStructType(["VecMap", "K", "V"], {
-  keys: ["vector", "K"],
-  values: ["vector", "V"],
+bcs.registerStructType(['VecMap', 'K', 'V'], {
+	keys: ['vector', 'K'],
+	values: ['vector', 'V'],
 });
 
 // is identical to an old string definition
-bcs.registerStructType("VecMap<K, V>", {
-  keys: "vector<K>",
-  values: "vector<V>",
+bcs.registerStructType('VecMap<K, V>', {
+	keys: 'vector<K>',
+	values: 'vector<V>',
 });
 ```
 
@@ -71,10 +84,10 @@ bcs.registerStructType("VecMap<K, V>", {
 - adds constants for the built-ins: `BCS.BASE64`, `BCS.BASE58` and `BCS.HEX`
 
 ```js
-bcs.registerStructType("TestStruct", {
-  hex: BCS.HEX,
-  base58: BCS.BASE58,
-  base64: BCS.BASE64,
+bcs.registerStructType('TestStruct', {
+	hex: BCS.HEX,
+	base58: BCS.BASE58,
+	base64: BCS.BASE64,
 });
 ```
 
@@ -87,17 +100,17 @@ bcs.registerStructType("TestStruct", {
 
 ```js
 // inline definition example
-let struct = { name: "Alice", age: 25 };
-let bytes = bcs.ser({ name: "string", age: "u8" }, struct).toBytes();
-let restored = bcs.de({ name: "string", age: "u8" }, bytes);
+let struct = { name: 'Alice', age: 25 };
+let bytes = bcs.ser({ name: 'string', age: 'u8' }, struct).toBytes();
+let restored = bcs.de({ name: 'string', age: 'u8' }, bytes);
 
 // `restored` deeply equals `struct`
 ```
 
 ```js
 // aliases for types
-bcs.registerAlias("Name", "string");
-bcs.ser("Name", "Palpatine");
+bcs.registerAlias('Name', 'string');
+bcs.ser('Name', 'Palpatine');
 ```
 
 ## 0.5.0

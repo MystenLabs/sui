@@ -20,7 +20,7 @@ Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0
 
 task 4 'transfer-object'. lines 27-27:
 Error: Transaction Effects Status: Invalid command argument at 0. Immutable and shared objects cannot be passed by-value.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidObjectByValue }, source: None, command: Some(0) } }
+Cannot return execution error with shared objects. Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidObjectByValue } at command Some(0)
 
 task 5 'view-object'. lines 29-29:
 Owner: Shared

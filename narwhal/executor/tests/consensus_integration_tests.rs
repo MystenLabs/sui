@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use bytes::Bytes;
 use consensus::bullshark::Bullshark;
-use consensus::consensus::ConsensusRound;
+use consensus::consensus::{ConsensusRound, LeaderSchedule, LeaderSwapTable};
 use consensus::metrics::ConsensusMetrics;
 use consensus::Consensus;
 use fastcrypto::hash::Hash;
@@ -40,27 +40,27 @@ async fn test_recovery() {
         .collect::<BTreeSet<_>>();
     let (mut certificates, next_parents) = test_utils::make_optimal_certificates(
         &committee,
+        &latest_protocol_version(),
         1..=2,
         &genesis,
         &ids,
-        &latest_protocol_version(),
     );
 
     // Make two certificate (f+1) with round 3 to trigger the commits.
     let (_, certificate) = test_utils::mock_certificate(
         &committee,
+        &latest_protocol_version(),
         ids[0],
         3,
         next_parents.clone(),
-        &latest_protocol_version(),
     );
     certificates.push_back(certificate);
     let (_, certificate) = test_utils::mock_certificate(
         &committee,
+        &latest_protocol_version(),
         ids[1],
         3,
         next_parents,
-        &latest_protocol_version(),
     );
     certificates.push_back(certificate);
 
@@ -79,8 +79,10 @@ async fn test_recovery() {
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
+        latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     let _consensus_handle = Consensus::spawn(
@@ -158,7 +160,7 @@ async fn test_internal_consensus_output() {
     // nodes logs.
     let _guard = setup_tracing();
 
-    let mut cluster = Cluster::new(None, true);
+    let mut cluster = Cluster::new(None);
 
     // start the cluster
     cluster.start(Some(4), Some(1), None).await;

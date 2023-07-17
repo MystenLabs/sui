@@ -29,13 +29,13 @@ use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{self, DynamicFieldInfo};
 use sui_types::effects::TransactionEvents;
 use sui_types::error::{SuiError, SuiResult, UserInputError};
-use sui_types::object::Owner;
+use sui_types::object::{Object, Owner};
 use sui_types::parse_sui_struct_tag;
 use sui_types::temporary_store::TxCoins;
 use tokio::task::spawn_blocking;
 use tracing::{debug, trace};
 use typed_store::rocks::{
-    default_db_options, read_size_from_env, DBBatch, DBMap, DBOptions, MetricConf, ReadWriteOptions,
+    default_db_options, read_size_from_env, DBBatch, DBMap, DBOptions, MetricConf,
 };
 use typed_store::traits::Map;
 use typed_store::traits::{TableSummary, TypedStoreDebug};
@@ -75,6 +75,17 @@ pub struct CoinInfo {
     pub digest: ObjectDigest,
     pub balance: u64,
     pub previous_transaction: TransactionDigest,
+}
+
+impl CoinInfo {
+    pub fn from_object(object: &Object) -> Option<CoinInfo> {
+        object.as_coin_maybe().map(|coin| CoinInfo {
+            version: object.version(),
+            digest: object.digest(),
+            previous_transaction: object.previous_transaction,
+            balance: coin.value(),
+        })
+    }
 }
 
 pub struct IndexStoreMetrics {
@@ -155,6 +166,9 @@ pub struct IndexStoreTables {
     /// **milliseconds** since epoch 1/1/1970). A transaction digest is subjectively time stamped
     /// on a node according to the local machine time, so it varies across nodes.
     /// The timestamping happens when the node sees a txn certificate for the first time.
+    ///
+    /// DEPRECATED. DO NOT USE
+    #[allow(dead_code)]
     #[default_options_override_fn = "timestamps_table_default_config"]
     timestamps: DBMap<TransactionDigest, u64>,
 
@@ -200,6 +214,16 @@ pub struct IndexStoreTables {
     event_by_time: DBMap<(u64, EventId), EventIndex>,
 }
 
+impl IndexStoreTables {
+    pub fn owner_index(&self) -> &DBMap<OwnerIndexKey, ObjectInfo> {
+        &self.owner_index
+    }
+
+    pub fn coin_index(&self) -> &DBMap<CoinIndexKey, CoinInfo> {
+        &self.coin_index
+    }
+}
+
 pub struct IndexStore {
     next_sequence_number: AtomicU64,
     tables: IndexStoreTables,
@@ -243,17 +267,11 @@ fn index_table_default_config() -> DBOptions {
     default_db_options()
 }
 fn coin_index_table_default_config() -> DBOptions {
-    DBOptions {
-        options: default_db_options()
-            .optimize_for_write_throughput()
-            .optimize_for_read(
-                read_size_from_env(ENV_VAR_COIN_INDEX_BLOCK_CACHE_SIZE_MB).unwrap_or(5 * 1024),
-            )
-            .options,
-        rw_options: ReadWriteOptions {
-            ignore_range_deletions: true,
-        },
-    }
+    default_db_options()
+        .optimize_for_write_throughput()
+        .optimize_for_read(
+            read_size_from_env(ENV_VAR_COIN_INDEX_BLOCK_CACHE_SIZE_MB).unwrap_or(5 * 1024),
+        )
 }
 
 impl IndexStore {
@@ -268,7 +286,7 @@ impl IndexStore {
         };
         let next_sequence_number = tables
             .transaction_order
-            .iter()
+            .unbounded_iter()
             .skip_to_last()
             .next()
             .map(|(seq, _)| seq + 1)
@@ -282,6 +300,10 @@ impl IndexStore {
             metrics: Arc::new(metrics),
             max_type_length: max_type_length.unwrap_or(128),
         }
+    }
+
+    pub fn tables(&self) -> &IndexStoreTables {
+        &self.tables
     }
 
     pub async fn index_coin(
@@ -437,7 +459,7 @@ impl IndexStore {
         digest: &TransactionDigest,
         timestamp_ms: u64,
         tx_coins: Option<TxCoins>,
-        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
+        loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
     ) -> SuiResult<u64> {
         let sequence = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
         let mut batch = self.tables.transactions_from_addr.batch();
@@ -487,11 +509,6 @@ impl IndexStore {
                     .ok()
                     .map(|addr| ((addr, sequence), digest))
             }),
-        )?;
-
-        batch.insert_batch(
-            &self.tables.timestamps,
-            std::iter::once((*digest, timestamp_ms)),
         )?;
 
         // Coin Index
@@ -586,7 +603,7 @@ impl IndexStore {
         )?;
 
         // Loaded child objects table
-        let loaded_child_objects: Vec<_> = loaded_child_objects.into_iter().collect();
+        let loaded_child_objects: Vec<_> = loaded_child_objects.clone().into_iter().collect();
         batch.insert_batch(
             &self.tables.loaded_child_object_versions,
             std::iter::once((*digest, loaded_child_objects)),
@@ -671,7 +688,7 @@ impl IndexStore {
                 error: UserInputError::Unsupported(format!("{:?}", filter)),
             }),
             None => {
-                let iter = self.tables.transaction_order.iter();
+                let iter = self.tables.transaction_order.unbounded_iter();
 
                 if reverse {
                     let iter = iter
@@ -710,15 +727,6 @@ impl IndexStore {
             .map_err(|err| err.into())
     }
 
-    /// Returns unix timestamp for a transaction if it exists
-    pub fn get_timestamp_ms(
-        &self,
-        transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<u64>> {
-        let ts = self.tables.timestamps.get(transaction_digest)?;
-        Ok(ts)
-    }
-
     fn get_transactions_from_index<KeyT: Clone + Serialize + DeserializeOwned + PartialEq>(
         index: &DBMap<(KeyT, TxSequenceNumber), TransactionDigest>,
         key: KeyT,
@@ -728,7 +736,7 @@ impl IndexStore {
     ) -> SuiResult<Vec<TransactionDigest>> {
         Ok(if reverse {
             let iter = index
-                .iter()
+                .unbounded_iter()
                 .skip_prior_to(&(key.clone(), cursor.unwrap_or(TxSequenceNumber::MAX)))?
                 .reverse()
                 // skip one more if exclusive cursor is Some
@@ -742,7 +750,7 @@ impl IndexStore {
             }
         } else {
             let iter = index
-                .iter()
+                .unbounded_iter()
                 .skip_to(&(key.clone(), cursor.unwrap_or(TxSequenceNumber::MIN)))?
                 // skip one more if exclusive cursor is Some
                 .skip(usize::from(cursor.is_some()))
@@ -850,7 +858,7 @@ impl IndexStore {
                 .unwrap_or(if reverse { max_string } else { "".to_string() });
 
         let key = (package, module_val, function_val, cursor_val);
-        let iter = self.tables.transactions_by_move_function.iter();
+        let iter = self.tables.transactions_by_move_function.unbounded_iter();
         Ok(if reverse {
             let iter = iter
                 .skip_prior_to(&key)?
@@ -920,7 +928,7 @@ impl IndexStore {
         Ok(if descending {
             self.tables
                 .event_order
-                .iter()
+                .unbounded_iter()
                 .skip_prior_to(&(tx_seq, event_seq))?
                 .reverse()
                 .take(limit)
@@ -931,7 +939,7 @@ impl IndexStore {
         } else {
             self.tables
                 .event_order
-                .iter()
+                .unbounded_iter()
                 .skip_to(&(tx_seq, event_seq))?
                 .take(limit)
                 .map(|((_, event_seq), (digest, tx_digest, time))| {
@@ -955,7 +963,7 @@ impl IndexStore {
         Ok(if descending {
             self.tables
                 .event_order
-                .iter()
+                .unbounded_iter()
                 .skip_prior_to(&(min(tx_seq, seq), event_seq))?
                 .reverse()
                 .take_while(|((tx, _), _)| tx == &seq)
@@ -967,7 +975,7 @@ impl IndexStore {
         } else {
             self.tables
                 .event_order
-                .iter()
+                .unbounded_iter()
                 .skip_to(&(max(tx_seq, seq), event_seq))?
                 .take_while(|((tx, _), _)| tx == &seq)
                 .take(limit)
@@ -988,7 +996,7 @@ impl IndexStore {
     ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
         Ok(if descending {
             index
-                .iter()
+                .unbounded_iter()
                 .skip_prior_to(&(key.clone(), (tx_seq, event_seq)))?
                 .reverse()
                 .take_while(|((m, _), _)| m == key)
@@ -999,7 +1007,7 @@ impl IndexStore {
                 .collect()
         } else {
             index
-                .iter()
+                .unbounded_iter()
                 .skip_to(&(key.clone(), (tx_seq, event_seq)))?
                 .take_while(|((m, _), _)| m == key)
                 .take(limit)
@@ -1094,7 +1102,7 @@ impl IndexStore {
         Ok(if descending {
             self.tables
                 .event_by_time
-                .iter()
+                .unbounded_iter()
                 .skip_prior_to(&(end_time, (tx_seq, event_seq)))?
                 .reverse()
                 .take_while(|((m, _), _)| m >= &start_time)
@@ -1106,7 +1114,7 @@ impl IndexStore {
         } else {
             self.tables
                 .event_by_time
-                .iter()
+                .unbounded_iter()
                 .skip_to(&(start_time, (tx_seq, event_seq)))?
                 .take_while(|((m, _), _)| m <= &end_time)
                 .take(limit)
@@ -1215,7 +1223,7 @@ impl IndexStore {
         let starting_coin_type =
             coin_type_tag.unwrap_or_else(|| String::from_utf8([0u8].to_vec()).unwrap());
         Ok(coin_index
-            .iter()
+            .unbounded_iter()
             .skip_to(&(owner, starting_coin_type.clone(), ObjectID::ZERO))?
             .take_while(move |((addr, coin_type, _), _)| {
                 if addr != &owner {
@@ -1240,7 +1248,7 @@ impl IndexStore {
         Ok(self
             .tables
             .coin_index
-            .iter()
+            .unbounded_iter()
             .skip_to(&(owner, starting_coin_type.clone(), starting_object_id))?
             .filter(move |((_, _, obj_id), _)| obj_id != &starting_object_id)
             .enumerate()
@@ -1270,7 +1278,7 @@ impl IndexStore {
         Ok(self
             .tables
             .owner_index
-            .iter()
+            .unbounded_iter()
             // The object id 0 is the smallest possible
             .skip_to(&(owner, starting_object_id))?
             .skip(usize::from(starting_object_id != ObjectID::ZERO))
@@ -1638,7 +1646,7 @@ mod tests {
                 &TransactionDigest::random(),
                 1234,
                 Some(tx_coins),
-                BTreeMap::new(),
+                &BTreeMap::new(),
             )
             .await?;
 
@@ -1690,7 +1698,7 @@ mod tests {
                 &TransactionDigest::random(),
                 1234,
                 Some(tx_coins),
-                BTreeMap::new(),
+                &BTreeMap::new(),
             )
             .await?;
         let balance_from_db = IndexStore::get_balance_from_db(

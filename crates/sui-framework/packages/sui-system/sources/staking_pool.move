@@ -8,7 +8,6 @@ module sui_system::staking_pool {
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
     use sui::object::{Self, ID, UID};
-    use sui::coin;
     use sui::math;
     use sui::table::{Self, Table};
     use sui::bag::Bag;
@@ -138,10 +137,9 @@ module sui_system::staking_pool {
         pool: &mut StakingPool,
         staked_sui: StakedSui,
         ctx: &mut TxContext
-    ) : u64 {
+    ) : Balance<SUI> {
         let (pool_token_withdraw_amount, principal_withdraw) =
             withdraw_from_principal(pool, staked_sui);
-        let staker = tx_context::sender(ctx);
         let principal_withdraw_amount = balance::value(&principal_withdraw);
 
         let rewards_withdraw = withdraw_rewards(
@@ -157,8 +155,7 @@ module sui_system::staking_pool {
 
         // TODO: implement withdraw bonding period here.
         balance::join(&mut principal_withdraw, rewards_withdraw);
-        transfer::public_transfer(coin::from_balance(principal_withdraw, ctx), staker);
-        total_sui_withdraw_amount
+        principal_withdraw
     }
 
     /// Withdraw the principal SUI stored in the StakedSui object, and calculate the corresponding amount of pool
@@ -273,30 +270,6 @@ module sui_system::staking_pool {
         assert!(!is_inactive(pool), EActivationOfInactivePool);
         // Fill in the active epoch.
         option::fill(&mut pool.activation_epoch, activation_epoch);
-    }
-
-    /// Withdraw stake from a preactive staking pool.
-    public(friend) fun request_withdraw_stake_preactive(
-        pool: &mut StakingPool,
-        staked_sui: StakedSui,
-        ctx: &mut TxContext
-    ) : u64 {
-        // Check that the stake information matches the pool.
-        assert!(staked_sui.pool_id == object::id(pool), EWrongPool);
-
-        assert!(is_preactive(pool), EPoolNotPreactive);
-
-        let staker = tx_context::sender(ctx);
-
-        let principal = unwrap_staked_sui(staked_sui);
-        let withdraw_amount = balance::value(&principal);
-        // The exchange rate is always 1:1 for a preactive pool so we decrement the
-        // same amount for both sui_balance and pool_token_balance.
-        pool.sui_balance = pool.sui_balance - withdraw_amount;
-        pool.pool_token_balance = pool.pool_token_balance - withdraw_amount;
-
-        transfer::public_transfer(coin::from_balance(principal, ctx), staker);
-        withdraw_amount
     }
 
     // ==== inactive pool related ====

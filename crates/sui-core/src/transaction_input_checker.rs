@@ -6,8 +6,6 @@ use crate::authority::AuthorityStore;
 use crate::transaction_signing_filter;
 use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
-use sui_adapter::adapter::default_verifier_config;
-use sui_adapter::adapter::run_metered_move_bytecode_verifier;
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_macros::checked_arithmetic;
 use sui_protocol_config::ProtocolConfig;
@@ -23,11 +21,10 @@ use sui_types::{
     base_types::{SequenceNumber, SuiAddress},
     error::SuiResult,
     fp_ensure,
-    gas::{SuiCostTable, SuiGasStatus},
+    gas::SuiGasStatus,
     object::{Object, Owner},
 };
 use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
-use sui_verifier::meter::SuiVerifierMeter;
 use tracing::instrument;
 
 checked_arithmetic! {
@@ -42,17 +39,10 @@ async fn get_gas_status(
     epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
 ) -> SuiResult<SuiGasStatus> {
-    // Get the first coin (possibly the only one) and make it "the gas coin", then
-    // keep track of all others that can contribute to gas (gas smashing).
-    let gas_object_ref = gas.get(0).unwrap();
-    // all other gas coins
-    let more_gas_object_refs = gas[1..].to_vec();
-
     check_gas(
         objects,
         epoch_store,
-        gas_object_ref,
-        more_gas_object_refs,
+        gas,
         transaction.gas_budget(),
         transaction.gas_price(),
         transaction.kind(),
@@ -66,7 +56,7 @@ pub async fn check_transaction_input(
     epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
     transaction_deny_config: &TransactionDenyConfig,
-    metrics: &Arc<BytecodeVerifierMetrics>
+    metrics: &Arc<BytecodeVerifierMetrics>,
 ) -> SuiResult<(SuiGasStatus, InputObjects)> {
     transaction.check_version_supported(epoch_store.protocol_config())?;
     transaction.validity_check(epoch_store.protocol_config())?;
@@ -92,7 +82,7 @@ pub async fn check_transaction_input_with_given_gas(
     epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
     gas_object: Object,
-    metrics: &Arc<BytecodeVerifierMetrics>
+    metrics: &Arc<BytecodeVerifierMetrics>,
 ) -> SuiResult<(SuiGasStatus, InputObjects)> {
     transaction.check_version_supported(epoch_store.protocol_config())?;
     transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
@@ -124,7 +114,11 @@ pub(crate) async fn check_dev_inspect_input(
         TransactionKind::ChangeEpoch(_)
         | TransactionKind::Genesis(_)
         | TransactionKind::ConsensusCommitPrologue(_) => {
-            return Err(UserInputError::Unsupported(format!("Transaction kind {} is not supported in dev-inspect", kind)).into())
+            return Err(UserInputError::Unsupported(format!(
+                "Transaction kind {} is not supported in dev-inspect",
+                kind
+            ))
+            .into())
         }
     }
     let mut input_objects = kind.input_objects()?;
@@ -186,58 +180,33 @@ pub async fn check_certificate_input(
 async fn check_gas(
     objects: &[Object],
     epoch_store: &AuthorityPerEpochStore,
-    gas_payment: &ObjectRef,
-    more_gas_object_refs: Vec<ObjectRef>,
+    gas: &[ObjectRef],
     gas_budget: u64,
     gas_price: u64,
     tx_kind: &TransactionKind,
 ) -> SuiResult<SuiGasStatus> {
-    let protocol_config = epoch_store.protocol_config();
     if tx_kind.is_system_tx() {
-        Ok(SuiGasStatus::new_unmetered(protocol_config))
+        Ok(SuiGasStatus::new_unmetered())
     } else {
-        // gas price must be bigger or equal to reference gas price
+        let protocol_config = epoch_store.protocol_config();
         let reference_gas_price = epoch_store.reference_gas_price();
-        if gas_price < reference_gas_price {
-            return Err(UserInputError::GasPriceUnderRGP {
-                gas_price,
-                reference_gas_price,
-            }
-            .into());
-        }
-        if protocol_config.gas_model_version() >= 4 && gas_price >= protocol_config.max_gas_price() {
-            return Err(UserInputError::GasPriceTooHigh {
-                max_gas_price: protocol_config.max_gas_price(),
-            }
-            .into());
-        }
+        let gas_status =
+            SuiGasStatus::new(gas_budget, gas_price, reference_gas_price, protocol_config)?;
 
+        // check balance and coins consistency
         // load all gas coins
         let objects: BTreeMap<_, _> = objects.iter().map(|o| (o.id(), o)).collect();
-
-        let gas_object = objects.get(&gas_payment.0);
-        let gas_object = *gas_object.ok_or(UserInputError::ObjectNotFound {
-            object_id: gas_payment.0,
-            version: Some(gas_payment.1),
-        })?;
-        let mut more_gas_objects = vec![];
-        for obj_ref in more_gas_object_refs.iter() {
+        let mut gas_objects = vec![];
+        for obj_ref in gas {
             let obj = objects.get(&obj_ref.0);
             let obj = *obj.ok_or(UserInputError::ObjectNotFound {
                 object_id: obj_ref.0,
                 version: Some(obj_ref.1),
             })?;
-            more_gas_objects.push(obj);
+            gas_objects.push(obj);
         }
-
-        // check balance and coins consistency
-        let cost_table = SuiCostTable::new(protocol_config);
-        cost_table.check_gas_balance(gas_object, more_gas_objects, gas_budget, gas_price)?;
-        Ok(SuiGasStatus::new_with_budget(
-            gas_budget,
-            gas_price,
-            protocol_config,
-        ))
+        gas_status.check_gas_balance(&gas_objects, gas_budget)?;
+        Ok(gas_status)
     }
 }
 
@@ -410,36 +379,46 @@ fn check_one_object(
 pub fn check_non_system_packages_to_be_published(
     transaction: &TransactionData,
     protocol_config: &ProtocolConfig,
-    metrics: &Arc<BytecodeVerifierMetrics>
+    metrics: &Arc<BytecodeVerifierMetrics>,
 ) -> UserInputResult<()> {
-    // Only meter non-system TXes
-    if !transaction.is_system_tx() {
-        // We use a custom config with metering enabled
-        let metered_verifier_config =
-            default_verifier_config(protocol_config, true /* enable metering */);
-        // Use the same meter for all packages
-        let mut meter = SuiVerifierMeter::new(&metered_verifier_config);
-        if let TransactionKind::ProgrammableTransaction(pt) = transaction.kind() {
-            // Measure time for verifying all packages in the PTB
-            let shared_meter_verifier_timer = metrics.verifier_runtime_per_ptb_success_latency.start_timer();
-            let verifier_status = pt.non_system_packages_to_be_published()
-                .try_for_each(|q| run_metered_move_bytecode_verifier(q, protocol_config, &metered_verifier_config, &mut meter, metrics))
-                .map_err(|e| UserInputError::PackageVerificationTimedout { err: e.to_string() });
-
-            match verifier_status {
-                Ok(_) => {
-                    // Success: stop and record the success timer
-                    shared_meter_verifier_timer.stop_and_record();
-                },
-                Err(err) => {
-                    // Failure: redirect the success timers output to the failure timer and
-                    // discard the success timer
-                    metrics.verifier_runtime_per_ptb_timeout_latency.observe(shared_meter_verifier_timer.stop_and_discard());
-                    return Err(err);
-                }
-            };
-        }
+    // Only meter non-system programmable transaction blocks
+    if transaction.is_system_tx() {
+        return Ok(());
     }
+
+    let TransactionKind::ProgrammableTransaction(pt) = transaction.kind() else {
+        return Ok(());
+    };
+
+    // We use a custom config with metering enabled
+    let is_metered = true;
+    // Use the same verifier and meter for all packages
+    let mut verifier = sui_execution::verifier(protocol_config, is_metered, metrics);
+
+    // Measure time for verifying all packages in the PTB
+    let shared_meter_verifier_timer = metrics
+        .verifier_runtime_per_ptb_success_latency
+        .start_timer();
+
+    let verifier_status = pt
+        .non_system_packages_to_be_published()
+        .try_for_each(|module_bytes| verifier.meter_module_bytes(protocol_config, module_bytes))
+        .map_err(|e| UserInputError::PackageVerificationTimedout { err: e.to_string() });
+
+    match verifier_status {
+        Ok(_) => {
+            // Success: stop and record the success timer
+            shared_meter_verifier_timer.stop_and_record();
+        }
+        Err(err) => {
+            // Failure: redirect the success timers output to the failure timer and
+            // discard the success timer
+            metrics
+                .verifier_runtime_per_ptb_timeout_latency
+                .observe(shared_meter_verifier_timer.stop_and_discard());
+            return Err(err);
+        }
+    };
 
     Ok(())
 }

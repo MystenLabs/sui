@@ -11,6 +11,9 @@ use move_transactional_test_runner::framework::run_test_impl;
 use std::path::Path;
 use test_adapter::{SuiTestAdapter, PRE_COMPILED};
 
-pub fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    run_test_impl::<SuiTestAdapter>(path, Some(&*PRE_COMPILED))
+#[cfg_attr(not(msim), tokio::main)]
+#[cfg_attr(msim, msim::main)]
+pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    run_test_impl::<SuiTestAdapter>(path, Some(&*PRE_COMPILED)).await?;
+    Ok(())
 }

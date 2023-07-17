@@ -22,6 +22,7 @@ CREATE TABLE recipients (
     recipient                   address         NOT NULL
 );
 CREATE INDEX recipients_transaction_digest ON recipients (transaction_digest);
+CREATE INDEX recipients_sender ON recipients (sender);
 CREATE INDEX recipients_recipient ON recipients (recipient);
 
 CREATE TABLE input_objects (
@@ -34,3 +35,15 @@ CREATE TABLE input_objects (
 );
 CREATE INDEX input_objects_transaction_digest ON input_objects (transaction_digest);
 CREATE INDEX input_objects_object_id ON input_objects (object_id);
+
+CREATE TABLE changed_objects (
+    id                         BIGSERIAL       PRIMARY KEY,
+    transaction_digest         base58digest    NOT NULL,
+    checkpoint_sequence_number BIGINT          NOT NULL,
+    epoch                      BIGINT          NOT NULL,
+    object_id                  address         NOT NULL,
+    object_change_type         TEXT            NOT NULL,
+    object_version             BIGINT          NOT NULL
+);
+CREATE INDEX changed_objects_transaction_digest ON changed_objects (transaction_digest);
+CREATE INDEX changed_objects_object_id ON changed_objects (object_id);

@@ -4,15 +4,18 @@
 import { useTimeAgo } from '@mysten/core';
 
 type Prop = {
-    timestamp: number | undefined;
+	timestamp: number | undefined;
 };
 
 export function TxTimeType({ timestamp }: Prop) {
-    const timeAgo = useTimeAgo(timestamp, true);
+	const timeAgo = useTimeAgo({
+		timeFrom: timestamp || null,
+		shortedTimeLabel: true,
+	});
 
-    return (
-        <section>
-            <div className="w-20 text-caption">{timeAgo}</div>
-        </section>
-    );
+	return (
+		<section>
+			<div className="w-20 text-caption">{timeAgo}</div>
+		</section>
+	);
 }

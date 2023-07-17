@@ -3,7 +3,7 @@
 
 use super::reroot_path;
 use clap::*;
-use move_package::{Architecture, BuildConfig};
+use move_package::BuildConfig;
 use std::path::PathBuf;
 
 /// Build the package at `path`. If no path is provided defaults to current directory.
@@ -22,21 +22,8 @@ impl Build {
             config.download_deps_for_package(&rerooted_path, &mut std::io::stdout())?;
             return Ok(());
         }
-        let architecture = config.architecture.unwrap_or(Architecture::Move);
 
-        match architecture {
-            Architecture::Move | Architecture::AsyncMove => {
-                config.compile_package(&rerooted_path, &mut std::io::stdout())?;
-            }
-
-            Architecture::Ethereum => {
-                #[cfg(feature = "evm-backend")]
-                config.compile_package_evm(&rerooted_path, &mut std::io::stderr())?;
-
-                #[cfg(not(feature = "evm-backend"))]
-                anyhow::bail!("The Ethereum architecture is not supported because move-cli was not compiled with feature flag `evm-backend`.");
-            }
-        }
+        config.compile_package(&rerooted_path, &mut std::io::stdout())?;
         Ok(())
     }
 }

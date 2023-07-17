@@ -30,7 +30,7 @@ use move_binary_format::{
 use move_compiler::{
     self,
     compiled_unit::{self, AnnotatedCompiledScript, AnnotatedCompiledUnit},
-    diagnostics::Diagnostics,
+    diagnostics::{Diagnostics, WarningFilters},
     expansion::ast::{self as E, Address, ModuleDefinition, ModuleIdent, ModuleIdent_},
     parser::ast::{self as P, ModuleName as ParserModuleName},
     shared::{parse_named_address, unique_map::UniqueMap, NumericalAddress, PackagePaths},
@@ -74,8 +74,14 @@ pub fn run_model_builder<
 >(
     move_sources: Vec<PackagePaths<Paths, NamedAddress>>,
     deps: Vec<PackagePaths<Paths, NamedAddress>>,
+    warning_filter: Option<WarningFilters>,
 ) -> anyhow::Result<GlobalEnv> {
-    run_model_builder_with_options(move_sources, deps, ModelBuilderOptions::default())
+    run_model_builder_with_options(
+        move_sources,
+        deps,
+        ModelBuilderOptions::default(),
+        warning_filter,
+    )
 }
 
 /// Build the move model with default compilation flags and custom options and a set of provided
@@ -88,12 +94,14 @@ pub fn run_model_builder_with_options<
     move_sources: Vec<PackagePaths<Paths, NamedAddress>>,
     deps: Vec<PackagePaths<Paths, NamedAddress>>,
     options: ModelBuilderOptions,
+    warning_filter: Option<WarningFilters>,
 ) -> anyhow::Result<GlobalEnv> {
     run_model_builder_with_options_and_compilation_flags(
         move_sources,
         deps,
         options,
         Flags::verification(),
+        warning_filter,
     )
 }
 
@@ -107,13 +115,15 @@ pub fn run_model_builder_with_options_and_compilation_flags<
     deps: Vec<PackagePaths<Paths, NamedAddress>>,
     options: ModelBuilderOptions,
     flags: Flags,
+    warning_filter: Option<WarningFilters>,
 ) -> anyhow::Result<GlobalEnv> {
     let mut env = GlobalEnv::new();
     env.set_extension(options);
 
     // Step 1: parse the program to get comments and a separation of targets and dependencies.
-    let (files, comments_and_compiler_res) = Compiler::from_package_paths(move_sources, deps)
+    let (files, comments_and_compiler_res) = Compiler::from_package_paths(move_sources, deps)?
         .set_flags(flags)
+        .set_warning_filter(warning_filter)
         .run::<PASS_PARSER>()?;
     let (comment_map, compiler) = match comments_and_compiler_res {
         Err(diags) => {
@@ -351,7 +361,7 @@ fn add_move_lang_diagnostics(env: &mut GlobalEnv, diags: Diagnostics) {
     for (severity, msg, primary_label, secondary_labels, notes) in diags.into_codespan_format() {
         let diag = Diagnostic::new(severity)
             .with_labels(vec![mk_label(true, primary_label)])
-            .with_message(msg)
+            .with_message(msg.to_string())
             .with_labels(
                 secondary_labels
                     .into_iter()
@@ -510,6 +520,7 @@ fn run_spec_checker(env: &mut GlobalEnv, units: Vec<AnnotatedCompiledUnit>, mut 
                     function_info,
                 }) => {
                     let move_compiler::expansion::ast::Script {
+                        warning_filter: _warning_filter,
                         package_name,
                         attributes,
                         loc,
@@ -542,6 +553,7 @@ fn run_spec_checker(env: &mut GlobalEnv, units: Vec<AnnotatedCompiledUnit>, mut 
                     let mut functions = UniqueMap::new();
                     functions.add(function_name, function).unwrap();
                     let expanded_module = ModuleDefinition {
+                        warning_filter: _warning_filter,
                         package_name,
                         attributes,
                         loc,

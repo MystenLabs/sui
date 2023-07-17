@@ -1,2 +1,0 @@
-Command `build -v --arch ethereum`:
-Error: Found cycle between packages: Foo -> Bar -> Foo

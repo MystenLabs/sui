@@ -17,5 +17,4 @@ authority-store-pruning-config:
   num-epochs-to-retain: 1
   max-checkpoints-in-batch: 10
   max-transactions-in-batch: 1000
-  use-range-deletion: true
   pruning-run-delay-seconds: 60

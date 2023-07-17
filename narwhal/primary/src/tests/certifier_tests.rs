@@ -4,7 +4,7 @@
 use super::*;
 use crate::common::create_db_stores;
 
-use crate::primary;
+use crate::{primary, PrimaryChannelMetrics};
 use consensus::consensus::ConsensusRound;
 use crypto::KeyPair as DefinedKeyPair;
 use fastcrypto::traits::KeyPair;
@@ -33,6 +33,7 @@ async fn propose_header() {
     let id = primary.id();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_headers, rx_headers) = test_utils::test_channel!(1);
@@ -113,8 +114,8 @@ async fn propose_header() {
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
         rx_synchronizer_network,
-        None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
 
     let _handle = Certifier::spawn(
@@ -150,6 +151,7 @@ async fn propose_header_failure() {
     let authority_id = primary.id();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_headers, rx_headers) = test_utils::test_channel!(1);
@@ -213,8 +215,8 @@ async fn propose_header_failure() {
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
         rx_synchronizer_network,
-        None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
 
     let _handle = Certifier::spawn(
@@ -271,6 +273,7 @@ async fn run_vote_aggregator_with_param(
     let id: AuthorityIdentifier = primary.id();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_headers, rx_headers) = test_utils::test_channel!(1);
@@ -346,8 +349,8 @@ async fn run_vote_aggregator_with_param(
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
         rx_synchronizer_network,
-        None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
     let _handle = Certifier::spawn(
         id,
@@ -390,6 +393,7 @@ async fn shutdown_core() {
     let id: AuthorityIdentifier = primary.id();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -417,8 +421,8 @@ async fn shutdown_core() {
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
         rx_synchronizer_network,
-        None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));

@@ -3,6 +3,8 @@ warning[W09002]: unused variable
    │
 10 │         let x: u64;
    │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E01009]: invalid assignment
    ┌─ tests/move_check/typing/assign_nested.move:14:19

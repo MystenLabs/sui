@@ -112,12 +112,15 @@ impl<'a> AbstractInterpreter for LocalsSafety<'a> {}
 
 pub fn verify(
     compilation_env: &mut CompilationEnv,
-    struct_declared_abilities: &UniqueMap<ModuleIdent, UniqueMap<StructName, AbilitySet>>,
-    signature: &FunctionSignature,
-    _acquires: &BTreeMap<StructName, Loc>,
-    locals: &UniqueMap<Var, SingleType>,
-    cfg: &super::cfg::BlockCFG,
+    context: &super::CFGContext,
+    cfg: &super::cfg::MutForwardCFG,
 ) -> BTreeMap<Label, LocalStates> {
+    let super::CFGContext {
+        struct_declared_abilities,
+        signature,
+        locals,
+        ..
+    } = context;
     let initial_state = LocalStates::initial(&signature.parameters, locals);
     let mut locals_safety = LocalsSafety::new(struct_declared_abilities, locals, signature);
     let (final_state, ds) = locals_safety.analyze_function(cfg, initial_state);

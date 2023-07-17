@@ -7,9 +7,11 @@ use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::CallError;
 use jsonrpsee::types::ErrorObject;
 use sui_types::error::{SuiError, SuiObjectResponseError, UserInputError};
-use sui_types::quorum_driver_types::QuorumDriverError;
+use sui_types::quorum_driver_types::{QuorumDriverError, NON_RECOVERABLE_ERROR_MSG};
 use thiserror::Error;
 use tokio::task::JoinError;
+
+pub type RpcInterimResult<T = ()> = Result<T, Error>;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -76,11 +78,8 @@ impl Error {
             },
             Error::QuorumDriverError(err) => match err {
                 QuorumDriverError::NonRecoverableTransactionError { errors } => {
-                    let error_object = ErrorObject::owned(
-                        -32000,
-                        "Transaction has non recoverable errors from at least 1/3 of validators",
-                        Some(errors),
-                    );
+                    let error_object =
+                        ErrorObject::owned(-32000, NON_RECOVERABLE_ERROR_MSG, Some(errors));
                     RpcError::Call(CallError::Custom(error_object))
                 }
                 _ => RpcError::Call(CallError::Failed(err.into())),
@@ -112,4 +111,7 @@ pub enum SuiRpcInputError {
 
     #[error("Unable to serialize: {0}")]
     CannotSerialize(#[from] bcs::Error),
+
+    #[error("{0}")]
+    CannotParseSuiStructTag(String),
 }

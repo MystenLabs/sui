@@ -15,18 +15,20 @@ use move_core_types::{
 };
 use sui_types::{
     base_types::ObjectID,
-    error::{ExecutionError, SuiError},
+    error::{ExecutionError, SuiError, SuiResult},
+    execution::SuiResolver,
     move_package::{MovePackage, TypeOrigin, UpgradeInfo},
+    object::Object,
     storage::BackingPackageStore,
 };
 
 /// Exposes module and linkage resolution to the Move runtime.  The first by delegating to
-/// `StorageView` and the second via linkage information that is loaded from a move package.
-pub struct LinkageView<S> {
-    /// Immutable access to the store for the transaction.
-    state_view: S,
+/// `resolver` and the second via linkage information that is loaded from a move package.
+pub struct LinkageView<'state> {
+    /// Interface to resolve packages, modules and resources directly from the store.
+    resolver: Box<dyn SuiResolver + 'state>,
     /// Information used to change module and type identities during linkage.
-    linkage_info: LinkageInfo,
+    linkage_info: Option<LinkageInfo>,
     /// Cache containing the type origin information from every package that has been set as the
     /// link context, and every other type that has been requested by the loader in this session.
     /// It's okay to retain entries in this cache between different link contexts because a type's
@@ -41,64 +43,39 @@ pub struct LinkageView<S> {
 }
 
 #[derive(Debug)]
-pub enum LinkageInfo {
-    /// No linkage information -- requests to relink will fail with an invariant violation.
-    Unset,
-    /// Linkage information cannot be altered, and does not affect type or module identity.
-    Universal,
-    /// Linkage provided by the package found at `storage_id` whose module self-addresses are
-    /// `runtime_id`.
-    /// Linkage information derived from a specific
-    Set(PackageLinkage),
-}
-
-#[derive(Debug)]
-pub struct PackageLinkage {
+pub struct LinkageInfo {
     storage_id: AccountAddress,
     runtime_id: AccountAddress,
     link_table: BTreeMap<ObjectID, UpgradeInfo>,
 }
 
-pub struct SavedLinkage(PackageLinkage);
+pub struct SavedLinkage(LinkageInfo);
 
-impl<S> LinkageView<S> {
-    pub fn new(state_view: S, linkage_info: LinkageInfo) -> Self {
+impl<'state> LinkageView<'state> {
+    pub fn new(resolver: Box<dyn SuiResolver + 'state>) -> Self {
         Self {
-            state_view,
-            linkage_info,
+            resolver,
+            linkage_info: None,
             type_origin_cache: RefCell::new(HashMap::new()),
             past_contexts: RefCell::new(HashSet::new()),
         }
     }
 
     pub fn reset_linkage(&mut self) {
-        if let LinkageInfo::Set(_) = &self.linkage_info {
-            // Resetting does not affect "universal" linkage.
-            self.linkage_info = LinkageInfo::Unset;
-        }
+        self.linkage_info = None;
     }
 
     /// Indicates whether this `LinkageView` has had its context set to match the linkage in
     /// `context`.
     pub fn has_linkage(&self, context: ObjectID) -> bool {
-        match &self.linkage_info {
-            LinkageInfo::Unset => false,
-            LinkageInfo::Universal => true,
-            LinkageInfo::Set(linkage) => linkage.storage_id == *context,
-        }
+        self.linkage_info
+            .as_ref()
+            .is_some_and(|l| l.storage_id == *context)
     }
 
     /// Reset the linkage, but save the context that existed before, if there was one.
     pub fn steal_linkage(&mut self) -> Option<SavedLinkage> {
-        if let LinkageInfo::Universal = &self.linkage_info {
-            None
-        } else {
-            match std::mem::replace(&mut self.linkage_info, LinkageInfo::Unset) {
-                LinkageInfo::Set(linkage) => Some(SavedLinkage(linkage)),
-                LinkageInfo::Unset => None,
-                LinkageInfo::Universal => unreachable!(),
-            }
-        }
+        Some(SavedLinkage(self.linkage_info.take()?))
     }
 
     /// Restore a previously saved linkage context.  Fails if there is already a context set.
@@ -107,20 +84,16 @@ impl<S> LinkageView<S> {
             return Ok(());
         };
 
-        match &self.linkage_info {
-            LinkageInfo::Unset => (),
-            LinkageInfo::Universal => (),
-            LinkageInfo::Set(existing) => {
-                invariant_violation!(
-                    "Attempt to overwrite linkage by restoring: {saved:#?} \
-                     Existing linkage: {existing:#?}",
-                )
-            }
+        if let Some(existing) = &self.linkage_info {
+            invariant_violation!(
+                "Attempt to overwrite linkage by restoring: {saved:#?} \
+                 Existing linkage: {existing:#?}",
+            )
         }
 
         // No need to populate type origin cache, because a saved context must have been set as a
         // linkage before, and the cache would have been populated at that time.
-        self.linkage_info = LinkageInfo::Set(saved);
+        self.linkage_info = Some(saved);
         Ok(())
     }
 
@@ -128,23 +101,18 @@ impl<S> LinkageView<S> {
     /// the `context` package.  Returns the original package ID (aka the runtime ID) of the context
     /// package on success.
     pub fn set_linkage(&mut self, context: &MovePackage) -> Result<AccountAddress, ExecutionError> {
-        match &self.linkage_info {
-            LinkageInfo::Unset => (),
-            LinkageInfo::Universal => return Ok(*context.id()),
-
-            LinkageInfo::Set(existing) => {
-                invariant_violation!(
-                    "Attempt to overwrite linkage info with context from {}. \
-                     Existing linkage: {existing:#?}",
-                    context.id(),
-                )
-            }
+        if let Some(existing) = &self.linkage_info {
+            invariant_violation!(
+                "Attempt to overwrite linkage info with context from {}. \
+                    Existing linkage: {existing:#?}",
+                context.id(),
+            )
         }
 
-        let linkage = PackageLinkage::from(context);
+        let linkage = LinkageInfo::from(context);
         let storage_id = context.id();
         let runtime_id = linkage.runtime_id;
-        self.linkage_info = LinkageInfo::Set(linkage);
+        self.linkage_info = Some(linkage);
 
         if !self.past_contexts.borrow_mut().insert(storage_id) {
             return Ok(runtime_id);
@@ -178,16 +146,8 @@ impl<S> LinkageView<S> {
         Ok(runtime_id)
     }
 
-    pub fn storage(&self) -> &S {
-        &self.state_view
-    }
-
     pub fn original_package_id(&self) -> Option<AccountAddress> {
-        if let LinkageInfo::Set(linkage) = &self.linkage_info {
-            Some(linkage.runtime_id)
-        } else {
-            None
-        }
+        Some(self.linkage_info.as_ref()?.runtime_id)
     }
 
     fn get_cached_type_origin(
@@ -233,7 +193,7 @@ impl<S> LinkageView<S> {
     }
 }
 
-impl From<&MovePackage> for PackageLinkage {
+impl From<&MovePackage> for LinkageInfo {
     fn from(package: &MovePackage) -> Self {
         Self {
             storage_id: package.id().into(),
@@ -243,25 +203,18 @@ impl From<&MovePackage> for PackageLinkage {
     }
 }
 
-impl<S: BackingPackageStore> LinkageResolver for LinkageView<S> {
+impl<'state> LinkageResolver for LinkageView<'state> {
     type Error = SuiError;
 
     fn link_context(&self) -> AccountAddress {
-        if let LinkageInfo::Set(linkage) = &self.linkage_info {
-            linkage.storage_id
-        } else {
-            AccountAddress::ZERO
-        }
+        self.linkage_info
+            .as_ref()
+            .map_or(AccountAddress::ZERO, |l| l.storage_id)
     }
 
     fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, Self::Error> {
-        let linkage = match &self.linkage_info {
-            LinkageInfo::Set(linkage) => linkage,
-            LinkageInfo::Universal => return Ok(module_id.clone()),
-
-            LinkageInfo::Unset => {
-                invariant_violation!("No linkage context set while relocating {module_id}.")
-            }
+        let Some(linkage) = &self.linkage_info else {
+            invariant_violation!("No linkage context set while relocating {module_id}.")
         };
 
         // The request is to relocate a module in the package that the link context is from.  This
@@ -292,23 +245,18 @@ impl<S: BackingPackageStore> LinkageResolver for LinkageView<S> {
         runtime_id: &ModuleId,
         struct_: &IdentStr,
     ) -> Result<ModuleId, Self::Error> {
-        match &self.linkage_info {
-            LinkageInfo::Set(_) => (),
-            LinkageInfo::Universal => return Ok(runtime_id.clone()),
-
-            LinkageInfo::Unset => {
-                invariant_violation!(
-                    "No linkage context set for defining module query on {runtime_id}::{struct_}."
-                )
-            }
-        };
+        if self.linkage_info.is_none() {
+            invariant_violation!(
+                "No linkage context set for defining module query on {runtime_id}::{struct_}."
+            )
+        }
 
         if let Some(cached) = self.get_cached_type_origin(runtime_id, struct_) {
             return Ok(ModuleId::new(cached, runtime_id.name().to_owned()));
         }
 
         let storage_id = ObjectID::from(*self.relocate(runtime_id)?.address());
-        let Some(package) = self.state_view.get_package(&storage_id)? else {
+        let Some(package) = self.resolver.get_package(&storage_id)? else {
             invariant_violation!(
                 "Missing dependent package in store: {storage_id}",
             )
@@ -335,22 +283,28 @@ impl<S: BackingPackageStore> LinkageResolver for LinkageView<S> {
 
 /** Remaining implementations delegated to state_view *************************/
 
-impl<S: ResourceResolver> ResourceResolver for LinkageView<S> {
-    type Error = <S as ResourceResolver>::Error;
+impl<'state> ResourceResolver for LinkageView<'state> {
+    type Error = SuiError;
 
     fn get_resource(
         &self,
         address: &AccountAddress,
         typ: &StructTag,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.state_view.get_resource(address, typ)
+        self.resolver.get_resource(address, typ)
     }
 }
 
-impl<S: ModuleResolver> ModuleResolver for LinkageView<S> {
-    type Error = <S as ModuleResolver>::Error;
+impl<'state> ModuleResolver for LinkageView<'state> {
+    type Error = SuiError;
 
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.state_view.get_module(id)
+        self.resolver.get_module(id)
+    }
+}
+
+impl<'state> BackingPackageStore for LinkageView<'state> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+        self.resolver.get_package_object(package_id)
     }
 }

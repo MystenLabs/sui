@@ -20,6 +20,7 @@ use anemo_tower::{
 use anemo_tower::{rate_limit, set_header::SetResponseHeaderLayer};
 use config::{Authority, AuthorityIdentifier, Committee, Parameters, WorkerCache, WorkerId};
 use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey};
+use mysten_metrics::metered_channel::channel_with_total;
 use mysten_metrics::spawn_logged_monitored_task;
 use mysten_network::{multiaddr::Protocol, Multiaddr};
 use network::client::NetworkClient;
@@ -36,8 +37,8 @@ use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
 use tracing::{error, info};
 use types::{
-    metered_channel::channel_with_total, Batch, BatchDigest, ConditionalBroadcastReceiver,
-    PreSubscribedBroadcastSender, PrimaryToWorkerServer, WorkerToWorkerServer,
+    Batch, BatchDigest, ConditionalBroadcastReceiver, PreSubscribedBroadcastSender,
+    PrimaryToWorkerServer, WorkerToWorkerServer,
 };
 
 #[cfg(test)]
@@ -61,12 +62,12 @@ pub struct Worker {
     committee: Committee,
     /// The worker information cache.
     worker_cache: WorkerCache,
+    // The protocol configuration.
+    protocol_config: ProtocolConfig,
     /// The configuration parameters
     parameters: Parameters,
     /// The persistent storage.
     store: DBMap<BatchDigest, Batch>,
-    // The protocol configuration.
-    protocol_config: ProtocolConfig,
 }
 
 impl Worker {
@@ -76,13 +77,13 @@ impl Worker {
         id: WorkerId,
         committee: Committee,
         worker_cache: WorkerCache,
+        protocol_config: ProtocolConfig,
         parameters: Parameters,
         validator: impl TransactionValidator,
         client: NetworkClient,
         store: DBMap<BatchDigest, Batch>,
         metrics: Metrics,
         tx_shutdown: &mut PreSubscribedBroadcastSender,
-        protocol_config: ProtocolConfig,
     ) -> Vec<JoinHandle<()>> {
         let worker_name = keypair.public().clone();
         let worker_peer_id = PeerId(worker_name.0.to_bytes());
@@ -95,9 +96,9 @@ impl Worker {
             id,
             committee: committee.clone(),
             worker_cache,
+            protocol_config: protocol_config.clone(),
             parameters: parameters.clone(),
             store,
-            protocol_config: protocol_config.clone(),
         };
 
         let node_metrics = Arc::new(metrics.worker_metrics.unwrap());
@@ -110,11 +111,11 @@ impl Worker {
         let mut shutdown_receivers = tx_shutdown.subscribe_n(NUM_SHUTDOWN_RECEIVERS);
 
         let mut worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
+            protocol_config: protocol_config.clone(),
             id: worker.id,
             client: client.clone(),
             store: worker.store.clone(),
             validator: validator.clone(),
-            protocol_config: protocol_config.clone(),
         });
         // Apply rate limits from configuration as needed.
         if let Some(limit) = parameters.anemo.report_batch_rate_limit {
@@ -139,6 +140,7 @@ impl Worker {
             authority_id: worker.authority.id(),
             id: worker.id,
             committee: worker.committee.clone(),
+            protocol_config: protocol_config.clone(),
             worker_cache: worker.worker_cache.clone(),
             store: worker.store.clone(),
             request_batch_timeout: worker.parameters.sync_retry_delay,
@@ -146,7 +148,6 @@ impl Worker {
             network: None,
             batch_fetcher: None,
             validator: validator.clone(),
-            protocol_config: protocol_config.clone(),
         });
 
         // Receive incoming messages from other workers.
@@ -226,6 +227,9 @@ impl Worker {
             quic_config.receive_window = Some(200 << 20);
             quic_config.send_window = Some(200 << 20);
             quic_config.crypto_buffer_size = Some(1 << 20);
+            quic_config.socket_receive_buffer_size = Some(20 << 20);
+            quic_config.socket_send_buffer_size = Some(20 << 20);
+            quic_config.allow_failed_socket_buffer_size_setting = true;
             quic_config.max_idle_timeout_ms = Some(30_000);
             // Enable keep alives every 5s
             quic_config.keep_alive_interval_ms = Some(5_000);
@@ -289,6 +293,7 @@ impl Worker {
                 authority_id: worker.authority.id(),
                 id: worker.id,
                 committee: worker.committee.clone(),
+                protocol_config,
                 worker_cache: worker.worker_cache.clone(),
                 store: worker.store.clone(),
                 request_batch_timeout: worker.parameters.sync_retry_delay,
@@ -296,7 +301,6 @@ impl Worker {
                 network: Some(network.clone()),
                 batch_fetcher: Some(batch_fetcher),
                 validator: validator.clone(),
-                protocol_config,
             }),
         );
 
@@ -489,7 +493,7 @@ impl Worker {
             shutdown_receivers.pop().unwrap(),
             rx_batch_maker,
             tx_quorum_waiter,
-            node_metrics,
+            node_metrics.clone(),
             client,
             self.store.clone(),
             self.protocol_config.clone(),
@@ -505,6 +509,7 @@ impl Worker {
             shutdown_receivers.pop().unwrap(),
             rx_quorum_waiter,
             network,
+            node_metrics,
         );
 
         info!(

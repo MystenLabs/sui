@@ -3,6 +3,8 @@ warning[W09003]: unused assignment
   │
 4 │     let y = x;
   │         ^ Unused assignment for variable 'y'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_y')
+  │
+  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E06002]: use of unassigned variable
   ┌─ tests/move_check/translated_ir_tests/move/commands/use_before_assign.move:4:13

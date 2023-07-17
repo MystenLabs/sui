@@ -4,14 +4,15 @@
 
 use anyhow::{bail, Context, Result};
 use move_command_line_common::files::{find_move_filenames, FileHash};
+use move_compiler::{diagnostics::WarningFilters, shared::PackageConfig};
 use move_core_types::account_address::AccountAddress;
-use ptree::{print_tree, TreeBuilder};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     io::Write,
     path::{Path, PathBuf},
 };
+use treeline::Tree;
 
 use crate::{
     source_package::{
@@ -70,7 +71,7 @@ pub struct Package {
 impl ResolvedGraph {
     pub fn resolve<Progress: Write>(
         graph: DG::DependencyGraph,
-        mut build_options: BuildConfig,
+        build_options: BuildConfig,
         dependency_cache: &mut DependencyCache,
         progress_output: &mut Progress,
     ) -> Result<ResolvedGraph> {
@@ -201,12 +202,6 @@ impl ResolvedGraph {
             }
         }
 
-        if build_options.architecture.is_none() {
-            if let Some(info) = &root_package.source_package.build {
-                build_options.architecture = info.architecture;
-            }
-        }
-
         // Now that all address unification has happened, individual package resolution tables can
         // be unified.
         for pkg in package_table.values_mut() {
@@ -250,17 +245,21 @@ impl ResolvedGraph {
         order
     }
 
-    fn print_info_dfs(&self, current_node: &PackageName, tree: &mut TreeBuilder) -> Result<()> {
+    fn print_info_dfs(&self, current_node: &PackageName, tree: &mut Tree<String>) -> Result<()> {
         let pkg = self.package_table.get(current_node).unwrap();
 
         for (name, addr) in &pkg.resolved_table {
-            tree.add_empty_child(format!("{}:0x{}", name, addr.short_str_lossless()));
+            tree.push(Tree::root(format!(
+                "{}:0x{}",
+                name,
+                addr.short_str_lossless()
+            )));
         }
 
         for dep in pkg.immediate_dependencies(self) {
-            tree.begin_child(dep.to_string());
-            self.print_info_dfs(&dep, tree)?;
-            tree.end_child();
+            let mut child = Tree::root(dep.to_string());
+            self.print_info_dfs(&dep, &mut child)?;
+            tree.push(child);
         }
 
         Ok(())
@@ -268,10 +267,9 @@ impl ResolvedGraph {
 
     pub fn print_info(&self) -> Result<()> {
         let root = self.root_package();
-        let mut tree = TreeBuilder::new(root.to_string());
+        let mut tree = Tree::root(root.to_string());
         self.print_info_dfs(&root, &mut tree)?;
-        let tree = tree.build();
-        print_tree(&tree)?;
+        println!("{}", tree);
         Ok(())
     }
 
@@ -441,6 +439,24 @@ impl Package {
             .into_iter()
             .map(FileName::from)
             .collect())
+    }
+
+    pub(crate) fn compiler_config(&self, config: &BuildConfig) -> PackageConfig {
+        PackageConfig {
+            flavor: self
+                .source_package
+                .package
+                .flavor
+                .or(config.default_flavor)
+                .unwrap_or_default(),
+            edition: self
+                .source_package
+                .package
+                .edition
+                .or(config.default_edition)
+                .unwrap_or_default(),
+            warning_filter: WarningFilters::Empty,
+        }
     }
 }
 

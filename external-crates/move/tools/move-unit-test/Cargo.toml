@@ -22,25 +22,19 @@ itertools = "0.10.1"
 
 move-command-line-common = { path = "../../move-command-line-common" }
 move-stdlib = { path = "../../move-stdlib", features = ["testing"] }
-move-table-extension = { path = "../../extensions/move-table-extension" }
 move-core-types = { path = "../../move-core/types" }
 move-compiler = { path = "../../move-compiler" }
 move-ir-types = { path = "../../move-ir/types" }
 move-symbol-pool = { path = "../../move-symbol-pool" }
 move-vm-types = { path = "../../move-vm/types" }
 move-vm-runtime = { path = "../../move-vm/runtime", features = ["testing"] }
+move-vm-profiler = { path = "../../move-vm/profiler" }
 move-vm-test-utils = { path = "../../move-vm/test-utils" }
 move-resource-viewer = { path = "../move-resource-viewer" }
 move-binary-format = { path = "../../move-binary-format" }
 move-model = { path = "../../move-model" }
 move-stackless-bytecode-interpreter = { path = "../../move-prover/interpreter" }
 move-bytecode-utils = { path = "../move-bytecode-utils" }
-
-# EVM-specific dependencies
-move-to-yul = { path = "../../evm/move-to-yul", optional = true }
-evm-exec-utils = { path = "../../evm/exec-utils", optional = true }
-
-evm = { version = "0.33.1", optional = true }
 primitive-types = { version = "0.10.1", optional = true }
 
 [dev-dependencies]
@@ -54,9 +48,3 @@ path = "src/main.rs"
 [[test]]
 name = "move_unit_test_testsuite"
 harness = false
-
-[features]
-evm-backend = ["move-to-yul", "evm-exec-utils", "evm", "primitive-types"]
-table-extension = [
- "move-vm-test-utils/table-extension"
-]

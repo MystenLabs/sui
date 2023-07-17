@@ -12,8 +12,7 @@ use jsonrpsee::RpcModule;
 use jsonrpsee_proc_macros::rpc;
 use prometheus::Registry;
 use std::env;
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
-use sui_config::utils::get_available_port;
+use sui_config::local_ip_utils;
 use sui_json_rpc::{JsonRpcServerBuilder, SuiRpcModule, CLIENT_TARGET_API_VERSION_HEADER};
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
@@ -23,15 +22,9 @@ async fn test_rpc_backward_compatibility() {
     let mut builder = JsonRpcServerBuilder::new("1.5", &Registry::new());
     builder.register_module(TestApiModule).unwrap();
 
-    let port = get_available_port("0.0.0.0");
-    let _handle = builder
-        .start(
-            SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)),
-            None,
-        )
-        .await
-        .unwrap();
-    let url = format!("http://0.0.0.0:{}", port);
+    let address = local_ip_utils::new_local_tcp_socket_for_testing();
+    let _handle = builder.start(address, None).await.unwrap();
+    let url = format!("http://0.0.0.0:{}", address.port());
 
     // Test with un-versioned client
     let client = HttpClientBuilder::default().build(&url).unwrap();
@@ -108,15 +101,9 @@ async fn test_disable_routing() {
     let mut builder = JsonRpcServerBuilder::new("1.5", &Registry::new());
     builder.register_module(TestApiModule).unwrap();
 
-    let port = get_available_port("0.0.0.0");
-    let _handle = builder
-        .start(
-            SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)),
-            None,
-        )
-        .await
-        .unwrap();
-    let url = format!("http://0.0.0.0:{}", port);
+    let address = local_ip_utils::new_local_tcp_socket_for_testing();
+    let _handle = builder.start(address, None).await.unwrap();
+    let url = format!("http://0.0.0.0:{}", address.port());
 
     // try to access old method directly should fail
     let client = HttpClientBuilder::default().build(&url).unwrap();

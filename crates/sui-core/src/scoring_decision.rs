@@ -304,15 +304,19 @@ mod tests {
     use rand::SeedableRng;
     use std::collections::{HashMap, HashSet};
     use std::sync::Arc;
-    use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+    use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
     use sui_types::crypto::NetworkPublicKey;
 
     fn protocol_v4() -> ProtocolConfig {
-        ProtocolConfig::get_for_version(ProtocolVersion::new(4))
+        // There are no chain specific protocol config options at this version
+        // so the chain is irrelevant
+        ProtocolConfig::get_for_version(ProtocolVersion::new(4), Chain::Unknown)
     }
 
     fn protocol_v5() -> ProtocolConfig {
-        ProtocolConfig::get_for_version(ProtocolVersion::new(5))
+        // There are no chain specific protocol config options at this version
+        // so the chain is irrelevant
+        ProtocolConfig::get_for_version(ProtocolVersion::new(5), Chain::Unknown)
     }
 
     #[test]
@@ -709,7 +713,7 @@ mod tests {
         let mut committee_builder = CommitteeBuilder::new(0);
         let mut rng = StdRng::from_rng(&mut OsRng).unwrap();
 
-        for _ in 0..committee_size {
+        for i in 0..committee_size {
             let pair = KeyPair::generate(&mut rng);
             let public_key = pair.public().clone();
 
@@ -718,6 +722,7 @@ mod tests {
                 1,
                 Multiaddr::empty(),
                 NetworkPublicKey::insecure_default(),
+                i.to_string(),
             );
         }
 

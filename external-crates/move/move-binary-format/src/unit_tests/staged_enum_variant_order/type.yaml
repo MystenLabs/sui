@@ -1,0 +1,15 @@
+---
+0: Bool
+1: U8
+2: U64
+3: U128
+4: Address
+5: Signer
+6: Struct
+7: Vector
+8: TypeParameter
+9: Reference
+10: MutableReference
+11: U16
+12: U32
+13: U256

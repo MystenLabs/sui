@@ -79,14 +79,14 @@ impl ConsensusStore {
 
     /// Load the last committed round of each validator.
     pub fn read_last_committed(&self) -> HashMap<AuthorityIdentifier, Round> {
-        self.last_committed.iter().collect()
+        self.last_committed.unbounded_iter().collect()
     }
 
     /// Gets the latest sub dag index from the store
     pub fn get_latest_sub_dag_index(&self) -> SequenceNumber {
         if let Some(s) = self
             .committed_sub_dags_by_index_v2
-            .iter()
+            .unbounded_iter()
             .skip_to_last()
             .next()
             .map(|(seq, _)| seq)
@@ -97,7 +97,7 @@ impl ConsensusStore {
         // TODO: remove once this has been released to the validators
         // If nothing has been found on v2, just fallback on the previous storage
         self.committed_sub_dags_by_index
-            .iter()
+            .unbounded_iter()
             .skip_to_last()
             .next()
             .map(|(seq, _)| seq)
@@ -109,7 +109,7 @@ impl ConsensusStore {
     pub fn get_latest_sub_dag(&self) -> Option<ConsensusCommit> {
         if let Some(sub_dag) = self
             .committed_sub_dags_by_index_v2
-            .iter()
+            .unbounded_iter()
             .skip_to_last()
             .next()
             .map(|(_, sub_dag)| sub_dag)
@@ -122,7 +122,7 @@ impl ConsensusStore {
         // to happen only after validator has upgraded. After that point the v2 table will populated
         // and an entry should be found there.
         self.committed_sub_dags_by_index
-            .iter()
+            .unbounded_iter()
             .skip_to_last()
             .next()
             .map(|(_, sub_dag)| ConsensusCommit::V1(sub_dag))
@@ -137,20 +137,28 @@ impl ConsensusStore {
         // start from the previous table first to ensure we haven't missed anything.
         let mut sub_dags = self
             .committed_sub_dags_by_index
-            .iter()
+            .unbounded_iter()
             .skip_to(from)?
             .map(|(_, sub_dag)| ConsensusCommit::V1(sub_dag))
             .collect::<Vec<ConsensusCommit>>();
 
         sub_dags.extend(
             self.committed_sub_dags_by_index_v2
-                .iter()
+                .unbounded_iter()
                 .skip_to(from)?
                 .map(|(_, sub_dag)| sub_dag)
                 .collect::<Vec<ConsensusCommit>>(),
         );
 
         Ok(sub_dags)
+    }
+
+    /// Load consensus commit with a given sequence number.
+    pub fn read_consensus_commit(
+        &self,
+        seq: &SequenceNumber,
+    ) -> StoreResult<Option<ConsensusCommit>> {
+        self.committed_sub_dags_by_index_v2.get(seq)
     }
 }
 

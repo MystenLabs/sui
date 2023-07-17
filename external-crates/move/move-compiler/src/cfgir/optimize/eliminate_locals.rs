@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cfgir::{cfg::BlockCFG, remove_no_ops},
+    cfgir::{cfg::MutForwardCFG, remove_no_ops},
     hlir::ast::{FunctionSignature, SingleType, Var},
     shared::unique_map::UniqueMap,
 };
@@ -13,7 +13,7 @@ use std::collections::BTreeSet;
 pub fn optimize(
     signature: &FunctionSignature,
     _locals: &UniqueMap<Var, SingleType>,
-    cfg: &mut BlockCFG,
+    cfg: &mut MutForwardCFG,
 ) -> bool {
     let changed = remove_no_ops::optimize(cfg);
     let ssa_temps = {
@@ -34,7 +34,7 @@ pub fn optimize(
 // Count assignment and usage
 //**************************************************************************************************
 
-fn count(signature: &FunctionSignature, cfg: &BlockCFG) -> BTreeSet<Var> {
+fn count(signature: &FunctionSignature, cfg: &MutForwardCFG) -> BTreeSet<Var> {
     let mut context = count::Context::new(signature);
     for block in cfg.blocks().values() {
         for cmd in block {
@@ -256,7 +256,7 @@ mod count {
 // Eliminate
 //**************************************************************************************************
 
-fn eliminate(cfg: &mut BlockCFG, ssa_temps: BTreeSet<Var>) {
+fn eliminate(cfg: &mut MutForwardCFG, ssa_temps: BTreeSet<Var>) {
     let context = &mut eliminate::Context::new(ssa_temps);
     loop {
         for block in cfg.blocks_mut().values_mut() {

@@ -40,9 +40,7 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                 ::sui_simulator::telemetry_subscribers::init_for_testing();
                 ::sui_simulator::sui_adapter::execution_engine::get_denied_certificates();
                 ::sui_simulator::sui_framework::BuiltInFramework::all_package_ids();
-                ::sui_simulator::sui_types::gas::SuiGasStatus::new_unmetered(
-                    &ProtocolConfig::get_for_min_version(),
-                );
+                ::sui_simulator::sui_types::gas::SuiGasStatus::new_unmetered();
 
                 // For reasons I can't understand, LruCache causes divergent behavior the second
                 // time one is constructed and inserted into, so construct one before the first
@@ -193,18 +191,48 @@ pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
     let arg_parser = Punctuated::<syn::Meta, Token![,]>::parse_terminated;
     let args = arg_parser.parse(args).unwrap().into_iter();
 
+    let ignore = input
+        .attrs
+        .iter()
+        .find(|attr| attr.path().is_ident("ignore"))
+        .map_or(quote! {}, |_| quote! { #[ignore] });
+
     let result = if cfg!(msim) {
+        let sig = &input.sig;
+        let return_type = &sig.output;
+        let body = &input.block;
         quote! {
             #[::sui_simulator::sim_test(crate = "sui_simulator", #(#args)*)]
             #[::sui_macros::init_static_initializers]
-            #input
+            #ignore
+            #sig {
+                async fn body_fn() #return_type { #body }
+
+                let ret = body_fn().await;
+
+                ::sui_simulator::task::shutdown_all_nodes();
+
+                // all node handles should have been dropped after the above block exits, but task
+                // shutdown is asynchronous, so we need a brief delay before checking for leaks.
+                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+                assert_eq!(
+                    sui_simulator::NodeLeakDetector::get_current_node_count(),
+                    0,
+                    "SuiNode leak detected"
+                );
+
+                ret
+            }
         }
     } else {
         let fn_name = &input.sig.ident;
         let sig = &input.sig;
         let body = &input.block;
         quote! {
+            #[allow(clippy::needless_return)]
             #[tokio::test]
+            #ignore
             #sig {
                 if std::env::var("SUI_SKIP_SIMTESTS").is_ok() {
                     println!("not running test {} in `cargo test`: SUI_SKIP_SIMTESTS is set", stringify!(#fn_name));

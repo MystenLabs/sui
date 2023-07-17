@@ -52,6 +52,11 @@ pub struct OnChainTransactionInfo {
     pub reference_gas_price: u64,
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct DiagInfo {
+    pub loaded_child_objects: Vec<(ObjectID, VersionNumber)>,
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Error, Clone)]
 pub enum ReplayEngineError {
@@ -252,11 +257,11 @@ pub enum ExecutionStoreEvent {
     ResourceResolverGetResource {
         address: AccountAddress,
         typ: StructTag,
-        result: Result<Option<Vec<u8>>, ReplayEngineError>,
+        result: SuiResult<Option<Vec<u8>>>,
     },
     ModuleResolverGetModule {
         module_id: ModuleId,
-        result: Result<Option<Vec<u8>>, ReplayEngineError>,
+        result: SuiResult<Option<Vec<u8>>>,
     },
     ObjectStoreGetObject {
         object_id: ObjectID,
@@ -269,6 +274,6 @@ pub enum ExecutionStoreEvent {
     },
     GetModuleGetModuleByModuleId {
         id: ModuleId,
-        result: Result<Option<CompiledModule>, ReplayEngineError>,
+        result: SuiResult<Option<CompiledModule>>,
     },
 }

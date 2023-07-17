@@ -129,8 +129,7 @@ impl CertificatesAggregator {
         if self.weight >= committee.quorum_threshold() {
             // Note that we do not reset the weight here. If this function is called again and
             // the proposer didn't yet advance round, we can add extra certificates as parents.
-            // This is required when running Bullshark as consensus and does not harm when running
-            // Tusk or an external consensus protocol.
+            // This is required when running Bullshark as consensus.
             return Some(self.certificates.drain(..).collect());
         }
         None

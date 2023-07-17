@@ -1,5 +1,69 @@
 # @mysten/wallet-kit-core
 
+## 0.4.12
+
+### Patch Changes
+
+- Updated dependencies [34cc7d610]
+  - @mysten/sui.js@0.37.1
+  - @mysten/wallet-adapter-base@0.7.12
+  - @mysten/wallet-standard@0.5.12
+
+## 0.4.11
+
+### Patch Changes
+
+- Updated dependencies [36f2edff3]
+- Updated dependencies [75d1a190d]
+- Updated dependencies [93794f9f2]
+- Updated dependencies [c3a4ec57c]
+- Updated dependencies [a17d3678a]
+- Updated dependencies [2f37537d5]
+- Updated dependencies [00484bcc3]
+  - @mysten/sui.js@0.37.0
+  - @mysten/wallet-adapter-base@0.7.11
+  - @mysten/wallet-standard@0.5.11
+
+## 0.4.10
+
+### Patch Changes
+
+- Updated dependencies [3ea9adb71a]
+- Updated dependencies [1cfb1c9da3]
+- Updated dependencies [1cfb1c9da3]
+- Updated dependencies [fb3bb9118a]
+  - @mysten/sui.js@0.36.0
+  - @mysten/wallet-adapter-base@0.7.10
+  - @mysten/wallet-standard@0.5.10
+
+## 0.4.9
+
+### Patch Changes
+
+- Updated dependencies [09d77325a9]
+  - @mysten/sui.js@0.35.1
+  - @mysten/wallet-adapter-base@0.7.9
+  - @mysten/wallet-standard@0.5.9
+
+## 0.4.8
+
+### Patch Changes
+
+- 83c7328d9b: - delay auto connect until document is visible - fix preloading dapp issues
+  - fixes showing the wallet connect popup (for cases wallet was disconnected without dapp to be notified) when preloading the page (usually while typing the url)
+  - prevents content script from creating a Port to service worker while the dapp is hidden, which causes the port to be in a disconnected state in SW but without notifying the CS, when page is preloaded.
+- Updated dependencies [4ea96d909a]
+- Updated dependencies [bcbb178c44]
+- Updated dependencies [470c27af50]
+- Updated dependencies [03828224c9]
+- Updated dependencies [671faefe3c]
+- Updated dependencies [9ce7e051b4]
+- Updated dependencies [9ce7e051b4]
+- Updated dependencies [bb50698551]
+  - @mysten/sui.js@0.35.0
+  - @mysten/wallet-adapter-base@0.7.8
+  - @mysten/wallet-standard@0.5.8
+
 ## 0.4.7
 
 ### Patch Changes

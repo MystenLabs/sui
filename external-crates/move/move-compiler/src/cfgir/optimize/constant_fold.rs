@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cfgir::cfg::BlockCFG,
+    cfgir::cfg::MutForwardCFG,
     hlir::ast::{
         BaseType, BaseType_, Command, Command_, Exp, ExpListItem, FunctionSignature, SingleType,
         TypeName, TypeName_, UnannotatedExp_, Value, Value_, Var,
@@ -19,7 +19,7 @@ use std::convert::TryFrom;
 pub fn optimize(
     _signature: &FunctionSignature,
     _locals: &UniqueMap<Var, SingleType>,
-    cfg: &mut BlockCFG,
+    cfg: &mut MutForwardCFG,
 ) -> bool {
     let mut changed = false;
     for block_ref in cfg.blocks_mut().values_mut() {

@@ -1,6 +1,6 @@
 # Narwhal and Consensus
 
-This directory provides an implementation of [Narwhal, Tusk](https://arxiv.org/pdf/2105.11827.pdf) and [partially synchronous Bullshark](https://arxiv.org/pdf/2209.05633.pdf), a [DAG](https://en.wikipedia.org/wiki/Directed_acyclic_graph)-based mempool and efficient [BFT](https://en.wikipedia.org/wiki/Byzantine_fault) consensus. The codebase has been designed to be small, efficient, and easy to benchmark and modify. 
+This directory provides an implementation of [Narwhal](https://arxiv.org/pdf/2105.11827.pdf) and [partially synchronous Bullshark](https://arxiv.org/pdf/2209.05633.pdf), a [DAG](https://en.wikipedia.org/wiki/Directed_acyclic_graph)-based mempool and efficient [BFT](https://en.wikipedia.org/wiki/Byzantine_fault) consensus. The codebase has been designed to be small, efficient, and easy to benchmark and modify. 
 
 This directory uses [fastcrypto](https://github.com/MystenLabs/fastcrypto) as its cryptography library.
 

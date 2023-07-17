@@ -37,10 +37,10 @@ move-core-types = { path = "../../move-core/types" }
 move-ir-types = { path = "../../move-ir/types" }
 move-compiler = { path = "../../move-compiler" }
 move-stdlib = { path = "../../move-stdlib", features = ["testing"] }
-move-table-extension = { path = "../../extensions/move-table-extension", optional = true }
 move-symbol-pool = { path = "../../move-symbol-pool" }
 move-vm-types = { path = "../../move-vm/types" }
 move-vm-runtime = { path = "../../move-vm/runtime", features = ["debugging"] }
+move-vm-profiler = { path = "../../move-vm/profiler"}
 move-vm-test-utils = { path = "../../move-vm/test-utils" }
 read-write-set = { path = "../read-write-set" }
 read-write-set-dynamic = { path = "../read-write-set/dynamic" }
@@ -70,22 +70,10 @@ name = "move_unit_tests_move_vm_and_stackless_vm"
 harness = false
 
 [[test]]
-name = "move_unit_tests_evm"
-harness = false
-required-features = ["evm-backend"]
-
-[[test]]
 name = "build_testsuite"
 harness = false
 
-[[test]]
-name = "build_testsuite_evm"
-harness = false
-required-features = ["evm-backend"]
-
 [features]
-evm-backend = ["move-unit-test/evm-backend", "move-package/evm-backend"]
 address20 = ["move-stdlib/address20"]
 address32 = ["move-stdlib/address32"]
-table-extension = ["move-table-extension", "move-unit-test/table-extension"]
 tiered-gas = [ "move-vm-test-utils/tiered-gas" ]

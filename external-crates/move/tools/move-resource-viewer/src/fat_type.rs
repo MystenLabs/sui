@@ -14,6 +14,7 @@ use move_core_types::{
     value::{MoveStructLayout, MoveTypeLayout},
     vm_status::StatusCode,
 };
+use move_proc_macros::test_variant_order;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::convert::TryInto;
 
@@ -53,6 +54,7 @@ pub(crate) struct FatStructType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[test_variant_order(src/unit_tests/staged_enum_variant_order/fat_type.yaml)]
 pub(crate) enum FatType {
     Bool,
     U8,
