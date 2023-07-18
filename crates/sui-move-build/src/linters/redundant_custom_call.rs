@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! This analysis flags potential custom implementations of transfer/share/freeze calls on objects
-//! that already have a store ability and where "public" variants of these calls can be used. A
-//! function is considered a potential custom implementation if it takes as a parameter an instance
-//! of a struct type defined in a given module with a store ability and passes it as an argument to
-//! a "private" transfer/share/freeze call.
+//! that already have a store ability and where "public" variants of these calls can be used. This
+//! can be dangerous as custom transfer/share/freeze operation is becoming unenforceable in this
+//! situation.  A function is considered a potential custom implementation if it takes as a
+//! parameter an instance of a struct type defined in a given module with a store ability and passes
+//! it as an argument to a "private" transfer/share/freeze call.
 
 use move_ir_types::location::*;
 
@@ -51,7 +52,7 @@ const REDUNDANT_CUSTOM_DIAG: DiagnosticInfo = custom(
     Severity::Warning,
     REDUNDANT_CUSTOM_DIAG_CATEGORY,
     REDUNDANT_CUSTOM_DIAG_CODE,
-    "possibly redundant custom transfer/share/freeze call",
+    "potentially unenforceable custom transfer/share/freeze policy",
 );
 
 //**************************************************************************************************
@@ -149,19 +150,20 @@ impl SimpleAbsInt for RedundantCustomVerifierAI {
         {
             if let Value::LocalObjWithStore(obj_addr_loc) = args[0] {
                 let msg = format!(
-                    "Potential unnecessary implementation of a custom {} function.",
+                    "Potential unintended implementation of a custom {} function.",
                     fname
                 );
-                let action = if *fname == TRANSFER_FUN {
-                    "transferred"
+                let (op, action) = if *fname == TRANSFER_FUN {
+                    ("transfer", "transferred")
                 } else if *fname == SHARE_FUN {
-                    "shared"
+                    ("share", "shared")
                 } else {
-                    "frozen"
+                    ("freeze", "frozen")
                 };
-                let uid_msg = format!("Instances of a type with a store ability can be {} using \
-                                       public_{} function which often makes calling the (private) {} \
-                                       function variant in the module defining this type unnecessary", action, fname, fname);
+                let uid_msg = format!("Instances of a type with a store ability can be {} using the \
+                                       public_{} function which often negates the intent of enforcing \
+                                       custom {} policy (implemented through calling the private {} \
+                                       function variant in the module defining this type)", action, fname, op, fname);
                 let mut d = diag!(
                     REDUNDANT_CUSTOM_DIAG,
                     (self.fn_name_loc, msg),

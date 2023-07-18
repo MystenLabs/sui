@@ -23,7 +23,7 @@ pub const LINT_WARNING_PREFIX: &str = "Lint ";
 
 pub const SHARE_OWNED_FILTER_NAME: &str = "share_owned";
 pub const SELF_TRANSFER_FILTER_NAME: &str = "self_transfer";
-pub const REDUNDANT_CUSTOM_FILTER_NAME: &str = "redundant_custom_call";
+pub const REDUNDANT_CUSTOM_FILTER_NAME: &str = "custom_state_change";
 
 pub const INVALID_LOC: Loc = Loc::invalid();
 
