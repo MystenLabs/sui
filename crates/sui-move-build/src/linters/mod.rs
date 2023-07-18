@@ -5,7 +5,9 @@ use move_compiler::{
     diagnostics::codes::{DiagnosticsID, WarningFilter},
     expansion::ast as E,
 };
+use move_ir_types::location::Loc;
 
+pub mod redundant_custom_call;
 pub mod self_transfer;
 pub mod share_owned;
 
@@ -13,12 +15,17 @@ pub const SHARE_OWNED_DIAG_CATEGORY: u8 = 1;
 pub const SHARE_OWNED_DIAG_CODE: u8 = 1;
 pub const SELF_TRANSFER_DIAG_CATEGORY: u8 = 2;
 pub const SELF_TRANSFER_DIAG_CODE: u8 = 1;
+pub const REDUNDANT_CUSTOM_DIAG_CATEGORY: u8 = 3;
+pub const REDUNDANT_CUSTOM_DIAG_CODE: u8 = 1;
 
 pub const ALLOW_ATTR_NAME: &str = "lint_allow";
 pub const LINT_WARNING_PREFIX: &str = "Lint ";
 
 pub const SHARE_OWNED_FILTER_NAME: &str = "share_owned";
 pub const SELF_TRANSFER_FILTER_NAME: &str = "self_transfer";
+pub const REDUNDANT_CUSTOM_FILTER_NAME: &str = "redundant_custom_call";
+
+pub const INVALID_LOC: Loc = Loc::invalid();
 
 pub fn known_filters() -> (E::AttributeName_, Vec<WarningFilter>) {
     (
@@ -40,6 +47,14 @@ pub fn known_filters() -> (E::AttributeName_, Vec<WarningFilter>) {
                     Some(LINT_WARNING_PREFIX),
                 ),
                 Some(SELF_TRANSFER_FILTER_NAME),
+            ),
+            WarningFilter::Code(
+                DiagnosticsID::new(
+                    REDUNDANT_CUSTOM_DIAG_CATEGORY,
+                    REDUNDANT_CUSTOM_DIAG_CODE,
+                    Some(LINT_WARNING_PREFIX),
+                ),
+                Some(REDUNDANT_CUSTOM_FILTER_NAME),
             ),
         ],
     )

@@ -30,7 +30,7 @@ use move_compiler::{
 };
 use std::collections::BTreeMap;
 
-use super::{SHARE_OWNED_DIAG_CATEGORY, SHARE_OWNED_DIAG_CODE};
+use super::{LINT_WARNING_PREFIX, SHARE_OWNED_DIAG_CATEGORY, SHARE_OWNED_DIAG_CODE};
 
 const SHARE_FUNCTIONS: &[(&str, &str, &str)] = &[
     ("sui", "transfer", "public_share_object"),
@@ -38,7 +38,7 @@ const SHARE_FUNCTIONS: &[(&str, &str, &str)] = &[
 ];
 
 const SHARE_OWNED_DIAG: DiagnosticInfo = custom(
-    "Lint ",
+    LINT_WARNING_PREFIX,
     Severity::Warning,
     SHARE_OWNED_DIAG_CATEGORY,
     SHARE_OWNED_DIAG_CODE,

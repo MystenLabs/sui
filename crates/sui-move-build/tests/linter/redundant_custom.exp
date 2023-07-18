@@ -1,0 +1,36 @@
+warning[Lint W03001]: possibly redundant custom transfer/share/freeze call
+   ┌─ tests/linter/redundant_custom.move:14:16
+   │
+14 │     public fun custom_transfer_bad(o: S1, ctx: &mut TxContext) {
+   │                ^^^^^^^^^^^^^^^^^^^ - An instance of a module-private type with a store ability to be transferred coming from here
+   │                │                    
+   │                Potential unnecessary implementation of a custom transfer function.
+15 │         transfer::transfer(o, tx_context::sender(ctx))
+   │                   -------- Instances of a type with a store ability can be transferred using public_transfer function which often makes calling the (private) transfer function variant in the module defining this type unnecessary
+   │
+   = This warning can be suppressed with '#[lint_allow(redundant_custom_call)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W03001]: possibly redundant custom transfer/share/freeze call
+   ┌─ tests/linter/redundant_custom.move:19:16
+   │
+19 │     public fun custom_share_bad(o: S1) {
+   │                ^^^^^^^^^^^^^^^^ - An instance of a module-private type with a store ability to be shared coming from here
+   │                │                 
+   │                Potential unnecessary implementation of a custom share_object function.
+20 │         transfer::share_object(o)
+   │                   ------------ Instances of a type with a store ability can be shared using public_share_object function which often makes calling the (private) share_object function variant in the module defining this type unnecessary
+   │
+   = This warning can be suppressed with '#[lint_allow(redundant_custom_call)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W03001]: possibly redundant custom transfer/share/freeze call
+   ┌─ tests/linter/redundant_custom.move:23:16
+   │
+23 │     public fun custom_freeze_bad(o: S1) {
+   │                ^^^^^^^^^^^^^^^^^ - An instance of a module-private type with a store ability to be frozen coming from here
+   │                │                  
+   │                Potential unnecessary implementation of a custom freeze_object function.
+24 │         transfer::freeze_object(o)
+   │                   ------------- Instances of a type with a store ability can be frozen using public_freeze_object function which often makes calling the (private) freeze_object function variant in the module defining this type unnecessary
+   │
+   = This warning can be suppressed with '#[lint_allow(redundant_custom_call)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
