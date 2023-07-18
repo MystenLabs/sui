@@ -70,6 +70,7 @@ pub fn run(args: Args) -> crate::Result<()> {
             // TODO spend the time to de-dup these direct dependencies
             "serde_yaml".to_owned(),
             "syn".to_owned(),
+            "aws-config".to_owned(),
         ],
     };
 
