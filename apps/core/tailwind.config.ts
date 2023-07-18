@@ -135,8 +135,8 @@ export default {
 			},
 			fontFamily: {
 				system: fontFamily.sans,
-				sans: ['InterVariable', 'Inter', ...fontFamily.sans],
-				mono: ['Red Hat MonoVariable', 'Red Hat Mono', ...fontFamily.mono],
+				sans: ['Inter Variable', 'Inter', ...fontFamily.sans],
+				mono: ['Red Hat Mono Variable', 'Red Hat Mono', ...fontFamily.mono],
 			},
 			keyframes: {
 				shimmer: {

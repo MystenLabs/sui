@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import './index.css';
-import '@fontsource/inter/variable.css';
-import '@fontsource/red-hat-mono/variable.css';
+import '@fontsource-variable/inter';
+import '@fontsource-variable/red-hat-mono';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { WalletKitProvider } from '@mysten/wallet-kit';
