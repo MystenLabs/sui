@@ -129,7 +129,7 @@ importers:
         version: 8.4.24
       tailwindcss:
         specifier: ^3.3.1
-        version: 3.3.1(postcss@8.4.24)(ts-node@10.9.1)
+        version: 3.3.1(ts-node@10.9.1)
       typescript:
         specifier: ^5.0.4
         version: 5.0.4
@@ -385,7 +385,7 @@ importers:
         version: 7.0.27
       tailwindcss:
         specifier: ^3.3.1
-        version: 3.3.1(postcss@8.4.24)(ts-node@10.9.1)
+        version: 3.3.1(ts-node@10.9.1)
       tsconfig-paths:
         specifier: ^4.2.0
         version: 4.2.0
@@ -431,12 +431,21 @@ importers:
       '@mysten/icons':
         specifier: workspace:*
         version: link:../icons
+      '@radix-ui/react-radio-group':
+        specifier: ^1.1.3
+        version: 1.1.3(@types/react@18.0.35)(react-dom@18.2.0)(react@18.2.0)
       '@radix-ui/react-slot':
         specifier: ^1.0.2
         version: 1.0.2(@types/react@18.0.35)(react@18.2.0)
+      '@radix-ui/react-switch':
+        specifier: ^1.0.3
+        version: 1.0.3(@types/react-dom@18.2.5)(@types/react@18.0.35)(react-dom@18.2.0)(react@18.2.0)
       class-variance-authority:
         specifier: ^0.7.0
         version: 0.7.0
+      framer-motion:
+        specifier: ^10.11.6
+        version: 10.11.6(react-dom@18.2.0)(react@18.2.0)
       react:
         specifier: ^18.2.0
         version: 18.2.0
@@ -479,7 +488,7 @@ importers:
         version: 7.0.27
       tailwindcss:
         specifier: ^3.3.1
-        version: 3.3.1(postcss@8.4.24)(ts-node@10.9.1)
+        version: 3.3.1(ts-node@10.9.1)
       typescript:
         specifier: ^5.0.4
         version: 5.0.4
@@ -620,7 +629,7 @@ importers:
         version: 3.0.0
       tailwindcss:
         specifier: ^3.3.1
-        version: 3.3.1(postcss@8.4.24)(ts-node@10.9.1)
+        version: 3.3.1(ts-node@10.9.1)
       throttle-debounce:
         specifier: ^5.0.0
         version: 5.0.0
@@ -883,7 +892,7 @@ importers:
         version: 8.4.24
       tailwindcss:
         specifier: ^3.3.1
-        version: 3.3.1(postcss@8.4.24)(ts-node@10.9.1)
+        version: 3.3.1(ts-node@10.9.1)
       typescript:
         specifier: ^5.0.4
         version: 5.0.4
@@ -998,7 +1007,7 @@ importers:
         version: 8.4.24
       tailwindcss:
         specifier: ^3.3.1
-        version: 3.3.1(postcss@8.4.24)(ts-node@10.9.1)
+        version: 3.3.1(ts-node@10.9.1)
       typescript:
         specifier: ^5.0.4
         version: 5.0.4
@@ -1038,7 +1047,7 @@ importers:
         version: 8.4.24
       tailwindcss:
         specifier: ^3.3.1
-        version: 3.3.1(postcss@8.4.24)(ts-node@10.9.1)
+        version: 3.3.1(ts-node@10.9.1)
       typescript:
         specifier: ^5.0.4
         version: 5.0.4
@@ -1596,7 +1605,7 @@ packages:
     dependencies:
       '@amplitude/analytics-client-common': 0.7.0
       '@amplitude/analytics-types': 0.20.0
-      tslib: 2.5.2
+      tslib: 2.6.0
     dev: false
 
   /@amplitude/plugin-web-attribution-browser@0.7.0:
@@ -1604,7 +1613,7 @@ packages:
     dependencies:
       '@amplitude/analytics-client-common': 0.7.0
       '@amplitude/analytics-types': 0.20.0
-      tslib: 2.5.2
+      tslib: 2.6.0
     dev: false
 
   /@amplitude/types@1.10.2:
@@ -5321,7 +5330,7 @@ packages:
     peerDependencies:
       tailwindcss: ^3.0
     dependencies:
-      tailwindcss: 3.3.1(postcss@8.4.24)(ts-node@10.9.1)
+      tailwindcss: 3.3.1(ts-node@10.9.1)
 
   /@hookform/resolvers@3.0.1(react-hook-form@7.43.9):
     resolution: {integrity: sha512-n5oOt0cLw9mQNW3/k9zWaPsNWQcc0k6Jpc7XUrg2Q/AqqsHp3IVa1juqHCxczXI6uXHBa69ILc4pdtsRGyuzsw==}
@@ -6894,6 +6903,35 @@ packages:
       '@radix-ui/react-slot': 1.0.2(@types/react@18.0.35)(react@18.2.0)
       '@types/react': 18.0.35
       '@types/react-dom': 18.2.5
+      react: 18.2.0
+      react-dom: 18.2.0(react@18.2.0)
+    dev: false
+
+  /@radix-ui/react-radio-group@1.1.3(@types/react@18.0.35)(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-x+yELayyefNeKeTx4fjK6j99Fs6c4qKm3aY38G3swQVTN6xMpsrbigC0uHs2L//g8q4qR7qOcww8430jJmi2ag==}
+    peerDependencies:
+      '@types/react': '*'
+      '@types/react-dom': '*'
+      react: ^16.8 || ^17.0 || ^18.0
+      react-dom: ^16.8 || ^17.0 || ^18.0
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      '@types/react-dom':
+        optional: true
+    dependencies:
+      '@babel/runtime': 7.22.6
+      '@radix-ui/primitive': 1.0.1
+      '@radix-ui/react-compose-refs': 1.0.1(@types/react@18.0.35)(react@18.2.0)
+      '@radix-ui/react-context': 1.0.1(@types/react@18.0.35)(react@18.2.0)
+      '@radix-ui/react-direction': 1.0.1(@types/react@18.0.35)(react@18.2.0)
+      '@radix-ui/react-presence': 1.0.1(@types/react-dom@18.2.5)(@types/react@18.0.35)(react-dom@18.2.0)(react@18.2.0)
+      '@radix-ui/react-primitive': 1.0.3(@types/react-dom@18.2.5)(@types/react@18.0.35)(react-dom@18.2.0)(react@18.2.0)
+      '@radix-ui/react-roving-focus': 1.0.4(@types/react-dom@18.2.5)(@types/react@18.0.35)(react-dom@18.2.0)(react@18.2.0)
+      '@radix-ui/react-use-controllable-state': 1.0.1(@types/react@18.0.35)(react@18.2.0)
+      '@radix-ui/react-use-previous': 1.0.1(@types/react@18.0.35)(react@18.2.0)
+      '@radix-ui/react-use-size': 1.0.1(@types/react@18.0.35)(react@18.2.0)
+      '@types/react': 18.0.35
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
     dev: false
@@ -8892,7 +8930,7 @@ packages:
   /@swc/helpers@0.4.14:
     resolution: {integrity: sha512-4C7nX/dvpzB7za4Ql9K81xK3HPxCpHMgwTZVyf+9JQ6VUbn9jjZVN7/Nkdz/Ugzs2CSjqnL/UPXroiVBVHUWUw==}
     dependencies:
-      tslib: 2.5.2
+      tslib: 2.6.0
     dev: false
 
   /@szmarczak/http-timer@1.1.2:
@@ -8914,7 +8952,7 @@ packages:
     peerDependencies:
       tailwindcss: '>=2.0.0 || >=3.0.0 || >=3.0.0-alpha.1'
     dependencies:
-      tailwindcss: 3.3.1(postcss@8.4.24)(ts-node@10.9.1)
+      tailwindcss: 3.3.1(ts-node@10.9.1)
     dev: true
 
   /@tailwindcss/forms@0.5.3(tailwindcss@3.3.1):
@@ -8923,7 +8961,7 @@ packages:
       tailwindcss: '>=3.0.0 || >= 3.0.0-alpha.1'
     dependencies:
       mini-svg-data-uri: 1.4.4
-      tailwindcss: 3.3.1(postcss@8.4.24)(ts-node@10.9.1)
+      tailwindcss: 3.3.1(ts-node@10.9.1)
 
   /@tanstack/eslint-plugin-query@4.29.9:
     resolution: {integrity: sha512-JlIZcs+zhl/ihta49iIbMCf3E8tSvGDqMIH+oItnYLOzWI7oiujXu7FYgna2E1V79KhR0PaxkPX6jHZLpvacgw==}
@@ -14711,7 +14749,7 @@ packages:
     dependencies:
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
-      tslib: 2.5.0
+      tslib: 2.6.0
     optionalDependencies:
       '@emotion/is-prop-valid': 0.8.8
     dev: false
@@ -22250,7 +22288,7 @@ packages:
     engines: {node: ^14.18.0 || >=16.0.0}
     dependencies:
       '@pkgr/utils': 2.4.1
-      tslib: 2.5.2
+      tslib: 2.6.0
     dev: true
 
   /tabbable@6.1.1:
@@ -22277,15 +22315,13 @@ packages:
     peerDependencies:
       tailwindcss: '>=3.0.0 || insiders'
     dependencies:
-      tailwindcss: 3.3.1(postcss@8.4.24)(ts-node@10.9.1)
+      tailwindcss: 3.3.1(ts-node@10.9.1)
     dev: false
 
-  /tailwindcss@3.3.1(postcss@8.4.24)(ts-node@10.9.1):
+  /tailwindcss@3.3.1(ts-node@10.9.1):
     resolution: {integrity: sha512-Vkiouc41d4CEq0ujXl6oiGFQ7bA3WEhUZdTgXAhtKxSy49OmKs8rEfQmupsfF0IGW8fv2iQkp1EVUuapCFrZ9g==}
     engines: {node: '>=12.13.0'}
     hasBin: true
-    peerDependencies:
-      postcss: ^8.0.9
     dependencies:
       arg: 5.0.2
       chokidar: 3.5.3
@@ -22749,6 +22785,7 @@ packages:
 
   /tslib@2.5.2:
     resolution: {integrity: sha512-5svOrSA2w3iGFDs1HibEVBGbDrAY82bFQ3HZ3ixB+88nsbsWQoKqDRb5UBYAUPEzbBn6dAp5gRNXglySbx1MlA==}
+    dev: false
 
   /tslib@2.6.0:
     resolution: {integrity: sha512-7At1WUettjcSRHXCyYtTselblcHl9PJFFVKiCAy/bY97+BPZXSQ2wbq0P9s8tK2G7dFQfNnlJnPAiArVBVBsfA==}

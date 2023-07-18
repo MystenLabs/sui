@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { X12 } from '@mysten/icons';
-import { Text } from '@mysten/ui';
+import { Text, IconButton } from '@mysten/ui';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { type ReactNode } from 'react';
 
-import { IconButton } from './IconButton';
 import { ReactComponent as InfoIcon } from './icons/info.svg';
 
 const bannerStyles = cva(
@@ -116,7 +115,9 @@ export function Banner({
 			</div>
 			{onDismiss ? (
 				<div className="absolute right-0 top-0">
-					<IconButton icon={X12} onClick={onDismiss} aria-label="Close" />
+					<IconButton onClick={onDismiss} aria-label="Close">
+						<X12 />
+					</IconButton>
 				</div>
 			) : null}
 		</div>

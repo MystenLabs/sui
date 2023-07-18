@@ -2,12 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetKioskContents, useGetOwnedObjects } from '@mysten/core';
-import { LoadingIndicator } from '@mysten/ui';
+import { LoadingIndicator, RadioGroup, RadioGroupItem } from '@mysten/ui';
 import { useMemo, useState } from 'react';
 
 import OwnedObject from './OwnedObject';
 import { Pagination, useCursorPagination } from '~/ui/Pagination';
-import { RadioGroup, RadioOption } from '~/ui/Radio';
 
 const FILTER_OPTIONS = [
 	{ label: 'NFTs', value: 'all' },
@@ -34,14 +33,9 @@ export function OwnedObjects({ id }: { id: string }) {
 
 	return (
 		<div className="flex flex-col gap-4 pt-5">
-			<RadioGroup
-				className="flex"
-				ariaLabel="transaction filter"
-				value={filter}
-				onChange={setFilter}
-			>
+			<RadioGroup aria-label="transaction filter" value={filter} onValueChange={setFilter}>
 				{FILTER_OPTIONS.map((filter) => (
-					<RadioOption
+					<RadioGroupItem
 						key={filter.value}
 						value={filter.value}
 						label={filter.label}
