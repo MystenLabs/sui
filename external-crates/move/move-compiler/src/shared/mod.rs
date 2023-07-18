@@ -197,12 +197,13 @@ pub type AttributeDeriver = dyn Fn(&mut CompilationEnv, &mut ModuleDefinition);
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct KnownFilterKey {
-    name: String,
+    name: Symbol,
     attribute_name: E::AttributeName_,
 }
 
 impl KnownFilterKey {
-    pub fn new(name: String, attribute_name: E::AttributeName_) -> Self {
+    pub fn new(n: &str, attribute_name: E::AttributeName_) -> Self {
+        let name = Symbol::from(n);
         KnownFilterKey {
             name,
             attribute_name,
@@ -222,7 +223,7 @@ pub struct CompilationEnv {
     /// Maps warning filter key (filter name and filter attribute name) to the filter itself.
     known_filters: BTreeMap<KnownFilterKey, WarningFilter>,
     /// Maps a diagnostics ID to a known filter name.
-    known_filter_names: BTreeMap<DiagnosticsID, String>,
+    known_filter_names: BTreeMap<DiagnosticsID, Symbol>,
     /// Attribute names (including externally provided ones) identifying known warning filters.
     known_filter_attributes: BTreeSet<E::AttributeName_>,
     // TODO(tzakian): Remove the global counter and use this counter instead
@@ -247,15 +248,15 @@ impl CompilationEnv {
         let filter_attributes = BTreeSet::from([filter_attr_name]);
         let known_filters = BTreeMap::from([
             (
-                KnownFilterKey::new(FILTER_ALL.to_string(), filter_attr_name.clone()),
+                KnownFilterKey::new(FILTER_ALL, filter_attr_name),
                 WarningFilter::All,
             ),
             (
-                KnownFilterKey::new(FILTER_UNUSED.to_string(), filter_attr_name.clone()),
+                KnownFilterKey::new(FILTER_UNUSED, filter_attr_name),
                 WarningFilter::Category(Category::UnusedItem as u8, Some(FILTER_UNUSED)),
             ),
             (
-                KnownFilterKey::new(FILTER_MISSING_PHANTOM.to_string(), filter_attr_name.clone()),
+                KnownFilterKey::new(FILTER_MISSING_PHANTOM, filter_attr_name),
                 WarningFilter::Code(
                     DiagnosticsID {
                         category: Category::Declarations as u8,
@@ -265,7 +266,7 @@ impl CompilationEnv {
                 ),
             ),
             (
-                KnownFilterKey::new(FILTER_UNUSED_USE.to_string(), filter_attr_name.clone()),
+                KnownFilterKey::new(FILTER_UNUSED_USE, filter_attr_name),
                 WarningFilter::Code(
                     DiagnosticsID {
                         category: Category::UnusedItem as u8,
@@ -275,7 +276,7 @@ impl CompilationEnv {
                 ),
             ),
             (
-                KnownFilterKey::new(FILTER_UNUSED_VARIABLE.to_string(), filter_attr_name.clone()),
+                KnownFilterKey::new(FILTER_UNUSED_VARIABLE, filter_attr_name),
                 WarningFilter::Code(
                     DiagnosticsID {
                         category: Category::UnusedItem as u8,
@@ -285,10 +286,7 @@ impl CompilationEnv {
                 ),
             ),
             (
-                KnownFilterKey::new(
-                    FILTER_UNUSED_ASSIGNMENT.to_string(),
-                    filter_attr_name.clone(),
-                ),
+                KnownFilterKey::new(FILTER_UNUSED_ASSIGNMENT, filter_attr_name),
                 WarningFilter::Code(
                     DiagnosticsID {
                         category: Category::UnusedItem as u8,
@@ -298,10 +296,7 @@ impl CompilationEnv {
                 ),
             ),
             (
-                KnownFilterKey::new(
-                    FILTER_UNUSED_TRAILING_SEMI.to_string(),
-                    filter_attr_name.clone(),
-                ),
+                KnownFilterKey::new(FILTER_UNUSED_TRAILING_SEMI, filter_attr_name),
                 WarningFilter::Code(
                     DiagnosticsID {
                         category: Category::UnusedItem as u8,
@@ -311,10 +306,7 @@ impl CompilationEnv {
                 ),
             ),
             (
-                KnownFilterKey::new(
-                    FILTER_UNUSED_ATTRIBUTE.to_string(),
-                    filter_attr_name.clone(),
-                ),
+                KnownFilterKey::new(FILTER_UNUSED_ATTRIBUTE, filter_attr_name),
                 WarningFilter::Code(
                     DiagnosticsID {
                         category: Category::UnusedItem as u8,
@@ -324,10 +316,7 @@ impl CompilationEnv {
                 ),
             ),
             (
-                KnownFilterKey::new(
-                    FILTER_UNUSED_TYPE_PARAMETER.to_string(),
-                    filter_attr_name.clone(),
-                ),
+                KnownFilterKey::new(FILTER_UNUSED_TYPE_PARAMETER, filter_attr_name),
                 WarningFilter::Code(
                     DiagnosticsID {
                         category: Category::UnusedItem as u8,
@@ -337,7 +326,7 @@ impl CompilationEnv {
                 ),
             ),
             (
-                KnownFilterKey::new(FILTER_UNUSED_FUNCTION.to_string(), filter_attr_name.clone()),
+                KnownFilterKey::new(FILTER_UNUSED_FUNCTION, filter_attr_name),
                 WarningFilter::Code(
                     DiagnosticsID {
                         category: Category::UnusedItem as u8,
@@ -347,7 +336,7 @@ impl CompilationEnv {
                 ),
             ),
             (
-                KnownFilterKey::new(FILTER_DEAD_CODE.to_string(), filter_attr_name.clone()),
+                KnownFilterKey::new(FILTER_DEAD_CODE, filter_attr_name),
                 WarningFilter::Code(
                     DiagnosticsID {
                         category: Category::UnusedItem as u8,
@@ -358,7 +347,7 @@ impl CompilationEnv {
             ),
         ]);
 
-        let known_filter_names: BTreeMap<DiagnosticsID, String> = known_filters
+        let known_filter_names: BTreeMap<DiagnosticsID, Symbol> = known_filters
             .iter()
             .filter_map(
                 |(
@@ -404,7 +393,8 @@ impl CompilationEnv {
                     let help = format!(
                         "This warning can be suppressed with '#[{}({})]' \
                         applied to the 'module' or module member ('const', 'fun', or 'struct')",
-                        WARNING_FILTER_ATTR, filter_name
+                        WARNING_FILTER_ATTR,
+                        filter_name.as_str()
                     );
                     diag.add_note(help)
                 }
@@ -485,7 +475,7 @@ impl CompilationEnv {
         attribute_name: E::AttributeName_,
     ) -> Option<WarningFilter> {
         self.known_filters
-            .get(&KnownFilterKey::new(name, attribute_name))
+            .get(&KnownFilterKey::new(name.as_str(), attribute_name))
             .cloned()
     }
 
@@ -502,29 +492,23 @@ impl CompilationEnv {
         for filter in filters {
             match filter {
                 WarningFilter::All => {
-                    self.known_filters.insert(
-                        KnownFilterKey::new(FILTER_ALL.to_string(), filter_attr_name.clone()),
-                        filter,
-                    );
+                    self.known_filters
+                        .insert(KnownFilterKey::new(FILTER_ALL, filter_attr_name), filter);
                 }
                 WarningFilter::Category(_, name) => {
                     let Some(n) = name else {
                         anyhow::bail!("A known Category warning filter must have a name specified");
                     };
-                    self.known_filters.insert(
-                        KnownFilterKey::new(n.to_string(), filter_attr_name.clone()),
-                        filter,
-                    );
+                    self.known_filters
+                        .insert(KnownFilterKey::new(n, filter_attr_name), filter);
                 }
                 WarningFilter::Code(diag_id, name) => {
                     let Some(n) = name else {
                         anyhow::bail!("A known Code warning filter must have a name specified");
                     };
-                    self.known_filters.insert(
-                        KnownFilterKey::new(n.to_string(), filter_attr_name.clone()),
-                        filter,
-                    );
-                    self.known_filter_names.insert(diag_id, n.to_string());
+                    self.known_filters
+                        .insert(KnownFilterKey::new(n, filter_attr_name), filter);
+                    self.known_filter_names.insert(diag_id, n.into());
                 }
             }
         }

@@ -430,13 +430,7 @@ impl WarningFilters {
                     let cat = cat as u8;
                     category.insert(cat, n);
                     // remove any codes now covered by this category
-                    codes.retain(
-                        |DiagnosticsID {
-                             category: codes_cat,
-                             code: _,
-                         },
-                         _| codes_cat != &cat,
-                    );
+                    codes.retain(|diag_id, _| diag_id.category != cat);
                 }
                 WarningFilter::Code(diag_id, n) => {
                     // no need to add the filter if already covered by the category
