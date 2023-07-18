@@ -39,11 +39,11 @@ pub struct TransactionEffectsV1 {
     /// Unwrapped objects are objects that were wrapped into other objects in the past,
     /// and just got extracted out.
     pub unwrapped: Vec<(ObjectRef, Owner)>,
-    /// Object Refs of objects now deleted (the old refs).
+    /// Object Refs of objects now deleted (the new refs).
     pub deleted: Vec<ObjectRef>,
-    /// Object refs of objects previously wrapped in other objects but now deleted.
+    /// Object refs of objects previously wrapped in other objects but now deleted ((the new refs)).
     pub unwrapped_then_deleted: Vec<ObjectRef>,
-    /// Object refs of objects now wrapped in other objects.
+    /// Object refs of objects now wrapped in other objects (the new refs).
     pub wrapped: Vec<ObjectRef>,
     /// The updated gas object reference. Have a dedicated field for convenient access.
     /// It's also included in mutated.
@@ -67,6 +67,7 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     }
 
     fn input_shared_objects(&self) -> Vec<(ObjectRef, InputSharedObjectKind)> {
+        // TODO: Also return entries for already deleted shared objects.
         let modified: HashSet<_> = self.modified_at_versions.iter().map(|(r, _)| r).collect();
         self.shared_objects
             .iter()

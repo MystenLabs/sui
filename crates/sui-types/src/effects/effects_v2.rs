@@ -3,14 +3,12 @@
 
 use crate::base_types::{EpochId, ObjectDigest, ObjectRef, TransactionDigest};
 use crate::digests::TransactionEventsDigest;
-use crate::effects::{TransactionEffectsAPI, TransactionEffectsDebugSummary};
+use crate::effects::{InputSharedObjectKind, TransactionEffectsAPI};
 use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
 use crate::object::Owner;
-use crate::storage::{DeleteKind, WriteKind};
 use crate::{ObjectID, SequenceNumber};
 use serde::{Deserialize, Serialize};
-use std::cell::OnceCell;
 use std::collections::HashSet;
 
 /// The response from processing a transaction or a certified transaction
@@ -41,11 +39,6 @@ pub struct TransactionEffectsV2 {
     /// and in order for a node to catch up and execute it without consensus sequencing,
     /// the version needs to be committed in the effects.
     unchanged_shared_objects: Vec<(ObjectID, UnchangedSharedKind)>,
-
-    /// This is just to satisfy the current TransactionEffectsAPI.
-    /// TODO: We should just change gas_object() to return value instead of reference.
-    #[serde(skip)]
-    _cached_gas_object: OnceCell<(ObjectRef, Owner)>,
 }
 
 impl TransactionEffectsAPI for TransactionEffectsV2 {
@@ -61,48 +54,175 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
         self.executed_epoch
     }
 
-    fn modified_at_versions(&self) -> &[(ObjectID, SequenceNumber)] {
-        unimplemented!()
-    }
-
-    fn shared_objects(&self) -> &[ObjectRef] {
-        unimplemented!()
-    }
-
-    fn created(&self) -> &[(ObjectRef, Owner)] {
-        unimplemented!()
-    }
-
-    fn mutated(&self) -> &[(ObjectRef, Owner)] {
-        unimplemented!()
-    }
-
-    fn unwrapped(&self) -> &[(ObjectRef, Owner)] {
-        unimplemented!()
-    }
-
-    fn deleted(&self) -> &[ObjectRef] {
-        unimplemented!()
-    }
-
-    fn unwrapped_then_deleted(&self) -> &[ObjectRef] {
-        unimplemented!()
-    }
-
-    fn wrapped(&self) -> &[ObjectRef] {
-        unimplemented!()
-    }
-
-    fn gas_object(&self) -> &(ObjectRef, Owner) {
-        self._cached_gas_object.get_or_init(|| {
-            let entry = &self.changed_objects[self.gas_object_index as usize];
-            match entry.1.output_state {
-                ObjectOut::ObjectWrite(digest, owner) => {
-                    ((entry.0, self.lamport_version, digest), owner)
+    // TODO: Add a new API to return modified object refs.
+    fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)> {
+        self.changed_objects
+            .iter()
+            .filter_map(|(id, change)| {
+                if let ObjectIn::Exist((version, _digest)) = &change.input_state {
+                    Some((*id, *version))
+                } else {
+                    None
                 }
-                _ => panic!("Gas object must be an ObjectWrite in changed_objects"),
+            })
+            .collect()
+    }
+
+    fn input_shared_objects(&self) -> Vec<(ObjectRef, InputSharedObjectKind)> {
+        self.changed_objects
+            .iter()
+            .filter_map(
+                |(id, change)| match (&change.input_state, &change.output_state) {
+                    (
+                        ObjectIn::Exist((version, digest)),
+                        ObjectOut::ObjectWrite(_, Owner::Shared { .. }),
+                    ) => Some(((*id, *version, *digest), InputSharedObjectKind::Mutate)),
+                    _ => None,
+                },
+            )
+            .chain(
+                self.unchanged_shared_objects
+                    .iter()
+                    .filter_map(|(id, change_kind)| match change_kind {
+                        UnchangedSharedKind::ReadOnlyRoot((version, digest)) => {
+                            Some(((*id, *version, *digest), InputSharedObjectKind::ReadOnly))
+                        }
+                        UnchangedSharedKind::ReadOnlyChild(_) => None,
+                    }),
+            )
+            .collect()
+    }
+
+    fn created(&self) -> Vec<(ObjectRef, Owner)> {
+        self.changed_objects
+            .iter()
+            .filter_map(|(id, change)| {
+                match (
+                    &change.input_state,
+                    &change.output_state,
+                    &change.id_operation,
+                ) {
+                    (
+                        ObjectIn::NotExist,
+                        ObjectOut::ObjectWrite(digest, owner),
+                        IDOperation::Created,
+                    ) => Some(((*id, self.lamport_version, *digest), *owner)),
+                    (
+                        ObjectIn::NotExist,
+                        ObjectOut::PackageWrite((version, digest)),
+                        IDOperation::Created,
+                    ) => Some(((*id, *version, *digest), Owner::Immutable)),
+                    _ => None,
+                }
+            })
+            .collect()
+    }
+
+    fn mutated(&self) -> Vec<(ObjectRef, Owner)> {
+        self.changed_objects
+            .iter()
+            .filter_map(
+                |(id, change)| match (&change.input_state, &change.output_state) {
+                    (ObjectIn::Exist(_), ObjectOut::ObjectWrite(digest, owner)) => {
+                        Some(((*id, self.lamport_version, *digest), *owner))
+                    }
+                    (ObjectIn::Exist(_), ObjectOut::PackageWrite((version, digest))) => {
+                        Some(((*id, *version, *digest), Owner::Immutable))
+                    }
+                    _ => None,
+                },
+            )
+            .collect()
+    }
+
+    fn unwrapped(&self) -> Vec<(ObjectRef, Owner)> {
+        self.changed_objects
+            .iter()
+            .filter_map(|(id, change)| {
+                match (
+                    &change.input_state,
+                    &change.output_state,
+                    &change.id_operation,
+                ) {
+                    (
+                        ObjectIn::NotExist,
+                        ObjectOut::ObjectWrite(digest, owner),
+                        IDOperation::None,
+                    ) => Some(((*id, self.lamport_version, *digest), *owner)),
+                    _ => None,
+                }
+            })
+            .collect()
+    }
+
+    fn deleted(&self) -> Vec<ObjectRef> {
+        self.changed_objects
+            .iter()
+            .filter_map(|(id, change)| {
+                match (
+                    &change.input_state,
+                    &change.output_state,
+                    &change.id_operation,
+                ) {
+                    (ObjectIn::Exist(_), ObjectOut::NotExist, IDOperation::Deleted) => Some((
+                        *id,
+                        self.lamport_version,
+                        ObjectDigest::OBJECT_DIGEST_DELETED,
+                    )),
+                    _ => None,
+                }
+            })
+            .collect()
+    }
+
+    fn unwrapped_then_deleted(&self) -> Vec<ObjectRef> {
+        self.changed_objects
+            .iter()
+            .filter_map(|(id, change)| {
+                match (
+                    &change.input_state,
+                    &change.output_state,
+                    &change.id_operation,
+                ) {
+                    (ObjectIn::NotExist, ObjectOut::NotExist, IDOperation::Deleted) => Some((
+                        *id,
+                        self.lamport_version,
+                        ObjectDigest::OBJECT_DIGEST_DELETED,
+                    )),
+                    _ => None,
+                }
+            })
+            .collect()
+    }
+
+    fn wrapped(&self) -> Vec<ObjectRef> {
+        self.changed_objects
+            .iter()
+            .filter_map(|(id, change)| {
+                match (
+                    &change.input_state,
+                    &change.output_state,
+                    &change.id_operation,
+                ) {
+                    (ObjectIn::Exist(_), ObjectOut::NotExist, IDOperation::None) => Some((
+                        *id,
+                        self.lamport_version,
+                        ObjectDigest::OBJECT_DIGEST_WRAPPED,
+                    )),
+                    _ => None,
+                }
+            })
+            .collect()
+    }
+
+    fn gas_object(&self) -> (ObjectRef, Owner) {
+        let entry = &self.changed_objects[self.gas_object_index as usize];
+        match entry.1.output_state {
+            ObjectOut::ObjectWrite(digest, owner) => {
+                ((entry.0, self.lamport_version, digest), owner)
             }
-        })
+            _ => panic!("Gas object must be an ObjectWrite in changed_objects"),
+        }
     }
 
     fn events_digest(&self) -> Option<&TransactionEventsDigest> {
@@ -113,28 +233,12 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
         &self.dependencies
     }
 
-    fn all_changed_objects(&self) -> Vec<(&ObjectRef, &Owner, WriteKind)> {
-        unimplemented!()
-    }
-
-    fn all_deleted(&self) -> Vec<(&ObjectRef, DeleteKind)> {
-        unimplemented!()
-    }
-
     fn transaction_digest(&self) -> &TransactionDigest {
         &self.transaction_digest
     }
 
-    fn mutated_excluding_gas(&self) -> Vec<&(ObjectRef, Owner)> {
-        unimplemented!()
-    }
-
     fn gas_cost_summary(&self) -> &GasCostSummary {
         &self.gas_used
-    }
-
-    fn summary_for_debug(&self) -> TransactionEffectsDebugSummary {
-        unimplemented!()
     }
 
     fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus {
@@ -153,12 +257,41 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
         &mut self.dependencies
     }
 
-    fn shared_objects_mut_for_testing(&mut self) -> &mut Vec<ObjectRef> {
-        unimplemented!()
+    fn unsafe_add_input_shared_object_for_testing(
+        &mut self,
+        obj_ref: ObjectRef,
+        kind: InputSharedObjectKind,
+    ) {
+        match kind {
+            InputSharedObjectKind::Mutate => self.changed_objects.push((
+                obj_ref.0,
+                ObjectChange {
+                    input_state: ObjectIn::Exist((obj_ref.1, obj_ref.2)),
+                    output_state: ObjectOut::ObjectWrite(
+                        obj_ref.2,
+                        Owner::Shared {
+                            initial_shared_version: obj_ref.1,
+                        },
+                    ),
+                    id_operation: IDOperation::None,
+                },
+            )),
+            InputSharedObjectKind::ReadOnly => self.unchanged_shared_objects.push((
+                obj_ref.0,
+                UnchangedSharedKind::ReadOnlyRoot((obj_ref.1, obj_ref.2)),
+            )),
+        }
     }
 
-    fn modified_at_versions_mut_for_testing(&mut self) -> &mut Vec<(ObjectID, SequenceNumber)> {
-        unimplemented!()
+    fn unsafe_add_deleted_object_for_testing(&mut self, obj_ref: ObjectRef) {
+        self.changed_objects.push((
+            obj_ref.0,
+            ObjectChange {
+                input_state: ObjectIn::Exist((obj_ref.1, obj_ref.2)),
+                output_state: ObjectOut::NotExist,
+                id_operation: IDOperation::Deleted,
+            },
+        ))
     }
 }
 
@@ -283,6 +416,4 @@ enum UnchangedSharedKind {
     /// Child objects of read-only shared objects. We don't need this for protocol correctness,
     /// but having it would make debugging a lot easier.
     ReadOnlyChild(VersionDigest),
-    /// Already deleted shared objects.
-    Deleted(SequenceNumber),
 }

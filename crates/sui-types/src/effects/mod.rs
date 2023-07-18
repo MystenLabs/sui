@@ -303,7 +303,7 @@ pub trait TransactionEffectsAPI {
         obj_ref: ObjectRef,
         kind: InputSharedObjectKind,
     );
-    fn unsafe_add_deleted_object_for_testing(&mut self, object: ObjectRef);
+    fn unsafe_add_deleted_object_for_testing(&mut self, obj_ref: ObjectRef);
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Default)]
