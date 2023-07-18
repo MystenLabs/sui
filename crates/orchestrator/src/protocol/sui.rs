@@ -26,25 +26,25 @@ use super::{ProtocolCommands, ProtocolMetrics};
 
 /// The type of benchmarks supported by Mysticeti.
 #[derive(Serialize, Deserialize, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct MysticetiBenchmarkType {
+pub struct SuiBenchmarkType {
     /// Percentage of shared vs owned objects; 0 means only owned objects and 100 means
     /// only shared objects.
     shared_objects_ratio: u16,
 }
 
-impl Debug for MysticetiBenchmarkType {
+impl Debug for SuiBenchmarkType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.shared_objects_ratio)
     }
 }
 
-impl Display for MysticetiBenchmarkType {
+impl Display for SuiBenchmarkType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}% shared objects", self.shared_objects_ratio)
     }
 }
 
-impl FromStr for MysticetiBenchmarkType {
+impl FromStr for SuiBenchmarkType {
     type Err = std::num::ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -54,14 +54,14 @@ impl FromStr for MysticetiBenchmarkType {
     }
 }
 
-impl BenchmarkType for MysticetiBenchmarkType {}
+impl BenchmarkType for SuiBenchmarkType {}
 
-/// All configurations information to run a Mysticeti client or validator.
-pub struct MysticetiProtocol {
+/// All configurations information to run a Sui client or validator.
+pub struct SuiProtocol {
     working_dir: PathBuf,
 }
 
-impl ProtocolCommands<MysticetiBenchmarkType> for MysticetiProtocol {
+impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
     fn protocol_dependencies(&self) -> Vec<&'static str> {
         vec![]
     }
@@ -111,7 +111,7 @@ impl ProtocolCommands<MysticetiBenchmarkType> for MysticetiProtocol {
     fn node_command<I>(
         &self,
         instances: I,
-        _parameters: &BenchmarkParameters<MysticetiBenchmarkType>,
+        _parameters: &BenchmarkParameters<SuiBenchmarkType>,
     ) -> Vec<(Instance, String)>
     where
         I: IntoIterator<Item = Instance>,
@@ -163,7 +163,7 @@ impl ProtocolCommands<MysticetiBenchmarkType> for MysticetiProtocol {
     fn client_command<I>(
         &self,
         _instances: I,
-        _parameters: &BenchmarkParameters<MysticetiBenchmarkType>,
+        _parameters: &BenchmarkParameters<SuiBenchmarkType>,
     ) -> Vec<(Instance, String)>
     where
         I: IntoIterator<Item = Instance>,
@@ -173,8 +173,8 @@ impl ProtocolCommands<MysticetiBenchmarkType> for MysticetiProtocol {
     }
 }
 
-impl MysticetiProtocol {
-    /// Make a new instance of the Mysticeti protocol commands generator.
+impl SuiProtocol {
+    /// Make a new instance of the Sui protocol commands generator.
     pub fn new(settings: &Settings) -> Self {
         Self {
             working_dir: settings.working_dir.clone(),
@@ -182,7 +182,7 @@ impl MysticetiProtocol {
     }
 }
 
-impl ProtocolMetrics for MysticetiProtocol {
+impl ProtocolMetrics for SuiProtocol {
     const BENCHMARK_DURATION: &'static str = "benchmark_duration";
     const TOTAL_TRANSACTIONS: &'static str = "latency_s_count";
     const LATENCY_BUCKETS: &'static str = "latency_s";

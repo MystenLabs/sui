@@ -8,7 +8,7 @@ use crate::{
     client::Instance,
 };
 
-pub mod mysticeti;
+pub mod sui;
 
 /// The minimum interface that the protocol should implement to allow benchmarks from
 /// the orchestrator.

@@ -10,7 +10,7 @@ use eyre::{Context, Result};
 use faults::FaultsType;
 use measurement::MeasurementsCollection;
 use orchestrator::Orchestrator;
-use protocol::mysticeti::{MysticetiBenchmarkType, MysticetiProtocol};
+use protocol::sui::{SuiBenchmarkType, SuiProtocol};
 use settings::{CloudProvider, Settings};
 use ssh::SshConnectionManager;
 use testbed::Testbed;
@@ -30,8 +30,8 @@ pub mod ssh;
 pub mod testbed;
 
 /// NOTE: Link these types to the correct protocol.
-type Protocol = MysticetiProtocol;
-type BenchmarkType = MysticetiBenchmarkType;
+type Protocol = SuiProtocol;
+type BenchmarkType = SuiBenchmarkType;
 
 #[derive(Parser)]
 #[command(author, version, about = "Testbed orchestrator", long_about = None)]
