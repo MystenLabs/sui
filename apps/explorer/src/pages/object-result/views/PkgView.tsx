@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getTransactionSender } from '@mysten/sui.js';
-import { LoadingIndicator } from '@mysten/ui';
+import { LoadingIndicator, RadioGroup, RadioGroupItem } from '@mysten/ui';
 import { useState } from 'react';
 import { type Direction } from 'react-resizable-panels';
 
@@ -16,7 +16,6 @@ import TransactionBlocksForAddress, {
 	FILTER_VALUES,
 } from '~/components/TransactionBlocksForAddress/TransactionBlocksForAddress';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
-import { RadioGroup, RadioOption } from '~/ui/Radio';
 import { TabHeader, Tabs, TabsContent, TabsList, TabsTrigger } from '~/ui/Tabs';
 
 import styles from './ObjectView.module.css';
@@ -87,15 +86,16 @@ function PkgView({ data }: { data: DataType }) {
 					<TabsList>
 						<div className="mt-16 flex w-full justify-between">
 							<TabsTrigger value="modules">Modules</TabsTrigger>
-							<div>
+							<div className="hidden md:block">
 								<RadioGroup
-									className="hidden gap-0.5 md:flex"
-									ariaLabel="split-panel-bytecode-viewer"
+									aria-label="split-panel-bytecode-viewer"
 									value={selectedSplitPanelOrientation}
-									onChange={setSplitPanelOrientation}
+									onValueChange={(value) =>
+										setSplitPanelOrientation(value as 'vertical' | 'horizontal')
+									}
 								>
 									{splitPanelsOrientation.map(({ value, label }) => (
-										<RadioOption key={value} value={value} label={label} />
+										<RadioGroupItem key={value} value={value} label={label} />
 									))}
 								</RadioGroup>
 							</div>

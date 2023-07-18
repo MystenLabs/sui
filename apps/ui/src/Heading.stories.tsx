@@ -3,7 +3,7 @@
 
 import { type Meta, type StoryObj } from '@storybook/react';
 
-import { Heading, type HeadingProps } from '../Heading';
+import { Heading, type HeadingProps } from './Heading';
 
 const meta = {
 	component: Heading,

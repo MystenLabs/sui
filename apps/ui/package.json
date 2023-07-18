@@ -25,14 +25,17 @@
 		"eslint:fix": "pnpm run eslint:check --fix",
 		"lint": "pnpm run eslint:check && pnpm run prettier:check",
 		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
-		"storybook": "storybook dev -p 6006",
-		"build-storybook": "storybook build"
+		"dev": "storybook dev -p 6006",
+		"build": "storybook build"
 	},
 	"dependencies": {
 		"@mysten/core": "workspace:*",
 		"@mysten/icons": "workspace:*",
+		"@radix-ui/react-radio-group": "^1.1.3",
 		"@radix-ui/react-slot": "^1.0.2",
+		"@radix-ui/react-switch": "^1.0.3",
 		"class-variance-authority": "^0.7.0",
+		"framer-motion": "^10.11.6",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0"
 	},

@@ -3,13 +3,17 @@
 
 import { type StoryObj, type Meta } from '@storybook/react';
 
-import { Placeholder, type PlaceholderProps } from '../Placeholder';
+import { Placeholder } from './Placeholder';
 
-export default {
+const meta = {
 	component: Placeholder,
-} as Meta;
+} satisfies Meta<typeof Placeholder>;
 
-export const VaryingWidthAndHeight: StoryObj<PlaceholderProps> = {
+export default meta;
+
+type Story = StoryObj<typeof meta>;
+
+export const VaryingWidthAndHeight: Story = {
 	render: () => (
 		<div>
 			<Placeholder width="120px" height="12px" />

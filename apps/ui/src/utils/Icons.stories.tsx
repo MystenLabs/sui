@@ -4,7 +4,7 @@ import * as Icons from '@mysten/icons';
 import { type Meta } from '@storybook/react';
 
 export default {
-	title: 'Icons',
+	title: '@mysten/icons',
 } as Meta;
 
 export const AllIcons = {

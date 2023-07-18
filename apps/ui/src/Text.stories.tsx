@@ -4,7 +4,7 @@
 import { type Meta, type StoryObj } from '@storybook/react';
 import { Fragment } from 'react';
 
-import { Text, type TextProps } from '../Text';
+import { Text, type TextProps } from './Text';
 
 const meta = {
 	component: Text,
