@@ -326,10 +326,20 @@ impl Proposer {
         // If this node is going to be the leader of the next round and there are more than
         // 1 primary in the committee, we use a lower min delay value to increase the chance
         // of committing the leader.
-        if self.committee.size() > 1
-            && self.committee.leader(self.round + 1).id() == self.authority_id
-        {
-            Duration::ZERO
+        if self.committee.size() > 1 {
+            // for even rounds we use the actual leader schedule to ensure that we give a boost to
+            // the leader of the round and take an advantage from proposing earlier.
+            // for odd rounds we iterate over the whole pool of validators so we periodically give
+            // everyone the chance of proposing a header earlier than the others.
+            if ((self.round + 1) % 2 == 0
+                && self.leader_schedule.leader(self.round + 1).id() == self.authority_id)
+                || ((self.round + 1) % 2 != 0
+                    && self.committee.leader(self.round + 1).id() == self.authority_id)
+            {
+                Duration::ZERO
+            } else {
+                self.min_header_delay
+            }
         } else {
             self.min_header_delay
         }
