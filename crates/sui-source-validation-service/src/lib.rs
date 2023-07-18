@@ -18,7 +18,7 @@ use hyper::server::conn::AddrIncoming;
 use hyper::{HeaderMap, StatusCode};
 use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
-use tracing::info;
+use tracing::{debug, info};
 use url::Url;
 
 use move_compiler::compiled_unit::CompiledUnitEnum;
@@ -80,15 +80,16 @@ pub struct SourceInfo {
 }
 
 #[derive(Eq, PartialEq, Clone, Default, Deserialize, Debug, Ord, PartialOrd)]
+#[serde(rename_all = "lowercase")]
 pub enum Network {
     #[default]
-    #[serde(alias = "mainnet", alias = "Mainnet")]
+    #[serde(alias = "Mainnet")]
     Mainnet,
-    #[serde(alias = "testnet", alias = "Testnet")]
+    #[serde(alias = "Testnet")]
     Testnet,
-    #[serde(alias = "devnet", alias = "Devnet")]
+    #[serde(alias = "Devnet")]
     Devnet,
-    #[serde(alias = "localnet", alias = "Localnet")]
+    #[serde(alias = "Localnet")]
     Localnet,
 }
 
@@ -145,17 +146,19 @@ pub async fn verify_package(
         .await?;
 
     let mut map = SourceLookup::new();
-    let Ok(address) = compiled_package.published_at.as_ref().map(|id| **id) else { bail!("could not resolve published-at field in package manifest")};
+    let address = compiled_package
+        .published_at
+        .as_ref()
+        .map(|id| **id)
+        .map_err(|_| anyhow!("could not resolve published-at field in package manifest"))?;
     for v in &compiled_package.package.root_compiled_units {
+        let path = v.source_path.to_path_buf();
+        let source = Some(fs::read_to_string(path.as_path())?);
         match v.unit {
             CompiledUnitEnum::Module(ref m) => {
-                let path = v.source_path.to_path_buf();
-                let source = Some(fs::read_to_string(path.as_path())?);
                 map.insert((address, m.name), SourceInfo { path, source })
             }
             CompiledUnitEnum::Script(ref m) => {
-                let path = v.source_path.to_path_buf();
-                let source = Some(fs::read_to_string(path.as_path())?);
                 map.insert((address, m.name), SourceInfo { path, source })
             }
         };
@@ -170,13 +173,12 @@ pub fn parse_config(config_path: impl AsRef<Path>) -> anyhow::Result<Config> {
 
 pub fn repo_name_from_url(url: &str) -> anyhow::Result<String> {
     let repo_url = Url::parse(url)?;
-    let Some(mut components) = repo_url.path_segments() else {
-	    bail!("Could not discover repository path in url {url}")
-	};
-    let Some(repo_name) = components.next_back() else {
-	    bail!("Could not discover repository name in url {url}")
-    };
-
+    let mut components = repo_url
+        .path_segments()
+        .ok_or_else(|| anyhow!("Could not discover repository path in url {url}"))?;
+    let repo_name = components
+        .next_back()
+        .ok_or_else(|| anyhow!("Could not discover repository name in url {url}"))?;
     Ok(repo_name.to_string())
 }
 
@@ -298,7 +300,7 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
                 for p in &r.paths {
                     let package_path = packages_dir.join(p).clone();
                     let network = r.network.clone().unwrap_or_default();
-                    info!("verifying {p}");
+                    info!("verifying {}", package_path.display());
                     let t =
                         tokio::spawn(async move { verify_package(&network, package_path).await });
                     tasks.push(t)
@@ -308,7 +310,7 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
                 for p in &packages_dir.paths {
                     let package_path = PathBuf::from(p);
                     let network = packages_dir.network.clone().unwrap_or_default();
-                    info!("verifying {p}");
+                    info!("verifying {}", package_path.display());
                     let t =
                         tokio::spawn(async move { verify_package(&network, package_path).await });
                     tasks.push(t)
@@ -378,11 +380,12 @@ async fn api_route(
     headers: HeaderMap,
     State(app_state): State<Arc<AppState>>,
     Query(Request {
+        network,
         address,
         module,
-        network,
     }): Query<Request>,
 ) -> impl IntoResponse {
+    debug!("request network={network}&address={address}&module={module}");
     let version = headers
         .get(SUI_SOURCE_VALIDATION_VERSION_HEADER)
         .as_ref()
@@ -414,18 +417,40 @@ async fn api_route(
     let symbol = Symbol::from(module);
     let Ok(address) = AccountAddress::from_hex_literal(&address) else {
 	let error = format!("Invalid hex address {address}");
-	return (StatusCode::BAD_REQUEST, headers, Json(ErrorResponse { error }).into_response())
+	return (
+	    StatusCode::BAD_REQUEST,
+	    headers,
+	    Json(ErrorResponse { error }).into_response()
+	)
     };
-    let Some(SourceInfo {source : Some(source), ..}) = app_state.sources.get(&network).and_then(|l| l.get(&(address, symbol))) else {
-	let error = format!("No source found for {symbol} at address {address} on network {network}");
-	return (StatusCode::NOT_FOUND, headers, Json(ErrorResponse { error }).into_response())
-    };
-    (
-        StatusCode::OK,
-        headers,
-        Json(SourceResponse {
-            source: source.to_owned(),
-        })
-        .into_response(),
-    )
+
+    let source_result = app_state
+        .sources
+        .get(&network)
+        .and_then(|l| l.get(&(address, symbol)));
+    if let Some(SourceInfo {
+        source: Some(source),
+        ..
+    }) = source_result
+    {
+        (
+            StatusCode::OK,
+            headers,
+            Json(SourceResponse {
+                source: source.to_owned(),
+            })
+            .into_response(),
+        )
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            headers,
+            Json(ErrorResponse {
+                error: format!(
+                    "No source found for {symbol} at address {address} on network {network}"
+                ),
+            })
+            .into_response(),
+        )
+    }
 }
