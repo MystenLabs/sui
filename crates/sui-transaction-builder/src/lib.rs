@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, bail, ensure, Ok};
 use async_trait::async_trait;
+use error::{SuiTransactionBuilderError as STBError, SuiTransactionBuilderResult};
 use futures::future::join_all;
 use move_binary_format::file_format::SignatureToken;
 use move_core_types::identifier::Identifier;
@@ -31,6 +32,8 @@ use sui_types::transaction::{
     Argument, CallArg, Command, InputObjectKind, ObjectArg, TransactionData, TransactionKind,
 };
 use sui_types::{coin, fp_ensure, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID};
+
+mod error;
 
 #[async_trait]
 pub trait DataReader {
@@ -64,14 +67,18 @@ impl TransactionBuilder {
         budget: u64,
         input_objects: Vec<ObjectID>,
         gas_price: u64,
-    ) -> Result<ObjectRef, anyhow::Error> {
+    ) -> SuiTransactionBuilderResult<ObjectRef> {
         if budget < gas_price {
-            bail!("Gas budget {budget} is less than the reference gas price {gas_price}. The gas budget must be at least the current reference gas price of {gas_price}.")
+            return Err(STBError::InsufficientGasBudget(budget, gas_price));
         }
         if let Some(gas) = input_gas {
             self.get_object_ref(gas).await
         } else {
-            let gas_objs = self.0.get_owned_objects(signer, GasCoin::type_()).await?;
+            let gas_objs = self
+                .0
+                .get_owned_objects(signer, GasCoin::type_())
+                .await
+                .map_err(STBError::DataReaderError)?;
 
             for obj in gas_objs {
                 let response = self
@@ -82,16 +89,16 @@ impl TransactionBuilder {
                 let gas: GasCoin = bcs::from_bytes(
                     &obj.bcs
                         .as_ref()
-                        .ok_or_else(|| anyhow!("bcs field is unexpectedly empty"))?
+                        .ok_or_else(|| STBError::BcsFieldEmpty)?
                         .try_as_move()
-                        .ok_or_else(|| anyhow!("Cannot parse move object to gas object"))?
+                        .ok_or_else(|| STBError::ParseMoveObjectError)?
                         .bcs_bytes,
                 )?;
                 if !input_objects.contains(&obj.object_id) && gas.value() >= budget {
                     return Ok(obj.object_ref());
                 }
             }
-            Err(anyhow!("Cannot find gas coin for signer address [{signer}] with amount sufficient for the required gas amount [{budget}]."))
+            Err(STBError::InsufficientGasCoin(signer, budget))
         }
     }
 
@@ -102,7 +109,7 @@ impl TransactionBuilder {
         gas: Option<ObjectID>,
         gas_budget: u64,
         recipient: SuiAddress,
-    ) -> anyhow::Result<TransactionData> {
+    ) -> SuiTransactionBuilderResult<TransactionData> {
         let mut builder = ProgrammableTransactionBuilder::new();
         self.single_transfer_object(&mut builder, object_id, recipient)
             .await?;
@@ -125,8 +132,10 @@ impl TransactionBuilder {
         builder: &mut ProgrammableTransactionBuilder,
         object_id: ObjectID,
         recipient: SuiAddress,
-    ) -> anyhow::Result<()> {
-        builder.transfer_object(recipient, self.get_object_ref(object_id).await?)?;
+    ) -> SuiTransactionBuilderResult<()> {
+        builder
+            .transfer_object(recipient, self.get_object_ref(object_id).await?)
+            .map_err(STBError::ProgrammableTransactionBuilderError)?;
         Ok(())
     }
 
@@ -137,7 +146,7 @@ impl TransactionBuilder {
         gas_budget: u64,
         recipient: SuiAddress,
         amount: Option<u64>,
-    ) -> anyhow::Result<TransactionData> {
+    ) -> SuiTransactionBuilderResult<TransactionData> {
         let object = self.get_object_ref(sui_object_id).await?;
         let gas_price = self.0.get_reference_gas_price().await?;
         Ok(TransactionData::new_transfer_sui(
@@ -153,10 +162,10 @@ impl TransactionBuilder {
         amounts: Vec<u64>,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> anyhow::Result<TransactionData> {
+    ) -> SuiTransactionBuilderResult<TransactionData> {
         if let Some(gas) = gas {
             if input_coins.contains(&gas) {
-                return Err(anyhow!("Gas coin is in input coins of Pay transaction, use PaySui transaction instead!"));
+                return Err(STBError::InvalidPayTransaction);
             }
         }
 
@@ -185,7 +194,7 @@ impl TransactionBuilder {
         recipients: Vec<SuiAddress>,
         amounts: Vec<u64>,
         gas_budget: u64,
-    ) -> anyhow::Result<TransactionData> {
+    ) -> SuiTransactionBuilderResult<TransactionData> {
         fp_ensure!(
             !input_coins.is_empty(),
             UserInputError::EmptyInputCoins.into()
@@ -219,7 +228,7 @@ impl TransactionBuilder {
         input_coins: Vec<ObjectID>,
         recipient: SuiAddress,
         gas_budget: u64,
-    ) -> anyhow::Result<TransactionData> {
+    ) -> SuiTransactionBuilderResult<TransactionData> {
         fp_ensure!(
             !input_coins.is_empty(),
             UserInputError::EmptyInputCoins.into()
@@ -257,7 +266,7 @@ impl TransactionBuilder {
         call_args: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> anyhow::Result<TransactionData> {
+    ) -> SuiTransactionBuilderResult<TransactionData> {
         let mut builder = ProgrammableTransactionBuilder::new();
         self.single_move_call(
             &mut builder,
@@ -299,7 +308,7 @@ impl TransactionBuilder {
         function: &str,
         type_args: Vec<SuiTypeTag>,
         call_args: Vec<SuiJsonValue>,
-    ) -> anyhow::Result<()> {
+    ) -> SuiTransactionBuilderResult<()> {
         let module = Identifier::from_str(module)?;
         let function = Identifier::from_str(function)?;
 
@@ -325,7 +334,7 @@ impl TransactionBuilder {
         id: ObjectID,
         objects: &mut BTreeMap<ObjectID, Object>,
         is_mutable_ref: bool,
-    ) -> Result<ObjectArg, anyhow::Error> {
+    ) -> SuiTransactionBuilderResult<ObjectArg> {
         let response = self
             .0
             .get_object_with_options(id, SuiObjectDataOptions::bcs_lossless())
@@ -357,14 +366,14 @@ impl TransactionBuilder {
         function: &Identifier,
         type_args: &[TypeTag],
         json_args: Vec<SuiJsonValue>,
-    ) -> Result<Vec<Argument>, anyhow::Error> {
+    ) -> SuiTransactionBuilderResult<Vec<Argument>> {
         let object = self
             .0
             .get_object_with_options(package_id, SuiObjectDataOptions::bcs_lossless())
             .await?
             .into_object()?;
         let Some(SuiRawData::Package(package)) = object.bcs else {
-            bail!("Bcs field in object [{}] is missing or not a package.", package_id);
+            return Err(STBError::MissingBcsField(package_id));
         };
         let package: MovePackage = MovePackage::new(
             package.id,
@@ -421,7 +430,7 @@ impl TransactionBuilder {
         dep_ids: Vec<ObjectID>,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> anyhow::Result<TransactionData> {
+    ) -> SuiTransactionBuilderResult<TransactionData> {
         let gas_price = self.0.get_reference_gas_price().await?;
         let gas = self
             .select_gas(sender, gas, gas_budget, vec![], gas_price)
@@ -447,7 +456,7 @@ impl TransactionBuilder {
         digest: Vec<u8>,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> anyhow::Result<TransactionData> {
+    ) -> SuiTransactionBuilderResult<TransactionData> {
         let gas_price = self.0.get_reference_gas_price().await?;
         let gas = self
             .select_gas(sender, gas, gas_budget, vec![], gas_price)
@@ -459,7 +468,7 @@ impl TransactionBuilder {
             .into_object()?;
         let cap_owner = upgrade_cap
             .owner
-            .ok_or_else(|| anyhow!("Unable to determine ownership of upgrade capability"))?;
+            .ok_or_else(|| STBError::UnknownUpgradeCapability)?;
         TransactionData::new_upgrade(
             sender,
             gas,
@@ -482,7 +491,7 @@ impl TransactionBuilder {
         split_amounts: Vec<u64>,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> anyhow::Result<TransactionData> {
+    ) -> SuiTransactionBuilderResult<TransactionData> {
         let coin = self
             .0
             .get_object_with_options(coin_object_id, SuiObjectDataOptions::bcs_lossless())
@@ -520,7 +529,7 @@ impl TransactionBuilder {
         split_count: u64,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> anyhow::Result<TransactionData> {
+    ) -> SuiTransactionBuilderResult<TransactionData> {
         let coin = self
             .0
             .get_object_with_options(coin_object_id, SuiObjectDataOptions::bcs_lossless())
@@ -558,7 +567,7 @@ impl TransactionBuilder {
         coin_to_merge: ObjectID,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> anyhow::Result<TransactionData> {
+    ) -> SuiTransactionBuilderResult<TransactionData> {
         let coin = self
             .0
             .get_object_with_options(primary_coin, SuiObjectDataOptions::bcs_lossless())
@@ -601,13 +610,10 @@ impl TransactionBuilder {
         single_transaction_params: Vec<RPCTransactionRequestParams>,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> anyhow::Result<TransactionData> {
+    ) -> SuiTransactionBuilderResult<TransactionData> {
         fp_ensure!(
             !single_transaction_params.is_empty(),
-            UserInputError::InvalidBatchTransaction {
-                error: "Batch Transaction cannot be empty".to_owned(),
-            }
-            .into()
+            STBError::InvalidBatchTransaction
         );
         let mut builder = ProgrammableTransactionBuilder::new();
         for param in single_transaction_params {
@@ -660,31 +666,29 @@ impl TransactionBuilder {
         validator: SuiAddress,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> anyhow::Result<TransactionData> {
+    ) -> SuiTransactionBuilderResult<TransactionData> {
         let gas_price = self.0.get_reference_gas_price().await?;
         let gas = self
             .select_gas(signer, gas, gas_budget, coins.clone(), gas_price)
             .await?;
 
         let mut obj_vec = vec![];
-        let coin = coins
-            .pop()
-            .ok_or_else(|| anyhow!("Coins input should contain at lease one coin object."))?;
+        let coin = coins.pop().ok_or_else(|| STBError::EmptyInputCoins)?;
         let (oref, coin_type) = self.get_object_ref_and_type(coin).await?;
 
         let ObjectType::Struct(type_) = &coin_type else{
-            return Err(anyhow!("Provided object [{coin}] is not a move object."))
+            return Err(STBError::NotAMoveObject(coin))
         };
-        ensure!(
+        fp_ensure!(
             type_.is_coin(),
-            "Expecting either Coin<T> input coin objects. Received [{type_}]"
+            STBError::InvalidCoinObjectType(type_.to_string())
         );
 
         for coin in coins {
             let (oref, type_) = self.get_object_ref_and_type(coin).await?;
-            ensure!(
+            fp_ensure!(
                 type_ == coin_type,
-                "All coins should be the same type, expecting {coin_type}, got {type_}."
+                STBError::CoinTypeMismatch(coin_type, type_)
             );
             obj_vec.push(ObjectArg::ImmOrOwnedObject(oref))
         }
@@ -726,7 +730,7 @@ impl TransactionBuilder {
         staked_sui: ObjectID,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> anyhow::Result<TransactionData> {
+    ) -> SuiTransactionBuilderResult<TransactionData> {
         let staked_sui = self.get_object_ref(staked_sui).await?;
         let gas_price = self.0.get_reference_gas_price().await?;
         let gas = self
@@ -749,7 +753,7 @@ impl TransactionBuilder {
     }
 
     // TODO: we should add retrial to reduce the transaction building error rate
-    async fn get_object_ref(&self, object_id: ObjectID) -> anyhow::Result<ObjectRef> {
+    async fn get_object_ref(&self, object_id: ObjectID) -> SuiTransactionBuilderResult<ObjectRef> {
         self.get_object_ref_and_type(object_id)
             .await
             .map(|(oref, _)| oref)
@@ -758,7 +762,7 @@ impl TransactionBuilder {
     async fn get_object_ref_and_type(
         &self,
         object_id: ObjectID,
-    ) -> anyhow::Result<(ObjectRef, ObjectType)> {
+    ) -> SuiTransactionBuilderResult<(ObjectRef, ObjectType)> {
         let object = self
             .0
             .get_object_with_options(object_id, SuiObjectDataOptions::new().with_type())

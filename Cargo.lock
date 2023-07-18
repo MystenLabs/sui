@@ -10815,6 +10815,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-protocol-config",
  "sui-types",
+ "thiserror",
  "workspace-hack",
 ]
 

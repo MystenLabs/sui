@@ -11,6 +11,7 @@ anyhow.workspace = true
 async-trait.workspace = true
 futures.workspace = true
 bcs.workspace = true
+thiserror.workspace = true
 
 move-binary-format.workspace = true
 sui-json-rpc-types.workspace = true
