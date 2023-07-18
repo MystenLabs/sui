@@ -84,7 +84,8 @@ impl TransactionBuilder {
                 let response = self
                     .0
                     .get_object_with_options(obj.object_id, SuiObjectDataOptions::new().with_bcs())
-                    .await?;
+                    .await
+                    .map_err(STBError::DataReaderError)?;
                 let obj = response.object()?;
                 let gas: GasCoin = bcs::from_bytes(
                     &obj.bcs
@@ -113,7 +114,11 @@ impl TransactionBuilder {
         let mut builder = ProgrammableTransactionBuilder::new();
         self.single_transfer_object(&mut builder, object_id, recipient)
             .await?;
-        let gas_price = self.0.get_reference_gas_price().await?;
+        let gas_price = self
+            .0
+            .get_reference_gas_price()
+            .await
+            .map_err(STBError::DataReaderError)?;
         let gas = self
             .select_gas(signer, gas, gas_budget, vec![object_id], gas_price)
             .await?;
