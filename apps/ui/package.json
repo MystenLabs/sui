@@ -25,8 +25,8 @@
 		"eslint:fix": "pnpm run eslint:check --fix",
 		"lint": "pnpm run eslint:check && pnpm run prettier:check",
 		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
-		"storybook": "storybook dev -p 6006",
-		"build-storybook": "storybook build"
+		"dev": "storybook dev -p 6006",
+		"build": "storybook build"
 	},
 	"dependencies": {
 		"@mysten/core": "workspace:*",
