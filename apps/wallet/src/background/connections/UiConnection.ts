@@ -6,11 +6,17 @@ import { BehaviorSubject, filter, switchMap, takeUntil } from 'rxjs';
 import { Connection } from './Connection';
 import NetworkEnv from '../NetworkEnv';
 import {
+	getAllSerializedUIAccountSources,
+	handleUIMessage as accountSourceHandleUIMessage,
+} from '../account-sources';
+import { getAllSerializedUIAccounts } from '../accounts';
+import {
 	acceptQredoConnection,
 	getUIQredoInfo,
 	getUIQredoPendingRequest,
 	rejectQredoConnection,
 } from '../qredo';
+import { type UIAccessibleEntityType } from '../storage-entities-utils';
 import { createMessage } from '_messages';
 import { type ErrorPayload, isBasePayload } from '_payloads';
 import { isSetNetworkPayload, type SetNetworkPayload } from '_payloads/network';
@@ -23,6 +29,10 @@ import Tabs from '_src/background/Tabs';
 import Transactions from '_src/background/Transactions';
 import Keyring from '_src/background/keyring';
 import { growthbook } from '_src/shared/experimentation/features';
+import {
+	type MethodPayload,
+	isMethodPayload,
+} from '_src/shared/messaging/messages/payloads/MethodPayload';
 import {
 	type QredoConnectPayload,
 	isQredoConnectPayload,
@@ -162,6 +172,23 @@ export class UiConnection extends Connection {
 			} else if (isQredoConnectPayload(payload, 'rejectQredoConnection')) {
 				await rejectQredoConnection(payload.args);
 				this.send(createMessage({ type: 'done' }, id));
+			} else if (isMethodPayload(payload, 'getStoredEntities')) {
+				const entities = await this.getUISerializedEntities(payload.args.type);
+				this.send(
+					createMessage<MethodPayload<'storedEntitiesResponse'>>(
+						{
+							method: 'storedEntitiesResponse',
+							type: 'method-payload',
+							args: {
+								type: payload.args.type,
+								entities,
+							},
+						},
+						msg.id,
+					),
+				);
+			} else if (await accountSourceHandleUIMessage(msg, this)) {
+				return;
 			}
 		} catch (e) {
 			this.send(
@@ -199,5 +226,19 @@ export class UiConnection extends Connection {
 				requestID,
 			),
 		);
+	}
+
+	private getUISerializedEntities(type: UIAccessibleEntityType) {
+		switch (type) {
+			case 'account-entity': {
+				return getAllSerializedUIAccounts();
+			}
+			case 'account-source-entity': {
+				return getAllSerializedUIAccountSources();
+			}
+			default: {
+				throw new Error(`Unknown entity type ${type}`);
+			}
+		}
 	}
 }

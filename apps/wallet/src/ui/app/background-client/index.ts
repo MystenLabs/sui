@@ -22,9 +22,15 @@ import { setKeyringStatus } from '_redux/slices/account';
 import { setActiveOrigin, changeActiveNetwork } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
+import { type MnemonicSerializedUiAccount } from '_src/background/accounts/MnemonicAccount';
 import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
 import { type AccountsPublicInfoUpdates } from '_src/background/keyring/accounts';
 import { type QredoConnectIdentity } from '_src/background/qredo/types';
+import { type UIAccessibleEntityType } from '_src/background/storage-entities-utils';
+import {
+	type MethodPayload,
+	isMethodPayload,
+} from '_src/shared/messaging/messages/payloads/MethodPayload';
 import {
 	isQredoConnectPayload,
 	type QredoConnectPayload,
@@ -414,6 +420,89 @@ export class BackgroundClient {
 					type: 'keyring',
 					method: 'updateAccountPublicInfo',
 					args: { updates },
+				}),
+			).pipe(take(1)),
+		);
+	}
+
+	public getStoredEntities<R>(type: UIAccessibleEntityType): Promise<R[]> {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'getStoredEntities'>>({
+					method: 'getStoredEntities',
+					type: 'method-payload',
+					args: { type },
+				}),
+			).pipe(
+				take(1),
+				map(({ payload }) => {
+					if (!isMethodPayload(payload, 'storedEntitiesResponse')) {
+						throw new Error('Unknown response');
+					}
+					if (type !== payload.args.type) {
+						throw new Error(`unexpected entity type response ${payload.args.type}`);
+					}
+					return payload.args.entities;
+				}),
+			),
+		);
+	}
+
+	public createMnemonicAccountSource(inputs: { password: string; entropy?: string }) {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'createAccountSource'>>({
+					method: 'createAccountSource',
+					type: 'method-payload',
+					args: { type: 'mnemonic', params: inputs },
+				}),
+			).pipe(
+				take(1),
+				map(({ payload }) => {
+					if (!isMethodPayload(payload, 'accountSourceCreationResponse')) {
+						throw new Error('Unknown response');
+					}
+					if ('mnemonic' !== payload.args.accountSource.type) {
+						throw new Error(
+							`Unexpected account source type response ${payload.args.accountSource.type}`,
+						);
+					}
+					return payload.args.accountSource as unknown as MnemonicSerializedUiAccount;
+				}),
+			),
+		);
+	}
+
+	public deriveMnemonicAccount({ sourceID }: { sourceID: string }) {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'deriveMnemonicAccount'>>({
+					method: 'deriveMnemonicAccount',
+					type: 'method-payload',
+					args: { sourceID },
+				}),
+			).pipe(
+				take(1),
+				map(({ payload }) => {
+					if (!isMethodPayload(payload, 'accountCreatedResponse')) {
+						throw new Error('Unknown response');
+					}
+					if ('mnemonic-derived' !== payload.args.account.type) {
+						throw new Error(`Unexpected account type response ${payload.args.account.type}`);
+					}
+					return payload.args.account as MnemonicSerializedUiAccount;
+				}),
+			),
+		);
+	}
+
+	public unlockAccountSource({ id, type, password }: MethodPayload<'unlockAccountSource'>['args']) {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'unlockAccountSource'>>({
+					type: 'method-payload',
+					method: 'unlockAccountSource',
+					args: { id, type, password },
 				}),
 			).pipe(take(1)),
 		);

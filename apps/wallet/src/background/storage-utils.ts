@@ -1,9 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { v4 as uuidV4 } from 'uuid';
 import Browser from 'webextension-polyfill';
+import {
+	decrypt,
+	encrypt,
+	getRandomPassword,
+	makeEphemeraPassword,
+	type Serializable,
+} from '_src/shared/cryptography/keystore';
 
 import type { Storage } from 'webextension-polyfill';
+
+/**
+ * [NOTE: not a complete list]
+ * Keys that can be found in local storage
+ */
+export type LocalStorageKey = 'active-account-id-key';
 
 const SESSION_STORAGE: Storage.LocalStorageArea | null =
 	// @ts-expect-error chrome
@@ -11,7 +25,7 @@ const SESSION_STORAGE: Storage.LocalStorageArea | null =
 
 async function getFromStorage<T>(
 	storage: Storage.LocalStorageArea,
-	key: string,
+	key: LocalStorageKey | string, // TODO: try to log all LocalStorage keys and remove string
 	defaultValue: T | null = null,
 ): Promise<T | null> {
 	return (await storage.get({ [key]: defaultValue }))[key];
@@ -51,4 +65,35 @@ export async function setToSessionStorage<T>(...params: SetParams<T>) {
 		return;
 	}
 	return setToStorage<T>(SESSION_STORAGE, ...params);
+}
+export async function removeFromSessionStorage(key: string) {
+	if (!SESSION_STORAGE) {
+		return;
+	}
+	await sessionStorage.removeItem(key);
+}
+export async function setToSessionStorageEncrypted<T extends Serializable>(key: string, value: T) {
+	const random = getRandomPassword();
+	await setToSessionStorage(key, {
+		random,
+		data: await encrypt(makeEphemeraPassword(random), value),
+	});
+}
+export async function getEncryptedFromSessionStorage<T extends Serializable>(key: string) {
+	const encryptedData = await getFromSessionStorage<{ random: string; data: string }>(key, null);
+	if (!encryptedData) {
+		return null;
+	}
+	try {
+		return decrypt<T>(makeEphemeraPassword(encryptedData.random), encryptedData.data);
+	} catch (e) {
+		return null;
+	}
+}
+
+/**
+ * Generates a unique id using uuid, that can be used as a key for storage data
+ */
+export function makeUniqueKey() {
+	return uuidV4();
 }

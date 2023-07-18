@@ -7,6 +7,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { useInitialPageView } from './hooks/useInitialPageView';
 import { ProtectAccountPage } from './pages/accounts/ProtectAccountPage';
+import { AccountsDev } from './pages/accounts-dev';
 import { TokensV2 } from './pages/enoki-onboarding/TokensV2';
 import AssetsPage from './pages/home/assets';
 import { QredoConnectInfoPage } from './pages/qredo-connect/QredoConnectInfoPage';
@@ -45,6 +46,7 @@ import { ImportPage } from '_pages/initialize/import';
 import SelectPage from '_pages/initialize/select';
 import SiteConnectPage from '_pages/site-connect';
 import { setNavVisibility } from '_redux/slices/app';
+import { NEW_ACCOUNTS_ENABLED } from '_src/shared/constants';
 
 const HIDDEN_MENU_PATHS = [
 	'/nft-details',
@@ -72,6 +74,11 @@ const App = () => {
 
 	return (
 		<Routes>
+			{/* this is used only for making dev work on refactoring accounts easier - TODO: remove when work is done ----> */}
+			{process.env.NODE_ENV === 'development' && NEW_ACCOUNTS_ENABLED ? (
+				<Route path="/accounts-dev" element={<AccountsDev />} />
+			) : null}
+			{/* <------ */}
 			<Route path="/*" element={<HomePage />}>
 				<Route path="tokens/*" element={<TokensPage />} />
 				<Route path="nfts/*" element={<AssetsPage />} />
