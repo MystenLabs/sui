@@ -1,0 +1,43 @@
+[package]
+name = "orchestrator"
+version = "0.0.1"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+futures = { workspace = true }
+serde = { workspace = true }
+eyre = { workspace = true }
+reqwest = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+prettytable-rs = { workspace = true }
+thiserror = { workspace = true }
+crossterm = { workspace = true }
+rand = { workspace = true }
+
+# These two dependencies should be part of the worspace
+tokio = { version = "1.28.1", features = ["full"] }
+clap = { version = "4.3.2", features = ["derive"] }
+
+# These dependencies are specific to the orchestrator and we sould minize them
+aws-config = "0.54.1"
+aws-sdk-ec2 = "0.24.0"
+glob = "0.3.1"
+color-eyre = "0.6.2"
+ssh2 = "0.9.4" # TODO: remove this dependency
+
+prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db" }
+
+sui-config = { path = "../sui-config" }
+sui-types = { path = "../sui-types" }
+sui-swarm-config =  { path = "../sui-swarm-config" }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[[bin]]
+name = "orchestrator"
+path = "src/main.rs"

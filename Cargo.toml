@@ -137,6 +137,7 @@ members = [
     "crates/typed-store-derive",
     "crates/workspace-hack",
     "crates/x",
+    "crates/orchestrator",
     "narwhal/config",
     "narwhal/consensus",
     "narwhal/crypto",
