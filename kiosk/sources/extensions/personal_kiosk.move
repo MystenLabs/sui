@@ -19,6 +19,8 @@ module kiosk::personal_kiosk {
     const EIncorrectOwnedObject: u64 = 1;
     /// Trying to get the owner of a non-personal Kiosk.
     const EKioskNotOwned: u64 = 2;
+    /// Trying to make a someone else's Kiosk "personal".
+    const EWrongKiosk: u64 = 3;
 
     /// A key-only wrapper for the KioskOwnerCap. Makes sure that the Kiosk can
     /// not be traded altogether with its contents.
@@ -45,6 +47,8 @@ module kiosk::personal_kiosk {
     public fun new(
         kiosk: &mut Kiosk, cap: KioskOwnerCap, ctx: &mut TxContext
     ): PersonalKioskCap {
+        assert!(kiosk::has_access(kiosk, &cap), EWrongKiosk);
+
         let owner = sender(ctx);
 
         // set the owner property of the Kiosk
