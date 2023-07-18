@@ -79,11 +79,16 @@ pub struct SourceInfo {
     pub source: Option<String>,
 }
 
-#[derive(Eq, PartialEq, Clone, Deserialize, Debug, Ord, PartialOrd)]
+#[derive(Eq, PartialEq, Clone, Default, Deserialize, Debug, Ord, PartialOrd)]
 pub enum Network {
+    #[default]
+    #[serde(alias = "mainnet", alias = "Mainnet")]
     Mainnet,
+    #[serde(alias = "testnet", alias = "Testnet")]
     Testnet,
+    #[serde(alias = "devnet", alias = "Devnet")]
     Devnet,
+    #[serde(alias = "localnet", alias = "Localnet")]
     Localnet,
 }
 
@@ -187,10 +192,8 @@ pub struct CloneCommand {
 impl CloneCommand {
     pub fn new(p: &RepositorySource, dest: &Path) -> anyhow::Result<CloneCommand> {
         let repo_name = repo_name_from_url(&p.repository)?;
-        let dest = dest
-            .join(p.network.as_ref().unwrap_or(&Network::Mainnet).to_string())
-            .join(repo_name)
-            .into_os_string();
+        let network = p.network.clone().unwrap_or_default().to_string();
+        let dest = dest.join(network).join(repo_name).into_os_string();
 
         macro_rules! ostr {
             ($arg:expr) => {
@@ -290,11 +293,11 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
         match p {
             PackageSources::Repository(r) => {
                 let repo_name = repo_name_from_url(&r.repository)?;
-                let network_name = r.network.clone().unwrap_or(Network::Mainnet).to_string();
+                let network_name = r.network.clone().unwrap_or_default().to_string();
                 let packages_dir = dir.join(network_name).join(repo_name);
                 for p in &r.paths {
                     let package_path = packages_dir.join(p).clone();
-                    let network = r.network.clone().unwrap_or(Network::Mainnet);
+                    let network = r.network.clone().unwrap_or_default();
                     info!("verifying {p}");
                     let t =
                         tokio::spawn(async move { verify_package(&network, package_path).await });
@@ -304,7 +307,7 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
             PackageSources::Directory(packages_dir) => {
                 for p in &packages_dir.paths {
                     let package_path = PathBuf::from(p);
-                    let network = packages_dir.network.clone().unwrap_or(Network::Mainnet);
+                    let network = packages_dir.network.clone().unwrap_or_default();
                     info!("verifying {p}");
                     let t =
                         tokio::spawn(async move { verify_package(&network, package_path).await });

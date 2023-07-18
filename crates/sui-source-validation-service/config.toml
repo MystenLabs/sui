@@ -3,7 +3,7 @@ source = "Repository"
 [packages.values]
 repository = "https://github.com/mystenlabs/sui"
 branch = "framework/mainnet"
-network = "Mainnet"
+network = "mainnet"
 paths = [
     "crates/sui-framework/packages/deepbook",
     "crates/sui-framework/packages/move-stdlib",
@@ -16,7 +16,7 @@ source = "Repository"
 [packages.values]
 repository = "https://github.com/mystenlabs/sui"
 branch = "framework/testnet"
-network = "Testnet"
+network = "testnet"
 paths = [
     "crates/sui-framework/packages/deepbook",
     "crates/sui-framework/packages/move-stdlib",
