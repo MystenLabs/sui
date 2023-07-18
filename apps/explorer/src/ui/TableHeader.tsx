@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Heading, type HeadingProps } from '@mysten/ui';
 import { type ReactNode } from 'react';
-
-import { Heading, type HeadingProps } from './Heading';
 
 export interface TableHeaderProps extends Pick<HeadingProps, 'as'> {
 	children: ReactNode;

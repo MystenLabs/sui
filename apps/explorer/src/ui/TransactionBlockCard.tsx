@@ -2,14 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ChevronRight12, ChevronRight16 } from '@mysten/icons';
+import { Heading, Text } from '@mysten/ui';
 import * as Collapsible from '@radix-ui/react-collapsible';
 import clsx from 'clsx';
 import { useState, type ReactNode } from 'react';
 
 import { Card, type CardProps } from '~/ui/Card';
 import { Divider } from '~/ui/Divider';
-import { Heading } from '~/ui/Heading';
-import { Text } from '~/ui/Text';
 
 type Size = 'md' | 'sm';
 

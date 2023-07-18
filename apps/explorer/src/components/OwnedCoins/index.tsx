@@ -2,13 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetAllBalances } from '@mysten/core';
+import { Heading, Text, LoadingIndicator } from '@mysten/ui';
 import { useState } from 'react';
 
 import OwnedCoinView from './OwnedCoinView';
-import { Heading } from '~/ui/Heading';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Pagination } from '~/ui/Pagination';
-import { Text } from '~/ui/Text';
 
 export const COINS_PER_PAGE: number = 6;
 
@@ -23,7 +21,7 @@ export function OwnedCoins({ id }: { id: string }): JSX.Element {
 	return (
 		<div>
 			{isLoading ? (
-				<LoadingSpinner />
+				<LoadingIndicator />
 			) : (
 				<div className="flex flex-col gap-4 pt-5 text-left">
 					<Heading color="steel-darker" variant="heading4/semibold">

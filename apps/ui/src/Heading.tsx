@@ -72,6 +72,7 @@ export interface HeadingProps extends Omit<HeadingStylesProps, 'size' | 'weight'
 	/**
 	 * The HTML element that will be rendered.
 	 * By default, we render a "div" in order to separate presentational styles from semantic markup.
+	 * TODO: Consider moving this to asChild instead.
 	 */
 	as?: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' | 'div';
 	children: ReactNode;

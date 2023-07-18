@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetObject } from '@mysten/core';
+import { LoadingIndicator } from '@mysten/ui';
 import { useParams } from 'react-router-dom';
 
 import { translate, type DataType } from './ObjectResultType';
@@ -10,7 +11,6 @@ import { TokenView } from './views/TokenView';
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import { PageLayout } from '~/components/Layout/PageLayout';
 import { Banner } from '~/ui/Banner';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { PageHeader } from '~/ui/PageHeader';
 
 const PACKAGE_TYPE_NAME = 'Move Package';
@@ -36,7 +36,7 @@ export function ObjectResult() {
 			<PageLayout
 				content={
 					<div className="flex w-full items-center justify-center">
-						<LoadingSpinner text="Loading data" />
+						<LoadingIndicator text="Loading data" />
 					</div>
 				}
 			/>

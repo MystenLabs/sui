@@ -6,16 +6,18 @@ import { Fragment } from 'react';
 
 import { Text, type TextProps } from '../Text';
 
-export default {
+const meta = {
 	component: Text,
-} as Meta;
+} satisfies Meta<typeof Text>;
 
-interface StoryProps {
+export default meta;
+
+type Story = StoryObj<{
 	variants: TextProps['variant'][];
 	italic?: boolean;
-}
+}>;
 
-export const Body: StoryObj<StoryProps> = {
+export const Body: Story = {
 	render: ({ variants, italic }) => (
 		<div>
 			{variants.map((variant) => (
@@ -39,7 +41,7 @@ export const Body: StoryObj<StoryProps> = {
 	},
 };
 
-export const Subtitle: StoryObj<StoryProps> = {
+export const Subtitle: Story = {
 	...Body,
 	args: {
 		variants: [
@@ -53,7 +55,7 @@ export const Subtitle: StoryObj<StoryProps> = {
 	},
 };
 
-export const Caption: StoryObj<StoryProps> = {
+export const Caption: Story = {
 	...Body,
 	args: {
 		variants: [

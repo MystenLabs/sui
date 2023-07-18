@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Heading } from '@mysten/ui';
 import clsx from 'clsx';
 import { Fragment } from 'react';
-
-import { Heading } from '~/ui/Heading';
 
 export type Gradient = {
 	deg?: number;

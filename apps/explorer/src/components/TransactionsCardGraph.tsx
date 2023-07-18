@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { formatAmount, formatDate, useGetTotalTransactionBlocks, useRpcClient } from '@mysten/core';
+import { Heading, Text, LoadingIndicator } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 import { ParentSize } from '@visx/responsive';
 import clsx from 'clsx';
@@ -10,9 +11,6 @@ import { AreaGraph } from './AreaGraph';
 import { FormattedStatsAmount } from './HomeMetrics/FormattedStatsAmount';
 import { ErrorBoundary } from './error-boundary/ErrorBoundary';
 import { Card } from '~/ui/Card';
-import { Heading } from '~/ui/Heading';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
-import { Text } from '~/ui/Text';
 
 function TooltipContent({
 	data: { epochTotalTransactions, epochStartTimestamp, epoch },
@@ -90,7 +88,7 @@ export function TransactionsCardGraph() {
 				>
 					{isLoading ? (
 						<div className="flex flex-col items-center gap-1">
-							<LoadingSpinner />
+							<LoadingIndicator />
 							<Text color="steel" variant="body/medium">
 								loading data
 							</Text>

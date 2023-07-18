@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { EyeClose16, NftTypeImage24 } from '@mysten/icons';
+import { LoadingIndicator } from '@mysten/ui';
 import { cva, cx, type VariantProps } from 'class-variance-authority';
 import clsx from 'clsx';
 import { useEffect, useState } from 'react';
 
-import { LoadingSpinner } from '../LoadingSpinner';
 import useImage from '~/hooks/useImage';
 import { VISIBILITY } from '~/hooks/useImageMod';
 
@@ -76,7 +76,7 @@ function BaseImage({
 			)}
 		>
 			{status === 'loading' ? (
-				<LoadingSpinner />
+				<LoadingIndicator />
 			) : status === 'loaded' ? (
 				isBlurred && (
 					<div

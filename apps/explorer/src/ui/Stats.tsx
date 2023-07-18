@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Heading, Text } from '@mysten/ui';
 import clsx from 'clsx';
 
 import { ReactComponent as InfoSvg } from './icons/info_10x10.svg';
-import { Heading } from '~/ui/Heading';
-import { Text } from '~/ui/Text';
 import { Tooltip } from '~/ui/Tooltip';
 import { ampli } from '~/utils/analytics/ampli';
 

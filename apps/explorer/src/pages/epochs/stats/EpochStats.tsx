@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Heading } from '@mysten/ui';
 import { type ReactNode } from 'react';
 
 import { Card } from '~/ui/Card';
-import { Heading } from '~/ui/Heading';
 
 interface EpochStatsProps {
 	label: string;

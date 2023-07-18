@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '@mysten/core';
+import { Text, LoadingIndicator } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 
@@ -11,10 +12,8 @@ import { SuiAmount } from '~/components/Table/SuiAmount';
 import { Banner } from '~/ui/Banner';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { EpochLink } from '~/ui/InternalLink';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { PageHeader } from '~/ui/PageHeader';
 import { TabHeader, Tabs, TabsContent, TabsList, TabsTrigger } from '~/ui/Tabs';
-import { Text } from '~/ui/Text';
 
 export default function CheckpointDetail() {
 	const { id } = useParams<{ id: string }>();
@@ -33,7 +32,7 @@ export default function CheckpointDetail() {
 						There was an issue retrieving data for checkpoint: {id}
 					</Banner>
 				) : isLoading ? (
-					<LoadingSpinner />
+					<LoadingIndicator />
 				) : (
 					<div className="flex flex-col space-y-12">
 						<PageHeader title={data.digest} type="Checkpoint" />

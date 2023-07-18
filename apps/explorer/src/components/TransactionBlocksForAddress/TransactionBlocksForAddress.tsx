@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type TransactionFilter } from '@mysten/sui.js';
+import { Heading } from '@mysten/ui';
 import { useReducer, useState } from 'react';
 
 import { genTableDataFromTxData } from '../transactions/TxCardUtils';
@@ -9,7 +10,6 @@ import {
 	DEFAULT_TRANSACTIONS_LIMIT,
 	useGetTransactionBlocks,
 } from '~/hooks/useGetTransactionBlocks';
-import { Heading } from '~/ui/Heading';
 import { Pagination } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { RadioGroup, RadioOption } from '~/ui/Radio';

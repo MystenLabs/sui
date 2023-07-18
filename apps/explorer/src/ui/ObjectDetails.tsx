@@ -1,14 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { ArrowUpRight16, MediaPlay16 } from '@mysten/icons';
+import { Text, Heading } from '@mysten/ui';
 import { cva } from 'class-variance-authority';
 import clsx from 'clsx';
 import { useState } from 'react';
 
-import { Heading } from './Heading';
 import { ObjectLink } from './InternalLink';
 import { ObjectModal } from './Modal/ObjectModal';
-import { Text } from './Text';
 import { Image } from './image/Image';
 
 const imageStyles = cva(['cursor-pointer z-0 flex-shrink-0 relative'], {

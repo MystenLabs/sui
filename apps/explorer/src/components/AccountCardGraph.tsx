@@ -3,6 +3,7 @@
 
 import { formatAmount, formatDate } from '@mysten/core';
 import { type AllEpochsAddressMetrics } from '@mysten/sui.js';
+import { Heading, LoadingIndicator, Text } from '@mysten/ui';
 import { ParentSize } from '@visx/responsive';
 import clsx from 'clsx';
 import { useMemo } from 'react';
@@ -13,9 +14,6 @@ import { ErrorBoundary } from './error-boundary/ErrorBoundary';
 import { useGetAddressMetrics } from '~/hooks/useGetAddressMetrics';
 import { useGetAllEpochAddressMetrics } from '~/hooks/useGetAllEpochAddressMetrics';
 import { Card } from '~/ui/Card';
-import { Heading } from '~/ui/Heading';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
-import { Text } from '~/ui/Text';
 
 const graphDataField = 'cumulativeAddresses' as const;
 const graphDataText = 'Total accounts';
@@ -81,7 +79,7 @@ export function AccountsCardGraph() {
 				>
 					{isLoading ? (
 						<div className="flex flex-col items-center gap-1">
-							<LoadingSpinner />
+							<LoadingIndicator />
 							<Text color="steel" variant="body/medium">
 								loading data
 							</Text>

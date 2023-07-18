@@ -15,6 +15,7 @@ import {
 	type DisplayFieldsResponse,
 	parseStructTag,
 } from '@mysten/sui.js';
+import { Text } from '@mysten/ui';
 import * as Collapsible from '@radix-ui/react-collapsible';
 import clsx from 'clsx';
 import { useState, type ReactNode } from 'react';
@@ -22,7 +23,6 @@ import { useState, type ReactNode } from 'react';
 import { ObjectDisplay } from './ObjectDisplay';
 import { ExpandableList, ExpandableListControl, ExpandableListItems } from '~/ui/ExpandableList';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
-import { Text } from '~/ui/Text';
 import { TransactionBlockCard, TransactionBlockCardSection } from '~/ui/TransactionBlockCard';
 
 enum ItemLabels {

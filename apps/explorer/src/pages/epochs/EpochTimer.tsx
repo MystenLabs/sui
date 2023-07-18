@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Text } from '@mysten/ui';
+
 import { useEpochProgress } from '~/pages/epochs/utils';
 import { ProgressCircle } from '~/ui/ProgressCircle';
-import { Text } from '~/ui/Text';
 
 export function EpochTimer() {
 	const { epoch, progress, label } = useEpochProgress();

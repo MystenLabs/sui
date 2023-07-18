@@ -7,11 +7,10 @@ import {
 	useFormatCoin,
 	type BalanceChange,
 } from '@mysten/core';
+import { Heading, Text } from '@mysten/ui';
 
 import { CoinsStack } from '~/ui/CoinsStack';
-import { Heading } from '~/ui/Heading';
 import { AddressLink } from '~/ui/InternalLink';
-import { Text } from '~/ui/Text';
 import { TransactionBlockCard, TransactionBlockCardSection } from '~/ui/TransactionBlockCard';
 
 interface BalanceChangesProps {

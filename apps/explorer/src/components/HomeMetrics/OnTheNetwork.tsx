@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { CoinFormat, formatBalance, useGetReferenceGasPrice } from '@mysten/core';
+import { Heading } from '@mysten/ui';
 
 import { FormattedStatsAmount, StatsWrapper } from './FormattedStatsAmount';
 import { useGetNetworkMetrics } from '~/hooks/useGetNetworkMetrics';
 import { Card } from '~/ui/Card';
 import { Divider } from '~/ui/Divider';
-import { Heading } from '~/ui/Heading';
 
 export function OnTheNetwork() {
 	const { data: networkMetrics } = useGetNetworkMetrics();

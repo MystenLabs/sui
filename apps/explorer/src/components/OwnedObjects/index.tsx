@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetKioskContents, useGetOwnedObjects } from '@mysten/core';
+import { LoadingIndicator } from '@mysten/ui';
 import { useMemo, useState } from 'react';
 
 import OwnedObject from './OwnedObject';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Pagination, useCursorPagination } from '~/ui/Pagination';
 import { RadioGroup, RadioOption } from '~/ui/Radio';
 
@@ -50,7 +50,7 @@ export function OwnedObjects({ id }: { id: string }) {
 				))}
 			</RadioGroup>
 			{isFetching ? (
-				<LoadingSpinner />
+				<LoadingIndicator />
 			) : (
 				<>
 					<div className="flex max-h-80 flex-col overflow-auto">

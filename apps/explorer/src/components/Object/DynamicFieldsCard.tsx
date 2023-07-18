@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetDynamicFields, useOnScreen } from '@mysten/core';
+import { LoadingIndicator } from '@mysten/ui';
 import { useRef, useEffect } from 'react';
 
 import { UnderlyingObjectCard } from './UnderlyingObjectCard';
 import { DisclosureBox } from '~/ui/DisclosureBox';
 import { ObjectLink } from '~/ui/InternalLink';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { TabHeader } from '~/ui/Tabs';
 
 export function DynamicFieldsCard({ id }: { id: string }) {
@@ -27,7 +27,7 @@ export function DynamicFieldsCard({ id }: { id: string }) {
 	if (isInitialLoading) {
 		return (
 			<div className="mt-1 flex w-full justify-center">
-				<LoadingSpinner />
+				<LoadingIndicator />
 			</div>
 		);
 	}
@@ -72,7 +72,7 @@ export function DynamicFieldsCard({ id }: { id: string }) {
 					<div ref={observerElem}>
 						{isSpinnerVisible ? (
 							<div className="mt-1 flex w-full justify-center">
-								<LoadingSpinner text="Loading data" />
+								<LoadingIndicator text="Loading data" />
 							</div>
 						) : null}
 					</div>
