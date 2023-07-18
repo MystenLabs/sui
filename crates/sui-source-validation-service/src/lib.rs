@@ -358,9 +358,10 @@ pub fn serve(app_state: AppState) -> anyhow::Result<Server<AddrIncoming, IntoMak
 
 #[derive(Deserialize)]
 pub struct Request {
+    #[serde(default)]
+    network: Network,
     address: String,
     module: String,
-    network: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -408,14 +409,6 @@ async fn api_route(
         }
         Some(_) => (),
         None => info!("No version set, using {SUI_SOURCE_VALIDATION_VERSION}"),
-    };
-
-    let network = match network.as_deref() {
-        Some("mainnet") => Network::Mainnet,
-        Some("testnet") => Network::Testnet,
-        Some("devnet") => Network::Devnet,
-        Some("localnet") => Network::Localnet,
-        _ => Network::Mainnet,
     };
 
     let symbol = Symbol::from(module);
