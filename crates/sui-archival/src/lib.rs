@@ -312,6 +312,34 @@ pub async fn verify_archive_with_genesis_config(
     verify_archive_with_local_store(store, remote_store_config, concurrency, interactive).await
 }
 
+pub async fn verify_archive_with_checksums(
+    remote_store_config: ObjectStoreConfig,
+    concurrency: usize,
+) -> Result<()> {
+    let metrics = ArchiveReaderMetrics::new(&Registry::default());
+    let config = ArchiveReaderConfig {
+        remote_store_config,
+        download_concurrency: NonZeroUsize::new(concurrency).unwrap(),
+        use_for_pruning_watermark: false,
+    };
+    let archive_reader = ArchiveReader::new(config, &metrics)?;
+    archive_reader.sync_manifest_once().await?;
+    let manifest = archive_reader.get_manifest().await?;
+    info!(
+        "Next checkpoint in archive store: {}",
+        manifest.next_checkpoint_seq_num()
+    );
+
+    let file_metadata = archive_reader.verify_manifest(manifest).await?;
+    // Account for both summary and content files
+    let num_files = file_metadata.len() * 2;
+    archive_reader
+        .verify_file_consistency(file_metadata)
+        .await?;
+    info!("All {} files are valid", num_files);
+    Ok(())
+}
+
 pub async fn verify_archive_with_local_store<S>(
     store: S,
     remote_store_config: ObjectStoreConfig,
