@@ -58,7 +58,7 @@ When you define a module, specify the module name (`coin`) preceded by the name 
 
 For example, if you have a published package "P", you cannot publish an entirely different package also named "P". At the same time you can have module "P1::M1", "P2::M1", and "P1::M2" but not another, say, "P1::M1" in the system at the same time.
 
-While you can't name different packages the same, you can upgrade a package on chain with updated code using the same package name.  
+While you can't name different packages the same, you can upgrade a package on chain with updated code using the same package name.
 
 In addition to having a presence at the source code level, as discussed in [Sui Move code organization](#move-code-organization), a
 package in Sui is also a Sui object and must have a unique numeric ID in addition to a unique name, which is assigned in the manifest file:
@@ -137,7 +137,7 @@ that it will do what it is intended to do.
 In general, an entry function must satisfy the following properties:
 
 - Has the `entry` modifier. The visibility does not matter. The function can be `public`, `public(friend)`, or `internal`.
-- Has no return value
+- All return types are non-reference types with `drop`.
 - (Optional) Has a mutable reference to an instance of the `TxContext` struct defined in the [TxContext module](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/tx_context.move) as the last parameter.
 
 More concretely, the `transfer` function is `public`, has no return value, and has three parameters:
