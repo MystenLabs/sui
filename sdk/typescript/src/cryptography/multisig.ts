@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64, toB64 } from '@mysten/bcs';
-import type { SerializedSignature, SignaturePubkeyPair, SignatureScheme } from './signature.js';
+import type { SerializedSignature, SignatureScheme } from './signature.js';
 import { SIGNATURE_SCHEME_TO_FLAG } from './signature.js';
+import type { SignaturePubkeyPair } from './utils.js';
 // eslint-disable-next-line import/no-cycle
 import { toSingleSignaturePubkeyPair } from './utils.js';
 import type { PublicKey } from './publickey.js';
@@ -15,7 +16,6 @@ import { Secp256k1PublicKey } from '../keypairs/secp256k1/publickey.js';
 import { Secp256r1PublicKey } from '../keypairs/secp256r1/publickey.js';
 import { builder } from '../builder/bcs.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
-import { IntentScope, messageWithIntent } from './intent.js';
 
 export type PubkeyWeightPair = {
 	pubKey: PublicKey;
@@ -122,62 +122,16 @@ export function combinePartialSigs(
 
 /// Decode a multisig signature into a list of signatures, public keys and flags.
 export function decodeMultiSig(signature: string): SignaturePubkeyPair[] {
-	const multisig = parseMultiSig(signature);
-	return toSignaturePubkeyPairs(multisig);
-}
-
-/// Verify a multisig signature against the message it commits to.
-export function verifyMultisig(multisig: MultiSig, tx_bytes: Uint8Array): boolean {
-	let digest = blake2b(messageWithIntent(IntentScope.TransactionData, tx_bytes), { dkLen: 32 });
-	let threhsold = multisig.multisig_pk.threshold;
-	let weight = 0;
-	let res;
-	for (const p of toSignaturePubkeyPairs(multisig)) {
-		switch (p.signatureScheme) {
-			case 'ED25519':
-				res = (p.pubKey as Ed25519PublicKey).verify(digest, p.signature);
-				break;
-			case 'Secp256k1':
-				res = (p.pubKey as Secp256k1PublicKey).verify(digest, p.signature);
-				break;
-			case 'Secp256r1':
-				res = (p.pubKey as Secp256r1PublicKey).verify(digest, p.signature);
-				break;
-			default:
-				throw new Error('Unsupported signature scheme');
-		}
-
-		if (!res) {
-			return false;
-		} else {
-			if (!p.weight) {
-				throw new Error('Invalid weight in multisig');
-			} else {
-				weight += p.weight;
-			}
-		}
-	}
-	return weight >= threhsold;
-}
-
-/// Parse a Base64 encoded multisig signature to its struct.
-export function parseMultiSig(signature: SerializedSignature): MultiSig {
 	const parsed = fromB64(signature);
 	if (parsed.length < 1 || parsed[0] !== SIGNATURE_SCHEME_TO_FLAG['MultiSig']) {
 		throw new Error('Invalid MultiSig flag');
 	}
 	const multisig: MultiSig = builder.de('MultiSig', parsed.slice(1));
-	return multisig;
-}
-
-/// Parse the list of signatures, public keys and their weights in a multisig signature.
-export function toSignaturePubkeyPairs(multisig: MultiSig): SignaturePubkeyPair[] {
 	let res: SignaturePubkeyPair[] = new Array(multisig.sigs.length);
 	for (let i = 0; i < multisig.sigs.length; i++) {
 		let s: CompressedSignature = multisig.sigs[i];
 		let pk_index = as_indices(multisig.bitmap).at(i);
-		let pair = multisig.multisig_pk.pk_map[pk_index as number];
-		let pk_bytes = Object.values(pair.pubKey)[0];
+		let pk_bytes = Object.values(multisig.multisig_pk.pk_map[pk_index as number].pubKey)[0];
 		const scheme = Object.keys(s)[0] as SignatureScheme;
 
 		if (scheme === 'MultiSig') {
@@ -196,7 +150,7 @@ export function toSignaturePubkeyPairs(multisig: MultiSig): SignaturePubkeyPair[
 			signatureScheme: scheme,
 			signature: Uint8Array.from(Object.values(s)[0]),
 			pubKey: new PublicKey(pk_bytes),
-			weight: pair.weight,
+			weight: multisig.multisig_pk.pk_map[pk_index as number].weight,
 		};
 	}
 	return res;

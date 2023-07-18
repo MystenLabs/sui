@@ -7,14 +7,13 @@ import {
 	PRIVATE_KEY_SIZE,
 	Secp256k1Keypair,
 	TransactionBlock,
-	parseSerializedSignature,
 	verifyMessage,
 } from '../../../src';
 import { describe, it, expect } from 'vitest';
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { fromB64, toB58, toB64 } from '@mysten/bcs';
 import { sha256 } from '@noble/hashes/sha256';
-import { verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';
+import { parseSignature, verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';
 
 // Test case from https://github.com/rust-bitcoin/rust-secp256k1/blob/master/examples/sign_verify.rs#L26
 const VALID_SECP256K1_SECRET_KEY = [
@@ -180,7 +179,7 @@ describe('secp256k1-keypair', () => {
 		const bytes = await txb.build();
 
 		const serializedSignature = (await keypair.signTransactionBlock(bytes)).signature;
-		const signature = parseSerializedSignature(serializedSignature);
+		const signature = parseSignature(serializedSignature);
 
 		expect(await keypair.getPublicKey().verifyTransactionBlock(bytes, signature.signature)).toEqual(
 			true,
@@ -196,7 +195,7 @@ describe('secp256k1-keypair', () => {
 		const message = new TextEncoder().encode('hello world');
 
 		const serializedSignature = (await keypair.signPersonalMessage(message)).signature;
-		const signature = parseSerializedSignature(serializedSignature);
+		const signature = parseSignature(serializedSignature);
 
 		expect(
 			await keypair.getPublicKey().verifyPersonalMessage(message, signature.signature),

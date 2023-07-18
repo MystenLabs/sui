@@ -9,13 +9,14 @@ export type SignatureScheme = 'ED25519' | 'Secp256k1' | 'Secp256r1' | 'MultiSig'
 /**
  * Pair of signature and corresponding public key
  */
-export type SignaturePubkeyPair = {
+export type SerializeSignatureInput = {
 	signatureScheme: SignatureScheme;
 	/** Base64-encoded signature */
 	signature: Uint8Array;
+	/** @deprecated use publicKey instead */
+	pubKey?: PublicKey;
 	/** Base64-encoded public key */
-	pubKey: PublicKey;
-	weight?: number;
+	publicKey?: PublicKey;
 };
 
 /**
@@ -50,8 +51,13 @@ export function toSerializedSignature({
 	signature,
 	signatureScheme,
 	pubKey,
-}: SignaturePubkeyPair): SerializedSignature {
-	const pubKeyBytes = pubKey.toBytes();
+	publicKey = pubKey,
+}: SerializeSignatureInput): SerializedSignature {
+	if (!publicKey) {
+		throw new Error('`publicKey` is required');
+	}
+
+	const pubKeyBytes = publicKey.toBytes();
 	const serializedSignature = new Uint8Array(1 + signature.length + pubKeyBytes.length);
 	serializedSignature.set([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
 	serializedSignature.set(signature, 1);
@@ -64,6 +70,13 @@ export function parseSerializedSignature(serializedSignature: SerializedSignatur
 
 	const signatureScheme =
 		SIGNATURE_FLAG_TO_SCHEME[bytes[0] as keyof typeof SIGNATURE_FLAG_TO_SCHEME];
+
+	if (signatureScheme === 'MultiSig') {
+		return {
+			signatureScheme,
+			bytes,
+		};
+	}
 
 	if (!(signatureScheme in SIGNATURE_SCHEME_TO_SIZE)) {
 		throw new Error('Unsupported signature scheme');
@@ -78,5 +91,6 @@ export function parseSerializedSignature(serializedSignature: SerializedSignatur
 		signatureScheme,
 		signature,
 		publicKey,
+		bytes,
 	};
 }

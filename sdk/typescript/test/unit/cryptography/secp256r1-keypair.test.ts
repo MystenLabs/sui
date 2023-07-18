@@ -6,13 +6,12 @@ import {
 	PRIVATE_KEY_SIZE,
 	Secp256r1Keypair,
 	TransactionBlock,
-	parseSerializedSignature,
 } from '../../../src';
 import { describe, it, expect } from 'vitest';
 import { secp256r1 } from '@noble/curves/p256';
 import { fromB64, toB58, toB64 } from '@mysten/bcs';
 import { sha256 } from '@noble/hashes/sha256';
-import { verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';
+import { parseSignature, verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';
 
 const VALID_SECP256R1_SECRET_KEY = [
 	66, 37, 141, 205, 161, 76, 241, 17, 198, 2, 184, 151, 27, 140, 200, 67, 233, 30, 70, 202, 144, 81,
@@ -183,7 +182,7 @@ describe('secp256r1-keypair', () => {
 		const bytes = await txb.build();
 
 		const serializedSignature = (await keypair.signTransactionBlock(bytes)).signature;
-		const signature = parseSerializedSignature(serializedSignature);
+		const signature = parseSignature(serializedSignature);
 
 		expect(await keypair.getPublicKey().verifyTransactionBlock(bytes, signature.signature)).toEqual(
 			true,
@@ -196,7 +195,7 @@ describe('secp256r1-keypair', () => {
 		const message = new TextEncoder().encode('hello world');
 
 		const serializedSignature = (await keypair.signPersonalMessage(message)).signature;
-		const signature = parseSerializedSignature(serializedSignature);
+		const signature = parseSignature(serializedSignature);
 
 		expect(
 			await keypair.getPublicKey().verifyPersonalMessage(message, signature.signature),

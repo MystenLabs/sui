@@ -9,10 +9,9 @@ import {
 	IntentScope,
 	PRIVATE_KEY_SIZE,
 	TransactionBlock,
-	parseSerializedSignature,
 	verifyMessage,
 } from '../../../src';
-import { verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';
+import { parseSignature, verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';
 
 const VALID_SECRET_KEY = 'mdqVWeFekT7pqy5T49+tV12jO0m+ESW7ki4zSU9JiCg=';
 
@@ -141,7 +140,7 @@ describe('ed25519-keypair', () => {
 		const bytes = await txb.build();
 
 		const serializedSignature = (await keypair.signTransactionBlock(bytes)).signature;
-		const signature = parseSerializedSignature(serializedSignature);
+		const signature = parseSignature(serializedSignature);
 
 		expect(await keypair.getPublicKey().verifyTransactionBlock(bytes, signature.signature)).toEqual(
 			true,
@@ -157,7 +156,7 @@ describe('ed25519-keypair', () => {
 		const message = new TextEncoder().encode('hello world');
 
 		const serializedSignature = (await keypair.signPersonalMessage(message)).signature;
-		const signature = parseSerializedSignature(serializedSignature);
+		const signature = parseSignature(serializedSignature);
 
 		expect(
 			await keypair.getPublicKey().verifyPersonalMessage(message, signature.signature),

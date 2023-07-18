@@ -10,3 +10,4 @@ packages:
     - '!sdk/typescript/transactions'
     - '!sdk/typescript/client'
     - '!sdk/typescript/verify'
+    - '!sdk/typescript/multisig'
