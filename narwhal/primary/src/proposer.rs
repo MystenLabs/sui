@@ -327,7 +327,7 @@ impl Proposer {
         // 1 primary in the committee, we use a lower min delay value to increase the chance
         // of committing the leader.
         if self.committee.size() > 1
-            && self.leader_schedule.leader(self.round + 1).id() == self.authority_id
+            && self.committee.leader(self.round + 1).id() == self.authority_id
         {
             Duration::ZERO
         } else {
