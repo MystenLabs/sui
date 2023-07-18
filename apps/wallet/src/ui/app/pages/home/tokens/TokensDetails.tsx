@@ -33,7 +33,6 @@ import { ampli } from '_src/shared/analytics/ampli';
 import { API_ENV } from '_src/shared/api-env';
 import { FEATURES } from '_src/shared/experimentation/features';
 import { AccountSelector } from '_src/ui/app/components/AccountSelector';
-import { useLedgerNotification } from '_src/ui/app/hooks/useLedgerNotification';
 import { usePinnedCoinTypes } from '_src/ui/app/hooks/usePinnedCoinTypes';
 import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
 import PageTitle from '_src/ui/app/shared/PageTitle';
@@ -196,8 +195,6 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	const BullsharkInterstitialEnabled = useFeature<boolean>(
 		FEATURES.BULLSHARK_QUESTS_INTERSTITIAL,
 	).value;
-
-	useLedgerNotification(!BullsharkInterstitialEnabled || interstitialDismissed);
 
 	const { providers } = useOnrampProviders();
 
