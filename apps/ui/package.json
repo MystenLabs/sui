@@ -1,0 +1,54 @@
+{
+	"name": "@mysten/ui",
+	"private": true,
+	"sideEffects": false,
+	"main": "./src/index.ts",
+	"author": "Mysten Labs <build@mystenlabs.com>",
+	"repository": {
+		"type": "git",
+		"url": "github.com:MystenLabs/sui.git"
+	},
+	"license": "Apache-2.0",
+	"exports": {
+		".": {
+			"import": "./src/index.ts",
+			"types": "./src/index.ts"
+		},
+		"./css": {
+			"import": "./src/styles.css"
+		}
+	},
+	"scripts": {
+		"prettier:check": "prettier -c --ignore-unknown .",
+		"prettier:fix": "prettier -w --ignore-unknown .",
+		"eslint:check": "eslint --max-warnings=0 .",
+		"eslint:fix": "pnpm run eslint:check --fix",
+		"lint": "pnpm run eslint:check && pnpm run prettier:check",
+		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
+		"storybook": "storybook dev -p 6006",
+		"build-storybook": "storybook build"
+	},
+	"dependencies": {
+		"@mysten/core": "workspace:*",
+		"@mysten/icons": "workspace:*",
+		"@radix-ui/react-slot": "^1.0.2",
+		"class-variance-authority": "^0.7.0",
+		"react": "^18.2.0",
+		"react-dom": "^18.2.0"
+	},
+	"devDependencies": {
+		"@storybook/addon-a11y": "^7.0.27",
+		"@storybook/addon-essentials": "^7.0.27",
+		"@storybook/addon-interactions": "^7.0.27",
+		"@storybook/addon-links": "^7.0.27",
+		"@storybook/blocks": "^7.0.27",
+		"@storybook/react": "^7.0.27",
+		"@storybook/react-vite": "^7.0.27",
+		"@storybook/testing-library": "^0.2.0",
+		"@types/react": "^18.0.35",
+		"prop-types": "^15.8.1",
+		"storybook": "^7.0.27",
+		"tailwindcss": "^3.3.1",
+		"typescript": "^5.0.4"
+	}
+}

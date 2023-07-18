@@ -5,6 +5,7 @@
     "scripts": {
         "turbo": "turbo",
         "core": "pnpm --filter ./apps/core",
+        "ui": "pnpm --filter ./apps/ui",
         "icons": "pnpm --filter ./apps/icons",
         "explorer": "pnpm --filter ./apps/explorer",
         "wallet": "pnpm --filter ./apps/wallet",
