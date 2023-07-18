@@ -114,6 +114,28 @@ impl Multiaddr {
         }
         Self(new_address)
     }
+
+    pub fn hostname(&self) -> Option<String> {
+        for component in self.iter() {
+            match component {
+                Protocol::Ip4(ip) => return Some(ip.to_string()),
+                Protocol::Ip6(ip) => return Some(ip.to_string()),
+                Protocol::Dns(dns) => return Some(dns.to_string()),
+                _ => (),
+            }
+        }
+        None
+    }
+
+    pub fn port(&self) -> Option<u16> {
+        for component in self.iter() {
+            match component {
+                Protocol::Udp(port) | Protocol::Tcp(port) => return Some(port),
+                _ => (),
+            }
+        }
+        None
+    }
 }
 
 impl std::fmt::Display for Multiaddr {
@@ -298,5 +320,16 @@ mod test {
         let _ = multi_addr_dns
             .to_socket_addr()
             .expect_err("DNS is unsupported");
+    }
+
+    #[test]
+    fn test_get_hostname_port() {
+        let multi_addr_ip4 = Multiaddr(multiaddr!(Ip4([127, 0, 0, 1]), Tcp(10500u16)));
+        assert_eq!(Some("127.0.0.1".to_string()), multi_addr_ip4.hostname());
+        assert_eq!(Some(10500u16), multi_addr_ip4.port());
+
+        let multi_addr_dns = Multiaddr(multiaddr!(Dns("mysten.sui"), Tcp(10501u16)));
+        assert_eq!(Some("mysten.sui".to_string()), multi_addr_dns.hostname());
+        assert_eq!(Some(10501u16), multi_addr_dns.port());
     }
 }
