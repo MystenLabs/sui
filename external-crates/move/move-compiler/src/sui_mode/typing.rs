@@ -18,7 +18,7 @@ use crate::{
     },
     typing::{
         ast as T,
-        core::{ability_not_satisified_tips, ProgramInfo, Subst},
+        core::{ability_not_satisfied_tips, ProgramInfo, Subst},
         visitor::TypingVisitor,
     },
 };
@@ -154,16 +154,14 @@ fn entry_signature(
 }
 
 fn tx_context_kind(sp!(_, last_param_ty_): &Type) -> TxContextKind {
-    let (is_mut, inner_ty) = match last_param_ty_ {
-        Type_::Ref(is_mut, inner_ty) => (*is_mut, &inner_ty.value),
-        _ => return TxContextKind::None,
+    let Type_::Ref(is_mut, inner_ty) = last_param_ty_ else {
+        return TxContextKind::None
     };
-    let inner_name = match inner_ty {
-        Type_::Apply(_, sp!(_, n_), _) => n_,
-        _ => return TxContextKind::None,
+    let Type_::Apply(_, sp!(_, inner_name), _) = &inner_ty.value else {
+        return TxContextKind::None
     };
     if inner_name.is(SUI_ADDR_NAME, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME) {
-        if is_mut {
+        if *is_mut {
             TxContextKind::Mutable
         } else {
             TxContextKind::Immutable
@@ -421,7 +419,7 @@ fn invalid_entry_return_ty<'a>(
 ) {
     let fmsg = format!("Invalid return type for entry function '{}'", name);
     let mut diag = diag!(ENTRY_FUN_SIGNATURE_DIAG, (entry_loc, fmsg));
-    ability_not_satisified_tips(
+    ability_not_satisfied_tips(
         &Subst::empty(),
         &mut diag,
         Ability_::Drop,

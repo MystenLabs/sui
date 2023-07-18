@@ -901,7 +901,7 @@ fn solve_ability_constraint(
             None => format!("'{}' constraint not satisifed", constraint),
         };
         let mut diag = diag!(AbilitySafety::Constraint, (loc, constraint_msg));
-        ability_not_satisified_tips(
+        ability_not_satisfied_tips(
             &context.subst,
             &mut diag,
             constraint.value,
@@ -925,7 +925,7 @@ fn solve_ability_constraint(
     }
 }
 
-pub fn ability_not_satisified_tips<'a>(
+pub fn ability_not_satisfied_tips<'a>(
     subst: &Subst,
     diag: &mut Diagnostic,
     constraint: Ability_,
