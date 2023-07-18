@@ -34,14 +34,14 @@ export abstract class PublicKey {
 	 * Checks if two public keys are equal
 	 */
 	equals(publicKey: PublicKey) {
-		return bytesEqual(this.toBytes(), publicKey.toBytes());
+		return bytesEqual(this.toRawBytes(), publicKey.toRawBytes());
 	}
 
 	/**
 	 * Return the base-64 representation of the public key
 	 */
 	toBase64() {
-		return toB64(this.toBytes());
+		return toB64(this.toRawBytes());
 	}
 
 	/**
@@ -96,9 +96,29 @@ export abstract class PublicKey {
 	}
 
 	/**
+	 * Returns the bytes representation of the public key
+	 * prefixed with the signature scheme flag
+	 */
+	toSuiBytes(): Uint8Array {
+		const rawBytes = this.toRawBytes();
+		const suiBytes = new Uint8Array(rawBytes.length + 1);
+		suiBytes.set([this.flag()]);
+		suiBytes.set(rawBytes, 1);
+
+		return suiBytes;
+	}
+
+	/**
+	 * @deprecated use `toRawBytes` instead.
+	 */
+	toBytes() {
+		return this.toRawBytes();
+	}
+
+	/**
 	 * Return the byte array representation of the public key
 	 */
-	abstract toBytes(): Uint8Array;
+	abstract toRawBytes(): Uint8Array;
 
 	/**
 	 * Return the Sui address associated with this public key

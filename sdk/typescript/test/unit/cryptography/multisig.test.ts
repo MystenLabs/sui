@@ -23,14 +23,17 @@ describe('multisig address and combine sigs', () => {
 		let k3 = Ed25519Keypair.fromSecretKey(new Uint8Array(32).fill(0));
 		let pk3 = k3.getPublicKey();
 
-		const multiSigPublicKey = MultiSigPublicKey.fromPublicKeys(3, [
-			{ publicKey: pk1, weight: 1 },
-			{
-				publicKey: pk2,
-				weight: 2,
-			},
-			{ publicKey: pk3, weight: 3 },
-		]);
+		const multiSigPublicKey = MultiSigPublicKey.fromPublicKeys({
+			threshold: 3,
+			publicKeys: [
+				{ publicKey: pk1, weight: 1 },
+				{
+					publicKey: pk2,
+					weight: 2,
+				},
+				{ publicKey: pk3, weight: 3 },
+			],
+		});
 
 		const data = new Uint8Array([0, 0, 0, 5, 72, 101, 108, 108, 111]);
 

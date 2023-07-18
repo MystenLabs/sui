@@ -52,7 +52,7 @@ export class Secp256r1PublicKey extends PublicKey {
 	/**
 	 * Return the byte array representation of the Secp256r1 public key
 	 */
-	toBytes(): Uint8Array {
+	toRawBytes(): Uint8Array {
 		return this.data;
 	}
 
@@ -83,7 +83,7 @@ export class Secp256r1PublicKey extends PublicKey {
 		return secp256r1.verify(
 			secp256r1.Signature.fromCompact(signature),
 			sha256(message),
-			this.toBytes(),
+			this.toRawBytes(),
 		);
 	}
 }

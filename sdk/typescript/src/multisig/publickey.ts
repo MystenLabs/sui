@@ -90,13 +90,19 @@ export class MultiSigPublicKey extends PublicKey {
 		}
 	}
 
-	static fromPublicKeys(threshold: number, publicKeys: { publicKey: PublicKey; weight: number }[]) {
+	static fromPublicKeys({
+		threshold,
+		publicKeys,
+	}: {
+		threshold: number;
+		publicKeys: { publicKey: PublicKey; weight: number }[];
+	}) {
 		return new MultiSigPublicKey({
 			pk_map: publicKeys.map(({ publicKey, weight }) => {
 				const scheme = SIGNATURE_FLAG_TO_SCHEME[publicKey.flag() as SignatureFlag];
 
 				return {
-					pubKey: { [scheme]: Array.from(publicKey.toBytes()) } as PublicKeyEnum,
+					pubKey: { [scheme]: Array.from(publicKey.toRawBytes()) } as PublicKeyEnum,
 					weight,
 				};
 			}),
@@ -114,7 +120,7 @@ export class MultiSigPublicKey extends PublicKey {
 	/**
 	 * Return the byte array representation of the MultiSig public key
 	 */
-	toBytes(): Uint8Array {
+	toRawBytes(): Uint8Array {
 		return this.rawBytes;
 	}
 
@@ -130,10 +136,10 @@ export class MultiSigPublicKey extends PublicKey {
 		tmp.set(bcs.ser('u16', this.multisigPublicKey.threshold).toBytes(), 1);
 		let i = 3;
 		for (const { publicKey, weight } of this.publicKeys) {
-			tmp.set([publicKey.flag()], i);
-			tmp.set(publicKey.toBytes(), i + 1);
-			tmp.set([weight], i + 1 + publicKey.toBytes().length);
-			i += publicKey.toBytes().length + 2;
+			const bytes = publicKey.toSuiBytes();
+			tmp.set(bytes, i);
+			i += bytes.length;
+			tmp.set([weight], i++);
 		}
 		return normalizeSuiAddress(bytesToHex(blake2b(tmp.slice(0, i), { dkLen: 32 })));
 	}

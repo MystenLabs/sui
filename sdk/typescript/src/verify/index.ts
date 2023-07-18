@@ -1,13 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { builder } from '../builder/bcs.js';
 import type { PublicKey, SerializedSignature, SignatureScheme } from '../cryptography/index.js';
 import { parseSerializedSignature } from '../cryptography/index.js';
 import { Ed25519PublicKey } from '../keypairs/ed25519/publickey.js';
 import { Secp256k1PublicKey } from '../keypairs/secp256k1/publickey.js';
 import { Secp256r1PublicKey } from '../keypairs/secp256r1/publickey.js';
-import type { MultiSigStruct } from '../multisig/publickey.js';
 // eslint-disable-next-line import/no-cycle
 import { MultiSigPublicKey } from '../multisig/publickey.js';
 
@@ -62,11 +60,9 @@ export function parseSignature(signature: SerializedSignature) {
 
 	if (parsedSignature.signatureScheme === 'MultiSig') {
 		const signatureBytes = parsedSignature.bytes.slice(1);
-		const multisig: MultiSigStruct = builder.de('MultiSig', signatureBytes);
 		return {
 			...parsedSignature,
-			multisig,
-			publicKey: new MultiSigPublicKey(multisig.multisig_pk),
+			publicKey: new MultiSigPublicKey(parsedSignature.multisig.multisig_pk),
 			signature: signatureBytes,
 		};
 	}

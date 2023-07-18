@@ -67,9 +67,9 @@ export function toMultiSigAddress(pks: PubkeyWeightPair[], threshold: number): s
 	let i = 3;
 	for (const pk of pks) {
 		tmp.set([pk.pubKey.flag()], i);
-		tmp.set(pk.pubKey.toBytes(), i + 1);
-		tmp.set([pk.weight], i + 1 + pk.pubKey.toBytes().length);
-		i += pk.pubKey.toBytes().length + 2;
+		tmp.set(pk.pubKey.toRawBytes(), i + 1);
+		tmp.set([pk.weight], i + 1 + pk.pubKey.toRawBytes().length);
+		i += pk.pubKey.toRawBytes().length + 2;
 	}
 	return normalizeSuiAddress(bytesToHex(blake2b(tmp.slice(0, i), { dkLen: 32 })));
 }

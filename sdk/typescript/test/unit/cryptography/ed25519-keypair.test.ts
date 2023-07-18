@@ -40,7 +40,7 @@ const TEST_MNEMONIC =
 describe('ed25519-keypair', () => {
 	it('new keypair', () => {
 		const keypair = new Ed25519Keypair();
-		expect(keypair.getPublicKey().toBytes().length).toBe(32);
+		expect(keypair.getPublicKey().toRawBytes().length).toBe(32);
 		expect(2).toEqual(2);
 	});
 
@@ -86,7 +86,7 @@ describe('ed25519-keypair', () => {
 		const isValid = nacl.sign.detached.verify(
 			signData,
 			signature,
-			keypair.getPublicKey().toBytes(),
+			keypair.getPublicKey().toRawBytes(),
 		);
 		expect(isValid).toBeTruthy();
 		expect(keypair.getPublicKey().verify(signData, signature));
@@ -100,7 +100,7 @@ describe('ed25519-keypair', () => {
 		const isValid = nacl.sign.detached.verify(
 			signData,
 			signature,
-			keypair.getPublicKey().toBytes(),
+			keypair.getPublicKey().toRawBytes(),
 		);
 		expect(isValid).toBeTruthy();
 	});
