@@ -218,7 +218,7 @@ dependencies = [
 [[package]]
 name = "anemo-tls"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=ab5ce17a092db03cc1b87923b69d6afb72fd1b64#ab5ce17a092db03cc1b87923b69d6afb72fd1b64"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=e18e9486d38768f897fd3aa4949ce777791f83bb#e18e9486d38768f897fd3aa4949ce777791f83bb"
 dependencies = [
  "anyhow",
  "futures",

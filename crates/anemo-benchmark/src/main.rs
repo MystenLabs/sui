@@ -143,8 +143,8 @@ async fn main() {
     let mut config = anemo::Config::default();
     if args.tls {
         let mut tls_config = anemo::TlsConfig::default();
-        tls_config.socket_send_buffer_size = args.socket_send_buffer_size;
-        tls_config.socket_receive_buffer_size = args.socket_receive_buffer_size;
+        tls_config.socket_send_buffer_size = args.socket_send_buffer_size.map(|value| value.try_into().unwrap());
+        tls_config.socket_receive_buffer_size = args.socket_receive_buffer_size.map(|value| value.try_into().unwrap());
         config.transport = Some(anemo::TransportConfig::Tls(tls_config))
     } else {
         let mut quic_config = anemo::QuicConfig::default();
