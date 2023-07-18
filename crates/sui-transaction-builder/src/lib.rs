@@ -6,7 +6,6 @@ use std::result::Result;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use anyhow::{anyhow, bail, ensure, Ok};
 use async_trait::async_trait;
 use error::{SuiTransactionBuilderError as STBError, SuiTransactionBuilderResult};
 use futures::future::join_all;
@@ -41,15 +40,15 @@ pub trait DataReader {
         &self,
         address: SuiAddress,
         object_type: StructTag,
-    ) -> Result<Vec<ObjectInfo>, anyhow::Error>;
+    ) -> anyhow::Result<Vec<ObjectInfo>>;
 
     async fn get_object_with_options(
         &self,
         object_id: ObjectID,
         options: SuiObjectDataOptions,
-    ) -> Result<SuiObjectResponse, anyhow::Error>;
+    ) -> anyhow::Result<SuiObjectResponse>;
 
-    async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error>;
+    async fn get_reference_gas_price(&self) -> anyhow::Result<u64>;
 }
 
 #[derive(Clone)]
@@ -58,6 +57,20 @@ pub struct TransactionBuilder(Arc<dyn DataReader + Sync + Send>);
 impl TransactionBuilder {
     pub fn new(data_reader: Arc<dyn DataReader + Sync + Send>) -> Self {
         Self(data_reader)
+    }
+
+    async fn get_coin_refs(
+        &self,
+        input_coins: &[ObjectID],
+    ) -> SuiTransactionBuilderResult<Vec<ObjectRef>> {
+        let handles: Vec<_> = input_coins
+            .into_iter()
+            .map(|id| self.get_object_ref(*id))
+            .collect();
+        join_all(handles)
+            .await
+            .into_iter()
+            .collect::<SuiTransactionBuilderResult<Vec<ObjectRef>>>()
     }
 
     async fn select_gas(
@@ -74,11 +87,7 @@ impl TransactionBuilder {
         if let Some(gas) = input_gas {
             self.get_object_ref(gas).await
         } else {
-            let gas_objs = self
-                .0
-                .get_owned_objects(signer, GasCoin::type_())
-                .await
-                .map_err(STBError::DataReaderError)?;
+            let gas_objs = self.0.get_owned_objects(signer, GasCoin::type_()).await?;
 
             for obj in gas_objs {
                 let response = self
@@ -174,14 +183,7 @@ impl TransactionBuilder {
             }
         }
 
-        let handles: Vec<_> = input_coins
-            .iter()
-            .map(|id| self.get_object_ref(*id))
-            .collect();
-        let coin_refs = join_all(handles)
-            .await
-            .into_iter()
-            .collect::<anyhow::Result<Vec<ObjectRef>>>()?;
+        let coin_refs = self.get_coin_refs(&input_coins).await?;
         let gas_price = self.0.get_reference_gas_price().await?;
         let gas = self
             .select_gas(signer, gas, gas_budget, input_coins, gas_price)
@@ -190,6 +192,7 @@ impl TransactionBuilder {
         TransactionData::new_pay(
             signer, coin_refs, recipients, amounts, gas, gas_budget, gas_price,
         )
+        .map_err(STBError::ProgrammableTransactionBuilderError)
     }
 
     pub async fn pay_sui(
@@ -200,19 +203,9 @@ impl TransactionBuilder {
         amounts: Vec<u64>,
         gas_budget: u64,
     ) -> SuiTransactionBuilderResult<TransactionData> {
-        fp_ensure!(
-            !input_coins.is_empty(),
-            UserInputError::EmptyInputCoins.into()
-        );
+        fp_ensure!(!input_coins.is_empty(), STBError::EmptyInputCoins);
 
-        let handles: Vec<_> = input_coins
-            .into_iter()
-            .map(|id| self.get_object_ref(id))
-            .collect();
-        let mut coin_refs = join_all(handles)
-            .await
-            .into_iter()
-            .collect::<anyhow::Result<Vec<ObjectRef>>>()?;
+        let mut coin_refs = self.get_coin_refs(&input_coins).await?;
         // [0] is safe because input_coins is non-empty and coins are of same length as input_coins.
         let gas_object_ref = coin_refs.remove(0);
         let gas_price = self.0.get_reference_gas_price().await?;
@@ -225,6 +218,7 @@ impl TransactionBuilder {
             gas_budget,
             gas_price,
         )
+        .map_err(STBError::ProgrammableTransactionBuilderError)
     }
 
     pub async fn pay_all_sui(
@@ -234,20 +228,10 @@ impl TransactionBuilder {
         recipient: SuiAddress,
         gas_budget: u64,
     ) -> SuiTransactionBuilderResult<TransactionData> {
-        fp_ensure!(
-            !input_coins.is_empty(),
-            UserInputError::EmptyInputCoins.into()
-        );
+        fp_ensure!(!input_coins.is_empty(), STBError::EmptyInputCoins);
 
-        let handles: Vec<_> = input_coins
-            .into_iter()
-            .map(|id| self.get_object_ref(id))
-            .collect();
+        let mut coin_refs = self.get_coin_refs(&input_coins).await?;
 
-        let mut coin_refs = join_all(handles)
-            .await
-            .into_iter()
-            .collect::<anyhow::Result<Vec<ObjectRef>>>()?;
         // [0] is safe because input_coins is non-empty and coins are of same length as input_coins.
         let gas_object_ref = coin_refs.remove(0);
         let gas_price = self.0.get_reference_gas_price().await?;
@@ -314,13 +298,14 @@ impl TransactionBuilder {
         type_args: Vec<SuiTypeTag>,
         call_args: Vec<SuiJsonValue>,
     ) -> SuiTransactionBuilderResult<()> {
-        let module = Identifier::from_str(module)?;
-        let function = Identifier::from_str(function)?;
+        let module = Identifier::from_str(module).map_err(STBError::IdentifierError)?;
+        let function = Identifier::from_str(function).map_err(STBError::IdentifierError)?;
 
         let type_args = type_args
             .into_iter()
             .map(|ty| ty.try_into())
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(STBError::TypeTagError)?;
 
         let call_args = self
             .resolve_and_checks_json_args(
@@ -345,7 +330,10 @@ impl TransactionBuilder {
             .get_object_with_options(id, SuiObjectDataOptions::bcs_lossless())
             .await?;
 
-        let obj: Object = response.into_object()?.try_into()?;
+        let obj: Object = response
+            .into_object()?
+            .try_into()
+            .map_err(STBError::SuiObjectDataError)?;
         let obj_ref = obj.compute_object_reference();
         let owner = obj.owner;
         objects.insert(id, obj);
@@ -395,34 +383,42 @@ impl TransactionBuilder {
             function.clone(),
             type_args,
             json_args,
-        )?;
+        )
+        .map_err(STBError::SuiJsonError)?;
 
         let mut args = Vec::new();
         let mut objects = BTreeMap::new();
         for (arg, expected_type) in json_args_and_tokens {
-            args.push(match arg {
-                ResolvedCallArg::Pure(p) => builder.input(CallArg::Pure(p)),
+            args.push(
+                match arg {
+                    ResolvedCallArg::Pure(p) => builder.input(CallArg::Pure(p)),
 
-                ResolvedCallArg::Object(id) => builder.input(CallArg::Object(
-                    self.get_object_arg(
-                        id,
-                        &mut objects,
-                        matches!(expected_type, SignatureToken::MutableReference(_)),
-                    )
-                    .await?,
-                )),
-
-                ResolvedCallArg::ObjVec(v) => {
-                    let mut object_ids = vec![];
-                    for id in v {
-                        object_ids.push(
-                            self.get_object_arg(id, &mut objects, /* is_mutable_ref */ false)
-                                .await?,
+                    ResolvedCallArg::Object(id) => builder.input(CallArg::Object(
+                        self.get_object_arg(
+                            id,
+                            &mut objects,
+                            matches!(expected_type, SignatureToken::MutableReference(_)),
                         )
+                        .await?,
+                    )),
+
+                    ResolvedCallArg::ObjVec(v) => {
+                        let mut object_ids = vec![];
+                        for id in v {
+                            object_ids.push(
+                                self.get_object_arg(
+                                    id,
+                                    &mut objects,
+                                    /* is_mutable_ref */ false,
+                                )
+                                .await?,
+                            )
+                        }
+                        builder.make_obj_vec(object_ids)
                     }
-                    builder.make_obj_vec(object_ids)
                 }
-            }?);
+                .map_err(STBError::ProgrammableTransactionBuilderError)?,
+            );
         }
 
         Ok(args)
@@ -486,6 +482,7 @@ impl TransactionBuilder {
             gas_budget,
             gas_price,
         )
+        .map_err(STBError::TransactionDataError)
     }
 
     // TODO: consolidate this with Pay transactions
@@ -503,7 +500,7 @@ impl TransactionBuilder {
             .await?
             .into_object()?;
         let coin_object_ref = coin.object_ref();
-        let coin: Object = coin.try_into()?;
+        let coin: Object = coin.try_into().map_err(STBError::SuiObjectDataError)?;
         let type_args = vec![coin.get_move_template_type()?];
         let gas_price = self.0.get_reference_gas_price().await?;
         let gas = self
@@ -524,6 +521,7 @@ impl TransactionBuilder {
             gas_budget,
             gas_price,
         )
+        .map_err(STBError::TransactionDataError)
     }
 
     // TODO: consolidate this with Pay transactions
@@ -541,7 +539,7 @@ impl TransactionBuilder {
             .await?
             .into_object()?;
         let coin_object_ref = coin.object_ref();
-        let coin: Object = coin.try_into()?;
+        let coin: Object = coin.try_into().map_err(STBError::SuiObjectDataError)?;
         let type_args = vec![coin.get_move_template_type()?];
         let gas_price = self.0.get_reference_gas_price().await?;
         let gas = self
@@ -562,6 +560,7 @@ impl TransactionBuilder {
             gas_budget,
             gas_price,
         )
+        .map_err(STBError::TransactionDataError)
     }
 
     // TODO: consolidate this with Pay transactions
@@ -580,7 +579,7 @@ impl TransactionBuilder {
             .into_object()?;
         let primary_coin_ref = coin.object_ref();
         let coin_to_merge_ref = self.get_object_ref(coin_to_merge).await?;
-        let coin: Object = coin.try_into()?;
+        let coin: Object = coin.try_into().map_err(STBError::SuiObjectDataError)?;
         let type_args = vec![coin.get_move_template_type()?];
         let gas_price = self.0.get_reference_gas_price().await?;
         let gas = self
@@ -607,6 +606,7 @@ impl TransactionBuilder {
             gas_budget,
             gas_price,
         )
+        .map_err(STBError::TransactionDataError)
     }
 
     pub async fn batch_transaction(
@@ -703,7 +703,9 @@ impl TransactionBuilder {
             let mut builder = ProgrammableTransactionBuilder::new();
             let arguments = vec![
                 builder.input(CallArg::SUI_SYSTEM_MUT).unwrap(),
-                builder.make_obj_vec(obj_vec)?,
+                builder
+                    .make_obj_vec(obj_vec)
+                    .map_err(STBError::ProgrammableTransactionBuilderError)?,
                 builder
                     .input(CallArg::Pure(bcs::to_bytes(&amount)?))
                     .unwrap(),
@@ -741,7 +743,7 @@ impl TransactionBuilder {
         let gas = self
             .select_gas(signer, gas, gas_budget, vec![], gas_price)
             .await?;
-        TransactionData::new_move_call(
+        Ok(TransactionData::new_move_call(
             signer,
             SUI_SYSTEM_PACKAGE_ID,
             SUI_SYSTEM_MODULE_NAME.to_owned(),
@@ -755,6 +757,7 @@ impl TransactionBuilder {
             gas_budget,
             gas_price,
         )
+        .map_err(|e| STBError::ProgrammableTransactionBuilderError(e))?)
     }
 
     // TODO: we should add retrial to reduce the transaction building error rate
@@ -774,6 +777,9 @@ impl TransactionBuilder {
             .await?
             .into_object()?;
 
-        Ok((object.object_ref(), object.object_type()?))
+        Ok((
+            object.object_ref(),
+            object.object_type().map_err(STBError::ObjectTypeError)?,
+        ))
     }
 }

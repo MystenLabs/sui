@@ -1,5 +1,5 @@
-use sui_types::base_types::{MoveObjectType, ObjectID, ObjectType, SuiAddress};
-use sui_types::error::SuiObjectResponseError;
+use sui_types::base_types::{ObjectID, ObjectType, SuiAddress};
+use sui_types::error::{ExecutionError, SuiError, SuiObjectResponseError, UserInputError};
 use thiserror::Error;
 
 pub type SuiTransactionBuilderResult<T = ()> = Result<T, SuiTransactionBuilderError>;
@@ -46,13 +46,40 @@ pub enum SuiTransactionBuilderError {
     SuiObjectResponseError(#[from] SuiObjectResponseError),
 
     #[error(transparent)]
+    ExecutionError(#[from] ExecutionError),
+
+    #[error(transparent)]
+    Bcs(#[from] bcs::Error),
+
+    #[error(transparent)]
+    UserInputError(#[from] UserInputError),
+
+    #[error(transparent)]
+    SuiError(#[from] SuiError),
+
+    #[error(transparent)]
     DataReaderError(anyhow::Error),
 
     #[error(transparent)]
     ProgrammableTransactionBuilderError(anyhow::Error),
 
     #[error(transparent)]
-    Bcs(#[from] bcs::Error),
+    ObjectTypeError(anyhow::Error),
+
+    #[error(transparent)]
+    SuiObjectDataError(anyhow::Error),
+
+    #[error(transparent)]
+    TransactionDataError(anyhow::Error),
+
+    #[error(transparent)]
+    SuiJsonError(anyhow::Error),
+
+    #[error(transparent)]
+    IdentifierError(anyhow::Error),
+
+    #[error(transparent)]
+    TypeTagError(anyhow::Error),
 }
 
 /*
