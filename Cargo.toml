@@ -129,7 +129,6 @@ members = [
     "crates/sui-upgrade-compatibility-transactional-tests",
     "crates/sui-verifier-transactional-tests",
     "crates/telemetry-subscribers",
-    "crates/orchestrator",
     "crates/test-cluster",
     "crates/transaction-fuzzer",
     "crates/typed-store",
