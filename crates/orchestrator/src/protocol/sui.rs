@@ -2,19 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    env,
     fmt::{Debug, Display},
-    net::IpAddr,
     path::PathBuf,
     str::FromStr,
 };
 
-// use mysticeti_core::{
-//     committee::Committee,
-//     config::{self, Parameters, PrivateConfig},
-//     types::AuthorityIndex,
-// };
 use serde::{Deserialize, Serialize};
+use sui_swarm_config::genesis_config::GenesisConfig;
+use sui_types::multiaddr::Multiaddr;
 
 use crate::{
     benchmark::{BenchmarkParameters, BenchmarkType},
@@ -63,33 +58,46 @@ pub struct SuiProtocol {
 
 impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
     fn protocol_dependencies(&self) -> Vec<&'static str> {
-        vec![]
+        vec![
+            // Install typical sui dependencies.
+            "sudo apt-get -y install curl git-all clang cmake gcc libssl-dev pkg-config libclang-dev",
+            // This dependency is missing from the Sui docs.
+            "sudo apt-get -y install libpq-dev",
+        ]
     }
 
     fn db_directories(&self) -> Vec<PathBuf> {
-        // TODO
-        vec![]
+        let authorities_db = [&self.working_dir, &sui_config::AUTHORITIES_DB_NAME.into()]
+            .iter()
+            .collect();
+        let consensus_db = [&self.working_dir, &sui_config::CONSENSUS_DB_NAME.into()]
+            .iter()
+            .collect();
+        vec![authorities_db, consensus_db]
     }
 
     fn genesis_command<'a, I>(&self, instances: I) -> String
     where
         I: Iterator<Item = &'a Instance>,
     {
-        // let ips = instances
-        //     .map(|x| x.main_ip.to_string())
-        //     .collect::<Vec<_>>()
-        //     .join(" ");
-        // let working_directory = self.working_dir.display();
+        let working_dir = self.working_dir.display();
+        let ips = instances
+            .map(|x| x.main_ip.to_string())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let genesis = [
+            "cargo run --release --bin sui --",
+            "genesis",
+            &format!("-f --working-dir {working_dir} --benchmark-ips {ips}"),
+        ]
+        .join(" ");
 
-        // let genesis = [
-        //     "cargo run --release --bin mysticeti --",
-        //     "benchmark-genesis",
-        //     &format!("--ips {ips} --working-directory {working_directory}"),
-        // ]
-        // .join(" ");
-
-        // ["source $HOME/.cargo/env", &genesis].join(" && ")
-        todo!()
+        [
+            &format!("mkdir -p {working_dir}"),
+            "source $HOME/.cargo/env",
+            &genesis,
+        ]
+        .join(" && ")
     }
 
     fn monitor_command<I>(&self, instances: I) -> Vec<(Instance, String)>
@@ -105,7 +113,7 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
         //         )
         //     })
         //     .collect()
-        todo!();
+        vec![]
     }
 
     fn node_command<I>(
@@ -116,48 +124,31 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
     where
         I: IntoIterator<Item = Instance>,
     {
-        // instances
-        //     .into_iter()
-        //     .enumerate()
-        //     .map(|(i, instance)| {
-        //         let authority = i as AuthorityIndex;
-        //         let committee_path: PathBuf =
-        //             [&self.working_dir, &Committee::DEFAULT_FILENAME.into()]
-        //                 .iter()
-        //                 .collect();
-        //         let parameters_path: PathBuf =
-        //             [&self.working_dir, &Parameters::DEFAULT_FILENAME.into()]
-        //                 .iter()
-        //                 .collect();
-        //         let private_configs_path: PathBuf = [
-        //             &self.working_dir,
-        //             &PrivateConfig::default_filename(authority),
-        //         ]
-        //         .iter()
-        //         .collect();
+        let working_dir = self.working_dir.clone();
 
-        //         let env = env::var("ENV").unwrap_or_default();
-        //         let run = [
-        //             &env,
-        //             "cargo run --release --bin mysticeti --",
-        //             "run",
-        //             &format!(
-        //                 "--authority {authority} --committee-path {}",
-        //                 committee_path.display()
-        //             ),
-        //             &format!(
-        //                 "--parameters-path {} --private-config-path {}",
-        //                 parameters_path.display(),
-        //                 private_configs_path.display()
-        //             ),
-        //         ]
-        //         .join(" ");
-        //         let command = ["source $HOME/.cargo/env", &run].join(" && ");
+        let instances: Vec<_> = instances.into_iter().collect();
+        let listen_addresses = Self::make_listen_addresses(&instances);
 
-        //         (instance, command)
-        //     })
-        //     .collect()
-        todo!()
+        instances
+            .into_iter()
+            .enumerate()
+            .map(|(i, instance)| {
+                let validator_config = sui_config::validator_config_file(i);
+                let config_path: PathBuf =
+                    [&working_dir, &validator_config.into()].iter().collect();
+                let path = config_path.display();
+                let address = listen_addresses[i].clone();
+
+                let run = [
+                    "cargo run --release --bin sui-node --",
+                    &format!("--config-path {path} --listen-address {address}"),
+                ]
+                .join(" ");
+                let command = ["source $HOME/.cargo/env", &run].join(" && ");
+
+                (instance, command)
+            })
+            .collect()
     }
 
     fn client_command<I>(
@@ -168,7 +159,52 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
     where
         I: IntoIterator<Item = Instance>,
     {
-        // TODO
+        // let genesis_path: PathBuf = [&self.working_dir, &sui_config::SUI_GENESIS_FILENAME.into()]
+        //     .iter()
+        //     .collect();
+        // let keystore_path: PathBuf = [
+        //     &self.working_dir,
+        //     &sui_config::SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME.into(),
+        // ]
+        // .iter()
+        // .collect();
+
+        // let clients: Vec<_> = instances.into_iter().collect();
+        // let load_share = parameters.load / clients.len();
+        // let shared_counter = parameters.benchmark_type.shared_objects_ratio;
+        // let transfer_objects = 100 - shared_counter;
+        // let metrics_port = Self::CLIENT_METRICS_PORT;
+
+        // clients
+        //     .into_iter()
+        //     .enumerate()
+        //     .map(|(i, instance)| {
+        //         let genesis = genesis_path.display();
+        //         let keystore = keystore_path.display();
+        //         let gas_id = GenesisConfig::benchmark_gas_object_id_offsets(
+        //             GenesisConfig::BENCHMARKS_NUM_GENESIS_OBJECTS,
+        //         )[i]
+        //             .clone();
+
+        //         let run = [
+        //             "cargo run --release --bin stress --",
+        //             "--num-client-threads 24 --num-server-threads 1",
+        //             "--local false --num-transfer-accounts 2",
+        //             &format!("--genesis-blob-path {genesis} --keystore-path {keystore}",),
+        //             &format!("--primary-gas-id {gas_id}"),
+        //             "bench",
+        //             &format!("--in-flight-ratio 30 --num-workers 24 --target-qps {load_share}"),
+        //             &format!(
+        //                 "--shared-counter {shared_counter} --transfer-object {transfer_objects}"
+        //             ),
+        //             &format!("--client-metric-host 0.0.0.0 --client-metric-port {metrics_port}"),
+        //         ]
+        //         .join(" ");
+        //         let command = ["source $HOME/.cargo/env", &run].join(" && ");
+
+        //         (instance, command)
+        //     })
+        //     .collect()
         vec![]
     }
 }
@@ -177,8 +213,24 @@ impl SuiProtocol {
     /// Make a new instance of the Sui protocol commands generator.
     pub fn new(settings: &Settings) -> Self {
         Self {
-            working_dir: settings.working_dir.clone(),
+            working_dir: [&settings.working_dir, &sui_config::SUI_CONFIG_DIR.into()]
+                .iter()
+                .collect(),
         }
+    }
+
+    /// Convert the ip of the validators' network addresses to 0.0.0.0.
+    pub fn make_listen_addresses(instances: &[Instance]) -> Vec<Multiaddr> {
+        let ips: Vec<_> = instances.iter().map(|x| x.main_ip.to_string()).collect();
+        let genesis_config = GenesisConfig::new_for_benchmarks(&ips);
+        let mut addresses = Vec::new();
+        if let Some(validator_configs) = genesis_config.validator_config_info.as_ref() {
+            for validator_info in validator_configs {
+                let address = &validator_info.network_address;
+                addresses.push(address.zero_ip_multi_address());
+            }
+        }
+        addresses
     }
 }
 

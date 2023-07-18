@@ -56,8 +56,8 @@ pub struct Orchestrator<P, T> {
     /// Number of instances running only load generators (not nodes). If this value is set
     /// to zero, the orchestrator runs a load generate collocated with each node.
     dedicated_clients: usize,
-    /// Whether to start a grafana and prometheus instance on a dedicate machine.
-    monitoring: bool,
+    /// Whether to forgo a grafana and prometheus instance and leave the testbed unmonitored.
+    skip_monitoring: bool,
 }
 
 impl<P, T> Orchestrator<P, T> {
@@ -87,7 +87,7 @@ impl<P, T> Orchestrator<P, T> {
             skip_testbed_configuration: false,
             log_processing: false,
             dedicated_clients: 0,
-            monitoring: true,
+            skip_monitoring: false,
         }
     }
 
@@ -128,8 +128,8 @@ impl<P, T> Orchestrator<P, T> {
     }
 
     /// Set whether to boot grafana on the local machine to monitor the nodes.
-    pub fn with_monitoring(mut self, monitoring: bool) -> Self {
-        self.monitoring = monitoring;
+    pub fn skip_monitoring(mut self, skip_monitoring: bool) -> Self {
+        self.skip_monitoring = skip_monitoring;
         self
     }
 
@@ -142,10 +142,10 @@ impl<P, T> Orchestrator<P, T> {
     ) -> TestbedResult<(Vec<Instance>, Vec<Instance>, Option<Instance>)> {
         // Ensure there are enough active instances.
         let available_instances: Vec<_> = self.instances.iter().filter(|x| x.is_active()).collect();
-        let minimum_instances = if self.monitoring {
-            parameters.nodes + self.dedicated_clients + 1
-        } else {
+        let minimum_instances = if self.skip_monitoring {
             parameters.nodes + self.dedicated_clients
+        } else {
+            parameters.nodes + self.dedicated_clients + 1
         };
         ensure!(
             available_instances.len() >= minimum_instances,
@@ -163,7 +163,7 @@ impl<P, T> Orchestrator<P, T> {
 
         // Select the instance to host the monitoring stack.
         let mut monitoring_instance = None;
-        if self.monitoring {
+        if !self.skip_monitoring {
             for region in &self.settings.regions {
                 if let Some(regional_instances) = instances_by_regions.get_mut(region) {
                     if let Some(instance) = regional_instances.pop_front() {
@@ -351,30 +351,6 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P,
             display::config("Grafana address", monitor.grafana_address());
             display::newline();
         }
-
-        // let (clients, nodes, _) = self.select_instances(parameters)?;
-        // let monitor = Monitor::new(
-        //     clients,
-        //     nodes,
-        //     self.ssh_manager.clone(),
-        //     self.dedicated_clients != 0,
-        // );
-
-        // // Start prometheus on all instances.
-        // monitor.start_prometheus(&self.protocol_commands).await?;
-
-        // // Start grafana on the localhost (only macOs, homebrew install).
-        // if self.monitoring && cfg!(target_os = "macos") {
-        //     monitor.start_grafana()?;
-        //     display::done();
-        //     display::config(
-        //         "Grafana address",
-        //         format!("http://localhost:{}", Grafana::DEFAULT_PORT),
-        //     );
-        //     display::newline();
-        // } else {
-        //     display::done();
-        // }
 
         Ok(())
     }
@@ -680,6 +656,8 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P,
                 self.configure(&parameters).await?;
                 latest_committee_size = parameters.nodes;
             }
+
+            return Ok(());
 
             // Deploy the validators.
             let monitor = self.run_nodes(&parameters).await?;

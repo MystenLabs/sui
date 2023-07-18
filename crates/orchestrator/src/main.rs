@@ -41,7 +41,7 @@ pub struct Opts {
     #[clap(
         long,
         value_name = "FILE",
-        default_value = "orchestrator/assets/settings.json",
+        default_value = "crates/orchestrator/assets/settings.json",
         global = true
     )]
     settings_path: String,
@@ -107,9 +107,9 @@ pub enum Operation {
         #[clap(long, value_name = "INT", default_value = "0", global = true)]
         dedicated_clients: usize,
 
-        /// Whether boot prometheus and grafana on a dedicated machine to monitor the benchmark.
-        #[clap(long, action, default_value = "true", global = true)]
-        monitoring: bool,
+        /// Whether to forgo a grafana and prometheus instance and leave the testbed unmonitored.
+        #[clap(long, action, default_value = "false", global = true)]
+        skip_monitoring: bool,
 
         /// The timeout duration for ssh commands (in seconds).
         #[clap(long, action, value_parser = parse_duration, default_value = "30", global = true)]
@@ -270,7 +270,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
             skip_testbed_configuration,
             log_processing,
             dedicated_clients,
-            monitoring,
+            skip_monitoring,
             timeout,
             retries,
             load_type,
@@ -333,7 +333,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
             .skip_testbed_configuration(skip_testbed_configuration)
             .with_log_processing(log_processing)
             .with_dedicated_clients(dedicated_clients)
-            .with_monitoring(monitoring)
+            .skip_monitoring(skip_monitoring)
             .run_benchmarks(generator)
             .await
             .wrap_err("Failed to run benchmarks")?;

@@ -31,6 +31,10 @@ ssh2 = "0.9.4" # TODO: remove this dependency
 
 prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db" }
 
+sui-config = { path = "../sui-config" }
+sui-types = { path = "../sui-types" }
+sui-swarm-config =  { path = "../sui-swarm-config" }
+
 [dev-dependencies]
 tempfile = { workspace = true }
 
