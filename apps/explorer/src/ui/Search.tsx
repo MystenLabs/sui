@@ -91,9 +91,7 @@ export function Search({
 					) : hasOptions ? (
 						options.map(({ label, results }) => (
 							<div key={label}>
-								{results?.map((item) => (
-									<SearchItem key={item.id} value={item} />
-								))}
+								{results?.map((item) => <SearchItem key={item.id} value={item} />)}
 							</div>
 						))
 					) : (

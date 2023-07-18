@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import '@fontsource-variable/inter';
+import '@fontsource-variable/red-hat-mono';
 import { GrowthBookProvider } from '@growthbook/growthbook-react';
 import { RpcClientContext } from '@mysten/core';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
@@ -24,8 +26,6 @@ import store from '_store';
 import { api, thunkExtras } from '_store/thunk-extras';
 
 import './styles/global.scss';
-import '@fontsource-variable/inter';
-import '@fontsource-variable/red-hat-mono';
 import 'bootstrap-icons/font/bootstrap-icons.scss';
 
 async function init() {
