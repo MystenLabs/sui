@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Text } from '@mysten/ui';
 import { type ReactNode } from 'react';
 
 import { ExpandableList } from '../ExpandableList';
 import { type InputProps } from '../Input';
-import { Text } from '../Text';
 
 import type { Meta, StoryObj } from '@storybook/react';
 

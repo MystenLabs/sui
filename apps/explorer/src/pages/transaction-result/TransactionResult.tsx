@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { LoadingIndicator } from '@mysten/ui';
 import { useParams } from 'react-router-dom';
 
 import { TransactionView } from './TransactionView';
 import { PageLayout } from '~/components/Layout/PageLayout';
 import { useGetTransaction } from '~/hooks/useGetTransaction';
 import { Banner } from '~/ui/Banner';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 export default function TransactionResult() {
 	const { id } = useParams();
@@ -16,7 +16,7 @@ export default function TransactionResult() {
 		<PageLayout
 			content={
 				isLoading ? (
-					<LoadingSpinner text="Loading..." />
+					<LoadingIndicator text="Loading..." />
 				) : isError || !data ? (
 					<Banner variant="error" spacing="lg" fullWidth>
 						{!id

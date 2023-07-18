@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ChevronUp12 } from '@mysten/icons';
+import { Text } from '@mysten/ui';
 import clsx from 'clsx';
 import { type ReactNode, useMemo, useState, createContext, useContext } from 'react';
 
 import { Link } from './Link';
-import { Text } from './Text';
 
 type ExpandableListContextType = {
 	handleShowAllClick: () => void;

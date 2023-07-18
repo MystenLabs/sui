@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { X12 } from '@mysten/icons';
+import { Text, Heading } from '@mysten/ui';
 
 import { Modal, type ModalProps } from './index';
-import { Heading } from '../Heading';
 import { IconButton } from '../IconButton';
-import { Text } from '../Text';
 import { Image } from '../image/Image';
 
 export interface ObjectModalProps extends Omit<ModalProps, 'children'> {

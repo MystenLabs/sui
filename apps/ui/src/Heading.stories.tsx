@@ -5,16 +5,18 @@ import { type Meta, type StoryObj } from '@storybook/react';
 
 import { Heading, type HeadingProps } from '../Heading';
 
-export default {
+const meta = {
 	component: Heading,
-} as Meta;
+} satisfies Meta<typeof Heading>;
 
-interface StoryProps {
+export default meta;
+
+type Story = StoryObj<{
 	as: HeadingProps['as'];
 	variants: HeadingProps['variant'][];
-}
+}>;
 
-export const Heading1: StoryObj<StoryProps> = {
+export const Heading1: Story = {
 	render: ({ as, variants }) => (
 		<div className="space-y-2">
 			<div>
@@ -39,7 +41,7 @@ export const Heading1: StoryObj<StoryProps> = {
 	},
 };
 
-export const Heading2: StoryObj<StoryProps> = {
+export const Heading2: Story = {
 	...Heading1,
 	args: {
 		as: 'h2',
@@ -47,7 +49,7 @@ export const Heading2: StoryObj<StoryProps> = {
 	},
 };
 
-export const Heading3: StoryObj<StoryProps> = {
+export const Heading3: Story = {
 	...Heading1,
 	args: {
 		as: 'h3',
@@ -55,7 +57,7 @@ export const Heading3: StoryObj<StoryProps> = {
 	},
 };
 
-export const Heading4: StoryObj<StoryProps> = {
+export const Heading4: Story = {
 	...Heading1,
 	args: {
 		as: 'h4',
@@ -63,7 +65,7 @@ export const Heading4: StoryObj<StoryProps> = {
 	},
 };
 
-export const Heading5: StoryObj<StoryProps> = {
+export const Heading5: Story = {
 	...Heading1,
 	args: {
 		as: 'h5',
@@ -71,7 +73,7 @@ export const Heading5: StoryObj<StoryProps> = {
 	},
 };
 
-export const Heading6: StoryObj<StoryProps> = {
+export const Heading6: Story = {
 	...Heading1,
 	args: {
 		as: 'h6',

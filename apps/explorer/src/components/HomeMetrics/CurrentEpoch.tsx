@@ -2,15 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { formatDate, formatAmountParts } from '@mysten/core';
+import { Text, Heading } from '@mysten/ui';
 import { format, isToday, isYesterday } from 'date-fns';
 import { useMemo } from 'react';
 
 import { Checkpoint } from '~/components/HomeMetrics/Checkpoint';
 import { useEpochProgress } from '~/pages/epochs/utils';
 import { Card } from '~/ui/Card';
-import { Heading } from '~/ui/Heading';
 import { ProgressBar } from '~/ui/ProgressBar';
-import { Text } from '~/ui/Text';
 import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 import { ampli } from '~/utils/analytics/ampli';
 

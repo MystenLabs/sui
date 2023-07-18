@@ -2,10 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import { Combobox } from '@headlessui/react';
 import { Search16 } from '@mysten/icons';
+import { LoadingIndicator, Text } from '@mysten/ui';
 import { type KeyboardEvent } from 'react';
-
-import { LoadingSpinner } from './LoadingSpinner';
-import { Text } from './Text';
 
 export type SearchResult = {
 	id: string;
@@ -88,7 +86,7 @@ export function Search({
 				<Combobox.Options className="absolute mt-1 w-full list-none space-y-2 rounded-md bg-white p-3.5 shadow-md">
 					{isLoading ? (
 						<div className="flex items-center justify-center">
-							<LoadingSpinner />
+							<LoadingIndicator />
 						</div>
 					) : hasOptions ? (
 						options.map(({ label, results }) => (

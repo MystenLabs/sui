@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { X12 } from '@mysten/icons';
+import { Text } from '@mysten/ui';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { type ReactNode } from 'react';
 
 import { IconButton } from './IconButton';
 import { ReactComponent as InfoIcon } from './icons/info.svg';
-import { Text } from '~/ui/Text';
 
 const bannerStyles = cva(
 	'inline-flex text-pBodySmall font-medium rounded-2xl overflow-hidden gap-2 items-center flex-nowrap relative',

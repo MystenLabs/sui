@@ -3,13 +3,12 @@
 
 import { CoinFormat, type TransactionSummary, useFormatCoin } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
+import { Heading, Text } from '@mysten/ui';
 
 import { CopyToClipboard } from '~/ui/CopyToClipboard';
 import { DescriptionItem } from '~/ui/DescriptionList';
 import { Divider } from '~/ui/Divider';
-import { Heading } from '~/ui/Heading';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
-import { Text } from '~/ui/Text';
 import { TransactionBlockCard, TransactionBlockCardSection } from '~/ui/TransactionBlockCard';
 
 interface GasProps {

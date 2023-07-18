@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Text } from '@mysten/ui';
 import * as RadixDropdownMenu from '@radix-ui/react-dropdown-menu';
 import { type ReactNode } from 'react';
 
-import { Text } from './Text';
 import { Toggle } from './Toggle';
 
 export type DropdownMenuProps = {
