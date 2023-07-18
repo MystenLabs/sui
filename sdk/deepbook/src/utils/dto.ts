@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 export type Pool = {
-	clob: string;
+	clob_v2: string;
 	type: string;
 	priceDecimals: number;
 	amountDecimals: number;
@@ -11,7 +11,7 @@ export type Pool = {
 
 export type PoolInfo = {
 	needChange: boolean;
-	clob: string;
+	clob_v2: string;
 	type: string;
 	tickSize: number;
 };
