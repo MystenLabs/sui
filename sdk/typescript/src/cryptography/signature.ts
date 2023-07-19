@@ -76,6 +76,7 @@ export function parseSerializedSignature(serializedSignature: SerializedSignatur
 	if (signatureScheme === 'MultiSig') {
 		const multisig: MultiSigStruct = builder.de('MultiSig', bytes.slice(1));
 		return {
+			serializedSignature,
 			signatureScheme,
 			multisig,
 			bytes,
@@ -92,6 +93,7 @@ export function parseSerializedSignature(serializedSignature: SerializedSignatur
 	const publicKey = bytes.slice(1 + signature.length);
 
 	return {
+		serializedSignature,
 		signatureScheme,
 		signature,
 		publicKey,

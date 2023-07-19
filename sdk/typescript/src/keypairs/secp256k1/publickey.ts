@@ -4,9 +4,13 @@
 import { fromB64 } from '@mysten/bcs';
 import { blake2b } from '@noble/hashes/blake2b';
 import { bytesToHex } from '@noble/hashes/utils';
-import { PublicKey } from '../../cryptography/publickey.js';
+import { PublicKey, bytesEqual } from '../../cryptography/publickey.js';
 import type { PublicKeyInitData } from '../../cryptography/publickey.js';
-import { SIGNATURE_SCHEME_TO_FLAG } from '../../cryptography/signature.js';
+import type { SerializedSignature } from '../../cryptography/signature.js';
+import {
+	SIGNATURE_SCHEME_TO_FLAG,
+	parseSerializedSignature,
+} from '../../cryptography/signature.js';
 import { SUI_ADDRESS_LENGTH, normalizeSuiAddress } from '../../utils/sui-types.js';
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { sha256 } from '@noble/hashes/sha256';
@@ -76,9 +80,25 @@ export class Secp256k1PublicKey extends PublicKey {
 	/**
 	 * Verifies that the signature is valid for for the provided message
 	 */
-	async verify(message: Uint8Array, signature: Uint8Array): Promise<boolean> {
+	async verify(message: Uint8Array, signature: Uint8Array | SerializedSignature): Promise<boolean> {
+		let bytes;
+		if (typeof signature === 'string') {
+			const parsed = parseSerializedSignature(signature);
+			if (parsed.signatureScheme !== 'Secp256k1') {
+				throw new Error('Invalid signature scheme');
+			}
+
+			if (!bytesEqual(this.toRawBytes(), parsed.publicKey)) {
+				throw new Error('Signature does not match public key');
+			}
+
+			bytes = parsed.signature;
+		} else {
+			bytes = signature;
+		}
+
 		return secp256k1.verify(
-			secp256k1.Signature.fromCompact(signature),
+			secp256k1.Signature.fromCompact(bytes),
 			sha256(message),
 			this.toRawBytes(),
 		);

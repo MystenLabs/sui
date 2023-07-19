@@ -10,11 +10,15 @@ import type {
 	SignatureFlag,
 	SignatureScheme,
 } from '../cryptography/signature.js';
-import { SIGNATURE_FLAG_TO_SCHEME, SIGNATURE_SCHEME_TO_FLAG } from '../cryptography/signature.js';
+import {
+	SIGNATURE_FLAG_TO_SCHEME,
+	SIGNATURE_SCHEME_TO_FLAG,
+	parseSerializedSignature,
+} from '../cryptography/signature.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import { builder } from '../builder/bcs.js';
 // eslint-disable-next-line import/no-cycle
-import { parseSignature, publicKeyFromBytes } from '../verify/index.js';
+import { publicKeyFromBytes } from '../verify/index.js';
 import { bcs } from '../types/sui-bcs.js';
 
 type CompressedSignature =
@@ -154,8 +158,20 @@ export class MultiSigPublicKey extends PublicKey {
 	/**
 	 * Verifies that the signature is valid for for the provided message
 	 */
-	async verify(message: Uint8Array, multisigSignature: Uint8Array): Promise<boolean> {
-		const multisig = builder.de('MultiSig', multisigSignature);
+	async verify(
+		message: Uint8Array,
+		multisigSignature: Uint8Array | SerializedSignature,
+	): Promise<boolean> {
+		if (typeof multisigSignature !== 'string') {
+			throw new Error('Multisig verification only supports serialized signature');
+		}
+
+		const { signatureScheme, multisig } = parseSerializedSignature(multisigSignature);
+
+		if (signatureScheme !== 'MultiSig') {
+			throw new Error('Invalid signature scheme');
+		}
+
 		let signatureWeight = 0;
 
 		if (
@@ -183,7 +199,7 @@ export class MultiSigPublicKey extends PublicKey {
 		const compressedSignatures: CompressedSignature[] = new Array(signatures.length);
 
 		for (let i = 0; i < signatures.length; i++) {
-			let parsed = parseSignature(signatures[i]);
+			let parsed = parseSerializedSignature(signatures[i]);
 
 			if (parsed.signatureScheme === 'MultiSig') {
 				throw new Error('MultiSig is not supported inside MultiSig');
@@ -200,7 +216,7 @@ export class MultiSigPublicKey extends PublicKey {
 			}
 
 			for (let j = 0; j < this.publicKeys.length; j++) {
-				if (parsed.publicKey.equals(this.publicKeys[j].publicKey)) {
+				if (bytesEqual(parsed.publicKey, this.publicKeys[j].publicKey.toRawBytes())) {
 					if (bitmap & (1 << j)) {
 						throw new Error('Received multiple signatures from the same public key');
 					}

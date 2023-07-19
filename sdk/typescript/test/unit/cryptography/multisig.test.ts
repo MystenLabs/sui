@@ -2,8 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect } from 'vitest';
-import { Ed25519Keypair, Secp256k1Keypair, decodeMultiSig } from '../../../src';
-import { parseSignature } from '../../../src/verify';
+import {
+	Ed25519Keypair,
+	Secp256k1Keypair,
+	decodeMultiSig,
+	parseSerializedSignature,
+} from '../../../src';
 import { MultiSigPublicKey } from '../../../src/multisig';
 
 describe('multisig address and combine sigs', () => {
@@ -53,33 +57,46 @@ describe('multisig address and combine sigs', () => {
 		let decoded = decodeMultiSig(multisig);
 		expect(decoded).toEqual([
 			{
-				signature: parseSignature((await k1.signPersonalMessage(data)).signature).signature,
+				signature: parseSerializedSignature((await k1.signPersonalMessage(data)).signature)
+					.signature,
 				signatureScheme: k1.getKeyScheme(),
 				pubKey: pk1,
 				weight: 1,
 			},
 			{
-				signature: parseSignature((await k2.signPersonalMessage(data)).signature).signature,
+				signature: parseSerializedSignature((await k2.signPersonalMessage(data)).signature)
+					.signature,
 				signatureScheme: k2.getKeyScheme(),
 				pubKey: pk2,
 				weight: 2,
 			},
 		]);
 
-		const parsed = parseSignature(multisig);
+		const parsed = parseSerializedSignature(multisig);
+		const publicKey = new MultiSigPublicKey(parsed.multisig!.multisig_pk);
 		// multisig (sig1 + sig2 weight 1+2 >= threshold ) verifies ok
-		expect(await parsed.publicKey.verifyPersonalMessage(data, parsed.signature)).toEqual(true);
+		expect(await publicKey.verifyPersonalMessage(data, multisig)).toEqual(true);
 
-		let multisig2 = parseSignature(multiSigPublicKey.combinePartialSignatures([sig3.signature]));
+		let multisig2 = parseSerializedSignature(
+			multiSigPublicKey.combinePartialSignatures([sig3.signature]),
+		);
 
 		// multisig (sig3 only weight = 3 >= threshold) verifies ok
-		expect(await multiSigPublicKey.verifyPersonalMessage(data, multisig2.signature)).toEqual(true);
+		expect(
+			await multiSigPublicKey.verifyPersonalMessage(data, multisig2.serializedSignature),
+		).toEqual(true);
 
-		let multisig3 = parseSignature(multiSigPublicKey.combinePartialSignatures([sig2.signature]));
+		let multisig3 = parseSerializedSignature(
+			multiSigPublicKey.combinePartialSignatures([sig2.signature]),
+		);
 
 		// multisig (sig2 only weight = 2 < threshold) verify fails
-		expect(await multisig3.publicKey.verifyPersonalMessage(data, multisig3.signature)).toEqual(
-			false,
-		);
+
+		expect(
+			await new MultiSigPublicKey(multisig3.multisig!.multisig_pk).verifyPersonalMessage(
+				data,
+				multisig3.serializedSignature,
+			),
+		).toEqual(false);
 	});
 });

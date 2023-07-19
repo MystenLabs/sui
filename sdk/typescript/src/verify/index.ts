@@ -15,7 +15,7 @@ export async function verifySignature(
 ): Promise<PublicKey> {
 	const parsedSignature = parseSignature(signature);
 
-	if (!(await parsedSignature.publicKey.verify(bytes, parsedSignature.signature))) {
+	if (!(await parsedSignature.publicKey.verify(bytes, parsedSignature.serializedSignature))) {
 		throw new Error(`Signature is not valid for the provided data`);
 	}
 
@@ -29,7 +29,10 @@ export async function verifyPersonalMessage(
 	const parsedSignature = parseSignature(signature);
 
 	if (
-		!(await parsedSignature.publicKey.verifyPersonalMessage(message, parsedSignature.signature))
+		!(await parsedSignature.publicKey.verifyPersonalMessage(
+			message,
+			parsedSignature.serializedSignature,
+		))
 	) {
 		throw new Error(`Signature is not valid for the provided message`);
 	}
@@ -46,7 +49,7 @@ export async function verifyTransactionBlock(
 	if (
 		!(await parsedSignature.publicKey.verifyTransactionBlock(
 			transactionBlock,
-			parsedSignature.signature,
+			parsedSignature.serializedSignature,
 		))
 	) {
 		throw new Error(`Signature is not valid for the provided TransactionBlock`);
@@ -55,15 +58,13 @@ export async function verifyTransactionBlock(
 	return parsedSignature.publicKey;
 }
 
-export function parseSignature(signature: SerializedSignature) {
+function parseSignature(signature: SerializedSignature) {
 	const parsedSignature = parseSerializedSignature(signature);
 
 	if (parsedSignature.signatureScheme === 'MultiSig') {
-		const signatureBytes = parsedSignature.bytes.slice(1);
 		return {
 			...parsedSignature,
 			publicKey: new MultiSigPublicKey(parsedSignature.multisig.multisig_pk),
-			signature: signatureBytes,
 		};
 	}
 

@@ -4,8 +4,12 @@
 import { blake2b } from '@noble/hashes/blake2b';
 import { fromB64 } from '@mysten/bcs';
 import type { PublicKeyInitData } from '../../cryptography/publickey.js';
-import { PublicKey } from '../../cryptography/publickey.js';
-import { SIGNATURE_SCHEME_TO_FLAG } from '../../cryptography/signature.js';
+import { PublicKey, bytesEqual } from '../../cryptography/publickey.js';
+import type { SerializedSignature } from '../../cryptography/signature.js';
+import {
+	SIGNATURE_SCHEME_TO_FLAG,
+	parseSerializedSignature,
+} from '../../cryptography/signature.js';
 import { bytesToHex } from '@noble/hashes/utils';
 import { SUI_ADDRESS_LENGTH, normalizeSuiAddress } from '../../utils/sui-types.js';
 import nacl from 'tweetnacl';
@@ -75,7 +79,23 @@ export class Ed25519PublicKey extends PublicKey {
 	/**
 	 * Verifies that the signature is valid for for the provided message
 	 */
-	async verify(message: Uint8Array, signature: Uint8Array): Promise<boolean> {
-		return nacl.sign.detached.verify(message, signature, this.toBytes());
+	async verify(message: Uint8Array, signature: Uint8Array | SerializedSignature): Promise<boolean> {
+		let bytes;
+		if (typeof signature === 'string') {
+			const parsed = parseSerializedSignature(signature);
+			if (parsed.signatureScheme !== 'ED25519') {
+				throw new Error('Invalid signature scheme');
+			}
+
+			if (!bytesEqual(this.toRawBytes(), parsed.publicKey)) {
+				throw new Error('Signature does not match public key');
+			}
+
+			bytes = parsed.signature;
+		} else {
+			bytes = signature;
+		}
+
+		return nacl.sign.detached.verify(message, bytes, this.toRawBytes());
 	}
 }

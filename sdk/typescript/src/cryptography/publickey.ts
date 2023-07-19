@@ -5,6 +5,7 @@ import { toB64 } from '@mysten/bcs';
 import { IntentScope, messageWithIntent } from './intent.js';
 import { blake2b } from '@noble/hashes/blake2b';
 import { bcs } from '../types/sui-bcs.js';
+import type { SerializedSignature } from './index.js';
 
 /**
  * Value to be converted into public key.
@@ -68,7 +69,7 @@ export abstract class PublicKey {
 
 	verifyWithIntent(
 		bytes: Uint8Array,
-		signature: Uint8Array,
+		signature: Uint8Array | SerializedSignature,
 		intent: IntentScope,
 	): Promise<boolean> {
 		const intentMessage = messageWithIntent(intent, bytes);
@@ -80,7 +81,10 @@ export abstract class PublicKey {
 	/**
 	 * Verifies that the signature is valid for for the provided PersonalMessage
 	 */
-	verifyPersonalMessage(message: Uint8Array, signature: Uint8Array): Promise<boolean> {
+	verifyPersonalMessage(
+		message: Uint8Array,
+		signature: Uint8Array | SerializedSignature,
+	): Promise<boolean> {
 		return this.verifyWithIntent(
 			bcs.ser(['vector', 'u8'], message).toBytes(),
 			signature,
@@ -91,7 +95,10 @@ export abstract class PublicKey {
 	/**
 	 * Verifies that the signature is valid for for the provided TransactionBlock
 	 */
-	verifyTransactionBlock(transactionBlock: Uint8Array, signature: Uint8Array): Promise<boolean> {
+	verifyTransactionBlock(
+		transactionBlock: Uint8Array,
+		signature: Uint8Array | SerializedSignature,
+	): Promise<boolean> {
 		return this.verifyWithIntent(transactionBlock, signature, IntentScope.TransactionData);
 	}
 
@@ -133,5 +140,5 @@ export abstract class PublicKey {
 	/**
 	 * Verifies that the signature is valid for for the provided message
 	 */
-	abstract verify(data: Uint8Array, signature: Uint8Array): Promise<boolean>;
+	abstract verify(data: Uint8Array, signature: Uint8Array | SerializedSignature): Promise<boolean>;
 }
