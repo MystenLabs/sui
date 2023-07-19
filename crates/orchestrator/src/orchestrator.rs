@@ -660,10 +660,10 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P,
             // Deploy the validators.
             let monitor = self.run_nodes(&parameters).await?;
 
-            return Ok(());
-
             // Deploy the load generators.
             self.run_clients(&parameters).await?;
+
+            return Ok(());
 
             // Wait for the benchmark to terminate. Then save the results and print a summary.
             let aggregator = self.run(&parameters).await?;

@@ -9,7 +9,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use sui_swarm_config::genesis_config::GenesisConfig;
-use sui_types::multiaddr::Multiaddr;
+use sui_types::{base_types::SuiAddress, multiaddr::Multiaddr};
 
 use crate::{
     benchmark::{BenchmarkParameters, BenchmarkType},
@@ -100,7 +100,7 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
         .join(" && ")
     }
 
-    fn monitor_command<I>(&self, instances: I) -> Vec<(Instance, String)>
+    fn monitor_command<I>(&self, _instances: I) -> Vec<(Instance, String)>
     where
         I: IntoIterator<Item = Instance>,
     {
@@ -153,59 +153,58 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
 
     fn client_command<I>(
         &self,
-        _instances: I,
-        _parameters: &BenchmarkParameters<SuiBenchmarkType>,
+        instances: I,
+        parameters: &BenchmarkParameters<SuiBenchmarkType>,
     ) -> Vec<(Instance, String)>
     where
         I: IntoIterator<Item = Instance>,
     {
-        // let genesis_path: PathBuf = [&self.working_dir, &sui_config::SUI_GENESIS_FILENAME.into()]
-        //     .iter()
-        //     .collect();
-        // let keystore_path: PathBuf = [
-        //     &self.working_dir,
-        //     &sui_config::SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME.into(),
-        // ]
-        // .iter()
-        // .collect();
+        let genesis_path: PathBuf = [&self.working_dir, &sui_config::SUI_GENESIS_FILENAME.into()]
+            .iter()
+            .collect();
+        let keystore_path: PathBuf = [
+            &self.working_dir,
+            &sui_config::SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME.into(),
+        ]
+        .iter()
+        .collect();
 
-        // let clients: Vec<_> = instances.into_iter().collect();
-        // let load_share = parameters.load / clients.len();
-        // let shared_counter = parameters.benchmark_type.shared_objects_ratio;
-        // let transfer_objects = 100 - shared_counter;
-        // let metrics_port = Self::CLIENT_METRICS_PORT;
+        let clients: Vec<_> = instances.into_iter().collect();
+        let load_share = parameters.load / clients.len();
+        let shared_counter = parameters.benchmark_type.shared_objects_ratio;
+        let transfer_objects = 100 - shared_counter;
+        let metrics_port = 4040;
 
-        // clients
-        //     .into_iter()
-        //     .enumerate()
-        //     .map(|(i, instance)| {
-        //         let genesis = genesis_path.display();
-        //         let keystore = keystore_path.display();
-        //         let gas_id = GenesisConfig::benchmark_gas_object_id_offsets(
-        //             GenesisConfig::BENCHMARKS_NUM_GENESIS_OBJECTS,
-        //         )[i]
-        //             .clone();
+        clients
+            .into_iter()
+            .enumerate()
+            .map(|(i, instance)| {
+                let genesis = genesis_path.display();
+                let keystore = keystore_path.display();
+                let gas_key = GenesisConfig::benchmark_gas_key();
+                let gas_address = SuiAddress::from(&gas_key.public());
 
-        //         let run = [
-        //             "cargo run --release --bin stress --",
-        //             "--num-client-threads 24 --num-server-threads 1",
-        //             "--local false --num-transfer-accounts 2",
-        //             &format!("--genesis-blob-path {genesis} --keystore-path {keystore}",),
-        //             &format!("--primary-gas-id {gas_id}"),
-        //             "bench",
-        //             &format!("--in-flight-ratio 30 --num-workers 24 --target-qps {load_share}"),
-        //             &format!(
-        //                 "--shared-counter {shared_counter} --transfer-object {transfer_objects}"
-        //             ),
-        //             &format!("--client-metric-host 0.0.0.0 --client-metric-port {metrics_port}"),
-        //         ]
-        //         .join(" ");
-        //         let command = ["source $HOME/.cargo/env", &run].join(" && ");
+                let run = [
+                    "cargo run --release --bin stress --",
+                    "--num-client-threads 24 --num-server-threads 1",
+                    "--local false --num-transfer-accounts 2",
+                    &format!("--genesis-blob-path {genesis} --keystore-path {keystore}",),
+                    &format!("--primary_gas_owner_id {gas_address}"),
+                    "bench",
+                    &format!("--in-flight-ratio 30 --num-workers 24 --target-qps {load_share}"),
+                    &format!(
+                        "--shared-counter {shared_counter} --transfer-object {transfer_objects}"
+                    ),
+                    &format!("--client-metric-host 0.0.0.0 --client-metric-port {metrics_port}"),
+                ]
+                .join(" ");
+                let command = ["source $HOME/.cargo/env", &run].join(" && ");
 
-        //         (instance, command)
-        //     })
-        //     .collect()
-        vec![]
+                println!("Client command: {}", command);
+
+                (instance, command)
+            })
+            .collect()
     }
 }
 

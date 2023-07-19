@@ -167,9 +167,9 @@ impl ValidatorGenesisConfigBuilder {
                     .zero_ip_multi_address(),
                 local_ip_utils::new_deterministic_tcp_address_for_testing(&ip, offset + 3)
                     .zero_ip_multi_address(),
-                local_ip_utils::new_deterministic_udp_address_for_testing(&localhost, offset + 4),
-                local_ip_utils::new_deterministic_udp_address_for_testing(&localhost, offset + 5),
-                local_ip_utils::new_deterministic_tcp_address_for_testing(&localhost, offset + 6),
+                local_ip_utils::new_deterministic_udp_address_for_testing(&ip, offset + 4),
+                local_ip_utils::new_deterministic_udp_address_for_testing(&ip, offset + 5),
+                local_ip_utils::new_deterministic_tcp_address_for_testing(&ip, offset + 6),
             )
         } else {
             (
