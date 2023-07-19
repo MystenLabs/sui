@@ -6820,6 +6820,7 @@ dependencies = [
  "serde_json",
  "ssh2",
  "sui-config",
+ "sui-node",
  "sui-swarm-config",
  "sui-types",
  "tempfile",

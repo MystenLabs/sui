@@ -29,6 +29,7 @@ prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", 
 
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
+sui-node = { path = "../sui-node" }
 sui-swarm-config =  { path = "../sui-swarm-config" }
 
 [dev-dependencies]
