@@ -41,8 +41,6 @@ validator_configs:
           worker_network_admin_server_base_port: 8765
         anemo:
           send_certificate_rate_limit: ~
-          get_payload_availability_rate_limit: ~
-          get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
@@ -125,8 +123,6 @@ validator_configs:
           worker_network_admin_server_base_port: 8765
         anemo:
           send_certificate_rate_limit: ~
-          get_payload_availability_rate_limit: ~
-          get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
@@ -209,8 +205,6 @@ validator_configs:
           worker_network_admin_server_base_port: 8765
         anemo:
           send_certificate_rate_limit: ~
-          get_payload_availability_rate_limit: ~
-          get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
@@ -293,8 +287,6 @@ validator_configs:
           worker_network_admin_server_base_port: 8765
         anemo:
           send_certificate_rate_limit: ~
-          get_payload_availability_rate_limit: ~
-          get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
@@ -377,8 +369,6 @@ validator_configs:
           worker_network_admin_server_base_port: 8765
         anemo:
           send_certificate_rate_limit: ~
-          get_payload_availability_rate_limit: ~
-          get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
@@ -461,8 +451,6 @@ validator_configs:
           worker_network_admin_server_base_port: 8765
         anemo:
           send_certificate_rate_limit: ~
-          get_payload_availability_rate_limit: ~
-          get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
@@ -545,8 +533,6 @@ validator_configs:
           worker_network_admin_server_base_port: 8765
         anemo:
           send_certificate_rate_limit: ~
-          get_payload_availability_rate_limit: ~
-          get_certificates_rate_limit: ~
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false

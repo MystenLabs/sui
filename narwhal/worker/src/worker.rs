@@ -95,7 +95,7 @@ impl Worker {
             keypair,
             id,
             committee: committee.clone(),
-            worker_cache,
+            worker_cache: worker_cache.clone(),
             protocol_config: protocol_config.clone(),
             parameters: parameters.clone(),
             store,
@@ -175,8 +175,15 @@ impl Worker {
                 epoch_string.clone(),
             )));
 
+        let worker_peer_ids = worker_cache
+            .all_workers()
+            .into_iter()
+            .map(|(worker_name, _)| PeerId(worker_name.0.to_bytes()));
         let routes = anemo::Router::new()
             .add_rpc_service(worker_service)
+            .route_layer(RequireAuthorizationLayer::new(AllowedPeers::new(
+                worker_peer_ids,
+            )))
             .route_layer(RequireAuthorizationLayer::new(AllowedEpoch::new(
                 epoch_string.clone(),
             )))

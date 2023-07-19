@@ -1304,18 +1304,6 @@ pub struct RequestVoteResponse {
     pub missing: Vec<CertificateDigest>,
 }
 
-/// Used by the primary to get specific certificates from other primaries.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct GetCertificatesRequest {
-    pub digests: Vec<CertificateDigest>,
-}
-
-/// Used by the primary to reply to GetCertificatesRequest.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct GetCertificatesResponse {
-    pub certificates: Vec<Certificate>,
-}
-
 /// Used by the primary to fetch certificates from other primaries.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FetchCertificatesRequest {
@@ -1390,25 +1378,6 @@ impl FetchCertificatesRequest {
 pub struct FetchCertificatesResponse {
     /// Certificates sorted from lower to higher rounds.
     pub certificates: Vec<Certificate>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct PayloadAvailabilityRequest {
-    pub certificate_digests: Vec<CertificateDigest>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct PayloadAvailabilityResponse {
-    pub payload_availability: Vec<(CertificateDigest, bool)>,
-}
-
-impl PayloadAvailabilityResponse {
-    pub fn available_certificates(&self) -> Vec<CertificateDigest> {
-        self.payload_availability
-            .iter()
-            .filter_map(|(digest, available)| available.then_some(*digest))
-            .collect()
-    }
 }
 
 /// Used by the primary to request that the worker sync the target missing batches.

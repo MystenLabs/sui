@@ -60,12 +60,10 @@ use types::{
     ensure,
     error::{DagError, DagResult},
     now, Certificate, CertificateAPI, CertificateDigest, FetchCertificatesRequest,
-    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header, HeaderAPI,
-    MetadataAPI, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
-    PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
-    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, Vote, VoteInfoAPI,
-    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerOwnBatchMessage, WorkerToPrimary,
-    WorkerToPrimaryServer,
+    FetchCertificatesResponse, Header, HeaderAPI, MetadataAPI, PreSubscribedBroadcastSender,
+    PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest, RequestVoteResponse, Round,
+    SendCertificateRequest, SendCertificateResponse, Vote, VoteInfoAPI, WorkerOthersBatchMessage,
+    WorkerOurBatchMessage, WorkerOwnBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
 };
 
 #[cfg(any(test))]
@@ -200,7 +198,6 @@ impl Primary {
             signature_service: signature_service.clone(),
             header_store: header_store.clone(),
             certificate_store: certificate_store.clone(),
-            payload_store: payload_store.clone(),
             vote_digest_store,
             rx_narwhal_round_updates,
             parent_digests: Default::default(),
@@ -220,22 +217,6 @@ impl Primary {
         // Apply other rate limits from configuration as needed.
         if let Some(limit) = parameters.anemo.send_certificate_rate_limit {
             primary_service = primary_service.add_layer_for_send_certificate(
-                InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
-                    governor::Quota::per_second(limit),
-                    rate_limit::WaitMode::Block,
-                )),
-            );
-        }
-        if let Some(limit) = parameters.anemo.get_payload_availability_rate_limit {
-            primary_service = primary_service.add_layer_for_get_payload_availability(
-                InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
-                    governor::Quota::per_second(limit),
-                    rate_limit::WaitMode::Block,
-                )),
-            );
-        }
-        if let Some(limit) = parameters.anemo.get_certificates_rate_limit {
-            primary_service = primary_service.add_layer_for_get_certificates(
                 InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
                     governor::Quota::per_second(limit),
                     rate_limit::WaitMode::Block,
@@ -271,8 +252,14 @@ impl Primary {
                 epoch_string.clone(),
             )));
 
+        let primary_peer_ids = committee
+            .authorities()
+            .map(|authority| PeerId(authority.network_key().0.to_bytes()));
         let routes = anemo::Router::new()
             .add_rpc_service(primary_service)
+            .route_layer(RequireAuthorizationLayer::new(AllowedPeers::new(
+                primary_peer_ids,
+            )))
             .route_layer(RequireAuthorizationLayer::new(AllowedEpoch::new(
                 epoch_string.clone(),
             )))
@@ -547,7 +534,6 @@ struct PrimaryReceiverHandler {
     signature_service: SignatureService<Signature, { crypto::INTENT_MESSAGE_LENGTH }>,
     header_store: HeaderStore,
     certificate_store: CertificateStore,
-    payload_store: PayloadStore,
     /// The store to persist the last voted round per authority, used to ensure idempotence.
     vote_digest_store: VoteDigestStore,
     /// Get a signal when the round changes.
@@ -924,26 +910,6 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
             })
     }
 
-    async fn get_certificates(
-        &self,
-        request: anemo::Request<GetCertificatesRequest>,
-    ) -> Result<anemo::Response<GetCertificatesResponse>, anemo::rpc::Status> {
-        let digests = request.into_body().digests;
-        if digests.is_empty() {
-            return Ok(anemo::Response::new(GetCertificatesResponse {
-                certificates: Vec::new(),
-            }));
-        }
-
-        // TODO [issue #195]: Do some accounting to prevent bad nodes from monopolizing our resources.
-        let certificates = self.certificate_store.read_all(digests).map_err(|e| {
-            anemo::rpc::Status::internal(format!("error while retrieving certificates: {e}"))
-        })?;
-        Ok(anemo::Response::new(GetCertificatesResponse {
-            certificates: certificates.into_iter().flatten().collect(),
-        }))
-    }
-
     #[instrument(level = "debug", skip_all, peer = ?request.peer_id())]
     async fn fetch_certificates(
         &self,
@@ -1037,50 +1003,6 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         // The requestor should be able to process certificates returned in this order without
         // any missing parents.
         Ok(anemo::Response::new(response))
-    }
-
-    async fn get_payload_availability(
-        &self,
-        request: anemo::Request<PayloadAvailabilityRequest>,
-    ) -> Result<anemo::Response<PayloadAvailabilityResponse>, anemo::rpc::Status> {
-        let digests = request.into_body().certificate_digests;
-        let certificates = self
-            .certificate_store
-            .read_all(digests.to_owned())
-            .map_err(|e| {
-                anemo::rpc::Status::internal(format!("error reading certificates: {e:?}"))
-            })?;
-
-        let mut result: Vec<(CertificateDigest, bool)> = Vec::new();
-        for (id, certificate_option) in digests.into_iter().zip(certificates) {
-            // Find batches only for certificates that exist.
-            if let Some(certificate) = certificate_option {
-                let payload_available = match self.payload_store.read_all(
-                    certificate
-                        .header()
-                        .payload()
-                        .iter()
-                        .map(|(batch, (worker_id, _))| (*batch, *worker_id)),
-                ) {
-                    Ok(payload_result) => payload_result.into_iter().all(|x| x.is_some()),
-                    Err(err) => {
-                        // Assume that we don't have the payloads available,
-                        // otherwise an error response should be sent back.
-                        error!("Error while retrieving payloads: {err}");
-                        false
-                    }
-                };
-                result.push((id, payload_available));
-            } else {
-                // We don't have the certificate available in first place,
-                // so we can't even look up the batches.
-                result.push((id, false));
-            }
-        }
-
-        Ok(anemo::Response::new(PayloadAvailabilityResponse {
-            payload_availability: result,
-        }))
     }
 }
 
