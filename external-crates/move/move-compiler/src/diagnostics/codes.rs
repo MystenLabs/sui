@@ -14,12 +14,16 @@ pub enum Severity {
     Bug = 3,
 }
 
-/// Identifies a warning category. Includes an option external prefix to distinguish warnings from
+/// A an optional prefix to distinguish between different types of warnings (internal vs. possibly
+/// multiple externally provided ones).
+type ExternalPrefix = Option<&'static str>;
+
+/// Identifies a warning category. Includes an external prefix to distinguish warnings from
 /// different sources.
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
 pub struct CategoryID {
     category: u8,
-    external_prefix: Option<&'static str>,
+    external_prefix: ExternalPrefix,
 }
 
 /// Identifies a warning diagnostic through a warning category ID and a warning code.
@@ -59,7 +63,7 @@ pub(crate) trait DiagnosticCode: Copy {
 /// Represents a single annotation for a diagnostic filter
 pub enum WarningFilter {
     /// Filters all warnings
-    All(/* external_prefix */ Option<&'static str>),
+    All(ExternalPrefix),
     /// Filters all warnings of a specific category. Only known filters have names.
     Category(CategoryID, /* name */ Option<&'static str>),
     /// Filters a single warning, as defined by codes below. Only known filters have names.
@@ -326,7 +330,7 @@ impl WarningFilter {
 //**************************************************************************************************
 
 impl CategoryID {
-    pub fn new(category: u8, external_prefix: Option<&'static str>) -> Self {
+    pub fn new(category: u8, external_prefix: ExternalPrefix) -> Self {
         CategoryID {
             category,
             external_prefix,
@@ -343,7 +347,7 @@ impl CategoryID {
 }
 
 impl DiagnosticsID {
-    pub fn new(category: u8, code: u8, external_prefix: Option<&'static str>) -> Self {
+    pub fn new(category: u8, code: u8, external_prefix: ExternalPrefix) -> Self {
         let category_id = CategoryID {
             category,
             external_prefix,
@@ -359,7 +363,7 @@ impl DiagnosticsID {
         self.code
     }
 
-    pub fn external_prefix(&self) -> Option<&'static str> {
+    pub fn external_prefix(&self) -> ExternalPrefix {
         self.category_id.external_prefix
     }
 

@@ -14,7 +14,7 @@ pub const SHARE_OWNED_DIAG_CODE: u8 = 1;
 pub const SELF_TRANSFER_DIAG_CATEGORY: u8 = 2;
 pub const SELF_TRANSFER_DIAG_CODE: u8 = 1;
 
-pub const ALLOW_ATTR_NAME: &str = "linter_allow";
+pub const ALLOW_ATTR_NAME: &str = "lint_allow";
 pub const LINT_WARNING_PREFIX: &str = "Lint ";
 
 pub const SHARE_OWNED_FILTER_NAME: &str = "share_owned";

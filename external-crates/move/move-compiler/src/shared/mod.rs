@@ -8,7 +8,6 @@ use crate::{
     diagnostics::{
         codes::{
             Category, CategoryID, Declarations, DiagnosticsID, Severity, UnusedItem, WarningFilter,
-            WARNING_FILTER_ATTR,
         },
         Diagnostic, Diagnostics, WarningFilters,
     },
@@ -195,16 +194,18 @@ pub struct IndexedPackagePath {
 
 pub type AttributeDeriver = dyn Fn(&mut CompilationEnv, &mut ModuleDefinition);
 
+/// Filter info for example filter #[allow(unused_function)] would have `name` to be
+/// `unused_function` and `attribute_name` to be `allow`
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct KnownFilterKey {
+pub struct KnownFilterInfo {
     name: Symbol,
     attribute_name: E::AttributeName_,
 }
 
-impl KnownFilterKey {
+impl KnownFilterInfo {
     pub fn new(n: &str, attribute_name: E::AttributeName_) -> Self {
         let name = Symbol::from(n);
-        KnownFilterKey {
+        KnownFilterInfo {
             name,
             attribute_name,
         }
@@ -221,9 +222,9 @@ pub struct CompilationEnv {
     /// Config for any package not found in `package_configs`, or for inputs without a package.
     default_config: PackageConfig,
     /// Maps warning filter key (filter name and filter attribute name) to the filter itself.
-    known_filters: BTreeMap<KnownFilterKey, WarningFilter>,
+    known_filters: BTreeMap<KnownFilterInfo, WarningFilter>,
     /// Maps a diagnostics ID to a known filter name.
-    known_filter_names: BTreeMap<DiagnosticsID, Symbol>,
+    known_filter_names: BTreeMap<DiagnosticsID, KnownFilterInfo>,
     /// Attribute names (including externally provided ones) identifying known warning filters.
     known_filter_attributes: BTreeSet<E::AttributeName_>,
     // TODO(tzakian): Remove the global counter and use this counter instead
@@ -233,7 +234,7 @@ pub struct CompilationEnv {
 macro_rules! known_code_filter {
     ($name:ident, $category:ident::$code:ident, $attr_name:ident) => {
         (
-            KnownFilterKey::new($name, $attr_name),
+            KnownFilterInfo::new($name, $attr_name),
             WarningFilter::Code(
                 DiagnosticsID::new(Category::$category as u8, $category::$code as u8, None),
                 Some($name),
@@ -260,11 +261,11 @@ impl CompilationEnv {
         let filter_attributes = BTreeSet::from([filter_attr_name]);
         let known_filters = BTreeMap::from([
             (
-                KnownFilterKey::new(FILTER_ALL, filter_attr_name),
+                KnownFilterInfo::new(FILTER_ALL, filter_attr_name),
                 WarningFilter::All(None),
             ),
             (
-                KnownFilterKey::new(FILTER_UNUSED, filter_attr_name),
+                KnownFilterInfo::new(FILTER_UNUSED, filter_attr_name),
                 WarningFilter::Category(
                     CategoryID::new(Category::UnusedItem as u8, None),
                     Some(FILTER_UNUSED),
@@ -309,23 +310,15 @@ impl CompilationEnv {
             known_code_filter!(FILTER_DEAD_CODE, UnusedItem::DeadCode, filter_attr_name),
         ]);
 
-        let known_filter_names: BTreeMap<DiagnosticsID, Symbol> = known_filters
+        let known_filter_names: BTreeMap<DiagnosticsID, KnownFilterInfo> = known_filters
             .iter()
-            .filter_map(
-                |(
-                    KnownFilterKey {
-                        name,
-                        attribute_name: _,
-                    },
-                    v,
-                )| {
-                    if let WarningFilter::Code(diag_id, _) = v {
-                        Some((*diag_id, name.clone()))
-                    } else {
-                        None
-                    }
-                },
-            )
+            .filter_map(|(known_filter_info, v)| {
+                if let WarningFilter::Code(diag_id, _) = v {
+                    Some((*diag_id, known_filter_info.clone()))
+                } else {
+                    None
+                }
+            })
             .collect();
 
         Self {
@@ -351,12 +344,13 @@ impl CompilationEnv {
             // add help to suppress warning, if applicable
             // TODO do we want a centralized place for tips like this?
             if diag.info().severity() == Severity::Warning {
-                if let Some(filter_name) = self.known_filter_names.get(&diag.info().id()) {
+                if let Some(filter_info) = self.known_filter_names.get(&diag.info().id()) {
+                    //                    if let Some(filter_attr_name) =
                     let help = format!(
                         "This warning can be suppressed with '#[{}({})]' \
-                        applied to the 'module' or module member ('const', 'fun', or 'struct')",
-                        WARNING_FILTER_ATTR,
-                        filter_name.as_str()
+                         applied to the 'module' or module member ('const', 'fun', or 'struct')",
+                        filter_info.attribute_name.name(),
+                        filter_info.name.as_str()
                     );
                     diag.add_note(help)
                 }
@@ -437,7 +431,7 @@ impl CompilationEnv {
         attribute_name: E::AttributeName_,
     ) -> Option<WarningFilter> {
         self.known_filters
-            .get(&KnownFilterKey::new(name.as_str(), attribute_name))
+            .get(&KnownFilterInfo::new(name.as_str(), attribute_name))
             .cloned()
     }
 
@@ -455,22 +449,22 @@ impl CompilationEnv {
             match filter {
                 WarningFilter::All(_) => {
                     self.known_filters
-                        .insert(KnownFilterKey::new(FILTER_ALL, filter_attr_name), filter);
+                        .insert(KnownFilterInfo::new(FILTER_ALL, filter_attr_name), filter);
                 }
                 WarningFilter::Category(_, name) => {
                     let Some(n) = name else {
                         anyhow::bail!("A known Category warning filter must have a name specified");
                     };
                     self.known_filters
-                        .insert(KnownFilterKey::new(n, filter_attr_name), filter);
+                        .insert(KnownFilterInfo::new(n, filter_attr_name), filter);
                 }
                 WarningFilter::Code(diag_id, name) => {
                     let Some(n) = name else {
                         anyhow::bail!("A known Code warning filter must have a name specified");
                     };
-                    self.known_filters
-                        .insert(KnownFilterKey::new(n, filter_attr_name), filter);
-                    self.known_filter_names.insert(diag_id, n.into());
+                    let known_filter_info = KnownFilterInfo::new(n, filter_attr_name);
+                    self.known_filters.insert(known_filter_info.clone(), filter);
+                    self.known_filter_names.insert(diag_id, known_filter_info);
                 }
             }
         }
