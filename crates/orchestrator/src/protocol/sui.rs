@@ -169,6 +169,7 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
         .iter()
         .collect();
 
+        let committee_size = parameters.nodes;
         let clients: Vec<_> = instances.into_iter().collect();
         let load_share = parameters.load / clients.len();
         let shared_counter = parameters.benchmark_type.shared_objects_ratio;
@@ -177,11 +178,10 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
 
         clients
             .into_iter()
-            .enumerate()
-            .map(|(i, instance)| {
+            .zip(GenesisConfig::benchmark_gas_keys(committee_size).into_iter())
+            .map(|(instance, gas_key)| {
                 let genesis = genesis_path.display();
                 let keystore = keystore_path.display();
-                let gas_key = GenesisConfig::benchmark_gas_key();
                 let gas_address = SuiAddress::from(&gas_key.public());
 
                 let run = [
@@ -269,8 +269,19 @@ impl ProtocolMetrics for SuiProtocol {
     where
         I: IntoIterator<Item = Instance>,
     {
-        // // TODO: hack until we have benchmark clients.
-        // self.nodes_metrics_path(instances)
-        todo!()
+        instances
+            .into_iter()
+            .enumerate()
+            .map(|(i, instance)| {
+                let port = 4000 + i as u16;
+                let path = format!(
+                    "{}:{}{}",
+                    instance.main_ip,
+                    port,
+                    sui_node::metrics::METRICS_ROUTE
+                );
+                (instance, path)
+            })
+            .collect()
     }
 }
