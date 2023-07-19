@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::future::select_all;
 use std::{
     collections::{HashMap, VecDeque},
     fs::{self},
@@ -9,12 +8,10 @@ use std::{
     path::PathBuf,
     time::Duration,
 };
-use tokio::select;
 
 use tokio::time::{self, Instant};
 
-use crate::error::SshError;
-use crate::monitor::{Monitor, NodeMonitorHandle};
+use crate::monitor::Monitor;
 use crate::{
     benchmark::{BenchmarkParameters, BenchmarkParametersGenerator, BenchmarkType},
     client::Instance,
@@ -216,7 +213,7 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P,
         &self,
         instances: Vec<Instance>,
         parameters: &BenchmarkParameters<T>,
-    ) -> TestbedResult<NodeMonitorHandle> {
+    ) -> TestbedResult<()> {
         // Run one node per instance.
         let targets = self
             .protocol_commands
@@ -237,44 +234,7 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P,
             .nodes_metrics_command(instances.clone());
         self.ssh_manager.wait_for_success(commands).await;
 
-        self.start_monitor(instances)
-    }
-
-    /// Monitors node process running on the instances,
-    /// Prints error message and terminates test if a node panics
-    fn start_monitor(&self, instances: Vec<Instance>) -> TestbedResult<NodeMonitorHandle> {
-        let targets = self.protocol_commands.monitor_command(instances);
-        let (handle, mut receiver) = NodeMonitorHandle::new();
-        let ssh_manager = self.ssh_manager.clone();
-        tokio::spawn(async move {
-            let monitor = Self::run_monitor(ssh_manager, targets);
-            select! {
-                _ = monitor => {
-                    unreachable!()
-                }
-                _ = receiver.recv() => {
-                    // do nothing
-                }
-            }
-        });
-        Ok(handle)
-    }
-
-    async fn run_monitor(ssh_manager: SshConnectionManager, targets: Vec<(Instance, String)>) {
-        loop {
-            let r = ssh_manager.run_per_instance(targets.clone(), CommandContext::new());
-            let (output, i, _) = select_all(r).await;
-            let output = output.unwrap();
-            let (instance, result) = match output {
-                Ok(output) => output,
-                Err(SshError::SessionError { .. } | SshError::ConnectionError { .. }) => continue, // Retry session error(likely timeout)
-                Err(SshError::NonZeroExitCode { code, .. }) => {
-                    panic!("Monitor command on {} failed with code: {}", i, code)
-                }
-            };
-            eprintln!("Node {} failed:\n{}", instance, result);
-            std::process::exit(1);
-        }
+        Ok(())
     }
 
     /// Install the codebase and its dependencies on the testbed.
@@ -289,12 +249,10 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P,
             "sudo apt-get -y autoremove",
             // Disable "pending kernel upgrade" message.
             "sudo apt-get -y remove needrestart",
-            // The following dependencies
+            // The following dependencies:
             // * build-essential: prevent the error: [error: linker `cc` not found].
-            // * sysstat - for getting disk stats
-            // * iftop - for getting network stats
             // * libssl-dev - Required to compile the orchestrator, todo remove this dependency
-            "sudo apt-get -y install build-essential sysstat iftop libssl-dev",
+            "sudo apt-get -y install build-essential libssl-dev",
             // Install rust (non-interactive).
             "curl --proto \"=https\" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y",
             "echo \"source $HOME/.cargo/env\" | tee -a ~/.bashrc",
@@ -434,20 +392,17 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P,
     }
 
     /// Deploy the nodes.
-    pub async fn run_nodes(
-        &self,
-        parameters: &BenchmarkParameters<T>,
-    ) -> TestbedResult<NodeMonitorHandle> {
+    pub async fn run_nodes(&self, parameters: &BenchmarkParameters<T>) -> TestbedResult<()> {
         display::action("Deploying validators");
 
         // Select the instances to run.
         let (_, nodes, _) = self.select_instances(parameters)?;
 
         // Boot one node per instance.
-        let monitor = self.boot_nodes(nodes, parameters).await?;
+        self.boot_nodes(nodes, parameters).await?;
 
         display::done();
-        Ok(monitor)
+        Ok(())
     }
 
     /// Deploy the load generators.
@@ -533,8 +488,7 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P,
                         self.ssh_manager.kill(action.kill.clone(), "node").await?;
                     }
                     if !action.boot.is_empty() {
-                        // Monitor not yet supported for this
-                        let _: NodeMonitorHandle = self.boot_nodes(action.boot.clone(), parameters).await?;
+                        self.boot_nodes(action.boot.clone(), parameters).await?;
                     }
                     if !action.kill.is_empty() || !action.boot.is_empty() {
                         display::newline();
@@ -662,8 +616,6 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P,
 
             // Deploy the load generators.
             self.run_clients(&parameters).await?;
-
-            return Ok(());
 
             // Wait for the benchmark to terminate. Then save the results and print a summary.
             let aggregator = self.run(&parameters).await?;

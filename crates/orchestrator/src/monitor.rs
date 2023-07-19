@@ -3,24 +3,12 @@
 
 use std::{fs, net::SocketAddr, path::PathBuf};
 
-use tokio::sync::mpsc;
-
 use crate::{
     client::Instance,
     error::{MonitorError, MonitorResult},
     protocol::ProtocolMetrics,
     ssh::{CommandContext, SshConnectionManager},
 };
-
-#[must_use]
-pub struct NodeMonitorHandle(mpsc::Sender<()>);
-
-impl NodeMonitorHandle {
-    pub fn new() -> (Self, mpsc::Receiver<()>) {
-        let (sender, receiver) = mpsc::channel(1);
-        (Self(sender), receiver)
-    }
-}
 
 pub struct Monitor {
     instance: Instance,
