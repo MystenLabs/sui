@@ -291,8 +291,7 @@ impl WriteApiServer for TransactionExecutionApi {
     ) -> RpcResult<DevInspectResults> {
         with_tracing!(async move {
             let tx_kind: TransactionKind = self.convert_bytes(tx_bytes)?;
-            self
-                .state
+            self.state
                 .dev_inspect_transaction_block(sender_address, tx_kind, gas_price.map(|i| *i))
                 .await
                 .map_err(Error::from)

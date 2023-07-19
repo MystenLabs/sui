@@ -493,7 +493,7 @@ impl ReadApiServer for ReadApi {
             } else {
                 Err(SuiRpcInputError::SizeLimitExceeded(
                     QUERY_MAX_RESULT_LIMIT.to_string(),
-                ))
+                ))?
             }
         })
     }
@@ -586,7 +586,7 @@ impl ReadApiServer for ReadApi {
             } else {
                 Err(SuiRpcInputError::SizeLimitExceeded(
                     QUERY_MAX_RESULT_LIMIT.to_string(),
-                ))
+                ))?
             }
         })
     }
@@ -938,6 +938,7 @@ impl ReadApiServer for ReadApi {
                         ProtocolVersion::MIN.as_u64(),
                         ProtocolVersion::MAX.as_u64(),
                     ))
+                    .map_err(Error::from)
                 })
                 .unwrap_or(Ok(self
                     .state

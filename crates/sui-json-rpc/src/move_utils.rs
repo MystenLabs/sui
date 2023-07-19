@@ -182,7 +182,7 @@ impl MoveUtilsServer for MoveUtils {
     ) -> RpcResult<SuiMoveNormalizedStruct> {
         with_tracing!(async move {
             let module = self.internal.get_move_module(package, module_name).await?;
-            let structs = module.structs;            
+            let structs = module.structs;
             let identifier = Identifier::new(struct_name.as_str())
                 .map_err(|e| SuiRpcInputError::GenericInvalid(format!("{e}")))?;
             match structs.get(&identifier) {
@@ -190,7 +190,7 @@ impl MoveUtilsServer for MoveUtils {
                 None => Err(SuiRpcInputError::GenericNotFound(format!(
                     "No struct was found with struct name {}",
                     struct_name
-                )))
+                )))?,
             }
         })
     }
@@ -204,7 +204,7 @@ impl MoveUtilsServer for MoveUtils {
     ) -> RpcResult<SuiMoveNormalizedFunction> {
         with_tracing!(async move {
             let module = self.internal.get_move_module(package, module_name).await?;
-            let functions = module.functions;           
+            let functions = module.functions;
             let identifier = Identifier::new(function_name.as_str())
                 .map_err(|e| SuiRpcInputError::GenericInvalid(format!("{e}")))?;
             match functions.get(&identifier) {
@@ -212,7 +212,7 @@ impl MoveUtilsServer for MoveUtils {
                 None => Err(SuiRpcInputError::GenericNotFound(format!(
                     "No function was found with function name {}",
                     function_name
-                ))),
+                )))?,
             }
         })
     }
@@ -278,7 +278,7 @@ impl MoveUtilsServer for MoveUtils {
                 None => Err(SuiRpcInputError::GenericNotFound(format!(
                     "No parameters found for function {}",
                     function
-                ))),
+                )))?,
             }
         })
     }

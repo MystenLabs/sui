@@ -92,14 +92,11 @@ impl CoinReadApiServer for CoinReadApi {
                 None => (coin_type_tag.to_string(), ObjectID::ZERO),
             };
 
-            let coins = self
-                .internal
+            self.internal
                 .get_coins_iterator(
                     owner, cursor, limit, true, // only care about one type of coin
                 )
-                .await?;
-
-            Ok(coins)
+                .await
         })
     }
 
