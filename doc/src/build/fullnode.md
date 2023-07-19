@@ -288,3 +288,119 @@ If you followed the instructions for [Building from Source](#building-from-sourc
     ```
 
 Your Full node starts on: `http://127.0.0.1:9000`.
+
+# Pruning 
+
+## Object Pruning
+
+Object pruning involves the removal of older object versions from the fullnode db. 
+New object versions are added to the db during transaction execution (making older versions ready for garbage collection) and can become a 
+problem if not pruned, as it can slow down the performance of the db and take up too much disk space. 
+Object pruning works in the background by tailing checkpoint stream, identifying each
+checkpoint which contains object versions which are now eligible for pruning.
+
+A sui node can enable object pruning by adding this `authority-store-pruning-config` config:
+```yaml
+authority-store-pruning-config:
+  # Number of epoch dbs to keep 
+  # Not relevant for object pruning
+  num-latest-epoch-dbs-to-retain: 3
+  # How often the epoch db pruning task should run
+  # Not relevant for object pruning
+  epoch-db-pruning-period-secs: 3600
+  # Number of latest epochs before which object pruning is allowed to run.
+  # When this is 0, pruner is allowed to prune old object versions as soon
+  # as possible. This is what we also call aggressive pruning and is the most effective
+  # garbage collection method which results in the samllest disk usage possible. 
+  # This is recommended setting for validator nodes as older object versions aren't
+  # needed for transaction execution.
+  # When this is 1, pruner will only prune object versions from transaction checkpoints
+  # older than the current epoch. In general, when this is N (where N >= 1), pruner 
+  # will only prune object versions from checkpoints upto current - N epoch. 
+  # This means it is possible to have multiple versions of an object to be present 
+  # in the db. It is a recommended setting for fullnodes as they may have to serve 
+  # rpc requests which require looking up objects by id and version (instead of just latest
+  # version). However, if a fullnode is not serving such rpc requests it should also 
+  # use aggressive pruning
+  num-epochs-to-retain: 0
+  # Advanced setting: Maximum number of checkpoints in one batch of pruning run. This is
+  # mostly not needed to be changed and default is good for most use cases
+  max-checkpoints-in-batch: 10
+  # Advanced setting: Maximum number of transactions in one batch of pruning run. This is
+  # mostly not needed to be changed and default is good for most use cases
+  max-transactions-in-batch: 1000
+```
+## Transaction Pruning
+
+Transaction pruning is another type of pruning that removes old transactions and effects from the db. 
+Checkpoints which are created periodically contain transaction and their effects. 
+Transaction pruning works in the background by tailing checkpoint stream as well.
+Full nodes and validators can enable transaction pruning by adding can enable transaction pruning
+by adding `num_epochs_to_retain_for_checkpoints` to their `authority-store-pruning-config` config:
+
+```yaml
+authority-store-pruning-config:
+  num-latest-epoch-dbs-to-retain: 3
+  epoch-db-pruning-period-secs: 3600
+  num-epochs-to-retain: 0
+  max-checkpoints-in-batch: 10
+  max-transactions-in-batch: 1000
+  # Number of latest epochs before which transaction and effects could be pruned.
+  # When this is N (where N >= 2), pruner can prune transaction and effects from 
+  # checkpoints upto current - N epoch. Transaction and effects from current and
+  # previous epoch are never pruned. N = 2 is a recommended setting for validators
+  # and fullnodes not serving rpc requests.
+  num_epochs_to_retain_for_checkpoints: 2
+  # Ensures that individual SST files periodically go through the compaction process.
+  # This helps reclaim disk space and avoid fragmentation issues
+  periodic-compaction-threshold-days: 1
+```
+
+## Archival Fallback
+
+Once various full nodes start pruning historical transactions and effects, it may not be always possible for
+their peers to catch up transaction and effects via state synchronization. And for this a node needs to fallback
+downloading this data from a remote aws s3 bucket. This archive has all transaction and effects data since 
+genesis and lags behind the latest network checkpoint by ten minutes. Enabling this is very highly recommended
+for all nodes. A sui node can enable this automatic archive fallback by adding the following config:
+
+```yaml
+state-archive-read-config:
+  - object-store-config:
+      object-store: "S3"
+      # Use mysten-testnet-archives for testnet 
+      # Use mysten-mainnet-archives for mainnet
+      bucket: "mysten-<testnet|mainnet>-archives"
+      # Use your aws account access key id
+      aws-access-key-id: "<AWS_ACCESS_KEY_ID>"
+      # Use your aws account secret access key
+      aws-secret-access-key: "<AWS_SECRET_ACCESS_KEY>"
+      aws-region: "us-west-2"
+      object-store-connection-limit: 20
+    # How many objects to read ahead when catching up  
+    concurrency: 5
+    # Whether to prune local state based on latest checkpoint in archive.
+    # This should stay false for most use cases
+    use-for-pruning-watermark: false
+```
+
+## Setting up your own archival fallback
+
+It is also possible to set up the archival fallback to a different (personal) s3 bucket. For this a fullnode
+needs to be configured to archive transactions and effects. Enabling this can be done by adding the below config:
+
+```yaml
+state-archive-write-config:
+  object-store-config:
+    object-store: "S3"
+    bucket: "<bucket_name>"
+    aws-access-key-id: "<AWS_ACCESS_KEY_ID>"
+    aws-secret-access-key: "<AWS_SECRET_ACCESS_KEY>"
+    aws-region: "<aws_region>"
+    object-store-connection-limit: 20
+  concurrency: 5
+  # This is needed to be set as true on the node which is archiving the data
+  # This prevents the node from pruning its local state until the data has been
+  # successfully archived
+  use-for-pruning-watermark: true
+```
