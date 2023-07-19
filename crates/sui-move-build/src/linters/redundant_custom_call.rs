@@ -160,15 +160,19 @@ impl SimpleAbsInt for RedundantCustomVerifierAI {
                 } else {
                     ("freeze", "frozen")
                 };
-                let uid_msg = format!("Instances of a type with a store ability can be {action} using \
+                let uid_msg = format!(
+                    "Instances of a type with a store ability can be {action} using \
                                        the public_{fname} function which often negates the intent \
-                                       of enforcing a custom {op} policy (implemented through calling \
-                                       the private {fname} function variant in the module defining this type)");
+                                       of enforcing a custom {op} policy"
+                );
+                let note_msg = format!("A custom {op} policy for a given type is implemented through calling \
+                                       the private {fname} function variant in the module defining this type");
                 let mut d = diag!(
                     REDUNDANT_CUSTOM_DIAG,
                     (self.fn_name_loc, msg),
                     (f.name.loc(), uid_msg)
                 );
+                d.add_note(note_msg);
                 if obj_addr_loc != INVALID_LOC {
                     let loc_msg = format!("An instance of a module-private type with a store ability to be {} coming from here", action);
                     d.add_secondary_label((obj_addr_loc, loc_msg));
