@@ -256,8 +256,9 @@ impl ProtocolMetrics for SuiProtocol {
             .zip(instances.into_iter())
             .map(|(config, instance)| {
                 let path = format!(
-                    "{}{}",
-                    config.metrics_address,
+                    "{}:{}{}",
+                    instance.main_ip,
+                    config.metrics_address.port(),
                     sui_node::metrics::METRICS_ROUTE
                 );
                 (instance, path)

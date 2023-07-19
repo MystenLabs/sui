@@ -295,13 +295,7 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P,
         if let Some(instance) = instance {
             display::action("Configuring monitoring instance");
 
-            let monitor = Monitor::new(
-                instance,
-                clients,
-                nodes,
-                self.ssh_manager.clone(),
-                self.dedicated_clients != 0,
-            );
+            let monitor = Monitor::new(instance, clients, nodes, self.ssh_manager.clone());
             monitor.start_prometheus(&self.protocol_commands).await?;
             monitor.start_grafana().await?;
 

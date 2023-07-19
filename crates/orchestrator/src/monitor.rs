@@ -15,7 +15,6 @@ pub struct Monitor {
     clients: Vec<Instance>,
     nodes: Vec<Instance>,
     ssh_manager: SshConnectionManager,
-    dedicated_clients: bool,
 }
 
 impl Monitor {
@@ -25,14 +24,12 @@ impl Monitor {
         clients: Vec<Instance>,
         nodes: Vec<Instance>,
         ssh_manager: SshConnectionManager,
-        dedicated_clients: bool,
     ) -> Self {
         Self {
             instance,
             clients,
             nodes,
             ssh_manager,
-            dedicated_clients,
         }
     }
 
@@ -49,24 +46,12 @@ impl Monitor {
         &self,
         protocol_commands: &P,
     ) -> MonitorResult<()> {
-        // Select the instances to monitor.
-        let instances: Vec<_> = if self.dedicated_clients {
-            self.clients
-                .iter()
-                .cloned()
-                .chain(self.nodes.iter().cloned())
-                .collect()
-        } else {
-            self.nodes.clone()
-        };
-
-        // Configure and reload prometheus.
         let instance = std::iter::once(self.instance.clone());
-        let commands = Prometheus::setup_commands(instances, protocol_commands);
+        let commands =
+            Prometheus::setup_commands(self.clients.clone(), self.nodes.clone(), protocol_commands);
         self.ssh_manager
             .execute(instance, commands, CommandContext::default())
             .await?;
-
         Ok(())
     }
 
@@ -107,17 +92,27 @@ impl Prometheus {
     }
 
     /// Generate the commands to update the prometheus configuration and restart prometheus.
-    pub fn setup_commands<I, P>(instances: I, protocol: &P) -> String
+    pub fn setup_commands<I, P>(clients: I, nodes: I, protocol: &P) -> String
     where
         I: IntoIterator<Item = Instance>,
         P: ProtocolMetrics,
     {
-        // Generate the prometheus configuration.
+        // Generate the prometheus' global configuration.
         let mut config = vec![Self::global_configuration()];
 
-        let nodes_metrics_path = protocol.nodes_metrics_path(instances);
+        // Add configurations to scrape the clients.
+        let clients_metrics_path = protocol.clients_metrics_path(clients);
+        for (i, (_, clients_metrics_path)) in clients_metrics_path.into_iter().enumerate() {
+            let id = format!("client-{i}");
+            let scrape_config = Self::scrape_configuration(&id, &clients_metrics_path);
+            config.push(scrape_config);
+        }
+
+        // Add configurations to scrape the nodes.
+        let nodes_metrics_path = protocol.nodes_metrics_path(nodes);
         for (i, (_, nodes_metrics_path)) in nodes_metrics_path.into_iter().enumerate() {
-            let scrape_config = Self::scrape_configuration(i, &nodes_metrics_path);
+            let id = format!("node-{i}");
+            let scrape_config = Self::scrape_configuration(&id, &nodes_metrics_path);
             config.push(scrape_config);
         }
 
@@ -147,7 +142,7 @@ impl Prometheus {
 
     /// Generate the prometheus configuration from the given metrics path.
     /// NOTE: The configuration file is a yaml file so spaces are important.
-    fn scrape_configuration(index: usize, nodes_metrics_path: &str) -> String {
+    fn scrape_configuration(id: &str, nodes_metrics_path: &str) -> String {
         let parts: Vec<_> = nodes_metrics_path.split('/').collect();
         let address = parts[0].parse::<SocketAddr>().unwrap();
         let ip = address.ip();
@@ -155,7 +150,7 @@ impl Prometheus {
         let path = parts[1];
 
         [
-            &format!("  - job_name: instance-{index}"),
+            &format!("  - job_name: {id}"),
             &format!("    metrics_path: /{path}"),
             "    static_configs:",
             "      - targets:",
