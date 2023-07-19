@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cfgir::visitor::AbsIntVisitorObj,
+    cfgir::visitor::{AbsIntVisitorObj, AbstractInterpreterVisitor},
     command_line as cli,
     diagnostics::{
         codes::{Category, Severity, WarningFilter, WARNING_FILTER_ATTR},
@@ -12,7 +12,7 @@ use crate::{
     editions::{Edition, Flavor},
     naming::ast::ModuleDefinition,
     sui_mode,
-    typing::visitor::TypingVisitorObj,
+    typing::visitor::{TypingVisitor, TypingVisitorObj},
 };
 use clap::*;
 use move_ir_types::location::*;
@@ -199,7 +199,10 @@ impl CompilationEnv {
         package_configs: BTreeMap<Symbol, PackageConfig>,
         default_config: Option<PackageConfig>,
     ) -> Self {
-        visitors.extend([sui_mode::id_leak::IDLeakVerifier.into()]);
+        visitors.extend([
+            sui_mode::id_leak::IDLeakVerifier.visitor(),
+            sui_mode::typing::SuiTypeChecks.visitor(),
+        ]);
         Self {
             flags,
             warning_filter: vec![],

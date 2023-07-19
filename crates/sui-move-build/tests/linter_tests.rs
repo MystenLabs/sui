@@ -8,7 +8,11 @@ use move_command_line_common::{
     testing::{add_update_baseline_fix, format_diff, read_env_update_baseline},
 };
 use move_compiler::{
-    command_line::compiler::move_check_for_errors, shared::NumericalAddress, Compiler, PASS_PARSER,
+    cfgir::visitor::AbstractInterpreterVisitor,
+    command_line::compiler::move_check_for_errors,
+    editions::Flavor,
+    shared::{NumericalAddress, PackageConfig},
+    Compiler, PASS_PARSER,
 };
 
 use sui_move_build::linters::{
@@ -35,13 +39,17 @@ fn run_tests(path: &Path) -> anyhow::Result<()> {
     let exp_path = path.with_extension(EXP_EXT);
 
     let targets: Vec<String> = vec![path.to_str().unwrap().to_owned()];
-    let lint_visitors = vec![ShareOwnedVerifier.into(), SelfTransferVerifier.into()];
+    let lint_visitors = vec![ShareOwnedVerifier.visitor(), SelfTransferVerifier.visitor()];
     let (files, comments_and_compiler_res) = Compiler::from_files(
         targets,
         vec![MOVE_STDLIB_PATH.to_string(), SUI_FRAMEWORK_PATH.to_string()],
         default_testing_addresses(),
     )
     .add_visitors(lint_visitors)
+    .set_default_config(PackageConfig {
+        flavor: Flavor::Sui,
+        ..PackageConfig::default()
+    })
     .run::<PASS_PARSER>()?;
 
     let diags = move_check_for_errors(comments_and_compiler_res);

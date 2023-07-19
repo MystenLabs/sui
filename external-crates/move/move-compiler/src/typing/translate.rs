@@ -9,6 +9,7 @@ use super::{
 use crate::{
     diag,
     diagnostics::{codes::*, Diagnostic},
+    editions::Flavor,
     expansion::ast::{AttributeName_, Fields, ModuleIdent, Value_, Visibility},
     naming::ast::{self as N, TParam, TParamID, Type, TypeName_, Type_},
     parser::ast::{Ability_, BinOp_, ConstantName, Field, FunctionName, StructName, UnaryOp_},
@@ -17,6 +18,7 @@ use crate::{
         unique_map::UniqueMap,
         *,
     },
+    sui_mode,
     typing::ast as T,
     FullyCompiledProgram,
 };
@@ -2292,46 +2294,48 @@ fn make_arg_types<S: std::fmt::Display, F: Fn() -> S>(
 
 /// Generates warnings for unused struct types and unused (private) functions.
 fn gen_unused_warnings(context: &mut Context, mdef: &T::ModuleDefinition) {
-    if mdef.is_source_module {
+    if !mdef.is_source_module {
         // generate warnings only for modules compiled in this pass rather than for all modules
         // including pre-compiled libraries for which we do not have source code available and
         // cannot be analyzed in this pass
+        return;
+    }
+
+    let is_sui_mode = context.env.package_config(mdef.package_name).flavor == Flavor::Sui;
+    context
+        .env
+        .add_warning_filter_scope(mdef.warning_filter.clone());
+
+    for (loc, name, fun) in &mdef.functions {
+        if fun.attributes.iter().any(|(_, n, _)| {
+            n == &AttributeName_::Known(KnownAttribute::Testing(TestingAttribute::Test))
+        }) {
+            // functions with #[test] attribute are implicitly used
+            continue;
+        }
+        if is_sui_mode && *name == sui_mode::INIT_FUNCTION_NAME {
+            // a Sui-specific filter to avoid signaling that the init function is unused
+            continue;
+        }
         context
             .env
-            .add_warning_filter_scope(mdef.warning_filter.clone());
-
-        for (loc, name, fun) in &mdef.functions {
-            if fun.attributes.iter().any(|(_, n, _)| {
-                n == &AttributeName_::Known(KnownAttribute::Testing(TestingAttribute::Test))
-            }) {
-                // functions with #[test] attribute are implicitly used
-                continue;
-            }
-            if *name == symbol!("init") {
-                // a Sui-specific hack (until we can implement this properly on the Sui side) to
-                // avoid signaling that the init function is unused (not called by the runtime
-                continue;
-            }
+            .add_warning_filter_scope(fun.warning_filter.clone());
+        if !context.called_fns.contains(name)
+            && fun.entry.is_none()
+            && matches!(fun.visibility, Visibility::Internal)
+        {
+            // TODO: postponing handling of friend functions until we decide what to do with them
+            // vis-a-vis ideas around package-private
+            let msg = format!(
+                "The non-'public', non-'entry' function '{name}' is never called. \
+                           Consider removing it."
+            );
             context
                 .env
-                .add_warning_filter_scope(fun.warning_filter.clone());
-            if !context.called_fns.contains(name)
-                && fun.entry.is_none()
-                && matches!(fun.visibility, Visibility::Internal)
-            {
-                // TODO: postponing handling of friend functions until we decide what to do with them
-                // vis-a-vis ideas around package-private
-                let msg = format!(
-                    "The non-'public', non-'entry' function '{name}' is never called. \
-                           Consider removing it."
-                );
-                context
-                    .env
-                    .add_diag(diag!(UnusedItem::Function, (loc, msg)))
-            }
-            context.env.pop_warning_filter_scope();
+                .add_diag(diag!(UnusedItem::Function, (loc, msg)))
         }
-
         context.env.pop_warning_filter_scope();
     }
+
+    context.env.pop_warning_filter_scope();
 }

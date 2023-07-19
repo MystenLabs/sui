@@ -1,0 +1,9 @@
+error[Sui E02002]: invalid 'entry' function signature
+  ┌─ tests/sui_mode/entry_points/obj_mut_ref_vector.move:8:25
+  │
+8 │     public entry fun no(_: &mut vector<S>) {
+  │            -----        ^  -------------- 'entry' parameters must be primitives (by-value), vectors of primitives, objects (by-reference or by-value), or vectors of objects
+  │            │            │   
+  │            │            Invalid 'entry' parameter type for parameter '_'
+  │            'no' was declared 'entry' here
+
