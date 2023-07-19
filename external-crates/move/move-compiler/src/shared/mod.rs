@@ -230,6 +230,18 @@ pub struct CompilationEnv {
     // pub counter: u64,
 }
 
+macro_rules! known_code_filter {
+    ($name:ident, $category:ident::$code:ident, $attr_name:ident) => {
+        (
+            KnownFilterKey::new($name, $attr_name),
+            WarningFilter::Code(
+                DiagnosticsID::new(Category::$category as u8, $category::$code as u8, None),
+                Some($name),
+            ),
+        )
+    };
+}
+
 impl CompilationEnv {
     pub fn new(
         flags: Flags,
@@ -258,101 +270,43 @@ impl CompilationEnv {
                     Some(FILTER_UNUSED),
                 ),
             ),
-            (
-                KnownFilterKey::new(FILTER_MISSING_PHANTOM, filter_attr_name),
-                WarningFilter::Code(
-                    DiagnosticsID::new(
-                        Category::Declarations as u8,
-                        Declarations::InvalidNonPhantomUse as u8,
-                        None,
-                    ),
-                    Some(FILTER_MISSING_PHANTOM),
-                ),
+            known_code_filter!(
+                FILTER_MISSING_PHANTOM,
+                Declarations::InvalidNonPhantomUse,
+                filter_attr_name
             ),
-            (
-                KnownFilterKey::new(FILTER_UNUSED_USE, filter_attr_name),
-                WarningFilter::Code(
-                    DiagnosticsID::new(Category::UnusedItem as u8, UnusedItem::Alias as u8, None),
-                    Some(FILTER_UNUSED_USE),
-                ),
+            known_code_filter!(FILTER_UNUSED_USE, UnusedItem::Alias, filter_attr_name),
+            known_code_filter!(
+                FILTER_UNUSED_VARIABLE,
+                UnusedItem::Variable,
+                filter_attr_name
             ),
-            (
-                KnownFilterKey::new(FILTER_UNUSED_VARIABLE, filter_attr_name),
-                WarningFilter::Code(
-                    DiagnosticsID::new(
-                        Category::UnusedItem as u8,
-                        UnusedItem::Variable as u8,
-                        None,
-                    ),
-                    Some(FILTER_UNUSED_VARIABLE),
-                ),
+            known_code_filter!(
+                FILTER_UNUSED_ASSIGNMENT,
+                UnusedItem::Assignment,
+                filter_attr_name
             ),
-            (
-                KnownFilterKey::new(FILTER_UNUSED_ASSIGNMENT, filter_attr_name),
-                WarningFilter::Code(
-                    DiagnosticsID::new(
-                        Category::UnusedItem as u8,
-                        UnusedItem::Assignment as u8,
-                        None,
-                    ),
-                    Some(FILTER_UNUSED_ASSIGNMENT),
-                ),
+            known_code_filter!(
+                FILTER_UNUSED_TRAILING_SEMI,
+                UnusedItem::TrailingSemi,
+                filter_attr_name
             ),
-            (
-                KnownFilterKey::new(FILTER_UNUSED_TRAILING_SEMI, filter_attr_name),
-                WarningFilter::Code(
-                    DiagnosticsID::new(
-                        Category::UnusedItem as u8,
-                        UnusedItem::TrailingSemi as u8,
-                        None,
-                    ),
-                    Some(FILTER_UNUSED_TRAILING_SEMI),
-                ),
+            known_code_filter!(
+                FILTER_UNUSED_ATTRIBUTE,
+                UnusedItem::Attribute,
+                filter_attr_name
             ),
-            (
-                KnownFilterKey::new(FILTER_UNUSED_ATTRIBUTE, filter_attr_name),
-                WarningFilter::Code(
-                    DiagnosticsID::new(
-                        Category::UnusedItem as u8,
-                        UnusedItem::Attribute as u8,
-                        None,
-                    ),
-                    Some(FILTER_UNUSED_ATTRIBUTE),
-                ),
+            known_code_filter!(
+                FILTER_UNUSED_TYPE_PARAMETER,
+                UnusedItem::StructTypeParam,
+                filter_attr_name
             ),
-            (
-                KnownFilterKey::new(FILTER_UNUSED_TYPE_PARAMETER, filter_attr_name),
-                WarningFilter::Code(
-                    DiagnosticsID::new(
-                        Category::UnusedItem as u8,
-                        UnusedItem::StructTypeParam as u8,
-                        None,
-                    ),
-                    Some(FILTER_UNUSED_TYPE_PARAMETER),
-                ),
+            known_code_filter!(
+                FILTER_UNUSED_FUNCTION,
+                UnusedItem::Function,
+                filter_attr_name
             ),
-            (
-                KnownFilterKey::new(FILTER_UNUSED_FUNCTION, filter_attr_name),
-                WarningFilter::Code(
-                    DiagnosticsID::new(
-                        Category::UnusedItem as u8,
-                        UnusedItem::Function as u8,
-                        None,
-                    ),
-                    Some(FILTER_UNUSED_FUNCTION),
-                ),
-            ),
-            (
-                KnownFilterKey::new(FILTER_DEAD_CODE, filter_attr_name),
-                WarningFilter::Code(
-                    DiagnosticsID::new(
-                        Category::UnusedItem as u8,
-                        UnusedItem::DeadCode as u8,
-                        None,
-                    ),
-                    Some(FILTER_DEAD_CODE),
-                ),
-            ),
+            known_code_filter!(FILTER_DEAD_CODE, UnusedItem::DeadCode, filter_attr_name),
         ]);
 
         let known_filter_names: BTreeMap<DiagnosticsID, Symbol> = known_filters
