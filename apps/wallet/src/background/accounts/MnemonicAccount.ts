@@ -11,16 +11,17 @@ import {
 } from './Account';
 import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
 
-export interface MnemonicSerializedAccount extends Omit<SerializedAccount, 'publicKey'> {
+export interface MnemonicSerializedAccount extends SerializedAccount {
 	type: 'mnemonic-derived';
 	sourceID: string;
 	derivationPath: string;
 	publicKey: string;
 }
 
-export interface MnemonicSerializedUiAccount extends Omit<SerializedUIAccount, 'publicKey'> {
-	derivationPath: string;
+export interface MnemonicSerializedUiAccount extends SerializedUIAccount {
+	type: 'mnemonic-derived';
 	publicKey: string;
+	derivationPath: string;
 	sourceID: string;
 }
 
@@ -77,6 +78,20 @@ export class MnemonicAccount
 			throw new Error(`Account is locked`);
 		}
 		return this.generateSignature(data, keyPair);
+	}
+
+	get derivationPath() {
+		if (!this.cachedData) {
+			this.cachedData = this.getStoredData();
+		}
+		return this.cachedData.then(({ derivationPath }) => derivationPath);
+	}
+
+	get sourceID() {
+		if (!this.cachedData) {
+			this.cachedData = this.getStoredData();
+		}
+		return this.cachedData.then(({ sourceID }) => sourceID);
 	}
 
 	async #getKeyPair() {

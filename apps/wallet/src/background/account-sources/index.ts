@@ -92,28 +92,6 @@ export async function accountSourcesHandleUIMessage(msg: Message, uiConnection: 
 			return true;
 		}
 	}
-	if (isMethodPayload(payload, 'deriveMnemonicAccount')) {
-		const { sourceID } = payload.args;
-		const accountSource = await getAccountSourceByID(sourceID);
-		if (!accountSource) {
-			throw new Error(`Account source ${sourceID} not found`);
-		}
-		if (!(accountSource instanceof MnemonicAccountSource)) {
-			throw new Error(`Invalid account source type`);
-		}
-		const newAccount = await accountSource.deriveAccount();
-		await uiConnection.send(
-			createMessage<MethodPayload<'accountCreatedResponse'>>(
-				{
-					method: 'accountCreatedResponse',
-					type: 'method-payload',
-					args: { account: await newAccount.toUISerialized() },
-				},
-				msg.id,
-			),
-		);
-		return true;
-	}
 	if (isMethodPayload(payload, 'lockAccountSourceOrAccount')) {
 		const accountSource = await getAccountSourceByID(payload.args.id);
 		if (accountSource) {

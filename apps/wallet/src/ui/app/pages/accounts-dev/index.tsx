@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Ed25519Keypair, type ExportedKeypair, toB64 } from '@mysten/sui.js';
+import { hexToBytes } from '@noble/hashes/utils';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Toaster, toast } from 'react-hot-toast';
 import { type BackgroundClient } from '../../background-client';
@@ -23,9 +25,13 @@ import { entropyToSerialized, mnemonicToEntropy } from '_src/shared/utils/bip39'
 const pass = '61916a448d7885641';
 const testMnemonic =
 	'lawsuit welcome deputy faith shadow monitor common paper candy horse panda history';
+const mnemonicFirstKeyPair: ExportedKeypair = {
+	schema: 'ED25519',
+	privateKey: toB64(hexToBytes('5051bc918ec4991c62969d6cd0f1edaabfbe5244e509d7a96f39fe52e76cf54f')),
+};
 
 /**
- * Just for dev, to simplify testing new accounts handling
+ * Just for dev, to allow testing new accounts handling
  */
 export function AccountsDev() {
 	const accountSources = useAccountSources();
@@ -41,6 +47,18 @@ export function AccountsDev() {
 			}),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ exact: true, queryKey: accountSourcesQueryKey });
+		},
+	});
+	const importKey = useMutation({
+		mutationKey: ['accounts', 'v2', 'import key'],
+		mutationFn: ({ keyPair }: { keyPair: ExportedKeypair }) =>
+			backgroundClient.createAccount({
+				type: 'imported',
+				password: pass,
+				keyPair,
+			}),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ exact: true, queryKey: accountsQueryKey });
 		},
 	});
 	return (
@@ -69,6 +87,20 @@ export function AccountsDev() {
 								loading={createMnemonic.isLoading}
 								onClick={() => {
 									createMnemonic.mutate(mnemonicToEntropy(testMnemonic));
+								}}
+							/>
+							<Button
+								text="Import random private key"
+								loading={importKey.isLoading}
+								onClick={() => {
+									importKey.mutate({ keyPair: Ed25519Keypair.generate().export() });
+								}}
+							/>
+							<Button
+								text="Import mnemonic private key"
+								loading={importKey.isLoading}
+								onClick={() => {
+									importKey.mutate({ keyPair: mnemonicFirstKeyPair });
 								}}
 							/>
 							{accountSources.data?.length ? (
@@ -133,7 +165,8 @@ function AccountSource({ accountSource }: { accountSource: AccountSourceSerializ
 	const queryClient = useQueryClient();
 	const deriveNextMnemonicAccount = useMutation({
 		mutationKey: ['accounts', 'v2', 'mnemonic', 'new account'],
-		mutationFn: (inputs: { sourceID: string }) => backgroundClient.deriveMnemonicAccount(inputs),
+		mutationFn: (inputs: { sourceID: string }) =>
+			backgroundClient.createAccount({ type: 'mnemonic-derived', ...inputs }),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ exact: true, queryKey: accountsQueryKey });
 		},
@@ -158,7 +191,7 @@ function AccountSource({ accountSource }: { accountSource: AccountSourceSerializ
 						disabled={unlock.isLoading}
 					/>
 				) : (
-					<div className="flex gap-2">
+					<div className="flex gap-2 flex-1">
 						<Button
 							text="Lock"
 							onClick={() => {
@@ -209,7 +242,6 @@ function Account({ account }: { account: SerializedUIAccount }) {
 			footer={
 				account.isLocked ? (
 					<Button
-						size="tiny"
 						text="Unlock"
 						onClick={() => {
 							unlock.mutate({ id: account.id, password: pass });
@@ -217,7 +249,7 @@ function Account({ account }: { account: SerializedUIAccount }) {
 						loading={unlock.isLoading}
 					/>
 				) : (
-					<div className="flex gap-2">
+					<div className="flex gap-2 flex-1">
 						<Button
 							text="Lock"
 							onClick={() => {

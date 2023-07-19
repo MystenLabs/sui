@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SerializedSignature, type SuiAddress } from '@mysten/sui.js';
+import { type ExportedKeypair, type SerializedSignature } from '@mysten/sui.js';
 import { isBasePayload } from './BasePayload';
 import {
 	type AccountSourceSerializedUI,
@@ -25,9 +25,11 @@ type MethodPayloads = {
 	accountSourceCreationResponse: { accountSource: AccountSourceSerializedUI };
 	lockAccountSourceOrAccount: { id: string };
 	unlockAccountSourceOrAccount: { id: string } & { password: string };
-	deriveMnemonicAccount: { sourceID: string };
+	createAccount:
+		| { type: 'mnemonic-derived'; sourceID: string }
+		| { type: 'imported'; keyPair: ExportedKeypair; password: string };
 	accountCreatedResponse: { account: SerializedUIAccount };
-	signData: { data: string; address: SuiAddress };
+	signData: { data: string; id: string };
 	signDataResponse: { signature: SerializedSignature };
 };
 

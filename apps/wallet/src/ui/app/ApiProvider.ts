@@ -102,7 +102,7 @@ export default class ApiProvider {
 				account.type,
 			)
 		) {
-			return this.getBackgroundSignerInstance(account.address, backgroundClient);
+			return this.getBackgroundSignerInstance(account, backgroundClient);
 		}
 		if ([AccountType.LEDGER, 'ledger'].includes(account.type)) {
 			// Ideally, Ledger transactions would be signed in the background
@@ -121,15 +121,16 @@ export default class ApiProvider {
 	}
 
 	public getBackgroundSignerInstance(
-		address: string,
+		account: SerializedAccount | SerializedUIAccount,
 		backgroundClient: BackgroundClient,
 	): WalletSigner {
-		if (!this._signerByAddress.has(address)) {
+		const key = 'id' in account ? account.id : account.address;
+		if (!this._signerByAddress.has(key)) {
 			this._signerByAddress.set(
-				address,
-				new BackgroundServiceSigner(address, backgroundClient, this._apiFullNodeProvider!),
+				key,
+				new BackgroundServiceSigner(account, backgroundClient, this._apiFullNodeProvider!),
 			);
 		}
-		return this._signerByAddress.get(address)!;
+		return this._signerByAddress.get(key)!;
 	}
 }

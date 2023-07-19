@@ -229,19 +229,19 @@ export class BackgroundClient {
 		);
 	}
 
-	public signData(address: string, data: Uint8Array): Promise<SerializedSignature> {
+	public signData(addressOrID: string, data: Uint8Array): Promise<SerializedSignature> {
 		return lastValueFrom(
 			this.sendMessage(
 				NEW_ACCOUNTS_ENABLED
 					? createMessage<MethodPayload<'signData'>>({
 							type: 'method-payload',
 							method: 'signData',
-							args: { data: toB64(data), address },
+							args: { data: toB64(data), id: addressOrID },
 					  })
 					: createMessage<KeyringPayload<'signData'>>({
 							type: 'keyring',
 							method: 'signData',
-							args: { data: toB64(data), address },
+							args: { data: toB64(data), address: addressOrID },
 					  }),
 			).pipe(
 				take(1),
@@ -483,13 +483,13 @@ export class BackgroundClient {
 		);
 	}
 
-	public deriveMnemonicAccount({ sourceID }: { sourceID: string }) {
+	public createAccount(inputs: MethodPayload<'createAccount'>['args']) {
 		return lastValueFrom(
 			this.sendMessage(
-				createMessage<MethodPayload<'deriveMnemonicAccount'>>({
-					method: 'deriveMnemonicAccount',
+				createMessage<MethodPayload<'createAccount'>>({
+					method: 'createAccount',
 					type: 'method-payload',
-					args: { sourceID },
+					args: inputs,
 				}),
 			).pipe(
 				take(1),
@@ -497,10 +497,10 @@ export class BackgroundClient {
 					if (!isMethodPayload(payload, 'accountCreatedResponse')) {
 						throw new Error('Unknown response');
 					}
-					if ('mnemonic-derived' !== payload.args.account.type) {
+					if (inputs.type !== payload.args.account.type) {
 						throw new Error(`Unexpected account type response ${payload.args.account.type}`);
 					}
-					return payload.args.account as MnemonicSerializedUiAccount;
+					return payload.args.account;
 				}),
 			),
 		);

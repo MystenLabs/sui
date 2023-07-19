@@ -22,16 +22,18 @@ import { type Serializable } from '_src/shared/cryptography/keystore';
 
 export type AccountType = 'mnemonic-derived' | 'imported' | 'ledger' | 'qredo';
 
-export abstract class Account<T extends SerializedAccount, V extends Serializable> {
+export abstract class Account<
+	T extends SerializedAccount = SerializedAccount,
+	V extends Serializable = Serializable,
+> {
 	readonly id: string;
 	readonly type: AccountType;
-	readonly address: Promise<SuiAddress>;
+	// optimization to avoid accessing storage for properties that don't change
+	protected cachedData: Promise<T> | null = null;
 
 	constructor({ id, type }: { id: string; type: AccountType }) {
 		this.id = id;
 		this.type = type;
-		const data = this.getStoredData();
-		this.address = data.then(({ address }) => address);
 	}
 
 	abstract lock(): Promise<void>;
@@ -72,6 +74,13 @@ export abstract class Account<T extends SerializedAccount, V extends Serializabl
 
 	clearEphemeralValue() {
 		return clearEphemeralValue(this.id);
+	}
+
+	get address() {
+		if (!this.cachedData) {
+			this.cachedData = this.getStoredData();
+		}
+		return this.cachedData.then(({ address }) => address);
 	}
 }
 

@@ -11,12 +11,27 @@ import {
 	type AccountSourceSerializedUI,
 	type AccountSourceSerialized,
 } from './AccountSource';
-import { addNewAccount } from '../accounts';
-import { type MnemonicSerializedAccount } from '../accounts/MnemonicAccount';
+import { getAllAccounts } from '../accounts';
+import { MnemonicAccount, type MnemonicSerializedAccount } from '../accounts/MnemonicAccount';
 import { setStorageEntity } from '../storage-entities-utils';
 import { makeUniqueKey } from '../storage-utils';
 import { getRandomEntropy, entropyToSerialized, entropyToMnemonic } from '_shared/utils/bip39';
 import { decrypt, encrypt } from '_src/shared/cryptography/keystore';
+
+type DataDecryptedV0 = {
+	version: 0;
+	entropyHex: string;
+	mnemonicSeedHex: string;
+};
+
+interface MnemonicAccountSourceSerialized extends AccountSourceSerialized {
+	type: 'mnemonic';
+	encrypted: string;
+	// hash of entropy to be used for comparing sources (even when locked)
+	sourceHash: string;
+}
+
+interface MnemonicAccountSourceSerializedUI extends AccountSourceSerializedUI {}
 
 export class MnemonicAccountSource extends AccountSource<
 	MnemonicAccountSourceSerialized,
@@ -40,7 +55,6 @@ export class MnemonicAccountSource extends AccountSource<
 			storageEntityType: 'account-source-entity',
 			type: 'mnemonic',
 			encrypted: await encrypt(password, decryptedData),
-			lastAccountIndex: null,
 			sourceHash: bytesToHex(sha256(entropy)),
 		};
 		const allAccountSources = await getAccountSources({ type: 'mnemonic' });
@@ -75,21 +89,17 @@ export class MnemonicAccountSource extends AccountSource<
 		return this.clearEphemeralValue();
 	}
 
-	async deriveAccount() {
-		const currentIndex = (await this.getStoredData()).lastAccountIndex;
-		const nextIndex = currentIndex === null ? 0 : currentIndex + 1;
-		const derivationPath = this.makeDerivationPath(nextIndex);
+	async deriveAccount(): Promise<Omit<MnemonicSerializedAccount, 'id'>> {
+		const derivationPath = await this.getAvailableDerivationPath();
 		const keyPair = await this.deriveKeyPair(derivationPath);
-		const newAccount = await addNewAccount<MnemonicSerializedAccount>({
+		return {
 			type: 'mnemonic-derived',
 			storageEntityType: 'account-entity',
 			sourceID: this.id,
 			address: keyPair.getPublicKey().toSuiAddress(),
 			derivationPath,
 			publicKey: keyPair.getPublicKey().toBase64(),
-		});
-		await this.updateStoredData({ lastAccountIndex: nextIndex });
-		return newAccount;
+		};
 	}
 
 	async deriveKeyPair(derivationPath: string) {
@@ -109,10 +119,6 @@ export class MnemonicAccountSource extends AccountSource<
 		};
 	}
 
-	get lastAccountIndex() {
-		return this.getStoredData().then(({ lastAccountIndex }) => lastAccountIndex);
-	}
-
 	get sourceHash() {
 		return this.getStoredData().then(({ sourceHash }) => sourceHash);
 	}
@@ -121,20 +127,26 @@ export class MnemonicAccountSource extends AccountSource<
 		// currently returns only Ed25519 path
 		return `m/44'/784'/${index}'/0'/0'`;
 	}
+
+	private async getAvailableDerivationPath() {
+		const derivationPathMap: Record<string, boolean> = {};
+		for (const anAccount of await getAllAccounts()) {
+			if (anAccount instanceof MnemonicAccount && (await anAccount.sourceID) === this.id) {
+				derivationPathMap[await anAccount.derivationPath] = true;
+			}
+		}
+		let index = 0;
+		let derivationPath = '';
+		let temp;
+		do {
+			temp = this.makeDerivationPath(index++);
+			if (!derivationPathMap[temp]) {
+				derivationPath = temp;
+			}
+		} while (derivationPath === '' && index < 10000);
+		if (!derivationPath) {
+			throw new Error('Failed to find next available derivation path');
+		}
+		return derivationPath;
+	}
 }
-
-type DataDecryptedV0 = {
-	version: 0;
-	entropyHex: string;
-	mnemonicSeedHex: string;
-};
-
-interface MnemonicAccountSourceSerialized extends AccountSourceSerialized {
-	type: 'mnemonic';
-	encrypted: string;
-	lastAccountIndex: number | null;
-	// hash of entropy to be used for comparing sources (even when locked)
-	sourceHash: string;
-}
-
-interface MnemonicAccountSourceSerializedUI extends AccountSourceSerializedUI {}

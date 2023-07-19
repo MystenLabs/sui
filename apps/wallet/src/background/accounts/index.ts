@@ -3,7 +3,10 @@
 
 import { fromB64, type SuiAddress } from '@mysten/sui.js';
 import { isSigningAccount, type SerializedAccount } from './Account';
+import { ImportedAccount } from './ImportedAccount';
 import { MnemonicAccount } from './MnemonicAccount';
+import { getAccountSourceByID } from '../account-sources';
+import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
 import { type UiConnection } from '../connections/UiConnection';
 import {
 	getAllStoredEntities,
@@ -21,6 +24,8 @@ function toAccount(account: SerializedAccount) {
 	switch (true) {
 		case MnemonicAccount.isOfType(account):
 			return new MnemonicAccount({ id: account.id });
+		case ImportedAccount.isOfType(account):
+			return new ImportedAccount({ id: account.id });
 		default:
 			throw new Error(`Unknown account of type ${account.type}`);
 	}
@@ -66,9 +71,11 @@ export async function getActiveAccount() {
 
 export async function addNewAccount<T extends SerializedAccount>(account: Omit<T, 'id'>) {
 	for (const anAccount of await getAllAccounts()) {
-		if ((await anAccount.address) === account.address) {
+		// allow importing accounts that have the same address but are of different type
+		// probably it's an edge case and we used to see this problem with importing
+		// accounts that were exported from the mnemonic while testing
+		if ((await anAccount.address) === account.address && anAccount.type === account.type) {
 			throw new Error(`Duplicated account ${account.address}`);
-			// TODO: handle imported keys accounts duplication or maybe any other case?
 		}
 	}
 	const id = makeUniqueKey();
@@ -103,13 +110,13 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 		}
 	}
 	if (isMethodPayload(payload, 'signData')) {
-		const { address, data } = payload.args;
-		const account = await getAccountByAddress(address);
+		const { id, data } = payload.args;
+		const account = await getAccountByID(id);
 		if (!account) {
-			throw new Error(`Account with address ${address} not found`);
+			throw new Error(`Account with address ${id} not found`);
 		}
 		if (!isSigningAccount(account)) {
-			throw new Error(`Account with address ${address} is not a signing account`);
+			throw new Error(`Account with address ${id} is not a signing account`);
 		}
 		await uiConnection.send(
 			createMessage<MethodPayload<'signDataResponse'>>(
@@ -117,6 +124,37 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 					type: 'method-payload',
 					method: 'signDataResponse',
 					args: { signature: await account.signData(fromB64(data)) },
+				},
+				msg.id,
+			),
+		);
+		return true;
+	}
+	if (isMethodPayload(payload, 'createAccount')) {
+		let newSerializedAccount: Omit<SerializedAccount, 'id'>;
+		const { type } = payload.args;
+		if (type === 'mnemonic-derived') {
+			const { sourceID } = payload.args;
+			const accountSource = await getAccountSourceByID(payload.args.sourceID);
+			if (!accountSource) {
+				throw new Error(`Account source ${sourceID} not found`);
+			}
+			if (!(accountSource instanceof MnemonicAccountSource)) {
+				throw new Error(`Invalid account source type`);
+			}
+			newSerializedAccount = await accountSource.deriveAccount();
+		} else if (type === 'imported') {
+			newSerializedAccount = await ImportedAccount.createNew(payload.args);
+		} else {
+			throw new Error(`Unknown account type to create ${type}`);
+		}
+		const newAccount = await addNewAccount(newSerializedAccount);
+		await uiConnection.send(
+			createMessage<MethodPayload<'accountCreatedResponse'>>(
+				{
+					method: 'accountCreatedResponse',
+					type: 'method-payload',
+					args: { account: await newAccount.toUISerialized() },
 				},
 				msg.id,
 			),
