@@ -437,18 +437,18 @@ impl AuthorityPerpetualTables {
 
     pub fn reset_db_for_execution_since_genesis(&self) -> SuiResult {
         // TODO: Add new tables that get added to the db automatically
-        self.objects.clear()?;
-        self.indirect_move_objects.clear()?;
-        self.owned_object_transaction_locks.clear()?;
-        self.executed_effects.clear()?;
-        self.events.clear()?;
-        self.executed_transactions_to_checkpoint.clear()?;
-        self.root_state_hash_by_epoch.clear()?;
-        self.epoch_start_configuration.clear()?;
-        self.pruned_checkpoint.clear()?;
-        self.expected_network_sui_amount.clear()?;
-        self.expected_storage_fund_imbalance.clear()?;
-        self.object_per_epoch_marker_table.clear()?;
+        self.objects.unsafe_clear()?;
+        self.indirect_move_objects.unsafe_clear()?;
+        self.owned_object_transaction_locks.unsafe_clear()?;
+        self.executed_effects.unsafe_clear()?;
+        self.events.unsafe_clear()?;
+        self.executed_transactions_to_checkpoint.unsafe_clear()?;
+        self.root_state_hash_by_epoch.unsafe_clear()?;
+        self.epoch_start_configuration.unsafe_clear()?;
+        self.pruned_checkpoint.unsafe_clear()?;
+        self.expected_network_sui_amount.unsafe_clear()?;
+        self.expected_storage_fund_imbalance.unsafe_clear()?;
+        self.object_per_epoch_marker_table.unsafe_clear()?;
         self.objects
             .rocksdb
             .flush()

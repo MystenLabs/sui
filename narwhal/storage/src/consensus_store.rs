@@ -54,9 +54,9 @@ impl ConsensusStore {
 
     /// Clear the store.
     pub fn clear(&self) -> StoreResult<()> {
-        self.last_committed.clear()?;
-        self.committed_sub_dags_by_index.clear()?;
-        self.committed_sub_dags_by_index_v2.clear()?;
+        self.last_committed.unsafe_clear()?;
+        self.committed_sub_dags_by_index.unsafe_clear()?;
+        self.committed_sub_dags_by_index_v2.unsafe_clear()?;
         Ok(())
     }
 
