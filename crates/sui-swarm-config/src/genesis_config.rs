@@ -94,6 +94,9 @@ pub struct ValidatorGenesisConfigBuilder {
     account_key_pair: Option<AccountKeyPair>,
     ip: Option<String>,
     gas_price: Option<u64>,
+    /// If set, the validator will use deterministic addresses based on the port offset.
+    /// This is useful for benchmarking.
+    port_offset: Option<u16>,
 }
 
 impl ValidatorGenesisConfigBuilder {
@@ -121,6 +124,11 @@ impl ValidatorGenesisConfigBuilder {
         self
     }
 
+    pub fn with_deterministic_ports(mut self, port_offset: u16) -> Self {
+        self.port_offset = Some(port_offset);
+        self
+    }
+
     pub fn build<R: rand::RngCore + rand::CryptoRng>(self, rng: &mut R) -> ValidatorGenesisConfig {
         let ip = self.ip.unwrap_or_else(local_ip_utils::get_new_ip);
         let localhost = local_ip_utils::localhost_for_testing();
@@ -136,23 +144,51 @@ impl ValidatorGenesisConfigBuilder {
         let (worker_key_pair, network_key_pair): (NetworkKeyPair, NetworkKeyPair) =
             (get_key_pair_from_rng(rng).1, get_key_pair_from_rng(rng).1);
 
+        let (
+            network_address,
+            p2p_address,
+            metrics_address,
+            narwhal_metrics_address,
+            narwhal_primary_address,
+            narwhal_worker_address,
+            consensus_address,
+        ) = if let Some(offset) = self.port_offset {
+            (
+                local_ip_utils::new_deterministic_tcp_address_for_testing(&ip, offset),
+                local_ip_utils::new_deterministic_udp_address_for_testing(&ip, offset + 1),
+                local_ip_utils::new_deterministic_tcp_address_for_testing(&ip, offset + 2),
+                local_ip_utils::new_deterministic_tcp_address_for_testing(&ip, offset + 3),
+                local_ip_utils::new_deterministic_udp_address_for_testing(&ip, offset + 4),
+                local_ip_utils::new_deterministic_udp_address_for_testing(&ip, offset + 5),
+                local_ip_utils::new_deterministic_tcp_address_for_testing(&ip, offset + 6),
+            )
+        } else {
+            (
+                local_ip_utils::new_tcp_address_for_testing(&ip),
+                local_ip_utils::new_udp_address_for_testing(&ip),
+                local_ip_utils::new_tcp_address_for_testing(&localhost),
+                local_ip_utils::new_tcp_address_for_testing(&localhost),
+                local_ip_utils::new_udp_address_for_testing(&ip),
+                local_ip_utils::new_udp_address_for_testing(&ip),
+                local_ip_utils::new_tcp_address_for_testing(&ip),
+            )
+        };
+
         ValidatorGenesisConfig {
             key_pair: protocol_key_pair,
             worker_key_pair,
             account_key_pair: account_key_pair.into(),
             network_key_pair,
-            network_address: local_ip_utils::new_tcp_address_for_testing(&ip),
-            p2p_address: local_ip_utils::new_udp_address_for_testing(&ip),
+            network_address,
+            p2p_address,
             p2p_listen_address: None,
-            metrics_address: local_ip_utils::new_tcp_address_for_testing(&localhost)
-                .to_socket_addr()
-                .unwrap(),
-            narwhal_metrics_address: local_ip_utils::new_tcp_address_for_testing(&localhost),
+            metrics_address: metrics_address.to_socket_addr().unwrap(),
+            narwhal_metrics_address,
             gas_price,
             commission_rate: DEFAULT_COMMISSION_RATE,
-            narwhal_primary_address: local_ip_utils::new_udp_address_for_testing(&ip),
-            narwhal_worker_address: local_ip_utils::new_udp_address_for_testing(&ip),
-            consensus_address: local_ip_utils::new_tcp_address_for_testing(&ip),
+            narwhal_primary_address,
+            narwhal_worker_address,
+            consensus_address,
             consensus_internal_worker_address: None,
             stake: sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST,
         }
@@ -234,7 +270,7 @@ impl GenesisConfig {
     /// by other crates (e.g. the load generators).
     pub const BENCHMARKS_RNG_SEED: u64 = 0;
     /// Port offset for benchmarks' genesis configs.
-    pub const BENCHMARKS_PORT_OFFSET: usize = 500;
+    pub const BENCHMARKS_PORT_OFFSET: u16 = 2000;
 
     pub fn for_local_testing() -> Self {
         Self::custom_genesis(
@@ -289,9 +325,11 @@ impl GenesisConfig {
         let mut rng = StdRng::seed_from_u64(Self::BENCHMARKS_RNG_SEED);
         let validator_config_info: Vec<_> = ips
             .iter()
-            .map(|ip| {
+            .enumerate()
+            .map(|(i, ip)| {
                 ValidatorGenesisConfigBuilder::new()
                     .with_ip(ip.to_string())
+                    .with_deterministic_ports(Self::BENCHMARKS_PORT_OFFSET + 10 * i as u16)
                     .build(&mut rng)
             })
             .collect();
