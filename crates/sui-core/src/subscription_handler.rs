@@ -1,6 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
+use prometheus::{
+    register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry, IntCounterVec,
+    IntGaugeVec, Registry,
+};
 use tokio_stream::Stream;
 use tracing::{error, instrument, trace};
 
@@ -14,21 +20,56 @@ use sui_types::error::SuiResult;
 use sui_types::transaction::TransactionData;
 
 #[cfg(test)]
-#[path = "unit_tests/event_handler_tests.rs"]
-mod event_handler_tests;
+#[path = "unit_tests/subscription_handler_tests.rs"]
+mod subscription_handler_tests;
 
 pub const EVENT_DISPATCH_BUFFER_SIZE: usize = 1000;
+
+pub struct SubscriptionMetrics {
+    pub streaming_success: IntCounterVec,
+    pub streaming_failure: IntCounterVec,
+    pub streaming_active_subscriber_number: IntGaugeVec,
+}
+
+impl SubscriptionMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            streaming_success: register_int_counter_vec_with_registry!(
+                "streaming_success",
+                "Total number of items that are streamed successfully",
+                &["type"],
+                registry,
+            )
+            .unwrap(),
+            streaming_failure: register_int_counter_vec_with_registry!(
+                "streaming_failure",
+                "Total number of items that fail to be streamed",
+                &["type"],
+                registry,
+            )
+            .unwrap(),
+            streaming_active_subscriber_number: register_int_gauge_vec_with_registry!(
+                "streaming_active_subscriber_number",
+                "Current number of active subscribers",
+                &["type"],
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+}
 
 pub struct SubscriptionHandler {
     event_streamer: Streamer<SuiEvent, SuiEvent, EventFilter>,
     transaction_streamer: Streamer<EffectsWithInput, SuiTransactionBlockEffects, TransactionFilter>,
 }
 
-impl Default for SubscriptionHandler {
-    fn default() -> Self {
+impl SubscriptionHandler {
+    pub fn new(registry: &Registry) -> Self {
+        let metrics = Arc::new(SubscriptionMetrics::new(registry));
         Self {
-            event_streamer: Streamer::spawn(EVENT_DISPATCH_BUFFER_SIZE),
-            transaction_streamer: Streamer::spawn(EVENT_DISPATCH_BUFFER_SIZE),
+            event_streamer: Streamer::spawn(EVENT_DISPATCH_BUFFER_SIZE, metrics.clone(), "event"),
+            transaction_streamer: Streamer::spawn(EVENT_DISPATCH_BUFFER_SIZE, metrics, "tx"),
         }
     }
 }
