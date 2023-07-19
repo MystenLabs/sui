@@ -215,16 +215,23 @@ export class MultiSigPublicKey extends PublicKey {
 				compressedSignatures[i] = { Secp256r1: bytes };
 			}
 
+			let publicKeyIndex;
 			for (let j = 0; j < this.publicKeys.length; j++) {
 				if (bytesEqual(parsed.publicKey, this.publicKeys[j].publicKey.toRawBytes())) {
 					if (bitmap & (1 << j)) {
 						throw new Error('Received multiple signatures from the same public key');
 					}
 
-					bitmap |= 1 << j;
+					publicKeyIndex = j;
 					break;
 				}
 			}
+
+			if (publicKeyIndex === undefined) {
+				throw new Error('Received signature from unknown public key');
+			}
+
+			bitmap |= 1 << publicKeyIndex;
 		}
 
 		let multisig: MultiSigStruct = {
