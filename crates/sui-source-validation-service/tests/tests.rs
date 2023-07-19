@@ -194,7 +194,7 @@ fn test_clone_command() -> anyhow::Result<()> {
         network: Some(Network::Localnet),
     };
 
-    let command = CloneCommand::new(&source, PathBuf::from("/tmp").as_path())?;
+    let command = CloneCommand::new(&source, PathBuf::from("/foo").as_path())?;
     let expect = expect![
         r#"CloneCommand {
     args: [
@@ -205,11 +205,11 @@ fn test_clone_command() -> anyhow::Result<()> {
             "--filter=tree:0",
             "--branch=main",
             "https://github.com/user/repo",
-            "/tmp/localnet/repo",
+            "/foo/localnet/repo",
         ],
         [
             "-C",
-            "/tmp/localnet/repo",
+            "/foo/localnet/repo",
             "sparse-checkout",
             "set",
             "--no-cone",
@@ -218,7 +218,7 @@ fn test_clone_command() -> anyhow::Result<()> {
         ],
         [
             "-C",
-            "/tmp/localnet/repo",
+            "/foo/localnet/repo",
             "checkout",
         ],
     ],
