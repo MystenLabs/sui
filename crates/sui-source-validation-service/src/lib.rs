@@ -151,6 +151,7 @@ pub async fn verify_package(
         .as_ref()
         .map(|id| **id)
         .map_err(|_| anyhow!("could not resolve published-at field in package manifest"))?;
+    info!("verifying {} at {address}", package_path.as_ref().display());
     for v in &compiled_package.package.root_compiled_units {
         let path = v.source_path.to_path_buf();
         let source = Some(fs::read_to_string(path.as_path())?);
@@ -300,7 +301,6 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
                 for p in &r.paths {
                     let package_path = packages_dir.join(p).clone();
                     let network = r.network.clone().unwrap_or_default();
-                    info!("verifying {}", package_path.display());
                     let t =
                         tokio::spawn(async move { verify_package(&network, package_path).await });
                     tasks.push(t)
@@ -310,7 +310,6 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
                 for p in &packages_dir.paths {
                     let package_path = PathBuf::from(p);
                     let network = packages_dir.network.clone().unwrap_or_default();
-                    info!("verifying {}", package_path.display());
                     let t =
                         tokio::spawn(async move { verify_package(&network, package_path).await });
                     tasks.push(t)
