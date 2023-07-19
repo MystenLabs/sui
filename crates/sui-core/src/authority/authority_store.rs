@@ -1444,23 +1444,21 @@ impl AuthorityStore {
 
         let tombstones = effects
             .deleted()
-            .iter()
-            .chain(effects.wrapped().iter())
+            .into_iter()
+            .chain(effects.wrapped())
             .map(|obj_ref| ObjectKey(obj_ref.0, obj_ref.1));
         write_batch.delete_batch(&self.perpetual_tables.objects, tombstones)?;
 
         let all_new_object_keys = effects
-            .mutated()
-            .iter()
-            .chain(effects.created().iter())
-            .chain(effects.unwrapped().iter())
-            .map(|((id, version, _), _)| ObjectKey(*id, *version));
+            .all_changed_objects()
+            .into_iter()
+            .map(|((id, version, _), _, _)| ObjectKey(id, version));
         write_batch.delete_batch(&self.perpetual_tables.objects, all_new_object_keys.clone())?;
 
         let modified_object_keys = effects
             .modified_at_versions()
-            .iter()
-            .map(|(id, version)| ObjectKey(*id, *version));
+            .into_iter()
+            .map(|(id, version)| ObjectKey(id, version));
 
         macro_rules! get_objects_and_locks {
             ($object_keys: expr) => {

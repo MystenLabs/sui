@@ -100,7 +100,7 @@ impl ExecutionEffects {
     pub fn created(&self) -> Vec<(ObjectRef, Owner)> {
         match self {
             ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
-                certified_effects.data().created().to_vec()
+                certified_effects.data().created()
             }
             ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => sui_tx_effects
                 .created()
