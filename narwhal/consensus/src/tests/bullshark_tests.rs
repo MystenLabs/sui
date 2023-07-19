@@ -10,7 +10,6 @@ use crate::consensus_utils::NUM_SUB_DAGS_PER_SCHEDULE;
 use crate::consensus_utils::*;
 use crate::{metrics::ConsensusMetrics, Consensus, NUM_SHUTDOWN_RECEIVERS};
 use config::AuthorityIdentifier;
-use dag::node_dag::Affiliated;
 #[allow(unused_imports)]
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
