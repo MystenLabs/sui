@@ -182,7 +182,7 @@ impl SshConnectionManager {
             .collect::<SshResult<_>>()
     }
 
-    pub fn run_per_instance<I, S>(
+    fn run_per_instance<I, S>(
         &self,
         instances: I,
         context: CommandContext,

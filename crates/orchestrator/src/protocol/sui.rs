@@ -174,7 +174,7 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
         let load_share = parameters.load / clients.len();
         let shared_counter = parameters.benchmark_type.shared_objects_ratio;
         let transfer_objects = 100 - shared_counter;
-        let metrics_port = 4040;
+        let metrics_port = Self::CLIENT_METRICS_PORT;
 
         clients
             .into_iter()
@@ -189,7 +189,7 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
                     "--num-client-threads 24 --num-server-threads 1",
                     "--local false --num-transfer-accounts 2",
                     &format!("--genesis-blob-path {genesis} --keystore-path {keystore}",),
-                    &format!("--primary_gas_owner_id {gas_address}"),
+                    &format!("--primary-gas-owner-id {gas_address}"),
                     "bench",
                     &format!("--in-flight-ratio 30 --num-workers 24 --target-qps {load_share}"),
                     &format!(
@@ -200,8 +200,6 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
                 .join(" ");
                 let command = ["source $HOME/.cargo/env", &run].join(" && ");
 
-                println!("Client command: {}", command);
-
                 (instance, command)
             })
             .collect()
@@ -209,6 +207,8 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
 }
 
 impl SuiProtocol {
+    const CLIENT_METRICS_PORT: u16 = GenesisConfig::BENCHMARKS_PORT_OFFSET + 2000;
+
     /// Make a new instance of the Sui protocol commands generator.
     pub fn new(settings: &Settings) -> Self {
         Self {
@@ -271,13 +271,11 @@ impl ProtocolMetrics for SuiProtocol {
     {
         instances
             .into_iter()
-            .enumerate()
-            .map(|(i, instance)| {
-                let port = 4000 + i as u16;
+            .map(|instance| {
                 let path = format!(
                     "{}:{}{}",
                     instance.main_ip,
-                    port,
+                    Self::CLIENT_METRICS_PORT,
                     sui_node::metrics::METRICS_ROUTE
                 );
                 (instance, path)
