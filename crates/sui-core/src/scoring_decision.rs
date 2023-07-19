@@ -4,9 +4,7 @@
 use crate::authority::AuthorityMetrics;
 use crate::math::median;
 use arc_swap::ArcSwap;
-use fastcrypto::traits::ToFromBytes;
 use narwhal_config::{Committee, Stake};
-use narwhal_crypto::PublicKey;
 use narwhal_types::ReputationScores;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -183,8 +181,8 @@ fn update_low_scoring_authorities_with_no_disable_mechanism(
     reputation_scores: ReputationScores,
     authority_names_to_hostnames: HashMap<AuthorityName, String>,
     metrics: &Arc<AuthorityMetrics>,
-    mad_divisor: f64,
-    cut_off_value: f64,
+    _mad_divisor: f64,
+    _cut_off_value: f64,
 ) {
     if !reputation_scores.final_of_schedule {
         return;
@@ -192,7 +190,7 @@ fn update_low_scoring_authorities_with_no_disable_mechanism(
 
     // Convert the narwhal authority ids to the corresponding AuthorityName in SUI
     // Also capture the stake so can calculate later is strong quorum is reached for the non-low scoring authorities.
-    let scores_per_authority: HashMap<AuthorityName, (u64, Stake)> = reputation_scores
+    let mut scores_per_authority: Vec<(AuthorityName, u64, Stake)> = reputation_scores
         .scores_per_authority
         .into_iter()
         .map(|(authority_id, score)| {
@@ -209,69 +207,27 @@ fn update_low_scoring_authorities_with_no_disable_mechanism(
                     .set(score as i64);
             }
 
-            (name, (score, authority.stake()))
+            (name, score, authority.stake())
         })
         .collect();
 
-    let mut final_low_scoring_map = HashMap::new();
-
-    let mut score_list = vec![];
-    let mut nonzero_scores = vec![];
-    for (score, _stake) in scores_per_authority.values() {
-        score_list.push(*score as f64);
-        if score != &0_u64 {
-            nonzero_scores.push(*score as f64);
-        }
-    }
-
-    let median_value = median(&nonzero_scores);
-    let mut deviations = vec![];
-    let mut abs_deviations = vec![];
-    for (i, _) in score_list.clone().iter().enumerate() {
-        deviations.push(score_list[i] - median_value);
-        if score_list[i] != 0.0 {
-            abs_deviations.push((score_list[i] - median_value).abs());
-        }
-    }
-
-    // adjusted median absolute deviation
-    let mad = median(&abs_deviations) / mad_divisor;
-    let mut low_scoring = vec![];
-    for (i, (a, (score, _stake))) in scores_per_authority.iter().enumerate() {
-        let temp = deviations[i] / mad;
-
-        // We expect the methodology to include the zero scoring validators, but we explicitly
-        // include them to make sure, as we know for sure that those have no contribution.
-        if *score == 0 || temp < -cut_off_value {
-            low_scoring.push((a, *score));
-        }
-    }
-
-    // report new scores
-    let len_low_scoring = low_scoring.len();
-    info!("{:?} low scoring authorities calculated", len_low_scoring);
-
-    // Do not disable the scoring mechanism when more than f validators are excluded. Just keep
-    // marking low scoring authorities up to f.
-
     // sort the low scoring authorities in asc order
-    low_scoring.sort_by_key(|(_, score)| *score);
+    // Keep marking low scoring authorities up to f.
+    scores_per_authority.sort_by_key(|(_, _, score)| *score);
+    let mut final_low_scoring_map = HashMap::new();
 
     // take low scoring authorities while we haven't reached validity threshold (f+1)
     let mut total_stake = 0;
-    for (authority, score) in low_scoring {
-        total_stake += committee
-            .authority_by_key(&PublicKey::from_bytes(authority.as_ref()).unwrap())
-            .unwrap()
-            .stake();
+    for (authority, score, stake) in scores_per_authority {
+        total_stake += stake;
 
         let included = if !committee.reached_validity(total_stake) {
-            final_low_scoring_map.insert(*authority, score);
+            final_low_scoring_map.insert(authority, score);
             true
         } else {
             false
         };
-        if let Some(hostname) = authority_names_to_hostnames.get(authority) {
+        if let Some(hostname) = authority_names_to_hostnames.get(&authority) {
             info!(
                 "low scoring authority {} has score {}, included: {}",
                 hostname, score, included
