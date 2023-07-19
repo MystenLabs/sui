@@ -185,7 +185,7 @@ impl ValidatorGenesisConfigBuilder {
 
         let p2p_listen_address = self
             .p2p_listen_ip_address
-            .map(|ip| SocketAddr::new(ip, p2p_address.to_socket_addr().unwrap().port()));
+            .map(|ip| SocketAddr::new(ip, p2p_address.port().unwrap()));
 
         ValidatorGenesisConfig {
             key_pair: protocol_key_pair,
