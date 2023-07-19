@@ -206,21 +206,18 @@ impl SimpleAbsInt for ShareOwnedVerifierAI {
     }
 }
 
-fn is_obj(l: &LValue) -> bool {
-    let sp!(_, l_) = l;
+fn is_obj(sp!(_, l_): &LValue) -> bool {
     if let LValue_::Var(_, st) = l_ {
         return is_obj_type(st);
     }
     false
 }
 
-fn is_obj_type(st: &SingleType) -> bool {
-    let sp!(_, st_) = st;
-    let bt = match st_ {
+fn is_obj_type(sp!(_, st_): &SingleType) -> bool {
+    let sp!(_, bt_) = match st_ {
         SingleType_::Base(v) => v,
         SingleType_::Ref(_, v) => v,
     };
-    let sp!(_, bt_) = bt;
     if let BaseType_::Apply(abilities, _, _) = bt_ {
         if abilities.has_ability_(Ability_::Key) {
             return true;

@@ -160,10 +160,10 @@ impl SimpleAbsInt for RedundantCustomVerifierAI {
                 } else {
                     ("freeze", "frozen")
                 };
-                let uid_msg = format!("Instances of a type with a store ability can be {} using the \
-                                       public_{} function which often negates the intent of enforcing \
-                                       custom {} policy (implemented through calling the private {} \
-                                       function variant in the module defining this type)", action, fname, op, fname);
+                let uid_msg = format!("Instances of a type with a store ability can be {action} using \
+                                       the public_{fname} function which often negates the intent \
+                                       of enforcing a custom {op} policy (implemented through calling \
+                                       the private {fname} function variant in the module defining this type)");
                 let mut d = diag!(
                     REDUNDANT_CUSTOM_DIAG,
                     (self.fn_name_loc, msg),
@@ -198,15 +198,13 @@ impl SimpleAbsInt for RedundantCustomVerifierAI {
     }
 }
 
-fn is_local_obj_with_store(st: &SingleType, context: &CFGContext) -> bool {
-    let sp!(_, st_) = st;
-    let bt = match st_ {
+fn is_local_obj_with_store(sp!(_, st_): &SingleType, context: &CFGContext) -> bool {
+    let sp!(_, bt_) = match st_ {
         SingleType_::Base(v) => v,
         // transfer/share/freeze take objects by value so even if by-reference object has store and
         // is module-local, it could not end up being an argument to one of these functions
         SingleType_::Ref(_, _) => return false,
     };
-    let sp!(_, bt_) = bt;
     if let BaseType_::Apply(abilities, sp!(_, tname), _) = bt_ {
         if !abilities.has_ability_(Ability_::Store) {
             // no store ability
