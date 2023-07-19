@@ -27,6 +27,7 @@ import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAcco
 import { type AccountsPublicInfoUpdates } from '_src/background/keyring/accounts';
 import { type QredoConnectIdentity } from '_src/background/qredo/types';
 import { type UIAccessibleEntityType } from '_src/background/storage-entities-utils';
+import { NEW_ACCOUNTS_ENABLED } from '_src/shared/constants';
 import {
 	type MethodPayload,
 	isMethodPayload,
@@ -231,14 +232,23 @@ export class BackgroundClient {
 	public signData(address: string, data: Uint8Array): Promise<SerializedSignature> {
 		return lastValueFrom(
 			this.sendMessage(
-				createMessage<KeyringPayload<'signData'>>({
-					type: 'keyring',
-					method: 'signData',
-					args: { data: toB64(data), address },
-				}),
+				NEW_ACCOUNTS_ENABLED
+					? createMessage<MethodPayload<'signData'>>({
+							type: 'method-payload',
+							method: 'signData',
+							args: { data: toB64(data), address },
+					  })
+					: createMessage<KeyringPayload<'signData'>>({
+							type: 'keyring',
+							method: 'signData',
+							args: { data: toB64(data), address },
+					  }),
 			).pipe(
 				take(1),
 				map(({ payload }) => {
+					if (NEW_ACCOUNTS_ENABLED && isMethodPayload(payload, 'signDataResponse')) {
+						return payload.args.signature;
+					}
 					if (isKeyringPayload(payload, 'signData') && payload.return) {
 						return payload.return;
 					}
@@ -496,13 +506,27 @@ export class BackgroundClient {
 		);
 	}
 
-	public unlockAccountSource({ id, type, password }: MethodPayload<'unlockAccountSource'>['args']) {
+	public unlockAccountSourceOrAccount(
+		inputs: MethodPayload<'unlockAccountSourceOrAccount'>['args'],
+	) {
 		return lastValueFrom(
 			this.sendMessage(
-				createMessage<MethodPayload<'unlockAccountSource'>>({
+				createMessage<MethodPayload<'unlockAccountSourceOrAccount'>>({
 					type: 'method-payload',
-					method: 'unlockAccountSource',
-					args: { id, type, password },
+					method: 'unlockAccountSourceOrAccount',
+					args: inputs,
+				}),
+			).pipe(take(1)),
+		);
+	}
+
+	public lockAccountSourceOrAccount({ id }: MethodPayload<'lockAccountSourceOrAccount'>['args']) {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'lockAccountSourceOrAccount'>>({
+					type: 'method-payload',
+					method: 'lockAccountSourceOrAccount',
+					args: { id },
 				}),
 			).pipe(take(1)),
 		);

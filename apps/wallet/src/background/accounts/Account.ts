@@ -1,7 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiAddress } from '@mysten/sui.js';
+import {
+	type Keypair,
+	toSerializedSignature,
+	type SerializedSignature,
+	type SuiAddress,
+} from '@mysten/sui.js';
+import { blake2b } from '@noble/hashes/blake2b';
 import {
 	clearEphemeralValue,
 	getEphemeralValue,
@@ -14,7 +20,7 @@ import {
 } from '../storage-entities-utils';
 import { type Serializable } from '_src/shared/cryptography/keystore';
 
-export type AccountType = 'mnemonic-derived'; // TODO: | 'imported' | 'ledger' | 'qredo';
+export type AccountType = 'mnemonic-derived' | 'imported' | 'ledger' | 'qredo';
 
 export abstract class Account<T extends SerializedAccount, V extends Serializable> {
 	readonly id: string;
@@ -33,15 +39,27 @@ export abstract class Account<T extends SerializedAccount, V extends Serializabl
 	abstract toUISerialized(): Promise<SerializedUIAccount>;
 
 	protected async getStoredData() {
-		const data = await getStorageEntity<T>(this.id);
+		const data = await getStorageEntity<T>(this.id, 'account-entity');
 		if (!data) {
 			throw new Error(`Account data not found. (id: ${this.id})`);
 		}
 		return data;
 	}
 
+	protected generateSignature(data: Uint8Array, keyPair: Keypair) {
+		const digest = blake2b(data, { dkLen: 32 });
+		const pubkey = keyPair.getPublicKey();
+		const signature = keyPair.signData(digest);
+		const signatureScheme = keyPair.getKeyScheme();
+		return toSerializedSignature({
+			signature,
+			signatureScheme,
+			pubKey: pubkey,
+		});
+	}
+
 	updateStoredData(update: Parameters<typeof updateStorageEntity<T>>['1']) {
-		return updateStorageEntity<T>(this.id, update);
+		return updateStorageEntity<T>(this.id, 'account-entity', update);
 	}
 
 	getEphemeralValue(): Promise<V | null> {
@@ -65,6 +83,7 @@ export interface SerializedAccount extends StorageEntity {
 }
 
 export interface SerializedUIAccount {
+	readonly id: string;
 	readonly type: AccountType;
 	readonly address: SuiAddress;
 	readonly isLocked: boolean;
@@ -80,4 +99,13 @@ export function isPasswordUnLockable(account: any): account is PasswordUnLockabl
 	return (
 		'passwordUnlock' in account && 'unlockType' in account && account.unlockType === 'password'
 	);
+}
+
+export interface SigningAccount {
+	readonly canSign: true;
+	signData(data: Uint8Array): Promise<SerializedSignature>;
+}
+
+export function isSigningAccount(account: any): account is SigningAccount {
+	return 'signData' in account && 'canSign' in account && account.canSign === true;
 }

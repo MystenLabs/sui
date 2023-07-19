@@ -70,7 +70,7 @@ export async function removeFromSessionStorage(key: string) {
 	if (!SESSION_STORAGE) {
 		return;
 	}
-	await sessionStorage.removeItem(key);
+	await SESSION_STORAGE.remove(key);
 }
 export async function setToSessionStorageEncrypted<T extends Serializable>(key: string, value: T) {
 	const random = getRandomPassword();

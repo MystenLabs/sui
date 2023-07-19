@@ -32,7 +32,10 @@ export async function getAccountSources(filter?: { type: AccountSourceType }) {
 }
 
 export async function getAccountSourceByID(id: string) {
-	const serializedAccountSource = await getStorageEntity<AccountSourceSerialized>(id);
+	const serializedAccountSource = await getStorageEntity<AccountSourceSerialized>(
+		id,
+		'account-source-entity',
+	);
 	if (!serializedAccountSource) {
 		return null;
 	}
@@ -63,7 +66,7 @@ async function createAccountSource({
 	}
 }
 
-export async function handleUIMessage(msg: Message, uiConnection: UiConnection) {
+export async function accountSourcesHandleUIMessage(msg: Message, uiConnection: UiConnection) {
 	const { payload } = msg;
 	if (isMethodPayload(payload, 'createAccountSource')) {
 		await uiConnection.send(
@@ -78,16 +81,16 @@ export async function handleUIMessage(msg: Message, uiConnection: UiConnection) 
 		);
 		return true;
 	}
-	if (isMethodPayload(payload, 'unlockAccountSource')) {
-		const { id, type, password } = payload.args;
+	if (isMethodPayload(payload, 'unlockAccountSourceOrAccount')) {
+		const { id, password } = payload.args;
 		const accountSource = await getAccountSourceByID(id);
-		if (!accountSource) {
-			throw new Error(`Account source not found, ${id} - ${type}`);
+		if (accountSource) {
+			await accountSource.unlock(password);
+			// TODO: Auto lock timer
+			await uiConnection.send(createMessage({ type: 'done' }, msg.id));
+			// TODO: emit event to notify UI?
+			return true;
 		}
-		await accountSource.unlock(password);
-		await uiConnection.send(createMessage({ type: 'done' }, msg.id));
-		// TODO: emit event to notify UI?
-		return true;
 	}
 	if (isMethodPayload(payload, 'deriveMnemonicAccount')) {
 		const { sourceID } = payload.args;
@@ -110,6 +113,14 @@ export async function handleUIMessage(msg: Message, uiConnection: UiConnection) 
 			),
 		);
 		return true;
+	}
+	if (isMethodPayload(payload, 'lockAccountSourceOrAccount')) {
+		const accountSource = await getAccountSourceByID(payload.args.id);
+		if (accountSource) {
+			await accountSource.lock();
+			await uiConnection.send(createMessage({ type: 'done' }, msg.id));
+			return true;
+		}
 	}
 	return false;
 }

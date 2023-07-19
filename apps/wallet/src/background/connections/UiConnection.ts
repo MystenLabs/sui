@@ -7,9 +7,9 @@ import { Connection } from './Connection';
 import NetworkEnv from '../NetworkEnv';
 import {
 	getAllSerializedUIAccountSources,
-	handleUIMessage as accountSourceHandleUIMessage,
+	accountSourcesHandleUIMessage,
 } from '../account-sources';
-import { getAllSerializedUIAccounts } from '../accounts';
+import { accountsHandleUIMessage, getAllSerializedUIAccounts } from '../accounts';
 import {
 	acceptQredoConnection,
 	getUIQredoInfo,
@@ -187,8 +187,16 @@ export class UiConnection extends Connection {
 						msg.id,
 					),
 				);
-			} else if (await accountSourceHandleUIMessage(msg, this)) {
+			} else if (await accountSourcesHandleUIMessage(msg, this)) {
 				return;
+			} else if (await accountsHandleUIMessage(msg, this)) {
+				return;
+			} else {
+				throw new Error(
+					`Unhandled message ${msg.id}. (${JSON.stringify(
+						'error' in payload ? `${payload.code}-${payload.message}` : payload.type,
+					)})`,
+				);
 			}
 		} catch (e) {
 			this.send(

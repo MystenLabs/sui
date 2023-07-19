@@ -1,15 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SerializedAccount } from './Account';
+import { fromB64, type SuiAddress } from '@mysten/sui.js';
+import { isSigningAccount, type SerializedAccount } from './Account';
 import { MnemonicAccount } from './MnemonicAccount';
+import { type UiConnection } from '../connections/UiConnection';
 import {
 	getAllStoredEntities,
 	getStorageEntity,
 	setStorageEntity,
 } from '../storage-entities-utils';
 import { getFromLocalStorage, makeUniqueKey } from '../storage-utils';
-import { type Message } from '_src/shared/messaging/messages';
+import { createMessage, type Message } from '_src/shared/messaging/messages';
+import {
+	type MethodPayload,
+	isMethodPayload,
+} from '_src/shared/messaging/messages/payloads/MethodPayload';
 
 function toAccount(account: SerializedAccount) {
 	switch (true) {
@@ -25,11 +31,21 @@ export async function getAllAccounts() {
 }
 
 export async function getAccountByID(id: string) {
-	const serializedAccount = await getStorageEntity<SerializedAccount>(id);
+	const serializedAccount = await getStorageEntity<SerializedAccount>(id, 'account-entity');
 	if (!serializedAccount) {
 		return null;
 	}
 	return toAccount(serializedAccount);
+}
+
+export async function getAccountByAddress(address: SuiAddress) {
+	const allAccounts = await getAllAccounts();
+	for (const anAccount of allAccounts) {
+		if ((await anAccount.address) === address) {
+			return anAccount;
+		}
+	}
+	return null;
 }
 
 export async function getAllSerializedUIAccounts() {
@@ -65,7 +81,48 @@ export async function addNewAccount<T extends SerializedAccount>(account: Omit<T
 	// TODO: emit event
 }
 
-export async function handleUIMessage(msg: Message) {
+export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConnection) {
+	const { payload } = msg;
+	if (isMethodPayload(payload, 'lockAccountSourceOrAccount')) {
+		const account = await getAccountByID(payload.args.id);
+		if (account) {
+			await account.lock();
+			await uiConnection.send(createMessage({ type: 'done' }, msg.id));
+			return true;
+		}
+	}
+	if (isMethodPayload(payload, 'unlockAccountSourceOrAccount')) {
+		const { id, password } = payload.args;
+		const account = await getAccountByID(id);
+		if (account) {
+			await account.passwordUnlock(password);
+			// TODO: Auto lock timer
+			await uiConnection.send(createMessage({ type: 'done' }, msg.id));
+			// TODO: emit event to notify UI?
+			return true;
+		}
+	}
+	if (isMethodPayload(payload, 'signData')) {
+		const { address, data } = payload.args;
+		const account = await getAccountByAddress(address);
+		if (!account) {
+			throw new Error(`Account with address ${address} not found`);
+		}
+		if (!isSigningAccount(account)) {
+			throw new Error(`Account with address ${address} is not a signing account`);
+		}
+		await uiConnection.send(
+			createMessage<MethodPayload<'signDataResponse'>>(
+				{
+					type: 'method-payload',
+					method: 'signDataResponse',
+					args: { signature: await account.signData(fromB64(data)) },
+				},
+				msg.id,
+			),
+		);
+		return true;
+	}
 	// TODO implement
 	return false;
 }

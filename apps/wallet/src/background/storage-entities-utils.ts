@@ -24,8 +24,15 @@ export function isStorageEntity(item: any): item is StorageEntity {
 	);
 }
 
-export function getStorageEntity<R extends StorageEntity>(id: string) {
-	return getFromLocalStorage<R>(id, null);
+export async function getStorageEntity<R extends StorageEntity>(
+	id: string,
+	storageEntityType: StorageEntityType,
+) {
+	const entity = await getFromLocalStorage<R>(id, null);
+	if (!isStorageEntity(entity) || entity.storageEntityType !== storageEntityType) {
+		return null;
+	}
+	return entity;
 }
 
 export function setStorageEntity<T extends StorageEntity>(entity: T) {
@@ -35,8 +42,8 @@ export function setStorageEntity<T extends StorageEntity>(entity: T) {
 export async function updateStorageEntity<
 	T extends StorageEntity,
 	U extends Partial<Omit<T, 'id' | 'type'>> = {},
->(id: string, update: U) {
-	const existingData = await getStorageEntity<T>(id);
+>(id: string, storageEntityType: StorageEntityType, update: U) {
+	const existingData = await getStorageEntity<T>(id, storageEntityType);
 	if (!existingData) {
 		throw new Error(`Entity ${id} not found`);
 	}

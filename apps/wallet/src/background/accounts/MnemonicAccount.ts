@@ -7,6 +7,7 @@ import {
 	type SerializedAccount,
 	type PasswordUnLockableAccount,
 	type SerializedUIAccount,
+	type SigningAccount,
 } from './Account';
 import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
 
@@ -27,9 +28,10 @@ type SessionStorageData = { keyPair: ExportedKeypair };
 
 export class MnemonicAccount
 	extends Account<MnemonicSerializedAccount, SessionStorageData>
-	implements PasswordUnLockableAccount
+	implements PasswordUnLockableAccount, SigningAccount
 {
 	readonly unlockType = 'password' as const;
+	readonly canSign = true;
 
 	static isOfType(serialized: SerializedAccount): serialized is MnemonicSerializedAccount {
 		return serialized.type === 'mnemonic-derived';
@@ -40,7 +42,7 @@ export class MnemonicAccount
 	}
 
 	async isLocked(): Promise<boolean> {
-		return !!this.#getKeyPair();
+		return !(await this.#getKeyPair());
 	}
 
 	lock(): Promise<void> {
@@ -57,8 +59,9 @@ export class MnemonicAccount
 	}
 
 	async toUISerialized(): Promise<MnemonicSerializedUiAccount> {
-		const { type, address, derivationPath, publicKey, sourceID } = await this.getStoredData();
+		const { id, type, address, derivationPath, publicKey, sourceID } = await this.getStoredData();
 		return {
+			id,
 			type,
 			address,
 			isLocked: await this.isLocked(),
@@ -66,6 +69,14 @@ export class MnemonicAccount
 			publicKey,
 			sourceID,
 		};
+	}
+
+	async signData(data: Uint8Array): Promise<string> {
+		const keyPair = await this.#getKeyPair();
+		if (!keyPair) {
+			throw new Error(`Account is locked`);
+		}
+		return this.generateSignature(data, keyPair);
 	}
 
 	async #getKeyPair() {

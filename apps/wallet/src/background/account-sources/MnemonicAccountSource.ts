@@ -71,6 +71,10 @@ export class MnemonicAccountSource extends AccountSource<
 		return this.setEphemeralValue(await decrypt(password, (await this.getStoredData()).encrypted));
 	}
 
+	lock() {
+		return this.clearEphemeralValue();
+	}
+
 	async deriveAccount() {
 		const currentIndex = (await this.getStoredData()).lastAccountIndex;
 		const nextIndex = currentIndex === null ? 0 : currentIndex + 1;

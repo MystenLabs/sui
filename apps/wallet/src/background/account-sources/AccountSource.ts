@@ -26,17 +26,18 @@ export abstract class AccountSource<T extends AccountSourceSerialized, V extends
 
 	abstract toUISerialized(): Promise<AccountSourceSerializedUI>;
 	abstract isLocked(): Promise<boolean>;
+	abstract lock(): Promise<void>;
 
 	async getStoredData() {
-		const data = await getStorageEntity<T>(this.id);
+		const data = await getStorageEntity<T>(this.id, 'account-source-entity');
 		if (!data) {
 			throw new Error(`Account data not found. (id: ${this.id})`);
 		}
 		return data;
 	}
 
-	updateStoredData(update: Parameters<typeof updateStorageEntity<T>>['1']) {
-		return updateStorageEntity<T>(this.id, update);
+	updateStoredData(update: Parameters<typeof updateStorageEntity<T>>['2']) {
+		return updateStorageEntity<T>(this.id, 'account-source-entity', update);
 	}
 
 	getEphemeralValue(): Promise<V | null> {
