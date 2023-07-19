@@ -9,7 +9,6 @@ import {
 	IntentScope,
 	PRIVATE_KEY_SIZE,
 	TransactionBlock,
-	parseSerializedSignature,
 	verifyMessage,
 } from '../../../src';
 import { verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';
@@ -41,7 +40,7 @@ const TEST_MNEMONIC =
 describe('ed25519-keypair', () => {
 	it('new keypair', () => {
 		const keypair = new Ed25519Keypair();
-		expect(keypair.getPublicKey().toBytes().length).toBe(32);
+		expect(keypair.getPublicKey().toRawBytes().length).toBe(32);
 		expect(2).toEqual(2);
 	});
 
@@ -87,7 +86,7 @@ describe('ed25519-keypair', () => {
 		const isValid = nacl.sign.detached.verify(
 			signData,
 			signature,
-			keypair.getPublicKey().toBytes(),
+			keypair.getPublicKey().toRawBytes(),
 		);
 		expect(isValid).toBeTruthy();
 		expect(keypair.getPublicKey().verify(signData, signature));
@@ -101,7 +100,7 @@ describe('ed25519-keypair', () => {
 		const isValid = nacl.sign.detached.verify(
 			signData,
 			signature,
-			keypair.getPublicKey().toBytes(),
+			keypair.getPublicKey().toRawBytes(),
 		);
 		expect(isValid).toBeTruthy();
 	});
@@ -141,9 +140,8 @@ describe('ed25519-keypair', () => {
 		const bytes = await txb.build();
 
 		const serializedSignature = (await keypair.signTransactionBlock(bytes)).signature;
-		const signature = parseSerializedSignature(serializedSignature);
 
-		expect(await keypair.getPublicKey().verifyTransactionBlock(bytes, signature.signature)).toEqual(
+		expect(await keypair.getPublicKey().verifyTransactionBlock(bytes, serializedSignature)).toEqual(
 			true,
 		);
 		expect(await verifyMessage(bytes, serializedSignature, IntentScope.TransactionData)).toEqual(
@@ -157,10 +155,9 @@ describe('ed25519-keypair', () => {
 		const message = new TextEncoder().encode('hello world');
 
 		const serializedSignature = (await keypair.signPersonalMessage(message)).signature;
-		const signature = parseSerializedSignature(serializedSignature);
 
 		expect(
-			await keypair.getPublicKey().verifyPersonalMessage(message, signature.signature),
+			await keypair.getPublicKey().verifyPersonalMessage(message, serializedSignature),
 		).toEqual(true);
 		expect(await verifyMessage(message, serializedSignature, IntentScope.PersonalMessage)).toEqual(
 			true,

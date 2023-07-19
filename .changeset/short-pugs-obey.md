@@ -2,4 +2,4 @@
 '@mysten/sui.js': minor
 ---
 
-signMesssage uses BCS serialization for vector
+update signMessage to correctly wrap PersonalMessages before signing

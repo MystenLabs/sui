@@ -6,7 +6,6 @@ import {
 	PRIVATE_KEY_SIZE,
 	Secp256r1Keypair,
 	TransactionBlock,
-	parseSerializedSignature,
 } from '../../../src';
 import { describe, it, expect } from 'vitest';
 import { secp256r1 } from '@noble/curves/p256';
@@ -58,7 +57,7 @@ const TEST_MNEMONIC = 'open genre century trouble allow pioneer love task chat s
 describe('secp256r1-keypair', () => {
 	it('new keypair', () => {
 		const keypair = new Secp256r1Keypair();
-		expect(keypair.getPublicKey().toBytes().length).toBe(33);
+		expect(keypair.getPublicKey().toRawBytes().length).toBe(33);
 		expect(2).toEqual(2);
 	});
 
@@ -67,7 +66,7 @@ describe('secp256r1-keypair', () => {
 		const pub_key = new Uint8Array(VALID_SECP256R1_PUBLIC_KEY);
 		let pub_key_base64 = toB64(pub_key);
 		const keypair = Secp256r1Keypair.fromSecretKey(secret_key);
-		expect(keypair.getPublicKey().toBytes()).toEqual(new Uint8Array(pub_key));
+		expect(keypair.getPublicKey().toRawBytes()).toEqual(new Uint8Array(pub_key));
 		expect(keypair.getPublicKey().toBase64()).toEqual(pub_key_base64);
 	});
 
@@ -97,7 +96,7 @@ describe('secp256r1-keypair', () => {
 			secp256r1.verify(
 				secp256r1.Signature.fromCompact(sig),
 				msgHash,
-				keypair.getPublicKey().toBytes(),
+				keypair.getPublicKey().toRawBytes(),
 			),
 		).toBeTruthy();
 	});
@@ -118,7 +117,7 @@ describe('secp256r1-keypair', () => {
 			secp256r1.verify(
 				secp256r1.Signature.fromCompact(sig),
 				msgHash,
-				keypair.getPublicKey().toBytes(),
+				keypair.getPublicKey().toRawBytes(),
 			),
 		).toBeTruthy();
 	});
@@ -183,9 +182,8 @@ describe('secp256r1-keypair', () => {
 		const bytes = await txb.build();
 
 		const serializedSignature = (await keypair.signTransactionBlock(bytes)).signature;
-		const signature = parseSerializedSignature(serializedSignature);
 
-		expect(await keypair.getPublicKey().verifyTransactionBlock(bytes, signature.signature)).toEqual(
+		expect(await keypair.getPublicKey().verifyTransactionBlock(bytes, serializedSignature)).toEqual(
 			true,
 		);
 		expect(!!(await verifyTransactionBlock(bytes, serializedSignature))).toEqual(true);
@@ -196,10 +194,9 @@ describe('secp256r1-keypair', () => {
 		const message = new TextEncoder().encode('hello world');
 
 		const serializedSignature = (await keypair.signPersonalMessage(message)).signature;
-		const signature = parseSerializedSignature(serializedSignature);
 
 		expect(
-			await keypair.getPublicKey().verifyPersonalMessage(message, signature.signature),
+			await keypair.getPublicKey().verifyPersonalMessage(message, serializedSignature),
 		).toEqual(true);
 		expect(!!(await verifyPersonalMessage(message, serializedSignature))).toEqual(true);
 	});

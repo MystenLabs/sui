@@ -12,6 +12,7 @@
 		"dist",
 		"faucet",
 		"keypairs",
+		"multisig",
 		"src",
 		"transactions",
 		"verify"
@@ -34,10 +35,20 @@
 			"import": "./dist/esm/builder/index.js",
 			"require": "./dist/cjs/builder/index.js"
 		},
+		"./client": {
+			"source": "./src/client/index.ts",
+			"import": "./dist/esm/client/index.js",
+			"require": "./dist/cjs/client/index.js"
+		},
 		"./cryptography": {
 			"source": "./src/cryptography/index.ts",
 			"import": "./dist/esm/cryptography/index.js",
 			"require": "./dist/cjs/cryptography/index.js"
+		},
+		"./faucet": {
+			"source": "./src/faucet/index.ts",
+			"import": "./dist/esm/faucet/index.js",
+			"require": "./dist/cjs/faucet/index.js"
 		},
 		"./keypairs/ed25519": {
 			"source": "./src/keypairs/ed25519/index.ts",
@@ -54,15 +65,10 @@
 			"import": "./dist/esm/keypairs/secp256r1/index.js",
 			"require": "./dist/cjs/keypairs/secp256r1/index.js"
 		},
-		"./faucet": {
-			"source": "./src/faucet/index.ts",
-			"import": "./dist/esm/faucet/index.js",
-			"require": "./dist/cjs/faucet/index.js"
-		},
-		"./client": {
-			"source": "./src/client/index.ts",
-			"import": "./dist/esm/client/index.js",
-			"require": "./dist/cjs/client/index.js"
+		"./multisig": {
+			"source": "./src/multisig/index.ts",
+			"import": "./dist/esm/multisig/index.js",
+			"require": "./dist/cjs/multisig/index.js"
 		},
 		"./transactions": {
 			"source": "./src/builder/export.ts",
