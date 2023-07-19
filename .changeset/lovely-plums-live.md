@@ -2,4 +2,4 @@
 '@mysten/sui.js': minor
 ---
 
-Add verify multisig method
+Added a MultiSigPublicKey class for verifying multisig signatures

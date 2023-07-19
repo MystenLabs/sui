@@ -19,7 +19,6 @@ import { normalizeSuiAddress } from '../utils/sui-types.js';
 import { builder } from '../builder/bcs.js';
 // eslint-disable-next-line import/no-cycle
 import { publicKeyFromBytes } from '../verify/index.js';
-import { bcs } from '../types/sui-bcs.js';
 
 type CompressedSignature =
 	| { ED25519: number[] }
@@ -65,9 +64,13 @@ export class MultiSigPublicKey extends PublicKey {
 	}[];
 	/**
 	 * Create a new MultiSigPublicKey object
-	 * @param value MultiSig public key as buffer or base-64 encoded string
 	 */
-	constructor(value: string | Uint8Array | MultiSigPublicKeyStruct) {
+	constructor(
+		/**
+		 *  MultiSig public key as buffer or base-64 encoded string
+		 */
+		value: string | Uint8Array | MultiSigPublicKeyStruct,
+	) {
 		super();
 
 		if (typeof value === 'string') {
@@ -128,16 +131,20 @@ export class MultiSigPublicKey extends PublicKey {
 		return this.rawBytes;
 	}
 
+	getPublicKeys() {
+		return this.publicKeys;
+	}
+
 	/**
 	 * Return the Sui address associated with this MultiSig public key
 	 */
-	toSuiAddress(): string {
+	override toSuiAddress(): string {
 		// max length = 1 flag byte + (max pk size + max weight size (u8)) * max signer size + 2 threshold bytes (u16)
 		const maxLength = 1 + (64 + 1) * MAX_SIGNER_IN_MULTISIG + 2;
 		const tmp = new Uint8Array(maxLength);
 		tmp.set([SIGNATURE_SCHEME_TO_FLAG['MultiSig']]);
 
-		tmp.set(bcs.ser('u16', this.multisigPublicKey.threshold).toBytes(), 1);
+		tmp.set(builder.ser('u16', this.multisigPublicKey.threshold).toBytes(), 1);
 		let i = 3;
 		for (const { publicKey, weight } of this.publicKeys) {
 			const bytes = publicKey.toSuiBytes();

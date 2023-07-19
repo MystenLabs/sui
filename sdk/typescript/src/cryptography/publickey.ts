@@ -6,6 +6,8 @@ import { IntentScope, messageWithIntent } from './intent.js';
 import { blake2b } from '@noble/hashes/blake2b';
 import { bcs } from '../types/sui-bcs.js';
 import type { SerializedSignature } from './index.js';
+import { SUI_ADDRESS_LENGTH, normalizeSuiAddress } from '../utils/sui-types.js';
+import { bytesToHex } from '@noble/hashes/utils';
 
 /**
  * Value to be converted into public key.
@@ -60,11 +62,8 @@ export abstract class PublicKey {
 	 * of the scheme flag with the raw bytes of the public key
 	 */
 	toSuiPublicKey(): string {
-		const bytes = this.toBytes();
-		const suiPublicKey = new Uint8Array(bytes.length + 1);
-		suiPublicKey.set([this.flag()]);
-		suiPublicKey.set(bytes, 1);
-		return toB64(suiPublicKey);
+		const bytes = this.toSuiBytes();
+		return toB64(bytes);
 	}
 
 	verifyWithIntent(
@@ -123,14 +122,19 @@ export abstract class PublicKey {
 	}
 
 	/**
+	 * Return the Sui address associated with this Ed25519 public key
+	 */
+	toSuiAddress(): string {
+		// Each hex char represents half a byte, hence hex address doubles the length
+		return normalizeSuiAddress(
+			bytesToHex(blake2b(this.toSuiBytes(), { dkLen: 32 })).slice(0, SUI_ADDRESS_LENGTH * 2),
+		);
+	}
+
+	/**
 	 * Return the byte array representation of the public key
 	 */
 	abstract toRawBytes(): Uint8Array;
-
-	/**
-	 * Return the Sui address associated with this public key
-	 */
-	abstract toSuiAddress(): string;
 
 	/**
 	 * Return signature scheme flag of the public key

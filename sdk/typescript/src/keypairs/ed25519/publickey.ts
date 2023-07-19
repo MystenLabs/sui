@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { blake2b } from '@noble/hashes/blake2b';
 import { fromB64 } from '@mysten/bcs';
 import type { PublicKeyInitData } from '../../cryptography/publickey.js';
 import { PublicKey, bytesEqual } from '../../cryptography/publickey.js';
@@ -10,8 +9,6 @@ import {
 	SIGNATURE_SCHEME_TO_FLAG,
 	parseSerializedSignature,
 } from '../../cryptography/signature.js';
-import { bytesToHex } from '@noble/hashes/utils';
-import { SUI_ADDRESS_LENGTH, normalizeSuiAddress } from '../../utils/sui-types.js';
 import nacl from 'tweetnacl';
 
 const PUBLIC_KEY_SIZE = 32;
@@ -57,16 +54,6 @@ export class Ed25519PublicKey extends PublicKey {
 	 */
 	toRawBytes(): Uint8Array {
 		return this.data;
-	}
-
-	/**
-	 * Return the Sui address associated with this Ed25519 public key
-	 */
-	toSuiAddress(): string {
-		// Each hex char represents half a byte, hence hex address doubles the length
-		return normalizeSuiAddress(
-			bytesToHex(blake2b(this.toSuiBytes(), { dkLen: 32 })).slice(0, SUI_ADDRESS_LENGTH * 2),
-		);
 	}
 
 	/**
