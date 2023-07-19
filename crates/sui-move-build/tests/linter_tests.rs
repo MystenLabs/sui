@@ -8,6 +8,7 @@ use move_command_line_common::{
     testing::{add_update_baseline_fix, format_diff, read_env_update_baseline},
 };
 use move_compiler::{
+    cfgir::visitor::AbstractInterpreterVisitor,
     command_line::compiler::move_check_for_errors,
     diagnostics::codes::{self, CategoryID, DiagnosticsID, WarningFilter},
     editions::Flavor,
