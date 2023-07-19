@@ -1351,6 +1351,7 @@ impl ProtocolConfig {
                 let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.commit_root_state_digest = true;
                 cfg.feature_flags.narwhal_new_leader_election_schedule = true;
+                cfg.consensus_bad_nodes_stake_threshold = Some(0.33);
                 cfg
             }
 
