@@ -5,7 +5,7 @@ use sui_types::{
     epoch_data::EpochData,
     messages::{InputObjectKind, VerifiedTransaction, TransactionKind, TransactionDataAPI},
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemState,
-    effects::{TransactionEffects},
+    effects::TransactionEffects,
 };
 
 

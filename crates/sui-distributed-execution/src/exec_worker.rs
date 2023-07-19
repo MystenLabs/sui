@@ -30,10 +30,11 @@ use super::types::*;
 const MANAGER_CHANNEL_SIZE:usize = 1024;
 
 
-pub struct QueueCell {
-    read_only: bool,
-    txns: HashSet<TransactionDigest>,
-}
+// TODO: For concurrent reads
+// pub struct QueueCell {
+//     read_only: bool,
+//     txns: HashSet<TransactionDigest>,
+// }
 
 pub struct QueuesManager {
     tx_store: HashMap<TransactionDigest, Transaction>,
@@ -446,25 +447,10 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                     num_tx += 1;
                     epoch_txs_semaphore -= 1;
                     assert!(epoch_txs_semaphore >= 0);
- 
-                    if tasks_queue.len() > 0 {
-                        println!("{}", tasks_queue.len());
-                    }
                     
                     let full_tx = &tx_with_results.full_tx;
                     if full_tx.checkpoint_seq % 10_000 == 0 {
                         println!("EW executed {}", full_tx.checkpoint_seq);
-                    }
-
-                    // Print some statistics
-                    let read_set = full_tx.get_read_set();
-                    if read_set.len() == 0 {
-                        println!("empty");
-                    } else {
-                        for id in read_set.iter() {
-                            print!("{}, ", id)
-                        }
-                        println!("");
                     }
 
                     // 1. Critical check: are the effects the same?
@@ -555,7 +541,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
         // Print TPS
         let elapsed = now.elapsed();
         println!("Execution worker finished");
-        self.sanity_check(manager);   
+        // self.sanity_check(manager);   
         println!(
             "Execution worker num executed: {}", num_tx);
         println!(
@@ -564,7 +550,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
         );
     }
 
-    fn sanity_check(&self, qm: QueuesManager) {
+    fn _sanity_check(&self, qm: QueuesManager) {
         println!("EW running sanity check...");
 
         // obj_queues should be empty

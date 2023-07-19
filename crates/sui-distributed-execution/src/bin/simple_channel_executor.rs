@@ -5,7 +5,7 @@ use sui_config::{Config, NodeConfig};
 use sui_distributed_execution::{
     seqn_worker,
     exec_worker,
-    mutex_store::MutexedMemoryBackedStore,
+    dash_store::DashMemoryBackedStore,
 };
 use sui_types::multiaddr::Multiaddr;
 use tokio::sync::mpsc;
@@ -57,7 +57,7 @@ async fn main() {
     let genesis = Arc::new(config.genesis().expect("Could not load genesis"));
     let mut sw_state = seqn_worker::SequenceWorkerState::new(&config).await;
     let metrics = sw_state.metrics.clone();
-    let store = MutexedMemoryBackedStore::new(); // use the mutexed store for concurrency control
+    let store = DashMemoryBackedStore::new(); // use the mutexed store for concurrency control
     let mut ew_state = exec_worker::ExecutionWorkerState::new(store);
     ew_state.init_store(&genesis);
 
