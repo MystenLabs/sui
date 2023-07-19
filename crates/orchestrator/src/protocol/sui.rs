@@ -245,17 +245,25 @@ impl ProtocolMetrics for SuiProtocol {
     where
         I: IntoIterator<Item = Instance>,
     {
-        // let (ips, instances): (_, Vec<_>) = instances
-        //     .into_iter()
-        //     .map(|x| (IpAddr::V4(x.main_ip), x))
-        //     .unzip();
-        // let parameters = config::Parameters::new_for_benchmarks(ips);
-        // let metrics_paths = parameters
-        //     .all_metric_addresses()
-        //     .map(|x| format!("{x}{}", mysticeti_core::prometheus::METRICS_ROUTE));
+        let (ips, instances): (Vec<_>, Vec<_>) = instances
+            .into_iter()
+            .map(|x| (x.main_ip.to_string(), x))
+            .unzip();
 
-        // instances.into_iter().zip(metrics_paths).collect()
-        todo!()
+        GenesisConfig::new_for_benchmarks(&ips)
+            .validator_config_info
+            .expect("No validator in genesis")
+            .iter()
+            .zip(instances.into_iter())
+            .map(|(config, instance)| {
+                let path = format!(
+                    "{}{}",
+                    config.metrics_address,
+                    sui_node::metrics::METRICS_ROUTE
+                );
+                (instance, path)
+            })
+            .collect()
     }
 
     fn clients_metrics_path<I>(&self, instances: I) -> Vec<(Instance, String)>
