@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 
 use anyhow::Result;
 use fastcrypto::traits::KeyPair;
@@ -97,6 +97,8 @@ pub struct ValidatorGenesisConfigBuilder {
     /// If set, the validator will use deterministic addresses based on the port offset.
     /// This is useful for benchmarking.
     port_offset: Option<u16>,
+    /// Whether to use a specific p2p listen ip address. This is useful for testing on AWS.
+    p2p_listen_ip_address: Option<IpAddr>,
 }
 
 impl ValidatorGenesisConfigBuilder {
@@ -129,6 +131,11 @@ impl ValidatorGenesisConfigBuilder {
         self
     }
 
+    pub fn with_p2p_listen_ip_address(mut self, p2p_listen_ip_address: IpAddr) -> Self {
+        self.p2p_listen_ip_address = Some(p2p_listen_ip_address);
+        self
+    }
+
     pub fn build<R: rand::RngCore + rand::CryptoRng>(self, rng: &mut R) -> ValidatorGenesisConfig {
         let ip = self.ip.unwrap_or_else(local_ip_utils::get_new_ip);
         let localhost = local_ip_utils::localhost_for_testing();
@@ -156,11 +163,13 @@ impl ValidatorGenesisConfigBuilder {
             (
                 local_ip_utils::new_deterministic_tcp_address_for_testing(&ip, offset),
                 local_ip_utils::new_deterministic_udp_address_for_testing(&ip, offset + 1),
-                local_ip_utils::new_deterministic_tcp_address_for_testing(&ip, offset + 2),
-                local_ip_utils::new_deterministic_tcp_address_for_testing(&ip, offset + 3),
-                local_ip_utils::new_deterministic_udp_address_for_testing(&ip, offset + 4),
-                local_ip_utils::new_deterministic_udp_address_for_testing(&ip, offset + 5),
-                local_ip_utils::new_deterministic_tcp_address_for_testing(&ip, offset + 6),
+                local_ip_utils::new_deterministic_tcp_address_for_testing(&ip, offset + 2)
+                    .zero_ip_multi_address(),
+                local_ip_utils::new_deterministic_tcp_address_for_testing(&ip, offset + 3)
+                    .zero_ip_multi_address(),
+                local_ip_utils::new_deterministic_udp_address_for_testing(&localhost, offset + 4),
+                local_ip_utils::new_deterministic_udp_address_for_testing(&localhost, offset + 5),
+                local_ip_utils::new_deterministic_tcp_address_for_testing(&localhost, offset + 6),
             )
         } else {
             (
@@ -174,6 +183,10 @@ impl ValidatorGenesisConfigBuilder {
             )
         };
 
+        let p2p_listen_address = self
+            .p2p_listen_ip_address
+            .map(|ip| SocketAddr::new(ip, p2p_address.to_socket_addr().unwrap().port()));
+
         ValidatorGenesisConfig {
             key_pair: protocol_key_pair,
             worker_key_pair,
@@ -181,7 +194,7 @@ impl ValidatorGenesisConfigBuilder {
             network_key_pair,
             network_address,
             p2p_address,
-            p2p_listen_address: None,
+            p2p_listen_address,
             metrics_address: metrics_address.to_socket_addr().unwrap(),
             narwhal_metrics_address,
             gas_price,
@@ -330,6 +343,7 @@ impl GenesisConfig {
                 ValidatorGenesisConfigBuilder::new()
                     .with_ip(ip.to_string())
                     .with_deterministic_ports(Self::BENCHMARKS_PORT_OFFSET + 10 * i as u16)
+                    .with_p2p_listen_ip_address("0.0.0.0".parse().unwrap())
                     .build(&mut rng)
             })
             .collect();
