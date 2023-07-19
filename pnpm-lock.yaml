@@ -446,6 +446,9 @@ importers:
       class-variance-authority:
         specifier: ^0.7.0
         version: 0.7.0
+      cmdk:
+        specifier: ^0.2.0
+        version: 0.2.0(@types/react@18.2.15)(react-dom@18.2.0)(react@18.2.0)
       framer-motion:
         specifier: ^10.12.22
         version: 10.12.22(react-dom@18.2.0)(react@18.2.0)

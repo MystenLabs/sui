@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { LoadingIndicator, Text } from '@mysten/ui';
 import { Command } from 'cmdk';
 import {
 	type ComponentProps,
@@ -15,7 +14,9 @@ import {
 	useState,
 } from 'react';
 
-import { useOnClickOutside } from '~/hooks/useOnClickOutside';
+import { Text } from './Text';
+import { LoadingIndicator } from './LoadingIndicator';
+import { useOnClickOutside } from './hooks/useOnClickOutside';
 
 export type ComboboxItem = {
 	value: string;
@@ -79,17 +80,19 @@ export function ComboboxInput(props: ComponentProps<typeof Command.Input>) {
 }
 
 type ComboboxListProps<T extends ComboboxItem> = {
-	isLoading: boolean;
+	isLoading?: boolean;
+	showResultsCount?: boolean;
 	options: T[];
 	onSelect(value: T): void;
 };
 
 export function ComboboxList<T extends ComboboxItem = ComboboxItem>({
 	isLoading,
+	showResultsCount,
 	options,
 	onSelect,
 }: ComboboxListProps<T>) {
-	const { visible, value, listRef, inputRef } = useComboboxContext();
+	const { visible, value, setVisible, onValueChange, listRef, inputRef } = useComboboxContext();
 
 	if (!visible || !value) {
 		return null;
@@ -98,8 +101,17 @@ export function ComboboxList<T extends ComboboxItem = ComboboxItem>({
 	return (
 		<Command.List
 			ref={listRef}
-			className="absolute mt-1 w-full list-none rounded-md bg-white p-3.5 shadow-md"
+			className="absolute mt-1 w-full list-none rounded-md bg-white p-3.5 shadow-moduleOption h-fit max-h-verticalListLong z-10 overflow-scroll"
 		>
+			{showResultsCount && !isLoading && options.length > 0 && (
+				<Command.Item className="text-left ml-1.5 pb-2" disabled>
+					<Text variant="caption/semibold" color="gray-75" uppercase>
+						{options.length}
+						{options.length === 1 ? ' Result' : ' Results'}
+					</Text>
+				</Command.Item>
+			)}
+
 			{isLoading ? (
 				<Command.Loading>
 					<div className="flex items-center justify-center">
@@ -113,6 +125,8 @@ export function ComboboxList<T extends ComboboxItem = ComboboxItem>({
 						item={item}
 						onSelect={() => {
 							onSelect(item);
+							onValueChange('');
+							setVisible(false);
 							inputRef.current?.blur();
 						}}
 					/>
