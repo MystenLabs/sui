@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::{
-    CoinReadApiClient, GovernanceReadApiClient, IndexerApiClient, ReadApiClient,
-    TransactionBuilderClient, WriteApiClient,
-};
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 #[cfg(not(msim))]
 use std::str::FromStr;
 use std::time::Duration;
 use sui_json::{call_args, type_args};
+use sui_json_rpc::api::{
+    CoinReadApiClient, GovernanceReadApiClient, IndexerApiClient, ReadApiClient,
+    TransactionBuilderClient, WriteApiClient,
+};
 use sui_json_rpc_types::ObjectChange;
 use sui_json_rpc_types::ObjectsPage;
 use sui_json_rpc_types::{
@@ -446,8 +446,9 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
     let gas = objects.first().unwrap().object().unwrap();
 
     // Publish test coin package
-    let compiled_package = BuildConfig::default()
-        .build(Path::new("src/unit_tests/data/dummy_modules_publish").to_path_buf())?;
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend(["tests", "data", "dummy_modules_publish"]);
+    let compiled_package = BuildConfig::new_for_testing().build(path)?;
     let compiled_modules_bytes =
         compiled_package.get_package_base64(/* with_unpublished_deps */ false);
     let dependencies = compiled_package.get_dependency_original_package_ids();
@@ -529,8 +530,9 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let gas = objects.first().unwrap().object().unwrap();
 
     // Publish test coin package
-    let compiled_package = BuildConfig::new_for_testing()
-        .build(Path::new("src/unit_tests/data/dummy_modules_publish").to_path_buf())?;
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend(["tests", "data", "dummy_modules_publish"]);
+    let compiled_package = BuildConfig::default().build(path)?;
     let compiled_modules_bytes =
         compiled_package.get_package_base64(/* with_unpublished_deps */ false);
     let dependencies = compiled_package.get_dependency_original_package_ids();

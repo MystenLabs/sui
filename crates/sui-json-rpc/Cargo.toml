@@ -52,15 +52,5 @@ typed-store.workspace = true
 cached.workspace = true
 
 [dev-dependencies]
-sui-config.workspace = true
-sui-keys.workspace = true
-sui-move-build.workspace = true
-sui-test-transaction-builder.workspace = true
-test-cluster.workspace = true
-sui-sdk.workspace = true
-rand.workspace = true
-sui-macros.workspace = true
-sui-simulator.workspace = true
-reqwest.workspace = true
 mockall.workspace = true
 expect-test.workspace = true

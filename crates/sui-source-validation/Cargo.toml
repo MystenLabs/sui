@@ -34,6 +34,5 @@ tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "test-util"] }
 tracing.workspace = true
 
-sui.workspace = true
 sui-test-transaction-builder.workspace = true
 test-cluster.workspace = true
