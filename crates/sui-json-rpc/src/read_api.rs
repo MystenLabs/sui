@@ -373,7 +373,7 @@ impl ReadApi {
                         .sender(),
                     effects.modified_at_versions(),
                     effects.all_changed_objects(),
-                    effects.all_deleted(),
+                    effects.all_removed_objects(),
                 ));
             }
             let results = join_all(results).await;
@@ -741,7 +741,7 @@ impl ReadApiServer for ReadApi {
                         sender,
                         effects.modified_at_versions(),
                         effects.all_changed_objects(),
-                        effects.all_deleted(),
+                        effects.all_removed_objects(),
                     )
                     .await;
 

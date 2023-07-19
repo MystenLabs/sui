@@ -1445,10 +1445,9 @@ impl AuthorityStore {
         }
 
         let tombstones = effects
-            .deleted()
+            .all_removed_objects()
             .into_iter()
-            .chain(effects.wrapped())
-            .map(|obj_ref| ObjectKey(obj_ref.0, obj_ref.1));
+            .map(|(obj_ref, _)| ObjectKey(obj_ref.0, obj_ref.1));
         write_batch.delete_batch(&self.perpetual_tables.objects, tombstones)?;
 
         let all_new_object_keys = effects
