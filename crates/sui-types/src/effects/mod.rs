@@ -211,7 +211,8 @@ pub trait TransactionEffectsAPI {
     fn mutated(&self) -> &[(ObjectRef, Owner)];
     fn unwrapped(&self) -> &[(ObjectRef, Owner)];
     fn deleted(&self) -> &[ObjectRef];
-    fn unwrapped_then_deleted(&self) -> &[ObjectRef];
+    fn unwrapped_then_deleted_v1_deprecated(&self) -> &[ObjectRef];
+    fn unwrapped_then_deleted_v2(&self) -> Vec<ObjectID>;
     fn wrapped(&self) -> &[ObjectRef];
     fn gas_object(&self) -> (ObjectRef, Owner);
     fn events_digest(&self) -> Option<&TransactionEventsDigest>;

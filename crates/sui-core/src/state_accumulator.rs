@@ -171,7 +171,7 @@ where
                 .map(|(oref, _owner)| (*fx.transaction_digest(), oref.0, oref.1))
         })
         .chain(effects.iter().flat_map(|fx| {
-            fx.unwrapped_then_deleted()
+            fx.unwrapped_then_deleted_v1_deprecated()
                 .iter()
                 .map(|oref| (*fx.transaction_digest(), oref.0, oref.1))
         }))

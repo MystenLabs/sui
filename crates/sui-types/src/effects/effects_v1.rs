@@ -96,8 +96,11 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     fn deleted(&self) -> &[ObjectRef] {
         &self.deleted
     }
-    fn unwrapped_then_deleted(&self) -> &[ObjectRef] {
+    fn unwrapped_then_deleted_v1_deprecated(&self) -> &[ObjectRef] {
         &self.unwrapped_then_deleted
+    }
+    fn unwrapped_then_deleted_v2(&self) -> Vec<ObjectID> {
+        self.unwrapped_then_deleted.iter().map(|r| r.0).collect()
     }
     fn wrapped(&self) -> &[ObjectRef] {
         &self.wrapped

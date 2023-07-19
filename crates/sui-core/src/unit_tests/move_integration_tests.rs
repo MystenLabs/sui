@@ -103,7 +103,7 @@ async fn test_object_wrapping_unwrapping() {
         (
             effects.created().len(),
             effects.deleted().len(),
-            effects.unwrapped_then_deleted().len(),
+            effects.unwrapped_then_deleted_v2().len(),
             effects.wrapped().len()
         ),
         (1, 0, 0, 1)
@@ -222,7 +222,7 @@ async fn test_object_wrapping_unwrapping() {
         effects.status()
     );
     assert_eq!(effects.deleted().len(), 1);
-    assert_eq!(effects.unwrapped_then_deleted().len(), 1);
+    assert_eq!(effects.unwrapped_then_deleted_v2().len(), 1);
     // Check that both objects are marked as deleted in the authority.
     let expected_child_object_ref = (
         child_object_ref.0,
@@ -230,8 +230,8 @@ async fn test_object_wrapping_unwrapping() {
         ObjectDigest::OBJECT_DIGEST_DELETED,
     );
     assert!(effects
-        .unwrapped_then_deleted()
-        .contains(&expected_child_object_ref));
+        .unwrapped_then_deleted_v2()
+        .contains(&expected_child_object_ref.0));
     check_latest_object_ref(&authority, &expected_child_object_ref, true).await;
     let expected_parent_object_ref = (
         parent_object_ref.0,
@@ -561,7 +561,7 @@ async fn test_create_then_delete_parent_child_wrap() {
     // considered created in the first place.
     assert_eq!(effects.deleted().len(), 2);
     // The child is considered as unwrapped and deleted, even though it was wrapped since creation.
-    assert_eq!(effects.unwrapped_then_deleted().len(), 1);
+    assert_eq!(effects.unwrapped_then_deleted_v2().len(), 1);
 
     assert_eq!(
         effects
@@ -656,7 +656,7 @@ async fn test_remove_child_when_no_prior_version_exists() {
     // considered created in the first place.
     assert_eq!(effects.deleted().len(), 1);
     // The child was never created so it is not unwrapped.
-    assert_eq!(effects.unwrapped_then_deleted().len(), 0);
+    assert!(effects.unwrapped_then_deleted_v2().is_empty());
 
     assert_eq!(
         effects
@@ -763,7 +763,7 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
     // Check that parent object was deleted.
     assert_eq!(effects.deleted().len(), 2);
     // Check that child object was unwrapped and deleted.
-    assert_eq!(effects.unwrapped_then_deleted().len(), 1);
+    assert_eq!(effects.unwrapped_then_deleted_v2().len(), 1);
 }
 
 #[tokio::test]
@@ -2302,7 +2302,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
     assert_eq!(effects.mutated().len(), 1);
     assert!(effects.unwrapped().is_empty());
     assert!(effects.deleted().is_empty());
-    assert!(effects.unwrapped_then_deleted().is_empty());
+    assert!(effects.unwrapped_then_deleted_v2().is_empty());
 
     // single
     let mut builder = ProgrammableTransactionBuilder::new();
@@ -2324,7 +2324,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
     assert_eq!(effects.mutated().len(), 1);
     assert!(effects.unwrapped().is_empty());
     assert!(effects.deleted().is_empty());
-    assert!(effects.unwrapped_then_deleted().is_empty());
+    assert!(effects.unwrapped_then_deleted_v2().is_empty());
 
     // two
     let mut builder = ProgrammableTransactionBuilder::new();
@@ -2349,7 +2349,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
     assert_eq!(effects.mutated().len(), 1);
     assert!(effects.unwrapped().is_empty());
     assert!(effects.deleted().is_empty());
-    assert!(effects.unwrapped_then_deleted().is_empty());
+    assert!(effects.unwrapped_then_deleted_v2().is_empty());
 
     // with move call value
     let mut builder = ProgrammableTransactionBuilder::new();
@@ -2379,7 +2379,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
     assert_eq!(effects.mutated().len(), 1);
     assert!(effects.unwrapped().is_empty());
     assert!(effects.deleted().is_empty());
-    assert!(effects.unwrapped_then_deleted().is_empty());
+    assert!(effects.unwrapped_then_deleted_v2().is_empty());
 
     // nested
     let mut builder = ProgrammableTransactionBuilder::new();
@@ -2416,7 +2416,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
     assert_eq!(effects.mutated().len(), 1);
     assert!(effects.unwrapped().is_empty());
     assert!(effects.deleted().is_empty());
-    assert!(effects.unwrapped_then_deleted().is_empty());
+    assert!(effects.unwrapped_then_deleted_v2().is_empty());
 }
 
 macro_rules! make_vec_tests_for_type {

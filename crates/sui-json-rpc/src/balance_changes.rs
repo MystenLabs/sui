@@ -59,9 +59,8 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
         })
         .collect::<HashMap<ObjectID, ObjectDigest>>();
     let unwrapped_then_deleted = effects
-        .unwrapped_then_deleted()
-        .iter()
-        .map(|e| e.0)
+        .unwrapped_then_deleted_v2()
+        .into_iter()
         .collect::<HashSet<_>>();
     get_balance_changes(
         object_provider,

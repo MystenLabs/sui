@@ -619,8 +619,9 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
                     mutated: to_owned_ref(effect.mutated().to_vec()),
                     unwrapped: to_owned_ref(effect.unwrapped().to_vec()),
                     deleted: to_sui_object_ref(effect.deleted().to_vec()),
+                    // TODO: Figure out how to not use deprecated method.
                     unwrapped_then_deleted: to_sui_object_ref(
-                        effect.unwrapped_then_deleted().to_vec(),
+                        effect.unwrapped_then_deleted_v1_deprecated().to_vec(),
                     ),
                     wrapped: to_sui_object_ref(effect.wrapped().to_vec()),
                     gas_object: OwnedObjectRef {

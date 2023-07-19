@@ -1114,11 +1114,7 @@ impl<'a> SuiTestAdapter<'a> {
             .map(|((id, _, _), _)| *id)
             .collect();
         let mut deleted_ids: Vec<_> = effects.deleted().iter().map(|(id, _, _)| *id).collect();
-        let mut unwrapped_then_deleted_ids: Vec<_> = effects
-            .unwrapped_then_deleted()
-            .iter()
-            .map(|(id, _, _)| *id)
-            .collect();
+        let mut unwrapped_then_deleted_ids = effects.unwrapped_then_deleted_v2();
         let mut wrapped_ids: Vec<_> = effects.wrapped().iter().map(|(id, _, _)| *id).collect();
         let gas_summary = effects.gas_cost_summary();
 
