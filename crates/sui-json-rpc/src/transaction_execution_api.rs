@@ -218,9 +218,8 @@ impl WriteApiServer for TransactionExecutionApi {
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> RpcResult<SuiTransactionBlockResponse> {
         with_tracing!(Duration::from_secs(10), async move {
-            Ok(self
-                .execute_transaction_block(tx_bytes, signatures, opts, request_type)
-                .await?)
+            self.execute_transaction_block(tx_bytes, signatures, opts, request_type)
+                .await
         })
     }
 
@@ -235,11 +234,10 @@ impl WriteApiServer for TransactionExecutionApi {
         with_tracing!(async move {
             let tx_kind: TransactionKind =
                 bcs::from_bytes(&tx_bytes.to_vec().map_err(Error::from)?).map_err(Error::from)?;
-            Ok(self
-                .state
+            self.state
                 .dev_inspect_transaction_block(sender_address, tx_kind, gas_price.map(|i| *i))
                 .await
-                .map_err(Error::from)?)
+                .map_err(Error::from)
         })
     }
 
@@ -248,7 +246,7 @@ impl WriteApiServer for TransactionExecutionApi {
         &self,
         tx_bytes: Base64,
     ) -> RpcResult<DryRunTransactionBlockResponse> {
-        with_tracing!(async move { Ok(self.dry_run_transaction_block(tx_bytes).await?) })
+        with_tracing!(async move { self.dry_run_transaction_block(tx_bytes).await })
     }
 }
 

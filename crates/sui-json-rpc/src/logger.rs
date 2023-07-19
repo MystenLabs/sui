@@ -6,24 +6,24 @@ macro_rules! with_tracing {
     ($time_spent_threshold:expr, $future:expr) => {{
         use tracing::{info, error, Instrument, Span};
         use jsonrpsee::core::{RpcResult, Error as RpcError};
-        use jsonrpsee::types::error::{CallError, CALL_EXECUTION_FAILED_CODE};
+        use jsonrpsee::types::error::{CallError};
+        use $crate::error::RpcInterimResult;
+        use anyhow::anyhow;
 
         async move {
             let start = std::time::Instant::now();
-            let result: RpcResult<_> = $future.await;
+            let interim_result: RpcInterimResult<_> = $future.await;
             let elapsed = start.elapsed();
-            if let Err(e) = &result {
-                match e {
-                    RpcError::Call(call_error) => {
-                        match call_error {
-                            // We don't log user input errors
-                            CallError::InvalidParams(_) => (),
-                            _ => error!(error = ?e, error_code = CALL_EXECUTION_FAILED_CODE)
-                        };
-                    }
-                    _ => error!(error = ?e),
+            let result: RpcResult<_> = interim_result.map_err(|e: Error| {
+                let anyhow_error = anyhow!("{:?}", e);
+
+                let rpc_error = e.to_rpc_error();
+                if !matches!(rpc_error, RpcError::Call(CallError::InvalidParams(_))) {
+                    error!(error=?anyhow_error);
                 }
-            }
+                rpc_error
+            });
+
             if elapsed > $time_spent_threshold {
                 info!(?elapsed, "RPC took longer than threshold to complete.");
             }

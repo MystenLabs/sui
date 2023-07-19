@@ -220,23 +220,22 @@ impl GovernanceReadApiServer for GovernanceReadApi {
         &self,
         staked_sui_ids: Vec<ObjectID>,
     ) -> RpcResult<Vec<DelegatedStake>> {
-        with_tracing!(async move { Ok(self.get_stakes_by_ids(staked_sui_ids).await?) })
+        with_tracing!(async move { self.get_stakes_by_ids(staked_sui_ids).await })
     }
 
     #[instrument(skip(self))]
     async fn get_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>> {
-        with_tracing!(async move { Ok(self.get_stakes(owner).await?) })
+        with_tracing!(async move { self.get_stakes(owner).await })
     }
 
     #[instrument(skip(self))]
     async fn get_committee_info(&self, epoch: Option<BigInt<u64>>) -> RpcResult<SuiCommittee> {
         with_tracing!(async move {
-            Ok(self
-                .state
+            self.state
                 .committee_store()
                 .get_or_latest_committee(epoch.map(|e| *e))
                 .map(|committee| committee.into())
-                .map_err(Error::from)?)
+                .map_err(Error::from)
         })
     }
 
