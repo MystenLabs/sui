@@ -15,7 +15,7 @@
 //! * [`TransactionBuilder`] - provides functions for building transactions
 //!
 //! # Usage
-//! The main way to interact with the API is through the [`SuiClientBuilder`] which returns a [`SuiClient`] object from which the user can access the various APIs.
+//! The main way to interact with the API is through the [`SuiClientBuilder`] which returns a [SuiClient] object from which the user can access the various APIs.
 //!
 //! ## Getting Started
 //! Add the Rust SDK to the project by running `cargo add sui-sdk` in the root folder of your Rust project.
@@ -147,7 +147,7 @@ impl SuiClientBuilder {
         self
     }
 
-    /// Returns a [`SuiClient`] object connected to the Sui network running at the URI provided
+    /// Returns a [SuiClient] object connected to the Sui network running at the URI provided
     ///
     /// # Arguments
     ///
@@ -226,7 +226,7 @@ impl SuiClientBuilder {
         })
     }
 
-    /// Returns a [`SuiClient`] object that is ready to interact with the local development network (by default it expects the Sui network to be up and running at `127.0.0.1:9000`)
+    /// Returns a [SuiClient] object that is ready to interact with the local development network (by default it expects the Sui network to be up and running at `127.0.0.1:9000`)
     ///
     /// For connecting to a custom URI, use the `build` function instead
     ///
@@ -249,7 +249,7 @@ impl SuiClientBuilder {
         self.build(SUI_LOCAL_NETWORK_URL).await
     }
 
-    /// Returns a [`SuiClient`] object that is ready to interact with the Sui devnet (`https://fullnode.devnet.sui.io:443`)
+    /// Returns a [SuiClient] object that is ready to interact with the Sui devnet (`https://fullnode.devnet.sui.io:443`)
     ///
     /// For connecting to a custom URI, use the `build` function instead.
     ///
@@ -272,7 +272,7 @@ impl SuiClientBuilder {
         self.build(SUI_DEVNET_URL).await
     }
 
-    /// Returns a [`SuiClient`] object that is ready to interact with the Sui testnet (`https://fullnode.testnet.sui.io:443`)
+    /// Returns a [SuiClient] object that is ready to interact with the Sui testnet (`https://fullnode.testnet.sui.io:443`)
     ///
     /// For connecting to a custom URI, use the `build` function instead.
     ///
@@ -346,7 +346,7 @@ impl SuiClientBuilder {
 ///
 /// # Usage
 ///
-/// Use [`SuiClientBuilder`] to build a [`SuiClient`].
+/// Use [`SuiClientBuilder`] to build a [SuiClient].
 ///
 /// # Examples
 ///
@@ -408,17 +408,19 @@ struct ServerInfo {
 }
 
 impl SuiClient {
-    /// Returns a list of available RPC calls.
+    /// Returns a list of RPC methods supported by the node the client is connected to.
     pub fn available_rpc_methods(&self) -> &Vec<String> {
         &self.api.info.rpc_methods
     }
 
-    /// Returns a list of available subscriptions.
+    /// Returns a list of streaming/subscription APIs supported by the node the client is connected to.
     pub fn available_subscriptions(&self) -> &Vec<String> {
         &self.api.info.subscriptions
     }
 
-    /// Returns the API version information.
+    /// Returns the API version information as a string.
+    ///
+    /// The format of this string is `<major>.<minor>.<patch>`, e.g., `1.6.0`.
     pub fn api_version(&self) -> &str {
         &self.api.info.version
     }
