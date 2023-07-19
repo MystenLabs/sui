@@ -79,7 +79,13 @@ impl ReadApi {
             .await?)
     }
 
-    /// Return a paginated response containing the dynamic fields objects for this ObjectID, or an error upon failure.
+    /// Return a paginated response containing the dynamic fields objects for this [ObjectID], or an error upon failure.
+    ///
+    /// The return type is a list of [DynamicFieldInfo] objects, where the field name is always present,
+    /// represented as a `Move Value`.
+    ///
+    /// If the field is a dynamic field, returns the ID of the Field object (which contains both the name and the value).
+    /// If the field is a dynamic object field, it returns the ID of the Object (the value of the field).
     ///
     /// # Examples
     ///
@@ -134,7 +140,7 @@ impl ReadApi {
     /// use std::str::FromStr;
     ///
     /// #[tokio::main]
-    ///     async fn main() -> Result<(), anyhow::Error> {
+    /// async fn main() -> Result<(), anyhow::Error> {
     ///     let sui = SuiClientBuilder::default().build_localnet().await?; // connect to the local Sui network
     ///     let address = SuiAddress::from_str("0x0000....0000")?; // change to your Sui address
     ///     let owned_objects = sui.read_api().get_owned_objects(address, None, None, None).await?;
@@ -373,7 +379,7 @@ impl ReadApi {
         Ok(*self.api.http.get_total_transaction_blocks().await?)
     }
 
-    /// Return a [SuiTransactionBlockResponse] based on the given TransactionDigest, or an error upon failure.
+    /// Return a [SuiTransactionBlockResponse] based on the given [TransactionDigest], or an error upon failure.
     pub async fn get_transaction_with_options(
         &self,
         digest: TransactionDigest,
@@ -385,7 +391,7 @@ impl ReadApi {
             .get_transaction_block(digest, Some(options))
             .await?)
     }
-    /// Return a vector of SuiTransactionBlockResponse based on the given list of TransactionDigest, or an error upon failure.
+    /// Return a vector of [SuiTransactionBlockResponse] based on the given list of [TransactionDigest], or an error upon failure.
     pub async fn multi_get_transactions_with_options(
         &self,
         digests: Vec<TransactionDigest>,
@@ -400,9 +406,7 @@ impl ReadApi {
 
     /// Return the [SuiCommittee] information for the provided `epoch`, or an error upon failure.
     ///
-    /// # Arguments
-    ///
-    /// * `epoch` - the known epoch id or `None` for the last epoch
+    /// The argument `epoch` is either a known epoch id or `None` for the last epoch.
     ///
     /// # Examples
     ///
@@ -423,7 +427,7 @@ impl ReadApi {
         Ok(self.api.http.get_committee_info(epoch).await?)
     }
 
-    // Return a paginated response containing all transaction blocks information, or an error upon failure.
+    /// Return a paginated response containing all transaction blocks information, or an error upon failure.
     pub async fn query_transaction_blocks(
         &self,
         query: SuiTransactionBlockResponseQuery,
@@ -438,7 +442,7 @@ impl ReadApi {
             .await?)
     }
 
-    // Return the chain identifier, or an error upon failure.
+    /// Return the chain identifier, or an error upon failure.
     pub async fn get_chain_identifier(&self) -> SuiRpcResult<String> {
         Ok(self.api.http.get_chain_identifier().await?)
     }
@@ -585,7 +589,7 @@ impl CoinReadApi {
 
     /// Return a list of coins for the provided address in a paginated fashion, or an error upon failure.
     ///
-    /// The coins can be filtered by `coin_type` or use `None` for including all coin types.
+    /// The coins can be filtered by `coin_type` or use `None` for including all coins.
     ///
     /// # Examples
     ///
@@ -615,7 +619,10 @@ impl CoinReadApi {
             .get_coins(owner, coin_type, cursor, limit)
             .await?)
     }
-    /// Return all coins in a paginated fashion, or an error upon failure.
+    /// Return a list of all the coins for the provided address in a paginated fashion, or an error upon failure.
+    ///
+    ///
+    /// Use the `get_coins` method instead when need to filter by coin type.
     ///
     /// # Examples
     ///
