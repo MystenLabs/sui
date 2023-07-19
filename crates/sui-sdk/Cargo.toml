@@ -42,10 +42,8 @@ clap.workspace = true
 dirs.workspace = true
 async-recursion.workspace = true
 tempfile.workspace = true
-test-cluster.workspace = true
 futures-core.workspace = true
 futures.workspace = true
-sui.workspace = true
 
 [[example]]
 name = "tic-tac-toe"
