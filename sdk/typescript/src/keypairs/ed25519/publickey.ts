@@ -8,6 +8,7 @@ import { PublicKey } from '../../cryptography/publickey.js';
 import { SIGNATURE_SCHEME_TO_FLAG } from '../../cryptography/signature.js';
 import { bytesToHex } from '@noble/hashes/utils';
 import { SUI_ADDRESS_LENGTH, normalizeSuiAddress } from '../../utils/sui-types.js';
+import nacl from 'tweetnacl';
 
 const PUBLIC_KEY_SIZE = 32;
 
@@ -72,5 +73,12 @@ export class Ed25519PublicKey extends PublicKey {
 	 */
 	flag(): number {
 		return SIGNATURE_SCHEME_TO_FLAG['ED25519'];
+	}
+
+	/**
+	 * Verifies that the signature is valid for for the provided message
+	 */
+	async verify(message: Uint8Array, signature: Uint8Array): Promise<boolean> {
+		return nacl.sign.detached.verify(message, signature, this.toBytes());
 	}
 }

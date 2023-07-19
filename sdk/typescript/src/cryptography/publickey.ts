@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { toB64 } from '@mysten/bcs';
+import { IntentScope, messageWithIntent } from './intent.js';
+import { blake2b } from '@noble/hashes/blake2b';
+import { bcs } from '../types/sui-bcs.js';
 
 /**
  * Value to be converted into public key.
@@ -63,6 +66,35 @@ export abstract class PublicKey {
 		return toB64(suiPublicKey);
 	}
 
+	verifyWithIntent(
+		bytes: Uint8Array,
+		signature: Uint8Array,
+		intent: IntentScope,
+	): Promise<boolean> {
+		const intentMessage = messageWithIntent(intent, bytes);
+		const digest = blake2b(intentMessage, { dkLen: 32 });
+
+		return this.verify(digest, signature);
+	}
+
+	/**
+	 * Verifies that the signature is valid for for the provided PersonalMessage
+	 */
+	verifyPersonalMessage(message: Uint8Array, signature: Uint8Array): Promise<boolean> {
+		return this.verifyWithIntent(
+			bcs.ser(['vector', 'u8'], message).toBytes(),
+			signature,
+			IntentScope.PersonalMessage,
+		);
+	}
+
+	/**
+	 * Verifies that the signature is valid for for the provided TransactionBlock
+	 */
+	verifyTransactionBlock(transactionBlock: Uint8Array, signature: Uint8Array): Promise<boolean> {
+		return this.verifyWithIntent(transactionBlock, signature, IntentScope.TransactionData);
+	}
+
 	/**
 	 * Return the byte array representation of the public key
 	 */
@@ -77,4 +109,9 @@ export abstract class PublicKey {
 	 * Return signature scheme flag of the public key
 	 */
 	abstract flag(): number;
+
+	/**
+	 * Verifies that the signature is valid for for the provided message
+	 */
+	abstract verify(data: Uint8Array, signature: Uint8Array): Promise<boolean>;
 }

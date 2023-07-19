@@ -1,10 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64, toB64 } from '@mysten/bcs';
+import { fromB64, toB58, toB64 } from '@mysten/bcs';
 import nacl from 'tweetnacl';
 import { describe, it, expect } from 'vitest';
-import { Ed25519Keypair, PRIVATE_KEY_SIZE } from '../../../src';
+import {
+	Ed25519Keypair,
+	IntentScope,
+	PRIVATE_KEY_SIZE,
+	TransactionBlock,
+	parseSerializedSignature,
+	verifyMessage,
+} from '../../../src';
+import { verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';
 
 const VALID_SECRET_KEY = 'mdqVWeFekT7pqy5T49+tV12jO0m+ESW7ki4zSU9JiCg=';
 
@@ -82,6 +90,7 @@ describe('ed25519-keypair', () => {
 			keypair.getPublicKey().toBytes(),
 		);
 		expect(isValid).toBeTruthy();
+		expect(keypair.getPublicKey().verify(signData, signature));
 	});
 
 	it('incorrect coin type node for ed25519 derivation path', () => {
@@ -113,5 +122,49 @@ describe('ed25519-keypair', () => {
 		expect(() => {
 			Ed25519Keypair.deriveKeypair('aaa');
 		}).toThrow('Invalid mnemonic');
+	});
+
+	it('signs TransactionBlocks', async () => {
+		const keypair = new Ed25519Keypair();
+		const txb = new TransactionBlock();
+		txb.setSender(keypair.getPublicKey().toSuiAddress());
+		txb.setGasPrice(5);
+		txb.setGasBudget(100);
+		txb.setGasPayment([
+			{
+				objectId: (Math.random() * 100000).toFixed(0).padEnd(64, '0'),
+				version: String((Math.random() * 10000).toFixed(0)),
+				digest: toB58(new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9])),
+			},
+		]);
+
+		const bytes = await txb.build();
+
+		const serializedSignature = (await keypair.signTransactionBlock(bytes)).signature;
+		const signature = parseSerializedSignature(serializedSignature);
+
+		expect(await keypair.getPublicKey().verifyTransactionBlock(bytes, signature.signature)).toEqual(
+			true,
+		);
+		expect(await verifyMessage(bytes, serializedSignature, IntentScope.TransactionData)).toEqual(
+			true,
+		);
+		expect(!!(await verifyTransactionBlock(bytes, serializedSignature))).toEqual(true);
+	});
+
+	it('signs PersonalMessages', async () => {
+		const keypair = new Ed25519Keypair();
+		const message = new TextEncoder().encode('hello world');
+
+		const serializedSignature = (await keypair.signPersonalMessage(message)).signature;
+		const signature = parseSerializedSignature(serializedSignature);
+
+		expect(
+			await keypair.getPublicKey().verifyPersonalMessage(message, signature.signature),
+		).toEqual(true);
+		expect(await verifyMessage(message, serializedSignature, IntentScope.PersonalMessage)).toEqual(
+			true,
+		);
+		expect(!!(await verifyPersonalMessage(message, serializedSignature))).toEqual(true);
 	});
 });

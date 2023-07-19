@@ -7,6 +7,7 @@ import { toSerializedSignature } from './signature.js';
 import type { SignatureScheme } from './signature.js';
 import { IntentScope, messageWithIntent } from './intent.js';
 import { blake2b } from '@noble/hashes/blake2b';
+import { bcs } from '../types/sui-bcs.js';
 
 export const PRIVATE_KEY_SIZE = 32;
 export const LEGACY_PRIVATE_KEY_SIZE = 64;
@@ -47,8 +48,18 @@ export abstract class BaseSigner {
 		return this.signWithIntent(bytes, IntentScope.TransactionData);
 	}
 
+	async signPersonalMessage(bytes: Uint8Array) {
+		return this.signWithIntent(
+			bcs.ser(['vector', 'u8'], bytes).toBytes(),
+			IntentScope.PersonalMessage,
+		);
+	}
+
+	/**
+	 * @deprecated use `signPersonalMessage` instead
+	 */
 	async signMessage(bytes: Uint8Array) {
-		return this.signWithIntent(bytes, IntentScope.PersonalMessage);
+		return this.signPersonalMessage(bytes);
 	}
 
 	toSuiAddress(): string {
@@ -57,7 +68,7 @@ export abstract class BaseSigner {
 
 	/**
 	 * Return the signature for the data.
-	 * Prefer the async verion {@link sign}, as this method will be deprecated in a future release.
+	 * Prefer the async version {@link sign}, as this method will be deprecated in a future release.
 	 */
 	abstract signData(data: Uint8Array): Uint8Array;
 

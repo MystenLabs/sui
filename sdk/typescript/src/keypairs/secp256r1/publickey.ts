@@ -8,6 +8,8 @@ import { PublicKey } from '../../cryptography/publickey.js';
 import type { PublicKeyInitData } from '../../cryptography/publickey.js';
 import { SIGNATURE_SCHEME_TO_FLAG } from '../../cryptography/signature.js';
 import { SUI_ADDRESS_LENGTH, normalizeSuiAddress } from '../../utils/sui-types.js';
+import { sha256 } from '@noble/hashes/sha256';
+import { secp256r1 } from '@noble/curves/p256';
 
 const SECP256R1_PUBLIC_KEY_SIZE = 33;
 
@@ -72,5 +74,16 @@ export class Secp256r1PublicKey extends PublicKey {
 	 */
 	flag(): number {
 		return SIGNATURE_SCHEME_TO_FLAG['Secp256r1'];
+	}
+
+	/**
+	 * Verifies that the signature is valid for for the provided message
+	 */
+	async verify(message: Uint8Array, signature: Uint8Array): Promise<boolean> {
+		return secp256r1.verify(
+			secp256r1.Signature.fromCompact(signature),
+			sha256(message),
+			this.toBytes(),
+		);
 	}
 }
