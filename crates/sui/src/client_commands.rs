@@ -1635,6 +1635,7 @@ async fn construct_move_call_transaction(
             sender, package, module, function, type_args, args, gas, gas_budget,
         )
         .await
+        .map_err(|e| anyhow!(e))
 }
 
 fn convert_number_to_string(value: Value) -> Value {

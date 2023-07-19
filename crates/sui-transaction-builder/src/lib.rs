@@ -20,7 +20,6 @@ use sui_json_rpc_types::{
 };
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, ObjectInfo, ObjectRef, ObjectType, SuiAddress};
-use sui_types::error::UserInputError;
 use sui_types::gas_coin::GasCoin;
 use sui_types::governance::{ADD_STAKE_MUL_COIN_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
 use sui_types::move_package::MovePackage;
@@ -32,7 +31,7 @@ use sui_types::transaction::{
 };
 use sui_types::{coin, fp_ensure, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID};
 
-mod error;
+pub mod error;
 
 #[async_trait]
 pub trait DataReader {
@@ -64,7 +63,7 @@ impl TransactionBuilder {
         input_coins: &[ObjectID],
     ) -> SuiTransactionBuilderResult<Vec<ObjectRef>> {
         let handles: Vec<_> = input_coins
-            .into_iter()
+            .iter()
             .map(|id| self.get_object_ref(*id))
             .collect();
         join_all(handles)
@@ -87,7 +86,11 @@ impl TransactionBuilder {
         if let Some(gas) = input_gas {
             self.get_object_ref(gas).await
         } else {
-            let gas_objs = self.0.get_owned_objects(signer, GasCoin::type_()).await?;
+            let gas_objs = self
+                .0
+                .get_owned_objects(signer, GasCoin::type_())
+                .await
+                .map_err(STBError::DataReaderError)?;
 
             for obj in gas_objs {
                 let response = self
@@ -162,7 +165,11 @@ impl TransactionBuilder {
         amount: Option<u64>,
     ) -> SuiTransactionBuilderResult<TransactionData> {
         let object = self.get_object_ref(sui_object_id).await?;
-        let gas_price = self.0.get_reference_gas_price().await?;
+        let gas_price = self
+            .0
+            .get_reference_gas_price()
+            .await
+            .map_err(STBError::DataReaderError)?;
         Ok(TransactionData::new_transfer_sui(
             recipient, signer, amount, object, gas_budget, gas_price,
         ))
@@ -184,7 +191,11 @@ impl TransactionBuilder {
         }
 
         let coin_refs = self.get_coin_refs(&input_coins).await?;
-        let gas_price = self.0.get_reference_gas_price().await?;
+        let gas_price = self
+            .0
+            .get_reference_gas_price()
+            .await
+            .map_err(STBError::DataReaderError)?;
         let gas = self
             .select_gas(signer, gas, gas_budget, input_coins, gas_price)
             .await?;
@@ -208,7 +219,11 @@ impl TransactionBuilder {
         let mut coin_refs = self.get_coin_refs(&input_coins).await?;
         // [0] is safe because input_coins is non-empty and coins are of same length as input_coins.
         let gas_object_ref = coin_refs.remove(0);
-        let gas_price = self.0.get_reference_gas_price().await?;
+        let gas_price = self
+            .0
+            .get_reference_gas_price()
+            .await
+            .map_err(STBError::DataReaderError)?;
         TransactionData::new_pay_sui(
             signer,
             coin_refs,
@@ -234,7 +249,11 @@ impl TransactionBuilder {
 
         // [0] is safe because input_coins is non-empty and coins are of same length as input_coins.
         let gas_object_ref = coin_refs.remove(0);
-        let gas_price = self.0.get_reference_gas_price().await?;
+        let gas_price = self
+            .0
+            .get_reference_gas_price()
+            .await
+            .map_err(STBError::DataReaderError)?;
         Ok(TransactionData::new_pay_all_sui(
             signer,
             coin_refs,
@@ -275,7 +294,11 @@ impl TransactionBuilder {
                 _ => None,
             })
             .collect();
-        let gas_price = self.0.get_reference_gas_price().await?;
+        let gas_price = self
+            .0
+            .get_reference_gas_price()
+            .await
+            .map_err(STBError::DataReaderError)?;
         let gas = self
             .select_gas(signer, gas, gas_budget, input_objects, gas_price)
             .await?;
@@ -328,7 +351,8 @@ impl TransactionBuilder {
         let response = self
             .0
             .get_object_with_options(id, SuiObjectDataOptions::bcs_lossless())
-            .await?;
+            .await
+            .map_err(STBError::DataReaderError)?;
 
         let obj: Object = response
             .into_object()?
@@ -363,7 +387,8 @@ impl TransactionBuilder {
         let object = self
             .0
             .get_object_with_options(package_id, SuiObjectDataOptions::bcs_lossless())
-            .await?
+            .await
+            .map_err(STBError::DataReaderError)?
             .into_object()?;
         let Some(SuiRawData::Package(package)) = object.bcs else {
             return Err(STBError::MissingBcsField(package_id));
@@ -432,7 +457,11 @@ impl TransactionBuilder {
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> SuiTransactionBuilderResult<TransactionData> {
-        let gas_price = self.0.get_reference_gas_price().await?;
+        let gas_price = self
+            .0
+            .get_reference_gas_price()
+            .await
+            .map_err(STBError::DataReaderError)?;
         let gas = self
             .select_gas(sender, gas, gas_budget, vec![], gas_price)
             .await?;
@@ -458,14 +487,19 @@ impl TransactionBuilder {
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> SuiTransactionBuilderResult<TransactionData> {
-        let gas_price = self.0.get_reference_gas_price().await?;
+        let gas_price = self
+            .0
+            .get_reference_gas_price()
+            .await
+            .map_err(STBError::DataReaderError)?;
         let gas = self
             .select_gas(sender, gas, gas_budget, vec![], gas_price)
             .await?;
         let upgrade_cap = self
             .0
             .get_object_with_options(upgrade_capability, SuiObjectDataOptions::new().with_owner())
-            .await?
+            .await
+            .map_err(STBError::DataReaderError)?
             .into_object()?;
         let cap_owner = upgrade_cap
             .owner
@@ -497,12 +531,17 @@ impl TransactionBuilder {
         let coin = self
             .0
             .get_object_with_options(coin_object_id, SuiObjectDataOptions::bcs_lossless())
-            .await?
+            .await
+            .map_err(STBError::DataReaderError)?
             .into_object()?;
         let coin_object_ref = coin.object_ref();
         let coin: Object = coin.try_into().map_err(STBError::SuiObjectDataError)?;
         let type_args = vec![coin.get_move_template_type()?];
-        let gas_price = self.0.get_reference_gas_price().await?;
+        let gas_price = self
+            .0
+            .get_reference_gas_price()
+            .await
+            .map_err(STBError::DataReaderError)?;
         let gas = self
             .select_gas(signer, gas, gas_budget, vec![coin_object_id], gas_price)
             .await?;
@@ -536,12 +575,17 @@ impl TransactionBuilder {
         let coin = self
             .0
             .get_object_with_options(coin_object_id, SuiObjectDataOptions::bcs_lossless())
-            .await?
+            .await
+            .map_err(STBError::DataReaderError)?
             .into_object()?;
         let coin_object_ref = coin.object_ref();
         let coin: Object = coin.try_into().map_err(STBError::SuiObjectDataError)?;
         let type_args = vec![coin.get_move_template_type()?];
-        let gas_price = self.0.get_reference_gas_price().await?;
+        let gas_price = self
+            .0
+            .get_reference_gas_price()
+            .await
+            .map_err(STBError::DataReaderError)?;
         let gas = self
             .select_gas(signer, gas, gas_budget, vec![coin_object_id], gas_price)
             .await?;
@@ -575,13 +619,18 @@ impl TransactionBuilder {
         let coin = self
             .0
             .get_object_with_options(primary_coin, SuiObjectDataOptions::bcs_lossless())
-            .await?
+            .await
+            .map_err(STBError::DataReaderError)?
             .into_object()?;
         let primary_coin_ref = coin.object_ref();
         let coin_to_merge_ref = self.get_object_ref(coin_to_merge).await?;
         let coin: Object = coin.try_into().map_err(STBError::SuiObjectDataError)?;
         let type_args = vec![coin.get_move_template_type()?];
-        let gas_price = self.0.get_reference_gas_price().await?;
+        let gas_price = self
+            .0
+            .get_reference_gas_price()
+            .await
+            .map_err(STBError::DataReaderError)?;
         let gas = self
             .select_gas(
                 signer,
@@ -649,7 +698,11 @@ impl TransactionBuilder {
                 _ => None,
             })
             .collect();
-        let gas_price = self.0.get_reference_gas_price().await?;
+        let gas_price = self
+            .0
+            .get_reference_gas_price()
+            .await
+            .map_err(STBError::DataReaderError)?;
         let gas = self
             .select_gas(signer, gas, gas_budget, inputs, gas_price)
             .await?;
@@ -672,7 +725,11 @@ impl TransactionBuilder {
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> SuiTransactionBuilderResult<TransactionData> {
-        let gas_price = self.0.get_reference_gas_price().await?;
+        let gas_price = self
+            .0
+            .get_reference_gas_price()
+            .await
+            .map_err(STBError::DataReaderError)?;
         let gas = self
             .select_gas(signer, gas, gas_budget, coins.clone(), gas_price)
             .await?;
@@ -739,11 +796,15 @@ impl TransactionBuilder {
         gas_budget: u64,
     ) -> SuiTransactionBuilderResult<TransactionData> {
         let staked_sui = self.get_object_ref(staked_sui).await?;
-        let gas_price = self.0.get_reference_gas_price().await?;
+        let gas_price = self
+            .0
+            .get_reference_gas_price()
+            .await
+            .map_err(STBError::DataReaderError)?;
         let gas = self
             .select_gas(signer, gas, gas_budget, vec![], gas_price)
             .await?;
-        Ok(TransactionData::new_move_call(
+        TransactionData::new_move_call(
             signer,
             SUI_SYSTEM_PACKAGE_ID,
             SUI_SYSTEM_MODULE_NAME.to_owned(),
@@ -757,7 +818,7 @@ impl TransactionBuilder {
             gas_budget,
             gas_price,
         )
-        .map_err(|e| STBError::ProgrammableTransactionBuilderError(e))?)
+        .map_err(STBError::ProgrammableTransactionBuilderError)
     }
 
     // TODO: we should add retrial to reduce the transaction building error rate
@@ -774,7 +835,8 @@ impl TransactionBuilder {
         let object = self
             .0
             .get_object_with_options(object_id, SuiObjectDataOptions::new().with_type())
-            .await?
+            .await
+            .map_err(STBError::DataReaderError)?
             .into_object()?;
 
         Ok((

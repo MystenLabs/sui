@@ -6,8 +6,10 @@ use hyper::header::InvalidHeaderValue;
 use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::CallError;
 use jsonrpsee::types::ErrorObject;
+use sui_transaction_builder::error::SuiTransactionBuilderError;
 use sui_types::error::{SuiError, SuiObjectResponseError, UserInputError};
 use sui_types::quorum_driver_types::{QuorumDriverError, NON_RECOVERABLE_ERROR_MSG};
+
 use thiserror::Error;
 use tokio::task::JoinError;
 
@@ -53,6 +55,9 @@ pub enum Error {
 
     #[error(transparent)]
     SuiRpcInputError(#[from] SuiRpcInputError),
+
+    #[error(transparent)]
+    SuiTransactionBuilderError(#[from] SuiTransactionBuilderError),
 }
 
 impl From<Error> for RpcError {
@@ -84,6 +89,9 @@ impl Error {
                 }
                 _ => RpcError::Call(CallError::Failed(err.into())),
             },
+            Error::SuiTransactionBuilderError(_) => {
+                RpcError::Call(CallError::InvalidParams(self.into()))
+            }
             _ => RpcError::Call(CallError::Failed(self.into())),
         }
     }

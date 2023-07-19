@@ -81,21 +81,3 @@ pub enum SuiTransactionBuilderError {
     #[error(transparent)]
     TypeTagError(anyhow::Error),
 }
-
-/*
-DataReader.get_owned_objects, get_object_with_options
-response.object()?
-bcs::from_bytes
-
-ProgrammableTransactionBuilder
-pt.input_objects()
-Identifier::from_str
-SuiObjectResponseError
-
-builder.transfer_object -> self.pure, self.obj
-builder.input -> obj
-resolve_and_checks_json_args, request_add_stake -> builder.make_obj_vec ->
-
-
-basically self.pure, self.obj
- */
