@@ -3,9 +3,7 @@
 
 use diesel::prelude::*;
 
-use sui_json_rpc_types::{
-    OwnedObjectRef, SuiObjectRef, SuiTransactionBlockDataAPI, SuiTransactionBlockEffectsAPI,
-};
+use sui_json_rpc_types::{SuiTransactionBlockDataAPI, SuiTransactionBlockEffectsAPI};
 
 use crate::errors::IndexerError;
 use crate::schema::transactions;
@@ -18,18 +16,11 @@ pub struct Transaction {
     pub id: Option<i64>,
     pub transaction_digest: String,
     pub sender: String,
-    pub recipients: Vec<Option<String>>,
     pub checkpoint_sequence_number: Option<i64>,
     pub timestamp_ms: Option<i64>,
     pub transaction_kind: String,
     pub transaction_count: i64,
     pub execution_success: bool,
-    pub created: Vec<Option<String>>,
-    pub mutated: Vec<Option<String>>,
-    pub deleted: Vec<Option<String>>,
-    pub unwrapped: Vec<Option<String>>,
-    pub wrapped: Vec<Option<String>>,
-    pub move_calls: Vec<Option<String>>,
     pub gas_object_id: String,
     pub gas_object_sequence: i64,
     pub gas_object_digest: String,
@@ -42,7 +33,6 @@ pub struct Transaction {
     pub gas_price: i64,
     // BCS bytes of SenderSignedData
     pub raw_transaction: Vec<u8>,
-    pub transaction_content: String,
     pub transaction_effects_content: String,
     pub confirmed_local_execution: Option<bool>,
 }
@@ -64,12 +54,6 @@ impl TryFrom<TemporaryTransactionBlockResponseStore> for Transaction {
             checkpoint,
         } = tx_resp;
 
-        let tx_json = serde_json::to_string(&transaction).map_err(|err| {
-            IndexerError::InsertableParsingError(format!(
-                "Failed converting transaction block {:?} to JSON with error: {:?}",
-                transaction, err
-            ))
-        })?;
         let tx_effect_json = serde_json::to_string(&effects).map_err(|err| {
             IndexerError::InsertableParsingError(format!(
                 "Failed converting transaction block effects {:?} to JSON with error: {:?}",
@@ -77,42 +61,6 @@ impl TryFrom<TemporaryTransactionBlockResponseStore> for Transaction {
                 err
             ))
         })?;
-        let recipients: Vec<String> = effects
-            .mutated()
-            .iter()
-            .cloned()
-            .chain(effects.created().iter().cloned())
-            .chain(effects.unwrapped().iter().cloned())
-            .map(|owned_obj_ref| owned_obj_ref.owner.to_string())
-            .collect();
-        let created: Vec<String> = effects
-            .created()
-            .iter()
-            .map(owned_obj_ref_to_obj_id)
-            .collect();
-        let mutated: Vec<String> = effects
-            .mutated()
-            .iter()
-            .map(owned_obj_ref_to_obj_id)
-            .collect();
-        let unwrapped: Vec<String> = effects
-            .unwrapped()
-            .iter()
-            .map(owned_obj_ref_to_obj_id)
-            .collect();
-        let deleted: Vec<String> = effects.deleted().iter().map(obj_ref_to_obj_id).collect();
-        let wrapped: Vec<String> = effects.wrapped().iter().map(obj_ref_to_obj_id).collect();
-        let move_call_strs: Vec<String> = transaction
-            .data
-            .move_calls()
-            .into_iter()
-            .map(|move_call| {
-                let package = move_call.package.to_string();
-                let module = move_call.module.to_string();
-                let function = move_call.function.to_string();
-                format!("{}::{}::{}", package, module, function)
-            })
-            .collect();
 
         let gas_summary = effects.gas_cost_summary();
         let computation_cost = gas_summary.computation_cost;
@@ -123,18 +71,11 @@ impl TryFrom<TemporaryTransactionBlockResponseStore> for Transaction {
             id: None,
             transaction_digest: digest.base58_encode(),
             sender: transaction.data.sender().to_string(),
-            recipients: vec_string_to_vec_opt(recipients),
             checkpoint_sequence_number: checkpoint.map(|seq| seq as i64),
             transaction_kind: transaction.data.transaction().name().to_string(),
             transaction_count: transaction.data.transaction().transaction_count() as i64,
             execution_success: effects.status().is_ok(),
             timestamp_ms: timestamp_ms.map(|ts| ts as i64),
-            created: vec_string_to_vec_opt(created),
-            mutated: vec_string_to_vec_opt(mutated),
-            unwrapped: vec_string_to_vec_opt(unwrapped),
-            deleted: vec_string_to_vec_opt(deleted),
-            wrapped: vec_string_to_vec_opt(wrapped),
-            move_calls: vec_string_to_vec_opt(move_call_strs),
             gas_object_id: effects.gas_object().reference.object_id.to_string(),
             gas_object_sequence: effects.gas_object().reference.version.value() as i64,
             gas_object_digest: effects.gas_object().reference.digest.base58_encode(),
@@ -148,21 +89,8 @@ impl TryFrom<TemporaryTransactionBlockResponseStore> for Transaction {
             storage_rebate: storage_rebate as i64,
             non_refundable_storage_fee: non_refundable_storage_fee as i64,
             raw_transaction,
-            transaction_content: tx_json,
             transaction_effects_content: tx_effect_json,
             confirmed_local_execution,
         })
     }
-}
-
-fn owned_obj_ref_to_obj_id(owned_obj_ref: &OwnedObjectRef) -> String {
-    owned_obj_ref.reference.object_id.to_string()
-}
-
-fn obj_ref_to_obj_id(obj_ref: &SuiObjectRef) -> String {
-    obj_ref.object_id.to_string()
-}
-
-fn vec_string_to_vec_opt(v: Vec<String>) -> Vec<Option<String>> {
-    v.into_iter().map(Some).collect::<Vec<Option<String>>>()
 }
