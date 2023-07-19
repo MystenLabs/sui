@@ -62,9 +62,11 @@ import { TransactionBlock } from '../builder/index.js';
 import { SuiHTTPTransport } from './http-transport.js';
 import type { SuiTransport } from './http-transport.js';
 import type { Keypair } from '../cryptography/index.js';
+import { RPCValidationError } from '../rpc/errors.js';
 
 export * from './http-transport.js';
 export * from './network.js';
+export { RPCValidationError };
 
 export interface PaginationArguments<Cursor> {
 	/** Optional paging cursor */
