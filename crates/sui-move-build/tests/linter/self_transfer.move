@@ -31,6 +31,8 @@ module 0x42::test {
         transfer::transfer(S2 { id: object::new(ctx), }, tx_context::sender(ctx))
     }
 
+    // non-linter suppression annotation should not suppress linter warnings
+    #[allow(all)]
     public fun transfer_through_assigns_bad(ctx: &mut TxContext) {
         let sender = tx_context::sender(ctx);
         let another_sender = sender;

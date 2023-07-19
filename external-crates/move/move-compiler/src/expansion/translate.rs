@@ -4,7 +4,10 @@
 
 use crate::{
     diag,
-    diagnostics::{codes::WarningFilter, Diagnostic, WarningFilters},
+    diagnostics::{
+        codes::{CategoryID, WarningFilter},
+        Diagnostic, WarningFilters,
+    },
     expansion::{
         aliases::{AliasMap, AliasSet},
         ast::{self as E, Address, Fields, ModuleIdent, ModuleIdent_, SpecId},
@@ -739,9 +742,12 @@ fn warning_filter(
                 let msg = format!(
                     "Expected list of warnings, e.g. '{}({})'",
                     DiagnosticAttribute::ALLOW,
-                    WarningFilter::Category(Category::UnusedItem as u8, Some(FILTER_UNUSED))
-                        .to_str()
-                        .unwrap(),
+                    WarningFilter::Category(
+                        CategoryID::new(Category::UnusedItem as u8, None),
+                        Some(FILTER_UNUSED)
+                    )
+                    .to_str()
+                    .unwrap(),
                 );
                 context
                     .env
