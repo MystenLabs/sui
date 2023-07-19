@@ -40,7 +40,7 @@
 		"@mysten/wallet-standard": "workspace:*"
 	},
 	"devDependencies": {
-		"tsup": "^6.7.0",
-		"typescript": "^5.0.4"
+		"tsup": "^7.1.0",
+		"typescript": "^5.1.6"
 	}
 }

@@ -53,9 +53,7 @@ export function OwnedObjects({ id }: { id: string }) {
 				<>
 					<div className="flex max-h-80 flex-col overflow-auto">
 						<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-							{filteredData?.map((obj) => (
-								<OwnedObject obj={obj} key={obj?.data?.objectId} />
-							))}
+							{filteredData?.map((obj) => <OwnedObject obj={obj} key={obj?.data?.objectId} />)}
 						</div>
 					</div>
 					{filter !== 'kiosks' && <Pagination {...pagination} />}

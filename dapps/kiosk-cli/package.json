@@ -17,6 +17,6 @@
   "dependencies": {
     "@mysten/kiosk": "workspace:*",
     "@mysten/sui.js": "workspace:*",
-    "commander": "^10.0.1"
+    "commander": "^11.0.0"
   }
 }

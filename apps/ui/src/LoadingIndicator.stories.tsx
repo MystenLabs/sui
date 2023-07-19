@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { LoadingIndicator } from '../LoadingIndicator';
+import { LoadingIndicator } from './LoadingIndicator';
 
 import type { Meta, StoryObj } from '@storybook/react';
 
 const meta = {
-	component: LoadingSpinner,
+	component: LoadingIndicator,
 } satisfies Meta<typeof LoadingIndicator>;
 
 export default meta;

@@ -10,7 +10,7 @@
 		"noFallthroughCasesInSwitch": true,
 		"moduleResolution": "node",
 		"resolveJsonModule": true,
-		"noEmit": false,
+		"noEmit": true,
 		"isolatedModules": true,
 		"sourceMap": true,
 		"jsx": "react-jsx"
