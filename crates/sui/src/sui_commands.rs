@@ -388,8 +388,9 @@ async fn genesis(
                 // Make a keystore containing the key for the genesis gas object.
                 let path = sui_config_dir.join(SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME);
                 let mut keystore = FileBasedKeystore::new(&path)?;
-                let gas_key = GenesisConfig::benchmark_gas_key();
-                keystore.add_key(gas_key)?;
+                for gas_key in GenesisConfig::benchmark_gas_keys(ips.len()) {
+                    keystore.add_key(gas_key)?;
+                }
                 keystore.save()?;
 
                 // Make a new genesis config from the provided ip addresses.

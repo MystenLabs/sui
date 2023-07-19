@@ -348,17 +348,20 @@ impl GenesisConfig {
             })
             .collect();
 
-        // Make a predictable address that will own all gas objects.
-        let gas_key = Self::benchmark_gas_key();
-        let gas_address = SuiAddress::from(&gas_key.public());
+        // Set the initial gas objects with a predictable owner address.
+        let account_configs = Self::benchmark_gas_keys(validator_config_info.len())
+            .iter()
+            .map(|gas_key| {
+                let gas_address = SuiAddress::from(&gas_key.public());
 
-        // Set the initial gas objects.
-        let account_config = AccountConfig {
-            address: Some(gas_address),
-            // Generate one genesis gas object per validator (this seems a good rule of thumb to produce
-            // enough gas objects for most types of benchmarks).
-            gas_amounts: vec![DEFAULT_GAS_AMOUNT; validator_config_info.len()],
-        };
+                AccountConfig {
+                    address: Some(gas_address),
+                    // Generate one genesis gas object per validator (this seems a good rule of thumb to produce
+                    // enough gas objects for most types of benchmarks).
+                    gas_amounts: vec![DEFAULT_GAS_AMOUNT; validator_config_info.len()],
+                }
+            })
+            .collect();
 
         // Benchmarks require a deterministic genesis. Every validator locally generates it own
         // genesis; it is thus important they have the same parameters.
@@ -372,15 +375,17 @@ impl GenesisConfig {
             ssfn_config_info: None,
             validator_config_info: Some(validator_config_info),
             parameters,
-            accounts: vec![account_config],
+            accounts: account_configs,
         }
     }
 
     /// Generate a predictable and fixed key that will own all gas objects used for benchmarks.
     /// This function may be called by other parts of the codebase (e.g. load generators) to
     /// get the same keypair used for genesis (hence the importance of the seedable rng).
-    pub fn benchmark_gas_key() -> SuiKeyPair {
+    pub fn benchmark_gas_keys(n: usize) -> Vec<SuiKeyPair> {
         let mut rng = StdRng::seed_from_u64(Self::BENCHMARKS_RNG_SEED);
-        SuiKeyPair::Ed25519(NetworkKeyPair::generate(&mut rng))
+        (0..n)
+            .map(|_| SuiKeyPair::Ed25519(NetworkKeyPair::generate(&mut rng)))
+            .collect()
     }
 }
