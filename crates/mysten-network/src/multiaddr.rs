@@ -114,6 +114,18 @@ impl Multiaddr {
         }
         Self(new_address)
     }
+
+    /// Returns the port of a multiaddress if it contains a TCP or UDP component.
+    pub fn port(&self) -> Option<u16> {
+        for component in &self.0 {
+            match component {
+                multiaddr::Protocol::Tcp(port) => return Some(port),
+                multiaddr::Protocol::Udp(port) => return Some(port),
+                _ => (),
+            }
+        }
+        None
+    }
 }
 
 impl std::fmt::Display for Multiaddr {

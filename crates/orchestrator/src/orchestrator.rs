@@ -657,10 +657,10 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P,
                 latest_committee_size = parameters.nodes;
             }
 
-            return Ok(());
-
             // Deploy the validators.
             let monitor = self.run_nodes(&parameters).await?;
+
+            return Ok(());
 
             // Deploy the load generators.
             self.run_clients(&parameters).await?;
