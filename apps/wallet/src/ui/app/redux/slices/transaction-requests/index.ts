@@ -3,11 +3,11 @@
 
 import {
 	fromB64,
-	TransactionBlock,
 	type SignedMessage,
 	type SignedTransaction,
 	type SuiTransactionBlockResponse,
 } from '@mysten/sui.js';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { createAsyncThunk, createEntityAdapter, createSlice } from '@reduxjs/toolkit';
 
 import { type WalletSigner } from '_src/ui/app/WalletSigner';

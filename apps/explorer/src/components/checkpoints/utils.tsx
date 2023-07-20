@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type CheckpointPage } from '@mysten/sui.js/src/types/checkpoints';
+import { type CheckpointPage } from '@mysten/sui.js';
 import { Text } from '@mysten/ui';
 
 import { TxTimeType } from '../tx-time/TxTimeType';

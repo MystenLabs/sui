@@ -3,7 +3,8 @@
 
 import { useFeatureValue } from '@growthbook/growthbook-react';
 import { ORIGINBYTE_KIOSK_OWNER_TOKEN, useGetOwnedObjects, useRpcClient } from '@mysten/core';
-import { type SuiAddress, TransactionBlock } from '@mysten/sui.js';
+import { type SuiAddress } from '@mysten/sui.js';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { useMutation } from '@tanstack/react-query';
 
 import { useActiveAddress, useSigner } from '_src/ui/app/hooks';

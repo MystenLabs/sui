@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { TransactionBlock } from '@mysten/sui.js';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { ReadonlyWalletAccount, type Wallet, getWallets } from '@mysten/wallet-standard';
 import { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';

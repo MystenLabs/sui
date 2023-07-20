@@ -4,16 +4,12 @@
 import { fromB64, toB58, toB64 } from '@mysten/bcs';
 import nacl from 'tweetnacl';
 import { describe, it, expect } from 'vitest';
-import {
-	Ed25519Keypair,
-	IntentScope,
-	PRIVATE_KEY_SIZE,
-	TransactionBlock,
-	verifyMessage,
-} from '../../../src';
+import { TransactionBlock } from '../../../src/builder';
+import { Ed25519Keypair } from '../../../src/keypairs/ed25519';
 import { verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';
 
 const VALID_SECRET_KEY = 'mdqVWeFekT7pqy5T49+tV12jO0m+ESW7ki4zSU9JiCg=';
+const PRIVATE_KEY_SIZE = 32;
 
 // Test case generated against rust keytool cli. See https://github.com/MystenLabs/sui/blob/edd2cd31e0b05d336b1b03b6e79a67d8dd00d06b/crates/sui/src/unit_tests/keytool_tests.rs#L165
 const TEST_CASES = [
@@ -144,7 +140,7 @@ describe('ed25519-keypair', () => {
 		expect(await keypair.getPublicKey().verifyTransactionBlock(bytes, serializedSignature)).toEqual(
 			true,
 		);
-		expect(await verifyMessage(bytes, serializedSignature, IntentScope.TransactionData)).toEqual(
+		expect(await keypair.getPublicKey().verifyTransactionBlock(bytes, serializedSignature)).toEqual(
 			true,
 		);
 		expect(!!(await verifyTransactionBlock(bytes, serializedSignature))).toEqual(true);
@@ -159,9 +155,9 @@ describe('ed25519-keypair', () => {
 		expect(
 			await keypair.getPublicKey().verifyPersonalMessage(message, serializedSignature),
 		).toEqual(true);
-		expect(await verifyMessage(message, serializedSignature, IntentScope.PersonalMessage)).toEqual(
-			true,
-		);
+		expect(
+			await keypair.getPublicKey().verifyPersonalMessage(message, serializedSignature),
+		).toEqual(true);
 		expect(!!(await verifyPersonalMessage(message, serializedSignature))).toEqual(true);
 	});
 });

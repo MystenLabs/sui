@@ -2,16 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect } from 'vitest';
-import {
-	Ed25519Keypair,
-	fromB64,
-	IntentScope,
-	messageWithIntent,
-	Secp256k1Keypair,
-	toB64,
-	toSingleSignaturePubkeyPair,
-	verifyMessage,
-} from '../../src';
+import { fromB64, toB64 } from '../../src';
+import { IntentScope, messageWithIntent, parseSerializedSignature } from '../../src/cryptography';
+import { Ed25519Keypair } from '../../src/keypairs/ed25519';
+import { Secp256k1Keypair } from '../../src/keypairs/secp256k1';
 
 import { blake2b } from '@noble/hashes/blake2b';
 
@@ -86,14 +80,13 @@ describe('Keypairs', () => {
 			expect(keypair.getPublicKey().toSuiAddress()).toEqual(t[2]);
 
 			const { signature: serializedSignature } = await keypair.signTransactionBlock(tx_bytes);
-			const { signature } = toSingleSignaturePubkeyPair(serializedSignature);
-			expect(toB64(signature)).toEqual(t[3]);
+			const { signature } = parseSerializedSignature(serializedSignature);
 
-			const isValid = await verifyMessage(
-				tx_bytes,
-				serializedSignature,
-				IntentScope.TransactionData,
-			);
+			expect(toB64(signature!)).toEqual(t[3]);
+
+			const isValid = await keypair
+				.getPublicKey()
+				.verifyTransactionBlock(tx_bytes, serializedSignature);
 			expect(isValid).toBeTruthy();
 		}
 	});
@@ -103,7 +96,7 @@ describe('Keypairs', () => {
 		const signData = new TextEncoder().encode('hello world');
 
 		const { signature } = await keypair.signPersonalMessage(signData);
-		const isValid = await verifyMessage(signData, signature, IntentScope.PersonalMessage);
+		const isValid = await keypair.getPublicKey().verifyPersonalMessage(signData, signature);
 		expect(isValid).toBe(true);
 	});
 
@@ -112,11 +105,9 @@ describe('Keypairs', () => {
 		const signData = new TextEncoder().encode('hello world');
 
 		const { signature } = await keypair.signPersonalMessage(signData);
-		const isValid = await verifyMessage(
-			new TextEncoder().encode('hello worlds'),
-			signature,
-			IntentScope.PersonalMessage,
-		);
+		const isValid = await keypair
+			.getPublicKey()
+			.verifyPersonalMessage(new TextEncoder().encode('hello worlds'), signature);
 		expect(isValid).toBe(false);
 	});
 
@@ -132,14 +123,13 @@ describe('Keypairs', () => {
 			expect(keypair.getPublicKey().toSuiAddress()).toEqual(t[2]);
 
 			const { signature: serializedSignature } = await keypair.signTransactionBlock(tx_bytes);
-			const { signature } = toSingleSignaturePubkeyPair(serializedSignature);
-			expect(toB64(signature)).toEqual(t[3]);
+			const { signature } = parseSerializedSignature(serializedSignature);
 
-			const isValid = await verifyMessage(
-				tx_bytes,
-				serializedSignature,
-				IntentScope.TransactionData,
-			);
+			expect(toB64(signature!)).toEqual(t[3]);
+
+			const isValid = await keypair
+				.getPublicKey()
+				.verifyTransactionBlock(tx_bytes, serializedSignature);
 			expect(isValid).toBeTruthy();
 		}
 	});
@@ -150,7 +140,7 @@ describe('Keypairs', () => {
 
 		const { signature } = await keypair.signPersonalMessage(signData);
 
-		const isValid = await verifyMessage(signData, signature, IntentScope.PersonalMessage);
+		const isValid = await keypair.getPublicKey().verifyPersonalMessage(signData, signature);
 		expect(isValid).toBe(true);
 	});
 });
