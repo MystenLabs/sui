@@ -249,7 +249,7 @@ pub struct AnemoParameters {
 
     /// Per-peer rate-limits (in requests/sec) for the WorkerToWorker service.
     pub report_batch_rate_limit: Option<NonZeroU32>,
-    pub request_batch_rate_limit: Option<NonZeroU32>,
+    pub request_batches_rate_limit: Option<NonZeroU32>,
 
     /// Size in bytes above which network messages are considered excessively large. Excessively
     /// large messages will still be handled, but logged and reported in metrics for debugging.

@@ -23,6 +23,6 @@ expression: parameters
   "anemo": {
     "send_certificate_rate_limit": null,
     "report_batch_rate_limit": null,
-    "request_batch_rate_limit": null
+    "request_batches_rate_limit": null
   }
 }
