@@ -130,14 +130,13 @@ impl NetworkManager {
     async fn handle_connection(
         my_id:UniqueId,
         socket: TcpStream, 
-        out_sender: mpsc::Sender<NetworkMessage>,  // To be placed in routing table after handshake
         in_sender: mpsc::Sender<NetworkMessage>,   // Send channel from link to Network Manager
-        out_receiver: &mut mpsc::Receiver<NetworkMessage>,  // Recv channel of link from Network Manager
-        routing_table: Arc<RwLock<HashMap<UniqueId, mpsc::Sender<NetworkMessage>>>>) 
+        receiver_table: Arc<RwLock<HashMap<UniqueId, mpsc::Receiver<NetworkMessage>>>>) 
     {
         let mut stream = BufReader::new(socket);
 
-        // First perform handshake. Send my id, and receive id to update routing table.
+        // First perform handshake. Send my id, receive remote_id, and pick appropriate
+        // receiver from receiver_table.
         let msg = format!("{}\n", my_id);
         stream.write_all(msg.as_bytes()).await.unwrap();
 
@@ -146,10 +145,10 @@ impl NetworkManager {
         let remote_id = line.trim().parse().unwrap();
         println!("Established connection with {}", remote_id);
 
+        let mut out_receiver: mpsc::Receiver<NetworkMessage>; 
         {
-            // Update the routing table
-            let mut w_routing_table = routing_table.write().unwrap();
-            w_routing_table.insert(remote_id, out_sender);
+            let mut w_receiver_table = receiver_table.write().unwrap();
+            out_receiver = w_receiver_table.remove(&remote_id).unwrap();
         }
 
         loop {
@@ -172,10 +171,23 @@ impl NetworkManager {
 
     async fn run(&mut self) {     
 
-        // Initialize empty routing table. This is then populated by handle_connection()
-        let routing_table = Arc::new(RwLock::new(
-            HashMap::<UniqueId, mpsc::Sender<NetworkMessage>>::new()
+        // Initialize routing table
+        let mut routing_table = HashMap::<UniqueId, mpsc::Sender<NetworkMessage>>::new();
+        let receiver_table = Arc::new(RwLock::new(
+            HashMap::<UniqueId, mpsc::Receiver<NetworkMessage>>::new()
         ));
+        {
+            let mut w_receiver_table = receiver_table.write().unwrap();
+            for (&id, _) in &self.addr_table {
+                // Channel from Network Manager to link handler
+                let (out_sender, out_receiver) = mpsc::channel::<NetworkMessage>(100);
+                
+                routing_table.insert(id, out_sender);
+                w_receiver_table.insert(id, out_receiver);
+            }
+        }
+       
+        let receiver_table_clone = receiver_table.clone();
    
         // Channel from link handlers to Network Manager
         let (in_sender, mut in_receiver) = mpsc::channel::<NetworkMessage>(100);
@@ -183,7 +195,6 @@ impl NetworkManager {
 
         // Listen for incoming connections
         let listener_address = SocketAddr::new(self.my_addr, self.my_port);
-        let routing_table_clone = routing_table.clone();
         let my_id = self.my_id.clone();
 
         tokio::spawn(async move {
@@ -191,15 +202,15 @@ impl NetworkManager {
             println!("Server {} listening on {}", my_id, listener_address);
             
             // Accept incoming connections and spawn a handle_connection task for each
+            // let receiver_table_clone = receiver_table.clone();
             while let Ok((socket, _)) = listener.accept().await {
                 let in_sender_clone = in_sender_clone.clone();
-                let routing_table_clone = routing_table_clone.clone();
+                let receiver_table_clone = receiver_table_clone.clone();
 
-                // Channel from Network Manager to link handler
-                let (out_sender, mut out_receiver) = mpsc::channel::<NetworkMessage>(100);
+                
                 tokio::spawn(async move {
                              // Channel from link handlers to Network Manager
-                    Self::handle_connection(my_id, socket, out_sender, in_sender_clone, &mut out_receiver, routing_table_clone).await;
+                    Self::handle_connection(my_id, socket, in_sender_clone, receiver_table_clone).await;
                 });
             }
         });
@@ -210,13 +221,10 @@ impl NetworkManager {
                 let remote = SocketAddr::new(ip, port);
                 let socket = TcpStream::connect(remote).await.unwrap();
                 let in_sender_clone = in_sender.clone();
-                let routing_table_clone = routing_table.clone();
-
-                // Channel from Network Manager to link handler
-                let (out_sender, mut out_receiver) = mpsc::channel::<NetworkMessage>(100);
+                let receiver_table_clone = receiver_table.clone();
 
                 tokio::spawn(async move {
-                    Self::handle_connection(my_id, socket, out_sender, in_sender_clone, &mut out_receiver, routing_table_clone).await;
+                    Self::handle_connection(my_id, socket, in_sender_clone, receiver_table_clone).await;
                 });
             }
         }
@@ -232,11 +240,7 @@ impl NetworkManager {
                 // NetManager from application
                 Some(message) = self.application_out.recv() => {
                     let dst = message.dst;
-                    let out_chan: mpsc::Sender<NetworkMessage>;
-                    {
-                        let r_routing_table = routing_table.read().unwrap();
-                        out_chan = r_routing_table.get(&dst).unwrap().clone();
-                    }
+                    let out_chan = routing_table.get(&dst).unwrap().clone();
                     out_chan.send(message).await.expect("send failed");
                 }
             }
