@@ -325,17 +325,7 @@ impl Proposer {
     }
 
     fn min_delay(&self) -> Duration {
-        // If this node is going to be the leader of the next round and there are more than
-        // 1 primary in the committee, we use a lower min delay value to increase the chance
-        // of committing the leader.
-        if self.committee.size() > 1
-            && (self.round + 1) % 2 == 0
-            && self.leader_schedule.leader(self.round + 1).id() == self.authority_id
-        {
-            Duration::ZERO
-        } else {
-            self.min_header_delay
-        }
+        self.min_header_delay
     }
 
     /// Update the last leader certificate.
