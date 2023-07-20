@@ -1756,7 +1756,7 @@ impl Message for SenderSignedData {
 
     fn verify_epoch(&self, epoch: EpochId) -> SuiResult {
         for sig in &self.inner().tx_signatures {
-            sig.verify_epoch(epoch)?;
+            sig.verify_user_authenticator_epoch(epoch)?;
         }
 
         Ok(())

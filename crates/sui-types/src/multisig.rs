@@ -75,7 +75,7 @@ impl Hash for MultiSig {
 }
 
 impl AuthenticatorTrait for MultiSig {
-    fn verify_epoch(&self, _: EpochId) -> Result<(), SuiError> {
+    fn verify_user_authenticator_epoch(&self, _: EpochId) -> Result<(), SuiError> {
         Ok(())
     }
 

@@ -73,7 +73,7 @@ pub trait AuthenticatedMessage {
     fn verify_message_signature(&self, verify_params: &VerifyParams) -> SuiResult;
 }
 
-/// A marker trait to indicated !AuthenticatedMessage since rust does not allow negative trait
+/// A marker trait to indicate !AuthenticatedMessage since rust does not allow negative trait
 /// bounds.
 pub trait UnauthenticatedMessage {}
 
@@ -248,7 +248,7 @@ impl<T> Envelope<T, AuthoritySignInfo>
 where
     T: Message + UnauthenticatedMessage + Serialize,
 {
-    pub fn verify_signatures(&self, committee: &Committee) -> SuiResult {
+    pub fn verify_authority_signatures(&self, committee: &Committee) -> SuiResult {
         self.data.verify_epoch(self.auth_sig().epoch)?;
         self.auth_signature
             .verify_secure(self.data(), Intent::sui_app(T::SCOPE), committee)
@@ -258,7 +258,7 @@ where
         self,
         committee: &Committee,
     ) -> SuiResult<VerifiedEnvelope<T, AuthoritySignInfo>> {
-        self.verify_signatures(committee)?;
+        self.verify_authority_signatures(committee)?;
         Ok(VerifiedEnvelope::<T, AuthoritySignInfo>::new_from_verified(
             self,
         ))
@@ -350,7 +350,7 @@ impl<T, const S: bool> Envelope<T, AuthorityQuorumSignInfo<S>>
 where
     T: Message + UnauthenticatedMessage + Serialize,
 {
-    pub fn verify_signatures(&self, committee: &Committee) -> SuiResult {
+    pub fn verify_authority_signatures(&self, committee: &Committee) -> SuiResult {
         self.data.verify_epoch(self.auth_sig().epoch)?;
         self.auth_signature
             .verify_secure(self.data(), Intent::sui_app(T::SCOPE), committee)
@@ -360,7 +360,7 @@ where
         self,
         committee: &Committee,
     ) -> SuiResult<VerifiedEnvelope<T, AuthorityQuorumSignInfo<S>>> {
-        self.verify_signatures(committee)?;
+        self.verify_authority_signatures(committee)?;
         Ok(VerifiedEnvelope::<T, AuthorityQuorumSignInfo<S>>::new_from_verified(self))
     }
 }

@@ -40,7 +40,7 @@ fn zklogin_authenticator_scenarios() {
 
     // Verify passes.
     assert!(authenticator
-        .verify_secure_generic(&intent_msg, user_address, Some(0), &aux_verify_data)
+        .verify_authenticator(&intent_msg, user_address, Some(0), &aux_verify_data)
         .is_ok());
 
     let parsed: ImHashMap<String, OAuthProviderContent> = parsed
@@ -54,7 +54,7 @@ fn zklogin_authenticator_scenarios() {
 
     // Verify fails.
     assert!(authenticator
-        .verify_secure_generic(&intent_msg, user_address, Some(9999), &aux_verify_data)
+        .verify_authenticator(&intent_msg, user_address, Some(9999), &aux_verify_data)
         .is_err());
 }
 

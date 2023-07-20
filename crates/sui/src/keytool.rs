@@ -614,7 +614,7 @@ impl KeyToolCommand {
                     let tx_bytes = Base64::decode(&tx_bytes.unwrap())
                         .map_err(|e| anyhow!("Invalid base64 tx bytes: {:?}", e))?;
                     let tx_data: TransactionData = bcs::from_bytes(&tx_bytes)?;
-                    let res = GenericSignature::MultiSig(multisig).verify_secure_generic(
+                    let res = GenericSignature::MultiSig(multisig).verify_authenticator(
                         &IntentMessage::new(Intent::sui_transaction(), tx_data),
                         author,
                         None,

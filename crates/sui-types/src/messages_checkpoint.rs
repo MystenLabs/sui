@@ -165,7 +165,10 @@ impl Message for CheckpointSummary {
     fn verify_epoch(&self, epoch: EpochId) -> SuiResult {
         fp_ensure!(
             self.epoch == epoch,
-            SuiError::from("Epoch in the summary doesn't match with the signature")
+            SuiError::WrongEpoch {
+                expected_epoch: epoch,
+                actual_epoch: self.epoch,
+            }
         );
         Ok(())
     }
@@ -263,7 +266,7 @@ impl CertifiedCheckpointSummary {
         committee: &Committee,
         contents: Option<&CheckpointContents>,
     ) -> SuiResult {
-        self.verify_signatures(committee)?;
+        self.verify_authority_signatures(committee)?;
 
         if let Some(contents) = contents {
             let content_digest = *contents.digest();
@@ -296,7 +299,7 @@ pub struct CheckpointSignatureMessage {
 
 impl CheckpointSignatureMessage {
     pub fn verify(&self, committee: &Committee) -> SuiResult {
-        self.summary.verify_signatures(committee)
+        self.summary.verify_authority_signatures(committee)
     }
 }
 
@@ -653,14 +656,15 @@ mod tests {
             })
             .collect();
 
-        signed_checkpoints
-            .iter()
-            .for_each(|c| c.verify_signatures(&committee).expect("signature ok"));
+        signed_checkpoints.iter().for_each(|c| {
+            c.verify_authority_signatures(&committee)
+                .expect("signature ok")
+        });
 
         // fails when not signed by member of committee
         signed_checkpoints
             .iter()
-            .for_each(|c| assert!(c.verify_signatures(&committee2).is_err()));
+            .for_each(|c| assert!(c.verify_authority_signatures(&committee2).is_err()));
     }
 
     #[test]
@@ -735,7 +739,7 @@ mod tests {
         assert!(
             CertifiedCheckpointSummary::new(summary, sign_infos, &committee)
                 .unwrap()
-                .verify_signatures(&committee)
+                .verify_authority_signatures(&committee)
                 .is_err()
         )
     }

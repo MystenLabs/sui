@@ -85,11 +85,14 @@ impl Hash for ZkLoginAuthenticator {
 }
 
 impl AuthenticatorTrait for ZkLoginAuthenticator {
-    fn verify_epoch(&self, epoch: EpochId) -> SuiResult {
+    fn verify_user_authenticator_epoch(&self, epoch: EpochId) -> SuiResult {
         // Verify the max epoch in aux inputs is <= the current epoch of authority.
-        if self.aux_inputs.get_max_epoch() <= epoch {
+        if epoch > self.aux_inputs.get_max_epoch() {
             return Err(SuiError::InvalidSignature {
-                error: "Invalid max epoch".to_string(),
+                error: format!(
+                    "ZKLogin expired at epoch {}",
+                    self.aux_inputs.get_max_epoch()
+                ),
             });
         }
         Ok(())
