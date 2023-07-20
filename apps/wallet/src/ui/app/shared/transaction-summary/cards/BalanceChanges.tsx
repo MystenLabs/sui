@@ -19,13 +19,16 @@ interface BalanceChangesProps {
 	changes?: BalanceChangeSummary;
 }
 
-function BalanceChangeEntry({ change }: { change: BalanceChange }) {
+function BalanceChangeEntry({
+	change,
+	notRecognizedToken,
+}: {
+	change: BalanceChange;
+	notRecognizedToken?: boolean;
+}) {
 	const { amount, coinType } = change;
 	const isPositive = BigInt(amount) > 0n;
-	const recognizedPackagesList = useRecognizedPackages();
 	const [formatted, symbol] = useFormatCoin(amount, coinType, CoinFormat.FULL);
-	const separator = '::';
-	const notRecognizedToken = !recognizedPackagesList.includes(coinType.split(separator)[0]);
 
 	return (
 		<div className="flex flex-col gap-2">
@@ -91,7 +94,11 @@ function BalanceChangeEntries({ changes }: { changes: BalanceChange[] }) {
 							</Text>
 						</div>
 						{notRecognizedTokenChanges.map((change) => (
-							<BalanceChangeEntry change={change} key={change.coinType + change.amount} />
+							<BalanceChangeEntry
+								change={change}
+								key={change.coinType + change.amount}
+								notRecognizedToken
+							/>
 						))}
 					</div>
 				)}
