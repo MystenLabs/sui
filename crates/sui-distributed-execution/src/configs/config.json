@@ -1,0 +1,24 @@
+{
+    "1" : {
+        "kind" : "echo",
+        "ip_addr" : "127.0.0.1", 
+        "port" : 5001,
+        "attrs" : {}
+    },
+    "2" : {
+        "kind" : "ping",
+        "ip_addr" : "127.0.0.1", 
+        "port" : 5002,
+        "attrs" : {
+            "target" : "1"
+        }
+    },
+    "3" : {
+        "kind" : "ping",
+        "ip_addr" : "127.0.0.1", 
+        "port" : 5003,
+        "attrs" : {
+            "target" : "1"
+        }
+    }
+}

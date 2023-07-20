@@ -5,3 +5,4 @@ pub mod mutex_store;
 pub mod dash_store;
 pub mod seqn_worker;
 pub mod exec_worker;
+pub mod network_agents;
