@@ -30,6 +30,7 @@ function BalanceChangeEntry({
 	notRecognizedToken?: boolean;
 }) {
 	const { amount, coinType, recipient } = change;
+	console.log(change, 'tets')
 	const { data: coinMetadata } = useCoinMetadata(coinType);
 	const [formatted, symbol] = useFormatCoin(amount, coinType, CoinFormat.FULL);
 	const isPositive = BigInt(amount) > 0n;
@@ -46,7 +47,7 @@ function BalanceChangeEntry({
 						<Coin type={coinType} />
 						<div className="flex flex-col  gap-2 gap-y-1 lg:flex-row">
 							<Text variant="pBody/semibold" color="steel-darker" truncate>
-								{coinMetadata?.name || coinMetadata?.symbol}
+								{coinMetadata?.name || coinMetadata?.symbol || coinType}
 							</Text>
 							{notRecognizedToken && (
 								<Banner variant="warning" icon={null} border spacing="sm">
@@ -84,25 +85,22 @@ function BalanceChangeCard({ changes, owner }: { changes: BalanceChange[]; owner
 	const recognizedPackagesList = useRecognizedPackages();
 
 	const normalizedRecognizedPackages = useMemo(
-		() => recognizedPackagesList.map(normalizeSuiObjectId),
+		() => recognizedPackagesList.map(normalizeSuiObjectId) as string[],
 		[recognizedPackagesList],
 	);
-	const recognizedTokenChanges = useMemo(
-		() =>
-			changes.filter((change) => {
-				const { address: packageId } = parseStructTag(change.coinType);
-				return normalizedRecognizedPackages.includes(packageId);
-			}),
-		[changes, normalizedRecognizedPackages],
-	);
-	const notRecognizedToken = useMemo(
-		() =>
-			changes.filter((change) => {
-				const { address: packageId } = parseStructTag(change.coinType);
-				return !normalizedRecognizedPackages.includes(packageId);
-			}),
-		[changes, normalizedRecognizedPackages],
-	);
+	const { recognizedTokenChanges, notRecognizedTokenChanges } = useMemo(() => {
+		const recognizedTokenChanges = [];
+		const notRecognizedTokenChanges = [];
+		for (let change of changes) {
+			const { address: packageId } = parseStructTag(change.coinType);
+			if (normalizedRecognizedPackages.includes(packageId)) {
+				recognizedTokenChanges.push(change);
+			} else {
+				notRecognizedTokenChanges.push(change);
+			}
+		}
+		return { recognizedTokenChanges, notRecognizedTokenChanges };
+	}, [changes, normalizedRecognizedPackages]);
 
 	return (
 		<TransactionBlockCard
@@ -130,19 +128,19 @@ function BalanceChangeCard({ changes, owner }: { changes: BalanceChange[]; owner
 		>
 			<div className="flex flex-col gap-2">
 				{recognizedTokenChanges.map((change, index) => (
-					<TransactionBlockCardSection key={index}>
+					<TransactionBlockCardSection key={index + change.coinType}>
 						<BalanceChangeEntry change={change} />
 					</TransactionBlockCardSection>
 				))}
-				{notRecognizedToken.length > 0 && (
+				{notRecognizedTokenChanges.length > 0 && (
 					<div className="flex flex-col gap-2">
 						<div className="flex border-t border-gray-45 pt-2">
 							<Text variant="pSubtitleSmall/medium" color="steel-dark">
 								Coins below are not recognized by <span className="text-hero">Sui Foundation.</span>
 							</Text>
 						</div>
-						{notRecognizedToken.map((change, index) => (
-							<TransactionBlockCardSection key={index}>
+						{notRecognizedTokenChanges.map((change, index) => (
+							<TransactionBlockCardSection key={index + change.coinType}>
 								<BalanceChangeEntry change={change} notRecognizedToken />
 							</TransactionBlockCardSection>
 						))}
