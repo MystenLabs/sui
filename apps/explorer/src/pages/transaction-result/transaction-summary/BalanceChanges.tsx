@@ -84,7 +84,7 @@ function BalanceChangeCard({ changes, owner }: { changes: BalanceChange[]; owner
 	const recognizedPackagesList = useRecognizedPackages();
 
 	const normalizedRecognizedPackages = useMemo(
-		() => recognizedPackagesList.map(normalizeSuiObjectId) as string[],
+		() => recognizedPackagesList.map((item) => normalizeSuiObjectId(item)),
 		[recognizedPackagesList],
 	);
 	const { recognizedTokenChanges, notRecognizedTokenChanges } = useMemo(() => {
