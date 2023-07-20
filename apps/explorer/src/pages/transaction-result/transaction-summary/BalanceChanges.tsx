@@ -30,7 +30,6 @@ function BalanceChangeEntry({
 	notRecognizedToken?: boolean;
 }) {
 	const { amount, coinType, recipient } = change;
-	console.log(change, 'tets')
 	const { data: coinMetadata } = useCoinMetadata(coinType);
 	const [formatted, symbol] = useFormatCoin(amount, coinType, CoinFormat.FULL);
 	const isPositive = BigInt(amount) > 0n;
