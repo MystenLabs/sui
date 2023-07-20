@@ -651,7 +651,7 @@ impl fmt::Debug for SuiAddress {
     }
 }
 
-#[cfg(feature = "test-utils")]
+#[cfg(any(test, feature = "test-utils"))]
 /// Generate a fake SuiAddress with repeated one byte.
 pub fn dbg_addr(name: u8) -> SuiAddress {
     let addr = [name; SUI_ADDRESS_LENGTH];
