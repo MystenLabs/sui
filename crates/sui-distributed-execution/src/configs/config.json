@@ -10,7 +10,8 @@
         "ip_addr" : "127.0.0.1", 
         "port" : 5002,
         "attrs" : {
-            "target" : "1"
+            "target" : "1",
+            "interval" : "2000"
         }
     },
     "3" : {
@@ -18,7 +19,8 @@
         "ip_addr" : "127.0.0.1", 
         "port" : 5003,
         "attrs" : {
-            "target" : "1"
+            "target" : "1",
+            "interval" : "2000"
         }
     }
 }

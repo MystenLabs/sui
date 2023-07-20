@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 use std::fs;
-use std::hash::Hash;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::sync::{Arc, RwLock};
+use std::net::{IpAddr, SocketAddr};
 use clap::*;
 use serde::Deserialize;
-// use serde_json::Result;
-use tokio::sync::mpsc;
-use tokio::io;
+use tokio::io::{BufReader, AsyncBufReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use sui_distributed_execution::network_agents::{*, self};
+use tokio::sync::mpsc;
+use tokio::time::{sleep, Duration};
+use sui_distributed_execution::network_agents::*;
 
 const FILE_PATH:&str = "/Users/tonyzhang/Documents/UMich2023su/sui.nosync/crates/sui-distributed-execution/src/configs/config.json";
 
@@ -27,23 +27,33 @@ struct AppConfig {
     attrs: HashMap<String, String>,
 }
 
-fn init_agent<T: Agent>(id: UniqueId, conf: AppConfig) 
-    -> (T, 
+fn init_agent(id: UniqueId, conf: AppConfig) 
+    -> (Box<dyn Agent>,
         mpsc::Sender<NetworkMessage>,
         mpsc::Receiver<NetworkMessage>,) 
 {
-    let (in_send, mut in_recv) = mpsc::channel(100);
-    let (out_send, mut out_recv) = mpsc::channel(100);
-    let agent = Agent::new(
+    let (in_send, in_recv) = mpsc::channel(100);
+    let (out_send, out_recv) = mpsc::channel(100);
+    let agent: Box<dyn Agent> = match conf.kind.as_str() {
+        "echo" => Box::new(EchoAgent::new(
             id,
             in_recv,
             out_send,
             conf.attrs
-        );
-    return (agent, in_send, out_recv)
+        )),
+        "ping" => Box::new(PingAgent::new(
+            id,
+            in_recv,
+            out_send,
+            conf.attrs
+        )),
+        _ => {panic!("Invalid agent kind {}", conf.kind); }
+    };
+    
+    return (agent, in_send, out_recv);
 }
 
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main()]
 async fn main() {
     // Parse config from json
     let config_json = fs::read_to_string(FILE_PATH)
@@ -65,10 +75,10 @@ async fn main() {
 
     // Initialize the agent
     let (mut agent, in_sender, out_receiver) = 
-        init_agent::<EchoAgent>(my_id, (*config.get(&my_id).unwrap()).clone());
+        init_agent(my_id, (*config.get(&my_id).unwrap()).clone());
 
     // Initialize and run the network
-    let network_manager = NetworkManager::new(
+    let mut network_manager = NetworkManager::new(
         my_id, addr_table, 
         in_sender, 
         out_receiver);
@@ -78,6 +88,8 @@ async fn main() {
         network_manager.run().await;
     });
 
+    // Wait for connections to be set up
+    sleep(Duration::from_millis(1_000)).await;
     agent.run().await;
 }
 
@@ -115,22 +127,67 @@ impl NetworkManager {
         }
     }
 
-    async fn handle_connection(my_id:UniqueId, socket: TcpStream, in_sender: mpsc::Sender<NetworkMessage>) {
-        // TODO
-        // Send my id, and receive id to update routing table.
-        // Routing table can be Arc<RwLock>
-        
+    async fn handle_connection(my_id:UniqueId, socket: TcpStream, 
+        out_sender: mpsc::Sender<NetworkMessage>,  // To be placed in routing table after handshake
+        in_sender: mpsc::Sender<NetworkMessage>, out_receiver: &mut mpsc::Receiver<NetworkMessage>,
+        routing_table: Arc<RwLock<HashMap<UniqueId, mpsc::Sender<NetworkMessage>>>>) 
+    {
+        println!("Handle connection");
+        let mut stream = BufReader::new(socket);
+
+        // First perform handshake. Send my id, and receive id to update routing table.
+        let msg = format!("{}\n", my_id);
+        stream.write_all(msg.as_bytes()).await.unwrap();
+        println!("sending {}", msg);
+
+        let mut line = String::new();
+        stream.read_line(&mut line).await.unwrap();
+        let remote_id = line.trim().parse().unwrap();
+        println!("GOT {:?}", remote_id);
+
+
+        {
+            let mut w_routing_table = routing_table.write().unwrap();
+            w_routing_table.insert(remote_id, out_sender);
+        }
+
+        loop {
+            line = String::new();
+            tokio::select! {
+                Some(message) = out_receiver.recv() => {
+                    println!("NetManager from application: {:?}", message);
+                    let serialized = message.serialize();
+                    stream.write_all(serialized.as_bytes()).await.expect("send failed");
+                }
+                Ok(_) = stream.read_line(&mut line) => {
+                    println!("NetManager from tcp: {:?}", line);
+                    if line.len() == 0 {
+                        panic!("Connection with remote id {remote_id} broken");
+                    }
+                    let message = NetworkMessage::deserialize(line);
+                    in_sender.send(message).await.expect("send failed");
+                }
+            }
+        }
     }
 
-    async fn run(&self) {
+    async fn run(&mut self) {
         // Initialize connections
         let listener_address = SocketAddr::new(self.my_addr, self.my_port);
+        
+        // Channel from link handlers to Network Manager
         let (in_sender, mut in_receiver) = mpsc::channel::<NetworkMessage>(100);
+
         let in_sender_clone = in_sender.clone();
         let my_id = self.my_id.clone();
         // TODO: in_send (orange) gets cloned to each TCP task
         // Each TCP task also has a (out_send, out_recv)
         // out_send is placed in routing table. Task polls out_recv and sends on TCP.
+
+        let routing_table = Arc::new(RwLock::new(
+                HashMap::<UniqueId, mpsc::Sender<NetworkMessage>>::new()
+        ));
+        let routing_table_clone = routing_table.clone();
 
         // Listen for incoming connections
         tokio::spawn(async move {
@@ -141,11 +198,13 @@ impl NetworkManager {
             while let Ok((socket, _)) = listener.accept().await {
                 println!("Server {} accepted connection from: {}", my_id, socket.peer_addr().unwrap());
                 let in_sender_clone = in_sender_clone.clone();
-                // let (out_sender, mut out_receiver) = mpsc::channel::<NetworkMessage>(100);
-                // out_sender goes into routing table
+                let routing_table_clone = routing_table_clone.clone();
+
+                // Channel from Network Manager to link handler
+                let (out_sender, mut out_receiver) = mpsc::channel::<NetworkMessage>(100);
                 tokio::spawn(async move {
-                    println!("hello");
-                    Self::handle_connection(my_id, socket, in_sender_clone).await;
+                             // Channel from link handlers to Network Manager
+                    Self::handle_connection(my_id, socket, out_sender, in_sender_clone, &mut out_receiver, routing_table_clone).await;
                 });
             }
         });
@@ -158,17 +217,37 @@ impl NetworkManager {
                 let socket = TcpStream::connect(remote).await.unwrap();
                 println!("Server {} connected to {}", my_id, remote);
                 let in_sender_clone = in_sender.clone();
+                let routing_table_clone = routing_table.clone();
+
+                // Channel from Network Manager to link handler
+                let (out_sender, mut out_receiver) = mpsc::channel::<NetworkMessage>(100);
 
                 tokio::spawn(async move {
-                    Self::handle_connection(my_id, socket, in_sender_clone).await;
+                    Self::handle_connection(my_id, socket, out_sender, in_sender_clone, &mut out_receiver, routing_table_clone).await;
                 });
             }
         }
 
         // Receive loop from TCP connections
-        while let Some(msg) = in_receiver.recv().await {
-            println!("Network manager received from agent {}:\n\t{}", msg.src, msg.payload);
-            // push to application_in
+
+        loop {
+            tokio::select! {
+                Some(message) = in_receiver.recv() => {
+                    println!("NetManager from tcp: {:?}", message);
+                    self.application_in.send(message).await.expect("send failed");
+                }
+                Some(message) = self.application_out.recv() => {
+                    println!("NetManager from application: {:?}", message);
+                    let dst = message.dst;
+                    let out_chan: mpsc::Sender<NetworkMessage>;
+                    {
+                        let r_routing_table = routing_table.read().unwrap();
+                        out_chan = r_routing_table.get(&dst).unwrap().clone();
+                    }
+                    out_chan.send(message).await.expect("send failed");
+                }
+            }
         }
+        // Select from in_receiver.recv() or application_out
     }
 }

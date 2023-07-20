@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::pin::Pin;
 use async_trait::async_trait;
 
 use tokio::sync::mpsc;
@@ -13,14 +14,28 @@ pub struct NetworkMessage {
     pub payload: String,
 }
 
+impl NetworkMessage {
+    pub fn serialize(&self) -> String {
+        format!("{}\t{}\t{}\t\n", self.src, self.dst, self.payload)
+    }
+
+    pub fn deserialize(string: String) -> NetworkMessage {
+        let mut splitted = string.split("\t");
+        let src = splitted.next().unwrap().parse().unwrap();
+        let dst = splitted.next().unwrap().parse().unwrap();
+        let payload = splitted.next().unwrap().to_string();
+        NetworkMessage { src, dst, payload }
+    }
+}
+
 #[async_trait]
 pub trait Agent {
-    fn new(
-        id: UniqueId, 
-        in_channel: mpsc::Receiver<NetworkMessage>, 
-        out_channel: mpsc::Sender<NetworkMessage>,
-        attrs: HashMap<String, String>) 
-    -> Self;
+    // fn new(
+    //     id: UniqueId, 
+    //     in_channel: mpsc::Receiver<NetworkMessage>, 
+    //     out_channel: mpsc::Sender<NetworkMessage>,
+    //     attrs: HashMap<String, String>) 
+    // -> Self;
 
     async fn run(&mut self);
 }
@@ -36,8 +51,17 @@ pub struct EchoAgent {
 
 #[async_trait]
 impl Agent for EchoAgent {
+    async fn run(&mut self) {
+        println!("Starting Echo agent {}", self.id);
+        while let Some(msg) = self.in_channel.recv().await {
+            assert!(msg.dst == self.id);
+            println!("Echo agent received from agent {}:\n\t{}", msg.src, msg.payload);
+        }
+    }
+}
 
-    fn new(id: UniqueId,
+impl EchoAgent {
+    pub fn new(id: UniqueId,
         in_channel: mpsc::Receiver<NetworkMessage>, 
         _out_channel: mpsc::Sender<NetworkMessage>, 
         _attrs: HashMap<String, String>) 
@@ -45,14 +69,6 @@ impl Agent for EchoAgent {
         EchoAgent {
             id, 
             in_channel,
-        }
-    }
-
-    async fn run(&mut self) {
-        println!("Starting Echo agent {}", self.id);
-        while let Some(msg) = self.in_channel.recv().await {
-            assert!(msg.dst == self.id);
-            println!("Echo agent received from agent {}:\n\t{}", msg.src, msg.payload);
         }
     }
 }
@@ -65,23 +81,11 @@ pub struct PingAgent {
     id: UniqueId,
     out_channel: mpsc::Sender<NetworkMessage>,
     target: UniqueId,
+    interval: Duration,
 }
 
 #[async_trait]
 impl Agent for PingAgent {
-
-    fn new(id: UniqueId,
-        _in_channel: mpsc::Receiver<NetworkMessage>, 
-        out_channel: mpsc::Sender<NetworkMessage>, 
-        attrs: HashMap<String, String>) 
-    -> Self {
-        PingAgent {
-            id, 
-            out_channel,
-            target: attrs["target"].trim().parse().unwrap(),
-        }
-    }
-
     async fn run(&mut self) {
         println!("Starting Ping agent {}", self.id);
         let mut count = 0;
@@ -93,8 +97,23 @@ impl Agent for PingAgent {
             };
 
             self.out_channel.send(out).await.expect("Send failed");
-            sleep(Duration::from_millis(1_000)).await;
+            sleep(self.interval).await;
             count += 1
+        }
+    }
+}
+
+impl PingAgent {
+    pub fn new(id: UniqueId,
+        _in_channel: mpsc::Receiver<NetworkMessage>, 
+        out_channel: mpsc::Sender<NetworkMessage>, 
+        attrs: HashMap<String, String>) 
+    -> Self {
+        PingAgent {
+            id, 
+            out_channel,
+            target: attrs["target"].trim().parse().unwrap(),
+            interval: Duration::from_millis(attrs["interval"].trim().parse().unwrap()),
         }
     }
 }
