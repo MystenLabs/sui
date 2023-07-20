@@ -39,7 +39,10 @@ export function TopPackagesCard() {
 					onChange={(val) => setSelectedFilter(val)}
 				/>
 			</div>
-			<TabHeader title="Popular Packages">
+			<TabHeader
+				title="Popular Packages"
+				tooltip="Popular packages is recomputed on epoch changes."
+			>
 				<ErrorBoundary>
 					<TopPackagesTable data={filteredData} isLoading={isLoading} />
 				</ErrorBoundary>

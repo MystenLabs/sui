@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 18;
+const MAX_PROTOCOL_VERSION: u64 = 19;
 
 // Record history of protocol version allocations here:
 //
@@ -58,6 +58,7 @@ const MAX_PROTOCOL_VERSION: u64 = 18;
 //             such that the minimum transaction cost is the same as the minimum computation
 //             bucket.
 //             Add a feature flag to indicate the changes semantics of `base_tx_cost_fixed`.
+// Version 19: Changes to sui-system package to enable liquid staking.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -899,11 +900,19 @@ impl ProtocolConfig {
         ProtocolConfig::get_for_version(ProtocolVersion::MIN, Chain::Unknown)
     }
 
+    /// CAREFUL! - You probably want to use `get_for_version` instead.
+    ///
     /// Convenience to get the constants at the current maximum supported version.
-    /// Mainly used by genesis.
-    pub fn get_for_max_version() -> Self {
+    /// Mainly used by genesis. Note well that this function uses the max version
+    /// supported locally by the node, which is not necessarily the current version
+    /// of the network. ALSO, this function disregards chain specific config (by
+    /// using Chain::Unknown), thereby potentially returning a protocol config that
+    /// is incorrect for some feature flags. Definitely safe for testing and for
+    /// protocol version 11 and prior.
+    #[allow(non_snake_case)]
+    pub fn get_for_max_version_UNSAFE() -> Self {
         if Self::load_poison_get_for_min_version() {
-            panic!("get_for_max_version called on validator");
+            panic!("get_for_max_version_UNSAFE called on validator");
         }
         ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown)
     }
@@ -1316,6 +1325,7 @@ impl ProtocolConfig {
                 cfg.base_tx_cost_fixed = Some(1_000);
                 cfg
             }
+            19 => Self::get_for_version_impl(version - 1, chain),
             // Use this template when making changes:
             //
             //     // modify an existing constant.

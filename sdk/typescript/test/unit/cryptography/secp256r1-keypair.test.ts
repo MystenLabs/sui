@@ -5,11 +5,13 @@ import {
 	DEFAULT_SECP256R1_DERIVATION_PATH,
 	PRIVATE_KEY_SIZE,
 	Secp256r1Keypair,
+	TransactionBlock,
 } from '../../../src';
 import { describe, it, expect } from 'vitest';
 import { secp256r1 } from '@noble/curves/p256';
-import { fromB64, toB64 } from '@mysten/bcs';
+import { fromB64, toB58, toB64 } from '@mysten/bcs';
 import { sha256 } from '@noble/hashes/sha256';
+import { verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';
 
 const VALID_SECP256R1_SECRET_KEY = [
 	66, 37, 141, 205, 161, 76, 241, 17, 198, 2, 184, 151, 27, 140, 200, 67, 233, 30, 70, 202, 144, 81,
@@ -55,7 +57,7 @@ const TEST_MNEMONIC = 'open genre century trouble allow pioneer love task chat s
 describe('secp256r1-keypair', () => {
 	it('new keypair', () => {
 		const keypair = new Secp256r1Keypair();
-		expect(keypair.getPublicKey().toBytes().length).toBe(33);
+		expect(keypair.getPublicKey().toRawBytes().length).toBe(33);
 		expect(2).toEqual(2);
 	});
 
@@ -64,7 +66,7 @@ describe('secp256r1-keypair', () => {
 		const pub_key = new Uint8Array(VALID_SECP256R1_PUBLIC_KEY);
 		let pub_key_base64 = toB64(pub_key);
 		const keypair = Secp256r1Keypair.fromSecretKey(secret_key);
-		expect(keypair.getPublicKey().toBytes()).toEqual(new Uint8Array(pub_key));
+		expect(keypair.getPublicKey().toRawBytes()).toEqual(new Uint8Array(pub_key));
 		expect(keypair.getPublicKey().toBase64()).toEqual(pub_key_base64);
 	});
 
@@ -94,7 +96,7 @@ describe('secp256r1-keypair', () => {
 			secp256r1.verify(
 				secp256r1.Signature.fromCompact(sig),
 				msgHash,
-				keypair.getPublicKey().toBytes(),
+				keypair.getPublicKey().toRawBytes(),
 			),
 		).toBeTruthy();
 	});
@@ -115,7 +117,7 @@ describe('secp256r1-keypair', () => {
 			secp256r1.verify(
 				secp256r1.Signature.fromCompact(sig),
 				msgHash,
-				keypair.getPublicKey().toBytes(),
+				keypair.getPublicKey().toRawBytes(),
 			),
 		).toBeTruthy();
 	});
@@ -161,5 +163,41 @@ describe('secp256r1-keypair', () => {
 		expect(() => {
 			Secp256r1Keypair.deriveKeypair(TEST_MNEMONIC, `m/44'/784'/0'/0'/0'`);
 		}).toThrow('Invalid derivation path');
+	});
+
+	it('signs TransactionBlocks', async () => {
+		const keypair = new Secp256r1Keypair();
+		const txb = new TransactionBlock();
+		txb.setSender(keypair.getPublicKey().toSuiAddress());
+		txb.setGasPrice(5);
+		txb.setGasBudget(100);
+		txb.setGasPayment([
+			{
+				objectId: (Math.random() * 100000).toFixed(0).padEnd(64, '0'),
+				version: String((Math.random() * 10000).toFixed(0)),
+				digest: toB58(new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9])),
+			},
+		]);
+
+		const bytes = await txb.build();
+
+		const serializedSignature = (await keypair.signTransactionBlock(bytes)).signature;
+
+		expect(await keypair.getPublicKey().verifyTransactionBlock(bytes, serializedSignature)).toEqual(
+			true,
+		);
+		expect(!!(await verifyTransactionBlock(bytes, serializedSignature))).toEqual(true);
+	});
+
+	it('signs PersonalMessages', async () => {
+		const keypair = new Secp256r1Keypair();
+		const message = new TextEncoder().encode('hello world');
+
+		const serializedSignature = (await keypair.signPersonalMessage(message)).signature;
+
+		expect(
+			await keypair.getPublicKey().verifyPersonalMessage(message, serializedSignature),
+		).toEqual(true);
+		expect(!!(await verifyPersonalMessage(message, serializedSignature))).toEqual(true);
 	});
 });

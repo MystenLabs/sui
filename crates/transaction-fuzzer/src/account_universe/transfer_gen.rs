@@ -32,7 +32,8 @@ const P2P_SUCCESS_STORAGE_USAGE: u64 = 1976000;
 const P2P_FAILURE_STORAGE_USAGE: u64 = 988000;
 const INSUFFICIENT_GAS_UNITS_THRESHOLD: u64 = 2;
 
-static PROTOCOL_CONFIG: Lazy<ProtocolConfig> = Lazy::new(ProtocolConfig::get_for_max_version);
+static PROTOCOL_CONFIG: Lazy<ProtocolConfig> =
+    Lazy::new(ProtocolConfig::get_for_max_version_UNSAFE);
 
 /// Represents a peer-to-peer transaction performed in the account universe.
 ///

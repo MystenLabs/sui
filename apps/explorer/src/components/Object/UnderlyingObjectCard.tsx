@@ -3,10 +3,10 @@
 
 import { useGetDynamicFieldObject, useGetNormalizedMoveStruct } from '@mysten/core';
 import { getObjectFields, getObjectType } from '@mysten/sui.js';
+import { LoadingIndicator } from '@mysten/ui';
 
 import { FieldItem } from './FieldItem';
 import { Banner } from '~/ui/Banner';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 interface UnderlyingObjectCardProps {
 	parentId: string;
@@ -55,7 +55,7 @@ export function UnderlyingObjectCard({
 	if (isLoading || loadingNormalizedStruct) {
 		return (
 			<div className="mt-3 flex w-full justify-center pt-3">
-				<LoadingSpinner text="Loading data" />
+				<LoadingIndicator text="Loading data" />
 			</div>
 		);
 	}

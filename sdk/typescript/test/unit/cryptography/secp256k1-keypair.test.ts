@@ -3,13 +3,17 @@
 
 import {
 	DEFAULT_SECP256K1_DERIVATION_PATH,
+	IntentScope,
 	PRIVATE_KEY_SIZE,
 	Secp256k1Keypair,
+	TransactionBlock,
+	verifyMessage,
 } from '../../../src';
 import { describe, it, expect } from 'vitest';
 import { secp256k1 } from '@noble/curves/secp256k1';
-import { fromB64, toB64 } from '@mysten/bcs';
+import { fromB64, toB58, toB64 } from '@mysten/bcs';
 import { sha256 } from '@noble/hashes/sha256';
+import { verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';
 
 // Test case from https://github.com/rust-bitcoin/rust-secp256k1/blob/master/examples/sign_verify.rs#L26
 const VALID_SECP256K1_SECRET_KEY = [
@@ -54,7 +58,7 @@ const TEST_MNEMONIC =
 describe('secp256k1-keypair', () => {
 	it('new keypair', () => {
 		const keypair = new Secp256k1Keypair();
-		expect(keypair.getPublicKey().toBytes().length).toBe(33);
+		expect(keypair.getPublicKey().toRawBytes().length).toBe(33);
 		expect(2).toEqual(2);
 	});
 
@@ -63,7 +67,7 @@ describe('secp256k1-keypair', () => {
 		const pub_key = new Uint8Array(VALID_SECP256K1_PUBLIC_KEY);
 		let pub_key_base64 = toB64(pub_key);
 		const keypair = Secp256k1Keypair.fromSecretKey(secret_key);
-		expect(keypair.getPublicKey().toBytes()).toEqual(new Uint8Array(pub_key));
+		expect(keypair.getPublicKey().toRawBytes()).toEqual(new Uint8Array(pub_key));
 		expect(keypair.getPublicKey().toBase64()).toEqual(pub_key_base64);
 	});
 
@@ -93,7 +97,7 @@ describe('secp256k1-keypair', () => {
 			secp256k1.verify(
 				secp256k1.Signature.fromCompact(sig),
 				msgHash,
-				keypair.getPublicKey().toBytes(),
+				keypair.getPublicKey().toRawBytes(),
 			),
 		).toBeTruthy();
 	});
@@ -114,7 +118,7 @@ describe('secp256k1-keypair', () => {
 			secp256k1.verify(
 				secp256k1.Signature.fromCompact(sig),
 				msgHash,
-				keypair.getPublicKey().toBytes(),
+				keypair.getPublicKey().toRawBytes(),
 			),
 		).toBeTruthy();
 	});
@@ -156,5 +160,47 @@ describe('secp256k1-keypair', () => {
 		expect(() => {
 			Secp256k1Keypair.deriveKeypair(TEST_MNEMONIC, `m/54'/784'/0'/0'/0'`);
 		}).toThrow('Invalid derivation path');
+	});
+
+	it('signs TransactionBlocks', async () => {
+		const keypair = new Secp256k1Keypair();
+		const txb = new TransactionBlock();
+		txb.setSender(keypair.getPublicKey().toSuiAddress());
+		txb.setGasPrice(5);
+		txb.setGasBudget(100);
+		txb.setGasPayment([
+			{
+				objectId: (Math.random() * 100000).toFixed(0).padEnd(64, '0'),
+				version: String((Math.random() * 10000).toFixed(0)),
+				digest: toB58(new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9])),
+			},
+		]);
+
+		const bytes = await txb.build();
+
+		const serializedSignature = (await keypair.signTransactionBlock(bytes)).signature;
+
+		expect(await keypair.getPublicKey().verifyTransactionBlock(bytes, serializedSignature)).toEqual(
+			true,
+		);
+		expect(await verifyMessage(bytes, serializedSignature, IntentScope.TransactionData)).toEqual(
+			true,
+		);
+		expect(!!(await verifyTransactionBlock(bytes, serializedSignature))).toEqual(true);
+	});
+
+	it('signs PersonalMessages', async () => {
+		const keypair = new Secp256k1Keypair();
+		const message = new TextEncoder().encode('hello world');
+
+		const serializedSignature = (await keypair.signPersonalMessage(message)).signature;
+
+		expect(
+			await keypair.getPublicKey().verifyPersonalMessage(message, serializedSignature),
+		).toEqual(true);
+		expect(await verifyMessage(message, serializedSignature, IntentScope.PersonalMessage)).toEqual(
+			true,
+		);
+		expect(!!(await verifyPersonalMessage(message, serializedSignature))).toEqual(true);
 	});
 });

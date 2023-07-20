@@ -11,8 +11,8 @@ use crypto::NetworkPublicKey;
 use std::time::Duration;
 use types::{
     Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse,
-    GetCertificatesRequest, GetCertificatesResponse, PrimaryToPrimaryClient, RequestBatchRequest,
-    RequestBatchesRequest, RequestBatchesResponse, WorkerBatchMessage, WorkerToWorkerClient,
+    PrimaryToPrimaryClient, RequestBatchRequest, RequestBatchesRequest, RequestBatchesResponse,
+    WorkerBatchMessage, WorkerToWorkerClient,
 };
 
 fn send<F, R, Fut>(
@@ -63,22 +63,6 @@ where
 
 #[async_trait]
 impl PrimaryToPrimaryRpc for anemo::Network {
-    async fn get_certificates(
-        &self,
-        peer: &NetworkPublicKey,
-        request: impl anemo::types::request::IntoRequest<GetCertificatesRequest> + Send,
-    ) -> Result<GetCertificatesResponse> {
-        let peer_id = PeerId(peer.0.to_bytes());
-        let peer = self
-            .peer(peer_id)
-            .ok_or_else(|| format_err!("Network has no connection with peer {peer_id}"))?;
-        let response = PrimaryToPrimaryClient::new(peer)
-            .get_certificates(request)
-            .await
-            .map_err(|e| format_err!("Network error {:?}", e))?;
-        Ok(response.into_body())
-    }
-
     async fn fetch_certificates(
         &self,
         peer: &NetworkPublicKey,

@@ -67,8 +67,8 @@ describe('Ed25519PublicKey', () => {
 
 	it('toBuffer', () => {
 		const key = new Ed25519PublicKey(VALID_KEY_BASE64);
-		expect(key.toBytes().length).toBe(32);
-		expect(new Ed25519PublicKey(key.toBytes()).equals(key)).toBe(true);
+		expect(key.toRawBytes().length).toBe(32);
+		expect(new Ed25519PublicKey(key.toRawBytes()).equals(key)).toBe(true);
 	});
 
 	TEST_CASES.forEach(({ rawPublicKey, suiPublicKey, suiAddress }) => {

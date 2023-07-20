@@ -8,6 +8,7 @@ import {
 	type SuiEvent,
 	type TransactionEvents,
 } from '@mysten/sui.js';
+import { Text } from '@mysten/ui';
 import * as Collapsible from '@radix-ui/react-collapsible';
 import clsx from 'clsx';
 import { useState } from 'react';
@@ -17,7 +18,6 @@ import { CopyToClipboard } from '~/ui/CopyToClipboard';
 import { DescriptionItem } from '~/ui/DescriptionList';
 import { Divider } from '~/ui/Divider';
 import { ObjectLink } from '~/ui/InternalLink';
-import { Text } from '~/ui/Text';
 
 function Event({ event, divider }: { event: SuiEvent; divider: boolean }) {
 	const [open, setOpen] = useState(false);

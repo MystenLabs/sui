@@ -67,6 +67,7 @@ async fn test_snapshot_basic() -> Result<(), anyhow::Error> {
         directory: Some(remote),
         ..Default::default()
     };
+
     let snapshot_writer = StateSnapshotWriterV1::new(
         &local_store_config,
         &remote_store_config,
@@ -119,7 +120,7 @@ async fn test_snapshot_empty_db() -> Result<(), anyhow::Error> {
         ..Default::default()
     };
     let include_wrapped_tombstone =
-        !ProtocolConfig::get_for_max_version().simplified_unwrap_then_delete();
+        !ProtocolConfig::get_for_max_version_UNSAFE().simplified_unwrap_then_delete();
     let snapshot_writer = StateSnapshotWriterV1::new(
         &local_store_config,
         &remote_store_config,

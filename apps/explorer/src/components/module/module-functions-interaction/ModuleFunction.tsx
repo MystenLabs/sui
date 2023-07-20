@@ -8,6 +8,7 @@ import {
 	getExecutionStatusError,
 	TransactionBlock,
 } from '@mysten/sui.js';
+import { Button } from '@mysten/ui';
 import { useWalletKit, ConnectButton } from '@mysten/wallet-kit';
 import { useMutation } from '@tanstack/react-query';
 import clsx from 'clsx';
@@ -19,7 +20,6 @@ import { FunctionExecutionResult } from './FunctionExecutionResult';
 import { useFunctionParamsDetails } from './useFunctionParamsDetails';
 import { useFunctionTypeArguments } from './useFunctionTypeArguments';
 import { useZodForm } from '~/hooks/useZodForm';
-import { Button } from '~/ui/Button';
 import { DisclosureBox } from '~/ui/DisclosureBox';
 import { Input } from '~/ui/Input';
 

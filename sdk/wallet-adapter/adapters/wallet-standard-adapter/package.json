@@ -38,10 +38,10 @@
 		"@mysten/sui.js": "workspace:*",
 		"@mysten/wallet-adapter-base": "workspace:*",
 		"@mysten/wallet-standard": "workspace:*",
-		"mitt": "^3.0.0"
+		"mitt": "^3.0.1"
 	},
 	"devDependencies": {
-		"tsup": "^6.7.0",
-		"typescript": "^5.0.4"
+		"tsup": "^7.1.0",
+		"typescript": "^5.1.6"
 	}
 }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::fmt;
 use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -17,7 +18,7 @@ use hyper::server::conn::AddrIncoming;
 use hyper::{HeaderMap, StatusCode};
 use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
-use tracing::info;
+use tracing::{debug, info};
 use url::Url;
 
 use move_compiler::compiled_unit::CompiledUnitEnum;
@@ -26,13 +27,17 @@ use move_package::BuildConfig as MoveBuildConfig;
 use move_symbol_pool::Symbol;
 use sui_move::build::resolve_lock_file_path;
 use sui_move_build::{BuildConfig, SuiPackageHooks};
-use sui_sdk::wallet_context::WalletContext;
-use sui_sdk::SuiClient;
+use sui_sdk::SuiClientBuilder;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 
 pub const HOST_PORT_ENV: &str = "HOST_PORT";
 pub const SUI_SOURCE_VALIDATION_VERSION_HEADER: &str = "X-Sui-Source-Validation-Version";
 pub const SUI_SOURCE_VALIDATION_VERSION: &str = "0.1";
+
+pub const MAINNET_URL: &str = "https://fullnode.mainnet.sui.io:443";
+pub const TESTNET_URL: &str = "https://fullnode.testnet.sui.io:443";
+pub const DEVNET_URL: &str = "https://fullnode.devnet.sui.io:443";
+pub const LOCALNET_URL: &str = "http://127.0.0.1:9000";
 
 pub fn host_port() -> String {
     match option_env!("HOST_PORT") {
@@ -58,11 +63,13 @@ pub struct RepositorySource {
     pub repository: String,
     pub branch: String,
     pub paths: Vec<String>,
+    pub network: Option<Network>,
 }
 
 #[derive(Clone, Deserialize, Debug)]
 pub struct DirectorySource {
     pub paths: Vec<String>,
+    pub network: Option<Network>,
 }
 
 #[derive(Debug)]
@@ -72,13 +79,44 @@ pub struct SourceInfo {
     pub source: Option<String>,
 }
 
+#[derive(Eq, PartialEq, Clone, Default, Deserialize, Debug, Ord, PartialOrd)]
+#[serde(rename_all = "lowercase")]
+pub enum Network {
+    #[default]
+    #[serde(alias = "Mainnet")]
+    Mainnet,
+    #[serde(alias = "Testnet")]
+    Testnet,
+    #[serde(alias = "Devnet")]
+    Devnet,
+    #[serde(alias = "Localnet")]
+    Localnet,
+}
+
+impl fmt::Display for Network {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Network::Mainnet => "mainnet",
+                Network::Testnet => "testnet",
+                Network::Devnet => "devnet",
+                Network::Localnet => "localnet",
+            }
+        )
+    }
+}
+
 /// Map (package address, module name) tuples to verified source info.
 type SourceLookup = BTreeMap<(AccountAddress, Symbol), SourceInfo>;
+/// Top-level lookup that maps network to sources for corresponding on-chain networks.
+pub type NetworkLookup = BTreeMap<Network, SourceLookup>;
 
 pub async fn verify_package(
-    client: &SuiClient,
+    network: &Network,
     package_path: impl AsRef<Path>,
-) -> anyhow::Result<SourceLookup> {
+) -> anyhow::Result<(Network, SourceLookup)> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let config = resolve_lock_file_path(
         MoveBuildConfig::default(),
@@ -92,6 +130,13 @@ pub async fn verify_package(
     };
     let compiled_package = build_config.build(package_path.as_ref().to_path_buf())?;
 
+    let network_url = match network {
+        Network::Mainnet => MAINNET_URL,
+        Network::Testnet => TESTNET_URL,
+        Network::Devnet => DEVNET_URL,
+        Network::Localnet => LOCALNET_URL,
+    };
+    let client = SuiClientBuilder::default().build(network_url).await?;
     BytecodeSourceVerifier::new(client.read_api())
         .verify_package(
             &compiled_package,
@@ -101,22 +146,25 @@ pub async fn verify_package(
         .await?;
 
     let mut map = SourceLookup::new();
-    let Ok(address) = compiled_package.published_at.as_ref().map(|id| **id) else { bail!("could not resolve published-at field in package manifest")};
+    let address = compiled_package
+        .published_at
+        .as_ref()
+        .map(|id| **id)
+        .map_err(|_| anyhow!("could not resolve published-at field in package manifest"))?;
+    info!("verifying {} at {address}", package_path.as_ref().display());
     for v in &compiled_package.package.root_compiled_units {
+        let path = v.source_path.to_path_buf();
+        let source = Some(fs::read_to_string(path.as_path())?);
         match v.unit {
             CompiledUnitEnum::Module(ref m) => {
-                let path = v.source_path.to_path_buf();
-                let source = Some(fs::read_to_string(path.as_path())?);
                 map.insert((address, m.name), SourceInfo { path, source })
             }
             CompiledUnitEnum::Script(ref m) => {
-                let path = v.source_path.to_path_buf();
-                let source = Some(fs::read_to_string(path.as_path())?);
                 map.insert((address, m.name), SourceInfo { path, source })
             }
         };
     }
-    Ok(map)
+    Ok((network.clone(), map))
 }
 
 pub fn parse_config(config_path: impl AsRef<Path>) -> anyhow::Result<Config> {
@@ -126,13 +174,12 @@ pub fn parse_config(config_path: impl AsRef<Path>) -> anyhow::Result<Config> {
 
 pub fn repo_name_from_url(url: &str) -> anyhow::Result<String> {
     let repo_url = Url::parse(url)?;
-    let Some(mut components) = repo_url.path_segments() else {
-	    bail!("Could not discover repository path in url {url}")
-	};
-    let Some(repo_name) = components.next_back() else {
-	    bail!("Could not discover repository name in url {url}")
-    };
-
+    let mut components = repo_url
+        .path_segments()
+        .ok_or_else(|| anyhow!("Could not discover repository path in url {url}"))?;
+    let repo_name = components
+        .next_back()
+        .ok_or_else(|| anyhow!("Could not discover repository name in url {url}"))?;
     Ok(repo_name.to_string())
 }
 
@@ -148,7 +195,8 @@ pub struct CloneCommand {
 impl CloneCommand {
     pub fn new(p: &RepositorySource, dest: &Path) -> anyhow::Result<CloneCommand> {
         let repo_name = repo_name_from_url(&p.repository)?;
-        let dest = dest.join(repo_name).into_os_string();
+        let network = p.network.clone().unwrap_or_default().to_string();
+        let dest = dest.join(network).join(repo_name).into_os_string();
 
         macro_rules! ostr {
             ($arg:expr) => {
@@ -230,11 +278,7 @@ pub async fn clone_repositories(repos: Vec<&RepositorySource>, dir: &Path) -> an
     Ok(())
 }
 
-pub async fn initialize(
-    context: &WalletContext,
-    config: &Config,
-    dir: &Path,
-) -> anyhow::Result<SourceLookup> {
+pub async fn initialize(config: &Config, dir: &Path) -> anyhow::Result<NetworkLookup> {
     let mut repos = vec![];
     for s in &config.packages {
         match s {
@@ -243,52 +287,60 @@ pub async fn initialize(
         }
     }
     clone_repositories(repos, dir).await?;
-    verify_packages(context, config, dir).await
+    verify_packages(config, dir).await
 }
 
-pub async fn verify_packages(
-    context: &WalletContext,
-    config: &Config,
-    dir: &Path,
-) -> anyhow::Result<SourceLookup> {
+pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<NetworkLookup> {
     let mut tasks = vec![];
     for p in &config.packages {
         match p {
-            PackageSources::Repository(p) => {
-                let repo_name = repo_name_from_url(&p.repository)?;
-                let packages_dir = dir.join(repo_name);
-                for p in &p.paths {
+            PackageSources::Repository(r) => {
+                let repo_name = repo_name_from_url(&r.repository)?;
+                let network_name = r.network.clone().unwrap_or_default().to_string();
+                let packages_dir = dir.join(network_name).join(repo_name);
+                for p in &r.paths {
                     let package_path = packages_dir.join(p).clone();
-                    let client = context.get_client().await?;
-                    info!("verifying {p}");
+                    let network = r.network.clone().unwrap_or_default();
                     let t =
-                        tokio::spawn(async move { verify_package(&client, package_path).await });
+                        tokio::spawn(async move { verify_package(&network, package_path).await });
                     tasks.push(t)
                 }
             }
             PackageSources::Directory(packages_dir) => {
                 for p in &packages_dir.paths {
                     let package_path = PathBuf::from(p);
-                    let client = context.get_client().await?;
-                    info!("verifying {p}");
+                    let network = packages_dir.network.clone().unwrap_or_default();
                     let t =
-                        tokio::spawn(async move { verify_package(&client, package_path).await });
+                        tokio::spawn(async move { verify_package(&network, package_path).await });
                     tasks.push(t)
                 }
             }
         }
     }
 
-    let mut lookup = BTreeMap::new();
+    let mut mainnet_lookup = SourceLookup::new();
+    let mut testnet_lookup = SourceLookup::new();
+    let mut devnet_lookup = SourceLookup::new();
+    let mut localnet_lookup = SourceLookup::new();
     for t in tasks {
-        let new_lookup = t.await.unwrap()?;
-        lookup.extend(new_lookup);
+        let (network, new_lookup) = t.await.unwrap()?;
+        match network {
+            Network::Mainnet => mainnet_lookup.extend(new_lookup),
+            Network::Testnet => testnet_lookup.extend(new_lookup),
+            Network::Devnet => devnet_lookup.extend(new_lookup),
+            Network::Localnet => localnet_lookup.extend(new_lookup),
+        }
     }
+    let mut lookup = NetworkLookup::new();
+    lookup.insert(Network::Mainnet, mainnet_lookup);
+    lookup.insert(Network::Testnet, testnet_lookup);
+    lookup.insert(Network::Devnet, devnet_lookup);
+    lookup.insert(Network::Localnet, localnet_lookup);
     Ok(lookup)
 }
 
 pub struct AppState {
-    pub sources: SourceLookup,
+    pub sources: NetworkLookup,
 }
 
 pub fn serve(app_state: AppState) -> anyhow::Result<Server<AddrIncoming, IntoMakeService<Router>>> {
@@ -307,6 +359,8 @@ pub fn serve(app_state: AppState) -> anyhow::Result<Server<AddrIncoming, IntoMak
 
 #[derive(Deserialize)]
 pub struct Request {
+    #[serde(default)]
+    network: Network,
     address: String,
     module: String,
 }
@@ -324,8 +378,13 @@ pub struct ErrorResponse {
 async fn api_route(
     headers: HeaderMap,
     State(app_state): State<Arc<AppState>>,
-    Query(Request { address, module }): Query<Request>,
+    Query(Request {
+        network,
+        address,
+        module,
+    }): Query<Request>,
 ) -> impl IntoResponse {
+    debug!("request network={network}&address={address}&module={module}");
     let version = headers
         .get(SUI_SOURCE_VALIDATION_VERSION_HEADER)
         .as_ref()
@@ -357,18 +416,40 @@ async fn api_route(
     let symbol = Symbol::from(module);
     let Ok(address) = AccountAddress::from_hex_literal(&address) else {
 	let error = format!("Invalid hex address {address}");
-	return (StatusCode::BAD_REQUEST, headers, Json(ErrorResponse { error }).into_response())
+	return (
+	    StatusCode::BAD_REQUEST,
+	    headers,
+	    Json(ErrorResponse { error }).into_response()
+	)
     };
-    let Some(SourceInfo {source : Some(source), ..}) = app_state.sources.get(&(address, symbol)) else {
-	let error = format!("No source found for {symbol} at address {address}" );
-	return (StatusCode::NOT_FOUND, headers, Json(ErrorResponse { error }).into_response())
-    };
-    (
-        StatusCode::OK,
-        headers,
-        Json(SourceResponse {
-            source: source.to_owned(),
-        })
-        .into_response(),
-    )
+
+    let source_result = app_state
+        .sources
+        .get(&network)
+        .and_then(|l| l.get(&(address, symbol)));
+    if let Some(SourceInfo {
+        source: Some(source),
+        ..
+    }) = source_result
+    {
+        (
+            StatusCode::OK,
+            headers,
+            Json(SourceResponse {
+                source: source.to_owned(),
+            })
+            .into_response(),
+        )
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            headers,
+            Json(ErrorResponse {
+                error: format!(
+                    "No source found for {symbol} at address {address} on network {network}"
+                ),
+            })
+            .into_response(),
+        )
+    }
 }

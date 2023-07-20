@@ -3,11 +3,11 @@
 
 import { useRpcClient } from '@mysten/core';
 import { type SuiTransactionBlockResponse } from '@mysten/sui.js';
+import { LoadingIndicator } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 
 import { genTableDataFromTxData } from './TxCardUtils';
 import { Banner } from '~/ui/Banner';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { TableCard } from '~/ui/TableCard';
 import { TabHeader } from '~/ui/Tabs';
 
@@ -59,7 +59,7 @@ export function TransactionsForAddress({ address, type }: Props) {
 	if (isLoading) {
 		return (
 			<div>
-				<LoadingSpinner />
+				<LoadingIndicator />
 			</div>
 		);
 	}

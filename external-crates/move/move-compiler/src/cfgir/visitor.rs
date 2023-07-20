@@ -30,17 +30,12 @@ pub trait AbstractInterpreterVisitor {
         context: &CFGContext,
         cfg: &ImmForwardCFG,
     ) -> Diagnostics;
-}
 
-impl<V: AbstractInterpreterVisitor + 'static> From<V> for AbsIntVisitorObj {
-    fn from(value: V) -> Self {
-        Box::new(value)
-    }
-}
-
-impl<V: AbstractInterpreterVisitor + 'static> From<V> for Visitor {
-    fn from(value: V) -> Self {
-        Visitor::AbsIntVisitor(Box::new(value))
+    fn visitor(self) -> Visitor
+    where
+        Self: 'static + Sized,
+    {
+        Visitor::AbsIntVisitor(Box::new(self))
     }
 }
 

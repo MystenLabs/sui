@@ -3,9 +3,9 @@
 
 import { useFormatCoin } from '@mysten/core';
 import { type CoinStruct } from '@mysten/sui.js';
+import { Text } from '@mysten/ui';
 
 import { ObjectLink } from '~/ui/InternalLink';
-import { Text } from '~/ui/Text';
 
 type CoinItemProps = {
 	coin: CoinStruct;

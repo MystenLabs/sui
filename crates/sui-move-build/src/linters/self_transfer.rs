@@ -26,18 +26,20 @@ use move_compiler::{
 use move_symbol_pool::Symbol;
 use std::collections::BTreeMap;
 
+use super::{
+    INVALID_LOC, LINT_WARNING_PREFIX, SELF_TRANSFER_DIAG_CATEGORY, SELF_TRANSFER_DIAG_CODE,
+};
+
 const TRANSFER_FUNCTIONS: &[(&str, &str, &str)] = &[
     ("sui", "transfer", "public_transfer"),
     ("sui", "transfer", "transfer"),
 ];
 
-const INVALID_LOC: Loc = Loc::invalid();
-
 const SELF_TRANSFER_DIAG: DiagnosticInfo = custom(
-    "Lint ",
+    LINT_WARNING_PREFIX,
     Severity::Warning,
-    /* category */ 1,
-    /* code */ 1,
+    SELF_TRANSFER_DIAG_CATEGORY,
+    SELF_TRANSFER_DIAG_CODE,
     "non-composable transfer to sender",
 );
 

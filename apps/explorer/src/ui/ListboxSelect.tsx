@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import { Listbox, Transition } from '@headlessui/react';
 import { Check12, ChevronDown16 } from '@mysten/icons';
+import { Text } from '@mysten/ui';
 import { Fragment } from 'react';
-
-import { Text } from './Text';
 
 export type ListboxSelectPros<T extends string = string> = {
 	value: T;

@@ -373,7 +373,7 @@ impl AuthorityEpochTables {
 
     pub fn reset_db_for_execution_since_genesis(&self) -> SuiResult {
         // TODO: Add new tables that get added to the db automatically
-        self.executed_transactions_to_checkpoint.clear()?;
+        self.executed_transactions_to_checkpoint.unsafe_clear()?;
         Ok(())
     }
 

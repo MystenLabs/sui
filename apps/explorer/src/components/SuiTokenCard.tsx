@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Sui } from '@mysten/icons';
+import { Text } from '@mysten/ui';
 
 import { useSuiCoinData } from '~/hooks/useSuiCoinData';
 import { Card } from '~/ui/Card';
-import { Text } from '~/ui/Text';
 import { ButtonOrLink } from '~/ui/utils/ButtonOrLink';
 
 const COIN_GECKO_SUI_URL = 'https://www.coingecko.com/en/coins/sui';

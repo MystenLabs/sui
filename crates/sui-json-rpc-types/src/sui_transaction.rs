@@ -597,8 +597,7 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
                     executed_epoch: effect.executed_epoch(),
                     modified_at_versions: effect
                         .modified_at_versions()
-                        .iter()
-                        .copied()
+                        .into_iter()
                         .map(|(object_id, sequence_number)| {
                             SuiTransactionBlockEffectsModifiedAtVersions {
                                 object_id,
@@ -615,7 +614,7 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
                             .collect(),
                     ),
                     transaction_digest: *effect.transaction_digest(),
-                    created: to_owned_ref(effect.created().to_vec()),
+                    created: to_owned_ref(effect.created()),
                     mutated: to_owned_ref(effect.mutated().to_vec()),
                     unwrapped: to_owned_ref(effect.unwrapped().to_vec()),
                     deleted: to_sui_object_ref(effect.deleted().to_vec()),

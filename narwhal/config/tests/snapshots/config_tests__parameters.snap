@@ -22,8 +22,6 @@ expression: parameters
   },
   "anemo": {
     "send_certificate_rate_limit": null,
-    "get_payload_availability_rate_limit": null,
-    "get_certificates_rate_limit": null,
     "report_batch_rate_limit": null,
     "request_batch_rate_limit": null
   }

@@ -25,11 +25,10 @@ serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.88"
 url = "2.3.1"
 
-sui-config = { path = "../../crates/sui-config" }
-sui-move = { path = "../../crates/sui-move", features = ["all"] }
-sui-move-build = { path = "../../crates/sui-move-build" }
-sui-sdk = { path = "../../crates/sui-sdk" }
-sui-source-validation = { path = "../sui-source-validation" }
+sui-move.workspace = true
+sui-move-build.workspace = true
+sui-sdk.workspace = true
+sui-source-validation.workspace = true
 
 axum.workspace = true
 move-package.workspace = true

@@ -214,7 +214,7 @@ async fn init_genesis(
     let pkg = Object::new_package(
         &modules,
         TransactionDigest::genesis(),
-        ProtocolConfig::get_for_max_version().max_move_package_size(),
+        ProtocolConfig::get_for_max_version_UNSAFE().max_move_package_size(),
         &genesis_move_packages,
     )
     .unwrap();

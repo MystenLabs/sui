@@ -10,6 +10,7 @@ import {
 	useGetSystemState,
 } from '@mysten/core';
 import { type SuiEvent, type SuiValidatorSummary } from '@mysten/sui.js';
+import { Heading, Text } from '@mysten/ui';
 import { lazy, Suspense, useMemo } from 'react';
 
 import { PageLayout } from '~/components/Layout/PageLayout';
@@ -18,14 +19,12 @@ import { StakeColumn } from '~/components/top-validators-card/StakeColumn';
 import { DelegationAmount } from '~/components/validator/DelegationAmount';
 import { Banner } from '~/ui/Banner';
 import { Card } from '~/ui/Card';
-import { Heading } from '~/ui/Heading';
 import { ImageIcon } from '~/ui/ImageIcon';
 import { Link } from '~/ui/Link';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { Stats } from '~/ui/Stats';
 import { TableCard } from '~/ui/TableCard';
 import { TableHeader } from '~/ui/TableHeader';
-import { Text } from '~/ui/Text';
 import { Tooltip } from '~/ui/Tooltip';
 import { ampli } from '~/utils/analytics/ampli';
 import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';

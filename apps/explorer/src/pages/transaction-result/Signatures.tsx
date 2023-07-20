@@ -12,11 +12,11 @@ import {
 	type SuiTransactionBlockResponse,
 	type SignaturePubkeyPair,
 } from '@mysten/sui.js';
+import { Text } from '@mysten/ui';
 
 import { DescriptionItem, DescriptionList } from '~/ui/DescriptionList';
 import { AddressLink } from '~/ui/InternalLink';
 import { TabHeader } from '~/ui/Tabs';
-import { Text } from '~/ui/Text';
 
 function SignaturePanel({ title, signature }: { title: string; signature: SignaturePubkeyPair }) {
 	return (

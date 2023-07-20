@@ -29,13 +29,13 @@ fn test_protocol_overrides() {
     });
 
     assert_eq!(
-        ProtocolConfig::get_for_max_version().max_function_definitions(),
+        ProtocolConfig::get_for_max_version_UNSAFE().max_function_definitions(),
         42
     );
 }
 
 // Same as the previous test, to ensure we have test isolation with all the caching that
-// happens in get_for_min_version/get_for_max_version.
+// happens in get_for_min_version/get_for_max_version_UNSAFE.
 #[test]
 fn test_protocol_overrides_2() {
     telemetry_subscribers::init_for_testing();
@@ -46,7 +46,7 @@ fn test_protocol_overrides_2() {
     });
 
     assert_eq!(
-        ProtocolConfig::get_for_max_version().max_function_definitions(),
+        ProtocolConfig::get_for_max_version_UNSAFE().max_function_definitions(),
         43
     );
 }

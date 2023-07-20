@@ -276,7 +276,7 @@ async fn test_dry_run_no_gas_big_transfer() {
         sender,
         vec![],
         pt,
-        ProtocolConfig::get_for_max_version().max_tx_gas(),
+        ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas(),
         fullnode.reference_gas_price_for_testing().unwrap(),
     );
 
@@ -3689,8 +3689,8 @@ async fn test_store_revert_add_ofield() {
     assert_eq!(add_effects.created().len(), 1);
 
     let field_v0 = add_effects.created()[0].0;
-    let outer_v1 = find_by_id(add_effects.mutated(), outer_v0.0).unwrap();
-    let inner_v1 = find_by_id(add_effects.mutated(), inner_v0.0).unwrap();
+    let outer_v1 = find_by_id(&add_effects.mutated(), outer_v0.0).unwrap();
+    let inner_v1 = find_by_id(&add_effects.mutated(), inner_v0.0).unwrap();
 
     let db = &authority_state.database;
 
@@ -3770,8 +3770,8 @@ async fn test_store_revert_remove_ofield() {
     assert_eq!(add_effects.created().len(), 1);
 
     let field_v0 = add_effects.created()[0].0;
-    let outer_v1 = find_by_id(add_effects.mutated(), outer_v0.0).unwrap();
-    let inner_v1 = find_by_id(add_effects.mutated(), inner_v0.0).unwrap();
+    let outer_v1 = find_by_id(&add_effects.mutated(), outer_v0.0).unwrap();
+    let inner_v1 = find_by_id(&add_effects.mutated(), inner_v0.0).unwrap();
 
     let remove_ofield_txn = to_sender_signed_transaction(
         TransactionData::new_move_call(
@@ -3802,8 +3802,8 @@ async fn test_store_revert_remove_ofield() {
         .into_message();
 
     assert!(remove_effects.status().is_ok());
-    let outer_v2 = find_by_id(remove_effects.mutated(), outer_v0.0).unwrap();
-    let inner_v2 = find_by_id(remove_effects.mutated(), inner_v0.0).unwrap();
+    let outer_v2 = find_by_id(&remove_effects.mutated(), outer_v0.0).unwrap();
+    let inner_v2 = find_by_id(&remove_effects.mutated(), inner_v0.0).unwrap();
 
     let db = &authority_state.database;
 
@@ -4752,7 +4752,7 @@ fn test_choose_next_system_packages() {
 
     let committee = Committee::new_simple_test_committee().0;
     let v = &committee.voting_rights;
-    let mut protocol_config = ProtocolConfig::get_for_max_version();
+    let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
     protocol_config.set_advance_to_highest_supported_protocol_version_for_testing(false);
     protocol_config.set_buffer_stake_for_protocol_upgrade_bps_for_testing(7500);
 
@@ -5219,7 +5219,7 @@ async fn test_publish_transitive_dependencies_ok() {
         .unwrap()
         .1
         .into_data();
-    let ((package_c_id, _, _), _) = txn_effects.created().first().unwrap();
+    let ((package_c_id, _, _), _) = txn_effects.created()[0];
     let gas_ref = txn_effects.gas_object().0;
 
     // Publish `package B`
@@ -5229,7 +5229,7 @@ async fn test_publish_transitive_dependencies_ok() {
     let mut build_config = BuildConfig::new_for_testing();
     build_config.config.additional_named_addresses.extend([
         ("b".to_string(), AccountAddress::ZERO),
-        ("c".to_string(), (*package_c_id).into()),
+        ("c".to_string(), (package_c_id).into()),
     ]);
 
     let modules = build_config
@@ -5239,7 +5239,7 @@ async fn test_publish_transitive_dependencies_ok() {
 
     let mut builder = ProgrammableTransactionBuilder::new();
 
-    builder.publish_immutable(modules, vec![*package_c_id]); // Note: B depends on C
+    builder.publish_immutable(modules, vec![package_c_id]); // Note: B depends on C
 
     let kind = TransactionKind::programmable(builder.finish());
     let txn_data = TransactionData::new_with_gas_coins(
@@ -5255,7 +5255,7 @@ async fn test_publish_transitive_dependencies_ok() {
         .unwrap()
         .1
         .into_data();
-    let ((package_b_id, _, _), _) = txn_effects.created().first().unwrap();
+    let ((package_b_id, _, _), _) = txn_effects.created()[0];
     let gas_ref = txn_effects.gas_object().0;
 
     // Publish `package A`
@@ -5265,8 +5265,8 @@ async fn test_publish_transitive_dependencies_ok() {
     let mut build_config = BuildConfig::new_for_testing();
     build_config.config.additional_named_addresses.extend([
         ("a".to_string(), AccountAddress::ZERO),
-        ("b".to_string(), (*package_b_id).into()),
-        ("c".to_string(), (*package_c_id).into()),
+        ("b".to_string(), (package_b_id).into()),
+        ("c".to_string(), (package_c_id).into()),
     ]);
 
     let modules = build_config
@@ -5276,7 +5276,7 @@ async fn test_publish_transitive_dependencies_ok() {
 
     let mut builder = ProgrammableTransactionBuilder::new();
 
-    builder.publish_immutable(modules, vec![*package_b_id, *package_c_id]); // Note: A depends on B and C.
+    builder.publish_immutable(modules, vec![package_b_id, package_c_id]); // Note: A depends on B and C.
 
     let kind = TransactionKind::programmable(builder.finish());
     let txn_data = TransactionData::new_with_gas_coins(
@@ -5292,7 +5292,7 @@ async fn test_publish_transitive_dependencies_ok() {
         .unwrap()
         .1
         .into_data();
-    let ((package_a_id, _, _), _) = txn_effects.created().first().unwrap();
+    let ((package_a_id, _, _), _) = txn_effects.created()[0];
     let gas_ref = txn_effects.gas_object().0;
 
     // Publish `package root`
@@ -5308,9 +5308,9 @@ async fn test_publish_transitive_dependencies_ok() {
     let mut build_config = BuildConfig::new_for_testing();
     build_config.config.additional_named_addresses.extend([
         ("examples".to_string(), AccountAddress::ZERO),
-        ("a".to_string(), (*package_a_id).into()),
-        ("b".to_string(), (*package_b_id).into()),
-        ("c".to_string(), (*package_c_id).into()),
+        ("a".to_string(), (package_a_id).into()),
+        ("b".to_string(), (package_b_id).into()),
+        ("c".to_string(), (package_c_id).into()),
     ]);
 
     let modules = build_config
@@ -5321,7 +5321,7 @@ async fn test_publish_transitive_dependencies_ok() {
     let mut builder = ProgrammableTransactionBuilder::new();
     let mut deps = BuiltInFramework::all_package_ids();
     // Note: root depends on A, B, C.
-    deps.extend([*package_a_id, *package_b_id, *package_c_id]);
+    deps.extend([package_a_id, package_b_id, package_c_id]);
     builder.publish_immutable(modules, deps);
 
     let kind = TransactionKind::programmable(builder.finish());

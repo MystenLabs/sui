@@ -17,24 +17,18 @@ import { useQuery } from '@tanstack/react-query';
 
 const isGenesisLibAddress = (value: string): boolean => /^(0x|0X)0{0,39}[12]$/.test(value);
 
-type Result = {
-	label: string;
-	results: { id: string; label: string; type: string }[];
-};
+type Results = { id: string; label: string; type: string }[];
 
 const getResultsForTransaction = async (rpc: JsonRpcProvider, query: string) => {
 	if (!isValidTransactionDigest(query)) return null;
 	const txdata = await rpc.getTransactionBlock({ digest: query });
-	return {
-		label: 'transaction',
-		results: [
-			{
-				id: getTransactionDigest(txdata),
-				label: getTransactionDigest(txdata),
-				type: 'transaction',
-			},
-		],
-	};
+	return [
+		{
+			id: getTransactionDigest(txdata),
+			label: getTransactionDigest(txdata),
+			type: 'transaction',
+		},
+	];
 };
 
 const getResultsForObject = async (rpc: JsonRpcProvider, query: string) => {
@@ -44,16 +38,13 @@ const getResultsForObject = async (rpc: JsonRpcProvider, query: string) => {
 	const { data, error } = await rpc.getObject({ id: normalized });
 	if (!is(data, SuiObjectData) || error) return null;
 
-	return {
-		label: 'object',
-		results: [
-			{
-				id: data.objectId,
-				label: data.objectId,
-				type: 'object',
-			},
-		],
-	};
+	return [
+		{
+			id: data.objectId,
+			label: data.objectId,
+			type: 'object',
+		},
+	];
 };
 
 const getResultsForCheckpoint = async (rpc: JsonRpcProvider, query: string) => {
@@ -63,32 +54,26 @@ const getResultsForCheckpoint = async (rpc: JsonRpcProvider, query: string) => {
 	const { digest } = await rpc.getCheckpoint({ id: query });
 	if (!digest) return null;
 
-	return {
-		label: 'checkpoint',
-		results: [
-			{
-				id: digest,
-				label: digest,
-				type: 'checkpoint',
-			},
-		],
-	};
+	return [
+		{
+			id: digest,
+			label: digest,
+			type: 'checkpoint',
+		},
+	];
 };
 
 const getResultsForAddress = async (rpc: JsonRpcProvider, query: string, suiNSEnabled: boolean) => {
 	if (suiNSEnabled && isSuiNSName(query)) {
 		const resolved = await rpc.resolveNameServiceAddress({ name: query });
 		if (!resolved) return null;
-		return {
-			label: 'address',
-			results: [
-				{
-					id: resolved,
-					label: resolved,
-					type: 'address',
-				},
-			],
-		};
+		return [
+			{
+				id: resolved,
+				label: resolved,
+				type: 'address',
+			},
+		];
 	}
 
 	const normalized = normalizeSuiObjectId(query);
@@ -107,16 +92,13 @@ const getResultsForAddress = async (rpc: JsonRpcProvider, query: string, suiNSEn
 
 	if (!from.data?.length && !to.data?.length) return null;
 
-	return {
-		label: 'address',
-		results: [
-			{
-				id: normalized,
-				label: normalized,
-				type: 'address',
-			},
-		],
-	};
+	return [
+		{
+			id: normalized,
+			label: normalized,
+			type: 'address',
+		},
+	];
 };
 
 // Query for validator by pool id or sui address.
@@ -135,16 +117,13 @@ const getResultsForValidatorByPoolIdOrSuiAddress = async (
 
 	if (!validator) return null;
 
-	return {
-		label: 'validator',
-		results: [
-			{
-				id: validator.suiAddress || validator.stakingPoolId,
-				label: normalized,
-				type: 'validator',
-			},
-		],
-	};
+	return [
+		{
+			id: validator.suiAddress || validator.stakingPoolId,
+			label: normalized,
+			type: 'validator',
+		},
+	];
 };
 
 export function useSearch(query: string) {
@@ -164,9 +143,9 @@ export function useSearch(query: string) {
 					getResultsForObject(rpc, query),
 					getResultsForValidatorByPoolIdOrSuiAddress(systemStateSummery || null, query),
 				])
-			).filter((r) => r.status === 'fulfilled' && r.value) as PromiseFulfilledResult<Result>[];
+			).filter((r) => r.status === 'fulfilled' && r.value) as PromiseFulfilledResult<Results>[];
 
-			return results.map(({ value }) => value);
+			return results.map(({ value }) => value).flat();
 		},
 		enabled: !!query,
 		cacheTime: 10000,

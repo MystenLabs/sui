@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Flag16, Nft16 } from '@mysten/icons';
+import { Heading } from '@mysten/ui';
 
 import { Badge } from './Badge';
-import { Heading } from './Heading';
 import { ReactComponent as SenderIcon } from './icons/sender.svg';
 import { ReactComponent as CallIcon } from './icons/transactions/call.svg';
 import { CopyToClipboard } from '~/ui/CopyToClipboard';

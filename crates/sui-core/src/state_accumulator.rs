@@ -136,11 +136,9 @@ where
         effects
             .iter()
             .flat_map(|fx| {
-                fx.created()
-                    .iter()
-                    .map(|(oref, _)| oref.2)
-                    .chain(fx.unwrapped().iter().map(|(oref, _)| oref.2))
-                    .chain(fx.mutated().iter().map(|(oref, _)| oref.2))
+                fx.all_changed_objects()
+                    .into_iter()
+                    .map(|(oref, _, _)| oref.2)
             })
             .collect::<Vec<ObjectDigest>>(),
     );
@@ -167,12 +165,12 @@ where
         .iter()
         .flat_map(|fx| {
             fx.unwrapped()
-                .iter()
+                .into_iter()
                 .map(|(oref, _owner)| (*fx.transaction_digest(), oref.0, oref.1))
         })
         .chain(effects.iter().flat_map(|fx| {
             fx.unwrapped_then_deleted()
-                .iter()
+                .into_iter()
                 .map(|oref| (*fx.transaction_digest(), oref.0, oref.1))
         }))
         .collect::<Vec<(TransactionDigest, ObjectID, SequenceNumber)>>();
@@ -193,8 +191,8 @@ where
         .iter()
         .flat_map(|fx| {
             fx.modified_at_versions()
-                .iter()
-                .map(|(id, seq_num)| (*fx.transaction_digest(), *id, *seq_num))
+                .into_iter()
+                .map(|(id, seq_num)| (*fx.transaction_digest(), id, seq_num))
         })
         .filter_map(|(tx_digest, id, seq_num)| {
             // unwrapped tx
@@ -268,11 +266,9 @@ where
         effects
             .iter()
             .flat_map(|fx| {
-                fx.created()
-                    .iter()
-                    .map(|(oref, _)| oref.2)
-                    .chain(fx.unwrapped().iter().map(|(oref, _)| oref.2))
-                    .chain(fx.mutated().iter().map(|(oref, _)| oref.2))
+                fx.all_changed_objects()
+                    .into_iter()
+                    .map(|(oref, _, _)| oref.2)
             })
             .collect::<Vec<ObjectDigest>>(),
     );
@@ -282,8 +278,8 @@ where
         .iter()
         .flat_map(|fx| {
             fx.modified_at_versions()
-                .iter()
-                .map(|(id, version)| ObjectKey(*id, *version))
+                .into_iter()
+                .map(|(id, version)| ObjectKey(id, version))
         })
         .collect();
 

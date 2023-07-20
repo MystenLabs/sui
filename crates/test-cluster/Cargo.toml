@@ -17,7 +17,6 @@ prometheus.workspace = true
 tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
 serde_json.workspace = true
 rand.workspace = true
-sui.workspace = true
 sui-config.workspace = true
 sui-core = { workspace = true, features = ["test-utils"] }
 sui-framework.workspace = true

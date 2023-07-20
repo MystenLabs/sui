@@ -2,12 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetKioskContents, useGetOwnedObjects } from '@mysten/core';
+import { LoadingIndicator, RadioGroup, RadioGroupItem } from '@mysten/ui';
 import { useMemo, useState } from 'react';
 
 import OwnedObject from './OwnedObject';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Pagination, useCursorPagination } from '~/ui/Pagination';
-import { RadioGroup, RadioOption } from '~/ui/Radio';
 
 const FILTER_OPTIONS = [
 	{ label: 'NFTs', value: 'all' },
@@ -35,13 +34,12 @@ export function OwnedObjects({ id }: { id: string }) {
 	return (
 		<div className="flex flex-col gap-4 pt-5">
 			<RadioGroup
-				className="flex"
-				ariaLabel="transaction filter"
+				aria-label="View transactions by a specific filter"
 				value={filter}
-				onChange={setFilter}
+				onValueChange={setFilter}
 			>
 				{FILTER_OPTIONS.map((filter) => (
-					<RadioOption
+					<RadioGroupItem
 						key={filter.value}
 						value={filter.value}
 						label={filter.label}
@@ -50,14 +48,12 @@ export function OwnedObjects({ id }: { id: string }) {
 				))}
 			</RadioGroup>
 			{isFetching ? (
-				<LoadingSpinner />
+				<LoadingIndicator />
 			) : (
 				<>
 					<div className="flex max-h-80 flex-col overflow-auto">
 						<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-							{filteredData?.map((obj) => (
-								<OwnedObject obj={obj} key={obj?.data?.objectId} />
-							))}
+							{filteredData?.map((obj) => <OwnedObject obj={obj} key={obj?.data?.objectId} />)}
 						</div>
 					</div>
 					{filter !== 'kiosks' && <Pagination {...pagination} />}

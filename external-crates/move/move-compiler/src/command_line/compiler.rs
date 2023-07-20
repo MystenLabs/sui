@@ -7,8 +7,13 @@ use crate::{
     command_line::{DEFAULT_OUTPUT_DIR, MOVE_COMPILED_INTERFACES_DIR},
     compiled_unit,
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::{codes::Severity, *},
-    expansion, hlir, interface_generator, naming, parser,
+    diagnostics::{
+        codes::{Severity, WarningFilter},
+        *,
+    },
+    expansion,
+    expansion::ast as E,
+    hlir, interface_generator, naming, parser,
     parser::{comments::*, *},
     shared::{
         CompilationEnv, Flags, IndexedPackagePath, NamedAddressMap, NamedAddressMaps,
@@ -24,7 +29,7 @@ use move_command_line_common::files::{
 use move_core_types::language_storage::ModuleId as CompiledModuleId;
 use move_symbol_pool::Symbol;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs,
     fs::File,
     io::{Read, Write},
@@ -36,6 +41,16 @@ use tempfile::NamedTempFile;
 // Definitions
 //**************************************************************************************************
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct KnownFiltersInfo {
+    /// An name that identifies attribute used for filtering (e.g. "allow" in
+    /// #[allow(unused_function)].
+    filter_attr_name: expansion::ast::AttributeName_,
+    /// A list of known warning filters that can be suppressed by the compiler suppression warning
+    /// system.
+    filters: Vec<WarningFilter>,
+}
+
 pub struct Compiler<'a> {
     maps: NamedAddressMaps,
     targets: Vec<IndexedPackagePath>,
@@ -45,7 +60,9 @@ pub struct Compiler<'a> {
     compiled_module_named_address_mapping: BTreeMap<CompiledModuleId, String>,
     flags: Flags,
     visitors: Vec<Visitor>,
+    /// Predefined filter for compiler warnings.
     warning_filter: Option<WarningFilters>,
+    known_warning_filters: BTreeSet<KnownFiltersInfo>,
     package_configs: BTreeMap<Symbol, PackageConfig>,
     default_config: Option<PackageConfig>,
 }
@@ -152,6 +169,7 @@ impl<'a> Compiler<'a> {
             flags: Flags::empty(),
             visitors: vec![],
             warning_filter: None,
+            known_warning_filters: BTreeSet::new(),
             package_configs,
             default_config: None,
         })
@@ -232,6 +250,18 @@ impl<'a> Compiler<'a> {
         self
     }
 
+    pub fn add_custom_known_filters(
+        mut self,
+        filters: Vec<WarningFilter>,
+        filter_attr_name: E::AttributeName_,
+    ) -> Self {
+        self.known_warning_filters.insert(KnownFiltersInfo {
+            filter_attr_name,
+            filters,
+        });
+        self
+    }
+
     /// Sets the PackageConfig for files without a specified package
     pub fn set_default_config(mut self, config: PackageConfig) -> Self {
         assert!(self.default_config.is_none());
@@ -255,6 +285,7 @@ impl<'a> Compiler<'a> {
             flags,
             visitors,
             warning_filter,
+            known_warning_filters,
             package_configs,
             default_config,
         } = self;
@@ -267,6 +298,13 @@ impl<'a> Compiler<'a> {
             CompilationEnv::new(flags, visitors, package_configs, default_config);
         if let Some(filter) = warning_filter {
             compilation_env.add_warning_filter_scope(filter);
+        }
+        for KnownFiltersInfo {
+            filter_attr_name,
+            filters,
+        } in known_warning_filters
+        {
+            compilation_env.add_custom_known_filters(filters, filter_attr_name)?;
         }
         let (source_text, pprog_and_comments_res) =
             parse_program(&mut compilation_env, maps, targets, deps)?;

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_ir_types::location::*;
+use move_symbol_pool::Symbol;
 
 use crate::{
     cfgir::{
@@ -24,9 +25,24 @@ use crate::{
 use std::collections::BTreeMap;
 
 use super::{
-    FRESH_ID_FUNCTIONS, FUNCTIONS_TO_SKIP, ID_LEAK_DIAG, OBJECT_MODULE_NAME, SUI_ADDR_NAME,
+    CLOCK_MODULE_NAME, ID_LEAK_DIAG, OBJECT_MODULE_NAME, OBJECT_NEW_UID_FROM_HASH, SUI_ADDR_NAME,
+    SUI_CLOCK_CREATE, SUI_SYSTEM_ADDR_NAME, SUI_SYSTEM_CREATE, SUI_SYSTEM_MODULE_NAME,
     UID_TYPE_NAME,
 };
+
+pub const FRESH_ID_FUNCTIONS: &[(Symbol, Symbol, Symbol)] = &[
+    (SUI_ADDR_NAME, OBJECT_MODULE_NAME, OBJECT_NEW),
+    (SUI_ADDR_NAME, OBJECT_MODULE_NAME, OBJECT_NEW_UID_FROM_HASH),
+    (SUI_ADDR_NAME, TEST_SCENARIO_MODULE_NAME, TS_NEW_OBJECT),
+];
+pub const FUNCTIONS_TO_SKIP: &[(Symbol, Symbol, Symbol)] = &[
+    (
+        SUI_SYSTEM_ADDR_NAME,
+        SUI_SYSTEM_MODULE_NAME,
+        SUI_SYSTEM_CREATE,
+    ),
+    (SUI_ADDR_NAME, CLOCK_MODULE_NAME, SUI_CLOCK_CREATE),
+];
 
 //**************************************************************************************************
 // types
