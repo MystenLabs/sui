@@ -6,7 +6,6 @@ import {
 	useFormatCoin,
 	type BalanceChange,
 	useResolveSuiNSName,
-	useCoinMetadata,
 } from '@mysten/core';
 import { parseStructTag, normalizeSuiObjectId } from '@mysten/sui.js';
 import { Heading, Text } from '@mysten/ui';
@@ -30,8 +29,8 @@ function BalanceChangeEntry({
 	isUnRecognizedToken?: boolean;
 }) {
 	const { amount, coinType, recipient } = change;
-	const { data: coinMetadata } = useCoinMetadata(coinType);
-	const [formatted, symbol] = useFormatCoin(amount, coinType, CoinFormat.FULL);
+	const [formatted, symbol, queryResult] = useFormatCoin(amount, coinType, CoinFormat.FULL);
+	const { name } = queryResult.data || {};
 	const isPositive = BigInt(amount) > 0n;
 
 	if (!change) {
@@ -40,41 +39,41 @@ function BalanceChangeEntry({
 
 	return (
 		<div className="flex flex-col gap-2 py-3 first:pt-0 only:pb-0 only:pt-0">
-			<div className="flex flex-col gap-2">
-				<div className="flex flex-wrap justify-between gap-2">
-					<div className="flex gap-2">
+			<div className="flex justify-between gap-2">
+				<div className="flex gap-2">
+					<div className="w-5">
 						<Coin type={coinType} />
-						<div className="flex flex-col  gap-2 gap-y-1 lg:flex-row">
-							<Text variant="pBody/semibold" color="steel-darker" truncate>
-								{coinMetadata?.name || coinMetadata?.symbol}
-							</Text>
-							{isUnRecognizedToken && (
-								<Banner variant="warning" icon={null} border spacing="sm">
-									<div className="break-normal text-captionSmallExtra uppercase tracking-wider">
-										Unrecognized
-									</div>
-								</Banner>
-							)}
-						</div>
 					</div>
-
-					<div className="flex">
-						<Text variant="pBody/medium" color={isPositive ? 'success-dark' : 'issue-dark'}>
-							{isPositive ? '+' : ''}
-							{formatted} {symbol}
+					<div className="flex max-w-[90px] flex-wrap gap-2 gap-y-1 sm:max-w-full">
+						<Text variant="pBody/semibold" color="steel-darker">
+							{name || symbol}
 						</Text>
+						{isUnRecognizedToken && (
+							<Banner variant="warning" icon={null} border spacing="sm" display="block">
+								<div className="item-center truncate break-normal text-captionSmallExtra font-medium uppercase tracking-wider">
+									Unrecognized
+								</div>
+							</Banner>
+						)}
 					</div>
 				</div>
 
-				{recipient && (
-					<div className="flex flex-wrap items-center justify-between border-t border-gray-45 pt-2">
-						<Text variant="pBody/medium" color="steel-dark">
-							Recipient
-						</Text>
-						<AddressLink address={recipient} />
-					</div>
-				)}
+				<div className="flex text-right">
+					<Text variant="pBody/medium" color={isPositive ? 'success-dark' : 'issue-dark'}>
+						{isPositive ? '+' : ''}
+						{formatted} {symbol}
+					</Text>
+				</div>
 			</div>
+
+			{recipient && (
+				<div className="flex flex-wrap items-center justify-between border-t border-gray-45 pt-2">
+					<Text variant="pBody/medium" color="steel-dark">
+						Recipient
+					</Text>
+					<AddressLink address={recipient} />
+				</div>
+			)}
 		</div>
 	);
 }
