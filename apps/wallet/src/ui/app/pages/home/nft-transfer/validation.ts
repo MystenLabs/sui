@@ -1,19 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type JsonRpcProvider } from '@mysten/sui.js';
+import { type SuiClient } from '@mysten/sui.js/client';
 import * as Yup from 'yup';
 
 import { createSuiAddressValidation } from '_components/address-input/validation';
 
 export function createValidationSchema(
-	rpc: JsonRpcProvider,
+	client: SuiClient,
 	suiNSEnabled: boolean,
 	senderAddress: string,
 	objectId: string,
 ) {
 	return Yup.object({
-		to: createSuiAddressValidation(rpc, suiNSEnabled)
+		to: createSuiAddressValidation(client, suiNSEnabled)
 			.test(
 				'sender-address',
 				// eslint-disable-next-line no-template-curly-in-string

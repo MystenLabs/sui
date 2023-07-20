@@ -17,17 +17,17 @@ You can also use yarn or pnpm.
 Create an instance of SuinsClient:
 
 ```typescript
-import { JsonRpcProvider } from '@mysten/sui.js';
+import { SuiClient } from '@mysten/sui.js/client';
 import { SuinsClient } from '@mysten/suins-toolkit';
 
-const provider = new JsonRpcProvider();
-export const suinsClient = new SuinsClient(provider);
+const client = new SuiClient();
+export const suinsClient = new SuinsClient(client);
 ```
 
 Choose network type:
 
 ```typescript
-export const suinsClient = new SuinsClient(provider, {
+export const suinsClient = new SuinsClient(client, {
     networkType: 'testnet',
 });
 ```

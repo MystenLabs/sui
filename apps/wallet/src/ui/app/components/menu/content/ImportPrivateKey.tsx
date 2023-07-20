@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowRight16 } from '@mysten/icons';
-import { type ExportedKeypair, toB64 } from '@mysten/sui.js';
+import { toB64 } from '@mysten/sui.js';
+import { type ExportedKeypair } from '@mysten/sui.js/cryptography';
 import { hexToBytes } from '@noble/hashes/utils';
 import { useMutation } from '@tanstack/react-query';
 import { ErrorMessage, Field, Form, Formik } from 'formik';

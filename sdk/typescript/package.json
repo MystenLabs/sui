@@ -30,11 +30,6 @@
 			"import": "./dist/esm/index.js",
 			"require": "./dist/cjs/index.js"
 		},
-		"./builder": {
-			"source": "./src/builder/index.ts",
-			"import": "./dist/esm/builder/index.js",
-			"require": "./dist/cjs/builder/index.js"
-		},
 		"./client": {
 			"source": "./src/client/index.ts",
 			"import": "./dist/esm/client/index.js",

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { formatDate, useOnScreen } from '@mysten/core';
-import { IntentScope, fromB64 } from '@mysten/sui.js';
+import { fromB64 } from '@mysten/sui.js';
+import { IntentScope } from '@mysten/sui.js/cryptography';
 import { useMemo, useRef } from 'react';
 
 import { toUtf8OrB64 } from '_src/shared/utils';

@@ -48,6 +48,7 @@ import type {
 	DynamicFieldPage,
 	NetworkMetrics,
 	AddressMetrics,
+	AllEpochsAddressMetrics,
 } from '../types/index.js';
 import {
 	isValidTransactionDigest,
@@ -703,6 +704,15 @@ export class SuiClient {
 
 	async getAddressMetrics(): Promise<AddressMetrics> {
 		return await this.transport.request({ method: 'suix_getLatestAddressMetrics', params: [] });
+	}
+
+	async getAllEpochAddressMetrics(input?: {
+		descendingOrder?: boolean;
+	}): Promise<AllEpochsAddressMetrics> {
+		return await this.transport.request({
+			method: 'suix_getAllEpochAddressMetrics',
+			params: [input?.descendingOrder],
+		});
 	}
 
 	/**

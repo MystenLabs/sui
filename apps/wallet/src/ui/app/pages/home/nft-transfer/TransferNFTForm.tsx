@@ -3,7 +3,8 @@
 
 import { useGetKioskContents, isSuiNSName, useRpcClient, useSuiNSEnabled } from '@mysten/core';
 import { ArrowRight16 } from '@mysten/icons';
-import { getTransactionDigest, TransactionBlock } from '@mysten/sui.js';
+import { getTransactionDigest } from '@mysten/sui.js';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Form, Field, Formik } from 'formik';
 import { toast } from 'react-hot-toast';

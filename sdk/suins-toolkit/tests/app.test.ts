@@ -1,17 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { JsonRpcProvider, testnetConnection } from '@mysten/sui.js';
 // import { faker } from '@faker-js/faker';
 import { describe, beforeEach, expect, it } from 'vitest';
 
 import { SuinsClient } from '../src';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 
 const domainName = 'test.sui';
 const walletAddress = '0xfce343a643991c592c4f1a9ee415a7889293f694ab8828f78e3c81d11c9530c6';
 
 describe('SuiNS Client', () => {
-    const client = new SuinsClient(new JsonRpcProvider(testnetConnection), {
+    const client = new SuinsClient(new SuiClient({ url: getFullnodeUrl('testnet') }), {
         networkType: 'testnet',
         contractObjects: {
             packageId: '0xfdba31b34a43e058f17c5cf4b12d9b9e0a08c0623d8569092c022e0c77df46d3',
