@@ -54,7 +54,8 @@ use sui_types::{
 use sui_verifier::verifier as sui_bytecode_verifier;
 
 use crate::linters::{
-    known_filters, self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier,
+    custom_state_change::CustomStateChangeVerifier, known_filters,
+    self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier,
 };
 
 #[cfg(test)]
@@ -134,8 +135,11 @@ impl BuildConfig {
         let mut fn_info = None;
         let compiled_pkg = build_plan.compile_with_driver(writer, |compiler| {
             let (files, units_res) = if lint {
-                let lint_visitors =
-                    vec![ShareOwnedVerifier.visitor(), SelfTransferVerifier.visitor()];
+                let lint_visitors = vec![
+                    ShareOwnedVerifier.visitor(),
+                    SelfTransferVerifier.visitor(),
+                    CustomStateChangeVerifier.visitor(),
+                ];
                 let (filter_attr_name, filters) = known_filters();
                 compiler
                     .add_visitors(lint_visitors)

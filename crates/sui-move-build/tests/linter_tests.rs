@@ -18,8 +18,8 @@ use move_compiler::{
 };
 
 use sui_move_build::linters::{
-    known_filters, self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier,
-    LINT_WARNING_PREFIX,
+    custom_state_change::CustomStateChangeVerifier, known_filters,
+    self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier, LINT_WARNING_PREFIX,
 };
 
 const SUI_FRAMEWORK_PATH: &str = "../sui-framework/packages/sui-framework";
@@ -62,7 +62,11 @@ fn run_tests(path: &Path) -> anyhow::Result<()> {
     let exp_path = path.with_extension(EXP_EXT);
 
     let targets: Vec<String> = vec![path.to_str().unwrap().to_owned()];
-    let lint_visitors = vec![ShareOwnedVerifier.visitor(), SelfTransferVerifier.visitor()];
+    let lint_visitors = vec![
+        ShareOwnedVerifier.visitor(),
+        SelfTransferVerifier.visitor(),
+        CustomStateChangeVerifier.visitor(),
+    ];
     let (filter_attr_name, filters) = known_filters_for_test();
     let (files, comments_and_compiler_res) = Compiler::from_files(
         targets,
