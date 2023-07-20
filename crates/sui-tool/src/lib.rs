@@ -534,11 +534,11 @@ pub(crate) fn make_anemo_config() -> anemo_cli::Config {
                     anemo_cli::ron_method!(WorkerToWorkerClient, report_batch, WorkerBatchMessage),
                 )
                 .add_method(
-                    "RequestBatch",
+                    "RequestBatches",
                     anemo_cli::ron_method!(
                         WorkerToWorkerClient,
-                        request_batch,
-                        RequestBatchRequest
+                        request_batches,
+                        RequestBatchesRequest
                     ),
                 ),
         )

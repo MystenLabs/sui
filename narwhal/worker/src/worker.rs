@@ -126,13 +126,13 @@ impl Worker {
                 ),
             ));
         }
-        if let Some(limit) = parameters.anemo.request_batch_rate_limit {
-            worker_service = worker_service.add_layer_for_request_batch(InboundRequestLayer::new(
-                rate_limit::RateLimitLayer::new(
+        if let Some(limit) = parameters.anemo.request_batches_rate_limit {
+            worker_service = worker_service.add_layer_for_request_batches(
+                InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
                     governor::Quota::per_second(limit),
                     rate_limit::WaitMode::Block,
-                ),
-            ));
+                )),
+            );
         }
 
         // Legacy RPC interface, only used by delete_batches() for external consensus.
@@ -143,8 +143,8 @@ impl Worker {
             protocol_config: protocol_config.clone(),
             worker_cache: worker.worker_cache.clone(),
             store: worker.store.clone(),
-            request_batch_timeout: worker.parameters.sync_retry_delay,
-            request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
+            request_batches_timeout: worker.parameters.sync_retry_delay,
+            request_batches_retry_nodes: worker.parameters.sync_retry_nodes,
             network: None,
             batch_fetcher: None,
             validator: validator.clone(),
@@ -303,8 +303,8 @@ impl Worker {
                 protocol_config,
                 worker_cache: worker.worker_cache.clone(),
                 store: worker.store.clone(),
-                request_batch_timeout: worker.parameters.sync_retry_delay,
-                request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
+                request_batches_timeout: worker.parameters.sync_retry_delay,
+                request_batches_retry_nodes: worker.parameters.sync_retry_nodes,
                 network: Some(network.clone()),
                 batch_fetcher: Some(batch_fetcher),
                 validator: validator.clone(),
