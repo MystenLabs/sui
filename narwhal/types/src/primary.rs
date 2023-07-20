@@ -169,8 +169,6 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Batch {
 pub trait BatchAPI {
     fn transactions(&self) -> &Vec<Transaction>;
     fn transactions_mut(&mut self) -> &mut Vec<Transaction>;
-
-    // BatchV2 APIs
     fn versioned_metadata(&self) -> &VersionedMetadata;
     fn versioned_metadata_mut(&mut self) -> &mut VersionedMetadata;
 }
