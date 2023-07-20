@@ -1,16 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 import {
 	type BalanceChangeSummary,
 	CoinFormat,
 	useFormatCoin,
 	type BalanceChange,
 	useResolveSuiNSName,
+	useCoinMetadata,
 } from '@mysten/core';
+import { parseStructTag, normalizeSuiObjectId } from '@mysten/sui.js';
 import { Heading, Text } from '@mysten/ui';
+import { useMemo } from 'react';
 
-import { CoinsStack } from '~/ui/CoinsStack';
+import { useRecognizedPackages } from '~/hooks/useRecognizedPackages';
+import { Banner } from '~/ui/Banner';
+import { Coin } from '~/ui/CoinsStack';
 import { AddressLink } from '~/ui/InternalLink';
 import { TransactionBlockCard, TransactionBlockCardSection } from '~/ui/TransactionBlockCard';
 
@@ -18,11 +22,16 @@ interface BalanceChangesProps {
 	changes: BalanceChangeSummary;
 }
 
-function BalanceChangeEntry({ change }: { change: BalanceChange }) {
+function BalanceChangeEntry({
+	change,
+	notRecognizedToken,
+}: {
+	change: BalanceChange;
+	notRecognizedToken?: boolean;
+}) {
 	const { amount, coinType, recipient } = change;
-
+	const { data: coinMetadata } = useCoinMetadata(coinType);
 	const [formatted, symbol] = useFormatCoin(amount, coinType, CoinFormat.FULL);
-
 	const isPositive = BigInt(amount) > 0n;
 
 	if (!change) {
@@ -32,10 +41,23 @@ function BalanceChangeEntry({ change }: { change: BalanceChange }) {
 	return (
 		<div className="flex flex-col gap-2 py-3 first:pt-0 only:pb-0 only:pt-0">
 			<div className="flex flex-col gap-2">
-				<div className="flex flex-wrap justify-between">
-					<Text variant="pBody/medium" color="steel-dark">
-						Amount
-					</Text>
+				<div className="flex flex-wrap justify-between gap-2">
+					<div className="flex gap-2">
+						<Coin type={coinType} />
+						<div className="flex flex-col  gap-2 gap-y-1 lg:flex-row">
+							<Text variant="pBody/semibold" color="steel-darker" truncate>
+								{coinMetadata?.name || coinMetadata?.symbol}
+							</Text>
+							{notRecognizedToken && (
+								<Banner variant="warning" icon={null} border spacing="sm">
+									<div className="break-normal text-captionSmallExtra uppercase tracking-wider">
+										Unrecognized
+									</div>
+								</Banner>
+							)}
+						</div>
+					</div>
+
 					<div className="flex">
 						<Text variant="pBody/medium" color={isPositive ? 'success-dark' : 'issue-dark'}>
 							{isPositive ? '+' : ''}
@@ -45,7 +67,7 @@ function BalanceChangeEntry({ change }: { change: BalanceChange }) {
 				</div>
 
 				{recipient && (
-					<div className="flex flex-wrap items-center justify-between">
+					<div className="flex flex-wrap items-center justify-between border-t border-gray-45 pt-2">
 						<Text variant="pBody/medium" color="steel-dark">
 							Recipient
 						</Text>
@@ -58,8 +80,29 @@ function BalanceChangeEntry({ change }: { change: BalanceChange }) {
 }
 
 function BalanceChangeCard({ changes, owner }: { changes: BalanceChange[]; owner: string }) {
-	const coinTypesSet = new Set(changes.map((change) => change.coinType));
 	const { data: suinsDomainName } = useResolveSuiNSName(owner);
+	const recognizedPackagesList = useRecognizedPackages();
+
+	const normalizedRecognizedPackages = useMemo(
+		() => recognizedPackagesList.map(normalizeSuiObjectId),
+		[recognizedPackagesList],
+	);
+	const recognizedTokenChanges = useMemo(
+		() =>
+			changes.filter((change) => {
+				const { address: packageId } = parseStructTag(change.coinType);
+				return normalizedRecognizedPackages.includes(packageId);
+			}),
+		[changes, normalizedRecognizedPackages],
+	);
+	const notRecognizedToken = useMemo(
+		() =>
+			changes.filter((change) => {
+				const { address: packageId } = parseStructTag(change.coinType);
+				return !normalizedRecognizedPackages.includes(packageId);
+			}),
+		[changes, normalizedRecognizedPackages],
+	);
 
 	return (
 		<TransactionBlockCard
@@ -68,8 +111,6 @@ function BalanceChangeCard({ changes, owner }: { changes: BalanceChange[]; owner
 					<Heading variant="heading6/semibold" color="steel-darker">
 						Balance Changes
 					</Heading>
-
-					<CoinsStack coinTypes={Array.from(coinTypesSet)} />
 				</div>
 			}
 			shadow
@@ -88,11 +129,25 @@ function BalanceChangeCard({ changes, owner }: { changes: BalanceChange[]; owner
 			}
 		>
 			<div className="flex flex-col gap-2">
-				{changes.map((change, index) => (
+				{recognizedTokenChanges.map((change, index) => (
 					<TransactionBlockCardSection key={index}>
 						<BalanceChangeEntry change={change} />
 					</TransactionBlockCardSection>
 				))}
+				{notRecognizedToken.length > 0 && (
+					<div className="flex flex-col gap-2">
+						<div className="flex border-t border-gray-45 pt-2">
+							<Text variant="pSubtitleSmall/medium" color="steel-dark">
+								Coins below are not recognized by <span className="text-hero">Sui Foundation.</span>
+							</Text>
+						</div>
+						{notRecognizedToken.map((change, index) => (
+							<TransactionBlockCardSection key={index}>
+								<BalanceChangeEntry change={change} notRecognizedToken />
+							</TransactionBlockCardSection>
+						))}
+					</div>
+				)}
 			</div>
 		</TransactionBlockCard>
 	);
