@@ -21,10 +21,10 @@ interface BalanceChangesProps {
 
 function BalanceChangeEntry({
 	change,
-	notRecognizedToken,
+	isUnRecognizedToken,
 }: {
 	change: BalanceChange;
-	notRecognizedToken?: boolean;
+	isUnRecognizedToken?: boolean;
 }) {
 	const { amount, coinType } = change;
 	const isPositive = BigInt(amount) > 0n;
@@ -33,7 +33,7 @@ function BalanceChangeEntry({
 	return (
 		<div className="flex flex-col gap-2">
 			<div className="flex flex-col gap-2">
-				{notRecognizedToken && (
+				{isUnRecognizedToken && (
 					<div className="border-t border-gray-45 pt-2">
 						<Text variant="pSubtitleSmall" weight="normal" color="steel-dark">
 							Coins below are not recognized by <span className="text-hero">Sui Foundation.</span>
@@ -66,18 +66,18 @@ function BalanceChangeEntries({ changes }: { changes: BalanceChange[] }) {
 		() => recognizedPackagesList.map((itm) => normalizeSuiObjectId(itm)),
 		[recognizedPackagesList],
 	);
-	const { recognizedTokenChanges, notRecognizedTokenChanges } = useMemo(() => {
+	const { recognizedTokenChanges, unRecognizedTokenChanges } = useMemo(() => {
 		const recognizedTokenChanges = [];
-		const notRecognizedTokenChanges = [];
+		const unRecognizedTokenChanges = [];
 		for (let change of changes) {
 			const { address: packageId } = parseStructTag(change.coinType);
 			if (normalizedRecognizedPackages.includes(packageId)) {
 				recognizedTokenChanges.push(change);
 			} else {
-				notRecognizedTokenChanges.push(change);
+				unRecognizedTokenChanges.push(change);
 			}
 		}
-		return { recognizedTokenChanges, notRecognizedTokenChanges };
+		return { recognizedTokenChanges, unRecognizedTokenChanges };
 	}, [changes, normalizedRecognizedPackages]);
 
 	return (
@@ -86,18 +86,18 @@ function BalanceChangeEntries({ changes }: { changes: BalanceChange[] }) {
 				{recognizedTokenChanges.map((change) => (
 					<BalanceChangeEntry change={change} key={change.coinType + change.amount} />
 				))}
-				{notRecognizedTokenChanges.length > 0 && (
+				{unRecognizedTokenChanges.length > 0 && (
 					<div className="flex flex-col gap-2">
 						<div className="flex border-t border-gray-45 pt-2">
 							<Text variant="pSubtitleSmall" weight="medium" color="steel-dark">
 								Coins below are not recognized by <span className="text-hero">Sui Foundation.</span>
 							</Text>
 						</div>
-						{notRecognizedTokenChanges.map((change) => (
+						{unRecognizedTokenChanges.map((change, index) => (
 							<BalanceChangeEntry
 								change={change}
-								key={change.coinType + change.amount}
-								notRecognizedToken
+								key={change.coinType + index}
+								isUnRecognizedToken
 							/>
 						))}
 					</div>
