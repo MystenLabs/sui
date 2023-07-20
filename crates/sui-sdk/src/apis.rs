@@ -81,7 +81,7 @@ impl ReadApi {
 
     /// Return a paginated response containing the dynamic fields objects for this [ObjectID], or an error upon failure.
     ///
-    /// The return type is a list of [DynamicFieldInfo] objects, where the field name is always present,
+    /// The return type is a list of `DynamicFieldInfo` objects, where the field name is always present,
     /// represented as a `Move Value`.
     ///
     /// If the field is a dynamic field, returns the ID of the Field object (which contains both the name and the value).
