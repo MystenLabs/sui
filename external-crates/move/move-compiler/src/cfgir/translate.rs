@@ -720,13 +720,21 @@ fn visit_module(
     mident: ModuleIdent,
     mdef: &G::ModuleDefinition,
 ) {
+    context
+        .env
+        .add_warning_filter_scope(mdef.warning_filter.clone());
     for (name, fdef) in mdef.functions.key_cloned_iter() {
         visit_function(context, prog, Some(mident), name, fdef)
     }
+    context.env.pop_warning_filter_scope();
 }
 
 fn visit_script(context: &mut Context, prog: &G::Program, script: &G::Script) {
-    visit_function(context, prog, None, script.function_name, &script.function)
+    context
+        .env
+        .add_warning_filter_scope(script.warning_filter.clone());
+    visit_function(context, prog, None, script.function_name, &script.function);
+    context.env.pop_warning_filter_scope();
 }
 
 fn visit_function(
@@ -737,7 +745,7 @@ fn visit_function(
     fdef: &G::Function,
 ) {
     let G::Function {
-        warning_filter: _,
+        warning_filter,
         index: _,
         attributes: _,
         visibility: _,
@@ -749,6 +757,7 @@ fn visit_function(
     let G::FunctionBody_::Defined { locals, start, blocks, block_info } = &body.value else {
         return
     };
+    context.env.add_warning_filter_scope(warning_filter.clone());
     let (cfg, infinite_loop_starts) = ImmForwardCFG::new(*start, blocks, block_info.iter());
     let function_context = super::CFGContext {
         module: mident,
@@ -764,5 +773,6 @@ fn visit_function(
         let mut v = visitor.borrow_mut();
         ds.extend(v.verify(&context.env, prog, &function_context, &cfg));
     }
-    context.env.add_diags(ds)
+    context.env.add_diags(ds);
+    context.env.pop_warning_filter_scope();
 }

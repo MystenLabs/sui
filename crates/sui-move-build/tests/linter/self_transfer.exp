@@ -1,4 +1,4 @@
-warning[Lint W01001]: non-composable transfer to sender
+warning[Lint W02001]: non-composable transfer to sender
    ┌─ tests/linter/self_transfer.move:23:9
    │
 22 │     public fun public_transfer_bad(ctx: &mut TxContext) {
@@ -8,8 +8,10 @@ warning[Lint W01001]: non-composable transfer to sender
    │         │                                                       │
    │         │                                                       Transaction sender address coming from here
    │         Transfer of an object to transaction sender address in function public_transfer_bad
+   │
+   = This warning can be suppressed with '#[lint_allow(self_transfer)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01001]: non-composable transfer to sender
+warning[Lint W02001]: non-composable transfer to sender
    ┌─ tests/linter/self_transfer.move:27:9
    │
 26 │     public fun private_transfer_bad(ctx: &mut TxContext) {
@@ -19,8 +21,10 @@ warning[Lint W01001]: non-composable transfer to sender
    │         │                                                │
    │         │                                                Transaction sender address coming from here
    │         Transfer of an object to transaction sender address in function private_transfer_bad
+   │
+   = This warning can be suppressed with '#[lint_allow(self_transfer)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01001]: non-composable transfer to sender
+warning[Lint W02001]: non-composable transfer to sender
    ┌─ tests/linter/self_transfer.move:31:9
    │
 30 │     public fun private_transfer_no_store_bad(ctx: &mut TxContext) {
@@ -30,15 +34,19 @@ warning[Lint W01001]: non-composable transfer to sender
    │         │                                                │
    │         │                                                Transaction sender address coming from here
    │         Transfer of an object to transaction sender address in function private_transfer_no_store_bad
-
-warning[Lint W01001]: non-composable transfer to sender
-   ┌─ tests/linter/self_transfer.move:37:9
    │
-34 │     public fun transfer_through_assigns_bad(ctx: &mut TxContext) {
+   = This warning can be suppressed with '#[lint_allow(self_transfer)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02001]: non-composable transfer to sender
+   ┌─ tests/linter/self_transfer.move:39:9
+   │
+36 │     public fun transfer_through_assigns_bad(ctx: &mut TxContext) {
    │                ---------------------------- Returning an object from a function, allows a caller to use the object and enables composability via programmable transactions.
-35 │         let sender = tx_context::sender(ctx);
+37 │         let sender = tx_context::sender(ctx);
    │                      ----------------------- Transaction sender address coming from here
-36 │         let another_sender = sender;
-37 │         transfer::public_transfer(S1 { id: object::new(ctx), }, another_sender)
+38 │         let another_sender = sender;
+39 │         transfer::public_transfer(S1 { id: object::new(ctx), }, another_sender)
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Transfer of an object to transaction sender address in function transfer_through_assigns_bad
+   │
+   = This warning can be suppressed with '#[lint_allow(self_transfer)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
