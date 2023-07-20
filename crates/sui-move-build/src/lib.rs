@@ -54,7 +54,7 @@ use sui_types::{
 use sui_verifier::verifier as sui_bytecode_verifier;
 
 use crate::linters::{
-    known_filters, redundant_custom_call::CustomStateChangeVerifier,
+    custom_state_change::CustomStateChangeVerifier, known_filters,
     self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier,
 };
 

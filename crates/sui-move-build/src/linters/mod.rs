@@ -7,7 +7,7 @@ use move_compiler::{
 };
 use move_ir_types::location::Loc;
 
-pub mod redundant_custom_call;
+pub mod custom_state_change;
 pub mod self_transfer;
 pub mod share_owned;
 

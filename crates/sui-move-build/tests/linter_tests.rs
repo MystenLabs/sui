@@ -18,7 +18,7 @@ use move_compiler::{
 };
 
 use sui_move_build::linters::{
-    known_filters, redundant_custom_call::CustomStateChangeVerifier,
+    custom_state_change::CustomStateChangeVerifier, known_filters,
     self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier, LINT_WARNING_PREFIX,
 };
 
