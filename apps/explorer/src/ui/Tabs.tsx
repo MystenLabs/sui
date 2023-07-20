@@ -13,13 +13,17 @@ import {
 	type ReactNode,
 } from 'react';
 
+import { Tooltip } from './Tooltip';
+import { ReactComponent as InfoSvg } from './icons/info_10x10.svg';
+import { ampli } from '~/utils/analytics/ampli';
+
 type TabSize = 'md' | 'lg' | 'sm';
 
 const TabSizeContext = createContext<TabSize | null | undefined>(null);
 
 const tabStyles = cva(
 	[
-		'border-b border-transparent -mb-px',
+		'flex items-center gap-1 border-b border-transparent -mb-px',
 		'font-semibold text-steel-dark disabled:text-steel-dark disabled:pointer-events-none hover:text-steel-darker data-[state=active]:border-gray-65',
 	],
 	{
@@ -57,7 +61,7 @@ const TabsList = forwardRef<
 		ref={ref}
 		className={clsx(
 			'flex items-center border-gray-45',
-			lessSpacing ? 'gap-2' : 'gap-6',
+			lessSpacing ? 'gap-3' : 'gap-6',
 			fullWidth && 'flex-1',
 			!disableBottomBorder && 'border-b',
 		)}
@@ -100,16 +104,30 @@ export function TabHeader({
 	title,
 	children,
 	noGap,
+	tooltip,
 }: {
 	size?: TabSize;
 	title: string;
 	children: ReactNode;
 	noGap?: boolean;
+	tooltip?: string;
 }) {
 	return (
 		<Tabs size={size} defaultValue="tab">
 			<TabsList>
-				<TabsTrigger value="tab">{title}</TabsTrigger>
+				<TabsTrigger value="tab">
+					{title}
+					{tooltip && (
+						<Tooltip
+							tip={tooltip}
+							onOpen={() => {
+								ampli.activatedTooltip({ tooltipLabel: title });
+							}}
+						>
+							<InfoSvg />
+						</Tooltip>
+					)}
+				</TabsTrigger>
 			</TabsList>
 			<TabsContent value="tab" noGap={noGap}>
 				{children}
