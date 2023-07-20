@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { fromExportedKeypair } from './cryptography/utils.js';
+
 export {
 	/** @deprecated Import from `@mysten/sui.js/keypairs/ed5519` instead */
 	type Ed25519KeypairData,
@@ -105,8 +107,8 @@ export {
 } from './cryptography/signature.js';
 
 export {
+	/** @deprecated This type will be removed because it cant accurately represent parsed signatures */
 	type SignaturePubkeyPair,
-	fromExportedKeypair,
 	/** @deprecated use `publicKeyFromBytes` from `@mysten/sui.j/verify` instead */
 	publicKeyFromSerialized,
 	/** @deprecated use `parseSerializedSignature` from `@mysten/sui.j/cryptography` instead */
@@ -114,7 +116,6 @@ export {
 	/** @deprecated use `parseSerializedSignature` from `@mysten/sui.j/cryptography` instead */
 	toSingleSignaturePubkeyPair,
 } from './cryptography/utils.js';
-
 export {
 	/** @deprecated Use `SuiClient` from `@mysten/sui.js/client` instead */
 	JsonRpcProvider,
@@ -132,13 +133,6 @@ export {
 	/** @deprecated This client will not be exported in the future */
 	JsonRpcClient,
 } from './rpc/client.js';
-
-export {
-	DEFAULT_CLIENT_OPTIONS,
-	WebsocketClient,
-	type WebsocketClientOptions,
-	getWebsocketUrl,
-} from './rpc/websocket-client.js';
 
 export {
 	/** @deprecated Use `getFullnodeUrl` from `@mysten/sui.js/client` instead */
@@ -170,11 +164,6 @@ export {
 	/** @deprecated Use KeyPair classes from `@mysten/sui.js/keypairs/*` instead */
 	SignerWithProvider,
 } from './signers/signer-with-provider.js';
-export { type SignedMessage, type SignedTransaction } from './signers/types.js';
-
-export * from './types/index.js';
-
-export { formatAddress, formatDigest } from './utils/format.js';
 
 export {
 	/** @deprecated Import from `@mysten/sui.js/cryptography` instead */
@@ -193,10 +182,126 @@ export {
 	/** @deprecated Use verify methods on PublicKey classes from `@mysten/sui.js/keypairs/*` instead */
 	verifyMessage,
 } from './utils/verify.js';
+
 export {
 	/** @deprecated Import from `@mysten/sui.js/client` instead */
 	RPCValidationError,
 } from './rpc/errors.js';
+
+export {
+	/** @deprecated Import from @mysten/sui.js/utils instead */
+	fromB64,
+	/** @deprecated Import from @mysten/sui.js/utils instead */
+	toB64,
+} from '@mysten/bcs';
+
+export {
+	/** @deprecated Import from @mysten/sui.js/utils instead */
+	SUI_ADDRESS_LENGTH,
+	/** @deprecated Import from @mysten/sui.js/utils instead */
+	isValidSuiAddress,
+	/** @deprecated Import from @mysten/sui.js/utils instead */
+	isValidSuiObjectId,
+	/** @deprecated Import from @mysten/sui.js/utils instead */
+	isValidTransactionDigest,
+	/** @deprecated Import from @mysten/sui.js/utils instead */
+	normalizeStructTag,
+	/** @deprecated Import from @mysten/sui.js/utils instead */
+	normalizeSuiAddress,
+	/** @deprecated Import from @mysten/sui.js/utils instead */
+	normalizeSuiObjectId,
+	/** @deprecated Import from @mysten/sui.js/utils instead */
+	parseStructTag,
+} from './utils/sui-types.js';
+
+export {
+	/** @deprecated Import from @mysten/sui.js/utils instead */
+	formatAddress,
+	/** @deprecated Import from @mysten/sui.js/utils instead */
+	formatDigest,
+} from './utils/format.js';
+
+export {
+	/** @deprecated Import from @mysten/sui.js/utils instead */
+	is,
+	/** @deprecated Import from @mysten/sui.js/utils instead */
+	assert,
+} from 'superstruct';
+
+export {
+	/** @deprecated this will be removed in future versions of the SDK */
+	DEFAULT_CLIENT_OPTIONS,
+	/** @deprecated this will be removed in future versions of the SDK */
+	WebsocketClient,
+	/** @deprecated this will be removed in future versions of the SDK */
+	type WebsocketClientOptions,
+	/** @deprecated this will be removed in future versions of the SDK */
+	getWebsocketUrl,
+} from './rpc/websocket-client.js';
+
+export {
+	/** @deprecated messages are now signed through the KeyPair classes */
+	type SignedMessage,
+	/**
+	 * deprecated transactions are now signed through the KeyPair classes
+	 * or signed and executed directly using the SuiClient
+	 */
+	type SignedTransaction,
+} from './signers/types.js';
+
+export {
+	/** @deprecated Import from `@mysten/sui.js/transactions` instead */
+	builder,
+	/** @deprecated Import from `@mysten/sui.js/transactions` instead */
+	Transactions,
+	/** @deprecated Import from `@mysten/sui.js/transactions` instead */
+	Inputs,
+	/** @deprecated Import from `@mysten/sui.js/transactions` instead */
+	TransactionBlock,
+	/** @deprecated Import from `@mysten/sui.js/transactions` instead */
+	TransactionArgument,
+	ARGUMENT,
+	ARGUMENT_INNER,
+	BuilderCallArg,
+	CALL_ARG,
+	COMPRESSED_SIGNATURE,
+	ENUM_KIND,
+	MULTISIG,
+	MULTISIG_PK_MAP,
+	MULTISIG_PUBLIC_KEY,
+	MakeMoveVecTransaction,
+	MergeCoinsTransaction,
+	MoveCallTransaction,
+	OBJECT_ARG,
+	OPTION,
+	ObjectCallArg,
+	ObjectTransactionArgument,
+	type Option,
+	PROGRAMMABLE_CALL,
+	PROGRAMMABLE_CALL_INNER,
+	PROGRAMMABLE_TX_BLOCK,
+	PUBLIC_KEY,
+	PublishTransaction,
+	PureCallArg,
+	PureTransactionArgument,
+	SplitCoinsTransaction,
+	TRANSACTION,
+	TRANSACTION_INNER,
+	TYPE_TAG,
+	TransactionBlockInput,
+	TransactionType,
+	TransferObjectsTransaction,
+	UpgradePolicy,
+	UpgradeTransaction,
+	VECTOR,
+	getIdFromCallArg,
+	getPureSerializationType,
+	getSharedObjectInput,
+	getTransactionType,
+	isMutableSharedObjectInput,
+	isSharedObjectInput,
+	isTxContext,
+} from './builder/index.js';
 
 export {
 	ADD_STAKE_FUN_NAME,
@@ -227,69 +332,6 @@ export {
 	isObjectDataFull,
 } from './framework/index.js';
 
-export {
-	/** @deprecated Import from `@mysten/sui.js/transactions` instead */
-	builder,
-	/** @deprecated Import from `@mysten/sui.js/transactions` instead */
-	Transactions,
-	/** @deprecated Import from `@mysten/sui.js/transactions` instead */
-	Inputs,
-	/** @deprecated Import from `@mysten/sui.js/transactions` instead */
-	TransactionBlock,
-	ARGUMENT,
-	ARGUMENT_INNER,
-	BuilderCallArg,
-	CALL_ARG,
-	COMPRESSED_SIGNATURE,
-	ENUM_KIND,
-	MULTISIG,
-	MULTISIG_PK_MAP,
-	MULTISIG_PUBLIC_KEY,
-	MakeMoveVecTransaction,
-	MergeCoinsTransaction,
-	MoveCallTransaction,
-	OBJECT_ARG,
-	OPTION,
-	ObjectCallArg,
-	ObjectTransactionArgument,
-	type Option,
-	PROGRAMMABLE_CALL,
-	PROGRAMMABLE_CALL_INNER,
-	PROGRAMMABLE_TX_BLOCK,
-	PUBLIC_KEY,
-	PublishTransaction,
-	PureCallArg,
-	PureTransactionArgument,
-	SplitCoinsTransaction,
-	TRANSACTION,
-	TRANSACTION_INNER,
-	TYPE_TAG,
-	TransactionArgument,
-	TransactionBlockInput,
-	TransactionType,
-	TransferObjectsTransaction,
-	UpgradePolicy,
-	UpgradeTransaction,
-	VECTOR,
-	getIdFromCallArg,
-	getPureSerializationType,
-	getSharedObjectInput,
-	getTransactionType,
-	isMutableSharedObjectInput,
-	isSharedObjectInput,
-	isTxContext,
-} from './builder/index.js';
-export {
-	SUI_ADDRESS_LENGTH,
-	isValidSuiAddress,
-	isValidSuiObjectId,
-	isValidTransactionDigest,
-	normalizeStructTag,
-	normalizeSuiAddress,
-	normalizeSuiObjectId,
-	parseStructTag,
-} from './utils/sui-types.js';
+export * from './types/index.js';
 
-export { fromB64, toB64 } from '@mysten/bcs';
-
-export { is, assert } from 'superstruct';
+export { fromExportedKeypair };

@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { DevInspectResults, normalizeSuiObjectId } from '@mysten/sui.js';
+import { DevInspectResults } from '@mysten/sui.js';
+import { normalizeSuiObjectId } from '@mysten/sui.js/utils';
 import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 

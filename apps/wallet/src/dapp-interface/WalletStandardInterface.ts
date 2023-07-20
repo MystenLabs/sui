@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toB64, fromB64 } from '@mysten/sui.js';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { toB64, fromB64 } from '@mysten/sui.js/utils';
 import {
 	SUI_CHAINS,
 	ReadonlyWalletAccount,

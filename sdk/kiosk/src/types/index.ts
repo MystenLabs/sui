@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SharedObjectRef, SuiObjectRef, TransactionArgument } from '@mysten/sui.js';
+import { SharedObjectRef, SuiObjectRef } from '@mysten/sui.js';
+import { TransactionArgument } from '@mysten/sui.js/transactions';
 
 export * from './kiosk';
 export * from './transfer-policy';

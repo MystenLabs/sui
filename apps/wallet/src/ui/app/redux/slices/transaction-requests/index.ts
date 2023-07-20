@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-	fromB64,
 	type SignedMessage,
 	type SignedTransaction,
 	type SuiTransactionBlockResponse,
 } from '@mysten/sui.js';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { fromB64 } from '@mysten/sui.js/utils';
 import { createAsyncThunk, createEntityAdapter, createSlice } from '@reduxjs/toolkit';
 
 import { type WalletSigner } from '_src/ui/app/WalletSigner';

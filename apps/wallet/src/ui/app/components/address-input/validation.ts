@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { isSuiNSName, useRpcClient, useSuiNSEnabled } from '@mysten/core';
-import { isValidSuiAddress } from '@mysten/sui.js';
 import { type SuiClient } from '@mysten/sui.js/client';
+import { isValidSuiAddress } from '@mysten/sui.js/utils';
 import { useMemo } from 'react';
 import * as Yup from 'yup';
 

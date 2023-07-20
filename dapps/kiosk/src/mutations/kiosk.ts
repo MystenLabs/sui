@@ -5,7 +5,8 @@ import { useMutation } from '@tanstack/react-query';
 
 import { useOwnedKiosk } from '../hooks/kiosk';
 import { OwnedObjectType } from '../components/Inventory/OwnedObjects';
-import { ObjectId, TransactionBlock } from '@mysten/sui.js';
+import { ObjectId } from '@mysten/sui.js';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 import {
 	Kiosk,
 	createKioskAndShare,
