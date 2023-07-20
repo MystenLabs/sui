@@ -12,6 +12,8 @@ import { useMemo } from 'react';
 import { CoinsStack } from './CoinStack';
 import { Card } from '../Card';
 import { OwnerFooter } from '../OwnerFooter';
+import Alert from '_components/alert';
+import { CoinIcon } from '_src/ui/app/components/coin-icon';
 import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
 import { Text } from '_src/ui/app/shared/text';
 
@@ -28,7 +30,7 @@ function BalanceChangeEntry({
 }) {
 	const { amount, coinType } = change;
 	const isPositive = BigInt(amount) > 0n;
-	const [formatted, symbol] = useFormatCoin(amount, coinType, CoinFormat.FULL);
+	const [formatted, symbol, queryResult] = useFormatCoin(amount, coinType, CoinFormat.FULL);
 
 	return (
 		<div className="flex flex-col gap-2">
@@ -41,9 +43,23 @@ function BalanceChangeEntry({
 					</div>
 				)}
 				<div className="flex justify-between">
-					<Text variant="pBody" weight="medium" color="steel-dark">
-						Amount
-					</Text>
+					<div className="flex gap-2">
+						<div className="w-5">
+							<CoinIcon size="sm" coinType={coinType} />
+						</div>
+						<div className="flex max-w-[90px] flex-wrap gap-2 gap-y-1 sm:max-w-full">
+							<Text variant="pBody" weight="semibold" color="steel-darker">
+								{queryResult.data?.name || symbol}
+							</Text>
+							{isUnRecognizedToken && (
+								<Alert mode="warning">
+									<div className="item-center truncate break-normal text-captionSmallExtra font-medium uppercase tracking-wider">
+										Unrecognized
+									</div>
+								</Alert>
+							)}
+						</div>
+					</div>
 					<div className="flex">
 						<Text
 							variant="pBody"
