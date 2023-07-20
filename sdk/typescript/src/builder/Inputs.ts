@@ -3,7 +3,7 @@
 
 import type { Infer } from 'superstruct';
 import { array, boolean, integer, object, string, union } from 'superstruct';
-import type { ObjectId, SharedObjectRef } from '../types/index.js';
+import type { SharedObjectRef } from '../types/index.js';
 import { SuiObjectRef } from '../types/index.js';
 import { builder } from './bcs.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
@@ -62,7 +62,7 @@ export const Inputs = {
 	},
 };
 
-export function getIdFromCallArg(arg: ObjectId | ObjectCallArg) {
+export function getIdFromCallArg(arg: string | ObjectCallArg) {
 	if (typeof arg === 'string') {
 		return normalizeSuiAddress(arg);
 	}

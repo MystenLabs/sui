@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import type {
 	ExecuteTransactionRequestType,
-	ObjectId,
 	SuiEventFilter,
-	TransactionDigest,
 	SuiTransactionBlockResponseQuery,
 	Order,
 	CoinMetadata,
@@ -17,7 +15,6 @@ import type {
 	TransactionEffects,
 	Unsubscribe,
 	PaginatedTransactionResponse,
-	SuiAddress,
 	SuiMoveFunctionArgTypes,
 	SuiMoveNormalizedFunction,
 	SuiMoveNormalizedModule,
@@ -121,7 +118,7 @@ export class SuiClient {
 	 */
 	async getCoins(
 		input: {
-			owner: SuiAddress;
+			owner: string;
 			coinType?: string | null;
 		} & PaginationArguments<PaginatedCoins['nextCursor']>,
 	): Promise<PaginatedCoins> {
@@ -140,7 +137,7 @@ export class SuiClient {
 	 */
 	async getAllCoins(
 		input: {
-			owner: SuiAddress;
+			owner: string;
 		} & PaginationArguments<PaginatedCoins['nextCursor']>,
 	): Promise<PaginatedCoins> {
 		if (!input.owner || !isValidSuiAddress(normalizeSuiAddress(input.owner))) {
@@ -157,7 +154,7 @@ export class SuiClient {
 	 * Get the total coin balance for one coin type, owned by the address owner.
 	 */
 	async getBalance(input: {
-		owner: SuiAddress;
+		owner: string;
 		/** optional fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified. */
 		coinType?: string | null;
 	}): Promise<CoinBalance> {
@@ -173,7 +170,7 @@ export class SuiClient {
 	/**
 	 * Get the total coin balance for all coin types, owned by the address owner.
 	 */
-	async getAllBalances(input: { owner: SuiAddress }): Promise<CoinBalance[]> {
+	async getAllBalances(input: { owner: string }): Promise<CoinBalance[]> {
 		if (!input.owner || !isValidSuiAddress(normalizeSuiAddress(input.owner))) {
 			throw new Error('Invalid Sui address');
 		}
@@ -282,7 +279,7 @@ export class SuiClient {
 	 */
 	async getOwnedObjects(
 		input: {
-			owner: SuiAddress;
+			owner: string;
 		} & PaginationArguments<PaginatedObjectsResponse['nextCursor']> &
 			SuiObjectResponseQuery,
 	): Promise<PaginatedObjectsResponse> {
@@ -308,7 +305,7 @@ export class SuiClient {
 	 * Get details about an object
 	 */
 	async getObject(input: {
-		id: ObjectId;
+		id: string;
 		options?: SuiObjectDataOptions;
 	}): Promise<SuiObjectResponse> {
 		if (!input.id || !isValidSuiObjectId(normalizeSuiObjectId(input.id))) {
@@ -321,7 +318,7 @@ export class SuiClient {
 	}
 
 	async tryGetPastObject(input: {
-		id: ObjectId;
+		id: string;
 		version: number;
 		options?: SuiObjectDataOptions;
 	}): Promise<ObjectRead> {
@@ -335,7 +332,7 @@ export class SuiClient {
 	 * Batch get details about a list of objects. If any of the object ids are duplicates the call will fail
 	 */
 	async multiGetObjects(input: {
-		ids: ObjectId[];
+		ids: string[];
 		options?: SuiObjectDataOptions;
 	}): Promise<SuiObjectResponse[]> {
 		input.ids.forEach((id) => {
@@ -377,7 +374,7 @@ export class SuiClient {
 	}
 
 	async getTransactionBlock(input: {
-		digest: TransactionDigest;
+		digest: string;
 		options?: SuiTransactionBlockResponseOptions;
 	}): Promise<SuiTransactionBlockResponse> {
 		if (!isValidTransactionDigest(input.digest)) {
@@ -390,7 +387,7 @@ export class SuiClient {
 	}
 
 	async multiGetTransactionBlocks(input: {
-		digests: TransactionDigest[];
+		digests: string[];
 		options?: SuiTransactionBlockResponseOptions;
 	}): Promise<SuiTransactionBlockResponse[]> {
 		input.digests.forEach((d) => {
@@ -483,7 +480,7 @@ export class SuiClient {
 	/**
 	 * Return the delegated stakes for an address
 	 */
-	async getStakes(input: { owner: SuiAddress }): Promise<DelegatedStake[]> {
+	async getStakes(input: { owner: string }): Promise<DelegatedStake[]> {
 		if (!input.owner || !isValidSuiAddress(normalizeSuiAddress(input.owner))) {
 			throw new Error('Invalid Sui address');
 		}
@@ -493,7 +490,7 @@ export class SuiClient {
 	/**
 	 * Return the delegated stakes queried by id.
 	 */
-	async getStakesByIds(input: { stakedSuiIds: ObjectId[] }): Promise<DelegatedStake[]> {
+	async getStakesByIds(input: { stakedSuiIds: string[] }): Promise<DelegatedStake[]> {
 		input.stakedSuiIds.forEach((id) => {
 			if (!id || !isValidSuiObjectId(normalizeSuiObjectId(id))) {
 				throw new Error(`Invalid Sui Stake id ${id}`);
@@ -571,7 +568,7 @@ export class SuiClient {
 	 */
 	async devInspectTransactionBlock(input: {
 		transactionBlock: TransactionBlock | string | Uint8Array;
-		sender: SuiAddress;
+		sender: string;
 		/** Default to use the network reference gas price stored in the Sui System State object */
 		gasPrice?: bigint | number | null;
 		/** optional. Default to use the current epoch number stored in the Sui System State object */
@@ -622,7 +619,7 @@ export class SuiClient {
 	async getDynamicFields(
 		input: {
 			/** The id of the parent object */
-			parentId: ObjectId;
+			parentId: string;
 		} & PaginationArguments<DynamicFieldPage['nextCursor']>,
 	): Promise<DynamicFieldPage> {
 		if (!input.parentId || !isValidSuiObjectId(normalizeSuiObjectId(input.parentId))) {
@@ -639,7 +636,7 @@ export class SuiClient {
 	 */
 	async getDynamicFieldObject(input: {
 		/** The ID of the quered parent object */
-		parentId: ObjectId;
+		parentId: string;
 		/** The name of the dynamic field */
 		name: string | DynamicFieldName;
 	}): Promise<SuiObjectResponse> {
@@ -757,7 +754,7 @@ export class SuiClient {
 		return toHEX(bytes.slice(0, 4));
 	}
 
-	async resolveNameServiceAddress(input: { name: string }): Promise<SuiAddress | null> {
+	async resolveNameServiceAddress(input: { name: string }): Promise<string | null> {
 		return await this.transport.request({
 			method: 'suix_resolveNameServiceAddress',
 			params: [input.name],

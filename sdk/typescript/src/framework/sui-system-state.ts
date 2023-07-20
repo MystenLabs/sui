@@ -4,7 +4,6 @@
 import { normalizeSuiObjectId } from '../utils/sui-types.js';
 import { TransactionBlock } from '../builder/index.js';
 import type { JsonRpcProvider } from '../providers/json-rpc-provider.js';
-import type { ObjectId, SuiAddress } from '../types/index.js';
 import { getObjectReference, SUI_SYSTEM_ADDRESS } from '../types/index.js';
 import type { SuiClient } from '../client/index.js';
 
@@ -32,9 +31,9 @@ export class SuiSystemStateUtil {
 	 */
 	public static async newRequestAddStakeTxn(
 		client: JsonRpcProvider | SuiClient,
-		coins: ObjectId[],
+		coins: string[],
 		amount: bigint,
-		validatorAddress: SuiAddress,
+		validatorAddress: string,
 	): Promise<TransactionBlock> {
 		// TODO: validate coin types and handle locked coins
 		const tx = new TransactionBlock();
@@ -63,8 +62,8 @@ export class SuiSystemStateUtil {
 	 * @param gasBudget omittable only for DevInspect mode
 	 */
 	public static async newRequestWithdrawlStakeTxn(
-		stake: ObjectId,
-		stakedCoinId: ObjectId,
+		stake: string,
+		stakedCoinId: string,
 	): Promise<TransactionBlock> {
 		const tx = new TransactionBlock();
 		tx.moveCall({

@@ -1,21 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiAddress } from '@mysten/sui.js';
-
 export type SuiNSContract = {
-    packageId: SuiAddress;
-    suins: SuiAddress;
-    registry: SuiAddress;
-    reverseRegistry: SuiAddress;
+    packageId: string;
+    suins: string;
+    registry: string;
+    reverseRegistry: string;
 };
 
 export type NameObject = {
-    id: SuiAddress;
-    owner: SuiAddress;
-    targetAddress: SuiAddress | '';
-    avatar?: SuiAddress;
-    contentHash?: SuiAddress;
+    id: string;
+    owner: string;
+    targetAddress: string;
+    avatar?: string;
+    contentHash?: string;
 };
 
 export type DataFields = 'avatar' | 'contentHash';

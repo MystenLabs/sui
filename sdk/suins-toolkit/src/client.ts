@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiAddress, getObjectDisplay, getObjectOwner } from '@mysten/sui.js';
+import { getObjectDisplay, getObjectOwner } from '@mysten/sui.js';
 import { SuiClient } from '@mysten/sui.js/client';
 
 import { DataFields, NetworkType, NameObject, SuiNSContract } from './types/objects';
@@ -52,7 +52,7 @@ class SuinsClient {
     }
 
     protected async getDynamicFieldObject(
-        parentObjectId: SuiAddress,
+        parentObjectId: string,
         key: unknown,
         type = '0x1::string::String',
     ) {
@@ -69,7 +69,7 @@ class SuinsClient {
         return dynamicFieldObject;
     }
 
-    protected async getNameData(dataObjectId: SuiAddress, fields: DataFields[] = []) {
+    protected async getNameData(dataObjectId: string, fields: DataFields[] = []) {
         if (!dataObjectId) return {};
 
         const { data: dynamicFields } = await this.suiClient.getDynamicFields({

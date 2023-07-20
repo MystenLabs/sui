@@ -14,8 +14,6 @@ import {
 	nullable,
 } from 'superstruct';
 
-import { TransactionDigest, TransactionEffectsDigest } from './common.js';
-
 export const GasCostSummary = object({
 	computationCost: string(),
 	storageCost: string(),
@@ -49,8 +47,8 @@ export const EndOfEpochData = object({
 export type EndOfEpochData = Infer<typeof EndOfEpochData>;
 
 export const ExecutionDigests = object({
-	transaction: TransactionDigest,
-	effects: TransactionEffectsDigest,
+	transaction: string(),
+	effects: string(),
 });
 
 export const Checkpoint = object({
@@ -63,7 +61,7 @@ export const Checkpoint = object({
 	timestampMs: string(),
 	endOfEpochData: optional(EndOfEpochData),
 	validatorSignature: ValidatorSignature,
-	transactions: array(TransactionDigest),
+	transactions: array(string()),
 	checkpointCommitments: array(CheckpointCommitment),
 });
 export type Checkpoint = Infer<typeof Checkpoint>;

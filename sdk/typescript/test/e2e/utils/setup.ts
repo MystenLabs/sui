@@ -9,8 +9,6 @@ import {
 	getPublishedObjectChanges,
 	getExecutionStatusType,
 	Coin,
-	SuiAddress,
-	ObjectId,
 	UpgradePolicy,
 } from '../../../src';
 import { TransactionBlock } from '../../../src/builder';
@@ -132,8 +130,8 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 }
 
 export async function upgradePackage(
-	packageId: ObjectId,
-	capId: ObjectId,
+	packageId: string,
+	capId: string,
 	packagePath: string,
 	toolbox?: TestToolbox,
 ) {
@@ -186,7 +184,7 @@ export async function upgradePackage(
 	expect(getExecutionStatusType(result)).toEqual('success');
 }
 
-export function getRandomAddresses(n: number): SuiAddress[] {
+export function getRandomAddresses(n: number): string[] {
 	return Array(n)
 		.fill(null)
 		.map(() => {
@@ -199,9 +197,9 @@ export async function paySui(
 	client: SuiClient,
 	signer: Keypair,
 	numRecipients: number = 1,
-	recipients?: SuiAddress[],
+	recipients?: string[],
 	amounts?: number[],
-	coinId?: ObjectId,
+	coinId?: string,
 ) {
 	const tx = new TransactionBlock();
 
@@ -241,7 +239,7 @@ export async function executePaySuiNTimes(
 	signer: Keypair,
 	nTimes: number,
 	numRecipientsPerTxn: number = 1,
-	recipients?: SuiAddress[],
+	recipients?: string[],
 	amounts?: number[],
 ) {
 	const txns = [];
