@@ -12,6 +12,7 @@ import {
 	useContext,
 	type ReactNode,
 } from 'react';
+
 import { Tooltip } from './Tooltip';
 import { ReactComponent as InfoSvg } from './icons/info_10x10.svg';
 import { ampli } from '~/utils/analytics/ampli';
@@ -114,15 +115,19 @@ export function TabHeader({
 	return (
 		<Tabs size={size} defaultValue="tab">
 			<TabsList>
-				<TabsTrigger value="tab">{title}
-				{tooltip && <Tooltip
-						tip={tooltip}
-						onOpen={() => {
-							ampli.activatedTooltip({ tooltipLabel: title });
-						}}
-					>
-						<InfoSvg />
-					</Tooltip>}</TabsTrigger>
+				<TabsTrigger value="tab">
+					{title}
+					{tooltip && (
+						<Tooltip
+							tip={tooltip}
+							onOpen={() => {
+								ampli.activatedTooltip({ tooltipLabel: title });
+							}}
+						>
+							<InfoSvg />
+						</Tooltip>
+					)}
+				</TabsTrigger>
 			</TabsList>
 			<TabsContent value="tab" noGap={noGap}>
 				{children}
