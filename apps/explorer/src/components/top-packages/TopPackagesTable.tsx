@@ -26,19 +26,19 @@ export function TopPackagesTable({ data, isLoading }: TopPackagesTableProps) {
 			})),
 			columns: [
 				{
-					header: 'Function',
-					accessorKey: 'function',
+					header: 'Package ID',
+					accessorKey: 'package',
 				},
 				{
 					header: 'Module',
 					accessorKey: 'module',
 				},
 				{
-					header: 'Package ID',
-					accessorKey: 'package',
+					header: 'Function',
+					accessorKey: 'function',
 				},
 				{
-					header: 'Txns',
+					header: 'Transactions',
 					accessorKey: 'count',
 				},
 			],
