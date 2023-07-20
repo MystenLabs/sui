@@ -213,7 +213,7 @@ fn update_low_scoring_authorities_with_no_disable_mechanism(
 
     // sort the low scoring authorities in asc order
     // Keep marking low scoring authorities up to f.
-    scores_per_authority.sort_by_key(|(_, _, score)| *score);
+    scores_per_authority.sort_by_key(|(_authority_name, score, _stake)| *score);
     let mut final_low_scoring_map = HashMap::new();
 
     // take low scoring authorities while we haven't reached validity threshold (f+1)
