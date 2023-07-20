@@ -138,7 +138,7 @@ dependencies = [
 [[package]]
 name = "anemo"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=e18e9486d38768f897fd3aa4949ce777791f83bb#e18e9486d38768f897fd3aa4949ce777791f83bb"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=d2d8487c0c14c0fb0a2285660dacd4af55667be6#d2d8487c0c14c0fb0a2285660dacd4af55667be6"
 dependencies = [
  "anemo-tls",
  "anyhow",
@@ -192,7 +192,7 @@ dependencies = [
 [[package]]
 name = "anemo-build"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=e18e9486d38768f897fd3aa4949ce777791f83bb#e18e9486d38768f897fd3aa4949ce777791f83bb"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=d2d8487c0c14c0fb0a2285660dacd4af55667be6#d2d8487c0c14c0fb0a2285660dacd4af55667be6"
 dependencies = [
  "prettyplease 0.1.23",
  "proc-macro2 1.0.58",
@@ -203,7 +203,7 @@ dependencies = [
 [[package]]
 name = "anemo-cli"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=e18e9486d38768f897fd3aa4949ce777791f83bb#e18e9486d38768f897fd3aa4949ce777791f83bb"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=d2d8487c0c14c0fb0a2285660dacd4af55667be6#d2d8487c0c14c0fb0a2285660dacd4af55667be6"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -219,7 +219,7 @@ dependencies = [
 [[package]]
 name = "anemo-tls"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=e18e9486d38768f897fd3aa4949ce777791f83bb#e18e9486d38768f897fd3aa4949ce777791f83bb"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=d2d8487c0c14c0fb0a2285660dacd4af55667be6#d2d8487c0c14c0fb0a2285660dacd4af55667be6"
 dependencies = [
  "anyhow",
  "futures",
@@ -235,7 +235,7 @@ dependencies = [
 [[package]]
 name = "anemo-tower"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=e18e9486d38768f897fd3aa4949ce777791f83bb#e18e9486d38768f897fd3aa4949ce777791f83bb"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=d2d8487c0c14c0fb0a2285660dacd4af55667be6#d2d8487c0c14c0fb0a2285660dacd4af55667be6"
 dependencies = [
  "anemo",
  "bytes",
