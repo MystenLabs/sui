@@ -47,6 +47,18 @@ module kiosk::personal_kiosk_tests {
         share(kiosk)
     }
 
+    #[test, expected_failure(abort_code = kiosk::personal_kiosk::EWrongKiosk)]
+    fun try_not_owned_kiosk_fail() {
+        let ctx = &mut test::ctx();
+        let (kiosk_1, cap_1) = test::get_kiosk(ctx);
+        let (kiosk_2, cap_2) = test::get_kiosk(ctx);
+
+        let _p1 = personal_kiosk::new(&mut kiosk_2, cap_1, ctx);
+        let _p2 = personal_kiosk::new(&mut kiosk_1, cap_2, ctx);
+
+        abort 1337
+    }
+
     #[test, expected_failure(abort_code = kiosk::personal_kiosk::EIncorrectCapObject)]
     fun borrow_replace_cap_fail() {
         let ctx = &mut test::ctx();
