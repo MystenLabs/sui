@@ -25,10 +25,15 @@ type MethodPayloads = {
 	accountSourceCreationResponse: { accountSource: AccountSourceSerializedUI };
 	lockAccountSourceOrAccount: { id: string };
 	unlockAccountSourceOrAccount: { id: string } & { password: string };
-	createAccount:
+	createAccounts:
 		| { type: 'mnemonic-derived'; sourceID: string }
-		| { type: 'imported'; keyPair: ExportedKeypair; password: string };
-	accountCreatedResponse: { account: SerializedUIAccount };
+		| { type: 'imported'; keyPair: ExportedKeypair; password: string }
+		| {
+				type: 'ledger';
+				accounts: { publicKey: string; derivationPath: string; address: string }[];
+				password: string;
+		  };
+	accountsCreatedResponse: { accounts: SerializedUIAccount[] };
 	signData: { data: string; id: string };
 	signDataResponse: { signature: SerializedSignature };
 };

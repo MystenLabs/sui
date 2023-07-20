@@ -4,6 +4,7 @@
 import { fromB64, type SuiAddress } from '@mysten/sui.js';
 import { isSigningAccount, type SerializedAccount } from './Account';
 import { ImportedAccount } from './ImportedAccount';
+import { LedgerAccount } from './LedgerAccount';
 import { MnemonicAccount } from './MnemonicAccount';
 import { getAccountSourceByID } from '../account-sources';
 import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
@@ -26,6 +27,8 @@ function toAccount(account: SerializedAccount) {
 			return new MnemonicAccount({ id: account.id });
 		case ImportedAccount.isOfType(account):
 			return new ImportedAccount({ id: account.id });
+		case LedgerAccount.isOfType(account):
+			return new LedgerAccount({ id: account.id });
 		default:
 			throw new Error(`Unknown account of type ${account.type}`);
 	}
@@ -69,22 +72,29 @@ export async function getActiveAccount() {
 	return getAccountByID(accountID);
 }
 
-export async function addNewAccount<T extends SerializedAccount>(account: Omit<T, 'id'>) {
-	for (const anAccount of await getAllAccounts()) {
-		// allow importing accounts that have the same address but are of different type
-		// probably it's an edge case and we used to see this problem with importing
-		// accounts that were exported from the mnemonic while testing
-		if ((await anAccount.address) === account.address && anAccount.type === account.type) {
-			throw new Error(`Duplicated account ${account.address}`);
+export async function addNewAccounts<T extends SerializedAccount>(accounts: Omit<T, 'id'>[]) {
+	const accountInstances = [];
+	for (const anAccountToAdd of accounts) {
+		for (const anAccount of await getAllAccounts()) {
+			// allow importing accounts that have the same address but are of different type
+			// probably it's an edge case and we used to see this problem with importing
+			// accounts that were exported from the mnemonic while testing
+			if (
+				(await anAccount.address) === anAccountToAdd.address &&
+				anAccount.type === anAccountToAdd.type
+			) {
+				throw new Error(`Duplicated account ${anAccountToAdd.address}`);
+			}
 		}
+		const id = makeUniqueKey();
+		await setStorageEntity<SerializedAccount>({ ...anAccountToAdd, id });
+		const accountInstance = await getAccountByID(id);
+		if (!accountInstance) {
+			throw new Error(`Something went wrong account with id ${id} not found`);
+		}
+		accountInstances.push(accountInstance);
 	}
-	const id = makeUniqueKey();
-	await setStorageEntity<SerializedAccount>({ ...account, id });
-	const accountInstance = await getAccountByID(id);
-	if (!accountInstance) {
-		throw new Error(`Something went wrong account with id ${id} not found`);
-	}
-	return accountInstance;
+	return accountInstances;
 	// TODO: emit event
 }
 
@@ -130,8 +140,8 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 		);
 		return true;
 	}
-	if (isMethodPayload(payload, 'createAccount')) {
-		let newSerializedAccount: Omit<SerializedAccount, 'id'>;
+	if (isMethodPayload(payload, 'createAccounts')) {
+		let newSerializedAccounts: Omit<SerializedAccount, 'id'>[] = [];
 		const { type } = payload.args;
 		if (type === 'mnemonic-derived') {
 			const { sourceID } = payload.args;
@@ -142,19 +152,28 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 			if (!(accountSource instanceof MnemonicAccountSource)) {
 				throw new Error(`Invalid account source type`);
 			}
-			newSerializedAccount = await accountSource.deriveAccount();
+			newSerializedAccounts.push(await accountSource.deriveAccount());
 		} else if (type === 'imported') {
-			newSerializedAccount = await ImportedAccount.createNew(payload.args);
+			newSerializedAccounts.push(await ImportedAccount.createNew(payload.args));
+		} else if (type === 'ledger') {
+			const { password, accounts } = payload.args;
+			for (const aLedgerAccount of accounts) {
+				newSerializedAccounts.push(await LedgerAccount.createNew({ ...aLedgerAccount, password }));
+			}
 		} else {
-			throw new Error(`Unknown account type to create ${type}`);
+			throw new Error(`Unknown accounts type to create ${type}`);
 		}
-		const newAccount = await addNewAccount(newSerializedAccount);
+		const newAccounts = await addNewAccounts(newSerializedAccounts);
 		await uiConnection.send(
-			createMessage<MethodPayload<'accountCreatedResponse'>>(
+			createMessage<MethodPayload<'accountsCreatedResponse'>>(
 				{
-					method: 'accountCreatedResponse',
+					method: 'accountsCreatedResponse',
 					type: 'method-payload',
-					args: { account: await newAccount.toUISerialized() },
+					args: {
+						accounts: await Promise.all(
+							newAccounts.map(async (aNewAccount) => await aNewAccount.toUISerialized()),
+						),
+					},
 				},
 				msg.id,
 			),

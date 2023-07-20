@@ -11,6 +11,7 @@ import useAppSelector from '../useAppSelector';
 import { useBackgroundClient } from '../useBackgroundClient';
 import { useQredoAPI } from '../useQredoAPI';
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
+import { isLedgerAccountSerializedUI } from '_src/background/accounts/LedgerAccount';
 import { type SerializedQredoAccount } from '_src/background/keyring/QredoAccount';
 
 export function useSigner(account: SerializedUIAccount | null): WalletSigner | null {
@@ -22,8 +23,8 @@ export function useSigner(account: SerializedUIAccount | null): WalletSigner | n
 	if (!account) {
 		return null;
 	}
-	if (account.type === 'ledger') {
-		return new LedgerSigner(connectToLedger, 'account.derivationPath' /* TODO */, api);
+	if (isLedgerAccountSerializedUI(account)) {
+		return new LedgerSigner(connectToLedger, account.derivationPath, api);
 	}
 	if (account.type === 'qredo') {
 		return qredoAPI

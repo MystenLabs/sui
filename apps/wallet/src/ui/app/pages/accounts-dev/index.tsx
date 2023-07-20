@@ -1,11 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Ed25519Keypair, type ExportedKeypair, toB64 } from '@mysten/sui.js';
+import { type ExportedKeypair } from '@mysten/sui.js/cryptography';
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+import { toB64 } from '@mysten/sui.js/utils';
 import { hexToBytes } from '@noble/hashes/utils';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { Toaster, toast } from 'react-hot-toast';
 import { type BackgroundClient } from '../../background-client';
+import { ConnectLedgerModal } from '../../components/ledger/ConnectLedgerModal';
 import LoadingIndicator from '../../components/loading/LoadingIndicator';
 import {
 	accountSourcesQueryKey,
@@ -14,7 +18,9 @@ import {
 import { accountsQueryKey, useAccounts } from '../../hooks/accounts-v2/useAccounts';
 import { useSigner } from '../../hooks/accounts-v2/useSigner';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
+import { ImportLedgerAccountsPage } from '../../pages/accounts/ImportLedgerAccountsPage';
 import { Button } from '../../shared/ButtonUI';
+import { ModalDialog } from '../../shared/ModalDialog';
 import { Card } from '../../shared/card';
 import { Heading } from '../../shared/heading';
 import { Text } from '../../shared/text';
@@ -52,7 +58,7 @@ export function AccountsDev() {
 	const importKey = useMutation({
 		mutationKey: ['accounts', 'v2', 'import key'],
 		mutationFn: ({ keyPair }: { keyPair: ExportedKeypair }) =>
-			backgroundClient.createAccount({
+			backgroundClient.createAccounts({
 				type: 'imported',
 				password: pass,
 				keyPair,
@@ -61,74 +67,109 @@ export function AccountsDev() {
 			queryClient.invalidateQueries({ exact: true, queryKey: accountsQueryKey });
 		},
 	});
+	const [isConnectLedgerModalVisible, setIsConnectLedgerModalVisible] = useState(false);
+	const [isImportLedgerModalVisible, setIsImportLedgerModalVisible] = useState(false);
 	return (
-		<div className="overflow-auto h-[100vh] w-[100vw] flex flex-col items-center p-5">
-			<div className="flex flex-col gap-10">
-				{accounts.isLoading ? (
-					<LoadingIndicator />
-				) : (
-					<Text>Wallet is {accounts.data?.length ? '' : 'not '}initialized</Text>
-				)}
-				<div className="flex flex-col gap-3">
-					<Heading>Account sources</Heading>
-					{accountSources.isLoading ? (
-						<LoadingIndicator />
-					) : (
-						<>
-							<Button
-								text="Create mnemonic account source"
-								loading={createMnemonic.isLoading}
-								onClick={() => {
-									createMnemonic.mutate(undefined);
-								}}
-							/>
-							<Button
-								text="Import mnemonic account source"
-								loading={createMnemonic.isLoading}
-								onClick={() => {
-									createMnemonic.mutate(mnemonicToEntropy(testMnemonic));
-								}}
-							/>
-							<Button
-								text="Import random private key"
-								loading={importKey.isLoading}
-								onClick={() => {
-									importKey.mutate({ keyPair: Ed25519Keypair.generate().export() });
-								}}
-							/>
-							<Button
-								text="Import mnemonic private key"
-								loading={importKey.isLoading}
-								onClick={() => {
-									importKey.mutate({ keyPair: mnemonicFirstKeyPair });
-								}}
-							/>
-							{accountSources.data?.length ? (
-								accountSources.data.map((anAccountSource) => (
-									<AccountSource key={anAccountSource.id} accountSource={anAccountSource} />
-								))
-							) : (
-								<Text>No account sources found</Text>
-							)}
-						</>
-					)}
-				</div>
-				<div className="flex flex-col gap-3">
-					<Heading>Accounts</Heading>
+		<>
+			<div className="overflow-auto h-[100vh] w-[100vw] flex flex-col items-center p-5">
+				<div className="flex flex-col gap-10">
+					<div className="grid grid-cols-2 gap-2">
+						<Button
+							text="Create mnemonic account source"
+							loading={createMnemonic.isLoading}
+							onClick={() => {
+								createMnemonic.mutate(undefined);
+							}}
+						/>
+						<Button
+							text="Import mnemonic account source"
+							loading={createMnemonic.isLoading}
+							onClick={() => {
+								createMnemonic.mutate(mnemonicToEntropy(testMnemonic));
+							}}
+						/>
+						<Button
+							text="Import random private key"
+							loading={importKey.isLoading}
+							onClick={() => {
+								importKey.mutate({ keyPair: Ed25519Keypair.generate().export() });
+							}}
+						/>
+						<Button
+							text="Import mnemonic private key"
+							loading={importKey.isLoading}
+							onClick={() => {
+								importKey.mutate({ keyPair: mnemonicFirstKeyPair });
+							}}
+						/>
+						<Button
+							text="Connect Ledger account"
+							onClick={() => setIsConnectLedgerModalVisible(true)}
+						/>
+					</div>
 					{accounts.isLoading ? (
 						<LoadingIndicator />
-					) : accounts.data?.length ? (
-						accounts.data.map((anAccount) => <Account key={anAccount.id} account={anAccount} />)
 					) : (
-						<Text>No accounts found</Text>
+						<Text>Wallet is {accounts.data?.length ? '' : 'not '}initialized</Text>
 					)}
+					<div className="flex flex-col gap-3">
+						<Heading>Account sources</Heading>
+						{accountSources.isLoading ? (
+							<LoadingIndicator />
+						) : accountSources.data?.length ? (
+							accountSources.data.map((anAccountSource) => (
+								<AccountSource key={anAccountSource.id} accountSource={anAccountSource} />
+							))
+						) : (
+							<Text>No account sources found</Text>
+						)}
+					</div>
+					<div className="flex flex-col gap-3">
+						<Heading>Accounts</Heading>
+						{accounts.isLoading ? (
+							<LoadingIndicator />
+						) : accounts.data?.length ? (
+							accounts.data.map((anAccount) => <Account key={anAccount.id} account={anAccount} />)
+						) : (
+							<Text>No accounts found</Text>
+						)}
+					</div>
 				</div>
+				<Toaster
+					containerClassName="z-[9999999]"
+					position="bottom-right"
+					toastOptions={{ success: { className: 'overflow-x-auto' } }}
+				/>
 			</div>
-			<Toaster
-				position="bottom-right"
-				toastOptions={{ success: { className: 'overflow-x-auto' } }}
+			{isConnectLedgerModalVisible ? (
+				<ConnectLedgerModal
+					onClose={() => setIsConnectLedgerModalVisible(false)}
+					onError={(e) => toast.error(JSON.stringify(e))}
+					onConfirm={() => {
+						setIsConnectLedgerModalVisible(false);
+						setIsImportLedgerModalVisible(true);
+						toast.success('Connect confirmed');
+					}}
+				/>
+			) : null}
+			<ModalDialog
+				isOpen={isImportLedgerModalVisible}
+				onClose={() => setIsImportLedgerModalVisible(false)}
+				body={
+					<>
+						<div id="overlay-portal-container"></div>
+						<ImportLedgerAccountsPage
+							password={pass}
+							onClose={() => setIsImportLedgerModalVisible(false)}
+							onConfirmed={() => {
+								setIsImportLedgerModalVisible(false);
+								queryClient.invalidateQueries({ exact: true, queryKey: accountsQueryKey });
+							}}
+						/>
+					</>
+				}
 			/>
-		</div>
+		</>
 	);
 }
 
@@ -166,7 +207,7 @@ function AccountSource({ accountSource }: { accountSource: AccountSourceSerializ
 	const deriveNextMnemonicAccount = useMutation({
 		mutationKey: ['accounts', 'v2', 'mnemonic', 'new account'],
 		mutationFn: (inputs: { sourceID: string }) =>
-			backgroundClient.createAccount({ type: 'mnemonic-derived', ...inputs }),
+			backgroundClient.createAccounts({ type: 'mnemonic-derived', ...inputs }),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ exact: true, queryKey: accountsQueryKey });
 		},

@@ -24,7 +24,7 @@ export type AccountType = 'mnemonic-derived' | 'imported' | 'ledger' | 'qredo';
 
 export abstract class Account<
 	T extends SerializedAccount = SerializedAccount,
-	V extends Serializable = Serializable,
+	V extends Serializable | null = Serializable,
 > {
 	readonly id: string;
 	readonly type: AccountType;
@@ -65,10 +65,13 @@ export abstract class Account<
 	}
 
 	getEphemeralValue(): Promise<V | null> {
-		return getEphemeralValue<V>(this.id);
+		return getEphemeralValue<NonNullable<V>>(this.id);
 	}
 
 	setEphemeralValue(value: V) {
+		if (!value) {
+			return;
+		}
 		return setEphemeralValue(this.id, value);
 	}
 

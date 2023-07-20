@@ -483,24 +483,24 @@ export class BackgroundClient {
 		);
 	}
 
-	public createAccount(inputs: MethodPayload<'createAccount'>['args']) {
+	public createAccounts(inputs: MethodPayload<'createAccounts'>['args']) {
 		return lastValueFrom(
 			this.sendMessage(
-				createMessage<MethodPayload<'createAccount'>>({
-					method: 'createAccount',
+				createMessage<MethodPayload<'createAccounts'>>({
+					method: 'createAccounts',
 					type: 'method-payload',
 					args: inputs,
 				}),
 			).pipe(
 				take(1),
 				map(({ payload }) => {
-					if (!isMethodPayload(payload, 'accountCreatedResponse')) {
+					if (!isMethodPayload(payload, 'accountsCreatedResponse')) {
 						throw new Error('Unknown response');
 					}
-					if (inputs.type !== payload.args.account.type) {
-						throw new Error(`Unexpected account type response ${payload.args.account.type}`);
+					if (inputs.type !== payload.args.accounts[0]?.type) {
+						throw new Error(`Unexpected accounts type response ${payload.args.accounts[0]?.type}`);
 					}
-					return payload.args.account;
+					return payload.args.accounts;
 				}),
 			),
 		);
