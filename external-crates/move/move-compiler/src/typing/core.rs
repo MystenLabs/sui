@@ -87,11 +87,11 @@ pub struct Context<'env> {
 }
 
 impl ProgramInfo {
-    fn module(&self, m: &ModuleIdent) -> &ModuleInfo {
+    pub fn module(&self, m: &ModuleIdent) -> &ModuleInfo {
         self.0.get(m).expect("ICE should have failed in naming")
     }
 
-    fn struct_definition(&self, m: &ModuleIdent, n: &StructName) -> &StructDefinition {
+    pub fn struct_definition(&self, m: &ModuleIdent, n: &StructName) -> &StructDefinition {
         let minfo = self.module(m);
         minfo
             .structs
@@ -104,10 +104,14 @@ impl ProgramInfo {
     }
 
     pub fn struct_declared_loc(&self, m: &ModuleIdent, n: &StructName) -> Loc {
+        self.struct_declared_loc_(m, &n.0.value)
+    }
+
+    pub fn struct_declared_loc_(&self, m: &ModuleIdent, n: &Symbol) -> Loc {
         let minfo = self.module(m);
         *minfo
             .structs
-            .get_loc(n)
+            .get_loc_(n)
             .expect("ICE should have failed in naming")
     }
 

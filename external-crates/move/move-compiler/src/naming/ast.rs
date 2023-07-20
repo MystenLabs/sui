@@ -611,6 +611,23 @@ impl Type_ {
             _ => None,
         }
     }
+
+    pub fn type_name(&self) -> Option<&TypeName> {
+        match self {
+            Type_::Apply(_, tn, _) => Some(tn),
+            _ => None,
+        }
+    }
+
+    pub fn is(
+        &self,
+        address: impl AsRef<str>,
+        module: impl AsRef<str>,
+        name: impl AsRef<str>,
+    ) -> bool {
+        self.type_name()
+            .is_some_and(|tn| tn.value.is(address, module, name))
+    }
 }
 
 impl Value_ {

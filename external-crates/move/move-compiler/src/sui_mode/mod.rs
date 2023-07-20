@@ -68,3 +68,31 @@ pub const ENTRY_FUN_SIGNATURE_DIAG: DiagnosticInfo = custom(
     /* code */ 2,
     "invalid 'entry' function signature",
 );
+pub const INIT_FUN_DIAG: DiagnosticInfo = custom(
+    SUI_DIAG_PREFIX,
+    Severity::NonblockingError,
+    /* category */ TYPING,
+    /* code */ 3,
+    "invalid 'init' function",
+);
+pub const OTW_DECL_DIAG: DiagnosticInfo = custom(
+    SUI_DIAG_PREFIX,
+    Severity::NonblockingError,
+    /* category */ TYPING,
+    /* code */ 4,
+    "invalid one-time witness declaration",
+);
+pub const OTW_USAGE_DIAG: DiagnosticInfo = custom(
+    SUI_DIAG_PREFIX,
+    Severity::NonblockingError,
+    /* category */ TYPING,
+    /* code */ 5,
+    "invalid one-time witness usage",
+);
+pub const INIT_CALL_DIAG: DiagnosticInfo = custom(
+    SUI_DIAG_PREFIX,
+    Severity::NonblockingError,
+    /* category */ TYPING,
+    /* code */ 6,
+    "invalid 'init' call",
+);

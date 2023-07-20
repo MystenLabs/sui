@@ -69,7 +69,21 @@ impl<K: TName, V> UniqueMap<K, V> {
     }
 
     pub fn get_key(&self, key: &K) -> Option<&K::Key> {
-        self.0.get_key_value(key.borrow().1).map(|(k, _v)| k)
+        self.get_key_(key.borrow().1)
+    }
+
+    pub fn get_key_(&self, key: &K::Key) -> Option<&K::Key> {
+        self.0.get_key_value(key).map(|(k, _v)| k)
+    }
+
+    pub fn get_full_key(&self, key: &K) -> Option<K> {
+        self.get_full_key_(key.borrow().1)
+    }
+
+    pub fn get_full_key_(&self, key: &K::Key) -> Option<K> {
+        self.0
+            .get_key_value(key)
+            .map(|(k, (loc, _))| K::add_loc(*loc, k.clone()))
     }
 
     pub fn remove(&mut self, key: &K) -> Option<V> {

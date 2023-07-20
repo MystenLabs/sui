@@ -2,23 +2,26 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_ir_types::location::Loc;
+use move_symbol_pool::Symbol;
 
 use crate::{
     diag,
     editions::Flavor,
-    expansion::ast::{AbilitySet, ModuleIdent},
-    naming::ast::{BuiltinTypeName_, FunctionSignature, TParam, Type, TypeName_, Type_, Var},
-    parser::ast::{Ability_, FunctionName},
-    shared::CompilationEnv,
+    expansion::ast::{AbilitySet, Fields, ModuleIdent, Visibility},
+    naming::ast::{
+        self as N, BuiltinTypeName_, FunctionSignature, TParam, Type, TypeName_, Type_, Var,
+    },
+    parser::ast::{Ability_, FunctionName, StructName},
+    shared::{CompilationEnv, Identifier},
     sui_mode::{
         ASCII_MODULE_NAME, ASCII_TYPE_NAME, CLOCK_MODULE_NAME, CLOCK_TYPE_NAME,
-        ENTRY_FUN_SIGNATURE_DIAG, ID_TYPE_NAME, OBJECT_MODULE_NAME, OPTION_MODULE_NAME,
-        OPTION_TYPE_NAME, SCRIPT_DIAG, STD_ADDR_NAME, SUI_ADDR_NAME, UTF_MODULE_NAME,
-        UTF_TYPE_NAME,
+        ENTRY_FUN_SIGNATURE_DIAG, ID_TYPE_NAME, INIT_CALL_DIAG, INIT_FUN_DIAG, OBJECT_MODULE_NAME,
+        OPTION_MODULE_NAME, OPTION_TYPE_NAME, OTW_DECL_DIAG, OTW_USAGE_DIAG, SCRIPT_DIAG,
+        STD_ADDR_NAME, SUI_ADDR_NAME, UTF_MODULE_NAME, UTF_TYPE_NAME,
     },
     typing::{
         ast as T,
-        core::{ability_not_satisfied_tips, ProgramInfo, Subst},
+        core::{ability_not_satisfied_tips, error_format, error_format_, ProgramInfo, Subst},
         visitor::TypingVisitor,
     },
 };
@@ -46,6 +49,8 @@ struct Context<'a> {
     env: &'a mut CompilationEnv,
     info: &'a ProgramInfo,
     current_module: ModuleIdent,
+    upper_module: Symbol,
+    one_time_witness: Option<Result<StructName, ()>>,
     in_test: bool,
 }
 
@@ -55,14 +60,24 @@ impl<'a> Context<'a> {
         info: &'a ProgramInfo,
         current_module: ModuleIdent,
     ) -> Self {
+        let upper_module: Symbol =
+            Symbol::from(current_module.value.module.0.value.as_str().to_uppercase());
         Context {
             env,
             current_module,
+            upper_module,
+            one_time_witness: None,
             info,
             in_test: false,
         }
     }
 }
+
+const OTW_NOTE: &str = "One-time witness types are structs with the following requirements: \
+                        their name is the upper-case version of the module's name, \
+                        they have no fields (or a single boolean field), \
+                        they have no type parameters, \
+                        and they have only the 'drop' ability.";
 
 //**************************************************************************************************
 // Entry
@@ -103,6 +118,23 @@ fn module(
     }
 
     let mut context = Context::new(env, info, mident);
+    if let Some(sdef) = mdef.structs.get_(&context.upper_module) {
+        let valid_fields = if let N::StructFields::Defined(fields) = &sdef.fields {
+            invalid_otw_field_loc(fields).is_none()
+        } else {
+            true
+        };
+        if valid_fields {
+            let name = mdef.structs.get_full_key_(&context.upper_module).unwrap();
+            check_otw_type(&mut context, name, sdef)
+        }
+    }
+
+    if let Some(fdef) = mdef.functions.get_(&symbol!("init")) {
+        let name = mdef.functions.get_full_key_(&symbol!("init")).unwrap();
+        init_signature(&mut context, name, &fdef.signature)
+    }
+
     for (name, fdef) in mdef.functions.key_cloned_iter() {
         function(&mut context, name, fdef);
     }
@@ -114,18 +146,272 @@ fn module(
 
 fn function(context: &mut Context, name: FunctionName, fdef: &T::Function) {
     let T::Function {
-        visibility: _,
+        visibility,
         signature,
         acquires: _,
-        body: _,
+        body,
         warning_filter: _,
         index: _,
         attributes: _,
         entry,
     } = fdef;
+    if name.0.value == symbol!("init") {
+        init_visibility(context, name, *visibility, *entry);
+    }
     if let Some(entry_loc) = entry {
         entry_signature(context, *entry_loc, name, signature);
     }
+    if let sp!(_, T::FunctionBody_::Defined(seq)) = body {
+        sequence(context, seq)
+    }
+}
+
+//**************************************************************************************************
+// init
+//**************************************************************************************************
+
+fn init_visibility(
+    context: &mut Context,
+    name: FunctionName,
+    visibility: Visibility,
+    entry: Option<Loc>,
+) {
+    match visibility {
+        Visibility::Public(loc) | Visibility::Friend(loc) => context.env.add_diag(diag!(
+            INIT_FUN_DIAG,
+            (name.loc(), "Invalid 'init' function declaration"),
+            (loc, "'init' functions must be internal to their module"),
+        )),
+        Visibility::Internal => (),
+    }
+    if let Some(entry) = entry {
+        context.env.add_diag(diag!(
+            INIT_FUN_DIAG,
+            (name.loc(), "Invalid 'init' function declaration"),
+            (entry, "'init' functions cannot be 'entry' functions"),
+        ));
+    }
+}
+
+fn init_signature(context: &mut Context, name: FunctionName, signature: &FunctionSignature) {
+    let FunctionSignature {
+        type_parameters,
+        parameters,
+        return_type,
+    } = signature;
+    if !type_parameters.is_empty() {
+        let tp_loc = type_parameters[0].user_specified_name.loc;
+        context.env.add_diag(diag!(
+            INIT_FUN_DIAG,
+            (name.loc(), "Invalid 'init' function declaration"),
+            (tp_loc, "'init' functions cannot have type parameters"),
+        ));
+    }
+    if !matches!(return_type, sp!(_, Type_::Unit)) {
+        let msg = format!(
+            "'init' functions must have a return type of {}",
+            error_format_(&Type_::Unit, &Subst::empty())
+        );
+        context.env.add_diag(diag!(
+            INIT_FUN_DIAG,
+            (name.loc(), "Invalid 'init' function declaration"),
+            (return_type.loc, msg),
+        ))
+    }
+    let last_loc = parameters
+        .last()
+        .map(|(_, sp!(loc, _))| *loc)
+        .unwrap_or(name.loc());
+    let tx_ctx_kind = parameters
+        .last()
+        .map(|(_, last_param_ty)| tx_context_kind(last_param_ty))
+        .unwrap_or(TxContextKind::None);
+    if tx_ctx_kind == TxContextKind::None {
+        let msg = format!(
+            "'init' functions must have their last parameter as \
+            '&{a}::{m}::{t}' or '&mut {a}::{m}::{t}'",
+            a = SUI_ADDR_NAME,
+            m = TX_CONTEXT_MODULE_NAME,
+            t = TX_CONTEXT_TYPE_NAME,
+        );
+        context.env.add_diag(diag!(
+            INIT_FUN_DIAG,
+            (name.loc(), "Invalid 'init' function declaration"),
+            (last_loc, msg),
+        ))
+    }
+    let upper_module: Symbol = Symbol::from(
+        context
+            .current_module
+            .value
+            .module
+            .0
+            .value
+            .as_str()
+            .to_uppercase(),
+    );
+
+    if parameters.len() == 1 && context.one_time_witness.is_some() {
+        // if there is 1 parameter, and a OTW, this is an error since the OTW must be used
+        let msg = format!(
+            "Invalid first parameter to 'init'. \
+            Expected this module's one-time witness type '{}::{upper_module}'",
+            context.current_module,
+        );
+        let otw_loc = context
+            .info
+            .struct_declared_loc_(&context.current_module, &upper_module);
+        let otw_msg = "One-time witness declared here";
+        let mut diag = diag!(
+            INIT_FUN_DIAG,
+            (parameters[0].1.loc, msg),
+            (otw_loc, otw_msg),
+        );
+        diag.add_note(OTW_NOTE);
+        context.env.add_diag(diag)
+    } else if parameters.len() > 1 {
+        // if there is more than one parameter, the first must be the OTW
+        let (first_var, first_ty) = parameters.first().unwrap();
+        let is_otw = matches!(
+            first_ty.value.type_name(),
+            Some(sp!(_, TypeName_::ModuleType(m, n)))
+                if m == &context.current_module && n.value() == upper_module
+        );
+        if !is_otw {
+            let msg = format!(
+                "Invalid parameter '{}' of type {}. \
+                Expected a one-time witness type, '{}::{upper_module}",
+                first_var.value.name,
+                error_format(first_ty, &Subst::empty()),
+                context.current_module,
+            );
+            let mut diag = diag!(
+                INIT_FUN_DIAG,
+                (name.loc(), "Invalid 'init' function declaration"),
+                (first_ty.loc, msg)
+            );
+            diag.add_note(OTW_NOTE);
+            context.env.add_diag(diag)
+        } else if let Some(sdef) = context
+            .info
+            .module(&context.current_module)
+            .structs
+            .get_(&upper_module)
+        {
+            let name = context
+                .info
+                .module(&context.current_module)
+                .structs
+                .get_full_key_(&upper_module)
+                .unwrap();
+            check_otw_type(context, name, sdef)
+        }
+    } else if parameters.len() > 2 {
+        // no init function can take more than 2 parameters (the OTW and the TxContext)
+        let (second_var, _) = &parameters[1];
+        context.env.add_diag(diag!(
+            INIT_FUN_DIAG,
+            (name.loc(), "Invalid 'init' function declaration"),
+            (
+                second_var.loc,
+                "'init' functions can have at most two parameters"
+            ),
+        ));
+    }
+}
+
+// While theoretically we could call this just once for the upper cased module struct, we break it
+// out into a separate function to help programmers understand the rules for one-time witness types,
+// when trying to write an 'init' function.
+fn check_otw_type(context: &mut Context, name: StructName, sdef: &N::StructDefinition) {
+    if context.one_time_witness.is_some() {
+        return;
+    }
+
+    let mut valid = true;
+    if let Some(tp) = sdef.type_parameters.first() {
+        let msg = "One-time witness types cannot have type parameters";
+        let mut diag = diag!(
+            OTW_DECL_DIAG,
+            (name.loc(), "Invalid one-time witness declaration"),
+            (tp.param.user_specified_name.loc, msg),
+        );
+        diag.add_note(OTW_NOTE);
+        context.env.add_diag(diag);
+        valid = false
+    }
+
+    if let N::StructFields::Defined(fields) = &sdef.fields {
+        if let Some(invalid_field_loc) = invalid_otw_field_loc(fields) {
+            let msg = format!(
+                "One-time witness types must have no fields, \
+                or exactly one field of type {}",
+                error_format(&Type_::bool(name.loc()), &Subst::empty())
+            );
+            let mut diag = diag!(
+                OTW_DECL_DIAG,
+                (name.loc(), "Invalid one-time witness declaration"),
+                (invalid_field_loc, msg),
+            );
+            diag.add_note(OTW_NOTE);
+            context.env.add_diag(diag);
+            valid = false
+        }
+    }
+
+    let invalid_ability_loc =
+        if !sdef.abilities.has_ability_(Ability_::Drop) || sdef.abilities.len() > 1 {
+            let loc = sdef
+                .abilities
+                .iter()
+                .find_map(|a| {
+                    if a.value != Ability_::Drop {
+                        Some(a.loc)
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(name.loc());
+            Some(loc)
+        } else {
+            None
+        };
+    if let Some(loc) = invalid_ability_loc {
+        let msg = format!(
+            "One-time witness types can only have the have the '{}' ability",
+            Ability_::Drop
+        );
+        let mut diag = diag!(
+            OTW_DECL_DIAG,
+            (name.loc(), "Invalid one-time witness declaration"),
+            (loc, msg),
+        );
+        diag.add_note(OTW_NOTE);
+        context.env.add_diag(diag);
+        valid = false
+    }
+
+    context.one_time_witness = Some(if valid { Ok(name) } else { Err(()) })
+}
+
+// Find the first invalid field in a one-time witness type, if any.
+// First looks for a non-boolean field, otherwise looks for any field after the first.
+fn invalid_otw_field_loc(fields: &Fields<Type>) -> Option<Loc> {
+    fields
+        .iter()
+        .find_map(|(loc, _, (idx, ty))| {
+            if (*idx == 0) && ty.value.builtin_name()?.value != BuiltinTypeName_::Bool {
+                Some(loc)
+            } else {
+                None
+            }
+        })
+        .or_else(|| {
+            fields
+                .iter()
+                .find(|(_, _, (idx, _))| *idx > 0)
+                .map(|(loc, _, _)| loc)
+        })
 }
 
 //**************************************************************************************************
@@ -429,4 +715,116 @@ fn invalid_entry_return_ty<'a>(
         ty_args,
     );
     context.env.add_diag(diag)
+}
+
+//**************************************************************************************************
+// Expr
+//**************************************************************************************************
+
+fn sequence(context: &mut Context, seq: &T::Sequence) {
+    for item in seq {
+        sequence_item(context, item)
+    }
+}
+
+fn sequence_item(context: &mut Context, sp!(_, item_): &T::SequenceItem) {
+    match item_ {
+        T::SequenceItem_::Seq(e) => exp(context, e),
+        T::SequenceItem_::Declare(_) => (),
+        T::SequenceItem_::Bind(_, _, e) => exp(context, e),
+    }
+}
+
+fn exp(context: &mut Context, e: &T::Exp) {
+    match &e.exp.value {
+        T::UnannotatedExp_::Unit { .. }
+        | T::UnannotatedExp_::Value(_)
+        | T::UnannotatedExp_::Move { .. }
+        | T::UnannotatedExp_::Copy { .. }
+        | T::UnannotatedExp_::Use(_)
+        | T::UnannotatedExp_::Constant(_, _)
+        | T::UnannotatedExp_::Break
+        | T::UnannotatedExp_::Continue
+        | T::UnannotatedExp_::BorrowLocal(_, _)
+        | T::UnannotatedExp_::Spec(_, _)
+        | T::UnannotatedExp_::UnresolvedError => (),
+        T::UnannotatedExp_::ModuleCall(mcall) => {
+            let T::ModuleCall {
+                module,
+                name,
+                arguments,
+                ..
+            } = &**mcall;
+            if name.value() == symbol!("init") {
+                let msg = format!(
+                    "Invalid call to '{}::{}'. \
+                    Module initializers cannot be called directly",
+                    module, name
+                );
+                let mut diag = diag!(INIT_CALL_DIAG, (e.exp.loc, msg));
+                diag.add_note(
+                    "Module initializers are called implicitly upon publishing. \
+                    If you need to reuse this function (or want to call it from a test), \
+                    consider extracting the logic into a new function and \
+                    calling that instead.",
+                );
+                context.env.add_diag(diag)
+            }
+            exp(context, arguments)
+        }
+
+        T::UnannotatedExp_::TempBorrow(_, e)
+        | T::UnannotatedExp_::Builtin(_, e)
+        | T::UnannotatedExp_::Vector(_, _, _, e)
+        | T::UnannotatedExp_::Loop { body: e, .. }
+        | T::UnannotatedExp_::Assign(_, _, e)
+        | T::UnannotatedExp_::Return(e)
+        | T::UnannotatedExp_::Abort(e)
+        | T::UnannotatedExp_::Dereference(e)
+        | T::UnannotatedExp_::UnaryExp(_, e)
+        | T::UnannotatedExp_::Borrow(_, e, _)
+        | T::UnannotatedExp_::Cast(e, _)
+        | T::UnannotatedExp_::Annotate(e, _) => exp(context, e),
+        T::UnannotatedExp_::BinopExp(el, _, _, er) | T::UnannotatedExp_::Mutate(el, er) => {
+            exp(context, el);
+            exp(context, er)
+        }
+        T::UnannotatedExp_::IfElse(econd, etrue, efalse) => {
+            exp(context, econd);
+            exp(context, etrue);
+            exp(context, efalse)
+        }
+        T::UnannotatedExp_::While(econd, ebody) => {
+            exp(context, econd);
+            exp(context, ebody)
+        }
+        T::UnannotatedExp_::Block(seq) => sequence(context, seq),
+        T::UnannotatedExp_::ExpList(es) => exp_list(context, es),
+
+        T::UnannotatedExp_::Pack(m, s, _, fields) => {
+            if !context.in_test
+                && context.one_time_witness.as_ref().is_some_and(|otw| {
+                    otw.as_ref()
+                        .is_ok_and(|o| m == &context.current_module && o == s)
+                })
+            {
+                let msg = "Invalid one-time witness construction. One-time witness types \
+                    cannot be created manually, but are passed as an argument 'init'";
+                let mut diag = diag!(OTW_USAGE_DIAG, (e.exp.loc, msg));
+                diag.add_note(OTW_NOTE);
+                context.env.add_diag(diag)
+            }
+            for (_, _, (_, (_, e))) in fields {
+                exp(context, e)
+            }
+        }
+    }
+}
+
+fn exp_list(context: &mut Context, es: &[T::ExpListItem]) {
+    for item in es {
+        match item {
+            T::ExpListItem::Single(e, _) | T::ExpListItem::Splat(_, e, _) => exp(context, e),
+        }
+    }
 }
