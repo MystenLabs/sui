@@ -6,6 +6,7 @@ use crate::math::median;
 use arc_swap::ArcSwap;
 use narwhal_config::{Committee, Stake};
 use narwhal_types::ReputationScores;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
@@ -213,7 +214,24 @@ fn update_low_scoring_authorities_with_no_disable_mechanism(
 
     // sort the low scoring authorities in asc order
     // Keep marking low scoring authorities up to f.
-    scores_per_authority.sort_by_key(|(_authority_name, score, _stake)| *score);
+    // Important: the ordering has to be deterministic, otherwise different validators will see
+    // different order and latency might increase. Here we order with the following properties:
+    // * by score ascending
+    // * if scores are equal, then we order by stake ascending
+    // * if stakes are equal, then we do order by name (where we can't have equality unless is the same validator)
+    scores_per_authority.sort_by(|(name1, score1, stake1), (name2, score2, stake2)| {
+        match score1.cmp(score2) {
+            // if scores are equal, then consider lower scorer an authority with lower stake
+            Ordering::Equal => {
+                match stake1.cmp(stake2) {
+                    // if stake is equal, then just order by name.
+                    Ordering::Equal => name1.cmp(name2),
+                    result => result,
+                }
+            }
+            result => result,
+        }
+    });
     let mut final_low_scoring_map = HashMap::new();
 
     // take low scoring authorities while we haven't reached validity threshold (f+1)
