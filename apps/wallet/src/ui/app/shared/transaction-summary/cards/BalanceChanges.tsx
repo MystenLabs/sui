@@ -63,23 +63,19 @@ function BalanceChangeEntries({ changes }: { changes: BalanceChange[] }) {
 		() => recognizedPackagesList.map((itm) => normalizeSuiObjectId(itm)),
 		[recognizedPackagesList],
 	);
-	const recognizedTokenChanges = useMemo(
-		() =>
-			changes.filter((change) => {
-				const { address: packageId } = parseStructTag(change.coinType);
-				return normalizedRecognizedPackages.includes(packageId);
-			}),
-		[changes, normalizedRecognizedPackages],
-	);
-
-	const notRecognizedToken = useMemo(
-		() =>
-			changes?.filter((change) => {
-				const { address: packageId } = parseStructTag(change.coinType);
-				return !normalizedRecognizedPackages.includes(packageId);
-			}),
-		[changes, normalizedRecognizedPackages],
-	);
+	const { recognizedTokenChanges, notRecognizedTokenChanges } = useMemo(() => {
+		const recognizedTokenChanges = [];
+		const notRecognizedTokenChanges = [];
+		for (let change of changes) {
+			const { address: packageId } = parseStructTag(change.coinType);
+			if (normalizedRecognizedPackages.includes(packageId)) {
+				recognizedTokenChanges.push(change);
+			} else {
+				notRecognizedTokenChanges.push(change);
+			}
+		}
+		return { recognizedTokenChanges, notRecognizedTokenChanges };
+	}, [changes, normalizedRecognizedPackages]);
 
 	return (
 		<div className="flex flex-col gap-2">
@@ -87,14 +83,14 @@ function BalanceChangeEntries({ changes }: { changes: BalanceChange[] }) {
 				{recognizedTokenChanges.map((change) => (
 					<BalanceChangeEntry change={change} key={change.coinType + change.amount} />
 				))}
-				{notRecognizedToken.length > 0 && (
+				{notRecognizedTokenChanges.length > 0 && (
 					<div className="flex flex-col gap-2">
 						<div className="flex border-t border-gray-45 pt-2">
 							<Text variant="pSubtitleSmall" weight="medium" color="steel-dark">
 								Coins below are not recognized by <span className="text-hero">Sui Foundation.</span>
 							</Text>
 						</div>
-						{notRecognizedToken.map((change) => (
+						{notRecognizedTokenChanges.map((change) => (
 							<BalanceChangeEntry change={change} key={change.coinType + change.amount} />
 						))}
 					</div>
