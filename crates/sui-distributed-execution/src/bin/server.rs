@@ -32,7 +32,7 @@ fn init_agent(id: UniqueId, conf: AppConfig)
         mpsc::Sender<NetworkMessage>,
         mpsc::Receiver<NetworkMessage>,) 
 {
-    let (in_send, in_recv) = mpsc::channel(100);
+    let (in_send, mut in_recv) = mpsc::channel(100);
     let (out_send, out_recv) = mpsc::channel(100);
     let agent: Box<dyn Agent> = match conf.kind.as_str() {
         "echo" => Box::new(EchoAgent::new(
@@ -43,7 +43,7 @@ fn init_agent(id: UniqueId, conf: AppConfig)
         )),
         "ping" => Box::new(PingAgent::new(
             id,
-            in_recv,
+            &mut in_recv,
             out_send,
             conf.attrs
         )),
@@ -127,26 +127,27 @@ impl NetworkManager {
         }
     }
 
-    async fn handle_connection(my_id:UniqueId, socket: TcpStream, 
+    async fn handle_connection(
+        my_id:UniqueId,
+        socket: TcpStream, 
         out_sender: mpsc::Sender<NetworkMessage>,  // To be placed in routing table after handshake
-        in_sender: mpsc::Sender<NetworkMessage>, out_receiver: &mut mpsc::Receiver<NetworkMessage>,
+        in_sender: mpsc::Sender<NetworkMessage>,   // Send channel from link to Network Manager
+        out_receiver: &mut mpsc::Receiver<NetworkMessage>,  // Recv channel of link from Network Manager
         routing_table: Arc<RwLock<HashMap<UniqueId, mpsc::Sender<NetworkMessage>>>>) 
     {
-        println!("Handle connection");
         let mut stream = BufReader::new(socket);
 
         // First perform handshake. Send my id, and receive id to update routing table.
         let msg = format!("{}\n", my_id);
         stream.write_all(msg.as_bytes()).await.unwrap();
-        println!("sending {}", msg);
 
         let mut line = String::new();
         stream.read_line(&mut line).await.unwrap();
         let remote_id = line.trim().parse().unwrap();
-        println!("GOT {:?}", remote_id);
-
+        println!("Established connection with {}", remote_id);
 
         {
+            // Update the routing table
             let mut w_routing_table = routing_table.write().unwrap();
             w_routing_table.insert(remote_id, out_sender);
         }
@@ -155,12 +156,10 @@ impl NetworkManager {
             line = String::new();
             tokio::select! {
                 Some(message) = out_receiver.recv() => {
-                    println!("NetManager from application: {:?}", message);
                     let serialized = message.serialize();
                     stream.write_all(serialized.as_bytes()).await.expect("send failed");
                 }
                 Ok(_) = stream.read_line(&mut line) => {
-                    println!("NetManager from tcp: {:?}", line);
                     if line.len() == 0 {
                         panic!("Connection with remote id {remote_id} broken");
                     }
@@ -171,32 +170,28 @@ impl NetworkManager {
         }
     }
 
-    async fn run(&mut self) {
-        // Initialize connections
-        let listener_address = SocketAddr::new(self.my_addr, self.my_port);
-        
+    async fn run(&mut self) {     
+
+        // Initialize empty routing table. This is then populated by handle_connection()
+        let routing_table = Arc::new(RwLock::new(
+            HashMap::<UniqueId, mpsc::Sender<NetworkMessage>>::new()
+        ));
+   
         // Channel from link handlers to Network Manager
         let (in_sender, mut in_receiver) = mpsc::channel::<NetworkMessage>(100);
-
         let in_sender_clone = in_sender.clone();
-        let my_id = self.my_id.clone();
-        // TODO: in_send (orange) gets cloned to each TCP task
-        // Each TCP task also has a (out_send, out_recv)
-        // out_send is placed in routing table. Task polls out_recv and sends on TCP.
-
-        let routing_table = Arc::new(RwLock::new(
-                HashMap::<UniqueId, mpsc::Sender<NetworkMessage>>::new()
-        ));
-        let routing_table_clone = routing_table.clone();
 
         // Listen for incoming connections
+        let listener_address = SocketAddr::new(self.my_addr, self.my_port);
+        let routing_table_clone = routing_table.clone();
+        let my_id = self.my_id.clone();
+
         tokio::spawn(async move {
             let listener = TcpListener::bind(listener_address).await.unwrap();
             println!("Server {} listening on {}", my_id, listener_address);
             
-            // Accept incoming connections and spawn a task to handle each one
+            // Accept incoming connections and spawn a handle_connection task for each
             while let Ok((socket, _)) = listener.accept().await {
-                println!("Server {} accepted connection from: {}", my_id, socket.peer_addr().unwrap());
                 let in_sender_clone = in_sender_clone.clone();
                 let routing_table_clone = routing_table_clone.clone();
 
@@ -213,9 +208,7 @@ impl NetworkManager {
         for (&id, &(ip, port)) in &self.addr_table {
             if id < self.my_id {
                 let remote = SocketAddr::new(ip, port);
-                println!("Server {} trying connect to {}", my_id, remote);
                 let socket = TcpStream::connect(remote).await.unwrap();
-                println!("Server {} connected to {}", my_id, remote);
                 let in_sender_clone = in_sender.clone();
                 let routing_table_clone = routing_table.clone();
 
@@ -228,16 +221,16 @@ impl NetworkManager {
             }
         }
 
-        // Receive loop from TCP connections
-
+        // Receive loop to manage incoming TCP messages, 
+        // and route outgoing messages from application to the right link
         loop {
             tokio::select! {
+                // NetManager from tcp
                 Some(message) = in_receiver.recv() => {
-                    println!("NetManager from tcp: {:?}", message);
                     self.application_in.send(message).await.expect("send failed");
                 }
+                // NetManager from application
                 Some(message) = self.application_out.recv() => {
-                    println!("NetManager from application: {:?}", message);
                     let dst = message.dst;
                     let out_chan: mpsc::Sender<NetworkMessage>;
                     {
@@ -248,6 +241,5 @@ impl NetworkManager {
                 }
             }
         }
-        // Select from in_receiver.recv() or application_out
     }
 }

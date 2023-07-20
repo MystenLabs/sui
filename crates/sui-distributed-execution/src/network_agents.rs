@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::pin::Pin;
 use async_trait::async_trait;
 
 use tokio::sync::mpsc;
@@ -30,13 +29,6 @@ impl NetworkMessage {
 
 #[async_trait]
 pub trait Agent {
-    // fn new(
-    //     id: UniqueId, 
-    //     in_channel: mpsc::Receiver<NetworkMessage>, 
-    //     out_channel: mpsc::Sender<NetworkMessage>,
-    //     attrs: HashMap<String, String>) 
-    // -> Self;
-
     async fn run(&mut self);
 }
 
@@ -105,10 +97,11 @@ impl Agent for PingAgent {
 
 impl PingAgent {
     pub fn new(id: UniqueId,
-        _in_channel: mpsc::Receiver<NetworkMessage>, 
+        in_channel: &mut mpsc::Receiver<NetworkMessage>, 
         out_channel: mpsc::Sender<NetworkMessage>, 
         attrs: HashMap<String, String>) 
     -> Self {
+        in_channel.close();
         PingAgent {
             id, 
             out_channel,
