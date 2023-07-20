@@ -255,7 +255,7 @@ export class MultiSigPublicKey extends PublicKey {
 	}
 }
 
-function parsePartialSignatures(multisig: MultiSigStruct): ParsedPartialMultiSigSignature[] {
+export function parsePartialSignatures(multisig: MultiSigStruct): ParsedPartialMultiSigSignature[] {
 	let res: ParsedPartialMultiSigSignature[] = new Array(multisig.sigs.length);
 	for (let i = 0; i < multisig.sigs.length; i++) {
 		const [signatureScheme, signature] = Object.entries(multisig.sigs[i])[0] as [

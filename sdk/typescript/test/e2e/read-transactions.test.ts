@@ -2,12 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll, vi, afterEach } from 'vitest';
-import {
-	getTransactionDigest,
-	getTransactionKind,
-	SuiTransactionBlockResponse,
-	TransactionBlock,
-} from '../../src';
+import { getTransactionDigest, getTransactionKind, SuiTransactionBlockResponse } from '../../src';
+import { TransactionBlock } from '../../src/builder';
 import { executePaySuiNTimes, setup, TestToolbox } from './utils/setup';
 
 describe('Transaction Reading API', () => {

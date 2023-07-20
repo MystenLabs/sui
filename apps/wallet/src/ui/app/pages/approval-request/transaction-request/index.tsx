@@ -3,7 +3,7 @@
 
 // import { Transaction } from '@mysten/sui.js';
 import { useTransactionSummary } from '@mysten/core';
-import { TransactionBlock } from '@mysten/sui.js';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { useMemo, useState } from 'react';
 
 import { GasFees } from './GasFees';

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64, toB64 } from '@mysten/bcs';
-import { TransactionBlock } from '../builder/index.js';
+import { TransactionBlock } from '../builder/TransactionBlock.js';
 import { TransactionBlockDataBuilder } from '../builder/TransactionBlockData.js';
 import type { SerializedSignature } from '../cryptography/signature.js';
 import type { JsonRpcProvider } from '../providers/json-rpc-provider.js';

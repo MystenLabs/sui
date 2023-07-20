@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect } from 'vitest';
-import { Ed25519PublicKey } from '../../../src';
+import { Ed25519PublicKey } from '../../../src/keypairs/ed25519';
 
 // Test case generated against CLI:
 // cargo build --bin sui

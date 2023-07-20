@@ -3,7 +3,7 @@
 
 import { test, expect } from 'vitest';
 import { setup } from './utils/setup';
-import { TransactionBlock } from '../../src';
+import { TransactionBlock } from '../../src/builder';
 
 test('subscribeTransaction', async () => {
 	const toolbox = await setup();

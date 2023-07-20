@@ -3,7 +3,7 @@
 
 export {
 	/** @deprecated Import from `@mysten/sui.js/keypairs/ed5519` instead */
-	Ed25519KeypairData,
+	type Ed25519KeypairData,
 	/** @deprecated Import from `@mysten/sui.js/keypairs/ed5519` instead */
 	Ed25519Keypair,
 	/** @deprecated Import from `@mysten/sui.js/keypairs/ed5519` instead */
@@ -13,7 +13,7 @@ export {
 	/** @deprecated Import from `@mysten/sui.js/keypairs/secp256k1` instead */
 	DEFAULT_SECP256K1_DERIVATION_PATH,
 	/** @deprecated Import from `@mysten/sui.js/keypairs/secp256k1` instead */
-	Secp256k1KeypairData,
+	type Secp256k1KeypairData,
 	/** @deprecated Import from `@mysten/sui.js/keypairs/secp256k1` instead */
 	Secp256k1Keypair,
 	/** @deprecated Import from `@mysten/sui.js/keypairs/secp256k1` instead */
@@ -23,7 +23,7 @@ export {
 	/** @deprecated Import from `@mysten/sui.js/keypairs/secp256r1` instead */
 	DEFAULT_SECP256R1_DERIVATION_PATH,
 	/** @deprecated Import from `@mysten/sui.js/keypairs/secp256r1` instead */
-	Secp256r1KeypairData,
+	type Secp256r1KeypairData,
 	/** @deprecated Import from `@mysten/sui.js/keypairs/secp256r1` instead */
 	Secp256r1Keypair,
 	/** @deprecated Import from `@mysten/sui.js/keypairs/secp256k1` instead */
@@ -32,8 +32,8 @@ export {
 export {
 	/** @deprecated Signing methods are now available on the KeyPair classes */
 	BaseSigner,
-	/** @deprecated Signing methods are now available on the KeyPair classes */
-	ExportedKeypair,
+	/** @deprecated Import from `@mysten/sui.js/cryptography` instead */
+	type ExportedKeypair,
 	/** @deprecated Import from `@mysten/sui.js/cryptography` instead */
 	Keypair,
 	/** @deprecated Import from `@mysten/sui.js/cryptography` instead */
@@ -43,19 +43,19 @@ export {
 } from './cryptography/keypair.js';
 export {
 	/** @deprecated Use the MultiSigPublicKey class from `@mysten/sui.js/multisig` instead */
-	CompressedSignature,
+	type CompressedSignature,
 	/** @deprecated Use the MultiSigPublicKey class from `@mysten/sui.js/multisig` instead */
 	MAX_SIGNER_IN_MULTISIG,
 	/** @deprecated Use the MultiSigStruct from `@mysten/sui.js/multisig` instead */
-	MultiSig,
+	type MultiSig,
 	/** @deprecated Use the MultiSigPublicKey class from `@mysten/sui.js/multisig` instead */
-	MultiSigPublicKey,
+	type MultiSigPublicKey,
 	/** @deprecated Use the MultiSigPublicKey class from `@mysten/sui.js/multisig` instead */
-	PubkeyEnumWeightPair,
+	type PubkeyEnumWeightPair,
 	/** @deprecated Use the MultiSigPublicKey class from `@mysten/sui.js/multisig` instead */
-	PubkeyWeightPair,
+	type PubkeyWeightPair,
 	/** @deprecated Use the MultiSigPublicKey class from `@mysten/sui.js/multisig` instead */
-	PublicKeyEnum,
+	type PublicKeyEnum,
 	/** @deprecated Use the MultiSigPublicKey class from `@mysten/sui.js/multisig` instead */
 	combinePartialSigs,
 	/** @deprecated Use the parseSerializedSignature from `@mysten/sui.js/cryptography` instead */
@@ -68,7 +68,7 @@ export {
 	/** @deprecated Import from `@mysten/sui.js/cryptography` instead */
 	PublicKey,
 	/** @deprecated Import from `@mysten/sui.js/cryptography` instead */
-	PublicKeyInitData,
+	type PublicKeyInitData,
 	/** @deprecated Import from `@mysten/sui.js/cryptography` instead */
 	bytesEqual,
 } from './cryptography/publickey.js';
@@ -91,13 +91,13 @@ export {
 	/** @deprecated Import from `@mysten/sui.js/cryptography` instead */
 	SIGNATURE_SCHEME_TO_SIZE,
 	/** @deprecated Import from `@mysten/sui.js/cryptography` instead */
-	SerializeSignatureInput,
+	type SerializeSignatureInput,
 	/** @deprecated Import from `@mysten/sui.js/cryptography` instead */
-	SerializedSignature,
+	type SerializedSignature,
 	/** @deprecated Import from `@mysten/sui.js/cryptography` instead */
-	SignatureFlag,
+	type SignatureFlag,
 	/** @deprecated Import from `@mysten/sui.js/cryptography` instead */
-	SignatureScheme,
+	type SignatureScheme,
 	/** @deprecated Import from `@mysten/sui.js/cryptography` instead */
 	parseSerializedSignature,
 	/** @deprecated Import from `@mysten/sui.js/cryptography` instead */
@@ -105,7 +105,7 @@ export {
 } from './cryptography/signature.js';
 
 export {
-	SignaturePubkeyPair,
+	type SignaturePubkeyPair,
 	fromExportedKeypair,
 	/** @deprecated use `publicKeyFromBytes` from `@mysten/sui.j/verify` instead */
 	publicKeyFromSerialized,
@@ -119,16 +119,16 @@ export {
 	/** @deprecated Use `SuiClient` from `@mysten/sui.js/client` instead */
 	JsonRpcProvider,
 	/** @deprecated Import from `@mysten/sui.js/client` instead */
-	OrderArguments,
+	type OrderArguments,
 	/** @deprecated Import from `@mysten/sui.js/client` instead */
-	PaginationArguments,
+	type PaginationArguments,
 	/** @deprecated Use `SuiClientOptions` from `@mysten/sui.js/client` instead */
-	RpcProviderOptions,
+	type RpcProviderOptions,
 } from './providers/json-rpc-provider.js';
 
 export {
 	/** @deprecated Import from `@mysten/sui.js/client` instead */
-	HttpHeaders,
+	type HttpHeaders,
 	/** @deprecated This client will not be exported in the future */
 	JsonRpcClient,
 } from './rpc/client.js';
@@ -136,7 +136,7 @@ export {
 export {
 	DEFAULT_CLIENT_OPTIONS,
 	WebsocketClient,
-	WebsocketClientOptions,
+	type WebsocketClientOptions,
 	getWebsocketUrl,
 } from './rpc/websocket-client.js';
 
@@ -160,11 +160,17 @@ export {
 
 export {
 	/** @deprecated Use KeyPair classes from `@mysten/sui.js/keypairs/*` instead */
-	Signer,
+	type Signer,
 } from './signers/signer.js';
-export { RawSigner } from './signers/raw-signer.js';
-export { SignerWithProvider } from './signers/signer-with-provider.js';
-export { SignedMessage, SignedTransaction } from './signers/types.js';
+export {
+	/** @deprecated Use KeyPair classes from `@mysten/sui.js/keypairs/*` instead */
+	RawSigner,
+} from './signers/raw-signer.js';
+export {
+	/** @deprecated Use KeyPair classes from `@mysten/sui.js/keypairs/*` instead */
+	SignerWithProvider,
+} from './signers/signer-with-provider.js';
+export { type SignedMessage, type SignedTransaction } from './signers/types.js';
 
 export * from './types/index.js';
 
@@ -174,7 +180,7 @@ export {
 	/** @deprecated Import from `@mysten/sui.js/cryptography` instead */
 	AppId,
 	/** @deprecated Import from `@mysten/sui.js/cryptography` instead */
-	Intent,
+	type Intent,
 	/** @deprecated Import from `@mysten/sui.js/cryptography` instead */
 	IntentScope,
 	/** @deprecated Import from `@mysten/sui.js/cryptography` instead */
@@ -197,11 +203,11 @@ export {
 	ADD_STAKE_LOCKED_COIN_FUN_NAME,
 	COIN_TYPE_ARG_REGEX,
 	Coin,
-	CoinMetadata,
+	type CoinMetadata,
 	CoinMetadataStruct,
 	Delegation,
-	DelegationData,
-	DelegationSuiObject,
+	type DelegationData,
+	type DelegationSuiObject,
 	ID_STRUCT_NAME,
 	MOVE_STDLIB_ADDRESS,
 	OBJECT_MODULE_NAME,
@@ -228,6 +234,8 @@ export {
 	Transactions,
 	/** @deprecated Import from `@mysten/sui.js/transactions` instead */
 	Inputs,
+	/** @deprecated Import from `@mysten/sui.js/transactions` instead */
+	TransactionBlock,
 	ARGUMENT,
 	ARGUMENT_INNER,
 	BuilderCallArg,
@@ -244,7 +252,7 @@ export {
 	OPTION,
 	ObjectCallArg,
 	ObjectTransactionArgument,
-	Option,
+	type Option,
 	PROGRAMMABLE_CALL,
 	PROGRAMMABLE_CALL_INNER,
 	PROGRAMMABLE_TX_BLOCK,
@@ -257,7 +265,6 @@ export {
 	TRANSACTION_INNER,
 	TYPE_TAG,
 	TransactionArgument,
-	TransactionBlock,
 	TransactionBlockInput,
 	TransactionType,
 	TransferObjectsTransaction,

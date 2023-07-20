@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { isSuiNSName, useRpcClient, useSuiNSEnabled } from '@mysten/core';
-import { type JsonRpcProvider, isValidSuiAddress } from '@mysten/sui.js';
+import { isValidSuiAddress } from '@mysten/sui.js';
+import { type SuiClient } from '@mysten/sui.js/client';
 import { useMemo } from 'react';
 import * as Yup from 'yup';
 
-export function createSuiAddressValidation(rpc: JsonRpcProvider, suiNSEnabled: boolean) {
+export function createSuiAddressValidation(client: SuiClient, suiNSEnabled: boolean) {
 	const resolveCache = new Map<string, boolean>();
 
 	return Yup.string()
@@ -19,7 +20,7 @@ export function createSuiAddressValidation(rpc: JsonRpcProvider, suiNSEnabled: b
 					return resolveCache.get(value)!;
 				}
 
-				const address = await rpc.resolveNameServiceAddress({
+				const address = await client.resolveNameServiceAddress({
 					name: value,
 				});
 
@@ -34,10 +35,10 @@ export function createSuiAddressValidation(rpc: JsonRpcProvider, suiNSEnabled: b
 }
 
 export function useSuiAddressValidation() {
-	const rpc = useRpcClient();
+	const client = useRpcClient();
 	const suiNSEnabled = useSuiNSEnabled();
 
 	return useMemo(() => {
-		return createSuiAddressValidation(rpc, suiNSEnabled);
-	}, [rpc, suiNSEnabled]);
+		return createSuiAddressValidation(client, suiNSEnabled);
+	}, [client, suiNSEnabled]);
 }

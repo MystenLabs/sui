@@ -9,19 +9,19 @@ import {
 	normalizeSuiObjectId,
 	is,
 	SuiObjectData,
-	type JsonRpcProvider,
 	getTransactionDigest,
 	type SuiSystemStateSummary,
 } from '@mysten/sui.js';
+import { type SuiClient } from '@mysten/sui.js/client';
 import { useQuery } from '@tanstack/react-query';
 
 const isGenesisLibAddress = (value: string): boolean => /^(0x|0X)0{0,39}[12]$/.test(value);
 
 type Results = { id: string; label: string; type: string }[];
 
-const getResultsForTransaction = async (rpc: JsonRpcProvider, query: string) => {
+const getResultsForTransaction = async (client: SuiClient, query: string) => {
 	if (!isValidTransactionDigest(query)) return null;
-	const txdata = await rpc.getTransactionBlock({ digest: query });
+	const txdata = await client.getTransactionBlock({ digest: query });
 	return [
 		{
 			id: getTransactionDigest(txdata),
@@ -31,11 +31,11 @@ const getResultsForTransaction = async (rpc: JsonRpcProvider, query: string) => 
 	];
 };
 
-const getResultsForObject = async (rpc: JsonRpcProvider, query: string) => {
+const getResultsForObject = async (client: SuiClient, query: string) => {
 	const normalized = normalizeSuiObjectId(query);
 	if (!isValidSuiObjectId(normalized)) return null;
 
-	const { data, error } = await rpc.getObject({ id: normalized });
+	const { data, error } = await client.getObject({ id: normalized });
 	if (!is(data, SuiObjectData) || error) return null;
 
 	return [
@@ -47,11 +47,11 @@ const getResultsForObject = async (rpc: JsonRpcProvider, query: string) => {
 	];
 };
 
-const getResultsForCheckpoint = async (rpc: JsonRpcProvider, query: string) => {
+const getResultsForCheckpoint = async (client: SuiClient, query: string) => {
 	// Checkpoint digests have the same format as transaction digests:
 	if (!isValidTransactionDigest(query)) return null;
 
-	const { digest } = await rpc.getCheckpoint({ id: query });
+	const { digest } = await client.getCheckpoint({ id: query });
 	if (!digest) return null;
 
 	return [
@@ -63,9 +63,9 @@ const getResultsForCheckpoint = async (rpc: JsonRpcProvider, query: string) => {
 	];
 };
 
-const getResultsForAddress = async (rpc: JsonRpcProvider, query: string, suiNSEnabled: boolean) => {
+const getResultsForAddress = async (client: SuiClient, query: string, suiNSEnabled: boolean) => {
 	if (suiNSEnabled && isSuiNSName(query)) {
-		const resolved = await rpc.resolveNameServiceAddress({ name: query });
+		const resolved = await client.resolveNameServiceAddress({ name: query });
 		if (!resolved) return null;
 		return [
 			{
@@ -80,11 +80,11 @@ const getResultsForAddress = async (rpc: JsonRpcProvider, query: string, suiNSEn
 	if (!isValidSuiAddress(normalized) || isGenesisLibAddress(normalized)) return null;
 
 	const [from, to] = await Promise.all([
-		rpc.queryTransactionBlocks({
+		client.queryTransactionBlocks({
 			filter: { FromAddress: normalized },
 			limit: 1,
 		}),
-		rpc.queryTransactionBlocks({
+		client.queryTransactionBlocks({
 			filter: { ToAddress: normalized },
 			limit: 1,
 		}),

@@ -6,24 +6,22 @@ import { execSync } from 'child_process';
 import tmp from 'tmp';
 
 import {
-	Ed25519Keypair,
 	getPublishedObjectChanges,
 	getExecutionStatusType,
-	localnetConnection,
 	Coin,
-	TransactionBlock,
 	SuiAddress,
 	ObjectId,
 	UpgradePolicy,
 } from '../../../src';
+import { TransactionBlock } from '../../../src/builder';
+import { Ed25519Keypair } from '../../../src/keypairs/ed25519';
 import { retry } from 'ts-retry-promise';
-import { FaucetRateLimitError, requestSuiFromFaucetV0 } from '../../../src/faucet';
-import { SuiClient } from '../../../src/client';
+import { FaucetRateLimitError, getFaucetHost, requestSuiFromFaucetV0 } from '../../../src/faucet';
+import { SuiClient, getFullnodeUrl } from '../../../src/client';
 import { Keypair } from '../../../src/cryptography';
 
-const TEST_ENDPOINTS = localnetConnection;
-const DEFAULT_FAUCET_URL = import.meta.env.VITE_FAUCET_URL ?? TEST_ENDPOINTS.faucet;
-const DEFAULT_FULLNODE_URL = import.meta.env.VITE_FULLNODE_URL ?? TEST_ENDPOINTS.fullnode;
+const DEFAULT_FAUCET_URL = import.meta.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');
+const DEFAULT_FULLNODE_URL = import.meta.env.VITE_FULLNODE_URL ?? getFullnodeUrl('localnet');
 const SUI_BIN = import.meta.env.VITE_SUI_BIN ?? 'cargo run --bin sui';
 
 export const DEFAULT_RECIPIENT =

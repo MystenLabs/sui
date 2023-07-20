@@ -1,19 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { TransactionBlock } from '../../../src/builder';
 import {
-	DEFAULT_SECP256K1_DERIVATION_PATH,
-	IntentScope,
-	PRIVATE_KEY_SIZE,
 	Secp256k1Keypair,
-	TransactionBlock,
-	verifyMessage,
-} from '../../../src';
+	DEFAULT_SECP256K1_DERIVATION_PATH,
+} from '../../../src/keypairs/secp256k1';
+
 import { describe, it, expect } from 'vitest';
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { fromB64, toB58, toB64 } from '@mysten/bcs';
 import { sha256 } from '@noble/hashes/sha256';
 import { verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';
+
+const PRIVATE_KEY_SIZE = 32;
 
 // Test case from https://github.com/rust-bitcoin/rust-secp256k1/blob/master/examples/sign_verify.rs#L26
 const VALID_SECP256K1_SECRET_KEY = [
@@ -183,7 +183,7 @@ describe('secp256k1-keypair', () => {
 		expect(await keypair.getPublicKey().verifyTransactionBlock(bytes, serializedSignature)).toEqual(
 			true,
 		);
-		expect(await verifyMessage(bytes, serializedSignature, IntentScope.TransactionData)).toEqual(
+		expect(await keypair.getPublicKey().verifyTransactionBlock(bytes, serializedSignature)).toEqual(
 			true,
 		);
 		expect(!!(await verifyTransactionBlock(bytes, serializedSignature))).toEqual(true);
@@ -198,9 +198,9 @@ describe('secp256k1-keypair', () => {
 		expect(
 			await keypair.getPublicKey().verifyPersonalMessage(message, serializedSignature),
 		).toEqual(true);
-		expect(await verifyMessage(message, serializedSignature, IntentScope.PersonalMessage)).toEqual(
-			true,
-		);
+		expect(
+			await keypair.getPublicKey().verifyPersonalMessage(message, serializedSignature),
+		).toEqual(true);
 		expect(!!(await verifyPersonalMessage(message, serializedSignature))).toEqual(true);
 	});
 });
