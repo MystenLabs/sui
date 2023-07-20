@@ -420,7 +420,8 @@ impl SuiClient {
 
     /// Returns the API version information as a string.
     ///
-    /// The format of this string is `<major>.<minor>.<patch>`, e.g., `1.6.0`.
+    /// The format of this string is `<major>.<minor>.<patch>`, e.g., `1.6.0`,
+    /// and it is retrieved from the OpenRPC specification via the discover service method.
     pub fn api_version(&self) -> &str {
         &self.api.info.version
     }
