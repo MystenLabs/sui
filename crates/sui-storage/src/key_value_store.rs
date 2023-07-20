@@ -64,7 +64,7 @@ impl From<TransactionEvents> for Value {
 /// Immutable key/value store trait for storing/retrieving transactions, effects, and events.
 /// Only defines multi_get/multi_put methods to discourage single key/value operations.
 #[async_trait]
-pub trait KeyValueStore {
+pub trait TransactionKeyValueStore {
     /// Generic multi_get, allows implementors to get heterogenous values with a single round trip.
     async fn multi_get(&self, keys: &[Key]) -> SuiResult<Vec<Option<Value>>>;
 
