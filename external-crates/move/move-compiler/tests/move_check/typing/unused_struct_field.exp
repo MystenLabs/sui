@@ -1,0 +1,8 @@
+warning[W09009]: unused struct field
+   ┌─ tests/move_check/typing/unused_struct_field.move:12:9
+   │
+12 │         field_unused: u8
+   │         ^^^^^^^^^^^^ The field_unused field of the OneUnusedFieldStruct type is unused
+   │
+   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

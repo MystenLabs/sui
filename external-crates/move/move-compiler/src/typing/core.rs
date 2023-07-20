@@ -84,6 +84,9 @@ pub struct Context<'env> {
 
     /// collects all called functions in the current module
     pub called_fns: BTreeSet<Symbol>,
+
+    /// collects all struct fields used in the current module
+    pub used_fields: BTreeMap<Symbol, BTreeSet<Symbol>>,
 }
 
 impl ProgramInfo {
@@ -182,6 +185,7 @@ impl<'env> Context<'env> {
             modules: ProgramInfo(modules),
             env,
             called_fns: BTreeSet::new(),
+            used_fields: BTreeMap::new(),
         }
     }
 
