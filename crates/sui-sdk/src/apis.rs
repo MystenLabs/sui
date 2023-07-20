@@ -129,7 +129,11 @@ impl ReadApi {
             .await?)
     }
 
-    /// Return a parsed past object for the provided [ObjectID], or an error upon failure.
+    /// Return a parsed past object for the provided [ObjectID] and version, or an error upon failure.
+    ///
+    /// An object's version increases (though it is not guaranteed that it increases always by 1) when
+    /// the object is mutated. A past object can be used to understand how the object changed over time,
+    /// i.e. what was the total balance at a specific version.
     ///
     /// # Examples
     ///
