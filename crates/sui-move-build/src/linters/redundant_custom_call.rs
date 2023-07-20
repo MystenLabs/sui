@@ -34,7 +34,8 @@ use move_compiler::{
 use std::collections::BTreeMap;
 
 use super::{
-    INVALID_LOC, LINT_WARNING_PREFIX, REDUNDANT_CUSTOM_DIAG_CATEGORY, REDUNDANT_CUSTOM_DIAG_CODE,
+    CUSTOM_STATE_CHANGE_DIAG_CATEGORY, CUSTOM_STATE_CHANGE_DIAG_CODE, INVALID_LOC,
+    LINT_WARNING_PREFIX,
 };
 
 const TRANSFER_FUN: &str = "transfer";
@@ -47,11 +48,11 @@ const PRIVATE_OBJ_FUNCTIONS: &[(&str, &str, &str)] = &[
     ("sui", "transfer", FREEZE_FUN),
 ];
 
-const REDUNDANT_CUSTOM_DIAG: DiagnosticInfo = custom(
+const CUSTOM_STATE_CHANGE_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
-    REDUNDANT_CUSTOM_DIAG_CATEGORY,
-    REDUNDANT_CUSTOM_DIAG_CODE,
+    CUSTOM_STATE_CHANGE_DIAG_CATEGORY,
+    CUSTOM_STATE_CHANGE_DIAG_CODE,
     "potentially unenforceable custom transfer/share/freeze policy",
 );
 
@@ -59,8 +60,8 @@ const REDUNDANT_CUSTOM_DIAG: DiagnosticInfo = custom(
 // types
 //**************************************************************************************************
 
-pub struct RedundantCustomVerifier;
-pub struct RedundantCustomVerifierAI {
+pub struct CustomStateChangeVerifier;
+pub struct CustomStateChangeVerifierAI {
     fn_name_loc: Loc,
 }
 
@@ -85,8 +86,8 @@ pub struct State {
 // impls
 //**************************************************************************************************
 
-impl SimpleAbsIntConstructor for RedundantCustomVerifier {
-    type AI<'a> = RedundantCustomVerifierAI;
+impl SimpleAbsIntConstructor for CustomStateChangeVerifier {
+    type AI<'a> = CustomStateChangeVerifierAI;
 
     fn new<'a>(
         _env: &CompilationEnv,
@@ -101,13 +102,13 @@ impl SimpleAbsIntConstructor for RedundantCustomVerifier {
             return None;
         };
 
-        Some(RedundantCustomVerifierAI {
+        Some(CustomStateChangeVerifierAI {
             fn_name_loc: fn_name.loc,
         })
     }
 }
 
-impl SimpleAbsInt for RedundantCustomVerifierAI {
+impl SimpleAbsInt for CustomStateChangeVerifierAI {
     type State = State;
     type ExecutionContext = ExecutionContext;
 
@@ -168,7 +169,7 @@ impl SimpleAbsInt for RedundantCustomVerifierAI {
                 let note_msg = format!("A custom {op} policy for a given type is implemented through calling \
                                        the private {fname} function variant in the module defining this type");
                 let mut d = diag!(
-                    REDUNDANT_CUSTOM_DIAG,
+                    CUSTOM_STATE_CHANGE_DIAG,
                     (self.fn_name_loc, msg),
                     (f.name.loc(), uid_msg)
                 );

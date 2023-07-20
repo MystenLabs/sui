@@ -18,7 +18,7 @@ use move_compiler::{
 };
 
 use sui_move_build::linters::{
-    known_filters, redundant_custom_call::RedundantCustomVerifier,
+    known_filters, redundant_custom_call::CustomStateChangeVerifier,
     self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier, LINT_WARNING_PREFIX,
 };
 
@@ -65,7 +65,7 @@ fn run_tests(path: &Path) -> anyhow::Result<()> {
     let lint_visitors = vec![
         ShareOwnedVerifier.visitor(),
         SelfTransferVerifier.visitor(),
-        RedundantCustomVerifier.visitor(),
+        CustomStateChangeVerifier.visitor(),
     ];
     let (filter_attr_name, filters) = known_filters_for_test();
     let (files, comments_and_compiler_res) = Compiler::from_files(
