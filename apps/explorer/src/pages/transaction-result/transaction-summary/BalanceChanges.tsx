@@ -46,7 +46,7 @@ function BalanceChangeEntry({
 						<Coin type={coinType} />
 						<div className="flex flex-col  gap-2 gap-y-1 lg:flex-row">
 							<Text variant="pBody/semibold" color="steel-darker" truncate>
-								{coinMetadata?.name || coinMetadata?.symbol || coinType}
+								{coinMetadata?.name || coinMetadata?.symbol}
 							</Text>
 							{notRecognizedToken && (
 								<Banner variant="warning" icon={null} border spacing="sm">
