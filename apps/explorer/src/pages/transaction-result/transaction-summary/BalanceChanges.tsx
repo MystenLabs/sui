@@ -4,14 +4,13 @@ import {
 	type BalanceChangeSummary,
 	CoinFormat,
 	useFormatCoin,
+	useCoinMetadata,
 	type BalanceChange,
 	useResolveSuiNSName,
 } from '@mysten/core';
-import { parseStructTag, normalizeSuiObjectId } from '@mysten/sui.js';
 import { Heading, Text } from '@mysten/ui';
 import { useMemo } from 'react';
 
-import { useRecognizedPackages } from '~/hooks/useRecognizedPackages';
 import { Banner } from '~/ui/Banner';
 import { Coin } from '~/ui/CoinsStack';
 import { AddressLink } from '~/ui/InternalLink';
@@ -21,16 +20,10 @@ interface BalanceChangesProps {
 	changes: BalanceChangeSummary;
 }
 
-function BalanceChangeEntry({
-	change,
-	isUnRecognizedToken,
-}: {
-	change: BalanceChange;
-	isUnRecognizedToken?: boolean;
-}) {
-	const { amount, coinType, recipient } = change;
-	const [formatted, symbol, queryResult] = useFormatCoin(amount, coinType, CoinFormat.FULL);
-	const { name } = queryResult.data || {};
+function BalanceChangeEntry({ change }: { change: BalanceChange }) {
+	const { amount, coinType, recipient, unRecognizedToken } = change;
+	const [formatted, symbol] = useFormatCoin(amount, coinType, CoinFormat.FULL);
+	const { data: coinMetaData } = useCoinMetadata(coinType);
 	const isPositive = BigInt(amount) > 0n;
 
 	if (!change) {
@@ -39,18 +32,18 @@ function BalanceChangeEntry({
 
 	return (
 		<div className="flex flex-col gap-2 py-3 first:pt-0 only:pb-0 only:pt-0">
-			<div className="flex justify-between gap-2">
+			<div className="flex justify-between gap-1">
 				<div className="flex gap-2">
 					<div className="w-5">
 						<Coin type={coinType} />
 					</div>
-					<div className="flex max-w-[90px] flex-wrap gap-2 gap-y-1 sm:max-w-full">
+					<div className="flex flex-wrap gap-2 gap-y-1">
 						<Text variant="pBody/semibold" color="steel-darker">
-							{name || symbol}
+							{coinMetaData?.name || symbol}
 						</Text>
-						{isUnRecognizedToken && (
-							<Banner variant="warning" icon={null} border spacing="sm" display="block">
-								<div className="item-center truncate break-normal text-captionSmallExtra font-medium uppercase tracking-wider">
+						{unRecognizedToken && (
+							<Banner variant="warning" icon={null} border spacing="sm">
+								<div className="item-center block max-w-[70px] truncate break-normal text-captionSmallExtra font-medium uppercase tracking-wider sm:max-w-full">
 									Unrecognized
 								</div>
 							</Banner>
@@ -80,25 +73,18 @@ function BalanceChangeEntry({
 
 function BalanceChangeCard({ changes, owner }: { changes: BalanceChange[]; owner: string }) {
 	const { data: suinsDomainName } = useResolveSuiNSName(owner);
-	const recognizedPackagesList = useRecognizedPackages();
-
-	const normalizedRecognizedPackages = useMemo(
-		() => recognizedPackagesList.map((item) => normalizeSuiObjectId(item)),
-		[recognizedPackagesList],
-	);
 	const { recognizedTokenChanges, unRecognizedTokenChanges } = useMemo(() => {
 		const recognizedTokenChanges = [];
 		const unRecognizedTokenChanges = [];
 		for (let change of changes) {
-			const { address: packageId } = parseStructTag(change.coinType);
-			if (normalizedRecognizedPackages.includes(packageId)) {
-				recognizedTokenChanges.push(change);
-			} else {
+			if (change.unRecognizedToken) {
 				unRecognizedTokenChanges.push(change);
+			} else {
+				recognizedTokenChanges.push(change);
 			}
 		}
 		return { recognizedTokenChanges, unRecognizedTokenChanges };
-	}, [changes, normalizedRecognizedPackages]);
+	}, [changes]);
 
 	return (
 		<TransactionBlockCard
@@ -131,15 +117,10 @@ function BalanceChangeCard({ changes, owner }: { changes: BalanceChange[]; owner
 					</TransactionBlockCardSection>
 				))}
 				{unRecognizedTokenChanges.length > 0 && (
-					<div className="flex flex-col gap-2">
-						<div className="flex border-t border-gray-45 pt-2">
-							<Text variant="pSubtitleSmall/medium" color="steel-dark">
-								Coins below are not recognized by <span className="text-hero">Sui Foundation.</span>
-							</Text>
-						</div>
+					<div className="flex flex-col gap-2 border-t border-gray-45 pt-2">
 						{unRecognizedTokenChanges.map((change, index) => (
 							<TransactionBlockCardSection key={index + change.coinType}>
-								<BalanceChangeEntry change={change} isUnRecognizedToken />
+								<BalanceChangeEntry change={change} />
 							</TransactionBlockCardSection>
 						))}
 					</div>

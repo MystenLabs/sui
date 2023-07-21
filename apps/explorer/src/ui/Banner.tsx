@@ -9,7 +9,7 @@ import { type ReactNode } from 'react';
 import { ReactComponent as InfoIcon } from './icons/info.svg';
 
 const bannerStyles = cva(
-	'text-pBodySmall font-medium rounded-2xl overflow-hidden gap-2 items-center flex-nowrap relative my-auto',
+	'inline-flex text-pBodySmall font-medium rounded-2xl overflow-hidden gap-2 items-center flex-nowrap relative my-auto',
 	{
 		variants: {
 			variant: {
@@ -38,15 +38,10 @@ const bannerStyles = cva(
 			border: {
 				true: '',
 			},
-			display: {
-				inlineFlex: 'inline-flex',
-				block: 'block',
-			},
 		},
 		defaultVariants: {
 			variant: 'message',
 			spacing: 'md',
-			display: 'inlineFlex',
 		},
 		compoundVariants: [
 			{
@@ -101,7 +96,6 @@ export function Banner({
 	border,
 	shadow,
 	onDismiss,
-	display,
 }: BannerProps) {
 	return (
 		<div
@@ -112,7 +106,6 @@ export function Banner({
 				shadow,
 				border,
 				spacing,
-				display,
 				class: onDismiss && 'pr-9',
 			})}
 		>
