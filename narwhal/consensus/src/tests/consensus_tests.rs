@@ -495,7 +495,7 @@ async fn test_leader_schedule_from_store() {
         .unwrap();
 
     // WHEN flag is disabled for the new schedule algorithm
-    let protocol_config = ProtocolConfig::get_for_max_version();
+    let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
     let schedule = LeaderSchedule::from_store(committee.clone(), store.clone(), protocol_config);
 
     // THEN the default should be returned. In this case we detect since good/bad nodes will be empty
@@ -503,7 +503,7 @@ async fn test_leader_schedule_from_store() {
     assert!(schedule.leader_swap_table.read().bad_nodes.is_empty());
 
     // WHEN flag is enabled for the new schedule algorithm
-    let mut protocol_config = ProtocolConfig::get_for_max_version();
+    let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
     protocol_config.set_narwhal_new_leader_election_schedule(true);
     let schedule = LeaderSchedule::from_store(committee, store, protocol_config);
 
