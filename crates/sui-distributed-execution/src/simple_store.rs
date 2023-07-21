@@ -14,10 +14,14 @@ use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 
 use super::storage::*;
 
-#[derive(Debug)]
+
 pub struct MemoryBackedStore {
     pub objects: RefCell<HashMap<ObjectID, (ObjectRef, Object)>>,
 }
+
+// To satisfy sync requirement of ew_state.execute_tx(). This is ok as simple store is
+// strictly for use in single-threaded setting
+unsafe impl Sync for MemoryBackedStore {}
 
 impl MemoryBackedStore {
     pub fn new() -> MemoryBackedStore {

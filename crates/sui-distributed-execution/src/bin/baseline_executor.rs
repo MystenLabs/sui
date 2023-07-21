@@ -91,10 +91,6 @@ async fn main() {
                 .expect("Cannot get checkpoint")
                 .expect("Checkpoint is None");
 
-            if checkpoint_seq % 10000 == 0 {
-                println!("{}", checkpoint_seq);
-            }
-
             let (_seq, summary) = checkpoint_summary.into_summary_and_sequence();
             let contents = sw_state
                 .checkpoint_store
@@ -126,6 +122,10 @@ async fn main() {
                         sw_state.metrics.clone(),
                     )
                     .await;
+
+                if checkpoint_seq % 10000 == 0 {
+                    println!("Executed {}", checkpoint_seq);
+                }
             }
 
             if summary.end_of_epoch_data.is_some() {
