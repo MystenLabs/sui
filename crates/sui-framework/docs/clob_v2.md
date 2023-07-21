@@ -8,6 +8,7 @@
 -  [Struct `PoolCreated`](#0xdee9_clob_v2_PoolCreated)
 -  [Struct `OrderPlaced`](#0xdee9_clob_v2_OrderPlaced)
 -  [Struct `OrderCanceled`](#0xdee9_clob_v2_OrderCanceled)
+-  [Struct `OrdersCanceled`](#0xdee9_clob_v2_OrdersCanceled)
 -  [Struct `OrderFilled`](#0xdee9_clob_v2_OrderFilled)
 -  [Struct `DepositAsset`](#0xdee9_clob_v2_DepositAsset)
 -  [Struct `WithdrawAsset`](#0xdee9_clob_v2_WithdrawAsset)
@@ -269,6 +270,34 @@ Emitted when a maker order is canceled.
 </dd>
 <dt>
 <code>price: u64</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0xdee9_clob_v2_OrdersCanceled"></a>
+
+## Struct `OrdersCanceled`
+
+Emitted when all orders are canceled.
+
+
+<pre><code><b>struct</b> <a href="clob_v2.md#0xdee9_clob_v2_OrdersCanceled">OrdersCanceled</a>&lt;BaseAsset, QuoteAsset&gt; <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>orders_canceled: <a href="">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_OrderCanceled">clob_v2::OrderCanceled</a>&lt;BaseAsset, QuoteAsset&gt;&gt;</code>
 </dt>
 <dd>
 
@@ -2496,6 +2525,7 @@ Abort if order_id is invalid or if the order is not submitted by the transaction
     <b>let</b> owner = account_owner(account_cap);
     <b>assert</b>!(contains(&pool.usr_open_orders, owner), <a href="clob_v2.md#0xdee9_clob_v2_EInvalidUser">EInvalidUser</a>);
     <b>let</b> usr_open_order_ids = <a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> pool.usr_open_orders, owner);
+    <b>let</b> canceled_order_events = <a href="_empty">vector::empty</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_OrderCanceled">OrderCanceled</a>&lt;BaseAsset, QuoteAsset&gt;&gt;();
     <b>while</b> (!<a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_is_empty">linked_table::is_empty</a>(usr_open_order_ids)) {
         <b>let</b> order_id = *<a href="_borrow">option::borrow</a>(<a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_back">linked_table::back</a>(usr_open_order_ids));
         <b>let</b> order_price = *<a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_borrow">linked_table::borrow</a>(usr_open_order_ids, order_id);
@@ -2517,8 +2547,24 @@ Abort if order_id is invalid or if the order is not submitted by the transaction
         } <b>else</b> {
             <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.base_custodian, owner, order.quantity);
         };
-        <a href="clob_v2.md#0xdee9_clob_v2_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, &order);
+
+        <b>let</b> canceled_order_event = <a href="clob_v2.md#0xdee9_clob_v2_OrderCanceled">OrderCanceled</a>&lt;BaseAsset, QuoteAsset&gt; {
+            pool_id,
+            client_order_id: order.client_order_id,
+            order_id: order.order_id,
+            is_bid: order.is_bid,
+            owner: order.owner,
+            original_quantity: order.original_quantity,
+            base_asset_quantity_canceled: order.quantity,
+            price: order.price
+        };
+
+        <a href="_push_back">vector::push_back</a>(&<b>mut</b> canceled_order_events, canceled_order_event);
     };
+
+    <a href="../../../.././build/Sui/docs/event.md#0x2_event_emit">event::emit</a>(<a href="clob_v2.md#0xdee9_clob_v2_OrdersCanceled">OrdersCanceled</a>&lt;BaseAsset, QuoteAsset&gt; {
+        orders_canceled: canceled_order_events,
+    });
 }
 </code></pre>
 

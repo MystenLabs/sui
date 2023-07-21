@@ -123,6 +123,11 @@ module deepbook::clob_v2 {
         price: u64
     }
 
+    /// Emitted when all orders are canceled.
+    struct OrdersCanceled<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
+        orders_canceled: vector<OrderCanceled<BaseAsset, QuoteAsset>>,
+    }
+
     /// Emitted only when a maker order is filled.
     struct OrderFilled<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
         /// object ID of the pool the order was placed on
@@ -1259,6 +1264,7 @@ module deepbook::clob_v2 {
         let owner = account_owner(account_cap);
         assert!(contains(&pool.usr_open_orders, owner), EInvalidUser);
         let usr_open_order_ids = table::borrow_mut(&mut pool.usr_open_orders, owner);
+        let canceled_order_events = vector::empty<OrderCanceled<BaseAsset, QuoteAsset>>();
         while (!linked_table::is_empty(usr_open_order_ids)) {
             let order_id = *option::borrow(linked_table::back(usr_open_order_ids));
             let order_price = *linked_table::borrow(usr_open_order_ids, order_id);
@@ -1280,8 +1286,24 @@ module deepbook::clob_v2 {
             } else {
                 custodian::unlock_balance(&mut pool.base_custodian, owner, order.quantity);
             };
-            emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, &order);
+
+            let canceled_order_event = OrderCanceled<BaseAsset, QuoteAsset> {
+                pool_id,
+                client_order_id: order.client_order_id,
+                order_id: order.order_id,
+                is_bid: order.is_bid,
+                owner: order.owner,
+                original_quantity: order.original_quantity,
+                base_asset_quantity_canceled: order.quantity,
+                price: order.price
+            };
+
+            vector::push_back(&mut canceled_order_events, canceled_order_event);
         };
+
+        event::emit(OrdersCanceled<BaseAsset, QuoteAsset> {
+            orders_canceled: canceled_order_events,
+        });
     }
 
 
