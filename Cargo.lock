@@ -10600,6 +10600,7 @@ dependencies = [
  "serde",
  "sui-json-rpc-types",
  "sui-protocol-config",
+ "sui-test-transaction-builder",
  "sui-types",
  "tap",
  "tempfile",
