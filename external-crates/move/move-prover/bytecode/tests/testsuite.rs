@@ -223,7 +223,7 @@ fn test_runner(path: &Path) -> datatest_stable::Result<()> {
         }],
         vec![],
         ModelBuilderOptions::default(),
-        Some(WarningFilters::unused_function_warnings_filter()),
+        Some(WarningFilters::unused_fun_and_field_warnings_filter()),
     )?;
     let out = if env.has_errors() {
         let mut error_writer = Buffer::no_color();

@@ -76,7 +76,7 @@ fn testsuite(path: &Path, mut config: PackageConfig) -> datatest_stable::Result<
         let mut config = config.clone();
         config
             .warning_filter
-            .union(&WarningFilters::unused_function_warnings_filter());
+            .union(&WarningFilters::unused_fun_and_field_warnings_filter());
         run_test(
             path,
             Path::new(&test_exp_path),
@@ -102,7 +102,7 @@ fn testsuite(path: &Path, mut config: PackageConfig) -> datatest_stable::Result<
         let mut config = config.clone();
         config
             .warning_filter
-            .union(&WarningFilters::unused_function_warnings_filter());
+            .union(&WarningFilters::unused_fun_and_field_warnings_filter());
         run_test(
             path,
             Path::new(&verification_exp_path),
@@ -140,7 +140,7 @@ fn testsuite(path: &Path, mut config: PackageConfig) -> datatest_stable::Result<
 
     config
         .warning_filter
-        .union(&WarningFilters::unused_function_warnings_filter());
+        .union(&WarningFilters::unused_fun_and_field_warnings_filter());
     run_test(path, &exp_path, &out_path, flags, config)?;
     Ok(())
 }

@@ -617,7 +617,7 @@ pub fn compile_source_units(
     // txn testing framework test code includes private unused functions and unused struct types on
     // purpose and generating warnings for all of them does not make much sense (and there would be
     // a lot of them!) so let's suppress them function warnings, so let's suppress these
-    let warning_filter = WarningFilters::unused_function_warnings_filter();
+    let warning_filter = WarningFilters::unused_fun_and_field_warnings_filter();
     let (mut files, comments_and_compiler_res) = move_compiler::Compiler::from_files(
         vec![file_name.as_ref().to_str().unwrap().to_owned()],
         state.source_files().cloned().collect::<Vec<_>>(),

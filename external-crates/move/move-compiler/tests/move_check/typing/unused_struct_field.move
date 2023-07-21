@@ -22,19 +22,19 @@ module 0x42::unused_fields {
         field2: u8,
     }
 
-    fun foo(s: &OneUnusedFieldStruct): u8 {
+    public fun foo(s: &OneUnusedFieldStruct): u8 {
         s.field_used_borrow
     }
 
-    fun bar(s: &mut OneUnusedFieldStruct) {
+    public fun bar(s: &mut OneUnusedFieldStruct) {
         s.field_used_borrow_mut = 42;
     }
 
-    fun pack(): AllFieldsUsedPackStruct {
+    public fun pack(): AllFieldsUsedPackStruct {
         AllFieldsUsedPackStruct { field1: 42, field2: 7 }
     }
 
-    fun unpack(s: AllFieldsUsedUnpackStruct): (u8, u8) {
+    public fun unpack(s: AllFieldsUsedUnpackStruct): (u8, u8) {
         let AllFieldsUsedUnpackStruct { field1, field2 } = s;
         (field1, field2)
     }

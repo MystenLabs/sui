@@ -9,7 +9,7 @@ use crate::{
     diagnostics::codes::{
         CategoryID, DiagnosticCode, DiagnosticInfo, DiagnosticsID, Severity, WarningFilter,
     },
-    shared::{ast_debug::AstDebug, FILTER_UNUSED_FUNCTION},
+    shared::{ast_debug::AstDebug, FILTER_UNUSED_FUNCTION, FILTER_UNUSED_STRUCT_FIELD},
 };
 use codespan_reporting::{
     self as csr,
@@ -443,12 +443,27 @@ impl WarningFilters {
         }
     }
 
-    pub fn unused_function_warnings_filter() -> Self {
-        let unused_fn_info = UnusedItem::Function.into_info();
-        let filtered_codes = BTreeMap::from([(
-            DiagnosticsID::new(unused_fn_info.category() as u8, unused_fn_info.code(), None),
-            Some(FILTER_UNUSED_FUNCTION),
-        )]);
+    pub fn unused_fun_and_field_warnings_filter() -> Self {
+        let unused_fun_info = UnusedItem::Function.into_info();
+        let unused_field_info = UnusedItem::StructField.into_info();
+        let filtered_codes = BTreeMap::from([
+            (
+                DiagnosticsID::new(
+                    unused_fun_info.category() as u8,
+                    unused_fun_info.code(),
+                    None,
+                ),
+                Some(FILTER_UNUSED_FUNCTION),
+            ),
+            (
+                DiagnosticsID::new(
+                    unused_field_info.category() as u8,
+                    unused_field_info.code(),
+                    None,
+                ),
+                Some(FILTER_UNUSED_STRUCT_FIELD),
+            ),
+        ]);
         WarningFilters::Specified {
             category: BTreeMap::new(),
             codes: filtered_codes,
