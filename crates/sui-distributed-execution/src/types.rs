@@ -4,9 +4,14 @@ use std::fmt::Debug;
 use std::net::IpAddr;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    base_types::ObjectID,
+    base_types::{ObjectID, ObjectRef},
+    digests::TransactionDigest,
     effects::TransactionEffects,
     epoch_data::EpochData,
+    epoch_data::EpochData,
+    messages::{InputObjectKind, TransactionDataAPI, TransactionKind, VerifiedTransaction},
+    object::Object,
+    sui_system_state::epoch_start_sui_system_state::EpochStartSystemState,
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemState,
     transaction::{InputObjectKind, TransactionDataAPI, TransactionKind, VerifiedTransaction},
 };
@@ -67,6 +72,7 @@ impl<M: Debug + Message> NetworkMessage<M> {
 
 #[derive(Debug)]
 pub enum SailfishMessage {
+    // Sequencing Worker <-> Execution Worker
     EpochStart {
         conf: ProtocolConfig,
         data: EpochData,
@@ -75,11 +81,17 @@ pub enum SailfishMessage {
     EpochEnd {
         new_epoch_start_state: EpochStartSystemState,
     },
-    Transaction {
-        tx: VerifiedTransaction,
-        tx_effects: TransactionEffects,
-        checkpoint_seq: u64,
+    ProposeExec(Transaction),
+
+    // Execution Worker <-> Execution Worker
+    LockedExec {
+        tx: TransactionDigest,
+        objects: Vec<(ObjectRef, Object)>,
     },
+
+    // Execution Worker <-> Storage Engine
+    StateUpdate(TransactionEffects),
+    Checkpointed(u64),
 }
 
 #[derive(Debug, Clone)]
@@ -91,13 +103,13 @@ pub struct Transaction {
 
 impl Transaction {
     pub fn is_epoch_change(&self) -> bool {
-        if let TransactionKind::ChangeEpoch(_) = self.tx.data().transaction_data().kind() {
-            return true;
+        match self.tx.data().transaction_data().kind() {
+            TransactionKind::ChangeEpoch(_) => true,
+            _ => false,
         }
-        return false;
     }
 
-    /// Returns the read set of a transction
+    /// Returns the read set of a transction.
     /// Specifically, this is the set of input objects to the transaction. It excludes
     /// child objects that are determined at runtime, but includes all owned objects inputs
     /// that must have their version numbers bumped.

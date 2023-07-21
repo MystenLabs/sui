@@ -58,7 +58,6 @@ impl QueuesManager {
 
     /// Enqueues a transaction on the manager
     async fn queue_tx(&mut self, full_tx: Transaction) {
-       
 		// Store tx
         let txid = *full_tx.tx.digest();
 		self.tx_store.insert(txid, full_tx.clone());
@@ -99,7 +98,6 @@ impl QueuesManager {
 
     /// Cleans up after a completed transaction
 	async fn clean_up(&mut self, completed_tx: &Transaction) {
-
         // Get digest and RW set
         let txid = completed_tx.tx.digest();
 		
@@ -496,12 +494,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                 },
                 Some(msg) = sw_receiver.recv() => {
                     // New tx from sequencer; enqueue to manager
-                    if let SailfishMessage::Transaction{
-                        tx, 
-                        tx_effects, 
-                        checkpoint_seq,
-                    } = msg {
-                        let full_tx = Transaction{tx, ground_truth_effects: tx_effects, checkpoint_seq};
+                    if let SailfishMessage::ProposeExec(full_tx) = msg {
                         if full_tx.is_epoch_change() {
                             // don't queue to manager, but store to epoch_change_tx
                             epoch_change_tx = Some(full_tx);
@@ -570,5 +563,3 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
         println!("Passed!");
     }
 }
-
-
