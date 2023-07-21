@@ -6,7 +6,6 @@ import type { Keypair } from '../cryptography/keypair.js';
 import { toSerializedSignature } from '../cryptography/signature.js';
 import type { SerializedSignature } from '../cryptography/signature.js';
 import type { JsonRpcProvider } from '../providers/json-rpc-provider.js';
-import type { SuiAddress } from '../types/index.js';
 import { SignerWithProvider } from './signer-with-provider.js';
 import type { SuiClient } from '../client/index.js';
 
@@ -18,7 +17,7 @@ export class RawSigner extends SignerWithProvider {
 		this.keypair = keypair;
 	}
 
-	async getAddress(): Promise<SuiAddress> {
+	async getAddress(): Promise<string> {
 		return this.keypair.getPublicKey().toSuiAddress();
 	}
 

@@ -14,7 +14,6 @@ import {
 	tuple,
 	optional,
 } from 'superstruct';
-import { ObjectId, SuiAddress } from './common.js';
 import { AuthorityName, EpochId } from './transactions.js';
 
 /* -------------- Types for the SuiSystemState Rust definition -------------- */
@@ -26,7 +25,7 @@ export type StakeObject = Infer<typeof StakeObject>;
 // APY Response
 export const Apy = object({
 	apy: number(),
-	address: SuiAddress,
+	address: string(),
 });
 
 export const ValidatorsApy = object({
@@ -42,7 +41,7 @@ export const Balance = object({
 });
 
 export const StakeObject = object({
-	stakedSuiId: ObjectId,
+	stakedSuiId: string(),
 	stakeRequestEpoch: EpochId,
 	stakeActiveEpoch: EpochId,
 	principal: string(),
@@ -51,8 +50,8 @@ export const StakeObject = object({
 });
 
 export const DelegatedStake = object({
-	validatorAddress: SuiAddress,
-	stakingPool: ObjectId,
+	validatorAddress: string(),
+	stakingPool: string(),
 	stakes: array(StakeObject),
 });
 
@@ -120,7 +119,7 @@ export const CommitteeInfo = object({
 });
 
 export const SuiValidatorSummary = object({
-	suiAddress: SuiAddress,
+	suiAddress: string(),
 	protocolPubkeyBytes: string(),
 	networkPubkeyBytes: string(),
 	workerPubkeyBytes: string(),
@@ -199,8 +198,8 @@ export const SuiSystemStateSummary = object({
 	inactivePoolsSize: string(),
 	validatorCandidatesId: string(),
 	validatorCandidatesSize: string(),
-	atRiskValidators: array(tuple([SuiAddress, string()])),
-	validatorReportRecords: array(tuple([SuiAddress, array(SuiAddress)])),
+	atRiskValidators: array(tuple([string(), string()])),
+	validatorReportRecords: array(tuple([string(), array(string())])),
 });
 
 export type SuiSystemStateSummary = Infer<typeof SuiSystemStateSummary>;

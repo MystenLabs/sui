@@ -8,7 +8,6 @@ import {
 	getSharedObjectInitialVersion,
 	isMutableSharedObjectInput,
 	isSharedObjectInput,
-	ObjectId,
 	SuiObjectData,
 	SuiTransactionBlockResponse,
 	SUI_SYSTEM_STATE_OBJECT_ID,
@@ -19,9 +18,9 @@ import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Transaction Serialization and deserialization', () => {
 	let toolbox: TestToolbox;
-	let packageId: ObjectId;
+	let packageId: string;
 	let publishTxn: SuiTransactionBlockResponse;
-	let sharedObjectId: ObjectId;
+	let sharedObjectId: string;
 
 	beforeAll(async () => {
 		toolbox = await setup();
