@@ -3,7 +3,7 @@
 
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { useEffect } from 'react';
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 
 import { useInitialPageView } from './hooks/useInitialPageView';
 import { ProtectAccountPage } from './pages/accounts/ProtectAccountPage';
@@ -76,7 +76,23 @@ const App = () => {
 		<Routes>
 			{/* this is used only for making dev work on refactoring accounts easier - TODO: remove when work is done ----> */}
 			{process.env.NODE_ENV === 'development' && NEW_ACCOUNTS_ENABLED ? (
-				<Route path="/accounts-dev" element={<AccountsDev />} />
+				<>
+					<Route path="/accounts-dev" element={<AccountsDev />} />
+					<Route
+						path="/dapp/"
+						element={
+							<>
+								<div className="p-3 flex bg-white rounded-lg flex-col w-80">
+									<Outlet />
+								</div>
+								<div id="overlay-portal-container"></div>
+							</>
+						}
+					>
+						<Route path="/dapp/qredo-connect/:requestID" element={<QredoConnectInfoPage />} />
+						<Route path="/dapp/qredo-connect/:id/select" element={<SelectQredoAccountsPage />} />
+					</Route>
+				</>
 			) : null}
 			{/* <------ */}
 			<Route path="/*" element={<HomePage />}>

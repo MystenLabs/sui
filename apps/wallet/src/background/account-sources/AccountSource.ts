@@ -13,7 +13,7 @@ import {
 } from '../storage-entities-utils';
 import { type Serializable } from '_src/shared/cryptography/keystore';
 
-export type AccountSourceType = 'mnemonic';
+export type AccountSourceType = 'mnemonic' | 'qredo';
 
 export abstract class AccountSource<T extends AccountSourceSerialized, V extends Serializable> {
 	readonly id: string;

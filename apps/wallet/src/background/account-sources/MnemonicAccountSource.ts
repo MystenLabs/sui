@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Ed25519Keypair, mnemonicToSeedHex } from '@mysten/sui.js';
+import { mnemonicToSeedHex } from '@mysten/sui.js/cryptography';
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { sha256 } from '@noble/hashes/sha256';
 
 import { bytesToHex } from '@noble/hashes/utils';
@@ -15,7 +16,12 @@ import { getAllAccounts } from '../accounts';
 import { MnemonicAccount, type MnemonicSerializedAccount } from '../accounts/MnemonicAccount';
 import { setStorageEntity } from '../storage-entities-utils';
 import { makeUniqueKey } from '../storage-utils';
-import { getRandomEntropy, entropyToSerialized, entropyToMnemonic } from '_shared/utils/bip39';
+import {
+	getRandomEntropy,
+	entropyToSerialized,
+	entropyToMnemonic,
+	validateEntropy,
+} from '_shared/utils/bip39';
 import { decrypt, encrypt } from '_src/shared/cryptography/keystore';
 
 type DataDecryptedV0 = {
@@ -31,7 +37,9 @@ interface MnemonicAccountSourceSerialized extends AccountSourceSerialized {
 	sourceHash: string;
 }
 
-interface MnemonicAccountSourceSerializedUI extends AccountSourceSerializedUI {}
+interface MnemonicAccountSourceSerializedUI extends AccountSourceSerializedUI {
+	type: 'mnemonic';
+}
 
 export class MnemonicAccountSource extends AccountSource<
 	MnemonicAccountSourceSerialized,
@@ -45,6 +53,9 @@ export class MnemonicAccountSource extends AccountSource<
 		entropyInput?: Uint8Array;
 	}) {
 		const entropy = entropyInput || getRandomEntropy();
+		if (!validateEntropy(entropy)) {
+			throw new Error("Can't create Passphrase Account Source, invalid entropy");
+		}
 		const decryptedData: DataDecryptedV0 = {
 			version: 0,
 			entropyHex: entropyToSerialized(entropy),
