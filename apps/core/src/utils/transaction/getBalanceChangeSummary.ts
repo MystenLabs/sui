@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import {
 	ObjectOwner,
+	normalizeSuiObjectId,
+	parseStructTag,
 	type DryRunTransactionBlockResponse,
 	type SuiTransactionBlockResponse,
 } from '@mysten/sui.js';
@@ -11,6 +13,7 @@ export type BalanceChange = {
 	amount: string;
 	recipient?: string;
 	owner?: string;
+	unRecognizedToken: boolean;
 };
 
 export type BalanceChangeByOwner = Record<string, BalanceChange[]>;
@@ -31,10 +34,14 @@ function getOwnerAddress(owner: ObjectOwner): string {
 
 export const getBalanceChangeSummary = (
 	transaction: DryRunTransactionBlockResponse | SuiTransactionBlockResponse,
+	recognizedPackagesList: string[],
 ) => {
 	const { balanceChanges, effects } = transaction;
 	if (!balanceChanges || !effects) return null;
 
+	const normalizedRecognizedPackages = recognizedPackagesList.map((itm) =>
+		normalizeSuiObjectId(itm),
+	);
 	const balanceChangeByOwner = {};
 	return balanceChanges.reduce((acc, balanceChange) => {
 		const amount = BigInt(balanceChange.amount);
@@ -43,6 +50,7 @@ export const getBalanceChangeSummary = (
 		const recipient = balanceChanges.find(
 			(bc) => balanceChange.coinType === bc.coinType && amount === BigInt(bc.amount) * -1n,
 		);
+		const { address: packageId } = parseStructTag(balanceChange.coinType);
 
 		const recipientAddress = recipient?.owner ? getOwnerAddress(recipient?.owner) : undefined;
 
@@ -51,6 +59,7 @@ export const getBalanceChangeSummary = (
 			amount: amount.toString(),
 			recipient: recipientAddress,
 			owner,
+			unRecognizedToken: !normalizedRecognizedPackages.includes(packageId),
 		};
 
 		acc[owner] = (acc[owner] ?? []).concat(summary);
