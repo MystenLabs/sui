@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
@@ -15,6 +16,7 @@ import ForgotPasswordPage from '_app/wallet/forgot-password-page';
 import LockedPage from '_app/wallet/locked-page';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { ApprovalRequestPage } from '_pages/approval-request';
+import WelcomePageV2 from '_pages/enoki-onboarding/WelcomePage';
 import HomePage, {
 	TokensPage,
 	TransactionBlocksPage,
@@ -46,6 +48,7 @@ const HIDDEN_MENU_PATHS = [
 
 const App = () => {
 	const dispatch = useAppDispatch();
+	const useNewOnboardingFlow = useFeatureIsOn('enoki-social-sign-in');
 	const isPopup = useAppSelector((state) => state.app.appType === AppType.popup);
 	useEffect(() => {
 		document.body.classList.remove('app-initializing');
@@ -82,7 +85,7 @@ const App = () => {
 				<Route path="qredo-connect/:id/select" element={<SelectQredoAccountsPage />} />
 			</Route>
 
-			<Route path="welcome" element={<WelcomePage />} />
+			<Route path="welcome" element={useNewOnboardingFlow ? <WelcomePageV2 /> : <WelcomePage />} />
 			<Route path="/initialize" element={<InitializePage />}>
 				<Route path="select" element={<SelectPage />} />
 				<Route path="create" element={<CreatePage />} />

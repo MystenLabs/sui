@@ -26,11 +26,12 @@ const styles = cva(
 					'disabled:bg-hero-darkest disabled:text-white disabled:opacity-40',
 				],
 				secondary: [
-					'bg-gray-40 text-steel-darker border-none',
-					'hover:bg-gray-45 focus:bg-gray-45',
-					'visited:text-steel-darker',
+					'bg-hero-darkest/5 text-steel-dark border-none',
+					'hover:bg-hero-darkest/20 hover:text-steel-darker',
+					'focus:bg-hero-darkest/10 focus:text-steel-dark/70',
 					'active:text-steel-dark/70',
-					'disabled:bg-gray-40 disabled:text-steel/50',
+					'visited:text-steel-darkest',
+					'disabled:bg-hero-darkest/5 disabled:text-steel/50',
 				],
 				secondarySui: [
 					'bg-transparent text-steel border-none',

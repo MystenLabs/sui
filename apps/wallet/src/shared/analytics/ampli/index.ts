@@ -150,6 +150,21 @@ export interface ClickedHideAssetProperties {
 	objectId: string;
 }
 
+export interface ClickedSocialSignInButtonProperties {
+	/**
+	 * The name (e.g., Microsoft) of a social sign-in provider.
+	 *
+	 * | Rule | Value |
+	 * |---|---|
+	 * | Enum Values | Microsoft, Facebook, Google, Twitch |
+	 */
+	signInProvider: 'Microsoft' | 'Facebook' | 'Google' | 'Twitch';
+	/**
+	 * The flow the user came from.
+	 */
+	sourceFlow: string;
+}
+
 export interface ClickedStakeSuiProperties {
 	/**
 	 * Whether or not the user is already staking some SUI.
@@ -410,6 +425,14 @@ export class ClickedHideAsset implements BaseEvent {
 
 export class ClickedImportExistingWallet implements BaseEvent {
 	event_type = 'clicked import existing wallet';
+}
+
+export class ClickedSocialSignInButton implements BaseEvent {
+	event_type = 'clicked social sign in button';
+
+	constructor(public event_properties: ClickedSocialSignInButtonProperties) {
+		this.event_properties = event_properties;
+	}
 }
 
 export class ClickedStakeSui implements BaseEvent {
@@ -811,6 +834,23 @@ export class Ampli {
     options?: EventOptions,
   ) {
     return this.track(new ClickedImportExistingWallet(), options);
+  }
+
+  /**
+   * clicked social sign in button
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/clicked%20social%20sign%20in%20button)
+   *
+   * When users click a social sign-in button to create an account.
+   *
+   * @param properties The event's properties (e.g. signInProvider)
+   * @param options Amplitude event options.
+   */
+  clickedSocialSignInButton(
+    properties: ClickedSocialSignInButtonProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new ClickedSocialSignInButton(properties), options);
   }
 
   /**
