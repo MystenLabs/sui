@@ -34,7 +34,10 @@ where
             self.store.get_last_address_processed_checkpoint().await?;
         // process another batch of events, 100 checkpoints at a time, otherwise sleep for 3 seconds
         loop {
-            let latest_checkpoint = self.store.get_latest_checkpoint_sequence_number().await?;
+            let latest_checkpoint = self
+                .store
+                .get_latest_tx_checkpoint_sequence_number()
+                .await?;
             if latest_checkpoint >= last_processed_addr_checkpoint + ADDRESS_STATS_BATCH_SIZE as i64
             {
                 let cursor = match last_processed_addr_checkpoint {
