@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SubscriptionId } from '../types/index.js';
 import { RequestManager, Client, WebSocketTransport } from '@open-rpc/client-js';
 
 export const getWebsocketUrl = (httpUrl: string, port?: number): string => {
@@ -14,7 +13,7 @@ export const getWebsocketUrl = (httpUrl: string, port?: number): string => {
 };
 
 type NotificationMessageParams = {
-	subscription: SubscriptionId;
+	subscription: number;
 	result: object;
 };
 
@@ -53,7 +52,7 @@ export const DEFAULT_CLIENT_OPTIONS: WebsocketClientOptions = {
 
 export class WebsocketClient {
 	#client: Client | null;
-	#subscriptions: Map<SubscriptionId, SubscriptionRequest & { id: number }>;
+	#subscriptions: Map<number, SubscriptionRequest & { id: number }>;
 	#disconnects: number;
 
 	constructor(
