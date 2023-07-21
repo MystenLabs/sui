@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiAddress } from '@mysten/sui.js';
-
 import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
 
 export type AccountPublicInfo = {
@@ -12,7 +10,7 @@ export type AccountPublicInfo = {
 
 const STORE_KEY = 'accountsPublicInfo';
 
-type AccountsPublicInfo = Record<SuiAddress, AccountPublicInfo>;
+type AccountsPublicInfo = Record<string, AccountPublicInfo>;
 
 export async function getStoredAccountsPublicInfo(): Promise<AccountsPublicInfo> {
 	return (await getFromLocalStorage(STORE_KEY, {})) || {};
@@ -23,13 +21,13 @@ export function storeAccountsPublicInfo(accountsPublicInfo: AccountsPublicInfo) 
 }
 
 export async function getAccountPublicInfo(
-	accountAddress: SuiAddress,
+	accountAddress: string,
 ): Promise<AccountPublicInfo | null> {
 	return (await getStoredAccountsPublicInfo())[accountAddress] || null;
 }
 
 export type AccountsPublicInfoUpdates = {
-	accountAddress: SuiAddress;
+	accountAddress: string;
 	changes: Partial<AccountPublicInfo>;
 }[];
 
@@ -45,7 +43,7 @@ export async function updateAccountsPublicInfo(accountsUpdates: AccountsPublicIn
 }
 
 export async function deleteAccountsPublicInfo(
-	accounts: { toDelete: SuiAddress[] } | { toKeep: SuiAddress[] },
+	accounts: { toDelete: string[] } | { toKeep: string[] },
 ) {
 	const allAccountsPublicInfo = await getStoredAccountsPublicInfo();
 	const newAccountsPublicInfo: AccountsPublicInfo = {};

@@ -3,12 +3,12 @@
 
 import { useFeatureValue } from '@growthbook/growthbook-react';
 import { useRpcClient } from '@mysten/core';
-import { type SuiTransactionBlockResponse, type SuiAddress } from '@mysten/sui.js';
+import { type SuiTransactionBlockResponse } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 
 import { FEATURES } from '_src/shared/experimentation/features';
 
-export function useQueryTransactionsByAddress(address: SuiAddress | null) {
+export function useQueryTransactionsByAddress(address: string | null) {
 	const rpc = useRpcClient();
 	const refetchInterval = useFeatureValue(FEATURES.WALLET_ACTIVITY_REFETCH_INTERVAL, 20_000);
 

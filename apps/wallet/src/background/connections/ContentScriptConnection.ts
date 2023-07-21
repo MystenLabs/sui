@@ -1,11 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	type SignedTransaction,
-	type SuiAddress,
-	type SuiTransactionBlockResponse,
-} from '@mysten/sui.js';
+import { type SignedTransaction, type SuiTransactionBlockResponse } from '@mysten/sui.js';
 import Browser from 'webextension-polyfill';
 
 import { Connection } from './Connection';
@@ -228,7 +224,7 @@ export class ContentScriptConnection extends Connection {
 		this.send(createMessage(error, responseForID));
 	}
 
-	private async sendAccounts(accounts: SuiAddress[], responseForID?: string) {
+	private async sendAccounts(accounts: string[], responseForID?: string) {
 		const allAccountsPublicInfo = await getStoredAccountsPublicInfo();
 		this.send(
 			createMessage<GetAccountResponse>(
@@ -244,7 +240,7 @@ export class ContentScriptConnection extends Connection {
 		);
 	}
 
-	private async ensurePermissions(permissions: PermissionType[], account?: SuiAddress) {
+	private async ensurePermissions(permissions: PermissionType[], account?: string) {
 		const existingPermission = await Permissions.getPermission(this.origin);
 		const allowed = await Permissions.hasPermissions(
 			this.origin,

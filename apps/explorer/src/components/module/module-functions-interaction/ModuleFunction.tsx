@@ -23,7 +23,7 @@ import { useZodForm } from '~/hooks/useZodForm';
 import { DisclosureBox } from '~/ui/DisclosureBox';
 import { Input } from '~/ui/Input';
 
-import type { SuiMoveNormalizedFunction, ObjectId } from '@mysten/sui.js';
+import type { SuiMoveNormalizedFunction } from '@mysten/sui.js';
 import type { TypeOf } from 'zod';
 
 const argsSchema = z.object({
@@ -32,7 +32,7 @@ const argsSchema = z.object({
 });
 
 export type ModuleFunctionProps = {
-	packageId: ObjectId;
+	packageId: string;
 	moduleName: string;
 	functionName: string;
 	functionDetails: SuiMoveNormalizedFunction;

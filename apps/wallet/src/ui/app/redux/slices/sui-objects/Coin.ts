@@ -3,7 +3,7 @@
 
 import { getObjectType } from '@mysten/sui.js';
 
-import type { ObjectId, SuiObjectData, SuiMoveObject } from '@mysten/sui.js';
+import type { SuiObjectData, SuiMoveObject } from '@mysten/sui.js';
 
 const COIN_TYPE = '0x2::coin::Coin';
 const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
@@ -35,7 +35,7 @@ export class Coin {
 		return BigInt(obj.fields.balance);
 	}
 
-	public static getID(obj: SuiMoveObject): ObjectId {
+	public static getID(obj: SuiMoveObject): string {
 		return obj.fields.id.id;
 	}
 

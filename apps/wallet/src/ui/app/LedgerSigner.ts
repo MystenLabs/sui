@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiAddress } from '@mysten/sui.js';
 import { type SuiClient } from '@mysten/sui.js/client';
 import {
 	type SerializedSignature,
@@ -39,7 +38,7 @@ export class LedgerSigner extends WalletSigner {
 		return this.#suiLedgerClient;
 	}
 
-	async getAddress(): Promise<SuiAddress> {
+	async getAddress(): Promise<string> {
 		const ledgerClient = await this.#initializeSuiLedgerClient();
 		const publicKeyResult = await ledgerClient.getPublicKey(this.#derivationPath);
 		const publicKey = new Ed25519PublicKey(publicKeyResult.publicKey);

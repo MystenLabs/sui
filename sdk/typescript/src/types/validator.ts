@@ -14,7 +14,6 @@ import {
 	tuple,
 	optional,
 } from 'superstruct';
-import { AuthorityName, EpochId } from './transactions.js';
 
 /* -------------- Types for the SuiSystemState Rust definition -------------- */
 
@@ -42,8 +41,8 @@ export const Balance = object({
 
 export const StakeObject = object({
 	stakedSuiId: string(),
-	stakeRequestEpoch: EpochId,
-	stakeActiveEpoch: EpochId,
+	stakeRequestEpoch: string(),
+	stakeActiveEpoch: string(),
 	principal: string(),
 	status: union([literal('Active'), literal('Pending'), literal('Unstaked')]),
 	estimatedReward: optional(string()),
@@ -110,10 +109,10 @@ export const DelegationStakingPool = object({
 	fields: DelegationStakingPoolFields,
 });
 
-export const Validators = array(tuple([AuthorityName, string()]));
+export const Validators = array(tuple([string(), string()]));
 
 export const CommitteeInfo = object({
-	epoch: EpochId,
+	epoch: string(),
 	/** Array of (validator public key, stake unit) tuple */
 	validators: Validators,
 });
