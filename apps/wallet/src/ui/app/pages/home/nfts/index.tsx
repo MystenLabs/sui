@@ -196,7 +196,13 @@ function NftsPage() {
 												<Button
 													variant="hidden"
 													size="icon"
-													onClick={(event: any) => hideAsset(object.objectId, event)}
+													onClick={(event: any) => {
+														ampli.clickedHideAsset({
+															objectId: object.objectId,
+															collectibleType: object.type!,
+														});
+														hideAsset(object.objectId, event);
+													}}
 													after={<EyeClose16 />}
 												/>
 											</div>
@@ -208,7 +214,6 @@ function NftsPage() {
 											size="lg"
 											animateHover
 											borderRadius="xl"
-											showLabel
 										/>
 									</ErrorBoundary>
 								</div>

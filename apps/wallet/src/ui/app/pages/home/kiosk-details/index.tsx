@@ -23,7 +23,7 @@ function KioskDetailsPage() {
 
 	return (
 		<div className="flex flex-1 flex-col flex-nowrap gap-3.75 mb-10">
-			<PageTitle title="Kiosk" back="/nfts" />
+			<PageTitle title="Kiosk" back />
 			<div className="grid grid-cols-3 gap-3 items-center justify-center mb-auto">
 				{items
 					?.sort((item) => (hasDisplayData(item) ? -1 : 1))

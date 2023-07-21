@@ -67,7 +67,7 @@ export function NftImage({
 }: NftImageProps) {
 	const [error, setError] = useState(false);
 	const imgCls = cl(
-		'w-full h-full object-cover ',
+		'w-full h-full object-cover',
 		animateHover && 'group-hover:scale-110 duration-500 ease-ease-out-cubic',
 		className,
 	);
@@ -85,11 +85,11 @@ export function NftImage({
 					className={cl(
 						imgCls,
 						'flex flex-col flex-nowrap items-center justify-center',
-						'select-none uppercase text-steel-dark gap-2 bg-gray-40',
+						'select-none uppercase text-steel-dark gap-2 bg-placeholderGradient01',
 					)}
 					title={title}
 				>
-					<Image32 className="text-steel text-3xl" />
+					<Image32 className="text-steel text-3xl h-6 w-6" />
 					{showLabel ? <span className="text-captionSmall font-medium">No media</span> : null}
 				</div>
 			) : (
@@ -101,7 +101,6 @@ export function NftImage({
 					onError={() => setError(true)}
 				/>
 			)}
-
 			{video ? (
 				playable ? (
 					<video controls className="h-full w-full rounded-md overflow-hidden" src={video} />

@@ -3,9 +3,10 @@
 
 import { useGetKioskContents } from '@mysten/core';
 import { ArrowUpRight12, ArrowRight16 } from '@mysten/icons';
-import { hasPublicTransfer, formatAddress } from '@mysten/sui.js';
+import { hasPublicTransfer } from '@mysten/sui.js';
+import { formatAddress } from '@mysten/sui.js/utils';
 import cl from 'classnames';
-import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import { Button } from '_app/shared/ButtonUI';
@@ -62,7 +63,7 @@ function NFTDetailsPage() {
 		type: ExplorerLinkType.address,
 		address: ownerAddress,
 	});
-	const navigate = useNavigate();
+
 	return (
 		<div
 			className={cl('flex flex-1 flex-col flex-nowrap gap-5', {
@@ -72,7 +73,7 @@ function NFTDetailsPage() {
 			<Loading loading={isLoading || isLoadingDisplay}>
 				{objectData ? (
 					<>
-						<PageTitle back={() => navigate(-1)} />
+						<PageTitle back />
 						<div className="flex flex-1 flex-col flex-nowrap items-stretch gap-8">
 							<div className="flex flex-col flex-nowrap items-center gap-3 self-center">
 								<NFTDisplayCard objectId={nftId!} size="xl" borderRadius="xl" playable />
