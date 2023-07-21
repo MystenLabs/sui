@@ -412,36 +412,38 @@ where
                     .transaction_per_checkpoint
                     .observe(tx_count as f64);
 
+                // MUSTFIX(gegaowp): temporarily disable object changes commit b/c its high latency caused
+                // indexer to fall behind on mainnet.
                 // NOTE: commit object changes in the current task to stick to the original order,
                 // spawned tasks are possible to be executed in a different order.
-                let object_commit_timer = self.metrics.object_db_commit_latency.start_timer();
-                let mut object_changes_commit_res = self
-                    .state
-                    .persist_object_changes(
-                        &object_changes,
-                        self.metrics.object_mutation_db_commit_latency.clone(),
-                        self.metrics.object_deletion_db_commit_latency.clone(),
-                    )
-                    .await;
-                while let Err(e) = object_changes_commit_res {
-                    warn!(
-                        "Indexer object changes commit failed with error: {:?}, retrying after {:?} milli-secs...",
-                        e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
-                    );
-                    tokio::time::sleep(std::time::Duration::from_millis(
-                        DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
-                    ))
-                    .await;
-                    object_changes_commit_res = self
-                        .state
-                        .persist_object_changes(
-                            &object_changes,
-                            self.metrics.object_mutation_db_commit_latency.clone(),
-                            self.metrics.object_deletion_db_commit_latency.clone(),
-                        )
-                        .await;
-                }
-                object_commit_timer.stop_and_record();
+                // let object_commit_timer = self.metrics.object_db_commit_latency.start_timer();
+                // let mut object_changes_commit_res = self
+                //     .state
+                //     .persist_object_changes(
+                //         &object_changes,
+                //         self.metrics.object_mutation_db_commit_latency.clone(),
+                //         self.metrics.object_deletion_db_commit_latency.clone(),
+                //     )
+                //     .await;
+                // while let Err(e) = object_changes_commit_res {
+                //     warn!(
+                //         "Indexer object changes commit failed with error: {:?}, retrying after {:?} milli-secs...",
+                //         e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
+                //     );
+                //     tokio::time::sleep(std::time::Duration::from_millis(
+                //         DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
+                //     ))
+                //     .await;
+                //     object_changes_commit_res = self
+                //         .state
+                //         .persist_object_changes(
+                //             &object_changes,
+                //             self.metrics.object_mutation_db_commit_latency.clone(),
+                //             self.metrics.object_deletion_db_commit_latency.clone(),
+                //         )
+                //         .await;
+                // }
+                // object_commit_timer.stop_and_record();
                 self.metrics.total_object_checkpoint_committed.inc();
                 self.metrics
                     .total_object_change_committed
