@@ -16,6 +16,7 @@ import ForgotPasswordPage from '_app/wallet/forgot-password-page';
 import LockedPage from '_app/wallet/locked-page';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { ApprovalRequestPage } from '_pages/approval-request';
+import WelcomePageV2 from '_pages/enoki-onboarding/WelcomePage';
 import HomePage, {
 	TokensPage,
 	TransactionBlocksPage,
@@ -34,7 +35,6 @@ import { ImportPage } from '_pages/initialize/import';
 import SelectPage from '_pages/initialize/select';
 import SiteConnectPage from '_pages/site-connect';
 import WelcomePage from '_pages/welcome';
-import WelcomePageV2 from '_pages/zk-onboarding/WelcomePage';
 import { setNavVisibility } from '_redux/slices/app';
 
 const HIDDEN_MENU_PATHS = [
