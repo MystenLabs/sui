@@ -1425,9 +1425,11 @@ pub async fn build_server(
         return Ok(None);
     }
 
+    let db = state.database.clone();
+
     let mut server = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
     let metrics = Arc::new(JsonRpcMetrics::new(prometheus_registry));
-    server.register_module(ReadApi::new(state.clone(), metrics.clone()))?;
+    server.register_module(ReadApi::new(state.clone(), db.clone(), metrics.clone()))?;
     server.register_module(CoinReadApi::new(state.clone(), metrics.clone()))?;
     server.register_module(TransactionBuilderApi::new(state.clone()))?;
     server.register_module(GovernanceReadApi::new(state.clone(), metrics.clone()))?;
@@ -1442,7 +1444,7 @@ pub async fn build_server(
 
     server.register_module(IndexerApi::new(
         state.clone(),
-        ReadApi::new(state.clone(), metrics.clone()),
+        ReadApi::new(state.clone(), db, metrics.clone()),
         config.name_service_package_address,
         config.name_service_registry_id,
         config.name_service_reverse_registry_id,
