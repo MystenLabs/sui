@@ -4,11 +4,11 @@ import {
 	DryRunTransactionBlockResponse,
 	type SuiAddress,
 	type SuiTransactionBlockResponse,
-	is,
 	getExecutionStatusType,
 	getTransactionDigest,
 	getTransactionSender,
 } from '@mysten/sui.js';
+import { is } from '@mysten/sui.js/utils';
 import { useMemo } from 'react';
 
 import { getBalanceChangeSummary } from '../utils/transaction/getBalanceChangeSummary';

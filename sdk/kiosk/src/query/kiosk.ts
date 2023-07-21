@@ -7,8 +7,8 @@ import {
 	SuiObjectData,
 	SuiObjectResponse,
 	getObjectFields,
-	isValidSuiAddress,
 } from '@mysten/sui.js';
+import { isValidSuiAddress } from '@mysten/sui.js/utils';
 import {
 	attachListingsAndPrices,
 	attachLockedItems,

@@ -15,6 +15,7 @@
 		"multisig",
 		"src",
 		"transactions",
+		"utils",
 		"verify"
 	],
 	"engines": {
@@ -69,6 +70,11 @@
 			"source": "./src/builder/export.ts",
 			"import": "./dist/esm/builder/export.js",
 			"require": "./dist/cjs/builder/export.js"
+		},
+		"./utils": {
+			"source": "./src/utils/index.ts",
+			"import": "./dist/esm/utils/index.js",
+			"require": "./dist/cjs/utils/index.js"
 		},
 		"./verify": {
 			"source": "./src/verify/index.ts",

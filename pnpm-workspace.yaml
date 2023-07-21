@@ -11,3 +11,4 @@ packages:
     - '!sdk/typescript/client'
     - '!sdk/typescript/verify'
     - '!sdk/typescript/multisig'
+    - '!sdk/typescript/utils'

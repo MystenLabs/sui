@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-	toB64,
 	type SignedTransaction,
 	type SignedMessage,
 	type SuiAddress,
 	type SuiTransactionBlockResponse,
 } from '@mysten/sui.js';
+
 import { type SerializedSignature, type ExportedKeypair } from '@mysten/sui.js/cryptography';
+import { toB64 } from '@mysten/sui.js/utils';
 import { lastValueFrom, map, take } from 'rxjs';
 
 import { growthbook } from '../experimentation/feature-gating';
