@@ -6,9 +6,9 @@ import {
 	getExecutionStatusType,
 	getTotalGasUsed,
 	getTransactionSender,
-	type JsonRpcProvider,
 	type SuiTransactionBlockResponse,
 } from '@mysten/sui.js';
+import { type SuiClient } from '@mysten/sui.js/client';
 
 import { SuiAmount } from '../Table/SuiAmount';
 import { TxTimeType } from '../tx-time/TxTimeType';
@@ -80,8 +80,8 @@ export const genTableDataFromTxData = (results: SuiTransactionBlockResponse[]) =
 
 const dedupe = (arr: string[]) => Array.from(new Set(arr));
 
-export const getDataOnTxDigests = (rpc: JsonRpcProvider, transactions: string[]) =>
-	rpc
+export const getDataOnTxDigests = (client: SuiClient, transactions: string[]) =>
+	client
 		.multiGetTransactionBlocks({
 			digests: dedupe(transactions),
 			options: {

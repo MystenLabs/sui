@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type SuiCallArg } from '@mysten/sui.js';
+import { Text } from '@mysten/ui';
 
 import { ProgrammableTxnBlockCard } from '~/components/transactions/ProgTxnBlockCard';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
-import { Text } from '~/ui/Text';
 import { TransactionBlockCardSection } from '~/ui/TransactionBlockCard';
 
 const REGEX_NUMBER = /^\d+$/;

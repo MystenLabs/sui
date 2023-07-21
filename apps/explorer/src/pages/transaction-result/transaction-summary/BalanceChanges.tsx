@@ -6,12 +6,12 @@ import {
 	CoinFormat,
 	useFormatCoin,
 	type BalanceChange,
+	useResolveSuiNSName,
 } from '@mysten/core';
+import { Heading, Text } from '@mysten/ui';
 
 import { CoinsStack } from '~/ui/CoinsStack';
-import { Heading } from '~/ui/Heading';
 import { AddressLink } from '~/ui/InternalLink';
-import { Text } from '~/ui/Text';
 import { TransactionBlockCard, TransactionBlockCardSection } from '~/ui/TransactionBlockCard';
 
 interface BalanceChangesProps {
@@ -59,6 +59,7 @@ function BalanceChangeEntry({ change }: { change: BalanceChange }) {
 
 function BalanceChangeCard({ changes, owner }: { changes: BalanceChange[]; owner: string }) {
 	const coinTypesSet = new Set(changes.map((change) => change.coinType));
+	const { data: suinsDomainName } = useResolveSuiNSName(owner);
 
 	return (
 		<TransactionBlockCard
@@ -80,7 +81,7 @@ function BalanceChangeCard({ changes, owner }: { changes: BalanceChange[]; owner
 							Owner
 						</Text>
 						<Text variant="pBody/medium" color="hero-dark">
-							<AddressLink address={owner} />
+							<AddressLink label={suinsDomainName || undefined} address={owner} />
 						</Text>
 					</div>
 				) : null

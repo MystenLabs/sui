@@ -3,14 +3,13 @@
 
 import { ArrowUpRight12 } from '@mysten/icons';
 import { type SuiValidatorSummary } from '@mysten/sui.js';
+import { Heading, Text } from '@mysten/ui';
 
 import { StakeButton } from './StakeButton';
 import { CopyToClipboard } from '~/ui/CopyToClipboard';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
-import { Heading } from '~/ui/Heading';
 import { ImageIcon } from '~/ui/ImageIcon';
 import { AddressLink } from '~/ui/InternalLink';
-import { Text } from '~/ui/Text';
 
 type ValidatorMetaProps = {
 	validatorData: SuiValidatorSummary;

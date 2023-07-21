@@ -19,6 +19,7 @@ use move_binary_format::{
 };
 use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule};
 use move_compiler::{
+    cfgir::visitor::AbstractInterpreterVisitor,
     compiled_unit::{
         AnnotatedCompiledModule, AnnotatedCompiledScript, CompiledUnitEnum, NamedCompiledModule,
     },
@@ -52,7 +53,10 @@ use sui_types::{
 };
 use sui_verifier::verifier as sui_bytecode_verifier;
 
-use crate::linters::{self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier};
+use crate::linters::{
+    custom_state_change::CustomStateChangeVerifier, known_filters,
+    self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier,
+};
 
 #[cfg(test)]
 #[path = "unit_tests/build_tests.rs"]
@@ -131,8 +135,16 @@ impl BuildConfig {
         let mut fn_info = None;
         let compiled_pkg = build_plan.compile_with_driver(writer, |compiler| {
             let (files, units_res) = if lint {
-                let lint_visitors = vec![ShareOwnedVerifier.into(), SelfTransferVerifier.into()];
-                compiler.add_visitors(lint_visitors).build()?
+                let lint_visitors = vec![
+                    ShareOwnedVerifier.visitor(),
+                    SelfTransferVerifier.visitor(),
+                    CustomStateChangeVerifier.visitor(),
+                ];
+                let (filter_attr_name, filters) = known_filters();
+                compiler
+                    .add_visitors(lint_visitors)
+                    .add_custom_known_filters(filters, filter_attr_name)
+                    .build()?
             } else {
                 compiler.build()?
             };

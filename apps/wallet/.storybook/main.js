@@ -25,12 +25,12 @@ module.exports = {
 		config.plugins.push(new MiniCssExtractPlugin());
 		config.resolve.alias = custom.resolve.alias;
 
-		const cssRule = custom.module.rules.find((rule) => rule.test.test('.css'));
-		const tsRule = custom.module.rules.find((rule) => rule.test.test('.tsx'));
+		const cssRule = custom.module.rules.find((rule) => rule.test?.test('.css'));
+		const tsRule = custom.module.rules.find((rule) => rule.test?.test('.tsx'));
 		tsRule.include = path.resolve('../icons/src');
 
 		config.module.rules = [
-			...config.module.rules.filter((rule) => !rule.test.test('.css')),
+			...config.module.rules.filter((rule) => !rule.test?.test('.css')),
 			tsRule,
 			cssRule,
 		];

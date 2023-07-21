@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { type MoveCallMetric } from '@mysten/sui.js';
+import { Text } from '@mysten/ui';
 import { useMemo } from 'react';
 
 import { ObjectLink } from '~/ui/InternalLink';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
-import { Text } from '~/ui/Text';
 
 interface TopPackagesTableProps {
 	data: MoveCallMetric[];
@@ -26,19 +26,19 @@ export function TopPackagesTable({ data, isLoading }: TopPackagesTableProps) {
 			})),
 			columns: [
 				{
-					header: 'Function',
-					accessorKey: 'function',
+					header: 'Package ID',
+					accessorKey: 'package',
 				},
 				{
 					header: 'Module',
 					accessorKey: 'module',
 				},
 				{
-					header: 'Package ID',
-					accessorKey: 'package',
+					header: 'Function',
+					accessorKey: 'function',
 				},
 				{
-					header: 'Txns',
+					header: 'Transactions',
 					accessorKey: 'count',
 				},
 			],

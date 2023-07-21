@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { normalizeSuiAddress, type SuiAddress } from '@mysten/sui.js';
+import { type SuiAddress } from '@mysten/sui.js';
+import { normalizeSuiAddress } from '@mysten/sui.js/utils';
 
 import { type Account, AccountType } from './Account';
 

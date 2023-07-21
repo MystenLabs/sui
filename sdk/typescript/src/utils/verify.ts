@@ -2,14 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64 } from '@mysten/bcs';
-import nacl from 'tweetnacl';
-import type { IntentScope } from '../cryptography/intent.js';
+import { IntentScope } from '../cryptography/intent.js';
 import { messageWithIntent } from '../cryptography/intent.js';
-import { secp256k1 } from '@noble/curves/secp256k1';
-import { sha256 } from '@noble/hashes/sha256';
 import type { SerializedSignature } from '../cryptography/signature.js';
 import { blake2b } from '@noble/hashes/blake2b';
 import { toSingleSignaturePubkeyPair } from '../cryptography/utils.js';
+import { bcs } from '../types/sui-bcs.js';
 
 // TODO: This might actually make sense to eventually move to the `Keypair` instances themselves, as
 // it could allow the Sui.js to be tree-shaken a little better, possibly allowing keypairs that are
@@ -22,21 +20,34 @@ export async function verifyMessage(
 	scope: IntentScope,
 ) {
 	const signature = toSingleSignaturePubkeyPair(serializedSignature);
+
+	if (scope === IntentScope.PersonalMessage) {
+		const messageBytes = messageWithIntent(
+			scope,
+			bcs.ser(['vector', 'u8'], typeof message === 'string' ? fromB64(message) : message).toBytes(),
+		);
+
+		if (await signature.pubKey.verify(blake2b(messageBytes, { dkLen: 32 }), signature.signature)) {
+			return true;
+		}
+
+		// Fallback for backwards compatibility, old versions of the SDK
+		// did not properly wrap PersonalMessages in a PersonalMessage bcs Struct
+		const unwrappedMessageBytes = messageWithIntent(
+			scope,
+			typeof message === 'string' ? fromB64(message) : message,
+		);
+
+		return signature.pubKey.verify(
+			blake2b(unwrappedMessageBytes, { dkLen: 32 }),
+			signature.signature,
+		);
+	}
+
 	const messageBytes = messageWithIntent(
 		scope,
 		typeof message === 'string' ? fromB64(message) : message,
 	);
-	const digest = blake2b(messageBytes, { dkLen: 32 });
-	switch (signature.signatureScheme) {
-		case 'ED25519':
-			return nacl.sign.detached.verify(digest, signature.signature, signature.pubKey.toBytes());
-		case 'Secp256k1':
-			return secp256k1.verify(
-				secp256k1.Signature.fromCompact(signature.signature),
-				sha256(digest),
-				signature.pubKey.toBytes(),
-			);
-		default:
-			throw new Error(`Unknown signature scheme: "${signature.signatureScheme}"`);
-	}
+
+	return signature.pubKey.verify(blake2b(messageBytes, { dkLen: 32 }), signature.signature);
 }

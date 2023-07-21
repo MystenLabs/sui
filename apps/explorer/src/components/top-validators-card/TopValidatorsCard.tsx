@@ -4,6 +4,7 @@
 import { useGetSystemState } from '@mysten/core';
 import { ArrowRight12 } from '@mysten/icons';
 import { type SuiValidatorSummary } from '@mysten/sui.js';
+import { Text } from '@mysten/ui';
 import { useMemo } from 'react';
 
 import { StakeColumn } from './StakeColumn';
@@ -14,7 +15,6 @@ import { AddressLink, ValidatorLink } from '~/ui/InternalLink';
 import { Link } from '~/ui/Link';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
-import { Text } from '~/ui/Text';
 import { ampli } from '~/utils/analytics/ampli';
 
 const NUMBER_OF_VALIDATORS = 10;

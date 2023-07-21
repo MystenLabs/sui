@@ -704,9 +704,9 @@ impl<T: Cache> CertificateStore<T> {
     pub fn clear(&self) -> StoreResult<()> {
         fail_point!("narwhal-store-before-write");
 
-        self.certificates_by_id.clear()?;
-        self.certificate_id_by_round.clear()?;
-        self.certificate_id_by_origin.clear()?;
+        self.certificates_by_id.unsafe_clear()?;
+        self.certificate_id_by_round.unsafe_clear()?;
+        self.certificate_id_by_origin.unsafe_clear()?;
 
         fail_point!("narwhal-store-after-write");
         Ok(())

@@ -332,7 +332,7 @@ pub fn remove_transaction(path: &Path, opt: RemoveTransactionOptions) -> anyhow:
     };
     let mut objects_to_remove = vec![];
     for mutated_obj in effects.modified_at_versions() {
-        let new_objs = perpetual_db.get_newer_object_keys(mutated_obj)?;
+        let new_objs = perpetual_db.get_newer_object_keys(&mutated_obj)?;
         if new_objs.len() > 1 {
             bail!(
                 "Dependents of transaction {:?} have already executed! Mutated object: {:?}, new objects: {:?}",

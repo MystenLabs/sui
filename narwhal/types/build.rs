@@ -72,24 +72,6 @@ fn build_anemo_services(out_dir: &Path) {
         )
         .method(
             anemo_build::manual::Method::builder()
-                .name("get_payload_availability")
-                .route_name("GetPayloadAvailability")
-                .request_type("crate::PayloadAvailabilityRequest")
-                .response_type("crate::PayloadAvailabilityResponse")
-                .codec_path(codec_path)
-                .build(),
-        )
-        .method(
-            anemo_build::manual::Method::builder()
-                .name("get_certificates")
-                .route_name("GetCertificates")
-                .request_type("crate::GetCertificatesRequest")
-                .response_type("crate::GetCertificatesResponse")
-                .codec_path(codec_path)
-                .build(),
-        )
-        .method(
-            anemo_build::manual::Method::builder()
                 .name("fetch_certificates")
                 .route_name("FetchCertificates")
                 .request_type("crate::FetchCertificatesRequest")
@@ -127,16 +109,6 @@ fn build_anemo_services(out_dir: &Path) {
         .name("WorkerToPrimary")
         .package("narwhal")
         .attributes(automock_attribute.clone())
-        // TODO: Remove once we have upgraded to protocol version 12.
-        .method(
-            anemo_build::manual::Method::builder()
-                .name("report_our_batch")
-                .route_name("ReportOurBatch")
-                .request_type("crate::WorkerOurBatchMessage")
-                .response_type("()")
-                .codec_path(codec_path)
-                .build(),
-        )
         .method(
             anemo_build::manual::Method::builder()
                 .name("report_own_batch")
@@ -167,15 +139,6 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("ReportBatch")
                 .request_type("crate::WorkerBatchMessage")
                 .response_type("()")
-                .codec_path(codec_path)
-                .build(),
-        )
-        .method(
-            anemo_build::manual::Method::builder()
-                .name("request_batch")
-                .route_name("RequestBatch")
-                .request_type("crate::RequestBatchRequest")
-                .response_type("crate::RequestBatchResponse")
                 .codec_path(codec_path)
                 .build(),
         )

@@ -3,7 +3,7 @@
 
 import { useRpcClient } from '../api/RpcClientContext';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { normalizeSuiAddress } from '@mysten/sui.js';
+import { normalizeSuiAddress } from '@mysten/sui.js/utils';
 
 const MAX_PAGE_SIZE = 10;
 

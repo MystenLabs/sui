@@ -64,7 +64,6 @@ They are defined as follows:
 - `range_synchronize_timeout`: The timeout configuration when synchronizing a range of certificates from peers.
 - `certificates_synchronize_timeout`: The timeout configuration when requesting certificates from peers.
 - `payload_synchronize_timeout`: Timeout when has requested the payload for a certificate and is waiting to receive them.
-- `payload_availability_timeout`: The timeout configuration when for when we ask the other peers to discover who has the payload available for the dictated certificates.
 - `socket_addr`: The socket address the consensus api gRPC server should be listening to.
 - `get_collections_timeout`: The timeout configuration when requesting batches from workers.
 - `remove_collections_timeout`: The timeout configuration when removing batches from workers.

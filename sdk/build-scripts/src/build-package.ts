@@ -127,9 +127,16 @@ async function buildImportDirectories({ exports }: PackageJSON) {
 			`${JSON.stringify(
 				{
 					private: true,
-					types: exportMap.types?.replace(/^\.\//, '../'),
-					import: exportMap.import?.replace(/^\.\//, '../'),
-					main: (exportMap.require ?? exportMap.default)?.replace(/^\.\//, '../'),
+					types:
+						exportMap.types &&
+						path.relative(exportDir, path.resolve(process.cwd(), exportMap.types)),
+					import:
+						exportMap.import &&
+						path.relative(exportDir, path.resolve(process.cwd(), exportMap.import)),
+					main: path.relative(
+						exportDir,
+						path.resolve(process.cwd(), exportMap.require ?? exportMap.default),
+					),
 				},
 				null,
 				'\t',

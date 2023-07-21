@@ -37,11 +37,9 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::info;
 use types::{
     Batch, BatchDigest, Certificate, CertificateAPI, CertificateDigest, FetchBatchesRequest,
-    FetchBatchesResponse, FetchCertificatesRequest, FetchCertificatesResponse,
-    GetCertificatesRequest, GetCertificatesResponse, Header, HeaderAPI, HeaderV1Builder,
-    PayloadAvailabilityRequest, PayloadAvailabilityResponse, PrimaryToPrimary,
-    PrimaryToPrimaryServer, PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest,
-    RequestBatchResponse, RequestBatchesRequest, RequestBatchesResponse, RequestVoteRequest,
+    FetchBatchesResponse, FetchCertificatesRequest, FetchCertificatesResponse, Header, HeaderAPI,
+    HeaderV1Builder, PrimaryToPrimary, PrimaryToPrimaryServer, PrimaryToWorker,
+    PrimaryToWorkerServer, RequestBatchesRequest, RequestBatchesResponse, RequestVoteRequest,
     RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, TimestampMs,
     Transaction, Vote, VoteAPI, WorkerBatchMessage, WorkerSynchronizeMessage, WorkerToWorker,
     WorkerToWorkerServer,
@@ -247,23 +245,11 @@ impl PrimaryToPrimary for PrimaryToPrimaryMockServer {
     ) -> Result<anemo::Response<RequestVoteResponse>, anemo::rpc::Status> {
         unimplemented!()
     }
-    async fn get_certificates(
-        &self,
-        _request: anemo::Request<GetCertificatesRequest>,
-    ) -> Result<anemo::Response<GetCertificatesResponse>, anemo::rpc::Status> {
-        unimplemented!()
-    }
+
     async fn fetch_certificates(
         &self,
         _request: anemo::Request<FetchCertificatesRequest>,
     ) -> Result<anemo::Response<FetchCertificatesResponse>, anemo::rpc::Status> {
-        unimplemented!()
-    }
-
-    async fn get_payload_availability(
-        &self,
-        _request: anemo::Request<PayloadAvailabilityRequest>,
-    ) -> Result<anemo::Response<PayloadAvailabilityResponse>, anemo::rpc::Status> {
         unimplemented!()
     }
 }
@@ -349,13 +335,6 @@ impl WorkerToWorker for WorkerToWorkerMockServer {
         self.batch_sender.send(message).await.unwrap();
 
         Ok(anemo::Response::new(()))
-    }
-    async fn request_batch(
-        &self,
-        _request: anemo::Request<RequestBatchRequest>,
-    ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
-        tracing::error!("Not implemented WorkerToWorkerMockServer::request_batch");
-        Err(anemo::rpc::Status::internal("Unimplemented"))
     }
 
     async fn request_batches(

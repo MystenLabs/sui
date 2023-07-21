@@ -8,11 +8,18 @@ use move_command_line_common::{
     testing::{add_update_baseline_fix, format_diff, read_env_update_baseline},
 };
 use move_compiler::{
-    command_line::compiler::move_check_for_errors, shared::NumericalAddress, Compiler, PASS_PARSER,
+    cfgir::visitor::AbstractInterpreterVisitor,
+    command_line::compiler::move_check_for_errors,
+    diagnostics::codes::{self, CategoryID, DiagnosticsID, WarningFilter},
+    editions::Flavor,
+    expansion::ast as E,
+    shared::{NumericalAddress, PackageConfig},
+    Compiler, PASS_PARSER,
 };
 
 use sui_move_build::linters::{
-    self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier,
+    custom_state_change::CustomStateChangeVerifier, known_filters,
+    self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier, LINT_WARNING_PREFIX,
 };
 
 const SUI_FRAMEWORK_PATH: &str = "../sui-framework/packages/sui-framework";
@@ -31,17 +38,47 @@ fn linter_tests(path: &Path) -> datatest_stable::Result<()> {
     Ok(())
 }
 
+pub fn known_filters_for_test() -> (E::AttributeName_, Vec<WarningFilter>) {
+    let (filter_attr_name, mut filters) = known_filters();
+
+    let unused_function_code_filter = WarningFilter::Code(
+        DiagnosticsID::new(
+            codes::Category::UnusedItem as u8,
+            codes::UnusedItem::Function as u8,
+            Some(LINT_WARNING_PREFIX),
+        ),
+        Some("code_suppression_should_not_work"),
+    );
+    let unused_function_category_filter = WarningFilter::Category(
+        CategoryID::new(codes::Category::UnusedItem as u8, Some(LINT_WARNING_PREFIX)),
+        Some("category_suppression_should_not_work"),
+    );
+    filters.push(unused_function_code_filter);
+    filters.push(unused_function_category_filter);
+    (filter_attr_name, filters)
+}
+
 fn run_tests(path: &Path) -> anyhow::Result<()> {
     let exp_path = path.with_extension(EXP_EXT);
 
     let targets: Vec<String> = vec![path.to_str().unwrap().to_owned()];
-    let lint_visitors = vec![ShareOwnedVerifier.into(), SelfTransferVerifier.into()];
+    let lint_visitors = vec![
+        ShareOwnedVerifier.visitor(),
+        SelfTransferVerifier.visitor(),
+        CustomStateChangeVerifier.visitor(),
+    ];
+    let (filter_attr_name, filters) = known_filters_for_test();
     let (files, comments_and_compiler_res) = Compiler::from_files(
         targets,
         vec![MOVE_STDLIB_PATH.to_string(), SUI_FRAMEWORK_PATH.to_string()],
         default_testing_addresses(),
     )
     .add_visitors(lint_visitors)
+    .set_default_config(PackageConfig {
+        flavor: Flavor::Sui,
+        ..PackageConfig::default()
+    })
+    .add_custom_known_filters(filters, filter_attr_name)
     .run::<PASS_PARSER>()?;
 
     let diags = move_check_for_errors(comments_and_compiler_res);

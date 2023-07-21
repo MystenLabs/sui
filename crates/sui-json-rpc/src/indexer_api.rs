@@ -323,6 +323,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 self.read_api
                     .get_object(id, Some(SuiObjectDataOptions::full_content()))
                     .await
+                    .map_err(Error::from)
             } else {
                 Ok(SuiObjectResponse::new_with_error(
                     SuiObjectResponseError::DynamicFieldNotFound { parent_object_id },

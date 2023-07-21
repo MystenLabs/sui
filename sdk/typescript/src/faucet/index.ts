@@ -113,3 +113,16 @@ export async function getFaucetRequestStatus(input: {
 		input.headers,
 	);
 }
+
+export function getFaucetHost(network: 'testnet' | 'devnet' | 'localnet') {
+	switch (network) {
+		case 'testnet':
+			return 'https://faucet.testnet.sui.io';
+		case 'devnet':
+			return 'https://faucet.devnet.sui.io';
+		case 'localnet':
+			return 'http://127.0.0.1:9123';
+		default:
+			throw new Error(`Unknown network: ${network}`);
+	}
+}

@@ -63,6 +63,7 @@ pub async fn send_and_confirm_transaction_with_execution_error(
     // Make the initial request
     let epoch_store = authority.load_epoch_store_one_call_per_task();
     let transaction = authority.verify_transaction(transaction).unwrap();
+
     let response = authority
         .handle_transaction(&epoch_store, transaction.clone())
         .await?;
@@ -73,7 +74,7 @@ pub async fn send_and_confirm_transaction_with_execution_error(
     let certificate =
         CertifiedTransaction::new(transaction.into_message(), vec![vote.clone()], &committee)
             .unwrap()
-            .verify(&committee)
+            .verify_authenticated(&committee, &Default::default())
             .unwrap();
 
     // We also check the incremental effects of the transaction on the live object set against StateAccumulator
@@ -275,7 +276,7 @@ pub fn init_certified_transaction(
         epoch_store.committee(),
     )
     .unwrap()
-    .verify(epoch_store.committee())
+    .verify_authenticated(epoch_store.committee(), &Default::default())
     .unwrap()
 }
 

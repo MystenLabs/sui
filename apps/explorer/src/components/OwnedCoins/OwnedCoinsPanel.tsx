@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useOnScreen, useGetCoins } from '@mysten/core';
+import { LoadingIndicator } from '@mysten/ui';
 import { useEffect, useRef } from 'react';
 
 import CoinItem from './CoinItem';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 type CoinsPanelProps = {
 	coinType: string;
@@ -33,7 +33,7 @@ function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
 				)}
 			{isSpinnerVisible && (
 				<div ref={containerRef}>
-					<LoadingSpinner />
+					<LoadingIndicator />
 				</div>
 			)}
 		</div>

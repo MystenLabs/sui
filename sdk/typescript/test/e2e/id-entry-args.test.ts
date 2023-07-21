@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { getExecutionStatusType, ObjectId, TransactionBlock } from '../../src';
+import { getExecutionStatusType, ObjectId } from '../../src';
+import { TransactionBlock } from '../../src/builder';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Test ID as args to entry functions', () => {

@@ -4,10 +4,6 @@ AuthorityIdentifier:
 Batch:
   ENUM:
     0:
-      V1:
-        NEWTYPE:
-          TYPENAME: BatchV1
-    1:
       V2:
         NEWTYPE:
           TYPENAME: BatchV2
@@ -16,13 +12,6 @@ BatchDigest:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
-BatchV1:
-  STRUCT:
-    - transactions:
-        SEQ:
-          SEQ: U8
-    - metadata:
-        TYPENAME: Metadata
 BatchV2:
   STRUCT:
     - transactions:
@@ -113,13 +102,6 @@ WorkerOthersBatchMessage:
     - digest:
         TYPENAME: BatchDigest
     - worker_id: U32
-WorkerOurBatchMessage:
-  STRUCT:
-    - digest:
-        TYPENAME: BatchDigest
-    - worker_id: U32
-    - metadata:
-        TYPENAME: Metadata
 WorkerOwnBatchMessage:
   STRUCT:
     - digest:

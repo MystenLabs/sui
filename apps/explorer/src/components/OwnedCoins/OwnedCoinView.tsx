@@ -4,12 +4,12 @@
 import { useFormatCoin } from '@mysten/core';
 import { ArrowShowAndHideRight12 } from '@mysten/icons';
 import { type CoinBalance } from '@mysten/sui.js';
+import { Text } from '@mysten/ui';
 import * as Collapsible from '@radix-ui/react-collapsible';
 import clsx from 'clsx';
 import { useState } from 'react';
 
 import CoinsPanel from './OwnedCoinsPanel';
-import { Text } from '~/ui/Text';
 
 type OwnedCoinViewProps = {
 	coin: CoinBalance;

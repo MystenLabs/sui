@@ -3,6 +3,7 @@
 
 import { useFormatCoin, useGetSystemState } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
+import { LoadingIndicator } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
@@ -15,7 +16,6 @@ import { PageLayout } from '~/components/Layout/PageLayout';
 import { CheckpointsTable } from '~/components/checkpoints/CheckpointsTable';
 import { useEnhancedRpcClient } from '~/hooks/useEnhancedRpc';
 import { Banner } from '~/ui/Banner';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Stats, type StatsProps } from '~/ui/Stats';
 import { TableCard } from '~/ui/TableCard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/ui/Tabs';
@@ -68,7 +68,7 @@ export default function EpochDetail() {
 		);
 	}, [epochData]);
 
-	if (isLoading) return <PageLayout content={<LoadingSpinner />} />;
+	if (isLoading) return <PageLayout content={<LoadingIndicator />} />;
 
 	if (isError || !epochData)
 		return (

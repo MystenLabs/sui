@@ -223,9 +223,10 @@ impl<'a> ObjectRuntime<'a> {
 
         // remove from deleted_ids for the case in dynamic fields where the Field object was deleted
         // and then re-added in a single transaction
-        self.state.deleted_ids.remove(&id);
-        // mark the id as new
-        self.state.new_ids.insert(id, ());
+        if self.state.deleted_ids.remove(&id).is_none() {
+            // mark the id as new
+            self.state.new_ids.insert(id, ());
+        }
         Ok(())
     }
 
@@ -450,11 +451,6 @@ impl ObjectRuntimeState {
                 ty,
                 effect,
             } = child_object_effect;
-            if loaded_child_objects.contains_key(&child) {
-                // remove if from new_ids if it was loaded for case in dynamic fields where the
-                // Field object was removed and then re-added in a single transaction
-                self.new_ids.remove(&child);
-            }
 
             match effect {
                 // was modified, so mark it as mutated and transferred

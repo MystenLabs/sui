@@ -341,10 +341,10 @@ async fn find_package_object_id(
             .await?;
 
         for ((id, _, _), _) in effect.created() {
-            if let Ok(object_read) = state.get_object_read(id) {
+            if let Ok(object_read) = state.get_object_read(&id) {
                 if let Ok(object) = object_read.into_object() {
                     if matches!(object.type_(), Some(type_) if type_.is(&object_struct_tag)) {
-                        return Ok(*id);
+                        return Ok(id);
                     }
                 }
             }

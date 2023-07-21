@@ -3,6 +3,7 @@
 
 import { useRpcClient } from '@mysten/core';
 import { ArrowRight12 } from '@mysten/icons';
+import { Text } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
@@ -12,7 +13,6 @@ import { Link } from '~/ui/Link';
 import { Pagination, useCursorPagination } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
-import { Text } from '~/ui/Text';
 import { numberSuffix } from '~/utils/numberUtil';
 
 const DEFAULT_CHECKPOINTS_LIMIT = 20;

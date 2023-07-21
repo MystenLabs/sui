@@ -58,7 +58,7 @@ When you define a module, specify the module name (`coin`) preceded by the name 
 
 For example, if you have a published package "P", you cannot publish an entirely different package also named "P". At the same time you can have module "P1::M1", "P2::M1", and "P1::M2" but not another, say, "P1::M1" in the system at the same time.
 
-While you can't name different packages the same, you can upgrade a package on chain with updated code using the same package name.  
+While you can't name different packages the same, you can upgrade a package on chain with updated code using the same package name.
 
 In addition to having a presence at the source code level, as discussed in [Sui Move code organization](#move-code-organization), a
 package in Sui is also a Sui object and must have a unique numeric ID in addition to a unique name, which is assigned in the manifest file:

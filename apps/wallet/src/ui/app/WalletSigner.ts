@@ -3,14 +3,14 @@
 
 import {
 	type ExecuteTransactionRequestType,
-	type SerializedSignature,
 	type SignedMessage,
 	type SignedTransaction,
 	SignerWithProvider,
 	type SuiTransactionBlockResponse,
 	type SuiTransactionBlockResponseOptions,
-	type TransactionBlock,
 } from '@mysten/sui.js';
+import { type SerializedSignature } from '@mysten/sui.js/cryptography';
+import { type TransactionBlock } from '@mysten/sui.js/transactions';
 
 export abstract class WalletSigner extends SignerWithProvider {
 	abstract signData(data: Uint8Array, clientIdentifier?: string): Promise<SerializedSignature>;

@@ -3,6 +3,7 @@
 
 import { useGetValidatorsApy, useGetValidatorsEvents, useGetSystemState } from '@mysten/core';
 import { type SuiSystemStateSummary } from '@mysten/sui.js';
+import { LoadingIndicator, Text } from '@mysten/ui';
 import React, { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -10,8 +11,6 @@ import { PageLayout } from '~/components/Layout/PageLayout';
 import { ValidatorMeta } from '~/components/validator/ValidatorMeta';
 import { ValidatorStats } from '~/components/validator/ValidatorStats';
 import { Banner } from '~/ui/Banner';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
-import { Text } from '~/ui/Text';
 import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';
 import { VALIDATOR_LOW_STAKE_GRACE_PERIOD } from '~/utils/validatorConstants';
 
@@ -59,7 +58,7 @@ function ValidatorDetails() {
 			<PageLayout
 				content={
 					<div className="mb-10 flex items-center justify-center">
-						<LoadingSpinner />
+						<LoadingIndicator />
 					</div>
 				}
 			/>

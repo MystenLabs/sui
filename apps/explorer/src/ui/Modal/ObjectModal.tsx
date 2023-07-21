@@ -2,11 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { X12 } from '@mysten/icons';
+import { Text, Heading, IconButton } from '@mysten/ui';
 
 import { Modal, type ModalProps } from './index';
-import { Heading } from '../Heading';
-import { IconButton } from '../IconButton';
-import { Text } from '../Text';
 import { Image } from '../image/Image';
 
 export interface ObjectModalProps extends Omit<ModalProps, 'children'> {
@@ -52,8 +50,9 @@ export function ObjectModal({
 					onClick={onClose}
 					className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-0 bg-gray-90 p-0 text-sui-light outline-none hover:scale-105 active:scale-100"
 					aria-label="Close"
-					icon={X12}
-				/>
+				>
+					<X12 />
+				</IconButton>
 			</div>
 		</Modal>
 	);

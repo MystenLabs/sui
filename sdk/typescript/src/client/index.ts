@@ -48,6 +48,7 @@ import type {
 	DynamicFieldPage,
 	NetworkMetrics,
 	AddressMetrics,
+	AllEpochsAddressMetrics,
 } from '../types/index.js';
 import {
 	isValidTransactionDigest,
@@ -62,9 +63,11 @@ import { TransactionBlock } from '../builder/index.js';
 import { SuiHTTPTransport } from './http-transport.js';
 import type { SuiTransport } from './http-transport.js';
 import type { Keypair } from '../cryptography/index.js';
+import { RPCValidationError } from '../rpc/errors.js';
 
 export * from './http-transport.js';
 export * from './network.js';
+export { RPCValidationError };
 
 export interface PaginationArguments<Cursor> {
 	/** Optional paging cursor */
@@ -701,6 +704,15 @@ export class SuiClient {
 
 	async getAddressMetrics(): Promise<AddressMetrics> {
 		return await this.transport.request({ method: 'suix_getLatestAddressMetrics', params: [] });
+	}
+
+	async getAllEpochAddressMetrics(input?: {
+		descendingOrder?: boolean;
+	}): Promise<AllEpochsAddressMetrics> {
+		return await this.transport.request({
+			method: 'suix_getAllEpochAddressMetrics',
+			params: [input?.descendingOrder],
+		});
 	}
 
 	/**

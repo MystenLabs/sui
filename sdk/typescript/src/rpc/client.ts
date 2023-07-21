@@ -5,7 +5,7 @@ import { RequestManager, HTTPTransport, Client } from '@open-rpc/client-js';
 import type { Struct } from 'superstruct';
 import { validate } from 'superstruct';
 import { PACKAGE_VERSION, TARGETED_RPC_VERSION } from '../version.js';
-import { RPCValidationError } from '../utils/errors.js';
+import { RPCValidationError } from './errors.js';
 
 /**
  * An object defining headers to be passed to the RPC server

@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Ed25519Keypair, RawSigner, JsonRpcProvider, Secp256k1Keypair } from '@mysten/sui.js';
+import { RawSigner } from '@mysten/sui.js';
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+import { Secp256k1Keypair } from '@mysten/sui.js/keypairs/secp256k1';
 import { describe, expect, it } from 'vitest';
 
 import { AccountKeypair } from './AccountKeypair';
@@ -15,7 +18,7 @@ describe('AccountKeypair', () => {
 			const signData = new TextEncoder().encode('hello world');
 			const account = new AccountKeypair(keypair);
 			const accountKeypairSignature = await account.sign(signData);
-			const rawSigner = new RawSigner(keypair, new JsonRpcProvider());
+			const rawSigner = new RawSigner(keypair, new SuiClient({ url: getFullnodeUrl('localnet') }));
 			const rawSignerSignature = await rawSigner.signData(signData);
 			expect(accountKeypairSignature).toBe(rawSignerSignature);
 		});
