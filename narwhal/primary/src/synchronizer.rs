@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anemo::{rpc::Status, Network, Request, Response};
-use config::{AuthorityIdentifier, Committee, Epoch, WorkerCache};
+use config::{AuthorityIdentifier, Committee, Epoch, Stake, WorkerCache};
 use consensus::consensus::ConsensusRound;
 use crypto::NetworkPublicKey;
 use fastcrypto::hash::Hash as _;
@@ -362,11 +362,31 @@ impl Synchronizer {
         let inner_proposer = inner.clone();
         spawn_logged_monitored_task!(
             async move {
-                let last_round_certificates = inner_proposer
-                    .certificate_store
-                    .last_two_rounds_certs()
-                    .expect("Failed recovering certificates in primary core");
-                for certificate in last_round_certificates {
+                let highest_round_number = inner_proposer.certificate_store.highest_round_number();
+                let mut certificates = vec![];
+                for i in 0..2 {
+                    let round = highest_round_number - i;
+                    if round == 0 {
+                        break;
+                    }
+                    let round_certs = inner_proposer
+                        .certificate_store
+                        .at_round(round)
+                        .expect("Failed recovering certificates in primary core");
+                    let stake: Stake = round_certs
+                        .iter()
+                        .map(|c: &Certificate| inner_proposer.committee.stake_by_id(c.origin()))
+                        .sum();
+                    certificates.extend(round_certs.into_iter());
+                    if stake >= inner_proposer.committee.quorum_threshold() {
+                        break;
+                    } else {
+                        assert_eq!(i, 0);
+                    }
+                }
+                // Unnecessary to append certificates in ascending round order, but it doesn't
+                // hurt either.
+                for certificate in certificates.into_iter().rev() {
                     if let Err(e) = inner_proposer
                         .append_certificate_in_aggregator(certificate)
                         .await

@@ -507,7 +507,7 @@ async fn synchronizer_recover_previous_round() {
         .unwrap();
     let _ = tx_synchronizer_network.send(network.clone());
 
-    // Send 3 certificates from round 1, and 2 certificates from round 2 to Synchronizer.
+    // Create 3 certificates per round.
     let genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
@@ -525,6 +525,7 @@ async fn synchronizer_recover_previous_round() {
         &latest_protocol_version(),
         &keys,
     );
+    // Send 3 certificates from round 1, and 2 certificates from round 2 to Synchronizer.
     let all_certificates: Vec<_> = all_certificates.into_iter().collect();
     let round_1_certificates = all_certificates[0..3].to_vec();
     let round_2_certificates = all_certificates[3..5].to_vec();
