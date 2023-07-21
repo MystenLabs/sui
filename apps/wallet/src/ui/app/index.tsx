@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
@@ -33,6 +34,7 @@ import { ImportPage } from '_pages/initialize/import';
 import SelectPage from '_pages/initialize/select';
 import SiteConnectPage from '_pages/site-connect';
 import WelcomePage from '_pages/welcome';
+import WelcomePageV2 from '_pages/zk-onboarding/WelcomePage';
 import { setNavVisibility } from '_redux/slices/app';
 
 const HIDDEN_MENU_PATHS = [
@@ -58,6 +60,8 @@ const App = () => {
 
 	useInitialPageView();
 
+	const useNewOnboardingFlow = useFeatureIsOn('enoki-social-sign-in');
+
 	return (
 		<Routes>
 			<Route path="/*" element={<HomePage />}>
@@ -82,7 +86,7 @@ const App = () => {
 				<Route path="qredo-connect/:id/select" element={<SelectQredoAccountsPage />} />
 			</Route>
 
-			<Route path="welcome" element={<WelcomePage />} />
+			<Route path="welcome" element={useNewOnboardingFlow ? <WelcomePageV2 /> : <WelcomePage />} />
 			<Route path="/initialize" element={<InitializePage />}>
 				<Route path="select" element={<SelectPage />} />
 				<Route path="create" element={<CreatePage />} />

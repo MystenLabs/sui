@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SocialButton } from '../../shared/SocialButton';
 import { Button } from '_app/shared/ButtonUI';
 import { Heading } from '_app/shared/heading';
 import { Text } from '_app/shared/text';
@@ -9,7 +10,6 @@ import Logo from '_components/logo';
 import { useInitializedGuard } from '_hooks';
 import PageLayout from '_pages/layout';
 import { ampli } from '_src/shared/analytics/ampli';
-import { SocialButton } from '../../shared/SocialButton';
 
 function WelcomePage() {
 	const checkingInitialized = useInitializedGuard(false);
