@@ -53,7 +53,7 @@ max_struct_definitions: 200
 max_function_definitions: 1000
 max_fields_in_struct: 32
 max_dependency_depth: 100
-max_num_event_emit: 256
+max_num_event_emit: 1024
 max_num_new_move_object_ids: 2048
 max_num_new_move_object_ids_system_tx: 32768
 max_num_deleted_move_object_ids: 2048
@@ -61,6 +61,7 @@ max_num_deleted_move_object_ids_system_tx: 32768
 max_num_transferred_move_object_ids: 2048
 max_num_transferred_move_object_ids_system_tx: 32768
 max_event_emit_size: 256000
+max_event_emit_size_total: 65536000
 max_move_vector_len: 262144
 max_move_identifier_len: 128
 max_move_value_depth: 128
