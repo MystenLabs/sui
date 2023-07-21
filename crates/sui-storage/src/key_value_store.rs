@@ -210,7 +210,7 @@ mod tests {
     use futures::FutureExt;
     use std::collections::HashMap;
     use sui_test_transaction_builder::TestTransactionBuilder;
-    use sui_types::base_types::{random_object_ref, SuiAddress};
+    use sui_types::base_types::random_object_ref;
     use sui_types::crypto::{get_key_pair, AccountKeyPair};
     use sui_types::event::Event;
     use sui_types::message_envelope::Message;
