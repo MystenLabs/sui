@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SocialFacebook24, SocialGoogle24, SocialMicrosoft24, SocialTwitch24 } from '@mysten/icons';
+import {
+	SocialFacebook24 as FacebookLogo,
+	SocialGoogle24 as GoogleLogo,
+	SocialMicrosoft24 as MicrosoftLogo,
+	SocialTwitch24 as TwitchLogo,
+} from '@mysten/icons';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { forwardRef, type FunctionComponent, type SVGProps, type Ref } from 'react';
 import { ButtonOrLink, type ButtonOrLinkProps } from './utils/ButtonOrLink';
@@ -36,19 +41,19 @@ const socialSignInProviderInfo: Record<
 	{ icon: FunctionComponent<SVGProps<SVGSVGElement>>; label: string }
 > = {
 	microsoft: {
-		icon: SocialMicrosoft24,
+		icon: MicrosoftLogo,
 		label: 'Sign in with Microsoft',
 	},
 	google: {
-		icon: SocialGoogle24,
+		icon: GoogleLogo,
 		label: 'Sign in with Google',
 	},
 	facebook: {
-		icon: SocialFacebook24,
+		icon: FacebookLogo,
 		label: 'Sign in with Facebook',
 	},
 	twitch: {
-		icon: SocialTwitch24,
+		icon: TwitchLogo,
 		label: 'Sign in with Twitch',
 	},
 };
