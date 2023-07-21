@@ -4,7 +4,7 @@
 import { SocialFacebook24, SocialGoogle24, SocialMicrosoft24, SocialTwitch24 } from '@mysten/icons';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { forwardRef, type FunctionComponent, type SVGProps, type Ref } from 'react';
-import { ButtonOrLink, type ButtonOrLinkProps } from '../utils/ButtonOrLink';
+import { ButtonOrLink, type ButtonOrLinkProps } from './utils/ButtonOrLink';
 import { Text } from '_app/shared/text';
 
 const styles = cva(
@@ -63,7 +63,7 @@ export const SocialButton = forwardRef(
 			<ButtonOrLink
 				ref={forwardedRef}
 				className={styles({ provider })}
-				aria-label={showLabel ? undefined : ''}
+				aria-label={showLabel ? undefined : label}
 				{...otherProps}
 			>
 				<IconComponent width={24} height={24} />
