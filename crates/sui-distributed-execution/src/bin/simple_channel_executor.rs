@@ -1,13 +1,13 @@
 use clap::*;
+use std::collections::HashMap;
+use sui_config::{Config, NodeConfig};
 use std::path::PathBuf;
 use std::sync::Arc;
-use sui_config::{Config, NodeConfig};
 use sui_distributed_execution::{
     seqn_worker,
     exec_worker,
     dash_store::DashMemoryBackedStore,
 };
-use sui_types::multiaddr::Multiaddr;
 use tokio::sync::mpsc;
 
 const GIT_REVISION: &str = {
@@ -40,26 +40,27 @@ struct Args {
 
     /// Specifies the watermark up to which I will download checkpoints
     #[clap(long)]
-    download: Option<u64>,
+    download: u64,
 
     /// Specifies the watermark up to which I will execute checkpoints
     #[clap(long)]
-    execute: Option<u64>,
-
-    #[clap(long, help = "Specify address to listen on")]
-    listen_address: Option<Multiaddr>,
+    execute: u64,
 }
 
-#[tokio::main(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() {
     let args = Args::parse();
-    let config = NodeConfig::load(&args.config_path).unwrap();
-    let genesis = Arc::new(config.genesis().expect("Could not load genesis"));
-    let mut sw_state = seqn_worker::SequenceWorkerState::new(&config).await;
+
+    // Initialize SW
+    let sw_attrs = HashMap::from([
+        ("config".to_string(), args.config_path.to_string_lossy().into_owned()),
+        ("download".to_string(), args.download.to_string()),
+        ("execute".to_string(), args.download.to_string()),
+    ]);
+    
+    let mut sw_state = seqn_worker::SequenceWorkerState::new(0, sw_attrs).await;    
+
     let metrics = sw_state.metrics.clone();
-    let store = DashMemoryBackedStore::new(); // use the mutexed store for concurrency control
-    let mut ew_state = exec_worker::ExecutionWorkerState::new(store);
-    ew_state.init_store(&genesis);
 
     // Channel from sw to ew
     let (sw_sender, sw_receiver) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
@@ -69,24 +70,30 @@ async fn main() {
     // Run Sequence Worker asynchronously
     let sw_handler = tokio::spawn(async move {
         sw_state.run(
-            config.clone(), 
-            args.download, 
-            args.execute,
             sw_sender, 
             ew_receiver, 
         ).await;
     });
 
+    // Initialize EW
+    let config = NodeConfig::load(&args.config_path).unwrap();
+    let genesis = Arc::new(config.genesis().expect("Could not load genesis"));
+    
+    let store = DashMemoryBackedStore::new(); // use the mutexed store for concurrency control
+    let mut ew_state = exec_worker::ExecutionWorkerState::new(store);
+    ew_state.init_store(&genesis);
+
     // Run Execution Worker
-    if let Some(watermark) = args.execute {
+    let ew_handler = tokio::spawn(async move {
         ew_state.run(
             metrics,
-            watermark,
+            args.execute,
             sw_receiver,
             ew_sender
         ).await;
-    }
+    });
 
     // Wait for workers to terminate
     sw_handler.await.expect("sw failed");
+    ew_handler.await.expect("ew failed")
 }

@@ -1,7 +1,8 @@
 use std::sync::Arc;
 use std::cmp;
+use std::collections::HashMap;
 
-use sui_config::NodeConfig;
+use sui_config::{Config, NodeConfig};
 use prometheus::Registry;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
@@ -24,16 +25,22 @@ use typed_store::rocks::default_db_options;
 use super::types::*;
 
 pub struct SequenceWorkerState {
+    pub config: NodeConfig,
     pub store: Arc<AuthorityStore>,
     pub epoch_store: Arc<AuthorityPerEpochStore>,
     pub checkpoint_store: Arc<CheckpointStore>,
     pub committee_store: Arc<CommitteeStore>,
     pub prometheus_registry: Registry,
     pub metrics: Arc<LimitsMetrics>,
+    pub download: Option<u64>,
+    pub execute: Option<u64>,
 }
 
 impl SequenceWorkerState {
-    pub async fn new(config: &NodeConfig) -> Self {
+    pub async fn new(id: UniqueId, attrs: HashMap<String, String>) -> Self {
+        let config_path = attrs.get("config").unwrap();
+        let config = NodeConfig::load(config_path).unwrap();
+
         let genesis = config.genesis().expect("Could not load genesis");
         let registry_service = { metrics::start_prometheus_server(config.metrics_address) };
         let prometheus_registry = registry_service.default_registry();
@@ -97,12 +104,15 @@ impl SequenceWorkerState {
             &epoch_store,
         );
         Self {
+            config,
             store,
             epoch_store,
             checkpoint_store,
             committee_store,
             prometheus_registry,
             metrics,
+            download: Some(attrs.get("download").unwrap().parse().unwrap()),
+            execute: Some(attrs.get("execute").unwrap().parse().unwrap()),
         }
     }
 
@@ -176,31 +186,24 @@ impl SequenceWorkerState {
     }
 
     pub async fn run(&mut self, 
-        config: NodeConfig, 
-        download: Option<u64>, 
-        exeucte: Option<u64>,
         sw_sender: mpsc::Sender<SailfishMessage>,
         mut ew_receiver: mpsc::Receiver<SailfishMessage>,
     ){
-        let genesis = Arc::new(config.genesis().expect("Could not load genesis"));
+        let genesis = Arc::new(self.config.genesis().expect("Could not load genesis"));
         let genesis_seq = genesis.checkpoint().into_summary_and_sequence().0;
 
         let (highest_synced_seq, highest_executed_seq) = self.get_watermarks();
         println!("Highest synced {}", highest_synced_seq);
         println!("Highest executed {}", highest_executed_seq);
-        
-        if let Some(watermark) = download {
-            self.handle_download(watermark, &config).await;
-        }
 
         let protocol_config = self.epoch_store.protocol_config();
         let epoch_start_config = self.epoch_store.epoch_start_config();
         let reference_gas_price = self.epoch_store.reference_gas_price();
 
         // Download txs
-        if let Some(watermark) = download {
+        if let Some(watermark) = self.download {
             println!("SW downloading up to {}", watermark);
-            self.handle_download(watermark, &config).await;
+            self.handle_download(watermark, &self.config).await;
         }
 
         // Epoch Start
@@ -213,8 +216,7 @@ impl SequenceWorkerState {
             .await
             .expect("Sending doesn't work");
         
-
-        if let Some(watermark) = exeucte {
+        if let Some(watermark) = self.execute {
             for checkpoint_seq in genesis_seq..cmp::min(watermark, highest_synced_seq) {
                 let checkpoint_summary = self
                     .checkpoint_store
@@ -292,11 +294,11 @@ impl SequenceWorkerState {
                         );
                         assert_eq!(self.epoch_store.epoch() + 1, next_epoch);
                         self.epoch_store = self.epoch_store.new_at_next_epoch(
-                            config.protocol_public_key(),
+                            self.config.protocol_public_key(),
                             next_epoch_committee,
                             epoch_start_configuration,
                             self.store.clone(),
-                            &config.expensive_safety_check_config,
+                            &self.config.expensive_safety_check_config,
                         );
                         println!("SW new epoch store has epoch {}", self.epoch_store.epoch());
                         let protocol_config = self.epoch_store.protocol_config();

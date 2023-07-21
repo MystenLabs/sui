@@ -1,31 +1,9 @@
 use std::collections::HashMap;
 use async_trait::async_trait;
-
 use tokio::sync::mpsc;
 use tokio::time::{sleep, Duration};
 
-pub type UniqueId = u16;
-
-#[derive(Debug)]
-pub struct NetworkMessage {
-    pub src: UniqueId,
-    pub dst: UniqueId,
-    pub payload: String,
-}
-
-impl NetworkMessage {
-    pub fn serialize(&self) -> String {
-        format!("{}\t{}\t{}\t\n", self.src, self.dst, self.payload)
-    }
-
-    pub fn deserialize(string: String) -> NetworkMessage {
-        let mut splitted = string.split("\t");
-        let src = splitted.next().unwrap().parse().unwrap();
-        let dst = splitted.next().unwrap().parse().unwrap();
-        let payload = splitted.next().unwrap().to_string();
-        NetworkMessage { src, dst, payload }
-    }
-}
+use super::types::*;
 
 #[async_trait]
 pub trait Agent {
