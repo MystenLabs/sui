@@ -6,7 +6,6 @@ import { isBasePayload } from '_payloads';
 import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
 import { type AccountsPublicInfoUpdates } from '_src/background/keyring/accounts';
 
-import type { SuiAddress } from '@mysten/sui.js';
 import type { BasePayload, Payload } from '_payloads';
 import type { SerializedAccount } from '_src/background/keyring/Account';
 
@@ -49,16 +48,16 @@ type MethodToPayloads = {
 		return: void;
 	};
 	signData: {
-		args: { data: string; address: SuiAddress };
+		args: { data: string; address: string };
 		return: SerializedSignature;
 	};
 	switchAccount: {
-		args: { address: SuiAddress };
+		args: { address: string };
 		return: void;
 	};
 	deriveNextAccount: {
 		args: void;
-		return: { accountAddress: SuiAddress };
+		return: { accountAddress: string };
 	};
 	importLedgerAccounts: {
 		args: { ledgerAccounts: SerializedLedgerAccount[] };
@@ -69,7 +68,7 @@ type MethodToPayloads = {
 		return: void;
 	};
 	exportAccount: {
-		args: { password: string; accountAddress: SuiAddress };
+		args: { password: string; accountAddress: string };
 		return: { keyPair: ExportedKeypair };
 	};
 	importPrivateKey: {

@@ -3,7 +3,6 @@
 
 import { useFeatureValue } from '@growthbook/growthbook-react';
 import { ORIGINBYTE_KIOSK_OWNER_TOKEN, useGetOwnedObjects, useRpcClient } from '@mysten/core';
-import { type SuiAddress } from '@mysten/sui.js';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { useMutation } from '@tanstack/react-query';
 
@@ -33,7 +32,7 @@ export function useTransferKioskItem({
 		);
 
 	return useMutation({
-		mutationFn: async (to: SuiAddress) => {
+		mutationFn: async (to: string) => {
 			if (!to || !signer || !objectType) {
 				throw new Error('Missing data');
 			}

@@ -8,10 +8,8 @@ import { ModuleFunction } from './ModuleFunction';
 import { useNormalizedMoveModule } from '~/hooks/useNormalizedMoveModule';
 import { Banner } from '~/ui/Banner';
 
-import type { ObjectId } from '@mysten/sui.js';
-
 export type ModuleFunctionsInteractionProps = {
-	packageId: ObjectId;
+	packageId: string;
 	moduleName: string;
 };
 

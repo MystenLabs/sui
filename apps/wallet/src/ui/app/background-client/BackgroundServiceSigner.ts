@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiAddress } from '@mysten/sui.js';
-
 import { type SuiClient } from '@mysten/sui.js/client';
 import { WalletSigner } from '../WalletSigner';
 
@@ -10,10 +8,10 @@ import type { BackgroundClient } from '.';
 import type { SerializedSignature } from '@mysten/sui.js/cryptography';
 
 export class BackgroundServiceSigner extends WalletSigner {
-	readonly #address: SuiAddress;
+	readonly #address: string;
 	readonly #backgroundClient: BackgroundClient;
 
-	constructor(address: SuiAddress, backgroundClient: BackgroundClient, client: SuiClient) {
+	constructor(address: string, backgroundClient: BackgroundClient, client: SuiClient) {
 		super(client);
 		this.#address = address;
 		this.#backgroundClient = backgroundClient;

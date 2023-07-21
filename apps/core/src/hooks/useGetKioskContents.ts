@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiAddress, SuiObjectResponse } from '@mysten/sui.js';
+import { SuiObjectResponse } from '@mysten/sui.js';
 import { fetchKiosk, getOwnedKiosks } from '@mysten/kiosk';
 import { useQuery } from '@tanstack/react-query';
 import { useRpcClient } from '../api/RpcClientContext';
@@ -17,7 +17,7 @@ export const ORIGINBYTE_KIOSK_MODULE =
 	'0x95a441d389b07437d00dd07e0b6f05f513d7659b13fd7c5d3923c7d9d847199b::ob_kiosk' as const;
 export const ORIGINBYTE_KIOSK_OWNER_TOKEN = `${ORIGINBYTE_KIOSK_MODULE}::OwnerToken`;
 
-async function getOriginByteKioskContents(address: SuiAddress, client: SuiClient) {
+async function getOriginByteKioskContents(address: string, client: SuiClient) {
 	const data = await client.getOwnedObjects({
 		owner: address,
 		filter: {
@@ -60,7 +60,7 @@ async function getOriginByteKioskContents(address: SuiAddress, client: SuiClient
 	return kioskContent;
 }
 
-async function getSuiKioskContents(address: SuiAddress, client: SuiClient) {
+async function getSuiKioskContents(address: string, client: SuiClient) {
 	const ownedKiosks = await getOwnedKiosks(client, address!);
 	const kioskContents = await Promise.all(
 		ownedKiosks.kioskIds.map(async (id) => {
@@ -83,7 +83,7 @@ async function getSuiKioskContents(address: SuiAddress, client: SuiClient) {
 	return kioskContent;
 }
 
-export function useGetKioskContents(address?: SuiAddress | null, disableOriginByteKiosk?: boolean) {
+export function useGetKioskContents(address?: string | null, disableOriginByteKiosk?: boolean) {
 	const rpc = useRpcClient();
 	return useQuery({
 		// eslint-disable-next-line @tanstack/query/exhaustive-deps

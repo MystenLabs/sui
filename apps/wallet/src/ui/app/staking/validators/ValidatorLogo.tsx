@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { useGetSystemState } from '@mysten/core';
-import { formatAddress, type SuiAddress } from '@mysten/sui.js';
+import { formatAddress } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useMemo } from 'react';
 
@@ -11,7 +11,7 @@ import { Text } from '_app/shared/text';
 import { Badge } from '_src/ui/app/shared/Badge';
 
 interface ValidatorLogoProps {
-	validatorAddress: SuiAddress;
+	validatorAddress: string;
 	showAddress?: boolean;
 	stacked?: boolean;
 	isTitle?: boolean;

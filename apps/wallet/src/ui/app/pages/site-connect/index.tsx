@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiAddress } from '@mysten/sui.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -32,7 +31,7 @@ function SiteConnectPage() {
 	const dispatch = useAppDispatch();
 	const permissionRequest = useAppSelector(permissionSelector);
 	const activeAddress = useActiveAddress();
-	const [accountsToConnect, setAccountsToConnect] = useState<SuiAddress[]>(() =>
+	const [accountsToConnect, setAccountsToConnect] = useState<string[]>(() =>
 		activeAddress ? [activeAddress] : [],
 	);
 	const handleOnSubmit = useCallback(

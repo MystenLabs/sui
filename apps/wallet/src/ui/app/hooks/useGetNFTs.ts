@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetOwnedObjects, hasDisplayData, useGetKioskContents } from '@mysten/core';
-import { type SuiObjectData, type SuiAddress } from '@mysten/sui.js';
+import { type SuiObjectData } from '@mysten/sui.js';
 
 import useAppSelector from './useAppSelector';
 
-export function useGetNFTs(address?: SuiAddress | null) {
+export function useGetNFTs(address?: string | null) {
 	const {
 		data,
 		isLoading,

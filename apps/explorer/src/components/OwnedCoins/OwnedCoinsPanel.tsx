@@ -12,7 +12,7 @@ type CoinsPanelProps = {
 	id: string;
 };
 
-function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
+export default function CoinsPanel({ coinType, id }: CoinsPanelProps) {
 	const containerRef = useRef(null);
 	const { isIntersecting } = useOnScreen(containerRef);
 	const { data, isLoading, isFetching, fetchNextPage, hasNextPage } = useGetCoins(coinType, id);
@@ -39,4 +39,3 @@ function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
 		</div>
 	);
 }
-export default CoinsPanel;
