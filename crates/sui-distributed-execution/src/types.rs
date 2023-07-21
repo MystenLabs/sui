@@ -134,53 +134,32 @@ impl Transaction {
     /// known a-priori before execution
     /// Returns the write set of a transction
     pub fn get_write_set(&self) -> HashSet<ObjectID> {
-        let mut write_set: HashSet<ObjectID> = HashSet::new();
-
         let TransactionEffects::V1(tx_effects) = &self.ground_truth_effects;
+        let total_writes = tx_effects.created.len()
+            + tx_effects.mutated.len()
+            + tx_effects.unwrapped.len()
+            + tx_effects.deleted.len()
+            + tx_effects.unwrapped_then_deleted.len()
+            + tx_effects.wrapped.len();
+        let mut write_set: HashSet<ObjectID> = HashSet::with_capacity(total_writes);
 
-        let created: Vec<ObjectID> = tx_effects
-            .created
-            .clone()
-            .into_iter()
-            .map(|(object_ref, _)| object_ref.0)
-            .collect();
-        let mutated: Vec<ObjectID> = tx_effects
-            .mutated
-            .clone()
-            .into_iter()
-            .map(|(object_ref, _)| object_ref.0)
-            .collect();
-        let unwrapped: Vec<ObjectID> = tx_effects
-            .unwrapped
-            .clone()
-            .into_iter()
-            .map(|(object_ref, _)| object_ref.0)
-            .collect();
-        let deleted: Vec<ObjectID> = tx_effects
-            .deleted
-            .clone()
-            .into_iter()
-            .map(|object_ref| object_ref.0)
-            .collect();
-        let unwrapped_then_deleted: Vec<ObjectID> = tx_effects
-            .unwrapped_then_deleted
-            .clone()
-            .into_iter()
-            .map(|object_ref| object_ref.0)
-            .collect();
-        let wrapped: Vec<ObjectID> = tx_effects
-            .wrapped
-            .clone()
-            .into_iter()
-            .map(|object_ref| object_ref.0)
-            .collect();
+        write_set.extend(
+            tx_effects
+                .created
+                .iter()
+                .chain(tx_effects.mutated.iter())
+                .chain(tx_effects.unwrapped.iter())
+                .map(|(object_ref, _)| object_ref.0),
+        );
+        write_set.extend(
+            tx_effects
+                .deleted
+                .iter()
+                .chain(tx_effects.unwrapped_then_deleted.iter())
+                .chain(tx_effects.wrapped.iter())
+                .map(|object_ref| object_ref.0),
+        );
 
-        write_set.extend(created);
-        write_set.extend(mutated);
-        write_set.extend(unwrapped);
-        write_set.extend(deleted);
-        write_set.extend(unwrapped_then_deleted);
-        write_set.extend(wrapped);
         return write_set;
     }
 
