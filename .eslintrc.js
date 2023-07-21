@@ -32,6 +32,8 @@ module.exports = {
 		'next-env.d.ts',
 		'doc/book',
 		'external-crates',
+		'storybook-static',
+		'.next',
 	],
 	rules: {
 		'no-case-declarations': 'off',
