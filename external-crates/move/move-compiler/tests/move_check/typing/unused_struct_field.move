@@ -9,6 +9,7 @@ module 0x42::unused_fields {
     struct OneUnusedFieldStruct {
         field_used_borrow: u8,
         field_used_borrow_mut: u8,
+        field_used_borrow_var: u8,
         field_unused: u8
     }
 
@@ -28,6 +29,11 @@ module 0x42::unused_fields {
 
     public fun bar(s: &mut OneUnusedFieldStruct) {
         s.field_used_borrow_mut = 42;
+    }
+
+    public fun baz(s: &mut OneUnusedFieldStruct) {
+        let v = s;
+        v.field_used_borrow_var = 42;
     }
 
     public fun pack(): AllFieldsUsedPackStruct {

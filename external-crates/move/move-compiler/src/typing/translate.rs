@@ -1419,11 +1419,6 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             (ty, TE::ExpList(items))
         }
         NE::Pack(m, n, ty_args_opt, nfields) => {
-            // all fields of a packed struct type are used
-            let used_fields: BTreeSet<Symbol> =
-                BTreeSet::from_iter(nfields.iter().map(|(_, s, _)| *s));
-            context.used_fields.insert(n.value(), used_fields);
-
             let (bt, targs) = core::make_struct_type(context, eloc, &m, &n, ty_args_opt);
             let typed_nfields =
                 add_field_types(context, eloc, "argument", &m, &n, targs.clone(), nfields);
@@ -1559,31 +1554,21 @@ fn lvalues_expected_types(
         .collect()
 }
 
-fn lvalue_expected_types(context: &mut Context, sp!(loc, b_): &T::LValue) -> Option<N::Type> {
+fn lvalue_expected_types(_context: &mut Context, sp!(loc, b_): &T::LValue) -> Option<N::Type> {
     use N::Type_::*;
     use T::LValue_ as L;
     let loc = *loc;
     match b_ {
         L::Ignore => None,
         L::Var { ty, .. } => Some(*ty.clone()),
-        L::BorrowUnpack(mut_, m, s, tys, nfields) => {
-            // all fields of an unpacked struct type are used
-            let used_fields: BTreeSet<Symbol> =
-                BTreeSet::from_iter(nfields.iter().map(|(_, s, _)| *s));
-            context.used_fields.insert(s.value(), used_fields);
-
+        L::BorrowUnpack(mut_, m, s, tys, _) => {
             let tn = sp(loc, N::TypeName_::ModuleType(*m, *s));
             Some(sp(
                 loc,
                 Ref(*mut_, Box::new(sp(loc, Apply(None, tn, tys.clone())))),
             ))
         }
-        L::Unpack(m, s, tys, nfields) => {
-            // all fields of an unpacked struct type are used
-            let used_fields: BTreeSet<Symbol> =
-                BTreeSet::from_iter(nfields.iter().map(|(_, s, _)| *s));
-            context.used_fields.insert(s.value(), used_fields);
-
+        L::Unpack(m, s, tys, _) => {
             let tn = sp(loc, N::TypeName_::ModuleType(*m, *s));
             Some(sp(loc, Apply(None, tn, tys.clone())))
         }
@@ -1988,35 +1973,10 @@ fn exp_dotted_to_borrow(
                     (tyloc, "Immutable because of this position"),
                 ))
             }
-            // mark field as used if it's being borrowed
-            if let Some(struct_name) = struct_name(context, &lhs_borrow.ty) {
-                context
-                    .used_fields
-                    .entry(struct_name.value())
-                    .or_insert_with(BTreeSet::new)
-                    .insert(field.value());
-            }
-
             let e_ = TE::Borrow(mut_, Box::new(lhs_borrow), field);
             let ty = sp(loc, Ref(mut_, field_ty));
             T::exp(ty, sp(dloc, e_))
         }
-    }
-}
-
-fn struct_name(context: &Context, sp!(_, t): &Type) -> Option<StructName> {
-    use Type_::*;
-    match t {
-        Ref(_, inner_t) => struct_name(context, &*inner_t),
-        Apply(_, t_name, _) => {
-            if let TypeName_::ModuleType(mident, struct_name) = t_name.value {
-                if context.is_current_module(&mident) {
-                    return Some(struct_name);
-                }
-            }
-            None
-        }
-        Unit | Param(_) | Var(_) | Anything | UnresolvedError => None,
     }
 }
 
@@ -2332,7 +2292,7 @@ fn make_arg_types<S: std::fmt::Display, F: Fn() -> S>(
 // Module-wide warnings
 //**************************************************************************************************
 
-/// Generates warnings for unused struct fields and unused (private) functions.
+/// Generates warnings for unused (private) functions.
 fn gen_unused_warnings(context: &mut Context, mdef: &T::ModuleDefinition) {
     if !mdef.is_source_module {
         // generate warnings only for modules compiled in this pass rather than for all modules
@@ -2374,29 +2334,6 @@ fn gen_unused_warnings(context: &mut Context, mdef: &T::ModuleDefinition) {
                 .env
                 .add_diag(diag!(UnusedItem::Function, (loc, msg)))
         }
-        context.env.pop_warning_filter_scope();
-    }
-
-    for (_, sname, sdef) in &mdef.structs {
-        context
-            .env
-            .add_warning_filter_scope(sdef.warning_filter.clone());
-
-        if let N::StructFields::Defined(fields) = &sdef.fields {
-            for (floc, fname, _) in fields {
-                if !context
-                    .used_fields
-                    .get(sname)
-                    .is_some_and(|names| names.contains(fname))
-                {
-                    let msg = format!("The {fname} field of the {sname} type is unused");
-                    context
-                        .env
-                        .add_diag(diag!(UnusedItem::StructField, (floc, msg)));
-                }
-            }
-        }
-
         context.env.pop_warning_filter_scope();
     }
 
