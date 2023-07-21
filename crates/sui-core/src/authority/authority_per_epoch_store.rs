@@ -1999,13 +1999,13 @@ impl AuthorityPerEpochStore {
             .map(|s| s.summary))
     }
 
-    pub fn builder_included_transaction_in_checkpoint(
+    pub fn builder_included_transactions_in_checkpoint<'a>(
         &self,
-        digest: &TransactionDigest,
-    ) -> Result<bool, TypedStoreError> {
+        digests: impl Iterator<Item = &'a TransactionDigest>,
+    ) -> Result<Vec<bool>, TypedStoreError> {
         self.tables
             .builder_digest_to_checkpoint
-            .contains_key(digest)
+            .multi_contains_keys(digests)
     }
 
     pub fn get_pending_checkpoint_signatures_iter(
