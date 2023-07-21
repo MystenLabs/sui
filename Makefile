@@ -23,15 +23,17 @@ $(FETCH_DIR)/rustup-init:
 $(FETCH_DIR)/rocksdb.tgz:
 	@$(call fetch_file,$(ROCKSDB_URL),$(ROCKSDB_HASH))
 
-$(CACHE_DIR)/rocksdb/Makefile: \
+$(CACHE_DIR)/rocksdb-src/Makefile: \
 	$(FETCH_DIR)/rocksdb.tgz
 	tar -xzf $< -C $(CACHE_DIR)/
 	mv $(CACHE_DIR)/facebook-rocksdb* $(dir $@)
 
-$(CACHE_DIR)/lib/librocksdb.a: $(CACHE_DIR)/rocksdb/Makefile
+$(CACHE_DIR)/lib/librocksdb.a: \
+	$(CACHE_DIR)/rocksdb-src/Makefile
 	$(call toolchain,' \
 		$(MAKE) \
-			--directory=$(CACHE_DIR)/rocksdb \
+			--directory=$(CACHE_DIR)/rocksdb-src \
+			-j$(CPUS) \
 			static_lib \
 	')
 
@@ -42,13 +44,19 @@ $(CACHE_DIR)/bin/rustup: $(FETCH_DIR)/rustup-init
 			--no-modify-path \
 			--profile minimal \
 			--default-toolchain $$RUST_VERSION \
-			--default-host $$RUST_ARCH; \
+			--default-host $$RUST_ARCH \
+		&& source "/home/build/cache/x86_64/cargo/env" \
+		&& rustup target add x86_64-unknown-linux-musl \
 	')
 
-$(OUT_DIR)/sui-node: $(CACHE_DIR)/bin/rustup
+$(OUT_DIR)/sui-node: \
+	$(CACHE_DIR)/bin/rustup
 	$(call toolchain,' \
 		source "/home/build/cache/x86_64/cargo/env" \
 		&& export RUSTFLAGS="-C target-feature=+crt-static" \
+		&& export ROCKSDB_COMPILE=true \
+		&& export ROCKSDB_STATIC=true \
+		&& sudo cp /lib/x86_64-linux-gnu/libgcc_s.so.1 /lib64/ \
 		&& cargo build \
 			--target x86_64-unknown-linux-musl \
 			--locked \

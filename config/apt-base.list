@@ -17,6 +17,7 @@ libarchive-tools
 libc-dev
 libelf-dev
 libclang-dev
+libgcc-s1
 libfaketime
 libncurses-dev
 libssl-dev
@@ -28,3 +29,4 @@ ninja-build
 pkg-config
 python3
 gcc-multilib
+libstdc++-11-dev
