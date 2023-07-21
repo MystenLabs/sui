@@ -10716,6 +10716,7 @@ dependencies = [
  "serde 1.0.152",
  "sui-json-rpc-types",
  "sui-protocol-config",
+ "sui-test-transaction-builder",
  "sui-types",
  "tap",
  "tempfile",
