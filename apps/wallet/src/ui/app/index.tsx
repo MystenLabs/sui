@@ -48,6 +48,7 @@ const HIDDEN_MENU_PATHS = [
 
 const App = () => {
 	const dispatch = useAppDispatch();
+	const useNewOnboardingFlow = useFeatureIsOn('enoki-social-sign-in');
 	const isPopup = useAppSelector((state) => state.app.appType === AppType.popup);
 	useEffect(() => {
 		document.body.classList.remove('app-initializing');
@@ -59,8 +60,6 @@ const App = () => {
 	}, [location, dispatch]);
 
 	useInitialPageView();
-
-	const useNewOnboardingFlow = useFeatureIsOn('enoki-social-sign-in');
 
 	return (
 		<Routes>
