@@ -179,12 +179,18 @@ export class TransactionBlock {
 		return tx;
 	}
 
-	/** A helper to retrieve the Transaction builder `Transactions` */
+	/**
+	 * A helper to retrieve the Transaction builder `Transactions`
+	 * @deprecated Either use the helper methods on the `TransactionBlock` class, or import `Transactions` from `@mysten/sui.js/transactions`.
+	 */
 	static get Transactions() {
 		return Transactions;
 	}
 
-	/** A helper to retrieve the Transaction builder `Inputs` */
+	/**
+	 * A helper to retrieve the Transaction builder `Inputs`
+	 * * @deprecated Either use the helper methods on the `TransactionBlock` class, or import `Inputs` from `@mysten/sui.js/transactions`.
+	 */
 	static get Inputs() {
 		return Inputs;
 	}
