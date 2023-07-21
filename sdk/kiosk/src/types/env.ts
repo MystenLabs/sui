@@ -6,7 +6,7 @@ import { SuiAddress } from '@mysten/sui.js';
 /* A list of environments. */
 export type Environment = 'mainnet' | 'testnet' | 'devnet' | 'custom';
 
-/** A Parameter to support enivronments for rules.  */
+/** A Parameter to support environments for rules.  */
 export type RulesEnvironmentParam = { env: Environment; address?: SuiAddress };
 
 /** A default Testnet Environment object  */

@@ -85,6 +85,12 @@ impl FileCompression {
     }
 }
 
+pub fn compute_sha3_checksum_for_bytes(bytes: Bytes) -> Result<[u8; 32]> {
+    let mut hasher = Sha3_256::default();
+    io::copy(&mut bytes.reader(), &mut hasher)?;
+    Ok(hasher.finalize().digest)
+}
+
 pub fn compute_sha3_checksum_for_file(file: &mut File) -> Result<[u8; 32]> {
     let mut hasher = Sha3_256::default();
     io::copy(file, &mut hasher)?;
@@ -208,10 +214,12 @@ where
             )
         });
 
-    checkpoint.verify_signature(&committee).map_err(|e| {
-        debug!("error verifying checkpoint: {e}");
-        checkpoint.clone()
-    })?;
+    checkpoint
+        .verify_authority_signatures(&committee)
+        .map_err(|e| {
+            debug!("error verifying checkpoint: {e}");
+            checkpoint.clone()
+        })?;
     Ok(VerifiedCheckpoint::new_unchecked(checkpoint))
 }
 

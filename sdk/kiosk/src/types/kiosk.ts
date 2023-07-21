@@ -1,13 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	ObjectDigest,
-	ObjectId,
-	ObjectType,
-	PaginatedObjectsResponse,
-	TransactionArgument,
-} from '@mysten/sui.js';
+import { ObjectDigest, ObjectId, ObjectType, PaginatedObjectsResponse } from '@mysten/sui.js';
+import { TransactionArgument } from '@mysten/sui.js/transactions';
 import { ObjectArgument } from '.';
 
 /** The Kiosk module. */

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Check12, X12 } from '@mysten/icons';
-import { Ed25519PublicKey, type SuiAddress } from '@mysten/sui.js';
+import { type SuiAddress } from '@mysten/sui.js';
+import { Ed25519PublicKey } from '@mysten/sui.js/keypairs/ed25519';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 

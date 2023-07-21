@@ -8,8 +8,8 @@ import {
 	SuiObjectResponse,
 	getObjectDisplay,
 	getObjectId,
-	normalizeSuiAddress,
 } from '@mysten/sui.js';
+import { normalizeSuiAddress } from '@mysten/sui.js/utils';
 // Parse the display of a list of objects into a simple {object_id: display} map
 // to use throughout the app.
 export const parseObjectDisplays = (

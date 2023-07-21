@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::{AuthorityName, ObjectRef, TransactionDigest};
-use crate::committee::Committee;
-use crate::error::SuiResult;
 use crate::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointTimestamp,
 };
@@ -176,19 +174,6 @@ impl ConsensusTransaction {
         (&self.tracking_id[..])
             .read_u64::<BigEndian>()
             .unwrap_or_default()
-    }
-
-    pub fn verify(&self, committee: &Committee) -> SuiResult<()> {
-        match &self.kind {
-            ConsensusTransactionKind::UserTransaction(certificate) => {
-                certificate.verify_signature(committee)
-            }
-            ConsensusTransactionKind::CheckpointSignature(data) => data.verify(committee),
-            // EndOfPublish and CapabilityNotification are authenticated in
-            // AuthorityPerEpochStore::verify_consensus_transaction
-            ConsensusTransactionKind::EndOfPublish(_)
-            | ConsensusTransactionKind::CapabilityNotification(_) => Ok(()),
-        }
     }
 
     pub fn key(&self) -> ConsensusTransactionKey {

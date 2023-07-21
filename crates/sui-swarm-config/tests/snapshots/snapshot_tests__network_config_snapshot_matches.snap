@@ -42,7 +42,7 @@ validator_configs:
         anemo:
           send_certificate_rate_limit: ~
           report_batch_rate_limit: ~
-          request_batch_rate_limit: ~
+          request_batches_rate_limit: ~
     enable-event-processing: false
     enable-index-processing: true
     grpc-load-shed: ~
@@ -124,7 +124,7 @@ validator_configs:
         anemo:
           send_certificate_rate_limit: ~
           report_batch_rate_limit: ~
-          request_batch_rate_limit: ~
+          request_batches_rate_limit: ~
     enable-event-processing: false
     enable-index-processing: true
     grpc-load-shed: ~
@@ -206,7 +206,7 @@ validator_configs:
         anemo:
           send_certificate_rate_limit: ~
           report_batch_rate_limit: ~
-          request_batch_rate_limit: ~
+          request_batches_rate_limit: ~
     enable-event-processing: false
     enable-index-processing: true
     grpc-load-shed: ~
@@ -288,7 +288,7 @@ validator_configs:
         anemo:
           send_certificate_rate_limit: ~
           report_batch_rate_limit: ~
-          request_batch_rate_limit: ~
+          request_batches_rate_limit: ~
     enable-event-processing: false
     enable-index-processing: true
     grpc-load-shed: ~
@@ -370,7 +370,7 @@ validator_configs:
         anemo:
           send_certificate_rate_limit: ~
           report_batch_rate_limit: ~
-          request_batch_rate_limit: ~
+          request_batches_rate_limit: ~
     enable-event-processing: false
     enable-index-processing: true
     grpc-load-shed: ~
@@ -452,7 +452,7 @@ validator_configs:
         anemo:
           send_certificate_rate_limit: ~
           report_batch_rate_limit: ~
-          request_batch_rate_limit: ~
+          request_batches_rate_limit: ~
     enable-event-processing: false
     enable-index-processing: true
     grpc-load-shed: ~
@@ -534,7 +534,7 @@ validator_configs:
         anemo:
           send_certificate_rate_limit: ~
           report_batch_rate_limit: ~
-          request_batch_rate_limit: ~
+          request_batches_rate_limit: ~
     enable-event-processing: false
     enable-index-processing: true
     grpc-load-shed: ~

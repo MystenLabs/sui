@@ -26,6 +26,7 @@ use sui_types::transaction::{
     CertifiedTransaction, SenderSignedData, SharedInputObject, TransactionDataAPI,
     VerifiedCertificate, VerifiedSignedTransaction,
 };
+use sui_types::zk_login_util::OAuthProviderContent;
 use tracing::{debug, error, info, trace, warn};
 use typed_store::rocks::{
     default_db_options, DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError,
@@ -307,6 +308,9 @@ pub struct AuthorityEpochTables {
     /// When transaction is executed via checkpoint executor, we store association here
     pub(crate) executed_transactions_to_checkpoint:
         DBMap<TransactionDigest, CheckpointSequenceNumber>,
+
+    /// Map from kid (key id) to the fetched OAuthProviderContent for that key.
+    oauth_provider_jwk: DBMap<String, OAuthProviderContent>,
 }
 
 fn signed_transactions_table_default_config() -> DBOptions {
@@ -387,6 +391,14 @@ impl AuthorityEpochTables {
     pub fn get_last_consensus_index(&self) -> SuiResult<Option<ExecutionIndicesWithHash>> {
         Ok(self.last_consensus_index.get(&LAST_CONSENSUS_INDEX_ADDR)?)
     }
+
+    fn load_oauth_provider_jwk(&self) -> SuiResult<HashMap<String, Arc<OAuthProviderContent>>> {
+        Ok(self
+            .oauth_provider_jwk
+            .unbounded_iter()
+            .map(|(k, v)| (k, Arc::new(v)))
+            .collect())
+    }
 }
 
 pub(crate) const MUTEX_TABLE_SIZE: usize = 1024;
@@ -413,6 +425,7 @@ impl AuthorityPerEpochStore {
         let reconfig_state = tables
             .load_reconfig_state()
             .expect("Load reconfig state at initialization cannot fail");
+
         let epoch_alive_notify = NotifyOnce::new();
         let pending_consensus_transactions = tables.get_all_pending_consensus_transactions();
         let pending_consensus_certificates: HashSet<_> = pending_consensus_transactions
@@ -446,8 +459,17 @@ impl AuthorityPerEpochStore {
             cache_metrics,
             expensive_safety_check_config,
         );
+
+        let oauth_provider_jwk = tables
+            .load_oauth_provider_jwk()
+            .expect("Load oauth provider jwk at initialization cannot fail");
+
         let signature_verifier =
             SignatureVerifier::new(committee.clone(), signature_verifier_metrics);
+        for (_, v) in oauth_provider_jwk.iter() {
+            signature_verifier.insert_oauth_jwk(v);
+        }
+
         let is_validator = committee.authority_index(&name).is_some();
         if is_validator {
             assert!(epoch_start_configuration
@@ -2098,6 +2120,19 @@ impl AuthorityPerEpochStore {
         self.metrics
             .epoch_total_duration
             .set(self.epoch_open_time.elapsed().as_millis() as i64);
+    }
+
+    // TODO: should be pub(crate) when it is inserted only from consensus
+    pub fn insert_oauth_jwk(&self, content: &OAuthProviderContent) {
+        if self.signature_verifier.insert_oauth_jwk(content) {
+            self.tables
+                .oauth_provider_jwk
+                .insert(&content.kid().to_string(), content)
+                .expect("write to oauth_provider_jwk should not fail");
+            info!("Added new JWK with kid {}: {:?}", content.kid(), content);
+        } else {
+            info!("OAuth JWK with kid {} already exists", content.kid());
+        }
     }
 }
 

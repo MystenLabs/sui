@@ -2,20 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-	JsonRpcProvider,
 	ObjectId,
-	PaginationArguments,
 	SharedObjectRef,
 	SuiObjectRef,
 	SuiObjectResponse,
-	TransactionArgument,
-	TransactionBlock,
 	getObjectFields,
 } from '@mysten/sui.js';
+import { TransactionBlock, TransactionArgument } from '@mysten/sui.js/transactions';
 import { type DynamicFieldInfo } from '@mysten/sui.js';
 import { bcs } from './bcs';
 import { KIOSK_TYPE, Kiosk, KioskData, KioskListing, RulesEnvironmentParam } from './types';
 import { MAINNET_RULES_PACKAGE_ADDRESS, TESTNET_RULES_PACKAGE_ADDRESS } from './constants';
+import { SuiClient, PaginationArguments } from '@mysten/sui.js/client';
 
 /* A simple map to the rule package addresses */
 // TODO: Supply the mainnet and devnet addresses.
@@ -56,8 +54,8 @@ export function objArg(
 	throw new Error('Invalid argument type');
 }
 
-export async function getKioskObject(provider: JsonRpcProvider, id: string): Promise<Kiosk> {
-	const queryRes = await provider.getObject({ id, options: { showBcs: true } });
+export async function getKioskObject(client: SuiClient, id: string): Promise<Kiosk> {
+	const queryRes = await client.getObject({ id, options: { showBcs: true } });
 
 	if (!queryRes || queryRes.error || !queryRes.data) {
 		throw new Error(`Kiosk ${id} not found; ${queryRes.error}`);
@@ -182,7 +180,7 @@ export function getRulePackageAddress(environment: RulesEnvironmentParam): strin
  * RPC calls that allow filtering of Type / batch fetching of spec
  */
 export async function getAllDynamicFields(
-	provider: JsonRpcProvider,
+	client: SuiClient,
 	parentId: ObjectId,
 	pagination: PaginationArguments<string>,
 ) {
@@ -191,7 +189,7 @@ export async function getAllDynamicFields(
 	const data: DynamicFieldInfo[] = [];
 
 	while (hasNextPage) {
-		const result = await provider.getDynamicFields({
+		const result = await client.getDynamicFields({
 			parentId,
 			limit: pagination.limit || undefined,
 			cursor,

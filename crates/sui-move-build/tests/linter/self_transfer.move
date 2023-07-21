@@ -31,6 +31,8 @@ module 0x42::test {
         transfer::transfer(S2 { id: object::new(ctx), }, tx_context::sender(ctx))
     }
 
+    // non-linter suppression annotation should not suppress linter warnings
+    #[allow(all)]
     public fun transfer_through_assigns_bad(ctx: &mut TxContext) {
         let sender = tx_context::sender(ctx);
         let another_sender = sender;
@@ -46,5 +48,10 @@ module 0x42::test {
         let xfer_address = if (b) { a } else { tx_context::sender(ctx) };
         transfer::public_transfer(S1 { id: object::new(ctx), }, xfer_address);
         transfer::transfer(S1 { id: object::new(ctx), }, xfer_address);
+    }
+
+    #[lint_allow(self_transfer)]
+    public fun public_transfer_bad_suppressed(ctx: &mut TxContext) {
+        transfer::public_transfer(S1 { id: object::new(ctx), }, tx_context::sender(ctx))
     }
 }

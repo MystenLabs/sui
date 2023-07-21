@@ -71,8 +71,8 @@ pub struct WorkerMetrics {
     pub worker_local_fetch_latency: Histogram,
     /// Time it takes to download a payload from remote peer
     pub worker_remote_fetch_latency: Histogram,
-    /// The number of pending remote calls to request_batch
-    pub pending_remote_request_batch: IntGauge,
+    /// The number of pending remote calls to request_batches
+    pub pending_remote_request_batches: IntGauge,
 }
 
 impl WorkerMetrics {
@@ -143,9 +143,9 @@ impl WorkerMetrics {
                 registry
             )
             .unwrap(),
-            pending_remote_request_batch: register_int_gauge_with_registry!(
-                "pending_remote_request_batch",
-                "The number of pending remote calls to request_batch",
+            pending_remote_request_batches: register_int_gauge_with_registry!(
+                "pending_remote_request_batches",
+                "The number of pending remote calls to request_batches",
                 registry
             )
             .unwrap(),

@@ -58,7 +58,8 @@ const MAX_PROTOCOL_VERSION: u64 = 19;
 //             such that the minimum transaction cost is the same as the minimum computation
 //             bucket.
 //             Add a feature flag to indicate the changes semantics of `base_tx_cost_fixed`.
-// Version 19: Add limit for total size of events.
+// Version 19: Changes to sui-system package to enable liquid staking.
+//             Add limit for total size of events.
 //             Increase limit for number of events emitted to 1024.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -1341,6 +1342,7 @@ impl ProtocolConfig {
                 );
                 cfg
             }
+
             // Use this template when making changes:
             //
             //     // modify an existing constant.

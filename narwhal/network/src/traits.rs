@@ -5,10 +5,9 @@ use anyhow::Result;
 use async_trait::async_trait;
 use crypto::NetworkPublicKey;
 use types::{
-    error::LocalClientError, Batch, BatchDigest, FetchBatchesRequest, FetchBatchesResponse,
-    FetchCertificatesRequest, FetchCertificatesResponse, RequestBatchesRequest,
-    RequestBatchesResponse, WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerOwnBatchMessage,
-    WorkerSynchronizeMessage,
+    error::LocalClientError, FetchBatchesRequest, FetchBatchesResponse, FetchCertificatesRequest,
+    FetchCertificatesResponse, RequestBatchesRequest, RequestBatchesResponse,
+    WorkerOthersBatchMessage, WorkerOwnBatchMessage, WorkerSynchronizeMessage,
 };
 
 pub trait ReliableNetwork<Request: Clone + Send + Sync> {
@@ -60,12 +59,6 @@ pub trait PrimaryToWorkerClient {
 
 #[async_trait]
 pub trait WorkerToPrimaryClient {
-    // TODO: Remove once we have upgraded to protocol version 12.
-    async fn report_our_batch(
-        &self,
-        request: WorkerOurBatchMessage,
-    ) -> Result<(), LocalClientError>;
-
     async fn report_own_batch(
         &self,
         request: WorkerOwnBatchMessage,
@@ -79,12 +72,6 @@ pub trait WorkerToPrimaryClient {
 
 #[async_trait]
 pub trait WorkerRpc {
-    async fn request_batch(
-        &self,
-        peer: NetworkPublicKey,
-        batch: BatchDigest,
-    ) -> Result<Option<Batch>>;
-
     async fn request_batches(
         &self,
         peer: NetworkPublicKey,
