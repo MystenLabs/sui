@@ -1644,6 +1644,7 @@
                 "max_event_emit_size": {
                   "u64": "256000"
                 },
+                "max_event_emit_size_total": null,
                 "max_fields_in_struct": {
                   "u64": "32"
                 },
