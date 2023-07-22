@@ -43,7 +43,9 @@ impl<S: IndexerStore> ExtendedApi<S> {
         {
             cp
         } else {
-            self.state.get_latest_checkpoint_sequence_number().await? as u64
+            self.state
+                .get_latest_tx_checkpoint_sequence_number()
+                .await? as u64
         };
 
         let object_cursor = cursor.as_ref().map(|c| c.object_id);
