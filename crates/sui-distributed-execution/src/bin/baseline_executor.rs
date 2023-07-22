@@ -60,7 +60,7 @@ async fn main() {
     let args = Args::parse();
     let config = NodeConfig::load(&args.config_path).unwrap();
     let genesis = config.genesis().expect("Could not load genesis");
-    let mut sw_state = seqn_worker::SequenceWorkerState::new(&config).await;
+    let mut sw_state = seqn_worker::SequenceWorkerState::new_from_config(&config).await;
 
     if let Some(watermark) = args.download {
         sw_state.handle_download(watermark, &config).await;

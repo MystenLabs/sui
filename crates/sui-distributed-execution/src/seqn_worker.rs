@@ -37,7 +37,7 @@ pub struct SequenceWorkerState {
 }
 
 impl SequenceWorkerState {
-    pub async fn new(id: UniqueId, attrs: HashMap<String, String>) -> Self {
+    pub async fn new(_id: UniqueId, attrs: HashMap<String, String>) -> Self {
         let config_path = attrs.get("config").unwrap();
         let config = NodeConfig::load(config_path).unwrap();
 
@@ -113,6 +113,82 @@ impl SequenceWorkerState {
             metrics,
             download: Some(attrs.get("download").unwrap().parse().unwrap()),
             execute: Some(attrs.get("execute").unwrap().parse().unwrap()),
+        }
+    }
+
+    pub async fn new_from_config(config: &NodeConfig) -> Self {
+        let genesis = config.genesis().expect("Could not load genesis");
+        let registry_service = { metrics::start_prometheus_server(config.metrics_address) };
+        let prometheus_registry = registry_service.default_registry();
+        let metrics = Arc::new(LimitsMetrics::new(&prometheus_registry));
+        let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
+        let genesis_committee = genesis.committee().expect("Could not get committee");
+        // committee store
+        let committee_store = Arc::new(CommitteeStore::new(
+            config.db_path().join("epochs"),
+            &genesis_committee,
+            None,
+        ));
+        let perpetual_options = default_db_options().optimize_db_for_write_throughput(4);
+        let store = AuthorityStore::open(
+            &config.db_path().join("store"),
+            Some(perpetual_options.options),
+            genesis,
+            &committee_store,
+            config.indirect_objects_threshold,
+            config
+                .expensive_safety_check_config
+                .enable_epoch_sui_conservation_check(),
+            &prometheus_registry,
+        )
+        .await
+        .expect("Could not create AuthorityStore");
+        let epoch_start_configuration = {
+            let epoch_start_configuration = EpochStartConfiguration::new(
+                genesis.sui_system_object().into_epoch_start_state(),
+                *genesis.checkpoint().digest(),
+            );
+            store
+                .set_epoch_start_configuration(&epoch_start_configuration)
+                .await
+                .expect("Could not set epoch start configuration");
+            epoch_start_configuration
+        };
+        let cur_epoch = 0; // always start from epoch 0
+        let committee = committee_store
+            .get_committee(&cur_epoch)
+            .expect("Could not get committee")
+            .expect("Committee of the current epoch must exist");
+        let cache_metrics = Arc::new(ResolverMetrics::new(&prometheus_registry));
+        let signature_verifier_metrics = SignatureVerifierMetrics::new(&prometheus_registry);
+        let epoch_options = default_db_options().optimize_db_for_write_throughput(4);
+        let epoch_store = AuthorityPerEpochStore::new(
+            config.protocol_public_key(),
+            committee.clone(),
+            &config.db_path().join("store"),
+            Some(epoch_options.options),
+            EpochMetrics::new(&registry_service.default_registry()),
+            epoch_start_configuration,
+            store.clone(),
+            cache_metrics,
+            signature_verifier_metrics,
+            &config.expensive_safety_check_config,
+        );
+        checkpoint_store.insert_genesis_checkpoint(
+            genesis.checkpoint(),
+            genesis.checkpoint_contents().clone(),
+            &epoch_store,
+        );
+        Self {
+            config: config.clone(),
+            store,
+            epoch_store,
+            checkpoint_store,
+            committee_store,
+            prometheus_registry,
+            metrics,
+            download: None,
+            execute: None,
         }
     }
 
