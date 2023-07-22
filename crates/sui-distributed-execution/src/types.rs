@@ -1,4 +1,6 @@
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
+use std::net::IpAddr;
+use serde::Deserialize;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::ObjectID,
@@ -8,8 +10,17 @@ use sui_types::{
     effects::TransactionEffects,
 };
 
-
 pub type UniqueId = u16;
+
+#[derive(Clone, Deserialize, Debug)]
+pub struct AppConfig {
+    pub kind: String,
+    pub ip_addr: IpAddr,
+    pub port: u16,
+    pub attrs: HashMap<String, String>,
+}
+
+pub type GlobalConfig = HashMap<UniqueId, AppConfig>;
 
 pub trait Message {
     fn serialize(&self) -> String;

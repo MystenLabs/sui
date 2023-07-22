@@ -1,98 +1,70 @@
-use core::fmt::Debug;
 use std::collections::HashMap;
-use std::fs;
 use std::sync::{Arc, RwLock};
 use std::net::{IpAddr, SocketAddr};
-use clap::*;
-use serde::Deserialize;
 use tokio::io::{BufReader, AsyncBufReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
 use tokio::time::{sleep, Duration};
-use sui_distributed_execution::network_agents::*;
-use sui_distributed_execution::types::*;
 
-const FILE_PATH:&str = "/Users/tonyzhang/Documents/UMich2023su/sui.nosync/crates/sui-distributed-execution/src/configs/simple_config.json";
+use super::network_agents::*;
+use super::types::*;
 
-#[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
-struct Args {
-    #[clap(long)]
-    pub my_id: UniqueId
+pub struct Server {
+    global_config: GlobalConfig,
+    my_id: UniqueId
 }
 
-#[derive(Clone, Deserialize, Debug)]
-struct AppConfig {
-    kind: String,
-    ip_addr: IpAddr,
-    port: u16,
-    attrs: HashMap<String, String>,
-}
-
-fn init_agent(id: UniqueId, conf: AppConfig) 
-    -> (Box<dyn Agent>,
-        mpsc::Sender<NetworkMessage>,
-        mpsc::Receiver<NetworkMessage>,) 
-{
-    let (in_send, mut in_recv) = mpsc::channel(100);
-    let (out_send, out_recv) = mpsc::channel(100);
-    let agent: Box<dyn Agent> = match conf.kind.as_str() {
-        "echo" => Box::new(EchoAgent::new(
-            id,
-            in_recv,
-            out_send,
-            conf.attrs
-        )),
-        "ping" => Box::new(PingAgent::new(
-            id,
-            &mut in_recv,
-            out_send,
-            conf.attrs
-        )),
-        _ => {panic!("Invalid agent kind {}", conf.kind); }
-    };
-    
-    return (agent, in_send, out_recv);
-}
-
-#[tokio::main()]
-async fn main() {
-    // Parse config from json
-    let config_json = fs::read_to_string(FILE_PATH)
-        .expect("Failed to read config file");
-    let config: HashMap<UniqueId, AppConfig> 
-        = serde_json::from_str(&config_json).unwrap();   
-
-    // Initialize map from id to address
-    let mut addr_table: HashMap<UniqueId, (IpAddr, u16)> = HashMap::new();
-    for (id, entry) in &config {
-        assert!(!addr_table.contains_key(&id), "ids must be unique");
-        addr_table.insert(*id, (entry.ip_addr, entry.port));
+impl Server {
+    pub fn new(global_config: GlobalConfig, my_id: UniqueId) -> Self {
+        Server {
+            global_config,
+            my_id,
+        }
     }
 
-    // Parse command line
-    let args = Args::parse();
-    let my_id = args.my_id;
-    assert!(config.contains_key(&my_id), "agent {} not in config", &my_id);
+    // Helper function to initialize Agent
+    fn init_agent<T: Agent>(id: UniqueId, conf: AppConfig) 
+    -> (T,
+        mpsc::Sender<NetworkMessage>,
+        mpsc::Receiver<NetworkMessage>,) 
+    {
+        let (in_send, in_recv) = mpsc::channel(100);
+        let (out_send, out_recv) = mpsc::channel(100);
+        let agent = T::new(id, in_recv, out_send, conf.attrs);
+        return (agent, in_send, out_recv);
+    }
 
-    // Initialize the agent
-    let (mut agent, in_sender, out_receiver) = 
-        init_agent(my_id, (*config.get(&my_id).unwrap()).clone());
+    // Server main function
+    pub async fn run<T: Agent>(&mut self) {
 
-    // Initialize and run the network
-    let mut network_manager = NetworkManager::new(
-        my_id, addr_table, 
-        in_sender, 
-        out_receiver);
+        // Initialize map from id to address
+        let mut addr_table: HashMap<UniqueId, (IpAddr, u16)> = HashMap::new();
+        for (id, entry) in &self.global_config {
+            assert!(!addr_table.contains_key(&id), "ids must be unique");
+            addr_table.insert(*id, (entry.ip_addr, entry.port));
+        }
 
-    
-    tokio::spawn(async move {
-        network_manager.run().await;
-    });
+        // Initialize Agent and Network Manager
+        let agent_config = self.global_config.get(&self.my_id).unwrap().clone();
+        let (mut agent, in_sender, out_receiver) = 
+            Self::init_agent::<T>(self.my_id, agent_config);
+             
+        let mut network_manager = NetworkManager::new(
+            self.my_id, addr_table, 
+            in_sender, 
+            out_receiver);
 
-    // Wait for connections to be set up
-    sleep(Duration::from_millis(1_000)).await;
-    agent.run().await;
+        // Run the Network Manager
+        tokio::spawn(async move {
+            network_manager.run().await;
+        });
+
+        // Wait for connections to be set up
+        sleep(Duration::from_millis(1_000)).await;
+
+        // Run the agent
+        agent.run().await;
+    }
 }
 
 
