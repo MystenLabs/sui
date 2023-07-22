@@ -19,7 +19,7 @@ use fastcrypto::hash::Digest;
 use fastcrypto::traits::ToFromBytes;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::identifier::Identifier;
-use prometheus::Histogram;
+use prometheus::{Histogram, IntCounter};
 use tracing::info;
 
 use sui_json_rpc_types::{
@@ -194,7 +194,7 @@ impl PgIndexerStore {
         }
     }
 
-    fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError> {
+    fn get_latest_tx_checkpoint_sequence_number(&self) -> Result<i64, IndexerError> {
         read_only_blocking!(&self.blocking_cp, |conn| {
             checkpoints::dsl::checkpoints
                 .select(max(checkpoints::sequence_number))
@@ -203,6 +203,17 @@ impl PgIndexerStore {
                 .map(|o| o.unwrap_or(-1))
         })
         .context("Failed reading latest checkpoint sequence number from PostgresDB")
+    }
+
+    fn get_latest_object_checkpoint_sequence_number(&self) -> Result<i64, IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            objects::dsl::objects
+                .select(max(objects::checkpoint))
+                .first::<Option<i64>>(conn)
+                // -1 to differentiate between no checkpoints and the first checkpoint
+                .map(|o| o.unwrap_or(-1))
+        })
+        .context("Failed reading latest object checkpoint sequence number from PostgresDB")
     }
 
     fn get_checkpoint(
@@ -1242,6 +1253,7 @@ impl PgIndexerStore {
                 deleted_objects,
                 None,
                 None,
+                None,
             )
         })
     }
@@ -1250,6 +1262,7 @@ impl PgIndexerStore {
         &self,
         checkpoint: &Checkpoint,
         transactions: &[Transaction],
+        total_transaction_chunk_committed_counter: IntCounter,
     ) -> Result<usize, IndexerError> {
         transactional_blocking!(&self.blocking_cp, |conn| {
             // Commit indexed transactions
@@ -1267,6 +1280,9 @@ impl PgIndexerStore {
                     .map_err(IndexerError::from)
                     .context("Failed writing transactions to PostgresDB")?;
             }
+            // chunks.counter() will consume the iterator, so we need to calculate the number of chunks separately.
+            let num_chunks = (transactions.len() + PG_COMMIT_CHUNK_SIZE - 1) / PG_COMMIT_CHUNK_SIZE;
+            total_transaction_chunk_committed_counter.inc_by(num_chunks as u64);
 
             // Commit indexed checkpoint last, so that if the checkpoint is committed,
             // all related data have been committed as well.
@@ -1282,6 +1298,7 @@ impl PgIndexerStore {
     fn persist_object_changes(
         &self,
         tx_object_changes: &[TransactionObjectChanges],
+        total_object_change_chunk_committed_counter: IntCounter,
         object_mutation_latency: Histogram,
         object_deletion_latency: Histogram,
     ) -> Result<(), IndexerError> {
@@ -1302,6 +1319,7 @@ impl PgIndexerStore {
                 conn,
                 mutated_objects,
                 deleted_objects,
+                Some(total_object_change_chunk_committed_counter),
                 Some(object_mutation_latency),
                 Some(object_deletion_latency),
             )?;
@@ -1892,8 +1910,13 @@ impl PgIndexerStore {
 impl IndexerStore for PgIndexerStore {
     type ModuleCache = SyncModuleCache<IndexerModuleResolver>;
 
-    async fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError> {
-        self.spawn_blocking(|this| this.get_latest_checkpoint_sequence_number())
+    async fn get_latest_tx_checkpoint_sequence_number(&self) -> Result<i64, IndexerError> {
+        self.spawn_blocking(|this| this.get_latest_tx_checkpoint_sequence_number())
+            .await
+    }
+
+    async fn get_latest_object_checkpoint_sequence_number(&self) -> Result<i64, IndexerError> {
+        self.spawn_blocking(|this| this.get_latest_object_checkpoint_sequence_number())
             .await
     }
 
@@ -2257,11 +2280,16 @@ impl IndexerStore for PgIndexerStore {
         &self,
         checkpoint: &Checkpoint,
         transactions: &[Transaction],
+        total_transaction_chunk_committed_counter: IntCounter,
     ) -> Result<usize, IndexerError> {
         let checkpoint = checkpoint.to_owned();
         let transactions = transactions.to_owned();
         self.spawn_blocking(move |this| {
-            this.persist_checkpoint_transactions(&checkpoint, &transactions)
+            this.persist_checkpoint_transactions(
+                &checkpoint,
+                &transactions,
+                total_transaction_chunk_committed_counter,
+            )
         })
         .await
     }
@@ -2269,6 +2297,7 @@ impl IndexerStore for PgIndexerStore {
     async fn persist_object_changes(
         &self,
         tx_object_changes: &[TransactionObjectChanges],
+        total_object_change_chunk_committed_counter: IntCounter,
         object_mutation_latency: Histogram,
         object_deletion_latency: Histogram,
     ) -> Result<(), IndexerError> {
@@ -2276,6 +2305,7 @@ impl IndexerStore for PgIndexerStore {
         self.spawn_blocking(move |this| {
             this.persist_object_changes(
                 &tx_object_changes,
+                total_object_change_chunk_committed_counter,
                 object_mutation_latency,
                 object_deletion_latency,
             )
@@ -2455,6 +2485,7 @@ fn persist_transaction_object_changes(
     conn: &mut PgConnection,
     mutated_objects: Vec<Object>,
     deleted_objects: Vec<Object>,
+    total_object_change_chunk_committed_counter: Option<IntCounter>,
     object_mutation_latency: Option<Histogram>,
     object_deletion_latency: Option<Histogram>,
 ) -> Result<usize, IndexerError> {
@@ -2463,9 +2494,13 @@ fn persist_transaction_object_changes(
     // we have to limit update of one object once in a query.
 
     // MUSTFIX(gegaowp): clean up the metrics codes after experiment
-    if let Some(object_mutation_latency) = object_mutation_latency {
+    if let (Some(object_mutation_latency), Some(object_change_chunk_counter)) = (
+        object_mutation_latency,
+        total_object_change_chunk_committed_counter.clone(),
+    ) {
         let object_mutation_guard = object_mutation_latency.start_timer();
         let mut mutated_object_groups = group_and_sort_objects(mutated_objects);
+        let mut db_commit_counter = 0;
         loop {
             let mutated_object_group = mutated_object_groups
                 .iter_mut()
@@ -2485,8 +2520,10 @@ fn persist_transaction_object_changes(
                         e
                     ))
                 })?;
+            db_commit_counter += 1;
         }
         object_mutation_guard.stop_and_record();
+        object_change_chunk_counter.inc_by(db_commit_counter);
     } else {
         let mut mutated_object_groups = group_and_sort_objects(mutated_objects);
         loop {
@@ -2512,7 +2549,11 @@ fn persist_transaction_object_changes(
     }
 
     // MUSTFIX(gegaowp): clean up the metrics codes after experiment
-    if let Some(object_deletion_latency) = object_deletion_latency {
+    if let (Some(object_deletion_latency), Some(object_deletion_chunk_counter)) = (
+        object_deletion_latency,
+        total_object_change_chunk_committed_counter,
+    ) {
+        let mut db_commit_counter = 0;
         let object_deletion_guard = object_deletion_latency.start_timer();
         for deleted_object_change_chunk in deleted_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
             diesel::insert_into(objects::table)
@@ -2533,8 +2574,10 @@ fn persist_transaction_object_changes(
                         e
                     ))
                 })?;
+            db_commit_counter += 1;
         }
         object_deletion_guard.stop_and_record();
+        object_deletion_chunk_counter.inc_by(db_commit_counter);
     } else {
         for deleted_object_change_chunk in deleted_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
             diesel::insert_into(objects::table)
