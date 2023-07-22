@@ -20,6 +20,9 @@ pub struct IndexerMetrics {
     pub total_object_checkpoint_committed: IntCounter,
     pub total_transaction_committed: IntCounter,
     pub total_object_change_committed: IntCounter,
+    // NOTE: *_chunk_commited counts number of DB commits
+    pub total_transaction_chunk_committed: IntCounter,
+    pub total_object_change_chunk_committed: IntCounter,
     pub total_epoch_committed: IntCounter,
     pub latest_fullnode_checkpoint_sequence_number: IntGauge,
     pub latest_tx_checkpoint_sequence_number: IntGauge,
@@ -92,6 +95,18 @@ impl IndexerMetrics {
             total_object_change_committed: register_int_counter_with_registry!(
                 "total_object_change_committed",
                 "Total number of object change committed",
+                registry,
+            )
+            .unwrap(),
+            total_transaction_chunk_committed: register_int_counter_with_registry!(
+                "total_transaction_chunk_commited",
+                "Total number of transaction chunk committed",
+                registry,
+            )
+            .unwrap(),
+            total_object_change_chunk_committed: register_int_counter_with_registry!(
+                "total_object_change_chunk_committed",
+                "Total number of object change chunk committed",
                 registry,
             )
             .unwrap(),

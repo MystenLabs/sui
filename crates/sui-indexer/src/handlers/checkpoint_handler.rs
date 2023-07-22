@@ -517,7 +517,11 @@ where
                     self.metrics.checkpoint_db_commit_latency.start_timer();
                 let mut checkpoint_tx_commit_res = self
                     .state
-                    .persist_checkpoint_transactions(&checkpoint, &transactions)
+                    .persist_checkpoint_transactions(
+                        &checkpoint,
+                        &transactions,
+                        self.metrics.total_transaction_chunk_committed.clone(),
+                    )
                     .await;
                 while let Err(e) = checkpoint_tx_commit_res {
                     warn!(
@@ -530,7 +534,11 @@ where
                     .await;
                     checkpoint_tx_commit_res = self
                         .state
-                        .persist_checkpoint_transactions(&checkpoint, &transactions)
+                        .persist_checkpoint_transactions(
+                            &checkpoint,
+                            &transactions,
+                            self.metrics.total_transaction_chunk_committed.clone(),
+                        )
                         .await;
                 }
                 checkpoint_tx_db_guard.stop_and_record();
@@ -590,6 +598,7 @@ where
                     .state
                     .persist_object_changes(
                         &object_changes,
+                        self.metrics.total_object_change_chunk_committed.clone(),
                         self.metrics.object_mutation_db_commit_latency.clone(),
                         self.metrics.object_deletion_db_commit_latency.clone(),
                     )
@@ -607,6 +616,7 @@ where
                         .state
                         .persist_object_changes(
                             &object_changes,
+                            self.metrics.total_object_change_chunk_committed.clone(),
                             self.metrics.object_mutation_db_commit_latency.clone(),
                             self.metrics.object_deletion_db_commit_latency.clone(),
                         )

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use prometheus::Histogram;
+use prometheus::{Histogram, IntCounter};
 
 use move_core_types::identifier::Identifier;
 use sui_json_rpc_types::{
@@ -220,10 +220,12 @@ pub trait IndexerStore {
         &self,
         checkpoint: &Checkpoint,
         transactions: &[Transaction],
+        total_transaction_chunk_committed_counter: IntCounter,
     ) -> Result<usize, IndexerError>;
     async fn persist_object_changes(
         &self,
         tx_object_changes: &[TransactionObjectChanges],
+        total_object_change_chunk_committed_counter: IntCounter,
         object_mutation_latency: Histogram,
         object_deletion_latency: Histogram,
     ) -> Result<(), IndexerError>;
