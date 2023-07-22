@@ -6,6 +6,7 @@ import {
 	SuiObjectResponse,
 	getSuiObjectData,
 	isSuiObjectResponse,
+	getObjectFields,
 } from '@mysten/sui.js';
 import { KIOSK_OWNER_CAP } from '@mysten/kiosk';
 
@@ -20,11 +21,8 @@ export function isKioskOwnerToken(object?: SuiObjectResponse | SuiObjectData) {
 	return [KIOSK_OWNER_CAP, ORIGINBYTE_KIOSK_OWNER_TOKEN].includes(objectData?.type ?? '');
 }
 
-export function getKioskIdFromDynamicFields(object: SuiObjectResponse | SuiObjectData) {
+export function getKioskIdFromOwnerCap(object: SuiObjectResponse | SuiObjectData) {
 	const objectData = isSuiObjectResponse(object) ? getSuiObjectData(object) : object;
-	return (
-		objectData?.content &&
-		'fields' in objectData.content &&
-		(objectData.content.fields.for ?? objectData.content.fields.kiosk)
-	);
+	const fields = getObjectFields(objectData!);
+	return fields?.for ?? fields?.kiosk;
 }

@@ -8,7 +8,7 @@ import { useState } from 'react';
 
 import type { VariantProps } from 'class-variance-authority';
 
-export const nftImageStyles = cva('overflow-hidden bg-gray-40 relative', {
+const nftImageStyles = cva('overflow-hidden bg-gray-40 relative', {
 	variants: {
 		animateHover: {
 			true: [

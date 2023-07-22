@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getKioskIdFromDynamicFields, isKioskOwnerToken, useMultiGetObjects } from '@mysten/core';
+import { getKioskIdFromOwnerCap, isKioskOwnerToken, useMultiGetObjects } from '@mysten/core';
 import { Check12, EyeClose16 } from '@mysten/icons';
 import { getObjectDisplay } from '@mysten/sui.js';
 import { get, set } from 'idb-keyval';
@@ -180,7 +180,7 @@ function HiddenNftsPage() {
 										to={
 											isKioskOwnerToken(nft.data)
 												? `/kiosk?${new URLSearchParams({
-														kioskId: getKioskIdFromDynamicFields(nft.data!),
+														kioskId: getKioskIdFromOwnerCap(nft.data!),
 												  })}`
 												: `/nft-details?${new URLSearchParams({
 														objectId,

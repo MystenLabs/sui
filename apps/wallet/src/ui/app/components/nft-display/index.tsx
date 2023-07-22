@@ -14,7 +14,7 @@ import { useGetNFTMeta, useFileExtensionType } from '_hooks';
 
 import type { VariantProps } from 'class-variance-authority';
 
-const nftDisplayCardStyles = cva('relative flex flex-nowrap items-center h-full', {
+const nftDisplayCardStyles = cva('flex flex-nowrap items-center h-full', {
 	variants: {
 		animateHover: {
 			true: 'group',
@@ -61,7 +61,7 @@ export function NFTDisplayCard({
 	const video = useResolveVideo(objectData);
 	const fileExtensionType = useFileExtensionType(nftImageUrl);
 	const isOwnerToken = isKioskOwnerToken(objectData);
-	const shouldShowLabel = showLabel && !wideView && orientation !== 'horizontal';
+	const shouldShowLabel = !wideView && orientation !== 'horizontal';
 
 	return (
 		<div className={nftDisplayCardStyles({ animateHover, wideView, orientation })}>

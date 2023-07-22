@@ -5,7 +5,7 @@ import { useFeatureValue } from '@growthbook/growthbook-react';
 import {
 	KioskTypes,
 	ORIGINBYTE_KIOSK_OWNER_TOKEN,
-	getKioskIdFromDynamicFields,
+	getKioskIdFromOwnerCap,
 	useGetKioskContents,
 	useGetObject,
 	useRpcClient,
@@ -34,7 +34,7 @@ export function useTransferKioskItem({
 	const objectData = useGetObject(objectId);
 
 	return useMutation({
-		mutationFn: async (to: string) => {
+		mutationFn: async ({ to, clientIdentifier }: { to: string; clientIdentifier?: string }) => {
 			if (!to || !signer || !objectType) {
 				throw new Error('Missing data');
 			}
@@ -52,14 +52,17 @@ export function useTransferKioskItem({
 				const obj = take(tx, objectData.data?.data?.type, kioskId, kiosk?.ownerCap, objectId);
 				// transfer as usual
 				tx.transferObjects([obj], tx.pure(to));
-				return signer.signAndExecuteTransactionBlock({
-					transactionBlock: tx,
-					options: {
-						showInput: true,
-						showEffects: true,
-						showEvents: true,
+				return signer.signAndExecuteTransactionBlock(
+					{
+						transactionBlock: tx,
+						options: {
+							showInput: true,
+							showEffects: true,
+							showEvents: true,
+						},
 					},
-				});
+					clientIdentifier,
+				);
 			}
 
 			if (kiosk.type === KioskTypes.ORIGINBYTE && objectData?.data?.data?.type) {
@@ -70,9 +73,7 @@ export function useTransferKioskItem({
 					filter: { StructType: ORIGINBYTE_KIOSK_OWNER_TOKEN },
 				});
 				const recipientKiosk = recipientKiosks.data[0];
-				const recipientKioskId = recipientKiosk
-					? getKioskIdFromDynamicFields(recipientKiosk)
-					: null;
+				const recipientKioskId = recipientKiosk ? getKioskIdFromOwnerCap(recipientKiosk) : null;
 
 				if (recipientKioskId) {
 					tx.moveCall({
@@ -87,14 +88,17 @@ export function useTransferKioskItem({
 						arguments: [tx.object(kioskId), tx.pure(to), tx.pure(objectId)],
 					});
 				}
-				return signer.signAndExecuteTransactionBlock({
-					transactionBlock: tx,
-					options: {
-						showInput: true,
-						showEffects: true,
-						showEvents: true,
+				return signer.signAndExecuteTransactionBlock(
+					{
+						transactionBlock: tx,
+						options: {
+							showInput: true,
+							showEffects: true,
+							showEvents: true,
+						},
 					},
-				});
+					clientIdentifier,
+				);
 			}
 			throw new Error('Failed to transfer object');
 		},

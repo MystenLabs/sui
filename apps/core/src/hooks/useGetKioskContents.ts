@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type SuiObjectResponse } from '@mysten/sui.js';
-import { KioskData, KioskItem, fetchKiosk, getOwnedKiosks } from '@mysten/kiosk';
+import { KIOSK_ITEM, KioskData, KioskItem, fetchKiosk, getOwnedKiosks } from '@mysten/kiosk';
 import { useQuery } from '@tanstack/react-query';
 import { useRpcClient } from '../api/RpcClientContext';
-import { ORIGINBYTE_KIOSK_OWNER_TOKEN, getKioskIdFromDynamicFields } from '../utils/kiosk';
+import { ORIGINBYTE_KIOSK_OWNER_TOKEN, getKioskIdFromOwnerCap } from '../utils/kiosk';
 import { SuiClient } from '@mysten/sui.js/src/client';
 
 export type KioskContents = Omit<KioskData, 'items'> & {
@@ -35,8 +35,7 @@ async function getOriginByteKioskContents(address: string, client: SuiClient) {
 			showContent: true,
 		},
 	});
-
-	const ids = data.data.map((object) => getKioskIdFromDynamicFields(object));
+	const ids = data.data.map((object) => getKioskIdFromOwnerCap(object));
 	const kiosks = new Map<string, Kiosk>();
 
 	// fetch the user's kiosks
@@ -55,7 +54,9 @@ async function getOriginByteKioskContents(address: string, client: SuiClient) {
 				parentId: kiosk.data.objectId,
 			});
 
-			const objectIds = objects.data.map((obj) => obj.objectId);
+			const objectIds = objects.data
+				.filter((obj) => obj.name.type === KIOSK_ITEM)
+				.map((obj) => obj.objectId);
 
 			// fetch the contents of the objects within a kiosk
 			const kioskContent = await client.multiGetObjects({
@@ -86,7 +87,7 @@ async function getSuiKioskContents(address: string, client: SuiClient) {
 			const kiosk = await fetchKiosk(client, id, { limit: 1000 }, {});
 			const contents = await client.multiGetObjects({
 				ids: kiosk.data.itemIds,
-				options: { showDisplay: true, showContent: true, showOwner: true },
+				options: { showDisplay: true, showContent: true },
 			});
 
 			const items = contents.map((object) => {
@@ -121,8 +122,8 @@ export function useGetKioskContents(address?: string | null, disableOriginByteKi
 			const list = [...Array.from(suiKiosks.values()), ...Array.from(obKiosks.values())].flatMap(
 				(d) => d.items,
 			);
-
 			const kiosks = new Map([...suiKiosks, ...obKiosks]) as Map<string, Kiosk>;
+			// a map of object ID to Kiosk ID
 			const lookup = list.reduce((acc, curr) => {
 				acc.set(curr.data.objectId, curr.kioskId);
 				return acc;

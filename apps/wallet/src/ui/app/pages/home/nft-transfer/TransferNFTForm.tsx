@@ -60,7 +60,7 @@ export function TransferNFTForm({
 			}
 
 			if (isContainedInKiosk) {
-				return transferKioskItem.mutateAsync(to);
+				return transferKioskItem.mutateAsync({ to, clientIdentifier });
 			}
 
 			const tx = new TransactionBlock();
