@@ -395,7 +395,7 @@ impl SuiClientBuilder {
 ///     println!("{:?}", sui.api_version());
 ///
 ///     let address = SuiAddress::from_str("0x0000....0000")?;
-///     let owned_objects = sui.
+///     let owned_objects = sui
 ///        .read_api()
 ///        .get_owned_objects(address, None, None, None)
 ///        .await?;
