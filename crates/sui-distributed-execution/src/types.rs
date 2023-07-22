@@ -11,6 +11,21 @@ use sui_types::{
 
 pub type UniqueId = u16;
 
+pub trait Message {
+    fn serialize(&self) -> String;
+    fn deserialize(string: String) -> Self;
+}
+
+impl Message for String {
+    fn serialize(&self) -> String {
+        self.to_string()
+    }
+
+    fn deserialize(string: String) -> Self {
+        string
+    }
+}
+
 #[derive(Debug)]
 pub struct NetworkMessage {
     pub src: UniqueId,
@@ -20,14 +35,14 @@ pub struct NetworkMessage {
 
 impl NetworkMessage {
     pub fn serialize(&self) -> String {
-        format!("{}\t{}\t{}\t\n", self.src, self.dst, self.payload)
+        format!("{}\t{}\t{}\t\n", self.src, self.dst, self.payload.serialize())
     }
 
-    pub fn deserialize(string: String) -> NetworkMessage {
+    pub fn deserialize(string: String) -> Self {
         let mut splitted = string.split("\t");
         let src = splitted.next().unwrap().parse().unwrap();
         let dst = splitted.next().unwrap().parse().unwrap();
-        let payload = splitted.next().unwrap().to_string();
+        let payload = Message::deserialize(splitted.next().unwrap().to_string());
         NetworkMessage { src, dst, payload }
     }
 }
