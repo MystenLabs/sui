@@ -1175,9 +1175,9 @@ pub mod pg_integration_test {
             start_test_cluster(Some(20000)).await;
         // Allow indexer to sync
         wait_until_next_checkpoint(&store).await;
-        let mut cp_res = store.get_latest_checkpoint_sequence_number().await;
+        let mut cp_res = store.get_latest_tx_checkpoint_sequence_number().await;
         while cp_res.is_err() {
-            cp_res = store.get_latest_checkpoint_sequence_number().await;
+            cp_res = store.get_latest_tx_checkpoint_sequence_number().await;
         }
         let cp = cp_res.unwrap() as u64;
         let first_checkpoint = indexer_rpc_client
@@ -1292,9 +1292,9 @@ pub mod pg_integration_test {
 
     async fn wait_until_next_checkpoint(store: &PgIndexerStore) {
         let since = std::time::Instant::now();
-        let mut cp_res = store.get_latest_checkpoint_sequence_number().await;
+        let mut cp_res = store.get_latest_tx_checkpoint_sequence_number().await;
         while cp_res.is_err() {
-            cp_res = store.get_latest_checkpoint_sequence_number().await;
+            cp_res = store.get_latest_tx_checkpoint_sequence_number().await;
         }
         let mut cp = cp_res.unwrap();
         let target = cp + 1;
@@ -1304,9 +1304,9 @@ pub mod pg_integration_test {
                 panic!("wait_until_next_checkpoint timed out!");
             }
             tokio::task::yield_now().await;
-            let mut cp_res = store.get_latest_checkpoint_sequence_number().await;
+            let mut cp_res = store.get_latest_tx_checkpoint_sequence_number().await;
             while cp_res.is_err() {
-                cp_res = store.get_latest_checkpoint_sequence_number().await;
+                cp_res = store.get_latest_tx_checkpoint_sequence_number().await;
             }
             cp = cp_res.unwrap();
         }
@@ -1314,9 +1314,9 @@ pub mod pg_integration_test {
 
     async fn wait_for_checkpoint(store: &PgIndexerStore, target: i64) {
         let since = std::time::Instant::now();
-        let mut cp_res = store.get_latest_checkpoint_sequence_number().await;
+        let mut cp_res = store.get_latest_tx_checkpoint_sequence_number().await;
         while cp_res.is_err() {
-            cp_res = store.get_latest_checkpoint_sequence_number().await;
+            cp_res = store.get_latest_tx_checkpoint_sequence_number().await;
         }
         let mut cp = cp_res.unwrap();
         while cp < target {
@@ -1325,9 +1325,9 @@ pub mod pg_integration_test {
                 panic!("wait_for_checkpoint timed out!");
             }
             tokio::task::yield_now().await;
-            let mut cp_res = store.get_latest_checkpoint_sequence_number().await;
+            let mut cp_res = store.get_latest_tx_checkpoint_sequence_number().await;
             while cp_res.is_err() {
-                cp_res = store.get_latest_checkpoint_sequence_number().await;
+                cp_res = store.get_latest_tx_checkpoint_sequence_number().await;
             }
             cp = cp_res.unwrap();
         }

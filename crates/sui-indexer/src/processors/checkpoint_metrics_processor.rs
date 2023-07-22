@@ -31,7 +31,10 @@ where
         let mut last_processed_cp = last_cp_metrics.checkpoint;
         // process another batch of events, 100 checkpoints at a time, otherwise sleep for 3 seconds
         loop {
-            let latest_checkpoint = self.store.get_latest_checkpoint_sequence_number().await?;
+            let latest_checkpoint = self
+                .store
+                .get_latest_tx_checkpoint_sequence_number()
+                .await?;
             if latest_checkpoint >= last_processed_cp + CHECKPOINT_METRICS_BATCH_SIZE as i64 {
                 let checkpoints = self
                     .store
