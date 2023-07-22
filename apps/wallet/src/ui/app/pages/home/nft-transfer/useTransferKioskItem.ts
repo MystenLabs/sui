@@ -49,9 +49,9 @@ export function useTransferKioskItem({
 			if (kiosk.type === KioskTypes.SUI && objectData?.data?.data?.type && kiosk?.ownerCap) {
 				const tx = new TransactionBlock();
 				// take item out of kiosk
-				const obj = await take(tx, objectData.data?.data?.type, kioskId, kiosk?.ownerCap, objectId);
+				const obj = take(tx, objectData.data?.data?.type, kioskId, kiosk?.ownerCap, objectId);
 				// transfer as usual
-				tx.transferObjects([obj], tx.pure(address));
+				tx.transferObjects([obj], tx.pure(to));
 				return signer.signAndExecuteTransactionBlock({
 					transactionBlock: tx,
 					options: {

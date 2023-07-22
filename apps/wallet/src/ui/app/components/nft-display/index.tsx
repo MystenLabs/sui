@@ -61,26 +61,27 @@ export function NFTDisplayCard({
 	const video = useResolveVideo(objectData);
 	const fileExtensionType = useFileExtensionType(nftImageUrl);
 	const isOwnerToken = isKioskOwnerToken(objectData);
+	const shouldShowLabel = showLabel && !wideView && orientation !== 'horizontal';
 
 	return (
 		<div className={nftDisplayCardStyles({ animateHover, wideView, orientation })}>
 			<Loading loading={isLoading}>
-				{objectData?.data && isOwnerToken && orientation !== 'horizontal' ? (
+				{objectData?.data && isOwnerToken ? (
 					<Kiosk
 						object={objectData}
 						borderRadius={borderRadius}
 						size={size}
-						showLabel={!wideView}
+						orientation={orientation}
+						playable={playable}
+						showLabel={shouldShowLabel}
 					/>
-				) : video && playable ? (
-					<video controls className="h-full w-full rounded-md overflow-hidden" src={video} />
 				) : (
 					<NftImage
 						name={nftName}
 						src={nftImageUrl}
 						title={nftMeta?.description || ''}
 						animateHover={animateHover}
-						showLabel={!wideView}
+						showLabel={shouldShowLabel}
 						borderRadius={borderRadius}
 						size={size}
 						isLocked={isLocked}

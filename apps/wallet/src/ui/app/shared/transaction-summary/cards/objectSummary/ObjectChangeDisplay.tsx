@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type SuiObjectChangeWithDisplay } from '@mysten/core';
-import { formatAddress } from '@mysten/sui.js';
+import { formatAddress } from '@mysten/sui.js/utils';
 
 import { Text } from '../../../text';
 import ExplorerLink from '_src/ui/app/components/explorer-link';
