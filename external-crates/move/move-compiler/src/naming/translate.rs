@@ -18,7 +18,7 @@ use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::fake_natives;
+use super::{ast::TParamID, fake_natives};
 
 //**************************************************************************************************
 // Context
@@ -53,6 +53,11 @@ struct Context<'env> {
     local_scopes: Vec<BTreeMap<Symbol, u16>>,
     local_count: BTreeMap<Symbol, u16>,
     used_locals: BTreeSet<N::Var_>,
+    /// Type parameters used in a function (they have to be cleared after processing each function).
+    used_fun_tparams: BTreeSet<TParamID>,
+    /// Indicates if the compiler is currently translating a function (set to true before starting
+    /// to translate a function and to false after translation is over).
+    translating_fun: bool,
 }
 
 impl<'env> Context<'env> {
@@ -123,6 +128,8 @@ impl<'env> Context<'env> {
             local_scopes: vec![],
             local_count: BTreeMap::new(),
             used_locals: BTreeSet::new(),
+            used_fun_tparams: BTreeSet::new(),
+            translating_fun: false,
         }
     }
 
@@ -556,12 +563,28 @@ fn function(
     assert!(context.local_scopes.is_empty());
     assert!(context.local_count.is_empty());
     assert!(context.used_locals.is_empty());
+    assert!(context.used_fun_tparams.is_empty());
+    assert!(!context.translating_fun);
     context.env.add_warning_filter_scope(warning_filter.clone());
     context.local_scopes = vec![BTreeMap::new()];
     context.local_count = BTreeMap::new();
+    context.translating_fun = true;
     let signature = function_signature(context, signature);
     let acquires = function_acquires(context, acquires);
     let body = function_body(context, body);
+
+    if !matches!(body.value, N::FunctionBody_::Native) {
+        for tparam in &signature.type_parameters {
+            if !context.used_fun_tparams.contains(&tparam.id) {
+                let sp!(loc, n) = tparam.user_specified_name;
+                let msg = format!("Unused type parameter '{}'.", n);
+                context
+                    .env
+                    .add_diag(diag!(UnusedItem::FunTypeParam, (loc, msg)))
+            }
+        }
+    }
+
     let mut f = N::Function {
         warning_filter,
         index,
@@ -578,7 +601,9 @@ fn function(
     context.local_scopes = vec![];
     context.local_count = BTreeMap::new();
     context.used_locals = BTreeSet::new();
+    context.used_fun_tparams = BTreeSet::new();
     context.env.pop_warning_filter_scope();
+    context.translating_fun = false;
     f
 }
 
@@ -888,6 +913,9 @@ fn type_(context: &mut Context, sp!(loc, ety_): E::Type) -> N::Type {
                     ));
                     NT::UnresolvedError
                 } else {
+                    if context.translating_fun {
+                        context.used_fun_tparams.insert(tp.id);
+                    }
                     NT::Param(tp)
                 }
             }
