@@ -51,7 +51,7 @@ function BalanceChangeEntry({ change }: { change: BalanceChange }) {
 					</div>
 				</div>
 
-				<div className="flex text-right">
+				<div className="flex w-full justify-end text-right">
 					<Text variant="pBody/medium" color={isPositive ? 'success-dark' : 'issue-dark'}>
 						{isPositive ? '+' : ''}
 						{formatted} {symbol}
