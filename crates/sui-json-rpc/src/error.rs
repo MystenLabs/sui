@@ -77,6 +77,7 @@ impl From<SuiError> for Error {
 }
 
 impl Error {
+    /// `InvalidParams`/`INVALID_PARAMS_CODE` for client errors.
     pub fn to_rpc_error(self) -> RpcError {
         match self {
             Error::UserInputError(user_input_error) => {
@@ -93,8 +94,13 @@ impl Error {
             },
             Error::QuorumDriverError(err) => match err {
                 QuorumDriverError::NonRecoverableTransactionError { errors } => {
-                    let error_object =
-                        ErrorObject::owned(-32000, NON_RECOVERABLE_ERROR_MSG, Some(errors));
+                    // Note: we probably want a more precise error than `INVALID_PARAMS_CODE`
+                    // but to keep the error code consistent we still use `INVALID_PARAMS_CODE`
+                    let error_object = ErrorObject::owned(
+                        jsonrpsee::types::error::INVALID_PARAMS_CODE,
+                        NON_RECOVERABLE_ERROR_MSG,
+                        Some(errors),
+                    );
                     RpcError::Call(CallError::Custom(error_object))
                 }
                 _ => RpcError::Call(CallError::Failed(err.into())),
