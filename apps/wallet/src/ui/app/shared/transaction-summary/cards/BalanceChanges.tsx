@@ -32,13 +32,13 @@ function BalanceChangeEntry({ change }: { change: BalanceChange }) {
 					<div className="w-5">
 						<CoinIcon size="sm" coinType={coinType} />
 					</div>
-					<div className="flex flex-wrap gap-2 gap-y-1 sm:max-w-full">
+					<div className="flex flex-wrap gap-2 gap-y-1">
 						<Text variant="pBody" weight="semibold" color="steel-darker">
 							{coinMetaData?.name || symbol}
 						</Text>
 						{unRecognizedToken && (
 							<Alert mode="warning">
-								<div className="item-center block max-w-[70px] truncate break-normal text-captionSmallExtra font-medium uppercase tracking-wider sm:max-w-full">
+								<div className="item-center max-w-[70px] overflow-hidden truncate whitespace-nowrap text-captionSmallExtra font-medium uppercase tracking-wider lg:max-w-full">
 									Unrecognized
 								</div>
 							</Alert>
