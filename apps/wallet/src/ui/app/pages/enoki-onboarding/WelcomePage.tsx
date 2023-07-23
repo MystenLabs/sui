@@ -11,7 +11,7 @@ import { useInitializedGuard } from '_hooks';
 import PageLayout from '_pages/layout';
 import { ampli } from '_src/shared/analytics/ampli';
 
-function WelcomePage() {
+export function WelcomePage() {
 	const checkingInitialized = useInitializedGuard(false);
 	return (
 		<PageLayout forceFullscreen>
@@ -92,7 +92,7 @@ function WelcomePage() {
 							</div>
 						</div>
 						<Button
-							to="/onboarding/add-account"
+							to="/accounts/add-account?sourceFlow=Onboarding"
 							size="tall"
 							variant="secondary"
 							text="More Options"
@@ -103,5 +103,3 @@ function WelcomePage() {
 		</PageLayout>
 	);
 }
-
-export default WelcomePage;
