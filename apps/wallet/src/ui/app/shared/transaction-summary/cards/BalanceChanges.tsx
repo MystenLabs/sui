@@ -9,7 +9,6 @@ import {
 } from '@mysten/core';
 import { useMemo } from 'react';
 
-import { CoinsStack } from './CoinStack';
 import { Card } from '../Card';
 import { OwnerFooter } from '../OwnerFooter';
 import Alert from '_components/alert';
@@ -28,24 +27,24 @@ function BalanceChangeEntry({ change }: { change: BalanceChange }) {
 	return (
 		<div className="flex flex-col gap-2">
 			<div className="flex justify-between">
-				<div className="flex gap-2">
+				<div className="flex items-center gap-2">
 					<div className="w-5">
 						<CoinIcon size="sm" coinType={coinType} />
 					</div>
-					<div className="flex flex-wrap gap-2 gap-y-1">
+					<div className="flex flex-wrap gap-2 gap-y-1 truncate">
 						<Text variant="pBody" weight="semibold" color="steel-darker">
 							{coinMetaData?.name || symbol}
 						</Text>
 						{unRecognizedToken && (
-							<Alert mode="warning">
-								<div className="item-center max-w-[70px] overflow-hidden truncate whitespace-nowrap text-captionSmallExtra font-medium uppercase tracking-wider lg:max-w-full">
+							<Alert mode="warning" spacing="sm" showIcon={false}>
+								<div className="item-center leading-none max-w-[70px] overflow-hidden truncate whitespace-nowrap text-captionSmallExtra font-medium uppercase tracking-wider">
 									Unrecognized
 								</div>
 							</Alert>
 						)}
 					</div>
 				</div>
-				<div className="flex">
+				<div className="flex justify-end w-full text-right">
 					<Text variant="pBody" weight="medium" color={isPositive ? 'success-dark' : 'issue-dark'}>
 						{isPositive ? '+' : ''}
 						{formatted} {symbol}
@@ -93,12 +92,7 @@ export function BalanceChanges({ changes }: BalanceChangesProps) {
 	return (
 		<>
 			{Object.entries(changes).map(([owner, changes]) => (
-				<Card
-					heading="Balance Changes"
-					key={owner}
-					after={<CoinsStack coinTypes={Array.from(new Set(changes.map((c) => c.coinType)))} />}
-					footer={<OwnerFooter owner={owner} />}
-				>
+				<Card heading="Balance Changes" key={owner} footer={<OwnerFooter owner={owner} />}>
 					<div className="flex flex-col gap-4 pb-3">
 						<BalanceChangeEntries changes={changes} />
 					</div>
