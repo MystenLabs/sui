@@ -14,8 +14,6 @@ export function ConnectLedgerModalContainer() {
 	const accountsUrl = useNextMenuUrl(true, '/accounts');
 	const importLedgerAccountsUrl = useNextMenuUrl(true, '/import-ledger-accounts');
 
-	console.log(accountsUrl, importLedgerAccountsUrl);
-
 	return (
 		<ConnectLedgerModal
 			onClose={() => {

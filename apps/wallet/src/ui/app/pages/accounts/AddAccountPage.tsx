@@ -14,10 +14,10 @@ import Overlay from '_components/overlay';
 import { ampli } from '_src/shared/analytics/ampli';
 
 type AddAccountPageProps = {
-	showSocialSignInButtons?: boolean;
+	showSocialSignInOptions?: boolean;
 };
 
-export function AddAccountPage({ showSocialSignInButtons = false }: AddAccountPageProps) {
+export function AddAccountPage({ showSocialSignInOptions = false }: AddAccountPageProps) {
 	const [isConnectLedgerModalOpen, setConnectLedgerModalOpen] = useState(false);
 	const [searchParams] = useSearchParams();
 	const navigate = useNavigate();
@@ -28,7 +28,7 @@ export function AddAccountPage({ showSocialSignInButtons = false }: AddAccountPa
 		<Overlay showModal title="Add Account" closeOverlay={() => navigate('/')}>
 			<div className="w-full flex flex-col gap-8 pt-3">
 				<div className="flex flex-col gap-3">
-					{showSocialSignInButtons && (
+					{showSocialSignInOptions && (
 						<>
 							<SocialButton
 								provider="google"
@@ -97,8 +97,8 @@ export function AddAccountPage({ showSocialSignInButtons = false }: AddAccountPa
 						size="tall"
 						text="Create a new Passphrase Account"
 						to="/accounts/create-new-account"
-						onClick={async () => {
-							// ampli.clickedCreateNewAccount({ sourceFlow });
+						onClick={() => {
+							ampli.clickedCreateNewAccount({ sourceFlow });
 						}}
 					/>
 				</Section>
@@ -108,8 +108,8 @@ export function AddAccountPage({ showSocialSignInButtons = false }: AddAccountPa
 						size="tall"
 						text="Import Passphrase"
 						to="/accounts/import-passphrase"
-						onClick={async () => {
-							// ampli.clickedImportExistingAccount({ sourceFlow });
+						onClick={() => {
+							ampli.clickedImportPassphrase({ sourceFlow });
 						}}
 					/>
 					<Button
@@ -117,8 +117,8 @@ export function AddAccountPage({ showSocialSignInButtons = false }: AddAccountPa
 						size="tall"
 						text="Import Private Key"
 						to="/accounts/import-private-key"
-						onClick={async () => {
-							// ampli.clickedImportPrivateKey({ sourceFlow });
+						onClick={() => {
+							ampli.clickedImportPrivateKey({ sourceFlow });
 						}}
 					/>
 				</Section>
@@ -134,7 +134,7 @@ export function AddAccountPage({ showSocialSignInButtons = false }: AddAccountPa
 					}}
 					onConfirm={() => {
 						ampli.connectedHardwareWallet({ hardwareWalletType: 'Ledger' });
-						navigate('/accounts/import-ledger-account');
+						navigate('/accounts/import-ledger-accounts');
 					}}
 				/>
 			)}
