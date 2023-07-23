@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
@@ -95,7 +94,7 @@ const App = () => {
 			<Route path="welcome" element={useNewOnboardingFlow ? <WelcomePageV2 /> : <WelcomePage />} />
 			{useNewOnboardingFlow && (
 				<Route path="/accounts" element={<AccountsPage />}>
-					<Route path="add-account" element={<AddAccountPage />} />
+					<Route path="add-account" element={<AddAccountPage showSocialSignInOptions />} />
 					<Route path="create-new-account" element={<CreateNewAccountPage />} />
 					<Route path="import-ledger-accounts" element={<ImportLedgerAccountsPage />} />
 					<Route path="import-passphrase" element={<ImportPassphrasePage />} />

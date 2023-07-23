@@ -13,7 +13,7 @@ import { ButtonOrLink, type ButtonOrLinkProps } from './utils/ButtonOrLink';
 import { Text } from '_app/shared/text';
 
 const styles = cva(
-	'w-full cursor-pointer rounded-xl inline-flex items-center justify-center gap-3 px-4 py-2 disabled:opacity-40 focus:opacity-80',
+	'h-10 w-full cursor-pointer rounded-xl inline-flex items-center justify-center gap-3 px-4 py-2 disabled:opacity-40 focus:opacity-80',
 	{
 		variants: {
 			provider: {

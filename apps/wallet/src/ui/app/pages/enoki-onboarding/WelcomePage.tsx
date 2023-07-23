@@ -16,7 +16,7 @@ export function WelcomePage() {
 	return (
 		<PageLayout forceFullscreen>
 			<Loading loading={checkingInitialized}>
-				<div className="rounded-20 bg-sui-lightest shadow-wallet-content flex flex-col items-center w-popup-width h-popup-height p-10">
+				<div className="rounded-20 bg-sui-lightest shadow-wallet-content flex flex-col items-center p-10 h-full">
 					<div className="shrink-0">
 						<Logo />
 					</div>
