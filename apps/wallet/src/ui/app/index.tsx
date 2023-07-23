@@ -94,7 +94,7 @@ const App = () => {
 			<Route path="welcome" element={useNewOnboardingFlow ? <WelcomePageV2 /> : <WelcomePage />} />
 			{useNewOnboardingFlow && (
 				<Route path="/accounts" element={<AccountsPage />}>
-					<Route path="add-account" element={<AddAccountPage showSocialSignInOptions />} />
+					<Route path="add-account" element={<AddAccountPage />} />
 					<Route path="create-new-account" element={<CreateNewAccountPage />} />
 					<Route path="import-ledger-accounts" element={<ImportLedgerAccountsPage />} />
 					<Route path="import-passphrase" element={<ImportPassphrasePage />} />
