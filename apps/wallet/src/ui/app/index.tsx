@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // import { useFeatureIsOn } from '@growthbook/growthbook-react';
+import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
@@ -54,7 +55,7 @@ const HIDDEN_MENU_PATHS = [
 
 const App = () => {
 	const dispatch = useAppDispatch();
-	const useNewOnboardingFlow = true; // ;useFeatureIsOn('enoki-social-sign-in');
+	const useNewOnboardingFlow = useFeatureIsOn('enoki-social-sign-in');
 	const isPopup = useAppSelector((state) => state.app.appType === AppType.popup);
 	useEffect(() => {
 		document.body.classList.remove('app-initializing');
