@@ -102,18 +102,18 @@ jobs:
         if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main' }}
         shell: bash
         run: |
-          mv cratest\sui crates\sui-${{ matrix.os }}
+          mv C:\a\sui\sui\crates\sui C:\a\sui\sui\crates\sui-${{ matrix.os }}
           echo BIN_SUI="crates\sui-${{ matrix.os }}" >> $GITHUB_OUTPUT
-          mv crates\sui-node crates\sui-node-${{ matrix.os }}
+          mv C:\a\sui\sui\crates\sui-node C:\a\sui\sui\crates\sui-node-${{ matrix.os }}
           echo BIN_SUI_NODE="crates\sui-node-${{ matrix.os }}" >> $GITHUB_OUTPUT
-          mv crates\sui-tool crates\sui-tool-${{ matrix.os }}
+          mv C:\a\sui\sui\crates\sui-tool C:\a\sui\sui\crates\sui-tool-${{ matrix.os }}
           echo BIN_SUI_TOOL="crates\sui-tool-${{ matrix.os }}" >> $GITHUB_OUTPUT
-          mv crates\sui-faucet crates\sui-faucet-${{ matrix.os }}
+          mv C:\a\sui\sui\crates\sui-faucet C:\a\sui\sui\crates\sui-faucet-${{ matrix.os }}
           echo BIN_SUI_FAUCET="crates\sui-faucet-${{ matrix.os }}" >> $GITHUB_OUTPUT
-          mv crates\sui-test-validator crates\sui-test-validator-${{ matrix.os }}
+          mv C:\a\sui\sui\crates\sui-test-validator C:\a\sui\sui\crates\sui-test-validator-${{ matrix.os }}
           echo BIN_SUI_TEST_VALIDATOR="crates\sui-test-validator-${{ matrix.os }}" >> $GITHUB_OUTPUT
-          mv crates\sui-indexer crates\sui-indexer-${{ matrix.os }}
-          echo BIN_SUI_INDEXER="crates\sui-indexer-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          mv C:\a\sui\sui\crates\sui-indexer C:\a\sui\sui\crates\sui-indexer-${{ matrix.os }}
+          echo BIN_SUI_INDEXER="C:\a\sui\sui\crates\sui-indexer-${{ matrix.os }}" >> $GITHUB_OUTPUT
 
       - name: Upload release artifacts for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
