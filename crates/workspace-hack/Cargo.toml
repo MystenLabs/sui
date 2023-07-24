@@ -64,6 +64,24 @@ async_once = { version = "0.2", default-features = false }
 atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
 auto_ops = { version = "0.3", default-features = false }
+aws-config = { version = "0.55" }
+aws-credential-types = { version = "0.55", default-features = false }
+aws-endpoint = { version = "0.55", default-features = false }
+aws-http = { version = "0.55", default-features = false }
+aws-sdk-dynamodb = { version = "0.28" }
+aws-sdk-sso = { version = "0.28", default-features = false }
+aws-sdk-sts = { version = "0.28", default-features = false }
+aws-sig-auth = { version = "0.55", default-features = false }
+aws-sigv4 = { version = "0.55" }
+aws-smithy-async = { version = "0.55", default-features = false, features = ["rt-tokio"] }
+aws-smithy-client = { version = "0.55", default-features = false, features = ["rustls"] }
+aws-smithy-http = { version = "0.55", default-features = false, features = ["rt-tokio"] }
+aws-smithy-http-tower = { version = "0.55", default-features = false }
+aws-smithy-json = { version = "0.55", default-features = false }
+aws-smithy-query = { version = "0.55", default-features = false }
+aws-smithy-types = { version = "0.55", default-features = false }
+aws-smithy-xml = { version = "0.55", default-features = false }
+aws-types = { version = "0.55", default-features = false }
 axum = { version = "0.6", default-features = false, features = ["form", "headers", "http1", "http2", "json", "matched-path", "original-uri", "query", "tokio"] }
 axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
@@ -75,6 +93,7 @@ base16ct-6f8ce4dd05d13bba = { package = "base16ct", version = "0.2", default-fea
 base16ct-c65f7effa3be6d31 = { package = "base16ct", version = "0.1", default-features = false }
 base64-594e8ee84c453af0 = { package = "base64", version = "0.13", features = ["alloc"] }
 base64-647d43efb71741da = { package = "base64", version = "0.21", features = ["alloc"] }
+base64-simd = { version = "0.8" }
 base64-url = { version = "2" }
 base64ct = { version = "1", default-features = false, features = ["alloc"] }
 bcs = { version = "0.1", default-features = false }
@@ -108,6 +127,7 @@ bytecount = { version = "0.6", default-features = false }
 bytemuck = { version = "1", default-features = false }
 byteorder = { version = "1", features = ["i128"] }
 bytes = { version = "1", features = ["serde"] }
+bytes-utils = { version = "0.1" }
 cached = { version = "0.43" }
 cached_proc_macro_types = { version = "0.1", default-features = false }
 camino = { version = "1", default-features = false, features = ["serde1"] }
@@ -402,7 +422,7 @@ num = { version = "0.4" }
 num-bigint = { version = "0.4", features = ["rand"] }
 num-bigint-dig = { version = "0.8", default-features = false, features = ["i128", "prime", "u64_digit", "zeroize"] }
 num-complex = { version = "0.4", default-features = false, features = ["std"] }
-num-integer = { version = "0.1", default-features = false, features = ["i128", "std"] }
+num-integer = { version = "0.1", features = ["i128"] }
 num-iter = { version = "0.1", default-features = false, features = ["i128", "std"] }
 num-rational = { version = "0.4", default-features = false, features = ["num-bigint-std", "std"] }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
@@ -417,6 +437,7 @@ opaque-debug = { version = "0.3", default-features = false }
 os_str_bytes = { version = "6", default-features = false, features = ["raw_os_str"] }
 ouroboros-274715c4dabd11b0 = { package = "ouroboros", version = "0.9", default-features = false }
 ouroboros-3575ec1268b04181 = { package = "ouroboros", version = "0.15" }
+outref = { version = "0.5", default-features = false }
 overload = { version = "0.1", default-features = false }
 owo-colors = { version = "3", default-features = false }
 p256 = { version = "0.13" }
@@ -666,10 +687,12 @@ unsafe-libyaml = { version = "0.2", default-features = false }
 unsigned-varint = { version = "0.7", default-features = false, features = ["std"] }
 untrusted = { version = "0.7", default-features = false }
 url = { version = "2", features = ["serde"] }
+urlencoding = { version = "2", default-features = false }
 utf8parse = { version = "0.2" }
 uuid = { version = "1", features = ["fast-rng", "v4"] }
 vec_map = { version = "0.8", default-features = false }
 versions = { version = "4", default-features = false }
+vsimd = { version = "0.8", default-features = false, features = ["detect"] }
 vte = { version = "0.10" }
 wait-timeout = { version = "0.2", default-features = false }
 waker-fn = { version = "1", default-features = false }
@@ -685,6 +708,7 @@ winnow = { version = "0.4" }
 wyz = { version = "0.2", default-features = false, features = ["alloc"] }
 x509-parser = { version = "0.14" }
 xml-rs = { version = "0.8", default-features = false }
+xmlparser = { version = "0.13" }
 yaml-rust = { version = "0.4", default-features = false }
 yansi = { version = "0.5", default-features = false }
 yasna = { version = "0.5", features = ["std", "time"] }
@@ -754,6 +778,24 @@ atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
 auto_ops = { version = "0.3", default-features = false }
 autocfg = { version = "1", default-features = false }
+aws-config = { version = "0.55" }
+aws-credential-types = { version = "0.55", default-features = false }
+aws-endpoint = { version = "0.55", default-features = false }
+aws-http = { version = "0.55", default-features = false }
+aws-sdk-dynamodb = { version = "0.28" }
+aws-sdk-sso = { version = "0.28", default-features = false }
+aws-sdk-sts = { version = "0.28", default-features = false }
+aws-sig-auth = { version = "0.55", default-features = false }
+aws-sigv4 = { version = "0.55" }
+aws-smithy-async = { version = "0.55", default-features = false, features = ["rt-tokio"] }
+aws-smithy-client = { version = "0.55", default-features = false, features = ["rustls"] }
+aws-smithy-http = { version = "0.55", default-features = false, features = ["rt-tokio"] }
+aws-smithy-http-tower = { version = "0.55", default-features = false }
+aws-smithy-json = { version = "0.55", default-features = false }
+aws-smithy-query = { version = "0.55", default-features = false }
+aws-smithy-types = { version = "0.55", default-features = false }
+aws-smithy-xml = { version = "0.55", default-features = false }
+aws-types = { version = "0.55", default-features = false }
 axum = { version = "0.6", default-features = false, features = ["form", "headers", "http1", "http2", "json", "matched-path", "original-uri", "query", "tokio"] }
 axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
@@ -765,6 +807,7 @@ base16ct-6f8ce4dd05d13bba = { package = "base16ct", version = "0.2", default-fea
 base16ct-c65f7effa3be6d31 = { package = "base16ct", version = "0.1", default-features = false }
 base64-594e8ee84c453af0 = { package = "base64", version = "0.13", features = ["alloc"] }
 base64-647d43efb71741da = { package = "base64", version = "0.21", features = ["alloc"] }
+base64-simd = { version = "0.8" }
 base64-url = { version = "2" }
 base64ct = { version = "1", default-features = false, features = ["alloc"] }
 bcs = { version = "0.1", default-features = false }
@@ -801,6 +844,7 @@ bytecount = { version = "0.6", default-features = false }
 bytemuck = { version = "1", default-features = false }
 byteorder = { version = "1", features = ["i128"] }
 bytes = { version = "1", features = ["serde"] }
+bytes-utils = { version = "0.1" }
 cached = { version = "0.43" }
 cached_proc_macro = { version = "0.16", default-features = false }
 cached_proc_macro_types = { version = "0.1", default-features = false }
@@ -1139,7 +1183,7 @@ num = { version = "0.4" }
 num-bigint = { version = "0.4", features = ["rand"] }
 num-bigint-dig = { version = "0.8", default-features = false, features = ["i128", "prime", "u64_digit", "zeroize"] }
 num-complex = { version = "0.4", default-features = false, features = ["std"] }
-num-integer = { version = "0.1", default-features = false, features = ["i128", "std"] }
+num-integer = { version = "0.1", features = ["i128"] }
 num-iter = { version = "0.1", default-features = false, features = ["i128", "std"] }
 num-rational = { version = "0.4", default-features = false, features = ["num-bigint-std", "std"] }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
@@ -1157,6 +1201,7 @@ ouroboros-274715c4dabd11b0 = { package = "ouroboros", version = "0.9", default-f
 ouroboros-3575ec1268b04181 = { package = "ouroboros", version = "0.15" }
 ouroboros_macro-274715c4dabd11b0 = { package = "ouroboros_macro", version = "0.9", default-features = false }
 ouroboros_macro-3575ec1268b04181 = { package = "ouroboros_macro", version = "0.15", default-features = false, features = ["std"] }
+outref = { version = "0.5", default-features = false }
 overload = { version = "0.1", default-features = false }
 owo-colors = { version = "3", default-features = false }
 p256 = { version = "0.13" }
@@ -1459,12 +1504,14 @@ unsigned-varint = { version = "0.7", default-features = false, features = ["std"
 untrusted = { version = "0.7", default-features = false }
 unzip-n = { version = "0.1", default-features = false }
 url = { version = "2", features = ["serde"] }
+urlencoding = { version = "2", default-features = false }
 utf8parse = { version = "0.2" }
 uuid = { version = "1", features = ["fast-rng", "v4"] }
 variant_count = { version = "1", default-features = false }
 vec_map = { version = "0.8", default-features = false }
 version_check = { version = "0.9", default-features = false }
 versions = { version = "4", default-features = false }
+vsimd = { version = "0.8", default-features = false, features = ["detect"] }
 vte = { version = "0.10" }
 vte_generate_state_changes = { version = "0.1", default-features = false }
 wait-timeout = { version = "0.2", default-features = false }
@@ -1486,6 +1533,7 @@ winnow = { version = "0.4" }
 wyz = { version = "0.2", default-features = false, features = ["alloc"] }
 x509-parser = { version = "0.14" }
 xml-rs = { version = "0.8", default-features = false }
+xmlparser = { version = "0.13" }
 yaml-rust = { version = "0.4", default-features = false }
 yansi = { version = "0.5", default-features = false }
 yasna = { version = "0.5", features = ["std", "time"] }
