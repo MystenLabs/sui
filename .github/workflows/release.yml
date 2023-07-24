@@ -36,9 +36,10 @@ env:
 jobs:
   release-build:
     timeout-minutes: 45
-    runs-on: [ubuntu-ghcloud]
     strategy:
-      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Clean up tag name
         shell: bash
@@ -51,20 +52,20 @@ jobs:
         with:
           ref: ${{ env.sui_tag }}
 
-      - name: cargo build (release)
+      - name: cargo build (release) for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
         id: build
         run: |
           cargo build --release
 
-          echo BIN_SUI="target/release/sui" >> $GITHUB_OUTPUT
-          echo BIN_SUI_NODE="target/release/sui-node" >> $GITHUB_OUTPUT
-          echo BIN_SUI_TOOL="target/release/sui-tool" >> $GITHUB_OUTPUT
-          echo BIN_SUI_FAUCET="target/release/sui-faucet" >> $GITHUB_OUTPUT
-          echo BIN_SUI_TEST_VALIDATOR="target/release/sui-test-validator" >> $GITHUB_OUTPUT
-          echo BIN_SUI_INDEXER="target/release/sui-indexer" >> $GITHUB_OUTPUT
+          echo BIN_SUI="target/release/sui-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          echo BIN_SUI_NODE="target/release/sui-node-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          echo BIN_SUI_TOOL="target/release/sui-tool-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          echo BIN_SUI_FAUCET="target/release/sui-faucet-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          echo BIN_SUI_TEST_VALIDATOR="target/release/sui-test-validator-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          echo BIN_SUI_INDEXER="target/release/sui-indexer-${{ matrix.os }}" >> $GITHUB_OUTPUT
 
-      - name: Upload release artifacts
+      - name: Upload release artifacts for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
         uses: actions/upload-artifact@v3
         with:
@@ -77,7 +78,7 @@ jobs:
             ${{ steps.build.outputs.BIN_SUI_TEST_VALIDATOR }}
             ${{ steps.build.outputs.BIN_SUI_INDEXER }}
 
-      - name: Publish binaries for ${{ env.sui_tag }} release
+      - name: Publish binaries for ${{ env.sui_tag }} release for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
         uses: softprops/action-gh-release@v1
         with:
