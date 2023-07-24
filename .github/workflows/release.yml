@@ -103,15 +103,15 @@ jobs:
         shell: bash
         run: |
           mv C:/a/sui/sui/crates/sui C:/a/sui/sui/crates/sui-${{ matrix.os }}
-          echo BIN_SUI="crates/sui-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          echo BIN_SUI="C:/a/sui/sui/crates/sui-${{ matrix.os }}" >> $GITHUB_OUTPUT
           mv C:/a/sui/sui/crates/sui-node C:/a/sui/sui/crates/sui-node-${{ matrix.os }}
-          echo BIN_SUI_NODE="crates/sui-node-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          echo BIN_SUI_NODE="C:/a/sui/sui/crates/sui-node-${{ matrix.os }}" >> $GITHUB_OUTPUT
           mv C:/a/sui/sui/crates/sui-tool C:/a/sui/sui/crates/sui-tool-${{ matrix.os }}
-          echo BIN_SUI_TOOL="crates/sui-tool-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          echo BIN_SUI_TOOL="C:/a/sui/sui/crates/sui-tool-${{ matrix.os }}" >> $GITHUB_OUTPUT
           mv C:/a/sui/sui/crates/sui-faucet C:/a/sui/sui/crates/sui-faucet-${{ matrix.os }}
-          echo BIN_SUI_FAUCET="crates/sui-faucet-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          echo BIN_SUI_FAUCET="C:/a/sui/sui/crates/sui-faucet-${{ matrix.os }}" >> $GITHUB_OUTPUT
           mv C:/a/sui/sui/crates/sui-test-validator C:/a/sui/sui/crates/sui-test-validator-${{ matrix.os }}
-          echo BIN_SUI_TEST_VALIDATOR="crates/sui-test-validator-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          echo BIN_SUI_TEST_VALIDATOR="C:/a/sui/sui/crates/sui-test-validator-${{ matrix.os }}" >> $GITHUB_OUTPUT
           mv C:/a/sui/sui/crates/sui-indexer C:/a/sui/sui/crates/sui-indexer-${{ matrix.os }}
           echo BIN_SUI_INDEXER="C:/a/sui/sui/crates/sui-indexer-${{ matrix.os }}" >> $GITHUB_OUTPUT
 
