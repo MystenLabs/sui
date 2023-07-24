@@ -38,13 +38,13 @@ jobs:
     timeout-minutes: 45
     strategy:
       matrix:
-        os: [ubuntu-ghcloud, windows-ghcloud, macos-ghcloud]
+        os: [ubuntu-ghcloud, windows-ghcloud, macos-latest]
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
       - name: Clean up tag name
         shell: bash
-        run: |
+        run: | 
           echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
 
       - name: Checking out ${{ env.sui_tag }}
