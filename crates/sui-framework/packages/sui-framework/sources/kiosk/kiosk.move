@@ -1,39 +1,88 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Kiosk is a primitive for building open, zero-fee trading platforms
-/// with a high degree of customization over transfer policies.
-
-/// The system has 3 main audiences:
+/// Kiosk is a primitive for building safe, decentralized and trustless trading
+/// experiences. It allows storing and trading any types of assets as long as
+/// the creator of these assets implements a `TransferPolicy` for them.
 ///
-/// 1. Creators: for a type to be tradable in the Kiosk ecosystem,
-/// creator (publisher) of the type needs to issue a `TransferPolicyCap`
-/// which gives them a power to enforce any constraint on trades by
-/// either using one of the pre-built primitives (see `sui::royalty`)
-/// or by implementing a custom policy. The latter requires additional
-/// support for discoverability in the ecosystem and should be performed
-/// within the scope of an Application or some platform.
+/// Principles and philosophy:
 ///
-/// - A type can not be traded in the Kiosk unless there's a policy for it.
-/// - 0-royalty policy is just as easy as "freezing" the `AllowTransferCap`
-///   making it available for everyone to authorize deals "for free"
+/// - Kiosk provides guarantees of "true ownership"; - just like single owner
+/// objects, assets stored in the Kiosk can only be managed by the Kiosk owner.
+/// Only the owner can `place`, `take`, `list`, perform any other actions on
+/// assets in the Kiosk.
 ///
-/// 2. Traders: anyone can create a Kiosk and depending on whether it's
-/// a shared object or some shared-wrapper the owner can trade any type
-/// that has issued `TransferPolicyCap` in a Kiosk. To do so, they need
-/// to make an offer, and any party can purchase the item for the amount of
-/// SUI set in the offer. The responsibility to follow the transfer policy
-/// set by the creator of the `T` is on the buyer.
+/// - Kiosk aims to be generic - allowing for a small set of default behaviors
+/// and not imposing any restrictions on how the assets can be traded. The only
+/// default scenario is a `list` + `purchase` flow; any other trading logic can
+/// be implemented on top using the `list_with_purchase_cap` (and a matching
+/// `purchase_with_cap`) flow.
 ///
-/// 3. Marketplaces: marketplaces can either watch for the offers made in
-/// personal Kiosks or even integrate the Kiosk primitive and build on top
-/// of it. In the custom logic scenario, the `TransferPolicyCap` can also
-/// be used to implement application-specific transfer rules.
+/// - For every transaction happening with a third party a `TransferRequest` is
+/// created - this way creators are fully in control of the trading experience.
 ///
+/// Asset states in the Kiosk:
+///
+/// `placed`
+/// An asset is `place`d into the Kiosk and can be `take`n out by the Kiosk
+/// owner; it's freely tradable and modifiable via the `borrow_mut` and
+/// `borrow_val` functions.
+///
+/// `locked`
+/// Similar to `placed` except that `take` is disabled and the only way to move
+/// the asset out of the Kiosk is to `list` it or `list_with_purchase_cap`
+/// therefore performing a trade (issuing a `TransferRequest`). The check on the
+/// `lock` function makes sure that the `TransferPolicy` exists to not lock the
+/// item in a `Kiosk` forever.
+///
+/// `listed`
+/// A `place`d or a `lock`ed item can be `list`ed for a fixed price allowing
+/// anyone to `purchase` it from the Kiosk. While listed, an item can not be
+/// taken or modified. However, an immutable borrow via `borrow` call is still
+/// available. The `delist` function returns the asset to the previous state.
+///
+/// `listed exclusively`
+/// An item is listed via the `list_with_purchase_cap` function (and a
+/// `PurchaseCap` is created). While listed this way, an item can not be
+/// `delist`-ed unless a `PurchaseCap` is returned. All actions available at
+/// this item state require a `PurchaseCap`:
+/// - `purchase_with_cap` - to purchase the item for a price equal or higher
+/// than the `min_price` set in the `PurchaseCap`.
+/// - `return_purchase_cap` - to return the `PurchaseCap` and return the asset
+/// into the previous state.
+///
+/// When an item is listed exclusively it cannot be modified nor taken and
+/// losing a `PurchaseCap` would lock the item in the Kiosk forever. Therefore,
+/// it is recommended to only use `PurchaseCap` functionality in trusted
+/// applications and not use it for direct trading (eg sending to another
+/// account).
+///
+/// Using multiple Transfer Policies for different "tracks":
+///
+/// Every `purchase` or `purchase_with_purchase_cap` creates a `TransferRequest`
+/// hot potato which must be resolved in a matching `TransferPolicy` for the
+/// transaction to pass. While the default scenario implies that there should be
+/// a single `TransferPolicy<T>` for `T`; it is possible to have multiple, each
+/// one having its own set of rules.
+///
+/// Examples:
+///
+/// - I create one `TransferPolicy` with "Royalty Rule" for everyone
+/// - I create a special `TransferPolicy` for bearers of a "Club Membership"
+/// object so they don't have to pay anything
+/// - I create and wrap a `TransferPolicy` so that players of my game can
+/// transfer items between `Kiosk`s in game without any charge (and maybe not
+/// even paying the price with a 0 SUI PurchaseCap)
+///
+/// ```
+///                                  /--------> In-game Wrapped Transfer Policy
+/// Kiosk -> (Item, TransferRequest) --------> Common Transfer Policy
+///                                  \-----> Club Membership Transfer Policy
+/// ```
+///
+/// See `transfer_policy` module for more details on how they function.
 module sui::kiosk {
-    use std::vector;
     use std::option::{Self, Option};
-    use std::type_name::{Self, TypeName};
     use sui::tx_context::{TxContext, sender};
     use sui::dynamic_object_field as dof;
     use sui::object::{Self, UID, ID};
@@ -45,9 +94,14 @@ module sui::kiosk {
     };
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
-    use sui::bag::{Self, Bag};
     use sui::sui::SUI;
     use sui::event;
+
+    // Gets access to:
+    // - `place_internal`
+    // - `lock_internal`
+    // - `uid_mut_internal`
+    friend sui::kiosk_extension;
 
     /// Trying to withdraw profits and sender is not owner.
     const ENotOwner: u64 = 0;
@@ -75,14 +129,6 @@ module sui::kiosk {
     const EItemNotFound: u64 = 11;
     /// Delisting an item that is not listed.
     const ENotListed: u64 = 12;
-    /// Extension is trying to access a permissioned action while being disabled.
-    const EExtensionDisabled: u64 = 13;
-    /// Extension is trying to access a permissioned action while not having
-    /// the required permission.
-    const EExtensionNotAllowed: u64 = 14;
-    /// Extension is trying to access a permissioned action while not being
-    /// authorized to use the type.
-    const EExtensionNotAllowedForType: u64 = 15;
 
     /// An object which allows selling collectibles within "kiosk" ecosystem.
     /// By default gives the functionality to list an item openly - for anyone
@@ -424,188 +470,23 @@ module sui::kiosk {
         coin::take(&mut self.profits, amount, ctx)
     }
 
-    // === Kiosk Extensions API ===
-
-    /// The Extension struct contains the data used by the extension and the
-    /// configuration for this extension. Stored under the `ExtensionKey`
-    /// dynamic field.
-    struct Extension has store {
-        /// Storage for the extension, an isolated Bag. By putting the extension
-        /// into a single dynamic field, we reduce the amount of fields on the
-        /// top level (eg items / listings) while giving extension developers
-        /// the ability to store any data they want.
-        storage: Bag,
-        /// Bitmap of permissions that the extension has (can be revoked any
-        /// moment). It's all or nothing policy - either the extension has the
-        /// required permissions or no permissions at all.
-        ///
-        /// 1st bit - `place` - allows to place items for sale
-        /// 2nd bit - `lock` - allows to lock items
-        ///
-        /// For example:
-        /// - `11` - allows to place items and lock them.
-        /// - `01` - allows to place items, but not lock them.
-        /// - `00` - no permissions.
-        permissions: u32,
-        /// List of types that the extension is allowed to use. It only affects
-        /// permissioned actions (eg `place`, `lock`). The Kiosk owner can limit
-        /// an extensions functionality to a set of specified types.
-        allowed_types: vector<TypeName>,
-        /// Whether the extension can call protected actions. By default, all
-        /// extensions are enabled (on `add_extension` call), however the Kiosk
-        /// owner can disable them at any time.
-        ///
-        /// Disabling the extension does not limit its access to the storage.
-        is_enabled: bool,
-    }
-
-    /// The `ExtensionKey` is a typed dynamic field key used to store the
-    /// extension configuration and data. `Ext` is a phantom type that is used
-    /// to identify the extension witness.
-    struct ExtensionKey<phantom Ext> has store, copy, drop {}
-
-    /// Add an extension to the Kiosk. Can only be performed by the owner.
-    ///
-    /// Unlike the original implementation, this one uses the `public`
-    /// visibility modifier to allow "owned kiosk" extension. Ideally we don't
-    /// want this function to be called arbitrarily, and to prevent some
-    /// malicious scenarios we now require the extension witness on install.
-    public fun add_extension<Ext: drop>(
-        _ext: Ext,
-        self: &mut Kiosk,
-        cap: &KioskOwnerCap,
-        permissions: u32,
-        allowed_types: vector<TypeName>,
-        ctx: &mut TxContext
-    ) {
-        assert!(has_access(self, cap), ENotOwner);
-
-        df::add(&mut self.id, ExtensionKey<Ext> {}, Extension {
-            storage: bag::new(ctx),
-            permissions,
-            allowed_types,
-            is_enabled: true,
-        })
-    }
-
-    /// Revoke permissions from the extension. While it does not remove the
-    /// extension completely, it keeps it from performing any protected actions.
-    /// The storage is still available to the extension (until it's removed).
-    public fun disable_extension<Ext: drop>(
-        self: &mut Kiosk,
-        cap: &KioskOwnerCap,
-    ) {
-        assert!(has_access(self, cap), ENotOwner);
-        extension_mut<Ext>(self).is_enabled = false;
-    }
-
-    /// Re-enable the extension allowing it to call protected actions (eg
-    /// `place`, `lock`). By default, all added extensions are enabled. Kiosk
-    /// owner can disable them via `disable_extension` call.
-    public fun enable_extension<Ext: drop>(
-        self: &mut Kiosk,
-        cap: &KioskOwnerCap,
-    ) {
-        assert!(has_access(self, cap), ENotOwner);
-        extension_mut<Ext>(self).is_enabled = true;
-    }
-
-    /// Limit the extension to a set of types. Can only be performed by the
-    /// owner. The extension can only perform protected actions on the types
-    /// specified in the list.
-    public fun set_allowed_types_for_extension<Ext: drop>(
-        self: &mut Kiosk,
-        cap: &KioskOwnerCap,
-        types: vector<TypeName>,
-    ) {
-        assert!(has_access(self, cap), ENotOwner);
-        extension_mut<Ext>(self).allowed_types = types;
-    }
-
-    /// Get immutable access to the extension storage. Can only be performed by
-    /// the extension as long as the extension is installed.
-    public fun ext_storage<Ext: drop>(
-        _ext: Ext, self: &mut Kiosk
-    ): &mut Bag {
-        &mut extension_mut<Ext>(self).storage
-    }
-
-    /// Get mutable access to the extension storage. Can only be performed by
-    /// the extension as long as the extension is installed. Disabling the
-    /// extension does not prevent it from accessing the storage.
-    ///
-    /// Potentially dangerous: extension developer can keep data in a Bag
-    /// therefore never really allowing the KioskOwner to remove the extension.
-    /// However, it is the case with any other solution (1) and this way we
-    /// prevent intentional extension freeze when the owner wants to ruin a
-    /// trade (2) - eg locking extension while an auction is in progress.
-    ///
-    /// Extensions should be crafted carefully, and the KioskOwner should be
-    /// aware of the risks.
-    public fun ext_storage_mut<Ext: drop>(
-        _ext: Ext, self: &mut Kiosk
-    ): &mut Bag {
-        &mut extension_mut<Ext>(self).storage
-    }
-
-    /// Protected action: place an item into the Kiosk. Can be performed by an
-    /// authorized extension. The extension must have the `place` permission
-    /// and the type of the item must be in the list of allowed types.
-    public fun ext_place<Ext: drop, T: key + store>(
-        _ext: Ext, self: &mut Kiosk, item: T
-    ) {
-        let ext = extension<Ext>(self);
-
-        assert!(ext.is_enabled, EExtensionDisabled);
-        assert!(ext.permissions & 1 != 0, EExtensionNotAllowed);
-        assert!(is_type_allowed<T>(ext), EExtensionNotAllowedForType);
-
-        place_internal(self, item)
-    }
-
-    /// Protected action: lock an item in the Kiosk. Can be performed by an
-    /// authorized extension. The extension must have the `lock` permission
-    /// and the type of the item must be in the list of allowed types.
-    public fun ext_lock<Ext: drop, T: key + store>(
-        _ext: Ext, self: &mut Kiosk, item: T, _policy: &TransferPolicy<T>
-    ) {
-        let ext = extension<Ext>(self);
-
-        assert!(ext.is_enabled, EExtensionDisabled);
-        assert!(ext.permissions & 2 != 0, EExtensionNotAllowed);
-        assert!(is_type_allowed<T>(ext), EExtensionNotAllowedForType);
-
-        lock_internal(self, item)
-    }
-
-    /// Internal: get a read-only access to the Extension.
-    fun extension<Ext: drop>(self: &Kiosk): &Extension {
-        df::borrow(&self.id, ExtensionKey<Ext> {})
-    }
-
-    /// Internal: get a mutable access to the Extension.
-    fun extension_mut<Ext: drop>(self: &mut Kiosk): &mut Extension {
-        df::borrow_mut(&mut self.id, ExtensionKey<Ext> {})
-    }
-
-    /// Internal: check if the type is explicitly allowed by extension.
-    fun is_type_allowed<T: key + store>(ext: &Extension): bool {
-        vector::length(&ext.allowed_types) == 0
-        || vector::contains(&ext.allowed_types, &type_name::get<T>())
-    }
-
     // === Internal Core ===
 
     /// Internal: "lock" an item disabling the `take` action.
-    fun lock_internal<T: key + store>(self: &mut Kiosk, item: T) {
+    public(friend) fun lock_internal<T: key + store>(self: &mut Kiosk, item: T) {
         df::add(&mut self.id, Lock { id: object::id(&item) }, true);
         place_internal(self, item)
     }
 
     /// Internal: "place" an item to the Kiosk and increment the item count.
-    fun place_internal<T: key + store>(self: &mut Kiosk, item: T) {
+    public(friend) fun place_internal<T: key + store>(self: &mut Kiosk, item: T) {
         self.item_count = self.item_count + 1;
         dof::add(&mut self.id, Item { id: object::id(&item) }, item)
+    }
+
+    /// Internal: get a mutable access to the UID.
+    public(friend) fun uid_mut_internal(self: &mut Kiosk): &mut UID {
+        &mut self.id
     }
 
     // === Kiosk fields access ===
@@ -641,11 +522,6 @@ module sui::kiosk {
     /// Check whether the `KioskOwnerCap` matches the `Kiosk`.
     public fun has_access(self: &mut Kiosk, cap: &KioskOwnerCap): bool {
         object::id(self) == cap.for
-    }
-
-    /// Check whether an extension of type `Ext` is installed.
-    public fun has_extension<Ext: drop>(self: &Kiosk): bool {
-        df::exists_(&self.id, ExtensionKey<Ext> {})
     }
 
     /// Access the `UID` using the `KioskOwnerCap`.

@@ -3,33 +3,86 @@
 
 # Module `0x2::kiosk`
 
-Kiosk is a primitive for building open, zero-fee trading platforms
-with a high degree of customization over transfer policies.
-The system has 3 main audiences:
+Kiosk is a primitive for building safe, decentralized and trustless trading
+experiences. It allows storing and trading any types of assets as long as
+the creator of these assets implements a <code>TransferPolicy</code> for them.
 
-1. Creators: for a type to be tradable in the Kiosk ecosystem,
-creator (publisher) of the type needs to issue a <code>TransferPolicyCap</code>
-which gives them a power to enforce any constraint on trades by
-either using one of the pre-built primitives (see <code>sui::royalty</code>)
-or by implementing a custom policy. The latter requires additional
-support for discoverability in the ecosystem and should be performed
-within the scope of an Application or some platform.
+Principles and philosophy:
 
-- A type can not be traded in the Kiosk unless there's a policy for it.
-- 0-royalty policy is just as easy as "freezing" the <code>AllowTransferCap</code>
-making it available for everyone to authorize deals "for free"
+- Kiosk provides guarantees of "true ownership"; - just like single owner
+objects, assets stored in the Kiosk can only be managed by the Kiosk owner.
+Only the owner can <code>place</code>, <code>take</code>, <code>list</code>, perform any other actions on
+assets in the Kiosk.
 
-2. Traders: anyone can create a Kiosk and depending on whether it's
-a shared object or some shared-wrapper the owner can trade any type
-that has issued <code>TransferPolicyCap</code> in a Kiosk. To do so, they need
-to make an offer, and any party can purchase the item for the amount of
-SUI set in the offer. The responsibility to follow the transfer policy
-set by the creator of the <code>T</code> is on the buyer.
+- Kiosk aims to be generic - allowing for a small set of default behaviors
+and not imposing any restrictions on how the assets can be traded. The only
+default scenario is a <code>list</code> + <code>purchase</code> flow; any other trading logic can
+be implemented on top using the <code>list_with_purchase_cap</code> (and a matching
+<code>purchase_with_cap</code>) flow.
 
-3. Marketplaces: marketplaces can either watch for the offers made in
-personal Kiosks or even integrate the Kiosk primitive and build on top
-of it. In the custom logic scenario, the <code>TransferPolicyCap</code> can also
-be used to implement application-specific transfer rules.
+- For every transaction happening with a third party a <code>TransferRequest</code> is
+created - this way creators are fully in control of the trading experience.
+
+Asset states in the Kiosk:
+
+<code>placed</code>
+An asset is <code>place</code>d into the Kiosk and can be <code>take</code>n out by the Kiosk
+owner; it's freely tradable and modifiable via the <code>borrow_mut</code> and
+<code>borrow_val</code> functions.
+
+<code>locked</code>
+Similar to <code>placed</code> except that <code>take</code> is disabled and the only way to move
+the asset out of the Kiosk is to <code>list</code> it or <code>list_with_purchase_cap</code>
+therefore performing a trade (issuing a <code>TransferRequest</code>). The check on the
+<code>lock</code> function makes sure that the <code>TransferPolicy</code> exists to not lock the
+item in a <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code> forever.
+
+<code>listed</code>
+A <code>place</code>d or a <code>lock</code>ed item can be <code>list</code>ed for a fixed price allowing
+anyone to <code>purchase</code> it from the Kiosk. While listed, an item can not be
+taken or modified. However, an immutable borrow via <code><a href="borrow.md#0x2_borrow">borrow</a></code> call is still
+available. The <code>delist</code> function returns the asset to the previous state.
+
+<code>listed exclusively</code>
+An item is listed via the <code>list_with_purchase_cap</code> function (and a
+<code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> is created). While listed this way, an item can not be
+<code>delist</code>-ed unless a <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> is returned. All actions available at
+this item state require a <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code>:
+- <code>purchase_with_cap</code> - to purchase the item for a price equal or higher
+than the <code>min_price</code> set in the <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code>.
+- <code>return_purchase_cap</code> - to return the <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> and return the asset
+into the previous state.
+
+When an item is listed exclusively it cannot be modified nor taken and
+losing a <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> would lock the item in the Kiosk forever. Therefore,
+it is recommended to only use <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> functionality in trusted
+applications and not use it for direct trading (eg sending to another
+account).
+
+Using multiple Transfer Policies for different "tracks":
+
+Every <code>purchase</code> or <code>purchase_with_purchase_cap</code> creates a <code>TransferRequest</code>
+hot potato which must be resolved in a matching <code>TransferPolicy</code> for the
+transaction to pass. While the default scenario implies that there should be
+a single <code>TransferPolicy&lt;T&gt;</code> for <code>T</code>; it is possible to have multiple, each
+one having its own set of rules.
+
+Examples:
+
+- I create one <code>TransferPolicy</code> with "Royalty Rule" for everyone
+- I create a special <code>TransferPolicy</code> for bearers of a "Club Membership"
+object so they don't have to pay anything
+- I create and wrap a <code>TransferPolicy</code> so that players of my game can
+transfer items between <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>s in game without any charge (and maybe not
+even paying the price with a 0 SUI PurchaseCap)
+
+```
+/--------> In-game Wrapped Transfer Policy
+Kiosk -> (Item, TransferRequest) --------> Common Transfer Policy
+\-----> Club Membership Transfer Policy
+```
+
+See <code><a href="transfer_policy.md#0x2_transfer_policy">transfer_policy</a></code> module for more details on how they function.
 
 
 -  [Resource `Kiosk`](#0x2_kiosk_Kiosk)
@@ -42,8 +95,6 @@ be used to implement application-specific transfer rules.
 -  [Struct `ItemListed`](#0x2_kiosk_ItemListed)
 -  [Struct `ItemPurchased`](#0x2_kiosk_ItemPurchased)
 -  [Struct `ItemDelisted`](#0x2_kiosk_ItemDelisted)
--  [Struct `Extension`](#0x2_kiosk_Extension)
--  [Struct `ExtensionKey`](#0x2_kiosk_ExtensionKey)
 -  [Constants](#@Constants_0)
 -  [Function `default`](#0x2_kiosk_default)
 -  [Function `new`](#0x2_kiosk_new)
@@ -61,26 +112,15 @@ be used to implement application-specific transfer rules.
 -  [Function `purchase_with_cap`](#0x2_kiosk_purchase_with_cap)
 -  [Function `return_purchase_cap`](#0x2_kiosk_return_purchase_cap)
 -  [Function `withdraw`](#0x2_kiosk_withdraw)
--  [Function `add_extension`](#0x2_kiosk_add_extension)
--  [Function `disable_extension`](#0x2_kiosk_disable_extension)
--  [Function `enable_extension`](#0x2_kiosk_enable_extension)
--  [Function `set_allowed_types_for_extension`](#0x2_kiosk_set_allowed_types_for_extension)
--  [Function `ext_storage`](#0x2_kiosk_ext_storage)
--  [Function `ext_storage_mut`](#0x2_kiosk_ext_storage_mut)
--  [Function `ext_place`](#0x2_kiosk_ext_place)
--  [Function `ext_lock`](#0x2_kiosk_ext_lock)
--  [Function `extension`](#0x2_kiosk_extension)
--  [Function `extension_mut`](#0x2_kiosk_extension_mut)
--  [Function `is_type_allowed`](#0x2_kiosk_is_type_allowed)
 -  [Function `lock_internal`](#0x2_kiosk_lock_internal)
 -  [Function `place_internal`](#0x2_kiosk_place_internal)
+-  [Function `uid_mut_internal`](#0x2_kiosk_uid_mut_internal)
 -  [Function `has_item`](#0x2_kiosk_has_item)
 -  [Function `has_item_with_type`](#0x2_kiosk_has_item_with_type)
 -  [Function `is_locked`](#0x2_kiosk_is_locked)
 -  [Function `is_listed`](#0x2_kiosk_is_listed)
 -  [Function `is_listed_exclusively`](#0x2_kiosk_is_listed_exclusively)
 -  [Function `has_access`](#0x2_kiosk_has_access)
--  [Function `has_extension`](#0x2_kiosk_has_extension)
 -  [Function `uid_mut_as_owner`](#0x2_kiosk_uid_mut_as_owner)
 -  [Function `set_allow_extensions`](#0x2_kiosk_set_allow_extensions)
 -  [Function `uid`](#0x2_kiosk_uid)
@@ -101,9 +141,6 @@ be used to implement application-specific transfer rules.
 
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
-<b>use</b> <a href="">0x1::type_name</a>;
-<b>use</b> <a href="">0x1::vector</a>;
-<b>use</b> <a href="bag.md#0x2_bag">0x2::bag</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="dynamic_field.md#0x2_dynamic_field">0x2::dynamic_field</a>;
@@ -520,103 +557,6 @@ to close tracked offers.
 
 </details>
 
-<a name="0x2_kiosk_Extension"></a>
-
-## Struct `Extension`
-
-The Extension struct contains the data used by the extension and the
-configuration for this extension. Stored under the <code><a href="kiosk.md#0x2_kiosk_ExtensionKey">ExtensionKey</a></code>
-dynamic field.
-
-
-<pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_Extension">Extension</a> <b>has</b> store
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>storage: <a href="bag.md#0x2_bag_Bag">bag::Bag</a></code>
-</dt>
-<dd>
- Storage for the extension, an isolated Bag. By putting the extension
- into a single dynamic field, we reduce the amount of fields on the
- top level (eg items / listings) while giving extension developers
- the ability to store any data they want.
-</dd>
-<dt>
-<code>permissions: u32</code>
-</dt>
-<dd>
- Bitmap of permissions that the extension has (can be revoked any
- moment). It's all or nothing policy - either the extension has the
- required permissions or no permissions at all.
-
- 1st bit - <code>place</code> - allows to place items for sale
- 2nd bit - <code>lock</code> - allows to lock items
-
- For example:
- - <code>11</code> - allows to place items and lock them.
- - <code>01</code> - allows to place items, but not lock them.
- - <code>00</code> - no permissions.
-</dd>
-<dt>
-<code>allowed_types: <a href="">vector</a>&lt;<a href="_TypeName">type_name::TypeName</a>&gt;</code>
-</dt>
-<dd>
- List of types that the extension is allowed to use. It only affects
- permissioned actions (eg <code>place</code>, <code>lock</code>). The Kiosk owner can limit
- an extensions functionality to a set of specified types.
-</dd>
-<dt>
-<code>is_enabled: bool</code>
-</dt>
-<dd>
- Whether the extension can call protected actions. By default, all
- extensions are enabled (on <code>add_extension</code> call), however the Kiosk
- owner can disable them at any time.
-
- Disabling the extension does not limit its access to the storage.
-</dd>
-</dl>
-
-
-</details>
-
-<a name="0x2_kiosk_ExtensionKey"></a>
-
-## Struct `ExtensionKey`
-
-The <code><a href="kiosk.md#0x2_kiosk_ExtensionKey">ExtensionKey</a></code> is a typed dynamic field key used to store the
-extension configuration and data. <code>Ext</code> is a phantom type that is used
-to identify the extension witness.
-
-
-<pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; <b>has</b> <b>copy</b>, drop, store
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>dummy_field: bool</code>
-</dt>
-<dd>
-
-</dd>
-</dl>
-
-
-</details>
-
 <a name="@Constants_0"></a>
 
 ## Constants
@@ -648,38 +588,6 @@ Tryng to exclusively list an already listed item.
 
 
 <pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EAlreadyListed">EAlreadyListed</a>: u64 = 6;
-</code></pre>
-
-
-
-<a name="0x2_kiosk_EExtensionDisabled"></a>
-
-Extension is trying to access a permissioned action while being disabled.
-
-
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EExtensionDisabled">EExtensionDisabled</a>: u64 = 13;
-</code></pre>
-
-
-
-<a name="0x2_kiosk_EExtensionNotAllowed"></a>
-
-Extension is trying to access a permissioned action while not having
-the required permission.
-
-
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EExtensionNotAllowed">EExtensionNotAllowed</a>: u64 = 14;
-</code></pre>
-
-
-
-<a name="0x2_kiosk_EExtensionNotAllowedForType"></a>
-
-Extension is trying to access a permissioned action while not being
-authorized to use the type.
-
-
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EExtensionNotAllowedForType">EExtensionNotAllowedForType</a>: u64 = 15;
 </code></pre>
 
 
@@ -1335,356 +1243,6 @@ Withdraw profits from the Kiosk.
 
 </details>
 
-<a name="0x2_kiosk_add_extension"></a>
-
-## Function `add_extension`
-
-Add an extension to the Kiosk. Can only be performed by the owner.
-
-Unlike the original implementation, this one uses the <code><b>public</b></code>
-visibility modifier to allow "owned kiosk" extension. Ideally we don't
-want this function to be called arbitrarily, and to prevent some
-malicious scenarios we now require the extension witness on install.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_add_extension">add_extension</a>&lt;Ext: drop&gt;(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, permissions: u32, allowed_types: <a href="">vector</a>&lt;<a href="_TypeName">type_name::TypeName</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_add_extension">add_extension</a>&lt;Ext: drop&gt;(
-    _ext: Ext,
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>,
-    cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>,
-    permissions: u32,
-    allowed_types: <a href="">vector</a>&lt;TypeName&gt;,
-    ctx: &<b>mut</b> TxContext
-) {
-    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
-
-    df::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {}, <a href="kiosk.md#0x2_kiosk_Extension">Extension</a> {
-        storage: <a href="bag.md#0x2_bag_new">bag::new</a>(ctx),
-        permissions,
-        allowed_types,
-        is_enabled: <b>true</b>,
-    })
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_kiosk_disable_extension"></a>
-
-## Function `disable_extension`
-
-Revoke permissions from the extension. While it does not remove the
-extension completely, it keeps it from performing any protected actions.
-The storage is still available to the extension (until it's removed).
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_disable_extension">disable_extension</a>&lt;Ext: drop&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_disable_extension">disable_extension</a>&lt;Ext: drop&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>,
-    cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>,
-) {
-    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
-    <a href="kiosk.md#0x2_kiosk_extension_mut">extension_mut</a>&lt;Ext&gt;(self).is_enabled = <b>false</b>;
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_kiosk_enable_extension"></a>
-
-## Function `enable_extension`
-
-Re-enable the extension allowing it to call protected actions (eg
-<code>place</code>, <code>lock</code>). By default, all added extensions are enabled. Kiosk
-owner can disable them via <code>disable_extension</code> call.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_enable_extension">enable_extension</a>&lt;Ext: drop&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_enable_extension">enable_extension</a>&lt;Ext: drop&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>,
-    cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>,
-) {
-    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
-    <a href="kiosk.md#0x2_kiosk_extension_mut">extension_mut</a>&lt;Ext&gt;(self).is_enabled = <b>true</b>;
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_kiosk_set_allowed_types_for_extension"></a>
-
-## Function `set_allowed_types_for_extension`
-
-Limit the extension to a set of types. Can only be performed by the
-owner. The extension can only perform protected actions on the types
-specified in the list.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_set_allowed_types_for_extension">set_allowed_types_for_extension</a>&lt;Ext: drop&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, <a href="types.md#0x2_types">types</a>: <a href="">vector</a>&lt;<a href="_TypeName">type_name::TypeName</a>&gt;)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_set_allowed_types_for_extension">set_allowed_types_for_extension</a>&lt;Ext: drop&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>,
-    cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>,
-    <a href="types.md#0x2_types">types</a>: <a href="">vector</a>&lt;TypeName&gt;,
-) {
-    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
-    <a href="kiosk.md#0x2_kiosk_extension_mut">extension_mut</a>&lt;Ext&gt;(self).allowed_types = <a href="types.md#0x2_types">types</a>;
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_kiosk_ext_storage"></a>
-
-## Function `ext_storage`
-
-Get immutable access to the extension storage. Can only be performed by
-the extension as long as the extension is installed.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_ext_storage">ext_storage</a>&lt;Ext: drop&gt;(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>): &<b>mut</b> <a href="bag.md#0x2_bag_Bag">bag::Bag</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_ext_storage">ext_storage</a>&lt;Ext: drop&gt;(
-    _ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>
-): &<b>mut</b> Bag {
-    &<b>mut</b> <a href="kiosk.md#0x2_kiosk_extension_mut">extension_mut</a>&lt;Ext&gt;(self).storage
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_kiosk_ext_storage_mut"></a>
-
-## Function `ext_storage_mut`
-
-Get mutable access to the extension storage. Can only be performed by
-the extension as long as the extension is installed. Disabling the
-extension does not prevent it from accessing the storage.
-
-Potentially dangerous: extension developer can keep data in a Bag
-therefore never really allowing the KioskOwner to remove the extension.
-However, it is the case with any other solution (1) and this way we
-prevent intentional extension freeze when the owner wants to ruin a
-trade (2) - eg locking extension while an auction is in progress.
-
-Extensions should be crafted carefully, and the KioskOwner should be
-aware of the risks.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_ext_storage_mut">ext_storage_mut</a>&lt;Ext: drop&gt;(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>): &<b>mut</b> <a href="bag.md#0x2_bag_Bag">bag::Bag</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_ext_storage_mut">ext_storage_mut</a>&lt;Ext: drop&gt;(
-    _ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>
-): &<b>mut</b> Bag {
-    &<b>mut</b> <a href="kiosk.md#0x2_kiosk_extension_mut">extension_mut</a>&lt;Ext&gt;(self).storage
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_kiosk_ext_place"></a>
-
-## Function `ext_place`
-
-Protected action: place an item into the Kiosk. Can be performed by an
-authorized extension. The extension must have the <code>place</code> permission
-and the type of the item must be in the list of allowed types.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_ext_place">ext_place</a>&lt;Ext: drop, T: store, key&gt;(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, item: T)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_ext_place">ext_place</a>&lt;Ext: drop, T: key + store&gt;(
-    _ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, item: T
-) {
-    <b>let</b> ext = <a href="kiosk.md#0x2_kiosk_extension">extension</a>&lt;Ext&gt;(self);
-
-    <b>assert</b>!(ext.is_enabled, <a href="kiosk.md#0x2_kiosk_EExtensionDisabled">EExtensionDisabled</a>);
-    <b>assert</b>!(ext.permissions & 1 != 0, <a href="kiosk.md#0x2_kiosk_EExtensionNotAllowed">EExtensionNotAllowed</a>);
-    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_is_type_allowed">is_type_allowed</a>&lt;T&gt;(ext), <a href="kiosk.md#0x2_kiosk_EExtensionNotAllowedForType">EExtensionNotAllowedForType</a>);
-
-    <a href="kiosk.md#0x2_kiosk_place_internal">place_internal</a>(self, item)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_kiosk_ext_lock"></a>
-
-## Function `ext_lock`
-
-Protected action: lock an item in the Kiosk. Can be performed by an
-authorized extension. The extension must have the <code>lock</code> permission
-and the type of the item must be in the list of allowed types.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_ext_lock">ext_lock</a>&lt;Ext: drop, T: store, key&gt;(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, item: T, _policy: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_ext_lock">ext_lock</a>&lt;Ext: drop, T: key + store&gt;(
-    _ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, item: T, _policy: &TransferPolicy&lt;T&gt;
-) {
-    <b>let</b> ext = <a href="kiosk.md#0x2_kiosk_extension">extension</a>&lt;Ext&gt;(self);
-
-    <b>assert</b>!(ext.is_enabled, <a href="kiosk.md#0x2_kiosk_EExtensionDisabled">EExtensionDisabled</a>);
-    <b>assert</b>!(ext.permissions & 2 != 0, <a href="kiosk.md#0x2_kiosk_EExtensionNotAllowed">EExtensionNotAllowed</a>);
-    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_is_type_allowed">is_type_allowed</a>&lt;T&gt;(ext), <a href="kiosk.md#0x2_kiosk_EExtensionNotAllowedForType">EExtensionNotAllowedForType</a>);
-
-    <a href="kiosk.md#0x2_kiosk_lock_internal">lock_internal</a>(self, item)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_kiosk_extension"></a>
-
-## Function `extension`
-
-Internal: get a read-only access to the Extension.
-
-
-<pre><code><b>fun</b> <a href="kiosk.md#0x2_kiosk_extension">extension</a>&lt;Ext: drop&gt;(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>): &<a href="kiosk.md#0x2_kiosk_Extension">kiosk::Extension</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="kiosk.md#0x2_kiosk_extension">extension</a>&lt;Ext: drop&gt;(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>): &<a href="kiosk.md#0x2_kiosk_Extension">Extension</a> {
-    df::borrow(&self.id, <a href="kiosk.md#0x2_kiosk_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {})
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_kiosk_extension_mut"></a>
-
-## Function `extension_mut`
-
-Internal: get a mutable access to the Extension.
-
-
-<pre><code><b>fun</b> <a href="kiosk.md#0x2_kiosk_extension_mut">extension_mut</a>&lt;Ext: drop&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>): &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Extension">kiosk::Extension</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="kiosk.md#0x2_kiosk_extension_mut">extension_mut</a>&lt;Ext: drop&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>): &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Extension">Extension</a> {
-    df::borrow_mut(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {})
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_kiosk_is_type_allowed"></a>
-
-## Function `is_type_allowed`
-
-Internal: check if the type is explicitly allowed by extension.
-
-
-<pre><code><b>fun</b> <a href="kiosk.md#0x2_kiosk_is_type_allowed">is_type_allowed</a>&lt;T: store, key&gt;(ext: &<a href="kiosk.md#0x2_kiosk_Extension">kiosk::Extension</a>): bool
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="kiosk.md#0x2_kiosk_is_type_allowed">is_type_allowed</a>&lt;T: key + store&gt;(ext: &<a href="kiosk.md#0x2_kiosk_Extension">Extension</a>): bool {
-    <a href="_length">vector::length</a>(&ext.allowed_types) == 0
-    || <a href="_contains">vector::contains</a>(&ext.allowed_types, &<a href="_get">type_name::get</a>&lt;T&gt;())
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0x2_kiosk_lock_internal"></a>
 
 ## Function `lock_internal`
@@ -1692,7 +1250,7 @@ Internal: check if the type is explicitly allowed by extension.
 Internal: "lock" an item disabling the <code>take</code> action.
 
 
-<pre><code><b>fun</b> <a href="kiosk.md#0x2_kiosk_lock_internal">lock_internal</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, item: T)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="kiosk.md#0x2_kiosk_lock_internal">lock_internal</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, item: T)
 </code></pre>
 
 
@@ -1701,7 +1259,7 @@ Internal: "lock" an item disabling the <code>take</code> action.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="kiosk.md#0x2_kiosk_lock_internal">lock_internal</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, item: T) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="kiosk.md#0x2_kiosk_lock_internal">lock_internal</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, item: T) {
     df::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Lock">Lock</a> { id: <a href="object.md#0x2_object_id">object::id</a>(&item) }, <b>true</b>);
     <a href="kiosk.md#0x2_kiosk_place_internal">place_internal</a>(self, item)
 }
@@ -1718,7 +1276,7 @@ Internal: "lock" an item disabling the <code>take</code> action.
 Internal: "place" an item to the Kiosk and increment the item count.
 
 
-<pre><code><b>fun</b> <a href="kiosk.md#0x2_kiosk_place_internal">place_internal</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, item: T)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="kiosk.md#0x2_kiosk_place_internal">place_internal</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, item: T)
 </code></pre>
 
 
@@ -1727,9 +1285,34 @@ Internal: "place" an item to the Kiosk and increment the item count.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="kiosk.md#0x2_kiosk_place_internal">place_internal</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, item: T) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="kiosk.md#0x2_kiosk_place_internal">place_internal</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, item: T) {
     self.item_count = self.item_count + 1;
     dof::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Item">Item</a> { id: <a href="object.md#0x2_object_id">object::id</a>(&item) }, item)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_kiosk_uid_mut_internal"></a>
+
+## Function `uid_mut_internal`
+
+Internal: get a mutable access to the UID.
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="kiosk.md#0x2_kiosk_uid_mut_internal">uid_mut_internal</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>): &<b>mut</b> <a href="object.md#0x2_object_UID">object::UID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="kiosk.md#0x2_kiosk_uid_mut_internal">uid_mut_internal</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>): &<b>mut</b> UID {
+    &<b>mut</b> self.id
 }
 </code></pre>
 
@@ -1883,31 +1466,6 @@ Check whether the <code><a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>): bool {
     <a href="object.md#0x2_object_id">object::id</a>(self) == cap.for
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_kiosk_has_extension"></a>
-
-## Function `has_extension`
-
-Check whether an extension of type <code>Ext</code> is installed.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_has_extension">has_extension</a>&lt;Ext: drop&gt;(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>): bool
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_has_extension">has_extension</a>&lt;Ext: drop&gt;(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>): bool {
-    df::exists_(&self.id, <a href="kiosk.md#0x2_kiosk_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {})
 }
 </code></pre>
 

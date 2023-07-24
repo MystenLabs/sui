@@ -8,6 +8,7 @@ module sui::kiosk_marketplace_ext {
     use sui::coin::{Self, Coin};
     use sui::object::{Self, ID};
     use sui::tx_context::TxContext;
+    use sui::kiosk_extension as ext;
     use sui::kiosk::{Self, KioskOwnerCap, Kiosk, PurchaseCap};
     use sui::transfer_policy::{Self as policy, TransferPolicy, TransferRequest};
 
@@ -17,6 +18,8 @@ module sui::kiosk_marketplace_ext {
     const EIncorrectAmount: u64 = 1;
     /// Trying to accept a bid from an incorrect Kiosk.
     const EIncorrectKiosk: u64 = 2;
+    /// Trying to use an extension that is not installed.
+    const ENotInstalled: u64 = 3;
 
     /// The Extension Witness.
     struct Ext<phantom Market> has drop {}
@@ -31,7 +34,7 @@ module sui::kiosk_marketplace_ext {
     ///
     /// Requests all permissions: `b011` - `place` and `lock` to perform collection bidding.
     public fun add<Market>(kiosk: &mut Kiosk, cap: &KioskOwnerCap, ctx: &mut TxContext) {
-        kiosk::add_extension(Ext<Market> {}, kiosk, cap, 3, vector[], ctx)
+        ext::add_extension(Ext<Market> {}, kiosk, cap, 3, ctx)
     }
 
     // === Collection Bidding ===
@@ -43,9 +46,10 @@ module sui::kiosk_marketplace_ext {
         kiosk: &mut Kiosk, cap: &KioskOwnerCap, bid: Coin<SUI>
     ) {
         assert!(kiosk::has_access(kiosk, cap), ENotOwner);
+        assert!(ext::is_installed<Ext<Market>>(kiosk), ENotInstalled);
 
         bag::add(
-            kiosk::ext_storage_mut(Ext<Market> {}, kiosk),
+            ext::storage_mut(Ext<Market> {}, kiosk),
             Bid<T> {},
             bid
         );
@@ -60,7 +64,7 @@ module sui::kiosk_marketplace_ext {
         lock: bool
     ): (TransferRequest<T>, TransferRequest<Market>) {
         let bid: Coin<SUI> = bag::remove(
-            kiosk::ext_storage_mut(Ext<Market> {}, destination),
+            ext::storage_mut(Ext<Market> {}, destination),
             Bid<T> {}
         );
 
@@ -76,8 +80,8 @@ module sui::kiosk_marketplace_ext {
 
         // lock or place the item into the Kiosk (chosen by the caller, however
         // TransferPolicy<T> will ensure that the right action is taken).
-        if (lock) kiosk::ext_lock(Ext<Market> {}, destination, item, policy)
-        else kiosk::ext_place(Ext<Market> {}, destination, item);
+        if (lock) ext::lock(Ext<Market> {}, destination, item, policy)
+        else ext::place(Ext<Market> {}, destination, item);
 
         (
             request,
@@ -96,7 +100,7 @@ module sui::kiosk_marketplace_ext {
         );
 
         bag::add(
-            kiosk::ext_storage_mut(Ext<Market> {}, kiosk),
+            ext::storage_mut(Ext<Market> {}, kiosk),
             item_id,
             purchase_cap
         );
@@ -109,7 +113,7 @@ module sui::kiosk_marketplace_ext {
         payment: Coin<SUI>,
     ): (T, TransferRequest<T>, TransferRequest<Market>) {
         let purchase_cap: PurchaseCap<T> = bag::remove(
-            kiosk::ext_storage_mut(Ext<Market> {}, kiosk),
+            ext::storage_mut(Ext<Market> {}, kiosk),
             item_id
         );
 
@@ -134,7 +138,7 @@ module sui::kiosk_marketplace_ext {
     ) {
         assert!(kiosk::has_access(kiosk, cap), ENotOwner);
         let purchase_cap: PurchaseCap<T> = bag::remove(
-            kiosk::ext_storage_mut(Ext<Market> {}, kiosk),
+            ext::storage_mut(Ext<Market> {}, kiosk),
             item_id
         );
 
@@ -146,7 +150,7 @@ module sui::kiosk_marketplace_ext {
 #[test_only]
 module sui::kiosk_extensions_tests {
     use sui::kiosk_test_utils::{Self as test};
-    use sui::kiosk;
+    use sui::kiosk_extension as ext;
     use sui::bag;
 
     /// The `Ext` witness to use for testing.
@@ -157,16 +161,15 @@ module sui::kiosk_extensions_tests {
         let ctx = &mut test::ctx();
         let (kiosk, owner_cap) = test::get_kiosk(ctx);
 
-        kiosk::add_extension(
+        ext::add_extension(
             Extension {},
             &mut kiosk,
             &owner_cap,
             0,
-            vector[],
             ctx
         );
 
-        let bag_mut = kiosk::ext_storage_mut(Extension {}, &mut kiosk);
+        let bag_mut = ext::storage_mut(Extension {}, &mut kiosk);
 
         bag::add(bag_mut, b"haha", b"yall");
         test::return_kiosk(kiosk, owner_cap, ctx);
