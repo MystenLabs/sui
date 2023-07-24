@@ -6,24 +6,20 @@ import { execSync } from 'child_process';
 import tmp from 'tmp';
 
 import {
-	Ed25519Keypair,
 	getPublishedObjectChanges,
 	getExecutionStatusType,
-	localnetConnection,
 	Coin,
-	TransactionBlock,
-	SuiAddress,
-	ObjectId,
 	UpgradePolicy,
 } from '../../../src';
+import { TransactionBlock } from '../../../src/builder';
+import { Ed25519Keypair } from '../../../src/keypairs/ed25519';
 import { retry } from 'ts-retry-promise';
-import { FaucetRateLimitError, requestSuiFromFaucetV0 } from '../../../src/faucet';
-import { SuiClient } from '../../../src/client';
+import { FaucetRateLimitError, getFaucetHost, requestSuiFromFaucetV0 } from '../../../src/faucet';
+import { SuiClient, getFullnodeUrl } from '../../../src/client';
 import { Keypair } from '../../../src/cryptography';
 
-const TEST_ENDPOINTS = localnetConnection;
-const DEFAULT_FAUCET_URL = import.meta.env.VITE_FAUCET_URL ?? TEST_ENDPOINTS.faucet;
-const DEFAULT_FULLNODE_URL = import.meta.env.VITE_FULLNODE_URL ?? TEST_ENDPOINTS.fullnode;
+const DEFAULT_FAUCET_URL = import.meta.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');
+const DEFAULT_FULLNODE_URL = import.meta.env.VITE_FULLNODE_URL ?? getFullnodeUrl('localnet');
 const SUI_BIN = import.meta.env.VITE_SUI_BIN ?? 'cargo run --bin sui';
 
 export const DEFAULT_RECIPIENT =
@@ -134,8 +130,8 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 }
 
 export async function upgradePackage(
-	packageId: ObjectId,
-	capId: ObjectId,
+	packageId: string,
+	capId: string,
 	packagePath: string,
 	toolbox?: TestToolbox,
 ) {
@@ -188,7 +184,7 @@ export async function upgradePackage(
 	expect(getExecutionStatusType(result)).toEqual('success');
 }
 
-export function getRandomAddresses(n: number): SuiAddress[] {
+export function getRandomAddresses(n: number): string[] {
 	return Array(n)
 		.fill(null)
 		.map(() => {
@@ -201,9 +197,9 @@ export async function paySui(
 	client: SuiClient,
 	signer: Keypair,
 	numRecipients: number = 1,
-	recipients?: SuiAddress[],
+	recipients?: string[],
 	amounts?: number[],
-	coinId?: ObjectId,
+	coinId?: string,
 ) {
 	const tx = new TransactionBlock();
 
@@ -243,7 +239,7 @@ export async function executePaySuiNTimes(
 	signer: Keypair,
 	nTimes: number,
 	numRecipientsPerTxn: number = 1,
-	recipients?: SuiAddress[],
+	recipients?: string[],
 	amounts?: number[],
 ) {
 	const txns = [];

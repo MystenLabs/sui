@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useOnScreen } from '@mysten/core';
+import { getKioskIdFromOwnerCap, isKioskOwnerToken, useOnScreen } from '@mysten/core';
 import { Check12, EyeClose16 } from '@mysten/icons';
 import { get, set } from 'idb-keyval';
 import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
@@ -28,7 +28,7 @@ function NftsPage() {
 	const [internalHiddenAssetIds, internalSetHiddenAssetIds] = useState<string[]>([]);
 	const accountAddress = useActiveAddress();
 	const {
-		data: nfts,
+		data: ownedAssets,
 		hasNextPage,
 		isInitialLoading,
 		isFetchingNextPage,
@@ -45,7 +45,7 @@ function NftsPage() {
 		if (isIntersecting && hasNextPage && !isFetchingNextPage) {
 			fetchNextPage();
 		}
-	}, [nfts.length, isIntersecting, fetchNextPage, hasNextPage, isFetchingNextPage]);
+	}, [ownedAssets.length, isIntersecting, fetchNextPage, hasNextPage, isFetchingNextPage]);
 
 	useEffect(() => {
 		(async () => {
@@ -144,8 +144,8 @@ function NftsPage() {
 	};
 
 	const filteredNFTs = useMemo(() => {
-		return nfts?.filter((nft) => !internalHiddenAssetIds.includes(nft.objectId));
-	}, [nfts, internalHiddenAssetIds]);
+		return ownedAssets?.filter((nft) => !internalHiddenAssetIds.includes(nft.objectId));
+	}, [ownedAssets, internalHiddenAssetIds]);
 
 	if (isInitialLoading) {
 		return (
@@ -169,39 +169,49 @@ function NftsPage() {
 				) : null}
 				{filteredNFTs?.length ? (
 					<div className="grid w-full grid-cols-2 gap-x-3.5 gap-y-4 mb-5">
-						{filteredNFTs.map(({ objectId, type }) => (
+						{filteredNFTs.map((object) => (
 							<Link
-								to={`/nft-details?${new URLSearchParams({
-									objectId,
-								}).toString()}`}
+								to={
+									isKioskOwnerToken(object)
+										? `/kiosk?${new URLSearchParams({
+												kioskId: getKioskIdFromOwnerCap(object),
+										  })}`
+										: `/nft-details?${new URLSearchParams({
+												objectId: object.objectId,
+										  }).toString()}`
+								}
 								onClick={() => {
 									ampli.clickedCollectibleCard({
-										objectId,
-										collectibleType: type!,
+										objectId: object.objectId,
+										collectibleType: object.type!,
 									});
 								}}
-								key={objectId}
+								key={object.objectId}
 								className="no-underline relative"
 							>
 								<div className="group">
 									<div className="w-full h-full justify-center z-10 absolute pointer-events-auto text-gray-60 transition-colors duration-200 p-0">
-										<div className="absolute top-2 right-3 rounded-md h-8 w-8 opacity-0 group-hover:opacity-100">
-											<Button
-												variant="hidden"
-												size="icon"
-												onClick={(event: any) => {
-													ampli.clickedHideAsset({ objectId, collectibleType: type! });
-													hideAsset(objectId, event);
-												}}
-												after={<EyeClose16 />}
-											/>
-										</div>
+										{!isKioskOwnerToken(object) ? (
+											<div className="absolute top-2 right-3 rounded-md h-8 w-8 opacity-0 group-hover:opacity-100">
+												<Button
+													variant="hidden"
+													size="icon"
+													onClick={(event: any) => {
+														ampli.clickedHideAsset({
+															objectId: object.objectId,
+															collectibleType: object.type!,
+														});
+														hideAsset(object.objectId, event);
+													}}
+													after={<EyeClose16 />}
+												/>
+											</div>
+										) : null}
 									</div>
 									<ErrorBoundary>
 										<NFTDisplayCard
-											objectId={objectId}
-											size="md"
-											showLabel
+											objectId={object.objectId}
+											size="lg"
 											animateHover
 											borderRadius="xl"
 										/>
@@ -219,7 +229,7 @@ function NftsPage() {
 					</div>
 				) : (
 					<div className="flex flex-1 items-center self-center text-caption font-semibold text-steel-darker">
-						No NFTs found
+						No Assets found
 					</div>
 				)}
 			</Loading>

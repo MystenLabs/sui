@@ -1,0 +1,113 @@
+# SuiClient
+
+The `SuiClient` can be imported from `@mysten/sui.js/client` and is used to make RPC request to the
+Sui network.
+
+## Usage
+
+```typescript
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+
+// create a client connected to devnet
+const client = new SuiClient({ url: getFullnodeUrl('devnet') });
+
+// get coins owned by an address
+await client.getCoins({
+	owner: '0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231',
+});
+```
+
+the `getFullnodeUrl` helper provides a default fullName url that can be used for developing. In a
+production application, you will likely want to manually define the URL of the RPC provider you want
+to use in your application.
+
+## Manually calling unsupported RPC methods
+
+The `SuiClient` can be used to call any RPC method exposed by the node you are connecting to. The
+Client has built in methods for most RPC methods, but if there are methods missing, they can still
+be called manually using the `call` method of the `SuiClient`.
+
+```typescript
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+
+const client = new SuiClient({ url: getFullnodeUrl('devnet') });
+const committeeInfo = await client.call('suix_getCommitteeInfo', []);
+```
+
+For a full list of available RPC methods see the
+[RPC documentation](https://docs.sui.io/sui-jsonrpc).
+
+## Subscribing to events
+
+In addition to calling RPC methods, the `SuiClient` also supports a few methods for subscribing to
+events:
+
+```typescript
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+
+const client = new SuiClient({
+	url: getFullnodeUrl('testnet'),
+});
+
+const unsubscribe = await client.subscribeEvent({
+	filter: {
+		Sender: '0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231',
+	},
+	onMessage(event) {
+		// handle subscription notification message here. This function is called once per subscription message.
+	},
+});
+
+// later, to unsubscribe:
+await unsubscribe();
+```
+
+## Subscribing to transactions
+
+Similar to subscribing to events, the `SuiClient` also supports subscribing to transactions:
+
+```typescript
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+
+const client = new SuiClient({
+	url: getFullnodeUrl('testnet'),
+});
+
+const unsubscribe = await client.subscribeTransaction({
+	filter: {
+		FromAddress: '0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231',
+	},
+	onMessage(event) {
+		// This function is called once per transaction.
+	},
+});
+
+// later, to unsubscribe:
+await unsubscribe();
+```
+
+## Customizing the Transport
+
+The `SuiClient` uses a `Transport` class to manage connections to the RPC node. The default
+`SuiHTTPTransport` makes both JSON RPC requests, as well as websocket requests for subscriptions.
+You can construct a custom transport instance if you need to pass any custom options, such as
+headers or timeout values.
+
+```typescript
+import { SuiClient, SuiHTTPTransport, getFullnodeUrl } from '@mysten/sui.js/client';
+
+const client = new SuiClient({
+	transport: new SuiHTTPTransport({
+		url: 'https://my-custom-node.com/rpc',
+		websocket: {
+			reconnectTimeout: 1000,
+			url: 'https://my-custom-node.com/websockets',
+		},
+		rpc: {
+			headers: {
+				'x-custom-header': 'custom value',
+			},
+		},
+	}),
+});
+```

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Image32, MediaPlay16 } from '@mysten/icons';
+import { Image32, LockLocked16, MediaPlay16 } from '@mysten/icons';
 import { cva } from 'class-variance-authority';
 import cl from 'classnames';
 import { useState } from 'react';
@@ -24,8 +24,9 @@ const nftImageStyles = cva('overflow-hidden bg-gray-40 relative', {
 		size: {
 			xs: 'w-10 h-10',
 			sm: 'w-12 h-12',
-			md: 'w-36 h-36',
-			lg: 'w-50 h-50',
+			md: 'w-24 h-24',
+			lg: 'w-36 h-36',
+			xl: 'w-50 h-50',
 		},
 	},
 	compoundVariants: [
@@ -46,6 +47,9 @@ export interface NftImageProps extends VariantProps<typeof nftImageStyles> {
 	name: string | null;
 	title?: string;
 	showLabel?: boolean;
+	playable?: boolean;
+	className?: string;
+	isLocked?: boolean;
 }
 
 export function NftImage({
@@ -57,13 +61,18 @@ export function NftImage({
 	borderRadius,
 	size,
 	video,
+	playable,
+	className,
+	isLocked,
 }: NftImageProps) {
 	const [error, setError] = useState(false);
 	const imgCls = cl(
 		'w-full h-full object-cover',
 		animateHover && 'group-hover:scale-110 duration-500 ease-ease-out-cubic',
+		className,
 	);
 	const imgSrc = src ? src.replace(/^ipfs:\/\//, 'https://ipfs.io/ipfs/') : '';
+
 	return (
 		<div
 			className={nftImageStyles({
@@ -72,16 +81,30 @@ export function NftImage({
 				size,
 			})}
 		>
-			{error ? (
+			{video ? (
+				playable ? (
+					<video
+						autoPlay
+						muted
+						controls
+						className="h-full w-full rounded-md overflow-hidden object-cover"
+						src={video}
+					/>
+				) : (
+					<div className="pointer-events-none absolute bottom-2 right-2 z-10 flex items-center justify-center rounded-full opacity-80 text-black">
+						<MediaPlay16 className="h-8 w-8" />
+					</div>
+				)
+			) : error || !imgSrc ? (
 				<div
 					className={cl(
 						imgCls,
 						'flex flex-col flex-nowrap items-center justify-center',
-						'select-none uppercase text-steel-dark gap-2 bg-gray-40',
+						'select-none uppercase text-steel-dark gap-2 bg-placeholderGradient01',
 					)}
 					title={title}
 				>
-					<Image32 className="text-steel text-3xl" />
+					<Image32 className="text-steel text-3xl h-6 w-6" />
 					{showLabel ? <span className="text-captionSmall font-medium">No media</span> : null}
 				</div>
 			) : (
@@ -93,12 +116,11 @@ export function NftImage({
 					onError={() => setError(true)}
 				/>
 			)}
-
-			{video && (
-				<div className="pointer-events-none absolute bottom-2 right-2 z-10 flex items-center justify-center rounded-full opacity-80 text-black">
-					<MediaPlay16 className="h-8 w-8" />
+			{isLocked ? (
+				<div className="right-1.5 bottom-1.5 flex items-center justify-center absolute h-6 w-6 bg-gray-100 text-white rounded-md">
+					<LockLocked16 className="h-3.5 w-3.5" />
 				</div>
-			)}
+			) : null}
 		</div>
 	);
 }

@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { type SuiAddress } from '@mysten/sui.js';
 
 import { BalanceChangeSummary } from './getBalanceChangeSummary';
 import { GasSummaryType } from './getGasSummary';
@@ -8,7 +7,7 @@ import { ObjectChangeSummary } from './getObjectChangeSummary';
 
 export type TransactionSummary = {
 	digest?: string;
-	sender?: SuiAddress;
+	sender?: string;
 	timestamp?: string;
 	balanceChanges: BalanceChangeSummary;
 	gas?: GasSummaryType;

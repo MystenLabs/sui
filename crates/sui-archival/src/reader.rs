@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_config::node::ArchiveReaderConfig;
 use sui_storage::object_store::util::get;
-use sui_storage::{make_iterator, verify_checkpoint};
+use sui_storage::{compute_sha3_checksum_for_bytes, make_iterator, verify_checkpoint};
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointSequenceNumber,
     FullCheckpointContents as CheckpointContents, VerifiedCheckpoint, VerifiedCheckpointContents,
@@ -161,35 +161,12 @@ impl ArchiveReader {
         })
     }
 
-    /// Load checkpoints+txns+effects from archive into the input store `S` for the given
-    /// checkpoint range. If latest available checkpoint in archive is older than the start of the
-    /// input range then this call fails with an error otherwise we load as many checkpoints as
-    /// possible until the end of the provided checkpoint range.
-    pub async fn read<S>(
+    /// This function verifies that the files in archive cover the entire range of checkpoints from
+    /// sequence number 0 until the latest available checkpoint with no missing checkpoint
+    pub async fn verify_manifest(
         &self,
-        store: S,
-        checkpoint_range: Range<CheckpointSequenceNumber>,
-        txn_counter: Arc<AtomicU64>,
-        checkpoint_counter: Arc<AtomicU64>,
-    ) -> Result<()>
-    where
-        S: WriteStore + Clone,
-        <S as ReadStore>::Error: std::error::Error,
-    {
-        let manifest = self.manifest.lock().await.clone();
-
-        let latest_available_checkpoint = manifest
-            .next_checkpoint_seq_num()
-            .checked_sub(1)
-            .context("Checkpoint seq num underflow")?;
-
-        if checkpoint_range.start > latest_available_checkpoint {
-            return Err(anyhow!(
-                "Latest available checkpoint is: {}",
-                latest_available_checkpoint
-            ));
-        }
-
+        manifest: Manifest,
+    ) -> Result<Vec<(FileMetadata, FileMetadata)>> {
         let files = manifest.files();
         if files.is_empty() {
             return Err(anyhow!("Unexpected empty archive store"));
@@ -226,6 +203,90 @@ impl ArchiveReader {
             .collect();
 
         assert_eq!(files.first().unwrap().0.checkpoint_seq_range.start, 0);
+
+        Ok(files)
+    }
+
+    /// This function downloads summary and content files and ensures their computed checksum matches
+    /// the one in manifest
+    pub async fn verify_file_consistency(
+        &self,
+        files: Vec<(FileMetadata, FileMetadata)>,
+    ) -> Result<()> {
+        let remote_object_store = self.remote_object_store.clone();
+        futures::stream::iter(files.iter())
+            .enumerate()
+            .map(|(_, (summary_metadata, content_metadata))| {
+                let remote_object_store = remote_object_store.clone();
+                async move {
+                    let summary_data =
+                        get(&summary_metadata.file_path(), remote_object_store.clone()).await?;
+                    let content_data =
+                        get(&content_metadata.file_path(), remote_object_store.clone()).await?;
+                    Ok::<((Bytes, &FileMetadata), (Bytes, &FileMetadata)), anyhow::Error>((
+                        (summary_data, summary_metadata),
+                        (content_data, content_metadata),
+                    ))
+                }
+            })
+            .boxed()
+            .buffer_unordered(self.concurrency)
+            .try_for_each(
+                |((summary_data, summary_metadata), (content_data, content_metadata))| {
+                    let checksums = compute_sha3_checksum_for_bytes(summary_data).and_then(|s| {
+                        compute_sha3_checksum_for_bytes(content_data).map(|c| (s, c))
+                    });
+                    let result = checksums.and_then(|(summary_checksum, content_checksum)| {
+                        (summary_checksum == summary_metadata.sha3_digest)
+                            .then_some(())
+                            .ok_or(anyhow!(
+                                "Summary checksum doesn't match for file: {:?}",
+                                summary_metadata.file_path()
+                            ))?;
+                        (content_checksum == content_metadata.sha3_digest)
+                            .then_some(())
+                            .ok_or(anyhow!(
+                                "Content checksum doesn't match for file: {:?}",
+                                content_metadata.file_path()
+                            ))?;
+                        Ok::<(), anyhow::Error>(())
+                    });
+                    futures::future::ready(result)
+                },
+            )
+            .await
+    }
+
+    /// Load checkpoints+txns+effects from archive into the input store `S` for the given
+    /// checkpoint range. If latest available checkpoint in archive is older than the start of the
+    /// input range then this call fails with an error otherwise we load as many checkpoints as
+    /// possible until the end of the provided checkpoint range.
+    pub async fn read<S>(
+        &self,
+        store: S,
+        checkpoint_range: Range<CheckpointSequenceNumber>,
+        txn_counter: Arc<AtomicU64>,
+        checkpoint_counter: Arc<AtomicU64>,
+    ) -> Result<()>
+    where
+        S: WriteStore + Clone,
+        <S as ReadStore>::Error: std::error::Error,
+    {
+        let manifest = self.manifest.lock().await.clone();
+
+        let latest_available_checkpoint = manifest
+            .next_checkpoint_seq_num()
+            .checked_sub(1)
+            .context("Checkpoint seq num underflow")?;
+
+        if checkpoint_range.start > latest_available_checkpoint {
+            return Err(anyhow!(
+                "Latest available checkpoint is: {}",
+                latest_available_checkpoint
+            ));
+        }
+
+        let files: Vec<(FileMetadata, FileMetadata)> = self.verify_manifest(manifest).await?;
 
         let start_index = match files.binary_search_by_key(&checkpoint_range.start, |(s, _c)| {
             s.checkpoint_seq_range.start
@@ -332,6 +393,10 @@ impl ArchiveReader {
     pub async fn sync_manifest_once(&self) -> Result<()> {
         Self::sync_manifest(self.remote_object_store.clone(), self.manifest.clone()).await?;
         Ok(())
+    }
+
+    pub async fn get_manifest(&self) -> Result<Manifest> {
+        Ok(self.manifest.lock().await.clone())
     }
 
     async fn sync_manifest(

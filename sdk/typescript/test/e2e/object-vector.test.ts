@@ -6,16 +6,15 @@ import {
 	Coin,
 	getCreatedObjects,
 	getExecutionStatusType,
-	ObjectId,
 	SuiObjectData,
 	SUI_FRAMEWORK_ADDRESS,
-	TransactionBlock,
 } from '../../src';
+import { TransactionBlock } from '../../src/builder';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Test Move call with a vector of objects as input', () => {
 	let toolbox: TestToolbox;
-	let packageId: ObjectId;
+	let packageId: string;
 
 	async function mintObject(val: number) {
 		const tx = new TransactionBlock();
@@ -34,7 +33,7 @@ describe('Test Move call with a vector of objects as input', () => {
 		return getCreatedObjects(result)![0].reference.objectId;
 	}
 
-	async function destroyObjects(objects: ObjectId[], withType = false) {
+	async function destroyObjects(objects: string[], withType = false) {
 		const tx = new TransactionBlock();
 		const vec = tx.makeMoveVec({
 			objects: objects.map((id) => tx.object(id)),

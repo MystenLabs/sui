@@ -822,7 +822,7 @@ impl PrimaryReceiverHandler {
         // certificates to still have a chance to be included in the DAG while not wasting
         // resources on very old vote requests. This value affects performance but not correctness
         // of the algorithm.
-        const HEADER_AGE_LIMIT: Round = 3;
+        const HEADER_AGE_LIMIT: Round = 5;
 
         // Lock to ensure consistency between limit_round and where parent_digests are gc'ed.
         let mut parent_digests = self.parent_digests.lock();

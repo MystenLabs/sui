@@ -80,6 +80,8 @@ pub(crate) struct ObjectRuntimeState {
     // TODO these struct tags can be removed if type_to_type_tag was exposed in the session
     transfers: LinkedHashMap<ObjectID, (Owner, Type, Value)>,
     events: Vec<(Type, StructTag, Value)>,
+    // total size of events emitted so far
+    total_events_size: u64,
 }
 
 #[derive(Clone)]
@@ -92,6 +94,7 @@ pub(crate) struct LocalProtocolConfig {
     pub(crate) max_num_transferred_move_object_ids: u64,
     pub(crate) max_num_transferred_move_object_ids_system_tx: u64,
     pub(crate) max_event_emit_size: u64,
+    pub(crate) max_event_emit_size_total: Option<u64>,
     pub(crate) object_runtime_max_num_cached_objects: u64,
     pub(crate) object_runtime_max_num_cached_objects_system_tx: u64,
     pub(crate) object_runtime_max_num_store_entries: u64,
@@ -106,6 +109,7 @@ impl LocalProtocolConfig {
             max_num_new_move_object_ids: constants.max_num_new_move_object_ids(),
             max_num_transferred_move_object_ids: constants.max_num_transferred_move_object_ids(),
             max_event_emit_size: constants.max_event_emit_size(),
+            max_event_emit_size_total: constants.max_event_emit_size_total_as_option(),
             max_num_deleted_move_object_ids_system_tx: constants
                 .max_num_deleted_move_object_ids_system_tx(),
             max_num_new_move_object_ids_system_tx: constants
@@ -193,6 +197,7 @@ impl<'a> ObjectRuntime<'a> {
                 deleted_ids: Set::new(),
                 transfers: LinkedHashMap::new(),
                 events: vec![],
+                total_events_size: 0,
             },
             is_metered,
             constants: LocalProtocolConfig::new(protocol_config),
@@ -218,10 +223,12 @@ impl<'a> ObjectRuntime<'a> {
         };
 
         // remove from deleted_ids for the case in dynamic fields where the Field object was deleted
-        // and then re-added in a single transaction
-        self.state.deleted_ids.remove(&id);
-        // mark the id as new
-        self.state.new_ids.insert(id, ());
+        // and then re-added in a single transaction. In that case, we also skip adding it
+        // to new_ids.
+        if self.state.deleted_ids.remove(&id).is_none() {
+            // mark the id as new
+            self.state.new_ids.insert(id, ());
+        }
         Ok(())
     }
 
@@ -436,11 +443,6 @@ impl ObjectRuntimeState {
                 ty,
                 effect,
             } = child_object_effect;
-            if loaded_child_objects.contains_key(&child) {
-                // remove if from new_ids if it was loaded for case in dynamic fields where the
-                // Field object was removed and then re-added in a single transaction
-                self.new_ids.remove(&child);
-            }
 
             match effect {
                 // was modified, so mark it as mutated and transferred
@@ -482,6 +484,7 @@ impl ObjectRuntimeState {
             deleted_ids,
             transfers,
             events: user_events,
+            total_events_size: _,
         } = self;
         let input_owner_map = input_objects
             .iter()
@@ -554,6 +557,14 @@ impl ObjectRuntimeState {
             user_events,
             loaded_child_objects,
         })
+    }
+
+    pub fn total_events_size(&self) -> u64 {
+        self.total_events_size
+    }
+
+    pub fn incr_total_events_size(&mut self, size: u64) {
+        self.total_events_size += size;
     }
 }
 

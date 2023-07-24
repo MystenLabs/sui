@@ -18,7 +18,6 @@ import {
 	unknown,
 	record,
 } from 'superstruct';
-import { ObjectId } from '../types/common.js';
 import type { WellKnownEncoding } from './utils.js';
 import { TRANSACTION_TYPE, create } from './utils.js';
 import { TypeTagSerializer } from './type-tag-serializer.js';
@@ -107,7 +106,7 @@ export type MakeMoveVecTransaction = Infer<typeof MakeMoveVecTransaction>;
 export const PublishTransaction = object({
 	kind: literal('Publish'),
 	modules: array(array(integer())),
-	dependencies: array(ObjectId),
+	dependencies: array(string()),
 });
 export type PublishTransaction = Infer<typeof PublishTransaction>;
 
@@ -122,8 +121,8 @@ export enum UpgradePolicy {
 export const UpgradeTransaction = object({
 	kind: literal('Upgrade'),
 	modules: array(array(integer())),
-	dependencies: array(ObjectId),
-	packageId: ObjectId,
+	dependencies: array(string()),
+	packageId: string(),
 	ticket: ObjectTransactionArgument,
 });
 export type UpgradeTransaction = Infer<typeof UpgradeTransaction>;
@@ -186,7 +185,7 @@ export const Transactions = {
 		dependencies,
 	}: {
 		modules: number[][] | string[];
-		dependencies: ObjectId[];
+		dependencies: string[];
 	}): PublishTransaction {
 		return create(
 			{
@@ -206,8 +205,8 @@ export const Transactions = {
 		ticket,
 	}: {
 		modules: number[][] | string[];
-		dependencies: ObjectId[];
-		packageId: ObjectId;
+		dependencies: string[];
+		packageId: string;
 		ticket: TransactionArgument;
 	}): UpgradeTransaction {
 		return create(

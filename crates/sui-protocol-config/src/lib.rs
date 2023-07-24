@@ -59,6 +59,8 @@ const MAX_PROTOCOL_VERSION: u64 = 19;
 //             bucket.
 //             Add a feature flag to indicate the changes semantics of `base_tx_cost_fixed`.
 // Version 19: Changes to sui-system package to enable liquid staking.
+//             Add limit for total size of events.
+//             Increase limit for number of events emitted to 1024.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -426,6 +428,9 @@ pub struct ProtocolConfig {
 
     /// Maximum size of a Move user event. Enforced by the VM during execution.
     max_event_emit_size: Option<u64>,
+
+    /// Maximum size of a Move user event. Enforced by the VM during execution.
+    max_event_emit_size_total: Option<u64>,
 
     /// Maximum length of a vector in Move. Enforced by the VM during execution, and for constants, by the verifier.
     max_move_vector_len: Option<u64>,
@@ -1185,6 +1190,8 @@ impl ProtocolConfig {
                 gas_rounding_step: None,
 
                 execution_version: None,
+
+                max_event_emit_size_total: None,
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
@@ -1325,7 +1332,17 @@ impl ProtocolConfig {
                 cfg.base_tx_cost_fixed = Some(1_000);
                 cfg
             }
-            19 => Self::get_for_version_impl(version - 1, chain),
+            19 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.max_num_event_emit = Some(1024);
+                // We maintain the same total size limit for events, but increase the number of
+                // events that can be emitted.
+                cfg.max_event_emit_size_total = Some(
+                    256 /* former event count limit */ * 250 * 1024, /* size limit per event */
+                );
+                cfg
+            }
+
             // Use this template when making changes:
             //
             //     // modify an existing constant.

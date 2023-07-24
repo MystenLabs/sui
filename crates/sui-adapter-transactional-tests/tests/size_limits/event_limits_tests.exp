@@ -13,15 +13,15 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 task 3 'run'. lines 61-63:
 events: 50
 mutated: 1
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 3000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4 'run'. lines 64-66:
 Error: Transaction Effects Status: Move Primitive Runtime Error. Location: sui::event::emit (function index 0) at offset 0. Arithmetic error, stack overflow, max value depth, etc.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: sui, name: Identifier("event") }, function: 0, instruction: 0, function_name: Some("emit") }))), source: Some(VMError { major_status: MEMORY_LIMIT_EXCEEDED, sub_status: Some(0), message: Some("Emitting more than 256 events is not allowed"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("event") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 0)] }), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: sui, name: Identifier("event") }, function: 0, instruction: 0, function_name: Some("emit") }))), source: Some(VMError { major_status: MEMORY_LIMIT_EXCEEDED, sub_status: Some(0), message: Some("Emitting more than 1024 events is not allowed"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("event") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 0)] }), command: Some(0) } }
 
 task 5 'run'. lines 67-69:
 Error: Transaction Effects Status: Move Primitive Runtime Error. Location: sui::event::emit (function index 0) at offset 0. Arithmetic error, stack overflow, max value depth, etc.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: sui, name: Identifier("event") }, function: 0, instruction: 0, function_name: Some("emit") }))), source: Some(VMError { major_status: MEMORY_LIMIT_EXCEEDED, sub_status: Some(0), message: Some("Emitting more than 256 events is not allowed"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("event") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 0)] }), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: sui, name: Identifier("event") }, function: 0, instruction: 0, function_name: Some("emit") }))), source: Some(VMError { major_status: MEMORY_LIMIT_EXCEEDED, sub_status: Some(0), message: Some("Emitting more than 1024 events is not allowed"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("event") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 0)] }), command: Some(0) } }
 
 task 6 'run'. lines 70-72:
 events: 1

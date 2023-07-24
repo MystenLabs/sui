@@ -26,11 +26,6 @@
  */
 
 import {
-  RawSigner,
-  testnetConnection,
-  Ed25519Keypair,
-  TransactionBlock,
-  JsonRpcProvider,
   formatAddress,
   isValidSuiAddress,
   isValidSuiObjectId,
@@ -54,6 +49,9 @@ import {
   getOwnedKiosks,
   KIOSK_LISTING,
 } from '@mysten/kiosk';
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 
 /**
  * List of known types for shorthand search in the `search` command.
@@ -64,20 +62,18 @@ const KNOWN_TYPES = {
 };
 
 /** JsonRpcProvider for the Testnet */
-const provider = new JsonRpcProvider(testnetConnection);
+const provider = new SuiClient({ url: getFullnodeUrl('testnet') });
 
 /**
  * Create the signer instance from the mnemonic.
  */
-const signer = (function (mnemonic) {
+const keypair = (function (mnemonic) {
   if (!mnemonic) {
     console.log('Requires MNEMONIC; set with `export MNEMONIC="..."`');
     process.exit(1);
   }
 
-  const keypair = Ed25519Keypair.deriveKeypair(process.env.MNEMONIC);
-  const provider = new JsonRpcProvider(testnetConnection);
-  return new RawSigner(keypair, provider);
+  return Ed25519Keypair.deriveKeypair(process.env.MNEMONIC);
 })(process.env.MNEMONIC);
 
 program
@@ -183,7 +179,7 @@ program.parse(process.argv);
  * Description: creates and shares a Kiosk
  */
 async function newKiosk() {
-  const sender = await signer.getAddress();
+  const sender = keypair.getPublicKey().toSuiAddress();
   const kioskCap = await findKioskCap().catch(() => null);
 
   if (kioskCap !== null) {
@@ -202,7 +198,7 @@ async function newKiosk() {
  * Description: view the inventory of the sender (or a specified address)
  */
 async function showInventory({ address, onlyDisplay, cursor, filter }) {
-  const owner = address || (await signer.getAddress());
+  const owner = address || keypair.getPublicKey().toSuiAddress();
 
   if (!isValidSuiAddress(owner)) {
     throw new Error(`Invalid SUI address: "${owner}"`);
@@ -260,7 +256,7 @@ async function showKioskContents({ id, address }) {
 
     kioskId = id;
   } else {
-    const sender = address || (await signer.getAddress());
+    const sender = address || keypair.getPublicKey().toSuiAddress();
 
     if (!isValidSuiAddress(sender)) {
       throw new Error(`Invalid SUI address: "${sender}"`);
@@ -317,7 +313,7 @@ async function showKioskContents({ id, address }) {
  */
 async function placeItem(itemId) {
   const kioskCap = await findKioskCap().catch(() => null);
-  const owner = await signer.getAddress();
+  const owner = keypair.getPublicKey().toSuiAddress();
 
   if (kioskCap === null) {
     throw new Error('No Kiosk found for sender; use `new` to create one');
@@ -356,7 +352,7 @@ async function placeItem(itemId) {
  */
 async function lockItem(itemId) {
   const kioskCap = await findKioskCap().catch(() => null);
-  const owner = await signer.getAddress();
+  const owner = keypair.getPublicKey().toSuiAddress();
 
   if (kioskCap === null) {
     throw new Error('No Kiosk found for sender; use `new` to create one');
@@ -403,7 +399,7 @@ async function lockItem(itemId) {
  */
 async function takeItem(itemId, { address }) {
   const kioskCap = await findKioskCap().catch(() => null);
-  const receiver = address || (await signer.getAddress());
+  const receiver = address || keypair.getPublicKey().toSuiAddress();
 
   if (!isValidSuiAddress(receiver)) {
     throw new Error('Invalid receiver address: "%s"', receiver);
@@ -604,7 +600,7 @@ async function purchaseItem(itemId, opts) {
   if (target === 'kiosk') {
     place(txb, itemInfo.data.type, ownedKiosk, ownedKioskCap, item);
   } else {
-    const receiver = target || (await signer.getAddress());
+    const receiver = target || keypair.getPublicKey().toSuiAddress();
     txb.transferObjects([item], txb.pure(receiver, 'address'));
   }
 
@@ -685,7 +681,7 @@ async function searchPolicy(type) {
  * Description: Withdraws funds from the Kiosk and send them to sender.
  */
 async function withdrawAll() {
-  const sender = await signer.getAddress();
+  const sender = keypair.getPublicKey().toSuiAddress();
   const kioskCap = await findKioskCap(sender).catch(() => null);
   if (kioskCap === null) {
     throw new Error('No Kiosk found for sender; use `new` to create one');
@@ -706,7 +702,7 @@ async function withdrawAll() {
  * Description: Shows the Publisher objects of the current user.
  */
 async function showPublisher() {
-  const sender = await signer.getAddress();
+  const sender = keypair.getPublicKey().toSuiAddress();
   const result = await provider.getOwnedObjects({
     owner: sender,
     filter: { StructType: '0x2::package::Publisher' },
@@ -740,7 +736,7 @@ async function showPublisher() {
  * Find the KioskOwnerCap at the sender address.
  */
 async function findKioskCap(address) {
-  const sender = address || (await signer.getAddress());
+  const sender = address || keypair.getPublicKey().toSuiAddress();
 
   if (!isValidSuiAddress(sender)) {
     throw new Error(`Invalid address "${sender}"`);
@@ -760,8 +756,9 @@ async function findKioskCap(address) {
  * If there are errors, print them.
  */
 async function sendTx(txb) {
-  return signer
+  return provider
     .signAndExecuteTransactionBlock({
+      signer: keypair,
       transactionBlock: txb,
       options: {
         showEffects: true,

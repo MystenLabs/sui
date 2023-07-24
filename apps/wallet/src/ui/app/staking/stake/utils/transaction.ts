@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SUI_SYSTEM_STATE_OBJECT_ID, TransactionBlock } from '@mysten/sui.js';
+import { SUI_SYSTEM_STATE_OBJECT_ID } from '@mysten/sui.js';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 
 export function createStakeTransaction(amount: bigint, validator: string) {
 	const tx = new TransactionBlock();

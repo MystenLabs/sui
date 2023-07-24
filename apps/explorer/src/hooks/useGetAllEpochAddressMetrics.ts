@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '@mysten/core';
-import { type JsonRpcProvider } from '@mysten/sui.js';
+import { type SuiClient } from '@mysten/sui.js/client';
 import { useQuery } from '@tanstack/react-query';
 
 export function useGetAllEpochAddressMetrics(
-	...input: Parameters<JsonRpcProvider['getAllEpochAddressMetrics']>
+	...input: Parameters<SuiClient['getAllEpochAddressMetrics']>
 ) {
 	const rpc = useRpcClient();
 	return useQuery({

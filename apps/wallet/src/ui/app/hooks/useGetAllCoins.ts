@@ -4,11 +4,11 @@
 import { useRpcClient } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 
-import type { SuiAddress, PaginatedCoins, CoinStruct } from '@mysten/sui.js';
+import type { PaginatedCoins, CoinStruct } from '@mysten/sui.js';
 const MAX_COINS_PER_REQUEST = 100;
 
 // Fetch all coins for an address, this will keep calling the API until all coins are fetched
-export function useGetAllCoins(coinType: string, address?: SuiAddress | null) {
+export function useGetAllCoins(coinType: string, address?: string | null) {
 	const rpc = useRpcClient();
 	return useQuery({
 		queryKey: ['get-all-coins', address, coinType],

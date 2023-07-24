@@ -139,6 +139,13 @@ export interface ClickedCollectibleCardProperties {
 	objectId: string;
 }
 
+export interface ClickedCreateNewAccountProperties {
+	/**
+	 * The flow the user came from.
+	 */
+	sourceFlow: string;
+}
+
 export interface ClickedHideAssetProperties {
 	/**
 	 * The object type of a collectible.
@@ -148,6 +155,35 @@ export interface ClickedHideAssetProperties {
 	 * The ID of an object on Sui.
 	 */
 	objectId: string;
+}
+
+export interface ClickedImportPassphraseProperties {
+	/**
+	 * The flow the user came from.
+	 */
+	sourceFlow: string;
+}
+
+export interface ClickedImportPrivateKeyProperties {
+	/**
+	 * The flow the user came from.
+	 */
+	sourceFlow: string;
+}
+
+export interface ClickedSocialSignInButtonProperties {
+	/**
+	 * The name (e.g., Microsoft) of a social sign-in provider.
+	 *
+	 * | Rule | Value |
+	 * |---|---|
+	 * | Enum Values | Microsoft, Facebook, Google, Twitch |
+	 */
+	signInProvider: 'Microsoft' | 'Facebook' | 'Google' | 'Twitch';
+	/**
+	 * The flow the user came from.
+	 */
+	sourceFlow: string;
 }
 
 export interface ClickedStakeSuiProperties {
@@ -392,6 +428,14 @@ export class ClickedCollectibleCard implements BaseEvent {
 	}
 }
 
+export class ClickedCreateNewAccount implements BaseEvent {
+	event_type = 'clicked create new account';
+
+	constructor(public event_properties: ClickedCreateNewAccountProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
 export class ClickedCreateNewWallet implements BaseEvent {
 	event_type = 'clicked create new wallet';
 }
@@ -410,6 +454,30 @@ export class ClickedHideAsset implements BaseEvent {
 
 export class ClickedImportExistingWallet implements BaseEvent {
 	event_type = 'clicked import existing wallet';
+}
+
+export class ClickedImportPassphrase implements BaseEvent {
+	event_type = 'clicked import passphrase';
+
+	constructor(public event_properties: ClickedImportPassphraseProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
+export class ClickedImportPrivateKey implements BaseEvent {
+	event_type = 'clicked import private key';
+
+	constructor(public event_properties: ClickedImportPrivateKeyProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
+export class ClickedSocialSignInButton implements BaseEvent {
+	event_type = 'clicked social sign in button';
+
+	constructor(public event_properties: ClickedSocialSignInButtonProperties) {
+		this.event_properties = event_properties;
+	}
 }
 
 export class ClickedStakeSui implements BaseEvent {
@@ -746,6 +814,23 @@ export class Ampli {
   }
 
   /**
+   * clicked create new account
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/clicked%20create%20new%20account)
+   *
+   * When users click the button to create a new passphrase account.
+   *
+   * @param properties The event's properties (e.g. sourceFlow)
+   * @param options Amplitude event options.
+   */
+  clickedCreateNewAccount(
+    properties: ClickedCreateNewAccountProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new ClickedCreateNewAccount(properties), options);
+  }
+
+  /**
    * clicked create new wallet
    *
    * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/clicked%20create%20new%20wallet)
@@ -811,6 +896,57 @@ export class Ampli {
     options?: EventOptions,
   ) {
     return this.track(new ClickedImportExistingWallet(), options);
+  }
+
+  /**
+   * clicked import passphrase
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/clicked%20import%20passphrase)
+   *
+   * When users click to import an account via passphrase.
+   *
+   * @param properties The event's properties (e.g. sourceFlow)
+   * @param options Amplitude event options.
+   */
+  clickedImportPassphrase(
+    properties: ClickedImportPassphraseProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new ClickedImportPassphrase(properties), options);
+  }
+
+  /**
+   * clicked import private key
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/clicked%20import%20private%20key)
+   *
+   * When users click the button to import an account via private key.
+   *
+   * @param properties The event's properties (e.g. sourceFlow)
+   * @param options Amplitude event options.
+   */
+  clickedImportPrivateKey(
+    properties: ClickedImportPrivateKeyProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new ClickedImportPrivateKey(properties), options);
+  }
+
+  /**
+   * clicked social sign in button
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/clicked%20social%20sign%20in%20button)
+   *
+   * When users click a social sign-in button to create an account.
+   *
+   * @param properties The event's properties (e.g. signInProvider)
+   * @param options Amplitude event options.
+   */
+  clickedSocialSignInButton(
+    properties: ClickedSocialSignInButtonProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new ClickedSocialSignInButton(properties), options);
   }
 
   /**

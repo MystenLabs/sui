@@ -5,9 +5,9 @@ use anyhow::Result;
 use async_trait::async_trait;
 use crypto::NetworkPublicKey;
 use types::{
-    error::LocalClientError, Batch, BatchDigest, FetchBatchesRequest, FetchBatchesResponse,
-    FetchCertificatesRequest, FetchCertificatesResponse, RequestBatchesRequest,
-    RequestBatchesResponse, WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerOwnBatchMessage,
+    error::LocalClientError, FetchBatchesRequest, FetchBatchesResponse, FetchCertificatesRequest,
+    FetchCertificatesResponse, RequestBatchesRequest, RequestBatchesResponse,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerOwnBatchMessage,
     WorkerSynchronizeMessage,
 };
 
@@ -79,12 +79,6 @@ pub trait WorkerToPrimaryClient {
 
 #[async_trait]
 pub trait WorkerRpc {
-    async fn request_batch(
-        &self,
-        peer: NetworkPublicKey,
-        batch: BatchDigest,
-    ) -> Result<Option<Batch>>;
-
     async fn request_batches(
         &self,
         peer: NetworkPublicKey,

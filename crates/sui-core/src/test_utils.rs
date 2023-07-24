@@ -68,7 +68,7 @@ pub async fn send_and_confirm_transaction(
     let certificate =
         CertifiedTransaction::new(transaction.into_message(), vec![vote.clone()], &committee)
             .unwrap()
-            .verify(&committee)
+            .verify_authenticated(&committee, &Default::default())
             .unwrap();
 
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
@@ -440,6 +440,7 @@ pub fn make_cert_with_large_committee(
         .collect();
 
     let cert = CertifiedTransaction::new(transaction.clone().into_data(), sigs, committee).unwrap();
-    cert.verify_signature(committee).unwrap();
+    cert.verify_signatures_authenticated(committee, &Default::default())
+        .unwrap();
     cert
 }

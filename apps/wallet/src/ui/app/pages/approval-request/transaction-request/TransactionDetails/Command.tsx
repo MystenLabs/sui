@@ -3,16 +3,15 @@
 
 import { ChevronDown12, ChevronRight12 } from '@mysten/icons';
 import {
-	type TransactionArgument,
-	formatAddress,
 	type TransactionType,
-	normalizeSuiAddress,
 	type MakeMoveVecTransaction,
 	type PublishTransaction,
-	toB64,
 	TypeTagSerializer,
 	type TypeTag,
 } from '@mysten/sui.js';
+import { type TransactionArgument } from '@mysten/sui.js/transactions';
+import { formatAddress, normalizeSuiAddress, toB64 } from '@mysten/sui.js/utils';
+
 import { useState } from 'react';
 
 import { Text } from '_src/ui/app/shared/text';

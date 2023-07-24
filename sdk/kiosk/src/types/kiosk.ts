@@ -1,13 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	ObjectDigest,
-	ObjectId,
-	ObjectType,
-	PaginatedObjectsResponse,
-	TransactionArgument,
-} from '@mysten/sui.js';
+import { ObjectDigest, ObjectType, PaginatedObjectsResponse } from '@mysten/sui.js';
+import { TransactionArgument } from '@mysten/sui.js/transactions';
 import { ObjectArgument } from '.';
 
 /** The Kiosk module. */
@@ -77,7 +72,7 @@ export type PurchaseOptionalParams = {
  */
 export type KioskListing = {
 	/** The ID of the Item */
-	objectId: ObjectId;
+	objectId: string;
 	/**
 	 * Whether or not there's a `PurchaseCap` issued. `true` means that
 	 * the listing is controlled by some logic and can't be purchased directly.
@@ -86,7 +81,7 @@ export type KioskListing = {
 	 */
 	isExclusive: boolean;
 	/** The ID of the listing */
-	listingId: ObjectId;
+	listingId: string;
 	price?: string;
 };
 
@@ -96,7 +91,7 @@ export type KioskListing = {
  */
 export type KioskItem = {
 	/** The ID of the Item */
-	objectId: ObjectId;
+	objectId: string;
 	/** The type of the Item */
 	type: ObjectType;
 	/** Whether the item is Locked (there must be a `Lock` Dynamic Field) */
@@ -109,8 +104,8 @@ export type KioskItem = {
  */
 export type KioskData = {
 	items: KioskItem[];
-	itemIds: ObjectId[];
-	listingIds: ObjectId[];
+	itemIds: string[];
+	listingIds: string[];
 	kiosk?: Kiosk;
 	extensions: any[]; // type will be defined on later versions of the SDK.
 };
@@ -128,12 +123,12 @@ export type FetchKioskOptions = {
 
 export type OwnedKiosks = {
 	kioskOwnerCaps: KioskOwnerCap[];
-	kioskIds: ObjectId[];
+	kioskIds: string[];
 } & Omit<PaginatedObjectsResponse, 'data'>;
 
 export type KioskOwnerCap = {
-	objectId: ObjectId;
-	kioskId: ObjectId;
+	objectId: string;
+	kioskId: string;
 	digest: ObjectDigest;
 	version: string;
 };

@@ -12,6 +12,7 @@ anyhow.workspace = true
 bincode.workspace = true
 bcs.workspace = true
 byteorder.workspace = true
+im.workspace = true
 itertools.workspace = true
 once_cell.workspace = true
 prometheus.workspace = true

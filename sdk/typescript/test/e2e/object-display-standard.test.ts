@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { ObjectId, getObjectDisplay, SuiObjectData } from '../../src';
+import { getObjectDisplay, SuiObjectData } from '../../src';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Test Object Display Standard', () => {
 	let toolbox: TestToolbox;
-	let packageId: ObjectId;
+	let packageId: string;
 
 	beforeAll(async () => {
 		toolbox = await setup();

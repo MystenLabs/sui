@@ -7,10 +7,10 @@ import type { RefObject } from 'react';
 
 type Event = MouseEvent | TouchEvent;
 
-export const useOnClickOutside = <T extends HTMLElement = HTMLElement>(
+export function useOnClickOutside<T extends HTMLElement = HTMLElement>(
 	ref: RefObject<T>,
 	handler: (event: Event) => void,
-) => {
+) {
 	useEffect(() => {
 		const listener = (event: Event) => {
 			const el = ref?.current;
@@ -29,4 +29,4 @@ export const useOnClickOutside = <T extends HTMLElement = HTMLElement>(
 			document.removeEventListener('touchstart', listener, true);
 		};
 	}, [ref, handler]); // Reload only if ref or handler changes
-};
+}

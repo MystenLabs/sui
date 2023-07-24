@@ -16,7 +16,7 @@ pub type RpcInterimResult<T = ()> = Result<T, Error>;
 #[derive(Debug, Error)]
 pub enum Error {
     #[error(transparent)]
-    SuiError(#[from] SuiError),
+    SuiError(SuiError),
 
     #[error(transparent)]
     InternalError(#[from] anyhow::Error),
@@ -34,7 +34,7 @@ pub enum Error {
     InvalidHeaderValue(#[from] InvalidHeaderValue),
 
     #[error(transparent)]
-    UserInputError(#[from] UserInputError),
+    UserInputError(UserInputError),
 
     #[error(transparent)]
     EncodingError(#[from] eyre::Report),
@@ -58,6 +58,21 @@ pub enum Error {
 impl From<Error> for RpcError {
     fn from(e: Error) -> Self {
         e.to_rpc_error()
+    }
+}
+
+impl From<UserInputError> for Error {
+    fn from(e: UserInputError) -> Self {
+        Self::UserInputError(e)
+    }
+}
+
+impl From<SuiError> for Error {
+    fn from(e: SuiError) -> Self {
+        match e {
+            SuiError::UserInputError { error } => Self::UserInputError(error),
+            other => Self::SuiError(other),
+        }
     }
 }
 

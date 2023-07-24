@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { normalizeSuiAddress, type SuiAddress } from '@mysten/sui.js';
+import { normalizeSuiAddress } from '@mysten/sui.js/utils';
 
 import { type Account, AccountType } from './Account';
 import { type Wallet } from '_src/shared/qredo-api';
 
 export type SerializedQredoAccount = {
 	type: AccountType.QREDO;
-	address: SuiAddress;
+	address: string;
 	qredoConnectionID: string;
 	qredoWalletID: string;
 	labels?: Wallet['labels'];
@@ -18,7 +18,7 @@ export type SerializedQredoAccount = {
 
 export class QredoAccount implements Account {
 	readonly type = AccountType.QREDO;
-	readonly address: SuiAddress;
+	readonly address: string;
 	readonly qredoConnectionID: string;
 	readonly qredoWalletID: string;
 	readonly labels: Wallet['labels'];

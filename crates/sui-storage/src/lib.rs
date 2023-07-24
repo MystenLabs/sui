@@ -22,6 +22,7 @@ use sui_types::storage::{ReadStore, WriteStore};
 use tracing::debug;
 
 pub mod blob;
+pub mod key_value_store;
 pub mod mutex_table;
 pub mod object_store;
 pub mod package_object_cache;
@@ -83,6 +84,12 @@ impl FileCompression {
         };
         Ok(res)
     }
+}
+
+pub fn compute_sha3_checksum_for_bytes(bytes: Bytes) -> Result<[u8; 32]> {
+    let mut hasher = Sha3_256::default();
+    io::copy(&mut bytes.reader(), &mut hasher)?;
+    Ok(hasher.finalize().digest)
 }
 
 pub fn compute_sha3_checksum_for_file(file: &mut File) -> Result<[u8; 32]> {
@@ -208,10 +215,12 @@ where
             )
         });
 
-    checkpoint.verify_signature(&committee).map_err(|e| {
-        debug!("error verifying checkpoint: {e}");
-        checkpoint.clone()
-    })?;
+    checkpoint
+        .verify_authority_signatures(&committee)
+        .map_err(|e| {
+            debug!("error verifying checkpoint: {e}");
+            checkpoint.clone()
+        })?;
     Ok(VerifiedCheckpoint::new_unchecked(checkpoint))
 }
 

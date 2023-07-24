@@ -10,7 +10,7 @@ import { Pagination } from '~/ui/Pagination';
 
 export const COINS_PER_PAGE: number = 6;
 
-export function OwnedCoins({ id }: { id: string }): JSX.Element {
+export function OwnedCoins({ id }: { id: string }) {
 	const [currentSlice, setCurrentSlice] = useState(1);
 	const { isLoading, data, isError } = useGetAllBalances(id);
 

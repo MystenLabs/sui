@@ -73,6 +73,7 @@ impl ReplayFuzzer {
                 config.expensive_safety_check_config.clone(),
                 false,
                 None,
+                None,
             )
             .await?;
 

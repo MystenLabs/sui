@@ -20,7 +20,6 @@ use arc_swap::ArcSwap;
 use futures::TryFutureExt;
 use mysten_common::sync::async_once_cell::AsyncOnceCell;
 use prometheus::Registry;
-use reqwest::Client;
 use sui_core::authority::CHAIN_IDENTIFIER;
 use sui_core::consensus_adapter::LazyNarwhalClient;
 use sui_json_rpc::api::JsonRpcMetrics;
@@ -105,6 +104,7 @@ use sui_types::quorum_driver_types::QuorumDriverEffectsQueueResult;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::zk_login_util::{parse_jwks, OAuthProviderContent};
 use typed_store::rocks::default_db_options;
 use typed_store::DBMetrics;
 
@@ -189,27 +189,49 @@ impl SuiNode {
         Ok(node_one_cell.get().await)
     }
 
-    fn start_jwk_updater() {
-        info!("Starting JWK updater thread for authority");
-        tokio::task::spawn(async move {
-            loop {
-                // Update the JWK value in the authority server
-                let res = Self::update_google_jwk().await;
-                if let Err(e) = res {
-                    warn!("Error when fetching JWK {:?}", e);
+    fn start_jwk_updater(epoch_store: Arc<AuthorityPerEpochStore>) {
+        let epoch = epoch_store.epoch();
+        tokio::task::spawn(
+            async move {
+                info!("Starting JWK updater task");
+                loop {
+                    let epoch_store_ = epoch_store.clone();
+                    let fetch_and_sleep = async move {
+                        // Update the JWK value in the authority server
+                        info!("fetching new JWKs");
+                        match Self::fetch_jwk().await {
+                            Err(e) => {
+                                warn!("Error when fetching JWK {:?}", e);
+                                // Retry in 30 seconds
+                                tokio::time::sleep(Duration::from_secs(30)).await;
+                            }
+                            Ok(keys) => {
+                                for (_, v) in keys {
+                                    epoch_store_.insert_oauth_jwk(&v);
+                                }
+
+                                // Sleep for 1 hour
+                                tokio::time::sleep(Duration::from_secs(3600)).await;
+                            }
+                        }
+                    };
+
+                    tokio::select! {
+                        _ = fetch_and_sleep => {}
+                        _ = epoch_store.wait_epoch_terminated() => {
+                            break;
+                        }
+                    }
                 }
-                // Sleep for 1 hour
-                tokio::time::sleep(Duration::from_secs(3600)).await;
+                info!("JWK updater task terminated");
             }
-        });
+            .instrument(error_span!("jwk_updater_task", epoch)),
+        );
     }
 
-    async fn update_google_jwk() -> Result<(), SuiError> {
-        if cfg!(msim) {
-            return Ok(());
-        }
-
-        let client = Client::new();
+    #[cfg(not(msim))]
+    async fn fetch_jwk() -> SuiResult<Vec<(String, OAuthProviderContent)>> {
+        let client = reqwest::Client::new();
         let response = client
             .get("https://www.googleapis.com/oauth2/v2/certs")
             .send()
@@ -219,14 +241,13 @@ impl SuiNode {
             .bytes()
             .await
             .map_err(|_| SuiError::JWKRetrievalError)?;
-        let jwk = get_google_jwk_bytes();
-        if let Ok(mut jwk) = jwk.write() {
-            if jwk.to_vec() != bytes.to_vec() {
-                *jwk = bytes.to_vec();
-                info!("New JWK value updated");
-            }
-        }
-        Ok(())
+
+        parse_jwks(&bytes)
+    }
+
+    #[cfg(msim)]
+    async fn fetch_jwk() -> SuiResult<Vec<(String, OAuthProviderContent)>> {
+        parse_jwks(sui_types::zk_login_util::DEFAULT_JWK_BYTES)
     }
 
     pub async fn start_async(
@@ -312,7 +333,7 @@ impl SuiNode {
         );
 
         if epoch_store.protocol_config().zklogin_auth() {
-            Self::start_jwk_updater();
+            Self::start_jwk_updater(epoch_store.clone());
         }
 
         // the database is empty at genesis time
@@ -1359,6 +1380,8 @@ impl SuiNode {
             cur_epoch_store.epoch_start_config().flags(),
             new_epoch_store.epoch_start_config().flags(),
         );
+
+        Self::start_jwk_updater(new_epoch_store.clone());
         new_epoch_store
     }
 

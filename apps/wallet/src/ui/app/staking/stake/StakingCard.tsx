@@ -4,7 +4,7 @@
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { useCoinMetadata, useGetSystemState, useGetCoinBalance } from '@mysten/core';
 import { ArrowLeft16 } from '@mysten/icons';
-import { getTransactionDigest, MIST_PER_SUI, SUI_TYPE_ARG, type SuiAddress } from '@mysten/sui.js';
+import { getTransactionDigest, MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { Formik } from 'formik';
@@ -111,7 +111,7 @@ function StakingCard() {
 		}: {
 			tokenTypeArg: string;
 			amount: bigint;
-			validatorAddress: SuiAddress;
+			validatorAddress: string;
 		}) => {
 			if (!validatorAddress || !amount || !tokenTypeArg || !signer) {
 				throw new Error('Failed, missing required field');

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type EpochPage } from '@mysten/sui.js/src/types/epochs';
+import { type EpochPage } from '@mysten/sui.js';
 import { Text } from '@mysten/ui';
 
 import { SuiAmount } from '../Table/SuiAmount';

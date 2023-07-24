@@ -8,7 +8,6 @@ import {
 	getTransactionSender,
 	getTransactionSignature,
 	normalizeSuiAddress,
-	type SuiAddress,
 	type SuiTransactionBlockResponse,
 	type SignaturePubkeyPair,
 } from '@mysten/sui.js';
@@ -45,7 +44,7 @@ function SignaturePanel({ title, signature }: { title: string; signature: Signat
 	);
 }
 
-function getSignatureFromAddress(signatures: SignaturePubkeyPair[], suiAddress: SuiAddress) {
+function getSignatureFromAddress(signatures: SignaturePubkeyPair[], suiAddress: string) {
 	return signatures.find(
 		(signature) => signature.pubKey.toSuiAddress() === normalizeSuiAddress(suiAddress),
 	);
@@ -53,7 +52,7 @@ function getSignatureFromAddress(signatures: SignaturePubkeyPair[], suiAddress: 
 
 function getSignaturesExcludingAddress(
 	signatures: SignaturePubkeyPair[],
-	suiAddress: SuiAddress,
+	suiAddress: string,
 ): SignaturePubkeyPair[] {
 	return signatures.filter(
 		(signature) => signature.pubKey.toSuiAddress() !== normalizeSuiAddress(suiAddress),

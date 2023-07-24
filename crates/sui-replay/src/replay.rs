@@ -54,7 +54,7 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use sui_types::temporary_store::InnerTemporaryStore;
 use sui_types::transaction::{
     CertifiedTransaction, InputObjectKind, InputObjects, SenderSignedData, Transaction,
-    TransactionData, TransactionDataAPI, TransactionKind, VerifiedTransaction,
+    TransactionData, TransactionDataAPI, TransactionKind, VerifiedCertificate, VerifiedTransaction,
 };
 use sui_types::DEEPBOOK_PACKAGE_ID;
 use tracing::info;
@@ -223,6 +223,10 @@ pub struct LocalExec {
     // One can optionally override the executor version
     // -1 implies use latest version
     pub executor_version_override: Option<i64>,
+    // One can optionally override the protocol version
+    // -1 implies use latest version
+    // None implies use the protocol version at the time of execution
+    pub protocol_version_override: Option<i64>,
     // Retry policies due to RPC errors
     pub num_retries_for_timeout: u32,
     pub sleep_period_for_timeout: std::time::Duration,
@@ -305,6 +309,7 @@ impl LocalExec {
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
         use_authority: bool,
         executor_version_override: Option<i64>,
+        protocol_version_override: Option<i64>,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
         async fn inner_exec(
             rpc_url: String,
@@ -312,6 +317,7 @@ impl LocalExec {
             expensive_safety_check_config: ExpensiveSafetyCheckConfig,
             use_authority: bool,
             executor_version_override: Option<i64>,
+            protocol_version_override: Option<i64>,
         ) -> Result<ExecutionSandboxState, ReplayEngineError> {
             LocalExec::new_from_fn_url(&rpc_url)
                 .await?
@@ -322,6 +328,7 @@ impl LocalExec {
                     expensive_safety_check_config,
                     use_authority,
                     executor_version_override,
+                    protocol_version_override,
                 )
                 .await
         }
@@ -334,6 +341,7 @@ impl LocalExec {
                 expensive_safety_check_config.clone(),
                 use_authority,
                 executor_version_override,
+                protocol_version_override,
             )
             .await
             {
@@ -354,6 +362,7 @@ impl LocalExec {
                 expensive_safety_check_config.clone(),
                 use_authority,
                 executor_version_override,
+                protocol_version_override,
             )
             .await
             {
@@ -411,6 +420,7 @@ impl LocalExec {
             sleep_period_for_timeout: RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
             diag: Default::default(),
             executor_version_override: None,
+            protocol_version_override: None,
         })
     }
 
@@ -452,6 +462,7 @@ impl LocalExec {
             sleep_period_for_timeout: RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
             diag: Default::default(),
             executor_version_override: None,
+            protocol_version_override: None,
         })
     }
 
@@ -643,6 +654,7 @@ impl LocalExec {
                     &tx,
                     expensive_safety_check_config.clone(),
                     use_authority,
+                    None,
                     None,
                 )
                 .await
@@ -851,15 +863,17 @@ impl LocalExec {
         let mut committee = authority_state.clone_committee_for_testing();
         committee.epoch = executed_epoch;
         let certificate = CertifiedTransaction::new(
-            sender_signed_tx.into_message(),
+            sender_signed_tx.clone().into_message(),
             vec![auth_vote.clone()],
             &committee,
         )
-        .unwrap()
-        .verify(&committee)
         .unwrap();
 
-        let certificate = &VerifiedExecutableTransaction::new_from_certificate(certificate.clone());
+        certificate.verify_committee_sigs_only(&committee).unwrap();
+
+        let certificate = &VerifiedExecutableTransaction::new_from_certificate(
+            VerifiedCertificate::new_unchecked(certificate.clone()),
+        );
 
         let new_tx_digest = certificate.digest();
 
@@ -956,8 +970,10 @@ impl LocalExec {
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
         use_authority: bool,
         executor_version_override: Option<i64>,
+        protocol_version_override: Option<i64>,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
         self.executor_version_override = executor_version_override;
+        self.protocol_version_override = protocol_version_override;
         if use_authority {
             self.certificate_execute(tx_digest, expensive_safety_check_config.clone())
                 .await
@@ -1275,12 +1291,22 @@ impl LocalExec {
         &self,
         epoch_id: EpochId,
     ) -> Result<ProtocolConfig, ReplayEngineError> {
-        self.protocol_version_epoch_table
-            .iter()
-            .rev()
-            .find(|(_, rg)| epoch_id >= rg.epoch_start)
-            .map(|(p, _rg)| Ok(ProtocolConfig::get_for_version((*p).into(), Chain::Unknown)))
-            .unwrap_or_else(|| Err(ReplayEngineError::ProtocolVersionNotFound { epoch: epoch_id }))
+        match self.protocol_version_override {
+            Some(x) if x < 0 => Ok(ProtocolConfig::get_for_max_version_UNSAFE()),
+            Some(v) => Ok(ProtocolConfig::get_for_version(
+                (v as u64).into(),
+                Chain::Unknown,
+            )),
+            None => self
+                .protocol_version_epoch_table
+                .iter()
+                .rev()
+                .find(|(_, rg)| epoch_id >= rg.epoch_start)
+                .map(|(p, _rg)| Ok(ProtocolConfig::get_for_version((*p).into(), Chain::Unknown)))
+                .unwrap_or_else(|| {
+                    Err(ReplayEngineError::ProtocolVersionNotFound { epoch: epoch_id })
+                }),
+        }
     }
 
     pub async fn checkpoints_for_epoch(
