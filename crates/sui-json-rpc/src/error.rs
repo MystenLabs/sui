@@ -34,7 +34,7 @@ pub enum Error {
     InvalidHeaderValue(#[from] InvalidHeaderValue),
 
     #[error(transparent)]
-    UserInputError(UserInputError),
+    UserInputError(#[from] UserInputError),
 
     #[error(transparent)]
     EncodingError(#[from] eyre::Report),
@@ -61,16 +61,11 @@ impl From<Error> for RpcError {
     }
 }
 
-impl From<UserInputError> for Error {
-    fn from(e: UserInputError) -> Self {
-        Self::UserInputError(e)
-    }
-}
-
 impl From<SuiError> for Error {
     fn from(e: SuiError) -> Self {
         match e {
             SuiError::UserInputError { error } => Self::UserInputError(error),
+            SuiError::SuiObjectResponseError { error } => Self::SuiObjectResponseError(error),
             other => Self::SuiError(other),
         }
     }
@@ -79,12 +74,20 @@ impl From<SuiError> for Error {
 impl Error {
     pub fn to_rpc_error(self) -> RpcError {
         match self {
-            Error::UserInputError(user_input_error) => {
-                RpcError::Call(CallError::InvalidParams(user_input_error.into()))
-            }
+            Error::UserInputError(_) => RpcError::Call(CallError::InvalidParams(self.into())),
+            Error::SuiObjectResponseError(err) => match err {
+                SuiObjectResponseError::NotExists { .. }
+                | SuiObjectResponseError::DynamicFieldNotFound { .. }
+                | SuiObjectResponseError::Deleted { .. } => {
+                    RpcError::Call(CallError::InvalidParams(err.into()))
+                }
+                _ => RpcError::Call(CallError::Failed(err.into())),
+            },
             Error::SuiRpcInputError(err) => err.into(),
             Error::SuiError(sui_error) => match sui_error {
-                SuiError::TransactionNotFound { .. } | SuiError::TransactionsNotFound { .. } => {
+                SuiError::TransactionNotFound { .. }
+                | SuiError::TransactionsNotFound { .. }
+                | SuiError::TransactionEventsNotFound { .. } => {
                     RpcError::Call(CallError::InvalidParams(sui_error.into()))
                 }
                 _ => RpcError::Call(CallError::Failed(sui_error.into())),
