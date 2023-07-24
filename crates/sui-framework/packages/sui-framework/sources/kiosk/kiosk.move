@@ -43,9 +43,10 @@
 /// function (and a `PurchaseCap` is created). While listed this way, an item
 /// can not be `delist`-ed unless a `PurchaseCap` is returned. All actions
 /// available at this item state require a `PurchaseCap`:
-/// * `purchase_with_cap` - to purchase the item for a price equal or higher
+///
+/// 1. `purchase_with_cap` - to purchase the item for a price equal or higher
 /// than the `min_price` set in the `PurchaseCap`.
-/// * `return_purchase_cap` - to return the `PurchaseCap` and return the asset
+/// 2. `return_purchase_cap` - to return the `PurchaseCap` and return the asset
 /// into the previous state.
 ///
 /// When an item is listed exclusively it cannot be modified nor taken and

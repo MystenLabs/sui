@@ -7,7 +7,11 @@ Kiosk is a primitive for building safe, decentralized and trustless trading
 experiences. It allows storing and trading any types of assets as long as
 the creator of these assets implements a <code>TransferPolicy</code> for them.
 
-Principles and philosophy:
+
+<a name="@Principles_and_philosophy:_0"></a>
+
+#### Principles and philosophy:
+
 
 - Kiosk provides guarantees of "true ownership"; - just like single owner
 objects, assets stored in the Kiosk can only be managed by the Kiosk owner.
@@ -23,34 +27,36 @@ be implemented on top using the <code>list_with_purchase_cap</code> (and a match
 - For every transaction happening with a third party a <code>TransferRequest</code> is
 created - this way creators are fully in control of the trading experience.
 
-Asset states in the Kiosk:
 
-<code>placed</code>
-An asset is <code>place</code>d into the Kiosk and can be <code>take</code>n out by the Kiosk
-owner; it's freely tradable and modifiable via the <code>borrow_mut</code> and
-<code>borrow_val</code> functions.
+<a name="@Asset_states_in_the_Kiosk:_1"></a>
 
-<code>locked</code>
-Similar to <code>placed</code> except that <code>take</code> is disabled and the only way to move
-the asset out of the Kiosk is to <code>list</code> it or <code>list_with_purchase_cap</code>
-therefore performing a trade (issuing a <code>TransferRequest</code>). The check on the
-<code>lock</code> function makes sure that the <code>TransferPolicy</code> exists to not lock the
-item in a <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code> forever.
+#### Asset states in the Kiosk:
 
-<code>listed</code>
-A <code>place</code>d or a <code>lock</code>ed item can be <code>list</code>ed for a fixed price allowing
-anyone to <code>purchase</code> it from the Kiosk. While listed, an item can not be
-taken or modified. However, an immutable borrow via <code><a href="borrow.md#0x2_borrow">borrow</a></code> call is still
-available. The <code>delist</code> function returns the asset to the previous state.
 
-<code>listed exclusively</code>
-An item is listed via the <code>list_with_purchase_cap</code> function (and a
-<code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> is created). While listed this way, an item can not be
-<code>delist</code>-ed unless a <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> is returned. All actions available at
-this item state require a <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code>:
-- <code>purchase_with_cap</code> - to purchase the item for a price equal or higher
+- <code>placed</code> -  An asset is <code>place</code>d into the Kiosk and can be <code>take</code>n out by
+the Kiosk owner; it's freely tradable and modifiable via the <code>borrow_mut</code>
+and <code>borrow_val</code> functions.
+
+- <code>locked</code> - Similar to <code>placed</code> except that <code>take</code> is disabled and the only
+way to move the asset out of the Kiosk is to <code>list</code> it or
+<code>list_with_purchase_cap</code> therefore performing a trade (issuing a
+<code>TransferRequest</code>). The check on the <code>lock</code> function makes sure that the
+<code>TransferPolicy</code> exists to not lock the item in a <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code> forever.
+
+- <code>listed</code> - A <code>place</code>d or a <code>lock</code>ed item can be <code>list</code>ed for a fixed price
+allowing anyone to <code>purchase</code> it from the Kiosk. While listed, an item can
+not be taken or modified. However, an immutable borrow via <code><a href="borrow.md#0x2_borrow">borrow</a></code> call is
+still available. The <code>delist</code> function returns the asset to the previous
+state.
+
+- <code>listed exclusively</code> - An item is listed via the <code>list_with_purchase_cap</code>
+function (and a <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> is created). While listed this way, an item
+can not be <code>delist</code>-ed unless a <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> is returned. All actions
+available at this item state require a <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code>:
+
+1. <code>purchase_with_cap</code> - to purchase the item for a price equal or higher
 than the <code>min_price</code> set in the <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code>.
-- <code>return_purchase_cap</code> - to return the <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> and return the asset
+2. <code>return_purchase_cap</code> - to return the <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> and return the asset
 into the previous state.
 
 When an item is listed exclusively it cannot be modified nor taken and
@@ -59,7 +65,11 @@ it is recommended to only use <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">Pur
 applications and not use it for direct trading (eg sending to another
 account).
 
-Using multiple Transfer Policies for different "tracks":
+
+<a name="@Using_multiple_Transfer_Policies_for_different_"tracks":_2"></a>
+
+#### Using multiple Transfer Policies for different "tracks":
+
 
 Every <code>purchase</code> or <code>purchase_with_purchase_cap</code> creates a <code>TransferRequest</code>
 hot potato which must be resolved in a matching <code>TransferPolicy</code> for the
@@ -67,7 +77,11 @@ transaction to pass. While the default scenario implies that there should be
 a single <code>TransferPolicy&lt;T&gt;</code> for <code>T</code>; it is possible to have multiple, each
 one having its own set of rules.
 
-Examples:
+
+<a name="@Examples:_3"></a>
+
+#### Examples:
+
 
 - I create one <code>TransferPolicy</code> with "Royalty Rule" for everyone
 - I create a special <code>TransferPolicy</code> for bearers of a "Club Membership"
@@ -77,14 +91,19 @@ transfer items between <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>
 even paying the price with a 0 SUI PurchaseCap)
 
 ```
-/--------> In-game Wrapped Transfer Policy
-Kiosk -> (Item, TransferRequest) --------> Common Transfer Policy
-\-----> Club Membership Transfer Policy
+Kiosk -> (Item, TransferRequest)
+... TransferRequest ------> Common Transfer Policy
+... TransferRequest ------> In-game Wrapped Transfer Policy
+... TransferRequest ------> Club Membership Transfer Policy
 ```
 
 See <code><a href="transfer_policy.md#0x2_transfer_policy">transfer_policy</a></code> module for more details on how they function.
 
 
+        -  [Principles and philosophy:](#@Principles_and_philosophy:_0)
+        -  [Asset states in the Kiosk:](#@Asset_states_in_the_Kiosk:_1)
+        -  [Using multiple Transfer Policies for different "tracks":](#@Using_multiple_Transfer_Policies_for_different_"tracks":_2)
+        -  [Examples:](#@Examples:_3)
 -  [Resource `Kiosk`](#0x2_kiosk_Kiosk)
 -  [Resource `KioskOwnerCap`](#0x2_kiosk_KioskOwnerCap)
 -  [Resource `PurchaseCap`](#0x2_kiosk_PurchaseCap)
@@ -95,7 +114,7 @@ See <code><a href="transfer_policy.md#0x2_transfer_policy">transfer_policy</a></
 -  [Struct `ItemListed`](#0x2_kiosk_ItemListed)
 -  [Struct `ItemPurchased`](#0x2_kiosk_ItemPurchased)
 -  [Struct `ItemDelisted`](#0x2_kiosk_ItemDelisted)
--  [Constants](#@Constants_0)
+-  [Constants](#@Constants_4)
 -  [Function `default`](#0x2_kiosk_default)
 -  [Function `new`](#0x2_kiosk_new)
 -  [Function `close_and_withdraw`](#0x2_kiosk_close_and_withdraw)
@@ -557,7 +576,7 @@ to close tracked offers.
 
 </details>
 
-<a name="@Constants_0"></a>
+<a name="@Constants_4"></a>
 
 ## Constants
 

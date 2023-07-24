@@ -13,7 +13,11 @@ related to trading. However, there's no limit to what can be built using the
 <code><a href="kiosk_extension.md#0x2_kiosk_extension">kiosk_extension</a></code> module, as it gives certain benefits such as using <code>Kiosk</code>
 as the storage for any type of data / assets.
 
-Flow:
+
+<a name="@Flow:_0"></a>
+
+#### Flow:
+
 - An extension can only be installed by the Kiosk Owner and requires an
 authorization via the <code>KioskOwnerCap</code>.
 - When installed, the extension is given a permission bitmap that allows it
@@ -27,13 +31,21 @@ back to the extension.
 - An extension permissions follow the all-or-nothing policy. Either all of
 the requested permissions are granted or none of them (can't install).
 
-Examples:
+
+<a name="@Examples:_1"></a>
+
+#### Examples:
+
 - An Auction extension can utilize the storage to store Auction-related data
 while utilizing the same <code>Kiosk</code> object that the items are stored in.
 - A Marketplace extension that implements custom events and fees for the
 default trading functionality.
 
-Notes:
+
+<a name="@Notes:_2"></a>
+
+#### Notes:
+
 - Trading functionality can utilize the <code>PurchaseCap</code> to build a custom
 logic around the purchase flow. However, it should be carefully managed to
 prevent asset locking.
@@ -42,9 +54,12 @@ internal functions (such as <code>place_internal</code> and <code>lock_internal<
 implement custom authorization scheme for <code>place</code> and <code>lock</code> respectively).
 
 
+        -  [Flow:](#@Flow:_0)
+        -  [Examples:](#@Examples:_1)
+        -  [Notes:](#@Notes:_2)
 -  [Struct `Extension`](#0x2_kiosk_extension_Extension)
 -  [Struct `ExtensionKey`](#0x2_kiosk_extension_ExtensionKey)
--  [Constants](#@Constants_0)
+-  [Constants](#@Constants_3)
 -  [Function `add`](#0x2_kiosk_extension_add)
 -  [Function `disable`](#0x2_kiosk_extension_disable)
 -  [Function `enable`](#0x2_kiosk_extension_enable)
@@ -160,7 +175,7 @@ to identify the extension witness.
 
 </details>
 
-<a name="@Constants_0"></a>
+<a name="@Constants_3"></a>
 
 ## Constants
 
