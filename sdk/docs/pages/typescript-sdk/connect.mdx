@@ -1,8 +1,4 @@
----
-title: Connecting to Sui Network
----
-
-<Title/>
+# Connecting to Sui Network
 
 The Sui TypeScript SDK provides a SuiClient class that you can use to connect to a network's JSON-RPC server. Use the `SuiClient` for all JSON-RPC read-only operations. 
 
@@ -20,7 +16,7 @@ await suiClient.getCoins({
 });
 ```
 
-| Connection object | Full node address | `faucet` value |
+| Connection object | Full node address | `faucet` location |
 | --- | --- | --- |
 | localConnection | `http://127.0.0.1:9000` | `http://127.0.0.1:9123/gas` |
 | devnetConnection | `https://fullnode.devnet.sui.io:443` | `https://faucet.devnet.sui.io/gas` |
