@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 import {
 	ObjectOwner,
-	normalizeSuiObjectId,
-	parseStructTag,
 	type DryRunTransactionBlockResponse,
 	type SuiTransactionBlockResponse,
 } from '@mysten/sui.js';
+import { normalizeSuiObjectId, parseStructTag } from '@mysten/sui.js/utils';
 
 export type BalanceChange = {
 	coinType: string;
@@ -65,4 +64,17 @@ export const getBalanceChangeSummary = (
 		acc[owner] = (acc[owner] ?? []).concat(summary);
 		return acc;
 	}, balanceChangeByOwner as BalanceChangeByOwner);
+};
+
+export const getRecognizedUnRecognizedTokenChanges = (changes: BalanceChange[]) => {
+	const recognizedTokenChanges = [];
+	const unRecognizedTokenChanges = [];
+	for (let change of changes) {
+		if (change.unRecognizedToken) {
+			unRecognizedTokenChanges.push(change);
+		} else {
+			recognizedTokenChanges.push(change);
+		}
+	}
+	return { recognizedTokenChanges, unRecognizedTokenChanges };
 };

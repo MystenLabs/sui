@@ -6,8 +6,8 @@ import {
 	useFormatCoin,
 	useCoinMetadata,
 	type BalanceChange,
+	getRecognizedUnRecognizedTokenChanges,
 } from '@mysten/core';
-import { useMemo } from 'react';
 
 import { Card } from '../Card';
 import { OwnerFooter } from '../OwnerFooter';
@@ -56,18 +56,8 @@ function BalanceChangeEntry({ change }: { change: BalanceChange }) {
 }
 
 function BalanceChangeEntries({ changes }: { changes: BalanceChange[] }) {
-	const { recognizedTokenChanges, unRecognizedTokenChanges } = useMemo(() => {
-		const recognizedTokenChanges = [];
-		const unRecognizedTokenChanges = [];
-		for (let change of changes) {
-			if (change.unRecognizedToken) {
-				unRecognizedTokenChanges.push(change);
-			} else {
-				recognizedTokenChanges.push(change);
-			}
-		}
-		return { recognizedTokenChanges, unRecognizedTokenChanges };
-	}, [changes]);
+	const { recognizedTokenChanges, unRecognizedTokenChanges } =
+		getRecognizedUnRecognizedTokenChanges(changes);
 
 	return (
 		<div className="flex flex-col gap-2">
