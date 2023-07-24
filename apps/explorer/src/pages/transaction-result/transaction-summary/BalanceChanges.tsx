@@ -10,6 +10,7 @@ import {
 	getRecognizedUnRecognizedTokenChanges,
 } from '@mysten/core';
 import { Heading, Text } from '@mysten/ui';
+import { useMemo } from 'react';
 
 import { Banner } from '~/ui/Banner';
 import { Coin } from '~/ui/CoinsStack';
@@ -73,8 +74,10 @@ function BalanceChangeEntry({ change }: { change: BalanceChange }) {
 
 function BalanceChangeCard({ changes, owner }: { changes: BalanceChange[]; owner: string }) {
 	const { data: suinsDomainName } = useResolveSuiNSName(owner);
-	const { recognizedTokenChanges, unRecognizedTokenChanges } =
-		getRecognizedUnRecognizedTokenChanges(changes);
+	const { recognizedTokenChanges, unRecognizedTokenChanges } = useMemo(
+		() => getRecognizedUnRecognizedTokenChanges(changes),
+		[changes],
+	);
 
 	return (
 		<TransactionBlockCard
