@@ -38,7 +38,8 @@ jobs:
     timeout-minutes: 45
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-ghcloud, windows-ghcloud, macos-ghcloud]
+      fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
       - name: Clean up tag name
