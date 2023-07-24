@@ -9,12 +9,11 @@ import type { JsonRpcProvider } from '../providers/json-rpc-provider.js';
 import type { HttpHeaders } from '../rpc/client.js';
 import type {
 	ExecuteTransactionRequestType,
-	SuiAddress,
 	DevInspectResults,
 	DryRunTransactionBlockResponse,
 	SuiTransactionBlockResponse,
 	SuiTransactionBlockResponseOptions,
-} from '../types/index.js';
+} from '../client/index.js';
 import { getTotalGasUsedUpperBound } from '../types/index.js';
 import { IntentScope, messageWithIntent } from '../cryptography/intent.js';
 import type { Signer } from './signer.js';
@@ -38,7 +37,7 @@ export abstract class SignerWithProvider implements Signer {
 	// Sub-classes MUST implement these
 
 	// Returns the checksum address
-	abstract getAddress(): Promise<SuiAddress>;
+	abstract getAddress(): Promise<string>;
 
 	/**
 	 * Returns the signature for the data and the public key of the signer
