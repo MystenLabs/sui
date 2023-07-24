@@ -329,7 +329,7 @@ impl Proposer {
         // to make sure that we don't give them a boost for the next rounds.
         if self.round % 2 == 0 && self.leader_schedule.leader(self.round).id() == self.authority_id
         {
-            return self.min_header_delay * 2;
+            return self.min_header_delay + self.min_header_delay / 2;
         }
 
         // We give an edge to the next leader
