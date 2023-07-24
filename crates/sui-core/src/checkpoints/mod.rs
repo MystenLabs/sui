@@ -1106,6 +1106,8 @@ impl CheckpointBuilder {
                 .map(|e| *e.transaction_digest())
                 .collect::<Vec<_>>();
 
+            let builder_multi_get_scope =
+                monitored_scope("CheckpointBuilder::builder_included_transactions_in_checkpoint");
             let included_transactions = self
                 .epoch_store
                 .builder_included_transactions_in_checkpoint(digests.iter())?;
@@ -1114,6 +1116,7 @@ impl CheckpointBuilder {
                 .into_iter()
                 .zip(included_transactions.into_iter())
                 .collect();
+            drop(builder_multi_get_scope);
 
             for effect in roots {
                 let digest = effect.transaction_digest();
@@ -1128,22 +1131,29 @@ impl CheckpointBuilder {
                 if effect.executed_epoch() < self.epoch_store.epoch() {
                     continue;
                 }
-                for dependency in effect.dependencies().iter() {
+
+                let effects_signature_exists_scope =
+                    monitored_scope("CheckpointBuilder::effects_signature_exists_scope");
+
+                let existing_effects = self
+                    .epoch_store
+                    .effects_signatures_exists(effect.dependencies().iter())?;
+
+                for (dependency, effects_signature_exists) in
+                    effect.dependencies().iter().zip(existing_effects.iter())
+                {
                     // Skip here if dependency not executed in the current epoch.
                     // Note that the existence of an effects signature in the
                     // epoch store for the given digest indicates that the transaction
                     // was locally executed in the current epoch
-                    if self
-                        .epoch_store
-                        .get_effects_signature(dependency)?
-                        .is_none()
-                    {
+                    if !effects_signature_exists {
                         continue;
                     }
                     if seen.insert(*dependency) {
                         pending.insert(*dependency);
                     }
                 }
+                drop(effects_signature_exists_scope);
                 results.push(effect);
             }
             if pending.is_empty() {
