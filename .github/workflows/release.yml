@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 45
     strategy:
       matrix:
-        os: [ubuntu-ghcloud, windows-ghcloud, macos-latest]
+        os: [ubuntu-ghcloud, windows-ghcloud]
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
@@ -81,11 +81,17 @@ jobs:
         run: |
           cargo build --release
 
+          mv target/release/sui target/release/sui-${{ matrix.os }}
           echo BIN_SUI="target/release/sui-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          mv target/release/sui-node target/release/sui-node-${{ matrix.os }}
           echo BIN_SUI_NODE="target/release/sui-node-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          mv target/release/sui-tool target/release/sui-tool-${{ matrix.os }}
           echo BIN_SUI_TOOL="target/release/sui-tool-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          mv target/release/sui-faucet target/release/sui-faucet-${{ matrix.os }}
           echo BIN_SUI_FAUCET="target/release/sui-faucet-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          mv target/release/sui-test-validator target/release/sui-test-validator-${{ matrix.os }}
           echo BIN_SUI_TEST_VALIDATOR="target/release/sui-test-validator-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          mv target/release/sui-indexer target/release/sui-indexer-${{ matrix.os }}
           echo BIN_SUI_INDEXER="target/release/sui-indexer-${{ matrix.os }}" >> $GITHUB_OUTPUT
 
       - name: Upload release artifacts for ${{ matrix.os }} platform
