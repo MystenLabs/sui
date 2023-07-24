@@ -29,6 +29,7 @@ import HomePage, {
 	TransferCoinPage,
 	NFTDetailsPage,
 	ReceiptPage,
+	KioskDetailsPage,
 	CoinsSelectorPage,
 	AppsPage,
 	NftTransferPage,
@@ -74,6 +75,7 @@ const App = () => {
 				<Route path="nfts/*" element={<AssetsPage />} />
 				<Route path="apps/*" element={<AppsPage />} />
 				<Route path="nft-details" element={<NFTDetailsPage />} />
+				<Route path="kiosk" element={<KioskDetailsPage />} />
 				<Route path="nft-transfer/:nftId" element={<NftTransferPage />} />
 				<Route path="transactions/:status?" element={<TransactionBlocksPage />} />
 				<Route path="send" element={<TransferCoinPage />} />

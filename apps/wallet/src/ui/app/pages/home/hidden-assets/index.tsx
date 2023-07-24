@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useMultiGetObjects } from '@mysten/core';
+import { getKioskIdFromOwnerCap, isKioskOwnerToken, useMultiGetObjects } from '@mysten/core';
 import { Check12, EyeClose16 } from '@mysten/icons';
 import { getObjectDisplay } from '@mysten/sui.js';
 import { get, set } from 'idb-keyval';
@@ -29,7 +29,7 @@ function HiddenNftsPage() {
 	const { data, isInitialLoading, isLoading, isError, error } = useMultiGetObjects(
 		// Prevents dupes
 		Array.from(new Set(hiddenAssetIds))!,
-		{ showContent: true, showDisplay: true },
+		{ showContent: true, showDisplay: true, showType: true },
 	);
 
 	const filteredAndSortedNfts = useMemo(() => {
@@ -177,9 +177,15 @@ function HiddenNftsPage() {
 							return (
 								<div className="flex justify-between items-center pt-2 pr-1" key={objectId}>
 									<Link
-										to={`/nft-details?${new URLSearchParams({
-											objectId: objectId,
-										}).toString()}`}
+										to={
+											isKioskOwnerToken(nft.data)
+												? `/kiosk?${new URLSearchParams({
+														kioskId: getKioskIdFromOwnerCap(nft.data!),
+												  })}`
+												: `/nft-details?${new URLSearchParams({
+														objectId,
+												  }).toString()}`
+										}
 										onClick={() => {
 											ampli.clickedCollectibleCard({
 												objectId,

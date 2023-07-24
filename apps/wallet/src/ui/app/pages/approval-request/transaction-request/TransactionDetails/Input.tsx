@@ -1,13 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	BuilderCallArg,
-	formatAddress,
-	is,
-	toB64,
-	type TransactionBlockInput,
-} from '@mysten/sui.js';
+import { BuilderCallArg, type TransactionBlockInput } from '@mysten/sui.js';
+import { formatAddress, is, toB64 } from '@mysten/sui.js/utils';
 
 import ExplorerLink from '_src/ui/app/components/explorer-link';
 import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerLinkType';
@@ -27,11 +22,7 @@ export function Input({ input }: InputProps) {
 					'Pure' in input.value ? (
 						`${toB64(new Uint8Array(input.value.Pure))}`
 					) : (
-						<ExplorerLink
-							className="text-hero-dark no-underline"
-							type={ExplorerLinkType.object}
-							objectID={objectId}
-						>
+						<ExplorerLink type={ExplorerLinkType.object} objectID={objectId}>
 							{formatAddress(objectId)}
 						</ExplorerLink>
 					)
