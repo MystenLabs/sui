@@ -52,6 +52,28 @@ jobs:
         uses: actions/checkout@v3
         with:
           ref: ${{ env.sui_tag }}
+      
+      - name: Install nexttest
+        if: ${{ matrix.os == 'windows-ghcloud' }}
+        uses: taiki-e/install-action@nextest
+
+      - name: Setup protoc
+        if: ${{ matrix.os == 'windows-ghcloud' }}
+        uses: arduino/setup-protoc@v1
+        # this avoids rate-limiting
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install postgres (Windows)
+        if: ${{ matrix.os == 'windows-ghcloud' }}
+        shell: bash
+        run: |
+          choco install postgresql12 --force --params '/Password:root'
+          echo "C:\Program Files\PostgreSQL\12\bin" >> $GITHUB_PATH
+          echo "C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_PATH
+          echo "PQ_LIB_DIR=C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_ENV
+          echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
+          echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV          
 
       - name: cargo build (release) for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
@@ -70,7 +92,7 @@ jobs:
         if: ${{ env.sui_tag != 'main' }}
         uses: actions/upload-artifact@v3
         with:
-          name: sui-binaries
+          name: sui-binaries-${{ matrix.os }}
           path: |
             ${{ steps.build.outputs.BIN_SUI }}
             ${{ steps.build.outputs.BIN_SUI_NODE }}
