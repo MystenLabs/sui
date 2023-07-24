@@ -332,7 +332,7 @@ authority-store-pruning-config:
 Transaction pruning removes previous transactions and effects from the database.
 Sui periodically creates checkpoints. Each checkpoint contains the transactions that occurred during the checkpoint and their associated effects.
 Sui performs transaction pruning in the background after checkpoints complete.
-You can enable transaction pruning for your Full node or Validator node by adding  `num_epochs_to_retain_for_checkpoints`
+You can enable transaction pruning for your Full node or Validator node by adding  `num-epochs-to-retain-for-checkpoints`
 to the `authority-store-pruning-config` config for the node:
 
 ```yaml
@@ -347,7 +347,7 @@ authority-store-pruning-config:
   # checkpoints up to the `current - N` epoch. Sui never prunes transactions and effects from the current and
   # immediately prior epoch. N = 2 is a recommended setting for Sui Validator nodes and Sui Full nodes that don't 
   # serve RPC requests.
-  num_epochs_to_retain_for_checkpoints: 2
+  num-epochs-to-retain-for-checkpoints: 2
   # Ensures that individual database files periodically go through the compaction process.
   # This helps reclaim disk space and avoid fragmentation issues
   periodic-compaction-threshold-days: 1
