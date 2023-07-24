@@ -421,7 +421,7 @@ impl ReadApi {
             .get_transaction_block(digest, Some(options))
             .await?)
     }
-    /// Return a vector of [SuiTransactionBlockResponse] based on the given list of [TransactionDigest], or an error upon failure.
+    /// Return a vector of [SuiTransactionBlockResponse] based on the given vector of [TransactionDigest], or an error upon failure.
     pub async fn multi_get_transactions_with_options(
         &self,
         digests: Vec<TransactionDigest>,
@@ -518,7 +518,7 @@ impl ReadApi {
             .await?)
     }
 
-    /// Return a stream of transaction block response, or an error upon failure.
+    /// Return a stream of [SuiTransactionBlockResponse], or an error upon failure.
     pub fn get_transactions_stream(
         &self,
         query: SuiTransactionBlockResponseQuery,
@@ -763,7 +763,7 @@ impl CoinReadApi {
         )
     }
 
-    /// Return a list of coins for the provided address, or an error upon failure.
+    /// Return a vector of coins for the provided address, or an error upon failure.
     ///
     /// The coins can be filtered by `coin_type` or use `None` for including all coin types.
     ///
