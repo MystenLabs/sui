@@ -22,6 +22,12 @@ export type TransactionRequestProps = {
 	txRequest: TransactionApprovalRequest;
 };
 
+// Some applications require *a lot* of transactions to interact with, and this
+// eats up our analytics event quota. As a short-term solution so we don't have
+// to stop tracking this event entirely, we'll just manually exclude application
+// origins with this list
+const appOriginsToExcludeFromAnalytics = ['https://sui8192.ethoswallet.xyz'];
+
 export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 	const addressForTransaction = txRequest.tx.account;
 	const signer = useSigner(addressForTransaction);
@@ -73,11 +79,13 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 							clientIdentifier,
 						}),
 					);
-					ampli.respondedToTransactionRequest({
-						applicationUrl: txRequest.origin,
-						approvedTransaction: approved,
-						receivedFailureWarning: false,
-					});
+					if (!appOriginsToExcludeFromAnalytics.includes(txRequest.origin)) {
+						ampli.respondedToTransactionRequest({
+							applicationUrl: txRequest.origin,
+							approvedTransaction: approved,
+							receivedFailureWarning: false,
+						});
+					}
 				}}
 				address={addressForTransaction}
 				approveLoading={isLoading || isConfirmationVisible}
