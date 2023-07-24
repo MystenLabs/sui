@@ -45,7 +45,7 @@
 //! async fn main() -> Result<(), anyhow::Error> {
 //!
 //!     let sui = SuiClientBuilder::default()
-//!         .build("http://127.0.0.1:9000") // local Sui network
+//!         .build("http://127.0.0.1:9000") // provide the Sui network URL
 //!         .await?;
 //!     println!("Sui local network version: {:?}", sui.api_version());
 //!     
@@ -115,7 +115,7 @@ pub const SUI_TESTNET_URL: &str = "https://fullnode.testnet.sui.io:443";
 
 /// A Sui client builder for connecting to the Sui network
 ///
-/// By default the `maximum concurrent requests` is set to 256 and 
+/// By default the `maximum concurrent requests` is set to 256 and
 /// the `request timeout` is set to 60 seconds. These can be adjusted using the
 /// `max_concurrent_requests` function, and the `request_timeout` function.
 ///
@@ -171,8 +171,7 @@ impl SuiClientBuilder {
         self
     }
 
-    /// Returns a [SuiClient] object connected to the Sui network running
-    /// at the URI provided.
+    /// Returns a [SuiClient] object connected to the Sui network running at the URI provided.
     ///
     /// # Examples
     ///
@@ -272,7 +271,7 @@ impl SuiClientBuilder {
         self.build(SUI_LOCAL_NETWORK_URL).await
     }
 
-    /// Returns a [SuiClient] object that is ready to interact with the Sui devnet. 
+    /// Returns a [SuiClient] object that is ready to interact with the Sui devnet.
     ///
     /// For connecting to a custom URI, use the `build` function instead..
     ///
@@ -370,8 +369,7 @@ impl SuiClientBuilder {
     }
 }
 
-/// SuiClient is the basic type that provides all the necessary abstractions
-/// for interacting with the Sui network.
+/// SuiClient is the basic type that provides all the necessary abstractions for interacting with the Sui network.
 ///
 /// # Usage
 ///
@@ -400,7 +398,7 @@ impl SuiClientBuilder {
 ///        .get_owned_objects(address, None, None, None)
 ///        .await?;
 ///
-///     println!("{:?}", owned_objects); 
+///     println!("{:?}", owned_objects);
 ///    
 ///     Ok(())
 /// }
@@ -433,8 +431,7 @@ impl Debug for RpcClient {
     }
 }
 
-/// ServerInfo contains all the useful information regarding the API version, 
-/// the available RPC calls, and subscriptions.
+/// ServerInfo contains all the useful information regarding the API version, the available RPC calls, and subscriptions.
 struct ServerInfo {
     rpc_methods: Vec<String>,
     subscriptions: Vec<String>,
@@ -442,14 +439,12 @@ struct ServerInfo {
 }
 
 impl SuiClient {
-    /// Returns a list of RPC methods supported by the node the client 
-    /// is connected to.
+    /// Returns a list of RPC methods supported by the node the client is connected to.
     pub fn available_rpc_methods(&self) -> &Vec<String> {
         &self.api.info.rpc_methods
     }
 
-    /// Returns a list of streaming/subscription APIs supported
-    /// by the node the client is connected to.
+    /// Returns a list of streaming/subscription APIs supported by the node the client is connected to.
     pub fn available_subscriptions(&self) -> &Vec<String> {
         &self.api.info.subscriptions
     }
@@ -457,14 +452,12 @@ impl SuiClient {
     /// Returns the API version information as a string.
     ///
     /// The format of this string is `<major>.<minor>.<patch>`, e.g., `1.6.0`,
-    /// and it is retrieved from the OpenRPC specification via 
-    /// the discover service method.
+    /// and it is retrieved from the OpenRPC specification via the discover service method.
     pub fn api_version(&self) -> &str {
         &self.api.info.version
     }
 
-    /// Verifies if the API version matches the server version and returns an 
-    /// error if they do not match.
+    /// Verifies if the API version matches the server version and returns an error if they do not match.
     pub fn check_api_version(&self) -> SuiRpcResult<()> {
         let server_version = self.api_version();
         let client_version = env!("CARGO_PKG_VERSION");
