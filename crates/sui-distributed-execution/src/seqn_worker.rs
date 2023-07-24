@@ -1,9 +1,9 @@
+use prometheus::Registry;
 use std::cmp;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
-
-use prometheus::Registry;
 use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::{Config, NodeConfig};
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -282,10 +282,12 @@ impl SequenceWorkerState {
         (highest_synced_seq, highest_executed_seq)
     }
 
-    // Main loop
     pub async fn run(
         &mut self,
-        sw_sender: mpsc::Sender<SailfishMessage>,
+        config: NodeConfig,
+        download: Option<u64>,
+        exeucte: Option<u64>,
+        sw_senders: Vec<mpsc::Sender<SailfishMessage>>,
         mut ew_receiver: mpsc::Receiver<SailfishMessage>,
     ) {
         let genesis = Arc::new(self.config.genesis().expect("Could not load genesis"));
@@ -310,14 +312,16 @@ impl SequenceWorkerState {
         let mut now = Instant::now();
 
         // Epoch Start
-        sw_sender
-            .send(SailfishMessage::EpochStart {
-                conf: protocol_config.clone(),
-                data: epoch_start_config.epoch_data(),
-                ref_gas_price: reference_gas_price,
-            })
-            .await
-            .expect("Sending doesn't work");
+        for sw_sender in &sw_senders {
+            sw_sender
+                .send(SailfishMessage::EpochStart {
+                    conf: protocol_config.clone(),
+                    data: epoch_start_config.epoch_data(),
+                    ref_gas_price: reference_gas_price,
+                })
+                .await
+                .expect("Sending doesn't work");
+        }
 
         if let Some(watermark) = self.execute {
             for checkpoint_seq in genesis_seq..cmp::min(watermark, highest_synced_seq) {
@@ -359,10 +363,20 @@ impl SequenceWorkerState {
                         checkpoint_seq,
                     };
 
-                    sw_sender
-                        .send(SailfishMessage::ProposeExec(full_tx))
-                        .await
-                        .expect("sending failed");
+                    let receivers: HashSet<_> = full_tx
+                        .get_write_set()
+                        .into_iter()
+                        .map(|obj| obj[0] % sw_senders.len() as u8)
+                        .collect();
+
+                    for (i, sw_sender) in sw_senders.iter().enumerate() {
+                        if receivers.contains(&(i as u8)) {
+                            sw_sender
+                                .send(SailfishMessage::ProposeExec(full_tx.clone()))
+                                .await
+                                .expect("sending failed");
+                        }
+                    }
 
                     if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
                         // wait for epoch end message from execution worker
@@ -418,14 +432,16 @@ impl SequenceWorkerState {
                         num_tx = 0;
 
                         // send EpochStart message to start next epoch
-                        sw_sender
-                            .send(SailfishMessage::EpochStart {
-                                conf: protocol_config.clone(),
-                                data: epoch_start_config.epoch_data(),
-                                ref_gas_price: reference_gas_price,
-                            })
-                            .await
-                            .expect("Sending doesn't work");
+                        for sw_sender in &sw_senders {
+                            sw_sender
+                                .send(SailfishMessage::EpochStart {
+                                    conf: protocol_config.clone(),
+                                    data: epoch_start_config.epoch_data(),
+                                    ref_gas_price: reference_gas_price,
+                                })
+                                .await
+                                .expect("Sending doesn't work");
+                        }
                     }
                 }
             }

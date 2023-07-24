@@ -62,10 +62,6 @@ impl QueuesManager {
         let txid = *full_tx.tx.digest();
 		self.tx_store.insert(txid, full_tx.clone());
 
-        // Get the read set
-        // let read_set = full_tx.get
-        
-
         // Get RW set
         let rw_set = full_tx.get_read_write_set();
         
@@ -418,6 +414,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
         exec_watermark: u64,
         mut sw_receiver: mpsc::Receiver<SailfishMessage>,
         ew_sender: mpsc::Sender<SailfishMessage>,
+        _id: usize,
     ){
         // Initialize channels
         let (manager_sender, mut manager_receiver) = mpsc::channel(MANAGER_CHANNEL_SIZE);

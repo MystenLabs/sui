@@ -110,9 +110,9 @@ impl Transaction {
     }
 
     /// Returns the read set of a transction.
-    /// Specifically, this is the set of input objects to the transaction. It excludes
-    /// child objects that are determined at runtime, but includes all owned objects inputs
-    /// that must have their version numbers bumped.
+    /// Specifically, this is the set of input objects to the transaction.
+    /// It excludes child objects that are determined at runtime,
+    /// but includes all owned objects inputs that must have their version numbers bumped.
     pub fn get_read_set(&self) -> HashSet<ObjectID> {
         let tx_data = self.tx.data().transaction_data();
         let input_object_kinds = tx_data
@@ -130,9 +130,9 @@ impl Transaction {
         return read_set;
     }
 
-    /// TODO: This makes use of ground_truth_effects, which is illegal; it is not something that is
-    /// known a-priori before execution
-    /// Returns the write set of a transction
+    /// TODO: This makes use of ground_truth_effects, which is illegal;
+    /// it is not something that is known a-priori before execution.
+    /// Returns the write set of a transction.
     pub fn get_write_set(&self) -> HashSet<ObjectID> {
         let TransactionEffects::V1(tx_effects) = &self.ground_truth_effects;
         let total_writes = tx_effects.created.len()
@@ -163,7 +163,7 @@ impl Transaction {
         return write_set;
     }
 
-    /// Returns the read-write set of the transaction
+    /// Returns the read-write set of the transaction.
     pub fn get_read_write_set(&self) -> HashSet<ObjectID> {
         self.get_read_set()
             .union(&self.get_write_set())
