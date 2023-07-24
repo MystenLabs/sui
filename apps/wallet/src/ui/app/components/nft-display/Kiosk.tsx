@@ -19,35 +19,32 @@ const clipPath = '[clip-path:inset(0_0_7px_0_round_12px)] group-hover:[clip-path
 
 const timing = 'transition-all duration-300 ease-[cubic-bezier(0.68,-0.55,0.265,1.55)]';
 const cardStyles = [
-	`scale-100 group-hover:scale-95 object-cover origin-bottom z-20 group-hover:translate-y-0 translate-y-2 group-hover:shadow-md`,
-	`scale-[0.95] group-hover:-rotate-6 group-hover:-translate-x-5 group-hover:-translate-y-2 z-10 translate-y-0 group-hover:shadow-md`,
-	`scale-[0.90] group-hover:rotate-6 group-hover:translate-x-5 group-hover:-translate-y-2 z-0 -translate-y-2 group-hover:shadow-xl`,
+	`scale-100 group-hover:scale-95 object-cover origin-bottom z-30 group-hover:translate-y-0 translate-y-2 group-hover:shadow-md`,
+	`scale-[0.95] group-hover:-rotate-6 group-hover:-translate-x-5 group-hover:-translate-y-2 z-20 translate-y-0 group-hover:shadow-md`,
+	`scale-[0.90] group-hover:rotate-6 group-hover:translate-x-5 group-hover:-translate-y-2 z-10 -translate-y-2 group-hover:shadow-xl`,
 ];
 
 export function Kiosk({ object, orientation, ...nftImageProps }: KioskProps) {
 	const address = useActiveAddress();
 	const { data: kioskData, isLoading } = useGetKioskContents(address);
 
-	if (isLoading) return null;
 	const kioskId = getKioskIdFromOwnerCap(object);
 	const kiosk = kioskData?.kiosks.get(kioskId!);
 	const itemsWithDisplay = kiosk?.items.filter((item) => hasDisplayData(item)) ?? [];
-	const items = kiosk?.items?.sort((item) => (hasDisplayData(item) ? -1 : 1)) ?? [];
 
 	const showCardStackAnimation = itemsWithDisplay.length > 1 && orientation !== 'horizontal';
 	const imagesToDisplay = orientation !== 'horizontal' ? 3 : 1;
+	const items = kiosk?.items.slice(0, imagesToDisplay) ?? [];
+
+	if (isLoading) return null;
 
 	return (
-		<div
-			className={cl(
-				'relative hover:bg-transparent group rounded-xl transform-gpu overflow-visible w-36 h-36',
-			)}
-		>
+		<div className="relative hover:bg-transparent group rounded-xl transform-gpu overflow-visible w-36 h-36">
 			<div className="absolute z-0">
 				{itemsWithDisplay.length === 0 ? (
 					<NftImage animateHover src={null} name="Kiosk" {...nftImageProps} />
-				) : items?.length ? (
-					items.slice(0, imagesToDisplay).map((item, idx) => {
+				) : (
+					items.map((item, idx) => {
 						const display = getObjectDisplay(item)?.data;
 						return (
 							<div
@@ -69,7 +66,7 @@ export function Kiosk({ object, orientation, ...nftImageProps }: KioskProps) {
 							</div>
 						);
 					})
-				) : null}
+				)}
 			</div>
 			{orientation !== 'horizontal' && (
 				<div

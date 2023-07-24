@@ -45,7 +45,7 @@ function NftsPage() {
 		if (isIntersecting && hasNextPage && !isFetchingNextPage) {
 			fetchNextPage();
 		}
-	}, [ownedAssets.length, isIntersecting, fetchNextPage, hasNextPage, isFetchingNextPage]);
+	}, [isIntersecting, fetchNextPage, hasNextPage, isFetchingNextPage]);
 
 	useEffect(() => {
 		(async () => {
@@ -219,13 +219,6 @@ function NftsPage() {
 								</div>
 							</Link>
 						))}
-						<div ref={observerElem}>
-							{isSpinnerVisible ? (
-								<div className="mt-1 flex w-full justify-center">
-									<LoadingSpinner />
-								</div>
-							) : null}
-						</div>
 					</div>
 				) : (
 					<div className="flex flex-1 items-center self-center text-caption font-semibold text-steel-darker">
@@ -233,6 +226,13 @@ function NftsPage() {
 					</div>
 				)}
 			</Loading>
+			<div className="mb-5" ref={observerElem}>
+				{isSpinnerVisible ? (
+					<div className="mt-1 flex w-full justify-center">
+						<LoadingSpinner />
+					</div>
+				) : null}
+			</div>
 		</div>
 	);
 }
