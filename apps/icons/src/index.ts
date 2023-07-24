@@ -57,6 +57,7 @@ export { default as Coins24 } from './Coins24';
 export { default as Copy12 } from './Copy12';
 export { default as Copy16 } from './Copy16';
 export { default as Copy18 } from './Copy18';
+export { default as Copy24 } from './Copy24';
 export { default as CopyArchiveDoNotUse16 } from './CopyArchiveDoNotUse16';
 export { default as CopyArchiveDoNotUse24 } from './CopyArchiveDoNotUse24';
 export { default as CopyNew24 } from './CopyNew24';

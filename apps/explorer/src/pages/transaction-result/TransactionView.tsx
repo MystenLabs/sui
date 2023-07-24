@@ -1,14 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	getExecutionStatusError,
-	getExecutionStatusType,
-	getTransactionDigest,
-	getTransactionKind,
-	getTransactionKindName,
-	type SuiTransactionBlockResponse,
-} from '@mysten/sui.js';
+import { type SuiTransactionBlockResponse } from '@mysten/sui.js';
 import clsx from 'clsx';
 
 import { Signatures } from './Signatures';
@@ -17,8 +10,6 @@ import { useBreakpoint } from '~/hooks/useBreakpoint';
 import { Events } from '~/pages/transaction-result/Events';
 import { TransactionData } from '~/pages/transaction-result/TransactionData';
 import { TransactionSummary } from '~/pages/transaction-result/transaction-summary';
-import { Banner } from '~/ui/Banner';
-import { PageHeader } from '~/ui/PageHeader';
 import { SplitPanes } from '~/ui/SplitPanes';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/ui/Tabs';
 
@@ -29,9 +20,7 @@ export function TransactionView({ transaction }: { transaction: SuiTransactionBl
 
 	const hasEvents = !!transaction.events?.length;
 
-	const txError = getExecutionStatusError(transaction);
-
-	const transactionKindName = getTransactionKindName(getTransactionKind(transaction)!);
+	const transactionKindName = transaction.transaction?.data.transaction?.kind;
 
 	const isProgrammableTransaction = transactionKindName === 'ProgrammableTransaction';
 
@@ -84,19 +73,6 @@ export function TransactionView({ transaction }: { transaction: SuiTransactionBl
 
 	return (
 		<div className={clsx(styles.txdetailsbg)}>
-			<div className="mb-10">
-				<PageHeader
-					type="Transaction"
-					title={getTransactionDigest(transaction)}
-					subtitle={!isProgrammableTransaction ? transactionKindName : undefined}
-					status={getExecutionStatusType(transaction)}
-				/>
-				{txError && (
-					<div className="mt-2">
-						<Banner variant="error">{txError}</Banner>
-					</div>
-				)}
-			</div>
 			<div className="h-screen md:h-full">
 				<SplitPanes
 					splitPanels={[leftPane, rightPane]}
