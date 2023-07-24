@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 45
     strategy:
       matrix:
-        os: [ubuntu-ghcloud, windows-ghcloud]
+        os: [windows-ghcloud]
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
@@ -54,18 +54,18 @@ jobs:
           ref: ${{ env.sui_tag }}
       
       - name: Install nexttest
-        if: ${{ matrix.os == 'windows-ghcloud' }}
+        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
         uses: taiki-e/install-action@nextest
 
       - name: Setup protoc
-        if: ${{ matrix.os == 'windows-ghcloud' }}
+        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
         uses: arduino/setup-protoc@v1
         # this avoids rate-limiting
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install postgres (Windows)
-        if: ${{ matrix.os == 'windows-ghcloud' }}
+        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
         shell: bash
         run: |
           choco install postgresql12 --force --params '/Password:root'
@@ -81,6 +81,10 @@ jobs:
         run: |
           cargo build --release
 
+      - name: Rename binaries for ubuntu
+        if: ${{ matrix.os == 'ubuntu-ghcloud' && env.sui_tag != 'main' }}
+        shell: bash
+        run: |
           mv target/release/sui target/release/sui-${{ matrix.os }}
           echo BIN_SUI="target/release/sui-${{ matrix.os }}" >> $GITHUB_OUTPUT
           mv target/release/sui-node target/release/sui-node-${{ matrix.os }}
@@ -93,6 +97,23 @@ jobs:
           echo BIN_SUI_TEST_VALIDATOR="target/release/sui-test-validator-${{ matrix.os }}" >> $GITHUB_OUTPUT
           mv target/release/sui-indexer target/release/sui-indexer-${{ matrix.os }}
           echo BIN_SUI_INDEXER="target/release/sui-indexer-${{ matrix.os }}" >> $GITHUB_OUTPUT
+
+      - name: Rename binaries for windows
+        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main' }}
+        shell: bash
+        run: |
+          mv cratest/sui crates/sui-${{ matrix.os }}
+          echo BIN_SUI="crates/sui-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          mv crates/sui-node crates/sui-node-${{ matrix.os }}
+          echo BIN_SUI_NODE="crates/sui-node-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          mv crates/sui-tool crates/sui-tool-${{ matrix.os }}
+          echo BIN_SUI_TOOL="crates/sui-tool-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          mv crates/sui-faucet crates/sui-faucet-${{ matrix.os }}
+          echo BIN_SUI_FAUCET="crates/sui-faucet-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          mv crates/sui-test-validator crates/sui-test-validator-${{ matrix.os }}
+          echo BIN_SUI_TEST_VALIDATOR="crates/sui-test-validator-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          mv crates/sui-indexer crates/sui-indexer-${{ matrix.os }}
+          echo BIN_SUI_INDEXER="crates/sui-indexer-${{ matrix.os }}" >> $GITHUB_OUTPUT
 
       - name: Upload release artifacts for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
