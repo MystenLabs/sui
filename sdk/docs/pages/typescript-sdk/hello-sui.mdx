@@ -1,0 +1,86 @@
+# Hello Sui
+
+import { Callout } from 'nextra/components';
+
+
+
+This basic example introduces you to the Sui TypeScript SDK. The Node.js example mints SUI on Testnet and then queries the address to get a sum for the owned SUI. You don't need to use an IDE to complete the example, but one like Microsoft Visual Studio Code helps centralize more advanced projects. 
+
+You need [Node.js](https://nodejs.org/en/download/current) and [pnpm](https://pnpm.io/installation) to follow this example, so install them on your system if you haven't already. 
+
+## Before you begin
+
+You need an address on a Sui development network (Devnet, Testnet, Localnet). If you don't already have an address, use the [Sui Client CLI](https://docs.sui.io/build/cli-client) or the [Sui Wallet browser extension](https://docs.mystenlabs.com/wallet) to create one. 
+
+## Clone Sui project and build SDK
+
+For the purpose of this topic, clone the [`sui` repo](https://github.com/MystenLabs/sui) in a directory that makes sense for you. If you already have `sui` cloned, make sure to get latest from the `main` branch. 
+
+```sh
+git clone https://github.com/MystenLabs/sui.git
+```
+
+If you plan to contribute to Sui, you should fork the sui repo and clone your fork to your system. For more information, see the [Contribute topic](https://docs.sui.io/contribute). 
+
+For this example, use a local build of the Sui TypeScript SDK. To do so, change your working directory to `sui/sdk`.
+
+```sh
+cd sui/sdk
+```
+
+Build the SDK:
+
+```sh
+pnpm build
+```
+
+## Start a project
+
+Create a folder on the same level as the `sui` cloned project on your system (`hello-sui` in this example) and make it the working directory. 
+
+```sh
+mkdir hello-sui
+cd hello-sui
+```
+
+When you use pnpm to install the necessary packages, the package manager downloads the modules to your `node_modules` folder and adds the references to your `package.json` file. If the folder or file do not already exist, pnpm creates them for you. For this example, just install the package you built earlier in this topic using the following command: 
+
+```sh
+# Change the path, if necessary 
+pnpm add ../sui/sdk/typescript
+```
+
+Your `package.json` file now has a *dependencies* section with your local path as the value for `@mysten/sui.js`.
+
+```json
+"dependencies": {
+    "@mysten/sui.js": "link:../sui/sdk/typescript"
+}
+```
+
+## Get some SUI for your account
+
+Instead of a 'Hello World' output to your console, this example introduces some SUI to your wallet address. You must be on Devnet, Testnet, or a local network to use a faucet for minting SUI. 
+
+Create a new `index.js` file in the root of your project with the following code.  
+
+```js
+import { requestSuiFromFaucetV1 } from '@mysten/sui.js/faucet';
+
+const FAUCET_HOST = 'https://faucet.devnet.sui.io';
+
+await requestSuiFromFaucetV1({
+  host: FAUCET_HOST,
+  recipient: '0x98bd90a13940cb3f6269dd7b2dcc787240fe9edebfe33fa35d736b5a0fcf2181',
+})
+```
+
+<Callout type="note">
+WIP. Final code (not in doc) was not working before.
+</Callout>
+
+The code imports the `requestSuiFromFaucetV1` function from the SDK and calls it to mint SUI for the provided address. The code also imports `SuiClient` to create a new client on Devnet that it uses to query the address and output the amount of SUI the address owns after minting the new SUI. 
+
+Both Testnet and Devnet faucets have a rate limit to prevent spamming the network with faucet requests, so running the script too often eventually causes a `FaucetRateLimitError`. If you receive this error, you must wait at least an hour before trying again or use a local network.
+
+You can also use the [Sui Client CLI](https://docs.sui.io/build/cli-client) to perform client calls on a Sui network. 

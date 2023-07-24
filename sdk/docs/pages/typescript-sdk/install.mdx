@@ -1,0 +1,78 @@
+# Install Sui TypeScript SDK
+
+import { Callout } from 'nextra/components';
+
+<Callout type="note">
+I had created my own tabs because I didn't know about npm2yarn. Thanks for the TIL, Michael! Would be nice to have similar behavior for everything (Windows/Mac, for example). And each persisted in local storage. I used `group` param for that. Codeblocked it all so as not to junk up the works.
+</Callout>
+
+```sh
+import { Tab, Tabs } from '../../components'
+```
+
+The Sui TypeScript SDK is available in the monorepo and NPM.
+
+## Install from NPM
+
+To use the Sui TypeScript SDK in your project, run the following command in your project root:
+
+```sh
+<Tabs items={["npm", "yarn", "pnpm"]} group="pkg-mgr">
+    <Tab>
+```js
+npm install --save @mysten/sui.js
+```
+    </Tab>
+    <Tab>
+```js
+yarn add @mysten/sui.js
+```
+    </Tab>
+    <Tab>
+```js
+pnpm i @mysten/sui.js
+```
+    </Tab>
+</Tabs>
+```
+
+## Experimental tag for use with a local Sui network 
+
+Projects developing against one of the on-chain Sui networks (Devnet, Testnet, Mainnet) should use the base SDK published in the NPM registry (previous section) because the code aligns with the relevant JSON-RPC. If your developing against a [local network](https://docs.sui.io/testnet/build/sui-local-network) built from the `main` branch of the Sui monorepo, however, you should use the `experimental`-tagged SDK package as it contains the latest features (or a local build detailed in the section that follows).
+
+```sh
+<Tabs items={["npm", "yarn", "pnpm"]} group="pkg-mgr">
+    <Tab>
+```js
+npm install --save @mysten/sui.js@experimental
+```
+    </Tab>
+    <Tab>
+```js
+yarn add @mysten/sui.js@experimental
+```
+    </Tab>
+    <Tab>
+```js
+pnpm i @mysten/sui.js@experimental
+```
+    </Tab>
+</Tabs>
+```
+
+## Install from local build
+
+To build the SDK from the [Sui monorepo](https://github.com/MystenLabs/sui), you must use [pnpm](https://pnpm.io/). With pnpm installed, run the following command from the `sui` root directory:
+
+```bash
+# Install all dependencies
+pnpm install
+# Run the build for the TypeScript SDK
+pnpm sdk build
+```
+
+With the SDK built, you can import the library from your `sui` project. To do so, use a path to the `sui/sdk/typescript` directory that is relative to your project. For example, if you created a folder `my-sui-project` at the same level as `sui`, use the following to import the locally built Sui Typescript package:
+
+```bash
+pnpm add ../sui/sdk/typescript
+```

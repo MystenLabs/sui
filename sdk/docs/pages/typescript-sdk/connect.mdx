@@ -1,0 +1,57 @@
+---
+title: Connecting to Sui Network
+---
+
+<Title/>
+
+The Sui TypeScript SDK provides a SuiClient class that you can use to connect to a network's JSON-RPC server. Use the `SuiClient` for all JSON-RPC read-only operations. 
+
+To establish a connection to a network, import `SuiClient` from `@mysten/sui.js/client` and pass the relevant URL to the `endpoint` parameter. The following example establishes a connection to Testnet and requests SUI from that network's faucet.
+
+```typescript
+import { SuiClient } from '@mysten/sui.js/client';
+// assign Testnet RPC address
+const testnet = 'https://fullnode.testnet.sui.io:443/';
+// set endpoint value to Testnet RPC URL
+const SuiClient = new SuiClient({ endpoint: testnet });
+// get tokens from the Testnet faucet server
+await suiClient.getCoins({
+	owner: '<OWNER_ADDRESS>',
+});
+```
+
+| Connection object | Full node address | `faucet` value |
+| --- | --- | --- |
+| localConnection | `http://127.0.0.1:9000` | `http://127.0.0.1:9123/gas` |
+| devnetConnection | `https://fullnode.devnet.sui.io:443` | `https://faucet.devnet.sui.io/gas` |
+| testnetConnection | `https://fullnode.testnet.sui.io:443` | `https://faucet.testnet.sui.io/gas` |
+| mainnetConnection | `https://fullnode.mainnet.sui.io:443` | `null` |
+
+For local development, you can run `cargo run --bin sui-test-validator` to spin up a local network with a local validator, a Full node, and a faucet server. Refer to [the Local Network guide](https://docs.sui.io/build/sui-local-network) for more information.
+
+```typescript
+import { JsonRpcProvider, localnetConnection } from '@mysten/sui.js';
+// connect to local RPC server
+const provider = new JsonRpcProvider(localnetConnection);
+// get tokens from the local faucet server
+await provider.requestSuiFromFaucet(
+	'0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231',
+);
+```
+
+ Import `Connection` to construct your own custom connection object, with your own URLs to your Full node and faucet server.
+
+```typescript
+import { JsonRpcProvider, Connection } from '@mysten/sui.js';
+// Construct your connection:
+const connection = new Connection({
+	fullnode: 'https://myfullnode.devnet.sui.io',
+	faucet: 'https://myfaucet.devnet.sui.io/gas',
+});
+// connect to a custom RPC server
+const provider = new JsonRpcProvider(connection);
+// get tokens from a custom faucet server
+await provider.requestSuiFromFaucet(
+	'0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231',
+);
+```
