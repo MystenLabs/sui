@@ -8,12 +8,12 @@ use sui_types::{
 };
 
 use anyhow::Result;
+use dashmap::DashMap;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 
 use crate::storage::WritableObjectStore;
-use dashmap::DashMap;
 
 #[derive(Debug)]
 pub struct DashMemoryBackedStore {

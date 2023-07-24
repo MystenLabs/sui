@@ -363,19 +363,20 @@ impl SequenceWorkerState {
                         checkpoint_seq,
                     };
 
-                    let receivers: HashSet<_> = full_tx
-                        .get_write_set()
-                        .into_iter()
-                        .map(|obj| obj[0] % sw_senders.len() as u8)
-                        .collect();
-
-                    for (i, sw_sender) in sw_senders.iter().enumerate() {
-                        if receivers.contains(&(i as u8)) {
-                            sw_sender
-                                .send(SailfishMessage::ProposeExec(full_tx.clone()))
-                                .await
-                                .expect("sending failed");
-                        }
+                    let receivers: HashSet<_> = if full_tx.is_epoch_change() {
+                        (0..sw_senders.len() as u8).collect()
+                    } else {
+                        full_tx
+                            .get_write_set()
+                            .into_iter()
+                            .map(|obj| obj[0] % sw_senders.len() as u8)
+                            .collect()
+                    };
+                    for ew in receivers {
+                        sw_senders[ew as usize]
+                            .send(SailfishMessage::ProposeExec(full_tx.clone()))
+                            .await
+                            .expect("sending failed");
                     }
 
                     if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {

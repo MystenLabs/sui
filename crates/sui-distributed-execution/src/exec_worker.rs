@@ -1,12 +1,13 @@
 use core::panic;
 use std::collections::{HashSet, HashMap, VecDeque};
 use std::sync::Arc;
-
 use sui_adapter_latest::{adapter, execution_engine};
 use move_vm_runtime::move_vm::MoveVM;
 use sui_types::error::SuiError;
 use sui_types::execution_mode;
 use move_binary_format::CompiledModule;
+use dashmap::DashMap;
+// use sui_adapter::{adapter, execution_engine, execution_mode, adapter::MoveVM};
 use sui_config::genesis::Genesis;
 use sui_core::transaction_input_checker::get_gas_status_no_epoch_store_experimental;
 use sui_protocol_config::ProtocolConfig;
@@ -16,6 +17,7 @@ use sui_types::epoch_data::EpochData;
 use sui_types::message_envelope::Message;
 use sui_types::transaction::{InputObjectKind, InputObjects, TransactionDataAPI, VerifiedTransaction};
 use sui_types::metrics::LimitsMetrics;
+use sui_types::object::Object;
 use sui_types::temporary_store::{TemporaryStore, InnerTemporaryStore};
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use sui_types::digests::{ObjectDigest, TransactionDigest};
@@ -136,13 +138,15 @@ pub struct ExecutionWorkerState
         + 'static> 
 {
     pub memory_store: Arc<S>,
+    pub received_objs: DashMap<TransactionDigest, Vec<Option<Object>>>,
 }
 
 impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + ChildObjectResolver + GetModule<Error = SuiError, Item = CompiledModule> + Send + Sync + 'static> 
     ExecutionWorkerState<S> {
     pub fn new(new_store: S) -> Self {
         Self {
-            memory_store: Arc::new(new_store)
+            memory_store: Arc::new(new_store),
+            received_objs: DashMap::new(),
         }
     }
 
@@ -413,13 +417,17 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
         metrics: Arc<LimitsMetrics>,
         exec_watermark: u64,
         mut sw_receiver: mpsc::Receiver<SailfishMessage>,
-        ew_sender: mpsc::Sender<SailfishMessage>,
-        _id: usize,
-    ){
+        sw_sender: mpsc::Sender<SailfishMessage>,
+        mut ew_receiver: mpsc::Receiver<SailfishMessage>,
+        ew_senders: Vec<mpsc::Sender<SailfishMessage>>,
+        ew_id: u8,
+    ) {
         // Initialize channels
         let (manager_sender, mut manager_receiver) = mpsc::channel(MANAGER_CHANNEL_SIZE);
         let mut manager = QueuesManager::new(manager_sender);
         let mut tasks_queue: JoinSet<TransactionWithResults> = JoinSet::new();
+
+        let num_ews = ew_senders.len() as u8;
 
         /* Semaphore to keep track of un-executed transactions in the current epoch, used
         * to schedule epoch change:
@@ -470,24 +478,58 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                 },
                 // Must poll from manager_receiver before sw_receiver, to avoid deadlock
                 Some(full_tx) = manager_receiver.recv() => {
-                    let mem_store = self.memory_store.clone();
-                    let move_vm = move_vm.clone();
-                    let epoch_data = epoch_data.clone();
-                    let protocol_config = protocol_config.clone();
-                    let metrics = metrics.clone();
+                    let mut locked_objs = Vec::new();
+                    for id in full_tx.get_read_set() {
+                        if id[0] % num_ews != ew_id {
+                            continue;
+                        }
+                        let obj = self.memory_store.get_object(&id).unwrap();
+                        locked_objs.push(obj);
+                    }
+                    let relevant_ews: HashSet<_> = full_tx.get_write_set().into_iter().map(|obj_id| obj_id[0] % num_ews).collect();
+                    for ew in relevant_ews {
+                        let msg = SailfishMessage::LockedExec { tx: full_tx.clone(), objects: locked_objs.clone() };
+                        ew_senders[ew as usize].send(msg).await.unwrap();
+                    }
+                },
+                Some(msg) = ew_receiver.recv() => {
+                    if let SailfishMessage::LockedExec { tx, objects } = msg {
+                        // TODO: deal with possible duplicate LockedExec messages
+                        let txid = tx.tx.digest();
+                        let mut list = self.received_objs.entry(*txid).or_insert(Vec::new());
+                        list.extend_from_slice(&objects);
 
-                    // Push execution task to futures queue
-                    tasks_queue.spawn(Box::pin(async move {
-                        Self::async_exec(
-                            full_tx,
-                            mem_store,
-                            move_vm,
-                            reference_gas_price,
-                            epoch_data,
-                            protocol_config,
-                            metrics,
-                        ).await
-                    }));
+                        for obj in objects {
+                            if let Some(obj) = obj {
+                                self.memory_store.insert(obj.id(), (obj.compute_object_reference(), obj));
+                            }
+                        }
+
+                        eprintln!("so far received objs: {}/{}", list.len(), tx.get_read_set().len());
+                        if list.len() == tx.get_read_set().len() { // if received_all_objects() {
+                            let mem_store = self.memory_store.clone();
+                            let move_vm = move_vm.clone();
+                            let epoch_data = epoch_data.clone();
+                            let protocol_config = protocol_config.clone();
+                            let metrics = metrics.clone();
+
+                            // Push execution task to futures queue
+                            tasks_queue.spawn(Box::pin(async move {
+                                Self::async_exec(
+                                    tx,
+                                    mem_store,
+                                    move_vm,
+                                    reference_gas_price,
+                                    epoch_data,
+                                    protocol_config,
+                                    metrics,
+                                ).await
+                            }));
+
+                            // ugly hack to prevent additional execution
+                            list.push(None);
+                        }
+                    }
                 },
                 Some(msg) = sw_receiver.recv() => {
                     // New tx from sequencer; enqueue to manager
@@ -528,7 +570,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
 
                 println!("EW END OF EPOCH at checkpoint {}", full_tx.checkpoint_seq);
                 (move_vm, protocol_config, epoch_data, reference_gas_price) = 
-                    self.process_epoch_change(&ew_sender, &mut sw_receiver).await;
+                    self.process_epoch_change(&sw_sender, &mut sw_receiver).await;
 
                 epoch_change_tx = None;  // reset for next epoch
             }

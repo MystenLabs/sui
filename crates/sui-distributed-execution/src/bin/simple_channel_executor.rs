@@ -51,9 +51,17 @@ async fn main() {
     let mut sw_state = seqn_worker::SequenceWorkerState::new(&config).await;
 
     // Channels from SW to EWs
-    let mut sw_senders = Vec::with_capacity(NUM_EXECUTION_WORKERS);
+    let mut sw2ew_senders = Vec::with_capacity(NUM_EXECUTION_WORKERS);
     // Channel from EWs to SW
-    let (ew_sender, ew_receiver) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
+    let (ew2sw_sender, ew2sw_receiver) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
+    // Channels from EWs to other EWs
+    let mut ew2ew_senders = Vec::new();
+    let mut ew2ew_receivers = Vec::new();
+    for _ in 0..NUM_EXECUTION_WORKERS {
+        let (snd, rcv) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
+        ew2ew_senders.push(snd);
+        ew2ew_receivers.push(Some(rcv));
+    }
 
     // Run Execution Workers
     let mut ew_handlers = Vec::new();
@@ -63,14 +71,24 @@ async fn main() {
             let mut ew_state = exec_worker::ExecutionWorkerState::new(store);
             ew_state.init_store(&genesis);
             let metrics = sw_state.metrics.clone();
-            let ew_sender = ew_sender.clone();
 
-            let (sw_sender, sw_receiver) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
-            sw_senders.push(sw_sender);
+            let ew2sw_sender = ew2sw_sender.clone();
+            let ew2ew_receiver = ew2ew_receivers[i].take().unwrap();
+            let ew2ew_senders = ew2ew_senders.clone();
+            let (sender, receiver) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
+            sw2ew_senders.push(sender);
 
             ew_handlers.push(tokio::spawn(async move {
                 ew_state
-                    .run(metrics, watermark, sw_receiver, ew_sender, i)
+                    .run(
+                        metrics,
+                        watermark,
+                        receiver,
+                        ew2sw_sender,
+                        ew2ew_receiver,
+                        ew2ew_senders,
+                        i as u8,
+                    )
                     .await;
             }));
         }
@@ -83,8 +101,8 @@ async fn main() {
                 config.clone(),
                 args.download,
                 args.execute,
-                sw_senders,
-                ew_receiver,
+                sw2ew_senders,
+                ew2sw_receiver,
             )
             .await;
     });
