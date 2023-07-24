@@ -37,13 +37,12 @@ use crate::{with_tracing, SuiRpcModule};
 #[cfg(test)]
 use mockall::automock;
 
-fn parse_to_struct_tag(coin_type: &str) -> Result<StructTag, Error> {
-    parse_sui_struct_tag(coin_type).map_err(|e| {
-        Error::SuiRpcInputError(SuiRpcInputError::CannotParseSuiStructTag(format!("{e}")))
-    })
+fn parse_to_struct_tag(coin_type: &str) -> Result<StructTag, SuiRpcInputError> {
+    parse_sui_struct_tag(coin_type)
+        .map_err(|e| SuiRpcInputError::CannotParseSuiStructTag(format!("{e}")))
 }
 
-fn parse_to_type_tag(coin_type: Option<String>) -> Result<TypeTag, Error> {
+fn parse_to_type_tag(coin_type: Option<String>) -> Result<TypeTag, SuiRpcInputError> {
     Ok(TypeTag::Struct(Box::new(match coin_type {
         Some(c) => parse_to_struct_tag(&c)?,
         None => GAS::type_(),
@@ -93,14 +92,11 @@ impl CoinReadApiServer for CoinReadApi {
                 None => (coin_type_tag.to_string(), ObjectID::ZERO),
             };
 
-            let coins = self
-                .internal
+            self.internal
                 .get_coins_iterator(
                     owner, cursor, limit, true, // only care about one type of coin
                 )
-                .await?;
-
-            Ok(coins)
+                .await
         })
     }
 
@@ -120,16 +116,16 @@ impl CoinReadApiServer for CoinReadApi {
                         Some(obj) => {
                             let coin_type = obj.coin_type_maybe();
                             if coin_type.is_none() {
-                                Err(Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(
+                                Err(SuiRpcInputError::GenericInvalid(
                                     "cursor is not a coin".to_string(),
-                                )))
+                                ))
                             } else {
                                 Ok((coin_type.unwrap().to_string(), object_id))
                             }
                         }
-                        None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(
+                        None => Err(SuiRpcInputError::GenericInvalid(
                             "cursor not found".to_string(),
-                        ))),
+                        )),
                     }
                 }
                 None => {
@@ -471,23 +467,26 @@ mod tests {
     use expect_test::expect;
     use jsonrpsee::types::ErrorObjectOwned;
     use mockall::predicate;
+    use move_core_types::account_address::AccountAddress;
     use move_core_types::language_storage::StructTag;
     use sui_json_rpc_types::Coin;
     use sui_types::balance::Supply;
     use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
     use sui_types::coin::TreasuryCap;
     use sui_types::digests::{ObjectDigest, TransactionDigest};
+    use sui_types::effects::TransactionEffectsV1;
     use sui_types::gas_coin::GAS;
     use sui_types::id::UID;
     use sui_types::object::Object;
+    use sui_types::utils::create_fake_transaction;
     use sui_types::{parse_sui_struct_tag, TypeTag};
 
     fn get_test_owner() -> SuiAddress {
-        SuiAddress::random_for_testing_only()
+        AccountAddress::ONE.into()
     }
 
     fn get_test_package_id() -> ObjectID {
-        ObjectID::random()
+        ObjectID::from_hex_literal("0xf").unwrap()
     }
 
     fn get_test_coin_type(package_id: ObjectID) -> String {
@@ -537,7 +536,7 @@ mod tests {
         let input_coin_struct = parse_sui_struct_tag(&coin_name).expect("should not fail");
         let treasury_cap_struct = TreasuryCap::type_(input_coin_struct.clone());
         let treasury_cap = TreasuryCap {
-            id: UID::new(ObjectID::random()),
+            id: UID::new(get_test_package_id()),
             total_supply: Supply { value: 420 },
         };
         let treasury_cap_object =
@@ -963,7 +962,7 @@ mod tests {
         #[tokio::test]
         async fn test_object_not_found() {
             let owner = get_test_owner();
-            let object_id = ObjectID::random();
+            let object_id = get_test_package_id();
             let mut mock_state = MockState::new();
             mock_state.expect_get_object().returning(move |_| Ok(None));
 
@@ -1280,7 +1279,7 @@ mod tests {
             let input_coin_struct = parse_sui_struct_tag(&coin_name).expect("should not fail");
             let coin_metadata_struct = CoinMetadata::type_(input_coin_struct.clone());
             let coin_metadata = CoinMetadata {
-                id: UID::new(ObjectID::random()),
+                id: UID::new(get_test_package_id()),
                 decimals: 2,
                 name: "test_coin".to_string(),
                 symbol: "TEST".to_string(),
@@ -1313,13 +1312,46 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn test_object_not_found() {
+            let transaction_digest = TransactionDigest::from([0; 32]);
+            let verified_transaction =
+                VerifiedTransaction::new_unchecked(create_fake_transaction());
+            let transaction_effects: TransactionEffects =
+                TransactionEffects::V1(TransactionEffectsV1::default());
+
+            let mut mock_state = MockState::new();
+            mock_state
+                .expect_find_publish_txn_digest()
+                .return_once(move |_| Ok(transaction_digest));
+            mock_state
+                .expect_get_executed_transaction_and_effects()
+                .return_once(move |_| Ok((verified_transaction, transaction_effects)));
+
+            let internal = CoinReadInternalImpl {
+                state: Arc::new(mock_state),
+                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+            };
+            let coin_read_api = CoinReadApi {
+                internal: Box::new(internal),
+            };
+
+            let response = coin_read_api
+                .get_coin_metadata("0x2::sui::SUI".to_string())
+                .await;
+
+            assert!(response.is_ok());
+            let result = response.unwrap();
+            assert_eq!(result, None);
+        }
+
+        #[tokio::test]
         async fn test_find_package_object_not_sui_coin_metadata() {
             let package_id = get_test_package_id();
             let coin_name = get_test_coin_type(package_id);
             let input_coin_struct = parse_sui_struct_tag(&coin_name).expect("should not fail");
             let coin_metadata_struct = CoinMetadata::type_(input_coin_struct.clone());
             let treasury_cap = TreasuryCap {
-                id: UID::new(ObjectID::random()),
+                id: UID::new(get_test_package_id()),
                 total_supply: Supply { value: 420 },
             };
             let treasury_cap_object =
@@ -1397,12 +1429,49 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn test_object_not_found() {
+            let package_id = get_test_package_id();
+            let (coin_name, _, _, _, _) = get_test_treasury_cap_peripherals(package_id);
+            let transaction_digest = TransactionDigest::from([0; 32]);
+            let verified_transaction =
+                VerifiedTransaction::new_unchecked(create_fake_transaction());
+            let transaction_effects: TransactionEffects =
+                TransactionEffects::V1(TransactionEffectsV1::default());
+
+            let mut mock_state = MockState::new();
+            mock_state
+                .expect_find_publish_txn_digest()
+                .return_once(move |_| Ok(transaction_digest));
+            mock_state
+                .expect_get_executed_transaction_and_effects()
+                .return_once(move |_| Ok((verified_transaction, transaction_effects)));
+
+            let internal = CoinReadInternalImpl {
+                state: Arc::new(mock_state),
+                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+            };
+            let coin_read_api = CoinReadApi {
+                internal: Box::new(internal),
+            };
+
+            let response = coin_read_api.get_total_supply(coin_name.clone()).await;
+
+            assert!(response.is_err());
+            let error_result = response.unwrap_err();
+            let error_object: ErrorObjectOwned = error_result.into();
+            let expected = expect!["-32602"];
+            expected.assert_eq(&error_object.code().to_string());
+            let expected = expect!["Cannot find object [0x2::coin::TreasuryCap<0xf::test_coin::TEST_COIN>] from [0x000000000000000000000000000000000000000000000000000000000000000f] package event."];
+            expected.assert_eq(error_object.message());
+        }
+
+        #[tokio::test]
         async fn test_find_package_object_not_treasury_cap() {
             let package_id = get_test_package_id();
             let (coin_name, input_coin_struct, treasury_cap_struct, _, _) =
                 get_test_treasury_cap_peripherals(package_id);
             let coin_metadata = CoinMetadata {
-                id: UID::new(ObjectID::random()),
+                id: UID::new(get_test_package_id()),
                 decimals: 2,
                 name: "test_coin".to_string(),
                 symbol: "TEST".to_string(),

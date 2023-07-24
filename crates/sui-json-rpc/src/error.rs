@@ -34,7 +34,7 @@ pub enum Error {
     InvalidHeaderValue(#[from] InvalidHeaderValue),
 
     #[error(transparent)]
-    UserInputError(UserInputError),
+    UserInputError(#[from] UserInputError),
 
     #[error(transparent)]
     EncodingError(#[from] eyre::Report),
@@ -61,16 +61,11 @@ impl From<Error> for RpcError {
     }
 }
 
-impl From<UserInputError> for Error {
-    fn from(e: UserInputError) -> Self {
-        Self::UserInputError(e)
-    }
-}
-
 impl From<SuiError> for Error {
     fn from(e: SuiError) -> Self {
         match e {
             SuiError::UserInputError { error } => Self::UserInputError(error),
+            SuiError::SuiObjectResponseError { error } => Self::SuiObjectResponseError(error),
             other => Self::SuiError(other),
         }
     }
@@ -79,14 +74,21 @@ impl From<SuiError> for Error {
 impl Error {
     pub fn to_rpc_error(self) -> RpcError {
         match self {
-            Error::UserInputError(user_input_error) => {
-                RpcError::Call(CallError::InvalidParams(user_input_error.into()))
-            }
-            Error::SuiRpcInputError(sui_json_rpc_input_error) => {
-                RpcError::Call(CallError::InvalidParams(sui_json_rpc_input_error.into()))
-            }
+            Error::UserInputError(_) => RpcError::Call(CallError::InvalidParams(self.into())),
+            Error::SuiObjectResponseError(err) => match err {
+                SuiObjectResponseError::NotExists { .. }
+                | SuiObjectResponseError::DynamicFieldNotFound { .. }
+                | SuiObjectResponseError::Deleted { .. }
+                | SuiObjectResponseError::DisplayError { .. } => {
+                    RpcError::Call(CallError::InvalidParams(err.into()))
+                }
+                _ => RpcError::Call(CallError::Failed(err.into())),
+            },
+            Error::SuiRpcInputError(err) => err.into(),
             Error::SuiError(sui_error) => match sui_error {
-                SuiError::TransactionNotFound { .. } | SuiError::TransactionsNotFound { .. } => {
+                SuiError::TransactionNotFound { .. }
+                | SuiError::TransactionsNotFound { .. }
+                | SuiError::TransactionEventsNotFound { .. } => {
                     RpcError::Call(CallError::InvalidParams(sui_error.into()))
                 }
                 _ => RpcError::Call(CallError::Failed(sui_error.into())),
@@ -124,9 +126,27 @@ pub enum SuiRpcInputError {
     #[error("Unsupported protocol version requested. Min supported: {0}, max supported: {1}")]
     ProtocolVersionUnsupported(u64, u64),
 
-    #[error("Unable to serialize: {0}")]
-    CannotSerialize(#[from] bcs::Error),
-
     #[error("{0}")]
     CannotParseSuiStructTag(String),
+
+    #[error(transparent)]
+    Base64(#[from] eyre::Report),
+
+    #[error("Deserialization error: {0}")]
+    Bcs(#[from] bcs::Error),
+
+    #[error(transparent)]
+    FastCryptoError(#[from] FastCryptoError),
+
+    #[error(transparent)]
+    Anyhow(#[from] anyhow::Error),
+
+    #[error(transparent)]
+    UserInputError(#[from] UserInputError),
+}
+
+impl From<SuiRpcInputError> for RpcError {
+    fn from(e: SuiRpcInputError) -> Self {
+        RpcError::Call(CallError::InvalidParams(e.into()))
+    }
 }
