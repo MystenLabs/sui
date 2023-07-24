@@ -325,6 +325,19 @@ impl Proposer {
     }
 
     fn min_delay(&self) -> Duration {
+        // If the node was the leader on the round that they just proposed, then we add an extra small delay
+        // to make sure that we don't give them a boost for the next rounds.
+        if self.round % 2 == 0 && self.leader_schedule.leader(self.round).id() == self.authority_id
+        {
+            return self.min_header_delay * 2;
+        }
+
+        // We give an edge to the next leader
+        if (self.round + 1) % 2 == 0
+            && self.leader_schedule.leader(self.round + 1).id() == self.authority_id
+        {
+            return Duration::ZERO;
+        }
         self.min_header_delay
     }
 
