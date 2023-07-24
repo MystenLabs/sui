@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { useInitialPageView } from './hooks/useInitialPageView';
+import { CreateNewAccountPage } from './pages/accounts/CreateNewAccountPage';
 import AssetsPage from './pages/home/assets';
 import { QredoConnectInfoPage } from './pages/qredo-connect/QredoConnectInfoPage';
 import { SelectQredoAccountsPage } from './pages/qredo-connect/SelectQredoAccountsPage';
@@ -15,8 +16,13 @@ import { Staking } from './staking/home';
 import ForgotPasswordPage from '_app/wallet/forgot-password-page';
 import LockedPage from '_app/wallet/locked-page';
 import { useAppDispatch, useAppSelector } from '_hooks';
+import { AccountsPage } from '_pages/accounts/AccountsPage';
+import { AddAccountPage } from '_pages/accounts/AddAccountPage';
+import { ImportLedgerAccountsPage } from '_pages/accounts/ImportLedgerAccountsPage';
+import { ImportPassphrasePage } from '_pages/accounts/ImportPassphrasePage';
+import { ImportPrivateKeyPage } from '_pages/accounts/ImportPrivateKeyPage';
 import { ApprovalRequestPage } from '_pages/approval-request';
-import WelcomePageV2 from '_pages/enoki-onboarding/WelcomePage';
+import { WelcomePage as WelcomePageV2 } from '_pages/enoki-onboarding/WelcomePage';
 import HomePage, {
 	TokensPage,
 	TransactionBlocksPage,
@@ -86,6 +92,15 @@ const App = () => {
 			</Route>
 
 			<Route path="welcome" element={useNewOnboardingFlow ? <WelcomePageV2 /> : <WelcomePage />} />
+			{useNewOnboardingFlow && (
+				<Route path="/accounts" element={<AccountsPage />}>
+					<Route path="add-account" element={<AddAccountPage />} />
+					<Route path="create-new-account" element={<CreateNewAccountPage />} />
+					<Route path="import-ledger-accounts" element={<ImportLedgerAccountsPage />} />
+					<Route path="import-passphrase" element={<ImportPassphrasePage />} />
+					<Route path="import-private-key" element={<ImportPrivateKeyPage />} />
+				</Route>
+			)}
 			<Route path="/initialize" element={<InitializePage />}>
 				<Route path="select" element={<SelectPage />} />
 				<Route path="create" element={<CreatePage />} />

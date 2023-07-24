@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import {
 	LockUnlocked16 as UnlockedLockIcon,
 	Spinner16 as SpinnerIcon,
@@ -10,13 +11,16 @@ import { useCallback, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-import { LedgerAccountList, type SelectableLedgerAccount } from './LedgerAccountList';
-import { useDeriveLedgerAccounts } from './useDeriveLedgerAccounts';
-import { useImportLedgerAccountsMutation } from './useImportLedgerAccountsMutation';
+import {
+	type SelectableLedgerAccount,
+	LedgerAccountList,
+} from '../../components/ledger/LedgerAccountList';
+import { useDeriveLedgerAccounts } from '../../components/ledger/useDeriveLedgerAccounts';
+import { useImportLedgerAccountsMutation } from '../../components/ledger/useImportLedgerAccountsMutation';
+import { useNextMenuUrl } from '../../components/menu/hooks';
+import Overlay from '../../components/overlay';
 import { getSuiApplicationErrorMessage } from '../../helpers/errorMessages';
 import { useAccounts } from '../../hooks/useAccounts';
-import { useNextMenuUrl } from '../menu/hooks';
-import Overlay from '../overlay';
 import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
 import { ampli } from '_src/shared/analytics/ampli';
 import { Button } from '_src/ui/app/shared/ButtonUI';
@@ -25,8 +29,11 @@ import { Text } from '_src/ui/app/shared/text';
 
 const numLedgerAccountsToDeriveByDefault = 10;
 
-export function ImportLedgerAccounts() {
-	const accountsUrl = useNextMenuUrl(true, `/accounts`);
+export function ImportLedgerAccountsPage() {
+	const accountMenuUrl = useNextMenuUrl(true, `/accounts`);
+	const shouldUseNewRedirectUrls = useFeatureIsOn('enoki-social-sign-in');
+	const closeRedirectUrl = shouldUseNewRedirectUrls ? '/accounts/add-account' : accountMenuUrl;
+	const successRedirectUrl = shouldUseNewRedirectUrls ? '/tokens' : accountMenuUrl;
 	const navigate = useNavigate();
 
 	const existingAccounts = useAccounts();
@@ -47,7 +54,7 @@ export function ImportLedgerAccounts() {
 		},
 		onError: (error) => {
 			toast.error(getSuiApplicationErrorMessage(error) || 'Something went wrong.');
-			navigate(accountsUrl, { replace: true });
+			navigate(closeRedirectUrl, { replace: true });
 		},
 	});
 
@@ -57,7 +64,7 @@ export function ImportLedgerAccounts() {
 				accountType: 'Ledger',
 				numberOfAccounts: importedAccounts.length,
 			});
-			navigate(accountsUrl);
+			navigate(successRedirectUrl);
 		},
 		onError: () => {
 			toast.error('There was an issue importing your Ledger accounts.');
@@ -127,7 +134,7 @@ export function ImportLedgerAccounts() {
 			showModal
 			title="Import Accounts"
 			closeOverlay={() => {
-				navigate(accountsUrl);
+				navigate(closeRedirectUrl);
 			}}
 		>
 			<div className="w-full flex flex-col gap-5">

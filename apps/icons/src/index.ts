@@ -82,6 +82,7 @@ export { default as Image16 } from './Image16';
 export { default as Image32 } from './Image32';
 export { default as Info12 } from './Info12';
 export { default as Info16 } from './Info16';
+export { default as LedgerLogo17 } from './LedgerLogo17';
 export { default as LockLocked16 } from './LockLocked16';
 export { default as LockUnlocked16 } from './LockUnlocked16';
 export { default as Logout24 } from './Logout24';

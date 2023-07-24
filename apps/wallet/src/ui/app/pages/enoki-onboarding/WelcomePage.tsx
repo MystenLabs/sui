@@ -11,12 +11,12 @@ import { useInitializedGuard } from '_hooks';
 import PageLayout from '_pages/layout';
 import { ampli } from '_src/shared/analytics/ampli';
 
-function WelcomePage() {
+export function WelcomePage() {
 	const checkingInitialized = useInitializedGuard(false);
 	return (
 		<PageLayout forceFullscreen>
 			<Loading loading={checkingInitialized}>
-				<div className="rounded-20 bg-sui-lightest shadow-wallet-content flex flex-col items-center w-popup-width h-popup-height p-10">
+				<div className="rounded-20 bg-sui-lightest shadow-wallet-content flex flex-col items-center p-10 h-full">
 					<div className="shrink-0">
 						<Logo />
 					</div>
@@ -92,7 +92,7 @@ function WelcomePage() {
 							</div>
 						</div>
 						<Button
-							to="/onboarding/add-account"
+							to="/accounts/add-account?sourceFlow=Onboarding"
 							size="tall"
 							variant="secondary"
 							text="More Options"
@@ -103,5 +103,3 @@ function WelcomePage() {
 		</PageLayout>
 	);
 }
-
-export default WelcomePage;
