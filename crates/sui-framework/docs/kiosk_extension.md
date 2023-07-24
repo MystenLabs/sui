@@ -3,6 +3,43 @@
 
 # Module `0x2::kiosk_extension`
 
+This module implements the Kiosk Extensions functionality. It allows
+exposing previously protected (only-owner) methods to third-party apps.
+
+A Kiosk Extension is a module that implements any functionality on top of
+the <code>Kiosk</code> without discarding nor blocking the base. Given that <code>Kiosk</code>
+itself is a trading primitive, most of the extensions are expected to be
+related to trading. However, there's no limit to what can be built using the
+<code><a href="kiosk_extension.md#0x2_kiosk_extension">kiosk_extension</a></code> module, as it gives certain benefits such as using <code>Kiosk</code>
+as the storage for any type of data / assets.
+
+Flow:
+- An extension can only be installed by the Kiosk Owner and requires an
+authorization via the <code>KioskOwnerCap</code>.
+- When installed, the extension is given a permission bitmap that allows it
+to perform certain protected actions (eg <code>place</code>, <code>lock</code>). However, it is
+possible to install an extension that does not have any permissions.
+- Kiosk Owner can <code>disable</code> the extension at any time, which prevents it
+from performing any protected actions. The storage is still available to the
+extension until it is completely removed.
+- A disabled extension can be <code>enable</code>d at any time giving the permissions
+back to the extension.
+- An extension permissions follow the all-or-nothing policy. Either all of
+the requested permissions are granted or none of them (can't install).
+
+Examples:
+- An Auction extension can utilize the storage to store Auction-related data
+while utilizing the same <code>Kiosk</code> object that the items are stored in.
+- A Marketplace extension that implements custom events and fees for the
+default trading functionality.
+
+Notes:
+- Trading functionality can utilize the <code>PurchaseCap</code> to build a custom
+logic around the purchase flow. However, it should be carefully managed to
+prevent asset locking.
+- <code><a href="kiosk_extension.md#0x2_kiosk_extension">kiosk_extension</a></code> is a friend module to <code><a href="kiosk.md#0x2_kiosk">kiosk</a></code> and has access to its
+internal functions (such as <code>place_internal</code> and <code>lock_internal</code> to
+implement custom authorization scheme for <code>place</code> and <code>lock</code> respectively).
 
 
 -  [Struct `Extension`](#0x2_kiosk_extension_Extension)
@@ -11,9 +48,9 @@
 -  [Function `add`](#0x2_kiosk_extension_add)
 -  [Function `disable`](#0x2_kiosk_extension_disable)
 -  [Function `enable`](#0x2_kiosk_extension_enable)
+-  [Function `remove`](#0x2_kiosk_extension_remove)
 -  [Function `storage`](#0x2_kiosk_extension_storage)
 -  [Function `storage_mut`](#0x2_kiosk_extension_storage_mut)
--  [Function `remove`](#0x2_kiosk_extension_remove)
 -  [Function `place`](#0x2_kiosk_extension_place)
 -  [Function `lock`](#0x2_kiosk_extension_lock)
 -  [Function `is_installed`](#0x2_kiosk_extension_is_installed)
@@ -278,6 +315,43 @@ owner can disable them via <code>disable</code> call.
 
 </details>
 
+<a name="0x2_kiosk_extension_remove"></a>
+
+## Function `remove`
+
+Remove an extension from the Kiosk. Can only be performed by the owner,
+the extension storage must be empty for the transaction to succeed.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_remove">remove</a>&lt;Ext: drop&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_remove">remove</a>&lt;Ext: drop&gt;(
+    self: &<b>mut</b> Kiosk, cap: &KioskOwnerCap
+) {
+    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">kiosk::has_access</a>(self, cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
+
+    <b>let</b> <a href="kiosk_extension.md#0x2_kiosk_extension_Extension">Extension</a> {
+        storage,
+        permissions: _,
+        is_enabled: _,
+    } = df::remove(<a href="kiosk.md#0x2_kiosk_uid_mut_as_owner">kiosk::uid_mut_as_owner</a>(self, cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {});
+
+    <a href="bag.md#0x2_bag_destroy_empty">bag::destroy_empty</a>(storage);
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_kiosk_extension_storage"></a>
 
 ## Function `storage`
@@ -286,7 +360,7 @@ Get immutable access to the extension storage. Can only be performed by
 the extension as long as the extension is installed.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_storage">storage</a>&lt;Ext: drop&gt;(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>): &<b>mut</b> <a href="bag.md#0x2_bag_Bag">bag::Bag</a>
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_storage">storage</a>&lt;Ext: drop&gt;(_ext: Ext, self: &<a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>): &<a href="bag.md#0x2_bag_Bag">bag::Bag</a>
 </code></pre>
 
 
@@ -296,10 +370,10 @@ the extension as long as the extension is installed.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_storage">storage</a>&lt;Ext: drop&gt;(
-    _ext: Ext, self: &<b>mut</b> Kiosk
-): &<b>mut</b> Bag {
+    _ext: Ext, self: &Kiosk
+): &Bag {
     <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
-    &<b>mut</b> <a href="kiosk_extension.md#0x2_kiosk_extension_extension_mut">extension_mut</a>&lt;Ext&gt;(self).storage
+    &<a href="kiosk_extension.md#0x2_kiosk_extension_extension">extension</a>&lt;Ext&gt;(self).storage
 }
 </code></pre>
 
@@ -346,43 +420,6 @@ aware of the risks.
 
 </details>
 
-<a name="0x2_kiosk_extension_remove"></a>
-
-## Function `remove`
-
-Remove an extension from the Kiosk. Can only be performed by the owner,
-the extension storage must be empty for the transaction to succeed.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_remove">remove</a>&lt;Ext: drop&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_remove">remove</a>&lt;Ext: drop&gt;(
-    self: &<b>mut</b> Kiosk, cap: &KioskOwnerCap
-) {
-    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">kiosk::has_access</a>(self, cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ENotOwner">ENotOwner</a>);
-    <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
-
-    <b>let</b> <a href="kiosk_extension.md#0x2_kiosk_extension_Extension">Extension</a> {
-        storage,
-        permissions: _,
-        is_enabled: _,
-    } = df::remove(<a href="kiosk.md#0x2_kiosk_uid_mut_as_owner">kiosk::uid_mut_as_owner</a>(self, cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {});
-
-    <a href="bag.md#0x2_bag_destroy_empty">bag::destroy_empty</a>(storage);
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0x2_kiosk_extension_place"></a>
 
 ## Function `place`
@@ -390,6 +427,9 @@ the extension storage must be empty for the transaction to succeed.
 Protected action: place an item into the Kiosk. Can be performed by an
 authorized extension. The extension must have the <code>place</code> permission
 and the type of the item must be in the list of allowed types.
+
+To prevent non-tradable items from being placed into <code>Kiosk</code> the method
+requires a <code>TransferPolicy</code> for the placed type.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_place">place</a>&lt;Ext: drop, T: store, key&gt;(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, item: T, _policy: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;)

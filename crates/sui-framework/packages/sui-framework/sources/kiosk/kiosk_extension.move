@@ -1,7 +1,43 @@
-// // Copyright (c) Mysten Labs, Inc.
-// // SPDX-License-Identifier: Apache-2.0
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 
+/// This module implements the Kiosk Extensions functionality. It allows
+/// exposing previously protected (only-owner) methods to third-party apps.
 ///
+/// A Kiosk Extension is a module that implements any functionality on top of
+/// the `Kiosk` without discarding nor blocking the base. Given that `Kiosk`
+/// itself is a trading primitive, most of the extensions are expected to be
+/// related to trading. However, there's no limit to what can be built using the
+/// `kiosk_extension` module, as it gives certain benefits such as using `Kiosk`
+/// as the storage for any type of data / assets.
+///
+/// Flow:
+/// - An extension can only be installed by the Kiosk Owner and requires an
+/// authorization via the `KioskOwnerCap`.
+/// - When installed, the extension is given a permission bitmap that allows it
+/// to perform certain protected actions (eg `place`, `lock`). However, it is
+/// possible to install an extension that does not have any permissions.
+/// - Kiosk Owner can `disable` the extension at any time, which prevents it
+/// from performing any protected actions. The storage is still available to the
+/// extension until it is completely removed.
+/// - A disabled extension can be `enable`d at any time giving the permissions
+/// back to the extension.
+/// - An extension permissions follow the all-or-nothing policy. Either all of
+/// the requested permissions are granted or none of them (can't install).
+///
+/// Examples:
+/// - An Auction extension can utilize the storage to store Auction-related data
+/// while utilizing the same `Kiosk` object that the items are stored in.
+/// - A Marketplace extension that implements custom events and fees for the
+/// default trading functionality.
+///
+/// Notes:
+/// - Trading functionality can utilize the `PurchaseCap` to build a custom
+/// logic around the purchase flow. However, it should be carefully managed to
+/// prevent asset locking.
+/// - `kiosk_extension` is a friend module to `kiosk` and has access to its
+/// internal functions (such as `place_internal` and `lock_internal` to
+/// implement custom authorization scheme for `place` and `lock` respectively).
 module sui::kiosk_extension {
     use sui::bag::{Self, Bag};
     use sui::dynamic_field as df;
@@ -104,13 +140,32 @@ module sui::kiosk_extension {
         extension_mut<Ext>(self).is_enabled = true;
     }
 
+    /// Remove an extension from the Kiosk. Can only be performed by the owner,
+    /// the extension storage must be empty for the transaction to succeed.
+    public fun remove<Ext: drop>(
+        self: &mut Kiosk, cap: &KioskOwnerCap
+    ) {
+        assert!(kiosk::has_access(self, cap), ENotOwner);
+        assert!(is_installed<Ext>(self), EExtensionNotInstalled);
+
+        let Extension {
+            storage,
+            permissions: _,
+            is_enabled: _,
+        } = df::remove(kiosk::uid_mut_as_owner(self, cap), ExtensionKey<Ext> {});
+
+        bag::destroy_empty(storage);
+    }
+
+    // === Storage ===
+
     /// Get immutable access to the extension storage. Can only be performed by
     /// the extension as long as the extension is installed.
     public fun storage<Ext: drop>(
-        _ext: Ext, self: &mut Kiosk
-    ): &mut Bag {
+        _ext: Ext, self: &Kiosk
+    ): &Bag {
         assert!(is_installed<Ext>(self), EExtensionNotInstalled);
-        &mut extension_mut<Ext>(self).storage
+        &extension<Ext>(self).storage
     }
 
     /// Get mutable access to the extension storage. Can only be performed by
@@ -132,28 +187,14 @@ module sui::kiosk_extension {
         &mut extension_mut<Ext>(self).storage
     }
 
-    /// Remove an extension from the Kiosk. Can only be performed by the owner,
-    /// the extension storage must be empty for the transaction to succeed.
-    public fun remove<Ext: drop>(
-        self: &mut Kiosk, cap: &KioskOwnerCap
-    ) {
-        assert!(kiosk::has_access(self, cap), ENotOwner);
-        assert!(is_installed<Ext>(self), EExtensionNotInstalled);
-
-        let Extension {
-            storage,
-            permissions: _,
-            is_enabled: _,
-        } = df::remove(kiosk::uid_mut_as_owner(self, cap), ExtensionKey<Ext> {});
-
-        bag::destroy_empty(storage);
-    }
-
     // === Protected Actions ===
 
     /// Protected action: place an item into the Kiosk. Can be performed by an
     /// authorized extension. The extension must have the `place` permission
     /// and the type of the item must be in the list of allowed types.
+    ///
+    /// To prevent non-tradable items from being placed into `Kiosk` the method
+    /// requires a `TransferPolicy` for the placed type.
     public fun place<Ext: drop, T: key + store>(
         _ext: Ext, self: &mut Kiosk, item: T, _policy: &TransferPolicy<T>
     ) {
