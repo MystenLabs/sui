@@ -1,0 +1,7 @@
+{
+	"index": "Typescript SDK",
+	"faucet": "Faucet",
+	"sui-client": "SuiClient",
+	"transaction-building": "Transaction Building",
+	"cryptography": "Cryptography"
+}

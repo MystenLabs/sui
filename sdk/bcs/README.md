@@ -1,10 +1,13 @@
 # BCS - Binary Canonical Serialization
 
-This small and lightweight library implements [Binary Canonical Serialization (BCS)](https://github.com/zefchain/bcs) in JavaScript, making BCS available in both Browser and NodeJS environments.
+This small and lightweight library implements
+[Binary Canonical Serialization (BCS)](https://github.com/zefchain/bcs) in JavaScript, making BCS
+available in both Browser and NodeJS environments.
 
 ## Install
 
-To install, add the [`@mysten/bcs`](https://www.npmjs.com/package/@mysten/bcs) package to your project:
+To install, add the [`@mysten/bcs`](https://www.npmjs.com/package/@mysten/bcs) package to your
+project:
 
 ```sh
 npm i @mysten/bcs
@@ -45,11 +48,15 @@ console.log(data);
 
 ## Description
 
-BCS defines the way the data is serialized, and the result contains no type information. To be able to serialize the data and later deserialize, a schema has to be created (based on the built-in primitives, such as `address` or `u64`). There's no tip in the serialized bytes on what they mean, so the receiving part needs to know how to treat it.
+BCS defines the way the data is serialized, and the result contains no type information. To be able
+to serialize the data and later deserialize, a schema has to be created (based on the built-in
+primitives, such as `address` or `u64`). There's no tip in the serialized bytes on what they mean,
+so the receiving part needs to know how to treat it.
 
 ## Configuration
 
-BCS constructor is configurable for the target. The following parameters are available for custom configuration:
+BCS constructor is configurable for the target. The following parameters are available for custom
+configuration:
 
 | parameter           | required | description                                                               |
 | ------------------- | -------- | ------------------------------------------------------------------------- |
@@ -89,7 +96,8 @@ let bytes = bcs.ser('User', { name: 'Adam', age: '30' }).toString('base64');
 console.log(bytes);
 ```
 
-For Sui Move there's already a pre-built configuration which can be used through the `getSuiMoveConfig()` call.
+For Sui Move there's already a pre-built configuration which can be used through the
+`getSuiMoveConfig()` call.
 
 ```ts
 // Example: Sui Move Config
@@ -107,7 +115,8 @@ const res = bcs.de(['vector', BCS.U8], ser);
 console.assert(res.toString() === val.toString());
 ```
 
-Similar configuration exists for Rust, the difference is the `Vec<T>` for vectors and `address` (being a special Move type) is not needed:
+Similar configuration exists for Rust, the difference is the `Vec<T>` for vectors and `address`
+(being a special Move type) is not needed:
 
 ```ts
 // Example: Rust Config
@@ -123,9 +132,11 @@ console.assert(res.toString() === val.toString());
 
 ## Built-in types
 
-By default, BCS will have a set of built-in type definitions and handy abstractions; all of them are supported in Move.
+By default, BCS will have a set of built-in type definitions and handy abstractions; all of them are
+supported in Move.
 
-Supported integer types are: u8, u16, u32, u64, u128 and u256. Constants `BCS.U8` to `BCS.U256` are provided by the library.
+Supported integer types are: u8, u16, u32, u64, u128 and u256. Constants `BCS.U8` to `BCS.U256` are
+provided by the library.
 
 | Type                        | Constant                      | Description                                            |
 | --------------------------- | ----------------------------- | ------------------------------------------------------ |
@@ -210,7 +221,8 @@ console.assert((str1 == str2) == (str3 == str4), 'Result is the same');
 
 ### Alias
 
-Alias is a way to create custom name for a registered type. It is helpful for fine-tuning a predefined schema without making changes deep in the tree.
+Alias is a way to create custom name for a registered type. It is helpful for fine-tuning a
+predefined schema without making changes deep in the tree.
 
 ```ts
 // Example: Alias
@@ -230,7 +242,8 @@ let _hex = bcs.ser('ObjectDigest', 'C0FFEE').toBytes();
 
 ### Struct
 
-Structs are the most common way of working with data; in BCS, a struct is simply a sequence of base types.
+Structs are the most common way of working with data; in BCS, a struct is simply a sequence of base
+types.
 
 ```ts
 // Example: Struct
@@ -262,7 +275,8 @@ let _bytes = bcs
 
 ## Using Generics
 
-To define a generic struct or an enum, pass the type parameters. It can either be done as a part of a string or as an Array. See below:
+To define a generic struct or an enum, pass the type parameters. It can either be done as a part of
+a string or as an Array. See below:
 
 ```ts
 // Example: Generics
@@ -307,7 +321,9 @@ bcs.ser(['VecMap', BCS.STRING, BCS.STRING], {
 
 ### Enum
 
-In BCS enums are encoded in a special way - first byte marks the order and then the value. Enum is an object, only one property of which is used; if an invariant is empty, `null` should be used to mark it (see `Option<T>` below).
+In BCS enums are encoded in a special way - first byte marks the order and then the value. Enum is
+an object, only one property of which is used; if an invariant is empty, `null` should be used to
+mark it (see `Option<T>` below).
 
 ```ts
 // Example: Enum
@@ -349,9 +365,11 @@ let _optionTxBatch = bcs.ser('Option<TransactionType>', {
 
 ### Inline (de)serialization
 
-Sometimes it is useful to get a value without registering a new struct. For that inline struct definition can be used.
+Sometimes it is useful to get a value without registering a new struct. For that inline struct
+definition can be used.
 
-> Nested struct definitions are not yet supported, only first level properties can be used (but they can reference any type, including other struct types).
+> Nested struct definitions are not yet supported, only first level properties can be used (but they
+> can reference any type, including other struct types).
 
 ```ts
 // Example: Inline Struct
@@ -382,7 +400,8 @@ Currently, main applications of this library are:
 2. Deserializing onchain data for performance and formatting reasons
 3. Deserializing events
 
-In this library, all of the primitive Move types are present as built-ins, however, there's a set of special types in Sui which can be simplified to a primitive.
+In this library, all of the primitive Move types are present as built-ins, however, there's a set of
+special types in Sui which can be simplified to a primitive.
 
 ```rust
 // Definition in Move which we want to read in JS
@@ -430,9 +449,7 @@ struct UID has store {
     id: ID
 }
 
-struct ID has store, copy, drop {
-bytes: address
-}
+struct ID has store, copy, drop { bytes: address }
 
 // { id: { bytes: '0x.....' } }
 

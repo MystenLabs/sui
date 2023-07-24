@@ -1100,6 +1100,27 @@ importers:
         specifier: ^5.1.6
         version: 5.1.6
 
+  sdk/docs:
+    dependencies:
+      '@types/node':
+        specifier: ^20.4.2
+        version: 20.4.2
+      next:
+        specifier: ^13.4.10
+        version: 13.4.10(react-dom@18.2.0)(react@18.2.0)
+      nextra:
+        specifier: ^2.10.0
+        version: 2.10.0(next@13.4.10)(react-dom@18.2.0)(react@18.2.0)
+      nextra-theme-docs:
+        specifier: ^2.10.0
+        version: 2.10.0(next@13.4.10)(nextra@2.10.0)(react-dom@18.2.0)(react@18.2.0)
+      react:
+        specifier: ^18.2.0
+        version: 18.2.0
+      react-dom:
+        specifier: ^18.2.0
+        version: 18.2.0(react@18.2.0)
+
   sdk/kiosk:
     dependencies:
       '@mysten/sui.js':
@@ -10649,7 +10670,7 @@ packages:
     engines: {node: ^6 || ^7 || ^8 || ^9 || ^10 || ^11 || ^12 || >=13.7}
     hasBin: true
     dependencies:
-      caniuse-lite: 1.0.30001478
+      caniuse-lite: 1.0.30001516
       electron-to-chromium: 1.4.332
       node-releases: 2.0.10
       update-browserslist-db: 1.0.10(browserslist@4.21.5)
