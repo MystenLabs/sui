@@ -78,7 +78,8 @@ impl Error {
             Error::SuiObjectResponseError(err) => match err {
                 SuiObjectResponseError::NotExists { .. }
                 | SuiObjectResponseError::DynamicFieldNotFound { .. }
-                | SuiObjectResponseError::Deleted { .. } => {
+                | SuiObjectResponseError::Deleted { .. }
+                | SuiObjectResponseError::DisplayError { .. } => {
                     RpcError::Call(CallError::InvalidParams(err.into()))
                 }
                 _ => RpcError::Call(CallError::Failed(err.into())),
