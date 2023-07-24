@@ -44,7 +44,7 @@ function BalanceChangeEntry({ change }: { change: BalanceChange }) {
 						</Text>
 						{unRecognizedToken && (
 							<Banner variant="warning" icon={null} border spacing="sm">
-								<div className="item-center max-w-[70px] overflow-hidden truncate whitespace-nowrap text-captionSmallExtra font-medium uppercase tracking-wider lg:max-w-full">
+								<div className="max-w-[70px] overflow-hidden truncate whitespace-nowrap text-captionSmallExtra font-medium uppercase leading-3 tracking-wider lg:max-w-full">
 									Unrecognized
 								</div>
 							</Banner>
