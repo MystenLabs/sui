@@ -11,7 +11,7 @@
 /// `kiosk_extension` module, as it gives certain benefits such as using `Kiosk`
 /// as the storage for any type of data / assets.
 ///
-/// Flow:
+/// ### Flow:
 /// - An extension can only be installed by the Kiosk Owner and requires an
 /// authorization via the `KioskOwnerCap`.
 /// - When installed, the extension is given a permission bitmap that allows it
@@ -25,13 +25,13 @@
 /// - An extension permissions follow the all-or-nothing policy. Either all of
 /// the requested permissions are granted or none of them (can't install).
 ///
-/// Examples:
+/// ### Examples:
 /// - An Auction extension can utilize the storage to store Auction-related data
 /// while utilizing the same `Kiosk` object that the items are stored in.
 /// - A Marketplace extension that implements custom events and fees for the
 /// default trading functionality.
 ///
-/// Notes:
+/// ### Notes:
 /// - Trading functionality can utilize the `PurchaseCap` to build a custom
 /// logic around the purchase flow. However, it should be carefully managed to
 /// prevent asset locking.
