@@ -672,6 +672,13 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
+    pub fn effects_signatures_exists<'a>(
+        &self,
+        digests: impl IntoIterator<Item = &'a TransactionDigest>,
+    ) -> Result<Vec<bool>, TypedStoreError> {
+        self.tables.effects_signatures.multi_contains_keys(digests)
+    }
+
     pub fn get_effects_signature(
         &self,
         tx_digest: &TransactionDigest,
