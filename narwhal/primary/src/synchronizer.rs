@@ -364,8 +364,11 @@ impl Synchronizer {
             async move {
                 let highest_round_number = inner_proposer.certificate_store.highest_round_number();
                 let mut certificates = vec![];
+                // The last or last 2 rounds are sufficient for recovery.
                 for i in 0..2 {
                     let round = highest_round_number - i;
+                    // Do not recover genesis certificates. They are initialized into certificate
+                    // aggregator already.
                     if round == 0 {
                         break;
                     }
@@ -378,9 +381,12 @@ impl Synchronizer {
                         .map(|c: &Certificate| inner_proposer.committee.stake_by_id(c.origin()))
                         .sum();
                     certificates.extend(round_certs.into_iter());
+                    // If a round has a quorum of certificates, enough have recovered because
+                    // a header can be proposed with these parents.
                     if stake >= inner_proposer.committee.quorum_threshold() {
                         break;
                     } else {
+                        // Only the last round can have less than a quorum of stake.
                         assert_eq!(i, 0);
                     }
                 }
