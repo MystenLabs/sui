@@ -34,18 +34,14 @@ use move_compiler::{
 use std::collections::BTreeMap;
 
 use super::{
-    CUSTOM_STATE_CHANGE_DIAG_CATEGORY, CUSTOM_STATE_CHANGE_DIAG_CODE, INVALID_LOC,
-    LINT_WARNING_PREFIX,
+    CUSTOM_STATE_CHANGE_DIAG_CATEGORY, CUSTOM_STATE_CHANGE_DIAG_CODE, FREEZE_FUN, INVALID_LOC,
+    LINT_WARNING_PREFIX, SHARE_FUN, SUI_PKG_NAME, TRANSFER_FUN, TRANSFER_MOD_NAME,
 };
 
-const TRANSFER_FUN: &str = "transfer";
-const SHARE_FUN: &str = "share_object";
-const FREEZE_FUN: &str = "freeze_object";
-
 const PRIVATE_OBJ_FUNCTIONS: &[(&str, &str, &str)] = &[
-    ("sui", "transfer", TRANSFER_FUN),
-    ("sui", "transfer", SHARE_FUN),
-    ("sui", "transfer", FREEZE_FUN),
+    (SUI_PKG_NAME, TRANSFER_MOD_NAME, TRANSFER_FUN),
+    (SUI_PKG_NAME, TRANSFER_MOD_NAME, SHARE_FUN),
+    (SUI_PKG_NAME, TRANSFER_MOD_NAME, FREEZE_FUN),
 ];
 
 const CUSTOM_STATE_CHANGE_DIAG: DiagnosticInfo = custom(

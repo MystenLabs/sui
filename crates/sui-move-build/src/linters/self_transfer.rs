@@ -27,12 +27,13 @@ use move_symbol_pool::Symbol;
 use std::collections::BTreeMap;
 
 use super::{
-    INVALID_LOC, LINT_WARNING_PREFIX, SELF_TRANSFER_DIAG_CATEGORY, SELF_TRANSFER_DIAG_CODE,
+    INVALID_LOC, LINT_WARNING_PREFIX, PUBLIC_TRANSFER_FUN, SELF_TRANSFER_DIAG_CATEGORY,
+    SELF_TRANSFER_DIAG_CODE, SUI_PKG_NAME, TRANSFER_FUN, TRANSFER_MOD_NAME,
 };
 
 const TRANSFER_FUNCTIONS: &[(&str, &str, &str)] = &[
-    ("sui", "transfer", "public_transfer"),
-    ("sui", "transfer", "transfer"),
+    (SUI_PKG_NAME, TRANSFER_MOD_NAME, PUBLIC_TRANSFER_FUN),
+    (SUI_PKG_NAME, TRANSFER_MOD_NAME, TRANSFER_FUN),
 ];
 
 const SELF_TRANSFER_DIAG: DiagnosticInfo = custom(
