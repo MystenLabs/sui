@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64, toB64 } from '@mysten/bcs';
-import { TransactionBlock } from '../builder/TransactionBlock.js';
+import type { TransactionBlock } from '../builder/TransactionBlock.js';
+import { isTransactionBlock } from '../builder/TransactionBlock.js';
 import { TransactionBlockDataBuilder } from '../builder/TransactionBlockData.js';
 import type { SerializedSignature } from '../cryptography/signature.js';
 import type { JsonRpcProvider } from '../providers/json-rpc-provider.js';
@@ -87,7 +88,7 @@ export abstract class SignerWithProvider implements Signer {
 	}
 
 	protected async prepareTransactionBlock(transactionBlock: Uint8Array | TransactionBlock) {
-		if (TransactionBlock.is(transactionBlock)) {
+		if (isTransactionBlock(transactionBlock)) {
 			// If the sender has not yet been set on the transaction, then set it.
 			// NOTE: This allows for signing transactions with mis-matched senders, which is important for sponsored transactions.
 			transactionBlock.setSenderIfNotSet(await this.getAddress());
@@ -153,7 +154,7 @@ export abstract class SignerWithProvider implements Signer {
 	 * @returns transaction digest
 	 */
 	async getTransactionBlockDigest(tx: Uint8Array | TransactionBlock): Promise<string> {
-		if (TransactionBlock.is(tx)) {
+		if (isTransactionBlock(tx)) {
 			tx.setSenderIfNotSet(await this.getAddress());
 			return tx.getDigest({ provider: this.provider });
 		} else if (tx instanceof Uint8Array) {
@@ -185,7 +186,7 @@ export abstract class SignerWithProvider implements Signer {
 		transactionBlock: TransactionBlock | string | Uint8Array;
 	}): Promise<DryRunTransactionBlockResponse> {
 		let dryRunTxBytes: Uint8Array;
-		if (TransactionBlock.is(input.transactionBlock)) {
+		if (isTransactionBlock(input.transactionBlock)) {
 			input.transactionBlock.setSenderIfNotSet(await this.getAddress());
 			dryRunTxBytes = await input.transactionBlock.build({
 				client: this.client,
