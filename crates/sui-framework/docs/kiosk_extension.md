@@ -225,12 +225,9 @@ Extension is not installed in the Kiosk.
 
 ## Function `add`
 
-Add an extension to the Kiosk. Can only be performed by the owner.
-
-Unlike the original implementation, this one uses the <code><b>public</b></code>
-visibility modifier to allow "owned kiosk" extension. Ideally we don't
-want this function to be called arbitrarily, and to prevent some
-malicious scenarios we now require the extension witness on install.
+Add an extension to the Kiosk. Can only be performed by the owner. The
+extension witness is required to allow extensions define their set of
+permissions in the custom <code>add</code> call.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_add">add</a>&lt;Ext: drop&gt;(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, permissions: u32, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -440,8 +437,7 @@ aware of the risks.
 ## Function `place`
 
 Protected action: place an item into the Kiosk. Can be performed by an
-authorized extension. The extension must have the <code>place</code> permission
-and the type of the item must be in the list of allowed types.
+authorized extension. The extension must have the <code>place</code> permission.
 
 To prevent non-tradable items from being placed into <code>Kiosk</code> the method
 requires a <code>TransferPolicy</code> for the placed type.
@@ -475,8 +471,7 @@ requires a <code>TransferPolicy</code> for the placed type.
 ## Function `lock`
 
 Protected action: lock an item in the Kiosk. Can be performed by an
-authorized extension. The extension must have the <code>lock</code> permission
-and the type of the item must be in the list of allowed types.
+authorized extension. The extension must have the <code>lock</code> permission.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_lock">lock</a>&lt;Ext: drop, T: store, key&gt;(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, item: T, _policy: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;)

@@ -156,7 +156,36 @@ module sui::kiosk_extensions_tests {
     /// The `Ext` witness to use for testing.
     struct Extension has drop {}
 
+    // === Default Behavior ===
 
+    #[test]
+    fun test_default_behavior() {
+        let ctx = &mut test::ctx();
+        let (kiosk, owner_cap) = test::get_kiosk(ctx);
+
+        ext::add(Extension {}, &mut kiosk, &owner_cap, 3, ctx);
+
+        assert!(ext::is_installed<Extension>(&kiosk), 0);
+        assert!(ext::is_enabled<Extension>(&kiosk), 0);
+        assert!(ext::can_place<Extension>(&kiosk), 0);
+        assert!(ext::can_lock<Extension>(&kiosk), 0);
+
+        ext::disable<Extension>(&mut kiosk, &owner_cap);
+
+        assert!(ext::is_installed<Extension>(&kiosk), 0);
+        assert!(!ext::is_enabled<Extension>(&kiosk), 0);
+        assert!(!ext::can_place<Extension>(&kiosk), 0);
+        assert!(!ext::can_lock<Extension>(&kiosk), 0);
+
+        ext::enable<Extension>(&mut kiosk, &owner_cap);
+
+        assert!(ext::is_installed<Extension>(&kiosk), 0);
+        assert!(ext::is_enabled<Extension>(&kiosk), 0);
+        assert!(ext::can_place<Extension>(&kiosk), 0);
+        assert!(ext::can_lock<Extension>(&kiosk), 0);
+
+        test::return_kiosk(kiosk, owner_cap, ctx);
+    }
 
     // === EExtensionNotAllowed ===
 

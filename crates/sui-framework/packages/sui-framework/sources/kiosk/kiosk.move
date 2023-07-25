@@ -577,11 +577,6 @@ module sui::kiosk {
         &mut self.profits
     }
 
-    /// Get the `ID` of the Kiosk this cap is for.
-    public fun kiosk_cap_for(cap: &KioskOwnerCap): ID {
-        cap.for
-    }
-
     // === Item borrowing ===
 
     /// Immutably borrow an item from the `Kiosk`. Any item can be `borrow`ed

@@ -17,7 +17,7 @@ module kiosk::unlock_example {
     };
     use sui::coin;
 
-    /// Trying to destroy the Unlocket object while not being its publisher.
+    /// Trying to destroy the Unlocker object while not being its publisher.
     const ENotPublisher: u64 = 0;
 
     /// An unlocker is a special type of object which can be used to unlock

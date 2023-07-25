@@ -148,7 +148,6 @@ See <code><a href="transfer_policy.md#0x2_transfer_policy">transfer_policy</a></
 -  [Function `item_count`](#0x2_kiosk_item_count)
 -  [Function `profits_amount`](#0x2_kiosk_profits_amount)
 -  [Function `profits_mut`](#0x2_kiosk_profits_mut)
--  [Function `kiosk_cap_for`](#0x2_kiosk_kiosk_cap_for)
 -  [Function `borrow`](#0x2_kiosk_borrow)
 -  [Function `borrow_mut`](#0x2_kiosk_borrow_mut)
 -  [Function `borrow_val`](#0x2_kiosk_borrow_val)
@@ -1699,31 +1698,6 @@ Get mutable access to <code>profits</code> - useful for extendability.
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_profits_mut">profits_mut</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>): &<b>mut</b> Balance&lt;SUI&gt; {
     <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     &<b>mut</b> self.profits
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_kiosk_kiosk_cap_for"></a>
-
-## Function `kiosk_cap_for`
-
-Get the <code>ID</code> of the Kiosk this cap is for.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_kiosk_cap_for">kiosk_cap_for</a>(cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>): <a href="object.md#0x2_object_ID">object::ID</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_kiosk_cap_for">kiosk_cap_for</a>(cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>): ID {
-    cap.for
 }
 </code></pre>
 

@@ -91,12 +91,9 @@ module sui::kiosk_extension {
 
     // === Management ===
 
-    /// Add an extension to the Kiosk. Can only be performed by the owner.
-    ///
-    /// Unlike the original implementation, this one uses the `public`
-    /// visibility modifier to allow "owned kiosk" extension. Ideally we don't
-    /// want this function to be called arbitrarily, and to prevent some
-    /// malicious scenarios we now require the extension witness on install.
+    /// Add an extension to the Kiosk. Can only be performed by the owner. The
+    /// extension witness is required to allow extensions define their set of
+    /// permissions in the custom `add` call.
     public fun add<Ext: drop>(
         _ext: Ext,
         self: &mut Kiosk,
@@ -190,8 +187,7 @@ module sui::kiosk_extension {
     // === Protected Actions ===
 
     /// Protected action: place an item into the Kiosk. Can be performed by an
-    /// authorized extension. The extension must have the `place` permission
-    /// and the type of the item must be in the list of allowed types.
+    /// authorized extension. The extension must have the `place` permission.
     ///
     /// To prevent non-tradable items from being placed into `Kiosk` the method
     /// requires a `TransferPolicy` for the placed type.
@@ -205,8 +201,7 @@ module sui::kiosk_extension {
     }
 
     /// Protected action: lock an item in the Kiosk. Can be performed by an
-    /// authorized extension. The extension must have the `lock` permission
-    /// and the type of the item must be in the list of allowed types.
+    /// authorized extension. The extension must have the `lock` permission.
     public fun lock<Ext: drop, T: key + store>(
         _ext: Ext, self: &mut Kiosk, item: T, _policy: &TransferPolicy<T>
     ) {
