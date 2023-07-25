@@ -343,7 +343,6 @@ pub struct TemporaryCheckpointStore {
     pub checkpoint: Checkpoint,
     pub transactions: Vec<Transaction>,
     pub events: Vec<Event>,
-    // pub object_changes: Vec<TransactionObjectChanges>,
     pub packages: Vec<Package>,
     pub input_objects: Vec<InputObject>,
     pub changed_objects: Vec<ChangedObject>,

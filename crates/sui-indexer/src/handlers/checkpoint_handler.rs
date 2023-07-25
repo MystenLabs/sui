@@ -33,6 +33,7 @@ use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use sui_types::SUI_SYSTEM_ADDRESS;
 
+use crate::errors::DataDownloadError;
 use crate::errors::IndexerError;
 use crate::metrics::IndexerMetrics;
 use crate::models::checkpoints::Checkpoint;
@@ -54,6 +55,7 @@ const CHECKPOINT_INDEX_RETRY_INTERVAL_IN_SECS: u64 = 10;
 const DB_COMMIT_RETRY_INTERVAL_IN_MILLIS: u64 = 100;
 const MULTI_GET_CHUNK_SIZE: usize = 50;
 const CHECKPOINT_QUEUE_LIMIT: usize = 24;
+const DOWNLOAD_QUEUE_SIZE: usize = 10000;
 const EPOCH_QUEUE_LIMIT: usize = 2;
 
 #[allow(clippy::type_complexity)]
@@ -105,7 +107,8 @@ where
 
     pub fn spawn(self) -> JoinHandle<()> {
         info!("Indexer checkpoint handler started...");
-        let (tx, rx) = tokio::sync::mpsc::channel(10000);
+        let (downloaded_checkpoint_data_sender, downloaded_checkpoint_data_receiver) =
+            tokio::sync::mpsc::channel(DOWNLOAD_QUEUE_SIZE);
         let self_clone = self.clone();
         // Start Checkpoint/Tx Downloader
         spawn_monitored_task!(async move {
@@ -115,7 +118,12 @@ where
                 .get_latest_tx_checkpoint_sequence_number()
                 .await
                 .expect("Failed to get latest tx checkpoint sequence number from DB");
-            Self::run_checkpoint_downloader(self_clone, last_seq_from_db + 1, tx.clone()).await;
+            Self::run_checkpoint_downloader(
+                self_clone,
+                last_seq_from_db + 1,
+                downloaded_checkpoint_data_sender,
+            )
+            .await;
         });
         // Start Checkpoint/Tx Indexing Processor
         let mut checkpoint_processor = CheckpointProcessor {
@@ -123,7 +131,7 @@ where
             metrics: self.metrics.clone(),
             epoch_sender: self.epoch_sender.clone(),
             checkpoint_sender: self.tx_checkpoint_sender.clone(),
-            rx,
+            downloaded_checkpoint_data_receiver,
         };
         spawn_monitored_task!(async move {
             let mut res = checkpoint_processor.run().await;
@@ -161,7 +169,8 @@ where
         });
 
         // Start Checkpoint Objects Downloader
-        let (tx, rx) = tokio::sync::mpsc::channel(10000);
+        let (downloaded_object_data_sender, downloaded_object_data_receiver) =
+            tokio::sync::mpsc::channel(DOWNLOAD_QUEUE_SIZE);
         let self_clone = self.clone();
         spawn_monitored_task!(async move {
             // -1 will be returned when checkpoints table is empty.
@@ -170,14 +179,19 @@ where
                 .get_latest_object_checkpoint_sequence_number()
                 .await
                 .expect("Failed to get latest object checkpoint sequence number from DB");
-            Self::run_checkpoint_downloader(self_clone, last_seq_from_db + 1, tx.clone()).await;
+            Self::run_checkpoint_downloader(
+                self_clone,
+                last_seq_from_db + 1,
+                downloaded_object_data_sender,
+            )
+            .await;
         });
 
         // Start Checkpoint Objects Indexing Processor
         let mut checkpoint_objects_processor = CheckpointObjectsProcessor {
             metrics: self.metrics.clone(),
             object_changes_sender: self.object_changes_sender.clone(),
-            rx,
+            downloaded_object_data_receiver,
         };
         spawn_monitored_task!(async move {
             let mut res = checkpoint_objects_processor.run().await;
@@ -250,7 +264,10 @@ where
             ))
             .await;
             checkpoint_download_index_res = checkpoint_download_handler
-                .start_download_checkpoint_data(start_seq, tx.clone())
+                .start_download_checkpoint_data(
+                    e.next_checkpoint_sequence_number as i64,
+                    tx.clone(),
+                )
                 .await;
         }
     }
@@ -260,7 +277,7 @@ where
         // FIXME: this does not need to be i64,
         starting_checkpoint_seq: i64,
         tx: Sender<CheckpointData>,
-    ) -> Result<(), IndexerError> {
+    ) -> Result<(), DataDownloadError> {
         info!("Indexer checkpoint download & index task resumed from {starting_checkpoint_seq}...");
         let mut next_cursor_sequence_number = starting_checkpoint_seq;
         // NOTE: we will download checkpoints in parallel, but we will commit them sequentially.
@@ -283,7 +300,12 @@ where
                             .expect("Send to checkpoint channel should not fail");
                         next_cursor_sequence_number += 1;
                     }
-                    Err(e) => return Err(e),
+                    Err(e) => {
+                        return Err(DataDownloadError {
+                            error: e,
+                            next_checkpoint_sequence_number: next_cursor_sequence_number as u64,
+                        })
+                    }
                 }
             }
         }
@@ -298,13 +320,11 @@ where
         loop {
             let mut checkpoint_receiver_guard = self.tx_checkpoint_receiver.lock().await;
 
-            let mut additional_checkpoints = checkpoint_commit_batch_size;
             let mut indexed_checkpoint_batch = vec![];
             loop {
                 if let Ok(ckp) = checkpoint_receiver_guard.try_recv() {
                     indexed_checkpoint_batch.push(ckp);
-                    additional_checkpoints -= 1;
-                    if additional_checkpoints == 0 {
+                    if indexed_checkpoint_batch.len() >= checkpoint_commit_batch_size as usize {
                         break;
                     }
                 } else if indexed_checkpoint_batch.is_empty() {
@@ -482,20 +502,18 @@ where
         loop {
             let mut checkpoint_receiver_guard = self.object_changes_receiver.lock().await;
 
-            let mut additional_checkpoints = checkpoint_commit_batch_size;
-            let mut indexed_checkpoint_batch = vec![];
+            let mut object_changes_batch = vec![];
             let mut seqs = vec![];
             loop {
-                if let Ok((seq, ckp)) = checkpoint_receiver_guard.try_recv() {
-                    indexed_checkpoint_batch.push(ckp);
+                if let Ok((seq, object_changes)) = checkpoint_receiver_guard.try_recv() {
+                    object_changes_batch.push(object_changes);
                     seqs.push(seq);
-                    additional_checkpoints -= 1;
-                    if additional_checkpoints == 0 {
+                    if object_changes_batch.len() >= checkpoint_commit_batch_size as usize {
                         break;
                     }
-                } else if indexed_checkpoint_batch.is_empty() {
-                    if let Some((seq, ckp)) = checkpoint_receiver_guard.recv().await {
-                        indexed_checkpoint_batch.push(ckp);
+                } else if object_changes_batch.is_empty() {
+                    if let Some((seq, object_changes)) = checkpoint_receiver_guard.recv().await {
+                        object_changes_batch.push(object_changes);
                         seqs.push(seq);
                         break;
                     }
@@ -507,7 +525,7 @@ where
 
             let mut object_change_batch = vec![];
 
-            if indexed_checkpoint_batch.is_empty() {
+            if object_changes_batch.is_empty() {
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 continue;
             }
@@ -523,7 +541,7 @@ where
                 );
                 continue;
             }
-            for object_changes in indexed_checkpoint_batch {
+            for object_changes in object_changes_batch {
                 object_change_batch.push(object_changes);
             }
 
@@ -572,7 +590,10 @@ where
                 .set(*last_checkpoint_seq as i64);
             info!(
                 elapsed,
-                "Object Checkpoint {}-{} committed", first_checkpoint_seq, last_checkpoint_seq,
+                "Object Checkpoint {}-{} committed with {} object changes",
+                first_checkpoint_seq,
+                last_checkpoint_seq,
+                object_changes.len(),
             );
         }
     }
@@ -737,7 +758,7 @@ where
     metrics: IndexerMetrics,
     epoch_sender: Arc<Mutex<Sender<TemporaryEpochStore>>>,
     checkpoint_sender: Arc<Mutex<Sender<TemporaryCheckpointStore>>>,
-    rx: Receiver<CheckpointData>,
+    downloaded_checkpoint_data_receiver: Receiver<CheckpointData>,
 }
 
 impl<S> CheckpointProcessor<S>
@@ -747,7 +768,7 @@ where
     async fn run(&mut self) -> Result<(), IndexerError> {
         loop {
             let checkpoint_data = self
-                .rx
+                .downloaded_checkpoint_data_receiver
                 .recv()
                 .await
                 .expect("Sender of Checkpoint Processor's rx should not be closed.");
@@ -1005,14 +1026,14 @@ struct CheckpointObjectsProcessor {
     metrics: IndexerMetrics,
     object_changes_sender:
         Arc<Mutex<Sender<(CheckpointSequenceNumber, Vec<TransactionObjectChanges>)>>>,
-    rx: Receiver<CheckpointData>,
+    downloaded_object_data_receiver: Receiver<CheckpointData>,
 }
 
 impl CheckpointObjectsProcessor {
     async fn run(&mut self) -> Result<(), IndexerError> {
         loop {
             let checkpoint_data = self
-                .rx
+                .downloaded_object_data_receiver
                 .recv()
                 .await
                 .expect("Sender of Checkpoint Processor's rx should not be closed.");

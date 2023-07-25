@@ -10,6 +10,22 @@ use sui_types::base_types::ObjectIDParseError;
 use sui_types::error::{SuiError, SuiObjectResponseError, UserInputError};
 
 #[derive(Debug, Error)]
+pub struct DataDownloadError {
+    pub error: IndexerError,
+    pub next_checkpoint_sequence_number: u64,
+}
+
+impl std::fmt::Display for DataDownloadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "next_checkpoint_seq: {}, error: {}",
+            self.next_checkpoint_sequence_number, self.error
+        )
+    }
+}
+
+#[derive(Debug, Error)]
 pub enum IndexerError {
     #[error("Indexer failed to convert timestamp to NaiveDateTime with error: `{0}`")]
     DateTimeParsingError(String),
