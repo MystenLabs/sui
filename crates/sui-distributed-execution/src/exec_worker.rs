@@ -138,6 +138,7 @@ pub struct ExecutionWorkerState
         + 'static> 
 {
     pub memory_store: Arc<S>,
+    pub ready_txs: DashMap<TransactionDigest, Transaction>,
     pub received_objs: DashMap<TransactionDigest, Vec<Option<Object>>>,
 }
 
@@ -146,6 +147,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
     pub fn new(new_store: S) -> Self {
         Self {
             memory_store: Arc::new(new_store),
+            ready_txs: DashMap::new(),
             received_objs: DashMap::new(),
         }
     }
@@ -248,7 +250,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
     fn check_effects_match(full_tx: &Transaction, effects: &TransactionEffects) -> bool {
         let ground_truth_effects = &full_tx.ground_truth_effects;
         if effects.digest() != ground_truth_effects.digest() {
-            println!("EW effects mismatch at checkpoint {}", full_tx.checkpoint_seq);
+            println!("EW effects mismatch at for tx {} (CP {})", full_tx.tx.digest(), full_tx.checkpoint_seq);
             let old_effects = ground_truth_effects.clone();
             println!("Past effects: {:?}", old_effects);
             println!("New effects: {:?}", effects);
@@ -458,6 +460,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                     assert!(epoch_txs_semaphore >= 0);
                     
                     let full_tx = &tx_with_results.full_tx;
+                    //println!("EW {} executed tx {} (CP {})", ew_id, full_tx.tx.digest(), full_tx.checkpoint_seq);
                     if full_tx.checkpoint_seq % 10_000 == 0 {
                         println!("EW executed {}", full_tx.checkpoint_seq);
                     }
@@ -478,35 +481,52 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                 },
                 // Must poll from manager_receiver before sw_receiver, to avoid deadlock
                 Some(full_tx) = manager_receiver.recv() => {
+                    let txid = *full_tx.tx.digest();
+                    self.ready_txs.insert(txid, full_tx.clone());
+
                     let mut locked_objs = Vec::new();
-                    for id in full_tx.get_read_set() {
-                        if id[0] % num_ews != ew_id {
+                    for obj_id in full_tx.get_read_set() {
+                        if obj_id[0] % num_ews != ew_id {
                             continue;
                         }
-                        let obj = self.memory_store.get_object(&id).unwrap();
+                        let obj = self.memory_store.get_object(&obj_id).unwrap();
                         locked_objs.push(obj);
                     }
-                    let relevant_ews: HashSet<_> = full_tx.get_write_set().into_iter().map(|obj_id| obj_id[0] % num_ews).collect();
+                    let relevant_ews: HashSet<_> = full_tx.get_read_write_set().into_iter().map(|obj_id| obj_id[0] % num_ews).collect();
                     for ew in relevant_ews {
                         let msg = SailfishMessage::LockedExec { tx: full_tx.clone(), objects: locked_objs.clone() };
-                        ew_senders[ew as usize].send(msg).await.unwrap();
+                        if ew_senders[ew as usize].is_closed() {
+                            eprintln!("EW {} could not send LockedExec; EW {} already stopped.", ew_id, ew);
+                        } else {
+                            ew_senders[ew as usize].send(msg).await.unwrap();
+                        }
                     }
                 },
                 Some(msg) = ew_receiver.recv() => {
-                    if let SailfishMessage::LockedExec { tx, objects } = msg {
+                    if let SailfishMessage::LockedExec { tx, mut objects } = msg {
                         // TODO: deal with possible duplicate LockedExec messages
                         let txid = tx.tx.digest();
                         let mut list = self.received_objs.entry(*txid).or_insert(Vec::new());
-                        list.extend_from_slice(&objects);
 
-                        for obj in objects {
-                            if let Some(obj) = obj {
-                                self.memory_store.insert(obj.id(), (obj.compute_object_reference(), obj));
-                            }
+                        if list.len() > tx.get_read_set().len() {
+                            continue;
                         }
 
-                        eprintln!("so far received objs: {}/{}", list.len(), tx.get_read_set().len());
-                        if list.len() == tx.get_read_set().len() { // if received_all_objects() {
+                        list.append(&mut objects);
+
+                        if list.len() == tx.get_read_set().len() && self.ready_txs.contains_key(&txid) {
+                            for obj in list.iter() {
+                                if let Some(obj) = obj {
+                                    //println!("EW {} received {:?} for tx {}", ew_id, obj.compute_object_reference(), txid);
+                                    self.memory_store.insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
+                                } else {
+                                    panic!("tx aborted, missing obj");
+                                }
+                            }
+
+                            // ugly hack to prevent additional executions of same tx
+                            list.push(None);
+
                             let mem_store = self.memory_store.clone();
                             let move_vm = move_vm.clone();
                             let epoch_data = epoch_data.clone();
@@ -525,9 +545,6 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                                     metrics,
                                 ).await
                             }));
-
-                            // ugly hack to prevent additional execution
-                            list.push(None);
                         }
                     }
                 },
@@ -542,6 +559,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                             epoch_txs_semaphore += 1;
                         }
                     } else {
+                        println!("EW {} received unexpected message from SW: {:?}", ew_id, msg);
                         panic!("unexpected message");
                     }
                 },

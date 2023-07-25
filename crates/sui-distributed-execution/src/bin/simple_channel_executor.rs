@@ -43,7 +43,7 @@ struct Args {
     execute: u64,
 }
 
-#[tokio::main(flavor = "multi_thread", worker_threads = 4)]
+#[tokio::main(flavor = "multi_thread", worker_threads = 12)]
 async fn main() {
     let args = Args::parse();
     let config = NodeConfig::load(&args.config_path).unwrap();

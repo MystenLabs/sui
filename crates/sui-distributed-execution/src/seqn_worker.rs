@@ -331,7 +331,7 @@ impl SequenceWorkerState {
                     .expect("Cannot get checkpoint")
                     .expect("Checkpoint is None");
 
-                if checkpoint_seq % 10000 == 0 {
+                if checkpoint_seq % 10_000 == 0 {
                     println!("SW sending checkpoint {}", checkpoint_seq);
                 }
 
@@ -367,7 +367,7 @@ impl SequenceWorkerState {
                         (0..sw_senders.len() as u8).collect()
                     } else {
                         full_tx
-                            .get_write_set()
+                            .get_read_write_set()
                             .into_iter()
                             .map(|obj| obj[0] % sw_senders.len() as u8)
                             .collect()
