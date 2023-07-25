@@ -1,0 +1,40 @@
+# Connecting to Sui Network
+
+The Sui TypeScript SDK provides a SuiClient class that you can use to connect to a network's
+JSON-RPC server. Use the `SuiClient` for all JSON-RPC operations.
+
+## Network locations
+
+The following table lists the locations for the Sui network and the default local network settings.
+
+| Network | Full node                             | faucet                              |
+| ------- | ------------------------------------- | ----------------------------------- |
+| local   | `http://127.0.0.1:9000`               | `http://127.0.0.1:9123/gas`         |
+| Devnet  | `https://fullnode.devnet.sui.io:443`  | `https://faucet.devnet.sui.io/gas`  |
+| Testnet | `https://fullnode.testnet.sui.io:443` | `https://faucet.testnet.sui.io/gas` |
+| Mainnet | `https://fullnode.mainnet.sui.io:443` | `null`                              |
+
+## Using SuiClient to connect to a Sui network
+
+To establish a connection to a network, import `SuiClient` from `@mysten/sui.js/client` and pass the
+relevant URL to the `url` parameter. The following example establishes a connection to Testnet and
+requests SUI from that network's faucet.
+
+```typescript
+import { SuiClient } from '@mysten/sui.js/client';
+// assign Testnet RPC address
+const suiNetwork = 'https://fullnode.testnet.sui.io:443/';
+// const suiNetwork = 'https://fullnode.devnet.sui.io:443'; // Devnet connect
+// const suiNetwork = 'https://fullnode.mainnet.sui.io:443'; // Mainnet connect
+// const suiNetwork = 'http://127.0.0.1:9000'; // Local network connect (default address)
+// set url value to Testnet RPC URL
+const suiClient = new SuiClient({ url: suiNetwork });
+// get tokens from the Testnet faucet server
+await suiClient.getCoins({
+	owner: '<OWNER_ADDRESS>',
+});
+```
+
+For local development, you can run `cargo run --bin sui-test-validator` to spin up a local network
+with a local validator, a Full node, and a faucet server. Refer to
+[the Local Network guide](https://docs.sui.io/build/sui-local-network) for more information.
