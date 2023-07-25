@@ -182,7 +182,6 @@ impl ReadApi {
 
         // Fetch effects when `show_events` is true because events relies on effects
         if opts.require_effects() {
-            //let state = self.state.clone();
             let transaction_kv_store = self.transaction_kv_store.clone();
             let digests_clone = digests.clone();
             let effects_list = transaction_kv_store
