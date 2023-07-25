@@ -97,7 +97,7 @@ jobs:
         shell: bash
         run: |
           mv ./crates/sui-tool ./crates/sui-tool-${{ matrix.os }}
-          cd crates
+          pwd
           ls -al
 
       - name: Upload release artifacts for ${{ matrix.os }} platform
