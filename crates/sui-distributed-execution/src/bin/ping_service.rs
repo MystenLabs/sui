@@ -5,7 +5,7 @@ use sui_distributed_execution::network_agents::*;
 use sui_distributed_execution::server::*;
 use sui_distributed_execution::types::*;
 
-const FILE_PATH:&str = "/Users/tonyzhang/Documents/UMich2023su/sui.nosync/crates/sui-distributed-execution/src/configs/simple_config.json";
+const FILE_PATH:&str = "crates/sui-distributed-execution/src/configs/simple_config.json";
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
