@@ -85,25 +85,31 @@ jobs:
         if: ${{ env.sui_tag != 'main' && matrix.os == 'ubuntu-ghcloud' }}
         shell: bash
         run: |
-          mv ./target/release/sui ./target/release/sui-${{ matrix.os }}
-          mv ./target/release/sui-node ./target/release/sui-node-${{ matrix.os }}
-          mv ./target/release/sui-tool ./target/release/sui-tool-${{ matrix.os }}
-          mv ./target/release/sui-faucet ./target/release/sui-faucet-${{ matrix.os }}
-          mv ./target/release/sui-test-validator ./target/release/sui-test-validator-${{ matrix.os }}
-          mv ./target/release/sui-indexer ./target/release/sui-indexer-${{ matrix.os }}
-          tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${{ matrix.os }}.tgz ./target/release/sui*-${{ matrix.os }}*
+          export arch=$(uname -m)
+          export os_type="ubuntu-${arch}"
+          echo "os_type=${os_type}" >> $GITHUB_ENV
+          mv ./target/release/sui ./target/release/sui-${os_type}
+          mv ./target/release/sui-node ./target/release/sui-node-${os_type}
+          mv ./target/release/sui-tool ./target/release/sui-tool-${os_type}
+          mv ./target/release/sui-faucet ./target/release/sui-faucet-${os_type}
+          mv ./target/release/sui-test-validator ./target/release/sui-test-validator-${os_type}
+          mv ./target/release/sui-indexer ./target/release/sui-indexer-${os_type}
+          tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui*-${os_type}*
 
       - name: Rename binaries for Windows
         if: ${{ env.sui_tag != 'main' && matrix.os == 'windows-ghcloud' }}
         shell: bash
         run: |
-          mv ./target/release/sui.exe ./target/release/sui-${{ matrix.os }}.exe
-          mv ./target/release/sui-node.exe ./target/release/sui-node-${{ matrix.os }}.exe
-          mv ./target/release/sui-tool.exe ./target/release/sui-tool-${{ matrix.os }}.exe
-          mv ./target/release/sui-faucet.exe ./target/release/sui-faucet-${{ matrix.os }}.exe
-          mv ./target/release/sui-test-validator.exe ./target/release/sui-test-validator-${{ matrix.os }}.exe
-          mv ./target/release/sui-indexer.exe ./target/release/sui-indexer-${{ matrix.os }}.exe
-          tar -cvzf ./target/release/sui-v${{ env.sui_tag }}-${{ matrix.os }}.tgz ./target/release/sui*-${{ matrix.os }}*
+          export arch=$(uname -m)
+          export os_type="windows-${arch}"
+          echo "os_type=${os_type}" >> $GITHUB_ENV
+          mv ./target/release/sui.exe ./target/release/sui-${os_type}.exe
+          mv ./target/release/sui-node.exe ./target/release/sui-node-${os_type}.exe
+          mv ./target/release/sui-tool.exe ./target/release/sui-tool-${os_type}.exe
+          mv ./target/release/sui-faucet.exe ./target/release/sui-faucet-${os_type}.exe
+          mv ./target/release/sui-test-validator.exe ./target/release/sui-test-validator-${os_type}.exe
+          mv ./target/release/sui-indexer.exe ./target/release/sui-indexer-${os_type}.exe
+          tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui*-${os_type}*
 
       - name: Upload release artifacts for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
@@ -111,7 +117,7 @@ jobs:
         with:
           name: sui-binaries-${{ matrix.os }}
           path: |
-            ./target/release/sui-v${{ env.sui_tag }}-${{ matrix.os }}.tgz
+            ./target/release/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
 
       - name: Publish binaries for ${{ env.sui_tag }} release
         if: ${{ env.sui_tag != 'main' }}
@@ -119,7 +125,7 @@ jobs:
         with:
           tag_name: ${{ env.sui_tag }}
           files: |
-            ./target/release/sui-v${{ env.sui_tag }}-${{ matrix.os }}.tgz
+            ./target/release/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
         env:
           # Have to use a Personal Access Token (PAT), based on https://tinyurl.com/2by2ntdr
           GITHUB_TOKEN: ${{ secrets.GH_RELEASE_BUILDS_TOKEN }}
