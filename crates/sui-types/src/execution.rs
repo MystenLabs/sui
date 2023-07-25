@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
 use move_binary_format::file_format::AbilitySet;
 use move_core_types::{
     identifier::IdentStr,
@@ -11,6 +9,7 @@ use move_core_types::{
 };
 use move_vm_types::loaded_data::runtime_types::Type;
 use serde::Deserialize;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
@@ -18,8 +17,8 @@ use crate::{
     digests::ObjectDigest,
     error::{ExecutionError, ExecutionErrorKind, SuiError},
     execution_status::CommandArgumentError,
-    object::Owner,
-    storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, StorageView},
+    object::{Object, Owner},
+    storage::{BackingPackageStore, ChildObjectResolver, StorageView},
 };
 
 pub trait SuiResolver:
@@ -69,7 +68,10 @@ where
 }
 
 pub struct ExecutionResults {
-    pub object_changes: BTreeMap<ObjectID, ObjectChange>,
+    pub written_objects: LinkedHashMap<ObjectID, Object>,
+    pub loaded_mutable_objects: BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>,
+    pub created_object_ids: BTreeSet<ObjectID>,
+    pub deleted_object_ids: BTreeSet<ObjectID>,
     pub user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
 }
 
@@ -79,6 +81,7 @@ pub struct InputObjectMetadata {
     pub is_mutable_input: bool,
     pub owner: Owner,
     pub version: SequenceNumber,
+    pub digest: ObjectDigest,
 }
 
 #[derive(Debug, PartialEq, Eq)]

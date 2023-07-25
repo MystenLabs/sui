@@ -15,13 +15,14 @@ use std::{
 use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed};
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber},
+    digests::ObjectDigest,
     error::VMMemoryLimitExceededSubStatusCode,
     metrics::LimitsMetrics,
     object::{Data, MoveObject, Object, Owner},
     storage::ChildObjectResolver,
 };
 
-use super::get_all_uids;
+use super::{get_all_uids, LoadedChildObject};
 pub(super) struct ChildObject {
     pub(super) owner: ObjectID,
     pub(super) ty: Type,
@@ -32,8 +33,6 @@ pub(super) struct ChildObject {
 #[derive(Debug)]
 pub(crate) struct ChildObjectEffect {
     pub(super) owner: ObjectID,
-    // none if it was an input object
-    pub(super) loaded_version: Option<SequenceNumber>,
     pub(super) ty: Type,
     pub(super) effect: Op<Value>,
 }
@@ -164,12 +163,7 @@ impl<'a> Inner<'a> {
             .get(&child)
             .unwrap()
             .as_ref()
-            .map(|obj| {
-                obj.data
-                    .try_as_move()
-                    // unwrap safe because we only insert Move objects
-                    .unwrap()
-            }))
+            .map(|o| o.data.try_as_move().unwrap()))
     }
 
     fn fetch_object_impl(
@@ -409,14 +403,18 @@ impl<'a> ChildObjectStore<'a> {
     pub(super) fn take_effects(
         &mut self,
     ) -> (
-        BTreeMap<ObjectID, SequenceNumber>,
+        BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>,
         BTreeMap<ObjectID, ChildObjectEffect>,
     ) {
-        let loaded_versions: BTreeMap<ObjectID, SequenceNumber> = self
+        let loaded_versions: BTreeMap<_, _> = self
             .inner
             .cached_objects
             .iter()
-            .filter_map(|(id, obj_opt)| Some((*id, obj_opt.as_ref()?.version())))
+            .filter_map(|(id, obj_opt)| {
+                obj_opt
+                    .as_ref()
+                    .map(|obj| ((*id, (obj.version(), obj.digest()))))
+            })
             .collect();
         let child_object_effects = std::mem::take(&mut self.store)
             .into_iter()
@@ -427,14 +425,8 @@ impl<'a> ChildObjectStore<'a> {
                     move_type: _,
                     value,
                 } = child_object;
-                let loaded_version = loaded_versions.get(&id).copied();
                 let effect = value.into_effect()?;
-                let child_effect = ChildObjectEffect {
-                    owner,
-                    loaded_version,
-                    ty,
-                    effect,
-                };
+                let child_effect = ChildObjectEffect { owner, ty, effect };
                 Some((id, child_effect))
             })
             .collect();

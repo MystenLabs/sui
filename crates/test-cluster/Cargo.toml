@@ -33,6 +33,7 @@ sui-sdk.workspace = true
 sui-test-transaction-builder.workspace = true
 mysten-metrics.workspace = true
 shared-crypto.workspace = true
+linked-hash-map.workspace = true
 
 move-binary-format.workspace = true
 move-core-types.workspace = true

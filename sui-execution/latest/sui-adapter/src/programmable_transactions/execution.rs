@@ -108,11 +108,7 @@ mod checked {
         // Save loaded objects for debug. We dont want to lose the info
         state_view.save_loaded_child_objects(loaded_child_objects);
 
-        let ExecutionResults {
-            object_changes,
-            user_events,
-        } = finished?;
-        state_view.apply_object_changes(object_changes);
+        state_view.record_execution_results(finished?);
         for (module_id, tag, contents) in user_events {
             state_view.log_event(Event::new(
                 module_id.address(),

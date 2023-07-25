@@ -246,6 +246,9 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     txn_base_cost_as_multiplier: bool,
 
+    #[serde(skip_serializing_if = "is_false")]
+    effects_v2: bool,
+
     // If true, then the new algorithm for the leader election schedule will be used
     #[serde(skip_serializing_if = "is_false")]
     narwhal_new_leader_election_schedule: bool,
@@ -825,6 +828,10 @@ impl ProtocolConfig {
 
     pub fn txn_base_cost_as_multiplier(&self) -> bool {
         self.feature_flags.txn_base_cost_as_multiplier
+    }
+
+    pub fn effects_v2(&self) -> bool {
+        self.feature_flags.effects_v2
     }
 
     pub fn narwhal_new_leader_election_schedule(&self) -> bool {

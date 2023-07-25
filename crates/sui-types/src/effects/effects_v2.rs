@@ -365,7 +365,7 @@ impl TransactionEffectsV2 {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-struct ObjectChange {
+pub struct ObjectChange {
     // input_state and output_state are the core fields that's required by
     // the protocol as it tells how an object changes on-chain.
     /// State of the object in the store prior to this transaction.

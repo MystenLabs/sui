@@ -16,6 +16,7 @@ use crate::{
     },
     error::{ExecutionError, SuiError, SuiResult},
     event::Event,
+    execution::ExecutionResults,
     fp_bail,
     gas::{GasCharger, GasCostSummary},
     object::Owner,
@@ -599,6 +600,8 @@ impl<'backing> TemporaryStore<'backing> {
         self.loaded_child_objects.extend(loaded_child_objects);
     }
 
+    pub fn record_execution_results(&mut self, results: ExecutionResults) {}
+
     pub fn estimate_effects_size_upperbound(&self) -> usize {
         // In the worst case, the number of deps is equal to the number of input objects
         TransactionEffects::estimate_effects_size_upperbound(
@@ -1172,6 +1175,10 @@ impl<'backing> Storage for TemporaryStore<'backing> {
         loaded_child_objects: BTreeMap<ObjectID, LoadedChildObjectMetadata>,
     ) {
         TemporaryStore::save_loaded_child_objects(self, loaded_child_objects)
+    }
+
+    fn record_execution_results(&mut self, results: ExecutionResults) {
+        TemporaryStore::record_execution_results(self, results)
     }
 }
 
