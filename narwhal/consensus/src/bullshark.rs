@@ -413,7 +413,9 @@ impl Bullshark {
                     reputation_scores,
                     self.protocol_config.consensus_bad_nodes_stake_threshold(),
                 ));
-
+            self.metrics
+                .num_of_bad_nodes
+                .set(self.leader_schedule.num_of_bad_nodes() as i64);
             return true;
         }
         false
