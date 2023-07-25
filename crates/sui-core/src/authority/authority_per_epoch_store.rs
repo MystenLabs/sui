@@ -1079,6 +1079,34 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
+    pub fn are_consensus_messages_processed<'a>(
+        &self,
+        keys: impl Iterator<Item = &'a SequencedConsensusTransactionKey>,
+    ) -> SuiResult<Vec<bool>> {
+        Ok(self
+            .tables
+            .consensus_message_processed
+            .multi_contains_keys(keys)?)
+    }
+
+    pub async fn consensus_messages_processed_notify(
+        &self,
+        keys: Vec<SequencedConsensusTransactionKey>,
+    ) -> Result<(), SuiError> {
+        let unprocessed_keys = keys
+            .iter()
+            .zip(
+                self.are_consensus_messages_processed(keys.iter())?
+                    .into_iter(),
+            )
+            .filter(|(_, processed)| !processed)
+            .map(|(key, _)| *key)
+            .collect::<Vec<SequencedConsensusTransactionKey>>();
+        let registrations = self.consensus_notify_read.register_all(unprocessed_keys);
+        join_all(registrations).await;
+        Ok(())
+    }
+
     pub fn has_sent_end_of_publish(&self, authority: &AuthorityName) -> SuiResult<bool> {
         Ok(self
             .end_of_publish
