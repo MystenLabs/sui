@@ -15,6 +15,7 @@ import { type TransactionApprovalRequest } from '_payloads/transactions/Approval
 import { respondToTransactionRequest } from '_redux/slices/transaction-requests';
 import { ampli } from '_src/shared/analytics/ampli';
 import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
+import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
 import { PageMainLayoutTitle } from '_src/ui/app/shared/page-main-layout/PageMainLayoutTitle';
 import { TransactionSummary } from '_src/ui/app/shared/transaction-summary';
 
@@ -47,10 +48,12 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 		isError: isDryRunError,
 		isLoading: isDryRunLoading,
 	} = useTransactionDryRun(addressForTransaction, transaction);
+	const recognizedPackagesList = useRecognizedPackages();
 
 	const summary = useTransactionSummary({
 		transaction: data,
 		currentAddress: addressForTransaction,
+		recognizedPackagesList,
 	});
 	const { clientIdentifier, notificationModal } = useQredoTransaction(true);
 	if (!signer) {
