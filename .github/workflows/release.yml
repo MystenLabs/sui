@@ -42,7 +42,7 @@ jobs:
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Clean up tag name
+      - name: Clean up tag name ${{ env.TAG_NAME }}
         shell: bash
         run: | 
           echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
@@ -53,11 +53,11 @@ jobs:
         with:
           ref: ${{ env.sui_tag }}
       
-      - name: Install nexttest
+      - name: Install nexttest (Windows)
         if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
         uses: taiki-e/install-action@nextest
 
-      - name: Setup protoc
+      - name: Setup protoc (Windows)
         if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
         uses: arduino/setup-protoc@v1
         # this avoids rate-limiting
@@ -78,6 +78,7 @@ jobs:
       - name: cargo build (release) for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
         id: build
+        shell: bash
         run: |
           cargo build --release
 
@@ -97,14 +98,26 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: sui-binaries-${{ matrix.os }}
-          path: ./target/release/sui-*-${{ matrix.os }}
+          path: |
+            ./target/release/sui-${{ matrix.os }}
+            ./target/release/sui-node-${{ matrix.os }}
+            ./target/release/sui-tool-${{ matrix.os }}
+            ./target/release/sui-faucet-${{ matrix.os }}
+            ./target/release/sui-test-validator-${{ matrix.os }}
+            ./target/release/sui-indexer-${{ matrix.os }}
 
       - name: Publish binaries for ${{ env.sui_tag }} release for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ env.sui_tag }}
-          files: ./target/release/sui-*-${{ matrix.os }}
+          files: |
+            ./target/release/sui-${{ matrix.os }}
+            ./target/release/sui-node-${{ matrix.os }}
+            ./target/release/sui-tool-${{ matrix.os }}
+            ./target/release/sui-faucet-${{ matrix.os }}
+            ./target/release/sui-test-validator-${{ matrix.os }}
+            ./target/release/sui-indexer-${{ matrix.os }}
         env:
           # Have to use a Personal Access Token (PAT), based on https://tinyurl.com/2by2ntdr
           GITHUB_TOKEN: ${{ secrets.GH_RELEASE_BUILDS_TOKEN }}
