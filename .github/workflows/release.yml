@@ -79,9 +79,9 @@ jobs:
         if: ${{ env.sui_tag != 'main' }}
         id: build
         run: |
-          cd crates/sui-tool
-          cargo build --release 
-
+          mkdir ./crates
+          touch ./crates/sui-tool
+          
       - name: Rename binaries for ubuntu
         if: ${{ matrix.os == 'ubuntu-ghcloud' && env.sui_tag != 'main' }}
         shell: bash
@@ -104,14 +104,14 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: sui-binaries-${{ matrix.os }}
-          path: ./crates/sui-*-${{ matrix.os }}
+          path: ./crates/sui-tool-${{ matrix.os }}
 
       - name: Publish binaries for ${{ env.sui_tag }} release for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ env.sui_tag }}
-          files: ./crates/sui-*-${{ matrix.os }}
+          files: ./crates/sui-tool-${{ matrix.os }}
         env:
           # Have to use a Personal Access Token (PAT), based on https://tinyurl.com/2by2ntdr
           GITHUB_TOKEN: ${{ secrets.GH_RELEASE_BUILDS_TOKEN }}
