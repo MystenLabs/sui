@@ -77,12 +77,11 @@ jobs:
 
       - name: cargo build (release) for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
-        id: build
         shell: bash
         run: |
           cargo build --release
 
-      - name: Rename binaries for ubuntu
+      - name: Rename binaries for Ubuntu
         if: ${{ env.sui_tag != 'main' && matrix.os == 'ubuntu-ghcloud' }}
         shell: bash
         run: |
