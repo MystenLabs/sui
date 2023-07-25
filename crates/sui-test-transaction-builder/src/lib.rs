@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::ident_str;
-use shared_crypto::intent::Intent;
+use shared_crypto::intent::{Intent, IntentMessage};
 use std::path::PathBuf;
 use sui_genesis_builder::validator_info::GenesisValidatorMetadata;
 use sui_move_build::BuildConfig;
@@ -13,7 +13,10 @@ use sui_sdk::wallet_context::WalletContext;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::crypto::{get_key_pair, AccountKeyPair, Signature, Signer};
 use sui_types::digests::TransactionDigest;
+use sui_types::multisig::{MultiSig, MultiSigPublicKey};
+use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
 use sui_types::object::Owner;
+use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::{
     CallArg, ObjectArg, ProgrammableTransaction, Transaction, TransactionData,
@@ -277,6 +280,47 @@ impl TestTransactionBuilder {
 
     pub fn build_and_sign(self, signer: &dyn Signer<Signature>) -> Transaction {
         Transaction::from_data_and_signer(self.build(), Intent::sui_transaction(), vec![signer])
+    }
+
+    pub fn build_and_sign_multisig(
+        self,
+        multisig_pk: MultiSigPublicKey,
+        signers: &[&dyn Signer<Signature>],
+    ) -> Transaction {
+        let data = self.build();
+        let intent = Intent::sui_transaction();
+        let intent_msg = IntentMessage::new(intent.clone(), data.clone());
+
+        let mut signatures = Vec::with_capacity(signers.len());
+        for signer in signers {
+            signatures.push(Signature::new_secure(&intent_msg, *signer));
+        }
+
+        let multisig =
+            GenericSignature::MultiSig(MultiSig::combine(signatures, multisig_pk).unwrap());
+
+        Transaction::from_generic_sig_data(data, intent, vec![multisig])
+    }
+
+    pub fn build_and_sign_multisig_legacy(
+        self,
+        multisig_pk: MultiSigPublicKeyLegacy,
+        signers: &[&dyn Signer<Signature>],
+    ) -> Transaction {
+        let data = self.build();
+        let intent = Intent::sui_transaction();
+        let intent_msg = IntentMessage::new(intent.clone(), data.clone());
+
+        let mut signatures = Vec::with_capacity(signers.len());
+        for signer in signers {
+            signatures.push(Signature::new_secure(&intent_msg, *signer));
+        }
+
+        let multisig = GenericSignature::MultiSigLegacy(
+            MultiSigLegacy::combine(signatures, multisig_pk).unwrap(),
+        );
+
+        Transaction::from_generic_sig_data(data, intent, vec![multisig])
     }
 }
 
