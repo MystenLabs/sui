@@ -1449,6 +1449,7 @@ pub async fn build_server(
         config.name_service_registry_id,
         config.name_service_reverse_registry_id,
         metrics.clone(),
+        config.indexer_max_subscriptions,
     ))?;
     server.register_module(MoveUtils::new(state.clone()))?;
 
