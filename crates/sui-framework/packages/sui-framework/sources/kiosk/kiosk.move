@@ -39,7 +39,7 @@
 /// still available. The `delist` function returns the asset to the previous
 /// state.
 ///
-/// - `listed exclusively` - An item is listed via the `list_with_purchase_cap`
+/// - `listed_exclusively` - An item is listed via the `list_with_purchase_cap`
 /// function (and a `PurchaseCap` is created). While listed this way, an item
 /// can not be `delist`-ed unless a `PurchaseCap` is returned. All actions
 /// available at this item state require a `PurchaseCap`:
