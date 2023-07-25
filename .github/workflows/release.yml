@@ -97,13 +97,16 @@ jobs:
         shell: bash
         run: |
           mv ./crates/sui-tool ./crates/sui-tool-${{ matrix.os }}
+          cd crates
+          ls -al
 
       - name: Upload release artifacts for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
         uses: actions/upload-artifact@v3
         with:
           name: sui-binaries-${{ matrix.os }}
-          path: ./crates/sui-tool-${{ matrix.os }}
+          path: |
+            ./crates/sui-tool-${{ matrix.os }}
 
       - name: Publish binaries for ${{ env.sui_tag }} release for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
