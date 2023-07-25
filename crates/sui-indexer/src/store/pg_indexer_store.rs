@@ -1230,10 +1230,10 @@ impl PgIndexerStore {
 
     fn persist_checkpoint_transactions(
         &self,
-        checkpoint: &Checkpoint,
+        checkpoints: &[Checkpoint],
         transactions: &[Transaction],
-        total_transaction_chunk_committed_counter: IntCounter,
-    ) -> Result<usize, IndexerError> {
+        counter_committed_tx: IntCounter,
+    ) -> Result<(), IndexerError> {
         transactional_blocking!(&self.blocking_cp, |conn| {
             // Commit indexed transactions
             for transaction_chunk in transactions.chunks(PG_COMMIT_CHUNK_SIZE) {
@@ -1249,26 +1249,30 @@ impl PgIndexerStore {
                     .execute(conn)
                     .map_err(IndexerError::from)
                     .context("Failed writing transactions to PostgresDB")?;
-                total_transaction_chunk_committed_counter.inc();
+                counter_committed_tx.inc();
             }
 
             // Commit indexed checkpoint last, so that if the checkpoint is committed,
             // all related data have been committed as well.
-            diesel::insert_into(checkpoints::table)
-                .values(checkpoint)
-                .on_conflict_do_nothing()
-                .execute(conn)
-                .map_err(IndexerError::from)
-                .context("Failed writing checkpoint to PostgresDB")
+            for checkpoint_chunk in checkpoints.chunks(PG_COMMIT_CHUNK_SIZE) {
+                diesel::insert_into(checkpoints::table)
+                    .values(checkpoint_chunk)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .map_err(IndexerError::from)
+                    .context("Failed writing checkpoint to PostgresDB")?;
+                counter_committed_tx.inc();
+            }
+            Ok::<(), IndexerError>(())
         })
     }
 
     fn persist_object_changes(
         &self,
         tx_object_changes: &[TransactionObjectChanges],
-        total_object_change_chunk_committed_counter: IntCounter,
         object_mutation_latency: Histogram,
         object_deletion_latency: Histogram,
+        counter_committed_object: IntCounter,
     ) -> Result<(), IndexerError> {
         transactional_blocking!(&self.blocking_cp, |conn| {
             let mutated_objects: Vec<Object> = tx_object_changes
@@ -1287,9 +1291,9 @@ impl PgIndexerStore {
                 conn,
                 mutated_objects,
                 deleted_objects,
-                total_object_change_chunk_committed_counter,
                 object_mutation_latency,
                 object_deletion_latency,
+                counter_committed_object,
             )?;
             Ok::<(), IndexerError>(())
         })?;
@@ -2237,18 +2241,14 @@ impl IndexerStore for PgIndexerStore {
 
     async fn persist_checkpoint_transactions(
         &self,
-        checkpoint: &Checkpoint,
+        checkpoints: &[Checkpoint],
         transactions: &[Transaction],
-        total_transaction_chunk_committed_counter: IntCounter,
-    ) -> Result<usize, IndexerError> {
-        let checkpoint = checkpoint.to_owned();
+        counter_committed_tx: IntCounter,
+    ) -> Result<(), IndexerError> {
+        let checkpoints = checkpoints.to_owned();
         let transactions = transactions.to_owned();
         self.spawn_blocking(move |this| {
-            this.persist_checkpoint_transactions(
-                &checkpoint,
-                &transactions,
-                total_transaction_chunk_committed_counter,
-            )
+            this.persist_checkpoint_transactions(&checkpoints, &transactions, counter_committed_tx)
         })
         .await
     }
@@ -2256,17 +2256,17 @@ impl IndexerStore for PgIndexerStore {
     async fn persist_object_changes(
         &self,
         tx_object_changes: &[TransactionObjectChanges],
-        total_object_change_chunk_committed_counter: IntCounter,
         object_mutation_latency: Histogram,
         object_deletion_latency: Histogram,
+        counter_committed_object: IntCounter,
     ) -> Result<(), IndexerError> {
         let tx_object_changes = tx_object_changes.to_owned();
         self.spawn_blocking(move |this| {
             this.persist_object_changes(
                 &tx_object_changes,
-                total_object_change_chunk_committed_counter,
                 object_mutation_latency,
                 object_deletion_latency,
+                counter_committed_object,
             )
         })
         .await
@@ -2444,9 +2444,9 @@ fn persist_transaction_object_changes(
     conn: &mut PgConnection,
     mutated_objects: Vec<Object>,
     deleted_objects: Vec<Object>,
-    object_commit_counter: IntCounter,
     object_mutation_latency: Histogram,
     object_deletion_latency: Histogram,
+    committed_object_counter: IntCounter,
 ) -> Result<(), IndexerError> {
     // NOTE: to avoid error of `ON CONFLICT DO UPDATE command cannot affect row a second time`,
     // we have to limit update of one object once in a query.
@@ -2465,7 +2465,6 @@ fn persist_transaction_object_changes(
                 e
             ))
         })?;
-    object_commit_counter.inc();
     object_mutation_guard.stop_and_record();
 
     let object_deletion_guard = object_deletion_latency.start_timer();
@@ -2488,7 +2487,7 @@ fn persist_transaction_object_changes(
                     e
                 ))
             })?;
-        object_commit_counter.inc();
+        committed_object_counter.inc();
     }
     object_deletion_guard.stop_and_record();
 

@@ -10167,6 +10167,7 @@ dependencies = [
  "sui-sdk",
  "sui-test-transaction-builder",
  "sui-types",
+ "tap",
  "telemetry-subscribers",
  "test-cluster",
  "thiserror",
