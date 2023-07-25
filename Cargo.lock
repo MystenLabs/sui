@@ -9886,6 +9886,7 @@ dependencies = [
  "sui-open-rpc",
  "sui-sdk",
  "sui-types",
+ "tap",
  "telemetry-subscribers",
  "test-cluster",
  "thiserror",

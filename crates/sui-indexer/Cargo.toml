@@ -15,6 +15,7 @@ backoff.workspace = true
 bcs.workspace = true
 chrono.workspace = true
 clap.workspace = true
+tap.workspace = true
 diesel.workspace = true
 diesel-derive-enum.workspace = true
 futures.workspace = true

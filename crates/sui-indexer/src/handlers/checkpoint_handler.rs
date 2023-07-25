@@ -1,14 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
-use std::collections::BTreeMap;
-use std::sync::Arc;
-
 use fastcrypto::traits::ToFromBytes;
 use futures::future::join_all;
+use futures::stream::FuturesOrdered;
 use futures::FutureExt;
+use futures::StreamExt;
 use jsonrpsee::http_client::HttpClient;
 use move_core_types::ident_str;
+use std::collections::BTreeMap;
+use std::env;
+use std::sync::Arc;
+use tap::tap::TapFallible;
 use tokio::sync::{
     mpsc::{self, Receiver, Sender},
     Mutex,
@@ -31,6 +33,7 @@ use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use sui_types::SUI_SYSTEM_ADDRESS;
 
+use crate::errors::DataDownloadError;
 use crate::errors::IndexerError;
 use crate::metrics::IndexerMetrics;
 use crate::models::checkpoints::Checkpoint;
@@ -48,24 +51,27 @@ use crate::IndexerConfig;
 
 const MAX_PARALLEL_DOWNLOADS: usize = 24;
 const DOWNLOAD_RETRY_INTERVAL_IN_SECS: u64 = 10;
+const CHECKPOINT_INDEX_RETRY_INTERVAL_IN_SECS: u64 = 10;
 const DB_COMMIT_RETRY_INTERVAL_IN_MILLIS: u64 = 100;
 const MULTI_GET_CHUNK_SIZE: usize = 50;
 const CHECKPOINT_QUEUE_LIMIT: usize = 24;
+const DOWNLOAD_QUEUE_SIZE: usize = 10000;
 const EPOCH_QUEUE_LIMIT: usize = 2;
 
+#[allow(clippy::type_complexity)]
 #[derive(Clone)]
 pub struct CheckpointHandler<S> {
     state: S,
     http_client: HttpClient,
-    // MUSTFIX(gegaowp): remove subscription_handler from checkpoint_handler;
-    // b/c subscription_handler should be on indexer reader, while checkpoint_handler is on indexer writer.
-    // subscription_handler: Arc<SubscriptionHandler>,
     metrics: IndexerMetrics,
     config: IndexerConfig,
+    // FIXME: these do not need to be Arc<Mutex<>>
     tx_checkpoint_sender: Arc<Mutex<Sender<TemporaryCheckpointStore>>>,
     tx_checkpoint_receiver: Arc<Mutex<Receiver<TemporaryCheckpointStore>>>,
-    object_checkpoint_sender: Arc<Mutex<Sender<TemporaryCheckpointStore>>>,
-    object_checkpoint_receiver: Arc<Mutex<Receiver<TemporaryCheckpointStore>>>,
+    object_changes_sender:
+        Arc<Mutex<Sender<(CheckpointSequenceNumber, Vec<TransactionObjectChanges>)>>>,
+    object_changes_receiver:
+        Arc<Mutex<Receiver<(CheckpointSequenceNumber, Vec<TransactionObjectChanges>)>>>,
     epoch_sender: Arc<Mutex<Sender<TemporaryEpochStore>>>,
     epoch_receiver: Arc<Mutex<Receiver<TemporaryEpochStore>>>,
 }
@@ -82,19 +88,18 @@ where
         config: &IndexerConfig,
     ) -> Self {
         let (tx_checkpoint_sender, tx_checkpoint_receiver) = mpsc::channel(CHECKPOINT_QUEUE_LIMIT);
-        let (object_checkpoint_sender, object_checkpoint_receiver) =
+        let (object_changes_sender, object_changes_receiver) =
             mpsc::channel(CHECKPOINT_QUEUE_LIMIT);
         let (epoch_sender, epoch_receiver) = mpsc::channel(EPOCH_QUEUE_LIMIT);
         Self {
             state,
             http_client,
-            // subscription_handler,
             metrics,
             config: config.clone(),
             tx_checkpoint_sender: Arc::new(Mutex::new(tx_checkpoint_sender)),
             tx_checkpoint_receiver: Arc::new(Mutex::new(tx_checkpoint_receiver)),
-            object_checkpoint_sender: Arc::new(Mutex::new(object_checkpoint_sender)),
-            object_checkpoint_receiver: Arc::new(Mutex::new(object_checkpoint_receiver)),
+            object_changes_sender: Arc::new(Mutex::new(object_changes_sender)),
+            object_changes_receiver: Arc::new(Mutex::new(object_changes_receiver)),
             epoch_sender: Arc::new(Mutex::new(epoch_sender)),
             epoch_receiver: Arc::new(Mutex::new(epoch_receiver)),
         }
@@ -102,46 +107,47 @@ where
 
     pub fn spawn(self) -> JoinHandle<()> {
         info!("Indexer checkpoint handler started...");
-        let tx_download_handler = self.clone();
+        let (downloaded_checkpoint_data_sender, downloaded_checkpoint_data_receiver) =
+            tokio::sync::mpsc::channel(DOWNLOAD_QUEUE_SIZE);
+        let self_clone = self.clone();
+        // Start Checkpoint/Tx Downloader
         spawn_monitored_task!(async move {
-            let mut checkpoint_download_index_res = tx_download_handler
-                .start_download_and_index_tx_checkpoint()
-                .await;
-            while let Err(e) = &checkpoint_download_index_res {
+            // -1 will be returned when checkpoints table is empty.
+            let last_seq_from_db = self_clone
+                .state
+                .get_latest_tx_checkpoint_sequence_number()
+                .await
+                .expect("Failed to get latest tx checkpoint sequence number from DB");
+            Self::run_checkpoint_downloader(
+                self_clone,
+                last_seq_from_db + 1,
+                downloaded_checkpoint_data_sender,
+            )
+            .await;
+        });
+        // Start Checkpoint/Tx Indexing Processor
+        let mut checkpoint_processor = CheckpointProcessor {
+            state: self.state.clone(),
+            metrics: self.metrics.clone(),
+            epoch_sender: self.epoch_sender.clone(),
+            checkpoint_sender: self.tx_checkpoint_sender.clone(),
+            downloaded_checkpoint_data_receiver,
+        };
+        spawn_monitored_task!(async move {
+            let mut res = checkpoint_processor.run().await;
+            while let Err(e) = &res {
                 warn!(
-                    "Indexer checkpoint download & index failed with error: {:?}, retrying after {:?} secs...",
-                    e, DOWNLOAD_RETRY_INTERVAL_IN_SECS
+                    "Indexer checkpoint data processing failed with error: {:?}, retrying after {:?} secs...",
+                    e, CHECKPOINT_INDEX_RETRY_INTERVAL_IN_SECS
                 );
                 tokio::time::sleep(std::time::Duration::from_secs(
-                    DOWNLOAD_RETRY_INTERVAL_IN_SECS,
+                    CHECKPOINT_INDEX_RETRY_INTERVAL_IN_SECS,
                 ))
                 .await;
-                checkpoint_download_index_res = tx_download_handler
-                    .start_download_and_index_tx_checkpoint()
-                    .await;
+                res = checkpoint_processor.run().await;
             }
         });
-
-        let object_download_handler = self.clone();
-        spawn_monitored_task!(async move {
-            let mut object_download_index_res = object_download_handler
-                .start_download_and_index_object_checkpoint()
-                .await;
-            while let Err(e) = &object_download_index_res {
-                warn!(
-                    "Indexer object download & index failed with error: {:?}, retrying after {:?} secs...",
-                    e, DOWNLOAD_RETRY_INTERVAL_IN_SECS
-                );
-                tokio::time::sleep(std::time::Duration::from_secs(
-                    DOWNLOAD_RETRY_INTERVAL_IN_SECS,
-                ))
-                .await;
-                object_download_index_res = object_download_handler
-                    .start_download_and_index_object_checkpoint()
-                    .await;
-            }
-        });
-
+        // Start Checkpoint/Tx Commit Handler
         let tx_checkpoint_commit_handler = self.clone();
         spawn_monitored_task!(async move {
             let mut checkpoint_commit_res = tx_checkpoint_commit_handler
@@ -162,12 +168,53 @@ where
             }
         });
 
+        // Start Checkpoint Objects Downloader
+        let (downloaded_object_data_sender, downloaded_object_data_receiver) =
+            tokio::sync::mpsc::channel(DOWNLOAD_QUEUE_SIZE);
+        let self_clone = self.clone();
+        spawn_monitored_task!(async move {
+            // -1 will be returned when checkpoints table is empty.
+            let last_seq_from_db = self_clone
+                .state
+                .get_latest_object_checkpoint_sequence_number()
+                .await
+                .expect("Failed to get latest object checkpoint sequence number from DB");
+            Self::run_checkpoint_downloader(
+                self_clone,
+                last_seq_from_db + 1,
+                downloaded_object_data_sender,
+            )
+            .await;
+        });
+
+        // Start Checkpoint Objects Indexing Processor
+        let mut checkpoint_objects_processor = CheckpointObjectsProcessor {
+            metrics: self.metrics.clone(),
+            object_changes_sender: self.object_changes_sender.clone(),
+            downloaded_object_data_receiver,
+        };
+        spawn_monitored_task!(async move {
+            let mut res = checkpoint_objects_processor.run().await;
+            while let Err(e) = &res {
+                warn!(
+                    "Indexer checkpoint object data processing failed with error: {:?}, retrying after {:?} secs...",
+                    e, CHECKPOINT_INDEX_RETRY_INTERVAL_IN_SECS
+                );
+                tokio::time::sleep(std::time::Duration::from_secs(
+                    CHECKPOINT_INDEX_RETRY_INTERVAL_IN_SECS,
+                ))
+                .await;
+                res = checkpoint_objects_processor.run().await;
+            }
+        });
+
+        // Start Checkpoint Objects Commit Handler
         let object_checkpoint_commit_handler = self.clone();
         spawn_monitored_task!(async move {
-            let mut object_checkpoint_commit_res = object_checkpoint_commit_handler
+            let mut checkpoint_commit_res = object_checkpoint_commit_handler
                 .start_object_checkpoint_commit()
                 .await;
-            while let Err(e) = &object_checkpoint_commit_res {
+            while let Err(e) = &checkpoint_commit_res {
                 warn!(
                     "Indexer object checkpoint commit failed with error: {:?}, retrying after {:?} secs...",
                     e, DOWNLOAD_RETRY_INTERVAL_IN_SECS
@@ -176,12 +223,13 @@ where
                     DOWNLOAD_RETRY_INTERVAL_IN_SECS,
                 ))
                 .await;
-                object_checkpoint_commit_res = object_checkpoint_commit_handler
+                checkpoint_commit_res = object_checkpoint_commit_handler
                     .start_object_checkpoint_commit()
                     .await;
             }
         });
 
+        // Start Epoch Commit Handler
         spawn_monitored_task!(async move {
             let mut epoch_commit_res = self.start_epoch_commit().await;
             while let Err(e) = &epoch_commit_res {
@@ -198,253 +246,129 @@ where
         })
     }
 
-    async fn start_download_and_index_tx_checkpoint(&self) -> Result<(), IndexerError> {
-        info!("Indexer checkpoint download & index task started...");
-        // NOTE: important not to cast i64 to u64 here,
-        // because -1 will be returned when checkpoints table is empty.
-        let last_seq_from_db = self
-            .state
-            .get_latest_tx_checkpoint_sequence_number()
-            .await?;
-        if last_seq_from_db > 0 {
-            info!("Resuming tx handler from checkpoint {last_seq_from_db}");
-        }
-        let mut next_cursor_sequence_number = last_seq_from_db + 1;
-        // NOTE: we will download checkpoints in parallel, but we will commit them sequentially.
-        // We will start with MAX_PARALLEL_DOWNLOADS, and adjust if no more checkpoints are available.
-        let mut current_parallel_downloads = MAX_PARALLEL_DOWNLOADS;
-        loop {
-            // Step 1: download tx checkpoint data for checkpoints in the current batch
-            let download_futures = (next_cursor_sequence_number
-                ..next_cursor_sequence_number + current_parallel_downloads as i64)
-                .map(|seq_num| self.download_checkpoint_data(seq_num as u64));
-            let download_results = join_all(download_futures).await;
-            let mut downloaded_checkpoints = vec![];
-            // NOTE: Push sequentially and if one of the downloads failed,
-            // we will discard all following checkpoints and retry, to avoid messing up the DB commit order.
-            for download_result in download_results {
-                if let Ok(checkpoint) = download_result {
-                    downloaded_checkpoints.push(checkpoint);
-                } else {
-                    if let Err(IndexerError::UnexpectedFullnodeResponseError(fn_e)) =
-                        download_result
-                    {
-                        warn!(
-                            "Unexpected response from fullnode for checkpoints: {}",
-                            fn_e
-                        );
-                    } else if let Err(IndexerError::FullNodeReadingError(fn_e)) = download_result {
-                        warn!("Fullnode reading error for checkpoints {}: {}. It can be transient or due to rate limiting.", next_cursor_sequence_number, fn_e);
-                    } else {
-                        warn!("Error downloading checkpoints: {:?}", download_result);
-                    }
-                    break;
-                }
-            }
-            next_cursor_sequence_number += downloaded_checkpoints.len() as i64;
-            // NOTE: with this line, we can make sure that:
-            // - when indexer is way behind and catching up, we download MAX_PARALLEL_DOWNLOADS checkpoints in parallel;
-            // - when indexer is up to date, we download at least one checkpoint at a time.
-            current_parallel_downloads =
-                std::cmp::min(downloaded_checkpoints.len() + 1, MAX_PARALLEL_DOWNLOADS);
-            if downloaded_checkpoints.is_empty() {
-                warn!(
-                    "No checkpoints were downloaded for sequence number {}, retrying...",
-                    next_cursor_sequence_number
-                );
-                continue;
-            }
-
-            // Step 2: Transform tx checkpoint data to indexed_checkpoints
-            let index_timer = self.metrics.checkpoint_index_latency.start_timer();
-            let indexed_checkpoint_epoch_vec = join_all(downloaded_checkpoints.iter().map(
-                |downloaded_checkpoint| async {
-                    self.index_checkpoint_and_epoch(downloaded_checkpoint).await
-                },
+    pub async fn run_checkpoint_downloader(
+        checkpoint_download_handler: Self,
+        start_seq: i64,
+        tx: Sender<CheckpointData>,
+    ) {
+        let mut checkpoint_download_index_res = checkpoint_download_handler
+            .start_download_checkpoint_data(start_seq, tx.clone())
+            .await;
+        while let Err(e) = &checkpoint_download_index_res {
+            error!(
+                "Indexer checkpoint download & index failed with error: {:?}, retrying after {:?} secs...",
+                e, DOWNLOAD_RETRY_INTERVAL_IN_SECS
+            );
+            tokio::time::sleep(std::time::Duration::from_secs(
+                DOWNLOAD_RETRY_INTERVAL_IN_SECS,
             ))
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, IndexerError>>()
-            .map_err(|e| {
-                error!(
-                    "Failed to index checkpoints {:?} with error: {}",
-                    downloaded_checkpoints,
-                    e.to_string()
-                );
-                e
-            })?;
-            let (indexed_checkpoints, indexed_epochs): (Vec<_>, Vec<_>) =
-                indexed_checkpoint_epoch_vec.into_iter().unzip();
-            index_timer.stop_and_record();
-
-            // Step 3: send indexed_checkpoints to channel to be committed later.
-            let tx_checkpoint_sender_guard = self.tx_checkpoint_sender.lock().await;
-            // NOTE: when the channel is full, checkpoint_sender_guard will wait until the channel has space.
-            // Checkpoints are sent sequentially to stick to the order of checkpoint sequence numbers.
-            for indexed_checkpoint in indexed_checkpoints {
-                tx_checkpoint_sender_guard
-                .send(indexed_checkpoint)
-                .await
-                .map_err(|e| {
-                    error!("Failed to send indexed checkpoint to checkpoint commit handler with error: {}", e.to_string());
-                    IndexerError::MpscChannelError(e.to_string())
-                })?;
-            }
-            drop(tx_checkpoint_sender_guard);
-
-            // Step 4: handle indexed_epochs, which depends on downloaded object changes.
-            for epoch in indexed_epochs.into_iter().flatten() {
-                // commit first epoch immediately, send other epochs to channel to be committed later.
-                if epoch.last_epoch.is_none() {
-                    let epoch_db_guard = self.metrics.epoch_db_commit_latency.start_timer();
-                    info!("Persisting first epoch...");
-                    let mut persist_first_epoch_res = self.state.persist_epoch(&epoch).await;
-                    while persist_first_epoch_res.is_err() {
-                        warn!("Failed to persist first epoch, retrying...");
-                        persist_first_epoch_res = self.state.persist_epoch(&epoch).await;
-                    }
-                    epoch_db_guard.stop_and_record();
-                    self.metrics.total_epoch_committed.inc();
-                    info!("Persisted first epoch");
-                } else {
-                    let epoch_sender_guard = self.epoch_sender.lock().await;
-                    // NOTE: when the channel is full, epoch_sender_guard will wait until the channel has space.
-                    epoch_sender_guard.send(epoch).await.map_err(|e| {
-                        error!(
-                            "Failed to send indexed epoch to epoch commit handler with error {}",
-                            e.to_string()
-                        );
-                        IndexerError::MpscChannelError(e.to_string())
-                    })?;
-                    drop(epoch_sender_guard);
-                }
-            }
+            .await;
+            checkpoint_download_index_res = checkpoint_download_handler
+                .start_download_checkpoint_data(
+                    e.next_checkpoint_sequence_number as i64,
+                    tx.clone(),
+                )
+                .await;
         }
     }
 
-    async fn start_download_and_index_object_checkpoint(&self) -> Result<(), IndexerError> {
-        info!("Indexer object checkpoint download & index task started...");
-        let last_seq_from_db = self
-            .state
-            .get_latest_object_checkpoint_sequence_number()
-            .await?;
-        if last_seq_from_db > 0 {
-            info!("Resuming obj handler from checkpoint {last_seq_from_db}");
-        }
-        let mut next_cursor_sequence_number = last_seq_from_db + 1;
+    async fn start_download_checkpoint_data(
+        &self,
+        // FIXME: this does not need to be i64,
+        starting_checkpoint_seq: i64,
+        tx: Sender<CheckpointData>,
+    ) -> Result<(), DataDownloadError> {
+        info!("Indexer checkpoint download & index task resumed from {starting_checkpoint_seq}...");
+        let mut next_cursor_sequence_number = starting_checkpoint_seq;
         // NOTE: we will download checkpoints in parallel, but we will commit them sequentially.
         // We will start with MAX_PARALLEL_DOWNLOADS, and adjust if no more checkpoints are available.
-        let mut current_parallel_downloads = MAX_PARALLEL_DOWNLOADS;
+        let current_parallel_downloads = MAX_PARALLEL_DOWNLOADS;
         loop {
-            // Step 1: download tx checkpoint data for checkpoints in the current batch
-            let download_futures = (next_cursor_sequence_number
-                ..next_cursor_sequence_number + current_parallel_downloads as i64)
-                .map(|seq_num| self.download_checkpoint_data(seq_num as u64));
-            let download_results = join_all(download_futures).await;
-            let mut downloaded_checkpoints = vec![];
+            let mut download_futures = FuturesOrdered::new();
+            for seq_num in next_cursor_sequence_number
+                ..next_cursor_sequence_number + current_parallel_downloads as i64
+            {
+                download_futures.push_back(self.download_checkpoint_data(seq_num as u64));
+            }
             // NOTE: Push sequentially and if one of the downloads failed,
             // we will discard all following checkpoints and retry, to avoid messing up the DB commit order.
-            for download_result in download_results {
-                if let Ok(checkpoint) = download_result {
-                    downloaded_checkpoints.push(checkpoint);
-                } else {
-                    if let Err(IndexerError::UnexpectedFullnodeResponseError(fn_e)) =
-                        download_result
-                    {
-                        warn!(
-                            "Unexpected response from fullnode for checkpoints: {}",
-                            fn_e
-                        );
-                    } else if let Err(IndexerError::FullNodeReadingError(fn_e)) = download_result {
-                        warn!("Fullnode reading error for checkpoints {}: {}. It can be transient or due to rate limiting.", next_cursor_sequence_number, fn_e);
-                    } else {
-                        warn!("Error downloading checkpoints: {:?}", download_result);
+            while let Some(res) = download_futures.next().await {
+                match res {
+                    Ok(checkpoint) => {
+                        tx.send(checkpoint)
+                            .await
+                            .expect("Send to checkpoint channel should not fail");
+                        next_cursor_sequence_number += 1;
                     }
-                    break;
+                    Err(e) => {
+                        return Err(DataDownloadError {
+                            error: e,
+                            next_checkpoint_sequence_number: next_cursor_sequence_number as u64,
+                        })
+                    }
                 }
             }
-            next_cursor_sequence_number += downloaded_checkpoints.len() as i64;
-            // NOTE: with this line, we can make sure that:
-            // - when indexer is way behind and catching up, we download MAX_PARALLEL_DOWNLOADS checkpoints in parallel;
-            // - when indexer is up to date, we download at least one checkpoint at a time.
-            current_parallel_downloads =
-                std::cmp::min(downloaded_checkpoints.len() + 1, MAX_PARALLEL_DOWNLOADS);
-            if downloaded_checkpoints.is_empty() {
-                warn!(
-                    "No checkpoints were downloaded for sequence number {}, retrying...",
-                    next_cursor_sequence_number
-                );
-                continue;
-            }
-
-            // Step 2: Transform tx checkpoint data to indexed_checkpoints and indexed_epochs
-            let index_timer = self.metrics.checkpoint_index_latency.start_timer();
-            let indexed_checkpoint_epoch_vec = join_all(downloaded_checkpoints.iter().map(
-                |downloaded_checkpoint| async {
-                    self.index_checkpoint_and_epoch(downloaded_checkpoint).await
-                },
-            ))
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, IndexerError>>()
-            .map_err(|e| {
-                error!(
-                    "Failed to index checkpoints {:?} with error: {}",
-                    downloaded_checkpoints,
-                    e.to_string()
-                );
-                e
-            })?;
-            let (indexed_checkpoints, _indexed_epochs): (Vec<_>, Vec<_>) =
-                indexed_checkpoint_epoch_vec.into_iter().unzip();
-            index_timer.stop_and_record();
-
-            // Step 3: send indexed_checkpoints to object channel to be committed later.
-            let object_checkpoint_sender_guard = self.object_checkpoint_sender.lock().await;
-            // NOTE: when the channel is full, checkpoint_sender_guard will wait until the channel has space.
-            // Checkpoints are sent sequentially to stick to the order of checkpoint sequence numbers.
-            for indexed_checkpoint in indexed_checkpoints {
-                object_checkpoint_sender_guard
-                .send(indexed_checkpoint)
-                .await
-                .map_err(|e| {
-                    error!("Failed to send indexed checkpoint to checkpoint commit handler with error: {}", e.to_string());
-                    IndexerError::MpscChannelError(e.to_string())
-                })?;
-            }
-            drop(object_checkpoint_sender_guard);
         }
     }
 
     async fn start_tx_checkpoint_commit(&self) -> Result<(), IndexerError> {
-        info!("Indexer tx checkpoint commit task started...");
+        info!("Indexer checkpoint commit task started...");
+        let checkpoint_commit_batch_size = env::var("CHECKPOINT_COMMIT_BATCH_SIZE")
+            .unwrap_or(5.to_string())
+            .parse::<u64>()
+            .unwrap();
         loop {
-            let mut tx_checkpoint_receiver_guard = self.tx_checkpoint_receiver.lock().await;
-            let indexed_checkpoint = tx_checkpoint_receiver_guard.recv().await;
-            drop(tx_checkpoint_receiver_guard);
+            let mut checkpoint_receiver_guard = self.tx_checkpoint_receiver.lock().await;
 
-            if let Some(indexed_checkpoint) = indexed_checkpoint {
-                if self.config.skip_db_commit {
-                    info!(
-                        "Downloaded and indexed tx checkpoint {} successfully, skipping DB commit...",
-                        indexed_checkpoint.checkpoint.sequence_number,
-                    );
-                    continue;
+            let mut indexed_checkpoint_batch = vec![];
+            loop {
+                if let Ok(ckp) = checkpoint_receiver_guard.try_recv() {
+                    indexed_checkpoint_batch.push(ckp);
+                    if indexed_checkpoint_batch.len() >= checkpoint_commit_batch_size as usize {
+                        break;
+                    }
+                } else if indexed_checkpoint_batch.is_empty() {
+                    if let Some(ckp) = checkpoint_receiver_guard.recv().await {
+                        indexed_checkpoint_batch.push(ckp);
+                        break;
+                    }
+                } else {
+                    break;
                 }
+            }
+            drop(checkpoint_receiver_guard);
 
+            let mut checkpoint_batch = vec![];
+            let mut tx_batch = vec![];
+
+            if indexed_checkpoint_batch.is_empty() {
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                continue;
+            }
+
+            if self.config.skip_db_commit {
+                info!(
+                    "[Checkpoint/Tx] Downloaded and indexed checkpoint {:?} - {:?} successfully, skipping DB commit...",
+                    indexed_checkpoint_batch.first().map(|c| c.checkpoint.sequence_number),
+                    indexed_checkpoint_batch.last().map(|c| c.checkpoint.sequence_number),
+                );
+                continue;
+            }
+
+            for indexed_checkpoint in indexed_checkpoint_batch {
                 // Write checkpoint to DB
                 let TemporaryCheckpointStore {
                     checkpoint,
                     transactions,
                     events,
-                    object_changes: _,
                     packages,
                     input_objects,
                     changed_objects,
                     move_calls,
                     recipients,
                 } = indexed_checkpoint;
-                let checkpoint_seq = checkpoint.sequence_number;
+                checkpoint_batch.push(checkpoint);
+                tx_batch.push(transactions);
 
                 // NOTE: retrials are necessary here, otherwise results can be popped and discarded.
                 let events_handler = self.clone();
@@ -512,132 +436,165 @@ where
                             .await;
                     }
                 });
+            }
 
-                let checkpoint_tx_db_guard =
-                    self.metrics.checkpoint_db_commit_latency.start_timer();
-                let mut checkpoint_tx_commit_res = self
+            // now commit batched data
+            let tx_batch = tx_batch.into_iter().flatten().collect::<Vec<_>>();
+            let checkpoint_tx_db_guard = self.metrics.checkpoint_db_commit_latency.start_timer();
+            let mut checkpoint_tx_commit_res = self
+                .state
+                .persist_checkpoint_transactions(
+                    &checkpoint_batch,
+                    &tx_batch,
+                    self.metrics.total_transaction_chunk_committed.clone(),
+                )
+                .await;
+            while let Err(e) = checkpoint_tx_commit_res {
+                warn!(
+                    "Indexer checkpoint & transaction commit failed with error: {:?}, retrying after {:?} milli-secs...",
+                    e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(
+                    DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
+                ))
+                .await;
+                checkpoint_tx_commit_res = self
                     .state
                     .persist_checkpoint_transactions(
-                        &checkpoint,
-                        &transactions,
+                        &checkpoint_batch,
+                        &tx_batch,
                         self.metrics.total_transaction_chunk_committed.clone(),
                     )
                     .await;
-                while let Err(e) = checkpoint_tx_commit_res {
-                    warn!(
-                            "Indexer checkpoint & transaction commit failed with error: {:?}, retrying after {:?} milli-secs...",
-                            e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
-                        );
-                    tokio::time::sleep(std::time::Duration::from_millis(
-                        DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
-                    ))
-                    .await;
-                    checkpoint_tx_commit_res = self
-                        .state
-                        .persist_checkpoint_transactions(
-                            &checkpoint,
-                            &transactions,
-                            self.metrics.total_transaction_chunk_committed.clone(),
-                        )
-                        .await;
-                }
-                checkpoint_tx_db_guard.stop_and_record();
-                self.metrics
-                    .latest_tx_checkpoint_sequence_number
-                    .set(checkpoint_seq);
-                self.metrics.total_tx_checkpoint_committed.inc();
-                let tx_count = transactions.len();
-                self.metrics
-                    .total_transaction_committed
-                    .inc_by(tx_count as u64);
-                info!(
-                    "Tx checkpoint {} committed with {} transactions.",
-                    checkpoint_seq, tx_count,
-                );
-                self.metrics
-                    .transaction_per_checkpoint
-                    .observe(tx_count as f64);
-            } else {
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             }
+            let elapsed = checkpoint_tx_db_guard.stop_and_record();
+            // unwrap: batch must not be empty at this point
+            let first_checkpoint_seq = checkpoint_batch.first().as_ref().unwrap().sequence_number;
+            let last_checkpoint_seq = checkpoint_batch.last().as_ref().unwrap().sequence_number;
+            self.metrics
+                .latest_tx_checkpoint_sequence_number
+                .set(last_checkpoint_seq);
+
+            self.metrics.total_tx_checkpoint_committed.inc();
+            let tx_count = tx_batch.len();
+            self.metrics
+                .total_transaction_committed
+                .inc_by(tx_count as u64);
+            info!(
+                elapsed,
+                "Tx Checkpoint {}-{} committed with {} transactions.",
+                first_checkpoint_seq,
+                last_checkpoint_seq,
+                tx_count,
+            );
+            self.metrics
+                .transaction_per_checkpoint
+                .observe(tx_count as f64 / (last_checkpoint_seq - first_checkpoint_seq + 1) as f64);
         }
     }
 
     async fn start_object_checkpoint_commit(&self) -> Result<(), IndexerError> {
         info!("Indexer object checkpoint commit task started...");
+        let checkpoint_commit_batch_size = env::var("CHECKPOINT_COMMIT_BATCH_SIZE")
+            .unwrap_or(5.to_string())
+            .parse::<u64>()
+            .unwrap();
         loop {
-            let mut object_checkpoint_receiver_guard = self.object_checkpoint_receiver.lock().await;
-            let indexed_checkpoint = object_checkpoint_receiver_guard.recv().await;
-            drop(object_checkpoint_receiver_guard);
+            let mut checkpoint_receiver_guard = self.object_changes_receiver.lock().await;
 
-            if let Some(indexed_checkpoint) = indexed_checkpoint {
-                if self.config.skip_db_commit {
-                    info!(
-                        "Downloaded and indexed object checkpoint {} successfully, skipping DB commit...",
-                        indexed_checkpoint.checkpoint.sequence_number,
-                    );
-                    continue;
+            let mut object_changes_batch = vec![];
+            let mut seqs = vec![];
+            loop {
+                if let Ok((seq, object_changes)) = checkpoint_receiver_guard.try_recv() {
+                    object_changes_batch.push(object_changes);
+                    seqs.push(seq);
+                    if object_changes_batch.len() >= checkpoint_commit_batch_size as usize {
+                        break;
+                    }
+                } else if object_changes_batch.is_empty() {
+                    if let Some((seq, object_changes)) = checkpoint_receiver_guard.recv().await {
+                        object_changes_batch.push(object_changes);
+                        seqs.push(seq);
+                        break;
+                    }
+                } else {
+                    break;
                 }
-                let TemporaryCheckpointStore {
-                    checkpoint,
-                    transactions: _,
-                    events: _,
-                    object_changes,
-                    packages: _,
-                    input_objects: _,
-                    changed_objects: _,
-                    move_calls: _,
-                    recipients: _,
-                } = indexed_checkpoint;
-                let checkpoint_seq = checkpoint.sequence_number;
+            }
+            drop(checkpoint_receiver_guard);
 
-                // NOTE: commit object changes in the current task to stick to the original order,
-                // spawned tasks are possible to be executed in a different order.
-                let object_commit_timer = self.metrics.object_db_commit_latency.start_timer();
-                let mut object_changes_commit_res = self
+            let mut object_change_batch = vec![];
+
+            if object_changes_batch.is_empty() {
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                continue;
+            }
+            // unwrap: seqs gets updated along with indexed_checkpoint_batch, hence must not be empty at this point
+            let last_checkpoint_seq = seqs.last().unwrap();
+            let first_checkpoint_seq = seqs.first().unwrap();
+
+            if self.config.skip_db_commit {
+                info!(
+                    "[Object] Downloaded and indexed checkpoint {} - {} successfully, skipping DB commit...",
+                    last_checkpoint_seq,
+                    first_checkpoint_seq,
+                );
+                continue;
+            }
+            for object_changes in object_changes_batch {
+                object_change_batch.push(object_changes);
+            }
+
+            // NOTE: commit object changes in the current task to stick to the original order,
+            // spawned tasks are possible to be executed in a different order.
+            let object_changes = object_change_batch
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>();
+            let object_commit_timer = self.metrics.object_db_commit_latency.start_timer();
+            let mut object_changes_commit_res = self
+                .state
+                .persist_object_changes(
+                    &object_changes,
+                    self.metrics.object_mutation_db_commit_latency.clone(),
+                    self.metrics.object_deletion_db_commit_latency.clone(),
+                    self.metrics.total_object_change_chunk_committed.clone(),
+                )
+                .await;
+            while let Err(e) = object_changes_commit_res {
+                warn!(
+                    "Indexer object changes commit failed with error: {:?}, retrying after {:?} milli-secs...",
+                    e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(
+                    DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
+                ))
+                .await;
+                object_changes_commit_res = self
                     .state
                     .persist_object_changes(
                         &object_changes,
-                        self.metrics.total_object_change_chunk_committed.clone(),
                         self.metrics.object_mutation_db_commit_latency.clone(),
                         self.metrics.object_deletion_db_commit_latency.clone(),
+                        self.metrics.total_object_change_chunk_committed.clone(),
                     )
                     .await;
-                while let Err(e) = object_changes_commit_res {
-                    warn!(
-                        "Indexer object changes commit failed with error: {:?}, retrying after {:?} milli-secs...",
-                        e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
-                    );
-                    tokio::time::sleep(std::time::Duration::from_millis(
-                        DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
-                    ))
-                    .await;
-                    object_changes_commit_res = self
-                        .state
-                        .persist_object_changes(
-                            &object_changes,
-                            self.metrics.total_object_change_chunk_committed.clone(),
-                            self.metrics.object_mutation_db_commit_latency.clone(),
-                            self.metrics.object_deletion_db_commit_latency.clone(),
-                        )
-                        .await;
-                }
-                object_commit_timer.stop_and_record();
-                self.metrics.total_object_checkpoint_committed.inc();
-                self.metrics
-                    .total_object_change_committed
-                    .inc_by(object_changes.len() as u64);
-                self.metrics
-                    .latest_indexer_object_checkpoint_sequence_number
-                    .set(checkpoint_seq);
-                info!(
-                    "Object checkpoint {} committed with {} object changes.",
-                    checkpoint_seq,
-                    object_changes.len(),
-                );
-            } else {
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             }
+            let elapsed = object_commit_timer.stop_and_record();
+            self.metrics.total_object_checkpoint_committed.inc();
+            self.metrics
+                .total_object_change_committed
+                .inc_by(object_changes.len() as u64);
+            self.metrics
+                .latest_indexer_object_checkpoint_sequence_number
+                .set(*last_checkpoint_seq as i64);
+            info!(
+                elapsed,
+                "Object Checkpoint {}-{} committed with {} object changes",
+                first_checkpoint_seq,
+                last_checkpoint_seq,
+                object_changes.len(),
+            );
         }
     }
 
@@ -654,6 +611,7 @@ where
                     let epoch_db_guard = self.metrics.epoch_db_commit_latency.start_timer();
                     let mut epoch_commit_res = self.state.persist_epoch(&indexed_epoch).await;
                     // NOTE: retrials are necessary here, otherwise indexed_epoch can be popped and discarded.
+                    // FIXME: use macro to replace this pattern in this file.
                     while let Err(e) = epoch_commit_res {
                         warn!(
                             "Indexer epoch commit failed with error: {:?}, retrying after {:?} milli-secs...",
@@ -675,6 +633,7 @@ where
         }
     }
 
+    /// TODO: rewrite this thing.
     /// Download all the data we need for one checkpoint.
     async fn download_checkpoint_data(
         &self,
@@ -758,8 +717,122 @@ where
         })
     }
 
+    fn index_packages(
+        transactions: &[CheckpointTransactionBlockResponse],
+        changed_objects: &[(ObjectStatus, SuiObjectData)],
+    ) -> Result<Vec<Package>, IndexerError> {
+        let object_map = changed_objects
+            .iter()
+            .filter_map(|(_, o)| {
+                if let SuiRawData::Package(p) = &o
+                    .bcs
+                    .as_ref()
+                    .expect("Expect the content field to be non-empty from data fetching")
+                {
+                    Some((o.object_id, p))
+                } else {
+                    None
+                }
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        transactions
+            .iter()
+            .flat_map(|tx| {
+                tx.effects.created().iter().map(|oref| {
+                    object_map
+                        .get(&oref.reference.object_id)
+                        .map(|o| Package::try_from(*tx.transaction.data.sender(), o))
+                })
+            })
+            .flatten()
+            .collect()
+    }
+}
+
+struct CheckpointProcessor<S>
+where
+    S: IndexerStore + Clone + Sync + Send + 'static,
+{
+    state: S,
+    metrics: IndexerMetrics,
+    epoch_sender: Arc<Mutex<Sender<TemporaryEpochStore>>>,
+    checkpoint_sender: Arc<Mutex<Sender<TemporaryCheckpointStore>>>,
+    downloaded_checkpoint_data_receiver: Receiver<CheckpointData>,
+}
+
+impl<S> CheckpointProcessor<S>
+where
+    S: IndexerStore + Clone + Sync + Send + 'static,
+{
+    async fn run(&mut self) -> Result<(), IndexerError> {
+        loop {
+            let checkpoint_data = self
+                .downloaded_checkpoint_data_receiver
+                .recv()
+                .await
+                .expect("Sender of Checkpoint Processor's rx should not be closed.");
+
+            // Index checkpoint data
+            let index_timer = self.metrics.checkpoint_index_latency.start_timer();
+
+            let (checkpoint, epoch) =
+                Self::index_checkpoint_and_epoch(&self.state, &checkpoint_data)
+                    .await
+                    .tap_err(|e| {
+                        error!(
+                            "Failed to index checkpoints {:?} with error: {}",
+                            checkpoint_data,
+                            e.to_string()
+                        );
+                    })?;
+            index_timer.stop_and_record();
+
+            // commit first epoch immediately, send other epochs to channel to be committed later.
+            if let Some(epoch) = epoch {
+                if epoch.last_epoch.is_none() {
+                    let epoch_db_guard = self.metrics.epoch_db_commit_latency.start_timer();
+                    info!("Persisting first epoch...");
+                    let mut persist_first_epoch_res = self.state.persist_epoch(&epoch).await;
+                    while persist_first_epoch_res.is_err() {
+                        warn!("Failed to persist first epoch, retrying...");
+                        persist_first_epoch_res = self.state.persist_epoch(&epoch).await;
+                    }
+                    epoch_db_guard.stop_and_record();
+                    self.metrics.total_epoch_committed.inc();
+                    info!("Persisted first epoch");
+                } else {
+                    let epoch_sender_guard = self.epoch_sender.lock().await;
+                    // NOTE: when the channel is full, epoch_sender_guard will wait until the channel has space.
+                    epoch_sender_guard.send(epoch).await.map_err(|e| {
+                        error!(
+                            "Failed to send indexed epoch to epoch commit handler with error {}",
+                            e.to_string()
+                        );
+                        IndexerError::MpscChannelError(e.to_string())
+                    })?;
+                    drop(epoch_sender_guard);
+                }
+            }
+
+            let checkpoint_sender_guard = self.checkpoint_sender.lock().await;
+            // NOTE: when the channel is full, checkpoint_sender_guard will wait until the channel has space.
+            // Checkpoints are sent sequentially to stick to the order of checkpoint sequence numbers.
+            checkpoint_sender_guard
+                .send(checkpoint)
+                .await
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "checkpoint channel send should not fail, but got error: {:?}",
+                        e
+                    )
+                });
+            drop(checkpoint_sender_guard);
+        }
+    }
+
     async fn index_checkpoint_and_epoch(
-        &self,
+        state: &S,
         data: &CheckpointData,
     ) -> Result<(TemporaryCheckpointStore, Option<TemporaryEpochStore>), IndexerError> {
         let CheckpointData {
@@ -782,48 +855,8 @@ where
             .flat_map(|tx| tx.events.data.iter().map(move |event| event.clone().into()))
             .collect::<Vec<_>>();
 
-        // Index objects
-        let tx_objects = changed_objects
-            .iter()
-            // Unwrap safe here as we requested previous tx data in the request.
-            .fold(BTreeMap::<_, Vec<_>>::new(), |mut acc, (status, o)| {
-                if let Some(digest) = &o.previous_transaction {
-                    acc.entry(*digest).or_default().push((status, o));
-                }
-                acc
-            });
-
-        let objects_changes = transactions
-            .iter()
-            .map(|tx| {
-                let changed_db_objects = tx_objects
-                    .get(&tx.digest)
-                    .unwrap_or(&vec![])
-                    .iter()
-                    .map(|(status, o)| {
-                        Object::from(
-                            checkpoint.epoch,
-                            Some(checkpoint.sequence_number),
-                            status,
-                            o,
-                        )
-                    })
-                    .collect::<Vec<_>>();
-                let deleted_objects = get_deleted_db_objects(
-                    &tx.effects,
-                    checkpoint.epoch,
-                    Some(checkpoint.sequence_number),
-                );
-
-                TransactionObjectChanges {
-                    changed_objects: changed_db_objects,
-                    deleted_objects,
-                }
-            })
-            .collect();
-
         // Index packages
-        let packages = Self::index_packages(transactions, changed_objects)?;
+        let packages = CheckpointHandler::<S>::index_packages(transactions, changed_objects)?;
 
         // Store input objects, move calls and recipients separately for transaction query indexing.
         let input_objects = transactions
@@ -913,8 +946,7 @@ where
             let event = event.as_ref();
 
             let last_epoch = system_state.epoch as i64 - 1;
-            let network_tx_count_prev_epoch = self
-                .state
+            let network_tx_count_prev_epoch = state
                 .get_network_total_transactions_previous_epoch(last_epoch)
                 .await?;
             Some(TemporaryEpochStore {
@@ -978,7 +1010,6 @@ where
                 )?,
                 transactions: db_transactions,
                 events,
-                object_changes: objects_changes,
                 packages,
                 input_objects,
                 changed_objects,
@@ -988,41 +1019,107 @@ where
             epoch_index,
         ))
     }
+}
 
-    fn index_packages(
-        transactions: &[CheckpointTransactionBlockResponse],
-        changed_objects: &[(ObjectStatus, SuiObjectData)],
-    ) -> Result<Vec<Package>, IndexerError> {
-        let object_map = changed_objects
+#[allow(clippy::type_complexity)]
+struct CheckpointObjectsProcessor {
+    metrics: IndexerMetrics,
+    object_changes_sender:
+        Arc<Mutex<Sender<(CheckpointSequenceNumber, Vec<TransactionObjectChanges>)>>>,
+    downloaded_object_data_receiver: Receiver<CheckpointData>,
+}
+
+impl CheckpointObjectsProcessor {
+    async fn run(&mut self) -> Result<(), IndexerError> {
+        loop {
+            let checkpoint_data = self
+                .downloaded_object_data_receiver
+                .recv()
+                .await
+                .expect("Sender of Checkpoint Processor's rx should not be closed.");
+            let checkpoint_seq = checkpoint_data.checkpoint.sequence_number;
+
+            // Index checkpoint data
+            let index_timer = self.metrics.checkpoint_index_latency.start_timer();
+
+            let object_changes = Self::index_checkpoint_objects(&checkpoint_data)
+                .await
+                .tap_err(|e| {
+                    error!(
+                        "Failed to index checkpoints {:?} with error: {}",
+                        checkpoint_data,
+                        e.to_string()
+                    );
+                })?;
+            index_timer.stop_and_record();
+
+            self.object_changes_sender
+                .lock()
+                .await
+                .send((checkpoint_seq, object_changes))
+                .await
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "checkpoint channel send should not fail, but got error: {:?}",
+                        e
+                    )
+                });
+        }
+    }
+
+    async fn index_checkpoint_objects(
+        data: &CheckpointData,
+    ) -> Result<Vec<TransactionObjectChanges>, IndexerError> {
+        let CheckpointData {
+            checkpoint,
+            transactions,
+            changed_objects,
+        } = data;
+
+        // Index objects
+        let tx_objects = changed_objects
             .iter()
-            .filter_map(|(_, o)| {
-                if let SuiRawData::Package(p) = &o
-                    .bcs
-                    .as_ref()
-                    .expect("Expect the content field to be non-empty from data fetching")
-                {
-                    Some((o.object_id, p))
-                } else {
-                    None
+            // Unwrap safe here as we requested previous tx data in the request.
+            .fold(BTreeMap::<_, Vec<_>>::new(), |mut acc, (status, o)| {
+                if let Some(digest) = &o.previous_transaction {
+                    acc.entry(*digest).or_default().push((status, o));
+                }
+                acc
+            });
+
+        let objects_changes = transactions
+            .iter()
+            .map(|tx| {
+                let changed_db_objects = tx_objects
+                    .get(&tx.digest)
+                    .unwrap_or(&vec![])
+                    .iter()
+                    .map(|(status, o)| {
+                        Object::from(
+                            checkpoint.epoch,
+                            Some(checkpoint.sequence_number),
+                            status,
+                            o,
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                let deleted_objects = get_deleted_db_objects(
+                    &tx.effects,
+                    checkpoint.epoch,
+                    Some(checkpoint.sequence_number),
+                );
+
+                TransactionObjectChanges {
+                    changed_objects: changed_db_objects,
+                    deleted_objects,
                 }
             })
-            .collect::<BTreeMap<_, _>>();
-
-        transactions
-            .iter()
-            .flat_map(|tx| {
-                tx.effects.created().iter().map(|oref| {
-                    object_map
-                        .get(&oref.reference.object_id)
-                        .map(|o| Package::try_from(*tx.transaction.data.sender(), o))
-                })
-            })
-            .flatten()
-            .collect()
+            .collect();
+        Ok(objects_changes)
     }
 }
 
-// TODO(gegaowp): re-orgnize object util functions below
+// TODO(gegaowp): re-organize object util functions below
 pub fn get_object_changes(
     effects: &SuiTransactionBlockEffects,
 ) -> Vec<(ObjectID, SequenceNumber, ObjectStatus)> {
@@ -1091,18 +1188,6 @@ pub async fn fetch_changed_objects(
         ))
     })
 }
-
-// TODO(gegaowp): temp. disable fast-path
-// pub fn to_changed_db_objects(
-//     changed_objects: Vec<(ObjectStatus, SuiObjectData)>,
-//     epoch: u64,
-//     checkpoint: Option<CheckpointSequenceNumber>,
-// ) -> Vec<Object> {
-//     changed_objects
-//         .into_iter()
-//         .map(|(status, o)| Object::from(epoch, checkpoint.map(<u64>::from), &status, &o))
-//         .collect::<Vec<_>>()
-// }
 
 pub fn get_deleted_db_objects(
     effects: &SuiTransactionBlockEffects,
