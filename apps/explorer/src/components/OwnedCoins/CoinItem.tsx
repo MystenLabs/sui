@@ -11,7 +11,7 @@ type CoinItemProps = {
 	coin: CoinStruct;
 };
 
-function CoinItem({ coin }: CoinItemProps): JSX.Element {
+export default function CoinItem({ coin }: CoinItemProps) {
 	const [formattedBalance, symbol] = useFormatCoin(coin.balance, coin.coinType);
 	return (
 		<div className="bg-grey-40 grid grid-flow-row auto-rows-fr grid-cols-4 items-center">
@@ -37,5 +37,3 @@ function CoinItem({ coin }: CoinItemProps): JSX.Element {
 		</div>
 	);
 }
-
-export default CoinItem;

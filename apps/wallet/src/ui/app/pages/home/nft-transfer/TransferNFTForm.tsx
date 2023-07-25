@@ -60,7 +60,7 @@ export function TransferNFTForm({
 			}
 
 			if (isContainedInKiosk) {
-				return transferKioskItem.mutateAsync(to);
+				return transferKioskItem.mutateAsync({ to, clientIdentifier });
 			}
 
 			const tx = new TransactionBlock();
@@ -80,7 +80,7 @@ export function TransferNFTForm({
 		},
 		onSuccess: (response) => {
 			queryClient.invalidateQueries(['object', objectId]);
-			queryClient.invalidateQueries(['get-kiosk-contents'], { refetchType: 'all' });
+			queryClient.invalidateQueries(['get-kiosk-contents']);
 			queryClient.invalidateQueries(['get-owned-objects']);
 
 			ampli.sentCollectible({ objectId });

@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type StoryObj, type Meta } from '@storybook/react';
+import { type ReactNode } from 'react';
 
 import { TableCard, type TableCardProps } from '../TableCard';
 
 type DataType = {
-	sardines: string | JSX.Element;
-	herrings: string | JSX.Element;
+	sardines: string | ReactNode;
+	herrings: string | ReactNode;
 	salmon: string;
 };
 

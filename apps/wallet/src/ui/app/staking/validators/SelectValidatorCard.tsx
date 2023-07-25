@@ -8,7 +8,6 @@ import {
 	useGetSystemState,
 } from '@mysten/core';
 import { ArrowRight16 } from '@mysten/icons';
-import { type SuiAddress } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useState, useMemo } from 'react';
 
@@ -29,7 +28,7 @@ const sortKeys: Record<SortKeys, string> = {
 
 type Validator = {
 	name: string;
-	address: SuiAddress;
+	address: string;
 	apy: number | null;
 	isApyApproxZero?: boolean;
 	stakeShare: number;

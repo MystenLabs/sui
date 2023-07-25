@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiAddress } from '@mysten/sui.js';
 import { type SuiClient } from '@mysten/sui.js/client';
 import {
 	IntentScope,
@@ -52,7 +51,7 @@ export class QredoSigner extends WalletSigner {
 		this.#network = API_ENV_TO_QREDO_NETWORK[apiEnv] || null;
 	}
 
-	async getAddress(): Promise<SuiAddress> {
+	async getAddress(): Promise<string> {
 		return this.#qredoAccount.address;
 	}
 

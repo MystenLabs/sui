@@ -19,7 +19,6 @@ import { Text } from '_app/shared/text';
 import { useGetTxnRecipientAddress } from '_hooks';
 
 import type {
-	SuiAddress,
 	// SuiEvent,
 	SuiTransactionBlockResponse,
 	// TransactionEvents,
@@ -30,7 +29,7 @@ export function TransactionCard({
 	address,
 }: {
 	txn: SuiTransactionBlockResponse;
-	address: SuiAddress;
+	address: string;
 }) {
 	const transaction = getTransactionKind(txn)!;
 	const executionStatus = getExecutionStatusType(txn);

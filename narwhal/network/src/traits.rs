@@ -7,7 +7,8 @@ use crypto::NetworkPublicKey;
 use types::{
     error::LocalClientError, FetchBatchesRequest, FetchBatchesResponse, FetchCertificatesRequest,
     FetchCertificatesResponse, RequestBatchesRequest, RequestBatchesResponse,
-    WorkerOthersBatchMessage, WorkerOwnBatchMessage, WorkerSynchronizeMessage,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerOwnBatchMessage,
+    WorkerSynchronizeMessage,
 };
 
 pub trait ReliableNetwork<Request: Clone + Send + Sync> {
@@ -59,6 +60,12 @@ pub trait PrimaryToWorkerClient {
 
 #[async_trait]
 pub trait WorkerToPrimaryClient {
+    // TODO: Remove once we have upgraded to protocol version 12.
+    async fn report_our_batch(
+        &self,
+        request: WorkerOurBatchMessage,
+    ) -> Result<(), LocalClientError>;
+
     async fn report_own_batch(
         &self,
         request: WorkerOwnBatchMessage,

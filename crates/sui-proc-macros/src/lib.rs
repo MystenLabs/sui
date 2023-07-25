@@ -286,12 +286,9 @@ pub fn with_checked_arithmetic(_attr: TokenStream, item: TokenStream) -> TokenSt
             let transformed_impl = CheckArithmetic.fold_item_impl(input_impl);
             TokenStream::from(quote! { #transformed_impl })
         }
-        _ => {
-            let err = syn::Error::new_spanned(
-                input_item,
-                "The with_checked_arithmetic attribute can only be applied to functions and impl blocks",
-            );
-            err.to_compile_error().into()
+        item => {
+            let transformed_impl = CheckArithmetic.fold_item(item);
+            TokenStream::from(quote! { #transformed_impl })
         }
     }
 }

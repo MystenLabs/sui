@@ -1,13 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	ObjectId,
-	SuiAddress,
-	SuiObjectData,
-	SuiObjectResponse,
-	getObjectFields,
-} from '@mysten/sui.js';
+import { SuiObjectData, SuiObjectResponse, getObjectFields } from '@mysten/sui.js';
 import { isValidSuiAddress } from '@mysten/sui.js/utils';
 import {
 	attachListingsAndPrices,
@@ -27,7 +21,7 @@ import { SuiClient, PaginationArguments } from '@mysten/sui.js/client';
 
 export async function fetchKiosk(
 	client: SuiClient,
-	kioskId: SuiAddress,
+	kioskId: string,
 	pagination: PaginationArguments<string>,
 	options: FetchKioskOptions,
 ): Promise<PagedKioskData> {
@@ -38,7 +32,7 @@ export async function fetchKiosk(
 	const data = await getAllDynamicFields(client, kioskId, pagination);
 
 	const listings: KioskListing[] = [];
-	const lockedItemIds: ObjectId[] = [];
+	const lockedItemIds: string[] = [];
 
 	// extracted kiosk data.
 	const kioskData = extractKioskData(data, listings, lockedItemIds);
@@ -79,7 +73,7 @@ export async function fetchKiosk(
  */
 export async function getOwnedKiosks(
 	client: SuiClient,
-	address: SuiAddress,
+	address: string,
 	options?: {
 		pagination?: PaginationArguments<string>;
 	},

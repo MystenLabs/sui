@@ -1,0 +1,13 @@
+{
+	"index": {
+		"title": "Home"
+	},
+	"typescript-sdk": {
+		"title": "TypeScript SDK",
+		"type": "page"
+	},
+	"wallet-kit": {
+		"title": "Wallet Kit",
+		"type": "page"
+	}
+}

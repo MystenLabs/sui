@@ -34,13 +34,13 @@ export const suinsClient = new SuinsClient(client, {
 
 > **Note:** To ensure best performance, please make sure to create only one instance of the SuinsClient class in your application. Then, import the created `suinsClient` instance to use its functions.
 
-Fetch a `SuiAddress` linked to a name:
+Fetch an address linked to a name:
 
 ```typescript
 const address = await suinsClient.getAddress('suins.sui');
 ```
 
-Fetch the default name of a `SuiAddress`:
+Fetch the default name of an address:
 
 ```typescript
 const defaultName = await suinsClient.getName(

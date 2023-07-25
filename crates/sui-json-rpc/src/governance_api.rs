@@ -91,20 +91,20 @@ impl GovernanceReadApi {
                         .await?
                     {
                         Some(o) => stakes.push((StakedSui::try_from(&o)?, false)),
-                        None => {
-                            return Err(Error::UserInputError(UserInputError::ObjectNotFound {
+                        None => Err(SuiRpcInputError::UserInputError(
+                            UserInputError::ObjectNotFound {
                                 object_id: oref.0,
                                 version: None,
-                            }));
-                        }
+                            },
+                        ))?,
                     }
                 }
-                ObjectRead::NotExists(id) => {
-                    return Err(Error::UserInputError(UserInputError::ObjectNotFound {
+                ObjectRead::NotExists(id) => Err(SuiRpcInputError::UserInputError(
+                    UserInputError::ObjectNotFound {
                         object_id: id,
                         version: None,
-                    }));
-                }
+                    },
+                ))?,
             }
         }
 

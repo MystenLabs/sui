@@ -3,7 +3,6 @@
 
 import {
 	type SuiTransactionBlockResponse,
-	type SuiAddress,
 	getTransactionKind,
 	getTransactionSender,
 } from '@mysten/sui.js';
@@ -13,7 +12,7 @@ import { getAmount } from '_helpers';
 
 type Props = {
 	txn: SuiTransactionBlockResponse;
-	address: SuiAddress;
+	address: string;
 };
 
 export function useGetTxnRecipientAddress({ txn, address }: Props) {

@@ -16,7 +16,7 @@ type OwnedCoinViewProps = {
 	id: string;
 };
 
-function OwnedCoinView({ coin, id }: OwnedCoinViewProps): JSX.Element {
+export default function OwnedCoinView({ coin, id }: OwnedCoinViewProps) {
 	const [open, setOpen] = useState(false);
 	const [formattedTotalBalance, symbol] = useFormatCoin(coin.totalBalance, coin.coinType);
 
@@ -57,5 +57,3 @@ function OwnedCoinView({ coin, id }: OwnedCoinViewProps): JSX.Element {
 		</Collapsible.Root>
 	);
 }
-
-export default OwnedCoinView;

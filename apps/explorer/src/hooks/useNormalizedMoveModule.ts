@@ -4,9 +4,7 @@
 import { useRpcClient } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 
-import type { ObjectId } from '@mysten/sui.js';
-
-export function useNormalizedMoveModule(packageId?: ObjectId | null, moduleName?: string | null) {
+export function useNormalizedMoveModule(packageId?: string | null, moduleName?: string | null) {
 	const rpc = useRpcClient();
 	return useQuery({
 		queryKey: ['normalized-module', packageId, moduleName],

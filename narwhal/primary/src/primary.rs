@@ -63,7 +63,7 @@ use types::{
     FetchCertificatesResponse, Header, HeaderAPI, MetadataAPI, PreSubscribedBroadcastSender,
     PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest, RequestVoteResponse, Round,
     SendCertificateRequest, SendCertificateResponse, Vote, VoteInfoAPI, WorkerOthersBatchMessage,
-    WorkerOwnBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
+    WorkerOurBatchMessage, WorkerOwnBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
 };
 
 #[cfg(any(test))]
@@ -822,7 +822,7 @@ impl PrimaryReceiverHandler {
         // certificates to still have a chance to be included in the DAG while not wasting
         // resources on very old vote requests. This value affects performance but not correctness
         // of the algorithm.
-        const HEADER_AGE_LIMIT: Round = 3;
+        const HEADER_AGE_LIMIT: Round = 5;
 
         // Lock to ensure consistency between limit_round and where parent_digests are gc'ed.
         let mut parent_digests = self.parent_digests.lock();
@@ -1015,6 +1015,34 @@ struct WorkerReceiverHandler {
 
 #[async_trait]
 impl WorkerToPrimary for WorkerReceiverHandler {
+    // TODO: Remove once we have upgraded to protocol version 12.
+    async fn report_our_batch(
+        &self,
+        request: anemo::Request<WorkerOurBatchMessage>,
+    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        let message = request.into_body();
+
+        let (tx_ack, rx_ack) = oneshot::channel();
+        let response = self
+            .tx_our_digests
+            .send(OurDigestMessage {
+                digest: message.digest,
+                worker_id: message.worker_id,
+                timestamp: message.metadata.created_at,
+                ack_channel: Some(tx_ack),
+            })
+            .await
+            .map(|_| anemo::Response::new(()))
+            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
+
+        // If we are ok, then wait for the ack
+        rx_ack
+            .await
+            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
+
+        Ok(response)
+    }
+
     async fn report_own_batch(
         &self,
         request: anemo::Request<WorkerOwnBatchMessage>,

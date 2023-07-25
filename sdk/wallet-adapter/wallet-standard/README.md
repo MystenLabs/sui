@@ -1,12 +1,14 @@
 # `@mysten/wallet-standard`
 
-A suite of standard utilities for implementing wallets and libraries based on the [Wallet Standard](https://github.com/wallet-standard/wallet-standard/).
+A suite of standard utilities for implementing wallets and libraries based on the
+[Wallet Standard](https://github.com/wallet-standard/wallet-standard/).
 
 ## Implementing the Wallet Standard in an extension wallet
 
 ### Creating a wallet interface
 
-You need to create a class that represents your wallet. You can use the `Wallet` interface from `@mysten/wallet-standard` to help ensure your class adheres to the standard.
+You need to create a class that represents your wallet. You can use the `Wallet` interface from
+`@mysten/wallet-standard` to help ensure your class adheres to the standard.
 
 ```typescript
 import { Wallet, SUI_DEVNET_CHAIN } from '@mysten/wallet-standard';
@@ -32,12 +34,17 @@ class YourWallet implements Wallet {
 
 ### Implementing features
 
-Features are standard methods consumers can use to interact with a wallet. To be listed in the Sui wallet adapter, you must implement the following features in your wallet:
+Features are standard methods consumers can use to interact with a wallet. To be listed in the Sui
+wallet adapter, you must implement the following features in your wallet:
 
 - `standard:connect` - Used to initiate a connection to the wallet.
-- `standard:events` - Used to listen for changes that happen within the wallet, such as accounts being added or removed.
-- `sui:signTransactionBlock` - Used to prompt the user to sign a transaction block, and return the serializated transaction block and signature back to the user. This method does not submit the transaction block for execution.
-- `sui:signAndExecuteTransactionBlock` - Used to prompt the user to sign a transaction block, then submit it for execution to the blockchain.
+- `standard:events` - Used to listen for changes that happen within the wallet, such as accounts
+  being added or removed.
+- `sui:signTransactionBlock` - Used to prompt the user to sign a transaction block, and return the
+  serializated transaction block and signature back to the user. This method does not submit the
+  transaction block for execution.
+- `sui:signAndExecuteTransactionBlock` - Used to prompt the user to sign a transaction block, then
+  submit it for execution to the blockchain.
 
 You can implement these features in your wallet class under the `features` property:
 
@@ -102,9 +109,12 @@ class YourWallet implements Wallet {
 
 ### Exposing accounts
 
-The last requirement of the wallet interface is to expose an `acccounts` interface. This should expose all of the accounts that a connected dapp has access to. It can be empty prior to initiating a connection through the `standard:connect` feature.
+The last requirement of the wallet interface is to expose an `acccounts` interface. This should
+expose all of the accounts that a connected dapp has access to. It can be empty prior to initiating
+a connection through the `standard:connect` feature.
 
-The accounts can use the `ReadonlyWalletAccount` class to easily construct an account matching the required interface.
+The accounts can use the `ReadonlyWalletAccount` class to easily construct an account matching the
+required interface.
 
 ```typescript
 import { ReadonlyWalletAccount } from '@mysten/wallet-standard';
@@ -131,7 +141,8 @@ class YourWallet implements Wallet {
 
 ### Registering in the window
 
-Once you have a compatible interface for your wallet, you can register it using the `registerWallet` function.
+Once you have a compatible interface for your wallet, you can register it using the `registerWallet`
+function.
 
 ```typescript
 import { registerWallet } from '@mysten/wallet-standard';
@@ -139,4 +150,5 @@ import { registerWallet } from '@mysten/wallet-standard';
 registerWallet(new YourWallet());
 ```
 
-> If you're interested in the internal implementation of the `registerWallet` method, you can [see how it works here](https://github.com/wallet-standard/wallet-standard/blob/b4794e761de688906827829d5380b24cb8ed5fd5/packages/core/wallet/src/register.ts#L9).
+> If you're interested in the internal implementation of the `registerWallet` method, you can
+> [see how it works here](https://github.com/wallet-standard/wallet-standard/blob/b4794e761de688906827829d5380b24cb8ed5fd5/packages/core/wallet/src/register.ts#L9).

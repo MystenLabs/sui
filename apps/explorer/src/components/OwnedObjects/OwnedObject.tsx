@@ -12,7 +12,7 @@ type OwnedObjectTypes = {
 	obj: SuiObjectResponse;
 };
 
-function OwnedObject({ obj }: OwnedObjectTypes): JSX.Element {
+export default function OwnedObject({ obj }: OwnedObjectTypes) {
 	const video = useResolveVideo(obj);
 	const displayMeta = getObjectDisplay(obj).data;
 
@@ -27,5 +27,3 @@ function OwnedObject({ obj }: OwnedObjectTypes): JSX.Element {
 		/>
 	);
 }
-
-export default OwnedObject;

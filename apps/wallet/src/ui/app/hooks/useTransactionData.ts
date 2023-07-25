@@ -2,14 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFormatCoin, useRpcClient } from '@mysten/core';
-import { type SuiAddress, SUI_TYPE_ARG } from '@mysten/sui.js';
+import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { useQuery } from '@tanstack/react-query';
 
-export function useTransactionData(
-	sender?: SuiAddress | null,
-	transaction?: TransactionBlock | null,
-) {
+export function useTransactionData(sender?: string | null, transaction?: TransactionBlock | null) {
 	const rpc = useRpcClient();
 	return useQuery({
 		// eslint-disable-next-line @tanstack/query/exhaustive-deps
@@ -28,7 +25,7 @@ export function useTransactionData(
 }
 
 export function useTransactionGasBudget(
-	sender?: SuiAddress | null,
+	sender?: string | null,
 	transaction?: TransactionBlock | null,
 ) {
 	const { data, ...rest } = useTransactionData(sender, transaction);

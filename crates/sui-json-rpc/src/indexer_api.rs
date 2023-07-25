@@ -103,6 +103,20 @@ impl<R: ReadApiServer> IndexerApi<R> {
             metrics,
         }
     }
+
+    fn extract_values_from_dynamic_field_name(
+        &self,
+        name: DynamicFieldName,
+    ) -> Result<(TypeTag, Vec<u8>), SuiRpcInputError> {
+        let DynamicFieldName {
+            type_: name_type,
+            value,
+        } = name;
+        let layout = TypeLayoutBuilder::build_with_types(&name_type, &self.state.database)?;
+        let sui_json_value = SuiJsonValue::new(value)?;
+        let name_bcs_value = sui_json_value.to_bcs_bytes(&layout)?;
+        Ok((name_type, name_bcs_value))
+    }
 }
 
 #[async_trait]
@@ -116,7 +130,8 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         limit: Option<usize>,
     ) -> RpcResult<ObjectsPage> {
         with_tracing!(async move {
-            let limit = validate_limit(limit, *QUERY_MAX_RESULT_LIMIT)?;
+            let limit =
+                validate_limit(limit, *QUERY_MAX_RESULT_LIMIT).map_err(SuiRpcInputError::from)?;
             self.metrics.get_owned_objects_limit.report(limit as u64);
             let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
             let options = options.unwrap_or_default();
@@ -307,13 +322,8 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         name: DynamicFieldName,
     ) -> RpcResult<SuiObjectResponse> {
         with_tracing!(async move {
-            let DynamicFieldName {
-                type_: name_type,
-                value,
-            } = name.clone();
-            let layout = TypeLayoutBuilder::build_with_types(&name_type, &self.state.database)?;
-            let sui_json_value = SuiJsonValue::new(value)?;
-            let name_bcs_value = sui_json_value.to_bcs_bytes(&layout)?;
+            let (name_type, name_bcs_value) = self.extract_values_from_dynamic_field_name(name)?;
+
             let id = self
                 .state
                 .get_dynamic_field_object_id(parent_object_id, name_type, &name_bcs_value)
@@ -362,19 +372,19 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 ))
             })?;
             let domain_bcs_value = bcs::to_bytes(&domain).map_err(|e| {
-                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!(
+                SuiRpcInputError::GenericInvalid(format!(
                     "Unable to serialize name: {:?} with error: {:?}",
                     domain, e
-                )))
+                ))
             })?;
             let record_object_id_option = self
                 .state
                 .get_dynamic_field_object_id(registry_id, name_type_tag, &domain_bcs_value)
                 .map_err(|e| {
-                    Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!(
+                    SuiRpcInputError::GenericInvalid(format!(
                         "Unable to lookup name in name service registry with error: {:?}",
                         e
-                    )))
+                    ))
                 })?;
             if let Some(record_object_id) = record_object_id_option {
                 let record_object_read =
@@ -445,10 +455,10 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
 
             let name_type_tag = TypeTag::Address;
             let addr_bcs_value = bcs::to_bytes(&address).map_err(|e| {
-                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!(
+                SuiRpcInputError::GenericInvalid(format!(
                     "Unable to serialize address: {:?} with error: {:?}",
                     address, e
-                )))
+                ))
             })?;
 
             let addr_object_id_opt = self

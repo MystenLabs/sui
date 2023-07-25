@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { getExecutionStatusType, ObjectId } from '../../src';
+import { getExecutionStatusType } from '../../src';
 import { TransactionBlock } from '../../src/builder';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Test Move call with strings', () => {
 	let toolbox: TestToolbox;
-	let packageId: ObjectId;
+	let packageId: string;
 
 	async function callWithString(str: string | string[], len: number, funcName: string) {
 		const tx = new TransactionBlock();
