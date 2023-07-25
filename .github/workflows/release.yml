@@ -113,7 +113,9 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ env.sui_tag }}
-          files: ./crates/sui-tool-${{ matrix.os }}
+          files: |
+            ./crates/sui-tool-${{ matrix.os }}
+            ./crates/sui-faucet
         env:
           # Have to use a Personal Access Token (PAT), based on https://tinyurl.com/2by2ntdr
           GITHUB_TOKEN: ${{ secrets.GH_RELEASE_BUILDS_TOKEN }}
