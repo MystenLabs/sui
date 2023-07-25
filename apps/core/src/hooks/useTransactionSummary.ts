@@ -23,9 +23,11 @@ import { getObjectDisplayLookup } from '../utils/transaction/getObjectDisplayLoo
 export function useTransactionSummary({
 	transaction,
 	currentAddress,
+	recognizedPackagesList,
 }: {
 	transaction?: SuiTransactionBlockResponse | DryRunTransactionBlockResponse;
 	currentAddress?: string;
+	recognizedPackagesList: string[];
 }) {
 	const { objectChanges } = transaction ?? {};
 
@@ -48,7 +50,7 @@ export function useTransactionSummary({
 	const summary = useMemo(() => {
 		if (!transaction) return null;
 		const objectSummary = getObjectChangeSummary(objectChangesWithDisplay);
-		const balanceChangeSummary = getBalanceChangeSummary(transaction);
+		const balanceChangeSummary = getBalanceChangeSummary(transaction, recognizedPackagesList);
 		const gas = getGasSummary(transaction);
 
 		if (is(transaction, DryRunTransactionBlockResponse)) {
@@ -69,7 +71,7 @@ export function useTransactionSummary({
 				timestamp: transaction.timestampMs,
 			};
 		}
-	}, [transaction, currentAddress, objectChangesWithDisplay]);
+	}, [transaction, objectChangesWithDisplay, recognizedPackagesList, currentAddress]);
 
 	return summary;
 }

@@ -10,14 +10,17 @@ import {
 
 import { BalanceChanges } from './BalanceChanges';
 import { ObjectChanges } from './ObjectChanges';
+import { useRecognizedPackages } from '~/hooks/useRecognizedPackages';
 
 interface TransactionSummaryProps {
 	transaction: SuiTransactionBlockResponse;
 }
 
 export function TransactionSummary({ transaction }: TransactionSummaryProps) {
+	const recognizedPackagesList = useRecognizedPackages();
 	const summary = useTransactionSummary({
 		transaction,
+		recognizedPackagesList,
 	});
 
 	const transactionKindName = getTransactionKindName(getTransactionKind(transaction)!);
