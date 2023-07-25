@@ -866,7 +866,12 @@ impl CheckpointBuilder {
             .iter()
             .map(|effect| *effect.transaction_digest())
             .collect();
+        let transactions_and_sizes = self
+            .state
+            .database
+            .get_transactions_and_serialized_sizes(&all_digests)?;
         let mut all_effects_and_transaction_sizes = Vec::with_capacity(all_effects.len());
+        let mut transaction_keys = Vec::new();
         {
             let _guard = monitored_scope("CheckpointBuilder::wait_for_transactions_sequenced");
             debug!(
@@ -874,28 +879,28 @@ impl CheckpointBuilder {
                 "Waiting for {:?} certificates to appear in consensus",
                 all_effects_and_transaction_sizes.len()
             );
-            for effects in all_effects {
-                let (transaction, transaction_size) = self
-                    .state
-                    .database
-                    .get_transaction_and_serialized_size(effects.transaction_digest())?
-                    .unwrap_or_else(|| panic!("Could not find executed transaction {effects:?}"));
+
+            for (effect, transaction_and_size) in all_effects
+                .into_iter()
+                .zip(transactions_and_sizes.into_iter())
+            {
+                let (transaction, size) = transaction_and_size
+                    .expect(&format!("Could not find executed transaction {:?}", effect));
                 // ConsensusCommitPrologue is guaranteed to be processed before we reach here
                 if !matches!(
                     transaction.inner().transaction_data().kind(),
                     TransactionKind::ConsensusCommitPrologue(_)
                 ) {
-                    // todo - use NotifyRead::register_all might be faster
-                    self.epoch_store
-                        .consensus_message_processed_notify(
-                            SequencedConsensusTransactionKey::External(
-                                ConsensusTransactionKey::Certificate(*effects.transaction_digest()),
-                            ),
-                        )
-                        .await?;
+                    transaction_keys.push(SequencedConsensusTransactionKey::External(
+                        ConsensusTransactionKey::Certificate(*effect.transaction_digest()),
+                    ));
                 }
-                all_effects_and_transaction_sizes.push((effects, transaction_size));
+                all_effects_and_transaction_sizes.push((effect.clone(), size));
             }
+
+            self.epoch_store
+                .consensus_messages_processed_notify(transaction_keys)
+                .await?;
         }
 
         let signatures = self
