@@ -441,7 +441,12 @@ where
     }
 
     fn subscribe_event(&self, sink: SubscriptionSink, filter: EventFilter) -> SubscriptionResult {
-        spawn_subscription(sink, self.subscription_handler.subscribe_events(filter));
+        // todo - we can add semaphore here as well
+        spawn_subscription(
+            sink,
+            self.subscription_handler.subscribe_events(filter),
+            None,
+        );
         Ok(())
     }
 
@@ -453,6 +458,7 @@ where
         spawn_subscription(
             sink,
             self.subscription_handler.subscribe_transactions(filter),
+            None, // todo - we can add semaphore here as well
         );
         Ok(())
     }
