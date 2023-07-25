@@ -1,18 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Filter16 } from '@mysten/icons';
-import { useEffect, useState } from 'react';
+import { useFeatureIsOn } from '@growthbook/growthbook-react';
+// import { Filter16 } from '@mysten/icons';
+import { useState } from 'react';
 import toast from 'react-hot-toast';
 
 import { EpochsActivityTable } from './EpochsActivityTable';
 import { TransactionsActivityTable } from './TransactionsActivityTable';
 import { CheckpointsTable } from '../checkpoints/CheckpointsTable';
-import { useNetwork } from '~/context';
-import { DropdownMenu, DropdownMenuCheckboxItem } from '~/ui/DropdownMenu';
+// import { useNetwork } from '~/context';
+// import { DropdownMenu, DropdownMenuCheckboxItem } from '~/ui/DropdownMenu';
 import { PlayPause } from '~/ui/PlayPause';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/ui/Tabs';
-import { Network } from '~/utils/api/DefaultRpcClient';
+// import { Network } from '~/utils/api/DefaultRpcClient';
 
 const VALID_TABS = ['transactions', 'epochs', 'checkpoints'];
 
@@ -27,6 +28,8 @@ const REFETCH_INTERVAL_SECONDS = 10;
 const REFETCH_INTERVAL = REFETCH_INTERVAL_SECONDS * 1000;
 
 export function Activity({ initialTab, initialLimit, disablePagination }: Props) {
+	const pollingTxnTableEnabled = useFeatureIsOn('polling-txn-table');
+
 	const [paused, setPaused] = useState(false);
 	const [activeTab, setActiveTab] = useState(() =>
 		initialTab && VALID_TABS.includes(initialTab) ? initialTab : 'transactions',
@@ -44,9 +47,9 @@ export function Activity({ initialTab, initialLimit, disablePagination }: Props)
 		setPaused((paused) => !paused);
 	};
 
-	const refetchInterval = paused ? undefined : REFETCH_INTERVAL;
+	const refetchInterval = paused || !pollingTxnTableEnabled ? undefined : REFETCH_INTERVAL;
 	// TODO remove network check when querying transactions with TransactionKind filter is fixed on devnet and testnet
-	const [network] = useNetwork();
+	/*const [network] = useNetwork();
 	const isTransactionKindFilterEnabled = Network.MAINNET === network || Network.LOCAL === network;
 	const [showSystemTransactions, setShowSystemTransaction] = useState(
 		!isTransactionKindFilterEnabled,
@@ -55,7 +58,7 @@ export function Activity({ initialTab, initialLimit, disablePagination }: Props)
 		if (!isTransactionKindFilterEnabled) {
 			setShowSystemTransaction(true);
 		}
-	}, [isTransactionKindFilterEnabled]);
+	}, [isTransactionKindFilterEnabled]);*/
 
 	return (
 		<div>
@@ -88,9 +91,9 @@ export function Activity({ initialTab, initialLimit, disablePagination }: Props)
 							/>
 						) : null */}
 						{/* todo: re-enable this when rpc is stable */}
-                        {activeTab === 'transactions' && (
-                            <PlayPause paused={paused} onChange={handlePauseChange} />
-                        )}
+						{pollingTxnTableEnabled && activeTab === 'transactions' && (
+							<PlayPause paused={paused} onChange={handlePauseChange} />
+						)}
 					</div>
 				</div>
 				<TabsContent value="transactions">
