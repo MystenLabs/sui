@@ -397,8 +397,19 @@ state-archive-write-config:
     aws-region: "<aws_region>"
     object-store-connection-limit: 20
   concurrency: 5
-  # This is needed to be set as true on the node that archives the data
-  # This prevents the node from pruning its local state until the data has been
-  # successfully archived
-  use-for-pruning-watermark: true
+  use-for-pruning-watermark: false
+state-archive-read-config:
+  - object-store-config:
+      object-store: "S3"
+      # Use the same bucket which is being used in `state-archive-write-config`
+      bucket: "<bucket_name>"
+      aws-access-key-id: "<AWS_ACCESS_KEY_ID>"
+      aws-secret-access-key: "<AWS_SECRET_ACCESS_KEY>"
+      aws-region: "<aws_region>"
+      object-store-connection-limit: 20
+    concurrency: 5
+    # This should be set to true in this case. Setting this to true
+    # would prevent pruning of local transaction data until it is archived
+    # in the bucket
+    use-for-pruning-watermark: true
 ```
