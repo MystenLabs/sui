@@ -325,6 +325,16 @@ impl Proposer {
     }
 
     fn min_delay(&self) -> Duration {
+        let next_round = self.round + 1;
+        if next_round % 2 == 0 && self.leader_schedule.leader(next_round).id() == self.authority_id
+        {
+            return Duration::ZERO;
+        }
+
+        if next_round % 2 != 0 && self.committee.leader(next_round).id() == self.authority_id {
+            return Duration::ZERO;
+        }
+
         self.min_header_delay
     }
 
