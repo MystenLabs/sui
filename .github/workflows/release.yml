@@ -111,10 +111,13 @@ jobs:
           path: |
             ./target/release/sui*-${{ matrix.os }}*
 
-      - name: Upload release artifacts for ${{ matrix.os }} platform
+      - name: Publish binaries for ${{ env.sui_tag }} release
         if: ${{ env.sui_tag != 'main' }}
-        uses: actions/upload-artifact@v3
+        uses: softprops/action-gh-release@v1
         with:
-          name: sui-binaries-${{ matrix.os }}
-          path: |
+          tag_name: ${{ env.sui_tag }}
+          files: |
             ./target/release/sui*-${{ matrix.os }}*
+        env:
+          # Have to use a Personal Access Token (PAT), based on https://tinyurl.com/2by2ntdr
+          GITHUB_TOKEN: ${{ secrets.GH_RELEASE_BUILDS_TOKEN }}
