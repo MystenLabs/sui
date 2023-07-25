@@ -74,6 +74,7 @@ mod checked {
         tx_context: &mut TxContext,
         gas_charger: &mut GasCharger,
         pt: ProgrammableTransaction,
+        lamport_version: SequenceNumber,
     ) -> Result<Mode::ExecutionResults, ExecutionError> {
         let ProgrammableTransaction { inputs, commands } = pt;
         let mut context = ExecutionContext::new(
@@ -104,24 +105,11 @@ mod checked {
         let loaded_child_objects = object_runtime.loaded_child_objects();
 
         // apply changes
-        let finished = context.finish::<Mode>();
+        let finished = context.finish::<Mode>(lamport_version);
         // Save loaded objects for debug. We dont want to lose the info
         state_view.save_loaded_child_objects(loaded_child_objects);
 
-        let ExecutionResults {
-            object_changes,
-            user_events,
-        } = finished?;
-        state_view.apply_object_changes(object_changes);
-        for (module_id, tag, contents) in user_events {
-            state_view.log_event(Event::new(
-                module_id.address(),
-                module_id.name(),
-                tx_context.sender(),
-                tag,
-                contents,
-            ))
-        }
+        state_view.record_execution_results(finished?);
         Ok(mode_results)
     }
 

@@ -501,6 +501,7 @@ mod checked {
                     tx_ctx,
                     gas_charger,
                     pt,
+                    temporary_store.lamport_version(),
                 )
             }
         }
@@ -677,12 +678,12 @@ mod checked {
 
         if result.is_err() {
             tracing::error!(
-            "Failed to execute advance epoch transaction. Switching to safe mode. Error: {:?}. Input objects: {:?}. Tx data: {:?}",
-            result.as_ref().err(),
-            temporary_store.objects(),
-            change_epoch,
-        );
-            temporary_store.drop_writes();
+                "Failed to execute advance epoch transaction. Switching to safe mode. Error: {:?}. Input objects: {:?}. Tx data: {:?}",
+                result.as_ref().err(),
+                temporary_store.objects(),
+                change_epoch,
+            );
+            temporary_store.reset();
             // Must reset the storage rebate since we are re-executing.
             gas_charger.reset_storage_cost_and_rebate();
 

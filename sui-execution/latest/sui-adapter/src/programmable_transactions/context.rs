@@ -38,8 +38,8 @@ mod checked {
         coin::Coin,
         error::{ExecutionError, ExecutionErrorKind},
         execution::{
-            ExecutionResults, ExecutionState, InputObjectMetadata, InputValue, ObjectValue,
-            RawValueType, ResultValue, UsageKind,
+            ExecutionResults, ExecutionResultsV2, ExecutionState, InputObjectMetadata, InputValue,
+            ObjectValue, RawValueType, ResultValue, UsageKind,
         },
         metrics::LimitsMetrics,
         move_package::MovePackage,
@@ -554,7 +554,10 @@ mod checked {
         }
 
         /// Determine the object changes and collect all user events
-        pub fn finish<Mode: ExecutionMode>(self) -> Result<ExecutionResults, ExecutionError> {
+        pub fn finish<Mode: ExecutionMode>(
+            self,
+            lamport_version: SequenceNumber,
+        ) -> Result<ExecutionResults, ExecutionError> {
             let Self {
                 protocol_config,
                 metrics,
@@ -571,36 +574,31 @@ mod checked {
                 user_events,
                 ..
             } = self;
+            let mut objects_modified_at = BTreeMap::new();
             let tx_digest = tx_context.digest();
+
             let mut additional_writes = BTreeMap::new();
-            let mut input_object_metadata = BTreeMap::new();
-            // Any object value that has not been taken (still has `Some` for it's value) needs to
-            // written as it's value might have changed (and eventually it's sequence number will need
-            // to increase)
-            let mut by_value_inputs = BTreeSet::new();
-            let mut add_input_object_write = |input| -> Result<(), ExecutionError> {
+
+            for input in inputs.into_iter().chain(iter::once(gas)) {
+                // Any object value that has not been taken (still has `Some` for it's value) needs to be
+                // written as it's value might have changed (and eventually it's sequence number will need
+                // to increase)
                 let InputValue {
                     object_metadata: object_metadata_opt,
                     inner: ResultValue { value, .. },
                 } = input;
-                let Some(object_metadata) = object_metadata_opt else { return Ok(()) };
-                let is_mutable_input = object_metadata.is_mutable_input;
-                let owner = object_metadata.owner;
-                let id = object_metadata.id;
-                input_object_metadata.insert(object_metadata.id, object_metadata);
-                let Some(Value::Object(object_value)) = value else {
-                    by_value_inputs.insert(id);
-                    return Ok(())
-                };
-                if is_mutable_input {
-                    add_additional_write(&mut additional_writes, owner, object_value)?;
+                let Some(object_metadata) = object_metadata_opt else { continue; };
+                if !object_metadata.is_mutable_input {
+                    // We are only interested in mutable inputs.
+                    continue;
                 }
-                Ok(())
-            };
-            let gas_id_opt = gas.object_metadata.as_ref().map(|info| info.id);
-            add_input_object_write(gas)?;
-            for input in inputs {
-                add_input_object_write(input)?
+                objects_modified_at.insert(
+                    object_metadata.id,
+                    (object_metadata.version, object_metadata.digest),
+                );
+                if let Some(Value::Object(object_value)) = value {
+                    add_additional_write(&mut pending_writes, object_metadata.owner, object_value)?;
+                }
             }
             // check for unused values
             // disable this check for dev inspect
@@ -657,6 +655,7 @@ mod checked {
                 add_additional_write(&mut additional_writes, owner, object_value)?;
             }
             // Refund unused gas
+            let gas_id_opt = gas.object_metadata.as_ref().map(|info| info.id);
             if let Some(gas_id) = gas_id_opt {
                 refund_max_gas_budget(&mut additional_writes, gas_charger, gas_id)?;
             }
@@ -672,25 +671,24 @@ mod checked {
             // Sui Move no longer uses Move's internal event system
             assert_invariant!(events.is_empty(), "Events must be empty");
             let object_runtime: ObjectRuntime = native_context_extensions.remove();
-            let new_ids = object_runtime.new_ids().clone();
-            // tell the object runtime what input objects were taken and which were transferred
-            let external_transfers = additional_writes.keys().copied().collect();
             let RuntimeResults {
                 writes,
-                deletions,
-                user_events: remaining_events,
                 loaded_child_objects,
-            } = object_runtime.finish(by_value_inputs, external_transfers)?;
+                user_events: remaining_events,
+                created_object_ids,
+                deleted_object_ids,
+            } = object_runtime.finish()?;
             assert_invariant!(
                 remaining_events.is_empty(),
                 "Events should be taken after every Move call"
             );
-            let mut object_changes = BTreeMap::new();
+
+            let mut written_objects = BTreeMap::new();
             for package in new_packages {
                 let id = package.id();
-                let change = ObjectChange::Write(package, WriteKind::Create);
-                object_changes.insert(id, change);
+                written_objects.insert(id, package);
             }
+
             // we need a new session just for deserializing and fetching abilities. Which is sad
             // TODO remove this
             let tmp_session = new_session(
@@ -702,6 +700,7 @@ mod checked {
                 protocol_config,
                 metrics,
             );
+
             for (id, additional_write) in additional_writes {
                 let AdditionalWrite {
                     recipient,
@@ -709,40 +708,24 @@ mod checked {
                     has_public_transfer,
                     bytes,
                 } = additional_write;
-                let write_kind = if input_object_metadata.contains_key(&id)
-                    || loaded_child_objects.contains_key(&id)
-                {
-                    assert_invariant!(
-                        !new_ids.contains_key(&id),
-                        "new id should not be in mutations"
-                    );
-                    WriteKind::Mutate
-                } else if new_ids.contains_key(&id) {
-                    WriteKind::Create
-                } else {
-                    WriteKind::Unwrap
-                };
                 // safe given the invariant that the runtime correctly propagates has_public_transfer
                 let move_object = unsafe {
                     create_written_object(
                         vm,
                         &tmp_session,
                         protocol_config,
-                        &input_object_metadata,
-                        &loaded_child_objects,
                         id,
                         type_,
                         has_public_transfer,
                         bytes,
-                        write_kind,
+                        lamport_version,
                     )?
                 };
                 let object = Object::new_move(move_object, recipient, tx_digest);
-                let change = ObjectChange::Write(object, write_kind);
-                object_changes.insert(id, change);
+                written_objects.insert(id, object);
             }
 
-            for (id, (write_kind, recipient, ty, value)) in writes {
+            for (id, (recipient, ty, value)) in writes {
                 let abilities = tmp_session
                     .get_type_abilities(&ty)
                     .map_err(|e| convert_vm_error(e, vm, tmp_session.get_resolver()))?;
@@ -759,64 +742,23 @@ mod checked {
                         vm,
                         &tmp_session,
                         protocol_config,
-                        &input_object_metadata,
-                        &loaded_child_objects,
                         id,
                         ty,
                         has_public_transfer,
                         bytes,
-                        write_kind,
+                        lamport_version,
                     )?
                 };
                 let object = Object::new_move(move_object, recipient, tx_digest);
-                let change = ObjectChange::Write(object, write_kind);
-                object_changes.insert(id, change);
+                written_objects.insert(id, object);
             }
-            for (id, delete_kind) in deletions {
-                // For deleted and wrapped objects, the object must exist either in the input or was
-                // loaded as child object. We can read them to get the previous version.
-                // For unwrap_then_delete, in older protocol versions, we must consult the object store
-                // to see if there exists a tombstone, and if so we include it otherwise we skip it.
-                // In newer protocol versions, we can just skip it.
-                let delete_kind_with_seq = match delete_kind {
-                    DeleteKind::Normal | DeleteKind::Wrap => {
-                        let old_version = match input_object_metadata.get(&id) {
-                            Some(metadata) => {
-                                assert_invariant!(
-                                    !matches!(metadata.owner, Owner::Immutable),
-                                    "Attempting to delete immutable object {id} via delete kind {delete_kind}"
-                                );
-                                metadata.version
-                            }
-                            None => {
-                                match loaded_child_objects.get(&id) {
-                                    Some(version) => *version,
-                                    None => invariant_violation!("Deleted/wrapped object {id} must be either in input or loaded child objects")
-                                }
-                            }
-                        };
-                        if delete_kind == DeleteKind::Normal {
-                            DeleteKindWithOldVersion::Normal(old_version)
-                        } else {
-                            DeleteKindWithOldVersion::Wrap(old_version)
-                        }
+
+            for (id, loaded_child_object) in loaded_child_objects {
+                if loaded_child_object.is_modified {
+                    if let Some(version_digest) = loaded_child_object.loaded_version_digest {
+                        objects_modified_at.insert(id, version_digest);
                     }
-                    DeleteKind::UnwrapThenDelete => {
-                        if protocol_config.simplified_unwrap_then_delete() {
-                            DeleteKindWithOldVersion::UnwrapThenDelete
-                        } else {
-                            let old_version = match state_view.get_latest_parent_entry_ref(id) {
-                                Ok(Some((_, previous_version, _))) => previous_version,
-                                // This object was not created this transaction but has never existed in
-                                // storage, skip it.
-                                Ok(None) => continue,
-                                Err(_) => invariant_violation!("{}", missing_unwrapped_msg(&id)),
-                            };
-                            DeleteKindWithOldVersion::UnwrapThenDeleteDEPRECATED(old_version)
-                        }
-                    }
-                };
-                object_changes.insert(id, ObjectChange::Delete(delete_kind_with_seq));
+                }
             }
 
             let (res, linkage) = tmp_session.finish();
@@ -828,8 +770,22 @@ mod checked {
             assert_invariant!(move_events.is_empty(), "Events must be empty");
 
             Ok(ExecutionResults {
-                object_changes,
-                user_events,
+                written_objects,
+                objects_modified_at,
+                created_object_ids,
+                deleted_object_ids,
+                user_events: user_events
+                    .into_iter()
+                    .map(|(module_id, tag, contents)| {
+                        Event::new(
+                            module_id.address(),
+                            module_id.name(),
+                            tx_context.sender(),
+                            tag,
+                            contents,
+                        )
+                    })
+                    .collect(),
             })
         }
 
@@ -1166,6 +1122,7 @@ mod checked {
             is_mutable_input,
             owner,
             version,
+            digest: obj.digest(),
         };
         let obj_value = value_from_object(vm, session, obj)?;
         let contained_uids = {
@@ -1302,32 +1259,15 @@ mod checked {
         vm: &'vm MoveVM,
         session: &Session<'state, 'vm, LinkageView<'state>>,
         protocol_config: &ProtocolConfig,
-        input_object_metadata: &BTreeMap<ObjectID, InputObjectMetadata>,
-        loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
         id: ObjectID,
         type_: Type,
         has_public_transfer: bool,
         contents: Vec<u8>,
-        write_kind: WriteKind,
+        version: SequenceNumber,
     ) -> Result<MoveObject, ExecutionError> {
         debug_assert_eq!(
             id,
             MoveObject::id_opt(&contents).expect("object contents should start with an id")
-        );
-        let metadata_opt = input_object_metadata.get(&id);
-        let loaded_child_version_opt = loaded_child_objects.get(&id);
-        assert_invariant!(
-            metadata_opt.is_none() || loaded_child_version_opt.is_none(),
-            "Loaded {id} as a child, but that object was an input object",
-        );
-
-        let old_obj_ver = metadata_opt
-            .map(|metadata| metadata.version)
-            .or_else(|| loaded_child_version_opt.copied());
-
-        debug_assert!(
-            (write_kind == WriteKind::Mutate) == old_obj_ver.is_some(),
-            "Inconsistent state: write_kind: {write_kind:?}, old ver: {old_obj_ver:?}"
         );
 
         let type_tag = session
@@ -1341,7 +1281,7 @@ mod checked {
         MoveObject::new_from_execution(
             struct_tag.into(),
             has_public_transfer,
-            old_obj_ver.unwrap_or_else(SequenceNumber::new),
+            version,
             contents,
             protocol_config,
         )

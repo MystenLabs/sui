@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
 use move_binary_format::file_format::AbilitySet;
 use move_core_types::{
     identifier::IdentStr,
@@ -11,15 +9,16 @@ use move_core_types::{
 };
 use move_vm_types::loaded_data::runtime_types::Type;
 use serde::Deserialize;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress},
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     coin::Coin,
     digests::ObjectDigest,
     error::{ExecutionError, ExecutionErrorKind, SuiError},
     execution_status::CommandArgumentError,
-    object::Owner,
-    storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, StorageView},
+    object::{Object, Owner},
+    storage::{BackingPackageStore, ChildObjectResolver, StorageView},
 };
 
 pub trait SuiResolver:
@@ -69,8 +68,55 @@ where
 }
 
 pub struct ExecutionResults {
-    pub object_changes: BTreeMap<ObjectID, ObjectChange>,
-    pub user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
+    written_objects: BTreeMap<ObjectID, Object>,
+    objects_modified_at: BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>,
+    created_object_ids: BTreeSet<ObjectID>,
+    deleted_object_ids: BTreeSet<ObjectID>,
+    /// Ordered sequence of events emitted by execution
+    user_events: Vec<Event>,
+}
+
+impl ExecutionResults {
+    pub fn new(mutable_input_objects: &[ObjectRef]) -> Self {
+        let mut results = Self { ..Default };
+        results.reset(mutable_input_objects);
+        results
+    }
+
+    pub fn read_object(&self, id: &ObjectID) -> Option<&Object> {
+        self.written_objects.get(id)
+    }
+
+    pub fn write_object(&mut self, object: Object) {
+        self.written_objects.insert(object.id(), object);
+    }
+
+    pub fn reset(&mut self, mutable_input_objects: &[ObjectRef]) {
+        self.written_objects.clear();
+        self.objects_modified_at = mutable_input_objects
+            .iter()
+            .map(|oref| (oref.0, (oref.1, oref.2)))
+            .collect();
+        self.created_object_ids.clear();
+        self.deleted_object_ids.clear();
+        self.user_events.clear();
+    }
+
+    pub fn record_execution_results(&mut self, results: Self) {
+        #[cfg(debug_assertions)]
+        {
+            for new_modified_at in results.objects_modified_at {
+                if let Some(old) = self.objects_modified_at.get(&new_modified_at.0) {
+                    assert_eq!(old, &new_modified_at.1);
+                }
+            }
+        }
+        self.written_objects.extend(results.written_objects);
+        self.objects_modified_at.extend(results.objects_modified_at);
+        self.created_object_ids.extend(results.created_object_ids);
+        self.deleted_object_ids.extend(results.deleted_object_ids);
+        self.user_events.extend(results.user_events);
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -79,6 +125,7 @@ pub struct InputObjectMetadata {
     pub is_mutable_input: bool,
     pub owner: Owner,
     pub version: SequenceNumber,
+    pub digest: ObjectDigest,
 }
 
 #[derive(Debug, PartialEq, Eq)]

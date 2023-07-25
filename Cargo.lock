@@ -11859,6 +11859,7 @@ dependencies = [
  "bcs",
  "futures",
  "jsonrpsee",
+ "linked-hash-map",
  "move-binary-format",
  "move-core-types",
  "move-package",

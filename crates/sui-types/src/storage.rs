@@ -8,6 +8,7 @@ use crate::digests::{
 };
 use crate::effects::{TransactionEffects, TransactionEvents};
 use crate::error::SuiError;
+use crate::execution::ExecutionResults;
 use crate::execution::LoadedChildObjectMetadata;
 use crate::message_envelope::Message;
 use crate::messages_checkpoint::{
@@ -130,6 +131,8 @@ pub trait Storage {
     fn read_object(&self, id: &ObjectID) -> Option<&Object>;
 
     fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>);
+
+    fn record_execution_results(&mut self, results: ExecutionResults);
 
     fn save_loaded_child_objects(
         &mut self,

@@ -3,7 +3,7 @@
 
 use crate::committee::EpochId;
 use crate::effects::{TransactionEffects, TransactionEvents};
-use crate::execution::LoadedChildObjectMetadata;
+use crate::execution::{ExecutionState, LoadedChildObjectMetadata};
 use crate::execution_status::ExecutionStatus;
 use crate::storage::{DeleteKindWithOldVersion, ObjectStore};
 use crate::sui_system_state::{
@@ -16,6 +16,7 @@ use crate::{
     },
     error::{ExecutionError, SuiError, SuiResult},
     event::Event,
+    execution::ExecutionResults,
     fp_bail,
     gas::{GasCharger, GasCostSummary},
     object::Owner,
@@ -172,18 +173,13 @@ pub struct TemporaryStore<'backing> {
     /// The version to assign to all objects written by the transaction using this store.
     lamport_timestamp: SequenceNumber,
     mutable_input_refs: Vec<ObjectRef>, // Inputs that are mutable
-    // When an object is being written, we need to ensure that a few invariants hold.
-    // It's critical that we always call write_object to update `written`, instead of writing
-    // into written directly.
-    written: BTreeMap<ObjectID, (Object, WriteKind)>, // Objects written
-    /// Objects actively deleted.
-    deleted: BTreeMap<ObjectID, DeleteKindWithOldVersion>,
+    protocol_config: ProtocolConfig,
+
+    execution_results: ExecutionResults,
+
     /// Child objects loaded during dynamic field opers
     /// Currently onply populated for full nodes, not for validators
     loaded_child_objects: BTreeMap<ObjectID, LoadedChildObjectMetadata>,
-    /// Ordered sequence of events emitted by execution
-    events: Vec<Event>,
-    protocol_config: ProtocolConfig,
 
     /// Every package that was loaded from DB store during execution.
     /// These packages were not previously loaded into the temporary store.
@@ -208,12 +204,10 @@ impl<'backing> TemporaryStore<'backing> {
             input_objects: objects,
             lamport_timestamp,
             mutable_input_refs: mutable_inputs,
-            written: BTreeMap::new(),
-            deleted: BTreeMap::new(),
-            events: Vec::new(),
             protocol_config: protocol_config.clone(),
             loaded_child_objects: BTreeMap::new(),
             runtime_packages_loaded_from_db: RwLock::new(BTreeMap::new()),
+            execution_results: ExecutionResults::new(&mutable_inputs),
         }
     }
 
@@ -238,18 +232,20 @@ impl<'backing> TemporaryStore<'backing> {
             input_objects: objects,
             lamport_timestamp,
             mutable_input_refs: mutable_inputs,
-            written: BTreeMap::new(),
-            deleted: BTreeMap::new(),
-            events: Vec::new(),
             protocol_config: protocol_config.clone(),
             loaded_child_objects: BTreeMap::new(),
             runtime_packages_loaded_from_db: RwLock::new(BTreeMap::new()),
+            execution_results: ExecutionResults::new(&mutable_inputs),
         }
     }
 
     // Helpers to access private fields
     pub fn objects(&self) -> &BTreeMap<ObjectID, Object> {
         &self.input_objects
+    }
+
+    pub fn lamport_version(&self) -> SequenceNumber {
+        self.lamport_timestamp
     }
 
     /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
@@ -524,6 +520,9 @@ impl<'backing> TemporaryStore<'backing> {
         // The adapter is not very disciplined at filling in the correct
         // previous transaction digest, so we ensure it is correct here.
         object.previous_transaction = self.tx_digest;
+        if let Some(move_object) = object.data.try_as_move_mut() {
+            move_object.increment_version_to(self.lamport_timestamp);
+        }
         self.written.insert(object.id(), (object, kind));
     }
 
@@ -548,12 +547,6 @@ impl<'backing> TemporaryStore<'backing> {
         // For object deletion, we will increment the version when converting the store to effects
         // so the object will eventually show up in the parent_sync table with a new version.
         self.deleted.insert(*id, kind);
-    }
-
-    pub fn drop_writes(&mut self) {
-        self.written.clear();
-        self.deleted.clear();
-        self.events.clear();
     }
 
     pub fn log_event(&mut self, event: Event) {
@@ -597,6 +590,10 @@ impl<'backing> TemporaryStore<'backing> {
         // Merge the two maps because we may be calling the execution engine more than once
         // (e.g. in advance epoch transaction, where we may be publishing a new system package).
         self.loaded_child_objects.extend(loaded_child_objects);
+    }
+
+    pub fn record_execution_results(&mut self, results: ExecutionResults) {
+        self.execution_results.record_execution_results(results)
     }
 
     pub fn estimate_effects_size_upperbound(&self) -> usize {
@@ -1153,6 +1150,7 @@ impl<'backing> Storage for TemporaryStore<'backing> {
         self.written.clear();
         self.deleted.clear();
         self.events.clear();
+        self.execution_results.reset(&self.mutable_input_refs);
     }
 
     fn log_event(&mut self, event: Event) {
@@ -1172,6 +1170,10 @@ impl<'backing> Storage for TemporaryStore<'backing> {
         loaded_child_objects: BTreeMap<ObjectID, LoadedChildObjectMetadata>,
     ) {
         TemporaryStore::save_loaded_child_objects(self, loaded_child_objects)
+    }
+
+    fn record_execution_results(&mut self, results: ExecutionResults) {
+        TemporaryStore::record_execution_results(self, results)
     }
 }
 
