@@ -7,7 +7,6 @@ import {
 	getTransactionDigest,
 	getTransactionSender,
 } from '@mysten/sui.js';
-import { is } from '@mysten/sui.js/utils';
 import { useMemo } from 'react';
 
 import { getBalanceChangeSummary } from '../utils/transaction/getBalanceChangeSummary';
@@ -51,13 +50,8 @@ export function useTransactionSummary({
 		const balanceChangeSummary = getBalanceChangeSummary(transaction);
 		const gas = getGasSummary(transaction);
 
-		if (is(transaction, DryRunTransactionBlockResponse)) {
-			return {
-				gas,
-				objectSummary,
-				balanceChanges: balanceChangeSummary,
-			};
-		} else {
+		if ('digest' in transaction) {
+			// Non-dry-run transaction:
 			return {
 				gas,
 				sender: getTransactionSender(transaction),
@@ -67,6 +61,13 @@ export function useTransactionSummary({
 				objectSummary,
 				status: getExecutionStatusType(transaction),
 				timestamp: transaction.timestampMs,
+			};
+		} else {
+			// Dry run transaction:
+			return {
+				gas,
+				objectSummary,
+				balanceChanges: balanceChangeSummary,
 			};
 		}
 	}, [transaction, currentAddress, objectChangesWithDisplay]);
