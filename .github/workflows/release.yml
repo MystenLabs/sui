@@ -96,12 +96,12 @@ jobs:
         if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main' }}
         shell: bash
         run: |
-          ren ./crates/sui ./crates/sui-${{ matrix.os }}
-          ren ./crates/sui-node ./crates/sui-node-${{ matrix.os }}
-          ren ./crates/sui-tool ./crates/sui-tool-${{ matrix.os }}
-          ren ./crates/sui-faucet ./crates/sui-faucet-${{ matrix.os }}
-          ren ./crates/sui-test-validator ./crates/sui-test-validator-${{ matrix.os }}
-          ren ./crates/sui-indexer ./crates/sui-indexer-${{ matrix.os }}
+          mv ./crates/sui ./crates/sui-${{ matrix.os }}
+          mv ./crates/sui-node ./crates/sui-node-${{ matrix.os }}
+          mv ./crates/sui-tool ./crates/sui-tool-${{ matrix.os }}
+          mv ./crates/sui-faucet ./crates/sui-faucet-${{ matrix.os }}
+          mv ./crates/sui-test-validator ./crates/sui-test-validator-${{ matrix.os }}
+          mv ./crates/sui-indexer ./crates/sui-indexer-${{ matrix.os }}
 
       - name: Upload release artifacts for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
