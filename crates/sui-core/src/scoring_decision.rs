@@ -57,6 +57,7 @@ pub fn update_low_scoring_authorities(
             metrics,
             protocol_config.scoring_decision_mad_divisor(),
             protocol_config.scoring_decision_cutoff_value(),
+            protocol_config,
         );
     } else {
         // TODO remove this after the protocol version upgrade to 5
@@ -184,6 +185,7 @@ fn update_low_scoring_authorities_with_no_disable_mechanism(
     metrics: &Arc<AuthorityMetrics>,
     _mad_divisor: f64,
     _cut_off_value: f64,
+    protocol_config: &ProtocolConfig,
 ) {
     if !reputation_scores.final_of_schedule {
         return;
@@ -239,12 +241,16 @@ fn update_low_scoring_authorities_with_no_disable_mechanism(
     for (authority, score, stake) in scores_per_authority {
         total_stake += stake;
 
-        let included = if !committee.reached_validity(total_stake) {
+        let included = if total_stake
+            <= (protocol_config.consensus_bad_nodes_stake_threshold()
+                * committee.total_stake() as f64) as Stake
+        {
             final_low_scoring_map.insert(authority, score);
             true
         } else {
             false
         };
+
         if let Some(hostname) = authority_names_to_hostnames.get(&authority) {
             info!(
                 "low scoring authority {} has score {}, included: {}",

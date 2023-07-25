@@ -305,6 +305,11 @@ impl LeaderSchedule {
         *write = table;
     }
 
+    pub fn num_of_bad_nodes(&self) -> usize {
+        let read = self.leader_swap_table.read();
+        read.bad_nodes.len()
+    }
+
     /// Returns the leader for the provided round. Keep in mind that this method will return a leader
     /// according to the provided LeaderSwapTable. Providing a different table can potentially produce
     /// a different leader for the same round.
