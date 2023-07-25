@@ -53,69 +53,58 @@ jobs:
         with:
           ref: ${{ env.sui_tag }}
       
-      # - name: Install nexttest
-      #   if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
-      #   uses: taiki-e/install-action@nextest
+      - name: Install nexttest
+        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
+        uses: taiki-e/install-action@nextest
 
-      # - name: Setup protoc
-      #   if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
-      #   uses: arduino/setup-protoc@v1
-      #   # this avoids rate-limiting
-      #   with:
-      #     repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup protoc
+        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
+        uses: arduino/setup-protoc@v1
+        # this avoids rate-limiting
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # - name: Install postgres (Windows)
-      #   if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
-      #   shell: bash
-      #   run: |
-      #     choco install postgresql12 --force --params '/Password:root'
-      #     echo "C:\Program Files\PostgreSQL\12\bin" >> $GITHUB_PATH
-      #     echo "C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_PATH
-      #     echo "PQ_LIB_DIR=C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_ENV
-      #     echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
-      #     echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV          
+      - name: Install postgres (Windows)
+        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
+        shell: bash
+        run: |
+          choco install postgresql12 --force --params '/Password:root'
+          echo "C:\Program Files\PostgreSQL\12\bin" >> $GITHUB_PATH
+          echo "C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_PATH
+          echo "PQ_LIB_DIR=C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_ENV
+          echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
+          echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV          
 
       - name: cargo build (release) for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
         id: build
         run: |
-          touch ./crates/sui-tool
-          
-      - name: Rename binaries for ubuntu
-        if: ${{ matrix.os == 'ubuntu-ghcloud' && env.sui_tag != 'main' }}
-        shell: bash
-        run: |
-          mv target/release/sui target/release/sui-${{ matrix.os }}
-          mv target/release/sui-node target/release/sui-node-${{ matrix.os }}
-          mv target/release/sui-tool target/release/sui-tool-${{ matrix.os }}
-          mv target/release/sui-faucet target/release/sui-faucet-${{ matrix.os }}
-          mv target/release/sui-test-validator target/release/sui-test-validator-${{ matrix.os }}
-          mv target/release/sui-indexer target/release/sui-indexer-${{ matrix.os }}
+          cargo build --release
 
-      - name: Rename binaries for windows
-        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main' }}
+      - name: Rename binaries for ${{ matrix.os }}
+        if: ${{ env.sui_tag != 'main' }}
         shell: bash
         run: |
-          mv ./crates/sui-tool ./crates/sui-tool-${{ matrix.os }}
-          pwd
-          ls -al
+          mv ./target/release/sui ./target/release/sui-${{ matrix.os }}
+          mv ./target/release/sui-node ./target/release/sui-node-${{ matrix.os }}
+          mv ./target/release/sui-tool ./target/release/sui-tool-${{ matrix.os }}
+          mv ./target/release/sui-faucet ./target/release/sui-faucet-${{ matrix.os }}
+          mv ./target/release/sui-test-validator ./target/release/sui-test-validator-${{ matrix.os }}
+          mv ./target/release/sui-indexer ./target/release/sui-indexer-${{ matrix.os }}
 
       - name: Upload release artifacts for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
         uses: actions/upload-artifact@v3
         with:
           name: sui-binaries-${{ matrix.os }}
-          path: |
-            ./crates/sui-tool-${{ matrix.os }}
+          path: ./target/release/sui-*-${{ matrix.os }}
 
       - name: Publish binaries for ${{ env.sui_tag }} release for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ env.sui_tag }}
-          files: |
-            ./crates/sui-tool-${{ matrix.os }}
-            ./crates/sui-faucet
+          files: ./target/release/sui-*-${{ matrix.os }}
         env:
           # Have to use a Personal Access Token (PAT), based on https://tinyurl.com/2by2ntdr
           GITHUB_TOKEN: ${{ secrets.GH_RELEASE_BUILDS_TOKEN }}
