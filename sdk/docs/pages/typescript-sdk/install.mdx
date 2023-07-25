@@ -1,63 +1,21 @@
 # Install Sui TypeScript SDK
 
-import { Callout } from 'nextra/components';
-
-<Callout type="note">
-I had created my own tabs because I didn't know about npm2yarn. Thanks for the TIL, Michael! Would be nice to have similar behavior for everything (Windows/Mac, for example). And each persisted in local storage. I used `group` param for that. Codeblocked it all so as not to junk up the works.
-</Callout>
-
-```sh
-import { Tab, Tabs } from '../../components'
-```
-
 The Sui TypeScript SDK is available in the monorepo and NPM.
 
 ## Install from NPM
 
 To use the Sui TypeScript SDK in your project, run the following command in your project root:
 
-```sh
-<Tabs items={["npm", "yarn", "pnpm"]} group="pkg-mgr">
-    <Tab>
-```js
-npm install --save @mysten/sui.js
-```
-    </Tab>
-    <Tab>
-```js
-yarn add @mysten/sui.js
-```
-    </Tab>
-    <Tab>
-```js
-pnpm i @mysten/sui.js
-```
-    </Tab>
-</Tabs>
+```sh npm2yarn
+npm i -D @mysten/sui.js
 ```
 
 ## Experimental tag for use with a local Sui network 
 
 Projects developing against one of the on-chain Sui networks (Devnet, Testnet, Mainnet) should use the base SDK published in the NPM registry (previous section) because the code aligns with the relevant JSON-RPC. If your developing against a [local network](https://docs.sui.io/testnet/build/sui-local-network) built from the `main` branch of the Sui monorepo, however, you should use the `experimental`-tagged SDK package as it contains the latest features (or a local build detailed in the section that follows).
 
-```sh
-<Tabs items={["npm", "yarn", "pnpm"]} group="pkg-mgr">
-    <Tab>
-```js
-npm install --save @mysten/sui.js@experimental
-```
-    </Tab>
-    <Tab>
-```js
-yarn add @mysten/sui.js@experimental
-```
-    </Tab>
-    <Tab>
-```js
-pnpm i @mysten/sui.js@experimental
-```
-    </Tab>
-</Tabs>
+```sh npm2yarn
+npm i -D @mysten/sui.js@experimental
 ```
 
 ## Install from local build
