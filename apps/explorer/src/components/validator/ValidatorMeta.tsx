@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowUpRight12 } from '@mysten/icons';
-import { type SuiValidatorSummary } from '@mysten/sui.js';
+import { type SuiValidatorSummary } from '@mysten/sui.js/client';
 import { Heading, Text } from '@mysten/ui';
 
 import { StakeButton } from './StakeButton';

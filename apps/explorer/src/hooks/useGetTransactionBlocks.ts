@@ -4,7 +4,7 @@
 import { useRpcClient } from '@mysten/core';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
-import type { TransactionFilter } from '@mysten/sui.js';
+import type { TransactionFilter } from '@mysten/sui.js/client';
 
 export const DEFAULT_TRANSACTIONS_LIMIT = 20;
 

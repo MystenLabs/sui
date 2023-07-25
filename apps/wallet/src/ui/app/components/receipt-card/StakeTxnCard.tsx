@@ -19,7 +19,7 @@ import { CountDownTimer } from '_src/ui/app/shared/countdown-timer';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
 
-import type { SuiEvent } from '@mysten/sui.js';
+import type { SuiEvent } from '@mysten/sui.js/client';
 
 type StakeTxnCardProps = {
 	event: SuiEvent;

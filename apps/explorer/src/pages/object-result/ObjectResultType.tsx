@@ -13,7 +13,7 @@ import {
 
 import { parseObjectType } from '../../utils/objectUtils';
 
-import type { SuiObjectResponse, ObjectOwner } from '@mysten/sui.js';
+import type { SuiObjectResponse, ObjectOwner } from '@mysten/sui.js/client';
 
 export type DataType = {
 	id: string;

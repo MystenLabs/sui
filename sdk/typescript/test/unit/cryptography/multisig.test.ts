@@ -2,12 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect } from 'vitest';
-import {
-	Ed25519Keypair,
-	Secp256k1Keypair,
-	decodeMultiSig,
-	parseSerializedSignature,
-} from '../../../src';
+import { parseSerializedSignature } from '../../../src/cryptography';
+import { decodeMultiSig } from '../../../src';
+import { Ed25519Keypair } from '../../../src/keypairs/ed25519';
+import { Secp256k1Keypair } from '../../../src/keypairs/secp256k1';
 import { MultiSigPublicKey } from '../../../src/multisig';
 
 describe('multisig address and combine sigs', () => {

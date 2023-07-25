@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { useWalletKit, ConnectModal } from '@mysten/wallet-kit';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from './ui/command';
-import { formatAddress } from '@mysten/sui.js';
+import { formatAddress } from '@mysten/sui.js/utils';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

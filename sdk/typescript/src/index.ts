@@ -2,6 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromExportedKeypair } from './cryptography/utils.js';
+import { ECMHLiveObjectSetDigest, ExecutionDigests } from './types/checkpoints.js';
+import { MIST_PER_SUI, SUI_DECIMALS } from './types/objects.js';
+import {
+	AuthorityQuorumSignInfo,
+	GenericAuthoritySignature,
+	SuiTransactionBlockKind,
+} from './types/transactions.js';
+
+// all exports deprecated, non-deprecated imports exported separately below
+export * from './types/index.js';
 
 export {
 	/** @deprecated Import from `@mysten/sui.js/keypairs/ed5519` instead */
@@ -332,6 +342,26 @@ export {
 	isObjectDataFull,
 } from './framework/index.js';
 
-export * from './types/index.js';
+export {
+	type CallArg,
+	type GasData,
+	type ObjectArg,
+	type PureArg,
+	type SharedObjectRef,
+	type StructTag,
+	type TransactionExpiration,
+	type TypeTag,
+	bcs,
+	isPureArg,
+} from './types/sui-bcs.js';
 
-export { fromExportedKeypair };
+export {
+	SUI_DECIMALS,
+	MIST_PER_SUI,
+	ECMHLiveObjectSetDigest,
+	ExecutionDigests,
+	GenericAuthoritySignature,
+	SuiTransactionBlockKind,
+	AuthorityQuorumSignInfo,
+	fromExportedKeypair,
+};

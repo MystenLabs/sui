@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { formatAddress } from '@mysten/sui.js';
 import { type TransactionBlock } from '@mysten/sui.js/transactions';
+import { formatAddress } from '@mysten/sui.js/utils';
 
 import { DescriptionItem, DescriptionList } from './DescriptionList';
 import { SummaryCard } from './SummaryCard';

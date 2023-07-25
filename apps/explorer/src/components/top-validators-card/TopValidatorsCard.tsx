@@ -3,7 +3,7 @@
 
 import { useGetSystemState } from '@mysten/core';
 import { ArrowRight12 } from '@mysten/icons';
-import { type SuiValidatorSummary } from '@mysten/sui.js';
+import { type SuiValidatorSummary } from '@mysten/sui.js/client';
 import { Text } from '@mysten/ui';
 import { useMemo } from 'react';
 

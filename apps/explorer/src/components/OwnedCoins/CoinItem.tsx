@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFormatCoin } from '@mysten/core';
-import { type CoinStruct } from '@mysten/sui.js';
+import { type CoinStruct } from '@mysten/sui.js/client';
 import { Text } from '@mysten/ui';
 
 import { ObjectLink } from '~/ui/InternalLink';

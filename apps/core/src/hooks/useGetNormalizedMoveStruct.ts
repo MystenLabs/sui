@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '../api/RpcClientContext';
-import { type SuiMoveNormalizedStruct } from '@mysten/sui.js';
+import { type SuiMoveNormalizedStruct } from '@mysten/sui.js/client';
 import { normalizeSuiObjectId } from '@mysten/sui.js/utils';
 import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
 

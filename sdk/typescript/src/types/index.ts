@@ -78,26 +78,43 @@ export {
 	SuiRawMoveObject,
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
 	SuiRawMovePackage,
-	SUI_DECIMALS,
-	MIST_PER_SUI,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getMoveObject,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getMoveObjectType,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getMovePackageContent,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getObjectDeletedResponse,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getObjectDisplay,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getObjectFields,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getObjectId,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getObjectNotExistsResponse,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getObjectOwner,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getObjectPreviousTransactionDigest,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getObjectReference,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getObjectType,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getObjectVersion,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getSharedObjectInitialVersion,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getSuiObjectData,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	hasPublicTransfer,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	isImmutableObject,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	isSharedObject,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	isSuiObjectResponse,
 } from './objects.js';
 export {
@@ -112,11 +129,15 @@ export {
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
 	type SuiEventFilter,
 	getEventPackage,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getEventSender,
+	/** @deprecated This method will be removed in a future version of the SDK */
 } from './events.js';
 export {
 	/** @deprecated Use `string` instead. */
 	AuthorityName,
+	/** @deprecated Use `string` instead. */
+	AuthoritySignature,
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
 	BalanceChange,
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
@@ -183,51 +204,62 @@ export {
 	TransactionEvents,
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
 	type TransactionFilter,
-	AuthoritySignature,
+	/** @deprecated This type will be removed in a future version of the SDK */
 	type EmptySignInfo,
-	GenericAuthoritySignature,
-	SuiTransactionBlockKind,
-	AuthorityQuorumSignInfo,
-	type TransactionKindName,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getChangeEpochTransaction,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getConsensusCommitPrologueTransaction,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getCreatedObjects,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getEvents,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getExecutionStatus,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getExecutionStatusError,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getExecutionStatusGasSummary,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getExecutionStatusType,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getGasData,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getNewlyCreatedCoinRefsAfterSplit,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getObjectChanges,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getProgrammableTransaction,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getPublishedObjectChanges,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getTimestampFromTransactionResponse,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getTotalGasUsed,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getTotalGasUsedUpperBound,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getTransaction,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getTransactionDigest,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getTransactionEffects,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getTransactionGasBudget,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getTransactionGasObject,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getTransactionGasPrice,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getTransactionKind,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getTransactionKindName,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getTransactionSender,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	getTransactionSignature,
 } from './transactions.js';
-export {
-	type CallArg,
-	type GasData,
-	type ObjectArg,
-	type PureArg,
-	type SharedObjectRef,
-	type StructTag,
-	type TransactionExpiration,
-	type TypeTag,
-	bcs,
-	isPureArg,
-} from './sui-bcs.js';
+
 export {
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
 	MoveCallMetric,
@@ -263,8 +295,11 @@ export {
 	SuiMoveStructTypeParameter,
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
 	SuiMoveVisibility,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	extractMutableReference,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	extractReference,
+	/** @deprecated This method will be removed in a future version of the SDK */
 	extractStructTag,
 } from './normalized.js';
 export {
@@ -286,14 +321,6 @@ export {
 	Validators,
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
 	ValidatorsApy,
-	Contents,
-	ContentsFields,
-	ContentsFieldsWithdraw,
-	DelegationStakingPool,
-	DelegationStakingPoolFields,
-	StakeSubsidy,
-	StakeSubsidyFields,
-	SuiSupplyFields,
 } from './validator.js';
 export {
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
@@ -333,6 +360,8 @@ export {
 } from './dynamic_fields.js';
 export {
 	/** @deprecated Use `string` instead. */
+	ValidatorSignature,
+	/** @deprecated Use `string` instead. */
 	CheckPointContentsDigest,
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
 	Checkpoint,
@@ -346,9 +375,6 @@ export {
 	EndOfEpochData,
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
 	GasCostSummary,
-	ECMHLiveObjectSetDigest,
-	ExecutionDigests,
-	ValidatorSignature,
 } from './checkpoints.js';
 export {
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
@@ -358,3 +384,22 @@ export {
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
 	NetworkMetrics,
 } from './metrics.js';
+
+export {
+	/** @deprecated This method will be removed in a future version of the SDK */
+	Contents,
+	/** @deprecated This method will be removed in a future version of the SDK */
+	ContentsFields,
+	/** @deprecated This method will be removed in a future version of the SDK */
+	ContentsFieldsWithdraw,
+	/** @deprecated This method will be removed in a future version of the SDK */
+	DelegationStakingPool,
+	/** @deprecated This method will be removed in a future version of the SDK */
+	DelegationStakingPoolFields,
+	/** @deprecated This method will be removed in a future version of the SDK */
+	StakeSubsidy,
+	/** @deprecated This method will be removed in a future version of the SDK */
+	StakeSubsidyFields,
+	/** @deprecated This method will be removed in a future version of the SDK */
+	SuiSupplyFields,
+} from './validator.js';

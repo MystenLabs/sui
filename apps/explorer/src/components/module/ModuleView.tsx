@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { normalizeSuiAddress, type SuiMoveNormalizedType } from '@mysten/sui.js';
+import { type SuiMoveNormalizedType } from '@mysten/sui.js/client';
+import { normalizeSuiAddress } from '@mysten/sui.js/utils';
 import cl from 'clsx';
 import Highlight, { defaultProps, Prism } from 'prism-react-renderer';
 import 'prism-themes/themes/prism-one-light.css';

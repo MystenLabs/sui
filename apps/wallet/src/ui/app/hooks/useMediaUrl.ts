@@ -3,7 +3,7 @@
 
 import { useMemo } from 'react';
 
-import type { SuiParsedData } from '@mysten/sui.js';
+import type { SuiParsedData } from '@mysten/sui.js/client';
 
 export const parseIpfsUrl = (ipfsUrl: string) =>
 	ipfsUrl.replace(/^ipfs:\/\//, 'https://ipfs.io/ipfs/');

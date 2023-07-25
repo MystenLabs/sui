@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { DisplayFieldsResponse, SuiObjectResponse } from '@mysten/sui.js';
+import { DisplayFieldsResponse, SuiObjectResponse } from '@mysten/sui.js/client';
 import { hasDisplayData } from '../hasDisplayData';
 
 export function getObjectDisplayLookup(objects: SuiObjectResponse[] = []) {
