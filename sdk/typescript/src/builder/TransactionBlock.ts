@@ -134,11 +134,17 @@ interface BuildOptions {
 	limits?: Limits;
 }
 
+export function isTransactionBlock(obj: unknown): obj is TransactionBlock {
+	return !!obj && typeof obj === 'object' && (obj as any)[TRANSACTION_BRAND] === true;
+}
+
 /**
  * Transaction Builder
  */
 export class TransactionBlock {
-	/** Returns `true` if the object is an instance of the Transaction builder class. */
+	/** Returns `true` if the object is an instance of the Transaction builder class.
+	 * @deprecated Use `isTransactionBlock` from `@mysten/sui.js/transactions` instead.
+	 */
 	static is(obj: unknown): obj is TransactionBlock {
 		return !!obj && typeof obj === 'object' && (obj as any)[TRANSACTION_BRAND] === true;
 	}

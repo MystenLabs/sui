@@ -55,7 +55,8 @@ import {
 } from '../utils/sui-types.js';
 import { fromB58, toB64, toHEX } from '@mysten/bcs';
 import type { SerializedSignature } from '../cryptography/signature.js';
-import { TransactionBlock } from '../builder/index.js';
+import type { TransactionBlock } from '../builder/index.js';
+import { isTransactionBlock } from '../builder/index.js';
 import { SuiHTTPTransport } from './http-transport.js';
 import type { SuiTransport } from './http-transport.js';
 import type { Keypair } from '../cryptography/index.js';
@@ -569,7 +570,7 @@ export class SuiClient {
 		epoch?: string | null;
 	}): Promise<DevInspectResults> {
 		let devInspectTxBytes;
-		if (TransactionBlock.is(input.transactionBlock)) {
+		if (isTransactionBlock(input.transactionBlock)) {
 			input.transactionBlock.setSenderIfNotSet(input.sender);
 			devInspectTxBytes = toB64(
 				await input.transactionBlock.build({

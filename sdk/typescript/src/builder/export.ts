@@ -3,4 +3,4 @@
 
 export { Inputs } from './Inputs.js';
 export { Transactions, type TransactionArgument } from './Transactions.js';
-export { TransactionBlock } from './TransactionBlock.js';
+export { TransactionBlock, isTransactionBlock } from './TransactionBlock.js';
