@@ -1,0 +1,152 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Open Questions
+# --------------
+# - Pattern for multi-gets
+# - Encoding RPC errors
+# - `type` (vs `scalar`) for Move Types
+# - Pattern for upcasting and downcasting
+
+# Check Completeness Against Existing APIs
+# -------------
+# TODO Read
+# DONE - Objects
+# TODO - Transactions (+ TotalTransactionBlocks)
+# TODO - Checkpoints
+# TODO - Events
+# TODO - ProtocolConfig
+# TODO - Chain Identifier
+# TODO Write
+# TODO Coin
+# TODO Extended
+# TODO Governance
+# TODO Indexer
+# TODO Move Utils
+
+# TODO Port designs from Notion
+# TODO Data Consistency API
+
+schema {
+  query: Query
+}
+type Query {
+  owner(address: SuiAddress!): Owner
+  object(address: SuiAddress!, version: U64): Object
+  address(address: SuiAddress!): Address
+
+  transactionBlock(digest: Digest!): TransactionBlock
+  transactionBlocks(): TransactionBlockConnection
+}
+
+# String containing 32B hex-encoded address
+scalar SuiAddress
+
+# String containing 32B Base58-encoded BLAKE2b256 digest
+scalar Digest
+
+# String representation of a 64 bit unsigned integer
+scalar U64
+
+# String containing Base58-encoded binary data.
+scalar Bytes
+
+interface Owner {
+  id: SuiAddress!
+}
+
+# Returned by Object.owner, where we can't disambiguate between
+# Address and Object.
+type AmbiguousOwner implements Owner {}
+
+type Address implements Owner {
+  transactionBlocks(
+    filter: AddressTransactionBlockFilter,
+  ): TransactionBlockConnection
+}
+
+enum AddressTransactionBlockFilter {
+  SIGN # Transactions this address has signed
+  SENT # Transactions that transferred objects from this address
+  RECV # Transactions that received objects into this address
+  PAID # Transactions that were paid for by this address
+}
+
+type Object implements Owner {
+  owner: Owner
+  version: U64
+  digest: Digest
+
+  previousTransactionBlock: TransactionBlock
+  storageRebate: U64
+
+  bcs: Bytes
+
+  asMoveObject: MoveObject
+  asMovePackage: MovePackage
+
+  # Transaction Blocks that sent objects to this object
+  receivedTransactionBlocks: TransactionBlockConnection
+}
+
+type TransactionBlock {}
+
+type MoveObject {
+  contents: MoveValue
+  hasPublicTransfer: Boolean
+
+  asObject: Object
+}
+
+type MovePackage {
+  modules: MovePackageModuleConnection
+
+  asObject: Object
+}
+
+type MoveValue {
+  type: MoveType!
+  data: MoveData
+}
+
+union MoveData =
+    MoveNumber
+  | MoveBool
+  | MoveAddress
+  | MoveUID
+  | MoveString
+  | MoveVector
+  | MoveOption
+  | MoveStruct
+
+type MoveNumber  { number: String! }
+type MoveBool    { bool: Boolean! }
+type MoveAddress { address: SuiAddress! }
+type MoveUID     { uid: SuiAddress! }
+type MoveString  { string: String! }
+type MoveVector  { elements: [MoveValue!]! }
+type MoveOption  { element: MoveValue }
+type MoveStruct  { fields: [MoveField!]! }
+
+type MoveField {
+  name: String!
+  value: MoveValue!
+}
+
+type MoveType {
+  # Flattened representation of the type and type parameters
+  repr: String!
+
+  # Fully qualified type name.  Primitive types have no `package` or
+  # `module`.
+  package: MovePackage
+  module: String
+  name: String!
+
+  typeParameters: [MoveType]
+}
+
+# Connections
+
+type TransactionBlockConnection {}
+type MovePackageModuleConnection {}
