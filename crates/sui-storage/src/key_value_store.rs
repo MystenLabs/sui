@@ -7,7 +7,7 @@
 use async_trait::async_trait;
 use sui_types::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::error::SuiResult;
+use sui_types::error::{SuiError, SuiResult};
 use sui_types::transaction::Transaction;
 use tracing::error;
 
@@ -16,6 +16,10 @@ pub enum Key {
     Tx(TransactionDigest),
     Fx(TransactionEffectsDigest),
     Events(TransactionEventsDigest),
+
+    // Separate key type so that you can do
+    // multi_get(&[Key::Tx(tx_digest), Key::FxByTxDigest(tx_digest)])
+    FxByTxDigest(TransactionDigest),
 }
 
 impl From<TransactionDigest> for Key {
@@ -112,6 +116,30 @@ pub trait TransactionKeyValueStore {
         })
     }
 
+    async fn multi_get_fx_by_tx_digest(
+        &self,
+        keys: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
+        let keys = keys
+            .iter()
+            .map(|k| Key::FxByTxDigest(*k))
+            .collect::<Vec<_>>();
+        self.multi_get(&keys).await.map(|values| {
+            values
+                .into_iter()
+                .enumerate()
+                .map(|(i, v)| match v {
+                    Some(Value::Fx(fx)) => Some(*fx),
+                    Some(_) => {
+                        error!("Key {:?} had unexpected value type {:?}", keys[i], v);
+                        None
+                    }
+                    _ => None,
+                })
+                .collect()
+        })
+    }
+
     async fn multi_get_events(
         &self,
         keys: &[TransactionEventsDigest],
@@ -131,6 +159,42 @@ pub trait TransactionKeyValueStore {
                 })
                 .collect()
         })
+    }
+
+    /// Convenience method for fetching single digest, and returning an error if it's not found.
+    /// Prefer using multi_get_tx whenever possible.
+    async fn get_tx(&self, digest: TransactionDigest) -> SuiResult<Transaction> {
+        self.multi_get_tx(&[digest])
+            .await?
+            .into_iter()
+            .next()
+            .flatten()
+            .ok_or(SuiError::TransactionNotFound { digest })
+    }
+
+    /// Convenience method for fetching single digest, and returning an error if it's not found.
+    /// Prefer using multi_get_fx_by_tx_digest whenever possible.
+    async fn get_fx_by_tx_digest(
+        &self,
+        digest: TransactionDigest,
+    ) -> SuiResult<TransactionEffects> {
+        self.multi_get_fx_by_tx_digest(&[digest])
+            .await?
+            .into_iter()
+            .next()
+            .flatten()
+            .ok_or(SuiError::TransactionNotFound { digest })
+    }
+
+    /// Convenience method for fetching single digest, and returning an error if it's not found.
+    /// Prefer using multi_get_events whenever possible.
+    async fn get_events(&self, digest: TransactionEventsDigest) -> SuiResult<TransactionEvents> {
+        self.multi_get_events(&[digest])
+            .await?
+            .into_iter()
+            .next()
+            .flatten()
+            .ok_or(SuiError::TransactionEventsNotFound { digest })
     }
 }
 
@@ -212,6 +276,7 @@ mod tests {
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::base_types::random_object_ref;
     use sui_types::crypto::{get_key_pair, AccountKeyPair};
+    use sui_types::effects::TransactionEffectsAPI;
     use sui_types::event::Event;
     use sui_types::message_envelope::Message;
 
@@ -273,6 +338,12 @@ mod tests {
                         .events
                         .get(digest)
                         .map(|events| Value::Events(events.clone().into())),
+
+                    Key::FxByTxDigest(digest) => self
+                        .fxs
+                        .values()
+                        .find(|fx| fx.transaction_digest() == digest)
+                        .map(|fx| Value::Fx(fx.clone().into())),
                 };
                 values.push(value);
             }

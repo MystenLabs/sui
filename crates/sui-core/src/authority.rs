@@ -2803,33 +2803,6 @@ impl AuthorityState {
         }
     }
 
-    pub async fn get_transaction_block(
-        &self,
-        digest: TransactionDigest,
-    ) -> SuiResult<VerifiedTransaction> {
-        let transaction = self.database.get_transaction_block(&digest)?;
-        transaction.ok_or(SuiError::TransactionNotFound { digest })
-    }
-
-    pub fn get_executed_effects(&self, digest: TransactionDigest) -> SuiResult<TransactionEffects> {
-        let effects = self.database.get_executed_effects(&digest)?;
-        effects.ok_or(SuiError::TransactionNotFound { digest })
-    }
-
-    pub fn multi_get_executed_transactions(
-        &self,
-        digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<VerifiedTransaction>>> {
-        self.database.multi_get_transaction_blocks(digests)
-    }
-
-    pub fn multi_get_executed_effects(
-        &self,
-        digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        self.database.multi_get_executed_effects(digests)
-    }
-
     pub fn multi_get_transaction_checkpoint(
         &self,
         digests: &[TransactionDigest],
@@ -2849,13 +2822,6 @@ impl AuthorityState {
                 })
                 .collect())
         }
-    }
-
-    pub fn multi_get_events(
-        &self,
-        digests: &[TransactionEventsDigest],
-    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
-        self.database.multi_get_events(digests)
     }
 
     pub fn multi_get_checkpoint_by_sequence_number(
