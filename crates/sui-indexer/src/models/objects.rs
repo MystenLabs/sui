@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, str::FromStr};
+use std::{
+    collections::{BTreeMap, HashMap},
+    str::FromStr,
+};
 
 use diesel::deserialize::FromSql;
 use diesel::pg::{Pg, PgValue};
@@ -13,6 +16,7 @@ use diesel_derive_enum::DbEnum;
 use fastcrypto::encoding::{Base64, Encoding};
 use serde::{Deserialize, Serialize};
 use serde_json;
+use std::collections::hash_map::Entry;
 
 use move_bytecode_utils::module_cache::GetModule;
 use sui_json_rpc_types::{SuiObjectData, SuiObjectRef, SuiRawData};
@@ -444,29 +448,23 @@ pub fn compose_object_bulk_insert_query(objects: &[Object]) -> String {
     bulk_insert_query
 }
 
-pub fn group_and_sort_objects(objects: Vec<Object>) -> Vec<Vec<Object>> {
-    let mut objects_sorted = objects;
-    objects_sorted.sort_by(|a, b| a.object_id.cmp(&b.object_id));
-    // Group objects by object_id
-    let mut groups: Vec<Vec<Object>> = vec![];
-    let mut current_group: Vec<Object> = vec![];
-    let mut current_object_id = String::new();
-    for object in objects_sorted {
-        if object.object_id != current_object_id {
-            if !current_group.is_empty() {
-                // Sort the group by version, in a reverse order to be popped later
-                current_group.sort_by(|a, b| b.version.cmp(&a.version));
-                groups.push(current_group);
+pub fn filter_latest_objects(objects: Vec<Object>) -> Vec<Object> {
+    // Transactions in checkpoint are ordered by causal depedencies.
+    // But HashMap is not a lot more costly than HashSet, and it
+    // may be good to still keep the relative order of objects in
+    // the checkpoint.
+    let mut latest_objects = HashMap::new();
+    for object in objects {
+        match latest_objects.entry(object.object_id.clone()) {
+            Entry::Vacant(e) => {
+                e.insert(object);
             }
-            current_group = vec![];
-            current_object_id = object.object_id.clone();
+            Entry::Occupied(mut e) => {
+                if object.version > e.get().version {
+                    e.insert(object);
+                }
+            }
         }
-        current_group.push(object);
     }
-    // Sort the last group by version, in a reverse order to be popped later
-    if !current_group.is_empty() {
-        current_group.sort_by(|a, b| b.version.cmp(&a.version));
-        groups.push(current_group);
-    }
-    groups
+    latest_objects.into_values().collect()
 }
