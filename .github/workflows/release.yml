@@ -104,40 +104,18 @@ jobs:
           mv ./target/release/sui-test-validator.exe ./target/release/sui-test-validator-${{ matrix.os }}.exe
           mv ./target/release/sui-indexer.exe ./target/release/sui-indexer-${{ matrix.os }}.exe
 
-      - name: Upload release artifacts for for ubuntu
-        if: ${{ env.sui_tag != 'main' && matrix.os == 'ubuntu-ghcloud' }}
+      - name: Upload release artifacts for ${{ matrix.os }} platform
+        if: ${{ env.sui_tag != 'main' }}
         uses: actions/upload-artifact@v3
         with:
           name: sui-binaries-${{ matrix.os }}
           path: |
-            ./target/release/sui*-${{ matrix.os }}
+            ./target/release/sui*-${{ matrix.os }}*
 
-      - name: Upload release artifacts for for ubuntu
-        if: ${{ env.sui_tag != 'main' && matrix.os == 'windows-ghcloud' }}
+      - name: Upload release artifacts for ${{ matrix.os }} platform
+        if: ${{ env.sui_tag != 'main' }}
         uses: actions/upload-artifact@v3
         with:
           name: sui-binaries-${{ matrix.os }}
           path: |
-            ./target/release/sui*-${{ matrix.os }}.exe
-
-      - name: Publish binaries for ${{ env.sui_tag }} release for ubuntu platform
-        if: ${{ env.sui_tag != 'main' && matrix.os == 'ubuntu-ghcloud' }}
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ env.sui_tag }}
-          files: |
-            ./target/release/sui*-${{ matrix.os }}
-        env:
-          # Have to use a Personal Access Token (PAT), based on https://tinyurl.com/2by2ntdr
-          GITHUB_TOKEN: ${{ secrets.GH_RELEASE_BUILDS_TOKEN }}
-
-      - name: Publish binaries for ${{ env.sui_tag }} release for windows platform
-        if: ${{ env.sui_tag != 'main' && matrix.os == 'windows-ghcloud' }}
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ env.sui_tag }}
-          files: |
-            ./target/release/sui*-${{ matrix.os }}.exe
-        env:
-          # Have to use a Personal Access Token (PAT), based on https://tinyurl.com/2by2ntdr
-          GITHUB_TOKEN: ${{ secrets.GH_RELEASE_BUILDS_TOKEN }}
+            ./target/release/sui*-${{ matrix.os }}*
