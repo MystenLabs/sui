@@ -86,34 +86,34 @@ jobs:
         shell: bash
         run: |
           mv target/release/sui target/release/sui-${{ matrix.os }}
-          echo BIN_SUI="target/release/sui-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          echo BIN_SUI="target/release/sui-${{ matrix.os }}" >> $GITHUB_ENV
           mv target/release/sui-node target/release/sui-node-${{ matrix.os }}
-          echo BIN_SUI_NODE="target/release/sui-node-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          echo BIN_SUI_NODE="target/release/sui-node-${{ matrix.os }}" >> $GITHUB_ENV
           mv target/release/sui-tool target/release/sui-tool-${{ matrix.os }}
-          echo BIN_SUI_TOOL="target/release/sui-tool-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          echo BIN_SUI_TOOL="target/release/sui-tool-${{ matrix.os }}" >> $GITHUB_ENV
           mv target/release/sui-faucet target/release/sui-faucet-${{ matrix.os }}
-          echo BIN_SUI_FAUCET="target/release/sui-faucet-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          echo BIN_SUI_FAUCET="target/release/sui-faucet-${{ matrix.os }}" >> $GITHUB_ENV
           mv target/release/sui-test-validator target/release/sui-test-validator-${{ matrix.os }}
-          echo BIN_SUI_TEST_VALIDATOR="target/release/sui-test-validator-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          echo BIN_SUI_TEST_VALIDATOR="target/release/sui-test-validator-${{ matrix.os }}" >> $GITHUB_ENV
           mv target/release/sui-indexer target/release/sui-indexer-${{ matrix.os }}
-          echo BIN_SUI_INDEXER="target/release/sui-indexer-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          echo BIN_SUI_INDEXER="target/release/sui-indexer-${{ matrix.os }}" >> $GITHUB_ENV
 
       - name: Rename binaries for windows
         if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main' }}
         shell: bash
         run: |
           mv C:/a/sui/sui/crates/sui C:/a/sui/sui/crates/sui-${{ matrix.os }}
-          echo BIN_SUI="C:/a/sui/sui/crates/sui-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          echo BIN_SUI="C:/a/sui/sui/crates/sui-${{ matrix.os }}" >> $GITHUB_ENV
           mv C:/a/sui/sui/crates/sui-node C:/a/sui/sui/crates/sui-node-${{ matrix.os }}
-          echo BIN_SUI_NODE="C:/a/sui/sui/crates/sui-node-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          echo BIN_SUI_NODE="C:/a/sui/sui/crates/sui-node-${{ matrix.os }}" >> $GITHUB_ENV
           mv C:/a/sui/sui/crates/sui-tool C:/a/sui/sui/crates/sui-tool-${{ matrix.os }}
-          echo BIN_SUI_TOOL="C:/a/sui/sui/crates/sui-tool-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          echo BIN_SUI_TOOL="C:/a/sui/sui/crates/sui-tool-${{ matrix.os }}" >> $GITHUB_ENV
           mv C:/a/sui/sui/crates/sui-faucet C:/a/sui/sui/crates/sui-faucet-${{ matrix.os }}
-          echo BIN_SUI_FAUCET="C:/a/sui/sui/crates/sui-faucet-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          echo BIN_SUI_FAUCET="C:/a/sui/sui/crates/sui-faucet-${{ matrix.os }}" >> $GITHUB_ENV
           mv C:/a/sui/sui/crates/sui-test-validator C:/a/sui/sui/crates/sui-test-validator-${{ matrix.os }}
-          echo BIN_SUI_TEST_VALIDATOR="C:/a/sui/sui/crates/sui-test-validator-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          echo BIN_SUI_TEST_VALIDATOR="C:/a/sui/sui/crates/sui-test-validator-${{ matrix.os }}" >> $GITHUB_ENV
           mv C:/a/sui/sui/crates/sui-indexer C:/a/sui/sui/crates/sui-indexer-${{ matrix.os }}
-          echo BIN_SUI_INDEXER="C:/a/sui/sui/crates/sui-indexer-${{ matrix.os }}" >> $GITHUB_OUTPUT
+          echo BIN_SUI_INDEXER="C:/a/sui/sui/crates/sui-indexer-${{ matrix.os }}" >> $GITHUB_ENV
 
       - name: Upload release artifacts for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
@@ -121,12 +121,12 @@ jobs:
         with:
           name: sui-binaries-${{ matrix.os }}
           path: |
-            ${{ steps.build.outputs.BIN_SUI }}
-            ${{ steps.build.outputs.BIN_SUI_NODE }}
-            ${{ steps.build.outputs.BIN_SUI_TOOL }}
-            ${{ steps.build.outputs.BIN_SUI_FAUCET }}
-            ${{ steps.build.outputs.BIN_SUI_TEST_VALIDATOR }}
-            ${{ steps.build.outputs.BIN_SUI_INDEXER }}
+            ${{ env.BIN_SUI }}
+            ${{ env.BIN_SUI_NODE }}
+            ${{ env.BIN_SUI_TOOL }}
+            ${{ env.BIN_SUI_FAUCET }}
+            ${{ env.BIN_SUI_TEST_VALIDATOR }}
+            ${{ env.BIN_SUI_INDEXER }}
 
       - name: Publish binaries for ${{ env.sui_tag }} release for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
@@ -134,12 +134,12 @@ jobs:
         with:
           tag_name: ${{ env.sui_tag }}
           files: |
-            ${{ steps.build.outputs.BIN_SUI }}
-            ${{ steps.build.outputs.BIN_SUI_NODE }}
-            ${{ steps.build.outputs.BIN_SUI_TOOL }}
-            ${{ steps.build.outputs.BIN_SUI_FAUCET }}
-            ${{ steps.build.outputs.BIN_SUI_TEST_VALIDATOR }}
-            ${{ steps.build.outputs.BIN_SUI_INDEXER }}
+            ${{ env.BIN_SUI }}
+            ${{ env.BIN_SUI_NODE }}
+            ${{ env.BIN_SUI_TOOL }}
+            ${{ env.BIN_SUI_FAUCET }}
+            ${{ env.BIN_SUI_TEST_VALIDATOR }}
+            ${{ env.BIN_SUI_INDEXER }}
         env:
           # Have to use a Personal Access Token (PAT), based on https://tinyurl.com/2by2ntdr
           GITHUB_TOKEN: ${{ secrets.GH_RELEASE_BUILDS_TOKEN }}
