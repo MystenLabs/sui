@@ -1,7 +1,7 @@
+use clap::*;
 use std::collections::HashMap;
 use std::fs;
-use clap::*;
-use sui_distributed_execution::network_agents::*;
+use sui_distributed_execution::agents::*;
 use sui_distributed_execution::server::*;
 use sui_distributed_execution::types::*;
 
@@ -29,11 +29,12 @@ async fn main() {
     assert!(global_config.contains_key(&my_id), "agent {} not in config", &my_id);
 
     // Initialize and run the server
-    let mut server = Server::new(global_config.clone(), my_id);
     let kind = global_config.get(&my_id).unwrap().kind.as_str();
-    match kind {
-        "echo" => server.run::<EchoAgent>().await,
-        "ping" => server.run::<PingAgent>().await,
-        _ => panic!("Invalid agent kind {}", kind),
+    if kind == "echo" {
+        let mut server = Server::<EchoAgent, String>::new(global_config.clone(), my_id);
+        server.run().await;
+    } else {
+        let mut server = Server::<PingAgent, String>::new(global_config.clone(), my_id);
+        server.run().await;
     }
 }

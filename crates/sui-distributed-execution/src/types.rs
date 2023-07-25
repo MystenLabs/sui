@@ -1,6 +1,7 @@
-use std::collections::{HashSet, HashMap};
-use std::net::IpAddr;
 use serde::Deserialize;
+use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
+use std::net::IpAddr;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::ObjectID,
@@ -27,7 +28,7 @@ pub trait Message {
     fn deserialize(string: String) -> Self;
 }
 
-impl Message for String {
+impl Message for std::string::String {
     fn serialize(&self) -> String {
         self.to_string()
     }
@@ -38,13 +39,13 @@ impl Message for String {
 }
 
 #[derive(Debug)]
-pub struct NetworkMessage {
+pub struct NetworkMessage<M: Debug + Message> {
     pub src: UniqueId,
     pub dst: UniqueId,
-    pub payload: String,
+    pub payload: M,
 }
 
-impl NetworkMessage {
+impl<M: Debug + Message> NetworkMessage<M> {
     pub fn serialize(&self) -> String {
         format!("{}\t{}\t{}\t\n", self.src, self.dst, self.payload.serialize())
     }

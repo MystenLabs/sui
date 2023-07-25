@@ -1,15 +1,16 @@
-use std::collections::HashMap;
 use async_trait::async_trait;
+use std::collections::HashMap;
+use std::fmt::Debug;
 use tokio::sync::mpsc;
 use tokio::time::{sleep, Duration};
 
 use super::types::*;
 
 #[async_trait]
-pub trait Agent {
+pub trait Agent<M: Debug + Message> {
     fn new(id: UniqueId,
-        in_channel: mpsc::Receiver<NetworkMessage>, 
-        out_channel: mpsc::Sender<NetworkMessage>, 
+        in_channel: mpsc::Receiver<NetworkMessage<M>>, 
+        out_channel: mpsc::Sender<NetworkMessage<M>>, 
         attrs: HashMap<String, String>) -> Self;
 
     async fn run(&mut self);
@@ -21,14 +22,14 @@ pub trait Agent {
  *****************************************************************************************/
 pub struct EchoAgent {
     id: UniqueId,
-    in_channel: mpsc::Receiver<NetworkMessage>,
+    in_channel: mpsc::Receiver<NetworkMessage<String>>,
 }
 
 #[async_trait]
-impl Agent for EchoAgent {
+impl Agent<String> for EchoAgent {
     fn new(id: UniqueId,
-        in_channel: mpsc::Receiver<NetworkMessage>, 
-        _out_channel: mpsc::Sender<NetworkMessage>, 
+        in_channel: mpsc::Receiver<NetworkMessage<String>>, 
+        _out_channel: mpsc::Sender<NetworkMessage<String>>, 
         _attrs: HashMap<String, String>) 
     -> Self {
         EchoAgent {
@@ -52,16 +53,16 @@ impl Agent for EchoAgent {
 
 pub struct PingAgent {
     id: UniqueId,
-    out_channel: mpsc::Sender<NetworkMessage>,
+    out_channel: mpsc::Sender<NetworkMessage<String>>,
     target: UniqueId,
     interval: Duration,
 }
 
 #[async_trait]
-impl Agent for PingAgent {
+impl Agent<String> for PingAgent {
     fn new(id: UniqueId,
-        _in_channel: mpsc::Receiver<NetworkMessage>, 
-        out_channel: mpsc::Sender<NetworkMessage>, 
+        _in_channel: mpsc::Receiver<NetworkMessage<String>>, 
+        out_channel: mpsc::Sender<NetworkMessage<String>>, 
         attrs: HashMap<String, String>) 
     -> Self {
         PingAgent {
