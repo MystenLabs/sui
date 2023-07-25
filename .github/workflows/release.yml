@@ -110,7 +110,7 @@ jobs:
         with:
           name: sui-binaries-${{ matrix.os }}
           path: |
-            ./target/release/sui-*-${{ matrix.os }}
+            ./target/release/sui*-${{ matrix.os }}
 
       - name: Upload release artifacts for for ubuntu
         if: ${{ env.sui_tag != 'main' && matrix.os == 'windows-ghcloud' }}
@@ -118,7 +118,7 @@ jobs:
         with:
           name: sui-binaries-${{ matrix.os }}
           path: |
-            ./target/release/sui-*-${{ matrix.os }}.exe
+            ./target/release/sui*-${{ matrix.os }}.exe
 
       - name: Publish binaries for ${{ env.sui_tag }} release for ubuntu platform
         if: ${{ env.sui_tag != 'main' && matrix.os == 'ubuntu-ghcloud' }}
@@ -126,7 +126,7 @@ jobs:
         with:
           tag_name: ${{ env.sui_tag }}
           files: |
-            ./target/release/sui-*-${{ matrix.os }}
+            ./target/release/sui*-${{ matrix.os }}
         env:
           # Have to use a Personal Access Token (PAT), based on https://tinyurl.com/2by2ntdr
           GITHUB_TOKEN: ${{ secrets.GH_RELEASE_BUILDS_TOKEN }}
@@ -137,7 +137,7 @@ jobs:
         with:
           tag_name: ${{ env.sui_tag }}
           files: |
-            ./target/release/sui-*-${{ matrix.os }}.exe
+            ./target/release/sui*-${{ matrix.os }}.exe
         env:
           # Have to use a Personal Access Token (PAT), based on https://tinyurl.com/2by2ntdr
           GITHUB_TOKEN: ${{ secrets.GH_RELEASE_BUILDS_TOKEN }}
