@@ -1,4 +1,4 @@
-name: Release Binaries
+name: Attach Sui binaries to a release
 
 on:
   release:
