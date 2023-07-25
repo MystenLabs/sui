@@ -211,11 +211,6 @@ pub trait IndexerStore {
     async fn get_network_metrics(&self) -> Result<NetworkMetrics, IndexerError>;
     async fn get_move_call_metrics(&self) -> Result<MoveCallMetrics, IndexerError>;
 
-    async fn persist_fast_path(
-        &self,
-        tx: Transaction,
-        tx_object_changes: TransactionObjectChanges,
-    ) -> Result<usize, IndexerError>;
     async fn persist_checkpoint_transactions(
         &self,
         checkpoint: &Checkpoint,

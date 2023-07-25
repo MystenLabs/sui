@@ -22,7 +22,7 @@ pub mod pg_integration_test {
     use sui_indexer::errors::IndexerError;
     use sui_indexer::models::objects::{
         compose_object_bulk_insert_query, compose_object_bulk_insert_update_query,
-        group_and_sort_objects, NamedBcsBytes, Object, ObjectStatus,
+        filter_latest_objects, NamedBcsBytes, Object, ObjectStatus,
     };
     use sui_indexer::models::owners::OwnerType;
     use sui_indexer::schema::objects;
@@ -1065,30 +1065,17 @@ pub mod pg_integration_test {
             .chain(mutated_bulk_data)
             .collect::<Vec<_>>();
         let mut pg_pool_conn = get_pg_pool_connection(&pg_connection_pool).unwrap();
-        let mut mutated_object_groups = group_and_sort_objects(mutated_bulk_data_same_checkpoint);
-        let mut counter = 0;
-        loop {
-            let mutated_object_group = mutated_object_groups
-                .iter_mut()
-                .filter_map(|group| group.pop())
-                .collect::<Vec<_>>();
-            if mutated_object_group.is_empty() {
-                break;
-            }
-            // bulk insert/update via UNNEST trick
-            let insert_update_query =
-                compose_object_bulk_insert_update_query(&mutated_object_group);
-            let result: Result<usize, IndexerError> = pg_pool_conn
-                .build_transaction()
-                .serializable()
-                .read_write()
-                .run(|conn| diesel::sql_query(insert_update_query).execute(conn))
-                .map_err(IndexerError::PostgresError);
-            assert!(result.is_ok());
-            assert_eq!(result.unwrap(), 10000);
-            counter += 1;
-        }
-        assert_eq!(counter, 2);
+        let mutated_objects = filter_latest_objects(mutated_bulk_data_same_checkpoint);
+        // bulk insert/update via UNNEST trick
+        let insert_update_query = compose_object_bulk_insert_update_query(&mutated_objects);
+        let result: Result<usize, IndexerError> = pg_pool_conn
+            .build_transaction()
+            .serializable()
+            .read_write()
+            .run(|conn| diesel::sql_query(insert_update_query).execute(conn))
+            .map_err(IndexerError::PostgresError);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 10000);
     }
 
     #[tokio::test]
