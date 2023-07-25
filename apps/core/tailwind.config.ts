@@ -106,6 +106,7 @@ export default {
 				drop: '0px 0px 10px rgba(111, 188, 240, 0.2)',
 				mistyEdge:
 					'0px 0px 0px 1px rgba(160, 182, 195, 0.08), 0px 5px 30px 0px rgba(86, 104, 115, 0.20)',
+				cardSoft: '1px 2px 8px 2px rgba(21, 82, 123, 0.05)',
 			},
 			fontSize: {
 				// Text sizes:
@@ -153,7 +154,9 @@ export default {
 				3.75: '0.9375rem',
 				4.5: '1.125rem',
 				7.5: '1.875rem',
+				17: '4.25rem',
 				18: '4.5rem',
+				19: '4.75rem',
 				50: '12.5rem',
 				verticalListShort: '13.0625rem',
 				verticalListLong: '35.6875rem',
@@ -168,6 +171,7 @@ export default {
 				walletLogo: '4.813rem',
 			},
 			minWidth: {
+				10: '2.5rem',
 				18: '4.5rem',
 				transactionColumn: '31.875rem',
 			},

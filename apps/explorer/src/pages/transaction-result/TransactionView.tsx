@@ -3,6 +3,7 @@
 
 import { type SuiTransactionBlockResponse } from '@mysten/sui.js';
 import clsx from 'clsx';
+import { type ReactNode } from 'react';
 
 import { Signatures } from './Signatures';
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
@@ -14,6 +15,14 @@ import { SplitPanes } from '~/ui/SplitPanes';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/ui/Tabs';
 
 import styles from './TransactionResult.module.css';
+
+function TabsContentContainer({ value, children }: { value: string; children: ReactNode }) {
+	return (
+		<TabsContent value={value}>
+			<div className="mt-6 md:mt-10">{children}</div>
+		</TabsContent>
+	);
+}
 
 export function TransactionView({ transaction }: { transaction: SuiTransactionBlockResponse }) {
 	const isMediumOrAbove = useBreakpoint('md');
@@ -33,25 +42,19 @@ export function TransactionView({ transaction }: { transaction: SuiTransactionBl
 						{hasEvents && <TabsTrigger value="events">Events</TabsTrigger>}
 						{isProgrammableTransaction && <TabsTrigger value="signatures">Signatures</TabsTrigger>}
 					</TabsList>
-					<TabsContent value="summary">
-						<div className="mt-10">
-							<TransactionSummary transaction={transaction} />
-						</div>
-					</TabsContent>
+					<TabsContentContainer value="summary">
+						<TransactionSummary transaction={transaction} />
+					</TabsContentContainer>
 					{hasEvents && (
-						<TabsContent value="events">
-							<div className="mt-10">
-								<Events events={transaction.events!} />
-							</div>
-						</TabsContent>
+						<TabsContentContainer value="events">
+							<Events events={transaction.events!} />
+						</TabsContentContainer>
 					)}
-					<TabsContent value="signatures">
-						<div className="mt-10">
-							<ErrorBoundary>
-								<Signatures transaction={transaction} />
-							</ErrorBoundary>
-						</div>
-					</TabsContent>
+					<TabsContentContainer value="signatures">
+						<ErrorBoundary>
+							<Signatures transaction={transaction} />
+						</ErrorBoundary>
+					</TabsContentContainer>
 				</Tabs>
 			</div>
 		),

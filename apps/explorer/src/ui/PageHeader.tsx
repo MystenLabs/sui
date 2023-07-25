@@ -36,43 +36,41 @@ export function PageHeader({ title, subtitle, type, before, error }: PageHeaderP
 
 	return (
 		<div data-testid="pageheader" className="group">
-			<div className="flex items-center gap-5">
-				{before}
+			<div className="flex items-center gap-3 sm:gap-5">
+				{before && <div className="self-start sm:self-center">{before}</div>}
 				<div>
-					<div className="mb-1 flex items-center gap-2">
-						{Icon && <Icon className="text-steel-dark" />}
-						<Heading variant="heading4/semibold" color="steel-darker">
-							{type in TYPE_TO_COPY ? TYPE_TO_COPY[type] : type}
-						</Heading>
-					</div>
-					<div className="flex flex-col gap-2">
-						<div className="flex flex-col gap-2 lg:flex-row">
-							<div className="flex min-w-0 items-center gap-2">
-								<div className="min-w-0 break-words break-all">
-									<Heading as="h2" variant="heading2/semibold" color="gray-90" mono>
-										{title}
+					<div className="flex">
+						<div>
+							<div className="mb-1 flex items-center gap-2">
+								{Icon && <Icon className="text-steel-dark" />}
+								<Heading variant="heading6/semibold" color="steel-darker">
+									{type in TYPE_TO_COPY ? TYPE_TO_COPY[type] : type}
+								</Heading>
+							</div>
+							<div className="min-w-0 break-words break-all">
+								<Heading as="h3" variant="heading3/semibold" color="gray-90" mono>
+									{title}
+								</Heading>
+							</div>
+							{subtitle && (
+								<div className="mt-2 break-words">
+									<Heading variant="heading4/semibold" color="gray-75">
+										{subtitle}
 									</Heading>
 								</div>
-								<div className="flex items-center group-hover/gradientContent:!flex group-hover:!flex md:hidden">
-									<CopyToClipboard size="lg" color="steel" copyText={title} />
-								</div>
-							</div>
+							)}
 						</div>
-						{error && (
-							<div>
-								<Banner variant="neutralWhite" icon={<Info12 className="text-issue-dark" />}>
-									<Text variant="pBody/medium" color="issue-dark">
-										{error}
-									</Text>
-								</Banner>
-							</div>
-						)}
+						<div className="ml-2 h-4 w-4 self-center group-hover/gradientContent:!flex group-hover:!flex sm:self-end md:hidden md:h-6 md:w-6">
+							<CopyToClipboard size="lg" color="steel" copyText={title} />
+						</div>
 					</div>
-					{subtitle && (
-						<div className="mt-2 break-words">
-							<Heading variant="heading4/semibold" color="gray-75">
-								{subtitle}
-							</Heading>
+					{error && (
+						<div className="mt-2">
+							<Banner variant="neutralWhite" icon={<Info12 className="text-issue-dark" />}>
+								<Text variant="pBody/medium" color="issue-dark">
+									{error}
+								</Text>
+							</Banner>
 						</div>
 					)}
 				</div>

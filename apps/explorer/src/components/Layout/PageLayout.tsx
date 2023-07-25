@@ -13,15 +13,16 @@ import { Banner } from '~/ui/Banner';
 import { Network } from '~/utils/api/DefaultRpcClient';
 
 export type PageLayoutProps = {
-	gradientContent?: {
+	gradient?: {
 		content: ReactNode;
 		size: 'lg' | 'md';
+		type?: 'success' | 'error';
 	};
 	content: ReactNode;
 	error?: string;
 };
 
-export function PageLayout({ gradientContent, content, error }: PageLayoutProps) {
+export function PageLayout({ gradient, content }: PageLayoutProps) {
 	const [network] = useNetworkContext();
 	const { request } = useAppsBackend();
 	const { data } = useQuery({
@@ -35,9 +36,8 @@ export function PageLayout({ gradientContent, content, error }: PageLayoutProps)
 		retry: false,
 		enabled: network === Network.MAINNET,
 	});
-	const isGradientVisible = !!gradientContent;
-	const isError = !!error;
-	console.log('isError', isGradientVisible, isError);
+	const isGradientVisible = !!gradient;
+	const isError = gradient?.type === 'error';
 
 	return (
 		<div
@@ -49,16 +49,6 @@ export function PageLayout({ gradientContent, content, error }: PageLayoutProps)
 		>
 			<Header />
 			<main className="relative z-10 min-h-screen bg-offwhite">
-				{network === Network.MAINNET && data?.degraded && (
-					<div className={clsx(isGradientVisible && 'bg-gradients-graph-cards-bg')}>
-						<div className="mx-auto max-w-[1440px] px-4 pt-3 lg:px-6 xl:px-10">
-							<Banner variant="warning" border fullWidth>
-								We&rsquo;re sorry that the explorer is running slower than usual. We&rsquo;re
-								working to fix the issue and appreciate your patience.
-							</Banner>
-						</div>
-					</div>
-				)}
 				{isGradientVisible ? (
 					<section
 						className={clsx(
@@ -67,22 +57,32 @@ export function PageLayout({ gradientContent, content, error }: PageLayoutProps)
 							isGradientVisible && !isError && 'bg-gradients-graph-cards',
 						)}
 					>
+						{network === Network.MAINNET && data?.degraded && (
+							<div className={clsx(isGradientVisible && 'bg-gradients-graph-cards-bg')}>
+								<div className="mx-auto max-w-[1440px] px-4 pt-3 lg:px-6 xl:px-10">
+									<Banner variant="warning" border fullWidth>
+										We&rsquo;re sorry that the explorer is running slower than usual. We&rsquo;re
+										working to fix the issue and appreciate your patience.
+									</Banner>
+								</div>
+							</div>
+						)}
 						<div
 							className={clsx(
 								'mx-auto max-w-[1440px] py-8 lg:px-6 xl:px-10',
-								gradientContent.size === 'lg' && 'px-4 xl:py-12',
-								gradientContent.size === 'md' && 'px-4',
+								gradient.size === 'lg' && 'px-4 xl:py-12',
+								gradient.size === 'md' && 'px-4',
 							)}
 						>
-							{gradientContent.content}
+							{gradient.content}
 						</div>
 					</section>
 				) : null}
-				<section className="mx-auto max-w-[1440px] px-4 py-6 pb-16 lg:px-6 xl:p-10 xl:pb-16">
-					{content}
-				</section>
+				<section className="mx-auto max-w-[1440px] p-5 sm:py-8 md:p-10">{content}</section>
 			</main>
 			<Footer />
 		</div>
 	);
 }
+
+//mx-auto max-w-[1440px] px-5 py-8 md:p-10

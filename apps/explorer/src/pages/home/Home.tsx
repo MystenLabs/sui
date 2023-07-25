@@ -27,7 +27,7 @@ function Home() {
 	const isSuiTokenCardEnabled = network === Network.MAINNET;
 	return (
 		<PageLayout
-			gradientContent={{
+			gradient={{
 				content: (
 					<div
 						data-testid="home-page"

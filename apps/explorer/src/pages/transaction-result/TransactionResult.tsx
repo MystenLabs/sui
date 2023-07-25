@@ -31,11 +31,7 @@ function TransactionResultPageHeader({
 			title={txnDigest}
 			subtitle={!isProgrammableTransaction ? txnKindName : undefined}
 			error={error}
-			before={
-				<div className="flex h-18 w-18 min-w-18 items-center justify-center rounded-xl bg-white/50">
-					<StatusIcon success={txnStatus === 'success'} />
-				</div>
-			}
+			before={<StatusIcon success={txnStatus === 'success'} />}
 		/>
 	);
 }
@@ -47,13 +43,13 @@ export default function TransactionResult() {
 
 	return (
 		<PageLayout
-			gradientContent={
+			gradient={
 				data && {
 					content: <TransactionResultPageHeader transaction={data} error={txError} />,
 					size: 'md',
+					type: txError ? 'error' : 'success',
 				}
 			}
-			error={txError}
 			content={
 				isLoading ? (
 					<LoadingIndicator text="Loading..." />
