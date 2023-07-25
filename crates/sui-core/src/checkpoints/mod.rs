@@ -997,12 +997,6 @@ impl CheckpointBuilder {
                     epoch_commitments,
                 })
             } else {
-                self.accumulator.accumulate_checkpoint(
-                    effects.clone(),
-                    sequence_number,
-                    self.epoch_store.clone(),
-                )?;
-
                 None
             };
 
