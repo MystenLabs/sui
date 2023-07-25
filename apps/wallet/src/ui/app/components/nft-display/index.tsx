@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isKioskOwnerToken, useGetObject } from '@mysten/core';
+import { useGetObject } from '@mysten/core';
 import { formatAddress } from '@mysten/sui.js';
 import { cva, cx } from 'class-variance-authority';
 
-import { Kiosk } from './Kiosk';
 import { useResolveVideo } from '../../hooks/useResolveVideo';
 import { Heading } from '_app/shared/heading';
 import Loading from '_components/loading';
@@ -60,34 +59,24 @@ export function NFTDisplayCard({
 	const nftImageUrl = nftMeta?.imageUrl || '';
 	const video = useResolveVideo(objectData);
 	const fileExtensionType = useFileExtensionType(nftImageUrl);
-	const isOwnerToken = isKioskOwnerToken(objectData);
 	const shouldShowLabel = !wideView && orientation !== 'horizontal';
 
 	return (
 		<div className={nftDisplayCardStyles({ animateHover, wideView, orientation })}>
 			<Loading loading={isLoading}>
-				{objectData?.data && isOwnerToken ? (
-					<Kiosk
-						object={objectData}
-						borderRadius={borderRadius}
-						size={size}
-						orientation={orientation}
-						playable={playable}
-						showLabel={shouldShowLabel}
-					/>
-				) : (
-					<NftImage
-						name={nftName}
-						src={nftImageUrl}
-						title={nftMeta?.description || ''}
-						animateHover={animateHover}
-						showLabel={shouldShowLabel}
-						borderRadius={borderRadius}
-						size={size}
-						isLocked={isLocked}
-						video={video}
-					/>
-				)}
+				<NftImage
+					name={nftName}
+					src={nftImageUrl}
+					title={nftMeta?.description || ''}
+					animateHover={animateHover}
+					showLabel={shouldShowLabel}
+					borderRadius={borderRadius}
+					size={size}
+					playable={playable}
+					isLocked={isLocked}
+					video={video}
+				/>
+
 				{wideView && (
 					<div className="flex flex-col gap-1 flex-1 min-w-0 ml-1">
 						<Heading variant="heading6" color="gray-90" truncate>
@@ -110,7 +99,7 @@ export function NFTDisplayCard({
 							orientation === 'horizontal' ? 'ml-2' : 'mt-2',
 						)}
 					>
-						{isOwnerToken ? 'Kiosk' : nftName}
+						{nftName}
 					</div>
 				)}
 			</Loading>
