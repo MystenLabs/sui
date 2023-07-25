@@ -5,7 +5,6 @@ use sui_core::authority_client::AuthorityAPI;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::effects::TransactionEffectsAPI;
 use sui_types::{
     base_types::SuiAddress,
     error::{SuiError, SuiResult},
