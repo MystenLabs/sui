@@ -52,11 +52,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           ref: ${{ env.sui_tag }}
-
-      - name: Read Sui crate version
-        working-directory: ./
-        run: | 
-          echo "sui_version=$(cat Cargo.toml | grep '^version =' | tr -d '\"' | awk '{ print $3 }')" >> $GITHUB_ENV
       
       - name: Install nexttest (Windows)
         if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
@@ -96,7 +91,7 @@ jobs:
           mv ./target/release/sui-faucet ./target/release/sui-faucet-${{ matrix.os }}
           mv ./target/release/sui-test-validator ./target/release/sui-test-validator-${{ matrix.os }}
           mv ./target/release/sui-indexer ./target/release/sui-indexer-${{ matrix.os }}
-          tar -cvzf ./target/release/sui-v${{ env.sui_version }}-${{ matrix.os }}.tgz ./target/release/sui*-${{ matrix.os }}*
+          tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${{ matrix.os }}.tgz ./target/release/sui*-${{ matrix.os }}*
 
       - name: Rename binaries for Windows
         if: ${{ env.sui_tag != 'main' && matrix.os == 'windows-ghcloud' }}
@@ -108,7 +103,7 @@ jobs:
           mv ./target/release/sui-faucet.exe ./target/release/sui-faucet-${{ matrix.os }}.exe
           mv ./target/release/sui-test-validator.exe ./target/release/sui-test-validator-${{ matrix.os }}.exe
           mv ./target/release/sui-indexer.exe ./target/release/sui-indexer-${{ matrix.os }}.exe
-          tar -cvzf ./target/release/sui-v${{ env.sui_version }}-${{ matrix.os }}.tgz ./target/release/sui*-${{ matrix.os }}*
+          tar -cvzf ./target/release/sui-v${{ env.sui_tag }}-${{ matrix.os }}.tgz ./target/release/sui*-${{ matrix.os }}*
 
       - name: Upload release artifacts for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
@@ -116,7 +111,7 @@ jobs:
         with:
           name: sui-binaries-${{ matrix.os }}
           path: |
-            ./target/release/sui-v${{ env.sui_version }}-${{ matrix.os }}.tgz
+            ./target/release/sui-v${{ env.sui_tag }}-${{ matrix.os }}.tgz
 
       - name: Publish binaries for ${{ env.sui_tag }} release
         if: ${{ env.sui_tag != 'main' }}
@@ -124,7 +119,7 @@ jobs:
         with:
           tag_name: ${{ env.sui_tag }}
           files: |
-            ./target/release/sui-v${{ env.sui_version }}-${{ matrix.os }}.tgz
+            ./target/release/sui-v${{ env.sui_tag }}-${{ matrix.os }}.tgz
         env:
           # Have to use a Personal Access Token (PAT), based on https://tinyurl.com/2by2ntdr
           GITHUB_TOKEN: ${{ secrets.GH_RELEASE_BUILDS_TOKEN }}
