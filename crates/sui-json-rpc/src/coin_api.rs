@@ -800,8 +800,10 @@ mod tests {
             assert!(response.is_err());
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
-            let expected = expect!["-32000"];
-            expected.assert_eq(&error_object.code().to_string());
+            assert_eq!(
+                error_object.code(),
+                jsonrpsee::types::error::CALL_EXECUTION_FAILED_CODE
+            );
             let expected = expect!["Index store not available on this Fullnode."];
             expected.assert_eq(error_object.message());
         }
@@ -831,8 +833,10 @@ mod tests {
             assert!(response.is_err());
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
-            let expected = expect!["-32000"];
-            expected.assert_eq(&error_object.code().to_string());
+            assert_eq!(
+                error_object.code(),
+                jsonrpsee::types::error::CALL_EXECUTION_FAILED_CODE
+            );
             let expected = expect!["Storage error"];
             expected.assert_eq(error_object.message());
         }
@@ -1128,8 +1132,10 @@ mod tests {
             assert!(response.is_err());
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
-            let expected = expect!["-32000"];
-            expected.assert_eq(&error_object.code().to_string());
+            assert_eq!(
+                error_object.code(),
+                jsonrpsee::types::error::CALL_EXECUTION_FAILED_CODE
+            );
             let expected = expect!["Index store not available on this Fullnode."];
             expected.assert_eq(error_object.message());
         }
@@ -1159,8 +1165,10 @@ mod tests {
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
 
-            let expected = expect!["-32000"];
-            expected.assert_eq(&error_object.code().to_string());
+            assert_eq!(
+                error_object.code(),
+                jsonrpsee::types::error::CALL_EXECUTION_FAILED_CODE
+            );
             let expected = expect!["Error executing mock db error"];
             expected.assert_eq(error_object.message());
         }
@@ -1258,8 +1266,10 @@ mod tests {
             assert!(response.is_err());
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
-            let expected = expect!["-32000"];
-            expected.assert_eq(&error_object.code().to_string());
+            assert_eq!(
+                error_object.code(),
+                jsonrpsee::types::error::CALL_EXECUTION_FAILED_CODE
+            );
             let expected = expect!["Index store not available on this Fullnode."];
             expected.assert_eq(error_object.message());
         }
@@ -1498,8 +1508,10 @@ mod tests {
             let response = coin_read_api.get_total_supply(coin_name.clone()).await;
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
-            let expected = expect!["-32000"];
-            expected.assert_eq(&error_object.code().to_string());
+            assert_eq!(
+                error_object.code(),
+                jsonrpsee::types::error::CALL_EXECUTION_FAILED_CODE
+            );
             let expected = expect!["Failure deserializing object in the requested format: \"Unable to deserialize TreasuryCap object: remaining input\""];
             expected.assert_eq(error_object.message());
         }
