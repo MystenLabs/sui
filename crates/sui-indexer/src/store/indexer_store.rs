@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use prometheus::Histogram;
+use prometheus::{Histogram, IntCounter};
 
 use move_core_types::identifier::Identifier;
 use sui_json_rpc_types::{
@@ -36,7 +36,8 @@ use crate::types::CheckpointTransactionBlockResponse;
 pub trait IndexerStore {
     type ModuleCache;
 
-    async fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
+    async fn get_latest_tx_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
+    async fn get_latest_object_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
     async fn get_checkpoint(&self, id: CheckpointId) -> Result<RpcCheckpoint, IndexerError>;
     async fn get_checkpoints(
         &self,
@@ -212,14 +213,16 @@ pub trait IndexerStore {
 
     async fn persist_checkpoint_transactions(
         &self,
-        checkpoint: &Checkpoint,
+        checkpoints: &[Checkpoint],
         transactions: &[Transaction],
-    ) -> Result<usize, IndexerError>;
+        counter_committed_tx: IntCounter,
+    ) -> Result<(), IndexerError>;
     async fn persist_object_changes(
         &self,
         tx_object_changes: &[TransactionObjectChanges],
         object_mutation_latency: Histogram,
         object_deletion_latency: Histogram,
+        counter_committed_object: IntCounter,
     ) -> Result<(), IndexerError>;
     async fn persist_events(&self, events: &[Event]) -> Result<(), IndexerError>;
     async fn persist_addresses(
@@ -335,11 +338,12 @@ impl ObjectStore for CheckpointData {
 }
 
 // Per checkpoint indexing
+#[derive(Debug)]
 pub struct TemporaryCheckpointStore {
     pub checkpoint: Checkpoint,
     pub transactions: Vec<Transaction>,
     pub events: Vec<Event>,
-    pub object_changes: Vec<TransactionObjectChanges>,
+    // pub object_changes: Vec<TransactionObjectChanges>,
     pub packages: Vec<Package>,
     pub input_objects: Vec<InputObject>,
     pub changed_objects: Vec<ChangedObject>,

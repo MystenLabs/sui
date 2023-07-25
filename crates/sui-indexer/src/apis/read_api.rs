@@ -116,7 +116,7 @@ impl<S: IndexerStore> ReadApi<S> {
 
     async fn get_latest_checkpoint_sequence_number_internal(&self) -> Result<u64, IndexerError> {
         self.state
-            .get_latest_checkpoint_sequence_number()
+            .get_latest_tx_checkpoint_sequence_number()
             .await
             .map(|n| n as u64)
     }
