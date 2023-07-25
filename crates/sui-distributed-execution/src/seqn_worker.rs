@@ -1,3 +1,6 @@
+use std::cmp;
+use std::sync::Arc;
+
 use prometheus::Registry;
 use std::cmp;
 use std::collections::HashMap;
@@ -5,6 +8,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 use sui_archival::reader::ArchiveReaderBalancer;
+use sui_config::NodeConfig;
 use sui_config::{Config, NodeConfig};
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -363,16 +367,7 @@ impl SequenceWorkerState {
                         checkpoint_seq,
                     };
 
-                    let receivers: HashSet<_> = if full_tx.is_epoch_change() {
-                        (0..sw_senders.len() as u8).collect()
-                    } else {
-                        full_tx
-                            .get_read_write_set()
-                            .into_iter()
-                            .map(|obj| obj[0] % sw_senders.len() as u8)
-                            .collect()
-                    };
-                    for ew in receivers {
+                    for ew in full_tx.get_relevant_ews(sw_senders.len() as u8) {
                         sw_senders[ew as usize]
                             .send(SailfishMessage::ProposeExec(full_tx.clone()))
                             .await
@@ -380,6 +375,7 @@ impl SequenceWorkerState {
                     }
 
                     if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
+                        println!("Change epoch tx {}", tx.digest());
                         // wait for epoch end message from execution worker
                         println!(
                             "SW waiting for epoch end message. Checkpoint_seq: {}",
@@ -393,6 +389,16 @@ impl SequenceWorkerState {
                         else {
                             panic!("unexpected message")
                         };
+                        for _ in 0..sw_senders.len() - 1 {
+                            let SailfishMessage::EpochEnd { new_epoch_start_state: start_state } = ew_receiver
+                                .recv()
+                                .await
+                                .expect("Receiving doesn't work")
+                            else {
+                                panic!("unexpected message")
+                            };
+                            assert_eq!(start_state, new_epoch_start_state);
+                        }
                         let next_epoch_committee = new_epoch_start_state.get_sui_committee();
                         let next_epoch = next_epoch_committee.epoch();
                         let last_checkpoint = self

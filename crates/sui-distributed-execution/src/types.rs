@@ -171,6 +171,15 @@ impl Transaction {
             .copied()
             .collect()
     }
+
+    pub fn get_relevant_ews(&self, num_ews: u8) -> HashSet<u8> {
+        let rw_set = self.get_read_write_set();
+        if rw_set.contains(&ObjectID::from_single_byte(5)) || self.is_epoch_change() {
+            (0..num_ews).collect()
+        } else {
+            rw_set.into_iter().map(|obj_id| obj_id[0] % num_ews).collect()
+        }
+    }
 }
 
 pub struct TransactionWithResults {

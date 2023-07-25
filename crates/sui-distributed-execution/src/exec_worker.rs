@@ -492,8 +492,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                         let obj = self.memory_store.get_object(&obj_id).unwrap();
                         locked_objs.push(obj);
                     }
-                    let relevant_ews: HashSet<_> = full_tx.get_read_write_set().into_iter().map(|obj_id| obj_id[0] % num_ews).collect();
-                    for ew in relevant_ews {
+                    for ew in full_tx.get_relevant_ews(num_ews) {
                         let msg = SailfishMessage::LockedExec { tx: full_tx.clone(), objects: locked_objs.clone() };
                         if ew_senders[ew as usize].is_closed() {
                             eprintln!("EW {} could not send LockedExec; EW {} already stopped.", ew_id, ew);
