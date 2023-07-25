@@ -53,16 +53,16 @@ jobs:
         with:
           ref: ${{ env.sui_tag }}
       
-      - name: Install nexttest
-        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
-        uses: taiki-e/install-action@nextest
+      # - name: Install nexttest
+      #   if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
+      #   uses: taiki-e/install-action@nextest
 
-      - name: Setup protoc
-        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
-        uses: arduino/setup-protoc@v1
-        # this avoids rate-limiting
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      # - name: Setup protoc
+      #   if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
+      #   uses: arduino/setup-protoc@v1
+      #   # this avoids rate-limiting
+      #   with:
+      #     repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       # - name: Install postgres (Windows)
       #   if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
@@ -79,7 +79,6 @@ jobs:
         if: ${{ env.sui_tag != 'main' }}
         id: build
         run: |
-          mkdir ./crates
           touch ./crates/sui-tool
           
       - name: Rename binaries for ubuntu
