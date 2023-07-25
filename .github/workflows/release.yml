@@ -1,4 +1,4 @@
-name: Release Binaries
+name: Attach Sui binaries to a release
 
 on:
   release:
@@ -36,13 +36,15 @@ env:
 jobs:
   release-build:
     timeout-minutes: 45
-    runs-on: [ubuntu-ghcloud]
     strategy:
+      matrix:
+        os: [windows-ghcloud, ubuntu-ghcloud]
       fail-fast: false
+    runs-on: ${{ matrix.os }}
     steps:
-      - name: Clean up tag name
+      - name: Clean up tag name ${{ env.TAG_NAME }}
         shell: bash
-        run: |
+        run: | 
           echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
 
       - name: Checking out ${{ env.sui_tag }}
@@ -50,32 +52,72 @@ jobs:
         uses: actions/checkout@v3
         with:
           ref: ${{ env.sui_tag }}
+      
+      - name: Install nexttest (Windows)
+        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
+        uses: taiki-e/install-action@nextest
 
-      - name: cargo build (release)
+      - name: Setup protoc (Windows)
+        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
+        uses: arduino/setup-protoc@v1
+        # this avoids rate-limiting
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install postgres (Windows)
+        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
+        shell: bash
+        run: |
+          choco install postgresql12 --force --params '/Password:root'
+          echo "C:\Program Files\PostgreSQL\12\bin" >> $GITHUB_PATH
+          echo "C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_PATH
+          echo "PQ_LIB_DIR=C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_ENV
+          echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
+          echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV          
+
+      - name: cargo build (release) for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
-        id: build
+        shell: bash
         run: |
           cargo build --release
 
-          echo BIN_SUI="target/release/sui" >> $GITHUB_OUTPUT
-          echo BIN_SUI_NODE="target/release/sui-node" >> $GITHUB_OUTPUT
-          echo BIN_SUI_TOOL="target/release/sui-tool" >> $GITHUB_OUTPUT
-          echo BIN_SUI_FAUCET="target/release/sui-faucet" >> $GITHUB_OUTPUT
-          echo BIN_SUI_TEST_VALIDATOR="target/release/sui-test-validator" >> $GITHUB_OUTPUT
-          echo BIN_SUI_INDEXER="target/release/sui-indexer" >> $GITHUB_OUTPUT
+      - name: Rename binaries for Ubuntu
+        if: ${{ env.sui_tag != 'main' && matrix.os == 'ubuntu-ghcloud' }}
+        shell: bash
+        run: |
+          export arch=$(uname -m)
+          export os_type="ubuntu-${arch}"
+          echo "os_type=${os_type}" >> $GITHUB_ENV
+          mv ./target/release/sui ./target/release/sui-${os_type}
+          mv ./target/release/sui-node ./target/release/sui-node-${os_type}
+          mv ./target/release/sui-tool ./target/release/sui-tool-${os_type}
+          mv ./target/release/sui-faucet ./target/release/sui-faucet-${os_type}
+          mv ./target/release/sui-test-validator ./target/release/sui-test-validator-${os_type}
+          mv ./target/release/sui-indexer ./target/release/sui-indexer-${os_type}
+          tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui*-${os_type}*
 
-      - name: Upload release artifacts
+      - name: Rename binaries for Windows
+        if: ${{ env.sui_tag != 'main' && matrix.os == 'windows-ghcloud' }}
+        shell: bash
+        run: |
+          export arch=$(uname -m)
+          export os_type="windows-${arch}"
+          echo "os_type=${os_type}" >> $GITHUB_ENV
+          mv ./target/release/sui.exe ./target/release/sui-${os_type}.exe
+          mv ./target/release/sui-node.exe ./target/release/sui-node-${os_type}.exe
+          mv ./target/release/sui-tool.exe ./target/release/sui-tool-${os_type}.exe
+          mv ./target/release/sui-faucet.exe ./target/release/sui-faucet-${os_type}.exe
+          mv ./target/release/sui-test-validator.exe ./target/release/sui-test-validator-${os_type}.exe
+          mv ./target/release/sui-indexer.exe ./target/release/sui-indexer-${os_type}.exe
+          tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui*-${os_type}*
+
+      - name: Upload release artifacts for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
         uses: actions/upload-artifact@v3
         with:
-          name: sui-binaries
+          name: sui-binaries-${{ matrix.os }}
           path: |
-            ${{ steps.build.outputs.BIN_SUI }}
-            ${{ steps.build.outputs.BIN_SUI_NODE }}
-            ${{ steps.build.outputs.BIN_SUI_TOOL }}
-            ${{ steps.build.outputs.BIN_SUI_FAUCET }}
-            ${{ steps.build.outputs.BIN_SUI_TEST_VALIDATOR }}
-            ${{ steps.build.outputs.BIN_SUI_INDEXER }}
+            ./target/release/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
 
       - name: Publish binaries for ${{ env.sui_tag }} release
         if: ${{ env.sui_tag != 'main' }}
@@ -83,12 +125,7 @@ jobs:
         with:
           tag_name: ${{ env.sui_tag }}
           files: |
-            ${{ steps.build.outputs.BIN_SUI }}
-            ${{ steps.build.outputs.BIN_SUI_NODE }}
-            ${{ steps.build.outputs.BIN_SUI_TOOL }}
-            ${{ steps.build.outputs.BIN_SUI_FAUCET }}
-            ${{ steps.build.outputs.BIN_SUI_TEST_VALIDATOR }}
-            ${{ steps.build.outputs.BIN_SUI_INDEXER }}
+            ./target/release/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
         env:
           # Have to use a Personal Access Token (PAT), based on https://tinyurl.com/2by2ntdr
           GITHUB_TOKEN: ${{ secrets.GH_RELEASE_BUILDS_TOKEN }}
