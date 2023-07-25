@@ -81,6 +81,7 @@ jobs:
         shell: bash
         run: |
           cargo build --release
+          ls -al ./target/release
 
       - name: Rename binaries for ${{ matrix.os }}
         if: ${{ env.sui_tag != 'main' }}
@@ -92,6 +93,7 @@ jobs:
           mv ./target/release/sui-faucet ./target/release/sui-faucet-${{ matrix.os }}
           mv ./target/release/sui-test-validator ./target/release/sui-test-validator-${{ matrix.os }}
           mv ./target/release/sui-indexer ./target/release/sui-indexer-${{ matrix.os }}
+          ls -al ./target/release
 
       - name: Upload release artifacts for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
