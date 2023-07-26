@@ -1326,7 +1326,7 @@ impl ProtocolConfig {
                 // cfg.feature_flags.pack_digest_hash_modules = true;
                 cfg.feature_flags.txn_base_cost_as_multiplier = true;
                 cfg.feature_flags.narwhal_new_leader_election_schedule = true;
-                cfg.consensus_bad_nodes_stake_threshold = Some(0.20);
+                cfg.consensus_bad_nodes_stake_threshold = Some(0.25);
                 // this is a multiplier of the gas price
                 cfg.base_tx_cost_fixed = Some(1_000);
                 cfg
