@@ -175,9 +175,9 @@ export default function MultiSigAddressGenerator() {
 					</Button>
 				</section>
 				<section>
-					<div>
-						<p>MultiSig Threshold Value</p>
-					</div>
+					<label className="form-label min-h-[80px] rounded-md border text-sm px-3 py-2 ring-offset-background">
+						MultiSig Threshold Value:
+					</label>
 					<input
 						className="min-h-[80px] rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
 						type="number"
