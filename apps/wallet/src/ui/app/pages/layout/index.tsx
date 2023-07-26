@@ -29,8 +29,8 @@ function PageLayout({ forceFullscreen = false, children, className }: PageLayout
 			<div
 				className={cl('w-popup-width h-popup-height', st.container, className, {
 					[st.navHidden]: !isNavVisible,
-					'h-popup-height': isSocialSignInEnabled,
-					'h-popup-height-v2': !isSocialSignInEnabled,
+					'h-popup-height': !isSocialSignInEnabled,
+					'h-popup-height-v2': isSocialSignInEnabled,
 				})}
 			>
 				{children}
