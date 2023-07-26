@@ -111,7 +111,7 @@ EXECUTE PROCEDURE refresh_view_func();
 CREATE MATERIALIZED VIEW epoch_move_call_metrics AS
 (SELECT 3::BIGINT AS day, move_package, move_module, move_function, COUNT(*) AS count
  FROM move_calls
- WHERE epoch >
+ WHERE epoch >=
        (SELECT MIN(epoch)
         FROM epochs
         WHERE epoch_start_timestamp > ((EXTRACT(EPOCH FROM CURRENT_TIMESTAMP - '3 days'::INTERVAL)) * 1000)::BIGINT)
@@ -121,7 +121,7 @@ CREATE MATERIALIZED VIEW epoch_move_call_metrics AS
 UNION ALL
 (SELECT 7::BIGINT AS day, move_package, move_module, move_function, COUNT(*) AS count
  FROM move_calls
- WHERE epoch >
+ WHERE epoch >=
        (SELECT MIN(epoch)
         FROM epochs
         WHERE epoch_start_timestamp > ((EXTRACT(EPOCH FROM CURRENT_TIMESTAMP - '7 days'::INTERVAL)) * 1000)::BIGINT)
@@ -131,7 +131,7 @@ UNION ALL
 UNION ALL
 (SELECT 30::BIGINT AS day, move_package, move_module, move_function, COUNT(*) AS count
  FROM move_calls
- WHERE epoch >
+ WHERE epoch >=
        (SELECT MIN(epoch)
         FROM epochs
         WHERE epoch_start_timestamp > ((EXTRACT(EPOCH FROM CURRENT_TIMESTAMP - '30 days'::INTERVAL)) * 1000)::BIGINT)
