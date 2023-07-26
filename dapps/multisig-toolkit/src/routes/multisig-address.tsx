@@ -189,7 +189,17 @@ export default function MultiSigAddressGenerator() {
 					Submit
 				</Button>
 			</form>
-			<div>{msAddress && <p className="text-danger">{msAddress}</p>}</div>
+			{msAddress && <Card key={msAddress}>
+				<CardHeader>
+					<CardTitle>Sui MultiSig Address</CardTitle>
+					<CardDescription>https://docs.sui.io/testnet/learn/cryptography/sui-multisig</CardDescription>
+				</CardHeader>
+				<CardContent>
+					<div className="flex flex-col gap-2">
+						<div className="bg-muted rounded text-sm font-mono p-2 break-all">{msAddress}</div>
+					</div>
+				</CardContent>
+			</Card>}
 		</div>
 	);
 }
