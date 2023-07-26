@@ -175,13 +175,15 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
         let shared_counter = parameters.benchmark_type.shared_objects_ratio;
         let transfer_objects = 100 - shared_counter;
         let metrics_port = Self::CLIENT_METRICS_PORT;
+        let gas_keys = GenesisConfig::benchmark_gas_keys(committee_size);
 
         clients
             .into_iter()
-            .zip(GenesisConfig::benchmark_gas_keys(committee_size).into_iter())
-            .map(|(instance, gas_key)| {
+            .enumerate()
+            .map(|(i, instance)| {
                 let genesis = genesis_path.display();
                 let keystore = keystore_path.display();
+                let gas_key = &gas_keys[i % committee_size];
                 let gas_address = SuiAddress::from(&gas_key.public());
 
                 let run = [
