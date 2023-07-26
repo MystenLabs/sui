@@ -1,9 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type AccountSourceSerialized, type AccountSourceType } from './AccountSource';
+import {
+	type AccountSource,
+	type AccountSourceSerialized,
+	type AccountSourceType,
+} from './AccountSource';
 import { MnemonicAccountSource } from './MnemonicAccountSource';
+import { QredoAccountSource } from './QredoAccountSource';
 import { type UiConnection } from '../connections/UiConnection';
+import { type QredoConnectIdentity } from '../qredo/types';
+import { isSameQredoConnection } from '../qredo/utils';
 import { getAllStoredEntities, getStorageEntity } from '../storage-entities-utils';
 import { type Message, createMessage } from '_src/shared/messaging/messages';
 import {
@@ -16,6 +23,8 @@ function toAccountSource(accountSource: AccountSourceSerialized) {
 	switch (true) {
 		case MnemonicAccountSource.isOfType(accountSource):
 			return new MnemonicAccountSource(accountSource.id);
+		case QredoAccountSource.isOfType(accountSource):
+			return new QredoAccountSource(accountSource.id);
 		default:
 			throw new Error(`Unknown account source of type ${accountSource.type}`);
 	}
@@ -64,6 +73,26 @@ async function createAccountSource({
 			throw new Error(`Unknown Account source type ${type}`);
 		}
 	}
+}
+
+export async function getQredoAccountSource(filter: string | QredoConnectIdentity) {
+	let accountSource: AccountSource | null = null;
+	if (typeof filter === 'string') {
+		accountSource = await getAccountSourceByID(filter);
+	} else {
+		const accountSourceSerialized = (
+			await getAllStoredEntities<AccountSourceSerialized>('account-source-entity')
+		)
+			.filter(QredoAccountSource.isOfType)
+			.find((anAccountSource) => isSameQredoConnection(filter, anAccountSource));
+		accountSource = accountSourceSerialized
+			? new QredoAccountSource(accountSourceSerialized.id)
+			: null;
+	}
+	if (!accountSource || !(accountSource instanceof QredoAccountSource)) {
+		return null;
+	}
+	return accountSource;
 }
 
 export async function accountSourcesHandleUIMessage(msg: Message, uiConnection: UiConnection) {

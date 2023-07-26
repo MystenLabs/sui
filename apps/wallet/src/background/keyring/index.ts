@@ -250,13 +250,15 @@ export class Keyring {
 			}
 		});
 		const accountsPublicInfoUpdates: AccountsPublicInfoUpdates = [];
-		newAccounts.forEach(({ address, labels, walletID, publicKey }) => {
+		newAccounts.forEach(({ address, labels, walletID, publicKey, network }) => {
 			const newAccount = new QredoAccount({
 				address,
 				qredoConnectionID: qredoID,
 				qredoWalletID: walletID,
 				labels,
 				publicKey,
+				network,
+				walletID,
 			});
 			accountsPublicInfoUpdates.push({
 				accountAddress: newAccount.address,
@@ -513,13 +515,15 @@ export class Keyring {
 			);
 		}
 		for (const aQredoConnection of await getAllQredoConnections()) {
-			aQredoConnection.accounts.forEach(({ address, labels, walletID, publicKey }) => {
+			aQredoConnection.accounts.forEach(({ address, labels, walletID, publicKey, network }) => {
 				const account = new QredoAccount({
 					address,
 					qredoConnectionID: aQredoConnection.id,
 					labels,
 					qredoWalletID: walletID,
 					publicKey,
+					network,
+					walletID,
 				});
 				this.#accountsMap.set(account.address, account);
 			});

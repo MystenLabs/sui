@@ -18,6 +18,7 @@ import {
 import { accountsQueryKey, useAccounts } from '../../hooks/accounts-v2/useAccounts';
 import { useSigner } from '../../hooks/accounts-v2/useSigner';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
+import { useQredoTransaction } from '../../hooks/useQredoTransaction';
 import { ImportLedgerAccountsPage } from '../../pages/accounts/ImportLedgerAccountsPage';
 import { Button } from '../../shared/ButtonUI';
 import { ModalDialog } from '../../shared/ModalDialog';
@@ -25,15 +26,24 @@ import { Card } from '../../shared/card';
 import { Heading } from '../../shared/heading';
 import { Text } from '../../shared/text';
 import { type AccountSourceSerializedUI } from '_src/background/account-sources/AccountSource';
-import { type SerializedUIAccount } from '_src/background/accounts/Account';
+import { type AccountType, type SerializedUIAccount } from '_src/background/accounts/Account';
+import { isLedgerAccountSerializedUI } from '_src/background/accounts/LedgerAccount';
+import { isMnemonicSerializedUiAccount } from '_src/background/accounts/MnemonicAccount';
+import { isQredoAccountSerializedUI } from '_src/background/accounts/QredoAccount';
 import { entropyToSerialized, mnemonicToEntropy } from '_src/shared/utils/bip39';
 
-const pass = '61916a448d7885641';
+export const testPassNewAccounts = '61916a448d7885641';
 const testMnemonic =
 	'lawsuit welcome deputy faith shadow monitor common paper candy horse panda history';
 const mnemonicFirstKeyPair: ExportedKeypair = {
 	schema: 'ED25519',
 	privateKey: toB64(hexToBytes('5051bc918ec4991c62969d6cd0f1edaabfbe5244e509d7a96f39fe52e76cf54f')),
+};
+const typeOrder: Record<AccountType, number> = {
+	'mnemonic-derived': 0,
+	imported: 1,
+	ledger: 2,
+	qredo: 3,
 };
 
 /**
@@ -48,7 +58,7 @@ export function AccountsDev() {
 		mutationKey: ['accounts', 'v2', 'new', 'mnemonic', 'account source'],
 		mutationFn: (entropy?: Uint8Array) =>
 			backgroundClient.createMnemonicAccountSource({
-				password: pass,
+				password: testPassNewAccounts,
 				entropy: entropy ? entropyToSerialized(entropy) : undefined,
 			}),
 		onSuccess: () => {
@@ -60,7 +70,7 @@ export function AccountsDev() {
 		mutationFn: ({ keyPair }: { keyPair: ExportedKeypair }) =>
 			backgroundClient.createAccounts({
 				type: 'imported',
-				password: pass,
+				password: testPassNewAccounts,
 				keyPair,
 			}),
 		onSuccess: () => {
@@ -129,7 +139,29 @@ export function AccountsDev() {
 						{accounts.isLoading ? (
 							<LoadingIndicator />
 						) : accounts.data?.length ? (
-							accounts.data.map((anAccount) => <Account key={anAccount.id} account={anAccount} />)
+							accounts.data
+								.sort((a, b) => {
+									if (a.type !== b.type) {
+										return typeOrder[a.type] - typeOrder[b.type];
+									}
+									if (isLedgerAccountSerializedUI(a) && isLedgerAccountSerializedUI(b)) {
+										return a.derivationPath.localeCompare(b.derivationPath);
+									}
+									if (isMnemonicSerializedUiAccount(a) && isMnemonicSerializedUiAccount(b)) {
+										if (a.sourceID === b.sourceID) {
+											return a.derivationPath.localeCompare(b.derivationPath);
+										}
+										return a.sourceID.localeCompare(b.sourceID);
+									}
+									if (isQredoAccountSerializedUI(a) && isQredoAccountSerializedUI(b)) {
+										if (a.sourceID === b.sourceID) {
+											return a.walletID.localeCompare(b.walletID);
+										}
+										return a.sourceID.localeCompare(b.sourceID);
+									}
+									return a.address.localeCompare(b.address);
+								})
+								.map((anAccount) => <Account key={anAccount.id} account={anAccount} />)
 						) : (
 							<Text>No accounts found</Text>
 						)}
@@ -159,7 +191,7 @@ export function AccountsDev() {
 					<>
 						<div id="overlay-portal-container"></div>
 						<ImportLedgerAccountsPage
-							password={pass}
+							password={testPassNewAccounts}
 							onClose={() => setIsImportLedgerModalVisible(false)}
 							onConfirmed={() => {
 								setIsImportLedgerModalVisible(false);
@@ -221,12 +253,11 @@ function AccountSource({ accountSource }: { accountSource: AccountSourceSerializ
 			footer={
 				accountSource.isLocked ? (
 					<Button
-						size="tiny"
 						text="Unlock"
 						onClick={() =>
 							unlock.mutate({
 								id: accountSource.id,
-								password: pass,
+								password: testPassNewAccounts,
 							})
 						}
 						disabled={unlock.isLoading}
@@ -240,14 +271,16 @@ function AccountSource({ accountSource }: { accountSource: AccountSourceSerializ
 							}}
 							loading={lock.isLoading}
 						/>
-						<Button
-							text="Create next account"
-							onClick={() => {
-								deriveNextMnemonicAccount.mutate({ sourceID: accountSource.id });
-							}}
-							disabled={lock.isLoading}
-							loading={deriveNextMnemonicAccount.isLoading}
-						/>
+						{accountSource.type === 'mnemonic' ? (
+							<Button
+								text="Create next account"
+								onClick={() => {
+									deriveNextMnemonicAccount.mutate({ sourceID: accountSource.id });
+								}}
+								disabled={lock.isLoading}
+								loading={deriveNextMnemonicAccount.isLoading}
+							/>
+						) : null}
 					</div>
 				)
 			}
@@ -261,6 +294,7 @@ function Account({ account }: { account: SerializedUIAccount }) {
 	const lock = useLockMutation();
 	const unlock = useUnlockMutation();
 	const signer = useSigner(account);
+	const { clientIdentifier, notificationModal } = useQredoTransaction();
 	const sign = useMutation({
 		mutationKey: ['accounts v2 sign'],
 		mutationFn: () => {
@@ -270,47 +304,53 @@ function Account({ account }: { account: SerializedUIAccount }) {
 			if (!signer) {
 				throw new Error('Signer not found');
 			}
-			return signer.signMessage({ message: new TextEncoder().encode('Message to sign') });
+			return signer.signMessage(
+				{ message: new TextEncoder().encode('Message to sign') },
+				clientIdentifier,
+			);
 		},
 		onSuccess: (result) => {
 			toast.success(JSON.stringify(result, null, 2));
 		},
 	});
 	return (
-		<Card
-			header={account.address}
-			key={account.address}
-			footer={
-				account.isLocked ? (
-					<Button
-						text="Unlock"
-						onClick={() => {
-							unlock.mutate({ id: account.id, password: pass });
-						}}
-						loading={unlock.isLoading}
-					/>
-				) : (
-					<div className="flex gap-2 flex-1">
+		<>
+			{notificationModal}
+			<Card
+				header={account.address}
+				key={account.address}
+				footer={
+					account.isLocked ? (
 						<Button
-							text="Lock"
+							text="Unlock"
 							onClick={() => {
-								lock.mutate({ id: account.id });
+								unlock.mutate({ id: account.id, password: testPassNewAccounts });
 							}}
-							loading={lock.isLoading}
+							loading={unlock.isLoading}
 						/>
-						<Button
-							text="Sign"
-							onClick={() => {
-								sign.mutate();
-							}}
-							loading={sign.isLoading}
-							disabled={lock.isLoading || unlock.isLoading}
-						/>
-					</div>
-				)
-			}
-		>
-			<pre>{JSON.stringify(account, null, 2)}</pre>
-		</Card>
+					) : (
+						<div className="flex gap-2 flex-1">
+							<Button
+								text="Lock"
+								onClick={() => {
+									lock.mutate({ id: account.id });
+								}}
+								loading={lock.isLoading}
+							/>
+							<Button
+								text="Sign"
+								onClick={() => {
+									sign.mutate();
+								}}
+								loading={sign.isLoading}
+								disabled={lock.isLoading || unlock.isLoading}
+							/>
+						</div>
+					)
+				}
+			>
+				<pre>{JSON.stringify(account, null, 2)}</pre>
+			</Card>
+		</>
 	);
 }

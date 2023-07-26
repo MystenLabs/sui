@@ -15,7 +15,10 @@ import { type Serializable } from '_src/shared/cryptography/keystore';
 
 export type AccountSourceType = 'mnemonic' | 'qredo';
 
-export abstract class AccountSource<T extends AccountSourceSerialized, V extends Serializable> {
+export abstract class AccountSource<
+	T extends AccountSourceSerialized = AccountSourceSerialized,
+	V extends Serializable = Serializable,
+> {
 	readonly id: string;
 	readonly type: AccountSourceType;
 

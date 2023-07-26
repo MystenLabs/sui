@@ -68,9 +68,12 @@ export class MnemonicAccountSource extends AccountSource<
 			encrypted: await encrypt(password, decryptedData),
 			sourceHash: bytesToHex(sha256(entropy)),
 		};
-		const allAccountSources = await getAccountSources({ type: 'mnemonic' });
+		const allAccountSources = await getAccountSources();
 		for (const anAccountSource of allAccountSources) {
-			if ((await anAccountSource.sourceHash) === dataSerialized.sourceHash) {
+			if (
+				anAccountSource instanceof MnemonicAccountSource &&
+				(await anAccountSource.sourceHash) === dataSerialized.sourceHash
+			) {
 				throw new Error('Mnemonic account source already exists');
 			}
 		}

@@ -25,7 +25,6 @@ import { setTransactionRequests } from '_redux/slices/transaction-requests';
 import { type MnemonicSerializedUiAccount } from '_src/background/accounts/MnemonicAccount';
 import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
 import { type AccountsPublicInfoUpdates } from '_src/background/keyring/accounts';
-import { type QredoConnectIdentity } from '_src/background/qredo/types';
 import { type UIAccessibleEntityType } from '_src/background/storage-entities-utils';
 import { NEW_ACCOUNTS_ENABLED } from '_src/shared/constants';
 import {
@@ -376,16 +375,13 @@ export class BackgroundClient {
 		);
 	}
 
-	public getQredoConnectionInfo(
-		filter: { qredoID: string } | { identity: QredoConnectIdentity },
-		refreshAccessToken = false,
-	) {
+	public getQredoConnectionInfo(qredoID: string, refreshAccessToken = false) {
 		return lastValueFrom(
 			this.sendMessage(
 				createMessage<QredoConnectPayload<'getQredoInfo'>>({
 					type: 'qredo-connect',
 					method: 'getQredoInfo',
-					args: { filter, refreshAccessToken },
+					args: { qredoID, refreshAccessToken },
 				}),
 			).pipe(
 				take(1),

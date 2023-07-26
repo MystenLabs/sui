@@ -1,15 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64, type SuiAddress } from '@mysten/sui.js';
+import { fromB64 } from '@mysten/sui.js/utils';
 import { isSigningAccount, type SerializedAccount } from './Account';
 import { ImportedAccount } from './ImportedAccount';
 import { LedgerAccount } from './LedgerAccount';
 import { MnemonicAccount } from './MnemonicAccount';
+import { QredoAccount } from './QredoAccount';
 import { getAccountSourceByID } from '../account-sources';
 import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
 import { type UiConnection } from '../connections/UiConnection';
 import {
+	deleteStorageEntity,
 	getAllStoredEntities,
 	getStorageEntity,
 	setStorageEntity,
@@ -29,6 +31,8 @@ function toAccount(account: SerializedAccount) {
 			return new ImportedAccount({ id: account.id });
 		case LedgerAccount.isOfType(account):
 			return new LedgerAccount({ id: account.id });
+		case QredoAccount.isOfType(account):
+			return new QredoAccount({ id: account.id });
 		default:
 			throw new Error(`Unknown account of type ${account.type}`);
 	}
@@ -46,7 +50,7 @@ export async function getAccountByID(id: string) {
 	return toAccount(serializedAccount);
 }
 
-export async function getAccountByAddress(address: SuiAddress) {
+export async function getAccountByAddress(address: string) {
 	const allAccounts = await getAllAccounts();
 	for (const anAccount of allAccounts) {
 		if ((await anAccount.address) === address) {
@@ -72,17 +76,50 @@ export async function getActiveAccount() {
 	return getAccountByID(accountID);
 }
 
+async function getQreqoAccountsToDelete<T extends SerializedAccount>(accounts: Omit<T, 'id'>[]) {
+	const accountIDsToDelete: string[] = [];
+	const allCurrentQredoAccounts = await Promise.all(
+		(await getAllAccounts())
+			.filter((anAccount): anAccount is QredoAccount => anAccount instanceof QredoAccount)
+			.map(async (anAccount) => ({ accountID: anAccount.id, sourceID: await anAccount.sourceID })),
+	);
+	const newAccountsQredoSourceIDs = new Set();
+	for (const aNewAccount of accounts) {
+		if (aNewAccount.type === 'qredo' && 'sourceID' in aNewAccount) {
+			newAccountsQredoSourceIDs.add(aNewAccount.sourceID);
+		}
+	}
+	newAccountsQredoSourceIDs.forEach((anAccountSourceID) => {
+		for (const { accountID, sourceID } of allCurrentQredoAccounts) {
+			if (sourceID === anAccountSourceID) {
+				accountIDsToDelete.push(accountID);
+			}
+		}
+	});
+	return accountIDsToDelete;
+}
+
 export async function addNewAccounts<T extends SerializedAccount>(accounts: Omit<T, 'id'>[]) {
 	const accountInstances = [];
+	const accountsToDelete = await getQreqoAccountsToDelete(accounts);
 	for (const anAccountToAdd of accounts) {
 		for (const anAccount of await getAllAccounts()) {
-			// allow importing accounts that have the same address but are of different type
-			// probably it's an edge case and we used to see this problem with importing
-			// accounts that were exported from the mnemonic while testing
+			if (
+				anAccountToAdd.type === 'qredo' &&
+				anAccount instanceof QredoAccount &&
+				'sourceID' in anAccountToAdd &&
+				anAccountToAdd.sourceID === (await anAccount.sourceID)
+			) {
+				// The existing account will be deleted after adding the new one
+				continue;
+			}
 			if (
 				(await anAccount.address) === anAccountToAdd.address &&
 				anAccount.type === anAccountToAdd.type
 			) {
+				// allow importing accounts that have the same address but are of different type
+				// probably it's an edge case and we used to see this problem with importing
+				// accounts that were exported from the mnemonic while testing
 				throw new Error(`Duplicated account ${anAccountToAdd.address}`);
 			}
 		}
@@ -93,6 +130,9 @@ export async function addNewAccounts<T extends SerializedAccount>(accounts: Omit
 			throw new Error(`Something went wrong account with id ${id} not found`);
 		}
 		accountInstances.push(accountInstance);
+	}
+	for (const anAccountID of accountsToDelete) {
+		await deleteStorageEntity(anAccountID);
 	}
 	return accountInstances;
 	// TODO: emit event

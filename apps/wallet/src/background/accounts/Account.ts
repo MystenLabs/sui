@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-	type Keypair,
-	toSerializedSignature,
 	type SerializedSignature,
-	type SuiAddress,
-} from '@mysten/sui.js';
+	toSerializedSignature,
+	type Keypair,
+} from '@mysten/sui.js/cryptography';
 import { blake2b } from '@noble/hashes/blake2b';
 import {
 	clearEphemeralValue,
@@ -90,14 +89,14 @@ export abstract class Account<
 export interface SerializedAccount extends StorageEntity {
 	readonly storageEntityType: 'account-entity';
 	readonly type: AccountType;
-	readonly address: SuiAddress;
+	readonly address: string;
 	readonly publicKey: string | null;
 }
 
 export interface SerializedUIAccount {
 	readonly id: string;
 	readonly type: AccountType;
-	readonly address: SuiAddress;
+	readonly address: string;
 	readonly isLocked: boolean;
 	readonly publicKey: string | null;
 }

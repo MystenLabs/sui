@@ -12,13 +12,17 @@ import { useBackgroundClient } from '../useBackgroundClient';
 import { useQredoAPI } from '../useQredoAPI';
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
 import { isLedgerAccountSerializedUI } from '_src/background/accounts/LedgerAccount';
-import { type SerializedQredoAccount } from '_src/background/keyring/QredoAccount';
+import { isQredoAccountSerializedUI } from '_src/background/accounts/QredoAccount';
 
 export function useSigner(account: SerializedUIAccount | null): WalletSigner | null {
 	const { connectToLedger } = useSuiLedgerClient();
 	const api = useRpcClient();
 	const background = useBackgroundClient();
-	const [qredoAPI] = useQredoAPI(account?.type === 'qredo' ? undefined /* TODO */ : undefined);
+	const [qredoAPI] = useQredoAPI(
+		account && !account?.isLocked && isQredoAccountSerializedUI(account)
+			? account.sourceID
+			: undefined,
+	);
 	const networkName = useAppSelector(({ app: { apiEnv } }) => apiEnv);
 	if (!account) {
 		return null;
@@ -26,15 +30,8 @@ export function useSigner(account: SerializedUIAccount | null): WalletSigner | n
 	if (isLedgerAccountSerializedUI(account)) {
 		return new LedgerSigner(connectToLedger, account.derivationPath, api);
 	}
-	if (account.type === 'qredo') {
-		return qredoAPI
-			? new QredoSigner(
-					api,
-					account as unknown as SerializedQredoAccount /* TODO */,
-					qredoAPI,
-					networkName,
-			  )
-			: null;
+	if (isQredoAccountSerializedUI(account)) {
+		return qredoAPI ? new QredoSigner(api, account, qredoAPI, networkName) : null;
 	}
 	return thunkExtras.api.getSignerInstance(account, background);
 }

@@ -158,7 +158,7 @@ export class UiConnection extends Connection {
 							method: 'getQredoInfoResponse',
 							args: {
 								qredoInfo: await getUIQredoInfo(
-									payload.args.filter,
+									payload.args.qredoID,
 									payload.args.refreshAccessToken,
 								),
 							},

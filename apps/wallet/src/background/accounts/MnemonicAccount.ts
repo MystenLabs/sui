@@ -25,6 +25,12 @@ export interface MnemonicSerializedUiAccount extends SerializedUIAccount {
 	sourceID: string;
 }
 
+export function isMnemonicSerializedUiAccount(
+	account: SerializedUIAccount,
+): account is MnemonicSerializedUiAccount {
+	return account.type === 'mnemonic-derived';
+}
+
 type SessionStorageData = { keyPair: ExportedKeypair };
 
 export class MnemonicAccount

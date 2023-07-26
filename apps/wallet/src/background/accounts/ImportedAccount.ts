@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromExportedKeypair, type ExportedKeypair } from '@mysten/sui.js';
+import { fromExportedKeypair } from '@mysten/sui.js';
+import { type ExportedKeypair } from '@mysten/sui.js/cryptography';
 import {
 	Account,
 	type PasswordUnLockableAccount,
@@ -24,6 +25,12 @@ export interface ImportedAccountSerialized extends SerializedAccount {
 export interface ImportedAccountSerializedUI extends SerializedUIAccount {
 	type: 'imported';
 	publicKey: string;
+}
+
+export function isImportedAccountSerializedUI(
+	account: SerializedUIAccount,
+): account is ImportedAccountSerializedUI {
+	return account.type === 'imported';
 }
 
 export class ImportedAccount
@@ -66,11 +73,11 @@ export class ImportedAccount
 		return !(await this.#getKeyPair());
 	}
 
-	async toUISerialized(): Promise<SerializedUIAccount> {
-		const { address, publicKey } = await this.getStoredData();
+	async toUISerialized(): Promise<ImportedAccountSerializedUI> {
+		const { address, publicKey, type } = await this.getStoredData();
 		return {
 			id: this.id,
-			type: this.type,
+			type,
 			address,
 			publicKey,
 			isLocked: await this.isLocked(),

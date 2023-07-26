@@ -18,4 +18,4 @@ export const NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_REDEEMABLE = 2;
 export const NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_STARTS = 1;
 export const MIN_NUMBER_SUI_TO_STAKE = 1;
 //use this to feature flag refactoring accounts work
-export const NEW_ACCOUNTS_ENABLED = true;
+export const NEW_ACCOUNTS_ENABLED = true as const;
