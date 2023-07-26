@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { getTransactionDigest, type ProgrammableTransaction } from '@mysten/sui.js';
+import { type ProgrammableTransaction } from '@mysten/sui.js/client';
 import { expect, test } from '@playwright/test';
 
 import { faucet, split_coin } from './utils/localnet';
@@ -8,7 +8,7 @@ import { faucet, split_coin } from './utils/localnet';
 test('displays gas breakdown', async ({ page }) => {
 	const address = await faucet();
 	const tx = await split_coin(address);
-	const txid = getTransactionDigest(tx);
+	const txid = tx.digest;
 	await page.goto(`/txblock/${txid}`);
 	await expect(page.getByTestId('gas-breakdown')).toBeVisible();
 });
@@ -16,7 +16,7 @@ test('displays gas breakdown', async ({ page }) => {
 test('displays inputs', async ({ page }) => {
 	const address = await faucet();
 	const tx = await split_coin(address);
-	const txid = getTransactionDigest(tx);
+	const txid = tx.digest;
 	await page.goto(`/txblock/${txid}`);
 
 	await expect(page.getByTestId('inputs-card')).toBeVisible();
@@ -31,7 +31,7 @@ test('displays inputs', async ({ page }) => {
 test('displays transactions card', async ({ page }) => {
 	const address = await faucet();
 	const tx = await split_coin(address);
-	const txid = getTransactionDigest(tx);
+	const txid = tx.digest;
 	await page.goto(`/txblock/${txid}`);
 
 	await expect(page.getByTestId('transactions-card')).toBeVisible();

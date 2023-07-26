@@ -3,16 +3,15 @@
 
 import { useFormatCoin, CoinFormat } from '@mysten/core';
 import {
-	normalizeSuiAddress,
-	type SuiObjectResponse,
 	getObjectDisplay,
 	getObjectOwner,
 	getObjectId,
 	getObjectVersion,
 	getObjectPreviousTransactionDigest,
 	getSuiObjectData,
-	SUI_TYPE_ARG,
 } from '@mysten/sui.js';
+import { type SuiObjectResponse } from '@mysten/sui.js/client';
+import { normalizeSuiAddress, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { Text } from '@mysten/ui';
 import { useState, useEffect } from 'react';
 

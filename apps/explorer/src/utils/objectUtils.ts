@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getObjectType, type ObjectOwner, type SuiObjectResponse } from '@mysten/sui.js';
+import { getObjectType } from '@mysten/sui.js';
+import { type ObjectOwner, type SuiObjectResponse } from '@mysten/sui.js/client';
 
 import { findIPFSvalue } from './stringUtils';
 

@@ -1,12 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	getExecutionStatusError,
-	getObjectId,
-	getTransactionDigest,
-	getTransactionEffects,
-} from '@mysten/sui.js';
+import { getObjectId } from '@mysten/sui.js';
 
 import { LinkGroup } from './LinkGroup';
 import { Banner } from '~/ui/Banner';
@@ -27,7 +22,7 @@ type FunctionExecutionResultProps = {
 };
 
 export function FunctionExecutionResult({ error, result, onClear }: FunctionExecutionResultProps) {
-	const adjError = error || (result && getExecutionStatusError(result)) || null;
+	const adjError = error || (result && result.effects?.status.error) || null;
 	const variant = adjError ? 'error' : 'message';
 	return (
 		<Banner icon={null} fullWidth variant={variant} spacing="lg" onDismiss={onClear}>
@@ -38,8 +33,8 @@ export function FunctionExecutionResult({ error, result, onClear }: FunctionExec
 						result
 							? [
 									{
-										text: getTransactionDigest(result),
-										to: `/txblock/${encodeURIComponent(getTransactionDigest(result))}`,
+										text: result.digest,
+										to: `/txblock/${encodeURIComponent(result.digest)}`,
 									},
 							  ]
 							: []
@@ -47,11 +42,11 @@ export function FunctionExecutionResult({ error, result, onClear }: FunctionExec
 				/>
 				<LinkGroup
 					title="Created"
-					links={(result && getTransactionEffects(result)?.created?.map(toObjectLink)) || []}
+					links={(result && result.effects?.created?.map(toObjectLink)) || []}
 				/>
 				<LinkGroup
 					title="Updated"
-					links={(result && getTransactionEffects(result)?.mutated?.map(toObjectLink)) || []}
+					links={(result && result.effects?.mutated?.map(toObjectLink)) || []}
 				/>
 				<LinkGroup title="Transaction failed" text={adjError} />
 			</div>

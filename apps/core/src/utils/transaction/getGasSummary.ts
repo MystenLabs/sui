@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import { getTotalGasUsed } from '@mysten/sui.js';
 import {
 	DryRunTransactionBlockResponse,
 	GasCostSummary,
 	SuiTransactionBlockResponse,
-	getTotalGasUsed,
 	SuiGasData,
-} from '@mysten/sui.js';
+} from '@mysten/sui.js/client';
 
 type Optional<T> = {
 	[K in keyof T]?: T[K];

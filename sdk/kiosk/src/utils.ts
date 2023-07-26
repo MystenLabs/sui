@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SharedObjectRef, SuiObjectRef, SuiObjectResponse, getObjectFields } from '@mysten/sui.js';
+import { SharedObjectRef, getObjectFields } from '@mysten/sui.js';
+import { SuiObjectRef, SuiObjectResponse } from '@mysten/sui.js/client';
 import { TransactionBlock, TransactionArgument } from '@mysten/sui.js/transactions';
 import { type DynamicFieldInfo } from '@mysten/sui.js/client';
 import { bcs } from './bcs';

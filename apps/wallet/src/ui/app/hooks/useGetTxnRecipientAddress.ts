@@ -1,11 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	type SuiTransactionBlockResponse,
-	getTransactionKind,
-	getTransactionSender,
-} from '@mysten/sui.js';
+import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 import { useMemo } from 'react';
 
 import { getAmount } from '_helpers';
@@ -23,7 +19,7 @@ export function useGetTxnRecipientAddress({ txn, address }: Props) {
 	//     return coins;
 	// }, [events, address]);
 
-	const transaction = getTransactionKind(txn)!;
+	const transaction = txn.transaction?.data.transaction!;
 	const amountByRecipient = getAmount(transaction, txn.effects!, events);
 
 	const recipientAddress = useMemo(() => {
@@ -38,7 +34,7 @@ export function useGetTxnRecipientAddress({ txn, address }: Props) {
 		//         ({ receiverAddress }) => receiverAddress !== address
 		//     )?.receiverAddress;
 
-		return null ?? transferObjectRecipientAddress ?? getTransactionSender(txn);
+		return null ?? transferObjectRecipientAddress ?? txn.transaction?.data.sender;
 	}, [address, amountByRecipient, txn]);
 	// }, [address, amountByRecipient, eventsSummary, txn]);
 

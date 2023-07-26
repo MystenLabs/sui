@@ -4,7 +4,7 @@
 import { Fragment } from 'react';
 import { Listbox, Transition } from '@headlessui/react';
 import { KioskOwnerCap } from '@mysten/kiosk';
-import { formatAddress } from '@mysten/sui.js';
+import { formatAddress } from '@mysten/sui.js/utils';
 import classNames from 'classnames';
 
 export function KioskSelector({
@@ -23,9 +23,9 @@ export function KioskSelector({
 				<div className="relative mt-1">
 					<Listbox.Button
 						className="relative w-full rounded-lg
-           bg-white py-2 pl-3 pr-10 text-left focus:outline-none 
+           bg-white py-2 pl-3 pr-10 text-left focus:outline-none
            border border-primary
-           focus-visible:border-primary focus-visible:ring-2 
+           focus-visible:border-primary focus-visible:ring-2
            focus-visible:ring-white focus-visible:ring-opacity-75 focus-visible:ring-offset-2
             focus-visible:ring-offset-primary sm:text-sm z-50
             cursor-pointer
@@ -47,7 +47,7 @@ export function KioskSelector({
 					>
 						<Listbox.Options
 							className="absolute mt-1 max-h-60 w-full overflow-y-auto overflow-x-hidden rounded-md
-             bg-white text-base shadow-lg ring-1 
+             bg-white text-base shadow-lg ring-1
              border border-primary
              ring-black ring-opacity-5 focus:outline-none sm:text-sm"
 						>

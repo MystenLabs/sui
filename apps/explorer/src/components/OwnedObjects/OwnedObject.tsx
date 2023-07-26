@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiObjectResponse, getObjectDisplay } from '@mysten/sui.js';
+import { getObjectDisplay } from '@mysten/sui.js';
+import { type SuiObjectResponse } from '@mysten/sui.js/client';
 
 import { useResolveVideo } from '~/hooks/useResolveVideo';
 import { ObjectDetails } from '~/ui/ObjectDetails';
