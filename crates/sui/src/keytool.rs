@@ -923,6 +923,7 @@ impl KeyToolCommand {
                     serialized_sig_base64: serialized_sig,
                 })
             }
+
             KeyToolCommand::Unpack { keypair } => {
                 let sui_address: SuiAddress = (&keypair.public()).into();
                 let path_str = format!("{}.key", sui_address).to_lowercase();
