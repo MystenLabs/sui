@@ -10,22 +10,13 @@ import { Form } from '../../shared/forms/Form';
 import { TextField } from '../../shared/forms/TextField';
 import ExternalLink from '../external-link';
 import { Button } from '_app/shared/ButtonUI';
-import {
-	ToS_LINK,
-	AUTO_LOCK_TIMER_MIN_MINUTES,
-	AUTO_LOCK_TIMER_MAX_MINUTES,
-} from '_src/shared/constants';
+import { ToS_LINK } from '_src/shared/constants';
 
 const formSchema = Yup.object({
 	password: Yup.string().required('Required'),
 	confirmedPassword: Yup.string().required('Required'),
 	acceptedTos: Yup.boolean().required().oneOf([true]),
 	enabledAutolock: Yup.boolean(),
-	autolockSettingInMinutes: Yup.number()
-		.integer()
-		.min(AUTO_LOCK_TIMER_MIN_MINUTES)
-		.max(AUTO_LOCK_TIMER_MAX_MINUTES)
-		.label('Auto-lock timer'),
 });
 
 type FormValues = Yup.InferType<typeof formSchema>;
@@ -42,7 +33,6 @@ export function ProtectAccountForm({ onSubmit }: ProtectAccountFormProps) {
 			confirmedPassword: '',
 			acceptedTos: false,
 			enabledAutolock: true,
-			autolockSettingInMinutes: 1,
 		},
 		resolver: yupResolver(formSchema),
 	});
