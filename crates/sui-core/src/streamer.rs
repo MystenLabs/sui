@@ -38,6 +38,7 @@ where
         metrics_label: &'static str,
     ) -> Self {
         let channel_label = format!("streamer_{}", metrics_label);
+        // TODO: use `get_metrics_or_init`
         let gauge = if let Some(metrics) = mysten_metrics::get_metrics() {
             metrics.channels.with_label_values(&[&channel_label])
         } else {

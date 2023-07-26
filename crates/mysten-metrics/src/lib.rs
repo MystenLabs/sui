@@ -96,6 +96,15 @@ pub fn get_metrics() -> Option<&'static Metrics> {
     METRICS.get()
 }
 
+pub fn get_metrics_or_init() -> &'static Metrics {
+    if let Some(metrics) = get_metrics() {
+        metrics
+    } else {
+        init_metrics(&Registry::default());
+        get_metrics().unwrap()
+    }
+}
+
 #[macro_export]
 macro_rules! monitored_future {
     ($fut: expr) => {{
