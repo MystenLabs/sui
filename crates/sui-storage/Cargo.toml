@@ -52,3 +52,5 @@ tempfile.workspace = true
 num_cpus.workspace = true
 pretty_assertions.workspace = true
 once_cell.workspace = true
+sui-test-transaction-builder.workspace = true
+sui-types = { workspace = true, features = ["test-utils"] }

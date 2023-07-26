@@ -20,7 +20,6 @@ config = { path = "../config", package = "narwhal-config" }
 fastcrypto.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 storage = { path = "../storage", package = "narwhal-storage" }
-dag = { path = "../dag", package = "narwhal-dag" }
 prometheus.workspace = true
 types = { path = "../types", package = "narwhal-types" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

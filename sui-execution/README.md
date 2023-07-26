@@ -47,6 +47,7 @@ is hardcoded in their binary (and may change from release-to-release).
 `sui-execution tests::test_encapsulation` is a test that detects
 potential breaches of this property.
 
+
 ## Kinds of Cut
 
 There are three kinds of cut:
@@ -56,6 +57,7 @@ There are three kinds of cut:
   preserve old behaviour.
 - "feature" cuts, where in-progress features are staged, typically
   named for that feature.
+
 
 ### The `latest` cut
 
@@ -145,10 +147,11 @@ To use this flow:
   from `latest` to preserve its existing behaviour, merge your feature
   into the new `latest`, and delete your feature.
 
+
 ## Making a Cut
 
-Cuts are always made from `latest`, with the process part automated by
-a script: `./scripts/execution_layer.py`.  To copy the relevant crates
+Cuts are always made from `latest`, with the process automated by a
+script: `./scripts/execution_layer.py`.  To copy the relevant crates
 for a new cut, call:
 
 ``` shell
@@ -162,9 +165,53 @@ whereas for feature cuts, it is the feature's name.
 The script can be called with `--dry-run` to print a summary of what
 it will do, without actually doing it.
 
-## Future Improvements
 
-- The process of merging a feature cut back into `latest` is fiddly if
-  done manually.  It can be done using patch files, so it behaves
-  similarly to a `git rebase`, but this is also difficult to get
-  right, and could be automated.
+## `sui-execution/src/lib.rs`
+
+The entry-point to the execution crate -- `sui-execution/src/lib.rs`
+-- is **automatically generated**.  CI tests will confirm that it has
+not been modified manually.  Any modifications should be made in one
+of two places:
+
+- `sui-execution/src/lib.template.rs` -- a template file with
+  expansion points to be filled in, by
+- function `generate_lib` in `scripts/execution_layer.py`, which fills
+  them in based on the execution modules in the crate.
+
+
+## Rebasing Cuts
+
+A cut can be `rebase`-d against `latest` using the following command:
+
+```shell
+./scripts/execution_layer.py rebase <FEATURE>
+
+```
+
+This saves all the changes that were made to the cut after it was
+made, and replays them on a fresh cut from `latest`.  As a precaution,
+it will not run if the working directory is not clean (because if it
+goes wrong, it will be harder to recover), but this can be overridden
+with `--force`.
+
+
+## Merging Cuts
+
+Cuts support a rudimentary form of `merge`, using patch files:
+
+```shell
+./scripts/execution_layer.py merge <BASE> <FEATURE>
+```
+
+The `merge` command attempts to merge the changes from `<FEATURE>`
+onto the cut at `<BASE>` (It modifies `<BASE>` and leaves `<FEATURE>`
+untouched).  Because it operates using patch files, any conflicts
+result in a failure to apply the patch.  This can be resolved in two
+ways:
+
+- (Recommended) If merging into `latest`, `rebase` the `<FEATURE>`
+  first, which will give you an opportunity to resolve all merge
+  conflicts during the rebase, to create a clean patch.
+- Use the `--dry-run` option of `merge` to output the patch file
+  instead of attempting to apply it, so you can manually modify it
+  (cut it into pieces, fix conflicts) before applying it.

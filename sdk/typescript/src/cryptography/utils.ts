@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 /* eslint-disable import/no-cycle */
 
-import { fromB64, toB64 } from '@mysten/bcs';
-import type { SerializedSignature, SignaturePubkeyPair, SignatureScheme } from './signature.js';
-import { SIGNATURE_FLAG_TO_SCHEME, SIGNATURE_SCHEME_TO_FLAG } from './signature.js';
+import { fromB64 } from '@mysten/bcs';
+import type { SerializedSignature, SignatureScheme } from './signature.js';
+import { SIGNATURE_FLAG_TO_SCHEME } from './signature.js';
 import { Secp256r1PublicKey } from '../keypairs/secp256r1/publickey.js';
 import { Secp256k1PublicKey } from '../keypairs/secp256k1/publickey.js';
 import { Ed25519PublicKey } from '../keypairs/ed25519/publickey.js';
@@ -15,17 +15,17 @@ import { Secp256k1Keypair } from '../keypairs/secp256k1/keypair.js';
 import type { ExportedKeypair, Keypair } from './keypair.js';
 import { LEGACY_PRIVATE_KEY_SIZE, PRIVATE_KEY_SIZE } from './keypair.js';
 
-export function toSerializedSignature({
-	signature,
-	signatureScheme,
-	pubKey,
-}: SignaturePubkeyPair): SerializedSignature {
-	const serializedSignature = new Uint8Array(1 + signature.length + pubKey.toBytes().length);
-	serializedSignature.set([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
-	serializedSignature.set(signature, 1);
-	serializedSignature.set(pubKey.toBytes(), 1 + signature.length);
-	return toB64(serializedSignature);
-}
+/**
+ * Pair of signature and corresponding public key
+ */
+export type SignaturePubkeyPair = {
+	signatureScheme: SignatureScheme;
+	/** Base64-encoded signature */
+	signature: Uint8Array;
+	/** Base64-encoded public key */
+	pubKey: PublicKey;
+	weight?: number;
+};
 
 /// Expects to parse a serialized signature by its signature scheme to a list of signature
 /// and public key pairs. The list is of length 1 if it is not multisig.

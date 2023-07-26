@@ -3,7 +3,7 @@
 
 import { useRpcClient } from '@mysten/core';
 import { X12, QrCode } from '@mysten/icons';
-import { isValidSuiAddress } from '@mysten/sui.js';
+import { isValidSuiAddress } from '@mysten/sui.js/utils';
 import { useQuery } from '@tanstack/react-query';
 import { cx } from 'class-variance-authority';
 import { useField, useFormikContext } from 'formik';

@@ -179,10 +179,7 @@ async fn reconfig_with_revert_end_to_end_test() {
     let client = net
         .get_client(&authorities[reverting_authority_idx].with(|node| node.state().name))
         .unwrap();
-    client
-        .handle_certificate(cert.clone().into_inner())
-        .await
-        .unwrap();
+    client.handle_certificate(cert.clone()).await.unwrap();
 
     authorities[reverting_authority_idx]
         .with_async(|node| async {

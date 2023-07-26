@@ -3,13 +3,12 @@
 
 import { isBasePayload } from '_payloads';
 
-import type { SuiAddress } from '@mysten/sui.js';
 import type { BasePayload, Payload } from '_payloads';
 import type { NetworkEnvType } from '_src/background/NetworkEnv';
 
 export type WalletStatusChange = {
 	network?: NetworkEnvType;
-	accounts?: { address: SuiAddress; publicKey: string | null }[];
+	accounts?: { address: string; publicKey: string | null }[];
 };
 
 export interface WalletStatusChangePayload extends BasePayload, WalletStatusChange {

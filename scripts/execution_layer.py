@@ -16,31 +16,104 @@ def parse_args():
         prog="execution-layer",
     )
 
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Print the operations, without running them",
-    )
-
     subparsers = parser.add_subparsers(
-        description="Tools for managing cuts of the execution-layer",
+        description="Tools for managing cuts of the execution-layer.",
     )
 
     cut = subparsers.add_parser(
         "cut",
         help=(
             "Create a new copy of execution-related crates, and add them to "
-            "the workspace.  Assigning an execution layer version to the new "
-            "copy and implementing the Execution and Verifier traits in "
-            "crates/sui-execution must be done manually as a follow-up."
+            "the workspace."
         ),
     )
-
-    cut.set_defaults(do=do_cut)
+    cut.set_defaults(cmd="Cut", do=do_cut)
     cut.add_argument(
         "feature",
         type=feature,
-        help="The name of the new cut to make",
+        help="The name of the new cut to make.",
+    )
+    cut.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the operations, without running them.",
+    )
+
+    generate_lib = subparsers.add_parser(
+        "generate-lib",
+        help=(
+            "Generate `sui-execution/src/lib.rs` based on the current set of "
+            "execution crates (i.e. without adding a new one).  Prints out "
+            "what the contents of `lib.rs` would be without actually writing "
+            "out to the file, if --dry-run flag is supplied."
+        ),
+    )
+    generate_lib.set_defaults(cmd="Generating lib.rs", do=do_generate_lib)
+    generate_lib.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the operations, without running them.",
+    )
+
+    merge = subparsers.add_parser(
+        "merge",
+        help="Apply the changes made to FEATURE since it was cut, to BASE.",
+    )
+    merge.set_defaults(cmd="Merge", do=do_merge)
+    merge.add_argument("base", type=feature, help="The cut to merge into.")
+    merge.add_argument("feature", type=feature, help="The cut to take from.")
+    merge.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the patch file to apply to BASE without applying it.",
+    )
+    merge.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        help=(
+            "Merge regardless of warnings that the working directory is "
+            "not clean.  If the merge fails at this point, it may be "
+            "difficult to recover from."
+        ),
+    )
+
+    patch = subparsers.add_parser(
+        "patch",
+        help=(
+            "Print a patch file representing the changes made to FEATURE "
+            "after the commit in which it was cut."
+        ),
+    )
+    patch.set_defaults(do=do_patch)
+    patch.add_argument(
+        "feature",
+        type=feature,
+        help="The name of the cut to generate the patch for.",
+    )
+
+    rebase = subparsers.add_parser(
+        "rebase",
+        help=(
+            "Rebase the changes to FEATURE against the current contents of "
+            "'latest'."
+        ),
+    )
+    rebase.set_defaults(cmd="Rebase", do=do_rebase)
+    rebase.add_argument(
+        "feature",
+        type=feature,
+        help="The name of the cut to rebase against 'latest'.",
+    )
+    rebase.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        help=(
+            "Rebase regardless of warnings that the working directory is "
+            "not clean.  If the rebase fails at this point, it may be "
+            "difficult to recover from."
+        ),
     )
 
     return parser.parse_args()
@@ -56,6 +129,7 @@ def feature(f):
 def do_cut(args):
     """Perform the actions of the 'cut' sub-command.
     Accepts the parsed command-line arguments as a parameter."""
+    ensure_cut_binary()
     cmd = cut_command(args.feature)
 
     if args.dry_run:
@@ -63,13 +137,13 @@ def do_cut(args):
         print(run(cmd))
         return
 
-    impl_module = Path() / "sui-execution" / "src" / (args.feature + ".rs")
+    impl_module = impl(args.feature)
     if impl_module.is_file():
-        raise RuntimeError(
-            f"Impl module for '{args.feature}' already exists at '{impl_module}'"
+        raise Exception(
+            f"Impl for '{args.feature}' already exists at '{impl_module}'"
         )
 
-    print("Cutting new release", file=stderr)
+    print("Cutting new release...", file=stderr)
     result = subprocess.run(cmd, stdout=stdout, stderr=stderr)
 
     if result.returncode != 0:
@@ -79,8 +153,104 @@ def do_cut(args):
     clean_up_cut(args.feature)
     update_toml(args.feature)
     generate_impls(args.feature, impl_module)
-    generate_lib()
+
+    with open(Path() / "sui-execution" / "src" / "lib.rs", mode="w") as lib:
+        generate_lib(lib)
+
     run(["cargo", "hakari", "generate"])
+
+
+def do_generate_lib(args):
+    if args.dry_run:
+        generate_lib(stdout)
+    else:
+        lib_path = Path() / "sui-execution" / "src" / "lib.rs"
+        with open(lib_path, mode="w") as lib:
+            generate_lib(lib)
+
+
+def do_merge(args):
+    from_module = impl(args.feature)
+    if not from_module.is_file():
+        raise Exception(f"'{args.feature}' does not exist.")
+
+    to_module = impl(args.base)
+    if not to_module.is_file():
+        raise Exception(f"'{args.base}' does not exist.")
+
+    print("Calculating change...", file=stderr)
+    changes = patch(args.feature)
+    if not changes:
+        print("No changes.", file=stderr)
+        return
+
+    print("Porting feature to base...", file=stderr)
+    adapted = change_patch_directories(changes, args.feature, args.base)
+
+    if args.dry_run:
+        print(adapted)
+        return
+
+    if not args.force and not is_repo_clean():
+        raise Exception(
+            "Working directory or index is not clean, not merging.  Re-run "
+            "with --force to ignore warning."
+        )
+
+    print("Applying changes...", file=stderr)
+    subprocess.run(
+        ["git", "apply", "-"],
+        input=adapted,
+        text=True,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+
+def do_patch(args):
+    print(patch(args.feature))
+
+
+def do_rebase(args):
+    impl_module = impl(args.feature)
+    if not impl_module.is_file():
+        raise Exception(f"'{args.feature}' does not exist.")
+
+    if not args.force and not is_repo_clean():
+        raise Exception(
+            "Working directory or index is not clean, not rebasing.  Re-run "
+            "with --force to ignore warning."
+        )
+
+    # Need to do this before we delete the existing crates, because it
+    # will leave the workspace in an inconsistent state, so we can't
+    # build the `cut` binary at that point.
+    ensure_cut_binary()
+
+    print("Preserving changes...", file=stderr)
+    changes = patch(args.feature) or ""
+
+    print("Cleaning feature...", file=stderr)
+    delete_cut_crates(args.feature)
+
+    print("Re-generating feature...", file=stderr)
+    cmd = cut_command(args.feature)
+    cmd.append("--no-workspace-update")
+
+    result = subprocess.run(cmd, stdout=stdout, stderr=stderr)
+    if result.returncode != 0:
+        print("Re-generation failed.", file=stderr)
+        exit(result.returncode)
+    clean_up_cut(args.feature)
+
+    print("Re-applying changes...", file=stderr)
+    subprocess.run(
+        ["git", "am", "-3", "-"],
+        input=changes,
+        text=True,
+        stdout=stdout,
+        stderr=stderr,
+    )
 
 
 def run(command):
@@ -94,11 +264,99 @@ def repo_root():
     return run(["git", "rev-parse", "--show-toplevel"]).strip()
 
 
+def origin_commit(feature):
+    """Find the commit that introduced cut with name `feature`.
+
+    Returns the commit hash as a string if one can be found.  Returns
+    `None` if the cut exists but hasn't been committed, and raises an
+    `Exception` if the cut does not exist.
+    """
+    impl_module = impl(feature)
+    if not impl_module.is_file():
+        raise Exception(f"Cut '{feature}' does not exist.")
+
+    commit = run(
+        [
+            *["git", "log"],
+            "--pretty=format:%H",
+            "--diff-filter=A",
+            *["--", impl_module],
+        ]
+    ).strip()
+
+    return None if commit == "" else commit
+
+
+def is_repo_clean():
+    """Checks whether the repo is in a clean state."""
+    return run(["git", "status", "--porcelain"]).strip() == ""
+
+
+def patch(feature):
+    sha = origin_commit(args.feature)
+    if sha is None:
+        return
+
+    return run(
+        [
+            *["git", "diff", f"{sha}...HEAD", "--"],
+            *cut_directories(args.feature),
+        ]
+    )
+
+
+def change_patch_directories(patch, feature, base):
+    """Fix-up patch referring to `feature` to refer to `base`.
+
+    Look for references to directories in cut `feature` in the
+    metadata of patch and replace them with references to the
+    equivalent directories in `base`.
+    """
+
+    def is_metadata(line):
+        return (
+            line.startswith("+++")
+            or line.startswith("---")
+            or line.startswith("diff --git")
+        )
+
+    # Mapping from directories that might appear in the patch file to
+    # the directories they should be replaced by.  Represented as a
+    # list of pairs as it will be iterated over.
+    mapping = list(
+        zip(
+            map(str, cut_directories(feature)),
+            map(str, cut_directories(base)),
+        )
+    )
+
+    def sub(line):
+        for feat, base in mapping:
+            line = line.replace(feat, base)
+        return line
+
+    return "".join(
+        (sub(line) if is_metadata(line) else line) + "\n"
+        for line in patch.splitlines()
+        if not line.startswith("index")
+    )
+
+
+def ensure_cut_binary():
+    """Ensure a build of the cut binary exists."""
+    result = subprocess.run(
+        ["cargo", "build", "--bin", "cut"],
+        stdout=stdout,
+        stderr=stderr,
+    )
+    if result.returncode != 0:
+        return Exception("Failed to build 'cut' binary.")
+
+
 def cut_command(f):
     """Arguments for creating the cut for 'feature'."""
     return [
-        *["cargo", "run", "--bin", "cut", "--"],
-        *["--feature", f],
+        *["./target/debug/cut", "--feature", f],
         *["-d", f"sui-execution/latest:sui-execution/{f}:-latest"],
         *["-d", f"external-crates/move:external-crates/move-execution/{f}"],
         *["-p", "sui-adapter-latest"],
@@ -110,12 +368,56 @@ def cut_command(f):
     ]
 
 
+def cut_directories(f):
+    """Directories containing crates for `feature`."""
+    sui_base = Path() / "sui-execution"
+    external = Path() / "external-crates"
+
+    crates = [
+        sui_base / f / "sui-adapter",
+        sui_base / f / "sui-move-natives",
+        sui_base / f / "sui-verifier",
+    ]
+
+    if f == "latest":
+        crates.extend(
+            [
+                external / "move" / "move-bytecode-verifier",
+                external / "move" / "move-stdlib",
+                external / "move" / "vm" / "runtime",
+            ]
+        )
+    else:
+        crates.extend(
+            [
+                external / "move-execution" / f / "move-bytecode-verifier",
+                external / "move-execution" / f / "move-stdlib",
+                external / "move-execution" / f / "move-vm" / "runtime",
+            ]
+        )
+
+    return crates
+
+
+def impl(feature):
+    """Path to the impl module for this feature"""
+    return Path() / "sui-execution" / "src" / (feature + ".rs")
+
+
 def clean_up_cut(feature):
     """Remove some special-case files/directories from a given cut"""
     move_exec = Path() / "external-crates" / "move-execution" / feature
     rmtree(move_exec / "move-bytecode-verifier" / "transactional-tests")
     remove(move_exec / "move-stdlib" / "src" / "main.rs")
     rmtree(move_exec / "move-stdlib" / "tests")
+
+
+def delete_cut_crates(feature):
+    """Delete `feature`-specific crates."""
+    if feature == "latest":
+        raise Exception("Can't delete 'latest'")
+    for module in cut_directories(feature):
+        rmtree(module)
 
 
 def update_toml(feature):
@@ -145,11 +447,11 @@ def generate_impls(feature, copy):
             copy.write(line)
 
 
-def generate_lib():
+def generate_lib(output_file):
     """Expose all `Executor` and `Verifier` impls via lib.rs
 
-    Generates and overwrites sui-execution/src/lib.rs to assign a numeric
-    execution version for every trait that assigns an execution version.
+    Generates the contents of sui-execution/src/lib.rs to assign a numeric
+    execution version for every module that implements an execution version.
 
     Version snapshots (whose names follow the pattern `/v[0-9]+/`) are assigned
     versions according to their names (v0 gets 0, v1 gets 1, etc).
@@ -158,12 +460,12 @@ def generate_lib():
 
     Feature snapshots (all other snapshots) are assigned versions starting with
     `u64::MAX` and going down, in the order they were created (as measured by
-    git commit timestamps)"""
+    git commit timestamps)
 
-    src = Path() / "sui-execution" / "src"
-    actual_path = src / "lib.rs"
-    template_path = src / "lib.template.rs"
+    The generated contents are written out to `output_file` (an IO device).
+    """
 
+    template_path = Path() / "sui-execution" / "src" / "lib.template.rs"
     cuts = discover_cuts()
 
     with open(template_path, mode="r") as template_file:
@@ -177,7 +479,7 @@ def generate_lib():
             cmd = "./scripts/execution-layer"
             return f"{spc}// DO NOT MODIFY, Generated by {cmd}"
         elif var == "MOD_CUTS":
-            return "".join(f"{spc}mod {cut};" for (_, _, cut) in cuts)
+            return "".join(sorted(f"{spc}mod {cut};" for (_, _, cut) in cuts))
         elif var == "FEATURE_CONSTS":
             return "".join(
                 f"{spc}pub const {feature}: u64 = {version};"
@@ -203,17 +505,16 @@ def generate_lib():
                 for (version, feature, cut) in cuts
             )
         else:
-            raise AssertionError(f"Don't know how to substitute {var}")
+            raise Exception(f"Don't know how to substitute {var}")
 
-    with open(actual_path, mode="w") as actual_file:
-        actual_file.write(
-            re.sub(
-                r"^(\s*)// \$([A-Z_]+)$",
-                substitute,
-                template,
-                flags=re.MULTILINE,
-            ),
-        )
+    output_file.write(
+        re.sub(
+            r"^(\s*)// \$([A-Z_]+)$",
+            substitute,
+            template,
+            flags=re.MULTILINE,
+        ),
+    )
 
 
 # Modules in `sui-execution` that don't count as "cuts" (they are
@@ -302,4 +603,8 @@ if __name__ == "__main__":
 
     args = parse_args()
     chdir(repo_root())
-    args.do(args)
+
+    try:
+        args.do(args)
+    except Exception as e:
+        print(f"{args.cmd} failed!  {e}", file=stderr)

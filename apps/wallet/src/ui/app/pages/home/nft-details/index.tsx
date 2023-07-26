@@ -3,7 +3,8 @@
 
 import { useGetKioskContents } from '@mysten/core';
 import { ArrowUpRight12, ArrowRight16 } from '@mysten/icons';
-import { hasPublicTransfer, formatAddress } from '@mysten/sui.js';
+import { hasPublicTransfer } from '@mysten/sui.js';
+import { formatAddress } from '@mysten/sui.js/utils';
 import cl from 'classnames';
 import { Navigate, useSearchParams } from 'react-router-dom';
 
@@ -29,7 +30,9 @@ function NFTDetailsPage() {
 	const { nftFields, fileExtensionType, filePath } = useNFTBasicData(objectData);
 	const address = useActiveAddress();
 	const { data } = useGetKioskContents(address);
-	const isContainedInSuiKiosk = data?.kiosks.sui.some((k) => k.data?.objectId === nftId);
+
+	const isContainedInKiosk = data?.lookup.get(nftId!);
+	const kioskItem = data?.list.find((k) => k.data?.objectId === nftId);
 
 	// Extract either the attributes, or use the top-level NFT fields:
 	const metaFields =
@@ -60,6 +63,7 @@ function NFTDetailsPage() {
 		type: ExplorerLinkType.address,
 		address: ownerAddress,
 	});
+
 	return (
 		<div
 			className={cl('flex flex-1 flex-col flex-nowrap gap-5', {
@@ -69,10 +73,10 @@ function NFTDetailsPage() {
 			<Loading loading={isLoading || isLoadingDisplay}>
 				{objectData ? (
 					<>
-						<PageTitle back="/nfts" />
+						<PageTitle back />
 						<div className="flex flex-1 flex-col flex-nowrap items-stretch gap-8">
 							<div className="flex flex-col flex-nowrap items-center gap-3 self-center">
-								<NFTDisplayCard objectId={nftId!} size="lg" borderRadius="xl" playable />
+								<NFTDisplayCard objectId={nftId!} size="xl" borderRadius="xl" playable />
 								{nftId ? (
 									<Link
 										color="steelDark"
@@ -157,7 +161,7 @@ function NFTDetailsPage() {
 								</Collapse>
 							) : null}
 
-							{isContainedInSuiKiosk ? (
+							{isContainedInKiosk && kioskItem.isLocked ? (
 								<div className="flex flex-col gap-2 mb-3">
 									<Button
 										after={<ArrowUpRight12 />}

@@ -126,11 +126,11 @@ use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::checkpoints::checkpoint_executor::CheckpointExecutor;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
-use crate::event_handler::SubscriptionHandler;
 use crate::execution_driver::execution_process;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::stake_aggregator::StakeAggregator;
 use crate::state_accumulator::{StateAccumulator, WrappedObject};
+use crate::subscription_handler::SubscriptionHandler;
 use crate::{transaction_input_checker, transaction_manager::TransactionManager};
 
 #[cfg(test)]
@@ -1076,7 +1076,7 @@ impl AuthorityState {
             monitored_scope("Execution::commit_cert_and_notify");
 
         let input_object_count = inner_temporary_store.objects.len();
-        let shared_object_count = effects.shared_objects().len();
+        let shared_object_count = effects.input_shared_objects().len();
         let digest = *certificate.digest();
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
@@ -1503,7 +1503,7 @@ impl AuthorityState {
                 effects
                     .all_changed_objects()
                     .into_iter()
-                    .map(|(obj_ref, owner, _kind)| (*obj_ref, *owner)),
+                    .map(|(obj_ref, owner, _kind)| (obj_ref, owner)),
                 cert.data()
                     .intent_message()
                     .value
@@ -1530,23 +1530,22 @@ impl AuthorityState {
     ) -> SuiResult<ObjectIndexChanges> {
         let modified_at_version = effects
             .modified_at_versions()
-            .iter()
-            .cloned()
+            .into_iter()
             .collect::<HashMap<_, _>>();
 
         let tx_digest = effects.transaction_digest();
         let mut deleted_owners = vec![];
         let mut deleted_dynamic_fields = vec![];
-        for (id, _, _) in effects.deleted().iter().chain(effects.wrapped()) {
-            let old_version = modified_at_version.get(id).unwrap();
+        for (id, _, _) in effects.deleted().into_iter().chain(effects.wrapped()) {
+            let old_version = modified_at_version.get(&id).unwrap();
             // When we process the index, the latest object hasn't been written yet so
             // the old object must be present.
-            match self.get_owner_at_version(id, *old_version).unwrap_or_else(
+            match self.get_owner_at_version(&id, *old_version).unwrap_or_else(
                 |e| panic!("tx_digest={:?}, error processing object owner index, cannot find owner for object {:?} at version {:?}. Err: {:?}", tx_digest, id, old_version, e),
             ) {
-                Owner::AddressOwner(addr) => deleted_owners.push((addr, *id)),
+                Owner::AddressOwner(addr) => deleted_owners.push((addr, id)),
                 Owner::ObjectOwner(object_id) => {
-                    deleted_dynamic_fields.push((ObjectID::from(object_id), *id))
+                    deleted_dynamic_fields.push((ObjectID::from(object_id), id))
                 }
                 _ => {}
             }
@@ -1567,7 +1566,7 @@ impl AuthorityState {
                 let Some(old_object) = self.database.get_object_by_key(id, *old_version)? else {
                     panic!("tx_digest={:?}, error processing object owner index, cannot find owner for object {:?} at version {:?}", tx_digest, id, old_version);
                 };
-                if &old_object.owner != owner {
+                if old_object.owner != owner {
                     match old_object.owner {
                         Owner::AddressOwner(addr) => {
                             deleted_owners.push((addr, *id));
@@ -1595,13 +1594,13 @@ impl AuthorityState {
                         .unwrap_or(ObjectType::Package);
 
                     new_owners.push((
-                        (*addr, *id),
+                        (addr, *id),
                         ObjectInfo {
                             object_id: *id,
                             version: oref.1,
                             digest: oref.2,
                             type_,
-                            owner: *owner,
+                            owner,
                             previous_transaction: *effects.transaction_digest(),
                         },
                     ));
@@ -1617,7 +1616,7 @@ impl AuthorityState {
                         // Skip indexing for non dynamic field objects.
                         continue;
                     };
-                    new_dynamic_fields.push(((ObjectID::from(*owner), *id), df_info))
+                    new_dynamic_fields.push(((ObjectID::from(owner), *id), df_info))
                 }
                 _ => {}
             }
@@ -1899,16 +1898,17 @@ impl AuthorityState {
         // to make sure not to mess up object pruning.
 
         let clock_ref = effects
-            .shared_objects()
-            .iter()
-            .find(|(id, _, _)| id.is_clock());
+            .input_shared_objects()
+            .into_iter()
+            .find(|(obj_ref, _)| obj_ref.0.is_clock())
+            .map(|(obj_ref, _)| obj_ref);
 
         if let Some((id, version, digest)) = clock_ref {
-            let clock_obj = self.database.get_object_by_key(id, *version)?;
+            let clock_obj = self.database.get_object_by_key(&id, version)?;
             debug_assert!(clock_obj.is_some());
             debug_assert_eq!(
                 clock_obj.as_ref().unwrap().compute_object_reference().2,
-                *digest
+                digest
             );
             Ok(clock_obj
                 .tap_none(|| error!("Clock object not found: {:?}", clock_ref))
@@ -1993,7 +1993,7 @@ impl AuthorityState {
             epoch_store: ArcSwap::new(epoch_store.clone()),
             database: store,
             indexes,
-            subscription_handler: Arc::new(SubscriptionHandler::default()),
+            subscription_handler: Arc::new(SubscriptionHandler::new(prometheus_registry)),
             checkpoint_store,
             committee_store,
             transaction_manager,
@@ -2029,7 +2029,8 @@ impl AuthorityState {
         config: NodeConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
     ) -> anyhow::Result<()> {
-        let archive_readers = ArchiveReaderBalancer::new(config.archive_reader_config())?;
+        let archive_readers =
+            ArchiveReaderBalancer::new(config.archive_reader_config(), &Registry::default())?;
         AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
             &self.database.perpetual_tables,
             &self.checkpoint_store,
@@ -2802,33 +2803,6 @@ impl AuthorityState {
         }
     }
 
-    pub async fn get_transaction_block(
-        &self,
-        digest: TransactionDigest,
-    ) -> SuiResult<VerifiedTransaction> {
-        let transaction = self.database.get_transaction_block(&digest)?;
-        transaction.ok_or(SuiError::TransactionNotFound { digest })
-    }
-
-    pub fn get_executed_effects(&self, digest: TransactionDigest) -> SuiResult<TransactionEffects> {
-        let effects = self.database.get_executed_effects(&digest)?;
-        effects.ok_or(SuiError::TransactionNotFound { digest })
-    }
-
-    pub fn multi_get_executed_transactions(
-        &self,
-        digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<VerifiedTransaction>>> {
-        self.database.multi_get_transaction_blocks(digests)
-    }
-
-    pub fn multi_get_executed_effects(
-        &self,
-        digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        self.database.multi_get_executed_effects(digests)
-    }
-
     pub fn multi_get_transaction_checkpoint(
         &self,
         digests: &[TransactionDigest],
@@ -2848,13 +2822,6 @@ impl AuthorityState {
                 })
                 .collect())
         }
-    }
-
-    pub fn multi_get_events(
-        &self,
-        digests: &[TransactionEventsDigest],
-    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
-        self.database.multi_get_events(digests)
     }
 
     pub fn multi_get_checkpoint_by_sequence_number(
@@ -4369,8 +4336,8 @@ impl NodeStateDump {
 
         // Record all the shared objects
         let mut shared_objects = Vec::new();
-        for (id, ver, _) in effects.shared_objects() {
-            if let Some(w) = authority_store.get_object_by_key(id, *ver)? {
+        for (obj_ref, _kind) in effects.input_shared_objects() {
+            if let Some(w) = authority_store.get_object_by_key(&obj_ref.0, obj_ref.1)? {
                 shared_objects.push(w)
             }
         }
@@ -4387,15 +4354,18 @@ impl NodeStateDump {
         // Record all modified objects
         let mut modified_at_versions = Vec::new();
         for (id, ver) in effects.modified_at_versions() {
-            if let Some(w) = authority_store.get_object_by_key(id, *ver)? {
+            if let Some(w) = authority_store.get_object_by_key(&id, ver)? {
                 modified_at_versions.push(w)
             }
         }
 
-        // Objects and packages read at runtime
+        // Packages read at runtime, which were not previously loaded into the temoorary store
         // Some packages may be fetched at runtime and wont show up in input objects
         let mut runtime_reads = Vec::new();
-        for obj in inner_temporary_store.runtime_read_objects.values() {
+        for obj in inner_temporary_store
+            .runtime_packages_loaded_from_db
+            .values()
+        {
             runtime_reads.push(obj.clone());
         }
 

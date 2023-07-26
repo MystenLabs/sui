@@ -3,7 +3,7 @@
 
 import { test, expect } from 'vitest';
 import { setup } from './utils/setup';
-import { TransactionBlock } from '../../src';
+import { TransactionBlock } from '../../src/builder';
 
 test('subscribeTransaction', async () => {
 	const toolbox = await setup();
@@ -11,7 +11,7 @@ test('subscribeTransaction', async () => {
 	expect(
 		// eslint-disable-next-line no-async-promise-executor
 		new Promise(async (resolve) => {
-			await toolbox.provider.subscribeTransaction({
+			await toolbox.client.subscribeTransaction({
 				filter: { FromAddress: toolbox.address() },
 				onMessage() {
 					resolve(true);
@@ -21,7 +21,8 @@ test('subscribeTransaction', async () => {
 			const tx = new TransactionBlock();
 			const [coin] = tx.splitCoins(tx.gas, [tx.pure(1)]);
 			tx.transferObjects([coin], tx.pure(toolbox.address()));
-			await toolbox.signer.signAndExecuteTransactionBlock({
+			await toolbox.client.signAndExecuteTransactionBlock({
+				signer: toolbox.keypair,
 				transactionBlock: tx,
 			});
 		}),

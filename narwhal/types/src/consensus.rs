@@ -9,6 +9,7 @@ use fastcrypto::hash::{Digest, Hash, HashFunction};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::warn;
@@ -403,7 +404,7 @@ impl CommittedSubDagShell {
 pub type ShutdownToken = mpsc::Sender<()>;
 
 // Digest of ConsususOutput and CommittedSubDag
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ConsensusOutputDigest([u8; crypto::DIGEST_LENGTH]);
 
 impl AsRef<[u8]> for ConsensusOutputDigest {
@@ -415,6 +416,22 @@ impl AsRef<[u8]> for ConsensusOutputDigest {
 impl From<ConsensusOutputDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
     fn from(d: ConsensusOutputDigest) -> Self {
         Digest::new(d.0)
+    }
+}
+
+impl fmt::Debug for ConsensusOutputDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}", base64::encode(self.0))
+    }
+}
+
+impl fmt::Display for ConsensusOutputDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(
+            f,
+            "{}",
+            base64::encode(self.0).get(0..16).ok_or(fmt::Error)?
+        )
     }
 }
 

@@ -34,20 +34,20 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
     // Only charge gas when tx fails, skip all object parsing
     if effects.status() != &ExecutionStatus::Success {
         return Ok(vec![BalanceChange {
-            owner: *gas_owner,
+            owner: gas_owner,
             coin_type: GAS::type_tag(),
             amount: effects.gas_cost_summary().net_gas_usage().neg() as i128,
         }]);
     }
 
-    let all_mutated: Vec<(&ObjectRef, &Owner, WriteKind)> = effects.all_changed_objects();
-    let all_mutated = all_mutated
-        .iter()
+    let all_mutated = effects
+        .all_changed_objects()
+        .into_iter()
         .filter_map(|((id, version, digest), _, _)| {
-            if matches!(mocked_coin, Some(coin) if *id == coin) {
+            if matches!(mocked_coin, Some(coin) if id == coin) {
                 return None;
             }
-            Some((*id, *version, Some(*digest)))
+            Some((id, version, Some(digest)))
         })
         .collect::<Vec<_>>();
 
@@ -67,16 +67,16 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
         object_provider,
         &effects
             .modified_at_versions()
-            .iter()
+            .into_iter()
             .filter_map(|(id, version)| {
-                if matches!(mocked_coin, Some(coin) if *id == coin) {
+                if matches!(mocked_coin, Some(coin) if id == coin) {
                     return None;
                 }
                 // We won't be able to get dynamic object from object provider today
-                if unwrapped_then_deleted.contains(id) {
+                if unwrapped_then_deleted.contains(&id) {
                     return None;
                 }
-                Some((*id, *version, input_objs_to_digest.get(id).cloned()))
+                Some((id, version, input_objs_to_digest.get(&id).cloned()))
             })
             .collect::<Vec<_>>(),
         &all_mutated,

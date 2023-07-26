@@ -19,6 +19,7 @@
 	transition: transform 300ms ease-in-out;
 	opacity: 1;
 	flex-direction: column;
+	z-index: 40;
 }
 
 .nav-menu {
@@ -100,7 +101,9 @@
 .hidden {
 	transform: translateY(100%);
 	opacity: 0;
-	transition: transform 300ms ease-in-out, opacity 0ms ease-in 300ms;
+	transition:
+		transform 300ms ease-in-out,
+		opacity 0ms ease-in 300ms;
 }
 
 /* TODO update icons so they are all the same size */

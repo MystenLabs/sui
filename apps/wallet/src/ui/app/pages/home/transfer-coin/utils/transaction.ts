@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type CoinStruct, SUI_TYPE_ARG, TransactionBlock } from '@mysten/sui.js';
+import { type CoinStruct, SUI_TYPE_ARG } from '@mysten/sui.js';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 
 import { parseAmount } from '_src/ui/app/helpers';
 

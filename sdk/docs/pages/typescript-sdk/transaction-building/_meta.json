@@ -1,0 +1,14 @@
+{
+	"basics": "Basics",
+	"gas": "Gas",
+	"pure-arguments": {
+		"title": "Pure Arguments",
+		"display": "hidden"
+	},
+	"encoding-values": {
+		"title": "Encoding Values",
+		"display": "hidden"
+	},
+	"sponsored-transactions": "Sponsored Transaction Blocks",
+	"offline": "Building Offline"
+}

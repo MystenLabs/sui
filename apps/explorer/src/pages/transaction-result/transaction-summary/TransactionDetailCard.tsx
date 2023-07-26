@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { formatDate, useResolveSuiNSName } from '@mysten/core';
+import { Heading, Text } from '@mysten/ui';
 import { type ReactNode } from 'react';
 
 import { useBreakpoint } from '~/hooks/useBreakpoint';
-import { Heading } from '~/ui/Heading';
 import { AddressLink, CheckpointSequenceLink, EpochLink } from '~/ui/InternalLink';
-import { Text } from '~/ui/Text';
 import { TransactionBlockCard, TransactionBlockCardSection } from '~/ui/TransactionBlockCard';
 
 export function TransactionDetail({ label, value }: { label: string; value: ReactNode | string }) {

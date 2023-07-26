@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Text } from '@mysten/ui';
+
 import { LegalLinks, LegalText } from './Legal';
 import { footerLinks, socialLinks } from './footerLinks';
 import { ReactComponent as MystenLabsRed } from '../../assets/MystenLabs_Red.svg';
 import { Link } from '~/ui/Link';
-import { Text } from '~/ui/Text';
 
 function FooterLinks() {
 	return (

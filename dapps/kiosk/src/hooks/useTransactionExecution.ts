@@ -2,11 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useWalletKit } from '@mysten/wallet-kit';
-import {
-	SuiTransactionBlockResponseOptions,
-	TransactionBlock,
-	getExecutionStatus,
-} from '@mysten/sui.js';
+import { getExecutionStatus } from '@mysten/sui.js';
+import { SuiTransactionBlockResponseOptions } from '@mysten/sui.js/client';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 
 import { useRpc } from '../context/RpcClientContext';
 

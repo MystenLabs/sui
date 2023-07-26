@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useProductAnalyticsConfig } from '@mysten/core';
+import { Text } from '@mysten/ui';
 
 import { legalLinks } from './footerLinks';
 import { Link } from '~/ui/Link';
-import { Text } from '~/ui/Text';
 
 export function LegalText() {
 	return (

@@ -18,7 +18,7 @@ describe('Normalized modules API', () => {
 	});
 
 	it('Get Move function arg types', async () => {
-		const argTypes = await toolbox.provider.getMoveFunctionArgTypes({
+		const argTypes = await toolbox.client.getMoveFunctionArgTypes({
 			package: DEFAULT_PACKAGE,
 			module: DEFAULT_MODULE,
 			function: DEFAULT_FUNCTION,
@@ -31,14 +31,14 @@ describe('Normalized modules API', () => {
 	});
 
 	it('Get Normalized Modules by packages', async () => {
-		const modules = await toolbox.provider.getNormalizedMoveModulesByPackage({
+		const modules = await toolbox.client.getNormalizedMoveModulesByPackage({
 			package: DEFAULT_PACKAGE,
 		});
 		expect(Object.keys(modules)).contains(DEFAULT_MODULE);
 	});
 
 	it('Get Normalized Move Module', async () => {
-		const normalized = await toolbox.provider.getNormalizedMoveModule({
+		const normalized = await toolbox.client.getNormalizedMoveModule({
 			package: DEFAULT_PACKAGE,
 			module: DEFAULT_MODULE,
 		});
@@ -46,7 +46,7 @@ describe('Normalized modules API', () => {
 	});
 
 	it('Get Normalized Move Function', async () => {
-		const normalized = await toolbox.provider.getNormalizedMoveFunction({
+		const normalized = await toolbox.client.getNormalizedMoveFunction({
 			package: DEFAULT_PACKAGE,
 			module: DEFAULT_MODULE,
 			function: DEFAULT_FUNCTION,
@@ -55,7 +55,7 @@ describe('Normalized modules API', () => {
 	});
 
 	it('Get Normalized Move Struct ', async () => {
-		const struct = await toolbox.provider.getNormalizedMoveStruct({
+		const struct = await toolbox.client.getNormalizedMoveStruct({
 			package: DEFAULT_PACKAGE,
 			module: DEFAULT_MODULE,
 			struct: DEFAULT_STRUCT,

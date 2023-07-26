@@ -111,7 +111,7 @@ impl AuthorityStorePruner {
         let mut object_keys_to_prune = vec![];
         for effects in &transaction_effects {
             for (object_id, seq_number) in effects.modified_at_versions() {
-                object_keys_to_prune.push(ObjectKey(*object_id, *seq_number));
+                object_keys_to_prune.push(ObjectKey(object_id, seq_number));
             }
         }
         metrics
@@ -138,11 +138,11 @@ impl AuthorityStorePruner {
         for effects in transaction_effects {
             for (object_id, seq_number) in effects.modified_at_versions() {
                 updates
-                    .entry(*object_id)
+                    .entry(object_id)
                     .and_modify(|range| {
-                        *range = (min(range.0, *seq_number), max(range.1, *seq_number))
+                        *range = (min(range.0, seq_number), max(range.1, seq_number))
                     })
-                    .or_insert((*seq_number, *seq_number));
+                    .or_insert((seq_number, seq_number));
             }
         }
         for (object_id, (min_version, max_version)) in updates {
@@ -183,40 +183,24 @@ impl AuthorityStorePruner {
         let _scope = monitored_scope("EffectsLivePruner");
 
         let mut perpetual_batch = perpetual_db.objects.batch();
-        let transactions = checkpoint_content_to_prune
+        let transactions: Vec<_> = checkpoint_content_to_prune
             .iter()
-            .flat_map(|content| content.iter().map(|tx| tx.transaction));
-        for transaction_digest in transactions {
-            if let Some(next_digest) = transaction_digest.next_lexicographical() {
-                debug!("Pruning transaction {:?}", transaction_digest);
-                perpetual_batch.delete_range(
-                    &perpetual_db.transactions,
-                    &transaction_digest,
-                    &next_digest,
-                )?;
-                perpetual_batch.delete_range(
-                    &perpetual_db.executed_effects,
-                    &transaction_digest,
-                    &next_digest,
-                )?;
-                perpetual_batch.delete_range(
-                    &perpetual_db.executed_transactions_to_checkpoint,
-                    &transaction_digest,
-                    &next_digest,
-                )?;
-            }
-        }
+            .flat_map(|content| content.iter().map(|tx| tx.transaction))
+            .collect();
 
+        perpetual_batch.delete_batch(&perpetual_db.transactions, transactions.iter())?;
+        perpetual_batch.delete_batch(&perpetual_db.executed_effects, transactions.iter())?;
+        perpetual_batch.delete_batch(
+            &perpetual_db.executed_transactions_to_checkpoint,
+            transactions,
+        )?;
+
+        let mut effect_digests = vec![];
         for effects in effects_to_prune {
             let effects_digest = effects.digest();
             debug!("Pruning effects {:?}", effects_digest);
-            if let Some(next_digest) = effects.digest().next_lexicographical() {
-                perpetual_batch.delete_range(
-                    &perpetual_db.effects,
-                    &effects_digest,
-                    &next_digest,
-                )?;
-            }
+            effect_digests.push(effects_digest);
+
             if let Some(event_digest) = effects.events_digest() {
                 if let Some(next_digest) = event_digest.next_lexicographical() {
                     perpetual_batch.delete_range(
@@ -227,34 +211,24 @@ impl AuthorityStorePruner {
                 }
             }
         }
+        perpetual_batch.delete_batch(&perpetual_db.effects, effect_digests)?;
 
         let mut checkpoints_batch = checkpoint_db.certified_checkpoints.batch();
 
-        for checkpoint_content in checkpoint_content_to_prune {
-            let content_digest = *checkpoint_content.digest();
-            if let Some(next_digest) = content_digest.next_lexicographical() {
-                debug!("Pruning checkpoint_content {:?}", content_digest);
-                checkpoints_batch.delete_range(
-                    &checkpoint_db.checkpoint_content,
-                    &content_digest,
-                    &next_digest,
-                )?;
-                checkpoints_batch.delete_range(
-                    &checkpoint_db.checkpoint_sequence_by_contents_digest,
-                    &content_digest,
-                    &next_digest,
-                )?;
-            }
-        }
-        for checkpoint_digest in checkpoints_to_prune {
-            if let Some(next_digest) = checkpoint_digest.next_lexicographical() {
-                checkpoints_batch.delete_range(
-                    &checkpoint_db.checkpoint_by_digest,
-                    &checkpoint_digest,
-                    &next_digest,
-                )?;
-            }
-        }
+        let checkpoint_content_digests =
+            checkpoint_content_to_prune.iter().map(|ckpt| ckpt.digest());
+        checkpoints_batch.delete_batch(
+            &checkpoint_db.checkpoint_content,
+            checkpoint_content_digests.clone(),
+        )?;
+        checkpoints_batch.delete_batch(
+            &checkpoint_db.checkpoint_sequence_by_contents_digest,
+            checkpoint_content_digests,
+        )?;
+
+        checkpoints_batch
+            .delete_batch(&checkpoint_db.checkpoint_by_digest, checkpoints_to_prune)?;
+
         checkpoints_batch.insert_batch(
             &checkpoint_db.watermarks,
             [(
@@ -712,8 +686,13 @@ mod tests {
             )
             .unwrap();
             let mut effects = TransactionEffects::default();
-            *effects.modified_at_versions_mut_for_testing() =
-                to_delete.into_iter().map(|o| (o.0, o.1)).collect();
+            for object in to_delete {
+                effects.unsafe_add_deleted_object_for_testing((
+                    object.0,
+                    object.1,
+                    ObjectDigest::MIN,
+                ));
+            }
             AuthorityStorePruner::prune_objects(vec![effects], &db, &lock_table(), 0, metrics, 1)
                 .await
                 .unwrap();
@@ -808,7 +787,9 @@ mod tests {
         let before_compaction_size = get_sst_size(&db_path);
 
         let mut effects = TransactionEffects::default();
-        *effects.modified_at_versions_mut_for_testing() = to_delete;
+        for object in to_delete {
+            effects.unsafe_add_deleted_object_for_testing((object.0, object.1, ObjectDigest::MIN));
+        }
         let registry = Registry::default();
         let metrics = AuthorityStorePruningMetrics::new(&registry);
         let total_pruned = AuthorityStorePruner::prune_objects(
@@ -850,6 +831,7 @@ mod pprof_tests {
     use crate::authority::authority_store_types::{get_store_object_pair, StoreObjectWrapper};
     use pprof::Symbol;
     use prometheus::Registry;
+    use sui_types::base_types::ObjectDigest;
     use sui_types::base_types::VersionNumber;
     use sui_types::effects::TransactionEffects;
     use sui_types::effects::TransactionEffectsAPI;
@@ -883,7 +865,9 @@ mod pprof_tests {
         }
 
         let mut effects = TransactionEffects::default();
-        *effects.modified_at_versions_mut_for_testing() = to_delete;
+        for object in to_delete {
+            effects.unsafe_add_deleted_object_for_testing((object.0, object.1, ObjectDigest::MIN));
+        }
         Ok(effects)
     }
 

@@ -2,11 +2,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    base_types::SuiAddress,
+    base_types::{EpochId, SuiAddress},
     crypto::{Signature, SignatureScheme, SuiSignature},
-    error::SuiError,
-    signature::{AuthenticatorTrait, AuxVerifyData},
-    zk_login_util::{find_jwk_by_kid, AddressParams, DEFAULT_WHITELIST},
+    error::{SuiError, SuiResult},
+    signature::{AuthenticatorTrait, VerifyParams},
+    zk_login_util::{AddressParams, DEFAULT_WHITELIST},
 };
 use fastcrypto::rsa::Encoding as OtherEncoding;
 use fastcrypto::rsa::RSAPublicKey;
@@ -21,8 +21,8 @@ use shared_crypto::intent::IntentMessage;
 use std::hash::Hash;
 use std::hash::Hasher;
 
+//#[cfg(any(test, feature = "test-utils"))]
 #[cfg(test)]
-#[cfg(feature = "test-utils")]
 #[path = "unit_tests/zk_login_authenticator_test.rs"]
 mod zk_login_authenticator_test;
 
@@ -33,6 +33,7 @@ pub struct ZkLoginAuthenticator {
     public_inputs: PublicInputs,
     aux_inputs: AuxInputs,
     user_signature: Signature,
+
     #[serde(skip)]
     pub bytes: OnceCell<Vec<u8>>,
 }
@@ -84,13 +85,26 @@ impl Hash for ZkLoginAuthenticator {
 }
 
 impl AuthenticatorTrait for ZkLoginAuthenticator {
+    fn verify_user_authenticator_epoch(&self, epoch: EpochId) -> SuiResult {
+        // Verify the max epoch in aux inputs is <= the current epoch of authority.
+        if epoch > self.aux_inputs.get_max_epoch() {
+            return Err(SuiError::InvalidSignature {
+                error: format!(
+                    "ZKLogin expired at epoch {}",
+                    self.aux_inputs.get_max_epoch()
+                ),
+            });
+        }
+        Ok(())
+    }
+
     /// Verify an intent message of a transaction with an zk login authenticator.
-    fn verify_secure_generic<T>(
+    fn verify_claims<T>(
         &self,
         intent_msg: &IntentMessage<T>,
         author: SuiAddress,
-        aux_verify_data: AuxVerifyData,
-    ) -> Result<(), SuiError>
+        aux_verify_data: &VerifyParams,
+    ) -> SuiResult
     where
         T: Serialize,
     {
@@ -100,13 +114,6 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
             return Err(SuiError::InvalidAddress);
         }
         let aux_inputs = &self.aux_inputs;
-
-        // Verify the max epoch in aux inputs is <= the current epoch of authority.
-        if aux_inputs.get_max_epoch() <= aux_verify_data.epoch.unwrap_or(0) {
-            return Err(SuiError::InvalidSignature {
-                error: "Invalid max epoch".to_string(),
-            });
-        }
 
         if !is_claim_supported(aux_inputs.get_claim_name()) {
             return Err(SuiError::InvalidSignature {
@@ -137,11 +144,9 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
             error: "Invalid JWT signature".to_string(),
         })?;
 
-        // Parse the JWK content for the given provider from the bytes.
-        let selected = find_jwk_by_kid(
-            aux_inputs.get_kid(),
-            &aux_verify_data.google_jwk_as_bytes.unwrap_or_default(),
-        )?;
+        let Some(selected) = aux_verify_data.oauth_provider_jwks.get(aux_inputs.get_kid()) else {
+            return Err(SuiError::JWKRetrievalError);
+        };
 
         // Verify the JWT signature against one of OAuth provider public keys in the bulletin.
         // Since more than one JWKs are available in the bulletin, iterate and find the one with

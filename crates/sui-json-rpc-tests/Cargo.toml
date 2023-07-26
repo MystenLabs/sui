@@ -1,0 +1,43 @@
+[package]
+name = "sui-json-rpc-tests"
+version = "0.0.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+move-package.workspace = true
+sui-config.workspace = true
+sui-core.workspace = true
+sui-keys.workspace = true
+sui-move-build.workspace = true
+sui-test-transaction-builder.workspace = true
+sui-sdk.workspace = true
+sui-macros.workspace = true
+sui-simulator.workspace = true
+sui-json.workspace = true
+sui-json-rpc.workspace = true
+sui-json-rpc-types.workspace = true
+sui-open-rpc.workspace = true
+sui-open-rpc-macros.workspace = true
+sui-protocol-config.workspace = true
+sui-swarm-config.workspace = true
+sui-types.workspace = true
+test-cluster.workspace = true
+
+anyhow.workspace = true
+async-trait.workspace = true
+bcs.workspace = true
+hyper.workspace = true
+jsonrpsee.workspace = true
+jsonrpsee-proc-macros.workspace = true
+prometheus.workspace = true
+rand.workspace = true
+reqwest.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+

@@ -9,7 +9,7 @@ import { ValidatorLogo } from '_app/staking/validators/ValidatorLogo';
 import { TxnAmount } from '_components/receipt-card/TxnAmount';
 import { Text } from '_src/ui/app/shared/text';
 
-import type { SuiEvent } from '@mysten/sui.js';
+import type { SuiEvent } from '@mysten/sui.js/client';
 
 type UnStakeTxnCardProps = {
 	event: SuiEvent;

@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetKioskContents, useGetObject } from '@mysten/core';
-import { is, SuiObjectData, getObjectOwner, type SuiAddress } from '@mysten/sui.js';
+import { getObjectOwner } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
-export function useOwnedNFT(nftObjectId: string | null, address: SuiAddress | null) {
+export function useOwnedNFT(nftObjectId: string | null, address: string | null) {
 	const data = useGetObject(nftObjectId);
 	const { data: kioskData, isFetching: areKioskContentsLoading } = useGetKioskContents(address);
 	const { data: objectData, isLoading } = data;
 
 	const objectDetails = useMemo(() => {
-		if (!objectData || !is(objectData.data, SuiObjectData) || !address) return null;
+		if (!objectData || !objectData.data || !address) return null;
 		const ownedKioskObjectIds = kioskData?.list.map(({ data }) => data?.objectId) || [];
 		const objectOwner = getObjectOwner(objectData);
 		const data =

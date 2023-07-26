@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Text } from '@mysten/ui';
 import { type ReactNode } from 'react';
 
 import { DescriptionItem } from '~/ui/DescriptionList';
 import { Link } from '~/ui/Link';
-import { Text } from '~/ui/Text';
 import { getDisplayUrl } from '~/utils/objectUtils';
 
 export type LinkOrTextDescriptionItemProps = {

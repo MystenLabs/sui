@@ -353,7 +353,7 @@ mod test {
                 info!("Targeting protocol version: {}", version);
                 test_cluster.wait_for_all_nodes_upgrade_to(version).await;
                 info!("All nodes are at protocol version: {}", version);
-                // Let all nodes run for a bit at this version.
+                // Let all nodes run for a few epochs at this version.
                 tokio::time::sleep(Duration::from_secs(50)).await;
                 if version == max_ver {
                     let stake_subsidy_start_epoch = test_cluster
@@ -392,12 +392,14 @@ mod test {
         });
 
         test_simulated_load(test_init_data_clone, 120).await;
-        loop {
+        for _ in 0..30 {
             if finished.load(Ordering::Relaxed) {
                 break;
             }
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
+
+        assert!(finished.load(Ordering::SeqCst));
     }
 
     async fn build_test_cluster(

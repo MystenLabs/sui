@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { getExecutionStatusType, ObjectId, TransactionBlock } from '../../src';
+import { getExecutionStatusType } from '../../src';
+import { TransactionBlock } from '../../src/builder';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Test ID as args to entry functions', () => {
 	let toolbox: TestToolbox;
-	let packageId: ObjectId;
+	let packageId: string;
 
 	beforeAll(async () => {
 		toolbox = await setup();
@@ -21,7 +22,8 @@ describe('Test ID as args to entry functions', () => {
 			target: `${packageId}::test::test_id`,
 			arguments: [tx.pure('0x000000000000000000000000c2b5625c221264078310a084df0a3137956d20ee')],
 		});
-		const result = await toolbox.signer.signAndExecuteTransactionBlock({
+		const result = await toolbox.client.signAndExecuteTransactionBlock({
+			signer: toolbox.keypair,
 			transactionBlock: tx,
 			options: {
 				showEffects: true,
@@ -36,7 +38,8 @@ describe('Test ID as args to entry functions', () => {
 			target: `${packageId}::test::test_id_non_mut`,
 			arguments: [tx.pure('0x000000000000000000000000c2b5625c221264078310a084df0a3137956d20ee')],
 		});
-		const result = await toolbox.signer.signAndExecuteTransactionBlock({
+		const result = await toolbox.client.signAndExecuteTransactionBlock({
+			signer: toolbox.keypair,
 			transactionBlock: tx,
 			options: {
 				showEffects: true,

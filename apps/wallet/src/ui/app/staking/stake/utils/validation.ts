@@ -16,23 +16,23 @@ export function createValidationSchema(
 		// NOTE: This is an intentional subset of the token validation:
 		amount: isUnstake
 			? mixed()
-			: mixed()
+			: mixed<BigNumber>()
 					.transform((_, original) => {
 						return new BigNumber(original);
 					})
 					.test('required', `\${path} is a required field`, (value) => {
 						return !!value;
 					})
-					.test('valid', 'The value provided is not valid.', (value?: BigNumber) => {
+					.test('valid', 'The value provided is not valid.', (value) => {
 						if (!value || value.isNaN() || !value.isFinite()) {
 							return false;
 						}
 						return true;
 					})
-					.test('min', `\${path} must be greater than 1 ${coinSymbol}`, (amount?: BigNumber) =>
+					.test('min', `\${path} must be greater than 1 ${coinSymbol}`, (amount) =>
 						amount ? amount.shiftedBy(decimals).gte(minimumStake.toString()) : false,
 					)
-					.test('max', (amount: BigNumber | undefined, ctx) => {
+					.test('max', (amount, ctx) => {
 						const gasBudget = ctx.parent.gasBudget || 0n;
 						const availableBalance = coinBalance - gasBudget;
 						if (availableBalance < 0) {
@@ -56,7 +56,7 @@ export function createValidationSchema(
 					.test(
 						'max-decimals',
 						`The value exceeds the maximum decimals (${decimals}).`,
-						(amount?: BigNumber) => {
+						(amount) => {
 							return amount ? amount.shiftedBy(decimals).isInteger() : false;
 						},
 					)

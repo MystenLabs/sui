@@ -2,12 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { X12 } from '@mysten/icons';
+import { Text, IconButton } from '@mysten/ui';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { type ReactNode } from 'react';
 
-import { IconButton } from './IconButton';
 import { ReactComponent as InfoIcon } from './icons/info.svg';
-import { Text } from '~/ui/Text';
 
 const bannerStyles = cva(
 	'inline-flex text-pBodySmall font-medium rounded-2xl overflow-hidden gap-2 items-center flex-nowrap relative',
@@ -19,7 +18,7 @@ const bannerStyles = cva(
 				error: 'bg-issue-light text-issue-dark',
 				message: 'bg-sui-light text-hero',
 				neutralGrey: 'bg-steel text-white',
-				neutralWhite: 'bg-white text-steel-darker',
+				neutralWhite: 'bg-white/80 text-steel-darker',
 			},
 			align: {
 				left: 'justify-start',
@@ -29,6 +28,7 @@ const bannerStyles = cva(
 				true: 'w-full',
 			},
 			spacing: {
+				sm: 'px-1.5 py-0.5',
 				md: 'px-3 py-2',
 				lg: 'p-5',
 			},
@@ -116,7 +116,9 @@ export function Banner({
 			</div>
 			{onDismiss ? (
 				<div className="absolute right-0 top-0">
-					<IconButton icon={X12} onClick={onDismiss} aria-label="Close" />
+					<IconButton onClick={onDismiss} aria-label="Close">
+						<X12 />
+					</IconButton>
 				</div>
 			) : null}
 		</div>

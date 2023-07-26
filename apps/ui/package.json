@@ -1,0 +1,58 @@
+{
+	"name": "@mysten/ui",
+	"private": true,
+	"sideEffects": false,
+	"main": "./src/index.ts",
+	"author": "Mysten Labs <build@mystenlabs.com>",
+	"repository": {
+		"type": "git",
+		"url": "github.com:MystenLabs/sui.git"
+	},
+	"license": "Apache-2.0",
+	"exports": {
+		".": {
+			"import": "./src/index.ts",
+			"types": "./src/index.ts"
+		},
+		"./css": {
+			"import": "./src/styles.css"
+		}
+	},
+	"scripts": {
+		"prettier:check": "prettier -c --ignore-unknown .",
+		"prettier:fix": "prettier -w --ignore-unknown .",
+		"eslint:check": "eslint --max-warnings=0 .",
+		"eslint:fix": "pnpm run eslint:check --fix",
+		"lint": "pnpm run eslint:check && pnpm run prettier:check",
+		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
+		"dev": "storybook dev -p 6006",
+		"build": "tsc -b && storybook build"
+	},
+	"dependencies": {
+		"@mysten/core": "workspace:*",
+		"@mysten/icons": "workspace:*",
+		"@radix-ui/react-radio-group": "^1.1.3",
+		"@radix-ui/react-slot": "^1.0.2",
+		"@radix-ui/react-switch": "^1.0.3",
+		"class-variance-authority": "^0.7.0",
+		"cmdk": "^0.2.0",
+		"framer-motion": "^10.12.22",
+		"react": "^18.2.0",
+		"react-dom": "^18.2.0"
+	},
+	"devDependencies": {
+		"@storybook/addon-a11y": "^7.1.0",
+		"@storybook/addon-essentials": "^7.1.0",
+		"@storybook/addon-interactions": "^7.1.0",
+		"@storybook/addon-links": "^7.1.0",
+		"@storybook/blocks": "^7.1.0",
+		"@storybook/react": "^7.1.0",
+		"@storybook/react-vite": "^7.1.0",
+		"@storybook/testing-library": "^0.2.0",
+		"@types/react": "^18.2.15",
+		"prop-types": "^15.8.1",
+		"storybook": "^7.1.0",
+		"tailwindcss": "^3.3.3",
+		"typescript": "^5.1.6"
+	}
+}

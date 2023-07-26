@@ -14,7 +14,6 @@ import { useOwnedNFT } from '_hooks';
 function NftTransferPage() {
 	const { nftId } = useParams();
 	const address = useActiveAddress();
-
 	// verify that the nft is owned by the user and is transferable
 	const { data: ownedNFT, isLoading } = useOwnedNFT(nftId || '', address);
 	const navigate = useNavigate();

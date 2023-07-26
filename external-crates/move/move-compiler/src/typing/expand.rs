@@ -72,7 +72,7 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
         Apply(Some(_), sp!(_, TypeName_::Builtin(_)), tys) => types(context, tys),
         Apply(Some(_), _, _) => panic!("ICE expanding pre expanded type"),
         Apply(None, _, _) => {
-            let abilities = core::infer_abilities(context, &context.subst, ty.clone());
+            let abilities = core::infer_abilities(&context.modules, &context.subst, ty.clone());
             match &mut ty.value {
                 Apply(abilities_opt, _, tys) => {
                     *abilities_opt = Some(abilities);
@@ -143,7 +143,7 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
         E::Use(v) => {
             let from_user = false;
             let var = *v;
-            let abs = core::infer_abilities(context, &context.subst, e.ty.clone());
+            let abs = core::infer_abilities(&context.modules, &context.subst, e.ty.clone());
             e.exp.value = if abs.has_ability_(Ability_::Copy) {
                 E::Copy { from_user, var }
             } else {

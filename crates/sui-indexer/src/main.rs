@@ -38,7 +38,7 @@ async fn main() -> Result<(), IndexerError> {
             e
         ))
     })?;
-    let blocking_cp = new_pg_connection_pool(&db_url).await.map_err(|e| {
+    let blocking_cp = new_pg_connection_pool(&db_url).map_err(|e| {
         error!(
             "Failed creating Postgres connection pool with error {:?}",
             e
@@ -62,7 +62,7 @@ async fn main() -> Result<(), IndexerError> {
             IndexerError::PostgresResetError(db_err_msg)
         })?;
     }
-    let store = PgIndexerStore::new(blocking_cp, indexer_metrics.clone()).await;
+    let store = PgIndexerStore::new(blocking_cp, indexer_metrics.clone());
 
     Indexer::start(&indexer_config, &registry, store, indexer_metrics, None).await
 }

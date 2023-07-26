@@ -1,12 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64, toB64 } from '@mysten/bcs';
+import { fromB64, toB58, toB64 } from '@mysten/bcs';
 import nacl from 'tweetnacl';
 import { describe, it, expect } from 'vitest';
-import { Ed25519Keypair, PRIVATE_KEY_SIZE } from '../../../src';
+import { TransactionBlock } from '../../../src/builder';
+import { Ed25519Keypair } from '../../../src/keypairs/ed25519';
+import { verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';
 
 const VALID_SECRET_KEY = 'mdqVWeFekT7pqy5T49+tV12jO0m+ESW7ki4zSU9JiCg=';
+const PRIVATE_KEY_SIZE = 32;
 
 // Test case generated against rust keytool cli. See https://github.com/MystenLabs/sui/blob/edd2cd31e0b05d336b1b03b6e79a67d8dd00d06b/crates/sui/src/unit_tests/keytool_tests.rs#L165
 const TEST_CASES = [
@@ -33,7 +36,7 @@ const TEST_MNEMONIC =
 describe('ed25519-keypair', () => {
 	it('new keypair', () => {
 		const keypair = new Ed25519Keypair();
-		expect(keypair.getPublicKey().toBytes().length).toBe(32);
+		expect(keypair.getPublicKey().toRawBytes().length).toBe(32);
 		expect(2).toEqual(2);
 	});
 
@@ -79,9 +82,10 @@ describe('ed25519-keypair', () => {
 		const isValid = nacl.sign.detached.verify(
 			signData,
 			signature,
-			keypair.getPublicKey().toBytes(),
+			keypair.getPublicKey().toRawBytes(),
 		);
 		expect(isValid).toBeTruthy();
+		expect(keypair.getPublicKey().verify(signData, signature));
 	});
 
 	it('incorrect coin type node for ed25519 derivation path', () => {
@@ -92,7 +96,7 @@ describe('ed25519-keypair', () => {
 		const isValid = nacl.sign.detached.verify(
 			signData,
 			signature,
-			keypair.getPublicKey().toBytes(),
+			keypair.getPublicKey().toRawBytes(),
 		);
 		expect(isValid).toBeTruthy();
 	});
@@ -113,5 +117,47 @@ describe('ed25519-keypair', () => {
 		expect(() => {
 			Ed25519Keypair.deriveKeypair('aaa');
 		}).toThrow('Invalid mnemonic');
+	});
+
+	it('signs TransactionBlocks', async () => {
+		const keypair = new Ed25519Keypair();
+		const txb = new TransactionBlock();
+		txb.setSender(keypair.getPublicKey().toSuiAddress());
+		txb.setGasPrice(5);
+		txb.setGasBudget(100);
+		txb.setGasPayment([
+			{
+				objectId: (Math.random() * 100000).toFixed(0).padEnd(64, '0'),
+				version: String((Math.random() * 10000).toFixed(0)),
+				digest: toB58(new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9])),
+			},
+		]);
+
+		const bytes = await txb.build();
+
+		const serializedSignature = (await keypair.signTransactionBlock(bytes)).signature;
+
+		expect(await keypair.getPublicKey().verifyTransactionBlock(bytes, serializedSignature)).toEqual(
+			true,
+		);
+		expect(await keypair.getPublicKey().verifyTransactionBlock(bytes, serializedSignature)).toEqual(
+			true,
+		);
+		expect(!!(await verifyTransactionBlock(bytes, serializedSignature))).toEqual(true);
+	});
+
+	it('signs PersonalMessages', async () => {
+		const keypair = new Ed25519Keypair();
+		const message = new TextEncoder().encode('hello world');
+
+		const serializedSignature = (await keypair.signPersonalMessage(message)).signature;
+
+		expect(
+			await keypair.getPublicKey().verifyPersonalMessage(message, serializedSignature),
+		).toEqual(true);
+		expect(
+			await keypair.getPublicKey().verifyPersonalMessage(message, serializedSignature),
+		).toEqual(true);
+		expect(!!(await verifyPersonalMessage(message, serializedSignature))).toEqual(true);
 	});
 });

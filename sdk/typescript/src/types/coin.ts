@@ -3,23 +3,22 @@
 
 import type { Infer } from 'superstruct';
 import { array, boolean, nullable, number, object, optional, string } from 'superstruct';
-import { ObjectId, TransactionDigest } from './common.js';
 
 export const CoinStruct = object({
 	coinType: string(),
 	// TODO(chris): rename this to objectId
-	coinObjectId: ObjectId,
+	coinObjectId: string(),
 	version: string(),
-	digest: TransactionDigest,
+	digest: string(),
 	balance: string(),
-	previousTransaction: TransactionDigest,
+	previousTransaction: string(),
 });
 
 export type CoinStruct = Infer<typeof CoinStruct>;
 
 export const PaginatedCoins = object({
 	data: array(CoinStruct),
-	nextCursor: nullable(ObjectId),
+	nextCursor: nullable(string()),
 	hasNextPage: boolean(),
 });
 

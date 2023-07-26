@@ -29,7 +29,7 @@ use move_compiler::{
         self, AnnotatedCompiledUnit, CompiledUnit, NamedCompiledModule, NamedCompiledScript,
     },
     diagnostics::FilesSourceText,
-    shared::{Flags, NamedAddressMap, NumericalAddress, PackagePaths},
+    shared::{Flags, NamedAddressMap, NumericalAddress, PackageConfig, PackagePaths},
     Compiler,
 };
 use move_docgen::{Docgen, DocgenOptions};
@@ -532,6 +532,7 @@ impl CompiledPackage {
             /* is immediate */ bool,
             /* source paths */ Vec<Symbol>,
             /* address mapping */ &ResolvedTable,
+            /* compiler config */ PackageConfig,
         )>,
         resolution_graph: &ResolvedGraph,
         mut compiler_driver: impl FnMut(
@@ -541,16 +542,18 @@ impl CompiledPackage {
     ) -> Result<CompiledPackage> {
         let immediate_dependencies = transitive_dependencies
             .iter()
-            .filter(|(_, is_immediate, _, _)| *is_immediate)
-            .map(|(name, _, _, _)| *name)
+            .filter(|(_, is_immediate, _, _, _)| *is_immediate)
+            .map(|(name, _, _, _, _)| *name)
             .collect::<Vec<_>>();
         let transitive_dependencies = transitive_dependencies
             .into_iter()
-            .map(|(name, _is_immediate, source_paths, address_mapping)| {
-                (name, source_paths, address_mapping)
-            })
+            .map(
+                |(name, _is_immediate, source_paths, address_mapping, config)| {
+                    (name, source_paths, address_mapping, config)
+                },
+            )
             .collect::<Vec<_>>();
-        for (dep_package_name, _, _) in &transitive_dependencies {
+        for (dep_package_name, _, _, _) in &transitive_dependencies {
             writeln!(
                 w,
                 "{} {}",
@@ -576,7 +579,9 @@ impl CompiledPackage {
         let mut paths = deps_package_paths.clone();
         paths.push(sources_package_paths.clone());
 
-        let compiler = Compiler::from_package_paths(paths, vec![]).set_flags(flags);
+        let compiler = Compiler::from_package_paths(paths, vec![])
+            .unwrap()
+            .set_flags(flags);
         let (file_map, all_compiled_units) = compiler_driver(compiler)?;
         let mut root_compiled_units = vec![];
         let mut deps_compiled_units = vec![];
@@ -893,6 +898,7 @@ pub(crate) fn make_source_and_deps_for_compiler(
         /* name */ Symbol,
         /* source paths */ Vec<Symbol>,
         /* address mapping */ &ResolvedTable,
+        /* compiler config */ PackageConfig,
     )>,
 ) -> Result<(
     /* sources */ PackagePaths,
@@ -900,7 +906,7 @@ pub(crate) fn make_source_and_deps_for_compiler(
 )> {
     let deps_package_paths = deps
         .into_iter()
-        .map(|(name, source_paths, resolved_table)| {
+        .map(|(name, source_paths, resolved_table, config)| {
             let paths = source_paths
                 .into_iter()
                 .collect::<BTreeSet<_>>()
@@ -908,7 +914,7 @@ pub(crate) fn make_source_and_deps_for_compiler(
                 .collect::<Vec<_>>();
             let named_address_map = named_address_mapping_for_compiler(resolved_table);
             Ok(PackagePaths {
-                name: Some(name),
+                name: Some((name, config)),
                 paths,
                 named_address_map,
             })
@@ -921,7 +927,10 @@ pub(crate) fn make_source_and_deps_for_compiler(
     );
     let sources = root.get_sources(&resolution_graph.build_options)?;
     let source_package_paths = PackagePaths {
-        name: Some(root.source_package.package.name),
+        name: Some((
+            root.source_package.package.name,
+            root.compiler_config(&resolution_graph.build_options),
+        )),
         paths: sources,
         named_address_map: root_named_addrs,
     };

@@ -137,6 +137,12 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub state_archive_read_config: Vec<StateArchiveConfig>,
+
+    #[serde(default)]
+    pub state_snapshot_write_config: StateSnapshotConfig,
+
+    #[serde(default)]
+    pub indexer_max_subscriptions: Option<usize>,
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
@@ -234,6 +240,10 @@ impl NodeConfig {
 
     pub fn archive_path(&self) -> PathBuf {
         self.db_path.join("archive")
+    }
+
+    pub fn snapshot_path(&self) -> PathBuf {
+        self.db_path.join("snapshot")
     }
 
     pub fn network_address(&self) -> &Multiaddr {
@@ -592,6 +602,14 @@ pub struct StateArchiveConfig {
     pub object_store_config: Option<ObjectStoreConfig>,
     pub concurrency: usize,
     pub use_for_pruning_watermark: bool,
+}
+
+#[derive(Default, Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct StateSnapshotConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub object_store_config: Option<ObjectStoreConfig>,
+    pub concurrency: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq)]

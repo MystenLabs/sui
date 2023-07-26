@@ -7,6 +7,7 @@ use std::ops::Not;
 use std::sync::Arc;
 use std::{iter, mem, thread};
 
+use async_trait::async_trait;
 use either::Either;
 use fastcrypto::hash::{HashFunction, MultisetHash, Sha3_256};
 use futures::stream::FuturesUnordered;
@@ -42,6 +43,7 @@ use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfigura
 use super::authority_store_tables::LiveObject;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use mysten_common::sync::notify_read::NotifyRead;
+use sui_storage::key_value_store;
 use sui_storage::package_object_cache::PackageObjectCache;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
@@ -1039,7 +1041,7 @@ impl AuthorityStore {
             max_binary_format_version: _,
             loaded_child_objects: _,
             no_extraneous_module_bytes: _,
-            runtime_read_objects: _,
+            runtime_packages_loaded_from_db: _,
         } = inner_temporary_store;
         trace!(written =? written.values().map(|((obj_id, ver, _), _, _)| (obj_id, ver)).collect::<Vec<_>>(),
                "batch_update_objects: temp store written");
@@ -1427,7 +1429,7 @@ impl AuthorityStore {
         info!(?tx_digest, ?effects, "reverting transaction");
 
         // We should never be reverting shared object transactions.
-        assert!(effects.shared_objects().is_empty());
+        assert!(effects.input_shared_objects().is_empty());
 
         let mut write_batch = self.perpetual_tables.transactions.batch();
         write_batch.delete_batch(
@@ -1444,23 +1446,21 @@ impl AuthorityStore {
 
         let tombstones = effects
             .deleted()
-            .iter()
-            .chain(effects.wrapped().iter())
+            .into_iter()
+            .chain(effects.wrapped())
             .map(|obj_ref| ObjectKey(obj_ref.0, obj_ref.1));
         write_batch.delete_batch(&self.perpetual_tables.objects, tombstones)?;
 
         let all_new_object_keys = effects
-            .mutated()
-            .iter()
-            .chain(effects.created().iter())
-            .chain(effects.unwrapped().iter())
-            .map(|((id, version, _), _)| ObjectKey(*id, *version));
+            .all_changed_objects()
+            .into_iter()
+            .map(|((id, version, _), _, _)| ObjectKey(id, version));
         write_batch.delete_batch(&self.perpetual_tables.objects, all_new_object_keys.clone())?;
 
         let modified_object_keys = effects
             .modified_at_versions()
-            .iter()
-            .map(|(id, version)| ObjectKey(*id, *version));
+            .into_iter()
+            .map(|(id, version)| ObjectKey(id, version));
 
         macro_rules! get_objects_and_locks {
             ($object_keys: expr) => {
@@ -1931,6 +1931,113 @@ impl GetModule for AuthorityStore {
 
     fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
         get_module_by_id(self, id)
+    }
+}
+
+#[async_trait]
+impl key_value_store::TransactionKeyValueStore for AuthorityStore {
+    /// Generic multi_get, allows implementors to get heterogenous values with a single round trip.
+    async fn multi_get(
+        &self,
+        keys: &[key_value_store::Key],
+    ) -> SuiResult<Vec<Option<key_value_store::Value>>> {
+        let mut tx_keys = Vec::new();
+        let mut fx_keys = Vec::new();
+        let mut fx_by_tx_digest_keys = Vec::new();
+        let mut events_keys = Vec::new();
+
+        for key in keys {
+            match key {
+                key_value_store::Key::Tx(digest) => tx_keys.push(*digest),
+                key_value_store::Key::Fx(digest) => fx_keys.push(*digest),
+                key_value_store::Key::Events(digest) => events_keys.push(*digest),
+                key_value_store::Key::FxByTxDigest(digest) => fx_by_tx_digest_keys.push(*digest),
+            }
+        }
+
+        let tx_results = if !tx_keys.is_empty() {
+            self.multi_get_tx(&tx_keys).await?
+        } else {
+            Vec::new()
+        };
+
+        let fx_results = if !fx_keys.is_empty() {
+            self.multi_get_fx(&fx_keys).await?
+        } else {
+            Vec::new()
+        };
+
+        let events_results = if !events_keys.is_empty() {
+            key_value_store::TransactionKeyValueStore::multi_get_events(self, &events_keys).await?
+        } else {
+            Vec::new()
+        };
+
+        let fx_by_tx_digest_results = if !fx_by_tx_digest_keys.is_empty() {
+            self.multi_get_fx_by_tx_digest(&fx_by_tx_digest_keys)
+                .await?
+        } else {
+            Vec::new()
+        };
+
+        // re-assemble original order
+        let mut tx_iter = tx_results.into_iter();
+        let mut fx_iter = fx_results.into_iter();
+        let mut events_iter = events_results.into_iter();
+        let mut fx_by_tx_digest_iter = fx_by_tx_digest_results.into_iter();
+
+        let mut results = Vec::new();
+
+        for key in keys {
+            match key {
+                key_value_store::Key::Tx(_) => {
+                    results.push(tx_iter.next().unwrap().map(|tx| tx.into()))
+                }
+                key_value_store::Key::Fx(_) => {
+                    results.push(fx_iter.next().unwrap().map(|fx| fx.into()))
+                }
+                key_value_store::Key::Events(_) => {
+                    results.push(events_iter.next().unwrap().map(|e| e.into()))
+                }
+                key_value_store::Key::FxByTxDigest(_) => {
+                    results.push(fx_by_tx_digest_iter.next().unwrap().map(|fx| fx.into()))
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
+    async fn multi_get_tx(
+        &self,
+        keys: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<Transaction>>> {
+        Ok(self
+            .multi_get_transaction_blocks(keys)?
+            .into_iter()
+            .map(|t| t.map(|t| t.into_inner()))
+            .collect())
+    }
+
+    async fn multi_get_fx(
+        &self,
+        keys: &[TransactionEffectsDigest],
+    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
+        Ok(self.multi_get_effects(keys.iter())?)
+    }
+
+    async fn multi_get_events(
+        &self,
+        keys: &[TransactionEventsDigest],
+    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
+        Ok(self.multi_get_events(keys)?)
+    }
+
+    async fn multi_get_fx_by_tx_digest(
+        &self,
+        keys: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
+        Ok(self.multi_get_executed_effects(keys)?)
     }
 }
 

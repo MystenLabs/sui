@@ -41,9 +41,9 @@
     "devDependencies": {
         "@faker-js/faker": "^8.0.2",
         "ts-node": "^10.9.1",
-        "tsup": "^6.7.0",
-        "typescript": "^5.0.4",
-        "vitest": "^0.32.0"
+        "tsup": "^7.1.0",
+        "typescript": "^5.1.6",
+        "vitest": "^0.33.0"
     },
     "dependencies": {
         "@mysten/sui.js": "workspace:*"

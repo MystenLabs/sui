@@ -22,10 +22,14 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_core::authority::authority_store_tables::{AuthorityPerpetualTables, LiveObject};
+use sui_core::authority::CHAIN_IDENTIFIER;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_storage::blob::{Blob, BlobEncoding, BLOB_ENCODING_BYTES};
 use sui_storage::object_store::util::{copy_file, delete_recursively, path_to_filesystem};
 use sui_storage::object_store::ObjectStoreConfig;
 use sui_types::base_types::{ObjectID, ObjectRef};
+use sui_types::sui_system_state::get_sui_system_state;
+use sui_types::sui_system_state::SuiSystemStateTrait;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
@@ -211,76 +215,93 @@ impl LiveObjectSetWriterV1 {
 /// StateSnapshotWriterV1 writes snapshot files to a local staging dir and simultaneously uploads them
 /// to a remote object store
 pub struct StateSnapshotWriterV1 {
-    epoch: u64,
-    local_staging_dir: File,
-    local_staging_dir_root: PathBuf,
+    local_staging_dir: PathBuf,
     file_compression: FileCompression,
     remote_object_store: Arc<DynObjectStore>,
-    local_object_store: Arc<DynObjectStore>,
+    local_staging_store: Arc<DynObjectStore>,
     concurrency: usize,
-    include_wrapped_tombstone: bool,
 }
 
 impl StateSnapshotWriterV1 {
+    pub async fn new_from_store(
+        local_staging_path: &std::path::Path,
+        local_staging_store: &Arc<DynObjectStore>,
+        remote_object_store: &Arc<DynObjectStore>,
+        file_compression: FileCompression,
+        concurrency: NonZeroUsize,
+    ) -> Result<Self> {
+        Ok(StateSnapshotWriterV1 {
+            file_compression,
+            local_staging_dir: local_staging_path.to_path_buf(),
+            remote_object_store: remote_object_store.clone(),
+            local_staging_store: local_staging_store.clone(),
+            concurrency: concurrency.get(),
+        })
+    }
+
     pub async fn new(
-        epoch: u64,
         local_store_config: &ObjectStoreConfig,
         remote_store_config: &ObjectStoreConfig,
         file_compression: FileCompression,
         concurrency: NonZeroUsize,
-        include_wrapped_tombstone: bool,
     ) -> Result<Self> {
-        let epoch_dir = format!("epoch_{epoch}");
         let remote_object_store = remote_store_config.make()?;
-        // Delete remote epoch dir if it exists
-        delete_recursively(
-            &Path::from(epoch_dir.clone()),
-            remote_object_store.clone(),
-            concurrency,
-        )
-        .await?;
-
-        let local_object_store = local_store_config.make()?;
-        let local_staging_dir_root = local_store_config
+        let local_staging_store = local_store_config.make()?;
+        let local_staging_dir = local_store_config
             .directory
             .as_ref()
             .context("No local directory specified")?
             .clone();
-
-        // Delete local epoch dir if it exists
-        let local_epoch_dir_path = local_staging_dir_root.join(&epoch_dir);
-        if local_epoch_dir_path.exists() {
-            return Err(anyhow!(
-                "Local epoch dir already exists: {:?}",
-                local_epoch_dir_path
-            ));
-        }
-        fs::create_dir_all(&local_epoch_dir_path)?;
-        let local_staging_dir = File::open(&local_epoch_dir_path)?;
         Ok(StateSnapshotWriterV1 {
-            epoch,
             local_staging_dir,
-            local_staging_dir_root,
             file_compression,
             remote_object_store,
-            local_object_store,
+            local_staging_store,
             concurrency: concurrency.get(),
-            include_wrapped_tombstone,
         })
     }
-    pub async fn write(mut self, perpetual_db: Arc<AuthorityPerpetualTables>) -> Result<()> {
-        let (sender, receiver) = mpsc::channel::<FileMetadata>(1000);
-        let epoch = self.epoch;
-        let manifest_file_path = self.epoch_dir().child("MANIFEST");
-        let local_staging_dir_root = self.local_staging_dir_root.clone();
-        let local_object_store = self.local_object_store.clone();
+
+    pub async fn write(self, perpetual_db: Arc<AuthorityPerpetualTables>) -> Result<()> {
+        let system_state_object = get_sui_system_state(&perpetual_db)?;
+        let epoch = system_state_object.epoch();
+
+        let protocol_version = system_state_object.protocol_version();
+        let chain_identifier = CHAIN_IDENTIFIER
+            .get()
+            .ok_or(anyhow!("No chain identifier found"))?;
+        let protocol_config = ProtocolConfig::get_for_version(
+            ProtocolVersion::new(protocol_version),
+            chain_identifier.chain(),
+        );
+        let include_wrapped_tombstone = !protocol_config.simplified_unwrap_then_delete();
+        self.write_internal(epoch, include_wrapped_tombstone, perpetual_db)
+            .await
+    }
+
+    pub(crate) async fn write_internal(
+        mut self,
+        epoch: u64,
+        include_wrapped_tombstone: bool,
+        perpetual_db: Arc<AuthorityPerpetualTables>,
+    ) -> Result<()> {
+        self.setup_epoch_dir(epoch).await?;
+
+        let manifest_file_path = self.epoch_dir(epoch).child("MANIFEST");
+        let local_staging_dir = self.local_staging_dir.clone();
+        let local_object_store = self.local_staging_store.clone();
         let remote_object_store = self.remote_object_store.clone();
 
-        let upload_handle = self.start_upload(receiver)?;
+        let (sender, receiver) = mpsc::channel::<FileMetadata>(1000);
+        let upload_handle = self.start_upload(epoch, receiver)?;
         let write_handler = tokio::task::spawn_blocking(move || {
-            self.write_live_object_set(perpetual_db, sender, Self::bucket_func)
+            self.write_live_object_set(
+                epoch,
+                perpetual_db,
+                sender,
+                Self::bucket_func,
+                include_wrapped_tombstone,
+            )
         });
-
         write_handler.await?.context(format!(
             "Failed to write state snapshot for epoch: {}",
             &epoch
@@ -292,7 +313,7 @@ impl StateSnapshotWriterV1 {
         ))?;
 
         Self::sync_file_to_remote(
-            local_staging_dir_root,
+            local_staging_dir,
             manifest_file_path,
             local_object_store,
             remote_object_store,
@@ -300,21 +321,23 @@ impl StateSnapshotWriterV1 {
         .await?;
         Ok(())
     }
+
     fn start_upload(
         &self,
+        epoch: u64,
         receiver: Receiver<FileMetadata>,
     ) -> Result<JoinHandle<Result<Vec<()>, anyhow::Error>>> {
         let remote_object_store = self.remote_object_store.clone();
-        let local_object_store = self.local_object_store.clone();
-        let local_dir_path = self.local_staging_dir_root.clone();
-        let epoch_dir = self.epoch_dir();
+        let local_staging_store = self.local_staging_store.clone();
+        let local_dir_path = self.local_staging_dir.clone();
+        let epoch_dir = self.epoch_dir(epoch);
         let upload_concurrency = self.concurrency;
         let join_handle = tokio::spawn(async move {
             let results: Vec<Result<(), anyhow::Error>> = ReceiverStream::new(receiver)
                 .map(|file_metadata| {
                     let file_path = file_metadata.file_path(&epoch_dir);
                     let remote_object_store = remote_object_store.clone();
-                    let local_object_store = local_object_store.clone();
+                    let local_object_store = local_staging_store.clone();
                     let local_dir_path = local_dir_path.clone();
                     async move {
                         Self::sync_file_to_remote(
@@ -337,19 +360,22 @@ impl StateSnapshotWriterV1 {
         });
         Ok(join_handle)
     }
+
     fn write_live_object_set<F>(
         &mut self,
+        epoch: u64,
         perpetual_db: Arc<AuthorityPerpetualTables>,
         sender: Sender<FileMetadata>,
         bucket_func: F,
+        include_wrapped_tombstone: bool,
     ) -> Result<()>
     where
         F: Fn(&LiveObject) -> u32,
     {
         let mut object_writers: HashMap<u32, LiveObjectSetWriterV1> = HashMap::new();
         let local_staging_dir_path =
-            path_to_filesystem(self.local_staging_dir_root.clone(), &self.epoch_dir())?;
-        for object in perpetual_db.iter_live_object_set(self.include_wrapped_tombstone) {
+            path_to_filesystem(self.local_staging_dir.clone(), &self.epoch_dir(epoch))?;
+        for object in perpetual_db.iter_live_object_set(include_wrapped_tombstone) {
             let bucket_num = bucket_func(&object);
             if let Vacant(entry) = object_writers.entry(bucket_num) {
                 entry.insert(LiveObjectSetWriterV1::new(
@@ -368,18 +394,18 @@ impl StateSnapshotWriterV1 {
         for (_, writer) in object_writers.into_iter() {
             files.extend(writer.done()?);
         }
-        self.local_staging_dir.sync_data()?;
-        self.write_manifest(files)?;
+        self.write_manifest(epoch, files)?;
         Ok(())
     }
-    fn write_manifest(&mut self, file_metadata: Vec<FileMetadata>) -> Result<()> {
-        let (f, manifest_file_path) = self.manifest_file()?;
+
+    fn write_manifest(&mut self, epoch: u64, file_metadata: Vec<FileMetadata>) -> Result<()> {
+        let (f, manifest_file_path) = self.manifest_file(epoch)?;
         let mut wbuf = BufWriter::new(f);
         let manifest: Manifest = Manifest::V1(ManifestV1 {
             snapshot_version: 1,
             address_length: ObjectID::LENGTH as u64,
             file_metadata,
-            epoch: self.epoch,
+            epoch,
         });
         let serialized_manifest = bcs::to_bytes(&manifest)?;
         wbuf.write_all(&serialized_manifest)?;
@@ -391,17 +417,17 @@ impl StateSnapshotWriterV1 {
         wbuf.get_ref().sync_data()?;
         let off = wbuf.get_ref().stream_position()?;
         wbuf.get_ref().set_len(off)?;
-        self.local_staging_dir.sync_data()?;
         Ok(())
     }
-    fn manifest_file(&mut self) -> Result<(File, PathBuf)> {
+
+    fn manifest_file(&mut self, epoch: u64) -> Result<(File, PathBuf)> {
         let manifest_file_path = path_to_filesystem(
-            self.local_staging_dir_root.clone(),
-            &self.epoch_dir().child("MANIFEST"),
+            self.local_staging_dir.clone(),
+            &self.epoch_dir(epoch).child("MANIFEST"),
         )?;
         let manifest_file_tmp_path = path_to_filesystem(
-            self.local_staging_dir_root.clone(),
-            &self.epoch_dir().child("MANIFEST.tmp"),
+            self.local_staging_dir.clone(),
+            &self.epoch_dir(epoch).child("MANIFEST.tmp"),
         )?;
         let mut f = File::create(manifest_file_tmp_path.clone())?;
         let mut metab = vec![0u8; MAGIC_BYTES];
@@ -410,30 +436,49 @@ impl StateSnapshotWriterV1 {
         f.write_all(&metab)?;
         drop(f);
         fs::rename(manifest_file_tmp_path, manifest_file_path.clone())?;
-        self.local_staging_dir.sync_data()?;
         let mut f = OpenOptions::new()
             .append(true)
             .open(manifest_file_path.clone())?;
         f.seek(SeekFrom::Start(MAGIC_BYTES as u64))?;
         Ok((f, manifest_file_path))
     }
+
     fn bucket_func(_object: &LiveObject) -> u32 {
         // TODO: Use the hash bucketing function used for accumulator tree if there is one
         1u32
     }
-    fn epoch_dir(&self) -> Path {
-        Path::from(format!("epoch_{}", self.epoch))
+
+    fn epoch_dir(&self, epoch: u64) -> Path {
+        Path::from(format!("epoch_{}", epoch))
+    }
+
+    async fn setup_epoch_dir(&self, epoch: u64) -> Result<()> {
+        let epoch_dir = self.epoch_dir(epoch);
+        // Delete remote epoch dir if it exists
+        delete_recursively(
+            &epoch_dir,
+            self.remote_object_store.clone(),
+            NonZeroUsize::new(self.concurrency).unwrap(),
+        )
+        .await?;
+        // Delete local staging epoch dir if it exists
+        let local_epoch_dir_path = self.local_staging_dir.join(format!("epoch_{}", epoch));
+        if local_epoch_dir_path.exists() {
+            fs::remove_dir_all(&local_epoch_dir_path)?;
+        }
+        fs::create_dir_all(&local_epoch_dir_path)?;
+        Ok(())
     }
 
     async fn sync_file_to_remote(
-        dir: PathBuf,
+        local_path: PathBuf,
         path: Path,
         from: Arc<DynObjectStore>,
         to: Arc<DynObjectStore>,
     ) -> Result<()> {
         debug!("Syncing snapshot file to remote: {:?}", path);
         copy_file(path.clone(), path.clone(), from, to).await?;
-        fs::remove_file(path_to_filesystem(dir, &path)?)?;
+        fs::remove_file(path_to_filesystem(local_path, &path)?)?;
         Ok(())
     }
 }

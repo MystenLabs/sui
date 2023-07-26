@@ -261,7 +261,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let mut protocol_config = if let Some(protocol_version) = protocol_version {
                     ProtocolConfig::get_for_version(protocol_version.into(), Chain::Unknown)
                 } else {
-                    ProtocolConfig::get_for_max_version()
+                    ProtocolConfig::get_for_max_version_UNSAFE()
                 };
                 if let Some(mx_tx_gas_override) = max_gas {
                     protocol_config.set_max_tx_gas_for_testing(mx_tx_gas_override)
@@ -271,7 +271,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             None => (
                 BTreeMap::new(),
                 BTreeSet::new(),
-                ProtocolConfig::get_for_max_version(),
+                ProtocolConfig::get_for_max_version_UNSAFE(),
             ),
         };
 

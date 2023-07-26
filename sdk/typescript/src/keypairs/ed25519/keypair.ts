@@ -5,7 +5,7 @@ import nacl from 'tweetnacl';
 import type { ExportedKeypair } from '../../cryptography/keypair.js';
 import { Ed25519PublicKey } from './publickey.js';
 import { isValidHardenedPath, mnemonicToSeedHex } from '../../cryptography/mnemonics.js';
-import { derivePath } from '../../utils/ed25519-hd-key.js';
+import { derivePath } from './ed25519-hd-key.js';
 import { toB64 } from '@mysten/bcs';
 import type { SignatureScheme } from '../../cryptography/signature.js';
 import { PRIVATE_KEY_SIZE, Keypair } from '../../cryptography/keypair.js';

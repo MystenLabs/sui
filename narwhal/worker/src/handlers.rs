@@ -15,9 +15,9 @@ use sui_protocol_config::ProtocolConfig;
 use tracing::{debug, trace};
 use types::{
     now, validate_batch_version, Batch, BatchAPI, BatchDigest, FetchBatchesRequest,
-    FetchBatchesResponse, MetadataAPI, PrimaryToWorker, RequestBatchRequest, RequestBatchResponse,
-    RequestBatchesRequest, RequestBatchesResponse, WorkerBatchMessage, WorkerDeleteBatchesMessage,
-    WorkerOthersBatchMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
+    FetchBatchesResponse, MetadataAPI, PrimaryToWorker, RequestBatchesRequest,
+    RequestBatchesResponse, WorkerBatchMessage, WorkerOthersBatchMessage, WorkerSynchronizeMessage,
+    WorkerToWorker, WorkerToWorkerClient,
 };
 
 use crate::{batch_fetcher::BatchFetcher, TransactionValidator};
@@ -75,19 +75,6 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
         Ok(anemo::Response::new(()))
     }
 
-    async fn request_batch(
-        &self,
-        request: anemo::Request<RequestBatchRequest>,
-    ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
-        // TODO [issue #7]: Do some accounting to prevent bad actors from monopolizing our resources
-        let batch = request.into_body().batch;
-        let batch = self.store.get(&batch).map_err(|e| {
-            anemo::rpc::Status::internal(format!("failed to read from batch store: {e:?}"))
-        })?;
-
-        Ok(anemo::Response::new(RequestBatchResponse { batch }))
-    }
-
     async fn request_batches(
         &self,
         request: anemo::Request<RequestBatchesRequest>,
@@ -141,10 +128,10 @@ pub struct PrimaryReceiverHandler<V> {
     pub worker_cache: WorkerCache,
     // The batch store
     pub store: DBMap<BatchDigest, Batch>,
-    // Timeout on RequestBatch RPC.
-    pub request_batch_timeout: Duration,
+    // Timeout on RequestBatches RPC.
+    pub request_batches_timeout: Duration,
     // Number of random nodes to query when retrying batch requests.
-    pub request_batch_retry_nodes: usize,
+    pub request_batches_retry_nodes: usize,
     // Synchronize header payloads from other workers.
     pub network: Option<Network>,
     // Fetch certificate payloads from other workers.
@@ -217,7 +204,9 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
         debug!("Sending RequestBatchesRequest to {worker_name}: {request:?}");
 
         let mut response = client
-            .request_batches(anemo::Request::new(request).with_timeout(self.request_batch_timeout))
+            .request_batches(
+                anemo::Request::new(request).with_timeout(self.request_batches_timeout),
+            )
             .await?
             .into_inner();
         for batch in response.batches.iter_mut() {
@@ -279,17 +268,5 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
             .fetch(request.digests, request.known_workers)
             .await;
         Ok(anemo::Response::new(FetchBatchesResponse { batches }))
-    }
-
-    async fn delete_batches(
-        &self,
-        request: anemo::Request<WorkerDeleteBatchesMessage>,
-    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-        for digest in request.into_body().digests {
-            self.store.remove(&digest).map_err(|e| {
-                anemo::rpc::Status::internal(format!("failed to remove from batch store: {e:?}"))
-            })?;
-        }
-        Ok(anemo::Response::new(()))
     }
 }

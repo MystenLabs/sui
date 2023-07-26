@@ -5,7 +5,7 @@ import { useWalletKit } from '@mysten/wallet-kit';
 import { Tab } from '@headlessui/react';
 import { OwnedObjects } from '../Inventory/OwnedObjects';
 import { KioskItems } from './KioskItems';
-import { ObjectId, formatAddress } from '@mysten/sui.js';
+import { formatAddress } from '@mysten/sui.js/utils';
 import { ExplorerLink } from '../Base/ExplorerLink';
 import { formatSui, mistToSui } from '../../utils/utils';
 import { toast } from 'react-hot-toast';
@@ -16,7 +16,7 @@ import { TANSTACK_KIOSK_DATA_KEY } from '../../utils/constants';
 import { Button } from '../Base/Button';
 import { useWithdrawMutation } from '../../mutations/kiosk';
 
-export function KioskData({ kioskId }: { kioskId: ObjectId }) {
+export function KioskData({ kioskId }: { kioskId: string }) {
 	const { currentAccount } = useWalletKit();
 
 	const { data: kiosk, isLoading } = useKioskDetails(kioskId);

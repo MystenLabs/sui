@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { getRefGasPrice, useGetSystemState } from '@mysten/core';
+import { Heading, Text } from '@mysten/ui';
 import { useMemo } from 'react';
 
 import { Card } from '~/ui/Card';
-import { Heading } from '~/ui/Heading';
 import { RingChart, RingChartLegend } from '~/ui/RingChart';
-import { Text } from '~/ui/Text';
 
 export function ValidatorStatus() {
 	const { data } = useGetSystemState();

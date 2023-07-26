@@ -8,15 +8,14 @@ import {
 	getTransactionSender,
 	getTransactionSignature,
 	normalizeSuiAddress,
-	type SuiAddress,
 	type SuiTransactionBlockResponse,
 	type SignaturePubkeyPair,
 } from '@mysten/sui.js';
+import { Text } from '@mysten/ui';
 
 import { DescriptionItem, DescriptionList } from '~/ui/DescriptionList';
 import { AddressLink } from '~/ui/InternalLink';
 import { TabHeader } from '~/ui/Tabs';
-import { Text } from '~/ui/Text';
 
 function SignaturePanel({ title, signature }: { title: string; signature: SignaturePubkeyPair }) {
 	return (
@@ -30,6 +29,11 @@ function SignaturePanel({ title, signature }: { title: string; signature: Signat
 				<DescriptionItem title="Address" align="start" labelWidth="sm">
 					<AddressLink noTruncate address={signature.pubKey.toSuiAddress()} />
 				</DescriptionItem>
+				<DescriptionItem title="Sui Public Key" align="start" labelWidth="sm">
+					<Text variant="pBody/medium" color="steel-darker">
+						{signature.pubKey.toSuiPublicKey()}
+					</Text>
+				</DescriptionItem>
 				<DescriptionItem title="Signature" align="start" labelWidth="sm">
 					<Text variant="pBody/medium" color="steel-darker">
 						{toB64(signature.signature)}
@@ -40,7 +44,7 @@ function SignaturePanel({ title, signature }: { title: string; signature: Signat
 	);
 }
 
-function getSignatureFromAddress(signatures: SignaturePubkeyPair[], suiAddress: SuiAddress) {
+function getSignatureFromAddress(signatures: SignaturePubkeyPair[], suiAddress: string) {
 	return signatures.find(
 		(signature) => signature.pubKey.toSuiAddress() === normalizeSuiAddress(suiAddress),
 	);
@@ -48,7 +52,7 @@ function getSignatureFromAddress(signatures: SignaturePubkeyPair[], suiAddress: 
 
 function getSignaturesExcludingAddress(
 	signatures: SignaturePubkeyPair[],
-	suiAddress: SuiAddress,
+	suiAddress: string,
 ): SignaturePubkeyPair[] {
 	return signatures.filter(
 		(signature) => signature.pubKey.toSuiAddress() !== normalizeSuiAddress(suiAddress),

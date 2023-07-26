@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowRight12 } from '@mysten/icons';
+import { Text } from '@mysten/ui';
 
 import { Link } from '~/ui/Link';
 import { Pagination, type PaginationResponse, type usePaginationStack } from '~/ui/Pagination';
-import { Text } from '~/ui/Text';
 import { numberSuffix } from '~/utils/numberUtil';
 
 interface Props {

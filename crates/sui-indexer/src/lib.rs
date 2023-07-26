@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #![recursion_limit = "256"]
 
-use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::{collections::HashMap, time::Duration};
 
 use anyhow::{anyhow, Result};
 use axum::{extract::Extension, http::StatusCode, routing::get, Router};
@@ -30,7 +30,7 @@ use handlers::checkpoint_handler::CheckpointHandler;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
 use processors::processor_orchestrator::ProcessorOrchestrator;
 use store::IndexerStore;
-use sui_core::event_handler::SubscriptionHandler;
+use sui_core::subscription_handler::SubscriptionHandler;
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, CLIENT_SDK_TYPE_HEADER};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 
@@ -181,7 +181,7 @@ impl Indexer {
             "Sui indexer of version {:?} started...",
             env!("CARGO_PKG_VERSION")
         );
-        let event_handler = Arc::new(SubscriptionHandler::default());
+        let subscription_handler = Arc::new(SubscriptionHandler::new(registry));
 
         if config.rpc_server_worker && config.fullnode_sync_worker {
             info!("Starting indexer with both fullnode sync and RPC server");
@@ -189,7 +189,7 @@ impl Indexer {
             let handle = build_json_rpc_server(
                 registry,
                 store.clone(),
-                event_handler.clone(),
+                subscription_handler.clone(),
                 config,
                 custom_runtime,
             )
@@ -202,13 +202,13 @@ impl Indexer {
             spawn_monitored_task!(processor_orchestrator.run_forever());
 
             backoff::future::retry(ExponentialBackoff::default(), || async {
-                let event_handler_clone = event_handler.clone();
+                let subscription_handler_clone = subscription_handler.clone();
                 let metrics_clone = metrics.clone();
                 let http_client = get_http_client(config.rpc_client_url.as_str())?;
                 let cp = CheckpointHandler::new(
                     store.clone(),
                     http_client,
-                    event_handler_clone,
+                    subscription_handler_clone,
                     metrics_clone,
                     config,
                 );
@@ -223,7 +223,7 @@ impl Indexer {
             let handle = build_json_rpc_server(
                 registry,
                 store.clone(),
-                event_handler.clone(),
+                subscription_handler.clone(),
                 config,
                 custom_runtime,
             )
@@ -237,13 +237,13 @@ impl Indexer {
             spawn_monitored_task!(processor_orchestrator.run_forever());
 
             backoff::future::retry(ExponentialBackoff::default(), || async {
-                let event_handler_clone = event_handler.clone();
+                let subscription_handler_clone = subscription_handler.clone();
                 let metrics_clone = metrics.clone();
                 let http_client = get_http_client(config.rpc_client_url.as_str())?;
                 let cp = CheckpointHandler::new(
                     store.clone(),
                     http_client,
-                    event_handler_clone,
+                    subscription_handler_clone,
                     metrics_clone,
                     config,
                 );
@@ -293,24 +293,81 @@ fn get_http_client(rpc_client_url: &str) -> Result<HttpClient, IndexerError> {
         })
 }
 
-pub async fn new_pg_connection_pool(db_url: &str) -> Result<PgConnectionPool, IndexerError> {
+pub fn new_pg_connection_pool(db_url: &str) -> Result<PgConnectionPool, IndexerError> {
+    let pool_config = PgConectionPoolConfig::default();
     let manager = ConnectionManager::<PgConnection>::new(db_url);
-    // default connection pool max size is 10
-    let blocking_conn_pool = diesel::r2d2::Pool::builder().build(manager).map_err(|e| {
-        IndexerError::PgConnectionPoolInitError(format!(
-            "Failed to initialize connection pool with error: {:?}",
-            e
+
+    diesel::r2d2::Pool::builder()
+        .max_size(pool_config.pool_size)
+        .connection_timeout(pool_config.connection_timeout)
+        .connection_customizer(Box::new(pool_config.connection_config()))
+        .build(manager)
+        .map_err(|e| {
+            IndexerError::PgConnectionPoolInitError(format!(
+                "Failed to initialize connection pool with error: {:?}",
+                e
+            ))
+        })
+}
+
+#[derive(Debug, Clone, Copy)]
+struct PgConectionPoolConfig {
+    pool_size: u32,
+    connection_timeout: Duration,
+    statement_timeout: Duration,
+}
+
+impl PgConectionPoolConfig {
+    const DEFAULT_POOL_SIZE: u32 = 10;
+    const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_secs(30);
+    const DEFAULT_STATEMENT_TIMEOUT: Duration = Duration::from_secs(5);
+
+    fn connection_config(&self) -> PgConnectionConfig {
+        PgConnectionConfig {
+            statement_timeout: self.statement_timeout,
+        }
+    }
+}
+
+impl Default for PgConectionPoolConfig {
+    fn default() -> Self {
+        Self {
+            pool_size: Self::DEFAULT_POOL_SIZE,
+            connection_timeout: Self::DEFAULT_CONNECTION_TIMEOUT,
+            statement_timeout: Self::DEFAULT_STATEMENT_TIMEOUT,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct PgConnectionConfig {
+    statement_timeout: Duration,
+    // read_only: bool,
+}
+
+impl diesel::r2d2::CustomizeConnection<PgConnection, diesel::r2d2::Error> for PgConnectionConfig {
+    fn on_acquire(&self, conn: &mut PgConnection) -> std::result::Result<(), diesel::r2d2::Error> {
+        use diesel::{sql_query, RunQueryDsl};
+
+        sql_query(format!(
+            "SET statement_timeout = {}",
+            self.statement_timeout.as_millis(),
         ))
-    })?;
-    Ok(blocking_conn_pool)
+        .execute(conn)
+        .map_err(diesel::r2d2::Error::QueryError)?;
+
+        // if self.read_only {
+        //     sql_query("SET default_transaction_read_only = 't'")
+        //         .execute(conn)
+        //         .map_err(r2d2::Error::QueryError)?;
+        // }
+
+        Ok(())
+    }
 }
 
 pub fn get_pg_pool_connection(pool: &PgConnectionPool) -> Result<PgPoolConnection, IndexerError> {
-    backoff::retry(ExponentialBackoff::default(), || {
-        let pool_conn = pool.get()?;
-        Ok(pool_conn)
-    })
-    .map_err(|e| {
+    pool.get().map_err(|e| {
         IndexerError::PgPoolConnectionError(format!(
             "Failed to get connection from PG connection pool with error: {:?}",
             e
@@ -321,7 +378,7 @@ pub fn get_pg_pool_connection(pool: &PgConnectionPool) -> Result<PgPoolConnectio
 pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clone>(
     prometheus_registry: &Registry,
     state: S,
-    event_handler: Arc<SubscriptionHandler>,
+    subscription_handler: Arc<SubscriptionHandler>,
     config: &IndexerConfig,
     custom_runtime: Option<Handle>,
 ) -> Result<ServerHandle, IndexerError> {
@@ -339,7 +396,7 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
     builder.register_module(IndexerApi::new(
         state.clone(),
         http_client.clone(),
-        event_handler,
+        subscription_handler,
         config.migrated_methods.clone(),
     ))?;
     builder.register_module(WriteApi::new(state.clone(), http_client.clone()))?;

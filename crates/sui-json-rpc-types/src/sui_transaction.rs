@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::{self, Display, Formatter, Write};
-
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
 use crate::{Filter, Page, SuiEvent, SuiObjectRef};
@@ -15,9 +13,11 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use move_core_types::value::MoveTypeLayout;
+use mysten_metrics::monitored_scope;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::fmt::{self, Display, Formatter, Write};
 use sui_json::{primitive_type, SuiJsonValue};
 use sui_types::base_types::{
     EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -597,8 +597,7 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
                     executed_epoch: effect.executed_epoch(),
                     modified_at_versions: effect
                         .modified_at_versions()
-                        .iter()
-                        .copied()
+                        .into_iter()
                         .map(|(object_id, sequence_number)| {
                             SuiTransactionBlockEffectsModifiedAtVersions {
                                 object_id,
@@ -607,9 +606,15 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
                         })
                         .collect(),
                     gas_used: effect.gas_cost_summary().clone(),
-                    shared_objects: to_sui_object_ref(effect.shared_objects().to_vec()),
+                    shared_objects: to_sui_object_ref(
+                        effect
+                            .input_shared_objects()
+                            .into_iter()
+                            .map(|(obj_ref, _)| obj_ref)
+                            .collect(),
+                    ),
                     transaction_digest: *effect.transaction_digest(),
-                    created: to_owned_ref(effect.created().to_vec()),
+                    created: to_owned_ref(effect.created()),
                     mutated: to_owned_ref(effect.mutated().to_vec()),
                     unwrapped: to_owned_ref(effect.unwrapped().to_vec()),
                     deleted: to_sui_object_ref(effect.deleted().to_vec()),
@@ -1677,6 +1682,7 @@ pub enum TransactionFilter {
 
 impl Filter<EffectsWithInput> for TransactionFilter {
     fn matches(&self, item: &EffectsWithInput) -> bool {
+        let _scope = monitored_scope("TransactionFilter::matches");
         match self {
             TransactionFilter::InputObject(o) => {
                 let Ok(input_objects) = item.input.input_objects() else {

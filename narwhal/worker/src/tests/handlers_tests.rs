@@ -68,8 +68,8 @@ async fn synchronize() {
         protocol_config: latest_protocol_config.clone(),
         worker_cache,
         store: store.clone(),
-        request_batch_timeout: Duration::from_secs(999),
-        request_batch_retry_nodes: 3, // Not used in this test.
+        request_batches_timeout: Duration::from_secs(999),
+        request_batches_retry_nodes: 3, // Not used in this test.
         network: Some(send_network),
         batch_fetcher: None,
         validator: TrivialTransactionValidator,
@@ -103,7 +103,7 @@ async fn synchronize_versioned_batches() {
     // Create a new test store.
     let store = test_utils::create_batch_store();
 
-    // Create network with mock behavior to respond to RequestBatch request.
+    // Create network with mock behavior to respond to RequestBatches request.
     let target_primary = fixture.authorities().nth(1).unwrap();
     let batch_v1 = test_utils::batch(protocol_config_v11);
     let digest_v1 = batch_v1.digest();
@@ -167,8 +167,8 @@ async fn synchronize_versioned_batches() {
         protocol_config: protocol_config_v11.clone(),
         worker_cache: worker_cache.clone(),
         store: store.clone(),
-        request_batch_timeout: Duration::from_secs(999),
-        request_batch_retry_nodes: 3, // Not used in this test.
+        request_batches_timeout: Duration::from_secs(999),
+        request_batches_retry_nodes: 3, // Not used in this test.
         network: Some(send_network.clone()),
         batch_fetcher: None,
         validator: TrivialTransactionValidator,
@@ -181,8 +181,8 @@ async fn synchronize_versioned_batches() {
         protocol_config: latest_protocol_config.clone(),
         worker_cache,
         store: store.clone(),
-        request_batch_timeout: Duration::from_secs(999),
-        request_batch_retry_nodes: 3, // Not used in this test.
+        request_batches_timeout: Duration::from_secs(999),
+        request_batches_retry_nodes: 3, // Not used in this test.
         network: Some(send_network),
         batch_fetcher: None,
         validator: TrivialTransactionValidator,
@@ -237,8 +237,8 @@ async fn synchronize_when_batch_exists() {
         protocol_config: latest_protocol_version(),
         worker_cache,
         store: store.clone(),
-        request_batch_timeout: Duration::from_secs(999),
-        request_batch_retry_nodes: 3, // Not used in this test.
+        request_batches_timeout: Duration::from_secs(999),
+        request_batches_retry_nodes: 3, // Not used in this test.
         network: Some(send_network),
         batch_fetcher: None,
         validator: TrivialTransactionValidator,
@@ -262,45 +262,4 @@ async fn synchronize_when_batch_exists() {
         .synchronize(anemo::Request::new(message))
         .await
         .unwrap();
-}
-
-#[tokio::test]
-async fn delete_batches() {
-    telemetry_subscribers::init_for_testing();
-
-    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
-    let committee = fixture.committee();
-    let worker_cache = fixture.worker_cache();
-    let authority_id = fixture.authorities().next().unwrap().id();
-    let id = 0;
-
-    // Create a new test store.
-    let store = test_utils::create_batch_store();
-    let batch = test_utils::batch(&latest_protocol_version());
-    let digest = batch.digest();
-    store.insert(&digest, &batch).unwrap();
-
-    // Send a delete request.
-    let handler = PrimaryReceiverHandler {
-        authority_id,
-        id,
-        committee,
-        protocol_config: latest_protocol_version(),
-        worker_cache,
-        store: store.clone(),
-        request_batch_timeout: Duration::from_secs(999),
-        request_batch_retry_nodes: 3, // Not used in this test.
-        network: None,
-        batch_fetcher: None,
-        validator: TrivialTransactionValidator,
-    };
-    let message = WorkerDeleteBatchesMessage {
-        digests: vec![digest],
-    };
-    handler
-        .delete_batches(anemo::Request::new(message))
-        .await
-        .unwrap();
-
-    assert!(store.get(&digest).unwrap().is_none());
 }

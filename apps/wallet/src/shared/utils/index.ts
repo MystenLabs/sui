@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGrowthBook } from '@growthbook/growthbook-react';
-import { fromB64, toB64 } from '@mysten/sui.js';
+import { fromB64, toB64 } from '@mysten/sui.js/utils';
 import { useEffect } from 'react';
 import Browser from 'webextension-polyfill';
 

@@ -72,24 +72,6 @@ fn build_anemo_services(out_dir: &Path) {
         )
         .method(
             anemo_build::manual::Method::builder()
-                .name("get_payload_availability")
-                .route_name("GetPayloadAvailability")
-                .request_type("crate::PayloadAvailabilityRequest")
-                .response_type("crate::PayloadAvailabilityResponse")
-                .codec_path(codec_path)
-                .build(),
-        )
-        .method(
-            anemo_build::manual::Method::builder()
-                .name("get_certificates")
-                .route_name("GetCertificates")
-                .request_type("crate::GetCertificatesRequest")
-                .response_type("crate::GetCertificatesResponse")
-                .codec_path(codec_path)
-                .build(),
-        )
-        .method(
-            anemo_build::manual::Method::builder()
                 .name("fetch_certificates")
                 .route_name("FetchCertificates")
                 .request_type("crate::FetchCertificatesRequest")
@@ -118,15 +100,6 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("FetchBatches")
                 .request_type("crate::FetchBatchesRequest")
                 .response_type("crate::FetchBatchesResponse")
-                .codec_path(codec_path)
-                .build(),
-        )
-        .method(
-            anemo_build::manual::Method::builder()
-                .name("delete_batches")
-                .route_name("DeleteBatches")
-                .request_type("crate::WorkerDeleteBatchesMessage")
-                .response_type("()")
                 .codec_path(codec_path)
                 .build(),
         )
@@ -176,15 +149,6 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("ReportBatch")
                 .request_type("crate::WorkerBatchMessage")
                 .response_type("()")
-                .codec_path(codec_path)
-                .build(),
-        )
-        .method(
-            anemo_build::manual::Method::builder()
-                .name("request_batch")
-                .route_name("RequestBatch")
-                .request_type("crate::RequestBatchRequest")
-                .response_type("crate::RequestBatchResponse")
                 .codec_path(codec_path)
                 .build(),
         )

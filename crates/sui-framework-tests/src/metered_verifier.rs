@@ -21,7 +21,7 @@ fn test_metered_move_bytecode_verifier() {
     let compiled_modules: Vec<_> = compiled_package.get_modules().cloned().collect();
 
     let mut metered_verifier_config = default_verifier_config(
-        &ProtocolConfig::get_for_max_version(),
+        &ProtocolConfig::get_for_max_version_UNSAFE(),
         true, /* enable metering */
     );
     let registry = &Registry::new();
@@ -213,7 +213,7 @@ fn test_metered_move_bytecode_verifier() {
     packages.push(package.get_dependency_sorted_modules(with_unpublished_deps));
 
     let is_metered = true;
-    let protocol_config = ProtocolConfig::get_for_max_version();
+    let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
     let metered_verifier_config = default_verifier_config(&protocol_config, is_metered);
 
     // Check if the same meter is indeed used multiple invocations of the verifier
@@ -241,7 +241,7 @@ fn test_meter_system_packages() {
 
     let is_metered = true;
     let metered_verifier_config =
-        default_verifier_config(&ProtocolConfig::get_for_max_version(), is_metered);
+        default_verifier_config(&ProtocolConfig::get_for_max_version_UNSAFE(), is_metered);
     let registry = &Registry::new();
     let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
     let mut meter = SuiVerifierMeter::new(&metered_verifier_config);
@@ -305,7 +305,7 @@ fn test_build_and_verify_programmability_examples() {
 
     let is_metered = true;
     let metered_verifier_config =
-        default_verifier_config(&ProtocolConfig::get_for_max_version(), is_metered);
+        default_verifier_config(&ProtocolConfig::get_for_max_version_UNSAFE(), is_metered);
     let registry = &Registry::new();
     let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
     let examples =

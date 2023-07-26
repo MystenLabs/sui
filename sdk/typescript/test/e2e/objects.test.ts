@@ -2,13 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import {
-	getObjectType,
-	normalizeSuiAddress,
-	SUI_TYPE_ARG,
-	SuiObjectData,
-	TransactionBlock,
-} from '../../src';
+import { getObjectType, normalizeSuiAddress, SUI_TYPE_ARG, SuiObjectData } from '../../src';
+import { TransactionBlock } from '../../src/builder';
 import { setup, TestToolbox } from './utils/setup';
 
 describe('Object Reading API', () => {
@@ -19,7 +14,7 @@ describe('Object Reading API', () => {
 	});
 
 	it('Get Owned Objects', async () => {
-		const gasObjects = await toolbox.provider.getOwnedObjects({
+		const gasObjects = await toolbox.client.getOwnedObjects({
 			owner: toolbox.address(),
 		});
 		expect(gasObjects.data.length).to.greaterThan(0);
@@ -31,7 +26,7 @@ describe('Object Reading API', () => {
 		const objectInfos = await Promise.all(
 			gasObjects.map((gasObject) => {
 				const details = gasObject.data as SuiObjectData;
-				return toolbox.provider.getObject({
+				return toolbox.client.getObject({
 					id: details.objectId,
 					options: { showType: true },
 				});
@@ -49,7 +44,7 @@ describe('Object Reading API', () => {
 			const details = gasObject.data as SuiObjectData;
 			return details.objectId;
 		});
-		const objectInfos = await toolbox.provider.multiGetObjects({
+		const objectInfos = await toolbox.client.multiGetObjects({
 			ids: gasObjectIds,
 			options: {
 				showType: true,
@@ -64,7 +59,7 @@ describe('Object Reading API', () => {
 	});
 
 	it('handles trying to get non-existent old objects', async () => {
-		const res = await toolbox.provider.tryGetPastObject({
+		const res = await toolbox.client.tryGetPastObject({
 			id: normalizeSuiAddress('0x9999'),
 			version: 0,
 		});
@@ -73,12 +68,12 @@ describe('Object Reading API', () => {
 	});
 
 	it('can read live versions', async () => {
-		const { data } = await toolbox.provider.getCoins({
+		const { data } = await toolbox.client.getCoins({
 			owner: toolbox.address(),
 			coinType: SUI_TYPE_ARG,
 		});
 
-		const res = await toolbox.provider.tryGetPastObject({
+		const res = await toolbox.client.tryGetPastObject({
 			id: data[0].coinObjectId,
 			version: Number(data[0].version),
 		});
@@ -87,12 +82,12 @@ describe('Object Reading API', () => {
 	});
 
 	it('handles trying to get a newer version than the latest version', async () => {
-		const { data } = await toolbox.provider.getCoins({
+		const { data } = await toolbox.client.getCoins({
 			owner: toolbox.address(),
 			coinType: SUI_TYPE_ARG,
 		});
 
-		const res = await toolbox.provider.tryGetPastObject({
+		const res = await toolbox.client.tryGetPastObject({
 			id: data[0].coinObjectId,
 			version: Number(data[0].version) + 1,
 		});
@@ -101,12 +96,12 @@ describe('Object Reading API', () => {
 	});
 
 	it('handles fetching versions that do not exist', async () => {
-		const { data } = await toolbox.provider.getCoins({
+		const { data } = await toolbox.client.getCoins({
 			owner: toolbox.address(),
 			coinType: SUI_TYPE_ARG,
 		});
 
-		const res = await toolbox.provider.tryGetPastObject({
+		const res = await toolbox.client.tryGetPastObject({
 			id: data[0].coinObjectId,
 			// NOTE: This works because we know that this is a fresh coin that hasn't been modified:
 			version: Number(data[0].version) - 1,
@@ -116,7 +111,7 @@ describe('Object Reading API', () => {
 	});
 
 	it('can find old versions of objects', async () => {
-		const { data } = await toolbox.provider.getCoins({
+		const { data } = await toolbox.client.getCoins({
 			owner: toolbox.address(),
 			coinType: SUI_TYPE_ARG,
 		});
@@ -125,11 +120,12 @@ describe('Object Reading API', () => {
 		// Transfer the entire gas object:
 		tx.transferObjects([tx.gas], tx.pure(normalizeSuiAddress('0x2')));
 
-		await toolbox.signer.signAndExecuteTransactionBlock({
+		await toolbox.client.signAndExecuteTransactionBlock({
+			signer: toolbox.keypair,
 			transactionBlock: tx,
 		});
 
-		const res = await toolbox.provider.tryGetPastObject({
+		const res = await toolbox.client.tryGetPastObject({
 			id: data[0].coinObjectId,
 			// NOTE: This works because we know that this is a fresh coin that hasn't been modified:
 			version: Number(data[0].version),

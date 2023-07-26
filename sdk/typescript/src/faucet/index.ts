@@ -1,14 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { ObjectId, SuiAddress, TransactionDigest } from '../types/index.js';
-
 export class FaucetRateLimitError extends Error {}
 
 type FaucetCoinInfo = {
 	amount: number;
-	id: ObjectId;
-	transferTxDigest: TransactionDigest;
+	id: string;
+	transferTxDigest: string;
 };
 
 type FaucetResponse = {
@@ -65,7 +63,7 @@ async function faucetRequest(
 
 export async function requestSuiFromFaucetV0(input: {
 	host: string;
-	recipient: SuiAddress;
+	recipient: string;
 	headers?: HeadersInit;
 }): Promise<FaucetResponse> {
 	return faucetRequest(
@@ -82,7 +80,7 @@ export async function requestSuiFromFaucetV0(input: {
 
 export async function requestSuiFromFaucetV1(input: {
 	host: string;
-	recipient: SuiAddress;
+	recipient: string;
 	headers?: HeadersInit;
 }): Promise<BatchFaucetResponse> {
 	return faucetRequest(
@@ -112,4 +110,17 @@ export async function getFaucetRequestStatus(input: {
 		},
 		input.headers,
 	);
+}
+
+export function getFaucetHost(network: 'testnet' | 'devnet' | 'localnet') {
+	switch (network) {
+		case 'testnet':
+			return 'https://faucet.testnet.sui.io';
+		case 'devnet':
+			return 'https://faucet.devnet.sui.io';
+		case 'localnet':
+			return 'http://127.0.0.1:9123';
+		default:
+			throw new Error(`Unknown network: ${network}`);
+	}
 }

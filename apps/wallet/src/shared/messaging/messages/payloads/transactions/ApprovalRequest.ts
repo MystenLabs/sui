@@ -6,12 +6,12 @@ import {
 	type SuiSignMessageOutput,
 } from '@mysten/wallet-standard';
 
-import type { SignedTransaction, SuiAddress, SuiTransactionBlockResponse } from '@mysten/sui.js';
+import type { SignedTransaction, SuiTransactionBlockResponse } from '@mysten/sui.js';
 
 export type TransactionDataType = {
 	type: 'transaction';
 	data: string;
-	account: SuiAddress;
+	account: string;
 	justSign?: boolean;
 	requestType?: SuiSignAndExecuteTransactionBlockInput['requestType'];
 	options?: SuiSignAndExecuteTransactionBlockInput['options'];
@@ -20,7 +20,7 @@ export type TransactionDataType = {
 export type SignMessageDataType = {
 	type: 'sign-message';
 	message: string;
-	accountAddress: SuiAddress;
+	accountAddress: string;
 };
 
 export type ApprovalRequest = {

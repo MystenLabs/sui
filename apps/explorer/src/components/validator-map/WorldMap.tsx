@@ -36,7 +36,7 @@ function BaseWorldMap({ onMouseOver, onMouseOut, width, height, validators }: Pr
 
 	return (
 		<svg width={width} height={height}>
-			<Mercator data={filteredLand} scale={105} translate={[centerX, centerY + 20]}>
+			<Mercator data={filteredLand} scale={105} translate={[centerX, centerY + 80]}>
 				{({ features, projection }) => (
 					<g>
 						<g>

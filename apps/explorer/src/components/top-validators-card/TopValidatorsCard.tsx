@@ -3,7 +3,8 @@
 
 import { useGetSystemState } from '@mysten/core';
 import { ArrowRight12 } from '@mysten/icons';
-import { type SuiValidatorSummary } from '@mysten/sui.js';
+import { type SuiValidatorSummary } from '@mysten/sui.js/client';
+import { Text } from '@mysten/ui';
 import { useMemo } from 'react';
 
 import { StakeColumn } from './StakeColumn';
@@ -14,7 +15,6 @@ import { AddressLink, ValidatorLink } from '~/ui/InternalLink';
 import { Link } from '~/ui/Link';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
-import { Text } from '~/ui/Text';
 import { ampli } from '~/utils/analytics/ampli';
 
 const NUMBER_OF_VALIDATORS = 10;
@@ -134,16 +134,18 @@ export function TopValidatorsCard({ limit, showIcon }: TopValidatorsCardProps) {
 			{isSuccess && tableData && (
 				<>
 					<TableCard data={tableData.data} columns={tableData.columns} />
-					{limit && (
-						<div className="mt-3">
-							<Link to="/validators">
-								<div className="flex items-center gap-2">
-									More Validators
-									<ArrowRight12 fill="currentColor" />
-								</div>
-							</Link>
-						</div>
-					)}
+					<div className="mt-3 flex justify-between">
+						<Link to="/validators">
+							<div className="flex items-center gap-2">
+								View all
+								<ArrowRight12 fill="currentColor" className="h-3 w-3 -rotate-45" />
+							</div>
+						</Link>
+						<Text variant="body/medium" color="steel-dark">
+							{data ? data.activeValidators.length : '-'}
+							{` Total`}
+						</Text>
+					</div>
 				</>
 			)}
 		</>

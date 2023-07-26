@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{self, bail, Result};
-use clap::Parser;
+use clap::{ArgAction, Parser};
 use std::env;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -42,6 +42,10 @@ pub(crate) struct Args {
     /// location, including any suffixes)
     #[arg(short, long = "package")]
     pub packages: Vec<String>,
+
+    /// Don't make changes to the workspace.
+    #[arg(long="no-workspace-update", action=ArgAction::SetFalse)]
+    pub workspace_update: bool,
 
     /// Don't execute the cut, just display it.
     #[arg(long)]

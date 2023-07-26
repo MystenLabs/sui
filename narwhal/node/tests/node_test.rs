@@ -43,7 +43,7 @@ async fn simple_primary_worker_node_start_stop() {
     let execution_state = Arc::new(SimpleExecutionState::new(tx_confirmation));
 
     // WHEN
-    let primary_node = PrimaryNode::new(parameters.clone(), true, registry_service.clone());
+    let primary_node = PrimaryNode::new(parameters.clone(), registry_service.clone());
     primary_node
         .start(
             key_pair.copy(),
@@ -127,7 +127,7 @@ async fn primary_node_restart() {
     let execution_state = Arc::new(SimpleExecutionState::new(tx_confirmation));
 
     // AND
-    let primary_node = PrimaryNode::new(parameters.clone(), true, registry_service.clone());
+    let primary_node = PrimaryNode::new(parameters.clone(), registry_service.clone());
     primary_node
         .start(
             key_pair.copy(),

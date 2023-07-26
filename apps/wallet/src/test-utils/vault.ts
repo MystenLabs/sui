@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromExportedKeypair, mnemonicToSeedHex } from '@mysten/sui.js';
+import { fromExportedKeypair } from '@mysten/sui.js';
+import { mnemonicToSeedHex } from '@mysten/sui.js/cryptography';
 
 import { EPHEMERAL_PASSWORD_KEY, EPHEMERAL_VAULT_KEY } from '_src/background/keyring/VaultStorage';
 import { toEntropy } from '_src/shared/utils/bip39';
 
-import type { Keypair } from '@mysten/sui.js';
+import type { Keypair } from '@mysten/sui.js/cryptography';
 
 export const testMnemonic =
 	'loud eye weather change muffin brisk episode dance mirror smart image energy';

@@ -1,14 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type SuiClient } from '@mysten/sui.js/client';
 import {
-	type SerializedSignature,
-	type SuiAddress,
-	type JsonRpcProvider,
-	toB64,
 	IntentScope,
 	messageWithIntent,
-} from '@mysten/sui.js';
+	type SerializedSignature,
+} from '@mysten/sui.js/cryptography';
+import { toB64 } from '@mysten/sui.js/utils';
 import mitt from 'mitt';
 
 import { WalletSigner } from './WalletSigner';
@@ -40,19 +39,19 @@ export class QredoSigner extends WalletSigner {
 	#apiEnv: API_ENV;
 
 	constructor(
-		provider: JsonRpcProvider,
+		client: SuiClient,
 		account: SerializedQredoAccount,
 		qredoAPI: QredoAPI,
 		apiEnv: API_ENV,
 	) {
-		super(provider);
+		super(client);
 		this.#qredoAccount = account;
 		this.#qredoAPI = qredoAPI;
 		this.#apiEnv = apiEnv;
 		this.#network = API_ENV_TO_QREDO_NETWORK[apiEnv] || null;
 	}
 
-	async getAddress(): Promise<SuiAddress> {
+	async getAddress(): Promise<string> {
 		return this.#qredoAccount.address;
 	}
 
@@ -156,8 +155,8 @@ export class QredoSigner extends WalletSigner {
 		});
 	};
 
-	connect(provider: JsonRpcProvider): WalletSigner {
-		return new QredoSigner(provider, this.#qredoAccount, this.#qredoAPI, this.#apiEnv);
+	connect(client: SuiClient): WalletSigner {
+		return new QredoSigner(client, this.#qredoAccount, this.#qredoAPI, this.#apiEnv);
 	}
 
 	async #createQredoTransaction(intent: Uint8Array, broadcast: boolean, clientIdentifier?: string) {

@@ -1,0 +1,22 @@
+## Building Offline
+
+In the event that you want to build a transaction block offline (i.e. with no `client` required),
+you need to fully define all of your input values, and gas configuration (see the following
+example). For pure values, you can provide a `Uint8Array` which will be used directly in the
+transaction. For objects, you can use the `Inputs` helper to construct an object reference.
+
+```tsx
+import { Inputs } from '@mysten/sui.js';
+
+// For pure values:
+txb.pure(pureValueAsBytes);
+
+// For owned or immutable objects:
+txb.object(Inputs.ObjectRef({ digest, objectId, version }));
+
+// For shared objects:
+txb.object(Inputs.SharedObjectRef({ objectId, initialSharedVersion, mutable }));
+```
+
+You can then omit the `client` object when calling `build` on the transaction. If there is any
+required data that is missing, this will throw an error.

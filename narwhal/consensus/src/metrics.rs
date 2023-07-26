@@ -19,10 +19,6 @@ pub struct ConsensusMetrics {
     pub consensus_dag_rounds: IntGaugeVec,
     /// The last committed round from consensus
     pub last_committed_round: IntGaugeVec,
-    /// The number of elements from the vertices secondary index (external consensus)
-    pub external_consensus_dag_vertices_elements: IntGaugeVec,
-    /// The number of elements in the dag (external consensus)
-    pub external_consensus_dag_size: IntGaugeVec,
     /// The number of times the consensus state was restored from the consensus store
     /// following a node restart
     pub recovered_consensus_state: IntCounter,
@@ -68,18 +64,6 @@ impl ConsensusMetrics {
             last_committed_round: register_int_gauge_vec_with_registry!(
                 "last_committed_round",
                 "The most recent round that has been committed from consensus",
-                &[],
-                registry
-            ).unwrap(),
-            external_consensus_dag_vertices_elements: register_int_gauge_vec_with_registry!(
-                "external_consensus_dag_vertices_elements",
-                "The number of elements in the vertices secondary index in the inner dag structure (external consensus)",
-                &[],
-                registry
-            ).unwrap(),
-            external_consensus_dag_size: register_int_gauge_vec_with_registry!(
-                "external_consensus_dag_size",
-                "The number of elements in the inner dag (external consensus)",
                 &[],
                 registry
             ).unwrap(),

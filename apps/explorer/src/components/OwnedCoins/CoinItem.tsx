@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFormatCoin } from '@mysten/core';
-import { type CoinStruct } from '@mysten/sui.js';
+import { type CoinStruct } from '@mysten/sui.js/client';
+import { Text } from '@mysten/ui';
 
 import { ObjectLink } from '~/ui/InternalLink';
-import { Text } from '~/ui/Text';
 
 type CoinItemProps = {
 	coin: CoinStruct;
 };
 
-function CoinItem({ coin }: CoinItemProps): JSX.Element {
+export default function CoinItem({ coin }: CoinItemProps) {
 	const [formattedBalance, symbol] = useFormatCoin(coin.balance, coin.coinType);
 	return (
 		<div className="bg-grey-40 grid grid-flow-row auto-rows-fr grid-cols-4 items-center">
@@ -37,5 +37,3 @@ function CoinItem({ coin }: CoinItemProps): JSX.Element {
 		</div>
 	);
 }
-
-export default CoinItem;

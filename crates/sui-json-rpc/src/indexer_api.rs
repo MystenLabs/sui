@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::bail;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -15,7 +16,7 @@ use move_core_types::account_address::AccountAddress;
 use serde::Serialize;
 use sui_json::SuiJsonValue;
 use sui_types::error::SuiObjectResponseError;
-use tracing::{instrument, warn};
+use tracing::{debug, instrument, warn};
 
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
@@ -33,6 +34,7 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::digests::TransactionDigest;
 use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::event::EventID;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 use crate::api::{
     cap_page_limit, validate_limit, IndexerApiServer, JsonRpcMetrics, ReadApiServer,
@@ -54,24 +56,34 @@ const NAME_SERVICE_DEFAULT_REGISTRY: &str =
 const NAME_SERVICE_DEFAULT_REVERSE_REGISTRY: &str =
     "0x2fd099e17a292d2bc541df474f9fafa595653848cbabb2d7a4656ec786a1969f";
 
-pub fn spawn_subscription<S, T>(mut sink: SubscriptionSink, rx: S)
-where
+pub fn spawn_subscription<S, T>(
+    mut sink: SubscriptionSink,
+    rx: S,
+    permit: Option<OwnedSemaphorePermit>,
+) where
     S: Stream<Item = T> + Unpin + Send + 'static,
     T: Serialize,
 {
     spawn_monitored_task!(async move {
+        let _permit = permit;
         match sink.pipe_from_stream(rx).await {
             SubscriptionClosed::Success => {
+                debug!("Subscription completed.");
                 sink.close(SubscriptionClosed::Success);
             }
-            SubscriptionClosed::RemotePeerAborted => (),
+            SubscriptionClosed::RemotePeerAborted => {
+                debug!("Subscription aborted by remote peer.");
+                sink.close(SubscriptionClosed::RemotePeerAborted);
+            }
             SubscriptionClosed::Failed(err) => {
-                warn!(error = ?err, "Event subscription closed.");
+                debug!("Subscription failed: {err:?}");
                 sink.close(err);
             }
         };
     });
 }
+const DEFAULT_MAX_SUBSCRIPTIONS: usize = 100;
+
 pub struct IndexerApi<R> {
     state: Arc<AuthorityState>,
     read_api: R,
@@ -79,6 +91,7 @@ pub struct IndexerApi<R> {
     ns_registry_id: Option<ObjectID>,
     ns_reverse_registry_id: Option<ObjectID>,
     pub metrics: Arc<JsonRpcMetrics>,
+    subscription_semaphore: Arc<Semaphore>,
 }
 
 impl<R: ReadApiServer> IndexerApi<R> {
@@ -89,7 +102,9 @@ impl<R: ReadApiServer> IndexerApi<R> {
         ns_registry_id: Option<ObjectID>,
         ns_reverse_registry_id: Option<ObjectID>,
         metrics: Arc<JsonRpcMetrics>,
+        max_subscriptions: Option<usize>,
     ) -> Self {
+        let max_subscriptions = max_subscriptions.unwrap_or(DEFAULT_MAX_SUBSCRIPTIONS);
         Self {
             state,
             read_api,
@@ -97,6 +112,28 @@ impl<R: ReadApiServer> IndexerApi<R> {
             ns_package_addr,
             ns_reverse_registry_id,
             metrics,
+            subscription_semaphore: Arc::new(Semaphore::new(max_subscriptions)),
+        }
+    }
+
+    fn extract_values_from_dynamic_field_name(
+        &self,
+        name: DynamicFieldName,
+    ) -> Result<(TypeTag, Vec<u8>), SuiRpcInputError> {
+        let DynamicFieldName {
+            type_: name_type,
+            value,
+        } = name;
+        let layout = TypeLayoutBuilder::build_with_types(&name_type, &self.state.database)?;
+        let sui_json_value = SuiJsonValue::new(value)?;
+        let name_bcs_value = sui_json_value.to_bcs_bytes(&layout)?;
+        Ok((name_type, name_bcs_value))
+    }
+
+    fn acquire_subscribe_permit(&self) -> anyhow::Result<OwnedSemaphorePermit> {
+        match self.subscription_semaphore.clone().try_acquire_owned() {
+            Ok(p) => Ok(p),
+            Err(_) => bail!("Resources exhausted"),
         }
     }
 }
@@ -112,7 +149,8 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         limit: Option<usize>,
     ) -> RpcResult<ObjectsPage> {
         with_tracing!(async move {
-            let limit = validate_limit(limit, *QUERY_MAX_RESULT_LIMIT)?;
+            let limit =
+                validate_limit(limit, *QUERY_MAX_RESULT_LIMIT).map_err(SuiRpcInputError::from)?;
             self.metrics.get_owned_objects_limit.report(limit as u64);
             let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
             let options = options.unwrap_or_default();
@@ -243,9 +281,11 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
 
     #[instrument(skip(self))]
     fn subscribe_event(&self, sink: SubscriptionSink, filter: EventFilter) -> SubscriptionResult {
+        let permit = self.acquire_subscribe_permit()?;
         spawn_subscription(
             sink,
             self.state.subscription_handler.subscribe_events(filter),
+            Some(permit),
         );
         Ok(())
     }
@@ -255,11 +295,13 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         sink: SubscriptionSink,
         filter: TransactionFilter,
     ) -> SubscriptionResult {
+        let permit = self.acquire_subscribe_permit()?;
         spawn_subscription(
             sink,
             self.state
                 .subscription_handler
                 .subscribe_transactions(filter),
+            Some(permit),
         );
         Ok(())
     }
@@ -303,13 +345,8 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         name: DynamicFieldName,
     ) -> RpcResult<SuiObjectResponse> {
         with_tracing!(async move {
-            let DynamicFieldName {
-                type_: name_type,
-                value,
-            } = name.clone();
-            let layout = TypeLayoutBuilder::build_with_types(&name_type, &self.state.database)?;
-            let sui_json_value = SuiJsonValue::new(value)?;
-            let name_bcs_value = sui_json_value.to_bcs_bytes(&layout)?;
+            let (name_type, name_bcs_value) = self.extract_values_from_dynamic_field_name(name)?;
+
             let id = self
                 .state
                 .get_dynamic_field_object_id(parent_object_id, name_type, &name_bcs_value)
@@ -319,6 +356,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 self.read_api
                     .get_object(id, Some(SuiObjectDataOptions::full_content()))
                     .await
+                    .map_err(Error::from)
             } else {
                 Ok(SuiObjectResponse::new_with_error(
                     SuiObjectResponseError::DynamicFieldNotFound { parent_object_id },
@@ -357,19 +395,19 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 ))
             })?;
             let domain_bcs_value = bcs::to_bytes(&domain).map_err(|e| {
-                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!(
+                SuiRpcInputError::GenericInvalid(format!(
                     "Unable to serialize name: {:?} with error: {:?}",
                     domain, e
-                )))
+                ))
             })?;
             let record_object_id_option = self
                 .state
                 .get_dynamic_field_object_id(registry_id, name_type_tag, &domain_bcs_value)
                 .map_err(|e| {
-                    Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!(
+                    SuiRpcInputError::GenericInvalid(format!(
                         "Unable to lookup name in name service registry with error: {:?}",
                         e
-                    )))
+                    ))
                 })?;
             if let Some(record_object_id) = record_object_id_option {
                 let record_object_read =
@@ -440,10 +478,10 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
 
             let name_type_tag = TypeTag::Address;
             let addr_bcs_value = bcs::to_bytes(&address).map_err(|e| {
-                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!(
+                SuiRpcInputError::GenericInvalid(format!(
                     "Unable to serialize address: {:?} with error: {:?}",
                     address, e
-                )))
+                ))
             })?;
 
             let addr_object_id_opt = self

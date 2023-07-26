@@ -395,7 +395,7 @@ fn add_drop_ability_tip(context: &Context, diag: &mut Diagnostic, st: SingleType
             t
         ),
     };
-    crate::typing::core::ability_not_satisified_tips(
+    crate::typing::core::ability_not_satisfied_tips(
         &crate::typing::core::Subst::empty(),
         diag,
         Ability_::Drop,

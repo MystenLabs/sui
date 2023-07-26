@@ -41,7 +41,7 @@ use sui_types::crypto::{
 use sui_types::crypto::{DefaultHash, PublicKey, Signature};
 use sui_types::multisig::{MultiSig, MultiSigPublicKey, ThresholdUnit, WeightUnit};
 use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
-use sui_types::signature::{AuthenticatorTrait, AuxVerifyData, GenericSignature};
+use sui_types::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
 use sui_types::transaction::TransactionData;
 use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
 use sui_types::zk_login_util::AddressParams;

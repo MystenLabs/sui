@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use sui_config::node::{
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
     AuthorityKeyPairWithPath, AuthorityStorePruningConfig, DBCheckpointConfig,
-    ExpensiveSafetyCheckConfig, Genesis, KeyPairWithPath, StateArchiveConfig,
+    ExpensiveSafetyCheckConfig, Genesis, KeyPairWithPath, StateArchiveConfig, StateSnapshotConfig,
     DEFAULT_GRPC_CONCURRENCY_LIMIT,
 };
 use sui_config::p2p::{P2pConfig, SeedPeer};
@@ -152,6 +152,8 @@ impl ValidatorConfigBuilder {
             state_debug_dump_config: Default::default(),
             state_archive_write_config: StateArchiveConfig::default(),
             state_archive_read_config: vec![],
+            state_snapshot_write_config: StateSnapshotConfig::default(),
+            indexer_max_subscriptions: Default::default(),
         }
     }
 
@@ -380,6 +382,8 @@ impl FullnodeConfigBuilder {
             state_debug_dump_config: Default::default(),
             state_archive_write_config: StateArchiveConfig::default(),
             state_archive_read_config: vec![],
+            state_snapshot_write_config: StateSnapshotConfig::default(),
+            indexer_max_subscriptions: Default::default(),
         }
     }
 }

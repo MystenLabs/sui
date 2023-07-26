@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use backoff::future::retry;
 use bytes::Bytes;
 use futures::StreamExt;
 use object_store::path::Path;
-use object_store::DynObjectStore;
+use object_store::{DynObjectStore, Error};
+use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -161,6 +162,70 @@ pub fn path_to_filesystem(local_dir_path: PathBuf, location: &Path) -> anyhow::R
         .to_file_path()
         .map_err(|_| anyhow!("Failed to convert url to path: {}", url.as_str()))?;
     Ok(new_path)
+}
+
+/// This function will find all child directories in the input store which are of the form "epoch_num"
+/// and return a map of epoch number to the directory path
+pub async fn find_all_dirs_with_epoch_prefix(
+    store: &Arc<DynObjectStore>,
+) -> anyhow::Result<BTreeMap<u64, Path>> {
+    let mut dirs = BTreeMap::new();
+    let entries = store.list_with_delimiter(None).await?;
+    for entry in entries.common_prefixes {
+        if let Some(filename) = entry.filename() {
+            if !filename.starts_with("epoch_") {
+                continue;
+            }
+            let epoch = filename
+                .split_once('_')
+                .context("Failed to split dir name")
+                .map(|(_, epoch)| epoch.parse::<u64>())??;
+            dirs.insert(epoch, entry);
+        }
+    }
+    Ok(dirs)
+}
+
+/// This function will find missing epoch directories in the input store and return a list of such
+/// epoch numbers. If the highest epoch directory in the store is `epoch_N` then it is expected that the
+/// store will have all epoch directories from `epoch_0` to `epoch_N`. Additionally, any epoch directory
+/// should have the passed in marker file present or else that epoch number is already considered as
+/// missing
+pub async fn find_missing_epochs_dirs(
+    store: &Arc<DynObjectStore>,
+    success_marker: &str,
+) -> anyhow::Result<Vec<u64>> {
+    let remote_checkpoints_by_epoch = find_all_dirs_with_epoch_prefix(store).await?;
+    let mut dirs: Vec<_> = remote_checkpoints_by_epoch.iter().collect();
+    dirs.sort_by_key(|(epoch_num, _path)| *epoch_num);
+    let mut candidate_epoch: u64 = 0;
+    let mut missing_epochs = Vec::new();
+    for (epoch_num, path) in dirs {
+        while candidate_epoch < *epoch_num {
+            // The whole epoch directory is missing
+            missing_epochs.push(candidate_epoch);
+            candidate_epoch += 1;
+            continue;
+        }
+        let success_marker = path.child(success_marker);
+        let get_result = store.get(&success_marker).await;
+        match get_result {
+            Err(Error::NotFound { .. }) => {
+                error!("No success marker found in db checkpoint for epoch: {epoch_num}");
+                missing_epochs.push(*epoch_num);
+            }
+            Err(_) => {
+                // Probably a transient error
+                warn!("Failed while trying to read success marker in db checkpoint for epoch: {epoch_num}");
+            }
+            Ok(_) => {
+                // Nothing to do
+            }
+        }
+        candidate_epoch += 1
+    }
+    missing_epochs.push(candidate_epoch);
+    Ok(missing_epochs)
 }
 
 #[cfg(test)]
