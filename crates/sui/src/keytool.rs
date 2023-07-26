@@ -968,8 +968,8 @@ fn convert_private_key_to_base64(value: String) -> Result<String, anyhow::Error>
 impl Display for CommandOutput {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            // Sign needs to be manually built because we need to wrap the very long rawTxData string and rawIntentMsg strings into multiple rows due to their lengths, which we cannot do with a JsonTable
             CommandOutput::RawString(data) => write!(formatter, "{}", data),
+            // Sign needs to be manually built because we need to wrap the very long rawTxData string and rawIntentMsg strings into multiple rows due to their lengths, which we cannot do with a JsonTable
             CommandOutput::Sign(data) => {
                 let intent_table = json_to_table(&json!(&data.intent))
                     .with(tabled::settings::Style::rounded().horizontals([]))
