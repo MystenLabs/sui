@@ -8,13 +8,10 @@ associated with an Address.
 ```typescript
 import { ED25519KeyPair } from '@mysten/sui.js/keypairs/ed25519';
 
-// create a random keypair
+// create a random KeyPair
 const keyPair = new ED25519KeyPair();
-// or create a keypair from an existing secret and public key
-const keyPair = new ED25519KeyPair({
-	publicKey: Uint8Array;
-	secretKey: Uint8Array;
-});
+// or create a KeyPair from an existing secret key (Uint8Array)
+const keyPair = ED25519KeyPair.fromSecretKey(secretKey);
 
 const publicKey = keyPair.getPublicKey();
 const message = new TextEncoder().encode('hello world');
@@ -98,4 +95,15 @@ const publicKey = await verifyTransactionBlock(message, signature);
 if (publicKey.getAddress() !== keyPair.getPublicKey().getAddress()) {
 	throw new Error('Signature was valid, but was signed by a different keyPair');
 }
+```
+
+## Deriving a KeyPair from a Mnemonic
+
+The Sui SDK supports deriving a KeyPair from a mnemonic phrase. This can be useful when building
+wallets or other tools that allow a user to import their private keys.
+
+```typescript
+const exampleMnemonic = 'result crisp session latin ...';
+
+const keyPair = ED25519KeyPair.deriveKeypair(exampleMnemonic);
 ```

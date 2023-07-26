@@ -2,6 +2,65 @@ import { Callout } from 'nextra/components';
 
 # MultiSig
 
-<Callout type="warning" emoji="⚠️">
-	Coming soon!
-</Callout>
+The typescript SDK supports
+[Sui Multi-Signature](https://docs.sui.io/learn/cryptography/sui-multisig) signing via the
+`MultiSigPublicKey` class.
+
+This class implements the same interface as the `PublicKey` classes used by [KeyPairs](./keypairs),
+and can be used to verify signatures for `PersonalMessages` and `TransactionBlocks` using the same
+methods.
+
+## Creating a MultiSigPublicKey
+
+You can create a `MultiSigPublicKey` by providing pairs of `PublicKey` and `weight` values, along
+with a threshold.
+
+```typescript
+import { ED25519KeyPair } from '@mysten/sui.js/keypairs/ed25519';
+
+const kp1 = new ED25519KeyPair();
+const kp2 = new ED25519KeyPair();
+const kp3 = new ED25519KeyPair();
+
+const multiSigPublicKey = MultiSigPublicKey.fromPublicKeys({
+	threshold: 2,
+	publicKeys: [
+		{
+			publicKey: kp1.getPublicKey(),
+			weight: 1,
+		},
+		{
+			publicKey: kp2.getPublicKey(),
+			weight: 1,
+		},
+		{
+			publicKey: kp3.getPublicKey(),
+			weight: 2,
+		},
+	],
+});
+
+const multisigAddress = multiSigPublicKey.getAddress();
+```
+
+The resulting MultiSigPublicKey will allow you to verify signatures with a combined weight of at
+least 2. A signature signed with only kp1 or kp2 would not be considered valid, but a signature
+signed with kp1 and kp2, or kp3 by itself would be valid.
+
+## Combining signatures with a MultiSigPublicKey
+
+To sign a message or transaction for a multig address, you will need to collect signatures from the
+individual keypairs, and then combine them into a signature using the `MultiSigPublicKey` class for
+the address.
+
+```typescript
+// This example uses the same keypairs and multiSigPublicKey from the previous example
+const message = new TextEncoder().encode('hello world');
+
+const signature1 = (await kp1.signPersonalMessage(message)).signature;
+const signature2 = (await kp2.signPersonalMessage(message)).signature;
+
+const combinedSignature = multiSigPublicKey.combinePartialSignatures([signature1, signature2]);
+
+const isValid = await multiSigPublicKey.verifyPersonalMessage(message, combinedSignature);
+```
