@@ -128,6 +128,15 @@ export default function MultiSigAddressGenerator() {
 
 			<form className="flex flex-col gap-4" onSubmit={handleSubmit(onSubmit)}>
 				<p>The following demo allow you to create Sui MultiSig addresses.</p>
+				<code>
+					Sui Pubkeys for playing with
+					<p>
+						ABr818VXt+6PLPRoA7QnsHBfRpKJdWZPjt7ppiTl6Fkq
+					</p>
+					<p>
+						ANRdB4M6Hj73R+gRM4N6zUPNidLuatB9uccOzHBc/0bP
+					</p>
+				</code>
 				<ul className="grid w-full gap-1.5">
 					{fields.map((item, index) => {
 						return (
