@@ -18,7 +18,7 @@ const bannerStyles = cva(
 				error: 'bg-issue-light text-issue-dark',
 				message: 'bg-sui-light text-hero',
 				neutralGrey: 'bg-steel text-white',
-				neutralWhite: 'bg-white text-steel-darker',
+				neutralWhite: 'bg-white/80 text-steel-darker',
 			},
 			align: {
 				left: 'justify-start',

@@ -4,15 +4,15 @@
 import clsx from 'clsx';
 import { lazy, Suspense } from 'react';
 
-import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
-import { TopValidatorsCard } from '../../components/top-validators-card/TopValidatorsCard';
 import { AccountsCardGraph } from '~/components/AccountCardGraph';
 import { Activity } from '~/components/Activity';
 import { CurrentEpoch, OnTheNetwork } from '~/components/HomeMetrics';
 import { PageLayout } from '~/components/Layout/PageLayout';
 import { SuiTokenCard } from '~/components/SuiTokenCard';
 import { TransactionsCardGraph } from '~/components/TransactionsCardGraph';
+import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import { TopPackagesCard } from '~/components/top-packages/TopPackagesCard';
+import { TopValidatorsCard } from '~/components/top-validators-card/TopValidatorsCard';
 import { useNetwork } from '~/context';
 import { Card } from '~/ui/Card';
 import { TabHeader } from '~/ui/Tabs';
@@ -27,30 +27,33 @@ function Home() {
 	const isSuiTokenCardEnabled = network === Network.MAINNET;
 	return (
 		<PageLayout
-			gradientContent={
-				<div
-					data-testid="home-page"
-					className={clsx('home-page-grid-container-top', isSuiTokenCardEnabled && 'with-token')}
-				>
-					<div style={{ gridArea: 'network' }} className="overflow-hidden">
-						<OnTheNetwork />
-					</div>
-					<div style={{ gridArea: 'epoch' }}>
-						<CurrentEpoch />
-					</div>
-					{isSuiTokenCardEnabled ? (
-						<div style={{ gridArea: 'token' }}>
-							<SuiTokenCard />
+			gradient={{
+				content: (
+					<div
+						data-testid="home-page"
+						className={clsx('home-page-grid-container-top', isSuiTokenCardEnabled && 'with-token')}
+					>
+						<div style={{ gridArea: 'network' }} className="overflow-hidden">
+							<OnTheNetwork />
 						</div>
-					) : null}
-					<div style={{ gridArea: 'transactions' }}>
-						<TransactionsCardGraph />
+						<div style={{ gridArea: 'epoch' }}>
+							<CurrentEpoch />
+						</div>
+						{isSuiTokenCardEnabled ? (
+							<div style={{ gridArea: 'token' }}>
+								<SuiTokenCard />
+							</div>
+						) : null}
+						<div style={{ gridArea: 'transactions' }}>
+							<TransactionsCardGraph />
+						</div>
+						<div style={{ gridArea: 'accounts' }}>
+							<AccountsCardGraph />
+						</div>
 					</div>
-					<div style={{ gridArea: 'accounts' }}>
-						<AccountsCardGraph />
-					</div>
-				</div>
-			}
+				),
+				size: 'lg',
+			}}
 			content={
 				<div className="home-page-grid-container-bottom">
 					<div style={{ gridArea: 'activity' }}>
