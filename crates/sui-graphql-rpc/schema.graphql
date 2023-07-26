@@ -18,7 +18,7 @@
 # DONE - Events
 # DONE - ProtocolConfig
 # DONE - Chain Identifier
-# TODO Coin
+# DONE Coin
 # TODO Extended
 # TODO Governance
 # TODO Indexer
@@ -51,6 +51,8 @@ type Query {
 
   transactionBlock(digest: Digest!): TransactionBlock
   transactionBlocks(): TransactionBlockConnection
+
+  coinMetadata(coinType: TypeRepr!): CoinMetadata
 }
 
 # String containing 32B hex-encoded address
@@ -65,10 +67,17 @@ scalar U64
 # String representation of a 128 bit signed integer
 scalar I128
 
+# String representation of a 128 bit unsigned integer
+scalar U128
+
 # String containing Base58-encoded binary data.
 scalar Bytes
 
 scalar JSON
+
+# Fully qualified type, with a flat representation:
+# <package>::<module>::<name>.
+scalar TypeRepr
 
 # Filter either by the digest, or the sequence number, or neither, to
 # get the latest checkpoint.
@@ -79,6 +88,11 @@ input CheckpointFilter {
 
 interface Owner {
   id: SuiAddress!
+
+  balance(owner: SuiAddress!, type: TypeRepr!): Balance
+  balances(owner: SuiAddress!): BalanceConnection
+
+  coins(owner: SuiAddress!, type: TypeRepr): CoinConnection
 }
 
 # Returned by Object.owner, where we can't disambiguate between
@@ -107,6 +121,7 @@ type Object implements Owner {
   previousTransactionBlock: TransactionBlock
   storageRebate: U64
 
+  asCoin: Coin
   asMoveObject: MoveObject
   asMovePackage: MovePackage
 
@@ -343,6 +358,28 @@ type Event {
   bcs: Bytes
 }
 
+type Balance {
+  coinType: MoveType
+  coinObjectCount: U64
+  totalBalance: U128
+}
+
+type Coin {
+  balance: U64
+  asMoveObject: MoveObject
+}
+
+type CoinMetadata {
+  decimals: Int
+  name: String
+  symbol: String
+  description: String
+  iconURL: String
+  supply: U64
+
+  asMoveObject: MoveObject
+}
+
 type MoveObject {
   contents: MoveValue
   hasPublicTransfer: Boolean
@@ -389,7 +426,7 @@ type MoveField {
 
 type MoveType {
   # Flattened representation of the type and type parameters
-  repr: String!
+  repr: TypeRepr!
 
   # Fully qualified type name.  Primitive types have no `package` or
   # `module`.
@@ -402,7 +439,9 @@ type MoveType {
 
 # Connections
 
+type BalanceConnection {}
 type CheckpointConnection {}
+type CoinConnection {}
 type MovePackageModuleConnection {}
 type TransactionBlockConnection {}
 type TransactionEventConnection {}
