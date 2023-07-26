@@ -81,6 +81,13 @@ jobs:
         run: |
           cargo build --release
 
+      - name: cargo build (release) for aarch64-apple-darwin platform
+        if: ${{ env.sui_tag != 'main' }}
+        shell: bash
+        run: |
+          rustup target add aarch64-apple-darwin
+          cargo build --target aarch64-apple-darwin --release      
+
       - name: Rename binaries for Ubuntu
         if: ${{ env.sui_tag != 'main' && matrix.os == 'macos-latest' }}
         shell: bash
