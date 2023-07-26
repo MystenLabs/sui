@@ -440,7 +440,7 @@ Protected action: place an item into the Kiosk. Can be performed by an
 authorized extension. The extension must have the <code>place</code> permission.
 
 To prevent non-tradable items from being placed into <code>Kiosk</code> the method
-requires a <code>TransferPolicy</code> for the placed type.
+requires a <code>TransferPolicy</code> for the placed type to exist.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_place">place</a>&lt;Ext: drop, T: store, key&gt;(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, item: T, _policy: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;)

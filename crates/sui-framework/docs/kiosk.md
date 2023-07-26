@@ -49,7 +49,7 @@ not be taken or modified. However, an immutable borrow via <code><a href="borrow
 still available. The <code>delist</code> function returns the asset to the previous
 state.
 
-- <code>listed exclusively</code> - An item is listed via the <code>list_with_purchase_cap</code>
+- <code>listed_exclusively</code> - An item is listed via the <code>list_with_purchase_cap</code>
 function (and a <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> is created). While listed this way, an item
 can not be <code>delist</code>-ed unless a <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> is returned. All actions
 available at this item state require a <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code>:

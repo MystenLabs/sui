@@ -75,7 +75,7 @@ module sui::kiosk_extension {
         /// - `11` - allows to place items and lock them.
         /// - `01` - allows to place items, but not lock them.
         /// - `00` - no permissions.
-        permissions: u32,
+        permissions: u128,
         /// Whether the extension can call protected actions. By default, all
         /// extensions are enabled (on `add` call), however the Kiosk
         /// owner can disable them at any time.
@@ -98,7 +98,7 @@ module sui::kiosk_extension {
         _ext: Ext,
         self: &mut Kiosk,
         cap: &KioskOwnerCap,
-        permissions: u32,
+        permissions: u128,
         ctx: &mut TxContext
     ) {
         assert!(kiosk::has_access(self, cap), ENotOwner);
