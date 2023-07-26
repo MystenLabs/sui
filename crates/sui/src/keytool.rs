@@ -373,6 +373,7 @@ pub enum CommandOutput {
     MultiSigCombinePartialSig(MultiSigCombinePartialSig),
     MultiSigCombinePartialSigLegacy(MultiSigCombinePartialSigLegacyOutput),
     PrivateKeyBase64(PrivateKeyBase64),
+    RawString(String),
     SerializeZkLoginAuthenticator(SerializedSig),
     Show(Key),
     Sign(SignData),
@@ -387,30 +388,30 @@ impl KeyToolCommand {
                 let bytes =
                     Base64::decode(&base64).map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
                 let hex = Hex::from_bytes(&bytes);
-                CommandOutput::Base64ToHex(hex)
+                CommandOutput::RawString(format!("{:?}", hex))
             }
 
             KeyToolCommand::Base64PubKeyToAddress { base64_key } => {
                 let pk = PublicKey::decode_base64(&base64_key)
                     .map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
                 let address = SuiAddress::from(&pk);
-                CommandOutput::Base64PubKeyToAddress(address)
+                CommandOutput::RawString(address.to_string())
             }
 
             KeyToolCommand::Base64ToBytes { base64 } => {
                 let bytes =
                     Base64::decode(&base64).map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
-                CommandOutput::Base64ToBytes(bytes)
+                CommandOutput::RawString(format!("{:?}", bytes))
             }
 
             KeyToolCommand::BytesToBase64 { bytes } => {
                 let base64 = Base64::from_bytes(&bytes);
-                CommandOutput::BytesToBase64(base64)
+                CommandOutput::RawString(format!("{:?}", base64))
             }
 
             KeyToolCommand::BytesToHex { bytes } => {
                 let hex = Hex::from_bytes(&bytes);
-                CommandOutput::BytesToHex(hex)
+                CommandOutput::RawString(format!("{:?}", hex))
             }
 
             KeyToolCommand::Convert { value } => {
@@ -968,6 +969,7 @@ impl Display for CommandOutput {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             // Sign needs to be manually built because we need to wrap the very long rawTxData string and rawIntentMsg strings into multiple rows due to their lengths, which we cannot do with a JsonTable
+            CommandOutput::RawString(data) => write!(formatter, "{}", data),
             CommandOutput::Sign(data) => {
                 let intent_table = json_to_table(&json!(&data.intent))
                     .with(tabled::settings::Style::rounded().horizontals([]))
