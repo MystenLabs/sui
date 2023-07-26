@@ -284,6 +284,8 @@ impl GenesisConfig {
     pub const BENCHMARKS_RNG_SEED: u64 = 0;
     /// Port offset for benchmarks' genesis configs.
     pub const BENCHMARKS_PORT_OFFSET: u16 = 2000;
+    /// The gas amount for each genesis gas object.
+    const BENCHMARK_GAS_AMOUNT: u64 = 750_000_000_000_000_000;
 
     pub fn for_local_testing() -> Self {
         Self::custom_genesis(
@@ -334,7 +336,7 @@ impl GenesisConfig {
     /// parameters are predictable to facilitate benchmarks orchestration. Only the main ip addresses of
     /// the validators are specified (as those are often dictated by the cloud provider hosing the testbed).
     pub fn new_for_benchmarks(ips: &[String]) -> Self {
-        // Set the validator's configs.
+        // Set the validator's configs. They should be the same across multiple runs to ensure reproducibility.
         let mut rng = StdRng::seed_from_u64(Self::BENCHMARKS_RNG_SEED);
         let validator_config_info: Vec<_> = ips
             .iter()
@@ -358,7 +360,7 @@ impl GenesisConfig {
                     address: Some(gas_address),
                     // Generate one genesis gas object per validator (this seems a good rule of thumb to produce
                     // enough gas objects for most types of benchmarks).
-                    gas_amounts: vec![DEFAULT_GAS_AMOUNT; validator_config_info.len()],
+                    gas_amounts: vec![Self::BENCHMARK_GAS_AMOUNT; validator_config_info.len()],
                 }
             })
             .collect();
