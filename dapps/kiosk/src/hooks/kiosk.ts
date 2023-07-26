@@ -9,7 +9,7 @@ import {
 	TANSTACK_OWNED_KIOSK_KEY,
 } from '../utils/constants';
 import { useRpc } from '../context/RpcClientContext';
-import { ObjectId, SuiAddress, SuiObjectResponse } from '@mysten/sui.js';
+import { SuiObjectResponse } from '@mysten/sui.js/client';
 import {
 	Kiosk,
 	KioskData,
@@ -29,7 +29,7 @@ export type KioskFnType = (item: OwnedObjectType, price?: string) => Promise<voi
  * A helper to get user's kiosks.
  * If the user doesn't have a kiosk, the return is an object with null values.
  */
-export function useOwnedKiosk(address: SuiAddress | undefined) {
+export function useOwnedKiosk(address: string | undefined) {
 	const provider = useRpc();
 
 	return useQuery({
@@ -38,8 +38,8 @@ export function useOwnedKiosk(address: SuiAddress | undefined) {
 		retry: false,
 		queryFn: async (): Promise<{
 			caps: KioskOwnerCap[];
-			kioskId: SuiAddress | undefined;
-			kioskCap: SuiAddress | undefined;
+			kioskId: string | undefined;
+			kioskCap: string | undefined;
 		} | null> => {
 			if (!address) return null;
 
@@ -94,7 +94,7 @@ export function useKiosk(kioskId: string | undefined | null) {
 			kioskData,
 		}): {
 			items: OwnedObjectType[];
-			listings: Record<ObjectId, KioskListing>;
+			listings: Record<string, KioskListing>;
 		} => {
 			if (!kioskData) return { items: [], listings: {} };
 			// parse the displays for FE.

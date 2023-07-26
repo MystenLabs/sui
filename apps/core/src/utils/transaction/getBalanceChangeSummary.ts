@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import {
-	ObjectOwner,
+	type ObjectOwner,
 	type DryRunTransactionBlockResponse,
 	type SuiTransactionBlockResponse,
-} from '@mysten/sui.js';
+} from '@mysten/sui.js/client';
 import { normalizeSuiObjectId, parseStructTag } from '@mysten/sui.js/utils';
 
 export type BalanceChange = {

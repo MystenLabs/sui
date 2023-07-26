@@ -4,7 +4,7 @@
 import { toB64 } from '@mysten/bcs';
 import { IntentScope, messageWithIntent } from './intent.js';
 import { blake2b } from '@noble/hashes/blake2b';
-import { bcs } from '../types/sui-bcs.js';
+import { bcs } from '../bcs/index.js';
 import type { SerializedSignature } from './index.js';
 import { SUI_ADDRESS_LENGTH, normalizeSuiAddress } from '../utils/sui-types.js';
 import { bytesToHex } from '@noble/hashes/utils';

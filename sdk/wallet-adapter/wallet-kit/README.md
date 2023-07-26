@@ -33,7 +33,7 @@ You can then add a **Connect Wallet** button to your page:
 
 ```tsx
 import { ConnectButton, useWalletKit } from '@mysten/wallet-kit';
-import { formatAddress } from '@mysten/sui.js';
+import { formatAddress } from '@mysten/sui.js/utils';
 
 function ConnectToWallet() {
 	const { currentAccount } = useWalletKit();

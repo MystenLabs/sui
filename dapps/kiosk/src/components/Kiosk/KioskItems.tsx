@@ -11,7 +11,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useKiosk, useOwnedKiosk } from '../../hooks/kiosk';
 import { KioskNotFound } from './KioskNotFound';
 import { useWalletKit } from '@mysten/wallet-kit';
-import { normalizeSuiAddress } from '@mysten/sui.js';
+import { normalizeSuiAddress } from '@mysten/sui.js/utils';
 
 export function KioskItems({ kioskId }: { kioskId?: string }) {
 	const location = useLocation();

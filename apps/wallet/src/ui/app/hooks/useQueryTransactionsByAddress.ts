@@ -3,7 +3,7 @@
 
 import { useFeatureValue } from '@growthbook/growthbook-react';
 import { useRpcClient } from '@mysten/core';
-import { type SuiTransactionBlockResponse } from '@mysten/sui.js';
+import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 import { useQuery } from '@tanstack/react-query';
 
 import { FEATURES } from '_src/shared/experimentation/features';

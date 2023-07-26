@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect } from 'vitest';
-import { fromB64, toB64 } from '../../src';
+import { fromB64, toB64 } from '../../src/utils';
 import { IntentScope, messageWithIntent, parseSerializedSignature } from '../../src/cryptography';
 import { Ed25519Keypair } from '../../src/keypairs/ed25519';
 import { Secp256k1Keypair } from '../../src/keypairs/secp256k1';

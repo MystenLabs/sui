@@ -3,7 +3,7 @@
 
 import { SharedObjectRef, SuiObjectRef, SuiObjectResponse, getObjectFields } from '@mysten/sui.js';
 import { TransactionBlock, TransactionArgument } from '@mysten/sui.js/transactions';
-import { type DynamicFieldInfo } from '@mysten/sui.js';
+import { type DynamicFieldInfo } from '@mysten/sui.js/client';
 import { bcs } from './bcs';
 import { KIOSK_TYPE, Kiosk, KioskData, KioskListing, RulesEnvironmentParam } from './types';
 import { MAINNET_RULES_PACKAGE_ADDRESS, TESTNET_RULES_PACKAGE_ADDRESS } from './constants';

@@ -13,14 +13,13 @@ import {
 	useTakeMutation,
 } from '../../mutations/kiosk';
 import { toast } from 'react-hot-toast';
-import { ObjectId } from '@mysten/sui.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { TANSTACK_OWNED_KIOSK_KEY } from '../../utils/constants';
 
 export type KioskItemProps = {
 	isGuest?: boolean;
 	listing?: KioskListing | null;
-	kioskId: ObjectId;
+	kioskId: string;
 	hasKiosk: boolean;
 	onSuccess: () => void; // parent component onSuccess handler.
 	listFn: KioskFnType;

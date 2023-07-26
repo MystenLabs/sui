@@ -8,13 +8,12 @@ import { ListPrice } from '../Modals/ListPrice';
 import { Loading } from '../Base/Loading';
 import { useOwnedObjects } from '../../hooks/useOwnedObjects';
 import { toast } from 'react-hot-toast';
-import { ObjectId } from '@mysten/sui.js';
 
 export type OwnedObjectType = KioskItem & {
 	display: Record<string, string>;
 };
 
-export function OwnedObjects({ address, kioskId }: { address: string; kioskId: ObjectId }) {
+export function OwnedObjects({ address, kioskId }: { address: string; kioskId: string }) {
 	const [modalItem, setModalItem] = useState<OwnedObjectType | null>(null);
 
 	const {

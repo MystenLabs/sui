@@ -3,7 +3,8 @@
 
 import { useFormatCoin, useGetCoinBalance, useResolveSuiNSName } from '@mysten/core';
 import { CheckFill16 } from '@mysten/icons';
-import { formatAddress, SUI_TYPE_ARG } from '@mysten/sui.js';
+import { SUI_TYPE_ARG } from '@mysten/sui.js';
+import { formatAddress } from '@mysten/sui.js/utils';
 import cl from 'classnames';
 
 import { useCoinsReFetchingConfig } from '../../hooks';

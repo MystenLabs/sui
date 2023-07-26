@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { formatAmount, formatDate } from '@mysten/core';
-import { type AllEpochsAddressMetrics } from '@mysten/sui.js';
+import { type AllEpochsAddressMetrics } from '@mysten/sui.js/client';
 import { Heading, LoadingIndicator, Text } from '@mysten/ui';
 import { ParentSize } from '@visx/responsive';
 import clsx from 'clsx';

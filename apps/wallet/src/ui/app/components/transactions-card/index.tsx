@@ -19,11 +19,7 @@ import { Text } from '_app/shared/text';
 import { useGetTxnRecipientAddress } from '_hooks';
 import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
 
-import type {
-	// SuiEvent,
-	SuiTransactionBlockResponse,
-	// TransactionEvents,
-} from '@mysten/sui.js';
+import type { SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 
 export function TransactionCard({
 	txn,

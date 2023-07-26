@@ -191,7 +191,7 @@ async function addIgnoredWorkspaces(paths: string[]) {
 	for (const path of paths) {
 		if (!lines.find((line) => line.includes(`!${path}`))) {
 			changed = true;
-			lines.push(`    - '!${path}'`);
+			lines.push(`  - '!${path}'`);
 		}
 	}
 
