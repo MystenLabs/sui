@@ -102,8 +102,9 @@ export default function MultiSigAddressGenerator() {
 
 			const pk = publicKeyFromSerialized(scheme, rawPkBytes);
 			console.log(pk);
-			pks.push({ pubKey: pk, weight: Number(1) });
+			pks.push({ pubKey: pk, weight: item.weight });
 		});
+		console.log('pks:', pks);
 		const multisigSuiAddress = toMultiSigAddress(pks, 1);
 		console.log('multisigSuiAddress', multisigSuiAddress);
 		setMSAddress(multisigSuiAddress);
