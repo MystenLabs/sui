@@ -15,7 +15,7 @@
 # DONE - Objects
 # DONE - Transactions
 # DONE - Checkpoints
-# TODO - Events
+# DONE - Events
 # TODO - ProtocolConfig
 # TODO - Chain Identifier
 # TODO Coin
@@ -62,6 +62,8 @@ scalar I128
 
 # String containing Base58-encoded binary data.
 scalar Bytes
+
+scalar JSON
 
 # Filter either by the digest, or the sequence number, or neither, to
 # get the latest checkpoint.
@@ -312,6 +314,17 @@ type BalanceChange {
   owner: Owner
   coinType: MoveType
   amount: I128
+}
+
+type Event {
+  package: MovePackage
+  module: String
+  sender: Address
+  type: MoveType
+  timestampMs: U64
+
+  json: JSON
+  bcs: Bytes
 }
 
 type MoveObject {
