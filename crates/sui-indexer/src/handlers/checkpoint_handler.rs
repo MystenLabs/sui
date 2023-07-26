@@ -913,7 +913,7 @@ where
                 .try_get_past_object(
                     SUI_SYSTEM_STATE_OBJECT_ID,
                     SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                    None,
+                    Some(SuiObjectDataOptions::bcs_lossless()),
                 )
                 .await
                 .map_err(|e| IndexerError::FullNodeReadingError(e.to_string()))?
@@ -965,7 +965,7 @@ where
                 "ChangeEpoch transaction must contain objects changes for 0x5 and its children"
             );
             http_client
-                .try_multi_get_past_objects(object_ids, None)
+                .try_multi_get_past_objects(object_ids, Some(SuiObjectDataOptions::bcs_lossless()))
                 .await
                 .map_err(|e| IndexerError::FullNodeReadingError(e.to_string()))?
                 .into_iter()
