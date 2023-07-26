@@ -36,7 +36,7 @@ let renderCount = 0;
 export default function MultiSigAddress() {
 	const { register, control, handleSubmit } = useForm({
 		defaultValues: {
-			pubKeys: [{ pubKey: 'Signature Bytes', weight: '' }],
+			pubKeys: [{ pubKey: 'Sui Pubkey', weight: '' }],
 		},
 	});
 	const { fields, append, remove } = useFieldArray({
@@ -123,7 +123,7 @@ export default function MultiSigAddress() {
 					<Button
 						type="button"
 						onClick={() => {
-							append({ pubKey: 'Signature Bytes', weight: '' });
+							append({ pubKey: 'Sui Pubkey', weight: '' });
 						}}
 					>
 						New PubKey
