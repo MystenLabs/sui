@@ -40,7 +40,7 @@ export function ImportPrivateKeyForm({ onSubmit }: ImportPrivateKeyFormProps) {
 					</Text>
 				</div>
 				<textarea
-					className="resize-none peer w-full text-body text-steel-dark font-medium py-3 pr-0 pl-3 border border-solid border-gray-45 rounded-2lg shadow-button focus:border-steel focus:shadow-none"
+					className="resize-none peer w-full text-body text-steel-dark font-medium p-3 border border-solid border-gray-45 rounded-2lg shadow-button focus:border-steel focus:shadow-none"
 					rows={4}
 					{...register('privateKey')}
 				/>
