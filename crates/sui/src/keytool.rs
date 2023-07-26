@@ -518,18 +518,18 @@ impl KeyToolCommand {
                     })
                 }
                 _ => {
-                    let (sui_address, kp, scheme, phrase) =
+                    let (sui_address, skp, scheme, phrase) =
                         generate_new_key(key_scheme, derivation_path, word_length)?;
-                    let public_base64_key = kp.encode_base64();
+                    let public_base64_key = skp.encode_base64();
                     let file = format!("{sui_address}.key");
-                    write_keypair_to_file(&kp, file)?;
+                    write_keypair_to_file(&skp, file)?;
                     CommandOutput::Generate(Key {
                         sui_address,
                         public_base64_key,
                         key_scheme: scheme.to_string(),
-                        flag: kp.public().flag(),
+                        flag: skp.public().flag(),
                         mnemonic: Some(phrase),
-                        peer_id: anemo_styling(&kp),
+                        peer_id: anemo_styling(&skp.public()),
                     })
                 }
             },
@@ -567,7 +567,6 @@ impl KeyToolCommand {
                 key_scheme,
                 derivation_path,
             } => {
-                let scheme = key_scheme.to_string();
                 // check if input is a private key -- should start with 0x
                 if input_string.starts_with("0x") {
                     let bytes = Hex::decode(&input_string).map_err(|_| {
@@ -575,29 +574,13 @@ impl KeyToolCommand {
                     })?;
                     match key_scheme {
                             SignatureScheme::ED25519 => {
-                                let kp: Ed25519KeyPair = Ed25519KeyPair::from_bytes(&bytes).map_err(|_| anyhow!("Cannot decode ed25519 keypair from the private key. Importing private key failed."))?;
+                                let kp = Ed25519KeyPair::from_bytes(&bytes).map_err(|_| anyhow!("Cannot decode ed25519 keypair from the private key. Importing private key failed."))?;
                                 let skp = SuiKeyPair::Ed25519(kp);
-                                let peer_id = if let PublicKey::Ed25519(public_key) = skp.public() {
-                                    Some(anemo::PeerId(public_key.0).to_string())
-                                } else {
-                                    None
-                                };
-                                eprintln!("Private key imported successfully.");
+                                let key = Key::from(&skp);
                                 keystore.add_key(skp)?;
-                                // we need these two because keystore.add_key takes ownership of skp
-                                let kp: Ed25519KeyPair = Ed25519KeyPair::from_bytes(&bytes).map_err(|_| anyhow!("Cannot decode ed25519 keypair from the private key. Importing private key failed."))?;
-                                let skp = SuiKeyPair::Ed25519(kp);
-                                let address: SuiAddress =  (&skp.public()).into();
-                                eprintln!("{address}");
-
-                                CommandOutput::Import(Key {
-                                    sui_address: address,
-                                    public_base64_key: skp.encode_base64(),
-                                    key_scheme: scheme,
-                                    mnemonic: None,
-                                    flag: skp.public().flag(),
-                                    peer_id,
-                                })
+                                eprintln!("Private key imported successfully.");
+                                eprintln!("Address is {}", key.sui_address);
+                                CommandOutput::Import(key)
                             }
                             _ => return Err(anyhow!(
                                 "Only ed25519 signature scheme is supported for importing private keys at the moment."
@@ -609,17 +592,13 @@ impl KeyToolCommand {
                         key_scheme,
                         derivation_path,
                     )?;
-                    let kp = keystore.get_key(&sui_address)?;
-                    let peer_id = anemo_styling(kp);
-                    eprintln!("Mnemonic imported successfully. Address is {sui_address}");
-                    CommandOutput::Import(Key {
-                        sui_address,
-                        public_base64_key: kp.encode_base64(),
-                        key_scheme: scheme,
-                        mnemonic: None,
-                        flag: kp.public().flag(),
-                        peer_id,
-                    })
+                    let skp = keystore.get_key(&sui_address)?;
+                    let key = Key::from(skp);
+                    eprintln!(
+                        "Mnemonic imported successfully. Address is {}",
+                        key.sui_address
+                    );
+                    CommandOutput::Import(key)
                 }
             }
 
@@ -627,20 +606,7 @@ impl KeyToolCommand {
                 let keys = keystore
                     .keys()
                     .into_iter()
-                    .map(|key| Key {
-                        sui_address: Into::<SuiAddress>::into(&key),
-                        public_base64_key: key.encode_base64(),
-                        key_scheme: key.scheme().to_string(),
-                        mnemonic: None,
-                        flag: key.flag(),
-                        peer_id: {
-                            if let PublicKey::Ed25519(public_key) = key {
-                                Some(anemo::PeerId(public_key.0).to_string())
-                            } else {
-                                None
-                            }
-                        },
-                    })
+                    .map(|key| Key::from(key))
                     .collect::<Vec<_>>();
 
                 CommandOutput::List(keys)
@@ -651,27 +617,17 @@ impl KeyToolCommand {
                     Ok(keypair) => {
                         // Account keypair is encoded with the key scheme flag {},
                         // and network and worker keypair are not.
-                        let mut data = KeypairData {
-                            account_keypair: keypair.encode_base64(),
-                            network_keypair: None,
-                            worker_keypair: None,
-                            key_scheme: keypair.public().scheme().to_string(),
+                        let network_worker_keypair = match &keypair {
+                            SuiKeyPair::Ed25519(kp) => kp.encode_base64(),
+                            SuiKeyPair::Secp256k1(kp) => kp.encode_base64(),
+                            SuiKeyPair::Secp256r1(kp) => kp.encode_base64(),
                         };
-                        match keypair {
-                            SuiKeyPair::Ed25519(kp) => {
-                                data.network_keypair = Some(kp.encode_base64());
-                                data.worker_keypair = Some(kp.encode_base64());
-                            }
-                            SuiKeyPair::Secp256k1(kp) => {
-                                data.network_keypair = Some(kp.encode_base64());
-                                data.worker_keypair = Some(kp.encode_base64());
-                            }
-                            SuiKeyPair::Secp256r1(kp) => {
-                                data.network_keypair = Some(kp.encode_base64());
-                                data.worker_keypair = Some(kp.encode_base64());
-                            }
+                        KeypairData {
+                            account_keypair: keypair.encode_base64(),
+                            network_keypair: Some(network_worker_keypair.clone()),
+                            worker_keypair: Some(network_worker_keypair),
+                            key_scheme: keypair.public().scheme().to_string(),
                         }
-                        data
                     }
                     Err(_) => {
                         // Authority keypair file is not stored with the flag, it will try read as BLS keypair..
@@ -794,17 +750,9 @@ impl KeyToolCommand {
             KeyToolCommand::Show { file } => {
                 let res = read_keypair_from_file(&file);
                 match res {
-                    Ok(keypair) => {
-                        let sui_address: SuiAddress = (&keypair.public()).into();
-                        let peer_id = anemo_styling(&keypair);
-                        CommandOutput::Show(Key {
-                            sui_address,
-                            public_base64_key: keypair.public().encode_base64(),
-                            key_scheme: keypair.public().scheme().to_string(),
-                            peer_id,
-                            flag: keypair.public().flag(),
-                            mnemonic: None,
-                        })
+                    Ok(skp) => {
+                        let key = Key::from(&skp);
+                        CommandOutput::Show(key)
                     }
                     Err(_) => match read_authority_keypair_from_file(&file) {
                         Ok(keypair) => {
@@ -931,25 +879,15 @@ impl KeyToolCommand {
             }
 
             KeyToolCommand::Unpack { keypair } => {
-                let sui_address: SuiAddress = (&keypair.public()).into();
-                let path_str = format!("{}.key", sui_address).to_lowercase();
+                let key = Key::from(&keypair);
+                let path_str = format!("{}.key", key.sui_address).to_lowercase();
                 let path = Path::new(&path_str);
-                let key_scheme = keypair.public().scheme().to_string();
-                let public_base64_key = keypair.encode_base64();
-                let flag = keypair.public().flag();
                 let out_str = format!(
                     "address: {}\nkeypair: {}\nflag: {}",
-                    sui_address, public_base64_key, flag
+                    key.sui_address, key.public_base64_key, key.flag
                 );
                 fs::write(path, out_str).unwrap();
-                CommandOutput::Show(Key {
-                    sui_address,
-                    public_base64_key,
-                    flag,
-                    key_scheme,
-                    mnemonic: None,
-                    peer_id: None,
-                })
+                CommandOutput::Show(key)
             }
 
             KeyToolCommand::ZkLogInPrepare { max_epoch } => {
@@ -985,6 +923,25 @@ impl KeyToolCommand {
         });
 
         cmd_result
+    }
+}
+
+impl From<&SuiKeyPair> for Key {
+    fn from(skp: &SuiKeyPair) -> Self {
+        Key::from(skp.public())
+    }
+}
+
+impl From<PublicKey> for Key {
+    fn from(key: PublicKey) -> Self {
+        Key {
+            sui_address: Into::<SuiAddress>::into(&key),
+            public_base64_key: key.encode_base64(),
+            key_scheme: key.scheme().to_string(),
+            mnemonic: None,
+            flag: key.flag(),
+            peer_id: anemo_styling(&key),
+        }
     }
 }
 
@@ -1107,8 +1064,8 @@ impl Debug for CommandOutput {
 //     }
 // }
 
-fn anemo_styling(kp: &SuiKeyPair) -> Option<String> {
-    if let PublicKey::Ed25519(public_key) = kp.public() {
+fn anemo_styling(pk: &PublicKey) -> Option<String> {
+    if let PublicKey::Ed25519(public_key) = pk {
         Some(anemo::PeerId(public_key.0).to_string())
     } else {
         None
