@@ -6,6 +6,7 @@ import OfflineSigner from './offline-signer';
 import SignatureAnalyzer from './signature-analyzer';
 import MultiSigAddress from './multisig-address';
 import { Root } from './root';
+import MultiSigAddressGenerator from './multisig-address';
 
 export const router = createBrowserRouter([
 	{
@@ -26,7 +27,7 @@ export const router = createBrowserRouter([
 			},
 			{
 				path: 'multisig-address',
-				element: <MultiSigAddress />,
+				element: <MultiSigAddressGenerator />,
 			},
 		],
 	},

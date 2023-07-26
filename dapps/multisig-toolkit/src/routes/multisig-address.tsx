@@ -23,6 +23,13 @@ import { useForm, useFieldArray, Controller, useWatch, FieldValues } from 'react
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 
+/*
+Pubkeys for playing with
+ABr818VXt+6PLPRoA7QnsHBfRpKJdWZPjt7ppiTl6Fkq
+ANRdB4M6Hj73R+gRM4N6zUPNidLuatB9uccOzHBc/0bP
+*/
+
+
 const schema = z.object({
 	threshold: z
 		.number({ invalid_type_error: 'Age field is required.' })
@@ -33,7 +40,43 @@ type FormData = z.infer<typeof schema>;
 
 let renderCount = 0;
 
-export default function MultiSigAddress() {
+//function MultiSigAddress({ signature, index }: ) {
+//	const suiAddress = signature.publicKey.toSuiAddress();
+//
+//	const pubkey_base64_sui_format = signature.publicKey.toSuiPublicKey();
+//
+//	const pubkey = signature.publicKey.toBase64();
+//	const scheme = signature.signatureScheme.toString();
+//
+//	const details = [
+//		{ label: 'Signature Public Key', value: pubkey },
+//		{ label: 'Sui Format Public Key ( flag | pk )', value: pubkey_base64_sui_format },
+//		{ label: 'Sui Address', value: suiAddress },
+//		{ label: 'Signature', value: toB64(signature.signature) },
+//	];
+//
+//	return (
+//		<Card>
+//			<CardHeader>
+//				<CardTitle>Signature #{index}</CardTitle>
+//				<CardDescription>{scheme}</CardDescription>
+//			</CardHeader>
+//			<CardContent>
+//				<div className="flex flex-col gap-2">
+//					{details.map(({ label, value }, index) => (
+//						<div key={index} className="flex flex-col gap-1.5">
+//							<div className="font-bold">{label}</div>
+//							<div className="bg-muted rounded text-sm font-mono p-2 break-all">{value}</div>
+//						</div>
+//					))}
+//				</div>
+//			</CardContent>
+//		</Card>
+//	);
+//}
+
+export default function MultiSigAddressGenerator() {
+	const [msAddress, setMSAddress] = useState('');
 	const { register, control, handleSubmit } = useForm({
 		defaultValues: {
 			pubKeys: [{ pubKey: 'Sui Pubkey', weight: '' }],
@@ -50,20 +93,21 @@ export default function MultiSigAddress() {
 
 		let pks: PubkeyWeightPair[] = [];
 		data.pubKeys.forEach((item: any) => {
-      console.log(item.pubKey);
-      const pkBytes = fromB64(item.pubKey);
-      const flag: number = pkBytes[0];
-      console.log(flag);
-      const rawPkBytes = toB64(pkBytes.slice(1));
-      const schemeFlag = (SIGNATURE_FLAG_TO_SCHEME as {[key: number]: string})[flag]
-      const scheme = schemeFlag as SignatureScheme;
+			console.log(item.pubKey);
+			const pkBytes = fromB64(item.pubKey);
+			const flag: number = pkBytes[0];
+			console.log(flag);
+			const rawPkBytes = toB64(pkBytes.slice(1));
+			const schemeFlag = (SIGNATURE_FLAG_TO_SCHEME as {[key: number]: string})[flag]
+			const scheme = schemeFlag as SignatureScheme;
 
-      const pk = publicKeyFromSerialized(scheme, rawPkBytes);
-      console.log(pk);
-      pks.push({ pubKey: pk, weight: Number(1) });
+			const pk = publicKeyFromSerialized(scheme, rawPkBytes);
+			console.log(pk);
+			pks.push({ pubKey: pk, weight: Number(1) });
 		});
 		const multisigSuiAddress = toMultiSigAddress(pks, 1);
 		console.log('multisigSuiAddress', multisigSuiAddress);
+		setMSAddress(multisigSuiAddress);
 	};
 
 	// if you want to control your fields with watch
@@ -146,6 +190,9 @@ export default function MultiSigAddress() {
 					Submit
 				</Button>
 			</form>
+		<div>
+			{msAddress && <p className="text-danger">{msAddress}</p>}
+		</div>
 		</div>
 	);
 }
