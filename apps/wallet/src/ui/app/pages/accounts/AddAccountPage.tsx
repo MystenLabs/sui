@@ -96,7 +96,7 @@ export function AddAccountPage({ showSocialSignInOptions = false }: AddAccountPa
 						variant="outline"
 						size="tall"
 						text="Create a new Passphrase Account"
-						to="/accounts/create-new-account"
+						to="/accounts/protect-account"
 						onClick={() => {
 							ampli.clickedCreateNewAccount({ sourceFlow });
 						}}

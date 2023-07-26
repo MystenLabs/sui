@@ -6,9 +6,9 @@ import { useForm, type SubmitHandler } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import * as Yup from 'yup';
 import { privateKeyValidation } from '../../helpers/validation/privateKeyValidation';
+import { Form } from '../../shared/forms/Form';
+import { TextAreaField } from '../../shared/forms/TextAreaField';
 import { Button } from '_app/shared/ButtonUI';
-import Alert from '_src/ui/app/components/alert';
-import { Text } from '_src/ui/app/shared/text';
 
 const formSchema = Yup.object({
 	privateKey: privateKeyValidation,
@@ -21,33 +21,19 @@ type ImportPrivateKeyFormProps = {
 };
 
 export function ImportPrivateKeyForm({ onSubmit }: ImportPrivateKeyFormProps) {
-	const {
-		register,
-		handleSubmit,
-		formState: { isSubmitting, isValid, touchedFields, errors },
-	} = useForm({
+	const form = useForm({
 		mode: 'onTouched',
 		resolver: yupResolver(formSchema),
 	});
+	const {
+		register,
+		formState: { isSubmitting, isValid },
+	} = form;
 	const navigate = useNavigate();
 
 	return (
-		<form className="flex flex-col h-full" onSubmit={handleSubmit(onSubmit)}>
-			<label className="flex flex-col gap-2.5">
-				<div className="pl-2.5">
-					<Text variant="pBody" color="steel-darker" weight="semibold">
-						Enter Private Key
-					</Text>
-				</div>
-				<textarea
-					className="resize-none w-full text-body text-steel-dark font-medium p-3 border border-solid border-gray-45 rounded-2lg shadow-button focus:border-steel focus:shadow-none"
-					rows={4}
-					{...register('privateKey')}
-				/>
-				{touchedFields.privateKey && errors.privateKey && (
-					<Alert>{errors.privateKey.message}</Alert>
-				)}
-			</label>
+		<Form className="flex flex-col h-full" form={form} onSubmit={onSubmit}>
+			<TextAreaField label="Enter Private Key" rows={4} {...register('privateKey')} />
 			<div className="flex gap-2.5 mt-auto">
 				<Button variant="outline" size="tall" text="Cancel" onClick={() => navigate(-1)} />
 				<Button
@@ -59,6 +45,6 @@ export function ImportPrivateKeyForm({ onSubmit }: ImportPrivateKeyFormProps) {
 					text="Add Account"
 				/>
 			</div>
-		</form>
+		</Form>
 	);
 }
