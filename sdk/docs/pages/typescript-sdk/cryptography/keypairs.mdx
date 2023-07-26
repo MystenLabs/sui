@@ -2,6 +2,100 @@ import { Callout } from 'nextra/components';
 
 # KeyPairs
 
-<Callout type="warning" emoji="⚠️">
-	Coming soon!
-</Callout>
+KeyPair classes are provide logic for signing and verification using the cryptographic keypairs
+associated with an Address.
+
+```typescript
+import { ED25519KeyPair } from '@mysten/sui.js/keypairs/ed25519';
+
+// create a random keypair
+const keyPair = new ED25519KeyPair();
+// or create a keypair from an existing secret and public key
+const keyPair = new ED25519KeyPair({
+	publicKey: Uint8Array;
+	secretKey: Uint8Array;
+});
+
+const publicKey = keyPair.getPublicKey();
+const message = new TextEncoder().encode('hello world');
+
+const { signature } = await keyPair.signPersonalMessage(message);
+const isValid = await publicKey.verifyPersonalMessage(message, signature);
+```
+
+## Public Keys
+
+Each KeyPair class has an associated PublicKey class. The PublicKey class that can be used to verify
+signatures, or get a the SuiAddress associated with the keyPair. PublicKeys can be access from a
+KeyPair, or constructed directly using the bytes (as a Uint8Array) of the PublicKey
+
+```typescript
+import { ED25519KeyPair, ED25519PublicKey } from '@mysten/sui.js/keypairs/ed25519';
+
+const keyPair = new ED25519KeyPair();
+const bytes = keyPair.getPublicKey().toBytes();
+
+const publicKey = new ED25519PublicKey(bytes);
+
+const address = publicKey.getAddress();
+```
+
+## KeyPair algorithms
+
+The Sui SDK supports the following keypair algorithms: `ED25519`, `SECP256K1`, and `SECP256R1`, each
+of which is exported separately.
+
+```typescript
+import { ED25519KeyPair } from '@mysten/sui.js/keypairs/ed25519';
+import { SECP256K1KeyPair } from '@mysten/sui.js/keypairs/secp256k1';
+import { SECP256R1KeyPair } from '@mysten/sui.js/keypairs/secp256r1';
+```
+
+## Verifying signatures without a KeyPair
+
+When you have an existing publicKey, you can use it to verify a signature, which will ensure the
+signature is valid for the provided message, and was signed with the secret key associated with the
+publicKey you are using for verification. In many cases, you may want to extract the public key from
+the signature, and then check that the resulting public key is for the address you expect.
+
+```typescript
+import { ED25519KeyPair } from '@mysten/sui.js/keypairs/ed25519';
+import { verifyPersonalMessage } from '@mysten/sui.js/verify';
+
+const keyPair = new ED25519KeyPair();
+const message = new TextEncoder().encode('hello world');
+const { signature } = await keyPair.signPersonalMessage(message);
+
+const publicKey = await verifyPersonalMessage(message, signature);
+
+if (publicKey.getAddress() !== keyPair.getPublicKey().getAddress()) {
+	throw new Error('Signature was valid, but was signed by a different keyPair');
+}
+```
+
+## Verifying Transaction Blocks
+
+The examples above have shown how signatures for personal messages work. Signatures for transaction
+blocks work the same way, but use `verifyTransactionBlock` instead:
+
+```typescript
+import { ED25519KeyPair } from '@mysten/sui.js/keypairs/ed25519';
+import { verifyTransactionBlock } from '@mysten/sui.js/verify';
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+
+const client = new SuiClient({ url: getFullnodeUrl('testnet') });
+const txb = new TransactionBlock();
+// ... add some transactions...
+const bytes = await txb.build({ client });
+
+const keyPair = new ED25519KeyPair();
+const { signature } = await keyPair.signTransactionBlock(message);
+
+const isValid = await publicKey.verifyTransactionBlock(message, signature);
+// or
+const publicKey = await verifyTransactionBlock(message, signature);
+
+if (publicKey.getAddress() !== keyPair.getPublicKey().getAddress()) {
+	throw new Error('Signature was valid, but was signed by a different keyPair');
+}
+```
