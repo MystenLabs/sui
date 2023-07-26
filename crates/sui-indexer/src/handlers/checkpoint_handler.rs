@@ -18,7 +18,6 @@ use sui_types::digests::TransactionDigest;
 use sui_types::object::Owner;
 use sui_types::SUI_SYSTEM_STATE_ADDRESS;
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
-use sui_types::SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION;
 use tap::tap::TapFallible;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -907,29 +906,13 @@ where
         checkpoint: &sui_json_rpc_types::Checkpoint,
         transactions: &[CheckpointTransactionBlockResponse],
     ) -> Result<Vec<sui_types::object::Object>, IndexerError> {
-        if checkpoint.sequence_number == 0 {
-            // Alternatively we could keep retrying v.s. return an error
-            let object_resp = http_client
-                .try_get_past_object(
-                    SUI_SYSTEM_STATE_OBJECT_ID,
-                    SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                    Some(SuiObjectDataOptions::bcs_lossless()),
-                )
-                .await
-                .map_err(|e| IndexerError::FullNodeReadingError(e.to_string()))?
-                .into_object()
-                .map_err(|e| IndexerError::FullNodeReadingError(e.to_string()))?;
-            let object: sui_types::object::Object = object_resp
-                .try_into()
-                .map_err(|e: anyhow::Error| IndexerError::FullNodeReadingError(e.to_string()))?;
-            Ok(vec![object])
-        } else if checkpoint.end_of_epoch_data.is_some() {
+        if checkpoint.sequence_number == 0 || checkpoint.end_of_epoch_data.is_some() {
             let object_ids = transactions
                 .iter()
                 .find_map(|t| {
                     if matches!(
                         t.transaction.data.transaction(),
-                        SuiTransactionBlockKind::ChangeEpoch(..)
+                        SuiTransactionBlockKind::ChangeEpoch(..) | SuiTransactionBlockKind::Genesis(..)
                     ) {
                         Some(
                             t.effects
@@ -959,10 +942,10 @@ where
                         None
                     }
                 })
-                .expect("End of Epoch Checkpoint must have ChangeEpoch transaction");
+                .expect("EndOfEpoch/Genesis Checkpoint must have ChangeEpoch/Genesis transaction");
             assert!(
                 !object_ids.is_empty(),
-                "ChangeEpoch transaction must contain objects changes for 0x5 and its children"
+                "ChangeEpoch/Genesis transaction must contain objects changes for 0x5 and its children"
             );
             http_client
                 .try_multi_get_past_objects(object_ids, Some(SuiObjectDataOptions::bcs_lossless()))
