@@ -7,11 +7,11 @@ import { Textarea } from '@/components/ui/textarea';
 import {
 	PubkeyWeightPair,
 	publicKeyFromSerialized,
-  SIGNATURE_FLAG_TO_SCHEME,
+	SIGNATURE_FLAG_TO_SCHEME,
 	toB64,
 	toMultiSigAddress,
-  SignatureScheme,
-  fromB64,
+	SignatureScheme,
+	fromB64,
 } from '@mysten/sui.js';
 import { AlertCircle } from 'lucide-react';
 import { useState } from 'react';
@@ -28,7 +28,6 @@ Pubkeys for playing with
 ABr818VXt+6PLPRoA7QnsHBfRpKJdWZPjt7ppiTl6Fkq
 ANRdB4M6Hj73R+gRM4N6zUPNidLuatB9uccOzHBc/0bP
 */
-
 
 const schema = z.object({
 	threshold: z
@@ -98,7 +97,7 @@ export default function MultiSigAddressGenerator() {
 			const flag: number = pkBytes[0];
 			console.log(flag);
 			const rawPkBytes = toB64(pkBytes.slice(1));
-			const schemeFlag = (SIGNATURE_FLAG_TO_SCHEME as {[key: number]: string})[flag]
+			const schemeFlag = (SIGNATURE_FLAG_TO_SCHEME as { [key: number]: string })[flag];
 			const scheme = schemeFlag as SignatureScheme;
 
 			const pk = publicKeyFromSerialized(scheme, rawPkBytes);
@@ -190,9 +189,7 @@ export default function MultiSigAddressGenerator() {
 					Submit
 				</Button>
 			</form>
-		<div>
-			{msAddress && <p className="text-danger">{msAddress}</p>}
-		</div>
+			<div>{msAddress && <p className="text-danger">{msAddress}</p>}</div>
 		</div>
 	);
 }
