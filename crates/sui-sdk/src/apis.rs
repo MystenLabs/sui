@@ -16,24 +16,19 @@ use crate::error::{Error, SuiRpcResult};
 use crate::RpcClient;
 use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc::api::{
-    CoinReadApiClient, IndexerApiClient, MoveUtilsClient, ReadApiClient,
-    WriteApiClient,
+    CoinReadApiClient, IndexerApiClient, MoveUtilsClient, ReadApiClient, WriteApiClient,
 };
 use sui_json_rpc_types::{
-    Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake,
-    DevInspectResults, DryRunTransactionBlockResponse, DynamicFieldPage,
-    EventFilter, EventPage, ObjectsPage, ProtocolConfigResponse,
-    SuiCoinMetadata, SuiCommittee, SuiEvent, SuiGetPastObjectRequest,
-    SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectResponse,
-    SuiObjectResponseQuery, SuiPastObjectResponse, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions, SuiTransactionBlockResponseQuery,
-    TransactionBlocksPage,
+    Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake, DevInspectResults,
+    DryRunTransactionBlockResponse, DynamicFieldPage, EventFilter, EventPage, ObjectsPage,
+    ProtocolConfigResponse, SuiCoinMetadata, SuiCommittee, SuiEvent, SuiGetPastObjectRequest,
+    SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
+    SuiPastObjectResponse, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    SuiTransactionBlockResponseQuery, TransactionBlocksPage,
 };
 use sui_json_rpc_types::{CheckpointPage, SuiLoadedChildObjectsResponse};
 use sui_types::balance::Supply;
-use sui_types::base_types::{
-    ObjectID, SequenceNumber, SuiAddress, TransactionDigest,
-};
+use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::event::EventID;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
@@ -53,7 +48,10 @@ impl ReadApi {
     pub(crate) fn new(api: Arc<RpcClient>) -> Self {
         Self { api }
     }
-    /// Return a paginated response containing the owned objects for this Sui address, or an error upon failure.
+    /// Return a paginated response with the objects owned by the given address, or an error upon failure.
+    ///
+    /// Note that if the address owns more than `QUERY_MAX_RESULT_LIMIT` objects (default is 50),
+    /// the pagination is not accurate, because previous page may have been updated when the next page is fetched.
     ///
     /// # Examples
     ///
@@ -87,10 +85,10 @@ impl ReadApi {
             .await?)
     }
 
-    /// Return a paginated response containing the dynamic fields objects for this [ObjectID], or an error upon failure.
+    /// Return a paginated response with the dynamic fields owned by the given [ObjectID], or an error upon failure.
     ///
     /// The return type is a list of `DynamicFieldInfo` objects, where the field name is always present,
-    /// represented as a `Move Value`.
+    /// represented as a Move `Value`.
     ///
     /// If the field is a dynamic field, returns the ID of the Field object (which contains both the name and the value).
     /// If the field is a dynamic object field, it returns the ID of the Object (the value of the field).
@@ -205,7 +203,9 @@ impl ReadApi {
             .await?)
     }
 
-    /// Return a vector containing [SuiPastObjectResponse] objects, or an error upon failure.
+    /// Return a list of [SuiPastObjectResponse] objects, or an error upon failure.
+    ///
+    /// See [this function](ReadApi::try_get_parsed_past_object) for more details about past objects.
     ///
     /// # Examples
     ///
@@ -286,6 +286,10 @@ impl ReadApi {
 
     /// Return a [SuiObjectResponse] based on the provided [ObjectID] and [SuiObjectDataOptions], or an error upon failure.
     ///
+    /// The [SuiObjectResponse] contains two fields:
+    /// 1) `data` for the object's data (see [SuiObjectData]),
+    //  2) `error` for the error (if any) (see [SuiObjectResponseError]).
+    ///
     /// # Examples
     ///
     /// ```rust,no_run
@@ -334,7 +338,9 @@ impl ReadApi {
         Ok(self.api.http.get_object(object_id, Some(options)).await?)
     }
 
-    /// Return a vector of [SuiObjectResponse] based on the given vector of [ObjectID]s and [SuiObjectDataOptions], or an error upon failure.
+    /// Return a list of [SuiObjectResponse] from the given vector of [ObjectID]s and [SuiObjectDataOptions], or an error upon failure.
+    ///
+    /// If only one object is needed, use the [get_object_with_options](ReadApi::get_object_with_options) function instead.
     ///
     /// # Examples
     ///
@@ -388,7 +394,7 @@ impl ReadApi {
             .await?)
     }
 
-    /// Return the total number of transaction blocks, or an error upon failure.
+    /// Return the total number of transaction blocks known to server, or an error upon failure.
     ///
     /// # Examples
     ///
@@ -409,7 +415,8 @@ impl ReadApi {
         Ok(*self.api.http.get_total_transaction_blocks().await?)
     }
 
-    /// Return a [SuiTransactionBlockResponse] based on the given [TransactionDigest], or an error upon failure.
+    /// Return a transaction and its effects in a [SuiTransactionBlockResponse] based on its
+    /// [TransactionDigest], or an error upon failure.
     pub async fn get_transaction_with_options(
         &self,
         digest: TransactionDigest,
@@ -421,7 +428,10 @@ impl ReadApi {
             .get_transaction_block(digest, Some(options))
             .await?)
     }
-    /// Return a vector of [SuiTransactionBlockResponse] based on the given vector of [TransactionDigest], or an error upon failure.
+    /// Return a list of [SuiTransactionBlockResponse] based on the given vector of [TransactionDigest], or an error upon failure.
+    ///
+    /// If only one transaction data is needed, use the
+    /// [get_transaction_with_options](ReadApi::get_transaction_with_options) function instead.
     pub async fn multi_get_transactions_with_options(
         &self,
         digests: Vec<TransactionDigest>,
@@ -436,7 +446,10 @@ impl ReadApi {
 
     /// Return the [SuiCommittee] information for the provided `epoch`, or an error upon failure.
     ///
-    /// The argument `epoch` is either a known epoch id or `None` for the last epoch.
+    /// The [SuiCommittee] is the RPC representation of the [Committee] type,
+    /// which contains the validators list and their information (name and stakes).
+    ///
+    /// The argument `epoch` is either a known epoch id or `None` for the current epoch.
     ///
     /// # Examples
     ///
@@ -460,7 +473,7 @@ impl ReadApi {
         Ok(self.api.http.get_committee_info(epoch).await?)
     }
 
-    /// Return a paginated response containing all transaction blocks information, or an error upon failure.
+    /// Return a paginated response with all transaction blocks information, or an error upon failure.
     pub async fn query_transaction_blocks(
         &self,
         query: SuiTransactionBlockResponseQuery,
@@ -471,29 +484,24 @@ impl ReadApi {
         Ok(self
             .api
             .http
-            .query_transaction_blocks(
-                query,
-                cursor,
-                limit,
-                Some(descending_order),
-            )
+            .query_transaction_blocks(query, cursor, limit, Some(descending_order))
             .await?)
     }
 
-    /// Return the chain identifier, or an error upon failure.
+    /// Return the first four bytes of the chain's genesis checkpoint digest, or an error upon failure.
     pub async fn get_chain_identifier(&self) -> SuiRpcResult<String> {
         Ok(self.api.http.get_chain_identifier().await?)
     }
 
     /// Return a checkpoint, or an error upon failure.
-    pub async fn get_checkpoint(
-        &self,
-        id: CheckpointId,
-    ) -> SuiRpcResult<Checkpoint> {
+    ///
+    /// A Sui checkpoint is a sequence of transaction sets that a quorum of validators
+    /// agree upon as having been executed within the Sui system.
+    pub async fn get_checkpoint(&self, id: CheckpointId) -> SuiRpcResult<Checkpoint> {
         Ok(self.api.http.get_checkpoint(id).await?)
     }
 
-    /// Return paginated list of checkpoints, or an error upon failure.
+    /// Return a paginated list of checkpoints, or an error upon failure.
     pub async fn get_checkpoints(
         &self,
         cursor: Option<BigInt<u64>>,
@@ -542,9 +550,8 @@ impl ReadApi {
                         .ok()?;
                     let mut data = page.data;
                     data.reverse();
-                    data.pop().map(|item| {
-                        (item, (data, page.next_cursor, false, query))
-                    })
+                    data.pop()
+                        .map(|item| (item, (data, page.next_cursor, false, query)))
                 } else {
                     None
                 }
@@ -571,6 +578,10 @@ impl ReadApi {
     }
 
     /// Dry run a transaction block given the provided transaction data. Returns an error upon failure.
+    ///
+    /// Simulate running the transaction, including all standard checks, without actually running it.
+    /// This is useful for estimating the gas fees of a transaction before executing it.
+    /// You can also use it to identify any side-effects of a transaction before you execute it on the network.
     pub async fn dry_run_transaction_block(
         &self,
         tx: TransactionData,
@@ -582,6 +593,28 @@ impl ReadApi {
             .await?)
     }
 
+    /// Return the inspection of the transaction block, or an error upon failure.
+    ///
+    /// Use this function to inspect the current state of the network by running a programmable
+    /// transaction block without committing its effects on chain.  Unlike
+    /// [dry_run_transaction_block](ReadApi::dry_run_transaction_block),
+    /// dev inspect will not validate whether the transaction block
+    /// would succeed or fail under normal circumstances, e.g.:
+    ///
+    /// - Transaction inputs are not checked for ownership (i.e. you can
+    ///   construct calls involving objects you do not own).
+    /// - Calls are not checked for visibility (you can call private functions on modules)
+    /// - Inputs of any type can be constructed and passed in, (including
+    ///    Coins and other objects that would usually need to be constructed
+    ///    with a move call).
+    /// - Function returns do not need to be used, even if they do not have `drop`.
+    ///
+    /// Dev inspect's output includes a breakdown of results returned by every transaction
+    /// in the block, as well as the transaction's effects.
+    ///
+    /// To run an accurate simulation of a transaction and understand whether
+    /// it will successfully validate and run,
+    /// use the [dry_run_transaction_block](ReadApi::dry_run_transaction_block) function instead.
     pub async fn dev_inspect_transaction_block(
         &self,
         sender_address: SuiAddress,
@@ -601,7 +634,10 @@ impl ReadApi {
             .await?)
     }
 
-    /// Return the loaded child objects response based on the provided digest, or an error upon failure.
+    /// Return the loaded child objects response for the the provided digest, or an error upon failure.
+    ///
+    /// Loaded child objects ([SuiLoadedChildObject]) are the non-input objects that the transaction at the digest loaded
+    /// in response to dynamic field accesses.
     pub async fn get_loaded_child_objects(
         &self,
         digest: TransactionDigest,
@@ -629,9 +665,9 @@ impl CoinReadApi {
         Self { api }
     }
 
-    /// Return a list of coins for the provided address in a paginated fashion, or an error upon failure.
+    /// Return a paginated response with the coins for the given address, or an error upon failure.
     ///
-    /// The coins can be filtered by `coin_type` or use `None` for including all coins.
+    /// The coins can be filtered by `coin_type` (e.g., "0x2::sui::SUI") or use `None` for including all coins.
     ///
     /// # Examples
     ///
@@ -664,10 +700,9 @@ impl CoinReadApi {
             .get_coins(owner, coin_type, cursor, limit)
             .await?)
     }
-    /// Return a list of all the coins for the provided address in a paginated fashion, or an error upon failure.
+    /// Return a paginated response with all the coins for the given address, or an error upon failure.
     ///
-    ///
-    /// Use the `get_coins` method instead when need to filter by coin type.
+    /// This function includes all coins. If needed to filter by coin type, use the `get_coins` method instead.
     ///
     /// # Examples
     ///
@@ -696,7 +731,7 @@ impl CoinReadApi {
         Ok(self.api.http.get_all_coins(owner, cursor, limit).await?)
     }
 
-    /// Return the coins for the provided address as a stream.
+    /// Return the coins for the given address as a stream.
     ///
     /// The coins can be filtered by `coin_type` or use `None` for including all coin types.
     ///
@@ -731,13 +766,7 @@ impl CoinReadApi {
             ),
             move |(mut data, cursor, has_next_page, coin_type)| async move {
                 if let Some(item) = data.pop() {
-                    Some((
-                        item,
-                        (
-                            data, cursor, /* has_next_page */ true,
-                            coin_type,
-                        ),
-                    ))
+                    Some((item, (data, cursor, /* has_next_page */ true, coin_type)))
                 } else if has_next_page {
                     let page = self
                         .get_coins(owner, coin_type.clone(), cursor, Some(100))
@@ -748,12 +777,7 @@ impl CoinReadApi {
                     data.pop().map(|item| {
                         (
                             item,
-                            (
-                                data,
-                                page.next_cursor,
-                                page.has_next_page,
-                                coin_type,
-                            ),
+                            (data, page.next_cursor, page.has_next_page, coin_type),
                         )
                     })
                 } else {
@@ -763,7 +787,10 @@ impl CoinReadApi {
         )
     }
 
-    /// Return a vector of coins for the provided address, or an error upon failure.
+    /// Return a list of coins for the given address, or an error upon failure.
+    ///
+    /// Note that the function selects coins to meet or exceed the requested `amount`.
+    /// If that it is not possible, it will fail with an insufficient fund error.
     ///
     /// The coins can be filtered by `coin_type` or use `None` for including all coin types.
     ///
@@ -795,9 +822,7 @@ impl CoinReadApi {
         let mut total = 0u128;
         let coins = self
             .get_coins_stream(address, coin_type)
-            .filter(|coin: &Coin| {
-                future::ready(!exclude.contains(&coin.coin_object_id))
-            })
+            .filter(|coin: &Coin| future::ready(!exclude.contains(&coin.coin_object_id)))
             .take_while(|coin: &Coin| {
                 let ready = future::ready(total < amount);
                 total += coin.balance as u128;
@@ -812,9 +837,11 @@ impl CoinReadApi {
         Ok(coins)
     }
 
-    /// Return the balance of coins for the provided address, or an error upon failure.
+    /// Return the balance for the given coin type owned by address, or an error upon failure.
     ///
-    /// The coins can be filtered by coin type or use `None` for including all coin types.
+    /// Note that this function sums up all the balances of all the coins matching
+    /// the given coin type. By default, if `coin_type` is set to `None`,
+    /// it will use the default "0x2::sui::SUI".
     ///
     /// # Examples
     ///
@@ -842,7 +869,10 @@ impl CoinReadApi {
         Ok(self.api.http.get_balance(owner, coin_type).await?)
     }
 
-    /// Return the total balance of all coins for the provided address, or an error upon failure.
+    /// Return a list of balances for each coin type owned by the given address,
+    /// or an error upon failure.
+    ///
+    /// Note that this function groups the coins by coin type, and sums up all their balances.
     ///
     /// # Examples
     ///
@@ -862,14 +892,12 @@ impl CoinReadApi {
     ///     Ok(())
     /// }
     /// ```
-    pub async fn get_all_balances(
-        &self,
-        owner: SuiAddress,
-    ) -> SuiRpcResult<Vec<Balance>> {
+    pub async fn get_all_balances(&self, owner: SuiAddress) -> SuiRpcResult<Vec<Balance>> {
         Ok(self.api.http.get_all_balances(owner).await?)
     }
 
-    /// Return the coin metadata for a given coin type, or an error upon failure.
+    /// Return the coin metadata (name, symbol, description, decimals, etc.) for a given coin type,
+    /// or an error upon failure.
     ///
     /// # Examples
     ///
@@ -909,10 +937,7 @@ impl CoinReadApi {
     ///     Ok(())
     /// }
     /// ```
-    pub async fn get_total_supply(
-        &self,
-        coin_type: String,
-    ) -> SuiRpcResult<Supply> {
+    pub async fn get_total_supply(&self, coin_type: String) -> SuiRpcResult<Supply> {
         Ok(self.api.http.get_total_supply(coin_type).await?)
     }
 }
@@ -931,6 +956,7 @@ impl EventApi {
     /// Return a stream of events, or an error upon failure.
     ///
     /// Subscription is only possible via WebSockets.
+    /// For a list of possible event filters, see [EventFilter].
     ///
     /// # Examples
     ///
@@ -962,8 +988,7 @@ impl EventApi {
     ) -> SuiRpcResult<impl Stream<Item = SuiRpcResult<SuiEvent>>> {
         match &self.api.ws {
             Some(c) => {
-                let subscription: Subscription<SuiEvent> =
-                    c.subscribe_event(filter).await?;
+                let subscription: Subscription<SuiEvent> = c.subscribe_event(filter).await?;
                 Ok(subscription.map(|item| Ok(item?)))
             }
             _ => Err(Error::Subscription(
@@ -972,15 +997,15 @@ impl EventApi {
         }
     }
 
-    /// Return a list of events based on the transaction digest, or an error upon failure.
-    pub async fn get_events(
-        &self,
-        digest: TransactionDigest,
-    ) -> SuiRpcResult<Vec<SuiEvent>> {
+    /// Return a list of events for the given transaction digest, or an error upon failure.
+    pub async fn get_events(&self, digest: TransactionDigest) -> SuiRpcResult<Vec<SuiEvent>> {
         Ok(self.api.http.get_events(digest).await?)
     }
 
-    /// Return a paginated list of events based on the given event filter, or an error upon failure.
+    /// Return a paginated response with events for the given event filter, or an error upon failure.
+    ///
+    /// The ordering of the events can be set with the `descending_order` argument.
+    /// For a list of possible event filters, see [EventFilter].
     pub async fn query_events(
         &self,
         query: EventFilter,
@@ -995,9 +1020,10 @@ impl EventApi {
             .await?)
     }
 
-    /// Return a stream of events based on the given event filter.
+    /// Return a stream of events for the given event filter.
     ///
-    /// By default, each page will return 100 items.
+    /// The ordering of the events can be set with the `descending_order` argument.
+    /// For a list of possible event filters, see [EventFilter].
     pub fn get_events_stream(
         &self,
         query: EventFilter,
@@ -1011,19 +1037,13 @@ impl EventApi {
                     Some((item, (data, cursor, false, query)))
                 } else if (cursor.is_none() && first) || cursor.is_some() {
                     let page = self
-                        .query_events(
-                            query.clone(),
-                            cursor,
-                            Some(100),
-                            descending_order,
-                        )
+                        .query_events(query.clone(), cursor, Some(100), descending_order)
                         .await
                         .ok()?;
                     let mut data = page.data;
                     data.reverse();
-                    data.pop().map(|item| {
-                        (item, (data, page.next_cursor, false, query))
-                    })
+                    data.pop()
+                        .map(|item| (item, (data, page.next_cursor, false, query)))
                 } else {
                     None
                 }
@@ -1056,8 +1076,7 @@ impl QuorumDriverApi {
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> SuiRpcResult<SuiTransactionBlockResponse> {
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
-        let request_type = request_type
-            .unwrap_or_else(|| options.default_execution_request_type());
+        let request_type = request_type.unwrap_or_else(|| options.default_execution_request_type());
         let mut retry_count = 0;
         let start = Instant::now();
         while retry_count < WAIT_FOR_LOCAL_EXECUTION_RETRY_COUNT {
@@ -1094,7 +1113,7 @@ impl QuorumDriverApi {
     }
 }
 
-/// Governance API provides the functionality needed for staking on the Sui network.
+/// Governance API provides the staking functionality.
 #[derive(Debug, Clone)]
 pub struct GovernanceApi {
     api: Arc<RpcClient>,
@@ -1105,18 +1124,14 @@ impl GovernanceApi {
         Self { api }
     }
 
-    /// Return all [DelegatedStake].
-    pub async fn get_stakes(
-        &self,
-        owner: SuiAddress,
-    ) -> SuiRpcResult<Vec<DelegatedStake>> {
+    /// Return a list of [DelegatedStake] objects for the given address, or an error upon failure.
+    pub async fn get_stakes(&self, owner: SuiAddress) -> SuiRpcResult<Vec<DelegatedStake>> {
         Ok(self.api.http.get_stakes(owner).await?)
     }
 
-    /// Return the [SuiCommittee] information for the provided `epoch`, or an error upon failure.
+    /// Return the [SuiCommittee] information for the given `epoch`, or an error upon failure.
     ///
-    ///
-    /// The argument `epoch` is the known epoch id or `None` for the last epoch.
+    /// The argument `epoch` is the known epoch id or `None` for the current epoch.
     ///
     /// # Examples
     ///
@@ -1127,7 +1142,7 @@ impl GovernanceApi {
     /// async fn main() -> Result<(), anyhow::Error> {     
     ///     let sui = SuiClientBuilder::default().build_localnet().await?;
     ///     let committee_info = sui
-    ///         .read_api()
+    ///         .governance_api()
     ///         .get_committee_info(None)
     ///         .await?;
     ///     Ok(())
@@ -1141,9 +1156,11 @@ impl GovernanceApi {
     }
 
     /// Return the latest SUI system state object on-chain, or an error upon failure.
-    pub async fn get_latest_sui_system_state(
-        &self,
-    ) -> SuiRpcResult<SuiSystemStateSummary> {
+    ///
+    /// Use this method to access system's information, such as the current epoch,
+    /// the protocol version, the reference gas price, the total stake, active validators,
+    /// and much more. See the [SuiSystemStateSummary] for all the available fields.
+    pub async fn get_latest_sui_system_state(&self) -> SuiRpcResult<SuiSystemStateSummary> {
         Ok(self.api.http.get_latest_sui_system_state().await?)
     }
 

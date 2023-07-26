@@ -64,6 +64,7 @@
 //!
 //! }
 //! ```
+//!
 //! ## Examples
 //!
 //! For detailed examples, please check the APIs docs and the examples folder
@@ -76,9 +77,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::http_client::{
-    HeaderMap, HeaderValue, HttpClient, HttpClientBuilder,
-};
+use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder};
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use serde_json::Value;
@@ -86,8 +85,7 @@ use serde_json::Value;
 use move_core_types::language_storage::StructTag;
 pub use sui_json as json;
 use sui_json_rpc::{
-    CLIENT_SDK_TYPE_HEADER, CLIENT_SDK_VERSION_HEADER,
-    CLIENT_TARGET_API_VERSION_HEADER,
+    CLIENT_SDK_TYPE_HEADER, CLIENT_SDK_VERSION_HEADER, CLIENT_TARGET_API_VERSION_HEADER,
 };
 pub use sui_json_rpc_types as rpc_types;
 use sui_json_rpc_types::{
@@ -98,9 +96,7 @@ use sui_transaction_builder::{DataReader, TransactionBuilder};
 pub use sui_types as types;
 use sui_types::base_types::{ObjectID, ObjectInfo, SuiAddress};
 
-use crate::apis::{
-    CoinReadApi, EventApi, GovernanceApi, QuorumDriverApi, ReadApi,
-};
+use crate::apis::{CoinReadApi, EventApi, GovernanceApi, QuorumDriverApi, ReadApi};
 use crate::error::{Error, SuiRpcResult};
 
 pub mod apis;
@@ -157,10 +153,7 @@ impl SuiClientBuilder {
     }
 
     /// Set the max concurrent requests allowed
-    pub fn max_concurrent_requests(
-        mut self,
-        max_concurrent_requests: usize,
-    ) -> Self {
+    pub fn max_concurrent_requests(mut self, max_concurrent_requests: usize) -> Self {
         self.max_concurrent_requests = max_concurrent_requests;
         self
     }
@@ -200,8 +193,7 @@ impl SuiClientBuilder {
             CLIENT_SDK_VERSION_HEADER,
             HeaderValue::from_static(client_version),
         );
-        headers
-            .insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("rust"));
+        headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("rust"));
 
         let ws = if let Some(url) = self.ws_url {
             Some(
@@ -324,22 +316,17 @@ impl SuiClientBuilder {
         http: &HttpClient,
         ws: &Option<WsClient>,
     ) -> Result<ServerInfo, Error> {
-        let rpc_spec: Value =
-            http.request("rpc.discover", rpc_params![]).await?;
+        let rpc_spec: Value = http.request("rpc.discover", rpc_params![]).await?;
         let version = rpc_spec
             .pointer("/info/version")
             .and_then(|v| v.as_str())
             .ok_or_else(|| {
-                Error::DataError(
-                    "Fail parsing server version from rpc.discover endpoint."
-                        .into(),
-                )
+                Error::DataError("Fail parsing server version from rpc.discover endpoint.".into())
             })?;
         let rpc_methods = Self::parse_methods(&rpc_spec)?;
 
         let subscriptions = if let Some(ws) = ws {
-            let rpc_spec: Value =
-                ws.request("rpc.discover", rpc_params![]).await?;
+            let rpc_spec: Value = ws.request("rpc.discover", rpc_params![]).await?;
             Self::parse_methods(&rpc_spec)?
         } else {
             Vec::new()
