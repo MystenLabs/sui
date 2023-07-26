@@ -119,7 +119,7 @@ export {
 export {
 	/** @deprecated This type will be removed because it cant accurately represent parsed signatures */
 	type SignaturePubkeyPair,
-	/** @deprecated use `publicKeyFromBytes` from `@mysten/sui.j/verify` instead */
+	/** @deprecated use `publicKeyFromRawBytes` from `@mysten/sui.j/verify` instead */
 	publicKeyFromSerialized,
 	/** @deprecated use `parseSerializedSignature` from `@mysten/sui.j/cryptography` instead */
 	toParsedSignaturePubkeyPair,

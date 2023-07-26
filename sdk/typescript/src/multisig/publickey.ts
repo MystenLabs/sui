@@ -18,7 +18,7 @@ import {
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import { builder } from '../builder/bcs.js';
 // eslint-disable-next-line import/no-cycle
-import { publicKeyFromBytes } from '../verify/index.js';
+import { publicKeyFromRawBytes } from '../verify/index.js';
 
 type CompressedSignature =
 	| { ED25519: number[] }
@@ -87,7 +87,7 @@ export class MultiSigPublicKey extends PublicKey {
 		this.publicKeys = this.multisigPublicKey.pk_map.map(({ pubKey, weight }) => {
 			const [scheme, bytes] = Object.entries(pubKey)[0] as [SignatureScheme, number[]];
 			return {
-				publicKey: publicKeyFromBytes(scheme, Uint8Array.from(bytes)),
+				publicKey: publicKeyFromRawBytes(scheme, Uint8Array.from(bytes)),
 				weight,
 			};
 		});
@@ -270,7 +270,7 @@ export function parsePartialSignatures(multisig: MultiSigStruct): ParsedPartialM
 			throw new Error('MultiSig is not supported inside MultiSig');
 		}
 
-		const publicKey = publicKeyFromBytes(signatureScheme, pkBytes);
+		const publicKey = publicKeyFromRawBytes(signatureScheme, pkBytes);
 
 		res[i] = {
 			signatureScheme,
