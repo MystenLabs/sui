@@ -7,29 +7,35 @@
 # - Encoding RPC errors
 # - `type` (vs `scalar`) for Move Types
 # - Pattern for upcasting and downcasting
+# - Subscription APIs
 
 # Check Completeness Against Existing APIs
 # -------------
 # TODO Read
 # DONE - Objects
-# TODO - Transactions (+ TotalTransactionBlocks)
+# DONE - Transactions
 # TODO - Checkpoints
 # TODO - Events
 # TODO - ProtocolConfig
 # TODO - Chain Identifier
-# TODO Write
 # TODO Coin
 # TODO Extended
 # TODO Governance
 # TODO Indexer
 # TODO Move Utils
+# TODO Write
 
 # TODO Port designs from Notion
+# TODO - Display
+# TODO - SuiNS
 # TODO Data Consistency API
+# TODO Flesh out Connections
+# TODO - TotalTransactionBlocks for the PTB connection
 
 schema {
   query: Query
 }
+
 type Query {
   owner(address: SuiAddress!): Owner
   object(address: SuiAddress!, version: U64): Object
@@ -47,6 +53,9 @@ scalar Digest
 
 # String representation of a 64 bit unsigned integer
 scalar U64
+
+# String representation of a 128 bit signed integer
+scalar I128
 
 # String containing Base58-encoded binary data.
 scalar Bytes
@@ -77,19 +86,191 @@ type Object implements Owner {
   version: U64
   digest: Digest
 
+  previousVersion: U64
   previousTransactionBlock: TransactionBlock
   storageRebate: U64
-
-  bcs: Bytes
 
   asMoveObject: MoveObject
   asMovePackage: MovePackage
 
   # Transaction Blocks that sent objects to this object
   receivedTransactionBlocks: TransactionBlockConnection
+
+  bcs: Bytes
 }
 
-type TransactionBlock {}
+type Epoch {}
+
+type Checkpoint {}
+
+type TransactionBlock {
+  digest: Digest!
+  sender: Address
+  gasInput: GasInput
+  kind: TransactionBlockKind
+  signatures: [TransactionSignature]
+  effects: TransactionBlockEffects
+
+  expiration: Epoch
+
+  bcs: Bytes
+}
+
+union TransactionBlockKind =
+    ConsensusCommitPrologueTransaction
+  | GenesisTransaction
+  | ChangeEpochTransaction
+  | ProgrammableTransactionBlock
+
+type ConsensusCommitPrologueTransaction {
+  epoch: Epoch
+  # TODO: This is the "leader round" -- does this line up with
+  # checkpoints? In which case, it may suffice to have a `Checkpoint`
+  # here.
+  round: U64
+  timestamp_ms: U64
+}
+
+type GenesisTransaction {
+  objects: [Object]
+}
+
+type ChangeEpochTransaction {
+  epoch: Epoch
+  timestamp_ms: U64
+
+  storageCharge: U64
+  computationCharge: U64
+  storageRebate: U64
+}
+
+type ProgrammableTransactionBlock {
+  inputs: [TransactionInput]
+  transactions: [ProgrammableTransaction]
+}
+
+union TransactionInput = MovePackage | MoveObject | ShareInput
+
+type SharedInput {
+  id: SuiAddress
+  initialSharedVersion: U64
+  mutable: Boolean
+}
+
+union TransactionArgument = GasCoin | Input | Result
+
+type GasCoin {}
+type Input   { ix: Int }
+type Result  { cmd: Int, ix: Int }
+
+union ProgrammableTransaction =
+    MoveCallTransaction
+  | TransferObjectsTransaction
+  | SplitCoinTransaction
+  | MergeCoinsTransaction
+  | PublishTransaction
+  | UpgradeTransaction
+  | MakeMoveVecTransaction
+
+type MoveCallTransaction {
+  package: MovePackage
+  module: String
+  function: String
+
+  typeArguments: [MoveType]
+  arguments: [TransactionArgument]
+}
+
+type TransferObjectsTransaction {
+  objects: [TransactionArgument]
+  address: TransactionArgument
+}
+
+type SplitCoinTransaction {
+  coin: TransactionArgument
+  amounts: [TransactionArgument]
+}
+
+type MergeCoinsTransaction {
+  coin: TransactionArgument
+  coins: [TransactionArgument]
+}
+
+type PublishTransaction {
+  dependencies: [MovePackage]
+}
+
+type UpgradeTransaction {
+  dependencies: [MovePackage]
+  currentPackage: MovePackage
+  upgradeTicket: TransactionArgument
+}
+
+type MakeMoveVecTransaction {
+  type: MoveType
+  elements: [TransactionArgument]
+}
+
+# Omitting for brevity -- there's a lot of structure here, but it's
+# not very "connected" (i.e. no edges to other types).
+type TransactionSignature {}
+
+type TransactionBlockEffects {
+  digest: Digest!
+  status: ExecutionStatus!
+  errors: String
+  transactionBlock: TransactionBlock
+  dependencies: [TransactionBlock]
+
+  lamportVersion: U64
+  gasEffects: GasEffects
+  objectReads: [Object]
+  objectChanges: [ObjectChange]
+  balanceChanges: [BalanceChange]
+
+  epoch: Epoch
+  checkpoint: Checkpoint
+
+  events: TransactionEventConnection
+
+  bcs: Bytes
+}
+
+enum ExecutionStatus {
+  SUCCESS
+  FAILURE
+}
+
+type GasInput {
+  gasSponsor: Address
+  gasPayment: [Object] # TODO Specialise to Coin type
+
+  gasPrice: U64
+  gasBudget: U64
+}
+
+type GasEffects {
+  gasObject: Object # TODO Specialise to Coin type
+
+  computationCost: U64
+  storageCost: U64
+  storageRebate: U64
+  nonRefundableStorageFee: U64
+}
+
+type ObjectChange {
+  inputState: Object
+  outputState: Object
+
+  idCreated: Boolean
+  idDeleted: Boolean
+}
+
+type BalanceChange {
+  owner: Owner
+  coinType: MoveType
+  amount: I128
+}
 
 type MoveObject {
   contents: MoveValue
@@ -107,6 +288,8 @@ type MovePackage {
 type MoveValue {
   type: MoveType!
   data: MoveData
+
+  bcs: Bytes
 }
 
 union MoveData =
@@ -148,5 +331,6 @@ type MoveType {
 
 # Connections
 
-type TransactionBlockConnection {}
 type MovePackageModuleConnection {}
+type TransactionBlockConnection {}
+type TransactionEventConnection {}
