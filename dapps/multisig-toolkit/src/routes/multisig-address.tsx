@@ -2,15 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Button } from '@/components/ui/button';
-import {
-	PubkeyWeightPair,
-	publicKeyFromSerialized,
-	SIGNATURE_FLAG_TO_SCHEME,
-	toB64,
-	toMultiSigAddress,
-	SignatureScheme,
-	fromB64,
-} from '@mysten/sui.js';
+import { MultiSigPublicKey, publicKeyFromSuiBytes } from '@mysten/sui.js/multisig';
+import { PublicKey } from '@mysten/sui.js/cryptography';
 import { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 
@@ -37,25 +30,16 @@ export default function MultiSigAddressGenerator() {
 
 	// Perform generation of multisig address
 	const onSubmit = (data: FieldValues) => {
-		console.log('data', data);
-
-		let pks: PubkeyWeightPair[] = [];
+		let pks: { publicKey: PublicKey; weight: number }[] = [];
 		data.pubKeys.forEach((item: any) => {
-			console.log(item.pubKey);
-			const pkBytes = fromB64(item.pubKey);
-			const flag: number = pkBytes[0];
-			console.log(flag);
-			const rawPkBytes = toB64(pkBytes.slice(1));
-			const schemeFlag = (SIGNATURE_FLAG_TO_SCHEME as { [key: number]: string })[flag];
-			const scheme = schemeFlag as SignatureScheme;
-
-			const pk = publicKeyFromSerialized(scheme, rawPkBytes);
-			console.log(pk);
-			pks.push({ pubKey: pk, weight: item.weight });
+			const pk = publicKeyFromSuiBytes(item.pubKey);
+			pks.push({ publicKey: pk, weight: item.weight });
 		});
-		console.log('pks:', pks);
-		const multisigSuiAddress = toMultiSigAddress(pks, data.threshold);
-		console.log('multisigSuiAddress', multisigSuiAddress);
+		const multiSigPublicKey = MultiSigPublicKey.fromPublicKeys({
+			threshold: data.threshold,
+			publicKeys: pks,
+		});
+		const multisigSuiAddress = multiSigPublicKey.toSuiAddress();
 		setMSAddress(multisigSuiAddress);
 	};
 
@@ -143,14 +127,7 @@ export default function MultiSigAddressGenerator() {
 					className="form-control"
 				/> */}
 
-				<Button
-					type="submit"
-					onClick={() => {
-						console.log('fields', fields);
-					}}
-				>
-					Submit
-				</Button>
+				<Button type="submit">Submit</Button>
 			</form>
 			{msAddress && (
 				<Card key={msAddress}>
@@ -171,26 +148,26 @@ export default function MultiSigAddressGenerator() {
 	);
 }
 
-/* 
+/*
 ➜  multisig-toolkit git:(jnaulty/multisig-create-address) ✗ sui keytool multi-sig-address --pks ABr818VXt+6PLPRoA7QnsHBfRpKJdWZPjt7ppiTl6Fkq ANRdB4M6Hj73R+gRM4N6zUPNidLuatB9uccOzHBc/0bP --weights 1 2 --threshold 2
 MultiSig address: 0x27b17213bc702893bb3e92ba84071589a6331f35f066ad15b666b9527a288c16
 Participating parties:
                 Sui Address                 |                Public Key (Base64)                 | Weight
 ----------------------------------------------------------------------------------------------------
- 0x504f656b7bc467f6eb1d05dc26447477921f05e5ea88c5715682ad28835268ce | ABr818VXt+6PLPRoA7QnsHBfRpKJdWZPjt7ppiTl6Fkq  |   1   
- 0x611f6a023c5d1c98b4de96e9da64daffaeb372fed0176536168908e50f6e07c0 | ANRdB4M6Hj73R+gRM4N6zUPNidLuatB9uccOzHBc/0bP  |   2   
+ 0x504f656b7bc467f6eb1d05dc26447477921f05e5ea88c5715682ad28835268ce | ABr818VXt+6PLPRoA7QnsHBfRpKJdWZPjt7ppiTl6Fkq  |   1
+ 0x611f6a023c5d1c98b4de96e9da64daffaeb372fed0176536168908e50f6e07c0 | ANRdB4M6Hj73R+gRM4N6zUPNidLuatB9uccOzHBc/0bP  |   2
 ➜  multisig-toolkit git:(jnaulty/multisig-create-address) ✗ sui keytool multi-sig-address --pks ABr818VXt+6PLPRoA7QnsHBfRpKJdWZPjt7ppiTl6Fkq ANRdB4M6Hj73R+gRM4N6zUPNidLuatB9uccOzHBc/0bP --weights 1 1 --threshold 2
 MultiSig address: 0x9134bd58a25a6b48811d1c65770dd1d01e113931ed35c13f1a3c26ed7eccf9bc
 Participating parties:
                 Sui Address                 |                Public Key (Base64)                 | Weight
 ----------------------------------------------------------------------------------------------------
- 0x504f656b7bc467f6eb1d05dc26447477921f05e5ea88c5715682ad28835268ce | ABr818VXt+6PLPRoA7QnsHBfRpKJdWZPjt7ppiTl6Fkq  |   1   
- 0x611f6a023c5d1c98b4de96e9da64daffaeb372fed0176536168908e50f6e07c0 | ANRdB4M6Hj73R+gRM4N6zUPNidLuatB9uccOzHBc/0bP  |   1   
+ 0x504f656b7bc467f6eb1d05dc26447477921f05e5ea88c5715682ad28835268ce | ABr818VXt+6PLPRoA7QnsHBfRpKJdWZPjt7ppiTl6Fkq  |   1
+ 0x611f6a023c5d1c98b4de96e9da64daffaeb372fed0176536168908e50f6e07c0 | ANRdB4M6Hj73R+gRM4N6zUPNidLuatB9uccOzHBc/0bP  |   1
 ➜  multisig-toolkit git:(jnaulty/multisig-create-address) ✗ sui keytool multi-sig-address --pks ABr818VXt+6PLPRoA7QnsHBfRpKJdWZPjt7ppiTl6Fkq ANRdB4M6Hj73R+gRM4N6zUPNidLuatB9uccOzHBc/0bP --weights 1 1 --threshold 1
 MultiSig address: 0xda3f8c1ba647d63b89a396a64eeac835d25a59323a1b8fd4697424f62374b0de
 Participating parties:
                 Sui Address                 |                Public Key (Base64)                 | Weight
 ----------------------------------------------------------------------------------------------------
- 0x504f656b7bc467f6eb1d05dc26447477921f05e5ea88c5715682ad28835268ce | ABr818VXt+6PLPRoA7QnsHBfRpKJdWZPjt7ppiTl6Fkq  |   1   
- 0x611f6a023c5d1c98b4de96e9da64daffaeb372fed0176536168908e50f6e07c0 | ANRdB4M6Hj73R+gRM4N6zUPNidLuatB9uccOzHBc/0bP  |   1  
+ 0x504f656b7bc467f6eb1d05dc26447477921f05e5ea88c5715682ad28835268ce | ABr818VXt+6PLPRoA7QnsHBfRpKJdWZPjt7ppiTl6Fkq  |   1
+ 0x611f6a023c5d1c98b4de96e9da64daffaeb372fed0176536168908e50f6e07c0 | ANRdB4M6Hj73R+gRM4N6zUPNidLuatB9uccOzHBc/0bP  |   1
  */
