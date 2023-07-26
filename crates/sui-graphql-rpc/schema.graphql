@@ -11,13 +11,13 @@
 
 # Check Completeness Against Existing APIs
 # -------------
-# TODO Read
+# DONE Read
 # DONE - Objects
 # DONE - Transactions
 # DONE - Checkpoints
 # DONE - Events
-# TODO - ProtocolConfig
-# TODO - Chain Identifier
+# DONE - ProtocolConfig
+# DONE - Chain Identifier
 # TODO Coin
 # TODO Extended
 # TODO Governance
@@ -37,9 +37,14 @@ schema {
 }
 
 type Query {
+  network: Network!
+
   owner(address: SuiAddress!): Owner
   object(address: SuiAddress!, version: U64): Object
   address(address: SuiAddress!): Address
+
+  epoch(epochId: Int): Epoch
+  protocolConfig(protocolVersion: Int): ProtocolConfig
 
   checkpoint(filter: CheckpointFilter): Checkpoint
   checkpoints(): CheckpointConnection
@@ -111,7 +116,18 @@ type Object implements Owner {
   bcs: Bytes
 }
 
-type Epoch {}
+type Network {
+  # First four bytes of the network's genesis checkpoint digest
+  # (uniquely defines the network)
+  chainIdentifier: String
+}
+
+type Epoch {
+  protocolConfig: ProtocolConfig
+}
+
+# Omitting for brevity
+type ProtocolConfig {}
 
 type Checkpoint {
   digest: Digest!
