@@ -14,7 +14,6 @@ use jsonrpsee::{RpcModule, SubscriptionSink};
 use move_core_types::identifier::Identifier;
 use sui_core::subscription_handler::SubscriptionHandler;
 use sui_json_rpc::api::{cap_page_limit, IndexerApiClient, IndexerApiServer};
-use sui_json_rpc::indexer_api::spawn_subscription;
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
     DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiObjectDataFilter,
@@ -33,7 +32,7 @@ use crate::store::IndexerStore;
 pub(crate) struct IndexerApi<S> {
     state: S,
     fullnode: HttpClient,
-    subscription_handler: Arc<SubscriptionHandler>,
+    _subscription_handler: Arc<SubscriptionHandler>,
     migrated_methods: Vec<String>,
 }
 
@@ -41,13 +40,13 @@ impl<S: IndexerStore> IndexerApi<S> {
     pub fn new(
         state: S,
         fullnode_client: HttpClient,
-        subscription_handler: Arc<SubscriptionHandler>,
+        _subscription_handler: Arc<SubscriptionHandler>,
         migrated_methods: Vec<String>,
     ) -> Self {
         Self {
             state,
             fullnode: fullnode_client,
-            subscription_handler,
+            _subscription_handler,
             migrated_methods,
         }
     }
@@ -454,20 +453,22 @@ where
         df_obj_resp
     }
 
-    fn subscribe_event(&self, sink: SubscriptionSink, filter: EventFilter) -> SubscriptionResult {
-        spawn_subscription(sink, self.subscription_handler.subscribe_events(filter));
+    fn subscribe_event(&self, _sink: SubscriptionSink, _filter: EventFilter) -> SubscriptionResult {
+        // TODO: need to re-implement subscription for events after splitting of readers and writers
+        // spawn_subscription(sink, self.subscription_handler.subscribe_events(filter));
         Ok(())
     }
 
     fn subscribe_transaction(
         &self,
-        sink: SubscriptionSink,
-        filter: TransactionFilter,
+        _sink: SubscriptionSink,
+        _filter: TransactionFilter,
     ) -> SubscriptionResult {
-        spawn_subscription(
-            sink,
-            self.subscription_handler.subscribe_transactions(filter),
-        );
+        // TODO: need to re-implement subscription for events after splitting of readers and writers
+        // spawn_subscription(
+        //     sink,
+        //     self.subscription_handler.subscribe_transactions(filter),
+        // );
         Ok(())
     }
 
