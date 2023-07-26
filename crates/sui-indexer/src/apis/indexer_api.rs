@@ -455,7 +455,11 @@ where
     }
 
     fn subscribe_event(&self, sink: SubscriptionSink, filter: EventFilter) -> SubscriptionResult {
-        spawn_subscription(sink, self.subscription_handler.subscribe_events(filter));
+        spawn_subscription(
+            sink,
+            self.subscription_handler.subscribe_events(filter),
+            None,
+        );
         Ok(())
     }
 
@@ -467,6 +471,7 @@ where
         spawn_subscription(
             sink,
             self.subscription_handler.subscribe_transactions(filter),
+            None,
         );
         Ok(())
     }
