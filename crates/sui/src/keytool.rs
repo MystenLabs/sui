@@ -234,7 +234,6 @@ pub enum KeyToolCommand {
     Unpack {
         keypair: SuiKeyPair,
     },
-
     /// Input the max epoch and generate a nonce with max_epoch,
     /// ephemeral_pubkey and a randomoness.
     ZkLogInPrepare {
@@ -329,10 +328,17 @@ pub struct SerializedSig {
 #[serde(rename_all = "camelCase")]
 pub struct SignData {
     sui_address: SuiAddress,
+    // Base64 encoded string of serialized transaction data.
     raw_tx_data: String,
+    // Intent struct used, see [struct Intent] for field definitions.
     intent: Intent,
+    // Base64 encoded [struct IntentMessage] consisting of (intent || message)
+    // where message can be `TransactionData` etc.
     raw_intent_msg: String,
+    // Base64 encoded blake2b hash of the intent message, this is what the signature commits to.
     digest: String,
+    // Base64 encoded `flag || signature || pubkey` for a complete
+    // serialized Sui signature to be send for executing the transaction.
     sui_signature: String,
 }
 
@@ -581,7 +587,7 @@ impl KeyToolCommand {
                                 // we need these two because keystore.add_key takes ownership of skp
                                 let kp: Ed25519KeyPair = Ed25519KeyPair::from_bytes(&bytes).map_err(|_| anyhow!("Cannot decode ed25519 keypair from the private key. Importing private key failed."))?;
                                 let skp = SuiKeyPair::Ed25519(kp);
-                                let address: SuiAddress = Into::<SuiAddress>::into(&skp.public());
+                                let address: SuiAddress =  (&skp.public()).into();
                                 eprintln!("{address}");
 
                                 CommandOutput::Import(Key {
