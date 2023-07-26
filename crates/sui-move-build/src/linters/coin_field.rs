@@ -18,16 +18,16 @@ use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 
 use super::{
-    COIN_FIELD_DIAG_CATEGORY, COIN_FIELD_DIAG_CODE, COIN_MOD_NAME, COIN_STRUCT_NAME,
+    LinterDiagCategory, COIN_MOD_NAME, COIN_STRUCT_NAME, LINTER_DEFAULT_DIAG_CODE,
     LINT_WARNING_PREFIX, SUI_PKG_NAME,
 };
 
 const COIN_FIELD_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
-    COIN_FIELD_DIAG_CATEGORY,
-    COIN_FIELD_DIAG_CODE,
-    "sub-optimal sui::coin::Coin field type",
+    LinterDiagCategory::CoinField as u8,
+    LINTER_DEFAULT_DIAG_CODE,
+    "sub-optimal 'sui::coin::Coin' field type",
 );
 
 pub struct CoinFieldVisitor;
@@ -55,8 +55,8 @@ fn struct_def(env: &mut CompilationEnv, sname: Symbol, sdef: &N::StructDefinitio
     if let N::StructFields::Defined(sfields) = &sdef.fields {
         for (floc, fname, (_, ftype)) in sfields.iter() {
             if is_field_coin_type(ftype) {
-                let msg = format!("A field of struct type {sname} has type sui::coin::Coin");
-                let uid_msg = format!("Storing sui::balance::Balance in field {fname} is typically preferred as it is more space-efficient");
+                let msg = format!("The field '{fname}' of '{sname}' has type 'sui::coin::Coin'");
+                let uid_msg = "Storing 'sui::balance::Balance' in this field will typically be more space-efficient";
                 let d = diag!(COIN_FIELD_DIAG, (sloc, msg), (floc, uid_msg));
                 env.add_diag(d);
             }

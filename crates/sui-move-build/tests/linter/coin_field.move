@@ -12,3 +12,16 @@ module 0x42::test1 {
         c: Coin<S1>,
     }
 }
+
+module 0x42::test2 {
+    use sui::coin::Coin as Balance;
+    use sui::object::UID;
+
+    struct S1 {}
+
+    // there should still be a warning as Balance is just an alias
+    struct S2 has key, store {
+        id: UID,
+        c: Balance<S1>,
+    }
+}

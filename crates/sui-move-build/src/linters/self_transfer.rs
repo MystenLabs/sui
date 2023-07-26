@@ -27,8 +27,8 @@ use move_symbol_pool::Symbol;
 use std::collections::BTreeMap;
 
 use super::{
-    INVALID_LOC, LINT_WARNING_PREFIX, PUBLIC_TRANSFER_FUN, SELF_TRANSFER_DIAG_CATEGORY,
-    SELF_TRANSFER_DIAG_CODE, SUI_PKG_NAME, TRANSFER_FUN, TRANSFER_MOD_NAME,
+    LinterDiagCategory, INVALID_LOC, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
+    PUBLIC_TRANSFER_FUN, SUI_PKG_NAME, TRANSFER_FUN, TRANSFER_MOD_NAME,
 };
 
 const TRANSFER_FUNCTIONS: &[(&str, &str, &str)] = &[
@@ -39,8 +39,8 @@ const TRANSFER_FUNCTIONS: &[(&str, &str, &str)] = &[
 const SELF_TRANSFER_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
-    SELF_TRANSFER_DIAG_CATEGORY,
-    SELF_TRANSFER_DIAG_CODE,
+    LinterDiagCategory::SelfTransfer as u8,
+    LINTER_DEFAULT_DIAG_CODE,
     "non-composable transfer to sender",
 );
 

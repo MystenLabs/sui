@@ -1,4 +1,4 @@
-warning[Lint W04001]: sub-optimal sui::coin::Coin field type
+warning[Lint W03001]: sub-optimal sui::coin::Coin field type
    ┌─ tests/linter/coin_field.move:10:12
    │
 10 │     struct S2 has key, store {
