@@ -942,29 +942,6 @@ impl From<PublicKey> for Key {
     }
 }
 
-fn convert_private_key_to_base64(value: String) -> Result<String, anyhow::Error> {
-    match Base64::decode(&value) {
-        Ok(decoded) => {
-            if decoded.len() != 33 {
-                return Err(anyhow!(format!("Private key is malformed and cannot base64 decode it. Fed 33 length but got {}", decoded.len())));
-            }
-            Ok(Hex::encode(&decoded[1..]))
-        }
-        Err(_) => match Hex::decode(&value) {
-            Ok(decoded) => {
-                if decoded.len() != 32 {
-                    return Err(anyhow!(format!("Private key is malformed and cannot hex decode it. Expected 32 length but got {}", decoded.len())));
-                }
-                let mut res = Vec::new();
-                res.extend_from_slice(&[SignatureScheme::ED25519.flag()]);
-                res.extend_from_slice(&decoded);
-                Ok(Base64::encode(&res))
-            }
-            Err(_) => Err(anyhow!("Invalid private key format".to_string())),
-        },
-    }
-}
-
 impl Display for CommandOutput {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -1029,24 +1006,6 @@ impl CommandOutput {
     }
 }
 
-// struct JsonOutput<'a>(&'a CommandOutput);
-
-// impl<'a> Display for JsonOutput<'a> {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-//         match serde_json::to_string_pretty(self) {
-//             Ok(json) => write!(f, "{json}"),
-//             Err(err) => write!(f, "Error serializing JSON: {err}"),
-//         }
-//     }
-// }
-
-// impl Debug for CommandOutput {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-//         let s = unwrap_err_to_string(|| Ok(serde_json::to_string_pretty(self)?));
-//         write!(f, "{}", s)
-//     }
-// }
-
 // when --json flag is used, any output result is transformed into a JSON pretty string and sent to std output
 impl Debug for CommandOutput {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -1057,12 +1016,28 @@ impl Debug for CommandOutput {
     }
 }
 
-// fn unwrap_err_to_string<T: Display, F: FnOnce() -> Result<T, anyhow::Error>>(func: F) -> String {
-//     match func() {
-//         Ok(s) => format!("{s}"),
-//         Err(err) => format!("{err}"),
-//     }
-// }
+fn convert_private_key_to_base64(value: String) -> Result<String, anyhow::Error> {
+    match Base64::decode(&value) {
+        Ok(decoded) => {
+            if decoded.len() != 33 {
+                return Err(anyhow!(format!("Private key is malformed and cannot base64 decode it. Fed 33 length but got {}", decoded.len())));
+            }
+            Ok(Hex::encode(&decoded[1..]))
+        }
+        Err(_) => match Hex::decode(&value) {
+            Ok(decoded) => {
+                if decoded.len() != 32 {
+                    return Err(anyhow!(format!("Private key is malformed and cannot hex decode it. Expected 32 length but got {}", decoded.len())));
+                }
+                let mut res = Vec::new();
+                res.extend_from_slice(&[SignatureScheme::ED25519.flag()]);
+                res.extend_from_slice(&decoded);
+                Ok(Base64::encode(&res))
+            }
+            Err(_) => Err(anyhow!("Invalid private key format".to_string())),
+        },
+    }
+}
 
 fn anemo_styling(pk: &PublicKey) -> Option<String> {
     if let PublicKey::Ed25519(public_key) = pk {
