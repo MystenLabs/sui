@@ -132,7 +132,7 @@ jobs:
 
   macos-release-build:
     timeout-minutes: 45
-    runs-on: [ macos-ghcloud ]
+    runs-on: [ ubuntu-ghcloud ]
     steps:
       - name: Clean up tag name ${{ env.TAG_NAME }}
         shell: bash
@@ -149,6 +149,7 @@ jobs:
         if: ${{ env.sui_tag != 'main'  }}
         shell: bash
         run: |
+          sudo apt-get install clang --assume-yes
           rustup target add aarch64-apple-darwin
           cargo build --target aarch64-apple-darwin --release
 
