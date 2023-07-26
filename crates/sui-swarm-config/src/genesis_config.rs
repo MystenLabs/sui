@@ -285,7 +285,7 @@ impl GenesisConfig {
     /// Port offset for benchmarks' genesis configs.
     pub const BENCHMARKS_PORT_OFFSET: u16 = 2000;
     /// The gas amount for each genesis gas object.
-    const BENCHMARK_GAS_AMOUNT: u64 = 100_000_000_000_000_000;
+    const BENCHMARK_GAS_AMOUNT: u64 = 50_000_000_000_000_000;
 
     pub fn for_local_testing() -> Self {
         Self::custom_genesis(
@@ -360,7 +360,7 @@ impl GenesisConfig {
                     address: Some(gas_address),
                     // Generate one genesis gas object per validator (this seems a good rule of thumb to produce
                     // enough gas objects for most types of benchmarks).
-                    gas_amounts: vec![Self::BENCHMARK_GAS_AMOUNT; 5],
+                    gas_amounts: vec![Self::BENCHMARK_GAS_AMOUNT; 10],
                 }
             })
             .collect();
