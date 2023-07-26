@@ -328,11 +328,7 @@ impl Proposer {
         let next_round = self.round + 1;
         if next_round % 2 == 0 && self.leader_schedule.leader(next_round).id() == self.authority_id
         {
-            return Duration::ZERO;
-        }
-
-        if next_round % 2 != 0 && self.committee.leader(next_round).id() == self.authority_id {
-            return Duration::ZERO;
+            return self.min_header_delay / 2;
         }
 
         self.min_header_delay
