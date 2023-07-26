@@ -197,6 +197,7 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
                     &format!(
                         "--shared-counter {shared_counter} --transfer-object {transfer_objects}"
                     ),
+                    "--shared-counter-hotness-factor 0",
                     &format!("--client-metric-host 0.0.0.0 --client-metric-port {metrics_port}"),
                 ]
                 .join(" ");
