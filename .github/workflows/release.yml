@@ -85,6 +85,8 @@ jobs:
         if: ${{ env.sui_tag != 'main' }}
         shell: bash
         run: |
+          export PATH=$PATH:/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib
+          export LIBRARY_PATH=$LIBRARY_PATH:/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib
           rustup target add aarch64-apple-darwin
           cargo build --target aarch64-apple-darwin --release      
 
