@@ -6,7 +6,7 @@ import { KIOSK_ITEM, KioskData, KioskItem, fetchKiosk, getOwnedKiosks } from '@m
 import { useQuery } from '@tanstack/react-query';
 import { useRpcClient } from '../api/RpcClientContext';
 import { ORIGINBYTE_KIOSK_OWNER_TOKEN, getKioskIdFromOwnerCap } from '../utils/kiosk';
-import { SuiClient } from '@mysten/sui.js/src/client';
+import { SuiClient } from '@mysten/sui.js/client';
 
 export type KioskContents = Omit<KioskData, 'items'> & {
 	items: Partial<KioskItem & SuiObjectResponse>[];

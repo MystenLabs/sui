@@ -1,13 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	SuiObjectData,
-	SuiObjectResponse,
-	getSuiObjectData,
-	isSuiObjectResponse,
-	getObjectFields,
-} from '@mysten/sui.js';
+import { SuiObjectData, SuiObjectResponse } from '@mysten/sui.js/client';
+import { getObjectFields } from '@mysten/sui.js';
 import { KIOSK_OWNER_CAP } from '@mysten/kiosk';
 
 export const ORIGINBYTE_KIOSK_MODULE =
@@ -17,12 +12,12 @@ export const ORIGINBYTE_KIOSK_OWNER_TOKEN = `${ORIGINBYTE_KIOSK_MODULE}::OwnerTo
 
 export function isKioskOwnerToken(object?: SuiObjectResponse | SuiObjectData) {
 	if (!object) return false;
-	const objectData = isSuiObjectResponse(object) ? getSuiObjectData(object) : object;
+	const objectData = 'data' in object && object.data ? object.data : (object as SuiObjectData);
 	return [KIOSK_OWNER_CAP, ORIGINBYTE_KIOSK_OWNER_TOKEN].includes(objectData?.type ?? '');
 }
 
 export function getKioskIdFromOwnerCap(object: SuiObjectResponse | SuiObjectData) {
-	const objectData = isSuiObjectResponse(object) ? getSuiObjectData(object) : object;
-	const fields = getObjectFields(objectData!);
+	const objectData = 'data' in object && object.data ? object.data : (object as SuiObjectData);
+	const fields = getObjectFields(objectData);
 	return fields?.for ?? fields?.kiosk;
 }

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ObjectDigest, ObjectType, PaginatedObjectsResponse } from '@mysten/sui.js';
+import { PaginatedObjectsResponse } from '@mysten/sui.js/client';
 import { TransactionArgument } from '@mysten/sui.js/transactions';
 import { ObjectArgument } from '.';
 
@@ -93,7 +93,7 @@ export type KioskItem = {
 	/** The ID of the Item */
 	objectId: string;
 	/** The type of the Item */
-	type: ObjectType;
+	type: string;
 	/** Whether the item is Locked (there must be a `Lock` Dynamic Field) */
 	isLocked: boolean;
 	/** Optional listing */
@@ -129,6 +129,6 @@ export type OwnedKiosks = {
 export type KioskOwnerCap = {
 	objectId: string;
 	kioskId: string;
-	digest: ObjectDigest;
+	digest: string;
 	version: string;
 };

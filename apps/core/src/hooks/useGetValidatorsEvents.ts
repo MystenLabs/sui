@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { VALIDATORS_EVENTS_QUERY } from '@mysten/sui.js';
 import { useRpcClient } from '../api/RpcClientContext';
-import { type EventId, VALIDATORS_EVENTS_QUERY, SuiEvent } from '@mysten/sui.js';
+import { type EventId, SuiEvent } from '@mysten/sui.js/client';
 import { useQuery } from '@tanstack/react-query';
 
 type GetValidatorsEvent = {

@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiObjectData, SuiObjectResponse, getObjectFields } from '@mysten/sui.js';
+import { getObjectFields } from '@mysten/sui.js';
+import { SuiObjectData, SuiObjectResponse } from '@mysten/sui.js/client';
 import { isValidSuiAddress } from '@mysten/sui.js/utils';
 import {
 	attachListingsAndPrices,

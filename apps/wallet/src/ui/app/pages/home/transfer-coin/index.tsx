@@ -3,7 +3,6 @@
 
 import { useCoinMetadata } from '@mysten/core';
 import { ArrowRight16, ArrowLeft16 } from '@mysten/icons';
-import { getTransactionDigest } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
@@ -88,7 +87,7 @@ function TransferCoinPage() {
 			});
 
 			const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
-				getTransactionDigest(response),
+				response.digest,
 			)}&from=transactions`;
 			return navigate(receiptUrl);
 		},

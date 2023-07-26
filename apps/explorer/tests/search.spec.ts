@@ -1,7 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
-import { getCreatedObjects, getTransactionDigest } from '@mysten/sui.js';
 import { expect, test, type Page } from '@playwright/test';
 
 import { faucet, split_coin } from './utils/localnet';
@@ -24,7 +22,7 @@ test('can search for objects', async ({ page }) => {
 	const address = await faucet();
 	const tx = await split_coin(address);
 
-	const { objectId } = getCreatedObjects(tx)![0].reference;
+	const { objectId } = tx.effects!.created![0].reference;
 	await page.goto('/');
 	await search(page, objectId);
 	await expect(page).toHaveURL(`/object/${objectId}`);
@@ -34,7 +32,7 @@ test('can search for transaction', async ({ page }) => {
 	const address = await faucet();
 	const tx = await split_coin(address);
 
-	const txid = getTransactionDigest(tx);
+	const txid = tx.digest;
 	await page.goto('/');
 	await search(page, txid);
 	await expect(page).toHaveURL(`/txblock/${txid}`);

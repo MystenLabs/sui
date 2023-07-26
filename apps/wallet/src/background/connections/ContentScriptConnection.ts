@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SignedTransaction, type SuiTransactionBlockResponse } from '@mysten/sui.js';
+import { type SignedTransaction } from '@mysten/sui.js';
+import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 import Browser from 'webextension-polyfill';
 
 import { Connection } from './Connection';
