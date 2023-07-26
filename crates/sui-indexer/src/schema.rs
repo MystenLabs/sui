@@ -4,14 +4,17 @@
 
 pub mod sql_types {
     #[derive(diesel::sql_types::SqlType)]
+    #[diesel(mysql_type(name = "Blob"))]
     #[diesel(postgres_type(name = "bcs_bytes"))]
     pub struct BcsBytes;
 
     #[derive(diesel::sql_types::SqlType)]
+    #[diesel(mysql_type(name = "LongLong"))]
     #[diesel(postgres_type(name = "object_status"))]
     pub struct ObjectStatus;
 
     #[derive(diesel::sql_types::SqlType)]
+    #[diesel(mysql_type(name = "LongLong"))]
     #[diesel(postgres_type(name = "owner_type"))]
     pub struct OwnerType;
 }

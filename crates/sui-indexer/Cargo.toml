@@ -6,8 +6,18 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[build-dependencies]
+diesel = { version = "2.1", features = ["chrono",  "mysql", "r2d2", "serde_json", "64-column-tables"] }
+diesel-derive-enum = { version = "2.1", features = ["postgres", "mysql"] }
+diesel_migrations = { version = "2.1", features = ["postgres", "mysql"] }
 
 [dependencies]
+# mysql = "24.0.0"
+# mysqlclient-sys = "0.2.5"
+diesel = { version = "2.1", features = ["chrono",  "mysql", "r2d2", "serde_json", "64-column-tables"] }
+diesel-derive-enum = { version = "2.1", features = [ "mysql"] }
+diesel_migrations = { version = "2.1", features = [ "mysql"] }
+
 anyhow.workspace = true
 async-trait.workspace = true
 axum.workspace = true
@@ -15,8 +25,6 @@ backoff.workspace = true
 bcs.workspace = true
 chrono.workspace = true
 clap.workspace = true
-diesel.workspace = true
-diesel-derive-enum.workspace = true
 futures.workspace = true
 itertools.workspace = true
 jsonrpsee.workspace = true
@@ -48,7 +56,6 @@ telemetry-subscribers.workspace = true
 move-core-types.workspace = true
 move-bytecode-utils.workspace = true
 
-diesel_migrations.workspace = true
 cached.workspace = true
 
 [features]
