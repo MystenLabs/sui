@@ -109,7 +109,11 @@ impl From<DeletedObject> for Object {
 }
 
 #[derive(DbEnum, Debug, Clone, Copy, Deserialize, Serialize)]
-#[ExistingTypePath = "crate::schema::sql_types::ObjectStatus"]
+// #[ExistingTypePath = "crate::schema::sql_types::ObjectStatus"]
+// #[DieselType = "ObjectStatusMapping"]
+#[derive(diesel::sql_types::SqlType)]
+#[diesel(mysql_type(name = "LongLong"))]
+#[diesel(postgres_type(name = "object_status"))]
 #[serde(rename_all = "snake_case")]
 pub enum ObjectStatus {
     Created,

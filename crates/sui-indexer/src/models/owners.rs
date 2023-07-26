@@ -20,7 +20,10 @@ pub struct ObjectOwner {
 }
 
 #[derive(DbEnum, Debug, Clone, Deserialize, Serialize)]
-#[ExistingTypePath = "crate::schema::sql_types::OwnerType"]
+// #[ExistingTypePath = "crate::schema::sql_types::OwnerType"]
+#[derive(diesel::sql_types::SqlType)]
+#[diesel(mysql_type(name = "LongLong"))]
+#[diesel(postgres_type(name = "owner_type"))]
 #[serde(rename_all = "snake_case")]
 pub enum OwnerType {
     AddressOwner,
