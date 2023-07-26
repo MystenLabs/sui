@@ -14,7 +14,7 @@
 # TODO Read
 # DONE - Objects
 # DONE - Transactions
-# TODO - Checkpoints
+# DONE - Checkpoints
 # TODO - Events
 # TODO - ProtocolConfig
 # TODO - Chain Identifier
@@ -41,6 +41,9 @@ type Query {
   object(address: SuiAddress!, version: U64): Object
   address(address: SuiAddress!): Address
 
+  checkpoint(filter: CheckpointFilter): Checkpoint
+  checkpoints(): CheckpointConnection
+
   transactionBlock(digest: Digest!): TransactionBlock
   transactionBlocks(): TransactionBlockConnection
 }
@@ -59,6 +62,13 @@ scalar I128
 
 # String containing Base58-encoded binary data.
 scalar Bytes
+
+# Filter either by the digest, or the sequence number, or neither, to
+# get the latest checkpoint.
+input CheckpointFilter {
+  digest: Digest
+  sequenceNumber: U64
+}
 
 interface Owner {
   id: SuiAddress!
@@ -101,7 +111,36 @@ type Object implements Owner {
 
 type Epoch {}
 
-type Checkpoint {}
+type Checkpoint {
+  digest: Digest!
+  sequenceNumber: U64!
+  timestampMs: U64
+  validatorSignature: Bytes
+
+  # Commitments
+  previousCheckpoint: Digest
+  liveObjectSet: Digest
+
+  networkTotalTransactions: U64
+  rollingGasCostSummary: GasCostSummary
+
+  epoch: Epoch
+
+  # Only available on the final checkpoint in an epoch
+  endOfEpoch: EndOfEpochData
+
+  transactions: TransactionBlockConnection
+}
+
+type EndOfEpochData {
+  newCommittee: [CommitteeMember]
+  nextProtocolVersion: Int
+}
+
+type CommitteeMember {
+  authorityName: String
+  stakeUnit: Int
+}
 
 type TransactionBlock {
   digest: Digest!
@@ -128,7 +167,7 @@ type ConsensusCommitPrologueTransaction {
   # checkpoints? In which case, it may suffice to have a `Checkpoint`
   # here.
   round: U64
-  timestamp_ms: U64
+  timestampMs: U64
 }
 
 type GenesisTransaction {
@@ -137,7 +176,7 @@ type GenesisTransaction {
 
 type ChangeEpochTransaction {
   epoch: Epoch
-  timestamp_ms: U64
+  timestampMs: U64
 
   storageCharge: U64
   computationCharge: U64
@@ -251,7 +290,10 @@ type GasInput {
 
 type GasEffects {
   gasObject: Object # TODO Specialise to Coin type
+  costSummary: GasCostSummary
+}
 
+type GasCostSummary {
   computationCost: U64
   storageCost: U64
   storageRebate: U64
@@ -331,6 +373,7 @@ type MoveType {
 
 # Connections
 
+type CheckpointConnection {}
 type MovePackageModuleConnection {}
 type TransactionBlockConnection {}
 type TransactionEventConnection {}
