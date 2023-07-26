@@ -66,8 +66,6 @@ export default function MultiSigAddressGenerator() {
 	// The following is useWatch example
 	// console.log(useWatch({ name: "pubKeys", control }));
 
-	renderCount++;
-
 	return (
 		<div className="flex flex-col gap-4">
 			<h2 className="scroll-m-20 text-4xl font-extrabold tracking-tight lg:text-5xl">
