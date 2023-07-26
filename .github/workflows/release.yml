@@ -132,7 +132,7 @@ jobs:
 
   macos-release-build:
     timeout-minutes: 45
-    runs-on: [ ubuntu-ghcloud ]
+    runs-on: [ macos-ghcloud ]
     steps:
       - name: Clean up tag name ${{ env.TAG_NAME }}
         shell: bash
