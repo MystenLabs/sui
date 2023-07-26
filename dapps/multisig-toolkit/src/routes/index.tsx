@@ -4,7 +4,6 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import OfflineSigner from './offline-signer';
 import SignatureAnalyzer from './signature-analyzer';
-import MultiSigAddress from './multisig-address';
 import { Root } from './root';
 import MultiSigAddressGenerator from './multisig-address';
 

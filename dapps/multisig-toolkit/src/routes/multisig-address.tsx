@@ -16,58 +16,11 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 
 import { useForm, useFieldArray, FieldValues } from 'react-hook-form';
 
-import { z } from 'zod';
-
 /*
 Pubkeys for playing with
 ABr818VXt+6PLPRoA7QnsHBfRpKJdWZPjt7ppiTl6Fkq
 ANRdB4M6Hj73R+gRM4N6zUPNidLuatB9uccOzHBc/0bP
 */
-
-const schema = z.object({
-	threshold: z
-		.number({ invalid_type_error: 'Age field is required.' })
-		.min(1, { message: 'threshold must be at least 3 characters.' }),
-});
-
-type FormData = z.infer<typeof schema>;
-
-let renderCount = 0;
-
-//function MultiSigAddress({ signature, index }: ) {
-//	const suiAddress = signature.publicKey.toSuiAddress();
-//
-//	const pubkey_base64_sui_format = signature.publicKey.toSuiPublicKey();
-//
-//	const pubkey = signature.publicKey.toBase64();
-//	const scheme = signature.signatureScheme.toString();
-//
-//	const details = [
-//		{ label: 'Signature Public Key', value: pubkey },
-//		{ label: 'Sui Format Public Key ( flag | pk )', value: pubkey_base64_sui_format },
-//		{ label: 'Sui Address', value: suiAddress },
-//		{ label: 'Signature', value: toB64(signature.signature) },
-//	];
-//
-//	return (
-//		<Card>
-//			<CardHeader>
-//				<CardTitle>Signature #{index}</CardTitle>
-//				<CardDescription>{scheme}</CardDescription>
-//			</CardHeader>
-//			<CardContent>
-//				<div className="flex flex-col gap-2">
-//					{details.map(({ label, value }, index) => (
-//						<div key={index} className="flex flex-col gap-1.5">
-//							<div className="font-bold">{label}</div>
-//							<div className="bg-muted rounded text-sm font-mono p-2 break-all">{value}</div>
-//						</div>
-//					))}
-//				</div>
-//			</CardContent>
-//		</Card>
-//	);
-//}
 
 export default function MultiSigAddressGenerator() {
 	const [msAddress, setMSAddress] = useState('');
