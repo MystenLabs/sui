@@ -140,6 +140,9 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub state_snapshot_write_config: StateSnapshotConfig,
+
+    #[serde(default)]
+    pub indexer_max_subscriptions: Option<usize>,
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
