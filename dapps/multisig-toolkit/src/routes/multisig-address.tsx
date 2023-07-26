@@ -1,9 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import {
 	PubkeyWeightPair,
 	publicKeyFromSerialized,
@@ -13,15 +11,12 @@ import {
 	SignatureScheme,
 	fromB64,
 } from '@mysten/sui.js';
-import { AlertCircle } from 'lucide-react';
 import { useState } from 'react';
-import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 
-import { useForm, useFieldArray, Controller, useWatch, FieldValues } from 'react-hook-form';
+import { useForm, useFieldArray, FieldValues } from 'react-hook-form';
 
 import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
 
 /*
 Pubkeys for playing with
@@ -130,12 +125,8 @@ export default function MultiSigAddressGenerator() {
 				<p>The following demo allow you to create Sui MultiSig addresses.</p>
 				<code>
 					Sui Pubkeys for playing with
-					<p>
-						ABr818VXt+6PLPRoA7QnsHBfRpKJdWZPjt7ppiTl6Fkq
-					</p>
-					<p>
-						ANRdB4M6Hj73R+gRM4N6zUPNidLuatB9uccOzHBc/0bP
-					</p>
+					<p>ABr818VXt+6PLPRoA7QnsHBfRpKJdWZPjt7ppiTl6Fkq</p>
+					<p>ANRdB4M6Hj73R+gRM4N6zUPNidLuatB9uccOzHBc/0bP</p>
 				</code>
 				<ul className="grid w-full gap-1.5">
 					{fields.map((item, index) => {
@@ -210,17 +201,21 @@ export default function MultiSigAddressGenerator() {
 					Submit
 				</Button>
 			</form>
-			{msAddress && <Card key={msAddress}>
-				<CardHeader>
-					<CardTitle>Sui MultiSig Address</CardTitle>
-					<CardDescription>https://docs.sui.io/testnet/learn/cryptography/sui-multisig</CardDescription>
-				</CardHeader>
-				<CardContent>
-					<div className="flex flex-col gap-2">
-						<div className="bg-muted rounded text-sm font-mono p-2 break-all">{msAddress}</div>
-					</div>
-				</CardContent>
-			</Card>}
+			{msAddress && (
+				<Card key={msAddress}>
+					<CardHeader>
+						<CardTitle>Sui MultiSig Address</CardTitle>
+						<CardDescription>
+							https://docs.sui.io/testnet/learn/cryptography/sui-multisig
+						</CardDescription>
+					</CardHeader>
+					<CardContent>
+						<div className="flex flex-col gap-2">
+							<div className="bg-muted rounded text-sm font-mono p-2 break-all">{msAddress}</div>
+						</div>
+					</CardContent>
+				</Card>
+			)}
 		</div>
 	);
 }
