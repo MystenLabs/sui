@@ -524,6 +524,10 @@ where
         quorum_driver: Arc<QuorumDriverHandler<A>>,
     ) {
         spawn_logged_monitored_task!(async move {
+            if std::env::var("SKIP_LOADING_FROM_PENDING_TX_LOG").is_ok() {
+                info!("Skipping loading pending transactions from pending_tx_log.");
+                return;
+            }
             let pending_txes = pending_tx_log.load_all_pending_transactions();
             info!(
                 "Recovering {} pending transactions from pending_tx_log.",
