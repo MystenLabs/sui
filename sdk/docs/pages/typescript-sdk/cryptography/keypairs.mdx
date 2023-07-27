@@ -1,109 +1,127 @@
-import { Callout } from 'nextra/components';
+# Key pairs
 
-# KeyPairs
+The Sui TypeScript SDK provides `Keypair` classes that handle logic for signing and verification
+using the cryptographic key pairs associated with a Sui address.
 
-KeyPair classes are provide logic for signing and verification using the cryptographic keypairs
-associated with an Address.
+The Sui TypeScript SDK supports three signing schemes:
+
+| Sign scheme     | Class name         | Import folder                     |
+| --------------- | ------------------ | --------------------------------- |
+| Ed25519         | `Ed25519Keypair`   | `@mysten/sui.js/keypairs/ed25519` |
+| ECDSA Secp256k1 | `Secp256k1Keypair` | `@mysten/sui.js/keypairs/ed25519` |
+| ECDSA Secp256r1 | `Secp256r1Keypair` | `@mysten/sui.js/keypairs/ed25519` |
+
+For information on these schemes, see the
+[Sui Wallet Specifications](https://docs.sui.io/testnet/learn/cryptography/sui-wallet-specs) topic.
+
+To use, import the key pair class your project uses from the `@mysten/sui.js/keypairs` folder. For
+example, to use the Ed25519 scheme, import the `Ed25519Keypair` class from
+`@mysten/sui.js/keypairs/ed25519`.
 
 ```typescript
-import { ED25519KeyPair } from '@mysten/sui.js/keypairs/ed25519';
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+```
 
-// create a random KeyPair
-const keyPair = new ED25519KeyPair();
-// or create a KeyPair from an existing secret key (Uint8Array)
-const keyPair = ED25519KeyPair.fromSecretKey(secretKey);
+To create a random key pair (which identifies a Sui address), instantiate a new `Keypair` class. To
+reference a key pair from an existing secret key, pass the secret to the `fromSecretKey` function.
 
-const publicKey = keyPair.getPublicKey();
+```typescript
+// random Keypair
+const keypair = new Ed25519Keypair();
+// Keypair from an existing secret key (Uint8Array)
+const keypair = Ed25519Keypair.fromSecretKey(secretKey);
+```
+
+With your key pair created, you can reference it when performing actions on the network. For
+example, you can use it to sign transactions, like the following code that creates and signs a
+personal message using the public key from the key pair created in the previous code:
+
+```typescript
+const publicKey = keypair.getPublicKey();
 const message = new TextEncoder().encode('hello world');
 
-const { signature } = await keyPair.signPersonalMessage(message);
+const { signature } = await keypair.signPersonalMessage(message);
 const isValid = await publicKey.verifyPersonalMessage(message, signature);
 ```
 
-## Public Keys
+## Public keys
 
-Each KeyPair class has an associated PublicKey class. The PublicKey class that can be used to verify
-signatures, or get a the SuiAddress associated with the keyPair. PublicKeys can be access from a
-KeyPair, or constructed directly using the bytes (as a Uint8Array) of the PublicKey
+Each `Keypair` has an associated `PublicKey` class. You use the public key to verify signatures or
+to retrieve its associated Sui address. You can access a `Keypair` from its `PublicKey` or construct
+it from the bytes (as a `Uint8Array`) of the `PublicKey`, as in the following code:
 
 ```typescript
-import { ED25519KeyPair, ED25519PublicKey } from '@mysten/sui.js/keypairs/ed25519';
+import { Ed25519Keypair, Ed25519PublicKey } from '@mysten/sui.js/keypairs/ed25519';
 
-const keyPair = new ED25519KeyPair();
-const bytes = keyPair.getPublicKey().toBytes();
+const keypair = new Ed25519Keypair();
+const bytes = keypair.getPublicKey().toBytes();
 
-const publicKey = new ED25519PublicKey(bytes);
+const publicKey = new Ed25519PublicKey(bytes);
 
-const address = publicKey.getAddress();
+const address = publicKey.toSuiAddress();
 ```
 
-## KeyPair algorithms
+## Verifying signatures without a key pair
 
-The Sui SDK supports the following keypair algorithms: `ED25519`, `SECP256K1`, and `SECP256R1`, each
-of which is exported separately.
+When you have an existing public key, you can use it to verify a signature. Verification ensures the
+signature is valid for the provided message and is signed with the appropriate secret key.
 
-```typescript
-import { ED25519KeyPair } from '@mysten/sui.js/keypairs/ed25519';
-import { SECP256K1KeyPair } from '@mysten/sui.js/keypairs/secp256k1';
-import { SECP256R1KeyPair } from '@mysten/sui.js/keypairs/secp256r1';
-```
-
-## Verifying signatures without a KeyPair
-
-When you have an existing publicKey, you can use it to verify a signature, which will ensure the
-signature is valid for the provided message, and was signed with the secret key associated with the
-publicKey you are using for verification. In many cases, you may want to extract the public key from
-the signature, and then check that the resulting public key is for the address you expect.
+The following code creates a key pair in the Ed25519 scheme, creates and signs a message with it,
+then verifies the message to retrieve the public key. The code then uses `toSuiAddress()` to check
+if the address associated with the public key matches the address that the key pair defines.
 
 ```typescript
-import { ED25519KeyPair } from '@mysten/sui.js/keypairs/ed25519';
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { verifyPersonalMessage } from '@mysten/sui.js/verify';
 
-const keyPair = new ED25519KeyPair();
+const keypair = new Ed25519Keypair();
 const message = new TextEncoder().encode('hello world');
-const { signature } = await keyPair.signPersonalMessage(message);
+const { signature } = await keypair.signPersonalMessage(message);
 
 const publicKey = await verifyPersonalMessage(message, signature);
 
-if (publicKey.getAddress() !== keyPair.getPublicKey().getAddress()) {
-	throw new Error('Signature was valid, but was signed by a different keyPair');
+if (publicKey.toSuiAddress() !== keypair.getPublicKey().toSuiAddress()) {
+	throw new Error('Signature was valid, but was signed by a different key pair');
 }
 ```
 
-## Verifying Transaction Blocks
+## Verifying transaction blocks
 
-The examples above have shown how signatures for personal messages work. Signatures for transaction
-blocks work the same way, but use `verifyTransactionBlock` instead:
+Verifying transaction blocks is similar to signature verification, except you use
+`verifyTransactionBlock`:
 
 ```typescript
-import { ED25519KeyPair } from '@mysten/sui.js/keypairs/ed25519';
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { verifyTransactionBlock } from '@mysten/sui.js/verify';
+// import SuiClient to create a network client and the getFullnodeUrl helper function
 import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
 
+// see Network Interactions with SuiClient for more info on creating clients
 const client = new SuiClient({ url: getFullnodeUrl('testnet') });
 const txb = new TransactionBlock();
 // ... add some transactions...
 const bytes = await txb.build({ client });
 
-const keyPair = new ED25519KeyPair();
-const { signature } = await keyPair.signTransactionBlock(message);
+const keypair = new Ed25519Keypair();
+const { signature } = await keypair.signTransactionBlock(bytes);
 
-const isValid = await publicKey.verifyTransactionBlock(message, signature);
-// or
-const publicKey = await verifyTransactionBlock(message, signature);
+// if you have a public key, you can verify it
+//   const isValid = await publicKey.verifyTransactionBlock(bytes, signature);
+// or get the public key from the transaction block
+const publicKey = await verifyTransactionBlock(bytes, signature);
 
-if (publicKey.getAddress() !== keyPair.getPublicKey().getAddress()) {
+if (publicKey.toSuiAddress() !== keypair.getPublicKey().toSuiAddress()) {
 	throw new Error('Signature was valid, but was signed by a different keyPair');
 }
 ```
 
-## Deriving a KeyPair from a Mnemonic
+## Deriving a key pair from a mnemonic
 
-The Sui SDK supports deriving a KeyPair from a mnemonic phrase. This can be useful when building
-wallets or other tools that allow a user to import their private keys.
+The Sui TypeScript SDK supports deriving a key pair from a mnemonic phrase. This can be useful when
+building wallets or other tools that allow a user to import their private keys.
 
 ```typescript
 const exampleMnemonic = 'result crisp session latin ...';
 
-const keyPair = ED25519KeyPair.deriveKeypair(exampleMnemonic);
+const keyPair = Ed25519Keypair.deriveKeypair(exampleMnemonic);
 ```

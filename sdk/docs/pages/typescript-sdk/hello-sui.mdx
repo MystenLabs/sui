@@ -56,32 +56,32 @@ import { requestSuiFromFaucetV0, getFaucetHost } from '@mysten/sui.js/faucet';
 import { SuiClient } from '@mysten/sui.js/client';
 
 const SUI_NETWORK = 'https://fullnode.devnet.sui.io:443/';
-// Replace <YOUR_SUI_ADDRESS> with your actual address, which is in the form 0x123...
+// replace <YOUR_SUI_ADDRESS> with your actual address, which is in the form 0x123...
 const MY_ADDRESS = '<YOUR_SUI_ADDRESS>';
 
-// Create a new SuiClient object pointing to the network you want to use.
+// create a new SuiClient object pointing to the network you want to use
 const suiClient = new SuiClient({ url: SUI_NETWORK });
 
-// Function to process the JSON that getCoins provides and then return number of SUI.
+// function to process the JSON that getCoins provides and then return number of SUI
 const balance = (coins) => {
 	let bal = 0;
 	coins.data.map((coin) => (bal += Number(coin.balance)));
 	return bal / 1000000000;
 };
 
-// Store the JSON representation for the SUI the address owns before using faucet.
+// store the JSON representation for the SUI the address owns before using faucet
 const coinsBefore = await suiClient.getCoins({
 	owner: MY_ADDRESS,
 });
 
 const statusId = await requestSuiFromFaucetV0({
-	// Use getFaucetHost to make sure you're using correct faucet address.
-	// You can also just use the address (see Connecting to Sui Network topic for values).
+	// use getFaucetHost to make sure you're using correct faucet address
+	// you can also just use the address (see Sui Typescript SDK Quick Start for values)
 	host: getFaucetHost('testnet'),
 	recipient: MY_ADDRESS,
 });
 
-// Store the JSON representation for the SUI the address owns after using faucet.
+// store the JSON representation for the SUI the address owns after using faucet
 const coinsAfter = await suiClient.getCoins({
 	owner: MY_ADDRESS,
 });
@@ -105,7 +105,7 @@ provided address. The code also imports `SuiClient` to create a new client on th
 it uses to query the address and output the amount of SUI the address owns before and after using
 the faucet. You can check the total SUI for your address using the Sui Wallet or Sui Client CLI.
 
-<Callout type="note">
+<Callout type="info">
 	Faucets on Devnet and Testnet are rate limited. If you run the script too many times, you surpass
 	the limit and must wait to successfully run it again.
 </Callout>

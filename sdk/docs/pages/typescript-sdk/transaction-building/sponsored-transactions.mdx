@@ -10,10 +10,10 @@ const txb = new TransactionBlock();
 
 const kindBytes = await txb.build({ provider, onlyTransactionKind: true });
 
-// Construct a sponsored transaction from the kind bytes:
+// construct a sponsored transaction from the kind bytes
 const sponsoredTxb = TransactionBlock.fromKind(kindBytes);
 
-// You can now set the sponsored transaction data that is required:
+// you can now set the sponsored transaction data that is required
 sponsoredTxb.setSender(sender);
 sponsoredTxb.setGasOwner(sponsor);
 sponsoredTxb.setGasPayment(sponsorCoins);
