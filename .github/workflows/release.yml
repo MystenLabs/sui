@@ -193,6 +193,10 @@ jobs:
           echo linker = \"aarch64-apple-darwin14-clang\" >> .cargo/config
           echo ar = \"aarch64-apple-darwin14-ar\" >> .cargo/config
 
+          echo "[target.aarch64-apple-darwin]" >> ../.cargo/config
+          echo linker = \"aarch64-apple-darwin14-clang\" >> ../.cargo/config
+          echo ar = \"aarch64-apple-darwin14-ar\" >> ../.cargo/config
+
           MACOS_TARGET="aarch64-apple-darwin"
 
           echo "Building target for platform ${MACOS_TARGET}"
