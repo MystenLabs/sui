@@ -125,6 +125,7 @@ export { default as SocialMicrosoft24 } from './SocialMicrosoft24';
 export { default as SocialTwitch24 } from './SocialTwitch24';
 export { default as SocialTwitter24 } from './SocialTwitter24';
 export { default as Spinner16 } from './Spinner16';
+export { default as Spinner24 } from './Spinner24';
 export { default as Stack16 } from './Stack16';
 export { default as Stake24 } from './Stake24';
 export { default as StakeAdd16 } from './StakeAdd16';
