@@ -167,8 +167,8 @@ jobs:
         if: ${{ env.sui_tag != 'main' }}
         shell: bash
         run: |
-          sudo apt update
-          sudo apt install \
+          sudo apt-get update -y
+          sudo apt-get install \
           dnf \
           clang \
           gcc \
@@ -176,7 +176,7 @@ jobs:
           zlib1g-dev \
           libmpc-dev \
           libmpfr-dev \
-          libgmp-dev
+          libgmp-dev -y
 
           sudo dnf install gcc-c++
 
