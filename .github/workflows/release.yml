@@ -188,5 +188,4 @@ jobs:
           echo ar = "x86_64-apple-darwin14-ar" >> .cargo/config
 
           rustup target add aarch64-apple-darwin
-          PATH="$(pwd)/osxcross/target/bin:$PATH" \ 
-          cargo build --target aarch64-apple-darwin --release                
+          PATH="$(pwd)/osxcross/target/bin:$PATH" cargo build --target aarch64-apple-darwin --release                
