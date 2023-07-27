@@ -5,7 +5,7 @@ import { useCopyToClipboard } from '@mysten/core';
 import { Check12, CheckStroke16, CheckStroke24, Copy12, Copy16, Copy24 } from '@mysten/icons';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { motion } from 'framer-motion';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
 import { Link } from '~/ui/Link';
@@ -59,48 +59,40 @@ export function CopyToClipboard({
 	size = 'md',
 	onSuccessMessage = 'Copied!',
 }: CopyToClipboardProps) {
-	const [showCopyIcon, setShowCopyIcon] = useState(true);
+	const [copied, setCopied] = useState(false);
 	const copyToClipBoard = useCopyToClipboard(() => toast.success(onSuccessMessage));
 
 	const CopyIcon = COPY_ICON_SIZES[size!];
 	const CheckIcon = CHECK_ICON_SIZES[size!];
 
-	const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-	const onClickHandler = async () => {
+	const handleCopy = async () => {
 		await copyToClipBoard(copyText);
-		setShowCopyIcon(false);
-
-		if (timeoutRef.current) {
-			clearTimeout(timeoutRef.current);
-		}
-		timeoutRef.current = setTimeout(() => {
-			setShowCopyIcon(true);
-		}, TIMEOUT_TIMER);
+		setCopied(true);
 	};
 
-	useEffect(
-		() => () => {
-			if (timeoutRef.current) {
-				clearTimeout(timeoutRef.current);
-			}
-		},
-		[],
-	);
+	useEffect(() => {
+		if (copied) {
+			const timeout = setTimeout(() => {
+				setCopied(false);
+			}, TIMEOUT_TIMER);
+
+			return () => clearTimeout(timeout);
+		}
+	}, [copied]);
 
 	return (
-		<Link disabled={!showCopyIcon} onClick={onClickHandler}>
+		<Link disabled={copied} onClick={handleCopy}>
 			<span className="sr-only">Copy</span>
-			{showCopyIcon ? (
+			{copied ? (
+				<CheckIcon className={iconStyles({ size, color, success: true })} />
+			) : (
 				<motion.div
 					initial={{ opacity: 0 }}
 					animate={{ opacity: 1 }}
-					transition={{ duration: 0.1 }}
+					transition={{ duration: 0.2 }}
 				>
 					<CopyIcon className={iconStyles({ size, color, success: false })} />
 				</motion.div>
-			) : (
-				<CheckIcon className={iconStyles({ size, color, success: true })} />
 			)}
 		</Link>
 	);
