@@ -167,7 +167,7 @@ jobs:
         if: ${{ env.sui_tag != 'main' }}
         shell: bash
         run: |
-          apt install \
+          sudo apt install \
           clang \
           gcc \
           g++ \
