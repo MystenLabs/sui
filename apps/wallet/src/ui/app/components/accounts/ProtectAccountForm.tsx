@@ -22,14 +22,14 @@ const formSchema = Yup.object({
 type FormValues = Yup.InferType<typeof formSchema>;
 
 type ProtectAccountFormProps = {
-	submitButtonText?: string;
-	cancelButtonText?: string;
+	submitButtonText: string;
+	cancelButtonText: string;
 	onSubmit: SubmitHandler<FormValues>;
 };
 
 export function ProtectAccountForm({
-	submitButtonText = 'Create Wallet',
-	cancelButtonText = 'Back',
+	submitButtonText,
+	cancelButtonText,
 	onSubmit,
 }: ProtectAccountFormProps) {
 	const form = useForm({

@@ -18,6 +18,8 @@ export function ProtectAccountPage() {
 			</div>
 			<div className="mt-6 w-full grow">
 				<ProtectAccountForm
+					cancelButtonText="Back"
+					submitButtonText="Create Wallet"
 					onSubmit={(formValues) => {
 						// eslint-disable-next-line no-console
 						console.log(
