@@ -1,7 +1,6 @@
 {
-	"index": "Sui Typescript SDK",
+	"index": "Sui Typescript SDK Quick Start",
 	"install": "Install",
-	"connect": "Connect to a Sui Network",
 	"hello-sui": "Hello, Sui",
 	"faucet": "Faucet",
 	"sui-client": "SuiClient",
