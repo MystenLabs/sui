@@ -18,13 +18,13 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
 		return (
 			<div className="flex w-full relative items-center">
 				<Input
+					{...props}
 					type={passwordShown ? 'text' : 'password'}
 					placeholder="Password"
 					ref={forwardedRef}
-					{...props}
 				/>
 				<ButtonOrLink
-					className="appearance-none bg-transparent border-none cursor-pointer absolute right-3 text-gray-60 peer-focus:text-steel"
+					className="flex appearance-none bg-transparent border-none cursor-pointer absolute right-3 text-gray-60 peer-focus:text-steel"
 					onClick={() => setPasswordShown((prevState) => !prevState)}
 				>
 					<IconComponent className="w-4 h-4" />
