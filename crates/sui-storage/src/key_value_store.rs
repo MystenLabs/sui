@@ -4,6 +4,7 @@
 //! Immutable key/value store trait for storing/retrieving transactions, effects, and events
 //! to/from a scalable.
 
+use crate::sharded_lru::ShardedLruCache;
 use async_trait::async_trait;
 use sui_types::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
@@ -11,7 +12,7 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::transaction::Transaction;
 use tracing::error;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum Key {
     Tx(TransactionDigest),
     Fx(TransactionEffectsDigest),
@@ -265,5 +266,49 @@ impl TransactionKeyValueStore for FallbackTransactionKVStore {
         keys: &[TransactionEventsDigest],
     ) -> SuiResult<Vec<Option<TransactionEvents>>> {
         fallback_fetch!(self, keys, multi_get_events)
+    }
+}
+
+pub struct CachingKVStore {
+    store: Box<dyn TransactionKeyValueStore + Send + Sync>,
+    cache: ShardedLruCache<Key, Value>,
+}
+
+impl CachingKVStore {
+    pub fn new(
+        store: Box<dyn TransactionKeyValueStore + Send + Sync>,
+        cache: ShardedLruCache<Key, Value>,
+    ) -> Self {
+        Self { store, cache }
+    }
+}
+
+#[async_trait]
+impl TransactionKeyValueStore for CachingKVStore {
+    async fn multi_get(&self, keys: &[Key]) -> SuiResult<Vec<Option<Value>>> {
+        let mut values = self.cache.batch_get(keys.iter().cloned()).await;
+
+        let mut missing_keys = Vec::new();
+        let mut missing_indices = Vec::new();
+        for (i, value) in values.iter().enumerate() {
+            if value.is_none() {
+                missing_keys.push(keys[i]);
+                missing_indices.push(i);
+            }
+        }
+        if !missing_keys.is_empty() {
+            let missing_values = self.store.multi_get(&missing_keys).await?;
+            let mut new_key_values = Vec::new();
+            for (missing_value, &index) in missing_values.into_iter().zip(&missing_indices) {
+                values[index] = missing_value.clone();
+                if let Some(missing_value) = missing_value {
+                    new_key_values.push((keys[index], missing_value));
+                }
+            }
+            if !new_key_values.is_empty() {
+                self.cache.batch_set(new_key_values).await;
+            }
+        }
+        Ok(values)
     }
 }

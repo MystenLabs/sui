@@ -4,6 +4,8 @@
 use async_trait::async_trait;
 use futures::FutureExt;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use sui_storage::sharded_lru::ShardedLruCache;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::random_object_ref;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
@@ -38,6 +40,7 @@ struct MockTxStore {
     txs: HashMap<TransactionDigest, Transaction>,
     fxs: HashMap<TransactionEffectsDigest, TransactionEffects>,
     events: HashMap<TransactionEventsDigest, TransactionEvents>,
+    log: Arc<Mutex<Vec<Key>>>,
 }
 
 impl MockTxStore {
@@ -46,6 +49,7 @@ impl MockTxStore {
             txs: HashMap::new(),
             fxs: HashMap::new(),
             events: HashMap::new(),
+            log: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -67,6 +71,7 @@ impl TransactionKeyValueStore for MockTxStore {
     async fn multi_get(&self, keys: &[Key]) -> SuiResult<Vec<Option<Value>>> {
         let mut values = Vec::new();
         for key in keys {
+            self.log.lock().unwrap().push(*key);
             let value = match key {
                 Key::Tx(digest) => self.txs.get(digest).map(|tx| Value::Tx(tx.clone().into())),
                 Key::Fx(digest) => self.fxs.get(digest).map(|fx| Value::Fx(fx.clone().into())),
@@ -74,7 +79,6 @@ impl TransactionKeyValueStore for MockTxStore {
                     .events
                     .get(digest)
                     .map(|events| Value::Events(events.clone().into())),
-
                 Key::FxByTxDigest(digest) => self
                     .fxs
                     .values()
@@ -85,6 +89,44 @@ impl TransactionKeyValueStore for MockTxStore {
         }
         Ok(values)
     }
+}
+
+#[test]
+fn test_caching_kv_store() {
+    let mut store = MockTxStore::new();
+    let log = store.log.clone();
+
+    let tx1 = random_tx();
+    let tx2 = random_tx();
+    store.add_tx(tx1.clone());
+    store.add_tx(tx2.clone());
+
+    let cache = ShardedLruCache::new(100, 2);
+    let store = CachingKVStore::new(Box::new(store), cache);
+
+    let result = store.multi_get_tx(&[*tx1.digest()]).now_or_never().unwrap();
+
+    assert_eq!(result.unwrap(), vec![Some(tx1.clone())]);
+    // First request goes to the MockTxStore
+    assert_eq!(log.lock().unwrap().clone(), vec![Key::Tx(*tx1.digest())]);
+
+    let result = store.multi_get_tx(&[*tx1.digest()]).now_or_never().unwrap();
+    assert_eq!(result.unwrap(), vec![Some(tx1.clone())]);
+
+    // Second request is satisfied by the cache
+    assert_eq!(log.lock().unwrap().clone(), vec![Key::Tx(*tx1.digest())]);
+
+    // mix of cached and uncached keys works
+    let result = store
+        .multi_get_tx(&[*tx1.digest(), *tx2.digest()])
+        .now_or_never()
+        .unwrap();
+    assert_eq!(result.unwrap(), vec![Some(tx1.clone()), Some(tx2.clone())]);
+    // request for tx2 goes to the MockTxStore, but tx1 is cached
+    assert_eq!(
+        log.lock().unwrap().clone(),
+        vec![Key::Tx(*tx1.digest()), Key::Tx(*tx2.digest())]
+    );
 }
 
 #[test]

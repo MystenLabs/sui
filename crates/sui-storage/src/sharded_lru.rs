@@ -118,6 +118,39 @@ where
         }
     }
 
+    pub async fn batch_set(&self, key_values: impl IntoIterator<Item = (K, V)>) {
+        let mut grouped = HashMap::new();
+        for (key, value) in key_values.into_iter() {
+            let shard_idx = self.shard_id(&key);
+            grouped
+                .entry(shard_idx)
+                .or_insert(vec![])
+                .push((key, value));
+        }
+        for (shard_idx, keys) in grouped.into_iter() {
+            let mut shard = self.shards[shard_idx].write().await;
+            for (key, value) in keys.into_iter() {
+                shard.put(key, value);
+            }
+        }
+    }
+
+    pub async fn batch_get(&self, keys: impl IntoIterator<Item = K>) -> Vec<Option<V>> {
+        let mut grouped = HashMap::new();
+        for key in keys.into_iter() {
+            let shard_idx = self.shard_id(&key);
+            grouped.entry(shard_idx).or_insert(vec![]).push(key);
+        }
+        let mut results = vec![];
+        for (shard_idx, keys) in grouped.into_iter() {
+            let shard = self.shards[shard_idx].read().await;
+            for key in keys.into_iter() {
+                results.push(shard.peek(&key).cloned());
+            }
+        }
+        results
+    }
+
     pub async fn get(&self, key: &K) -> Option<V> {
         self.read_shard(key).await.peek(key).cloned()
     }
