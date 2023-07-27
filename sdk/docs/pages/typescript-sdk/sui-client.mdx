@@ -94,7 +94,7 @@ const client = new SuiClient({
 
 const unsubscribe = await client.subscribeTransaction({
 	filter: {
-		FromAddress: '0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231',
+		FromAddress: '<SUI_ADDRESS>',
 	},
 	onMessage(event) {
 		// This function is called once per transaction.
