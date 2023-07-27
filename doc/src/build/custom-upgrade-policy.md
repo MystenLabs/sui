@@ -2,7 +2,7 @@
 title: Custom Upgrade Policies
 ---
 
-The ability to upgrade Sui Move packages provides the opportunity to iterate your package development, whether to continuously improve features or address logic defects. The `sui client upgrade` command offers an approachable way to upgrade packages when the CLI active address owns the `UpgradeCap` object associated with those packages. 
+The ability to upgrade Sui Move packages provides the opportunity to iterate your package development, whether to continuously improve features or address logic defects. The `sui client upgrade` command offers an approachable way to upgrade packages when the CLI active address owns the `UpgradeCap` object associated with those packages.
 
 Using the Sui Client CLI is useful to get started with upgrades, or in the early stages of package development, but protecting the ability to upgrade a package on chain using a single key can pose a security risk for several reasons:
 
@@ -161,7 +161,7 @@ After Sui creates an `UpgradeReceipt`, you must use it to update its `UpgradeCap
 
 ## Isolating policies
 
-When writing custom upgrade policies, prefer: 
+When writing custom upgrade policies, prefer:
 
 - separating them into their own package, (i.e. not co-located with the code they govern the upgradeability of),
 - making that package immutable (not upgradeable), and
@@ -227,7 +227,7 @@ After the `new_policy` function, add a `week_day` function to get the current we
 
 ```rust
 fun week_day(ctx: &TxContext): u8 {
-    let days_since_unix_epoch = 
+    let days_since_unix_epoch =
         tx_context::epoch_timestamp_ms(ctx) / MS_IN_DAY;
     // The unix epoch (1st Jan 1970) was a Thursday so shift days
     // since the epoch by 3 so that 0 = Monday.
@@ -254,7 +254,7 @@ public fun authorize_upgrade(
 The signature of a custom `authorize_upgrade` can be different from the signature of `sui::package::authorize_upgrade` as long as it returns an `UpgradeTicket`.
 
 
-  
+
 Finally, provide implementations of `commit_upgrade` and `make_immutable` that delegate to their respective functions in `sui::package`:
 
 ```rust
@@ -300,7 +300,7 @@ module policy::day_of_week {
     }
 
     fun week_day(ctx: &TxContext): u8 {
-        let days_since_unix_epoch = 
+        let days_since_unix_epoch =
             sui::tx_context::epoch_timestamp_ms(ctx) / MS_IN_DAY;
         // The unix epoch (1st Jan 1970) was a Thursday so shift days
         // since the epoch by 3 so that 0 = Monday.
@@ -493,7 +493,7 @@ If you don't have a package available, use the `sui move new` command to create 
 $ sui move new example
 ```
 
-In the `example/sources` directory, create an `example.move` file with the following code: 
+In the `example/sources` directory, create an `example.move` file with the following code:
 
 ```rust
 module example::example {
@@ -523,7 +523,7 @@ $ npm install @mysten/sui.js
 
 ### Publishing a package with custom policy
 
-In the root of your Node.js project, create a script file named `publish.js`. Open the file for editing and define some constants: 
+In the root of your Node.js project, create a script file named `publish.js`. Open the file for editing and define some constants:
 * `SUI`: the location of the `sui` CLI binary.
 * `POLICY_PACKAGE_ID`: the ID of our published `day_of_week` package.
 
@@ -540,10 +540,8 @@ import { readFileSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 
-import {
-    Ed25519Keypair,
-    fromB64,
-} from '@mysten/sui.js';
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+import { fromB64 } from '@mysten/sui.js/utils';
 
 const sender = execSync(`${SUI} client active-address`, { encoding: 'utf8' }).trim();
 const keyPair = (() => {
@@ -565,7 +563,7 @@ const keyPair = (() => {
             return pair;
         }
     }
-    
+
     throw new Error(`keypair not found for sender: ${sender}`);
 })();
 ```
@@ -596,7 +594,7 @@ const { modules, dependencies } = JSON.parse(
 Next, construct the transaction to publish the package. Wrap its `UpgradeCap` in a "day of the week" policy, which permits upgrades on Tuesdays, and send the new policy back:
 
 ```js
-import { TransactionBlock } from '@mysten/sui.js';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 
 const tx = new TransactionBlock();
 const packageUpgradeCap = tx.publish({ modules, dependencies });
@@ -788,15 +786,10 @@ import { homedir } from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-import {
-    Ed25519Keypair,
-    JsonRpcProvider,
-    RawSigner,
-    TransactionBlock,
-    UpgradePolicy,
-    fromB64,
-    localnetConnection,
-} from '@mysten/sui.js';
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { fromB64 } from '@mysten/sui.js/utils';
+import { TransactionBlock, UpgradePolicy } from '@mysten/sui.js/transactions';
 
 const SUI = 'sui';
 const POLICY_PACKAGE_ID = '<POLICY-PACKAGE>';
@@ -823,7 +816,7 @@ const keyPair = (() => {
             return pair;
         }
     }
-    
+
     throw new Error(`keypair not found for sender: ${sender}`);
 })();
 
@@ -860,10 +853,10 @@ tx.moveCall({
     arguments: [cap, receipt],
 })
 
-const provider = new JsonRpcProvider(localnetConnection);
-const signer = new RawSigner(keyPair, provider);
+const client = new SuiClient({ url: getFullnodeUrl('localnet')});
 
-const result = await signer.signAndExecuteTransactionBlock({
+const result = await client.signAndExecuteTransactionBlock({
+    signer: keypair,
     transactionBlock: tx,
     options: {
         showEffects: true,

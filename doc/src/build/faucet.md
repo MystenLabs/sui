@@ -39,12 +39,13 @@ Replace `'https://faucet.devnet.sui.io/gas'` with `http://127.0.0.1:5003/gas` wh
 
 You can also access the faucet through the TS-SDK.
 
-```
-import { JsonRpcProvider, devnetConnection } from '@mysten/sui.js';
-// connect to Devnet
-const provider = new JsonRpcProvider(devnetConnection);
+```typescript
+import { requestSuiFromFaucetV0, getFaucetHost } from '@mysten/sui.js/faucet';
+
 // get tokens from the Devnet faucet server
-await provider.requestSuiFromFaucet(
-  '<YOUR SUI ADDRESS>'
-);
+await requestSuiFromFaucetV0({
+  // connect to Devnet
+	host: getFaucetHost('devnet'),
+	recipient: '<YOUR SUI ADDRESS>',
+});
 ```
