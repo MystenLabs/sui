@@ -170,6 +170,7 @@ jobs:
           sudo apt-get update && sudo apt-get upgrade -y
           sudo apt-get install \
           build-essential \
+          aptitude \
           clang \
           gcc \
           g++ \
@@ -177,6 +178,9 @@ jobs:
           libmpc-dev \
           libmpfr-dev \
           libgmp-dev -y
+
+          sudo aptitude install dnf
+          sudo dnf install gcc-c++
 
           git clone https://github.com/tpoechtrager/osxcross
           cd osxcross
