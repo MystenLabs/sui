@@ -503,7 +503,7 @@ impl KeyToolCommand {
                 let keys = keystore
                     .keys()
                     .into_iter()
-                    .map(|key| Key::from(key))
+                    .map(Key::from)
                     .collect::<Vec<_>>();
 
                 CommandOutput::List(keys)
