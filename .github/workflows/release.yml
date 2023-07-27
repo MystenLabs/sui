@@ -34,61 +34,61 @@ env:
   RUST_BACKTRACE: short
 
 jobs:
-  release-build:
-    timeout-minutes: 120
-    strategy:
-      matrix:
-        os: [macos-13-xl]
-      fail-fast: false
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Clean up tag name ${{ env.TAG_NAME }}
-        shell: bash
-        run: | 
-          echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
+  # release-build:
+  #   timeout-minutes: 120
+  #   strategy:
+  #     matrix:
+  #       os: [macos-13-xl]
+  #     fail-fast: false
+  #   runs-on: ${{ matrix.os }}
+  #   steps:
+  #     - name: Clean up tag name ${{ env.TAG_NAME }}
+  #       shell: bash
+  #       run: | 
+  #         echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
 
-      - name: Checking out ${{ env.sui_tag }}
-        if: ${{ env.sui_tag != 'main' }}
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ env.sui_tag }}
+  #     - name: Checking out ${{ env.sui_tag }}
+  #       if: ${{ env.sui_tag != 'main' }}
+  #       uses: actions/checkout@v3
+  #       with:
+  #         ref: ${{ env.sui_tag }}
       
-      - name: Install nexttest (Windows)
-        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
-        uses: taiki-e/install-action@nextest
+  #     - name: Install nexttest (Windows)
+  #       if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
+  #       uses: taiki-e/install-action@nextest
 
-      - name: Setup protoc (Windows)
-        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
-        uses: arduino/setup-protoc@v1
-        # this avoids rate-limiting
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+  #     - name: Setup protoc (Windows)
+  #       if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
+  #       uses: arduino/setup-protoc@v1
+  #       # this avoids rate-limiting
+  #       with:
+  #         repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install postgres (Windows)
-        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
-        shell: bash
-        run: |
-          choco install postgresql12 --force --params '/Password:root'
-          echo "C:\Program Files\PostgreSQL\12\bin" >> $GITHUB_PATH
-          echo "C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_PATH
-          echo "PQ_LIB_DIR=C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_ENV
-          echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
-          echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV          
+  #     - name: Install postgres (Windows)
+  #       if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
+  #       shell: bash
+  #       run: |
+  #         choco install postgresql12 --force --params '/Password:root'
+  #         echo "C:\Program Files\PostgreSQL\12\bin" >> $GITHUB_PATH
+  #         echo "C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_PATH
+  #         echo "PQ_LIB_DIR=C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_ENV
+  #         echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
+  #         echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV          
 
-      # - name: cargo build (release) for ${{ matrix.os }} platform
-      #   if: ${{ env.sui_tag != 'main' }}
-      #   shell: bash
-      #   run: |
-      #     cargo build --release
+  #     # - name: cargo build (release) for ${{ matrix.os }} platform
+  #     #   if: ${{ env.sui_tag != 'main' }}
+  #     #   shell: bash
+  #     #   run: |
+  #     #     cargo build --release
 
-      - name: cargo build (release) for aarch64-apple-darwin platform
-        if: ${{ env.sui_tag != 'main' }}
-        shell: bash
-        run: |
-          export PATH=$PATH:/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib
-          export LIBRARY_PATH=$LIBRARY_PATH:/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib
-          rustup target add aarch64-apple-darwin
-          cargo build --target aarch64-apple-darwin --release      
+  #     - name: cargo build (release) for aarch64-apple-darwin platform
+  #       if: ${{ env.sui_tag != 'main' }}
+  #       shell: bash
+  #       run: |
+  #         export PATH=$PATH:/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib
+  #         export LIBRARY_PATH=$LIBRARY_PATH:/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib
+  #         rustup target add aarch64-apple-darwin
+  #         cargo build --target aarch64-apple-darwin --release      
 
       # - name: Rename binaries for Ubuntu
       #   if: ${{ env.sui_tag != 'main' && matrix.os == 'macos-latest' }}
@@ -138,3 +138,34 @@ jobs:
       #   env:
       #     # Have to use a Personal Access Token (PAT), based on https://tinyurl.com/2by2ntdr
       #     GITHUB_TOKEN: ${{ secrets.GH_RELEASE_BUILDS_TOKEN }}
+
+  build-aarch64-apple-darwin:
+    name: osmosisd-${{ matrix.targetos }}-${{ matrix.arch }}
+    runs-on: ubuntu-ghcloud
+
+    strategy:
+      matrix:
+        arch: [ arm64 ]
+        targetos: [ darwin ]
+        include:
+          - targetos: darwin
+            arch: arm64
+
+    steps:
+      - name: Clean up tag name ${{ env.TAG_NAME }}
+        shell: bash
+        run: | 
+          echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
+
+      - name: Checking out ${{ env.sui_tag }}
+        if: ${{ env.sui_tag != 'main' }}
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ env.sui_tag }}
+
+      - name: cargo build (release) for aarch64-apple-darwin platform
+        if: ${{ env.sui_tag != 'main' }}
+        shell: bash
+        run: |
+          rustup target add aarch64-apple-darwin
+          cargo build --target aarch64-apple-darwin --release                
