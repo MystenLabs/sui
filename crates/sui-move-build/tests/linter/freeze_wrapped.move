@@ -32,5 +32,8 @@ module 0x42::test {
         transfer::public_freeze_object(w);
     }
 
-
+    public fun freeze_direct_var(w: Wrapper) {
+        let v = w;
+        transfer::public_freeze_object(v);
+    }
 }

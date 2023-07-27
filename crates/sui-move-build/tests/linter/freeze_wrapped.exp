@@ -23,3 +23,14 @@ warning[Lint W04001]: attempting to freeze wrapped objects
    │
    = This warning can be suppressed with '#[lint_allow(freeze_wrapped)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
+warning[Lint W04001]: attempting to freeze wrapped objects
+   ┌─ tests/linter/freeze_wrapped.move:37:40
+   │
+12 │     struct Wrapper has key, store {
+   │            ------- The field inner of Wrapper contains  wrapped objects
+   ·
+37 │         transfer::public_freeze_object(v);
+   │                                        ^ Freezing an object containing other wrapped objects will disallow unwrapping these objects in the future.
+   │
+   = This warning can be suppressed with '#[lint_allow(freeze_wrapped)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
