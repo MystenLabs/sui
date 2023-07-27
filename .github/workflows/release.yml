@@ -168,6 +168,7 @@ jobs:
         shell: bash
         run: |
           sudo apt install \
+          dnf \
           clang \
           gcc \
           g++ \
@@ -175,7 +176,8 @@ jobs:
           libmpc-dev \
           libmpfr-dev \
           libgmp-dev
-          sudo yum install gcc-c++
+
+          sudo dnf install gcc-c++
 
           git clone https://github.com/tpoechtrager/osxcross
           cd osxcross
