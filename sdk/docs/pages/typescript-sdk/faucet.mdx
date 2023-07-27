@@ -2,14 +2,17 @@
 
 import { Callout } from 'nextra/components';
 
-Devnet, Testnet, and local networks include faucets that mint SUI. You can use the Sui TypeScript SDK to call a network's faucet and provide SUI to the address you provide.
+Devnet, Testnet, and local networks include faucets that mint SUI. You can use the Sui TypeScript
+SDK to call a network's faucet and provide SUI to the address you provide.
 
-To request SUI from a faucet, import the `requestSuiFromFaucetV0` function from the `@mysten/sui.js/faucet` package to your project. 
+To request SUI from a faucet, import the `requestSuiFromFaucetV0` function from the
+`@mysten/sui.js/faucet` package to your project.
 
 ```typescript
 import { requestSuiFromFaucetV0, getFaucetHost } from '@mysten/sui.js/faucet';
 ```
-Use `requestSuiFromFaucetV0` in your TypeScript code to request SUI from the network's faucet. The `getFaucetHost` function is useful for development, but you should use the actual [Mainnet RPC address](../index#network-locations) as the `host` parameter value in production apps. 
+
+Use `requestSuiFromFaucetV0` in your TypeScript code to request SUI from the network's faucet.
 
 ```typescript
 await requestSuiFromFaucetV0({
@@ -17,6 +20,7 @@ await requestSuiFromFaucetV0({
 	recipient: <RECEPIENT_ADDRESS>,
 });
 ```
+
 <Callout type="info">
 	Faucets on Devnet and Testnet are rate limited. If you run the script too many times, you surpass
 	the limit and must wait to successfully run it again.

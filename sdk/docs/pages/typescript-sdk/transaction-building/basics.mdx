@@ -1,6 +1,7 @@
 # Sui Programmable Transaction Blocks Basics
 
-This example starts by constructing a transaction block to send SUI. To construct transactions, import the `TransactionBlock` class and construct it:
+This example starts by constructing a transaction block to send SUI. To construct transactions,
+import the `TransactionBlock` class and construct it:
 
 ```tsx
 import { TransactionBlock } from '@mysten/sui.js/transactions';
@@ -18,8 +19,8 @@ const [coin] = txb.splitCoins(txb.gas, [txb.pure(100)]);
 txb.transferObjects([coin], txb.pure('0xSomeSuiAddress'));
 ```
 
-You can attach multiple transactions of the same type to a transaction block, as well. For
-example, to get a list of transfers and iterate over them to transfer coins to each of them:
+You can attach multiple transactions of the same type to a transaction block, as well. For example,
+to get a list of transfers and iterate over them to transfer coins to each of them:
 
 ```tsx
 interface Transfer {

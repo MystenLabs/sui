@@ -1,25 +1,29 @@
-# Key pairs 
+# Key pairs
 
-The Sui TypeScript SDK provides `Keypair` classes that handle logic for signing and verification using the cryptographic key pairs
-associated with a Sui address. 
+The Sui TypeScript SDK provides `Keypair` classes that handle logic for signing and verification
+using the cryptographic key pairs associated with a Sui address.
 
 The Sui TypeScript SDK supports three signing schemes:
 
-| Sign scheme | Class name | Import folder |
-| ----------- | ----- | --------------- |
-| Ed25519 | `Ed25519Keypair` | `@mysten/sui.js/keypairs/ed25519` |
+| Sign scheme     | Class name         | Import folder                     |
+| --------------- | ------------------ | --------------------------------- |
+| Ed25519         | `Ed25519Keypair`   | `@mysten/sui.js/keypairs/ed25519` |
 | ECDSA Secp256k1 | `Secp256k1Keypair` | `@mysten/sui.js/keypairs/ed25519` |
-| ECDSA Secp256r1 | `Secp256r1Keypair` | `@mysten/sui.js/keypairs/ed25519` | 
+| ECDSA Secp256r1 | `Secp256r1Keypair` | `@mysten/sui.js/keypairs/ed25519` |
 
-For information on these schemes, see the [Sui Wallet Specifications](https://docs.sui.io/testnet/learn/cryptography/sui-wallet-specs) topic.
+For information on these schemes, see the
+[Sui Wallet Specifications](https://docs.sui.io/testnet/learn/cryptography/sui-wallet-specs) topic.
 
-To use, import the key pair class your project uses from the `@mysten/sui.js/keypairs` folder. For example, to use the Ed25519 scheme, import the `Ed25519Keypair` class from `@mysten/sui.js/keypairs/ed25519`.
+To use, import the key pair class your project uses from the `@mysten/sui.js/keypairs` folder. For
+example, to use the Ed25519 scheme, import the `Ed25519Keypair` class from
+`@mysten/sui.js/keypairs/ed25519`.
 
 ```typescript
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 ```
 
-To create a random key pair (which identifies a Sui address), instantiate a new `Keypair` class. To reference a key pair from an existing secret key, pass the secret to the `fromSecretKey` function.
+To create a random key pair (which identifies a Sui address), instantiate a new `Keypair` class. To
+reference a key pair from an existing secret key, pass the secret to the `fromSecretKey` function.
 
 ```typescript
 // random Keypair
@@ -28,7 +32,9 @@ const keypair = new Ed25519Keypair();
 const keypair = Ed25519Keypair.fromSecretKey(secretKey);
 ```
 
-With your key pair created, you can use it to perform actions on the network. For example, you can use it to sign transactions, like the following code that creates and signs a personal message using the public key from the key pair created in the previous code:
+With your key pair created, you can reference it when performing actions on the network. For
+example, you can use it to sign transactions, like the following code that creates and signs a
+personal message using the public key from the key pair created in the previous code:
 
 ```typescript
 const publicKey = keypair.getPublicKey();
@@ -40,7 +46,9 @@ const isValid = await publicKey.verifyPersonalMessage(message, signature);
 
 ## Public keys
 
-Each `Keypair` has an associated `PublicKey` class. You use the public key to verify signatures or to retrieve its associated Sui address. You can access a `Keypair` from its `PublicKey` or construct it from the bytes (as a `Uint8Array`) of the `PublicKey`, as in the following code:
+Each `Keypair` has an associated `PublicKey` class. You use the public key to verify signatures or
+to retrieve its associated Sui address. You can access a `Keypair` from its `PublicKey` or construct
+it from the bytes (as a `Uint8Array`) of the `PublicKey`, as in the following code:
 
 ```typescript
 import { Ed25519Keypair, Ed25519PublicKey } from '@mysten/sui.js/keypairs/ed25519';
@@ -55,9 +63,12 @@ const address = publicKey.toSuiAddress();
 
 ## Verifying signatures without a key pair
 
-When you have an existing public key, you can use it to verify a signature. Verification ensures the signature is valid for the provided message and is signed with the appropriate secret key. 
+When you have an existing public key, you can use it to verify a signature. Verification ensures the
+signature is valid for the provided message and is signed with the appropriate secret key.
 
-The following code creates a key pair in the Ed25519 scheme, creates and signs a message with it, then verifies the message to retrieve the public key. The code then uses `toSuiAddress()` to check if the address associated with the public key matches the address that the key pair defines.
+The following code creates a key pair in the Ed25519 scheme, creates and signs a message with it,
+then verifies the message to retrieve the public key. The code then uses `toSuiAddress()` to check
+if the address associated with the public key matches the address that the key pair defines.
 
 ```typescript
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
@@ -76,7 +87,8 @@ if (publicKey.toSuiAddress() !== keypair.getPublicKey().toSuiAddress()) {
 
 ## Verifying transaction blocks
 
-Verifying transaction blocks is similar to signature verification, except you use `verifyTransactionBlock`:
+Verifying transaction blocks is similar to signature verification, except you use
+`verifyTransactionBlock`:
 
 ```typescript
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
@@ -105,7 +117,8 @@ if (publicKey.toSuiAddress() !== keypair.getPublicKey().toSuiAddress()) {
 
 ## Deriving a key pair from a mnemonic
 
-The Sui TypeScript SDK supports deriving a key pair from a mnemonic phrase. This can be useful when building wallets or other tools that allow a user to import their private keys.
+The Sui TypeScript SDK supports deriving a key pair from a mnemonic phrase. This can be useful when
+building wallets or other tools that allow a user to import their private keys.
 
 ```typescript
 const exampleMnemonic = 'result crisp session latin ...';
