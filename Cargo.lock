@@ -1183,6 +1183,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "base64-url"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c5b0a88aa36e9f095ee2e2b13fb8c5e4313e022783aedacc123328c0084916d"
+dependencies = [
+ "base64 0.21.2",
+]
+
+[[package]]
 name = "base64ct"
 version = "1.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4004,7 +4013,9 @@ checksum = "0646026eb1b3eea4cd9ba47912ea5ce9cc07713d105b1a14698f4e6433d348b7"
 dependencies = [
  "http",
  "hyper",
+ "log",
  "rustls 0.21.1",
+ "rustls-native-certs",
  "tokio",
  "tokio-rustls 0.24.0",
 ]
@@ -10583,6 +10594,7 @@ dependencies = [
  "move-package",
  "msim",
  "narwhal-network",
+ "rand 0.8.5",
  "sui-adapter-latest",
  "sui-framework",
  "sui-move-build",
@@ -10690,6 +10702,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "backoff",
+ "base64-url",
  "bcs",
  "byteorder",
  "bytes",
@@ -10698,6 +10711,8 @@ dependencies = [
  "eyre",
  "fastcrypto",
  "futures",
+ "hyper",
+ "hyper-rustls 0.24.0",
  "integer-encoding",
  "itertools",
  "lru",
@@ -10715,7 +10730,9 @@ dependencies = [
  "rocksdb",
  "serde 1.0.152",
  "sui-json-rpc-types",
+ "sui-macros",
  "sui-protocol-config",
+ "sui-simulator",
  "sui-test-transaction-builder",
  "sui-types",
  "tap",
@@ -12862,6 +12879,7 @@ dependencies = [
  "base16ct 0.2.0",
  "base64 0.13.1",
  "base64 0.21.2",
+ "base64-url",
  "base64ct",
  "bcs",
  "beef",
