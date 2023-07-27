@@ -181,8 +181,8 @@ impl Indexer {
             "Sui indexer of version {:?} started...",
             env!("CARGO_PKG_VERSION")
         );
+        mysten_metrics::init_metrics(registry);
         let subscription_handler = Arc::new(SubscriptionHandler::new(registry));
-
         if config.rpc_server_worker && config.fullnode_sync_worker {
             info!("Starting indexer with both fullnode sync and RPC server");
             // let JSON RPC server run forever.
