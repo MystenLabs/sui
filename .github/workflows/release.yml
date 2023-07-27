@@ -175,6 +175,7 @@ jobs:
           libmpc-dev \
           libmpfr-dev \
           libgmp-dev
+          sudo yum install gcc-c++
 
           git clone https://github.com/tpoechtrager/osxcross
           cd osxcross
