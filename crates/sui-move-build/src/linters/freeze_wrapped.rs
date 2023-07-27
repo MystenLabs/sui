@@ -14,7 +14,10 @@ use move_compiler::{
 };
 use move_ir_types::location::*;
 
-use super::{LinterDiagCategory, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX};
+use super::{
+    LinterDiagCategory, FREEZE_FUN, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
+    PUBLIC_FREEZE_FUN, SUI_PKG_NAME, TRANSFER_MOD_NAME,
+};
 
 const FREEZE_KEY_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
@@ -25,8 +28,8 @@ const FREEZE_KEY_DIAG: DiagnosticInfo = custom(
 );
 
 const FREEZE_FUNCTIONS: &[(&str, &str, &str)] = &[
-    ("sui", "transfer", "public_freeze_object"),
-    ("sui", "transfer", "freeze_object"),
+    (SUI_PKG_NAME, TRANSFER_MOD_NAME, PUBLIC_FREEZE_FUN),
+    (SUI_PKG_NAME, TRANSFER_MOD_NAME, FREEZE_FUN),
 ];
 
 pub struct FreezeWrappedVisitor;

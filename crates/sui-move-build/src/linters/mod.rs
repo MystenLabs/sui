@@ -18,6 +18,7 @@ pub const PUBLIC_TRANSFER_FUN: &str = "public_transfer";
 pub const SHARE_FUN: &str = "share_object";
 pub const PUBLIC_SHARE_FUN: &str = "public_share_object";
 pub const FREEZE_FUN: &str = "freeze_object";
+pub const PUBLIC_FREEZE_FUN: &str = "public_freeze_object";
 
 pub const COIN_MOD_NAME: &str = "coin";
 pub const COIN_STRUCT_NAME: &str = "Coin";
