@@ -155,8 +155,12 @@ jobs:
 
     runs-on: ${{ matrix.platform.os }}
     steps:
-      - name: Checkout
+      - name: Checking out ${{ env.sui_tag }}
+        if: ${{ env.sui_tag != 'main' }}
         uses: actions/checkout@v3
+        with:
+          ref: ${{ env.sui_tag }}
+
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0
         with:
