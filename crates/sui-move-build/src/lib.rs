@@ -26,6 +26,7 @@ use move_compiler::{
     diagnostics::{report_diagnostics_to_color_buffer, report_warnings},
     expansion::ast::{AttributeName_, Attributes},
     shared::known_attributes::KnownAttribute,
+    typing::visitor::TypingVisitor,
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -54,7 +55,7 @@ use sui_types::{
 use sui_verifier::verifier as sui_bytecode_verifier;
 
 use crate::linters::{
-    custom_state_change::CustomStateChangeVerifier, known_filters,
+    coin_field::CoinFieldVisitor, custom_state_change::CustomStateChangeVerifier, known_filters,
     self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier,
 };
 
@@ -139,6 +140,7 @@ impl BuildConfig {
                     ShareOwnedVerifier.visitor(),
                     SelfTransferVerifier.visitor(),
                     CustomStateChangeVerifier.visitor(),
+                    CoinFieldVisitor.visitor(),
                 ];
                 let (filter_attr_name, filters) = known_filters();
                 compiler
