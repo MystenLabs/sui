@@ -5,7 +5,7 @@ import { useCopyToClipboard } from '@mysten/core';
 import { Check12, CheckStroke16, CheckStroke24, Copy12, Copy16, Copy24 } from '@mysten/icons';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
 import { Link } from '~/ui/Link';
@@ -65,19 +65,28 @@ export function CopyToClipboard({
 	const CopyIcon = COPY_ICON_SIZES[size!];
 	const CheckIcon = CHECK_ICON_SIZES[size!];
 
+	const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
 	const onClickHandler = async () => {
 		await copyToClipBoard(copyText);
 		setShowCopyIcon(false);
+
+		if (timeoutRef.current) {
+			clearTimeout(timeoutRef.current);
+		}
+		timeoutRef.current = setTimeout(() => {
+			setShowCopyIcon(true);
+		}, TIMEOUT_TIMER);
 	};
 
-	useEffect(() => {
-		if (!showCopyIcon) {
-			const timeout = setTimeout(() => {
-				setShowCopyIcon(true);
-			}, TIMEOUT_TIMER);
-			return () => clearTimeout(timeout);
-		}
-	}, [showCopyIcon]);
+	useEffect(
+		() => () => {
+			if (timeoutRef.current) {
+				clearTimeout(timeoutRef.current);
+			}
+		},
+		[],
+	);
 
 	return (
 		<Link disabled={!showCopyIcon} onClick={onClickHandler}>
