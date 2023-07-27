@@ -22,9 +22,9 @@ use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake, DevInspectResults,
     DryRunTransactionBlockResponse, DynamicFieldPage, EventFilter, EventPage, ObjectsPage,
     ProtocolConfigResponse, SuiCoinMetadata, SuiCommittee, SuiEvent, SuiGetPastObjectRequest,
-    SuiLoadedChildObject, SuiMoveNormalizedModule, SuiObjectData, SuiObjectDataOptions,
-    SuiObjectResponse, SuiObjectResponseQuery, SuiPastObjectResponse, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions, SuiTransactionBlockResponseQuery, TransactionBlocksPage,
+    SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
+    SuiPastObjectResponse, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    SuiTransactionBlockResponseQuery, TransactionBlocksPage,
 };
 use sui_json_rpc_types::{CheckpointPage, SuiLoadedChildObjectsResponse};
 use sui_types::balance::Supply;
@@ -287,8 +287,8 @@ impl ReadApi {
     /// Return a [SuiObjectResponse] based on the provided [ObjectID] and [SuiObjectDataOptions], or an error upon failure.
     ///
     /// The [SuiObjectResponse] contains two fields:
-    /// 1) `data` for the object's data (see [SuiObjectData]),
-    //  2) `error` for the error (if any) (see [SuiObjectResponseError]).
+    /// 1) `data` for the object's data (see [SuiObjectData](sui_json_rpc_types::SuiObjectData)),
+    /// 2) `error` for the error (if any) (see [SuiObjectResponseError](sui_types::error::SuiObjectResponseError)).
     ///
     /// # Examples
     ///
@@ -635,7 +635,7 @@ impl ReadApi {
 
     /// Return the loaded child objects response for the the provided digest, or an error upon failure.
     ///
-    /// Loaded child objects ([SuiLoadedChildObject]) are the non-input objects that the transaction at the digest loaded
+    /// Loaded child objects ([SuiLoadedChildObject](sui_json_rpc_types::SuiLoadedChildObject)) are the non-input objects that the transaction at the digest loaded
     /// in response to dynamic field accesses.
     pub async fn get_loaded_child_objects(
         &self,
