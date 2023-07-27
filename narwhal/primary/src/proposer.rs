@@ -643,7 +643,15 @@ impl Proposer {
                         Ordering::Equal => {
                             // The core gives us the parents the first time they are enough to form a quorum.
                             // Then it keeps giving us all the extra parents.
-                            self.last_parents.extend(parents)
+                            self.last_parents.extend(parents);
+
+                            // As the schedule can change, make sure that the timer is reset correctly
+                            // for the round leader
+                            if self.min_delay() == Duration::ZERO {
+                                min_delay_timer
+                                .as_mut()
+                                .reset(Instant::now());
+                            }
                         }
                     }
 
