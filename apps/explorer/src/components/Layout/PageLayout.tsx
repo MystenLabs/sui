@@ -81,7 +81,7 @@ export function PageLayout({ gradient, content, loading }: PageLayoutProps) {
 					</section>
 				) : null}
 				{loading ? (
-					<div className="flex h-96 items-center justify-center">
+					<div className="absolute left-1/2 right-0 top-1/2 flex -translate-x-1/2 -translate-y-1/2 transform justify-center">
 						<LoadingIndicator variant="lg" />
 					</div>
 				) : (

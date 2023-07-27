@@ -4,17 +4,17 @@
 import { cva, VariantProps } from 'class-variance-authority';
 
 const placeholderStyle = cva(
-	'h-[1em] w-full animate-shimmer rounded-[3px] bg-placeholderShimmer bg-[length:1000px_100%]',
+	'h-[1em] w-full animate-shimmer bg-placeholderShimmer bg-[length:1000px_100%]',
 	{
 		variants: {
 			rounded: {
-				'3px': 'rounded-[3px]',
+				md: 'rounded-[3px]',
 				lg: 'rounded-lg',
 				xl: 'rounded-xl',
 			},
 		},
 		defaultVariants: {
-			rounded: '3px',
+			rounded: 'md',
 		},
 	},
 );
