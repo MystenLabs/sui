@@ -901,10 +901,7 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
     Ok(())
 }
 
-// TODO(tzakian): When we remove the upgrade feature flag un-ignore this test.
-// This test will fail until the protocol config allows upgrades (doesn't work with an override).
 #[sim_test]
-#[ignore]
 async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let mut test_cluster = TestClusterBuilder::new().build().await;
