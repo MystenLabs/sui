@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SuiObjectData, SuiObjectResponse } from '@mysten/sui.js/client';
-import { getObjectFields } from '@mysten/sui.js';
 import { KIOSK_OWNER_CAP } from '@mysten/kiosk';
 
 export const ORIGINBYTE_KIOSK_MODULE =
@@ -18,6 +17,6 @@ export function isKioskOwnerToken(object?: SuiObjectResponse | SuiObjectData) {
 
 export function getKioskIdFromOwnerCap(object: SuiObjectResponse | SuiObjectData) {
 	const objectData = 'data' in object && object.data ? object.data : (object as SuiObjectData);
-	const fields = getObjectFields(objectData);
+	const fields = objectData.content?.dataType === 'moveObject' ? objectData.content.fields : null;
 	return fields?.for ?? fields?.kiosk;
 }

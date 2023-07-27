@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowRight12 } from '@mysten/icons';
-import { getPureSerializationType } from '@mysten/sui.js';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { TransactionBlock, getPureSerializationType } from '@mysten/sui.js/transactions';
 import { Button } from '@mysten/ui';
 import { useWalletKit, ConnectButton } from '@mysten/wallet-kit';
 import { useMutation } from '@tanstack/react-query';

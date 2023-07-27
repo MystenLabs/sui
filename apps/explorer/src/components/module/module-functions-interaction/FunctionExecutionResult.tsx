@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getObjectId } from '@mysten/sui.js';
-
 import { LinkGroup } from './LinkGroup';
 import { Banner } from '~/ui/Banner';
 
@@ -10,8 +8,8 @@ import type { SuiTransactionBlockResponse, OwnedObjectRef } from '@mysten/sui.js
 
 function toObjectLink(object: OwnedObjectRef) {
 	return {
-		text: getObjectId(object.reference),
-		to: `/object/${encodeURIComponent(getObjectId(object.reference))}`,
+		text: object.reference.objectId,
+		to: `/object/${encodeURIComponent(object.reference.objectId)}`,
 	};
 }
 

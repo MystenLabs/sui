@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getObjectType } from '@mysten/sui.js';
 import { type ObjectOwner, type SuiObjectResponse } from '@mysten/sui.js/client';
 
 import { findIPFSvalue } from './stringUtils';
@@ -22,12 +21,10 @@ export function parseImageURL(display?: Record<string, string> | null) {
 }
 
 export function parseObjectType(data: SuiObjectResponse): string {
-	// TODO: define better naming and typing here
-	const dataType = getObjectType(data);
-	if (dataType === 'package') {
+	if (data.data?.content?.dataType === 'package') {
 		return 'Move Package';
 	}
-	return dataType ?? 'unknown';
+	return data.data?.type ?? data?.data?.content?.type ?? 'unknown';
 }
 
 export function getOwnerStr(owner: ObjectOwner | string): string {

@@ -6,7 +6,6 @@ import { is } from 'superstruct';
 
 import {
 	getExecutionStatusType,
-	getObjectId,
 	getSharedObjectInitialVersion,
 	getTransactionDigest,
 	SuiTransactionBlockResponse,
@@ -40,7 +39,7 @@ describe('Transaction Builders', () => {
 		const sharedObject = getCreatedObjects(publishTxn)!.filter(
 			(o) => getSharedObjectInitialVersion(o.owner) !== undefined,
 		)[0];
-		sharedObjectId = getObjectId(sharedObject);
+		sharedObjectId = sharedObject.reference.objectId;
 	});
 
 	beforeEach(async () => {
@@ -168,11 +167,9 @@ describe('Transaction Builders', () => {
 
 			expect(capId).toBeTruthy();
 
-			const sharedObjectId = getObjectId(
-				getCreatedObjects(publishTxn)!.filter(
-					(o) => getSharedObjectInitialVersion(o.owner) !== undefined,
-				)[0],
-			);
+			const sharedObjectId = getCreatedObjects(publishTxn)!.filter(
+				(o) => getSharedObjectInitialVersion(o.owner) !== undefined,
+			)[0].reference.objectId;
 
 			// Step 2. Confirm that its functions work as expected in its
 			// first version
