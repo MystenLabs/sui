@@ -1,4 +1,4 @@
-## Paying for Transactions with Gas Coins
+# Paying for Sui Transactions with Gas Coins
 
 With Programmable Transaction blocks, you can use the gas payment coin to construct coins with a set
 balance using `splitCoin`. This is useful for Sui payments, and avoids the need for up-front coin
@@ -50,7 +50,7 @@ the transaction block, and all but one of the gas objects will be deleted. The g
 0-index will be the coin that all others are merged into.
 
 ```tsx
-// NOTE: You need to ensure that the coins do not overlap with any
-// of the input objects for the transaction block.
+// you need to ensure that the coins do not overlap with any
+// of the input objects for the transaction block
 txb.setGasPayment([coin1, coin2]);
 ```
