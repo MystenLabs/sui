@@ -22,9 +22,9 @@ use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake, DevInspectResults,
     DryRunTransactionBlockResponse, DynamicFieldPage, EventFilter, EventPage, ObjectsPage,
     ProtocolConfigResponse, SuiCoinMetadata, SuiCommittee, SuiEvent, SuiGetPastObjectRequest,
-    SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
-    SuiPastObjectResponse, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
-    SuiTransactionBlockResponseQuery, TransactionBlocksPage,
+    SuiLoadedChildObject, SuiMoveNormalizedModule, SuiObjectData, SuiObjectDataOptions,
+    SuiObjectResponse, SuiObjectResponseQuery, SuiPastObjectResponse, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions, SuiTransactionBlockResponseQuery, TransactionBlocksPage,
 };
 use sui_json_rpc_types::{CheckpointPage, SuiLoadedChildObjectsResponse};
 use sui_types::balance::Supply;
@@ -446,8 +446,7 @@ impl ReadApi {
 
     /// Return the [SuiCommittee] information for the provided `epoch`, or an error upon failure.
     ///
-    /// The [SuiCommittee] is the RPC representation of the [Committee] type,
-    /// which contains the validators list and their information (name and stakes).
+    /// The [SuiCommittee] contains the validators list and their information (name and stakes).
     ///
     /// The argument `epoch` is either a known epoch id or `None` for the current epoch.
     ///
