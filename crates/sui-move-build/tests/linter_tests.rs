@@ -14,11 +14,12 @@ use move_compiler::{
     editions::Flavor,
     expansion::ast as E,
     shared::{NumericalAddress, PackageConfig},
+    typing::visitor::TypingVisitor,
     Compiler, PASS_PARSER,
 };
 
 use sui_move_build::linters::{
-    custom_state_change::CustomStateChangeVerifier, known_filters,
+    coin_field::CoinFieldVisitor, custom_state_change::CustomStateChangeVerifier, known_filters,
     self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier, LINT_WARNING_PREFIX,
 };
 
@@ -66,6 +67,7 @@ fn run_tests(path: &Path) -> anyhow::Result<()> {
         ShareOwnedVerifier.visitor(),
         SelfTransferVerifier.visitor(),
         CustomStateChangeVerifier.visitor(),
+        CoinFieldVisitor.visitor(),
     ];
     let (filter_attr_name, filters) = known_filters_for_test();
     let (files, comments_and_compiler_res) = Compiler::from_files(
