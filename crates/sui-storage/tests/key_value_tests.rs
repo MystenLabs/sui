@@ -3,17 +3,7 @@
 
 use async_trait::async_trait;
 use futures::FutureExt;
-use hyper::{
-    service::{make_service_fn, service_fn},
-    Body, Request, Response, Server, Uri,
-};
 use std::collections::HashMap;
-use std::convert::Infallible;
-use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
-use sui_macros::sim_test;
-use sui_simulator::configs::constant_latency_ms;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::random_object_ref;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
@@ -23,9 +13,7 @@ use sui_types::error::SuiResult;
 use sui_types::event::Event;
 use sui_types::message_envelope::Message;
 use sui_types::transaction::Transaction;
-use tracing::info;
 
-use sui_storage::http_key_value_store::*;
 use sui_storage::key_value_store::*;
 
 fn random_tx() -> Transaction {
@@ -181,119 +169,139 @@ fn test_get_tx_from_fallback() {
     assert_eq!(result.unwrap(), vec![None]);
 }
 
-async fn test_server(data: Arc<Mutex<HashMap<String, Vec<u8>>>>) {
-    let handle = sui_simulator::runtime::Handle::current();
-    let builder = handle.create_node();
-    let (startup_sender, mut startup_receiver) = tokio::sync::watch::channel(false);
-    let startup_sender = Arc::new(startup_sender);
-    let _node = builder
-        .ip("10.10.10.10".parse().unwrap())
-        .name("server")
-        .init(move || {
-            info!("Server started");
-            let data = data.clone();
-            let startup_sender = startup_sender.clone();
-            async move {
-                let make_svc = make_service_fn(move |_| {
-                    let data = data.clone();
-                    async {
-                        Ok::<_, Infallible>(service_fn(move |req: Request<Body>| {
-                            let data = data.clone();
-                            async move {
-                                let path = req.uri().path().to_string();
-                                let key = path.trim_start_matches('/');
-                                let value = data.lock().unwrap().get(key).cloned();
-                                info!("Got request for key: {:?}, value: {:?}", key, value);
-                                match value {
-                                    Some(v) => Ok::<_, Infallible>(Response::new(Body::from(v))),
-                                    None => Ok::<_, Infallible>(
-                                        Response::builder()
-                                            .status(hyper::StatusCode::NOT_FOUND)
-                                            .body(Body::empty())
-                                            .unwrap(),
-                                    ),
+#[cfg(msim)]
+mod simtests {
+
+    use super::*;
+    use hyper::{
+        service::{make_service_fn, service_fn},
+        Body, Request, Response, Server, Uri,
+    };
+    use std::convert::Infallible;
+    use std::net::SocketAddr;
+    use std::sync::{Arc, Mutex};
+    use std::time::{Duration, Instant};
+    use sui_macros::sim_test;
+    use sui_simulator::configs::constant_latency_ms;
+    use sui_storage::http_key_value_store::*;
+    use tracing::info;
+
+    async fn test_server(data: Arc<Mutex<HashMap<String, Vec<u8>>>>) {
+        let handle = sui_simulator::runtime::Handle::current();
+        let builder = handle.create_node();
+        let (startup_sender, mut startup_receiver) = tokio::sync::watch::channel(false);
+        let startup_sender = Arc::new(startup_sender);
+        let _node = builder
+            .ip("10.10.10.10".parse().unwrap())
+            .name("server")
+            .init(move || {
+                info!("Server started");
+                let data = data.clone();
+                let startup_sender = startup_sender.clone();
+                async move {
+                    let make_svc = make_service_fn(move |_| {
+                        let data = data.clone();
+                        async {
+                            Ok::<_, Infallible>(service_fn(move |req: Request<Body>| {
+                                let data = data.clone();
+                                async move {
+                                    let path = req.uri().path().to_string();
+                                    let key = path.trim_start_matches('/');
+                                    let value = data.lock().unwrap().get(key).cloned();
+                                    info!("Got request for key: {:?}, value: {:?}", key, value);
+                                    match value {
+                                        Some(v) => {
+                                            Ok::<_, Infallible>(Response::new(Body::from(v)))
+                                        }
+                                        None => Ok::<_, Infallible>(
+                                            Response::builder()
+                                                .status(hyper::StatusCode::NOT_FOUND)
+                                                .body(Body::empty())
+                                                .unwrap(),
+                                        ),
+                                    }
                                 }
-                            }
-                        }))
-                    }
-                });
+                            }))
+                        }
+                    });
 
-                let addr = SocketAddr::from(([10, 10, 10, 10], 8080));
-                let server = Server::bind(&addr).serve(make_svc);
+                    let addr = SocketAddr::from(([10, 10, 10, 10], 8080));
+                    let server = Server::bind(&addr).serve(make_svc);
 
-                let graceful = server.with_graceful_shutdown(async {
-                    tokio::time::sleep(Duration::from_secs(86400)).await;
-                });
+                    let graceful = server.with_graceful_shutdown(async {
+                        tokio::time::sleep(Duration::from_secs(86400)).await;
+                    });
 
-                tokio::spawn(async {
-                    let _ = graceful.await;
-                });
+                    tokio::spawn(async {
+                        let _ = graceful.await;
+                    });
 
-                startup_sender.send(true).ok();
-            }
-        })
-        .build();
-    startup_receiver.changed().await.unwrap();
-}
-
-#[sim_test(config = "constant_latency_ms(250)")]
-async fn test_multi_fetch() {
-    let mut data = HashMap::new();
-
-    let tx = random_tx();
-    let fx = random_fx();
-    let events = random_events();
-
-    {
-        let bytes = bcs::to_bytes(&tx).unwrap();
-        assert_eq!(tx, bcs::from_bytes::<Transaction>(&bytes).unwrap());
-
-        let bytes = bcs::to_bytes(&fx).unwrap();
-        assert_eq!(fx, bcs::from_bytes::<TransactionEffects>(&bytes).unwrap());
-
-        let bytes = bcs::to_bytes(&events).unwrap();
-        assert_eq!(
-            events,
-            bcs::from_bytes::<TransactionEvents>(&bytes).unwrap()
-        );
+                    startup_sender.send(true).ok();
+                }
+            })
+            .build();
+        startup_receiver.changed().await.unwrap();
     }
 
-    data.insert(
-        format!("{}/tx", encode_digest(tx.digest())),
-        bcs::to_bytes(&tx).unwrap(),
-    );
-    data.insert(
-        format!("{}/fx", encode_digest(fx.transaction_digest())),
-        bcs::to_bytes(&fx).unwrap(),
-    );
-    data.insert(
-        format!("{}/events", encode_digest(&events.digest())),
-        bcs::to_bytes(&events).unwrap(),
-    );
+    #[sim_test(config = "constant_latency_ms(250)")]
+    async fn test_multi_fetch() {
+        let mut data = HashMap::new();
 
-    let server_data = Arc::new(Mutex::new(data));
-    test_server(server_data).await;
+        let tx = random_tx();
+        let fx = random_fx();
+        let events = random_events();
 
-    let keys = vec![
-        Key::Tx(*tx.digest()),
-        Key::FxByTxDigest(*fx.transaction_digest()),
-        Key::Events(events.digest()),
-        Key::Tx(*random_tx().digest()),
-    ];
+        {
+            let bytes = bcs::to_bytes(&tx).unwrap();
+            assert_eq!(tx, bcs::from_bytes::<Transaction>(&bytes).unwrap());
 
-    let store = HttpKVStore::new(Uri::from_str("http://10.10.10.10:8080").unwrap()).unwrap();
+            let bytes = bcs::to_bytes(&fx).unwrap();
+            assert_eq!(fx, bcs::from_bytes::<TransactionEffects>(&bytes).unwrap());
 
-    // send one request to warm up the client (and open a connection)
-    store.multi_get(&[keys[0]]).await.unwrap();
+            let bytes = bcs::to_bytes(&events).unwrap();
+            assert_eq!(
+                events,
+                bcs::from_bytes::<TransactionEvents>(&bytes).unwrap()
+            );
+        }
 
-    let start_time = Instant::now();
-    let result = store.multi_get(&keys).await.unwrap();
-    // verify that the request took approximately one round trip despite fetching 4 items,
-    // i.e. test that pipelining or multiplexing is working.
-    assert!(start_time.elapsed() < Duration::from_millis(600));
+        data.insert(
+            format!("{}/tx", encode_digest(tx.digest())),
+            bcs::to_bytes(&tx).unwrap(),
+        );
+        data.insert(
+            format!("{}/fx", encode_digest(fx.transaction_digest())),
+            bcs::to_bytes(&fx).unwrap(),
+        );
+        data.insert(
+            format!("{}/events", encode_digest(&events.digest())),
+            bcs::to_bytes(&events).unwrap(),
+        );
 
-    assert_eq!(result[0].as_ref().unwrap(), &Value::from(tx));
-    assert_eq!(result[1].as_ref().unwrap(), &Value::from(fx));
-    assert_eq!(result[2].as_ref().unwrap(), &Value::from(events));
-    assert!(result[3].is_none());
+        let server_data = Arc::new(Mutex::new(data));
+        test_server(server_data).await;
+
+        let keys = vec![
+            Key::Tx(*tx.digest()),
+            Key::FxByTxDigest(*fx.transaction_digest()),
+            Key::Events(events.digest()),
+            Key::Tx(*random_tx().digest()),
+        ];
+
+        let store = HttpKVStore::new(Uri::from_str("http://10.10.10.10:8080").unwrap()).unwrap();
+
+        // send one request to warm up the client (and open a connection)
+        store.multi_get(&[keys[0]]).await.unwrap();
+
+        let start_time = Instant::now();
+        let result = store.multi_get(&keys).await.unwrap();
+        // verify that the request took approximately one round trip despite fetching 4 items,
+        // i.e. test that pipelining or multiplexing is working.
+        assert!(start_time.elapsed() < Duration::from_millis(600));
+
+        assert_eq!(result[0].as_ref().unwrap(), &Value::from(tx));
+        assert_eq!(result[1].as_ref().unwrap(), &Value::from(fx));
+        assert_eq!(result[2].as_ref().unwrap(), &Value::from(events));
+        assert!(result[3].is_none());
+    }
 }
