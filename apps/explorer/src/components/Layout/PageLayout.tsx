@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useAppsBackend } from '@mysten/core';
+import { LoadingIndicator } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { type ReactNode } from 'react';
@@ -20,9 +21,10 @@ export type PageLayoutProps = {
 	};
 	content: ReactNode;
 	error?: string;
+	loading?: boolean;
 };
 
-export function PageLayout({ gradient, content }: PageLayoutProps) {
+export function PageLayout({ gradient, content, loading }: PageLayoutProps) {
 	const [network] = useNetworkContext();
 	const { request } = useAppsBackend();
 	const { data } = useQuery({
@@ -78,7 +80,13 @@ export function PageLayout({ gradient, content }: PageLayoutProps) {
 						</div>
 					</section>
 				) : null}
-				<section className="mx-auto max-w-[1440px] p-5 sm:py-8 md:p-10">{content}</section>
+				{loading ? (
+					<div className="absolute left-1/2 right-0 top-1/2 flex -translate-x-1/2 -translate-y-1/2 transform justify-center">
+						<LoadingIndicator variant="lg" />
+					</div>
+				) : (
+					<section className="mx-auto max-w-[1440px] p-5 sm:py-8 md:p-10">{content}</section>
+				)}
 			</main>
 			<Footer />
 		</div>
