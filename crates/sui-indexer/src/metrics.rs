@@ -9,8 +9,8 @@ use prometheus::{
 /// Prometheus metrics for sui-indexer.
 // buckets defined in seconds
 const LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 3.0, 5.0, 10.0, 20.0, 40.0, 60.0,
-    80.0, 100.0, 200.0,
+    0.001, 0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.2, 0.3, 0.4, 0.5,
+    0.6, 0.7, 0.8, 0.9, 1.0, 2.0, 3.0, 5.0, 10.0, 20.0, 40.0, 60.0, 80.0, 100.0, 200.0,
 ];
 
 #[derive(Clone)]
@@ -34,6 +34,8 @@ pub struct IndexerMetrics {
     pub checkpoint_index_latency: Histogram,
     pub checkpoint_objects_index_latency: Histogram,
     pub checkpoint_db_commit_latency: Histogram,
+    // average latency of 1k transactions
+    pub thousand_transaction_db_commit_latency: Histogram,
     pub object_db_commit_latency: Histogram,
     pub object_mutation_db_commit_latency: Histogram,
     pub object_deletion_db_commit_latency: Histogram,
@@ -170,35 +172,42 @@ impl IndexerMetrics {
             .unwrap(),
             checkpoint_db_commit_latency: register_histogram_with_registry!(
                 "checkpoint_db_commit_latency",
-                "Time spent commiting a checkpoint to the db",
+                "Time spent committing a checkpoint to the db",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            thousand_transaction_db_commit_latency: register_histogram_with_registry!(
+                "transaction_db_commit_latency",
+                "Time spent committing a thousand transactions to the db",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             object_db_commit_latency: register_histogram_with_registry!(
                 "object_db_commit_latency",
-                "Time spent commiting a object to the db",
+                "Time spent committing a object chunk to the db",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             object_mutation_db_commit_latency: register_histogram_with_registry!(
                 "object_mutation_db_commit_latency",
-                "Time spent commiting a object mutation to the db",
+                "Time spent committing a object mutation chunk to the db",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             object_deletion_db_commit_latency: register_histogram_with_registry!(
                 "object_deletion_db_commit_latency",
-                "Time spent commiting a object deletion to the db",
+                "Time spent committing a object deletion chunk to the db",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             epoch_db_commit_latency: register_histogram_with_registry!(
                 "epoch_db_commit_latency",
-                "Time spent commiting a epoch to the db",
+                "Time spent committing a epoch to the db",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )

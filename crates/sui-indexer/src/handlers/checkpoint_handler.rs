@@ -475,7 +475,9 @@ where
                 .latest_tx_checkpoint_sequence_number
                 .set(last_checkpoint_seq);
 
-            self.metrics.total_tx_checkpoint_committed.inc();
+            self.metrics
+                .total_tx_checkpoint_committed
+                .inc_by(checkpoint_batch.len() as u64);
             let tx_count = tx_batch.len();
             self.metrics
                 .total_transaction_committed
@@ -490,6 +492,9 @@ where
             self.metrics
                 .transaction_per_checkpoint
                 .observe(tx_count as f64 / (last_checkpoint_seq - first_checkpoint_seq + 1) as f64);
+            self.metrics
+                .thousand_transaction_db_commit_latency
+                .observe(elapsed * 1000.0 / tx_count as f64);
         }
     }
 
