@@ -183,9 +183,24 @@ jobs:
           UNATTENDED=yes OSX_VERSION_MIN=10.7 ./build.sh
           cd -
 
-          echo "[target.x86_64-apple-darwin]" >> .cargo/config
-          echo linker = \"x86_64-apple-darwin14-clang\" >> .cargo/config
-          echo ar = \"x86_64-apple-darwin14-ar\" >> .cargo/config
+          echo "[target.aarch64-apple-darwin]" >> .cargo/config
+          echo linker = \"aarch64-apple-darwin14-clang\" >> .cargo/config
+          echo ar = \"aarch64-apple-darwin14-ar\" >> .cargo/config
 
-          rustup target add aarch64-apple-darwin
-          PATH="$(pwd)/osxcross/target/bin:$PATH" cargo build --target aarch64-apple-darwin --release                
+          MACOS_TARGET="aarch64-apple-darwin"
+
+          echo "Building target for platform ${MACOS_TARGET}"
+          rustup target add ${MACOS_TARGET}
+
+          # Add osxcross toolchain to path
+          export PATH="$(pwd)/osxcross/target/bin:$PATH"
+
+          # Make libz-sys (git2-rs -> libgit2-sys -> libz-sys) build as a statically linked lib
+          # This prevents the host zlib from being linked
+          export LIBZ_SYS_STATIC=1
+
+          # Use Clang for C/C++ builds
+          export CC=o64-clang
+          export CXX=o64-clang++
+
+          cargo build --target "${MACOS_TARGET}" --release                
