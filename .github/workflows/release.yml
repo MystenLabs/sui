@@ -179,9 +179,6 @@ jobs:
           libmpfr-dev \
           libgmp-dev -y
 
-          sudo aptitude install dnf
-          sudo dnf install gcc-c++
-
           git clone https://github.com/tpoechtrager/osxcross
           cd osxcross
           wget -nc https://s3.dockerproject.org/darwin/v2/MacOSX10.10.sdk.tar.xz
