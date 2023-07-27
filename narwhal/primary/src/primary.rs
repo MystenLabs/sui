@@ -63,7 +63,7 @@ use types::{
     FetchCertificatesResponse, Header, HeaderAPI, MetadataAPI, PreSubscribedBroadcastSender,
     PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest, RequestVoteResponse, Round,
     SendCertificateRequest, SendCertificateResponse, Vote, VoteInfoAPI, WorkerOthersBatchMessage,
-    WorkerOurBatchMessage, WorkerOwnBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
+    WorkerOwnBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
 };
 
 #[cfg(any(test))]
@@ -1015,34 +1015,6 @@ struct WorkerReceiverHandler {
 
 #[async_trait]
 impl WorkerToPrimary for WorkerReceiverHandler {
-    // TODO: Remove once we have upgraded to protocol version 12.
-    async fn report_our_batch(
-        &self,
-        request: anemo::Request<WorkerOurBatchMessage>,
-    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-        let message = request.into_body();
-
-        let (tx_ack, rx_ack) = oneshot::channel();
-        let response = self
-            .tx_our_digests
-            .send(OurDigestMessage {
-                digest: message.digest,
-                worker_id: message.worker_id,
-                timestamp: message.metadata.created_at,
-                ack_channel: Some(tx_ack),
-            })
-            .await
-            .map(|_| anemo::Response::new(()))
-            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
-
-        // If we are ok, then wait for the ack
-        rx_ack
-            .await
-            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
-
-        Ok(response)
-    }
-
     async fn report_own_batch(
         &self,
         request: anemo::Request<WorkerOwnBatchMessage>,
