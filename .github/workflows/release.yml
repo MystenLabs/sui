@@ -169,7 +169,6 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo apt-get install \
-          dnf \
           clang \
           gcc \
           g++ \
@@ -177,6 +176,8 @@ jobs:
           libmpc-dev \
           libmpfr-dev \
           libgmp-dev -y
+          sudo apt update -y
+          sudo apt -y install dnf
 
           sudo dnf install gcc-c++
 
