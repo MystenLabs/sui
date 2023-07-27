@@ -541,7 +541,7 @@ import { homedir } from 'os';
 import path from 'path';
 
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { fromB64, } from '@mysten/sui.js/utils';
+import { fromB64 } from '@mysten/sui.js/utils';
 
 const sender = execSync(`${SUI} client active-address`, { encoding: 'utf8' }).trim();
 const keyPair = (() => {
