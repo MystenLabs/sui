@@ -139,75 +139,28 @@ jobs:
       #     # Have to use a Personal Access Token (PAT), based on https://tinyurl.com/2by2ntdr
       #     GITHUB_TOKEN: ${{ secrets.GH_RELEASE_BUILDS_TOKEN }}
 
-  build-aarch64-apple-darwin:
-    name: osmosisd-${{ matrix.targetos }}-${{ matrix.arch }}
-    runs-on: ubuntu-ghcloud
-
+  release:
+    name: Release - ${{ matrix.platform.release_for }}
     strategy:
       matrix:
-        arch: [ arm64 ]
-        targetos: [ darwin ]
-        include:
-          - targetos: darwin
-            arch: arm64
+        platform:
+          - release_for: macOS-aarch64
+            os: macOS-latest
+            target: aarch64-apple-darwin
+            bin: precious
+            name: precious-Darwin-aarch64.tar.gz
+            command: both
 
+            # more release targets here ...
+
+    runs-on: ${{ matrix.platform.os }}
     steps:
-      - name: Clean up tag name ${{ env.TAG_NAME }}
-        shell: bash
-        run: | 
-          echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
-
-      - name: Checking out ${{ env.sui_tag }}
-        if: ${{ env.sui_tag != 'main' }}
+      - name: Checkout
         uses: actions/checkout@v3
+      - name: Build binary
+        uses: houseabsolute/actions-rust-cross@v0
         with:
-          ref: ${{ env.sui_tag }}
-
-      - name: cargo build (release) for aarch64-apple-darwin platform
-        if: ${{ env.sui_tag != 'main' }}
-        shell: bash
-        run: |
-          sudo apt-get update && sudo apt-get upgrade -y
-          sudo apt-get install \
-          build-essential \
-          aptitude \
-          clang \
-          gcc \
-          g++ \
-          zlib1g-dev \
-          libmpc-dev \
-          libmpfr-dev \
-          libgmp-dev -y
-
-          git clone https://github.com/tpoechtrager/osxcross
-          cd osxcross
-          wget -nc https://s3.dockerproject.org/darwin/v2/MacOSX10.10.sdk.tar.xz
-          mv MacOSX10.10.sdk.tar.xz tarballs/
-          UNATTENDED=yes OSX_VERSION_MIN=10.7 ./build.sh
-          cd -
-
-          echo "[target.aarch64-apple-darwin]" >> .cargo/config
-          echo linker = \"aarch64-apple-darwin14-clang\" >> .cargo/config
-          echo ar = \"aarch64-apple-darwin14-ar\" >> .cargo/config
-
-          echo "[target.aarch64-apple-darwin]" >> ../.cargo/config
-          echo linker = \"aarch64-apple-darwin14-clang\" >> ../.cargo/config
-          echo ar = \"aarch64-apple-darwin14-ar\" >> ../.cargo/config
-
-          MACOS_TARGET="aarch64-apple-darwin"
-
-          echo "Building target for platform ${MACOS_TARGET}"
-          rustup target add ${MACOS_TARGET}
-
-          # Add osxcross toolchain to path
-          export PATH="$(pwd)/osxcross/target/bin:$PATH"
-
-          # Make libz-sys (git2-rs -> libgit2-sys -> libz-sys) build as a statically linked lib
-          # This prevents the host zlib from being linked
-          export LIBZ_SYS_STATIC=1
-
-          # Use Clang for C/C++ builds
-          export CC=o64-clang
-          export CXX=o64-clang++
-
-          cargo build --target "${MACOS_TARGET}" --release                
+          command: ${{ matrix.platform.command }}
+          target: ${{ matrix.platform.target }}
+          args: "--release"
+          strip: true
