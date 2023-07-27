@@ -22,10 +22,16 @@ const formSchema = Yup.object({
 type FormValues = Yup.InferType<typeof formSchema>;
 
 type ProtectAccountFormProps = {
+	submitButtonText?: string;
+	cancelButtonText?: string;
 	onSubmit: SubmitHandler<FormValues>;
 };
 
-export function ProtectAccountForm({ onSubmit }: ProtectAccountFormProps) {
+export function ProtectAccountForm({
+	submitButtonText = 'Create Wallet',
+	cancelButtonText = 'Back',
+	onSubmit,
+}: ProtectAccountFormProps) {
 	const form = useForm({
 		mode: 'all',
 		defaultValues: {
@@ -67,14 +73,19 @@ export function ProtectAccountForm({ onSubmit }: ProtectAccountFormProps) {
 					}
 				/>
 				<div className="flex gap-2.5">
-					<Button variant="outline" size="tall" text="Back" onClick={() => navigate(-1)} />
+					<Button
+						variant="outline"
+						size="tall"
+						text={cancelButtonText}
+						onClick={() => navigate(-1)}
+					/>
 					<Button
 						type="submit"
 						disabled={isSubmitting || !isValid}
 						variant="primary"
 						size="tall"
 						loading={isSubmitting}
-						text="Create Wallet"
+						text={submitButtonText}
 					/>
 				</div>
 			</div>
