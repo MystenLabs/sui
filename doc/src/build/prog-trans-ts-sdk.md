@@ -6,7 +6,7 @@ One of Sui’s most powerful core developer primitives is Programmable Transacti
 
 * Any public on-chain Move function across all smart contracts is accessible to the Programmable Transaction block.
 * Typed outputs from earlier on-chain Move calls can be chained as typed inputs to later on-chain Move calls. These types can be arbitrary Sui objects that carry a rich set of attributes and properties. Programmable Transaction blocks can be highly heterogeneous. A single block can extract a **Player** object from a smart contract wallet, use it to make a move in a **Game**, then send a **Badge** object won by the move to a multi-game **TrophyCase**, all without publishing any new smart contract code. The natural compositionality of these blocks allow existing contracts to seamlessly interoperate with both old and new code (for example, the **Game** does not have to know/care that the user stores their **Player** in a Multisig wallet or their **Badge** in a **TrophyCase**).
-* Chained transactions in a Programmable Transaction block execute and fail atomically. For example, a Defi programmable transaction block might perform multiple swaps across many distinct pools, mutating dozens of existing objects and creating new ones in the process. If one of these transactions fails, the chain breaks and causes the Programmable Transaction block to also fail. 
+* Chained transactions in a Programmable Transaction block execute and fail atomically. For example, a Defi programmable transaction block might perform multiple swaps across many distinct pools, mutating dozens of existing objects and creating new ones in the process. If one of these transactions fails, the chain breaks and causes the Programmable Transaction block to also fail.
 * Each Programmable Transaction block supports up to 1,024 transactions, which enables unbounded expressivity and efficiency. You can use these blocks for homogeneous batching (such as for payments or NFT mints), and heterogeneous chains of single-sender operations as described in the two preceding examples. Both modes leverage Sui's high-speed execution, and allow developers to push already low transaction fees even lower by packing more productive work into a single block.
 
 With the power and convenience of Programmable Transaction blocks, developers on Sui are constructing increasingly sophisticated blocks customized for their applications. Sui’s programmability was highly expressive even before Programmable Transaction blocks. Now, a single execution can perform up to 1,024 heterogeneous operations. On most other blockchains, each of the 1,024 operations would be an individual transaction.
@@ -18,7 +18,7 @@ To get started using Programmable Transaction blocks, make sure that you have th
 This example starts by constructing a transaction block to send Sui. If you are familiar with the legacy Sui transaction types, this is similar to a `paySui` transaction. To construct transactions, import the `TransactionBlock` class, and construct it:
 
 ```tsx
-import { TransactionBlock } from "@mysten/sui.js";
+import { TransactionBlock } from "@mysten/sui.js/transactions";
 const txb = new TransactionBlock();
 ```
 
@@ -152,7 +152,7 @@ const txb = TransactionBlock.from(bytes);
 In the event that you want to build a transaction block offline (i.e. with no `provider` required), you need to fully define all of your input values, and gas configuration (see the following example). For pure values, you can provide a `Uint8Array` which will be used directly in the transaction. For objects, you can use the `Inputs` helper to construct an object reference.
 
 ```tsx
-import { Inputs } from "@mysten/sui.js";
+import { Inputs } from "@mysten/sui.js/transactions";
 
 // For pure values:
 txb.pure(pureValueAsBytes);
