@@ -25,6 +25,7 @@ use move_compiler::{
     },
     diagnostics::{report_diagnostics_to_color_buffer, report_warnings},
     expansion::ast::{AttributeName_, Attributes},
+    hlir::visitor::HlirVisitor,
     shared::known_attributes::KnownAttribute,
     typing::visitor::TypingVisitor,
 };
@@ -55,8 +56,8 @@ use sui_types::{
 use sui_verifier::verifier as sui_bytecode_verifier;
 
 use crate::linters::{
-    coin_field::CoinFieldVisitor, custom_state_change::CustomStateChangeVerifier, known_filters,
-    self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier,
+    coin_field::CoinFieldVisitor, custom_state_change::CustomStateChangeVerifier, freeze_wrapped::FreezeWrappedVisitor,
+    known_filters, self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier,
 };
 
 #[cfg(test)]
@@ -141,6 +142,7 @@ impl BuildConfig {
                     SelfTransferVerifier.visitor(),
                     CustomStateChangeVerifier.visitor(),
                     CoinFieldVisitor.visitor(),
+                    FreezeWrappedVisitor.visitor(),
                 ];
                 let (filter_attr_name, filters) = known_filters();
                 compiler

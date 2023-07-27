@@ -4,3 +4,4 @@
 
 pub mod ast;
 pub(crate) mod translate;
+pub mod visitor;
