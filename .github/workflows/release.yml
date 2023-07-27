@@ -145,7 +145,7 @@ jobs:
       matrix:
         platform:
           - release_for: macOS-aarch64
-            os: macOS-latest
+            os: macos-latest-xl
             target: aarch64-apple-darwin
             bin: precious
             name: precious-Darwin-aarch64.tar.gz
