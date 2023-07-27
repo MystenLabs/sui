@@ -15,6 +15,7 @@ use serde::Deserialize;
 use crate::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     coin::Coin,
+    digests::ObjectDigest,
     error::{ExecutionError, ExecutionErrorKind, SuiError},
     execution_status::CommandArgumentError,
     object::Owner,
@@ -78,6 +79,12 @@ pub struct InputObjectMetadata {
     pub is_mutable_input: bool,
     pub owner: Owner,
     pub version: SequenceNumber,
+}
+
+pub struct LoadedChildObjectMetadata {
+    pub version: SequenceNumber,
+    pub digest: ObjectDigest,
+    pub storage_rebate: u64,
 }
 
 #[derive(Clone, Debug)]
