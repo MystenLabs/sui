@@ -1943,6 +1943,7 @@ impl key_value_store::TransactionKeyValueStore for AuthorityStore {
     ) -> SuiResult<Vec<Option<key_value_store::Value>>> {
         let mut tx_keys = Vec::new();
         let mut fx_keys = Vec::new();
+        let mut fx_by_tx_digest_keys = Vec::new();
         let mut events_keys = Vec::new();
 
         for key in keys {
@@ -1950,6 +1951,7 @@ impl key_value_store::TransactionKeyValueStore for AuthorityStore {
                 key_value_store::Key::Tx(digest) => tx_keys.push(*digest),
                 key_value_store::Key::Fx(digest) => fx_keys.push(*digest),
                 key_value_store::Key::Events(digest) => events_keys.push(*digest),
+                key_value_store::Key::FxByTxDigest(digest) => fx_by_tx_digest_keys.push(*digest),
             }
         }
 
@@ -1971,10 +1973,18 @@ impl key_value_store::TransactionKeyValueStore for AuthorityStore {
             Vec::new()
         };
 
+        let fx_by_tx_digest_results = if !fx_by_tx_digest_keys.is_empty() {
+            self.multi_get_fx_by_tx_digest(&fx_by_tx_digest_keys)
+                .await?
+        } else {
+            Vec::new()
+        };
+
         // re-assemble original order
         let mut tx_iter = tx_results.into_iter();
         let mut fx_iter = fx_results.into_iter();
         let mut events_iter = events_results.into_iter();
+        let mut fx_by_tx_digest_iter = fx_by_tx_digest_results.into_iter();
 
         let mut results = Vec::new();
 
@@ -1988,6 +1998,9 @@ impl key_value_store::TransactionKeyValueStore for AuthorityStore {
                 }
                 key_value_store::Key::Events(_) => {
                     results.push(events_iter.next().unwrap().map(|e| e.into()))
+                }
+                key_value_store::Key::FxByTxDigest(_) => {
+                    results.push(fx_by_tx_digest_iter.next().unwrap().map(|fx| fx.into()))
                 }
             }
         }
@@ -2018,6 +2031,13 @@ impl key_value_store::TransactionKeyValueStore for AuthorityStore {
         keys: &[TransactionEventsDigest],
     ) -> SuiResult<Vec<Option<TransactionEvents>>> {
         Ok(self.multi_get_events(keys)?)
+    }
+
+    async fn multi_get_fx_by_tx_digest(
+        &self,
+        keys: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
+        Ok(self.multi_get_executed_effects(keys)?)
     }
 }
 

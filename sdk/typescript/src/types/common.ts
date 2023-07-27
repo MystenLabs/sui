@@ -13,7 +13,7 @@ import {
 	string,
 	union,
 } from 'superstruct';
-import type { CallArg } from './sui-bcs.js';
+import type { CallArg } from '../bcs/index.js';
 
 /** @deprecated Use `string` instead. */
 export const TransactionDigest = string();

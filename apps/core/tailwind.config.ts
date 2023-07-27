@@ -85,7 +85,8 @@ export default {
 			colors: {
 				'gradient-blue-start': '#589AEA',
 				'gradient-blue-end': '#4C75A6',
-				'gradient-graph-bg-01-start': '#D2EBFA',
+				'gradients-graph-cards-start': '#D2EBFA',
+				'gradients-failure-start': '#FBF0FF',
 			},
 			// Line-heights that are found in the design:
 			lineHeight: {
@@ -105,6 +106,7 @@ export default {
 				drop: '0px 0px 10px rgba(111, 188, 240, 0.2)',
 				mistyEdge:
 					'0px 0px 0px 1px rgba(160, 182, 195, 0.08), 0px 5px 30px 0px rgba(86, 104, 115, 0.20)',
+				cardSoft: '1px 2px 8px 2px rgba(21, 82, 123, 0.05)',
 			},
 			fontSize: {
 				// Text sizes:
@@ -152,6 +154,9 @@ export default {
 				3.75: '0.9375rem',
 				4.5: '1.125rem',
 				7.5: '1.875rem',
+				17: '4.25rem',
+				18: '4.5rem',
+				19: '4.75rem',
 				50: '12.5rem',
 				verticalListShort: '13.0625rem',
 				verticalListLong: '35.6875rem',
@@ -166,6 +171,8 @@ export default {
 				walletLogo: '4.813rem',
 			},
 			minWidth: {
+				10: '2.5rem',
+				18: '4.5rem',
 				transactionColumn: '31.875rem',
 			},
 			transitionTimingFunction: {
@@ -179,7 +186,8 @@ export default {
 				placeholderGradient01: 'linear-gradient(165.96deg, #e6f5ff 10%, #ebecff 95%)',
 				placeholderShimmer:
 					'linear-gradient(90deg, #ecf1f4 -24.18%, rgba(237 242 245 / 40%) 73.61%, #f3f7f9 114.81%, #ecf1f4 114.82%)',
-				main: 'linear-gradient(176deg, #D2EBFA 51.68%, #D5F7EE 100%)',
+				'gradients-graph-cards': 'linear-gradient(176deg, #D2EBFA 51.68%, #D5F7EE 100%)',
+				'gradients-failure': 'linear-gradient(166deg, #FBF0FF 0%, #FFF0F0 100%)',
 			},
 			rotate: {
 				135: '135deg',

@@ -23,7 +23,7 @@ import { useZodForm } from '~/hooks/useZodForm';
 import { DisclosureBox } from '~/ui/DisclosureBox';
 import { Input } from '~/ui/Input';
 
-import type { SuiMoveNormalizedFunction } from '@mysten/sui.js';
+import type { SuiMoveNormalizedFunction } from '@mysten/sui.js/client';
 import type { TypeOf } from 'zod';
 
 const argsSchema = z.object({

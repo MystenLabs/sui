@@ -56,11 +56,8 @@ export default function OfflineSigner() {
 				connections[currentAccount?.chains.filter((x) => x.startsWith('sui'))[0]],
 			);
 
-			const transactionBlock = TransactionBlock.from(bytes);
-
-			return await provider.devInspectTransactionBlock({
-				transactionBlock,
-				sender: currentAccount?.address,
+			return await provider.dryRunTransactionBlock({
+				transactionBlock: bytes,
 			});
 		},
 	});

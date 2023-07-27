@@ -68,14 +68,20 @@ function parseSignature(signature: SerializedSignature) {
 		};
 	}
 
-	const publicKey = publicKeyFromBytes(parsedSignature.signatureScheme, parsedSignature.publicKey);
+	const publicKey = publicKeyFromRawBytes(
+		parsedSignature.signatureScheme,
+		parsedSignature.publicKey,
+	);
 	return {
 		...parsedSignature,
 		publicKey,
 	};
 }
 
-export function publicKeyFromBytes(signatureScheme: SignatureScheme, bytes: Uint8Array): PublicKey {
+export function publicKeyFromRawBytes(
+	signatureScheme: SignatureScheme,
+	bytes: Uint8Array,
+): PublicKey {
 	switch (signatureScheme) {
 		case 'ED25519':
 			return new Ed25519PublicKey(bytes);

@@ -6,7 +6,7 @@ import { useMemo } from 'react';
 
 import { getAmount } from '_helpers';
 
-import type { SuiTransactionBlockResponse } from '@mysten/sui.js';
+import type { SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 
 export function useGetTransferAmount({
 	txn,

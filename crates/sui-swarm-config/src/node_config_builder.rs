@@ -153,6 +153,7 @@ impl ValidatorConfigBuilder {
             state_archive_write_config: StateArchiveConfig::default(),
             state_archive_read_config: vec![],
             state_snapshot_write_config: StateSnapshotConfig::default(),
+            indexer_max_subscriptions: Default::default(),
         }
     }
 
@@ -382,6 +383,7 @@ impl FullnodeConfigBuilder {
             state_archive_write_config: StateArchiveConfig::default(),
             state_archive_read_config: vec![],
             state_snapshot_write_config: StateSnapshotConfig::default(),
+            indexer_max_subscriptions: Default::default(),
         }
     }
 }

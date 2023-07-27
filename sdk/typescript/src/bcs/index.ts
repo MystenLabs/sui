@@ -3,7 +3,7 @@
 
 import type { EnumTypeDefinition, StructTypeDefinition } from '@mysten/bcs';
 import { BCS, getSuiMoveConfig } from '@mysten/bcs';
-import type { SuiObjectRef } from './objects.js';
+import type { SuiObjectRef } from '../types/objects.js';
 
 /**
  * A reference to a shared object.

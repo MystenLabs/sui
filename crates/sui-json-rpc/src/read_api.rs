@@ -29,6 +29,7 @@ use sui_json_rpc_types::{
 use sui_json_rpc_types::{SuiLoadedChildObject, SuiLoadedChildObjectsResponse};
 use sui_open_rpc::Module;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::collection_types::VecMap;
 use sui_types::digests::TransactionEventsDigest;
@@ -38,8 +39,8 @@ use sui_types::error::{SuiError, SuiObjectResponseError};
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointTimestamp};
 use sui_types::object::{Object, ObjectRead, PastObjectRead};
 use sui_types::sui_serde::BigInt;
+use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionDataAPI;
-use sui_types::transaction::VerifiedTransaction;
 
 use crate::api::JsonRpcMetrics;
 use crate::api::{validate_limit, ReadApiServer};
@@ -57,6 +58,7 @@ const MAX_DISPLAY_NESTED_LEVEL: usize = 10;
 #[derive(Clone)]
 pub struct ReadApi {
     pub state: Arc<AuthorityState>,
+    pub transaction_kv_store: Arc<dyn TransactionKeyValueStore + Send + Sync>,
     pub metrics: Arc<JsonRpcMetrics>,
 }
 
@@ -66,7 +68,7 @@ pub struct ReadApi {
 #[derive(Default)]
 struct IntermediateTransactionResponse {
     digest: TransactionDigest,
-    transaction: Option<VerifiedTransaction>,
+    transaction: Option<Transaction>,
     effects: Option<TransactionEffects>,
     events: Option<SuiTransactionBlockEvents>,
     checkpoint_seq: Option<CheckpointSequenceNumber>,
@@ -84,14 +86,22 @@ impl IntermediateTransactionResponse {
         }
     }
 
-    pub fn transaction(&self) -> &Option<VerifiedTransaction> {
+    pub fn transaction(&self) -> &Option<Transaction> {
         &self.transaction
     }
 }
 
 impl ReadApi {
-    pub fn new(state: Arc<AuthorityState>, metrics: Arc<JsonRpcMetrics>) -> Self {
-        Self { state, metrics }
+    pub fn new(
+        state: Arc<AuthorityState>,
+        transaction_kv_store: Arc<dyn TransactionKeyValueStore + Send + Sync>,
+        metrics: Arc<JsonRpcMetrics>,
+    ) -> Self {
+        Self {
+            state,
+            transaction_kv_store,
+            metrics,
+        }
     }
 
     fn get_checkpoint_internal(&self, id: CheckpointId) -> Result<Checkpoint, Error> {
@@ -157,10 +167,9 @@ impl ReadApi {
         }
 
         if opts.require_input() {
-            let state = self.state.clone();
             let digests_clone = digests.clone();
             let transactions =
-                state.multi_get_executed_transactions(&digests_clone).tap_err(
+                self.transaction_kv_store.multi_get_tx(&digests_clone).await.tap_err(
                     |err| debug!(digests=?digests_clone, "Failed to multi get transactions: {:?}", err),
                 )?;
 
@@ -173,11 +182,14 @@ impl ReadApi {
 
         // Fetch effects when `show_events` is true because events relies on effects
         if opts.require_effects() {
-            let state = self.state.clone();
+            let transaction_kv_store = self.transaction_kv_store.clone();
             let digests_clone = digests.clone();
-            let effects_list = state.multi_get_executed_effects(&digests_clone).tap_err(
-                |err| debug!(digests=?digests_clone, "Failed to multi get effects for transactions: {:?}", err),
-            )?;
+            let effects_list = transaction_kv_store
+                .multi_get_fx_by_tx_digest(&digests_clone)
+                .await
+                .tap_err(
+                    |err| debug!(digests=?digests_clone, "Failed to multi get effects for transactions: {:?}", err),
+                )?;
             for ((_digest, cache_entry), e) in
                 temp_response.iter_mut().zip(effects_list.into_iter())
             {
@@ -256,8 +268,9 @@ impl ReadApi {
 
             // fetch events from the DB
             let events = self
-                .state
+                .transaction_kv_store
                 .multi_get_events(&event_digests_list)
+                .await
                 .map_err(|e| {
                     Error::UnexpectedError(format!("Failed to call multi_get_events for transactions {digests:?} with event digests {event_digests_list:?}: {e:?}"))
                 })?
@@ -613,9 +626,9 @@ impl ReadApiServer for ReadApi {
             let mut temp_response = IntermediateTransactionResponse::new(digest);
 
             // Fetch transaction to determine existence
-            let state = self.state.clone();
+            let transaction_kv_store = self.transaction_kv_store.clone();
             let transaction = spawn_monitored_task!(async move {
-                state.get_transaction_block(digest).await.map_err(|err| {
+                transaction_kv_store.get_tx(digest).await.map_err(|err| {
                     debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err);
                     Error::from(err)
                 })
@@ -637,13 +650,16 @@ impl ReadApiServer for ReadApi {
 
             // Fetch effects when `show_events` is true because events relies on effects
             if opts.require_effects() {
-                let state = self.state.clone();
+                let transaction_kv_store = self.transaction_kv_store.clone();
                 temp_response.effects = Some(
                     spawn_monitored_task!(async move {
-                        state.get_executed_effects(digest).map_err(|err| {
-                            debug!(tx_digest=?digest, "Failed to get effects: {:?}", err);
-                            Error::from(err)
-                        })
+                        transaction_kv_store
+                            .get_fx_by_tx_digest(digest)
+                            .await
+                            .map_err(|err| {
+                                debug!(tx_digest=?digest, "Failed to get effects: {:?}", err);
+                                Error::from(err)
+                            })
                     })
                     .await
                     .map_err(Error::from)??,
@@ -685,16 +701,19 @@ impl ReadApiServer for ReadApi {
                 // safe to unwrap because we have checked is_some
                 if let Some(event_digest) = temp_response.effects.as_ref().unwrap().events_digest()
                 {
-                    let state = self.state.clone();
+                    let transaction_kv_store = self.transaction_kv_store.clone();
                     let event_digest = *event_digest;
-                    let events = spawn_monitored_task!(async move{
-                    state
-                    .get_transaction_events(&event_digest)
-                    .map_err(|e|
-                        {
-                            error!("Failed to call get transaction events for events digest: {event_digest:?} with error {e:?}");
-                            Error::from(e)
-                        })}).await.map_err(Error::from)??;
+                    let events = spawn_monitored_task!(async move {
+                        transaction_kv_store
+                            .get_events(event_digest)
+                            .await
+                            .map_err(|e| {
+                                error!("Failed to call get transaction events for events digest: {event_digest:?} with error {e:?}");
+                                Error::from(e)
+                            })
+                        })
+                        .await
+                        .map_err(Error::from)??;
                     match to_sui_transaction_events(self, digest, events) {
                         Ok(e) => temp_response.events = Some(e),
                         Err(e) => temp_response.errors.push(e.to_string()),
@@ -779,12 +798,17 @@ impl ReadApiServer for ReadApi {
     async fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
         with_tracing!(async move {
             let state = self.state.clone();
+            let transaction_kv_store = self.transaction_kv_store.clone();
             spawn_monitored_task!(async move{
             let store = state.load_epoch_store_one_call_per_task();
-            let effect = state.get_executed_effects(transaction_digest).map_err(Error::from)?;
+            let effect = transaction_kv_store
+                .get_fx_by_tx_digest(transaction_digest)
+                .await
+                .map_err(Error::from)?;
             let events = if let Some(event_digest) = effect.events_digest() {
-            state
-                .get_transaction_events(event_digest)
+            transaction_kv_store
+                .get_events(*event_digest)
+                .await
                 .map_err(
                     |e| {
                         error!("Failed to get transaction events for event digest {event_digest:?} with error: {e:?}");
@@ -1222,7 +1246,7 @@ fn convert_to_response(
 
     if opts.show_input && cache.transaction.is_some() {
         let tx_block =
-            SuiTransactionBlock::try_from(cache.transaction.unwrap().into_message(), module_cache)?;
+            SuiTransactionBlock::try_from(cache.transaction.unwrap().into_data(), module_cache)?;
         response.transaction = Some(tx_block);
     }
 

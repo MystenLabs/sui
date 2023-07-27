@@ -1342,6 +1342,11 @@ impl ProtocolConfig {
                 );
                 cfg
             }
+            20 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.feature_flags.commit_root_state_digest = true;
+                cfg
+            }
 
             // Use this template when making changes:
             //

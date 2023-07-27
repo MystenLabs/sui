@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { isSuiNSName } from '@mysten/core';
-import { formatAddress, formatDigest } from '@mysten/sui.js';
+import { formatAddress, formatDigest } from '@mysten/sui.js/utils';
 
 import { Link, type LinkProps } from '~/ui/Link';
 
