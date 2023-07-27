@@ -74,7 +74,8 @@ base-x = { version = "0.2", default-features = false }
 base16ct-6f8ce4dd05d13bba = { package = "base16ct", version = "0.2", default-features = false, features = ["alloc"] }
 base16ct-c65f7effa3be6d31 = { package = "base16ct", version = "0.1", default-features = false }
 base64-594e8ee84c453af0 = { package = "base64", version = "0.13", features = ["alloc"] }
-base64-647d43efb71741da = { package = "base64", version = "0.21" }
+base64-647d43efb71741da = { package = "base64", version = "0.21", features = ["alloc"] }
+base64-url = { version = "2" }
 base64ct = { version = "1", default-features = false, features = ["alloc"] }
 bcs = { version = "0.1", default-features = false }
 beef = { version = "0.5", features = ["impl_serde"] }
@@ -278,6 +279,7 @@ humansize = { version = "1", default-features = false }
 humantime = { version = "2", default-features = false }
 hyper = { version = "0.14", features = ["full"] }
 hyper-rustls-2b5c6dc72f624058 = { package = "hyper-rustls", version = "0.23", features = ["http2", "webpki-tokio"] }
+hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", features = ["http2"] }
 hyper-timeout = { version = "0.4", default-features = false }
 idna = { version = "0.3", default-features = false }
 ignore = { version = "0.4", default-features = false }
@@ -608,6 +610,7 @@ tokio = { version = "1", features = ["full", "test-util", "tracing"] }
 tokio-io-timeout = { version = "1", default-features = false }
 tokio-retry = { version = "0.3", default-features = false }
 tokio-rustls-2b5c6dc72f624058 = { package = "tokio-rustls", version = "0.23" }
+tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24", default-features = false, features = ["logging", "tls12"] }
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
 tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
 toml-ca01ad9e24f5d932 = { package = "toml", version = "0.7", features = ["preserve_order"] }
@@ -757,7 +760,8 @@ base-x = { version = "0.2", default-features = false }
 base16ct-6f8ce4dd05d13bba = { package = "base16ct", version = "0.2", default-features = false, features = ["alloc"] }
 base16ct-c65f7effa3be6d31 = { package = "base16ct", version = "0.1", default-features = false }
 base64-594e8ee84c453af0 = { package = "base64", version = "0.13", features = ["alloc"] }
-base64-647d43efb71741da = { package = "base64", version = "0.21" }
+base64-647d43efb71741da = { package = "base64", version = "0.21", features = ["alloc"] }
+base64-url = { version = "2" }
 base64ct = { version = "1", default-features = false, features = ["alloc"] }
 bcs = { version = "0.1", default-features = false }
 beef = { version = "0.5", features = ["impl_serde"] }
@@ -993,6 +997,7 @@ humansize = { version = "1", default-features = false }
 humantime = { version = "2", default-features = false }
 hyper = { version = "0.14", features = ["full"] }
 hyper-rustls-2b5c6dc72f624058 = { package = "hyper-rustls", version = "0.23", features = ["http2", "webpki-tokio"] }
+hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", features = ["http2"] }
 hyper-timeout = { version = "0.4", default-features = false }
 ident_case = { version = "1", default-features = false }
 idna = { version = "0.3", default-features = false }
@@ -1387,6 +1392,7 @@ tokio-io-timeout = { version = "1", default-features = false }
 tokio-macros = { version = "2", default-features = false }
 tokio-retry = { version = "0.3", default-features = false }
 tokio-rustls-2b5c6dc72f624058 = { package = "tokio-rustls", version = "0.23" }
+tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24", default-features = false, features = ["logging", "tls12"] }
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
 tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
 toml-ca01ad9e24f5d932 = { package = "toml", version = "0.7", features = ["preserve_order"] }
@@ -1491,7 +1497,6 @@ encoding_rs = { version = "0.8" }
 errno-468e82937335b1c9 = { package = "errno", version = "0.3", default-features = false }
 errno-6f8ce4dd05d13bba = { package = "errno", version = "0.2", default-features = false }
 findshlibs = { version = "0.10", default-features = false }
-hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", default-features = false }
 iana-time-zone = { version = "0.1", default-features = false, features = ["fallback"] }
 inferno = { version = "0.11", default-features = false, features = ["nameattr"] }
 ipnet = { version = "2" }
@@ -1535,7 +1540,6 @@ encoding_rs = { version = "0.8" }
 errno-468e82937335b1c9 = { package = "errno", version = "0.3", default-features = false }
 errno-6f8ce4dd05d13bba = { package = "errno", version = "0.2", default-features = false }
 findshlibs = { version = "0.10", default-features = false }
-hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", default-features = false }
 iana-time-zone = { version = "0.1", default-features = false, features = ["fallback"] }
 inferno = { version = "0.11", default-features = false, features = ["nameattr"] }
 ipnet = { version = "2" }
@@ -1575,7 +1579,6 @@ cpufeatures = { version = "0.2", default-features = false }
 debugid = { version = "0.8", default-features = false }
 encoding_rs = { version = "0.8" }
 findshlibs = { version = "0.10", default-features = false }
-hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", default-features = false }
 iana-time-zone = { version = "0.1", default-features = false, features = ["fallback"] }
 inferno = { version = "0.11", default-features = false, features = ["nameattr"] }
 ipnet = { version = "2" }
@@ -1616,7 +1619,6 @@ cpufeatures = { version = "0.2", default-features = false }
 debugid = { version = "0.8", default-features = false }
 encoding_rs = { version = "0.8" }
 findshlibs = { version = "0.10", default-features = false }
-hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", default-features = false }
 iana-time-zone = { version = "0.1", default-features = false, features = ["fallback"] }
 inferno = { version = "0.11", default-features = false, features = ["nameattr"] }
 ipnet = { version = "2" }
@@ -1659,7 +1661,6 @@ crossterm_winapi-c38e5c1d305a1b54 = { package = "crossterm_winapi", version = "0
 encode_unicode-468e82937335b1c9 = { package = "encode_unicode", version = "0.3" }
 encoding_rs = { version = "0.8" }
 error-code = { version = "2", default-features = false }
-hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", default-features = false }
 ipnet = { version = "2" }
 ntapi = { version = "0.4" }
 once_cell = { version = "1", default-features = false, features = ["unstable"] }
@@ -1690,7 +1691,6 @@ ctor = { version = "0.1", default-features = false }
 encode_unicode-468e82937335b1c9 = { package = "encode_unicode", version = "0.3" }
 encoding_rs = { version = "0.8" }
 error-code = { version = "2", default-features = false }
-hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", default-features = false }
 ipnet = { version = "2" }
 ntapi = { version = "0.4" }
 once_cell = { version = "1", default-features = false, features = ["unstable"] }

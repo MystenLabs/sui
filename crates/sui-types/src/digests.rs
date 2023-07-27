@@ -645,6 +645,18 @@ impl fmt::Debug for TransactionEventsDigest {
     }
 }
 
+impl AsRef<[u8]> for TransactionEventsDigest {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
+impl AsRef<[u8; 32]> for TransactionEventsDigest {
+    fn as_ref(&self) -> &[u8; 32] {
+        self.0.as_ref()
+    }
+}
+
 // Each object has a unique digest
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct ObjectDigest(Digest);
