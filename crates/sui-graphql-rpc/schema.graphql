@@ -20,7 +20,7 @@
 # DONE - Chain Identifier
 # DONE Coin
 # TODO Extended
-# TODO Governance
+# DONE Governance
 # TODO Indexer
 # TODO Move Utils
 # TODO Write
@@ -93,6 +93,8 @@ interface Owner {
   balances: BalanceConnection
 
   coins(type: TypeRepr): CoinConnection
+
+  stakes: StakeConnection
 }
 
 # Returned by Object.owner, where we can't disambiguate between
@@ -136,11 +138,130 @@ type Network {
 }
 
 type Epoch {
+  epochId: Int!
+  systemStateVersion: Int
   protocolConfig: ProtocolConfig
+  referenceGasPrice: U64
+
+  systemParameters: SystemParameters
+  stakeSubsidy: StakeSubsidy
+  validatorSet: ValidatorSet
+  storageFund: StorageFund
+  safeMode: SafeMode
+
+  timestampMs: U64
 }
 
-# Omitting for brevity
-type ProtocolConfig {}
+type ProtocolConfig {
+  protocolVersion: Int!
+  # Omitting for brevity
+}
+
+type SystemParameters {
+  durationMs: U64
+  stakeSubsidyStartEpoch: Int
+
+  minValidatorCount: Int
+  maxValidatorCount: Int
+
+  minValidatorJoiningStake: U64
+  validatorLowStakeThreshold: U64
+  validatorVeryLowStakeThreshold: U64
+  validatorLowStakeGracePeriod: Int
+}
+
+type StakeSubsidy {
+  balance: U64
+  distributionCounter: U64
+  currentDistributionAmount: U64
+  periodLength: Int
+  decreaseRate: Int
+}
+
+type ValidatorSet {
+  totalStake: U64
+
+  activeValidators: [Validator]
+
+  # Indices into `activeValidators`
+  pendingRemovals: [U64]
+
+  pendingActiveValidators: MoveObject
+  pendingActiveValidatorsSize: U64
+
+  stakePoolMappings: MoveObject
+  stakePoolMappingsSize: U64
+
+  inactivePools: MoveObject
+  inactivePoolsSize: U64
+
+  validatorCandidates: MoveObject
+  validatorCandidatesSize: U64
+}
+
+type Validator {
+  address: Address!
+
+  credentials: ValidatorCredentials
+  nextEpochCredentials: ValidatorCredentials
+
+  name: String
+  description: String
+  imageUrl: String
+  projectUrl: String
+
+  operationCap: MoveObject
+  stakingPool: MoveObject
+  exchangeRates: MoveObject
+
+  stakingPoolActivationEpoch: Int
+  stakingPoolSuiBalance: U64
+  rewardsPool: U64
+  poolTokenBalance: U64
+  pendingStake: U64
+  pendingTotalSuiWithdraw: U64
+  pendingPoolTokenWithdraw: U64
+  exchangeRatesSize: U64
+
+  votingPower: Int
+  stakeUnits: Int
+  gasPrice: U64
+  commissionRate: U64
+  nextEpochStake: U64
+  nextEpochGasPrice: U64
+  nextEpochCommissionRate: U64
+
+  # The number of epochs for which this validator has been below the
+  # low stake threshold.
+  atRisk: Int
+
+  # The other validators this validator has reported
+  reportRecords: [SuiAddress]
+
+  apy: Float
+}
+
+type ValidatorCredentials {
+  protocolPubKey: Bytes
+  networkPubKey: Bytes
+  workerPubKey: Bytes
+  proofOfPossession: Bytes
+
+  netAddress: String
+  p2pAddreess: String
+  primaryAddress: String
+  workerAddress: String
+}
+
+type StorageFund {
+  totalObjectStorageRebates: U64
+  nonRefundableBalance: U64
+}
+
+type SafeMode {
+  enabled: Boolean
+  gasSummary: GasCostSummary
+}
 
 type Checkpoint {
   digest: Digest!
@@ -367,6 +488,24 @@ type Coin {
   asMoveObject: MoveObject
 }
 
+type StakedSui {
+  status: StakeStatus
+  requestEpoch: Epoch
+  activeEpoch: Epoch
+  principal: U64
+
+  # Only available if status is `ACTIVE`.
+  estimatedReward: U64
+
+  asMoveObject: MoveObject
+}
+
+enum StakeStatus {
+  PENDING
+  ACTIVE
+  UNSTAKED
+}
+
 type CoinMetadata {
   decimals: Int
   name: String
@@ -383,6 +522,7 @@ type MoveObject {
   hasPublicTransfer: Boolean
 
   asCoin: Coin
+  asStakedSui: StakedSui
   asObject: Object
 }
 
@@ -442,5 +582,6 @@ type BalanceConnection {}
 type CheckpointConnection {}
 type CoinConnection {}
 type MovePackageModuleConnection {}
+type StakeConnection {}
 type TransactionBlockConnection {}
 type TransactionEventConnection {}
