@@ -667,7 +667,7 @@ impl CoinReadApi {
     /// Return a paginated response with the coins for the given address, or an error upon failure.
     ///
     /// The coins can be filtered by `coin_type` (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
-    /// or use `None` for the default Coin<SUI>.
+    /// or use `None` for the default `Coin<SUI>`.
     ///
     /// # Examples
     ///
@@ -734,7 +734,7 @@ impl CoinReadApi {
     /// Return the coins for the given address as a stream.
     ///
     /// The coins can be filtered by `coin_type` (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
-    /// or use `None` for the default Coin<SUI>.
+    /// or use `None` for the default `Coin<SUI>`.
     ///
     /// # Examples
     ///
@@ -794,7 +794,7 @@ impl CoinReadApi {
     /// If that it is not possible, it will fail with an insufficient fund error.
     ///
     /// The coins can be filtered by `coin_type` (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
-    /// or use `None` to use the default Coin<SUI>.
+    /// or use `None` to use the default `Coin<SUI>`.
     ///
     /// # Examples
     ///
@@ -843,7 +843,7 @@ impl CoinReadApi {
     ///
     /// Note that this function sums up all the balances of all the coins matching
     /// the given coin type. By default, if `coin_type` is set to `None`,
-    /// it will use the default Coin<SUI>.
+    /// it will use the default `Coin<SUI>`.
     ///
     /// # Examples
     ///
