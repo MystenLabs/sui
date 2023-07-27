@@ -490,6 +490,9 @@ where
             self.metrics
                 .transaction_per_checkpoint
                 .observe(tx_count as f64 / (last_checkpoint_seq - first_checkpoint_seq + 1) as f64);
+            self.metrics
+                .transaction_db_commit_latency
+                .observe(elapsed * 1000.0 / tx_count as f64);
         }
     }
 
