@@ -86,14 +86,12 @@ async fn synchronize() {
     assert!(store.get(&digest).unwrap().is_some());
 }
 
-// TODO: Remove once we have upgraded to protocol version 12.
+// TODO: Remove once we have removed BatchV1 from the codebase.
 #[tokio::test]
 async fn synchronize_versioned_batches() {
     telemetry_subscribers::init_for_testing();
 
     let latest_protocol_config = &latest_protocol_version();
-    // protocol version 11 should only support BatchV1
-    let protocol_config_v11 = &get_protocol_config(11);
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.worker_cache();
@@ -105,7 +103,8 @@ async fn synchronize_versioned_batches() {
 
     // Create network with mock behavior to respond to RequestBatches request.
     let target_primary = fixture.authorities().nth(1).unwrap();
-    let batch_v1 = test_utils::batch(protocol_config_v11);
+    // protocol versions under 12 should only support BatchV1
+    let batch_v1 = test_utils::batch(&get_protocol_config(11));
     let digest_v1 = batch_v1.digest();
     let message_v1 = WorkerSynchronizeMessage {
         digests: vec![digest_v1],
@@ -126,7 +125,7 @@ async fn synchronize_versioned_batches() {
     mock_server
         .expect_request_batches()
         .withf(move |request| request.body().batch_digests == vec![digest_v1])
-        .times(2)
+        .times(1)
         .returning(move |_| {
             Ok(anemo::Response::new(RequestBatchesResponse {
                 batches: vec![mock_batch_response_v1.clone()],
@@ -137,7 +136,7 @@ async fn synchronize_versioned_batches() {
     mock_server
         .expect_request_batches()
         .withf(move |request| request.body().batch_digests == vec![digest_v2])
-        .times(2)
+        .times(1)
         .returning(move |_| {
             Ok(anemo::Response::new(RequestBatchesResponse {
                 batches: vec![mock_batch_response_v2.clone()],
@@ -160,20 +159,6 @@ async fn synchronize_versioned_batches() {
         .await
         .unwrap();
 
-    let handler_v11 = PrimaryReceiverHandler {
-        authority_id,
-        id,
-        committee: committee.clone(),
-        protocol_config: protocol_config_v11.clone(),
-        worker_cache: worker_cache.clone(),
-        store: store.clone(),
-        request_batches_timeout: Duration::from_secs(999),
-        request_batches_retry_nodes: 3, // Not used in this test.
-        network: Some(send_network.clone()),
-        batch_fetcher: None,
-        validator: TrivialTransactionValidator,
-    };
-
     let handler_latest_version = PrimaryReceiverHandler {
         authority_id,
         id,
@@ -188,26 +173,12 @@ async fn synchronize_versioned_batches() {
         validator: TrivialTransactionValidator,
     };
 
-    // Case #1: Receive BatchV1 and network has not upgraded to 12 so we are okay
-    assert!(store.get(&digest_v1).unwrap().is_none());
-    let request = anemo::Request::new(message_v1.clone());
-    handler_v11.synchronize(request).await.unwrap();
-    assert!(store.get(&digest_v1).unwrap().is_some());
-
-    // Remove the batch from the store so we can test the other cases.
-    store.remove(&digest_v1).unwrap();
-
-    // Case #2: Receive BatchV1 but network has upgraded to 12 so we fail because we expect BatchV2
+    // Case #1: Receive BatchV1 but network is upgraded past v11 so we fail because we expect BatchV2
     let request = anemo::Request::new(message_v1);
     let response = handler_latest_version.synchronize(request).await;
     assert!(response.is_err());
 
-    // Case #3: Receive BatchV2 but network is still in v11 so we fail because we expect BatchV1
-    let request = anemo::Request::new(message_v2.clone());
-    let response = handler_v11.synchronize(request).await;
-    assert!(response.is_err());
-
-    // Case #4: Receive BatchV2 and network is upgraded to 12 so we are okay
+    // Case #2: Receive BatchV2 and network is upgraded past v11 so we are okay
     assert!(store.get(&digest_v2).unwrap().is_none());
     let request = anemo::Request::new(message_v2.clone());
     handler_latest_version.synchronize(request).await.unwrap();
