@@ -8,10 +8,10 @@ import {
 	getSharedObjectInitialVersion,
 	isMutableSharedObjectInput,
 	isSharedObjectInput,
-	SuiObjectData,
-	SuiTransactionBlockResponse,
 	SUI_SYSTEM_STATE_OBJECT_ID,
 } from '../../src';
+
+import { SuiObjectData, SuiTransactionBlockResponse } from '../../src/client';
 import { TransactionBlock } from '../../src/builder';
 import { TransactionBlockDataBuilder } from '../../src/builder/TransactionBlockData';
 import { publishPackage, setup, TestToolbox } from './utils/setup';

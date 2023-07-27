@@ -11,6 +11,7 @@ import { DateCard } from '../../shared/date-card';
 import { TransactionSummary } from '../../shared/transaction-summary';
 import { ExplorerLinkCard } from '../../shared/transaction-summary/cards/ExplorerLink';
 import { GasSummary } from '../../shared/transaction-summary/cards/GasSummary';
+import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
 
 type ReceiptCardProps = {
 	txn: SuiTransactionBlockResponse;
@@ -31,9 +32,11 @@ function TransactionStatus({ success, timestamp }: { success: boolean; timestamp
 
 export function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
 	const { events } = txn;
+	const recognizedPackagesList = useRecognizedPackages();
 	const summary = useTransactionSummary({
 		transaction: txn,
 		currentAddress: activeAddress,
+		recognizedPackagesList,
 	});
 
 	if (!summary) return null;

@@ -7,8 +7,6 @@ import {
 	isValidSuiAddress,
 	isValidSuiObjectId,
 	normalizeSuiObjectId,
-	is,
-	SuiObjectData,
 	getTransactionDigest,
 	type SuiSystemStateSummary,
 } from '@mysten/sui.js';
@@ -36,7 +34,7 @@ const getResultsForObject = async (client: SuiClient, query: string) => {
 	if (!isValidSuiObjectId(normalized)) return null;
 
 	const { data, error } = await client.getObject({ id: normalized });
-	if (!is(data, SuiObjectData) || error) return null;
+	if (!data || error) return null;
 
 	return [
 		{

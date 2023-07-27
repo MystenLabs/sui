@@ -108,6 +108,7 @@
 		"@growthbook/growthbook": "^0.25.0",
 		"@growthbook/growthbook-react": "^0.15.0",
 		"@headlessui/react": "^1.7.15",
+		"@hookform/resolvers": "^3.1.1",
 		"@ledgerhq/errors": "^6.12.4",
 		"@ledgerhq/hw-transport": "^6.28.2",
 		"@ledgerhq/hw-transport-webhid": "^6.27.15",
@@ -137,6 +138,7 @@
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",
 		"react-error-boundary": "^4.0.10",
+		"react-hook-form": "^7.45.2",
 		"react-hot-toast": "^2.4.1",
 		"react-number-format": "^5.2.2",
 		"react-redux": "^8.1.1",
@@ -150,7 +152,7 @@
 		"tweetnacl": "^1.0.3",
 		"uuid": "^9.0.0",
 		"webextension-polyfill": "^0.10.0",
-		"yup": "^0.32.11",
+		"yup": "^1.1.1",
 		"zxcvbn": "^4.4.2"
 	}
 }

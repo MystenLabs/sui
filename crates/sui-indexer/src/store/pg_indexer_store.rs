@@ -51,7 +51,7 @@ use crate::models::epoch::DBEpochInfo;
 use crate::models::events::Event;
 use crate::models::network_metrics::{DBMoveCallMetrics, DBNetworkMetrics};
 use crate::models::objects::{
-    compose_object_bulk_insert_update_query, group_and_sort_objects, Object,
+    compose_object_bulk_insert_update_query, filter_latest_objects, Object,
 };
 use crate::models::packages::Package;
 use crate::models::system_state::DBValidatorSummary;
@@ -1228,42 +1228,12 @@ impl PgIndexerStore {
         })
     }
 
-    fn persist_fast_path(
-        &self,
-        tx: Transaction,
-        tx_object_changes: TransactionObjectChanges,
-    ) -> Result<usize, IndexerError> {
-        transactional_blocking!(&self.blocking_cp, |conn| {
-            diesel::insert_into(transactions::table)
-                .values(vec![tx])
-                .on_conflict_do_nothing()
-                .execute(conn)
-                .map_err(IndexerError::from)
-                .context("Failed writing transactions to PostgresDB")?;
-
-            let deleted_objects: Vec<Object> = tx_object_changes
-                .deleted_objects
-                .iter()
-                .map(|deleted_object| deleted_object.clone().into())
-                .collect();
-
-            persist_transaction_object_changes(
-                conn,
-                tx_object_changes.changed_objects,
-                deleted_objects,
-                None,
-                None,
-                None,
-            )
-        })
-    }
-
     fn persist_checkpoint_transactions(
         &self,
-        checkpoint: &Checkpoint,
+        checkpoints: &[Checkpoint],
         transactions: &[Transaction],
-        total_transaction_chunk_committed_counter: IntCounter,
-    ) -> Result<usize, IndexerError> {
+        counter_committed_tx: IntCounter,
+    ) -> Result<(), IndexerError> {
         transactional_blocking!(&self.blocking_cp, |conn| {
             // Commit indexed transactions
             for transaction_chunk in transactions.chunks(PG_COMMIT_CHUNK_SIZE) {
@@ -1279,28 +1249,30 @@ impl PgIndexerStore {
                     .execute(conn)
                     .map_err(IndexerError::from)
                     .context("Failed writing transactions to PostgresDB")?;
+                counter_committed_tx.inc();
             }
-            // chunks.counter() will consume the iterator, so we need to calculate the number of chunks separately.
-            let num_chunks = (transactions.len() + PG_COMMIT_CHUNK_SIZE - 1) / PG_COMMIT_CHUNK_SIZE;
-            total_transaction_chunk_committed_counter.inc_by(num_chunks as u64);
 
             // Commit indexed checkpoint last, so that if the checkpoint is committed,
             // all related data have been committed as well.
-            diesel::insert_into(checkpoints::table)
-                .values(checkpoint)
-                .on_conflict_do_nothing()
-                .execute(conn)
-                .map_err(IndexerError::from)
-                .context("Failed writing checkpoint to PostgresDB")
+            for checkpoint_chunk in checkpoints.chunks(PG_COMMIT_CHUNK_SIZE) {
+                diesel::insert_into(checkpoints::table)
+                    .values(checkpoint_chunk)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .map_err(IndexerError::from)
+                    .context("Failed writing checkpoint to PostgresDB")?;
+                counter_committed_tx.inc();
+            }
+            Ok::<(), IndexerError>(())
         })
     }
 
     fn persist_object_changes(
         &self,
         tx_object_changes: &[TransactionObjectChanges],
-        total_object_change_chunk_committed_counter: IntCounter,
         object_mutation_latency: Histogram,
         object_deletion_latency: Histogram,
+        counter_committed_object: IntCounter,
     ) -> Result<(), IndexerError> {
         transactional_blocking!(&self.blocking_cp, |conn| {
             let mutated_objects: Vec<Object> = tx_object_changes
@@ -1319,9 +1291,9 @@ impl PgIndexerStore {
                 conn,
                 mutated_objects,
                 deleted_objects,
-                Some(total_object_change_chunk_committed_counter),
-                Some(object_mutation_latency),
-                Some(object_deletion_latency),
+                object_mutation_latency,
+                object_deletion_latency,
+                counter_committed_object,
             )?;
             Ok::<(), IndexerError>(())
         })?;
@@ -2267,29 +2239,16 @@ impl IndexerStore for PgIndexerStore {
             .await
     }
 
-    async fn persist_fast_path(
-        &self,
-        tx: Transaction,
-        tx_object_changes: TransactionObjectChanges,
-    ) -> Result<usize, IndexerError> {
-        self.spawn_blocking(move |this| this.persist_fast_path(tx, tx_object_changes))
-            .await
-    }
-
     async fn persist_checkpoint_transactions(
         &self,
-        checkpoint: &Checkpoint,
+        checkpoints: &[Checkpoint],
         transactions: &[Transaction],
-        total_transaction_chunk_committed_counter: IntCounter,
-    ) -> Result<usize, IndexerError> {
-        let checkpoint = checkpoint.to_owned();
+        counter_committed_tx: IntCounter,
+    ) -> Result<(), IndexerError> {
+        let checkpoints = checkpoints.to_owned();
         let transactions = transactions.to_owned();
         self.spawn_blocking(move |this| {
-            this.persist_checkpoint_transactions(
-                &checkpoint,
-                &transactions,
-                total_transaction_chunk_committed_counter,
-            )
+            this.persist_checkpoint_transactions(&checkpoints, &transactions, counter_committed_tx)
         })
         .await
     }
@@ -2297,17 +2256,17 @@ impl IndexerStore for PgIndexerStore {
     async fn persist_object_changes(
         &self,
         tx_object_changes: &[TransactionObjectChanges],
-        total_object_change_chunk_committed_counter: IntCounter,
         object_mutation_latency: Histogram,
         object_deletion_latency: Histogram,
+        counter_committed_object: IntCounter,
     ) -> Result<(), IndexerError> {
         let tx_object_changes = tx_object_changes.to_owned();
         self.spawn_blocking(move |this| {
             this.persist_object_changes(
                 &tx_object_changes,
-                total_object_change_chunk_committed_counter,
                 object_mutation_latency,
                 object_deletion_latency,
+                counter_committed_object,
             )
         })
         .await
@@ -2485,122 +2444,54 @@ fn persist_transaction_object_changes(
     conn: &mut PgConnection,
     mutated_objects: Vec<Object>,
     deleted_objects: Vec<Object>,
-    total_object_change_chunk_committed_counter: Option<IntCounter>,
-    object_mutation_latency: Option<Histogram>,
-    object_deletion_latency: Option<Histogram>,
-) -> Result<usize, IndexerError> {
-    // TODO(gegaowp): tx object changes from one tx do not need group_and_sort_objects, will optimize soon after this PR.
+    object_mutation_latency: Histogram,
+    object_deletion_latency: Histogram,
+    committed_object_counter: IntCounter,
+) -> Result<(), IndexerError> {
     // NOTE: to avoid error of `ON CONFLICT DO UPDATE command cannot affect row a second time`,
     // we have to limit update of one object once in a query.
+    // Also we only need to update the latest object into DB.
+    let mutated_objects = filter_latest_objects(mutated_objects);
 
-    // MUSTFIX(gegaowp): clean up the metrics codes after experiment
-    if let (Some(object_mutation_latency), Some(object_change_chunk_counter)) = (
-        object_mutation_latency,
-        total_object_change_chunk_committed_counter.clone(),
-    ) {
-        let object_mutation_guard = object_mutation_latency.start_timer();
-        let mut mutated_object_groups = group_and_sort_objects(mutated_objects);
-        let mut db_commit_counter = 0;
-        loop {
-            let mutated_object_group = mutated_object_groups
-                .iter_mut()
-                .filter_map(|group| group.pop())
-                .collect::<Vec<_>>();
-            if mutated_object_group.is_empty() {
-                break;
-            }
-            // bulk insert/update via UNNEST trick
-            let insert_update_query =
-                compose_object_bulk_insert_update_query(&mutated_object_group);
-            diesel::sql_query(insert_update_query)
-                .execute(conn)
-                .map_err(|e| {
-                    IndexerError::PostgresWriteError(format!(
-                        "Failed writing mutated objects to PostgresDB with error: {:?}",
-                        e
-                    ))
-                })?;
-            db_commit_counter += 1;
-        }
-        object_mutation_guard.stop_and_record();
-        object_change_chunk_counter.inc_by(db_commit_counter);
-    } else {
-        let mut mutated_object_groups = group_and_sort_objects(mutated_objects);
-        loop {
-            let mutated_object_group = mutated_object_groups
-                .iter_mut()
-                .filter_map(|group| group.pop())
-                .collect::<Vec<_>>();
-            if mutated_object_group.is_empty() {
-                break;
-            }
-            // bulk insert/update via UNNEST trick
-            let insert_update_query =
-                compose_object_bulk_insert_update_query(&mutated_object_group);
-            diesel::sql_query(insert_update_query)
-                .execute(conn)
-                .map_err(|e| {
-                    IndexerError::PostgresWriteError(format!(
-                        "Failed writing mutated objects to PostgresDB with error: {:?}",
-                        e
-                    ))
-                })?;
-        }
-    }
+    let object_mutation_guard = object_mutation_latency.start_timer();
+    // bulk insert/update via UNNEST trick to bypass the 65535 parameters limit
+    // ref: https://klotzandrew.com/blog/postgres-passing-65535-parameter-limit
+    let insert_update_query = compose_object_bulk_insert_update_query(&mutated_objects);
+    diesel::sql_query(insert_update_query)
+        .execute(conn)
+        .map_err(|e| {
+            IndexerError::PostgresWriteError(format!(
+                "Failed writing mutated objects to PostgresDB with error: {:?}",
+                e
+            ))
+        })?;
+    object_mutation_guard.stop_and_record();
 
-    // MUSTFIX(gegaowp): clean up the metrics codes after experiment
-    if let (Some(object_deletion_latency), Some(object_deletion_chunk_counter)) = (
-        object_deletion_latency,
-        total_object_change_chunk_committed_counter,
-    ) {
-        let mut db_commit_counter = 0;
-        let object_deletion_guard = object_deletion_latency.start_timer();
-        for deleted_object_change_chunk in deleted_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
-            diesel::insert_into(objects::table)
-                .values(deleted_object_change_chunk)
-                .on_conflict(objects::object_id)
-                .do_update()
-                .set((
-                    objects::epoch.eq(excluded(objects::epoch)),
-                    objects::checkpoint.eq(excluded(objects::checkpoint)),
-                    objects::version.eq(excluded(objects::version)),
-                    objects::previous_transaction.eq(excluded(objects::previous_transaction)),
-                    objects::object_status.eq(excluded(objects::object_status)),
+    let object_deletion_guard = object_deletion_latency.start_timer();
+    for deleted_object_change_chunk in deleted_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
+        diesel::insert_into(objects::table)
+            .values(deleted_object_change_chunk)
+            .on_conflict(objects::object_id)
+            .do_update()
+            .set((
+                objects::epoch.eq(excluded(objects::epoch)),
+                objects::checkpoint.eq(excluded(objects::checkpoint)),
+                objects::version.eq(excluded(objects::version)),
+                objects::previous_transaction.eq(excluded(objects::previous_transaction)),
+                objects::object_status.eq(excluded(objects::object_status)),
+            ))
+            .execute(conn)
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed writing deleted objects to PostgresDB with error: {:?}",
+                    e
                 ))
-                .execute(conn)
-                .map_err(|e| {
-                    IndexerError::PostgresWriteError(format!(
-                        "Failed writing deleted objects to PostgresDB with error: {:?}",
-                        e
-                    ))
-                })?;
-            db_commit_counter += 1;
-        }
-        object_deletion_guard.stop_and_record();
-        object_deletion_chunk_counter.inc_by(db_commit_counter);
-    } else {
-        for deleted_object_change_chunk in deleted_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
-            diesel::insert_into(objects::table)
-                .values(deleted_object_change_chunk)
-                .on_conflict(objects::object_id)
-                .do_update()
-                .set((
-                    objects::epoch.eq(excluded(objects::epoch)),
-                    objects::checkpoint.eq(excluded(objects::checkpoint)),
-                    objects::version.eq(excluded(objects::version)),
-                    objects::previous_transaction.eq(excluded(objects::previous_transaction)),
-                    objects::object_status.eq(excluded(objects::object_status)),
-                ))
-                .execute(conn)
-                .map_err(|e| {
-                    IndexerError::PostgresWriteError(format!(
-                        "Failed writing deleted objects to PostgresDB with error: {:?}",
-                        e
-                    ))
-                })?;
-        }
+            })?;
+        committed_object_counter.inc();
     }
-    Ok(0)
+    object_deletion_guard.stop_and_record();
+
+    Ok(())
 }
 
 #[derive(Clone)]

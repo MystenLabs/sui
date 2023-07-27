@@ -9,7 +9,7 @@ import LoadingIndicator from '_components/loading/LoadingIndicator';
 import type { ReactNode } from 'react';
 
 const alertStyles = cva(
-	'rounded-2xl text-pBodySmall font-medium flex flex-row flex-nowrap justify-start items-center py-2 px-2.5 gap-2',
+	'rounded-2xl text-pBodySmall font-medium flex flex-row flex-nowrap justify-start items-center gap-2',
 	{
 		variants: {
 			mode: {
@@ -21,6 +21,10 @@ const alertStyles = cva(
 			noBorder: {
 				true: '!border-transparent',
 			},
+			spacing: {
+				sm: 'px-1.5 py-0.5',
+				md: 'py-2 px-2.5',
+			},
 			rounded: {
 				lg: 'rounded-lg',
 				xl: 'rounded-xl',
@@ -30,12 +34,14 @@ const alertStyles = cva(
 		defaultVariants: {
 			mode: 'issue',
 			rounded: '2xl',
+			spacing: 'md',
 		},
 	},
 );
 
 export interface AlertProps extends VariantProps<typeof alertStyles> {
 	children: ReactNode;
+	showIcon?: boolean;
 }
 
 const modeToIcon = {
@@ -45,10 +51,17 @@ const modeToIcon = {
 	loading: <LoadingIndicator color="inherit" />,
 };
 
-export default function Alert({ children, noBorder, rounded, mode = 'issue' }: AlertProps) {
+export default function Alert({
+	children,
+	noBorder,
+	rounded,
+	mode = 'issue',
+	showIcon = true,
+	spacing,
+}: AlertProps) {
 	return (
-		<div className={alertStyles({ noBorder, rounded, mode })}>
-			{(mode && modeToIcon[mode]) || null}
+		<div className={alertStyles({ noBorder, rounded, mode, spacing })}>
+			{(showIcon && mode && modeToIcon[mode]) || null}
 			<div className="break-words flex-1 text-left">{children}</div>
 		</div>
 	);

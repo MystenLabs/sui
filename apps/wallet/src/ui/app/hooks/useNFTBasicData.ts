@@ -6,7 +6,7 @@ import { getObjectFields } from '@mysten/sui.js';
 import useFileExtensionType from './useFileExtensionType';
 import useMediaUrl from './useMediaUrl';
 
-import type { SuiObjectData } from '@mysten/sui.js';
+import type { SuiObjectData } from '@mysten/sui.js/client';
 
 export default function useNFTBasicData(nftObj: SuiObjectData | null) {
 	const nftObjectID = nftObj?.objectId || null;

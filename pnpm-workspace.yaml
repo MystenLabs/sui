@@ -13,3 +13,4 @@ packages:
   - '!sdk/typescript/verify'
   - '!sdk/typescript/multisig'
   - '!sdk/typescript/utils'
+  - '!sdk/typescript/bcs'

@@ -11,6 +11,7 @@ import {
 
 import { TransactionDetailCard } from './transaction-summary/TransactionDetailCard';
 import { GasBreakdown } from '~/components/GasBreakdown';
+import { useRecognizedPackages } from '~/hooks/useRecognizedPackages';
 import { InputsCard } from '~/pages/transaction-result/programmable-transaction-view/InputsCard';
 import { TransactionsCard } from '~/pages/transaction-result/programmable-transaction-view/TransactionsCard';
 
@@ -19,8 +20,10 @@ interface Props {
 }
 
 export function TransactionData({ transaction }: Props) {
+	const recognizedPackagesList = useRecognizedPackages();
 	const summary = useTransactionSummary({
 		transaction,
+		recognizedPackagesList,
 	});
 
 	const transactionKindName = getTransactionKindName(getTransactionKind(transaction)!);

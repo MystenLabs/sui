@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { useGetSystemState } from '@mysten/core';
-import { formatAddress } from '@mysten/sui.js';
+import { formatAddress } from '@mysten/sui.js/utils';
 import cl from 'classnames';
 import { useMemo } from 'react';
 

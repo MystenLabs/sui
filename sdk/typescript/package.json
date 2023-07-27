@@ -6,6 +6,7 @@
 	"license": "Apache-2.0",
 	"files": [
 		"CHANGELOG.md",
+		"bcs",
 		"builder",
 		"client",
 		"cryptography",
@@ -30,6 +31,11 @@
 			"source": "./src/index.ts",
 			"import": "./dist/esm/index.js",
 			"require": "./dist/cjs/index.js"
+		},
+		"./bcs": {
+			"source": "./src/bcs/index.ts",
+			"import": "./dist/esm/bcs/index.js",
+			"require": "./dist/cjs/bcs/index.js"
 		},
 		"./client": {
 			"source": "./src/client/index.ts",

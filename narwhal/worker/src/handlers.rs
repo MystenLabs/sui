@@ -57,11 +57,8 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
 
         let mut batch = message.batch.clone();
 
-        // TODO: Remove once we have upgraded to protocol version 12.
-        if self.protocol_config.narwhal_versioned_metadata() {
-            // Set received_at timestamp for remote batch.
-            batch.versioned_metadata_mut().set_received_at(now());
-        }
+        // Set received_at timestamp for remote batch.
+        batch.versioned_metadata_mut().set_received_at(now());
         self.store.insert(&digest, &batch).map_err(|e| {
             anemo::rpc::Status::internal(format!("failed to write to batch store: {e:?}"))
         })?;
@@ -224,7 +221,7 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
                 }
             }
 
-            // TODO: Remove once we have upgraded to protocol version 12.
+            // TODO: Remove once we have removed BatchV1 from the codebase.
             validate_batch_version(batch, &self.protocol_config).map_err(|err| {
                 anemo::rpc::Status::new_with_message(
                     StatusCode::BadRequest,
@@ -234,11 +231,8 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
 
             let digest = batch.digest();
             if missing.remove(&digest) {
-                // TODO: Remove once we have upgraded to protocol version 12.
-                if self.protocol_config.narwhal_versioned_metadata() {
-                    // Set received_at timestamp for remote batch.
-                    batch.versioned_metadata_mut().set_received_at(now());
-                }
+                // Set received_at timestamp for remote batch.
+                batch.versioned_metadata_mut().set_received_at(now());
                 self.store.insert(&digest, batch).map_err(|e| {
                     anemo::rpc::Status::internal(format!("failed to write to batch store: {e:?}"))
                 })?;

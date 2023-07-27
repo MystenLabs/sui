@@ -4,10 +4,7 @@ import {
 	DryRunTransactionBlockResponse,
 	GasCostSummary,
 	SuiTransactionBlockResponse,
-	getGasData,
 	getTotalGasUsed,
-	getTransactionSender,
-	is,
 	SuiGasData,
 } from '@mysten/sui.js';
 
@@ -32,17 +29,16 @@ export function getGasSummary(
 	if (!effects) return null;
 	const totalGas = getTotalGasUsed(effects);
 
-	let sender = is(transaction, SuiTransactionBlockResponse)
-		? getTransactionSender(transaction)
-		: undefined;
+	let sender = 'transaction' in transaction ? transaction.transaction?.data.sender : undefined;
 
-	const owner = is(transaction, SuiTransactionBlockResponse)
-		? getGasData(transaction)?.owner
-		: typeof effects.gasObject.owner === 'object' && 'AddressOwner' in effects.gasObject.owner
-		? effects.gasObject.owner.AddressOwner
-		: '';
+	const gasData = 'transaction' in transaction ? transaction.transaction?.data.gasData : {};
 
-	const gasData = is(transaction, SuiTransactionBlockResponse) ? getGasData(transaction) : {};
+	const owner =
+		'transaction' in transaction
+			? transaction.transaction?.data.gasData.owner
+			: typeof effects.gasObject.owner === 'object' && 'AddressOwner' in effects.gasObject.owner
+			? effects.gasObject.owner.AddressOwner
+			: '';
 
 	return {
 		...effects.gasUsed,

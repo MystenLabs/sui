@@ -3,15 +3,14 @@
 
 import {
 	DEFAULT_SECP256R1_DERIVATION_PATH,
-	PRIVATE_KEY_SIZE,
 	Secp256r1Keypair,
-	TransactionBlock,
-} from '../../../src';
+} from '../../../src/keypairs/secp256r1';
 import { describe, it, expect } from 'vitest';
 import { secp256r1 } from '@noble/curves/p256';
 import { fromB64, toB58, toB64 } from '@mysten/bcs';
 import { sha256 } from '@noble/hashes/sha256';
 import { verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';
+import { TransactionBlock } from '../../../src/builder';
 
 const VALID_SECP256R1_SECRET_KEY = [
 	66, 37, 141, 205, 161, 76, 241, 17, 198, 2, 184, 151, 27, 140, 200, 67, 233, 30, 70, 202, 144, 81,
@@ -24,6 +23,7 @@ export const VALID_SECP256R1_PUBLIC_KEY = [
 	64, 127, 95, 116, 31, 109, 239, 87, 98, 96, 154,
 ];
 
+const PRIVATE_KEY_SIZE = 32;
 // Invalid private key with incorrect length
 export const INVALID_SECP256R1_SECRET_KEY = Uint8Array.from(Array(PRIVATE_KEY_SIZE - 1).fill(1));
 

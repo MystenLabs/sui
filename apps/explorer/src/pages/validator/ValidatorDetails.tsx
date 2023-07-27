@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetValidatorsApy, useGetValidatorsEvents, useGetSystemState } from '@mysten/core';
-import { type SuiSystemStateSummary } from '@mysten/sui.js';
+import { type SuiSystemStateSummary } from '@mysten/sui.js/client';
 import { LoadingIndicator, Text } from '@mysten/ui';
 import React, { useMemo } from 'react';
 import { useParams } from 'react-router-dom';

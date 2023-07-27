@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '../api/RpcClientContext';
-import { CoinBalance } from '@mysten/sui.js';
+import { CoinBalance } from '@mysten/sui.js/client';
 import { useQuery } from '@tanstack/react-query';
 
 export function useGetAllBalances<TResult = CoinBalance[]>(

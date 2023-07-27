@@ -113,13 +113,6 @@ WorkerOthersBatchMessage:
     - digest:
         TYPENAME: BatchDigest
     - worker_id: U32
-WorkerOurBatchMessage:
-  STRUCT:
-    - digest:
-        TYPENAME: BatchDigest
-    - worker_id: U32
-    - metadata:
-        TYPENAME: Metadata
 WorkerOwnBatchMessage:
   STRUCT:
     - digest:

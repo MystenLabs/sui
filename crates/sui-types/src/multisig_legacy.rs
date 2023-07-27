@@ -87,19 +87,20 @@ impl Hash for MultiSigLegacy {
 
 impl AuthenticatorTrait for MultiSigLegacy {
     fn verify_user_authenticator_epoch(&self, _: EpochId) -> Result<(), SuiError> {
-        unreachable!("cannot be called because verify_authenticator is overridden");
+        Ok(())
     }
 
     fn verify_claims<T>(
         &self,
-        _: &IntentMessage<T>,
-        _: SuiAddress,
-        _: &VerifyParams,
+        value: &IntentMessage<T>,
+        author: SuiAddress,
+        aux_verify_data: &VerifyParams,
     ) -> Result<(), SuiError>
     where
         T: Serialize,
     {
-        unreachable!("cannot be called because verify_authenticator is overridden");
+        let multisig: MultiSig = self.clone().try_into()?;
+        multisig.verify_claims(value, author, aux_verify_data)
     }
 
     fn verify_authenticator<T>(

@@ -68,7 +68,7 @@ impl TransactionValidator for SuiTxValidator {
     ) -> Result<(), Self::Error> {
         let _scope = monitored_scope("ValidateBatch");
 
-        // TODO: Remove once we have upgraded to protocol version 12.
+        // TODO: Remove once we have removed BatchV1 from the codebase.
         validate_batch_version(b, protocol_config)
             .map_err(|err| eyre::eyre!(format!("Invalid Batch: {err}")))?;
 
@@ -172,8 +172,8 @@ mod tests {
         consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
     };
 
-    use narwhal_test_utils::{get_protocol_config, latest_protocol_version};
-    use narwhal_types::Batch;
+    use narwhal_test_utils::latest_protocol_version;
+    use narwhal_types::{Batch, BatchV1};
     use narwhal_worker::TransactionValidator;
     use sui_types::signature::GenericSignature;
 
@@ -253,29 +253,18 @@ mod tests {
             .await;
         assert!(res_batch.is_err());
 
-        // TODO: Remove once we have upgraded to protocol version 12.
-        // protocol version 11 should only support BatchV1
-        let protocol_config_v11 = &get_protocol_config(11);
-        let batch_v1 = Batch::new(vec![], protocol_config_v11);
+        // TODO: Remove once we have removed BatchV1 from the codebase.
+        let batch_v1 = Batch::V1(BatchV1::new(vec![]));
 
-        // Case #1: Receive BatchV1 and network has not upgraded to 12 so we are okay
-        let res_batch = validator
-            .validate_batch(&batch_v1, protocol_config_v11)
-            .await;
-        assert!(res_batch.is_ok());
-        // Case #2: Receive BatchV1 but network has upgraded to 12 so we fail because we expect BatchV2
+        // Case #1: Receive BatchV1 but network has upgraded past v11 so we fail because we expect BatchV2
         let res_batch = validator
             .validate_batch(&batch_v1, latest_protocol_config)
             .await;
         assert!(res_batch.is_err());
 
         let batch_v2 = Batch::new(vec![], latest_protocol_config);
-        // Case #3: Receive BatchV2 but network is still in v11 so we fail because we expect BatchV1
-        let res_batch = validator
-            .validate_batch(&batch_v2, protocol_config_v11)
-            .await;
-        assert!(res_batch.is_err());
-        // Case #4: Receive BatchV2 and network is upgraded to 12 so we are okay
+
+        // Case #2: Receive BatchV2 and network is upgraded past v11 so we are okay
         let res_batch = validator
             .validate_batch(&batch_v2, latest_protocol_config)
             .await;

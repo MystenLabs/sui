@@ -10,7 +10,7 @@ import {
 	Version24,
 	CopyArchiveDoNotUse24,
 } from '@mysten/icons';
-import { formatAddress } from '@mysten/sui.js';
+import { formatAddress } from '@mysten/sui.js/utils';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Browser from 'webextension-polyfill';

@@ -7,6 +7,7 @@ import { NavLink } from 'react-router-dom';
 const links = [
 	{ to: '/offline-signer', label: 'Offline Signer' },
 	{ to: '/signature-analyzer', label: 'Signature Analyzer' },
+	{ to: '/multisig-address', label: 'MultiSig Address' },
 ];
 
 export function Header() {

@@ -20,7 +20,6 @@ pub struct IndexerMetrics {
     pub total_object_checkpoint_committed: IntCounter,
     pub total_transaction_committed: IntCounter,
     pub total_object_change_committed: IntCounter,
-    // NOTE: *_chunk_commited counts number of DB commits
     pub total_transaction_chunk_committed: IntCounter,
     pub total_object_change_chunk_committed: IntCounter,
     pub total_epoch_committed: IntCounter,
@@ -30,10 +29,10 @@ pub struct IndexerMetrics {
     // checkpoint E2E latency is:
     // fullnode_download_latency + checkpoint_index_latency + db_commit_latency
     pub fullnode_checkpoint_wait_and_download_latency: Histogram,
-    pub fullnode_checkpoint_download_latency: Histogram,
     pub fullnode_transaction_download_latency: Histogram,
     pub fullnode_object_download_latency: Histogram,
     pub checkpoint_index_latency: Histogram,
+    pub checkpoint_objects_index_latency: Histogram,
     pub checkpoint_db_commit_latency: Histogram,
     pub object_db_commit_latency: Histogram,
     pub object_mutation_db_commit_latency: Histogram,
@@ -141,13 +140,6 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
-            fullnode_checkpoint_download_latency: register_histogram_with_registry!(
-                "fullnode_checkpoint_download_latency",
-                "Time spent in waiting for a new checkpoint from the Full Node",
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
             fullnode_transaction_download_latency: register_histogram_with_registry!(
                 "fullnode_transaction_download_latency",
                 "Time spent in waiting for a new transaction from the Full Node",
@@ -165,6 +157,13 @@ impl IndexerMetrics {
             checkpoint_index_latency: register_histogram_with_registry!(
                 "checkpoint_index_latency",
                 "Time spent in indexing a checkpoint",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            checkpoint_objects_index_latency: register_histogram_with_registry!(
+                "checkpoint_object_index_latency",
+                "Time spent in indexing a checkpoint objects",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
