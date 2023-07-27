@@ -167,6 +167,7 @@ jobs:
         if: ${{ env.sui_tag != 'main' }}
         shell: bash
         run: |
+          sudo apt update
           sudo apt install \
           dnf \
           clang \
