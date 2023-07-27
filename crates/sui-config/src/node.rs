@@ -137,6 +137,10 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub state_archive_read_config: Vec<StateArchiveConfig>,
+
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kv_store_config: Option<KVStoreConfig>,
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
@@ -592,6 +596,16 @@ pub struct StateArchiveConfig {
     pub object_store_config: Option<ObjectStoreConfig>,
     pub concurrency: usize,
     pub use_for_pruning_watermark: bool,
+}
+
+#[derive(Default, Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct KVStoreConfig {
+    pub aws_access_key_id: String,
+    pub aws_secret_access_key: String,
+    pub aws_region: String,
+    pub table_name: String,
+    pub concurrency: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq)]

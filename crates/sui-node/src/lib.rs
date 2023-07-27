@@ -87,6 +87,7 @@ use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
+use sui_kvstore::writer::setup_key_value_store_uploader;
 use sui_macros::fail_point_async;
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
@@ -159,6 +160,7 @@ pub struct SuiNode {
     sim_state: SimState,
 
     _state_archive_handle: Option<broadcast::Sender<()>>,
+    _kv_store_uploader_handle: Option<oneshot::Sender<()>>,
 }
 
 impl fmt::Debug for SuiNode {
@@ -403,7 +405,7 @@ impl SuiNode {
                 &prometheus_registry,
             )
             .await?;
-            Some(archive_writer.start(state_sync_store).await?)
+            Some(archive_writer.start(state_sync_store.clone()).await?)
         } else {
             None
         };
@@ -437,6 +439,13 @@ impl SuiNode {
             }
             None => None,
         };
+        // Start uploading transactions/events to remote key value store
+        let kv_store_uploader_handle = setup_key_value_store_uploader(
+            state_sync_store,
+            &config.kv_store_config,
+            &prometheus_registry,
+        )
+        .await?;
 
         let state = AuthorityState::new(
             config.protocol_public_key(),
@@ -590,6 +599,7 @@ impl SuiNode {
             },
 
             _state_archive_handle: state_archive_handle,
+            _kv_store_uploader_handle: kv_store_uploader_handle,
         };
 
         info!("SuiNode started!");

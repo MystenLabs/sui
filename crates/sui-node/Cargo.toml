@@ -36,6 +36,7 @@ sui-json-rpc.workspace = true
 sui-protocol-config.workspace = true
 sui-telemetry.workspace = true
 sui-types.workspace = true
+sui-kvstore.workspace = true
 mysten-metrics.workspace = true
 mysten-common.workspace = true
 narwhal-network.workspace = true
