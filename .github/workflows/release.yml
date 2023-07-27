@@ -167,8 +167,9 @@ jobs:
         if: ${{ env.sui_tag != 'main' }}
         shell: bash
         run: |
-          sudo apt-get update -y
+          sudo apt-get update && sudo apt-get upgrade -y
           sudo apt-get install \
+          build-essential \
           clang \
           gcc \
           g++ \
@@ -176,10 +177,6 @@ jobs:
           libmpc-dev \
           libmpfr-dev \
           libgmp-dev -y
-          sudo apt update -y
-          sudo apt -y install dnf
-
-          sudo dnf install gcc-c++
 
           git clone https://github.com/tpoechtrager/osxcross
           cd osxcross
