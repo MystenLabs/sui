@@ -54,7 +54,15 @@ export function PageLayout({
 				isGradientVisible && backgroundGradient && !isError && 'bg-gradients-graph-cards-start',
 			)}
 		>
-			<Header />
+			<section className="sticky top-0 z-20 flex flex-col">
+				{network === Network.MAINNET && data?.degraded && (
+					<Banner rounded="none" align="center" variant="warning" fullWidth>
+						The explorer is running slower than usual. We&rsquo;re working to fix the issue and
+						appreciate your patience.
+					</Banner>
+				)}
+				<Header />
+			</section>
 			{loading && (
 				<div className="absolute left-1/2 right-0 top-1/2 flex -translate-x-1/2 -translate-y-1/2 transform justify-center">
 					<LoadingIndicator variant="lg" />
@@ -70,16 +78,6 @@ export function PageLayout({
 							!isError && 'bg-gradients-graph-cards',
 						)}
 					>
-						{network === Network.MAINNET && data?.degraded && (
-							<div className={clsx(isGradientVisible && 'bg-gradients-graph-cards-bg')}>
-								<div className="mx-auto max-w-[1440px] px-4 pt-3 lg:px-6 xl:px-10">
-									<Banner variant="warning" border fullWidth>
-										We&rsquo;re sorry that the explorer is running slower than usual. We&rsquo;re
-										working to fix the issue and appreciate your patience.
-									</Banner>
-								</div>
-							</div>
-						)}
 						<div
 							className={clsx(
 								'mx-auto max-w-[1440px] py-8 lg:px-6 xl:px-10',
