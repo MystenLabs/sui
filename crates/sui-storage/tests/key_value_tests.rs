@@ -4,6 +4,7 @@
 use async_trait::async_trait;
 use futures::FutureExt;
 use std::collections::HashMap;
+use std::sync::Arc;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::random_object_ref;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
@@ -148,7 +149,7 @@ fn test_get_tx_from_fallback() {
     let fallback_tx = random_tx();
     fallback.add_tx(fallback_tx.clone());
 
-    let fallback = FallbackTransactionKVStore::new(Box::new(store), Box::new(fallback));
+    let fallback = FallbackTransactionKVStore::new(Arc::new(store), Arc::new(fallback));
 
     let result = fallback
         .multi_get_tx(&[*tx.digest()])
@@ -175,11 +176,11 @@ mod simtests {
     use super::*;
     use hyper::{
         service::{make_service_fn, service_fn},
-        Body, Request, Response, Server, Uri,
+        Body, Request, Response, Server,
     };
     use std::convert::Infallible;
     use std::net::SocketAddr;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Mutex;
     use std::time::{Duration, Instant};
     use sui_macros::sim_test;
     use sui_simulator::configs::constant_latency_ms;
@@ -288,7 +289,7 @@ mod simtests {
             Key::Tx(*random_tx().digest()),
         ];
 
-        let store = HttpKVStore::new(Uri::from_str("http://10.10.10.10:8080").unwrap()).unwrap();
+        let store = HttpKVStore::new("http://10.10.10.10:8080").unwrap();
 
         // send one request to warm up the client (and open a connection)
         store.multi_get(&[keys[0]]).await.unwrap();
