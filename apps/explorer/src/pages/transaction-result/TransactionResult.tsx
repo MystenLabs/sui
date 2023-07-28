@@ -40,21 +40,33 @@ function TransactionResultPageHeader({
 
 export default function TransactionResult() {
 	const { id } = useParams();
-	const { isLoading, isError, data } = useGetTransaction(id as string);
-	const txError = data ? data.effects?.status.error : undefined;
+	const {
+		isLoading,
+		isError: getTxnErrorBool,
+		data,
+		error: getTxnError,
+	} = useGetTransaction(id as string);
+	const txnExecutionError = data?.effects?.status.error;
+
+	const txnErrorText = txnExecutionError || (getTxnError as Error)?.message;
 
 	return (
 		<PageLayout
 			loading={isLoading}
 			gradient={{
 				content: (
-					<TransactionResultPageHeader transaction={data} error={txError} loading={isLoading} />
+					<TransactionResultPageHeader
+						transaction={data}
+						error={txnErrorText}
+						loading={isLoading}
+					/>
 				),
 				size: 'md',
-				type: txError ? 'error' : 'success',
 			}}
+			backgroundGradient={!!data}
+			isError={!!txnErrorText}
 			content={
-				isError || !data ? (
+				getTxnErrorBool || !data ? (
 					<Banner variant="error" spacing="lg" fullWidth>
 						{!id
 							? "Can't search for a transaction without a digest"
