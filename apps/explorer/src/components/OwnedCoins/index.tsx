@@ -3,17 +3,42 @@
 
 import { useGetAllBalances } from '@mysten/core';
 import { Heading, Text, LoadingIndicator } from '@mysten/ui';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import OwnedCoinView from './OwnedCoinView';
 import { Pagination } from '~/ui/Pagination';
+import { useRecognizedPackages } from '~/hooks/useRecognizedPackages';
+import { CoinBalance } from '@mysten/sui.js';
 
 export const COINS_PER_PAGE: number = 6;
 
 export function OwnedCoins({ id }: { id: string }) {
 	const [currentSlice, setCurrentSlice] = useState(1);
 	const { isLoading, data, isError } = useGetAllBalances(id);
+	const recognizedPackages = useRecognizedPackages();
 
+	const { recognized, unrecognized } = useMemo(
+		() => {
+			return data?.reduce(
+				(acc, coinBalance) => {
+					if (recognizedPackages.includes(coinBalance.coinType.split('::')[0])) {
+						acc.recognized.push(coinBalance);
+
+					} else {
+						acc.unrecognized.push(coinBalance);
+					}
+					return acc;
+				},
+				{
+					recognized: [] as CoinBalance[],
+					unrecognized: [] as CoinBalance[],
+				},
+			) ?? { recognized: [], unrecognized: [] }
+		},
+		[data, recognizedPackages],
+	);
+
+	console.log({ recognized, unrecognized })
 	if (isError) {
 		return <div className="pt-2 font-sans font-semibold text-issue-dark">Failed to load Coins</div>;
 	}
