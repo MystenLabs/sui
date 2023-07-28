@@ -28,7 +28,7 @@
 # DONE Port designs from Notion
 # DONE - Display
 # DONE - SuiNS
-# TODO Data Consistency API
+# DONE Data Consistency API
 # TODO Flesh out Connections
 # TODO - TotalTransactionBlocks for the PTB connection
 
@@ -41,6 +41,10 @@ type Query {
   # First four bytes of the network's genesis checkpoint digest
   # (uniquely defines the network)
   chainIdentifier: String!
+
+  # First and last checkpoint that the RPC can answer consistent
+  # queries for.
+  consistentRange: ConsistentRange
 
   owner(address: SuiAddress!): Owner
   object(address: SuiAddress!, version: U64): Object
@@ -185,6 +189,11 @@ input TransactionBlockFilter {
 
   inputObject: SuiAddress
   changedObject: SuiAddress
+}
+
+type ConsistentRange {
+  first: Checkpoint
+  last: Checkpoint
 }
 
 interface Owner {
