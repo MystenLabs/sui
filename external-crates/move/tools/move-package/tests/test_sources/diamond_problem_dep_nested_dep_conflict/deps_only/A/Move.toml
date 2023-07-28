@@ -3,4 +3,4 @@ name = "A"
 version = "0.0.0"
 
 [dependencies]
-ADep = { local = "../ADep" }
+ADep = { local = "../ADep", addr_subst = { "A" = "0x7" } }

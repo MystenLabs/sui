@@ -603,57 +603,58 @@ impl DependencyGraph {
         for pkg_name in all_packages {
             let mut existing_pkg_info: Option<(&DependencyGraph, &Package, bool)> = None;
             for (_, (g, _, is_external)) in &dep_graphs {
-                if let Some(pkg) = g.package_table.get(&pkg_name) {
-                    // graph g has a package with name pkg_name
-                    if let Some((existing_graph, existing_pkg, existing_is_external)) =
-                        existing_pkg_info
-                    {
-                        // it's the subsequent time package with pkg_name has been encountered
-                        if pkg == existing_pkg {
-                            // both packages are the same but we need to check if their dependencies
-                            // are the same as well
-                            let (exisiting_pkg_deps, pkg_deps) =
-                                deps_equal(pkg_name, &existing_graph, &g);
-                            if exisiting_pkg_deps != pkg_deps {
-                                bail!(
-                                    "When resolving dependencies for package {}, \
-                                     conflicting dependencies found:{}{}",
+                let Some(pkg) = g.package_table.get(&pkg_name) else {
+                    continue;
+                };
+                // graph g has a package with name pkg_name
+                let Some((existing_graph, existing_pkg, existing_is_external)) =
+                    existing_pkg_info else
+                {
+                    // first time this package was encountered
+                    existing_pkg_info = Some((g, pkg, *is_external));
+                    continue;
+                };
+                // it's the subsequent time package with pkg_name has been encountered
+                if pkg != existing_pkg {
+                    bail!(
+                        "When resolving dependencies for package {0}, conflicting versions \
+                         of package {1} found:\nAt {4}\n\t{1} = {2}\nAt {5}\n\t{1} = {3}",
+                        root_package,
+                        pkg_name,
+                        PackageWithResolverTOML(existing_pkg),
+                        PackageWithResolverTOML(&pkg),
+                        dep_path_from_root(
+                            root_package,
+                            &existing_graph,
+                            pkg_name,
+                            existing_is_external
+                        )?,
+                        dep_path_from_root(root_package, &g, pkg_name, *is_external)?
+                    );
+                }
+                // both packages are the same but we need to check if their dependencies
+                // are the same as well
+                match deps_equal(pkg_name, &existing_graph, &g) {
+                    Ok(_) => continue,
+                    Err((existing_pkg_deps, pkg_deps)) => {
+                        bail!(
+                            "When resolving dependencies for package {}, \
+                             conflicting dependencies found:{}{}",
+                            root_package,
+                            format_deps(
+                                dep_path_from_root(
                                     root_package,
-                                    format_deps(
-                                        dep_path_from_root(
-                                            root_package,
-                                            &existing_graph,
-                                            pkg_name,
-                                            existing_is_external
-                                        )?,
-                                        exisiting_pkg_deps
-                                    ),
-                                    format_deps(
-                                        dep_path_from_root(
-                                            root_package,
-                                            &g,
-                                            pkg_name,
-                                            *is_external,
-                                        )?,
-                                        pkg_deps,
-                                    ),
-                                )
-                            }
-                        } else {
-                            bail!(
-                                "When resolving dependencies for package {0}, \
-                                 conflicting versions of package {1} found:\nAt {4}\n\t{1} = {2}\nAt {5}\n\t{1} = {3}",
-                                root_package,
-                                pkg_name,
-                                PackageWithResolverTOML(existing_pkg),
-                                PackageWithResolverTOML(&pkg),
-                                dep_path_from_root(root_package, &existing_graph, pkg_name, existing_is_external)?,
-                                dep_path_from_root(root_package, &g, pkg_name, *is_external)?
-                            );
-                        }
-                    } else {
-                        // first time this package was encountered
-                        existing_pkg_info = Some((g, pkg, *is_external));
+                                    &existing_graph,
+                                    pkg_name,
+                                    existing_is_external
+                                )?,
+                                existing_pkg_deps
+                            ),
+                            format_deps(
+                                dep_path_from_root(root_package, &g, pkg_name, *is_external,)?,
+                                pkg_deps,
+                            ),
+                        )
                     }
                 }
             }
@@ -683,26 +684,28 @@ impl DependencyGraph {
             // the dependencies of the same package in other sub-graphs (if any)
             for (other_dep_name, (other_g, _, is_other_external)) in &dep_graphs {
                 if dep_name != other_dep_name && other_g.package_graph.contains_node(*dep_name) {
-                    let (other_pkg_deps, pkg_deps) = deps_equal(*dep_name, &other_g, &g);
-                    if other_pkg_deps != pkg_deps {
-                        bail!(
-                            "When resolving dependencies for package {}, \
-                             conflicting dependencies found:\n{}{}",
-                            root_package,
-                            format_deps(
-                                dep_path_from_root(
-                                    root_package,
-                                    &other_g,
-                                    *dep_name,
-                                    *is_other_external
-                                )?,
-                                other_pkg_deps
-                            ),
-                            format_deps(
-                                dep_path_from_root(root_package, &g, *dep_name, *is_external)?,
-                                pkg_deps
-                            ),
-                        )
+                    match deps_equal(*dep_name, &other_g, &g) {
+                        Ok(_) => continue,
+                        Err((other_pkg_deps, pkg_deps)) => {
+                            bail!(
+                                "When resolving dependencies for package {}, \
+                                 conflicting dependencies found:\n{}{}",
+                                root_package,
+                                format_deps(
+                                    dep_path_from_root(
+                                        root_package,
+                                        &other_g,
+                                        *dep_name,
+                                        *is_other_external
+                                    )?,
+                                    other_pkg_deps
+                                ),
+                                format_deps(
+                                    dep_path_from_root(root_package, &g, *dep_name, *is_external)?,
+                                    pkg_deps
+                                ),
+                            )
+                        }
                     }
                 }
             }
@@ -712,12 +715,7 @@ impl DependencyGraph {
                 // internally resolved sub-graphs - due to how external graphs are constructed,
                 // edges between directly dependent packages and their neighbors are already in
                 // the sub-graph and would have been inserted in the first loop in this function
-                for to_pkg_name in g
-                    .package_graph
-                    .neighbors_directed(*dep_name, Direction::Outgoing)
-                {
-                    // unwrap is safe as all edges have a Dependency weight
-                    let sub_dep = g.package_graph.edge_weight(*dep_name, to_pkg_name).unwrap();
+                for (_, to_pkg_name, sub_dep) in g.package_graph.edges(*dep_name) {
                     self.package_graph
                         .add_edge(*dep_name, to_pkg_name, sub_dep.clone());
                 }
@@ -727,9 +725,8 @@ impl DependencyGraph {
     }
 
     /// Inserts a single direct dependency with given (package) name representing a sub-graph into
-    /// the combined graph. Returns true if the sub-graph has to be further merged into the combined
-    /// graph and false if it does not (i.e., if the dependency is already represented in the
-    /// combined graph).
+    /// the combined graph. Returns true if the dependency was internally resolved and false if it
+    /// was externally resolved.
     fn insert_direct_dep(
         &mut self,
         dep: &PM::Dependency,
@@ -1431,15 +1428,20 @@ fn format_deps(
 }
 
 /// Checks if dependencies of a given package in two different dependency graph maps are the same,
-/// checking both the dependency in the graph and the destination package (both can be different).
+/// checking both the dependency in the graph and the destination package (both can be
+/// different). Returns Ok(()) if they are and the two parts of the symmetric different between
+/// dependencies inside Err if they aren't.
 fn deps_equal<'a>(
     pkg_name: Symbol,
     combined_graph: &'a DependencyGraph,
     sub_graph: &'a DependencyGraph,
-) -> (
-    Vec<(&'a Dependency, PM::PackageName, &'a Package)>,
-    Vec<(&'a Dependency, PM::PackageName, &'a Package)>,
-) {
+) -> std::result::Result<
+    (),
+    (
+        Vec<(&'a Dependency, PM::PackageName, &'a Package)>,
+        Vec<(&'a Dependency, PM::PackageName, &'a Package)>,
+    ),
+> {
     let combined_edges = BTreeSet::from_iter(
         combined_graph
             .package_graph
@@ -1456,7 +1458,11 @@ fn deps_equal<'a>(
     let (combined_pkgs, sub_pkgs): (Vec<_>, Vec<_>) = combined_edges
         .symmetric_difference(&sub_pkg_edges)
         .partition(|dep| combined_edges.contains(dep));
-    (combined_pkgs, sub_pkgs)
+    if combined_pkgs == sub_pkgs {
+        Ok(())
+    } else {
+        Err((combined_pkgs, sub_pkgs))
+    }
 }
 
 /// Collects overridden dependencies.
@@ -1529,13 +1535,14 @@ fn dep_path_from_root(
             pkg_name
         ),
         Some((_, p)) => {
-            let mut p = p.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+            let mut i = p.iter();
             if is_external {
                 // externally resolved graphs contain a path to the package in the enclosing graph -
                 // this package has to be removed from the path for the output to be consistent
                 // between internally and externally resolved graphs
-                p.remove(0);
+                i.next();
             }
+            let p = i.map(|s| s.as_str()).collect::<Vec<_>>();
             Ok(format!("{}", p.join(" -> ")))
         }
     }
