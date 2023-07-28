@@ -33,7 +33,7 @@ use sui_types::{
 
 pub(crate) mod object_store;
 
-use object_store::ObjectStore;
+use object_store::ChildObjectStore;
 
 use self::object_store::{ChildObjectEffect, ObjectResult};
 
@@ -131,7 +131,7 @@ impl LocalProtocolConfig {
 
 #[derive(Tid)]
 pub struct ObjectRuntime<'a> {
-    object_store: ObjectStore<'a>,
+    child_object_store: ChildObjectStore<'a>,
     // inventories for test scenario
     pub(crate) test_inventories: TestInventories,
     // the internal state
@@ -184,7 +184,7 @@ impl<'a> ObjectRuntime<'a> {
             }
         }
         Self {
-            object_store: ObjectStore::new(
+            child_object_store: ChildObjectStore::new(
                 object_resolver,
                 root_version,
                 is_metered,
@@ -329,7 +329,7 @@ impl<'a> ObjectRuntime<'a> {
         parent: ObjectID,
         child: ObjectID,
     ) -> PartialVMResult<bool> {
-        self.object_store.object_exists(parent, child)
+        self.child_object_store.object_exists(parent, child)
     }
 
     pub(crate) fn child_object_exists_and_has_type(
@@ -338,7 +338,7 @@ impl<'a> ObjectRuntime<'a> {
         child: ObjectID,
         child_type: &MoveObjectType,
     ) -> PartialVMResult<bool> {
-        self.object_store
+        self.child_object_store
             .object_exists_and_has_type(parent, child, child_type)
     }
 
@@ -351,7 +351,7 @@ impl<'a> ObjectRuntime<'a> {
         child_fully_annotated_layout: &MoveTypeLayout,
         child_move_type: MoveObjectType,
     ) -> PartialVMResult<ObjectResult<&mut GlobalValue>> {
-        let res = self.object_store.get_or_fetch_object(
+        let res = self.child_object_store.get_or_fetch_object(
             parent,
             child,
             child_ty,
@@ -373,7 +373,7 @@ impl<'a> ObjectRuntime<'a> {
         child_move_type: MoveObjectType,
         child_value: Value,
     ) -> PartialVMResult<()> {
-        self.object_store
+        self.child_object_store
             .add_object(parent, child, child_ty, child_move_type, child_value)
     }
 
@@ -387,7 +387,7 @@ impl<'a> ObjectRuntime<'a> {
         by_value_inputs: BTreeSet<ObjectID>,
         external_transfers: BTreeSet<ObjectID>,
     ) -> Result<RuntimeResults, ExecutionError> {
-        let (loaded_child_objects, child_effects) = self.object_store.take_effects();
+        let (loaded_child_objects, child_effects) = self.child_object_store.take_effects();
         self.state.finish(
             by_value_inputs,
             external_transfers,
@@ -399,11 +399,11 @@ impl<'a> ObjectRuntime<'a> {
     pub(crate) fn all_active_child_objects(
         &self,
     ) -> impl Iterator<Item = (&ObjectID, &Type, Value)> {
-        self.object_store.all_active_objects()
+        self.child_object_store.all_active_objects()
     }
 
     pub fn loaded_child_objects(&self) -> BTreeMap<ObjectID, LoadedChildObjectMetadata> {
-        self.object_store
+        self.child_object_store
             .cached_objects()
             .iter()
             .filter_map(|(id, obj_opt)| {
@@ -498,20 +498,9 @@ impl ObjectRuntimeState {
             events: user_events,
             total_events_size: _,
         } = self;
-        let input_owner_map = input_objects
-            .iter()
-            .filter_map(|(id, owner)| match owner {
-                Owner::AddressOwner(_) | Owner::Shared { .. } | Owner::Immutable => None,
-                Owner::ObjectOwner(parent) => Some((*id, (*parent).into())),
-            })
-            .collect();
-        // update the input owners with the new owners from transfers
-        // reports an error on cycles
+        // Check new owners from transfers, reports an error on cycles.
         // TODO can we have cycles in the new system?
-        update_owner_map(
-            input_owner_map,
-            transfers.iter().map(|(id, (owner, _, _))| (*id, *owner)),
-        )?;
+        check_circular_ownership(transfers.iter().map(|(id, (owner, _, _))| (*id, *owner)))?;
         // determine write kinds
         let writes: LinkedHashMap<_, _> = transfers
             .into_iter()
@@ -580,10 +569,10 @@ impl ObjectRuntimeState {
     }
 }
 
-fn update_owner_map(
-    mut object_owner_map: BTreeMap<ObjectID, ObjectID>,
+fn check_circular_ownership(
     transfers: impl IntoIterator<Item = (ObjectID, Owner)>,
 ) -> Result<(), ExecutionError> {
+    let mut object_owner_map = BTreeMap::new();
     for (id, recipient) in transfers {
         object_owner_map.remove(&id);
         match recipient {

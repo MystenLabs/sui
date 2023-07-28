@@ -58,7 +58,7 @@ struct Inner<'a> {
 
 // maintains the runtime GlobalValues for child objects and manages the fetching of objects
 // from storage, through the `ChildObjectResolver`
-pub(super) struct ObjectStore<'a> {
+pub(super) struct ChildObjectStore<'a> {
     // contains object resolver and object cache
     // kept as a separate struct to deal with lifetime issues where the `store` is accessed
     // at the same time as the `cached_objects` is populated
@@ -235,7 +235,7 @@ impl<'a> Inner<'a> {
     }
 }
 
-impl<'a> ObjectStore<'a> {
+impl<'a> ChildObjectStore<'a> {
     pub(super) fn new(
         resolver: &'a dyn ChildObjectResolver,
         root_version: BTreeMap<ObjectID, SequenceNumber>,
