@@ -157,17 +157,18 @@ mod checked {
                 // so to mimic this "off limits" behavior, we act as if the coin has less balance than
                 // it really does
                 let Some(Value::Object(ObjectValue {
-                contents: ObjectContents::Coin(coin),
-                ..
-            })) = &mut gas.inner.value else {
-                invariant_violation!("Gas object should be a populated coin")
-            };
+                    contents: ObjectContents::Coin(coin),
+                    ..
+                })) = &mut gas.inner.value else {
+                    invariant_violation!("Gas object should be a populated coin")
+                };
+
                 let max_gas_in_balance = gas_charger.gas_budget();
                 let Some(new_balance) = coin.balance.value().checked_sub(max_gas_in_balance) else {
-                invariant_violation!(
-                    "Transaction input checker should check that there is enough gas"
-                );
-            };
+                    invariant_violation!(
+                        "Transaction input checker should check that there is enough gas"
+                    );
+                };
                 coin.balance = Balance::new(new_balance);
                 gas
             } else {
@@ -326,8 +327,8 @@ mod checked {
                         .type_to_type_layout(&ty)
                         .map_err(|e| self.convert_vm_error(e))?;
                     let Some(bytes) = value.simple_serialize(&layout) else {
-                    invariant_violation!("Failed to deserialize already serialized Move value");
-                };
+                        invariant_violation!("Failed to deserialize already serialized Move value");
+                    };
                     Ok((module_id.clone(), tag, bytes))
                 })
                 .collect::<Result<Vec<_>, ExecutionError>>()?;
@@ -479,8 +480,8 @@ mod checked {
             );
             // restore is exclusively used for mut
             let Ok((_, value_opt)) = self.borrow_mut_impl(arg, None) else {
-            invariant_violation!("Should be able to borrow argument to restore it")
-        };
+                invariant_violation!("Should be able to borrow argument to restore it")
+            };
             let old_value = value_opt.replace(value);
             assert_invariant!(
                 old_value.is_none() || old_value.unwrap().is_copyable(),
@@ -588,9 +589,9 @@ mod checked {
                 let id = object_metadata.id;
                 input_object_metadata.insert(object_metadata.id, object_metadata);
                 let Some(Value::Object(object_value)) = value else {
-                by_value_inputs.insert(id);
-                return Ok(())
-            };
+                    by_value_inputs.insert(id);
+                    return Ok(())
+                };
                 if is_mutable_input {
                     add_additional_write(&mut additional_writes, owner, object_value)?;
                 }
@@ -750,8 +751,8 @@ mod checked {
                     .type_to_type_layout(&ty)
                     .map_err(|e| convert_vm_error(e, vm, tmp_session.get_resolver()))?;
                 let Some(bytes) = value.simple_serialize(&layout) else {
-                invariant_violation!("Failed to deserialize already serialized Move value");
-            };
+                    invariant_violation!("Failed to deserialize already serialized Move value");
+                };
                 // safe because has_public_transfer has been determined by the abilities
                 let move_object = unsafe {
                     create_written_object(
@@ -780,20 +781,20 @@ mod checked {
                 let delete_kind_with_seq = match delete_kind {
                     DeleteKind::Normal | DeleteKind::Wrap => {
                         let old_version = match input_object_metadata.get(&id) {
-                        Some(metadata) => {
-                            assert_invariant!(
-                                !matches!(metadata.owner, Owner::Immutable),
-                                "Attempting to delete immutable object {id} via delete kind {delete_kind}"
-                            );
-                            metadata.version
-                        }
-                        None => {
-                            match loaded_child_objects.get(&id) {
-                                Some(version) => *version,
-                                None => invariant_violation!("Deleted/wrapped object {id} must be either in input or loaded child objects")
+                            Some(metadata) => {
+                                assert_invariant!(
+                                    !matches!(metadata.owner, Owner::Immutable),
+                                    "Attempting to delete immutable object {id} via delete kind {delete_kind}"
+                                );
+                                metadata.version
                             }
-                        }
-                    };
+                            None => {
+                                match loaded_child_objects.get(&id) {
+                                    Some(version) => *version,
+                                    None => invariant_violation!("Deleted/wrapped object {id} must be either in input or loaded child objects")
+                                }
+                            }
+                        };
                         if delete_kind == DeleteKind::Normal {
                             DeleteKindWithOldVersion::Normal(old_version)
                         } else {
@@ -897,8 +898,8 @@ mod checked {
                 }
                 Argument::Result(i) => {
                     let Some(command_result) = self.results.get_mut(i as usize) else {
-                    return Err(CommandArgumentError::IndexOutOfBounds { idx: i });
-                };
+                        return Err(CommandArgumentError::IndexOutOfBounds { idx: i });
+                    };
                     if command_result.len() != 1 {
                         return Err(CommandArgumentError::InvalidResultArity { result_idx: i });
                     }
@@ -906,14 +907,14 @@ mod checked {
                 }
                 Argument::NestedResult(i, j) => {
                     let Some(command_result) = self.results.get_mut(i as usize) else {
-                    return Err(CommandArgumentError::IndexOutOfBounds { idx: i });
-                };
+                        return Err(CommandArgumentError::IndexOutOfBounds { idx: i });
+                    };
                     let Some(result_value) = command_result.get_mut(j as usize) else {
-                    return Err(CommandArgumentError::SecondaryIndexOutOfBounds {
-                        result_idx: i,
-                        secondary_idx: j,
-                    });
-                };
+                        return Err(CommandArgumentError::SecondaryIndexOutOfBounds {
+                            result_idx: i,
+                            secondary_idx: j,
+                        });
+                    };
                     (None, result_value)
                 }
             };
@@ -1273,20 +1274,20 @@ mod checked {
         gas_id: ObjectID,
     ) -> Result<(), ExecutionError> {
         let Some(AdditionalWrite { bytes,.. }) = additional_writes.get_mut(&gas_id) else {
-        invariant_violation!("Gas object cannot be wrapped or destroyed")
-    };
-        let Ok(mut coin) = Coin::from_bcs_bytes(bytes) else {
-        invariant_violation!("Gas object must be a coin")
-    };
-        let Some(new_balance) = coin
-        .balance
-        .value()
-        .checked_add(gas_charger.gas_budget()) else {
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::CoinBalanceOverflow,
-                "Gas coin too large after returning the max gas budget",
-            ));
+            invariant_violation!("Gas object cannot be wrapped or destroyed")
         };
+        let Ok(mut coin) = Coin::from_bcs_bytes(bytes) else {
+            invariant_violation!("Gas object must be a coin")
+        };
+        let Some(new_balance) = coin
+            .balance
+            .value()
+            .checked_add(gas_charger.gas_budget()) else {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::CoinBalanceOverflow,
+                    "Gas coin too large after returning the max gas budget",
+                ));
+            };
         coin.balance = Balance::new(new_balance);
         *bytes = coin.to_bcs_bytes();
         Ok(())
