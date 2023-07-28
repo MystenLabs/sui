@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { getTotalGasUsed } from '@mysten/sui.js';
 import {
 	DryRunTransactionBlockResponse,
 	GasCostSummary,
 	SuiTransactionBlockResponse,
 	SuiGasData,
+	TransactionEffects,
 } from '@mysten/sui.js/client';
 
 type Optional<T> = {
@@ -48,4 +48,13 @@ export function getGasSummary(
 		isSponsored: !!owner && !!sender && owner !== sender,
 		gasUsed: transaction?.effects!.gasUsed,
 	};
+}
+
+export function getTotalGasUsed(effects: TransactionEffects): bigint | undefined {
+	const gasSummary = effects?.gasUsed;
+	return gasSummary
+		? BigInt(gasSummary.computationCost) +
+				BigInt(gasSummary.storageCost) -
+				BigInt(gasSummary.storageRebate)
+		: undefined;
 }

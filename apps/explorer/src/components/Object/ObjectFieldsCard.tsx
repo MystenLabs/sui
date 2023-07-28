@@ -3,7 +3,6 @@
 
 import { useGetObject, useGetNormalizedMoveStruct } from '@mysten/core';
 import { Search24 } from '@mysten/icons';
-import { getObjectFields, getObjectType } from '@mysten/sui.js';
 import { Text, LoadingIndicator, Combobox, ComboboxInput, ComboboxList } from '@mysten/ui';
 import { useState } from 'react';
 
@@ -23,7 +22,10 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
 	const { data, isLoading, isError } = useGetObject(id);
 	const [query, setQuery] = useState('');
 	const [activeFieldName, setActiveFieldName] = useState('');
-	const objectType = getObjectType(data!);
+	const objectType =
+		data?.data?.type ?? data?.data?.content?.dataType === 'package'
+			? 'package'
+			: data?.data?.content?.type;
 
 	// Get the packageId, moduleName, functionName from the objectType
 	const [packageId, moduleName, functionName] = objectType?.split('<')[0]?.split('::') || [];
@@ -59,7 +61,8 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
 		);
 	}
 
-	const fieldsData = getObjectFields(data!);
+	const fieldsData =
+		data.data?.content?.dataType === 'moveObject' ? data.data?.content?.fields : null;
 
 	const filteredFieldNames =
 		query === ''

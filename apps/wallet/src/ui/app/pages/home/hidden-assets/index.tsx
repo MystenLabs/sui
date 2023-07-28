@@ -3,7 +3,6 @@
 
 import { getKioskIdFromOwnerCap, isKioskOwnerToken, useMultiGetObjects } from '@mysten/core';
 import { Check12, EyeClose16 } from '@mysten/icons';
-import { getObjectDisplay } from '@mysten/sui.js';
 import { get, set } from 'idb-keyval';
 import { useEffect, useCallback, useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
@@ -37,7 +36,7 @@ function HiddenNftsPage() {
 			data?.flatMap((data) => {
 				return {
 					data: data.data,
-					display: getObjectDisplay(data).data,
+					display: data.data?.display?.data,
 				};
 			}) || [];
 

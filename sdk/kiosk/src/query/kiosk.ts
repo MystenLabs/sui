@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getObjectFields } from '@mysten/sui.js';
 import { SuiObjectData, SuiObjectResponse } from '@mysten/sui.js/client';
 import { isValidSuiAddress } from '@mysten/sui.js/utils';
 import {
@@ -98,7 +97,10 @@ export async function getOwnedKiosks(
 	});
 
 	// get kioskIds from the OwnerCaps.
-	const kioskIdList = data?.map((x: SuiObjectResponse) => getObjectFields(x)?.for);
+	const kioskIdList = data?.map((x: SuiObjectResponse) => {
+		const fields = x.data?.content?.dataType === 'moveObject' ? x.data.content.fields : null;
+		return fields?.for;
+	});
 
 	// clean up data that might have an error in them.
 	// only return valid objects.

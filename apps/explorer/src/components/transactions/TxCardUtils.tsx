@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { getTotalGasUsed } from '@mysten/core';
 import { X12, Dot12 } from '@mysten/icons';
-import { getTotalGasUsed } from '@mysten/sui.js';
 import { type SuiClient, type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 
 import { SuiAmount } from '../Table/SuiAmount';
@@ -43,7 +43,7 @@ export const genTableDataFromTxData = (results: SuiTransactionBlockResponse[]) =
 						: '--'}
 				</div>
 			),
-			gas: <SuiAmount amount={getTotalGasUsed(transaction)} />,
+			gas: <SuiAmount amount={transaction.effects && getTotalGasUsed(transaction.effects!)} />,
 			sender: (
 				<HighlightedTableCol>{sender ? <AddressLink address={sender} /> : '-'}</HighlightedTableCol>
 			),

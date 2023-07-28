@@ -2,14 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFormatCoin, CoinFormat } from '@mysten/core';
-import {
-	getObjectDisplay,
-	getObjectOwner,
-	getObjectId,
-	getObjectVersion,
-	getObjectPreviousTransactionDigest,
-	getSuiObjectData,
-} from '@mysten/sui.js';
 import { type SuiObjectResponse } from '@mysten/sui.js/client';
 import { normalizeSuiAddress, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { Text } from '@mysten/ui';
@@ -29,13 +21,13 @@ import { TabHeader } from '~/ui/Tabs';
 import { extractName, parseImageURL, parseObjectType } from '~/utils/objectUtils';
 
 export function TokenView({ data }: { data: SuiObjectResponse }) {
-	const display = getObjectDisplay(data)?.data;
+	const display = data.data?.display?.data;
 	const imgUrl = parseImageURL(display);
-	const objOwner = getObjectOwner(data);
+	const objOwner = data.data?.owner;
 	const name = extractName(display);
-	const objectId = getObjectId(data);
+	const objectId = data.data?.objectId!;
 	const objectType = parseObjectType(data);
-	const storageRebate = getSuiObjectData(data)?.storageRebate;
+	const storageRebate = data.data?.storageRebate;
 	const [storageRebateFormatted, symbol] = useFormatCoin(
 		storageRebate,
 		SUI_TYPE_ARG,
@@ -83,7 +75,7 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
 									</DescriptionItem>
 								) : null}
 								<DescriptionItem title="Object ID">
-									<ObjectLink objectId={getObjectId(data)} noTruncate />
+									<ObjectLink objectId={data.data?.objectId!} noTruncate />
 								</DescriptionItem>
 								<DescriptionItem title="Type">
 									{/* TODO: Support module links on `ObjectLink` */}
@@ -93,11 +85,11 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
 								</DescriptionItem>
 								<DescriptionItem title="Version">
 									<Text variant="body/medium" color="steel-darker">
-										{getObjectVersion(data)}
+										{data.data?.version}
 									</Text>
 								</DescriptionItem>
 								<DescriptionItem title="Last Transaction Block Digest">
-									<TransactionLink digest={getObjectPreviousTransactionDigest(data)!} noTruncate />
+									<TransactionLink digest={data.data?.previousTransaction!} noTruncate />
 								</DescriptionItem>
 							</DescriptionList>
 						</div>
