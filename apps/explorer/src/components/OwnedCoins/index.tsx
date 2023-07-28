@@ -65,11 +65,11 @@ export function OwnedCoins({ id }: { id: string }) {
 	);
 
 	const displayedBalances = useMemo(() => balances[filterValue], [balances, filterValue]);
+
 	if (isError) {
 		return <div className="pt-2 font-sans font-semibold text-issue-dark">Failed to load Coins</div>;
 	}
 
-	console.log(currentSlice);
 	return (
 		<div>
 			{isLoading ? (
