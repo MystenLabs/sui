@@ -58,7 +58,7 @@ function AppsPlayGround() {
 					<div className="text-heading3">5 million sui prize pool!</div>
 					<ExternalLink
 						className="appearance-none no-underline text-white bg-[#EA3389] rounded-lg p-2 [-webkit-text-stroke:1px_black] leading-none text-heading6"
-						href="https://tech.mystenlabs.com/introducing-bullsharks-quests/"
+						href="https://tech.mystenlabs.com/bullshark-quest-2"
 						onClick={() => ampli.clickedBullsharkQuestsCta({ sourceFlow: 'Banner - Apps tab' })}
 					>
 						read more on the blog
