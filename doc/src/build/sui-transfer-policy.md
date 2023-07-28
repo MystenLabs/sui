@@ -14,7 +14,7 @@ By default, a transfer policy is empty, and the request confirmation does not re
 
 ## Create a transfer policy
 
-A transfer policy applies to a specified type (T), which means that for every Move type you define, you need to also create a separate `TransferPolicy` object. To create one, you call the `transfer_policy::new` function. You can also use the `transfer_policy::default` function to create a basic default policy. Kiosk transfer policy authorization is performed via the `Publisher` object - if you defined and published the type (T), then you are authorized to set the `TransferPolicy` for the type (T).
+A transfer policy applies to a specified type `<T>`, which means that for every Move type you define, you need to also create a separate `TransferPolicy` object. To create one, you call the `transfer_policy::new` function. You can also use the `transfer_policy::default` function to create a basic default policy. Kiosk transfer policy authorization is performed via the `Publisher` object - if you defined and published the type `<T>`, then you are authorized to set the `TransferPolicy` for the type `<T>`.
 
 When you create (and share) a `TransferPolicy`, it emits a special event that makes the policy  discoverable on the network.
 
