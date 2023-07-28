@@ -1,0 +1,3 @@
+{
+	"extends": "../../build-scripts/tsconfig.shared.json"
+}

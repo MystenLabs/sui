@@ -16,9 +16,14 @@ type UnStakeTxnCardProps = {
 };
 
 export function UnStakeTxnCard({ event }: UnStakeTxnCardProps) {
-	const principalAmount = event.parsedJson?.principal_amount || 0;
-	const rewardAmount = event.parsedJson?.reward_amount || 0;
-	const validatorAddress = event.parsedJson?.validator_address;
+	const json = event.parsedJson as {
+		principal_amount?: number;
+		reward_amount?: number;
+		validator_address?: string;
+	};
+	const principalAmount = json?.principal_amount || 0;
+	const rewardAmount = json?.reward_amount || 0;
+	const validatorAddress = json?.validator_address;
 	const totalAmount = Number(principalAmount) + Number(rewardAmount);
 	const [formatPrinciple, symbol] = useFormatCoin(principalAmount, SUI_TYPE_ARG);
 	const [formatRewards] = useFormatCoin(rewardAmount || 0, SUI_TYPE_ARG);

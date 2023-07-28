@@ -48,7 +48,8 @@ function ValidatorDetails() {
 
 	const validatorRewards = useMemo(() => {
 		if (!validatorEvents || !id) return 0;
-		const rewards = getValidatorMoveEvent(validatorEvents, id)?.pool_staking_reward;
+		const rewards = (getValidatorMoveEvent(validatorEvents, id) as { pool_staking_reward: string })
+			?.pool_staking_reward;
 
 		return rewards ? Number(rewards) : null;
 	}, [id, validatorEvents]);
@@ -81,8 +82,13 @@ function ValidatorDetails() {
 	const { apy, isApyApproxZero } = rollingAverageApys?.[id] ?? { apy: null };
 
 	const tallyingScore =
-		validatorEvents?.find(({ parsedJson }) => parsedJson?.validator_address === id)?.parsedJson
+		(
+			validatorEvents as {
+				parsedJson?: { tallying_rule_global_score?: string; validator_address?: string };
+			}[]
+		)?.find(({ parsedJson }) => parsedJson?.validator_address === id)?.parsedJson
 			?.tallying_rule_global_score || null;
+
 	return (
 		<PageLayout
 			content={

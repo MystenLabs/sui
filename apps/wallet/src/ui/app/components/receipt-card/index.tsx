@@ -49,14 +49,20 @@ export function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
 	if (stakedTxn || unstakeTxn)
 		return (
 			<div className="block relative w-full h-full">
-				<TransactionStatus success={summary?.status === 'success'} timestamp={txn.timestampMs} />
+				<TransactionStatus
+					success={summary?.status === 'success'}
+					timestamp={txn.timestampMs ?? undefined}
+				/>
 				<section className="-mx-5 bg-sui/10 min-h-full">
 					<div className="px-5 py-10">
 						<div className="flex flex-col gap-4">
 							{stakedTxn ? <StakeTxnCard event={stakedTxn} /> : null}
 							{unstakeTxn ? <UnStakeTxnCard event={unstakeTxn} /> : null}
 							<GasSummary gasSummary={summary?.gas} />
-							<ExplorerLinkCard digest={summary?.digest} timestamp={summary?.timestamp} />
+							<ExplorerLinkCard
+								digest={summary?.digest}
+								timestamp={summary?.timestamp ?? undefined}
+							/>
 						</div>
 					</div>
 				</section>
@@ -65,7 +71,10 @@ export function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
 
 	return (
 		<div className="block relative w-full h-full">
-			<TransactionStatus success={summary.status === 'success'} timestamp={txn.timestampMs} />
+			<TransactionStatus
+				success={summary.status === 'success'}
+				timestamp={txn.timestampMs ?? undefined}
+			/>
 			<TransactionSummary showGasSummary summary={summary} />
 		</div>
 	);

@@ -5,6 +5,7 @@ packages:
   - '!**/dist/**'
   - '!**/.next/**'
   - '!sdk/typescript/*/**'
+  - '!sdk/typescript/scripts'
   - '!sdk/typescript/builder'
   - '!sdk/typescript/cryptography'
   - '!sdk/typescript/faucet'

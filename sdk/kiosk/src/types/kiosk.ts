@@ -112,7 +112,7 @@ export type KioskData = {
 
 export type PagedKioskData = {
 	data: KioskData;
-	nextCursor: string | null;
+	nextCursor: string | null | undefined;
 	hasNextPage: boolean;
 };
 

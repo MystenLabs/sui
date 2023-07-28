@@ -20,6 +20,10 @@ import { useGetNFTMeta, useNFTBasicData, useOwnedNFT } from '_hooks';
 import { useExplorerLink } from '_src/ui/app/hooks/useExplorerLink';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
+type NftFields = {
+	metadata?: { fields?: { attributes?: { fields?: { keys: string[]; values: string[] } } } };
+};
+
 function NFTDetailsPage() {
 	const [searchParams] = useSearchParams();
 	const nftId = searchParams.get('objectId');
@@ -38,13 +42,13 @@ function NFTDetailsPage() {
 
 	// Extract either the attributes, or use the top-level NFT fields:
 	const metaFields =
-		nftFields?.metadata?.fields?.attributes?.fields ||
+		(nftFields as NftFields)?.metadata?.fields?.attributes?.fields ||
 		Object.entries(nftFields ?? {})
 			.filter(([key]) => key !== 'id')
 			.reduce(
 				(acc, [key, value]) => {
 					acc.keys.push(key);
-					acc.values.push(value);
+					acc.values.push(value as string);
 					return acc;
 				},
 				{ keys: [] as string[], values: [] as string[] },
@@ -57,7 +61,8 @@ function NFTDetailsPage() {
 		objectID: nftId || '',
 	});
 	const ownerAddress =
-		(typeof objectData?.owner === 'object' &&
+		(objectData?.owner &&
+			typeof objectData?.owner === 'object' &&
 			'AddressOwner' in objectData.owner &&
 			objectData.owner.AddressOwner) ||
 		'';
