@@ -233,8 +233,8 @@ impl Indexer {
             Ok(())
         } else if config.fullnode_sync_worker {
             info!("Starting indexer with only fullnode sync");
-            let mut processor_orchestrator = ProcessorOrchestrator::new(store.clone(), registry);
-            spawn_monitored_task!(processor_orchestrator.run_forever());
+            // let mut processor_orchestrator = ProcessorOrchestrator::new(store.clone(), registry);
+            // spawn_monitored_task!(processor_orchestrator.run_forever());
 
             backoff::future::retry(ExponentialBackoff::default(), || async {
                 let event_handler_clone = event_handler.clone();
