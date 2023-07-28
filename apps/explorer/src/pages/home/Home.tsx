@@ -54,6 +54,7 @@ function Home() {
 				),
 				size: 'lg',
 			}}
+			backgroundGradient
 			content={
 				<div className="home-page-grid-container-bottom">
 					<div style={{ gridArea: 'activity' }}>
