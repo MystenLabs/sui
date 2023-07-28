@@ -18,7 +18,12 @@ export function ImportPassphrasePage() {
 					Add Existing Account
 				</Heading>
 			</div>
-			<div className="mt-6 grow">
+			<div className="mt-6 grow flex flex-col gap-3">
+				<div className="pl-2.5">
+					<Text variant="pBody" color="steel-darker" weight="semibold">
+						Enter your 12-word Recovery Phrase
+					</Text>
+				</div>
 				<ImportRecoveryPhraseForm
 					cancelButtonText="Cancel"
 					submitButtonText="Add Account"
