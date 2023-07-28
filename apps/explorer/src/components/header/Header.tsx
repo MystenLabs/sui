@@ -33,12 +33,12 @@ function Header() {
 				isScrolled && 'shadow-mistyEdge',
 			)}
 		>
-			{network === Network.MAINNET && data?.degraded && (
-				<Banner rounded={false} align="center" variant="warning" fullWidth>
-					The explorer is running slower than usual. We&rsquo;re working to fix the issue and
-					appreciate your patience.
-				</Banner>
-			)}
+			{/*{network === Network.MAINNET && data?.degraded && (*/}
+			<Banner rounded={false} align="center" variant="warning" fullWidth>
+				The explorer is running slower than usual. We&rsquo;re working to fix the issue and
+				appreciate your patience.
+			</Banner>
+			{/*)}*/}
 			<div className="flex h-header justify-center">
 				<div className="flex h-full h-header max-w-[1440px] flex-1 items-center gap-5 px-5 2xl:p-0">
 					<LinkWithQuery
