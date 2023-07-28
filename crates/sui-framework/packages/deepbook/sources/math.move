@@ -5,6 +5,7 @@ module deepbook::math {
     /// scaling setting for float
     const FLOAT_SCALING: u64 = 1_000_000_000;
     const FLOAT_SCALING_U128: u128 = 1_000_000_000;
+    use sui::event;
 
     friend deepbook::clob;
     friend deepbook::clob_v2;
@@ -12,6 +13,8 @@ module deepbook::math {
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     const EUnderflow: u64 = 1;
+    const ERoundDown: u64 = 2;
+
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
 
     // multiply two floating numbers
@@ -32,9 +35,14 @@ module deepbook::math {
 
     // multiply two floating numbers and assert the result is non zero
     public fun mul(x: u64, y: u64): u64 {
-        let (_, result) = unsafe_mul_round(x, y);
+        safe_mul(x, y)
+    }
+
+    public fun safe_mul(x: u64, y: u64): u64 {
+        let (is_round_down, result) = unsafe_mul_round(x, y);
+        // assert!(!is_round_down, ERoundDown);
         assert!(result > 0, EUnderflow);
-        result
+        result       
     }
 
     // multiply two floating numbers and assert the result is non zero

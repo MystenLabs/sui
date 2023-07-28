@@ -47,4 +47,7 @@ sui-sdk.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 sui-macros.workspace = true
+sui-move-build.workspace = true
+sui-move = { workspace = true, features = ["all"] }
+
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

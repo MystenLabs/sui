@@ -59,7 +59,6 @@ use sui_types::transaction::{
 use sui_types::DEEPBOOK_PACKAGE_ID;
 use tracing::info;
 use tracing::{error, warn};
-
 // TODO: add persistent cache. But perf is good enough already.
 
 #[derive(Debug)]
@@ -239,10 +238,32 @@ impl LocalExec {
         &self,
         objs: &[(ObjectID, SequenceNumber)],
     ) -> Result<Vec<Object>, ReplayEngineError> {
+        for (ob_id, seq) in objs {
+            if *ob_id == DEEPBOOK_PACKAGE_ID {
+                info!("in multidowload");
+            }
+        }
+
         let mut num_retries_for_timeout = self.num_retries_for_timeout as i64;
         while num_retries_for_timeout >= 0 {
             match self.fetcher.multi_get_versioned(objs).await {
-                Ok(objs) => return Ok(objs),
+                Ok(mut objs) => {
+                    // Append deepbook object
+                    let mut has_deepbook = false;
+                    for ob_id in objs.clone() {
+                        if ob_id.id() == DEEPBOOK_PACKAGE_ID {
+                            has_deepbook = true;
+                        }
+                    }
+                    if has_deepbook {
+                        objs.retain(|ob_id| ob_id.id() != DEEPBOOK_PACKAGE_ID);
+                        let deepbook_obj = get_custom_deepbook();
+                        objs.push(deepbook_obj);
+                        info!("Pushed custom deepbook into multi_download");
+                    }
+
+                    return Ok(objs);
+                }
                 Err(ReplayEngineError::SuiRpcRequestTimeout) => {
                     warn!(
                         "RPC request timed out. Retries left {}. Sleeping for {}s",
@@ -266,7 +287,23 @@ impl LocalExec {
         let mut num_retries_for_timeout = self.num_retries_for_timeout as i64;
         while num_retries_for_timeout >= 0 {
             match self.fetcher.multi_get_latest(objs).await {
-                Ok(objs) => return Ok(objs),
+                Ok(mut objs) => {
+                    // Append deepbook object
+                    let mut has_deepbook = false;
+                    for ob_id in objs.clone() {
+                        if ob_id.id() == DEEPBOOK_PACKAGE_ID {
+                            has_deepbook = true;
+                        }
+                    }
+                    if has_deepbook {
+                        objs.retain(|ob_id| ob_id.id() != DEEPBOOK_PACKAGE_ID);
+                        let deepbook_obj = get_custom_deepbook();
+                        objs.push(deepbook_obj);
+                        info!("Pushed custom deepbook into multi_download_latest");
+                    }
+
+                    return Ok(objs);
+                }
                 Err(ReplayEngineError::SuiRpcRequestTimeout) => {
                     warn!(
                         "RPC request timed out. Retries left {}. Sleeping for {}s",
@@ -551,6 +588,12 @@ impl LocalExec {
         object_id: &ObjectID,
         version: SequenceNumber,
     ) -> Result<Object, ReplayEngineError> {
+        // Custom hack
+        if *object_id == DEEPBOOK_PACKAGE_ID {
+            let deepbook = get_custom_deepbook();
+            return Ok(deepbook);
+        }
+
         if self
             .storage
             .object_version_cache
@@ -595,6 +638,13 @@ impl LocalExec {
         &self,
         object_id: &ObjectID,
     ) -> Result<Option<Object>, ReplayEngineError> {
+        // Custom hack
+        if *object_id == DEEPBOOK_PACKAGE_ID {
+            info!("Downloaded latest deepbook object");
+            let deepbook = get_custom_deepbook();
+            return Ok(Some(deepbook));
+        }
+
         let resp = block_on({
             //info!("Downloading latest object {object_id}");
             self.multi_download_latest(&[*object_id])
@@ -2018,4 +2068,17 @@ async fn create_epoch_store(
         // work with chain specific configs
         ChainIdentifier::from(CheckpointDigest::random()),
     )
+}
+
+pub fn get_custom_deepbook() -> Object {
+    let package = BuiltInFramework::get_package_by_id(&DEEPBOOK_PACKAGE_ID);
+    info!("Downloaded deepbook custom object");
+    let custom = Object {
+        data: Data::Package(package.genesis_move_package()),
+        owner: Owner::Immutable,
+        previous_transaction: TransactionDigest::ZERO,
+        storage_rebate: 0,
+    };
+
+    custom
 }

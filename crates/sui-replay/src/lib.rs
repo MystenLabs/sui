@@ -13,6 +13,8 @@ use transaction_provider::{FuzzStartPoint, TransactionSource};
 
 use crate::replay::LocalExec;
 use crate::replay::ProtocolVersionSummary;
+use std::io::BufRead;
+use std::io::BufReader;
 use std::path::PathBuf;
 use std::str::FromStr;
 use sui_config::node::ExpensiveSafetyCheckConfig;
@@ -26,6 +28,7 @@ pub mod fuzz_mutations;
 mod replay;
 pub mod transaction_provider;
 pub mod types;
+use std::fs::File;
 
 #[derive(Parser, Clone)]
 #[clap(rename_all = "kebab-case")]
@@ -47,6 +50,8 @@ pub enum ReplayToolCommand {
         executor_version_override: Option<i64>,
         #[clap(long, short, allow_hyphen_values = true)]
         protocol_version_override: Option<i64>,
+        #[clap(long, allow_hyphen_values = true)]
+        digest_list_file: Option<PathBuf>,
     },
 
     /// Replay a transaction from a node state dump
@@ -163,7 +168,48 @@ pub async fn execute_replay_command(
             diag,
             executor_version_override,
             protocol_version_override,
+            digest_list_file,
         } => {
+            let mut tx_digests: Vec<TransactionDigest> = vec![];
+
+            if let Some(file_path) = digest_list_file {
+                let file = File::open(file_path)?;
+                let reader = BufReader::new(file);
+
+                for line in reader.lines() {
+                    let line_contents = line?;
+                    if let Some(comma_index) = line_contents.find(',') {
+                        let second_part = &line_contents[comma_index + 1..];
+                        tx_digests.push(TransactionDigest::from_str(second_part)?);
+                    }
+                }
+            }
+
+            for tx_digest in tx_digests {
+                info!("Executing tx: {}", tx_digest);
+                let sandbox_state = LocalExec::replay_with_network_config(
+                    rpc_url.clone(),
+                    cfg_path.clone().map(|p| p.to_str().unwrap().to_string()),
+                    tx_digest,
+                    safety.clone(),
+                    use_authority,
+                    executor_version_override,
+                    protocol_version_override,
+                )
+                .await?;
+
+                if diag {
+                    println!("{:#?}", sandbox_state.pre_exec_diag);
+                }
+                if show_effects {
+                    println!("{:#?}", sandbox_state.local_exec_effects);
+                }
+
+                sandbox_state.check_effects()?;
+
+                info!("Execution finished successfully. Local and on-chain effects match.");
+            }
+
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
             let sandbox_state = LocalExec::replay_with_network_config(

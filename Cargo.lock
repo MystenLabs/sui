@@ -10315,6 +10315,8 @@ dependencies = [
  "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-macros",
+ "sui-move",
+ "sui-move-build",
  "sui-protocol-config",
  "sui-sdk",
  "sui-storage",
