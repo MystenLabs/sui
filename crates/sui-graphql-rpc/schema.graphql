@@ -7,7 +7,6 @@
 # - Encoding RPC errors
 # - `type` (vs `scalar`) for Move Types
 # - Pattern for upcasting and downcasting
-# - Subscription APIs
 
 # Check Completeness Against Existing APIs
 # -------------
@@ -21,19 +20,20 @@
 # DONE Coin
 # DONE Extended
 # DONE Governance
-# TODO Indexer
+# DONE Indexer
 # TODO Move Utils
 # TODO Write
 
 # TODO Port designs from Notion
 # TODO - Display
-# TODO - SuiNS
+# DONE - SuiNS
 # TODO Data Consistency API
 # TODO Flesh out Connections
 # TODO - TotalTransactionBlocks for the PTB connection
 
 schema {
   query: Query
+  subscription: Subscription
 }
 
 type Query {
@@ -57,11 +57,24 @@ type Query {
   coinMetadata(coinType: TypeRepr!): CoinMetadata
 
   queryObjects(query: ObjectQuery): ObjectQueryConnection
+  queryEvents(filter: EventFilter, order: Order!): EventQueryConnection
+  queryTransactionBlocks(
+    filter: TransactionBlockFilter,
+    order: Order!,
+  ): TransactionBlockQueryConnection
+
+  resolveNameServiceAddress(name: String!): SuiAddress
+  resolveNameServiceNames(address: SuiAddress!): NameServiceNamesConnection
 
   networkMetrics: NetworkMetrics
   moveCallMetrics: MoveCallMetrics
   checkpointAddressMetrics(checkpoint: U64): AddressMetric
   allEpochAddressMetrics(order: Order!): AddressMetricConnection
+}
+
+type Subscription {
+  events(filter: EventFilter): Event
+  transactions(filter: TransactionBlockFilter): TransactionBlock
 }
 
 # String containing 32B hex-encoded address
@@ -104,9 +117,10 @@ input ObjectQuery {
   not: ObjectQuery
 
   # (x)or any of these
+
+  # Cascading (type requires module requires package)
   package: SuiAddress
   module: String
-  # Requires `package` and `module`.
   type: String
 
   owner: SuiAddress
@@ -114,8 +128,62 @@ input ObjectQuery {
   version: U64
 }
 
+input EventFilter {
+  # one of these
+  any: [EventFilter]
+  all: [EventFilter]
+  not: EventFilter
+
+  # (x)or any of these
+  sender: SuiAddress
+  transaction: Digest
+
+  # Cascading (module requires package)
+  emittingPackage: SuiAddress
+  emittingModule: String
+
+  # Cascading (type requires module requires package)
+  eventPackage: SuiAddress
+  eventModule: String
+  eventType: String
+
+  eventField: EventField
+
+  startTimeMs: U64
+  endTimeMs: U64
+}
+
+input EventField {
+  path: String!
+  value: JSON!
+}
+
+input TransactionBlockFilter {
+  # one of these
+  any: [TransactionBlockFilter]
+  all: [TransactionBlockFilter]
+  not: TransactionBlockFilter
+
+  # (x)or any of these
+
+  # Cascading (function requires module requires package)
+  package: SuiAddress
+  module: String
+  function: String
+
+  kind: TransactionBlockKindInput
+  checkpoint: U64
+  fromAddress: SuiAddress
+  toAddress: SuiAddress
+
+  inputObject: SuiAddress
+  changedObject: SuiAddress
+}
+
 interface Owner {
   id: SuiAddress!
+
+  objects(query: ObjectQuery): ObjectQueryConnection
 
   balance(type: TypeRepr!): Balance
   balances: BalanceConnection
@@ -155,6 +223,9 @@ type Object implements Owner {
 
   # Transaction Blocks that sent objects to this object
   receivedTransactionBlocks: TransactionBlockConnection
+
+  dynamicField(dynamicFieldName: DynamicFieldName!): DynamicField
+  dynamicFields: DynamicFieldConnection
 
   bcs: Bytes
 }
@@ -333,6 +404,13 @@ type TransactionBlock {
   expiration: Epoch
 
   bcs: Bytes
+}
+
+enum TransactionBlockKindInput {
+  CONSENSUS_COMMIT_PROLOGUE
+  GENESIS
+  CHANGE_EPOCH
+  PROGRAMMABLE
 }
 
 union TransactionBlockKind =
@@ -545,6 +623,18 @@ type CoinMetadata {
   asMoveObject: MoveObject
 }
 
+input DynamicFieldName {
+  type: TypeRepr!
+  bcs: Bytes!
+}
+
+type DynamicField {
+  name: MoveValue
+  value: DynamicFieldValue
+}
+
+union DynamicFieldValue = MoveObject | MoveValue
+
 type MoveObject {
   contents: MoveValue
   hasPublicTransfer: Boolean
@@ -615,8 +705,12 @@ type AddressMetricConnection {}
 type BalanceConnection {}
 type CheckpointConnection {}
 type CoinConnection {}
+type DynamicFieldConnection {}
+type EventQueryConnection {}
 type MovePackageModuleConnection {}
+type NameServiceNamesConnection {}
 type ObjectQueryConnection {}
 type StakeConnection {}
 type TransactionBlockConnection {}
+type TransactionBlockQueryConnection {}
 type TransactionEventConnection {}
