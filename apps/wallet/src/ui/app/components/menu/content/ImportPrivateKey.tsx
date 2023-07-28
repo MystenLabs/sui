@@ -17,13 +17,13 @@ import { PasswordInputDialog } from './PasswordInputDialog';
 import Alert from '../../alert';
 import { useNextMenuUrl } from '../hooks';
 import { ampli } from '_src/shared/analytics/ampli';
-import { privateKeyValidation } from '_src/ui/app/helpers/validation/privateKeyValidation';
+import { deprecatedPrivateKeyValidation } from '_src/ui/app/helpers/validation/privateKeyValidation';
 import { useBackgroundClient } from '_src/ui/app/hooks/useBackgroundClient';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import FieldLabel from '_src/ui/app/shared/field-label';
 
 const validation = object({
-	privateKey: privateKeyValidation,
+	privateKey: deprecatedPrivateKeyValidation,
 });
 
 export function ImportPrivateKey() {
