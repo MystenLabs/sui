@@ -3,6 +3,7 @@
 
 # Open Questions
 # --------------
+# - Rules for nullabilit/non-nullability
 # - Pattern for multi-gets
 # - Encoding RPC errors
 # - `type` (vs `scalar`) for Move Types
@@ -24,8 +25,8 @@
 # DONE Move Utils
 # TODO Write
 
-# TODO Port designs from Notion
-# TODO - Display
+# DONE Port designs from Notion
+# DONE - Display
 # DONE - SuiNS
 # TODO Data Consistency API
 # TODO Flesh out Connections
@@ -64,7 +65,6 @@ type Query {
   ): TransactionBlockQueryConnection
 
   resolveNameServiceAddress(name: String!): SuiAddress
-  resolveNameServiceNames(address: SuiAddress!): NameServiceNamesConnection
 
   networkMetrics: NetworkMetrics
   moveCallMetrics: MoveCallMetrics
@@ -198,6 +198,9 @@ interface Owner {
   coins(type: TypeInst): CoinConnection
 
   stakes: StakeConnection
+
+  defaultNameServiceName: String
+  nameServiceNames: NameServiceNamesConnection
 }
 
 # Returned by Object.owner, where we can't disambiguate between
@@ -218,13 +221,16 @@ enum AddressTransactionBlockFilter {
 }
 
 type Object implements Owner {
-  owner: Owner
+  owner: AmbiguousOwner
   version: U64
   digest: Digest
 
   previousVersion: U64
   previousTransactionBlock: TransactionBlock
   storageRebate: U64
+
+  display: [DisplayEntry]
+
   asMoveObject: MoveObject
   asMovePackage: MovePackage
 
@@ -235,6 +241,11 @@ type Object implements Owner {
   dynamicFields: DynamicFieldConnection
 
   bcs: Bytes
+}
+
+type DisplayEntry {
+  key: String
+  value: String
 }
 
 type Epoch {
