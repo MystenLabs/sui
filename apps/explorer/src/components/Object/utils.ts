@@ -23,7 +23,7 @@ function splitByCommaExcludingBrackets(input: string) {
 	return input.split(regex).map((part) => part.trim());
 }
 
-export function extractSerializationType(type: SuiMoveNormalizedType): TypeReference {
+export function extractSerializationType(type: SuiMoveNormalizedType | ''): TypeReference {
 	if (typeof type === 'string') {
 		return type;
 	}
@@ -51,7 +51,7 @@ export function extractSerializationType(type: SuiMoveNormalizedType): TypeRefer
 	return type;
 }
 
-export function getFieldTypeValue(type: SuiMoveNormalizedType, objectType: string) {
+export function getFieldTypeValue(type: SuiMoveNormalizedType | '', objectType: string) {
 	const normalizedType = extractSerializationType(type);
 	if (typeof normalizedType === 'string') {
 		return {
