@@ -11,6 +11,7 @@ import { PageLayout } from '~/components/Layout/PageLayout';
 import { OwnedCoins } from '~/components/OwnedCoins';
 import { OwnedObjects } from '~/components/OwnedObjects';
 import { PageHeader } from '~/ui/PageHeader';
+import { TabHeader } from '~/ui/Tabs';
 
 function AddressResult({ address }: { address: string }) {
 	const { data: domainName } = useResolveSuiNSName(address);
@@ -19,22 +20,19 @@ function AddressResult({ address }: { address: string }) {
 		<div className="space-y-12">
 			<PageHeader type="Address" title={address} subtitle={domainName} />
 			<div>
-				<div className="border-b border-gray-45 pb-5 md:mt-12">
-					<Heading color="gray-90" variant="heading4/semibold">
-						Owned Objects
-					</Heading>
-				</div>
-				<ErrorBoundary>
-					<div className="flex flex-col gap-10 md:flex-row">
-						<div className="flex-1 overflow-hidden">
-							<OwnedCoins id={address} />
+				<TabHeader title="Owned Objects" noGap>
+					<ErrorBoundary>
+						<div className="flex flex-col gap-10 md:flex-row">
+							<div className="flex-1 overflow-hidden">
+								<OwnedCoins id={address} />
+							</div>
+							<div className="hidden w-px bg-gray-45 md:block" />
+							<div className="flex-1 overflow-hidden">
+								<OwnedObjects id={address} />
+							</div>
 						</div>
-						<div className="hidden w-px bg-gray-45 md:block" />
-						<div className="flex-1 overflow-hidden">
-							<OwnedObjects id={address} />
-						</div>
-					</div>
-				</ErrorBoundary>
+					</ErrorBoundary>
+				</TabHeader>
 			</div>
 
 			<div>

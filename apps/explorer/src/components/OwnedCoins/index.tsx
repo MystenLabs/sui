@@ -2,78 +2,154 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetAllBalances } from '@mysten/core';
-import { Heading, Text, LoadingIndicator } from '@mysten/ui';
+import { type CoinBalance } from '@mysten/sui.js';
+import { Heading, Text, LoadingIndicator, RadioGroup, RadioGroupItem } from '@mysten/ui';
 import { useMemo, useState } from 'react';
 
 import OwnedCoinView from './OwnedCoinView';
-import { Pagination } from '~/ui/Pagination';
 import { useRecognizedPackages } from '~/hooks/useRecognizedPackages';
-import { CoinBalance } from '@mysten/sui.js';
+import { Pagination } from '~/ui/Pagination';
+import { numberSuffix } from '~/utils/numberUtil';
 
-export const COINS_PER_PAGE: number = 6;
+export type CoinBalanceVerified = CoinBalance & {
+	isRecognized?: boolean;
+};
+
+enum COIN_FILTERS {
+	ALL = 'allBalances',
+	RECOGNIZED = 'recognizedBalances',
+	UNRECOGNIZED = 'unrecognizedBalances',
+}
 
 export function OwnedCoins({ id }: { id: string }) {
 	const [currentSlice, setCurrentSlice] = useState(1);
+	const [limit, setLimit] = useState(20);
+	const [filterValue, setFilterValue] = useState(COIN_FILTERS.ALL);
 	const { isLoading, data, isError } = useGetAllBalances(id);
 	const recognizedPackages = useRecognizedPackages();
 
-	const { recognized, unrecognized } = useMemo(
-		() => {
-			return data?.reduce(
-				(acc, coinBalance) => {
-					if (recognizedPackages.includes(coinBalance.coinType.split('::')[0])) {
-						acc.recognized.push(coinBalance);
+	const balances: Record<COIN_FILTERS, CoinBalanceVerified[]> = useMemo(() => {
+		const balanceData = data?.reduce(
+			(acc, coinBalance) => {
+				if (recognizedPackages.includes(coinBalance.coinType.split('::')[0])) {
+					acc.recognizedBalances.push({
+						...coinBalance,
+						isRecognized: true,
+					});
+				} else {
+					acc.unrecognizedBalances.push({ ...coinBalance, isRecognized: false });
+				}
+				return acc;
+			},
+			{
+				recognizedBalances: [] as CoinBalanceVerified[],
+				unrecognizedBalances: [] as CoinBalanceVerified[],
+			},
+		) ?? { recognizedBalances: [], unrecognizedBalances: [] };
 
-					} else {
-						acc.unrecognized.push(coinBalance);
-					}
-					return acc;
-				},
-				{
-					recognized: [] as CoinBalance[],
-					unrecognized: [] as CoinBalance[],
-				},
-			) ?? { recognized: [], unrecognized: [] }
-		},
-		[data, recognizedPackages],
+		return {
+			...balanceData,
+			allBalances: balanceData.recognizedBalances.concat(balanceData.unrecognizedBalances),
+		};
+	}, [data, recognizedPackages]);
+
+	const filterOptions = useMemo(
+		() => [
+			{ label: 'All', value: COIN_FILTERS.ALL },
+			{ label: `${balances.recognizedBalances.length} Recognized`, value: COIN_FILTERS.RECOGNIZED },
+			{
+				label: `${balances.unrecognizedBalances.length} Unrecognized`,
+				value: COIN_FILTERS.UNRECOGNIZED,
+			},
+		],
+		[balances],
 	);
 
-	console.log({ recognized, unrecognized })
+	const displayedBalances = useMemo(() => balances[filterValue], [data, filterValue]);
 	if (isError) {
 		return <div className="pt-2 font-sans font-semibold text-issue-dark">Failed to load Coins</div>;
 	}
 
+	console.log(currentSlice);
 	return (
 		<div>
 			{isLoading ? (
 				<LoadingIndicator />
 			) : (
 				<div className="flex flex-col gap-4 pt-5 text-left">
-					<Heading color="steel-darker" variant="heading4/semibold">
-						Coins
-					</Heading>
+					<div className='md:mt-12" flex w-full justify-between border-b border-gray-45 pb-3'>
+						<Heading color="steel-darker" variant="heading4/semibold">
+							{balances.allBalances.length} Coins
+						</Heading>
+						<div>
+							<RadioGroup
+								aria-label="transaction filter"
+								value={filterValue}
+								onValueChange={(value) => setFilterValue(value as COIN_FILTERS)}
+							>
+								{filterOptions.map((filter) => (
+									<RadioGroupItem key={filter.value} value={filter.value} label={filter.label} />
+								))}
+							</RadioGroup>
+						</div>
+					</div>
+
 					<div className="flex max-h-80 flex-col overflow-auto">
-						<div className="grid grid-cols-3 py-2 uppercase tracking-wider text-gray-80">
-							<Text variant="caption/medium">Type</Text>
-							<Text variant="caption/medium">Objects</Text>
-							<Text variant="caption/medium">Balance</Text>
+						<div className="flex py-2 uppercase tracking-wider text-gray-80">
+							<div className="w-[40%]">
+								<Text variant="caption/medium">Type</Text>
+							</div>
+							<div className="w-[30%]">
+								<Text variant="caption/medium">Objects</Text>
+							</div>
+							<div className="w-[30%]">
+								<Text variant="caption/medium">Balance</Text>
+							</div>
 						</div>
 						<div>
-							{data
-								.slice((currentSlice - 1) * COINS_PER_PAGE, currentSlice * COINS_PER_PAGE)
+							{displayedBalances
+								.slice((currentSlice - 1) * limit, currentSlice * limit)
 								.map((coin) => (
-									<OwnedCoinView id={id} key={coin.coinType} coin={coin} />
+									<OwnedCoinView
+										id={id}
+										key={coin.coinType}
+										coin={coin}
+										isRecognized={coin.isRecognized}
+									/>
 								))}
 						</div>
 					</div>
-					{data.length > COINS_PER_PAGE && (
-						<Pagination
-							onNext={() => setCurrentSlice(currentSlice + 1)}
-							hasNext={currentSlice !== Math.ceil(data.length / COINS_PER_PAGE)}
-							hasPrev={currentSlice !== 1}
-							onPrev={() => setCurrentSlice(currentSlice - 1)}
-							onFirst={() => setCurrentSlice(1)}
-						/>
+					{displayedBalances.length > limit && (
+						<div className="flex justify-between">
+							<Pagination
+								onNext={() => setCurrentSlice(currentSlice + 1)}
+								hasNext={currentSlice !== Math.ceil(displayedBalances.length / limit)}
+								hasPrev={currentSlice !== 1}
+								onPrev={() => setCurrentSlice(currentSlice - 1)}
+								onFirst={() => setCurrentSlice(1)}
+							/>
+							<div className="flex items-center gap-4">
+								<Text variant="body/medium" color="steel-dark">
+									{`Showing `}
+									{(currentSlice - 1) * limit + 1}-
+									{currentSlice * limit > displayedBalances.length
+										? displayedBalances.length
+										: currentSlice * limit}
+								</Text>
+								<select
+									className="form-select flex rounded-md border border-gray-45 px-3 py-2 pr-8 text-bodySmall font-medium leading-[1.2] text-steel-dark shadow-button"
+									value={limit}
+									onChange={(e) => {
+										setLimit(Number(e.target.value));
+										setCurrentSlice(1);
+									}}
+								>
+									<option value={20}>20 Per Page</option>
+									<option value={40}>40 Per Page</option>
+									<option value={60}>60 Per Page</option>
+								</select>
+							</div>
+						</div>
 					)}
 				</div>
 			)}

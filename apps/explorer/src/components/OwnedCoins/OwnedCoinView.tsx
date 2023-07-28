@@ -10,13 +10,15 @@ import clsx from 'clsx';
 import { useState } from 'react';
 
 import CoinsPanel from './OwnedCoinsPanel';
+import { Banner } from '~/ui/Banner';
 
 type OwnedCoinViewProps = {
 	coin: CoinBalance;
 	id: string;
+	isRecognized?: boolean;
 };
 
-export default function OwnedCoinView({ coin, id }: OwnedCoinViewProps) {
+export default function OwnedCoinView({ coin, id, isRecognized }: OwnedCoinViewProps) {
 	const [open, setOpen] = useState(false);
 	const [formattedTotalBalance, symbol] = useFormatCoin(coin.totalBalance, coin.coinType);
 
@@ -24,22 +26,31 @@ export default function OwnedCoinView({ coin, id }: OwnedCoinViewProps) {
 		<Collapsible.Root open={open} onOpenChange={setOpen}>
 			<Collapsible.Trigger
 				data-testid="ownedcoinlabel"
-				className="grid w-full grid-cols-3 items-center justify-between rounded-none py-2 text-left hover:bg-sui-light"
+				className="flex w-full items-center rounded-none py-2 text-left hover:bg-sui-light"
 			>
-				<div className="flex">
+				<div className="flex w-[40%] items-center gap-1">
 					<ArrowShowAndHideRight12
-						className={clsx('mr-1.5 text-gray-60', open && 'rotate-90 transform')}
+						className={clsx('text-gray-60', open && 'rotate-90 transform')}
 					/>
 					<Text color="steel-darker" variant="body/medium">
 						{symbol}
 					</Text>
+					{!isRecognized && (
+						<Banner variant="warning" icon={null} border spacing="sm">
+							<div className="max-w-[70px] overflow-hidden truncate whitespace-nowrap text-captionSmallExtra font-medium uppercase leading-3 tracking-wider lg:max-w-full">
+								Unrecognized
+							</div>
+						</Banner>
+					)}
 				</div>
 
-				<Text color="steel-darker" variant="body/medium">
-					{coin.coinObjectCount}
-				</Text>
+				<div className="flex w-[30%]">
+					<Text color="steel-darker" variant="body/medium">
+						{coin.coinObjectCount}
+					</Text>
+				</div>
 
-				<div className="flex items-center gap-1">
+				<div className="flex w-[30%] items-center gap-1">
 					<Text color="steel-darker" variant="bodySmall/medium">
 						{formattedTotalBalance}
 					</Text>
