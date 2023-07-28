@@ -20,6 +20,21 @@ The following table lists the locations for Sui networks.
 | Testnet | `https://fullnode.testnet.sui.io:443` | `https://faucet.testnet.sui.io/gas`   |
 | Mainnet | `https://fullnode.mainnet.sui.io:443` | `null`                                |
 
+## Migrate to version 0.38.0
+
+The Sui TypeScript SDK was refactored beginning with version 0.38.0. If you are updating from an earlier version of the SDK, there are some changes you should consider when updating your code.
+
+### Module structure
+
+The Sui TypeScript SDK is now divided into modular components. Before version 0.38.0, you imported the complete SDK module. Now, you upload the individual packages of the SDK module instead. See the [Architecture section](#architecture) for the list of packages. 
+
+### Deprecated classes
+
+The Sui TypeScript SDK deprecates the following classes with version 0.38.0:
+ - `JsonRpcProvider` - The `JsonRpcProvider` class is deprecated in favor of the `suiClient` class when creating a client for a Sui network. See [Network Interactions with SuiClient](sui-client) for more information. 
+ - `Signer` - Key pairs now directly support signing transactions and messages without the need of a `Signer` class. See the [Key pairs](cryptography/keypairs) topic for more information.
+ - `Connection` classes - The `Connection` classes (`Connection`, `devnetConnection`, and so on) have been deprecated in favor of using `suiClient` for establishing the connection. See [Network Interactions with SuiClient](sui-client) for more information.
+
 ## Architecture
 
 The SDK contains a set of modular packages that you can use independently or together. Import just
