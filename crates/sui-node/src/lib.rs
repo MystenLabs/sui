@@ -97,6 +97,7 @@ use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use sui_storage::{
     http_key_value_store::HttpKVStore,
     key_value_store::{FallbackTransactionKVStore, TransactionKeyValueStore},
+    key_value_store_metrics::KeyValueStoreMetrics,
 };
 use sui_storage::{FileCompression, IndexStore, StorageFormat};
 use sui_types::base_types::{AuthorityName, EpochId};
@@ -1420,24 +1421,31 @@ fn send_trusted_peer_change(
 fn build_kv_store(
     state: &Arc<AuthorityState>,
     config: &NodeConfig,
-) -> Result<Arc<dyn TransactionKeyValueStore + Send + Sync>> {
+    registry: &Registry,
+) -> Result<Arc<TransactionKeyValueStore>> {
     let base_url: url::Url = config.transaction_kv_store_config.base_url.parse()?;
-    let db_store = state.db();
+
+    let metrics = KeyValueStoreMetrics::new(registry);
+
+    let db_store = TransactionKeyValueStore::new("rocksdb", metrics.clone(), state.db());
 
     let network_str = match state.get_chain_identifier().map(|c| c.chain()) {
         Some(Chain::Mainnet) => "/mainnet",
         Some(Chain::Testnet) => "/testnet",
         _ => {
             info!("using local db only for kv store for unknown chain");
-            return Ok(db_store);
+            return Ok(Arc::new(db_store));
         }
     };
 
     let base_url = base_url.join(network_str)?.to_string();
-    let http_store = Arc::new(HttpKVStore::new(&base_url)?);
+    let http_store = HttpKVStore::new_kv(&base_url, metrics.clone())?;
     info!("using local key-value store with fallback to http key-value store");
-    Ok(Arc::new(FallbackTransactionKVStore::new(
-        db_store, http_store,
+    Ok(Arc::new(FallbackTransactionKVStore::new_kv(
+        db_store,
+        http_store,
+        metrics,
+        "json_rpc_fallback",
     )))
 }
 
@@ -1453,14 +1461,16 @@ pub async fn build_server(
         return Ok(None);
     }
 
-    let db = state.database.clone();
-
     let mut server = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
 
-    let kv_store = build_kv_store(&state, config)?;
+    let kv_store = build_kv_store(&state, config, prometheus_registry)?;
 
     let metrics = Arc::new(JsonRpcMetrics::new(prometheus_registry));
-    server.register_module(ReadApi::new(state.clone(), kv_store, metrics.clone()))?;
+    server.register_module(ReadApi::new(
+        state.clone(),
+        kv_store.clone(),
+        metrics.clone(),
+    ))?;
     server.register_module(CoinReadApi::new(state.clone(), metrics.clone()))?;
     server.register_module(TransactionBuilderApi::new(state.clone()))?;
     server.register_module(GovernanceReadApi::new(state.clone(), metrics.clone()))?;
@@ -1475,7 +1485,7 @@ pub async fn build_server(
 
     server.register_module(IndexerApi::new(
         state.clone(),
-        ReadApi::new(state.clone(), db, metrics.clone()),
+        ReadApi::new(state.clone(), kv_store, metrics.clone()),
         config.name_service_package_address,
         config.name_service_registry_id,
         config.name_service_reverse_registry_id,
