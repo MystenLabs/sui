@@ -56,7 +56,7 @@ const HIDDEN_MENU_PATHS = [
 
 const App = () => {
 	const dispatch = useAppDispatch();
-	const isEnokiSocialSignInEnabled = useFeatureIsOn('enoki-social-sign-in');
+	const isSocialSignInEnabled = useFeatureIsOn('enoki-social-sign-in');
 	const isPopup = useAppSelector((state) => state.app.appType === AppType.popup);
 	useEffect(() => {
 		document.body.classList.remove('app-initializing');
@@ -94,11 +94,8 @@ const App = () => {
 				<Route path="qredo-connect/:id/select" element={<SelectQredoAccountsPage />} />
 			</Route>
 
-			<Route
-				path="welcome"
-				element={isEnokiSocialSignInEnabled ? <WelcomePageV2 /> : <WelcomePage />}
-			/>
-			{isEnokiSocialSignInEnabled && (
+			<Route path="welcome" element={isSocialSignInEnabled ? <WelcomePageV2 /> : <WelcomePage />} />
+			{isSocialSignInEnabled && (
 				<Route path="/accounts" element={<AccountsPage />}>
 					<Route path="add-account" element={<AddAccountPage />} />
 					<Route path="forgot-password" element={<ForgotPasswordPageV2 />} />
