@@ -175,8 +175,13 @@ jobs:
         run: |
           brew install cmake
           brew install libiconv
+          brew install libpq
+          brew link --force libpq
           export PATH="/usr/local/opt/libiconv/bin:$PATH"
           rustup update stable
           rustup target add aarch64-apple-darwin
           rustup default stable-aarch64-apple-darwin
+          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          PQ_LIB_DIR="$(brew --prefix libpq)/lib"
+          cargo install diesel_cli --no-default-features --features postgres
           cargo build --target aarch64-apple-darwin --release 
