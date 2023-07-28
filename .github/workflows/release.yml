@@ -140,9 +140,20 @@ jobs:
       #     GITHUB_TOKEN: ${{ secrets.GH_RELEASE_BUILDS_TOKEN }}
 
   build-aarch64-apple-darwin:
-    runs-on: [macos-latest-xl] 
-    steps:
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        config:
+          - {
+              name: "macOS M1 Latest Clang",
+              artifact: "njord-macos-m1",
+              os: macos-latest-xl,
+              cc: "clang",
+              architecture: arm64,
+            }
 
+    steps:
       - name: Checking out ${{ env.sui_tag }}
         if: ${{ env.sui_tag != 'main' }}
         uses: actions/checkout@v3
