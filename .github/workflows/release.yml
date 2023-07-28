@@ -153,11 +153,11 @@ jobs:
             }
 
     steps:
-      - name: Checking out ${{ env.sui_tag }}
-        if: ${{ env.sui_tag != 'main' }}
+      - name: Checking out ${{ env.TAG_NAME }}
+        if: ${{ env.TAG_NAME != 'main' }}
         uses: actions/checkout@v3
         with:
-          ref: ${{ env.sui_tag }}
+          ref: ${{ env.TAG_NAME }}
       
       - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths    
 
