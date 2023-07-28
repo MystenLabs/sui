@@ -789,11 +789,12 @@ impl<'backing> TemporaryStore<'backing> {
 
 impl<'backing> TemporaryStore<'backing> {
     /// Return the storage rebate of object `id`
-    fn get_input_storage_rebate(&self, id: &ObjectID) -> u64 {
+    fn get_input_storage_rebate(&self, id: &ObjectID, expected_version: SequenceNumber) -> u64 {
         // A mutated object must either be from input object or child object.
         if let Some(old_obj) = self.input_objects.get(id) {
             old_obj.storage_rebate
         } else if let Some(metadata) = self.loaded_child_objects.get(id) {
+            debug_assert_eq!(metadata.version, expected_version);
             metadata.storage_rebate
         } else {
             // not a lot we can do safely and under this condition everything is broken
@@ -869,9 +870,10 @@ impl<'backing> TemporaryStore<'backing> {
     pub(crate) fn collect_rebate(&self, gas_charger: &mut GasCharger) {
         for (object_id, kind) in &self.deleted {
             match kind {
-                DeleteKindWithOldVersion::Wrap(_) | DeleteKindWithOldVersion::Normal(_) => {
+                DeleteKindWithOldVersion::Wrap(version)
+                | DeleteKindWithOldVersion::Normal(version) => {
                     // get and track the deleted object `storage_rebate`
-                    let storage_rebate = self.get_input_storage_rebate(object_id);
+                    let storage_rebate = self.get_input_storage_rebate(object_id, *version);
                     gas_charger.track_storage_mutation(0, storage_rebate);
                 }
                 DeleteKindWithOldVersion::UnwrapThenDelete

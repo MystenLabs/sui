@@ -81,6 +81,7 @@ pub struct InputObjectMetadata {
     pub version: SequenceNumber,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct LoadedChildObjectMetadata {
     pub version: SequenceNumber,
     pub digest: ObjectDigest,
