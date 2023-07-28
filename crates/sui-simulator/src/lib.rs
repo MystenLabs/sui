@@ -7,6 +7,7 @@ pub use msim::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 // Re-export things used by sui-macros
+pub use ::rand as rand_crate;
 pub use anemo;
 pub use anemo_tower;
 pub use fastcrypto;

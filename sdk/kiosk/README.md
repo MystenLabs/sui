@@ -115,7 +115,7 @@ const purchaseItem = async (item, kioskId) => {
 
 ```typescript
 import { createKioskAndShare } from '@mysten/kiosk';
-import { TransactionBlock } from '@mysten/sui.js';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 
 const createKiosk = async () => {
 	const accountAddress = '0xSomeSuiAddress';
@@ -137,7 +137,7 @@ const createKiosk = async () => {
 
 ```typescript
 import { placeAndList } from '@mysten/kiosk';
-import { TransactionBlock } from '@mysten/sui.js';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 
 const placeAndListToKiosk = async () => {
 	const kiosk = 'SomeKioskId';
@@ -162,7 +162,7 @@ const placeAndListToKiosk = async () => {
 
 ```typescript
 import { withdrawFromKiosk } from '@mysten/kiosk';
-import { TransactionBlock } from '@mysten/sui.js';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 
 const withdraw = async () => {
 	const kiosk = 'SomeKioskId';

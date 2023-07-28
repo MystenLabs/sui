@@ -3,7 +3,6 @@
 
 import { useGetKioskContents } from '@mysten/core';
 import { ArrowUpRight12, ArrowRight16 } from '@mysten/icons';
-import { hasPublicTransfer } from '@mysten/sui.js';
 import { formatAddress } from '@mysten/sui.js/utils';
 import cl from 'classnames';
 import { Navigate, useSearchParams } from 'react-router-dom';
@@ -26,7 +25,10 @@ function NFTDetailsPage() {
 	const nftId = searchParams.get('objectId');
 	const accountAddress = useActiveAddress();
 	const { data: objectData, isLoading } = useOwnedNFT(nftId || '', accountAddress);
-	const isTransferable = !!objectData && hasPublicTransfer(objectData);
+	const isTransferable =
+		!!objectData &&
+		objectData.content?.dataType === 'moveObject' &&
+		objectData.content?.hasPublicTransfer;
 	const { nftFields, fileExtensionType, filePath } = useNFTBasicData(objectData);
 	const address = useActiveAddress();
 	const { data } = useGetKioskContents(address);

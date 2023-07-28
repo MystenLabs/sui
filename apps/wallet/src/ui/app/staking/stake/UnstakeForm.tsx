@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFormatCoin, useGetTimeBeforeEpochNumber } from '@mysten/core';
-import { SUI_TYPE_ARG } from '@mysten/sui.js';
+import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { Form } from 'formik';
 import { useMemo } from 'react';
 

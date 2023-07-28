@@ -2,12 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowRight12 } from '@mysten/icons';
-import {
-	getPureSerializationType,
-	getExecutionStatusType,
-	getExecutionStatusError,
-	TransactionBlock,
-} from '@mysten/sui.js';
+import { TransactionBlock, getPureSerializationType } from '@mysten/sui.js/transactions';
 import { Button } from '@mysten/ui';
 import { useWalletKit, ConnectButton } from '@mysten/wallet-kit';
 import { useMutation } from '@tanstack/react-query';
@@ -81,8 +76,8 @@ export function ModuleFunction({
 					showInput: true,
 				},
 			});
-			if (getExecutionStatusType(result) === 'failure') {
-				throw new Error(getExecutionStatusError(result) || 'Transaction failed');
+			if (result.effects?.status.status === 'failure') {
+				throw new Error(result.effects.status.error || 'Transaction failed');
 			}
 			return result;
 		},

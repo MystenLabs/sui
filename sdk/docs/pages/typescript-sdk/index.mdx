@@ -1,9 +1,7 @@
-import { Callout } from 'nextra/components';
+# Sui Typescript SDK Quick Start
 
-# Overview
-
-The Sui Typescript SDK is a modular library of tools for interacting with the Sui blockchain. It can
-be used to send queries to RPC nodes, build and sign transactions, and more.
+The Sui Typescript SDK is a modular library of tools for interacting with the Sui blockchain. Use it
+to send queries to RPC nodes, build and sign transactions, and interact with a Sui or local network.
 
 ## Installation
 
@@ -11,10 +9,21 @@ be used to send queries to RPC nodes, build and sign transactions, and more.
 npm i -D @mysten/sui.js
 ```
 
+## Network locations
+
+The following table lists the locations for Sui networks.
+
+| Network | Full node                             | faucet                                |
+| ------- | ------------------------------------- | ------------------------------------- |
+| local   | `http://127.0.0.1:9000` (default)     | `http://127.0.0.1:9123/gas` (default) |
+| Devnet  | `https://fullnode.devnet.sui.io:443`  | `https://faucet.devnet.sui.io/gas`    |
+| Testnet | `https://fullnode.testnet.sui.io:443` | `https://faucet.testnet.sui.io/gas`   |
+| Mainnet | `https://fullnode.mainnet.sui.io:443` | `null`                                |
+
 ## Architecture
 
-The SDK is split into a set of modular packages that can be used independently or together. So you
-can import just what you need.
+The SDK contains a set of modular packages that you can use independently or together. Import just
+what you need to keep your code light and compact.
 
 - [`@mysten/sui.js/client`](/typescript-sdk/sui-client) - A client for interacting with Sui RPC
   nodes.

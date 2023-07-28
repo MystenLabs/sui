@@ -1,16 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeatureIsOn } from '@growthbook/growthbook-react';
 // import { Filter16 } from '@mysten/icons';
 import { useState } from 'react';
-// import toast from 'react-hot-toast';
+import toast from 'react-hot-toast';
 
 import { EpochsActivityTable } from './EpochsActivityTable';
 import { TransactionsActivityTable } from './TransactionsActivityTable';
 import { CheckpointsTable } from '../checkpoints/CheckpointsTable';
-// import { PlayPause } from '~/ui/PlayPause';
 // import { useNetwork } from '~/context';
 // import { DropdownMenu, DropdownMenuCheckboxItem } from '~/ui/DropdownMenu';
+import { PlayPause } from '~/ui/PlayPause';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/ui/Tabs';
 // import { Network } from '~/utils/api/DefaultRpcClient';
 
@@ -22,30 +23,31 @@ type Props = {
 	disablePagination?: boolean;
 };
 
-// const AUTO_REFRESH_ID = 'auto-refresh';
+const AUTO_REFRESH_ID = 'auto-refresh';
 const REFETCH_INTERVAL_SECONDS = 10;
 const REFETCH_INTERVAL = REFETCH_INTERVAL_SECONDS * 1000;
 
 export function Activity({ initialTab, initialLimit, disablePagination }: Props) {
-	const [paused] = useState(false);
+	const pollingTxnTableEnabled = useFeatureIsOn('polling-txn-table');
+
+	const [paused, setPaused] = useState(false);
 	const [activeTab, setActiveTab] = useState(() =>
 		initialTab && VALID_TABS.includes(initialTab) ? initialTab : 'transactions',
 	);
 
-	// const handlePauseChange = () => {
-	//     if (paused) {
-	//         toast.success(
-	//             `Auto-refreshing on - every ${REFETCH_INTERVAL_SECONDS} seconds`,
-	//             { id: AUTO_REFRESH_ID }
-	//         );
-	//     } else {
-	//         toast.success('Auto-refresh paused', { id: AUTO_REFRESH_ID });
-	//     }
+	const handlePauseChange = () => {
+		if (paused) {
+			toast.success(`Auto-refreshing on - every ${REFETCH_INTERVAL_SECONDS} seconds`, {
+				id: AUTO_REFRESH_ID,
+			});
+		} else {
+			toast.success('Auto-refresh paused', { id: AUTO_REFRESH_ID });
+		}
 
-	//     setPaused((paused) => !paused);
-	// };
+		setPaused((paused) => !paused);
+	};
 
-	const refetchInterval = paused ? undefined : REFETCH_INTERVAL;
+	const refetchInterval = paused || !pollingTxnTableEnabled ? undefined : REFETCH_INTERVAL;
 	// TODO remove network check when querying transactions with TransactionKind filter is fixed on devnet and testnet
 	/*const [network] = useNetwork();
 	const isTransactionKindFilterEnabled = Network.MAINNET === network || Network.LOCAL === network;
@@ -89,10 +91,9 @@ export function Activity({ initialTab, initialLimit, disablePagination }: Props)
 							/>
 						) : null */}
 						{/* todo: re-enable this when rpc is stable */}
-						{/* <PlayPause
-                            paused={paused}
-                            onChange={handlePauseChange}
-                        /> */}
+						{pollingTxnTableEnabled && activeTab === 'transactions' && (
+							<PlayPause paused={paused} onChange={handlePauseChange} />
+						)}
 					</div>
 				</div>
 				<TabsContent value="transactions">

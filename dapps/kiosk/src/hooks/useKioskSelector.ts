@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { KioskOwnerCap } from '@mysten/kiosk';
-import { SuiAddress } from '@mysten/sui.js';
 import { useEffect, useState } from 'react';
 import { useOwnedKiosk } from './kiosk';
 
-export function useKioskSelector(address: SuiAddress | undefined) {
+export function useKioskSelector(address: string | undefined) {
 	const [selected, setSelected] = useState<KioskOwnerCap | undefined>();
 
 	// tries to find an owned kiosk for the supplied id.

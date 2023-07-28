@@ -9,7 +9,7 @@ import {
 	formatPercentageDisplay,
 	useGetSystemState,
 } from '@mysten/core';
-import { type SuiEvent, type SuiValidatorSummary } from '@mysten/sui.js';
+import { type SuiEvent, type SuiValidatorSummary } from '@mysten/sui.js/client';
 import { Heading, Text } from '@mysten/ui';
 import { lazy, Suspense, useMemo } from 'react';
 

@@ -4,9 +4,9 @@ import {
 	DryRunTransactionBlockResponse,
 	GasCostSummary,
 	SuiTransactionBlockResponse,
-	getTotalGasUsed,
 	SuiGasData,
-} from '@mysten/sui.js';
+	TransactionEffects,
+} from '@mysten/sui.js/client';
 
 type Optional<T> = {
 	[K in keyof T]?: T[K];
@@ -48,4 +48,13 @@ export function getGasSummary(
 		isSponsored: !!owner && !!sender && owner !== sender,
 		gasUsed: transaction?.effects!.gasUsed,
 	};
+}
+
+export function getTotalGasUsed(effects: TransactionEffects): bigint | undefined {
+	const gasSummary = effects?.gasUsed;
+	return gasSummary
+		? BigInt(gasSummary.computationCost) +
+				BigInt(gasSummary.storageCost) -
+				BigInt(gasSummary.storageRebate)
+		: undefined;
 }

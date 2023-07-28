@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFormatCoin, useRpcClient } from '@mysten/core';
-import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { useQuery } from '@tanstack/react-query';
 
 export function useTransactionData(sender?: string | null, transaction?: TransactionBlock | null) {

@@ -6,11 +6,12 @@ import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { useInitialPageView } from './hooks/useInitialPageView';
-import { CreateNewAccountPage } from './pages/accounts/CreateNewAccountPage';
+import { ProtectAccountPage } from './pages/accounts/ProtectAccountPage';
 import AssetsPage from './pages/home/assets';
 import { QredoConnectInfoPage } from './pages/qredo-connect/QredoConnectInfoPage';
 import { SelectQredoAccountsPage } from './pages/qredo-connect/SelectQredoAccountsPage';
 import { RestrictedPage } from './pages/restricted';
+import WelcomePage from './pages/welcome';
 import { AppType } from './redux/slices/app/AppType';
 import { Staking } from './staking/home';
 import ForgotPasswordPage from '_app/wallet/forgot-password-page';
@@ -41,7 +42,6 @@ import CreatePage from '_pages/initialize/create';
 import { ImportPage } from '_pages/initialize/import';
 import SelectPage from '_pages/initialize/select';
 import SiteConnectPage from '_pages/site-connect';
-import WelcomePage from '_pages/welcome';
 import { setNavVisibility } from '_redux/slices/app';
 
 const HIDDEN_MENU_PATHS = [
@@ -97,7 +97,7 @@ const App = () => {
 			{useNewOnboardingFlow && (
 				<Route path="/accounts" element={<AccountsPage />}>
 					<Route path="add-account" element={<AddAccountPage />} />
-					<Route path="create-new-account" element={<CreateNewAccountPage />} />
+					<Route path="protect-account" element={<ProtectAccountPage />} />
 					<Route path="import-ledger-accounts" element={<ImportLedgerAccountsPage />} />
 					<Route path="import-passphrase" element={<ImportPassphrasePage />} />
 					<Route path="import-private-key" element={<ImportPrivateKeyPage />} />

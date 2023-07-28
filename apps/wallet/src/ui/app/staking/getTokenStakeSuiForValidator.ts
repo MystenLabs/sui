@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type DelegatedStake } from '@mysten/sui.js';
+import { type DelegatedStake } from '@mysten/sui.js/client';
 
 // Get total Stake SUI for a specific validator address
 export const getTokenStakeSuiForValidator = (
