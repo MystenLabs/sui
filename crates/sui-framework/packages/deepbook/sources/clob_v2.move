@@ -714,24 +714,22 @@ module deepbook::clob_v2 {
 
                     // if maker_rebate = 0 due to underflow, maker will not receive a rebate
                     let maker_rebate = clob_math::unsafe_mul(filled_quote_quantity, pool.maker_rebate_rate);
-                    
                     // if taker_commission = 0 due to underflow, round it up to 1
                     let (is_round_down, taker_commission) = clob_math::unsafe_mul_round(
                         filled_quote_quantity,
                         pool.taker_fee_rate
                     );
                     if (is_round_down) taker_commission = taker_commission + 1;
+
                     maker_base_quantity = maker_base_quantity - filled_base_quantity;
 
                     // maker in ask side, decrease maker's locked base asset, increase maker's available quote asset
                     taker_base_quantity_remaining = taker_base_quantity_remaining - filled_base_quantity;      
-
                     let locked_base_balance = custodian::decrease_user_locked_balance<BaseAsset>(
                         &mut pool.base_custodian,
                         maker_order.owner,
                         filled_base_quantity
                     );
- 
                     let taker_commission_balance = balance::split(
                         &mut quote_balance_left,
                         taker_commission,
@@ -859,7 +857,6 @@ module deepbook::clob_v2 {
 
                     // if maker_rebate = 0 due to underflow, maker will not receive a rebate
                     let maker_rebate = clob_math::unsafe_mul(filled_quote_quantity, pool.maker_rebate_rate);
-
                     // if taker_commission = 0 due to underflow, round it up to 1
                     let (is_round_down, taker_commission) = clob_math::unsafe_mul_round(
                         filled_quote_quantity,
@@ -897,7 +894,6 @@ module deepbook::clob_v2 {
                             filled_base_quantity,
                         ),
                     );
-                    
                     emit_order_filled<BaseAsset, QuoteAsset>(
                         *object::uid_as_inner(&pool.id),
                         client_order_id,
