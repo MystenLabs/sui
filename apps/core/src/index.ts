@@ -39,4 +39,5 @@ export * from './hooks/useGetBinaryVersion';
 export * from './hooks/useProductAnalyticsConfig';
 export * from './hooks/useCookieConsentBanner';
 export * from './hooks/useGetKioskContents';
+export * from './hooks/useZodForm';
 export * from './utils/kiosk';
