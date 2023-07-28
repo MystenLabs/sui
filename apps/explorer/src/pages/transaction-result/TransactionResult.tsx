@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getExecutionStatusError, type SuiTransactionBlockResponse } from '@mysten/sui.js';
+import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 import { useParams } from 'react-router-dom';
 
 import { TransactionView } from './TransactionView';
@@ -41,7 +41,7 @@ function TransactionResultPageHeader({
 export default function TransactionResult() {
 	const { id } = useParams();
 	const { isLoading, isError, data } = useGetTransaction(id as string);
-	const txError = data ? getExecutionStatusError(data) : undefined;
+	const txError = data ? data.effects?.status.error : undefined;
 
 	return (
 		<PageLayout

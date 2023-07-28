@@ -2,14 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useTransactionSummary, getLabel } from '@mysten/core';
-import {
-	getExecutionStatusError,
-	getExecutionStatusType,
-	getTransactionDigest,
-	getTransactionKindName,
-	getTransactionKind,
-	getTransactionSender,
-} from '@mysten/sui.js';
 import { Link } from 'react-router-dom';
 
 import { TxnTypeLabel } from './TxnActionLabel';
@@ -28,9 +20,7 @@ export function TransactionCard({
 	txn: SuiTransactionBlockResponse;
 	address: string;
 }) {
-	const transaction = getTransactionKind(txn)!;
-	const executionStatus = getExecutionStatusType(txn);
-	getTransactionKindName(transaction);
+	const executionStatus = txn.effects?.status.status;
 	const recognizedPackagesList = useRecognizedPackages();
 
 	const summary = useTransactionSummary({
@@ -43,9 +33,9 @@ export function TransactionCard({
 
 	const recipientAddress = useGetTxnRecipientAddress({ txn, address });
 
-	const isSender = address === getTransactionSender(txn);
+	const isSender = address === txn.transaction?.data.sender;
 
-	const error = getExecutionStatusError(txn);
+	const error = txn.effects?.status.error;
 
 	// Transition label - depending on the transaction type and amount
 	// Epoch change without amount is delegation object
@@ -62,7 +52,7 @@ export function TransactionCard({
 		<Link
 			data-testid="link-to-txn"
 			to={`/receipt?${new URLSearchParams({
-				txdigest: getTransactionDigest(txn),
+				txdigest: txn.digest,
 			}).toString()}`}
 			className="flex items-center w-full flex-col gap-2 py-4 no-underline"
 		>

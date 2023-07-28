@@ -9,7 +9,7 @@ import {
 	type SuiObjectChangeTypes,
 } from '@mysten/core';
 import { ChevronDown12, ChevronRight12 } from '@mysten/icons';
-import { formatAddress } from '@mysten/sui.js';
+import { formatAddress } from '@mysten/sui.js/utils';
 import cx from 'classnames';
 
 import { ObjectChangeDisplay } from './objectSummary/ObjectChangeDisplay';

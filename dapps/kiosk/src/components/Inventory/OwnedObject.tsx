@@ -6,7 +6,6 @@ import { DisplayObject } from '../DisplayObject';
 import { Button } from '../Base/Button';
 import { KioskFnType } from '../../hooks/kiosk';
 import { usePlaceMutation } from '../../mutations/kiosk';
-import { ObjectId } from '@mysten/sui.js';
 
 export function OwnedObject({
 	object,
@@ -17,7 +16,7 @@ export function OwnedObject({
 	onListSuccess: () => void;
 	listFn: KioskFnType;
 	object: OwnedObjectType;
-	kioskId: ObjectId;
+	kioskId: string;
 }) {
 	const placeToKioskMutation = usePlaceMutation({
 		onSuccess: onListSuccess,

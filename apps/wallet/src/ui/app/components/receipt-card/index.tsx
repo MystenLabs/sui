@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useTransactionSummary } from '@mysten/core';
-import { type SuiTransactionBlockResponse } from '@mysten/sui.js';
+import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 
 import { StakeTxnCard } from './StakeTxnCard';
 import { StatusIcon } from './StatusIcon';

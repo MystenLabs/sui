@@ -4,7 +4,7 @@
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { useCoinMetadata, useGetSystemState, useGetCoinBalance } from '@mysten/core';
 import { ArrowLeft16 } from '@mysten/icons';
-import { getTransactionDigest, MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js';
+import { MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import * as Sentry from '@sentry/react';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { Formik } from 'formik';
@@ -202,14 +202,14 @@ function StakingCard() {
 						stakedSuiId: stakeSuiIdParams,
 					});
 
-					txDigest = getTransactionDigest(response);
+					txDigest = response.digest;
 				} else {
 					response = await stakeToken.mutateAsync({
 						amount: bigIntAmount,
 						tokenTypeArg: coinType,
 						validatorAddress: validatorAddress,
 					});
-					txDigest = getTransactionDigest(response);
+					txDigest = response.digest;
 				}
 
 				// Invalidate the react query for system state and validator

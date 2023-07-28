@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getTransactionSender } from '@mysten/sui.js';
 import { LoadingIndicator, RadioGroup, RadioGroupItem } from '@mysten/ui';
 import { useState } from 'react';
 import { type Direction } from 'react-resizable-panels';
@@ -43,7 +42,7 @@ function PkgView({ data }: { data: DataType }) {
 		tx_digest: data.data.tx_digest,
 		owner: getOwnerStr(data.owner),
 		publisherAddress:
-			data.data.tx_digest === GENESIS_TX_DIGEST ? 'Genesis' : getTransactionSender(txnData!),
+			data.data.tx_digest === GENESIS_TX_DIGEST ? 'Genesis' : txnData?.transaction?.data.sender,
 	};
 
 	const checkIsPropertyType = (value: any) => ['number', 'string'].includes(typeof value);

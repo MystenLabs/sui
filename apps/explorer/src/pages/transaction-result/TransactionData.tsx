@@ -3,11 +3,9 @@
 
 import { useTransactionSummary } from '@mysten/core';
 import {
-	getTransactionKind,
-	getTransactionKindName,
 	type ProgrammableTransaction,
 	type SuiTransactionBlockResponse,
-} from '@mysten/sui.js';
+} from '@mysten/sui.js/client';
 
 import { TransactionDetailCard } from './transaction-summary/TransactionDetailCard';
 import { GasBreakdown } from '~/components/GasBreakdown';
@@ -26,7 +24,7 @@ export function TransactionData({ transaction }: Props) {
 		recognizedPackagesList,
 	});
 
-	const transactionKindName = getTransactionKindName(getTransactionKind(transaction)!);
+	const transactionKindName = transaction.transaction?.data.transaction.kind;
 
 	const isProgrammableTransaction = transactionKindName === 'ProgrammableTransaction';
 

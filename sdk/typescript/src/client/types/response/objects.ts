@@ -83,7 +83,7 @@ export type SuiObjectData = {
 	 * This can also be None if the struct type does not have Display defined
 	 * See more details in https://forums.sui.io/t/nft-object-display-proposal/4872
 	 */
-	display?: DisplayFieldsBackwardCompatibleResponse;
+	display?: DisplayFieldsResponse;
 };
 
 export type SuiParsedData =
@@ -120,11 +120,6 @@ export type DisplayFieldsResponse = {
 	data: Record<string, string> | null;
 	error: SuiObjectResponseError | null;
 };
-
-// TODO: remove after all envs support the new DisplayFieldsResponse;
-export type DisplayFieldsBackwardCompatibleResponse =
-	| DisplayFieldsResponse
-	| (Record<string, string> | undefined);
 
 export type ObjectContentFields = Record<string, any>;
 

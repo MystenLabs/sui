@@ -2,15 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient, useGetSystemState, isSuiNSName, useSuiNSEnabled } from '@mysten/core';
+import { type SuiClient, type SuiSystemStateSummary } from '@mysten/sui.js/client';
 import {
 	isValidTransactionDigest,
 	isValidSuiAddress,
 	isValidSuiObjectId,
 	normalizeSuiObjectId,
-	getTransactionDigest,
-	type SuiSystemStateSummary,
-} from '@mysten/sui.js';
-import { type SuiClient } from '@mysten/sui.js/client';
+} from '@mysten/sui.js/utils';
 import { useQuery } from '@tanstack/react-query';
 
 const isGenesisLibAddress = (value: string): boolean => /^(0x|0X)0{0,39}[12]$/.test(value);
@@ -22,8 +20,8 @@ const getResultsForTransaction = async (client: SuiClient, query: string) => {
 	const txdata = await client.getTransactionBlock({ digest: query });
 	return [
 		{
-			id: getTransactionDigest(txdata),
-			label: getTransactionDigest(txdata),
+			id: txdata.digest,
+			label: txdata.digest,
 			type: 'transaction',
 		},
 	];

@@ -4,7 +4,7 @@
 import { FormEvent, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import classnames from 'classnames';
-import { normalizeSuiAddress } from '@mysten/sui.js';
+import { normalizeSuiAddress } from '@mysten/sui.js/utils';
 
 export default function FindKiosk() {
 	const { id } = useParams();
@@ -41,7 +41,7 @@ export default function FindKiosk() {
 						value={searchKiosk}
 						onInput={onInput}
 						className="bg-gray-100 border lg:min-w-[600px] text-gray-900 placeholder:text-gray-500 text-sm rounded rounded-r-none
-             focus:ring-transparent 
+             focus:ring-transparent
             focus:border-primary block w-full p-2.5 outline-primary"
 						placeholder="Enter an address or a Sui Kiosk ID to search for a kiosk..."
 						required

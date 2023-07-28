@@ -1,17 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import {
-	SUI_TYPE_ARG,
-	SuiTransactionBlockResponse,
-	getTotalGasUsed,
-	getTransactionSender,
-} from '@mysten/sui.js';
+import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 import { useMemo } from 'react';
+import { getTotalGasUsed } from '../utils/transaction';
 
 export function useGetTransferAmount(txnData: SuiTransactionBlockResponse) {
 	const { balanceChanges } = txnData;
-	const sender = getTransactionSender(txnData);
-	const gas = getTotalGasUsed(txnData);
+	const sender = txnData.transaction?.data.sender;
+	const gas = txnData.effects && getTotalGasUsed(txnData.effects);
 	const changes = useMemo(
 		() =>
 			balanceChanges
