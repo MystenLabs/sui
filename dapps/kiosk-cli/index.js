@@ -30,8 +30,8 @@ import {
   isValidSuiAddress,
   isValidSuiObjectId,
   MIST_PER_SUI,
-  bcs,
-} from '@mysten/sui.js';
+} from '@mysten/sui.js/utils';
+import { bcs } from '@mysten/sui.js/bcs';
 import { program } from 'commander';
 import {
   createKioskAndShare,

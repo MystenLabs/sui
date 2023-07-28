@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '../api/RpcClientContext';
-import { type SuiObjectDataFilter } from '@mysten/sui.js';
+import { type SuiObjectDataFilter } from '@mysten/sui.js/client';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 const MAX_OBJECTS_PER_REQ = 6;

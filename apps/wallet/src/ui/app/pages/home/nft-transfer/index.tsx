@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { hasPublicTransfer } from '@mysten/sui.js';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 
 import { TransferNFTForm } from './TransferNFTForm';
@@ -22,7 +21,10 @@ function NftTransferPage() {
 		<Overlay showModal={true} title="Send NFT" closeOverlay={() => navigate('/nfts')}>
 			<div className="flex w-full flex-col h-full">
 				<Loading loading={isLoading}>
-					{ownedNFT && nftId && hasPublicTransfer(ownedNFT) ? (
+					{ownedNFT &&
+					nftId &&
+					ownedNFT.content?.dataType === 'moveObject' &&
+					ownedNFT.content.hasPublicTransfer ? (
 						<>
 							<div className="mb-7.5">
 								<NFTDisplayCard objectId={nftId} wideView size="sm" />

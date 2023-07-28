@@ -3,7 +3,7 @@
 
 import { useResolveSuiNSName } from '@mysten/core';
 import { Check12, Copy12 } from '@mysten/icons';
-import { formatAddress } from '@mysten/sui.js';
+import { formatAddress } from '@mysten/sui.js/utils';
 
 import { AccountBadge } from './AccountBadge';
 import { useActiveAddress } from '../hooks/useActiveAddress';

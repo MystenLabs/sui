@@ -4,12 +4,12 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
 	getCreatedObjects,
-	getObjectId,
 	getSharedObjectInitialVersion,
 	isMutableSharedObjectInput,
 	isSharedObjectInput,
-	SUI_SYSTEM_STATE_OBJECT_ID,
 } from '../../src';
+
+import { SUI_SYSTEM_STATE_OBJECT_ID } from '../../src/utils';
 
 import { SuiObjectData, SuiTransactionBlockResponse } from '../../src/client';
 import { TransactionBlock } from '../../src/builder';
@@ -29,7 +29,7 @@ describe('Transaction Serialization and deserialization', () => {
 		const sharedObject = getCreatedObjects(publishTxn)!.filter(
 			(o) => getSharedObjectInitialVersion(o.owner) !== undefined,
 		)[0];
-		sharedObjectId = getObjectId(sharedObject);
+		sharedObjectId = sharedObject.reference.objectId;
 	});
 
 	async function serializeAndDeserialize(tx: TransactionBlock, mutable: boolean[]) {

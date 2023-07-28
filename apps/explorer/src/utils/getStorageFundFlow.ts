@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type EndOfEpochInfo } from '@mysten/sui.js';
+import { type EndOfEpochInfo } from '@mysten/sui.js/client';
 
 export function getEpochStorageFundFlow(endOfEpochInfo: EndOfEpochInfo | null) {
 	const fundInflow = endOfEpochInfo
