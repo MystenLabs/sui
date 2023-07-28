@@ -273,6 +273,7 @@ itertools = "0.10.5"
 jemalloc-ctl = "^0.5"
 jsonrpsee = { git="https://github.com/wlmyng/jsonrpsee.git", rev= "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = ["full", "http-client", "jsonrpsee-core"] }
 jsonrpsee-proc-macros = {git="https://github.com/wlmyng/jsonrpsee.git", rev= "b1b300784795f6a64d0fcdf8f03081a9bc38bde8"}
+json_to_table = { git = "https://github.com/zhiburt/tabled/", rev = "e449317a1c02eb6b29e409ad6617e5d9eb7b3bd4"}
 leb128 = "0.2.5"
 linked-hash-map = "0.5.6"
 lru = "0.10"
@@ -351,6 +352,7 @@ syn = { version = "1.0.104", features = ["full", "derive", "extra-traits"] }
 # syn = { version = "2", features = ["full", "fold", "extra-traits"] }
 synstructure = "0.12"
 sysinfo = "0.27.5"
+tabled = { version = "0.12" }
 tap = "1.0.1"
 tempfile = "3.3.0"
 test-fuzz = "3.0.4"
