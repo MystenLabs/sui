@@ -178,5 +178,5 @@ jobs:
           export PATH="/usr/local/opt/libiconv/bin:$PATH"
           rustup update stable
           rustup target add aarch64-apple-darwin
-          rustup default aarch64-apple-darwin
+          rustup default stable-aarch64-apple-darwin
           cargo build --target aarch64-apple-darwin --release 
