@@ -1099,8 +1099,7 @@ impl AuthorityPerEpochStore {
                 self.are_consensus_messages_processed(keys.iter())?
                     .into_iter(),
             )
-            .filter(|(_, processed)| !processed)
-            .map(|(key, _)| *key)
+            .filter_map(|(key, processed)| if !processed { Some(*key) } else { None })
             .collect::<Vec<SequencedConsensusTransactionKey>>();
         let registrations = self.consensus_notify_read.register_all(unprocessed_keys);
         join_all(registrations).await;

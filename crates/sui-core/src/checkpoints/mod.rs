@@ -885,7 +885,7 @@ impl CheckpointBuilder {
                 .zip(transactions_and_sizes.into_iter())
             {
                 let (transaction, size) = transaction_and_size
-                    .expect(&format!("Could not find executed transaction {:?}", effect));
+                    .unwrap_or_else(|| panic!("Could not find executed transaction {:?}", effect));
                 // ConsensusCommitPrologue is guaranteed to be processed before we reach here
                 if !matches!(
                     transaction.inner().transaction_data().kind(),
@@ -1105,8 +1105,6 @@ impl CheckpointBuilder {
                 .map(|e| *e.transaction_digest())
                 .collect::<Vec<_>>();
 
-            let builder_multi_get_scope =
-                monitored_scope("CheckpointBuilder::builder_included_transactions_in_checkpoint");
             let included_transactions = self
                 .epoch_store
                 .builder_included_transactions_in_checkpoint(digests.iter())?;
@@ -1115,24 +1113,18 @@ impl CheckpointBuilder {
                 .into_iter()
                 .zip(included_transactions.into_iter())
                 .collect();
-            drop(builder_multi_get_scope);
 
             for effect in roots {
                 let digest = effect.transaction_digest();
                 // Unnecessary to read effects of a dependency if the effect is already processed.
                 seen.insert(*digest);
-                if let Some(inclusion_status) = digest_inclusion_map.get(digest) {
-                    if *inclusion_status {
-                        continue;
-                    }
-                }
-                // Skip roots from previous epochs
-                if effect.executed_epoch() < self.epoch_store.epoch() {
+
+                // Skip roots already included in checkpoints or roots from previous epochs
+                if *digest_inclusion_map.get(digest).unwrap_or(&false)
+                    || effect.executed_epoch() < self.epoch_store.epoch()
+                {
                     continue;
                 }
-
-                let effects_signature_exists_scope =
-                    monitored_scope("CheckpointBuilder::effects_signature_exists_scope");
 
                 let existing_effects = self
                     .epoch_store
@@ -1152,7 +1144,6 @@ impl CheckpointBuilder {
                         pending.insert(*dependency);
                     }
                 }
-                drop(effects_signature_exists_scope);
                 results.push(effect);
             }
             if pending.is_empty() {
