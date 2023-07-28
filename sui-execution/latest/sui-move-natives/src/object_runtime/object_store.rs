@@ -17,7 +17,7 @@ use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber},
     error::VMMemoryLimitExceededSubStatusCode,
     metrics::LimitsMetrics,
-    object::{Data, MoveObject, Owner},
+    object::{Data, MoveObject, Object, Owner},
     storage::ChildObjectResolver,
 };
 
@@ -47,7 +47,7 @@ struct Inner<'a> {
     root_version: BTreeMap<ObjectID, SequenceNumber>,
     // cached objects from the resolver. An object might be in this map but not in the store
     // if it's existence was queried, but the value was not used.
-    cached_objects: BTreeMap<ObjectID, Option<MoveObject>>,
+    cached_objects: BTreeMap<ObjectID, Option<Object>>,
     // whether or not this TX is gas metered
     is_metered: bool,
     // Local protocol config used to enforce limits
@@ -132,7 +132,7 @@ impl<'a> Inner<'a> {
                             ),
                         ))
                     }
-                    Data::Move(mo @ MoveObject { .. }) => Some(mo),
+                    Data::Move(_) => Some(object),
                 }
             } else {
                 None
@@ -159,7 +159,17 @@ impl<'a> Inner<'a> {
 
             e.insert(obj_opt);
         }
-        Ok(self.cached_objects.get(&child).unwrap().as_ref())
+        Ok(self
+            .cached_objects
+            .get(&child)
+            .unwrap()
+            .as_ref()
+            .map(|obj| {
+                obj.data
+                    .try_as_move()
+                    // unwrap safe because we only insert Move objects
+                    .unwrap()
+            }))
     }
 
     fn fetch_object_impl(
@@ -391,7 +401,7 @@ impl<'a> ObjectStore<'a> {
         Ok(())
     }
 
-    pub(super) fn cached_objects(&self) -> &BTreeMap<ObjectID, Option<MoveObject>> {
+    pub(super) fn cached_objects(&self) -> &BTreeMap<ObjectID, Option<Object>> {
         &self.inner.cached_objects
     }
 

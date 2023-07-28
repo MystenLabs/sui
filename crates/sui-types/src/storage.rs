@@ -8,6 +8,7 @@ use crate::digests::{
 };
 use crate::effects::{TransactionEffects, TransactionEvents};
 use crate::error::SuiError;
+use crate::execution::LoadedChildObjectMetadata;
 use crate::message_envelope::Message;
 use crate::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, FullCheckpointContents, VerifiedCheckpoint,
@@ -132,7 +133,7 @@ pub trait Storage {
 
     fn save_loaded_child_objects(
         &mut self,
-        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
+        loaded_child_objects: BTreeMap<ObjectID, LoadedChildObjectMetadata>,
     );
 }
 
