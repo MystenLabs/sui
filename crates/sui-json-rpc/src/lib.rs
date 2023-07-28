@@ -72,6 +72,11 @@ pub fn sui_rpc_doc(version: &str) -> Project {
     )
 }
 
+pub enum ServerType {
+    WebSocket,
+    Http,
+}
+
 impl JsonRpcServerBuilder {
     pub fn new(version: &str, prometheus_registry: &Registry) -> Self {
         Self {
@@ -90,6 +95,7 @@ impl JsonRpcServerBuilder {
         mut self,
         listen_address: SocketAddr,
         custom_runtime: Option<Handle>,
+        server_type: Option<ServerType>,
     ) -> Result<ServerHandle, Error> {
         let acl = match env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
             Ok(value) => {
@@ -179,6 +185,17 @@ impl JsonRpcServerBuilder {
 
         if let Some(custom_runtime) = custom_runtime {
             builder = builder.custom_tokio_runtime(custom_runtime);
+        }
+
+        if let Some(server_type) = server_type {
+            match server_type {
+                ServerType::WebSocket => {
+                    builder = builder.ws_only();
+                }
+                ServerType::Http => {
+                    builder = builder.http_only();
+                }
+            }
         }
 
         let server = builder.build(listen_address).await?;
