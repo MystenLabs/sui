@@ -167,5 +167,6 @@ jobs:
 
       - name: Build for mac
         run: |
+          sudo xcode-select -s /Library/Developer/CommandLineTools
           rustup target add aarch64-apple-darwin
           cargo build --target aarch64-apple-darwin --release 
