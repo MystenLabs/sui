@@ -19,7 +19,7 @@
 # DONE - ProtocolConfig
 # DONE - Chain Identifier
 # DONE Coin
-# TODO Extended
+# DONE Extended
 # DONE Governance
 # TODO Indexer
 # TODO Move Utils
@@ -37,7 +37,9 @@ schema {
 }
 
 type Query {
-  network: Network!
+  # First four bytes of the network's genesis checkpoint digest
+  # (uniquely defines the network)
+  chainIdentifier: String!
 
   owner(address: SuiAddress!): Owner
   object(address: SuiAddress!, version: U64): Object
@@ -47,12 +49,19 @@ type Query {
   protocolConfig(protocolVersion: Int): ProtocolConfig
 
   checkpoint(filter: CheckpointFilter): Checkpoint
-  checkpoints: CheckpointConnection
+  checkpoints(order: Order!): CheckpointConnection
 
   transactionBlock(digest: Digest!): TransactionBlock
   transactionBlocks: TransactionBlockConnection
 
   coinMetadata(coinType: TypeRepr!): CoinMetadata
+
+  queryObjects(query: ObjectQuery): ObjectQueryConnection
+
+  networkMetrics: NetworkMetrics
+  moveCallMetrics: MoveCallMetrics
+  checkpointAddressMetrics(checkpoint: U64): AddressMetric
+  allEpochAddressMetrics(order: Order!): AddressMetricConnection
 }
 
 # String containing 32B hex-encoded address
@@ -84,6 +93,25 @@ scalar TypeRepr
 input CheckpointFilter {
   digest: Digest
   sequenceNumber: U64
+}
+
+enum Order { ASC, DESC }
+
+input ObjectQuery {
+  # one of these
+  any: [ObjectQuery]
+  all: [ObjectQuery]
+  not: ObjectQuery
+
+  # (x)or any of these
+  package: SuiAddress
+  module: String
+  # Requires `package` and `module`.
+  type: String
+
+  owner: SuiAddress
+  objectId: SuiAddress
+  version: U64
 }
 
 interface Owner {
@@ -131,12 +159,6 @@ type Object implements Owner {
   bcs: Bytes
 }
 
-type Network {
-  # First four bytes of the network's genesis checkpoint digest
-  # (uniquely defines the network)
-  chainIdentifier: String
-}
-
 type Epoch {
   epochId: Int!
   systemStateVersion: Int
@@ -149,7 +171,13 @@ type Epoch {
   storageFund: StorageFund
   safeMode: SafeMode
 
-  timestampMs: U64
+  startTimestampMs: U64
+  endTimestampMs: U64
+
+  # TODO: Identify non-duplicate fields in `EndOfEpochInfo`
+
+  checkpoints: CheckpointConnection
+  transactionBlocks: TransactionBlockConnection
 }
 
 type ProtocolConfig {
@@ -576,12 +604,19 @@ type MoveType {
   typeParameters: [MoveType]
 }
 
+# Metrics (omitted for brevity)
+type NetworkMetrics {}
+type MoveCallMetrics {}
+type AddressMetrics {}
+
 # Connections
 
+type AddressMetricConnection {}
 type BalanceConnection {}
 type CheckpointConnection {}
 type CoinConnection {}
 type MovePackageModuleConnection {}
+type ObjectQueryConnection {}
 type StakeConnection {}
 type TransactionBlockConnection {}
 type TransactionEventConnection {}
