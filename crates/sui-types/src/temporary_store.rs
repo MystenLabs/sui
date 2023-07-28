@@ -576,7 +576,22 @@ impl<'backing> TemporaryStore<'backing> {
         &mut self,
         loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
     ) {
-        self.loaded_child_objects = loaded_child_objects;
+        #[cfg(debug_assertions)]
+        {
+            for (id, v1) in &loaded_child_objects {
+                if let Some(v2) = self.loaded_child_objects.get(id) {
+                    assert_eq!(v1, v2);
+                }
+            }
+            for (id, v1) in &self.loaded_child_objects {
+                if let Some(v2) = loaded_child_objects.get(id) {
+                    assert_eq!(v1, v2);
+                }
+            }
+        }
+        // Merge the two maps because we may be calling the execution engine more than once
+        // (e.g. in advance epoch transaction, where we may be publishing a new system package).
+        self.loaded_child_objects.extend(loaded_child_objects);
     }
 
     pub fn estimate_effects_size_upperbound(&self) -> usize {
