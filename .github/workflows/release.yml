@@ -142,7 +142,6 @@ jobs:
   build-aarch64-apple-darwin:
     runs-on: ${{ matrix.config.os }}
     strategy:
-      fail-fast: true
       matrix:
         config:
           - {
