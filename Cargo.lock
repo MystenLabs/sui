@@ -10836,6 +10836,7 @@ dependencies = [
  "futures-core",
  "jsonrpsee",
  "move-core-types",
+ "reqwest",
  "serde",
  "serde_json",
  "serde_with",
