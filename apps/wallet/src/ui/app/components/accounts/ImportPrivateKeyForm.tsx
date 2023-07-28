@@ -1,29 +1,54 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { yupResolver } from '@hookform/resolvers/yup';
-import { useForm, type SubmitHandler } from 'react-hook-form';
+import { useZodForm } from '@mysten/core';
+import { hexToBytes } from '@noble/hashes/utils';
+import { type SubmitHandler } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
-import * as Yup from 'yup';
-import { privateKeyValidation } from '../../helpers/validation/privateKeyValidation';
+import { z } from 'zod';
 import { Form } from '../../shared/forms/Form';
 import { TextAreaField } from '../../shared/forms/TextAreaField';
 import { Button } from '_app/shared/ButtonUI';
 
-const formSchema = Yup.object({
-	privateKey: privateKeyValidation,
+const formSchema = z.object({
+	privateKey: z
+		.string()
+		.trim()
+		.transform((privateKey, context) => {
+			const hexValue = privateKey.startsWith('0x') ? privateKey.slice(2) : privateKey;
+			let privateKeyBytes: Uint8Array | undefined;
+
+			try {
+				privateKeyBytes = hexToBytes(hexValue);
+			} catch (error) {
+				context.addIssue({
+					code: 'custom',
+					message: 'Private Key must be a hexadecimal value. It may optionally begin with "0x".',
+				});
+				return z.NEVER;
+			}
+
+			if ([32, 64].includes(privateKeyBytes.length)) {
+				context.addIssue({
+					code: 'custom',
+					message: 'Private Key must be either 32 or 64 bytes.',
+				});
+				return z.NEVER;
+			}
+			return hexValue;
+		}),
 });
 
-type FormValues = Yup.InferType<typeof formSchema>;
+type FormValues = z.infer<typeof formSchema>;
 
 type ImportPrivateKeyFormProps = {
 	onSubmit: SubmitHandler<FormValues>;
 };
 
 export function ImportPrivateKeyForm({ onSubmit }: ImportPrivateKeyFormProps) {
-	const form = useForm({
+	const form = useZodForm({
 		mode: 'onTouched',
-		resolver: yupResolver(formSchema),
+		schema: formSchema,
 	});
 	const {
 		register,
