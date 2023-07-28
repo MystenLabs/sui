@@ -41,6 +41,7 @@ export { default as Check32 } from './Check32';
 export { default as CheckFill12 } from './CheckFill12';
 export { default as CheckFill16 } from './CheckFill16';
 export { default as CheckStroke16 } from './CheckStroke16';
+export { default as CheckStroke24 } from './CheckStroke24';
 export { default as ChevronDown12 } from './ChevronDown12';
 export { default as ChevronDown16 } from './ChevronDown16';
 export { default as ChevronDown24 } from './ChevronDown24';
