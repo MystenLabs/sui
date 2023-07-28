@@ -1503,6 +1503,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "bytecount"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c676a478f63e9fa2dd5368a42f28bba0d6c560b775f38583c8bbaa7fcd67c9c"
+
+[[package]]
 name = "bytemuck"
 version = "1.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4343,6 +4349,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "json_to_table"
+version = "0.6.0"
+source = "git+https://github.com/zhiburt/tabled/?rev=e449317a1c02eb6b29e409ad6617e5d9eb7b3bd4#e449317a1c02eb6b29e409ad6617e5d9eb7b3bd4"
+dependencies = [
+ "serde_json",
+ "tabled",
+]
+
+[[package]]
 name = "jsonpath_lib"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6697,6 +6712,17 @@ dependencies = [
  "elliptic-curve 0.13.4",
  "primeorder",
  "sha2 0.10.6",
+]
+
+[[package]]
+name = "papergrid"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae7891b22598926e4398790c8fe6447930c72a67d36d983a49d6ce682ce83290"
+dependencies = [
+ "bytecount",
+ "fnv",
+ "unicode-width",
 ]
 
 [[package]]
@@ -9105,6 +9131,7 @@ dependencies = [
  "git-version",
  "inquire",
  "jemalloc-ctl",
+ "json_to_table",
  "move-bytecode-verifier",
  "move-core-types",
  "move-package",
@@ -9142,6 +9169,7 @@ dependencies = [
  "sui-test-transaction-builder",
  "sui-types",
  "sui-verifier-latest",
+ "tabled",
  "tap",
  "telemetry-subscribers",
  "tempfile",
@@ -11102,6 +11130,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "tabled"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ce69a5028cd9576063ec1f48edb2c75339fd835e6094ef3e05b3a079bf594a6"
+dependencies = [
+ "papergrid",
+ "tabled_derive",
+ "unicode-width",
+]
+
+[[package]]
+name = "tabled_derive"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99f688a08b54f4f02f0a3c382aefdb7884d3d69609f785bd253dc033243e3fe4"
+dependencies = [
+ "heck 0.4.0",
+ "proc-macro-error",
+ "proc-macro2 1.0.58",
+ "quote 1.0.26",
+ "syn 1.0.107",
+]
+
+[[package]]
 name = "tabular"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12795,6 +12847,7 @@ dependencies = [
  "bumpalo",
  "byte-slice-cast",
  "bytecode-interpreter-crypto",
+ "bytecount",
  "bytemuck",
  "byteorder",
  "bytes",
@@ -13047,6 +13100,7 @@ dependencies = [
  "jemalloc-sys",
  "jobserver",
  "js-sys",
+ "json_to_table",
  "jsonpath_lib",
  "jsonrpsee",
  "jsonrpsee-client-transport",
@@ -13188,6 +13242,7 @@ dependencies = [
  "overload",
  "owo-colors",
  "p256",
+ "papergrid",
  "parity-scale-codec",
  "parity-scale-codec-derive",
  "parking",
@@ -13412,6 +13467,8 @@ dependencies = [
  "sync_wrapper",
  "synstructure",
  "sysinfo",
+ "tabled",
+ "tabled_derive",
  "tabular",
  "tap",
  "target-lexicon",
