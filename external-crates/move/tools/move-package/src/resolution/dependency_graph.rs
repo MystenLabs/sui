@@ -473,14 +473,9 @@ impl DependencyGraph {
                 &mut dev_o,
                 mode == DependencyMode::DevOnly,
             )?;
-            self.prune_overriden_pkgs(root_package, DependencyMode::Always, &o, &dev_o)?;
+            self.prune_overriden_pkgs(root_package, mode, &o, &dev_o)?;
         } else {
-            self.prune_overriden_pkgs(
-                root_package,
-                DependencyMode::Always,
-                overrides,
-                dev_overrides,
-            )?;
+            self.prune_overriden_pkgs(root_package, mode, overrides, dev_overrides)?;
         }
         Ok(())
     }
@@ -746,18 +741,15 @@ impl DependencyGraph {
                     dep_override,
                 } = internal;
 
-                match self.package_table.get(&dep_pkg_name) {
-                    Some(_) => (),
-                    None => {
-                        let mut pkg = Package {
-                            kind: kind.clone(),
-                            version: version.clone(),
-                            resolver: None,
-                        };
-                        pkg.kind.reroot(parent)?;
-                        self.package_table.insert(dep_pkg_name, pkg);
-                    }
-                };
+                if let Entry::Vacant(entry) = self.package_table.entry(dep_pkg_name) {
+                    let mut pkg = Package {
+                        kind: kind.clone(),
+                        version: version.clone(),
+                        resolver: None,
+                    };
+                    pkg.kind.reroot(parent)?;
+                    entry.insert(pkg);
+                }
                 self.package_graph.add_edge(
                     root_package,
                     dep_pkg_name,
