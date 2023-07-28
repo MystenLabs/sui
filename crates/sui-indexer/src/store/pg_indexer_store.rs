@@ -1198,13 +1198,13 @@ impl PgIndexerStore {
             for transaction_chunk in transactions.chunks(PG_COMMIT_CHUNK_SIZE) {
                 diesel::insert_into(transactions::table)
                     .values(transaction_chunk)
-                    .on_conflict(transactions::transaction_digest)
-                    .do_update()
-                    .set((
-                        transactions::timestamp_ms.eq(excluded(transactions::timestamp_ms)),
-                        transactions::checkpoint_sequence_number
-                            .eq(excluded(transactions::checkpoint_sequence_number)),
-                    ))
+                    // .on_conflict(transactions::transaction_digest)
+                    // .do_update()
+                    // .set((
+                    //     transactions::timestamp_ms.eq(excluded(transactions::timestamp_ms)),
+                    //     transactions::checkpoint_sequence_number
+                    //         .eq(excluded(transactions::checkpoint_sequence_number)),
+                    // ))
                     .execute(conn)
                     .map_err(IndexerError::from)
                     .context("Failed writing transactions to PostgresDB")?;
