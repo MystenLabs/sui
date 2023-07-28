@@ -1920,7 +1920,7 @@ pub fn get_executor(
             };
 
             let mut c = protocol_config.clone();
-            c.set_execution_version_for_testing(ver);
+            c.set_execution_version_for_testing_UNSAFE(ver);
             c
         })
         .unwrap_or(protocol_config.clone());

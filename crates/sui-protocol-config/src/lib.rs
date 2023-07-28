@@ -1400,6 +1400,14 @@ impl ProtocolConfig {
     pub fn set_upgraded_multisig_for_testing(&mut self, val: bool) {
         self.feature_flags.upgraded_multisig_supported = val
     }
+    #[allow(non_snake_case)]
+    pub fn set_max_tx_gas_for_testing_UNSAFE(&mut self, max_tx_gas: u64) {
+        self.max_tx_gas = Some(max_tx_gas)
+    }
+    #[allow(non_snake_case)]
+    pub fn set_execution_version_for_testing_UNSAFE(&mut self, version: u64) {
+        self.execution_version = Some(version)
+    }
     #[cfg(msim)]
     pub fn set_simplified_unwrap_then_delete(&mut self, val: bool) {
         self.feature_flags.simplified_unwrap_then_delete = val
