@@ -8,7 +8,7 @@ import * as Yup from 'yup';
 import { Button } from '_app/shared/ButtonUI';
 import FieldLabel from '_app/shared/field-label';
 import Alert from '_components/alert';
-import { mnemonicValidation } from '_pages/initialize/import/validation';
+import { mnemonicValidation } from '_src/ui/app/helpers/validation/mnemonicValidation';
 import { PasswordInputField } from '_src/ui/app/shared/input/password';
 import { Text } from '_src/ui/app/shared/text';
 
