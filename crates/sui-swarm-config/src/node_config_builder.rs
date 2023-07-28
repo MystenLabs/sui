@@ -153,6 +153,7 @@ impl ValidatorConfigBuilder {
             state_archive_write_config: StateArchiveConfig::default(),
             state_archive_read_config: vec![],
             indexer_max_subscriptions: Default::default(),
+            transaction_kv_store_config: Default::default(),
         }
     }
 
@@ -382,6 +383,7 @@ impl FullnodeConfigBuilder {
             state_archive_write_config: StateArchiveConfig::default(),
             state_archive_read_config: vec![],
             indexer_max_subscriptions: Default::default(),
+            transaction_kv_store_config: Default::default(),
         }
     }
 }
