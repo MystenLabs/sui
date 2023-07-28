@@ -274,8 +274,8 @@ type Epoch {
 
   # TODO: Identify non-duplicate fields in `EndOfEpochInfo`
 
-  checkpoints: CheckpointConnection
-  transactionBlocks: TransactionBlockConnection
+  checkpoints(order: Order!): CheckpointConnection
+  transactionBlocks(order: Order!): TransactionBlockConnection
 }
 
 type ProtocolConfig {
