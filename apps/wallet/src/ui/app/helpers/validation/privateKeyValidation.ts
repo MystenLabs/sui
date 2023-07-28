@@ -8,6 +8,7 @@ import { z } from 'zod';
 export const privateKeyValidation = z
 	.string()
 	.trim()
+	.nonempty('Private Key is a required field.')
 	.transform((privateKey, context) => {
 		const hexValue = privateKey.startsWith('0x') ? privateKey.slice(2) : privateKey;
 		let privateKeyBytes: Uint8Array | undefined;
@@ -22,13 +23,14 @@ export const privateKeyValidation = z
 			return z.NEVER;
 		}
 
-		if ([32, 64].includes(privateKeyBytes.length)) {
+		if (![32, 64].includes(privateKeyBytes.length)) {
 			context.addIssue({
 				code: 'custom',
 				message: 'Private Key must be either 32 or 64 bytes.',
 			});
 			return z.NEVER;
 		}
+
 		return hexValue;
 	});
 
