@@ -173,7 +173,7 @@ jobs:
 
       - name: Build for mac
         run: |
-          sudo brew install cmake
+          brew install cmake
           rustup update stable
           rustup target add aarch64-apple-darwin
           cargo build --target aarch64-apple-darwin --release 
