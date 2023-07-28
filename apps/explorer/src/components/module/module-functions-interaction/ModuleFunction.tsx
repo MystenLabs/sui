@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useZodForm } from '@mysten/core';
 import { ArrowRight12 } from '@mysten/icons';
 import { TransactionBlock, getPureSerializationType } from '@mysten/sui.js/transactions';
 import { Button } from '@mysten/ui';
@@ -14,7 +15,6 @@ import { z } from 'zod';
 import { FunctionExecutionResult } from './FunctionExecutionResult';
 import { useFunctionParamsDetails } from './useFunctionParamsDetails';
 import { useFunctionTypeArguments } from './useFunctionTypeArguments';
-import { useZodForm } from '~/hooks/useZodForm';
 import { DisclosureBox } from '~/ui/DisclosureBox';
 import { Input } from '~/ui/Input';
 
