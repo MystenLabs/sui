@@ -12,6 +12,7 @@ module deepbook::math {
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     const EUnderflow: u64 = 1;
+    const ERoundDown: u64 = 2;
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
 
     // multiply two floating numbers
@@ -30,7 +31,7 @@ module deepbook::math {
         (is_round_down, ((x * y / FLOAT_SCALING_U128) as u64))
     }
 
-    // multiply two floating numbers and assert the result is non zero
+    // multiply two floating numbers and assert the result is non zero and also that we don't round down
     public fun mul(x: u64, y: u64): u64 {
         let (_, result) = unsafe_mul_round(x, y);
         assert!(result > 0, EUnderflow);
