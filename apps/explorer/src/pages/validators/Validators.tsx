@@ -46,7 +46,9 @@ export function validatorsTableData(
 				const totalStake = validator.stakingPoolSuiBalance;
 				const img = validator.imageUrl;
 
-				const event = getValidatorMoveEvent(validatorEvents, validator.suiAddress);
+				const event = getValidatorMoveEvent(validatorEvents, validator.suiAddress) as {
+					pool_staking_reward?: string;
+				};
 
 				const atRiskValidator = atRiskValidators.find(
 					([address]) => address === validator.suiAddress,
@@ -265,7 +267,7 @@ function ValidatorPageResult() {
 		let totalRewards = 0;
 
 		validatorEvents.forEach(({ parsedJson }) => {
-			totalRewards += Number(parsedJson!.pool_staking_reward);
+			totalRewards += Number((parsedJson as { pool_staking_reward: string }).pool_staking_reward);
 		});
 
 		return totalRewards;

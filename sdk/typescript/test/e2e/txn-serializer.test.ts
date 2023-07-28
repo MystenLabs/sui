@@ -2,17 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import {
-	getCreatedObjects,
-	getSharedObjectInitialVersion,
-	isMutableSharedObjectInput,
-	isSharedObjectInput,
-} from '../../src';
 
 import { SUI_SYSTEM_STATE_OBJECT_ID } from '../../src/utils';
 
 import { SuiObjectData, SuiTransactionBlockResponse } from '../../src/client';
-import { TransactionBlock } from '../../src/builder';
+import { SharedObjectRef } from '../../src/bcs';
+import { BuilderCallArg, TransactionBlock } from '../../src/builder';
 import { TransactionBlockDataBuilder } from '../../src/builder/TransactionBlockData';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
@@ -26,8 +21,11 @@ describe('Transaction Serialization and deserialization', () => {
 		toolbox = await setup();
 		const packagePath = __dirname + '/./data/serializer';
 		({ packageId, publishTxn } = await publishPackage(packagePath));
-		const sharedObject = getCreatedObjects(publishTxn)!.filter(
-			(o) => getSharedObjectInitialVersion(o.owner) !== undefined,
+		const sharedObject = (publishTxn.effects?.created)!.filter(
+			(o) =>
+				typeof o.owner === 'object' &&
+				'Shared' in o.owner &&
+				o.owner.Shared.initial_shared_version !== undefined,
 		)[0];
 		sharedObjectId = sharedObject.reference.objectId;
 	});
@@ -94,3 +92,17 @@ describe('Transaction Serialization and deserialization', () => {
 		await serializeAndDeserialize(tx, []);
 	});
 });
+
+export function getSharedObjectInput(arg: BuilderCallArg): SharedObjectRef | undefined {
+	return typeof arg === 'object' && 'Object' in arg && 'Shared' in arg.Object
+		? arg.Object.Shared
+		: undefined;
+}
+
+export function isSharedObjectInput(arg: BuilderCallArg): boolean {
+	return !!getSharedObjectInput(arg);
+}
+
+export function isMutableSharedObjectInput(arg: BuilderCallArg): boolean {
+	return getSharedObjectInput(arg)?.mutable ?? false;
+}

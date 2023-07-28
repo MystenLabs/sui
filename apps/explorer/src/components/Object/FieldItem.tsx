@@ -11,7 +11,7 @@ import { Link } from '~/ui/Link';
 
 interface FieldItemProps {
 	value: string | number | object | boolean;
-	type: SuiMoveNormalizedType;
+	type: SuiMoveNormalizedType | '';
 	objectType: string;
 	truncate?: boolean;
 }

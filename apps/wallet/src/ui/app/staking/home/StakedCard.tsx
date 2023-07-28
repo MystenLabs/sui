@@ -38,9 +38,10 @@ const STATUS_VARIANT = {
 	[StakeState.WITHDRAW]: 'withDraw',
 	[StakeState.IN_ACTIVE]: 'inActive',
 } as const;
-interface DelegationObjectWithValidator extends StakeObject {
+
+export type DelegationObjectWithValidator = Extract<StakeObject, { estimatedReward: string }> & {
 	validatorAddress: string;
-}
+};
 
 const cardStyle = cva(
 	[

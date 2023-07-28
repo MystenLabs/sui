@@ -2,17 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { Infer } from 'superstruct';
-import {
-	boolean,
-	define,
-	literal,
-	nullable,
-	number,
-	object,
-	record,
-	string,
-	union,
-} from 'superstruct';
+import { boolean, define, literal, nullable, object, record, string, union } from 'superstruct';
 import type { CallArg } from '../bcs/index.js';
 
 /** @deprecated Use `string` instead. */
@@ -54,7 +44,7 @@ export const ObjectOwner = union([
 	}),
 	object({
 		Shared: object({
-			initial_shared_version: number(),
+			initial_shared_version: nullable(string()),
 		}),
 	}),
 	literal('Immutable'),

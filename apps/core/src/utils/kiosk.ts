@@ -9,7 +9,7 @@ export const ORIGINBYTE_KIOSK_MODULE =
 
 export const ORIGINBYTE_KIOSK_OWNER_TOKEN = `${ORIGINBYTE_KIOSK_MODULE}::OwnerToken`;
 
-export function isKioskOwnerToken(object?: SuiObjectResponse | SuiObjectData) {
+export function isKioskOwnerToken(object?: SuiObjectResponse | SuiObjectData | null) {
 	if (!object) return false;
 	const objectData = 'data' in object && object.data ? object.data : (object as SuiObjectData);
 	return [KIOSK_OWNER_CAP, ORIGINBYTE_KIOSK_OWNER_TOKEN].includes(objectData?.type ?? '');
@@ -17,6 +17,9 @@ export function isKioskOwnerToken(object?: SuiObjectResponse | SuiObjectData) {
 
 export function getKioskIdFromOwnerCap(object: SuiObjectResponse | SuiObjectData) {
 	const objectData = 'data' in object && object.data ? object.data : (object as SuiObjectData);
-	const fields = objectData.content?.dataType === 'moveObject' ? objectData.content.fields : null;
-	return fields?.for ?? fields?.kiosk;
+	const fields =
+		objectData.content?.dataType === 'moveObject'
+			? (objectData.content.fields as { for?: string; kiosk?: string })
+			: null;
+	return fields?.for ?? fields?.kiosk!;
 }

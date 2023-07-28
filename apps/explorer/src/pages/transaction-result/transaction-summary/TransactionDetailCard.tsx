@@ -23,9 +23,9 @@ export function TransactionDetail({ label, value }: { label: string; value: Reac
 
 interface TransactionDetailsProps {
 	sender?: string;
-	checkpoint?: string;
+	checkpoint?: string | null;
 	executedEpoch?: string;
-	timestamp?: string;
+	timestamp?: string | null;
 }
 
 export function TransactionDetailCard({
