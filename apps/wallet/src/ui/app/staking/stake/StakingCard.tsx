@@ -27,7 +27,7 @@ import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout';
-import { Collapse } from '_app/shared/collapse';
+import { Collapsible } from '_app/shared/collapse';
 import { Text } from '_app/shared/text';
 import Loading from '_components/loading';
 import { parseAmount } from '_helpers';
@@ -311,13 +311,13 @@ function StakingCard() {
 
 								{!unstake && (
 									<div className="flex-1 mt-7.5">
-										<Collapse title="Staking Rewards" initialIsOpen>
+										<Collapsible title="Staking Rewards" defaultOpen>
 											<Text variant="pSubtitle" color="steel-dark" weight="normal">
 												Staked SUI starts counting as validator’s stake at the end of the Epoch in
 												which it was staked. Rewards are earned separately for each Epoch and become
 												available at the end of each Epoch.
 											</Text>
-										</Collapse>
+										</Collapsible>
 									</div>
 								)}
 							</Content>
