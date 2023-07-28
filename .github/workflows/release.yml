@@ -175,8 +175,8 @@ jobs:
         run: |
           brew install cmake
           brew install libiconv
+          export PATH="/usr/local/opt/libiconv/bin:$PATH"
           rustup update stable
           rustup target add aarch64-apple-darwin
-          rustup show
-          uname -a
-          # cargo build --target aarch64-apple-darwin --release 
+          rustup default aarch64-apple-darwin
+          cargo build --target aarch64-apple-darwin --release 
