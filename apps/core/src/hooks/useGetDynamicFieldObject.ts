@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { DynamicFieldName } from '@mysten/sui.js/src/client';
+import { DynamicFieldName } from '@mysten/sui.js/client';
 import { useRpcClient } from '../api/RpcClientContext';
 import { useQuery } from '@tanstack/react-query';
 
