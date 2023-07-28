@@ -3,6 +3,7 @@
 
 use crate::committee::EpochId;
 use crate::effects::{TransactionEffects, TransactionEvents};
+use crate::execution::LoadedChildObjectMetadata;
 use crate::execution_status::ExecutionStatus;
 use crate::storage::{DeleteKindWithOldVersion, ObjectStore};
 use crate::sui_system_state::{
@@ -179,7 +180,7 @@ pub struct TemporaryStore<'backing> {
     deleted: BTreeMap<ObjectID, DeleteKindWithOldVersion>,
     /// Child objects loaded during dynamic field opers
     /// Currently onply populated for full nodes, not for validators
-    loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
+    loaded_child_objects: BTreeMap<ObjectID, LoadedChildObjectMetadata>,
     /// Ordered sequence of events emitted by execution
     events: Vec<Event>,
     protocol_config: ProtocolConfig,
@@ -315,7 +316,11 @@ impl<'backing> TemporaryStore<'backing> {
             deleted,
             events: TransactionEvents { data: self.events },
             max_binary_format_version: self.protocol_config.move_binary_format_version(),
-            loaded_child_objects: self.loaded_child_objects,
+            loaded_child_objects: self
+                .loaded_child_objects
+                .into_iter()
+                .map(|(id, metadata)| (id, metadata.version))
+                .collect(),
             no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),
             runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.read().clone(),
         }
@@ -574,7 +579,7 @@ impl<'backing> TemporaryStore<'backing> {
     }
     pub fn save_loaded_child_objects(
         &mut self,
-        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
+        loaded_child_objects: BTreeMap<ObjectID, LoadedChildObjectMetadata>,
     ) {
         #[cfg(debug_assertions)]
         {
@@ -785,16 +790,18 @@ impl<'backing> TemporaryStore<'backing> {
 impl<'backing> TemporaryStore<'backing> {
     /// Return the storage rebate of object `id`
     fn get_input_storage_rebate(&self, id: &ObjectID, expected_version: SequenceNumber) -> u64 {
+        // A mutated object must either be from input object or child object.
         if let Some(old_obj) = self.input_objects.get(id) {
             old_obj.storage_rebate
+        } else if let Some(metadata) = self.loaded_child_objects.get(id) {
+            debug_assert_eq!(metadata.version, expected_version);
+            metadata.storage_rebate
         } else {
-            // else, this is a dynamic field, not an input object
-            if let Ok(Some(old_obj)) = self.store.get_object_by_key(id, expected_version) {
-                old_obj.storage_rebate
-            } else {
-                // not a lot we can do safely and under this condition everything is broken
-                panic!("Looking up storage rebate of mutated object should not fail")
-            }
+            // not a lot we can do safely and under this condition everything is broken
+            panic!(
+                "Looking up storage rebate of mutated object {:?} should not fail",
+                id
+            )
         }
     }
 
@@ -1162,7 +1169,7 @@ impl<'backing> Storage for TemporaryStore<'backing> {
 
     fn save_loaded_child_objects(
         &mut self,
-        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
+        loaded_child_objects: BTreeMap<ObjectID, LoadedChildObjectMetadata>,
     ) {
         TemporaryStore::save_loaded_child_objects(self, loaded_child_objects)
     }
