@@ -14,7 +14,7 @@ export function ForgotPasswordPage() {
 				<Heading variant="heading1" color="gray-90" as="h1" weight="bold">
 					Forgot Password?
 				</Heading>
-				<Text variant="pBody" color="gray-90" weight="medium">
+				<Text variant="pBody" color="gray-90">
 					Enter your 12-word Recovery Phrase
 				</Text>
 			</div>
