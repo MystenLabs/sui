@@ -572,8 +572,6 @@ module deepbook::clob_v2 {
                         };
                         filled_quote_quantity = filled_quote_quantity_without_commission + taker_commission;
                     };
-
-
                     // if maker_rebate = 0 due to underflow, maker will not receive a rebate
                     let maker_rebate = clob_math::unsafe_mul(
                         filled_quote_quantity_without_commission,
@@ -593,7 +591,6 @@ module deepbook::clob_v2 {
                         &mut quote_balance_left,
                         filled_quote_quantity,
                     );
-
                     // Send quote asset including rebate to maker.
                     custodian::increase_user_available_balance<QuoteAsset>(
                         &mut pool.quote_custodian,
@@ -716,12 +713,7 @@ module deepbook::clob_v2 {
                     let filled_quote_quantity = clob_math::mul(filled_base_quantity, maker_order.price);
 
                     // if maker_rebate = 0 due to underflow, maker will not receive a rebate
-                    let (is_round_down, maker_rebate) = clob_math::unsafe_mul_round(filled_quote_quantity, pool.maker_rebate_rate);
-                    // Check if maker rebate rounded down.
-                    if (is_round_down) {
-                        std::debug::print(&(filled_quote_quantity * pool.maker_rebate_rate));
-                        std::debug::print(&maker_rebate);
-                    };
+                    let maker_rebate = clob_math::unsafe_mul(filled_quote_quantity, pool.maker_rebate_rate);
                     
                     // if taker_commission = 0 due to underflow, round it up to 1
                     let (is_round_down, taker_commission) = clob_math::unsafe_mul_round(
@@ -732,20 +724,14 @@ module deepbook::clob_v2 {
                     maker_base_quantity = maker_base_quantity - filled_base_quantity;
 
                     // maker in ask side, decrease maker's locked base asset, increase maker's available quote asset
-                    taker_base_quantity_remaining = taker_base_quantity_remaining - filled_base_quantity;
-
-                    let (avail, locked) = custodian::account_balance(&pool.base_custodian, maker_order.owner);
-                    // std::debug::print(&avail);
-                    // std::debug::print(&locked);             
+                    taker_base_quantity_remaining = taker_base_quantity_remaining - filled_base_quantity;      
 
                     let locked_base_balance = custodian::decrease_user_locked_balance<BaseAsset>(
                         &mut pool.base_custodian,
                         maker_order.owner,
                         filled_base_quantity
                     );
-                    let (avail, locked) = custodian::account_balance(&pool.base_custodian, maker_order.owner);
-                    // std::debug::print(&avail);
-                    // std::debug::print(&locked);    
+ 
                     let taker_commission_balance = balance::split(
                         &mut quote_balance_left,
                         taker_commission,
@@ -769,10 +755,6 @@ module deepbook::clob_v2 {
                             filled_quote_quantity,
                         ),
                     );
-
-                    // let (avail, locked_balance) = custodian::account_balance(&mut pool.base_custodian, maker_order.owner);
-                    // std::debug::print(&locked_balance);
-                    // std::debug::print(&avail);
 
                     emit_order_filled<BaseAsset, QuoteAsset>(
                         *object::uid_as_inner(&pool.id),
@@ -873,10 +855,10 @@ module deepbook::clob_v2 {
                         if (taker_base_quantity_remaining >= maker_base_quantity) { maker_base_quantity }
                         else { taker_base_quantity_remaining };
 
-                    let filled_quote_quantity = clob_math::unsafe_mul(filled_base_quantity, maker_order.price);
+                    let filled_quote_quantity = clob_math::mul(filled_base_quantity, maker_order.price);
 
                     // if maker_rebate = 0 due to underflow, maker will not receive a rebate
-                    let (maker_rebate) = clob_math::unsafe_mul(filled_quote_quantity, pool.maker_rebate_rate);
+                    let maker_rebate = clob_math::unsafe_mul(filled_quote_quantity, pool.maker_rebate_rate);
 
                     // if taker_commission = 0 due to underflow, round it up to 1
                     let (is_round_down, taker_commission) = clob_math::unsafe_mul_round(
@@ -915,9 +897,7 @@ module deepbook::clob_v2 {
                             filled_base_quantity,
                         ),
                     );
-                    // let (avail, locked_balance) = custodian::account_balance(&mut pool.base_custodian, maker_order.owner);                    
-                    // std::debug::print(&locked_balance);
-                    // std::debug::print(&avail);
+                    
                     emit_order_filled<BaseAsset, QuoteAsset>(
                         *object::uid_as_inner(&pool.id),
                         client_order_id,
