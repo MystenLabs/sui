@@ -1,28 +1,26 @@
-import { Callout } from 'nextra/components';
+# Sui Programmable Transaction Blocks Basics
 
-## Sui Programmable Transaction Blocks with the TS SDK
-
-This example starts by constructing a transaction block to send Sui. To construct transactions,
-\import the `TransactionBlock` class, and construct it:
+This example starts by constructing a transaction block to send SUI. To construct transactions,
+\import the `TransactionBlock` class and construct it:
 
 ```tsx
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 const txb = new TransactionBlock();
 ```
 
-Using this, you can then add transactions to this transaction block.
+You can then add transactions to the transaction block.
 
 ```tsx
-// Create a new coin with balance 100, based on the coins used as gas payment.
-// You can define any balance here.
+// create a new coin with balance 100, based on the coins used as gas payment
+// you can define any balance here
 const [coin] = txb.splitCoins(txb.gas, [txb.pure(100)]);
 
-// Transfer the split coin to a specific address.
+// transfer the split coin to a specific address
 txb.transferObjects([coin], txb.pure('0xSomeSuiAddress'));
 ```
 
-Note that you can attach multiple transactions of the same type to a transaction block as well. For
-example, to get a list of transfers, and iterate over them to transfer coins to each of them:
+You can attach multiple transactions of the same type to a transaction block, as well. For example,
+to get a list of transfers and iterate over them to transfer coins to each of them:
 
 ```tsx
 interface Transfer {
@@ -30,18 +28,18 @@ interface Transfer {
 	amount: number;
 }
 
-// Procure a list of some Sui transfers to make:
+// procure a list of some Sui transfers to make
 const transfers: Transfer[] = getTransfers();
 
 const txb = new TransactionBlock();
 
-// First, split the gas coin into multiple coins:
+// first, split the gas coin into multiple coins
 const coins = txb.splitCoins(
 	txb.gas,
 	transfers.map((transfer) => txb.pure(transfer.amount)),
 );
 
-// Next, create a transfer transaction for each coin:
+// next, create a transfer transaction for each coin
 transfers.forEach((transfer, index) => {
 	txb.transferObjects([coins[index]], txb.pure(transfer.to));
 });
@@ -104,9 +102,9 @@ You can use the result of a transaction as an argument in a subsequent transacti
 transaction method on the transaction builder returns a reference to the transaction result.
 
 ```tsx
-// Split a coin object off of the gas object:
+// split a coin object off of the gas object
 const [coin] = txb.splitCoins(txb.gas, [txb.pure(100)]);
-// Transfer the resulting coin object:
+// transfer the resulting coin object
 txb.transferObjects([coin], txb.pure(address));
 ```
 
@@ -114,11 +112,11 @@ When a transaction returns multiple results, you can access the result at a spec
 using destructuring, or array indexes.
 
 ```tsx
-// Destructuring (preferred, as it gives you logical local names):
+// destructuring (preferred, as it gives you logical local names)
 const [nft1, nft2] = txb.moveCall({ target: '0x2::nft::mint_many' });
 txb.transferObjects([nft1, nft2], txb.pure(address));
 
-// Array indexes:
+// array indexes
 const mintMany = txb.moveCall({ target: '0x2::nft::mint_many' });
 txb.transferObjects([mintMany[0], mintMany[1]], txb.pure(address));
 ```

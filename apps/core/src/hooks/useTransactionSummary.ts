@@ -3,10 +3,7 @@
 import {
 	DryRunTransactionBlockResponse,
 	type SuiTransactionBlockResponse,
-	getExecutionStatusType,
-	getTransactionDigest,
-	getTransactionSender,
-} from '@mysten/sui.js';
+} from '@mysten/sui.js/client';
 import { useMemo } from 'react';
 
 import { getBalanceChangeSummary } from '../utils/transaction/getBalanceChangeSummary';
@@ -56,12 +53,12 @@ export function useTransactionSummary({
 			// Non-dry-run transaction:
 			return {
 				gas,
-				sender: getTransactionSender(transaction),
+				sender: transaction.transaction?.data.sender,
 				balanceChanges: balanceChangeSummary,
-				digest: getTransactionDigest(transaction),
+				digest: transaction.digest,
 				label: getLabel(transaction, currentAddress),
 				objectSummary,
-				status: getExecutionStatusType(transaction),
+				status: transaction.effects?.status.status,
 				timestamp: transaction.timestampMs,
 			};
 		} else {

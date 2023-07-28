@@ -3,7 +3,7 @@
 
 import { useMemo } from 'react';
 
-import type { SuiMoveAbilitySet } from '@mysten/sui.js';
+import type { SuiMoveAbilitySet } from '@mysten/sui.js/client';
 
 export function useFunctionTypeArguments(typeArguments: SuiMoveAbilitySet[]) {
 	return useMemo(

@@ -7,7 +7,7 @@ import {
 	useFormatCoin,
 	useResolveSuiNSName,
 } from '@mysten/core';
-import { SUI_TYPE_ARG } from '@mysten/sui.js';
+import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { Heading, Text } from '@mysten/ui';
 
 import { CopyToClipboard } from '~/ui/CopyToClipboard';
@@ -90,7 +90,7 @@ function GasPaymentLinks({ objectIds }: { objectIds: string[] }) {
 }
 
 interface GasBreakdownProps {
-	summary?: TransactionSummary;
+	summary?: TransactionSummary | null;
 }
 
 export function GasBreakdown({ summary }: GasBreakdownProps) {

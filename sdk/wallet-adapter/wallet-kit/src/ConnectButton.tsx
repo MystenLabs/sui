@@ -6,7 +6,7 @@ import { ConnectModal } from './ConnectModal';
 import { Button } from './utils/ui';
 import { useWalletKit } from './WalletKitContext';
 import { Menu } from '@headlessui/react';
-import { formatAddress } from '@mysten/sui.js';
+import { formatAddress } from '@mysten/sui.js/utils';
 import { styled } from '@stitches/react';
 import { CheckIcon, ChevronIcon } from './utils/icons';
 

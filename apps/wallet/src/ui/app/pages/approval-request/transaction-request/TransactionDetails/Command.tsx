@@ -2,19 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ChevronDown12, ChevronRight12 } from '@mysten/icons';
-import {
-	type TransactionType,
-	type MakeMoveVecTransaction,
-	type PublishTransaction,
-	TypeTagSerializer,
-	type TypeTag,
-} from '@mysten/sui.js';
-import { type TransactionArgument } from '@mysten/sui.js/transactions';
+import { TypeTagSerializer, type TypeTag } from '@mysten/sui.js';
+import { type TransactionArgument, type Transactions } from '@mysten/sui.js/transactions';
 import { formatAddress, normalizeSuiAddress, toB64 } from '@mysten/sui.js/utils';
 
 import { useState } from 'react';
 
 import { Text } from '_src/ui/app/shared/text';
+
+type TransactionType = ReturnType<(typeof Transactions)[keyof typeof Transactions]>;
+type MakeMoveVecTransaction = ReturnType<(typeof Transactions)['MakeMoveVec']>;
+type PublishTransaction = ReturnType<(typeof Transactions)['Publish']>;
 
 function convertCommandArgumentToString(
 	arg:

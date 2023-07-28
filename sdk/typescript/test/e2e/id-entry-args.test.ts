@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { getExecutionStatusType } from '../../src';
 import { TransactionBlock } from '../../src/builder';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
@@ -29,7 +28,7 @@ describe('Test ID as args to entry functions', () => {
 				showEffects: true,
 			},
 		});
-		expect(getExecutionStatusType(result)).toEqual('success');
+		expect(result.effects?.status.status).toEqual('success');
 	});
 
 	it('Test ID as arg to entry functions', async () => {
@@ -45,6 +44,6 @@ describe('Test ID as args to entry functions', () => {
 				showEffects: true,
 			},
 		});
-		expect(getExecutionStatusType(result)).toEqual('success');
+		expect(result.effects?.status.status).toEqual('success');
 	});
 });

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFormatCoin, useGetTimeBeforeEpochNumber } from '@mysten/core';
-import { SUI_TYPE_ARG, type SuiAddress, type StakeObject } from '@mysten/sui.js';
+import { type StakeObject } from '@mysten/sui.js/client';
+import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { cx, cva, type VariantProps } from 'class-variance-authority';
 import { Link } from 'react-router-dom';
 
@@ -37,9 +38,10 @@ const STATUS_VARIANT = {
 	[StakeState.WITHDRAW]: 'withDraw',
 	[StakeState.IN_ACTIVE]: 'inActive',
 } as const;
-interface DelegationObjectWithValidator extends StakeObject {
-	validatorAddress: SuiAddress;
-}
+
+export type DelegationObjectWithValidator = Extract<StakeObject, { estimatedReward: string }> & {
+	validatorAddress: string;
+};
 
 const cardStyle = cva(
 	[

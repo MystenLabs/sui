@@ -1,13 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	SuiObjectData,
-	SuiObjectResponse,
-	getSuiObjectData,
-	isSuiObjectResponse,
-	getObjectFields,
-} from '@mysten/sui.js';
+import { SuiObjectData, SuiObjectResponse } from '@mysten/sui.js/client';
 import { KIOSK_OWNER_CAP } from '@mysten/kiosk';
 
 export const ORIGINBYTE_KIOSK_MODULE =
@@ -15,14 +9,17 @@ export const ORIGINBYTE_KIOSK_MODULE =
 
 export const ORIGINBYTE_KIOSK_OWNER_TOKEN = `${ORIGINBYTE_KIOSK_MODULE}::OwnerToken`;
 
-export function isKioskOwnerToken(object?: SuiObjectResponse | SuiObjectData) {
+export function isKioskOwnerToken(object?: SuiObjectResponse | SuiObjectData | null) {
 	if (!object) return false;
-	const objectData = isSuiObjectResponse(object) ? getSuiObjectData(object) : object;
+	const objectData = 'data' in object && object.data ? object.data : (object as SuiObjectData);
 	return [KIOSK_OWNER_CAP, ORIGINBYTE_KIOSK_OWNER_TOKEN].includes(objectData?.type ?? '');
 }
 
 export function getKioskIdFromOwnerCap(object: SuiObjectResponse | SuiObjectData) {
-	const objectData = isSuiObjectResponse(object) ? getSuiObjectData(object) : object;
-	const fields = getObjectFields(objectData!);
-	return fields?.for ?? fields?.kiosk;
+	const objectData = 'data' in object && object.data ? object.data : (object as SuiObjectData);
+	const fields =
+		objectData.content?.dataType === 'moveObject'
+			? (objectData.content.fields as { for?: string; kiosk?: string })
+			: null;
+	return fields?.for ?? fields?.kiosk!;
 }

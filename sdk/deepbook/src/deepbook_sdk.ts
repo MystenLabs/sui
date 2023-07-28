@@ -6,7 +6,7 @@ import { normalizeSuiObjectId } from '@mysten/sui.js/utils';
 import { getPoolInfoByRecords } from './utils';
 import { PoolInfo, Records } from './utils';
 import { defaultGasBudget } from './utils';
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/src/client';
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
 
 export type smartRouteResult = {
 	maxSwapTokens: number;

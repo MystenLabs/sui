@@ -6,7 +6,7 @@ import {
 	useGetValidatorsApy,
 	useGetTimeBeforeEpochNumber,
 } from '@mysten/core';
-import { SUI_TYPE_ARG } from '@mysten/sui.js';
+import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 
 import { Card } from '../../shared/transaction-summary/Card';
 import { ValidatorLogo } from '_app/staking/validators/ValidatorLogo';
@@ -27,9 +27,10 @@ type StakeTxnCardProps = {
 
 // For Staked Transaction use moveEvent Field to get the validator address, delegation amount, epoch
 export function StakeTxnCard({ event }: StakeTxnCardProps) {
-	const validatorAddress = event.parsedJson?.validator_address;
-	const stakedAmount = event.parsedJson?.amount;
-	const stakedEpoch = Number(event.parsedJson?.epoch || 0);
+	const json = event.parsedJson as { amount: string; validator_address: string; epoch: string };
+	const validatorAddress = json?.validator_address;
+	const stakedAmount = json?.amount;
+	const stakedEpoch = Number(json?.epoch || '0');
 
 	const { data: rollingAverageApys } = useGetValidatorsApy();
 
@@ -60,7 +61,7 @@ export function StakeTxnCard({ event }: StakeTxnCardProps) {
 							showAddress
 							iconSize="md"
 							size="body"
-							activeEpoch={event.parsedJson?.epoch}
+							activeEpoch={json?.epoch}
 						/>
 					</div>
 				)}

@@ -149,7 +149,7 @@ export class QredoSigner extends WalletSigner {
 		if (!txInfo.txHash) {
 			throw new Error(`Digest is not set in Qredo transaction ${txInfo.txID}`);
 		}
-		return this.provider.waitForTransactionBlock({
+		return this.client.waitForTransactionBlock({
 			digest: txInfo.txHash,
 			options: options,
 		});

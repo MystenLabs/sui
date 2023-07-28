@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getExecutionStatusError, type SuiTransactionBlockResponse } from '@mysten/sui.js';
-import { LoadingIndicator } from '@mysten/ui';
+import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 import { useParams } from 'react-router-dom';
 
 import { TransactionView } from './TransactionView';
@@ -15,18 +14,21 @@ import { StatusIcon } from '~/ui/StatusIcon';
 function TransactionResultPageHeader({
 	transaction,
 	error,
+	loading,
 }: {
-	transaction: SuiTransactionBlockResponse;
+	transaction?: SuiTransactionBlockResponse;
 	error?: string;
+	loading?: boolean;
 }) {
-	const txnKindName = transaction.transaction?.data.transaction?.kind;
-	const txnDigest = transaction.digest;
-	const txnStatus = transaction.effects?.status.status;
+	const txnKindName = transaction?.transaction?.data.transaction?.kind;
+	const txnDigest = transaction?.digest ?? '';
+	const txnStatus = transaction?.effects?.status.status;
 
 	const isProgrammableTransaction = txnKindName === 'ProgrammableTransaction';
 
 	return (
 		<PageHeader
+			loading={loading}
 			type="Transaction"
 			title={txnDigest}
 			subtitle={!isProgrammableTransaction ? txnKindName : undefined}
@@ -38,22 +40,33 @@ function TransactionResultPageHeader({
 
 export default function TransactionResult() {
 	const { id } = useParams();
-	const { isLoading, isError, data } = useGetTransaction(id as string);
-	const txError = data ? getExecutionStatusError(data) : undefined;
+	const {
+		isLoading,
+		isError: getTxnErrorBool,
+		data,
+		error: getTxnError,
+	} = useGetTransaction(id as string);
+	const txnExecutionError = data?.effects?.status.error;
+
+	const txnErrorText = txnExecutionError || (getTxnError as Error)?.message;
 
 	return (
 		<PageLayout
-			gradient={
-				data && {
-					content: <TransactionResultPageHeader transaction={data} error={txError} />,
-					size: 'md',
-					type: txError ? 'error' : 'success',
-				}
-			}
+			loading={isLoading}
+			gradient={{
+				content: (
+					<TransactionResultPageHeader
+						transaction={data}
+						error={txnErrorText}
+						loading={isLoading}
+					/>
+				),
+				size: 'md',
+			}}
+			backgroundGradient={!!data}
+			isError={!!txnErrorText}
 			content={
-				isLoading ? (
-					<LoadingIndicator text="Loading..." />
-				) : isError || !data ? (
+				getTxnErrorBool || !data ? (
 					<Banner variant="error" spacing="lg" fullWidth>
 						{!id
 							? "Can't search for a transaction without a digest"

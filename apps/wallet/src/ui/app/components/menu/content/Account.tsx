@@ -4,7 +4,7 @@
 import { Disclosure, Transition } from '@headlessui/react';
 import { useResolveSuiNSName } from '@mysten/core';
 import { ChevronDown16, Copy16 } from '@mysten/icons';
-import { formatAddress } from '@mysten/sui.js';
+import { formatAddress } from '@mysten/sui.js/utils';
 import { cx } from 'class-variance-authority';
 
 import { AccountActions } from './AccountActions';

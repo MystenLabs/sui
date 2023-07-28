@@ -4,7 +4,6 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useRpc } from '../context/RpcClientContext';
-import { getObjectId, getObjectType } from '@mysten/sui.js';
 import { PaginatedObjectsResponse } from '@mysten/sui.js/client';
 import { parseObjectDisplays } from '../utils/utils';
 import { TANSTACK_OWNED_OBJECTS_KEY } from '../utils/constants';
@@ -40,10 +39,13 @@ export function useOwnedObjects({
 
 			// Simple mapping to OwnedObject style.
 			return data.map((item) => ({
-				display: displays[getObjectId(item)] || {},
-				type: getObjectType(item) || '',
+				display: displays[item.data?.objectId!] || {},
+				type:
+					item.data?.type ??
+					(item?.data?.content?.dataType === 'package' ? 'package' : item?.data?.content?.type) ??
+					'',
 				isLocked: false,
-				objectId: getObjectId(item),
+				objectId: item.data?.objectId,
 			}));
 		},
 	});

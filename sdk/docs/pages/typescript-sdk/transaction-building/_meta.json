@@ -1,6 +1,6 @@
 {
-	"basics": "Basics",
-	"gas": "Gas",
+	"basics": "Sui Programmable Transaction Blocks Basics",
+	"gas": "Paying for Sui Transactions with Gas Coins",
 	"pure-arguments": {
 		"title": "Pure Arguments",
 		"display": "hidden"

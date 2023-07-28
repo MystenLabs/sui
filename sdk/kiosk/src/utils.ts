@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SharedObjectRef, SuiObjectRef, SuiObjectResponse, getObjectFields } from '@mysten/sui.js';
+import { SharedObjectRef } from '@mysten/sui.js/bcs';
+import { SuiObjectRef, SuiObjectResponse } from '@mysten/sui.js/client';
 import { TransactionBlock, TransactionArgument } from '@mysten/sui.js/transactions';
 import { type DynamicFieldInfo } from '@mysten/sui.js/client';
 import { bcs } from './bcs';
@@ -84,13 +85,13 @@ export function extractKioskData(
 				case 'kiosk::Listing':
 					acc.listingIds.push(val.objectId);
 					listings.push({
-						objectId: val.name.value.id,
+						objectId: (val.name.value as { id: string }).id,
 						listingId: val.objectId,
-						isExclusive: val.name.value.is_exclusive,
+						isExclusive: (val.name.value as { is_exclusive: boolean }).is_exclusive,
 					});
 					break;
 				case 'kiosk::Lock':
-					lockedItemIds?.push(val.name.value.id);
+					lockedItemIds?.push((val.name.value as { id: string }).id);
 					break;
 			}
 			return acc;
@@ -122,10 +123,12 @@ export function attachListingsAndPrices(
 			// that's the case when we don't have the `listingPrices` included.
 			if (listingObjects.length === 0) return acc;
 
-			const data = getObjectFields(listingObjects[idx]);
+			const content = listingObjects[idx].data?.content;
+			const data = content?.dataType === 'moveObject' ? content?.fields : null;
+
 			if (!data) return acc;
 
-			acc[item.objectId].price = data.value;
+			acc[item.objectId].price = (data as { value: string }).value;
 			return acc;
 		},
 		{},

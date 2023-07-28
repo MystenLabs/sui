@@ -4,7 +4,7 @@
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { provider } from './rpc';
-import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/src/faucet';
+import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
 
 // This simulates what a server would do to sponsor a transaction
 export async function sponsorTransaction(sender: string, transactionKindBytes: Uint8Array) {

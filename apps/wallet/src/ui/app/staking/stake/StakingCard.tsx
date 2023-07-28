@@ -4,7 +4,7 @@
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { useCoinMetadata, useGetSystemState, useGetCoinBalance } from '@mysten/core';
 import { ArrowLeft16 } from '@mysten/icons';
-import { getTransactionDigest, MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js';
+import { MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import * as Sentry from '@sentry/react';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { Formik } from 'formik';
@@ -36,6 +36,7 @@ import { Coin } from '_redux/slices/sui-objects/Coin';
 import { ampli } from '_src/shared/analytics/ampli';
 import { MIN_NUMBER_SUI_TO_STAKE } from '_src/shared/constants';
 import { FEATURES } from '_src/shared/experimentation/features';
+import type { StakeObject } from '@mysten/sui.js/client';
 
 import type { FormikHelpers } from 'formik';
 
@@ -81,7 +82,8 @@ function StakingCard() {
 
 	const coinSymbol = useMemo(() => (coinType && Coin.getCoinSymbol(coinType)) || '', [coinType]);
 
-	const suiEarned = stakeData?.estimatedReward || '0';
+	const suiEarned =
+		(stakeData as Extract<StakeObject, { estimatedReward: string }>)?.estimatedReward || '0';
 
 	const { data: metadata } = useCoinMetadata(coinType);
 	const coinDecimals = metadata?.decimals ?? 0;
@@ -202,14 +204,14 @@ function StakingCard() {
 						stakedSuiId: stakeSuiIdParams,
 					});
 
-					txDigest = getTransactionDigest(response);
+					txDigest = response.digest;
 				} else {
 					response = await stakeToken.mutateAsync({
 						amount: bigIntAmount,
 						tokenTypeArg: coinType,
 						validatorAddress: validatorAddress,
 					});
-					txDigest = getTransactionDigest(response);
+					txDigest = response.digest;
 				}
 
 				// Invalidate the react query for system state and validator

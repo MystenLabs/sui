@@ -1,26 +1,26 @@
-import { Callout } from 'nextra/components';
+# Multi-Signature Transactions
 
-# MultiSig
+The Sui TypeScript SDK provides a `MultiSigPublicKey` class to support
+[Multi-Signature](https://docs.sui.io/learn/cryptography/sui-multisig) (MultiSig) transaction and
+personal message signing.
 
-The typescript SDK supports
-[Sui Multi-Signature](https://docs.sui.io/learn/cryptography/sui-multisig) signing via the
-`MultiSigPublicKey` class.
-
-This class implements the same interface as the `PublicKey` classes used by [KeyPairs](./keypairs),
-and can be used to verify signatures for `PersonalMessages` and `TransactionBlocks` using the same
-methods.
+This class implements the same interface as the `PublicKey` classes that [Keypairs](./keypairs) uses
+and you call the same methods to verify signatures for `PersonalMessages` and `TransactionBlocks`.
 
 ## Creating a MultiSigPublicKey
 
-You can create a `MultiSigPublicKey` by providing pairs of `PublicKey` and `weight` values, along
-with a threshold.
+To create a `MultiSigPublicKey`, you provide a `threshold`(u16) value and an array of objects that
+contain `publicKey` and `weight`(u8) values. If the combined weight of valid signatures for a
+transaction is equal to or greater than the threshold value, then the Sui network considers the
+transdaction valid.
 
 ```typescript
-import { ED25519KeyPair } from '@mysten/sui.js/keypairs/ed25519';
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+import { MultiSigPublicKey } from '@mysten/sui.js/multisig';
 
-const kp1 = new ED25519KeyPair();
-const kp2 = new ED25519KeyPair();
-const kp3 = new ED25519KeyPair();
+const kp1 = new Ed25519Keypair();
+const kp2 = new Ed25519Keypair();
+const kp3 = new Ed25519Keypair();
 
 const multiSigPublicKey = MultiSigPublicKey.fromPublicKeys({
 	threshold: 2,
@@ -40,21 +40,21 @@ const multiSigPublicKey = MultiSigPublicKey.fromPublicKeys({
 	],
 });
 
-const multisigAddress = multiSigPublicKey.getAddress();
+const multisigAddress = multiSigPublicKey.toSuiAddress();
 ```
 
-The resulting MultiSigPublicKey will allow you to verify signatures with a combined weight of at
-least 2. A signature signed with only kp1 or kp2 would not be considered valid, but a signature
-signed with kp1 and kp2, or kp3 by itself would be valid.
+The `multiSigPublicKey` in the preceding code enables you to verify that signatures have a combined
+weight of at least `2`. A signature signed with only `kp1` or `kp2` is not valid, but a signature
+signed with both `kp1` and `kp2`, or just `kp3` is valid.
 
 ## Combining signatures with a MultiSigPublicKey
 
-To sign a message or transaction for a multig address, you will need to collect signatures from the
-individual keypairs, and then combine them into a signature using the `MultiSigPublicKey` class for
+To sign a message or transaction for a MultiSig address, you must collect signatures from the
+individual key pairs, and then combine them into a signature using the `MultiSigPublicKey` class for
 the address.
 
 ```typescript
-// This example uses the same keypairs and multiSigPublicKey from the previous example
+// This example uses the same imports, key pairs, and multiSigPublicKey from the previous example
 const message = new TextEncoder().encode('hello world');
 
 const signature1 = (await kp1.signPersonalMessage(message)).signature;

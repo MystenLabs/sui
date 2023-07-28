@@ -228,7 +228,7 @@ export const TransactionEffects = object({
 	 */
 	gasObject: OwnedObjectRef,
 	/** The events emitted during execution. Note that only successful transactions emit events */
-	eventsDigest: optional(string()),
+	eventsDigest: nullable(optional(string())),
 	/** The set of transaction digests this transaction depends on */
 	dependencies: optional(array(string())),
 });

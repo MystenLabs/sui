@@ -1,21 +1,27 @@
-import { Callout } from 'nextra/components';
-
 # Faucet
 
-To get started with the SDK it can be helpful get some Sui tokens to play with. The faucet is a
-simple way to get some tokens sent to your address in `testnet`, `devnet` or `localnet` if you are
-running your own network locally for development.
+import { Callout } from 'nextra/components';
 
-You can request sui from the faucet using the `@mysten/sui.js/faucet` package.
+Devnet, Testnet, and local networks include faucets that mint SUI. You can use the Sui TypeScript
+SDK to call a network's faucet and provide SUI to the address you provide.
+
+To request SUI from a faucet, import the `requestSuiFromFaucetV0` function from the
+`@mysten/sui.js/faucet` package to your project.
 
 ```typescript
 import { requestSuiFromFaucetV0, getFaucetHost } from '@mysten/sui.js/faucet';
+```
 
+Use `requestSuiFromFaucetV0` in your TypeScript code to request SUI from the network's faucet.
+
+```typescript
 await requestSuiFromFaucetV0({
 	host: getFaucetHost('testnet'),
-	recipient: '0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231',
+	recipient: <RECEPIENT_ADDRESS>,
 });
 ```
 
-The sui faucet is rate limited, so after making this call you may not be able to request more sui
-for a while. The exact limits depend on which network you are connecting to.
+<Callout type="info">
+	Faucets on Devnet and Testnet are rate limited. If you run the script too many times, you surpass
+	the limit and must wait to successfully run it again.
+</Callout>

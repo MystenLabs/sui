@@ -13,7 +13,7 @@ export function useGetAllCoins(coinType: string, address?: string | null) {
 	return useQuery({
 		queryKey: ['get-all-coins', address, coinType],
 		queryFn: async () => {
-			let cursor: string | null = null;
+			let cursor: string | undefined | null = null;
 			const allData: CoinStruct[] = [];
 			// keep fetching until cursor is null or undefined
 			do {

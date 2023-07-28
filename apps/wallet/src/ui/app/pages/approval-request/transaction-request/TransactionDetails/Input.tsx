@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type TransactionBlockInput } from '@mysten/sui.js';
+import { type TransactionBlockInput } from '@mysten/sui.js/transactions';
 import { formatAddress, toB64 } from '@mysten/sui.js/utils';
 
 import ExplorerLink from '_src/ui/app/components/explorer-link';
