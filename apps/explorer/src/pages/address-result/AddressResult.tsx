@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { isSuiNSName, useResolveSuiNSAddress, useResolveSuiNSName } from '@mysten/core';
-import { Heading, LoadingIndicator } from '@mysten/ui';
+import { LoadingIndicator } from '@mysten/ui';
 import { useParams } from 'react-router-dom';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
