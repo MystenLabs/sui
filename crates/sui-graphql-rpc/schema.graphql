@@ -21,7 +21,7 @@
 # DONE Extended
 # DONE Governance
 # DONE Indexer
-# TODO Move Utils
+# DONE Move Utils
 # TODO Write
 
 # TODO Port designs from Notion
@@ -54,7 +54,7 @@ type Query {
   transactionBlock(digest: Digest!): TransactionBlock
   transactionBlocks: TransactionBlockConnection
 
-  coinMetadata(coinType: TypeRepr!): CoinMetadata
+  coinMetadata(coinType: TypeInst!): CoinMetadata
 
   queryObjects(query: ObjectQuery): ObjectQueryConnection
   queryEvents(filter: EventFilter, order: Order!): EventQueryConnection
@@ -97,9 +97,16 @@ scalar Bytes
 
 scalar JSON
 
-# Fully qualified type, with a flat representation:
-# <package>::<module>::<name>.
-scalar TypeRepr
+# Fully qualified concrete type instantiation, with a flat
+# representation:
+#
+# ([package]::[module]::)?[name](<[param], ...>)?.
+scalar TypeInst
+
+# Move type from a function (parameter or return type) or struct
+# (field) signature.  May contain type parameters, referred to by
+# index.
+scalar TypeSignature
 
 # Filter either by the digest, or the sequence number, or neither, to
 # get the latest checkpoint.
@@ -185,10 +192,10 @@ interface Owner {
 
   objects(query: ObjectQuery): ObjectQueryConnection
 
-  balance(type: TypeRepr!): Balance
+  balance(type: TypeInst!): Balance
   balances: BalanceConnection
 
-  coins(type: TypeRepr): CoinConnection
+  coins(type: TypeInst): CoinConnection
 
   stakes: StakeConnection
 }
@@ -470,9 +477,9 @@ union ProgrammableTransaction =
   | MakeMoveVecTransaction
 
 type MoveCallTransaction {
-  package: MovePackage
-  module: String
-  function: String
+  moduleId: MoveModuleId
+  name: String
+  function: NormalizedFunction
 
   typeArguments: [MoveType]
   arguments: [TransactionArgument]
@@ -573,10 +580,9 @@ type BalanceChange {
 }
 
 type Event {
-  package: MovePackage
-  module: String
-  sender: Address
+  moduleId: MoveModuleId
   type: MoveType
+  sender: Address
   timestampMs: U64
 
   json: JSON
@@ -624,7 +630,7 @@ type CoinMetadata {
 }
 
 input DynamicFieldName {
-  type: TypeRepr!
+  type: TypeInst!
   bcs: Bytes!
 }
 
@@ -647,7 +653,81 @@ type MoveObject {
 type MovePackage {
   modules: MovePackageModuleConnection
 
+  normalizedModules: NormalizedModulesConnection
+  normalizedModule(name: String!): NormalizedModule
+
   asObject: Object
+}
+
+type MoveModuleId {
+  package: MovePackage
+  name: String
+}
+
+enum MoveAbility {
+  COPY
+  DROP
+  STORE
+  KEY
+}
+
+enum MoveVisibility {
+  PUBLIC
+  PRIVATE
+  FRIEND
+}
+
+enum MoveReference {
+  IMMUT
+  MUT
+}
+
+type MoveStructTypeParameterDecl {
+  constraints: [MoveAbility]
+  isPhantom: Boolean
+}
+
+type MoveFunctionTypeParameterDecl {
+  constraints: [MoveAbility]
+}
+
+type NormalizedModule {
+  fileFormatVersion: Int
+
+  moduleId: MoveModuleId
+  friends: [MoveModuleId]
+
+  structs: NormalizedStructConnection
+  struct(name: String!): NormalizedStruct
+
+  functions: NormalizedFunctionConnection
+  function(name: String!): NormalizedFunction
+}
+
+type NormalizedStruct {
+  module: NormalizedModule
+  name: String
+
+  abilities: [MoveAbility]
+  typeParameters: [MoveStructTypeParameterDecl]
+  fields: [NormalizedField]
+}
+
+type NormalizedField {
+  name: String
+  type: MoveTypeUse
+}
+
+type NormalizedFunction {
+  module: NormalizedModule
+  name: String
+
+  visibility: MoveVisibility
+  isEntry: Boolean
+
+  typeParameters: [MoveFunctionTypeParameterDecl]
+  parameters: [MoveTypeUse]
+  return: [MoveTypeUse]
 }
 
 type MoveValue {
@@ -681,17 +761,38 @@ type MoveField {
   value: MoveValue!
 }
 
-type MoveType {
-  # Flattened representation of the type and type parameters
-  repr: TypeRepr!
-
-  # Fully qualified type name.  Primitive types have no `package` or
-  # `module`.
-  package: MovePackage
-  module: String
+type MoveTypeName {
+  # Fully qualified type name.  Primitive types have no `moduleId`, or
+  # `struct`.
+  moduleId: MoveModuleId
   name: String!
+  struct: NormalizedStruct
+}
 
+type MoveType {
+  # Scalar representation of the type instantiation (type and type
+  # parameters)
+  repr: TypeInst!
+  typeName: MoveTypeName!
   typeParameters: [MoveType]
+}
+
+type MoveTypeUse {
+  # Scalar representation of the use of a type in a signature.
+  repr: TypeSignature!
+  ref: MoveReference
+  type: MoveTypeBody
+}
+
+union MoveTypeBody = MoveTypeNameUse | MoveTypeParameterUse
+
+type MoveTypeNameUse {
+  name: MoveTypeName!
+  typeParameters: [MoveTypeUse]
+}
+
+type MoveTypeParameterUse {
+  index: Int
 }
 
 # Metrics (omitted for brevity)
@@ -709,6 +810,9 @@ type DynamicFieldConnection {}
 type EventQueryConnection {}
 type MovePackageModuleConnection {}
 type NameServiceNamesConnection {}
+type NormalizedFunctionConnection {}
+type NormalizedModuleConnection {}
+type NormalizedStructConnection {}
 type ObjectQueryConnection {}
 type StakeConnection {}
 type TransactionBlockConnection {}
