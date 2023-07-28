@@ -94,10 +94,6 @@ pub enum KeyToolCommand {
         #[clap(long)]
         address_seed: String,
     },
-    /// Converts a hexadecimal string to its Base64 encoded representation.
-    HexToBase64 { hex: String },
-    /// Converts a hexadecimal string to its corresponding bytes.
-    HexToBytes { hex: String },
     /// Add a new key to sui.keystore using either the input mnemonic phrase or a private key (from the Wallet),
     /// the key scheme flag {ed25519 | secp256k1 | secp256r1} and an optional derivation path,
     /// default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1
@@ -325,8 +321,6 @@ pub enum CommandOutput {
     DecodeMultiSig(DecodedMultiSigOutput),
     DecodeTxBytes(TransactionData),
     Error(String),
-    HexToBase64(Base64),
-    HexToBytes(Vec<u8>),
     Generate(Key),
     GenerateZkLoginAddress(SuiAddress, AddressParams),
     Import(Key),
@@ -450,19 +444,6 @@ impl KeyToolCommand {
                 hasher.update(big_int_str_to_bytes(&address_seed));
                 let user_address = SuiAddress::from_bytes(hasher.finalize().digest)?;
                 CommandOutput::GenerateZkLoginAddress(user_address, address_params)
-            }
-
-            KeyToolCommand::HexToBase64 { hex } => {
-                let bytes =
-                    Hex::decode(&hex).map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
-                let base64 = Base64::from_bytes(&bytes);
-                CommandOutput::HexToBase64(base64)
-            }
-
-            KeyToolCommand::HexToBytes { hex } => {
-                let bytes =
-                    Hex::decode(&hex).map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
-                CommandOutput::HexToBytes(bytes)
             }
 
             KeyToolCommand::Import {
