@@ -148,7 +148,7 @@ jobs:
           - {
               name: "macOS M1 Latest Clang",
               artifact: "njord-macos-m1",
-              os: macos-latest-xl,
+              os: macos-13-xl,
               cc: "clang",
               architecture: arm64,
             }
@@ -159,25 +159,21 @@ jobs:
         uses: actions/checkout@v3
         with:
           ref: ${{ env.sui_tag }}
+      
+      - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths    
 
-      - name: Cache Rust dependencies
-        uses: actions/cache@v1.0.1
-        with:
-          path: target
-          key: ${{ runner.OS }}-build-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.OS }}-build-
-
-      - name: Install latest rust toolchain
+      - name: Install latest stable
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: beta
-          target: aarch64-apple-darwin
-          default: true
-          override: true
+            toolchain: stable
+            target: aarch64-apple-darwin
+            override: true
+            default: true
+            components: rustfmt, clippy
 
       - name: Build for mac
         run: |
-          sudo xcode-select -s /Library/Developer/CommandLineTools
+          sudo brew install cmake
+          rustup update stable
           rustup target add aarch64-apple-darwin
           cargo build --target aarch64-apple-darwin --release 
