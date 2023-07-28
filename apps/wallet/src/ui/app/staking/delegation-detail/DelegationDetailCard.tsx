@@ -8,7 +8,7 @@ import {
 	useGetCoinBalance,
 } from '@mysten/core';
 import { ArrowLeft16, StakeAdd16, StakeRemove16 } from '@mysten/icons';
-import { MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js';
+import { MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
 

@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type MoveCallSuiTransaction, type SuiArgument, type SuiMovePackage } from '@mysten/sui.js';
+import {
+	type MoveCallSuiTransaction,
+	type SuiArgument,
+	type SuiMovePackage,
+} from '@mysten/sui.js/client';
 import { Text } from '@mysten/ui';
 import { type ReactNode } from 'react';
 

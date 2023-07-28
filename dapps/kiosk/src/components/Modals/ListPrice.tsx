@@ -6,7 +6,7 @@ import { ModalBase } from './Base';
 import { OwnedObjectType } from '../Inventory/OwnedObjects';
 import { DisplayObjectThumbnail } from '../DisplayObjectThumbnail';
 import { Button } from '../Base/Button';
-import { MIST_PER_SUI } from '@mysten/sui.js';
+import { MIST_PER_SUI } from '@mysten/sui.js/utils';
 import { usePlaceAndListMutation } from '../../mutations/kiosk';
 
 export interface ListPriceProps {

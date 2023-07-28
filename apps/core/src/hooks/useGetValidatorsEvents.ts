@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 import { useRpcClient } from '../api/RpcClientContext';
-import { type EventId, VALIDATORS_EVENTS_QUERY, SuiEvent } from '@mysten/sui.js';
+import { type EventId, SuiEvent } from '@mysten/sui.js/client';
 import { useQuery } from '@tanstack/react-query';
 
 type GetValidatorsEvent = {
@@ -12,6 +11,7 @@ type GetValidatorsEvent = {
 
 // NOTE: This copys the query limit from our Rust JSON RPC backend, this needs to be kept in sync!
 const QUERY_MAX_RESULT_LIMIT = 50;
+const VALIDATORS_EVENTS_QUERY = '0x3::validator_set::ValidatorEpochInfoEventV2';
 
 //TODO: get validatorEvents by validator address
 export function useGetValidatorsEvents({ limit, order }: GetValidatorsEvent) {

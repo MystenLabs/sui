@@ -11,7 +11,9 @@ import {
 	Unpin16,
 	Pin16,
 } from '@mysten/icons';
-import { SUI_TYPE_ARG, Coin, type CoinBalance as CoinBalanceType } from '@mysten/sui.js';
+import { Coin } from '@mysten/sui.js';
+import { type CoinBalance as CoinBalanceType } from '@mysten/sui.js/client';
+import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
