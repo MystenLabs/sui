@@ -26,7 +26,7 @@ After you add a rule to a transfer policy, all transactions from the kiosk for i
 
 ## Custom transfer policy rules
 
-While Sui supports and allows for you to add any rules to a transfer policy, the Sui ecosystem needs to implement support for each rule independently. Hence, adding new rules is a tricky process which requires ecosystem agreement. For example, you create a transfer policy for a type MyHeroes. You then add a transfer policy that includes a rule that any buyer must complete Know Your Customer (KYC) verification, and to perform KYC checks you implement custom logic. Other marketplaces and wallets on the network are not aware of the rule you added to your transfer policy. The purchase process can’t be automated, and no purchase of an asset with a type of MyHeroes can be completed.
+While Sui supports and allows for you to add any rules to a transfer policy, the Sui ecosystem needs to implement support for each rule independently. Hence, adding new rules is a tricky process which requires ecosystem agreement. For example, you create a transfer policy for a type `MyHeroes`. You then add a transfer policy that includes a rule that any buyer must complete Know Your Customer (KYC) verification, and to perform KYC checks you implement custom logic. Other marketplaces and wallets on the network are not aware of the rule you added to your transfer policy. The purchase process can’t be automated, and no purchase of an asset with a type of `MyHeroes` can be completed.
 
 ### TransferPolicy code samples
 
