@@ -505,9 +505,20 @@ impl ObjectRuntimeState {
             transfers,
             events: user_events,
         } = self;
-        // Validator new owners from transfers, reports an error on cycles.
+        let input_owner_map = input_objects
+            .iter()
+            .filter_map(|(id, owner)| match owner {
+                Owner::AddressOwner(_) | Owner::Shared { .. } | Owner::Immutable => None,
+                Owner::ObjectOwner(parent) => Some((*id, (*parent).into())),
+            })
+            .collect();
+        // update the input owners with the new owners from transfers
+        // reports an error on cycles
         // TODO can we have cycles in the new system?
-        check_circular_ownership(transfers.iter().map(|(id, (owner, _, _))| (*id, *owner)))?;
+        update_owner_map(
+            input_owner_map,
+            transfers.iter().map(|(id, (owner, _, _))| (*id, *owner)),
+        )?;
         // determine write kinds
         let writes: LinkedHashMap<_, _> = transfers
             .into_iter()
@@ -568,10 +579,10 @@ impl ObjectRuntimeState {
     }
 }
 
-fn check_circular_ownership(
+fn update_owner_map(
+    mut object_owner_map: BTreeMap<ObjectID, ObjectID>,
     transfers: impl IntoIterator<Item = (ObjectID, Owner)>,
 ) -> Result<(), ExecutionError> {
-    let mut object_owner_map = BTreeMap::new();
     for (id, recipient) in transfers {
         object_owner_map.remove(&id);
         match recipient {
