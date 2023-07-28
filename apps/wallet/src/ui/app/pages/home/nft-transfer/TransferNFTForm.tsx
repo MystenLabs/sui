@@ -37,7 +37,6 @@ export function TransferNFTForm({
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
 	const { clientIdentifier, notificationModal } = useQredoTransaction();
-
 	const { data: kiosk } = useGetKioskContents(activeAddress);
 	const transferKioskItem = useTransferKioskItem({ objectId, objectType });
 	const isContainedInKiosk = kiosk?.list.some((kioskItem) => kioskItem.data?.objectId === objectId);
