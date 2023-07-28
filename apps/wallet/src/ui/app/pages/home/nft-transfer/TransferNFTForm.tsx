@@ -27,7 +27,7 @@ export function TransferNFTForm({
 	objectType,
 }: {
 	objectId: string;
-	objectType?: string;
+	objectType?: string | null;
 }) {
 	const activeAddress = useActiveAddress();
 	const rpc = useRpcClient();

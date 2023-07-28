@@ -7,12 +7,11 @@ import { LoadingIndicator } from '@mysten/ui';
 import { FieldItem } from './FieldItem';
 import { Banner } from '~/ui/Banner';
 
+import type { DynamicFieldName } from '@mysten/sui.js/client';
+
 interface UnderlyingObjectCardProps {
 	parentId: string;
-	name: {
-		type: string;
-		value?: string;
-	};
+	name: DynamicFieldName;
 	dynamicFieldType: 'DynamicField' | 'DynamicObject';
 }
 
@@ -69,7 +68,8 @@ export function UnderlyingObjectCard({
 		return null;
 	}
 	// For dynamicObject type show the entire object
-	const fieldData = dynamicFieldType === 'DynamicObject' ? fieldsData : fieldsData?.value;
+	const fieldData =
+		dynamicFieldType === 'DynamicObject' ? fieldsData : (fieldsData as { value?: unknown })?.value;
 
 	const dynamicFieldsData =
 		// show name if it is a struct
@@ -77,7 +77,7 @@ export function UnderlyingObjectCard({
 
 	return (
 		<FieldItem
-			value={dynamicFieldsData}
+			value={dynamicFieldsData as string}
 			objectType={objectType}
 			// add the struct type to the value
 			type={normalizedStruct?.fields.find((field) => field.name === 'value')?.type || ''}

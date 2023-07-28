@@ -23,7 +23,7 @@ export function useTransferKioskItem({
 	objectType,
 }: {
 	objectId: string;
-	objectType?: string;
+	objectType?: string | null;
 }) {
 	const rpc = useRpcClient();
 	const signer = useSigner();
