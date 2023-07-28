@@ -39,13 +39,14 @@ const bannerStyles = cva(
 				true: '',
 			},
 			rounded: {
-				true: 'rounded-2xl',
+				none: 'rounded-none',
+				'2xl': 'rounded-2xl',
 			},
 		},
 		defaultVariants: {
 			variant: 'message',
 			spacing: 'md',
-			rounded: true,
+			rounded: '2xl',
 		},
 		compoundVariants: [
 			{
