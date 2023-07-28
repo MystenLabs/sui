@@ -20,7 +20,7 @@ import { Network } from '~/utils/api/DefaultRpcClient';
 
 const ValidatorMap = lazy(() => import('../../components/validator-map'));
 
-const TRANSACTIONS_LIMIT = 25;
+const TRANSACTIONS_LIMIT = 10;
 
 function Home() {
 	const [network] = useNetwork();
