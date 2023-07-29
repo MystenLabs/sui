@@ -499,12 +499,6 @@ impl DependencyGraph {
                 // not (yet) reached via regular (non-overridden) path
                 pruned_pkgs.insert(from_pkg_name);
             }
-        } else {
-            // we are on a regular path, not involving an override
-            reachable_pkgs.insert(from_pkg_name);
-            // if there was a package candidate for pruning, it should be removed from the list as
-            // it can be reached via a regular path
-            pruned_pkgs.remove(&from_pkg_name);
         }
         let mut override_found = overridden_path;
 
@@ -519,8 +513,15 @@ impl DependencyGraph {
             .is_some();
 
             if override_found {
-                // we also prune overridden package
+                // we also prune overridden package - we can do this safely as the outgoing edges
+                // from other package graph nodes to the overridden package will be preserved (see
+                // the nested_pruned_override test for additional explanation how nodes are removed
+                // from the package graph)
                 pruned_pkgs.insert(from_pkg_name);
+            } else {
+                // we are on a regular path, not involving an override (overridden_path == false)
+                // and we did not find an override
+                reachable_pkgs.insert(from_pkg_name);
             }
         }
 
@@ -564,6 +565,9 @@ impl DependencyGraph {
             false,
         )?;
 
+        // if there was a package candidate for pruning, it should be removed from the list if it
+        // can be reached via a regular path
+        pruned_pkgs.retain(|p| !reachable_pkgs.contains(p));
         for pkg in pruned_pkgs {
             self.package_graph.remove_node(pkg);
             self.package_table.remove(&pkg);
