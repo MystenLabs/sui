@@ -9,6 +9,10 @@ ResolvedGraph {
         always_deps: {
             "name",
         },
+        manifest_digest: Some(
+            "FC0696A769A6ACA88ED23495C9051F1D8389D2A70675D9C35E54DC67C793DFC7",
+        ),
+        deps_digest: None,
     },
     build_options: BuildConfig {
         dev_mode: true,
