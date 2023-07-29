@@ -63,6 +63,9 @@ pub struct IndexerMetrics {
     pub get_dynamic_fields_latency: Histogram,
     pub get_dynamic_field_object_latency: Histogram,
     pub get_protocol_config_latency: Histogram,
+    // indexer state metrics
+    pub db_conn_pool_size: IntGauge,
+    pub idle_db_conn: IntGauge,
 }
 
 impl IndexerMetrics {
@@ -352,6 +355,16 @@ impl IndexerMetrics {
                 registry
             )
             .unwrap(),
+            db_conn_pool_size: register_int_gauge_with_registry!(
+                "db_conn_pool_size",
+                "Size of the database connection pool",
+                registry
+            ).unwrap(),
+            idle_db_conn: register_int_gauge_with_registry!(
+                "idle_db_conn",
+                "Number of idle database connections",
+                registry
+            ).unwrap(),
         }
     }
 }
