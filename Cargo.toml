@@ -356,7 +356,7 @@ tabled = { version = "0.12" }
 tap = "1.0.1"
 tempfile = "3.3.0"
 test-fuzz = "3.0.4"
-thiserror = "1.0.40"
+thiserror = "1.0.39"
 tiny-bip39 = "1.0.0"
 tokio = "1.28.1"
 tokio-retry = "0.3"
