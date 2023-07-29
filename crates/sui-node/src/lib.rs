@@ -33,7 +33,7 @@ use tokio::sync::oneshot;
 use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 use tracing::{error_span, info, Instrument};
 
 use checkpoint_executor::CheckpointExecutor;
@@ -91,9 +91,13 @@ use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::discovery::TrustedPeerChangeEvent;
 use sui_network::state_sync;
-use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
+use sui_protocol_config::{Chain, ProtocolConfig, SupportedProtocolVersions};
 use sui_snapshot::uploader::StateSnapshotUploader;
 use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
+use sui_storage::{
+    http_key_value_store::HttpKVStore,
+    key_value_store::{FallbackTransactionKVStore, TransactionKeyValueStore},
+};
 use sui_storage::{FileCompression, IndexStore, StorageFormat};
 use sui_types::base_types::{AuthorityName, EpochId};
 use sui_types::committee::Committee;
@@ -1413,6 +1417,43 @@ fn send_trusted_peer_change(
         })
 }
 
+fn build_kv_store(
+    state: &Arc<AuthorityState>,
+    config: &NodeConfig,
+) -> Result<Arc<dyn TransactionKeyValueStore + Send + Sync>> {
+    let db_store = state.db();
+
+    let base_url = &config.transaction_kv_store_config.base_url;
+
+    if base_url.is_empty() {
+        info!("no http kv store url provided, using local db only");
+        return Ok(db_store);
+    }
+
+    let base_url: url::Url = base_url.parse().tap_err(|e| {
+        error!(
+            "failed to parse config.transaction_kv_store_config.base_url ({:?}) as url: {}",
+            base_url, e
+        )
+    })?;
+
+    let network_str = match state.get_chain_identifier().map(|c| c.chain()) {
+        Some(Chain::Mainnet) => "/mainnet",
+        Some(Chain::Testnet) => "/testnet",
+        _ => {
+            info!("using local db only for kv store for unknown chain");
+            return Ok(db_store);
+        }
+    };
+
+    let base_url = base_url.join(network_str)?.to_string();
+    let http_store = Arc::new(HttpKVStore::new(&base_url)?);
+    info!("using local key-value store with fallback to http key-value store");
+    Ok(Arc::new(FallbackTransactionKVStore::new(
+        db_store, http_store,
+    )))
+}
+
 pub async fn build_server(
     state: Arc<AuthorityState>,
     transaction_orchestrator: &Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
@@ -1428,8 +1469,11 @@ pub async fn build_server(
     let db = state.database.clone();
 
     let mut server = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
+
+    let kv_store = build_kv_store(&state, config)?;
+
     let metrics = Arc::new(JsonRpcMetrics::new(prometheus_registry));
-    server.register_module(ReadApi::new(state.clone(), db.clone(), metrics.clone()))?;
+    server.register_module(ReadApi::new(state.clone(), kv_store, metrics.clone()))?;
     server.register_module(CoinReadApi::new(state.clone(), metrics.clone()))?;
     server.register_module(TransactionBuilderApi::new(state.clone()))?;
     server.register_module(GovernanceReadApi::new(state.clone(), metrics.clone()))?;
