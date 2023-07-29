@@ -1,18 +1,36 @@
-# Dependency graph and an override. This tests if pruning correctly preserves links to D and E
-# despite these dependencies being first visited (during pruned package discovery) on the
-# overridden path (via A2)
+# Dependency graph and an override. This tests if pruning correctly preserves the D->A edge even if
+# A2 is pruned when processing the override in root. It is indeed the case due to how edge removal
+# works in petgraph - removing A2 from the package graph will not remove the outgoing edge from D to
+# A. A pruned package graph for sub-graph B looks as follows when it's beig merged to Root:
 #
-#                                  +----+
-#                            +---->| A2 |-------+
-#                            |     +----+       |
-#                            |                  |
-#                 +----+     |                  |     +----+     +----+
-#           +---->| B  |-----+                  +---->| D  |---->| E  |
-#           |     +----+     |                  |     +----+     +----+
-#           |                |                  |
-# +----+    |                |     +----+       |
-# |Root|----|                +---->| C  |-------+
-# +----+    |                      +----+
+#    package_graph: {
+#        "B": [
+#            (
+#                "C",
+#                Outgoing,
+#            ),
+#        ],
+#        "C": [
+#            (
+#                "B",
+#                Incoming,
+#            ),
+#            (
+#                "A",
+#                Outgoing,
+#            ),
+#        ],
+#    },
+#
+#
+#
+#                 +----+     +----+     +----+
+#           +---->| B  |---->| D  |---->| A2 |
+#           |     +----+     +----+     +----+
+#           |
+# +----+    |
+# |Root|----|
+# +----+    |
 #           |
 #           | ov  +----+
 #           +---->| A1 |
