@@ -37,6 +37,7 @@ module basics::object_basics {
         transfer::public_freeze_object(o)
     }
 
+    #[no_lint]
     public entry fun set_value(o: &mut Object, value: u64) {
         o.value = value;
     }

@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Heading, Text } from '@mysten/ui';
+
 import { Amount, type AmountProps } from '~/ui/Amount';
 import { DateCard } from '~/ui/DateCard';
-import { Heading } from '~/ui/Heading';
-import { Text } from '~/ui/Text';
 
 export interface StatAmountProps extends Omit<AmountProps, 'size'> {
 	dollarAmount?: number;

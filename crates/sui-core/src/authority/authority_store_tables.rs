@@ -10,6 +10,7 @@ use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::TransactionEffects;
+use sui_types::storage::MarkerKind;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
 use typed_store::rocks::{
@@ -118,6 +119,13 @@ pub struct AuthorityPerpetualTables {
     /// This could be non-zero due to bugs in earlier protocol versions.
     /// This number is the result of storage_fund_balance - sum(storage_rebate).
     pub(crate) expected_storage_fund_imbalance: DBMap<(), i64>,
+
+    /// Table that stores the set of received objects and deleted shared objects and the version at
+    /// which they were received. This is used to prevent possible race conditions around receiving
+    /// objects (since they are not locked by the transaction manager) and for tracking shared
+    /// objects that have been deleted. This table is meant to be pruned per-epoch, and all
+    /// previous epochs other than the current epoch may be pruned safely.
+    pub(crate) object_per_epoch_marker_table: DBMap<(EpochId, ObjectKey, MarkerKind), ()>,
 }
 
 impl AuthorityPerpetualTables {
@@ -205,7 +213,28 @@ impl AuthorityPerpetualTables {
         Ok(obj_ref)
     }
 
-    pub fn get_object_or_tombstone(
+    pub fn tombstone_reference(
+        &self,
+        object_key: &ObjectKey,
+        store_object: &StoreObjectWrapper,
+    ) -> Result<Option<ObjectRef>, SuiError> {
+        let obj_ref = match store_object.inner() {
+            StoreObject::Deleted => Some((
+                object_key.0,
+                object_key.1,
+                ObjectDigest::OBJECT_DIGEST_DELETED,
+            )),
+            StoreObject::Wrapped => Some((
+                object_key.0,
+                object_key.1,
+                ObjectDigest::OBJECT_DIGEST_WRAPPED,
+            )),
+            _ => None,
+        };
+        Ok(obj_ref)
+    }
+
+    pub fn get_latest_object_ref_or_tombstone(
         &self,
         object_id: ObjectID,
     ) -> Result<Option<ObjectRef>, SuiError> {
@@ -217,6 +246,23 @@ impl AuthorityPerpetualTables {
         if let Some((object_key, value)) = iterator.next() {
             if object_key.0 == object_id {
                 return Ok(Some(self.object_reference(&object_key, value)?));
+            }
+        }
+        Ok(None)
+    }
+
+    pub fn get_latest_object_or_tombstone(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<Option<(ObjectKey, StoreObjectWrapper)>, SuiError> {
+        let mut iterator = self
+            .objects
+            .unbounded_iter()
+            .skip_prior_to(&ObjectKey::max_for_id(&object_id))?;
+
+        if let Some((object_key, value)) = iterator.next() {
+            if object_key.0 == object_id {
+                return Ok(Some((object_key, value)));
             }
         }
         Ok(None)
@@ -351,7 +397,7 @@ impl AuthorityPerpetualTables {
             &(object.0, object.1, ObjectDigest::MIN),
             &(object.0, object.1, ObjectDigest::MAX),
         )?;
-        let object_ref = self.get_object_or_tombstone(object.0)?.unwrap();
+        let object_ref = self.get_latest_object_ref_or_tombstone(object.0)?.unwrap();
         wb.insert_batch(&self.owned_object_transaction_locks, [(object_ref, None)])?;
         Ok(object_ref)
     }
@@ -391,17 +437,18 @@ impl AuthorityPerpetualTables {
 
     pub fn reset_db_for_execution_since_genesis(&self) -> SuiResult {
         // TODO: Add new tables that get added to the db automatically
-        self.objects.clear()?;
-        self.indirect_move_objects.clear()?;
-        self.owned_object_transaction_locks.clear()?;
-        self.executed_effects.clear()?;
-        self.events.clear()?;
-        self.executed_transactions_to_checkpoint.clear()?;
-        self.root_state_hash_by_epoch.clear()?;
-        self.epoch_start_configuration.clear()?;
-        self.pruned_checkpoint.clear()?;
-        self.expected_network_sui_amount.clear()?;
-        self.expected_storage_fund_imbalance.clear()?;
+        self.objects.unsafe_clear()?;
+        self.indirect_move_objects.unsafe_clear()?;
+        self.owned_object_transaction_locks.unsafe_clear()?;
+        self.executed_effects.unsafe_clear()?;
+        self.events.unsafe_clear()?;
+        self.executed_transactions_to_checkpoint.unsafe_clear()?;
+        self.root_state_hash_by_epoch.unsafe_clear()?;
+        self.epoch_start_configuration.unsafe_clear()?;
+        self.pruned_checkpoint.unsafe_clear()?;
+        self.expected_network_sui_amount.unsafe_clear()?;
+        self.expected_storage_fund_imbalance.unsafe_clear()?;
+        self.object_per_epoch_marker_table.unsafe_clear()?;
         self.objects
             .rocksdb
             .flush()
@@ -579,7 +626,6 @@ fn objects_table_default_config() -> DBOptions {
 fn transactions_table_default_config() -> DBOptions {
     default_db_options()
         .optimize_for_write_throughput()
-        .optimize_for_large_values_no_scan(4 << 10)
         .optimize_for_point_lookup(
             read_size_from_env(ENV_VAR_TRANSACTIONS_BLOCK_CACHE_SIZE).unwrap_or(512),
         )
@@ -588,7 +634,6 @@ fn transactions_table_default_config() -> DBOptions {
 fn effects_table_default_config() -> DBOptions {
     default_db_options()
         .optimize_for_write_throughput()
-        .optimize_for_large_values_no_scan(4 << 10)
         .optimize_for_point_lookup(
             read_size_from_env(ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE).unwrap_or(1024),
         )
@@ -597,7 +642,6 @@ fn effects_table_default_config() -> DBOptions {
 fn events_table_default_config() -> DBOptions {
     default_db_options()
         .optimize_for_write_throughput()
-        .optimize_for_large_values_no_scan(4 << 10)
         .optimize_for_read(read_size_from_env(ENV_VAR_EVENTS_BLOCK_CACHE_SIZE).unwrap_or(1024))
 }
 

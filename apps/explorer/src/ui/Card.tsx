@@ -4,13 +4,14 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { type ReactNode } from 'react';
 
-const cardStyles = cva(null, {
+const cardStyles = cva('overflow-hidden', {
 	variants: {
 		bg: {
 			default: 'bg-gray-40',
 			highlight: 'bg-success-light',
 			lightBlue: 'bg-sui/10',
 			white: 'bg-white',
+			'white/80': 'bg-white/80',
 		},
 		height: {
 			full: 'h-full',
@@ -24,14 +25,18 @@ const cardStyles = cva(null, {
 			none: '',
 			sm: 'px-5 py-4',
 			md: 'p-5',
-			lg: 'p-6 sm:p-8',
+			lg: 'p-6',
+			lgGraph: 'p-6 pb-4',
 		},
 		border: {
 			gray45: 'border border-gray-45',
 			steel: 'border border-steel',
 		},
 		shadow: {
-			true: 'shadow',
+			true: 'shadow-cardSoft',
+		},
+		growOnHover: {
+			true: 'hover:scale-101 ease-in-out duration-200',
 		},
 	},
 	defaultVariants: {
@@ -45,7 +50,16 @@ export interface CardProps extends VariantProps<typeof cardStyles> {
 	children?: ReactNode;
 }
 
-export function Card({ spacing, rounded, bg, border, shadow, children, height }: CardProps) {
+export function Card({
+	spacing,
+	rounded,
+	bg,
+	border,
+	shadow,
+	children,
+	height,
+	growOnHover,
+}: CardProps) {
 	return (
 		<div
 			className={cardStyles({
@@ -55,6 +69,7 @@ export function Card({ spacing, rounded, bg, border, shadow, children, height }:
 				border,
 				shadow,
 				height,
+				growOnHover,
 			})}
 		>
 			{children}

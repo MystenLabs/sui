@@ -1,29 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Disclosure } from '@headlessui/react';
 import {
 	ObjectChangeLabels,
 	type SuiObjectChangeWithDisplay,
 	type ObjectChangesByOwner,
 	type ObjectChangeSummary,
 	type SuiObjectChangeTypes,
+	useResolveSuiNSName,
 } from '@mysten/core';
 import { ChevronRight12 } from '@mysten/icons';
 import {
 	type SuiObjectChangePublished,
 	type SuiObjectChange,
 	type DisplayFieldsResponse,
-	parseStructTag,
-} from '@mysten/sui.js';
+} from '@mysten/sui.js/client';
+import { parseStructTag } from '@mysten/sui.js/utils';
+import { Text } from '@mysten/ui';
+import * as Collapsible from '@radix-ui/react-collapsible';
 import clsx from 'clsx';
-import { type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { ObjectDisplay } from './ObjectDisplay';
-
 import { ExpandableList, ExpandableListControl, ExpandableListItems } from '~/ui/ExpandableList';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
-import { Text } from '~/ui/Text';
 import { TransactionBlockCard, TransactionBlockCardSection } from '~/ui/TransactionBlockCard';
 
 enum ItemLabels {
@@ -78,33 +78,26 @@ function ObjectDetailPanel({
 	panelContent: ReactNode;
 	headerContent?: ReactNode;
 }) {
+	const [open, setOpen] = useState(false);
 	return (
-		<div>
-			<Disclosure>
-				{({ open }) => (
-					<>
-						<div className="flex flex-wrap items-center justify-between">
-							<Disclosure.Button>
-								<div className="flex items-center gap-0.5">
-									<Text variant="pBody/medium" color="steel-dark">
-										Object
-									</Text>
+		<Collapsible.Root open={open} onOpenChange={setOpen}>
+			<div className="flex flex-wrap items-center justify-between">
+				<Collapsible.Trigger>
+					<div className="flex items-center gap-0.5">
+						<Text variant="pBody/medium" color="steel-dark">
+							Object
+						</Text>
 
-									<ChevronRight12
-										className={clsx('h-3 w-3 text-steel-dark', open && 'rotate-90')}
-									/>
-								</div>
-							</Disclosure.Button>
-							{headerContent}
-						</div>
+						<ChevronRight12 className={clsx('h-3 w-3 text-steel-dark', open && 'rotate-90')} />
+					</div>
+				</Collapsible.Trigger>
+				{headerContent}
+			</div>
 
-						<Disclosure.Panel>
-							<div className="flex flex-col gap-2">{panelContent}</div>
-						</Disclosure.Panel>
-					</>
-				)}
-			</Disclosure>
-		</div>
+			<Collapsible.Content>
+				<div className="flex flex-col gap-2">{panelContent}</div>
+			</Collapsible.Content>
+		</Collapsible.Root>
 	);
 }
 
@@ -241,6 +234,32 @@ interface ObjectChangeEntriesCardsProps {
 	type: SuiObjectChangeTypes;
 }
 
+function ObjectChangeEntriesCardFooter({
+	ownerType,
+	ownerAddress,
+}: {
+	ownerType: string;
+	ownerAddress: string;
+}) {
+	const { data: suinsDomainName } = useResolveSuiNSName(ownerAddress);
+
+	return (
+		<div className="flex flex-wrap items-center justify-between">
+			<Text variant="pBody/medium" color="steel-dark">
+				Owner
+			</Text>
+
+			{ownerType === 'AddressOwner' && (
+				<AddressLink label={suinsDomainName || undefined} address={ownerAddress} />
+			)}
+
+			{ownerType === 'ObjectOwner' && <ObjectLink objectId={ownerAddress} />}
+
+			{ownerType === 'Shared' && <ObjectLink objectId={ownerAddress} label="Shared" />}
+		</div>
+	);
+}
+
 export function ObjectChangeEntriesCards({ data, type }: ObjectChangeEntriesCardsProps) {
 	if (!data) return null;
 
@@ -256,19 +275,10 @@ export function ObjectChangeEntriesCards({ data, type }: ObjectChangeEntriesCard
 						shadow
 						footer={
 							renderFooter && (
-								<div className="flex flex-wrap items-center justify-between">
-									<Text variant="pBody/medium" color="steel-dark">
-										Owner
-									</Text>
-
-									{changes.ownerType === 'AddressOwner' && <AddressLink address={ownerAddress} />}
-
-									{changes.ownerType === 'ObjectOwner' && <ObjectLink objectId={ownerAddress} />}
-
-									{changes.ownerType === 'Shared' && (
-										<ObjectLink objectId={ownerAddress} label="Shared" />
-									)}
-								</div>
+								<ObjectChangeEntriesCardFooter
+									ownerType={changes.ownerType}
+									ownerAddress={ownerAddress}
+								/>
 							)
 						}
 					>

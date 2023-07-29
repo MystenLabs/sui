@@ -2,19 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetDynamicFieldObject, useGetNormalizedMoveStruct } from '@mysten/core';
-import { getObjectFields, getObjectType } from '@mysten/sui.js';
+import { LoadingIndicator } from '@mysten/ui';
 
 import { FieldItem } from './FieldItem';
-
 import { Banner } from '~/ui/Banner';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
+
+import type { DynamicFieldName } from '@mysten/sui.js/client';
 
 interface UnderlyingObjectCardProps {
 	parentId: string;
-	name: {
-		type: string;
-		value?: string;
-	};
+	name: DynamicFieldName;
 	dynamicFieldType: 'DynamicField' | 'DynamicObject';
 }
 
@@ -24,7 +21,10 @@ export function UnderlyingObjectCard({
 	dynamicFieldType,
 }: UnderlyingObjectCardProps) {
 	const { data, isLoading, isError, isFetched } = useGetDynamicFieldObject(parentId, name);
-	const objectType = data ? getObjectType(data!) : null;
+	const objectType =
+		data?.data?.type ??
+		(data?.data?.content?.dataType === 'package' ? 'package' : data?.data?.content?.type) ??
+		null;
 	// Get the packageId, moduleName, functionName from the objectType
 	const [packageId, moduleName, functionName] = objectType?.split('<')[0]?.split('::') || [];
 
@@ -56,18 +56,20 @@ export function UnderlyingObjectCard({
 	if (isLoading || loadingNormalizedStruct) {
 		return (
 			<div className="mt-3 flex w-full justify-center pt-3">
-				<LoadingSpinner text="Loading data" />
+				<LoadingIndicator text="Loading data" />
 			</div>
 		);
 	}
 
-	const fieldsData = getObjectFields(data);
+	const fieldsData =
+		data.data?.content?.dataType === 'moveObject' ? data.data?.content.fields : null;
 	// Return null if there are no fields
 	if (!fieldsData || !normalizedStruct?.fields || !objectType) {
 		return null;
 	}
 	// For dynamicObject type show the entire object
-	const fieldData = dynamicFieldType === 'DynamicObject' ? fieldsData : fieldsData?.value;
+	const fieldData =
+		dynamicFieldType === 'DynamicObject' ? fieldsData : (fieldsData as { value?: unknown })?.value;
 
 	const dynamicFieldsData =
 		// show name if it is a struct
@@ -75,7 +77,7 @@ export function UnderlyingObjectCard({
 
 	return (
 		<FieldItem
-			value={dynamicFieldsData}
+			value={dynamicFieldsData as string}
 			objectType={objectType}
 			// add the struct type to the value
 			type={normalizedStruct?.fields.find((field) => field.name === 'value')?.type || ''}

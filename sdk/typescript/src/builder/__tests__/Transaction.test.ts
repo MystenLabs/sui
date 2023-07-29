@@ -3,8 +3,8 @@
 
 import { toB58 } from '@mysten/bcs';
 import { describe, it, expect } from 'vitest';
-import { TransactionBlock, Transactions, builder } from '..';
-import { Inputs } from '../Inputs';
+import { TransactionBlock, Transactions, builder } from '../index.js';
+import { Inputs } from '../Inputs.js';
 
 it('can construct and serialize an empty tranaction', () => {
 	const tx = new TransactionBlock();

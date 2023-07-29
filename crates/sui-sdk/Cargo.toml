@@ -7,47 +7,43 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.64"
-async-trait = "0.1.61"
-clap = { version = "3.2.17", features = ["derive"] }
-colored = "2.0.0"
-jsonrpsee = { git="https://github.com/wlmyng/jsonrpsee.git", rev= "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = ["http-client"] }
-serde = { version = "1.0.144", features = ["derive"] }
-serde_with = { version = "2.1.0", features = ["hex"] }
-serde_json = "1.0.88"
-futures-core = "0.3.21"
-futures = "0.3.23"
-tokio = { workspace = true }
-bcs = "0.1.4"
-thiserror = "1.0.37"
+anyhow.workspace = true
+async-trait.workspace = true
+clap.workspace = true
+colored.workspace = true
+jsonrpsee.workspace = true
+serde.workspace = true
+serde_with.workspace = true
+serde_json.workspace = true
+futures-core.workspace = true
+futures.workspace = true
+tokio.workspace = true
+bcs.workspace = true
+thiserror.workspace = true
 
-sui-swarm-config = { path = "../sui-swarm-config" }
-sui-json-rpc = { path = "../sui-json-rpc" }
-sui-test-transaction-builder = { path = "../sui-test-transaction-builder" }
-sui-transaction-builder = { path = "../sui-transaction-builder" }
-sui-json-rpc-types = { path = "../sui-json-rpc-types" }
-sui-types = { path = "../sui-types" }
-sui-json = { path = "../sui-json" }
-sui-keys = { path = "../sui-keys" }
-sui-config = { path = "../sui-config" }
-shared-crypto = { path = "../shared-crypto" }
-tracing = "0.1.36"
+sui-swarm-config.workspace = true
+sui-json-rpc.workspace = true
+sui-transaction-builder.workspace = true
+sui-json-rpc-types.workspace = true
+sui-types.workspace = true
+sui-json.workspace = true
+sui-keys.workspace = true
+sui-config.workspace = true
+shared-crypto.workspace = true
+tracing.workspace = true
 
 move-core-types.workspace = true
 
 fastcrypto.workspace = true
-
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-clap = { version = "3.2.17", features = ["derive"] }
-dirs = "4.0.0"
-async-recursion = "1.0.0"
-tempfile = "3.3.0"
-test-utils = { path = "../test-utils" }
-futures-core = "0.3.21"
-futures = "0.3.23"
-sui = { path = "../sui" }
+clap.workspace = true
+dirs.workspace = true
+async-recursion.workspace = true
+tempfile.workspace = true
+futures-core.workspace = true
+futures.workspace = true
 
 [[example]]
 name = "tic-tac-toe"

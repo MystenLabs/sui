@@ -107,8 +107,7 @@ impl TicTacToe {
                     create_game_call,
                     Intent::sui_transaction(),
                     vec![signature],
-                )
-                .verify()?,
+                ),
                 SuiTransactionBlockResponseOptions::full_content(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
@@ -212,8 +211,7 @@ impl TicTacToe {
                         place_mark_call,
                         Intent::sui_transaction(),
                         vec![signature],
-                    )
-                    .verify()?,
+                    ),
                     SuiTransactionBlockResponseOptions::new().with_effects(),
                     Some(ExecuteTransactionRequestType::WaitForLocalExecution),
                 )

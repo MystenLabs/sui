@@ -72,6 +72,8 @@ impl ReplayFuzzer {
                 &base_transaction,
                 config.expensive_safety_check_config.clone(),
                 false,
+                None,
+                None,
             )
             .await?;
 

@@ -6,8 +6,7 @@ use crate::LocalNarwhalClient;
 use crate::{metrics::initialise_metrics, TrivialTransactionValidator};
 use async_trait::async_trait;
 use bytes::Bytes;
-use consensus::consensus::ConsensusRound;
-use consensus::{dag::Dag, metrics::ConsensusMetrics};
+use consensus::consensus::{ConsensusRound, LeaderSchedule, LeaderSwapTable};
 use fastcrypto::{
     encoding::{Encoding, Hex},
     hash::Hash,
@@ -395,13 +394,12 @@ async fn get_network_peers_from_admin_server() {
     // Make the data store.
     let store = NodeStorage::reopen(temp_dir(), None);
 
-    let (tx_new_certificates, rx_new_certificates) =
+    let (tx_new_certificates, _rx_new_certificates) =
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) = test_utils::test_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::default());
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
-    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 1
     Primary::spawn(
@@ -421,19 +419,10 @@ async fn get_network_peers_from_admin_server() {
         tx_new_certificates,
         rx_feedback,
         rx_consensus_round_updates,
-        /* dag */
-        Some(Arc::new(
-            Dag::new(
-                &committee,
-                rx_new_certificates,
-                consensus_metrics,
-                tx_shutdown.subscribe(),
-            )
-            .1,
-        )),
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     // Wait for tasks to start
@@ -519,14 +508,13 @@ async fn get_network_peers_from_admin_server() {
         ..Parameters::default()
     };
 
-    let (tx_new_certificates_2, rx_new_certificates_2) =
+    let (tx_new_certificates_2, _rx_new_certificates_2) =
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) = test_utils::test_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
-    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
     Primary::spawn(
@@ -546,19 +534,10 @@ async fn get_network_peers_from_admin_server() {
         tx_new_certificates_2,
         rx_feedback_2,
         rx_consensus_round_updates,
-        /* dag */
-        Some(Arc::new(
-            Dag::new(
-                &committee,
-                rx_new_certificates_2,
-                consensus_metrics,
-                tx_shutdown.subscribe(),
-            )
-            .1,
-        )),
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     // Wait for tasks to start

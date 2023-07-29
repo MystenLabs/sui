@@ -12,18 +12,6 @@ expression: params
   "sync_retry_nodes": 3,
   "batch_size": 500000,
   "max_batch_delay": "100ms",
-  "block_synchronizer": {
-    "range_synchronize_timeout": "30000ms",
-    "certificates_synchronize_timeout": "2000ms",
-    "payload_synchronize_timeout": "3000ms",
-    "payload_availability_timeout": "4000ms",
-    "handler_certificate_deliver_timeout": "30000ms"
-  },
-  "consensus_api_grpc": {
-    "socket_addr": "/ip4/127.0.0.1/tcp/0/http",
-    "get_collections_timeout": "5000ms",
-    "remove_collections_timeout": "5000ms"
-  },
   "max_concurrent_requests": 500000,
   "prometheus_metrics": {
     "socket_addr": "/ip4/127.0.0.1/tcp/0/http"
@@ -34,9 +22,7 @@ expression: params
   },
   "anemo": {
     "send_certificate_rate_limit": null,
-    "get_payload_availability_rate_limit": null,
-    "get_certificates_rate_limit": null,
     "report_batch_rate_limit": null,
-    "request_batch_rate_limit": null
+    "request_batches_rate_limit": null
   }
 }

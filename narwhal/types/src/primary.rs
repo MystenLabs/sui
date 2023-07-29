@@ -4,16 +4,13 @@
 use crate::{
     error::{DagError, DagResult},
     serde::NarwhalBitmap,
-    CertificateDigestProto,
 };
-use bytes::Bytes;
 use config::{AuthorityIdentifier, Committee, Epoch, Stake, WorkerCache, WorkerId, WorkerInfo};
 use crypto::{
     to_intent_message, AggregateSignature, AggregateSignatureBytes,
     NarwhalAuthorityAggregateSignature, NarwhalAuthoritySignature, NetworkPublicKey, PublicKey,
     Signature,
 };
-use dag::node_dag::Affiliated;
 use derive_builder::Builder;
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{
@@ -149,12 +146,7 @@ pub enum Batch {
 
 impl Batch {
     pub fn new(transactions: Vec<Transaction>, protocol_config: &ProtocolConfig) -> Self {
-        // TODO: Remove once we have upgraded to protocol version 12.
-        if protocol_config.narwhal_versioned_metadata() {
-            Self::V2(BatchV2::new(transactions, protocol_config))
-        } else {
-            Self::V1(BatchV1::new(transactions))
-        }
+        Self::V2(BatchV2::new(transactions, protocol_config))
     }
 
     pub fn size(&self) -> usize {
@@ -280,33 +272,23 @@ impl BatchV2 {
     }
 }
 
-// TODO: Remove once we have upgraded to protocol version 12.
+// TODO: Remove once we have removed BatchV1 from the codebase.
 pub fn validate_batch_version(
     batch: &Batch,
     protocol_config: &ProtocolConfig,
 ) -> anyhow::Result<()> {
-    // If network has advanced to using version 12, which sets narwhal_versioned_metadata
-    // to true, we will start using BatchV2 locally and so we will only accept
-    // BatchV2 from the network. Otherwise BatchV1 is used.
+    // We will only accept BatchV2 from the network.
     match batch {
         Batch::V1(_) => {
-            if protocol_config.narwhal_versioned_metadata() {
-                return Err(anyhow::anyhow!(format!(
+            Err(anyhow::anyhow!(format!(
                     "Received {batch:?} but network is at {:?} and this batch version is no longer supported",
                     protocol_config.version
-                )));
-            }
+                )))
         }
         Batch::V2(_) => {
-            if !protocol_config.narwhal_versioned_metadata() {
-                return Err(anyhow::anyhow!(format!(
-                    "Received {batch:?} but network is at {:?} and this batch version is not supported yet",
-                    protocol_config.version
-                )));
-            }
+            Ok(())
         }
-    };
-    Ok(())
+    }
 }
 
 #[derive(
@@ -344,6 +326,12 @@ impl fmt::Display for BatchDigest {
 impl From<BatchDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
     fn from(digest: BatchDigest) -> Self {
         Digest::new(digest.0)
+    }
+}
+
+impl AsRef<[u8]> for BatchDigest {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
     }
 }
 
@@ -1211,13 +1199,6 @@ impl From<CertificateDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
         Digest::new(hd.0)
     }
 }
-impl From<CertificateDigest> for CertificateDigestProto {
-    fn from(hd: CertificateDigest) -> Self {
-        CertificateDigestProto {
-            digest: Bytes::from(hd.0.to_vec()),
-        }
-    }
-}
 
 impl fmt::Debug for CertificateDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
@@ -1277,23 +1258,6 @@ impl PartialEq for CertificateV1 {
     }
 }
 
-impl Affiliated for Certificate {
-    fn parents(&self) -> Vec<<Self as Hash<{ crypto::DIGEST_LENGTH }>>::TypedDigest> {
-        match self {
-            Certificate::V1(data) => data.header().parents().iter().cloned().collect(),
-        }
-    }
-
-    // This makes the genesis certificate and empty blocks compressible,
-    // so that they will never be reported by a DAG walk
-    // (`read_causal`, `node_read_causal`).
-    fn compressible(&self) -> bool {
-        match self {
-            Certificate::V1(data) => data.header().payload().is_empty(),
-        }
-    }
-}
-
 /// Request for broadcasting certificates to peers.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SendCertificateRequest {
@@ -1323,18 +1287,6 @@ pub struct RequestVoteResponse {
 
     // Indicates digests of missing certificates without which a vote cannot be provided.
     pub missing: Vec<CertificateDigest>,
-}
-
-/// Used by the primary to get specific certificates from other primaries.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct GetCertificatesRequest {
-    pub digests: Vec<CertificateDigest>,
-}
-
-/// Used by the primary to reply to GetCertificatesRequest.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct GetCertificatesResponse {
-    pub certificates: Vec<Certificate>,
 }
 
 /// Used by the primary to fetch certificates from other primaries.
@@ -1413,25 +1365,6 @@ pub struct FetchCertificatesResponse {
     pub certificates: Vec<Certificate>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct PayloadAvailabilityRequest {
-    pub certificate_digests: Vec<CertificateDigest>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct PayloadAvailabilityResponse {
-    pub payload_availability: Vec<(CertificateDigest, bool)>,
-}
-
-impl PayloadAvailabilityResponse {
-    pub fn available_certificates(&self) -> Vec<CertificateDigest> {
-        self.payload_availability
-            .iter()
-            .filter_map(|(digest, available)| available.then_some(*digest))
-            .collect()
-    }
-}
-
 /// Used by the primary to request that the worker sync the target missing batches.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WorkerSynchronizeMessage {
@@ -1455,12 +1388,6 @@ pub struct FetchBatchesRequest {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FetchBatchesResponse {
     pub batches: HashMap<BatchDigest, Batch>,
-}
-
-/// Used by the primary to request that the worker delete the specified batches.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct WorkerDeleteBatchesMessage {
-    pub digests: Vec<BatchDigest>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1505,15 +1432,6 @@ impl fmt::Display for BlockErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
     }
-}
-
-// TODO: Remove once we have upgraded to protocol version 12.
-/// Used by worker to inform primary it sealed a new batch.
-#[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]
-pub struct WorkerOurBatchMessage {
-    pub digest: BatchDigest,
-    pub worker_id: WorkerId,
-    pub metadata: Metadata,
 }
 
 /// Used by worker to inform primary it sealed a new batch.
@@ -1594,30 +1512,13 @@ impl From<&Vote> for VoteInfo {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        Batch, BatchAPI, BatchV1, BatchV2, Metadata, MetadataAPI, MetadataV1, Timestamp,
-        VersionedMetadata,
-    };
+    use crate::{Batch, BatchAPI, BatchV2, MetadataAPI, MetadataV1, Timestamp, VersionedMetadata};
     use std::time::Duration;
-    use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
     use test_utils::latest_protocol_version;
     use tokio::time::sleep;
 
     #[tokio::test]
     async fn test_elapsed() {
-        // TODO: Remove once we have upgraded to protocol version 12.
-        // BatchV1
-        let batch = Batch::new(
-            vec![],
-            &ProtocolConfig::get_for_version(ProtocolVersion::new(11), Chain::Unknown),
-        );
-        assert!(batch.metadata().created_at > 0);
-
-        sleep(Duration::from_secs(2)).await;
-
-        assert!(batch.metadata().created_at.elapsed().as_secs_f64() >= 2.0);
-
-        // BatchV2
         let batch = Batch::new(vec![], &latest_protocol_version());
 
         assert!(*batch.versioned_metadata().created_at() > 0);
@@ -1638,18 +1539,6 @@ mod tests {
 
     #[test]
     fn test_elapsed_when_newer_than_now() {
-        // TODO: Remove once we have upgraded to protocol version 12.
-        // BatchV1
-        let batch = Batch::V1(BatchV1 {
-            transactions: vec![],
-            metadata: Metadata {
-                created_at: 2999309726980, // something in the future - Fri Jan 16 2065 05:35:26
-            },
-        });
-
-        assert_eq!(batch.metadata().created_at.elapsed().as_secs_f64(), 0.0);
-
-        // BatchV2
         let batch = Batch::V2(BatchV2 {
             transactions: vec![],
             versioned_metadata: VersionedMetadata::V1(MetadataV1 {

@@ -3,6 +3,7 @@
 
 /* tslint:disable */
 /* eslint-disable */
+// @ts-nocheck
 /**
  * Ampli - A strong typed wrapper for your Analytics
  *
@@ -65,6 +66,128 @@ export type LoadOptions =
 	| LoadOptionsWithEnvironment
 	| LoadOptionsWithApiKey
 	| LoadOptionsWithClientInstance;
+
+export interface IdentifyProperties {
+	/**
+	 * The Sui network that the user is currently interacting with.
+	 */
+	activeNetwork: string;
+	/**
+	 * The domain (e.g., suiexplorer.com) of a given page.
+	 */
+	pageDomain: string;
+	/**
+	 * The path (e.g., /validators) of a given page.
+	 */
+	pagePath: string;
+	/**
+	 * The full URL (e.g., suiexplorer.com/validators) of a given page.
+	 */
+	pageUrl: string;
+}
+
+export interface ActivatedTooltipProperties {
+	tooltipLabel: string;
+}
+
+export interface ClickedCurrentEpochCardProperties {
+	/**
+	 * An epoch or period of time.
+	 *
+	 * | Rule | Value |
+	 * |---|---|
+	 * | Type | integer |
+	 */
+	epoch: number;
+}
+
+export interface ClickedSearchResultProperties {
+	searchCategory: string;
+	searchQuery: string;
+}
+
+export interface ClickedValidatorRowProperties {
+	/**
+	 * The source flow where the user came from.
+	 */
+	sourceFlow: string;
+	/**
+	 * The address of a validator.
+	 */
+	validatorAddress: string;
+	/**
+	 * The name of a validator.
+	 */
+	validatorName: string;
+}
+
+export interface CompletedSearchProperties {
+	searchQuery: string;
+}
+
+export interface SwitchedNetworkProperties {
+	toNetwork: string;
+}
+
+export class Identify implements BaseEvent {
+	event_type = amplitude.Types.SpecialEventType.IDENTIFY;
+
+	constructor(public event_properties: IdentifyProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
+export class ActivatedTooltip implements BaseEvent {
+	event_type = 'activated tooltip';
+
+	constructor(public event_properties: ActivatedTooltipProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
+export class ClickedCurrentEpochCard implements BaseEvent {
+	event_type = 'clicked current epoch card';
+
+	constructor(public event_properties: ClickedCurrentEpochCardProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
+export class ClickedSearchResult implements BaseEvent {
+	event_type = 'clicked search result';
+
+	constructor(public event_properties: ClickedSearchResultProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
+export class ClickedValidatorRow implements BaseEvent {
+	event_type = 'clicked validator row';
+
+	constructor(public event_properties: ClickedValidatorRowProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
+export class CompletedSearch implements BaseEvent {
+	event_type = 'completed search';
+
+	constructor(public event_properties: CompletedSearchProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
+export class OpenedSuiExplorer implements BaseEvent {
+	event_type = 'opened sui explorer';
+}
+
+export class SwitchedNetwork implements BaseEvent {
+	event_type = 'switched network';
+
+	constructor(public event_properties: SwitchedNetworkProperties) {
+		this.event_properties = event_properties;
+	}
+}
 
 export type PromiseResult<T> = { promise: Promise<T | void> };
 
@@ -129,10 +252,12 @@ export class Ampli {
    * Identify a user and set user properties.
    *
    * @param userId The user's id.
+   * @param properties The user properties.
    * @param options Optional event options.
    */
   identify(
     userId: string | undefined,
+    properties: IdentifyProperties,
     options?: EventOptions,
   ): PromiseResult<Result> {
     if (!this.isInitializedAndEnabled()) {
@@ -144,6 +269,12 @@ export class Ampli {
     }
 
     const amplitudeIdentify = new amplitude.Identify();
+    const eventProperties = properties;
+    if (eventProperties != null) {
+      for (const [key, value] of Object.entries(eventProperties)) {
+        amplitudeIdentify.set(key, value);
+      }
+    }
     return this.amplitude!.identify(
       amplitudeIdentify,
       options,
@@ -164,6 +295,136 @@ export class Ampli {
     return this.amplitude!.track(event, undefined, options);
   }
 
+  /**
+   * activated tooltip
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Explorer/events/main/latest/activated%20tooltip)
+   *
+   * When users activate or open a tooltip in the application.
+   *
+   * Owner: William Robertson
+   *
+   * @param properties The event's properties (e.g. tooltipLabel)
+   * @param options Amplitude event options.
+   */
+  activatedTooltip(
+    properties: ActivatedTooltipProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new ActivatedTooltip(properties), options);
+  }
+
+  /**
+   * clicked current epoch card
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Explorer/events/main/latest/clicked%20current%20epoch%20card)
+   *
+   * When users click the current epoch card on the home page.
+   *
+   * Owner: William Robertson
+   *
+   * @param properties The event's properties (e.g. epoch)
+   * @param options Amplitude event options.
+   */
+  clickedCurrentEpochCard(
+    properties: ClickedCurrentEpochCardProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new ClickedCurrentEpochCard(properties), options);
+  }
+
+  /**
+   * clicked search result
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Explorer/events/main/latest/clicked%20search%20result)
+   *
+   * When users click a search result within the search bar.
+   *
+   * Owner: William Robertson
+   *
+   * @param properties The event's properties (e.g. searchCategory)
+   * @param options Amplitude event options.
+   */
+  clickedSearchResult(
+    properties: ClickedSearchResultProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new ClickedSearchResult(properties), options);
+  }
+
+  /**
+   * clicked validator row
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Explorer/events/main/latest/clicked%20validator%20row)
+   *
+   * When users click a validator list item in a table.
+   *
+   * Owner: William Robertson
+   *
+   * @param properties The event's properties (e.g. sourceFlow)
+   * @param options Amplitude event options.
+   */
+  clickedValidatorRow(
+    properties: ClickedValidatorRowProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new ClickedValidatorRow(properties), options);
+  }
+
+  /**
+   * completed search
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Explorer/events/main/latest/completed%20search)
+   *
+   * When users successfully search for something.
+   *
+   * Owner: William Robertson
+   *
+   * @param properties The event's properties (e.g. searchQuery)
+   * @param options Amplitude event options.
+   */
+  completedSearch(
+    properties: CompletedSearchProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new CompletedSearch(properties), options);
+  }
+
+  /**
+   * opened sui explorer
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Explorer/events/main/latest/opened%20sui%20explorer)
+   *
+   * When users first open Sui Explorer.
+   *
+   * Owner: William Robertson
+   *
+   * @param options Amplitude event options.
+   */
+  openedSuiExplorer(
+    options?: EventOptions,
+  ) {
+    return this.track(new OpenedSuiExplorer(), options);
+  }
+
+  /**
+   * switched network
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Explorer/events/main/latest/switched%20network)
+   *
+   * When users switch from one network to another.
+   *
+   * Owner: William Robertson
+   *
+   * @param properties The event's properties (e.g. toNetwork)
+   * @param options Amplitude event options.
+   */
+  switchedNetwork(
+    properties: SwitchedNetworkProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new SwitchedNetwork(properties), options);
+  }
 }
 
 export const ampli = new Ampli();

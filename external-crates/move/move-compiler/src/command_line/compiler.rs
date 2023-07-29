@@ -7,14 +7,21 @@ use crate::{
     command_line::{DEFAULT_OUTPUT_DIR, MOVE_COMPILED_INTERFACES_DIR},
     compiled_unit,
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::{codes::Severity, *},
-    expansion, hlir, interface_generator, naming, parser,
+    diagnostics::{
+        codes::{Severity, WarningFilter},
+        *,
+    },
+    expansion,
+    expansion::ast as E,
+    hlir, interface_generator, naming, parser,
     parser::{comments::*, *},
     shared::{
         CompilationEnv, Flags, IndexedPackagePath, NamedAddressMap, NamedAddressMaps,
-        NumericalAddress, PackagePaths,
+        NumericalAddress, PackageConfig, PackagePaths,
     },
-    to_bytecode, typing, unit_test, verification,
+    to_bytecode,
+    typing::{self, visitor::TypingVisitorObj},
+    unit_test, verification,
 };
 use move_command_line_common::files::{
     extension_equals, find_filenames, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
@@ -22,7 +29,7 @@ use move_command_line_common::files::{
 use move_core_types::language_storage::ModuleId as CompiledModuleId;
 use move_symbol_pool::Symbol;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs,
     fs::File,
     io::{Read, Write},
@@ -34,6 +41,16 @@ use tempfile::NamedTempFile;
 // Definitions
 //**************************************************************************************************
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct KnownFiltersInfo {
+    /// An name that identifies attribute used for filtering (e.g. "allow" in
+    /// #[allow(unused_function)].
+    filter_attr_name: expansion::ast::AttributeName_,
+    /// A list of known warning filters that can be suppressed by the compiler suppression warning
+    /// system.
+    filters: Vec<WarningFilter>,
+}
+
 pub struct Compiler<'a> {
     maps: NamedAddressMaps,
     targets: Vec<IndexedPackagePath>,
@@ -43,7 +60,11 @@ pub struct Compiler<'a> {
     compiled_module_named_address_mapping: BTreeMap<CompiledModuleId, String>,
     flags: Flags,
     visitors: Vec<Visitor>,
+    /// Predefined filter for compiler warnings.
     warning_filter: Option<WarningFilters>,
+    known_warning_filters: BTreeSet<KnownFiltersInfo>,
+    package_configs: BTreeMap<Symbol, PackageConfig>,
+    default_config: Option<PackageConfig>,
 }
 
 pub struct SteppedCompiler<'a, const P: Pass> {
@@ -87,6 +108,7 @@ pub struct FullyCompiledProgram {
 }
 
 pub enum Visitor {
+    TypingVisitor(TypingVisitorObj),
     AbsIntVisitor(AbsIntVisitorObj),
 }
 
@@ -98,11 +120,12 @@ impl<'a> Compiler<'a> {
     pub fn from_package_paths<Paths: Into<Symbol>, NamedAddress: Into<Symbol>>(
         targets: Vec<PackagePaths<Paths, NamedAddress>>,
         deps: Vec<PackagePaths<Paths, NamedAddress>>,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
         fn indexed_scopes(
             maps: &mut NamedAddressMaps,
+            package_configs: &mut BTreeMap<Symbol, PackageConfig>,
             all_pkgs: Vec<PackagePaths<impl Into<Symbol>, impl Into<Symbol>>>,
-        ) -> Vec<IndexedPackagePath> {
+        ) -> anyhow::Result<Vec<IndexedPackagePath>> {
             let mut idx_paths = vec![];
             for PackagePaths {
                 name,
@@ -110,6 +133,13 @@ impl<'a> Compiler<'a> {
                 named_address_map,
             } in all_pkgs
             {
+                let name = if let Some((name, config)) = name {
+                    let prev = package_configs.insert(name, config);
+                    anyhow::ensure!(prev.is_none(), "Duplicate package entry for '{name}'");
+                    Some(name)
+                } else {
+                    None
+                };
                 let idx = maps.insert(
                     named_address_map
                         .into_iter()
@@ -122,13 +152,14 @@ impl<'a> Compiler<'a> {
                     named_address_map: idx,
                 }))
             }
-            idx_paths
+            Ok(idx_paths)
         }
         let mut maps = NamedAddressMaps::new();
-        let targets = indexed_scopes(&mut maps, targets);
-        let deps = indexed_scopes(&mut maps, deps);
+        let mut package_configs = BTreeMap::new();
+        let targets = indexed_scopes(&mut maps, &mut package_configs, targets)?;
+        let deps = indexed_scopes(&mut maps, &mut package_configs, deps)?;
 
-        Self {
+        Ok(Self {
             maps,
             targets,
             deps,
@@ -138,7 +169,10 @@ impl<'a> Compiler<'a> {
             flags: Flags::empty(),
             visitors: vec![],
             warning_filter: None,
-        }
+            known_warning_filters: BTreeSet::new(),
+            package_configs,
+            default_config: None,
+        })
     }
 
     pub fn from_files<Paths: Into<Symbol>, NamedAddress: Into<Symbol> + Clone>(
@@ -156,7 +190,7 @@ impl<'a> Compiler<'a> {
             paths: deps,
             named_address_map,
         }];
-        Self::from_package_paths(targets, deps)
+        Self::from_package_paths(targets, deps).unwrap()
     }
 
     pub fn set_flags(mut self, flags: Flags) -> Self {
@@ -216,6 +250,25 @@ impl<'a> Compiler<'a> {
         self
     }
 
+    pub fn add_custom_known_filters(
+        mut self,
+        filters: Vec<WarningFilter>,
+        filter_attr_name: E::AttributeName_,
+    ) -> Self {
+        self.known_warning_filters.insert(KnownFiltersInfo {
+            filter_attr_name,
+            filters,
+        });
+        self
+    }
+
+    /// Sets the PackageConfig for files without a specified package
+    pub fn set_default_config(mut self, config: PackageConfig) -> Self {
+        assert!(self.default_config.is_none());
+        self.default_config = Some(config);
+        self
+    }
+
     pub fn run<const TARGET: Pass>(
         self,
     ) -> anyhow::Result<(
@@ -232,15 +285,26 @@ impl<'a> Compiler<'a> {
             flags,
             visitors,
             warning_filter,
+            known_warning_filters,
+            package_configs,
+            default_config,
         } = self;
         generate_interface_files_for_deps(
             &mut deps,
             interface_files_dir_opt,
             &compiled_module_named_address_mapping,
         )?;
-        let mut compilation_env = CompilationEnv::new(flags, visitors);
+        let mut compilation_env =
+            CompilationEnv::new(flags, visitors, package_configs, default_config);
         if let Some(filter) = warning_filter {
             compilation_env.add_warning_filter_scope(filter);
+        }
+        for KnownFiltersInfo {
+            filter_attr_name,
+            filters,
+        } in known_warning_filters
+        {
+            compilation_env.add_custom_known_filters(filters, filter_attr_name)?;
         }
         let (source_text, pprog_and_comments_res) =
             parse_program(&mut compilation_env, maps, targets, deps)?;
@@ -448,7 +512,7 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
     flags: Flags,
 ) -> anyhow::Result<Result<FullyCompiledProgram, (FilesSourceText, Diagnostics)>> {
     let (files, pprog_and_comments_res) =
-        Compiler::from_package_paths(targets, Vec::<PackagePaths<Paths, NamedAddress>>::new())
+        Compiler::from_package_paths(targets, Vec::<PackagePaths<Paths, NamedAddress>>::new())?
             .set_interface_files_dir_opt(interface_files_dir_opt)
             .set_flags(flags)
             .run::<PASS_PARSER>()?;
@@ -741,6 +805,36 @@ fn has_compiled_module_magic_number(path: &str) -> bool {
         Ok(n) => n,
     };
     num_bytes_read == BinaryConstants::MOVE_MAGIC_SIZE && magic == BinaryConstants::MOVE_MAGIC
+}
+
+pub fn move_check_for_errors(
+    comments_and_compiler_res: Result<(CommentMap, SteppedCompiler<'_, PASS_PARSER>), Diagnostics>,
+) -> Diagnostics {
+    fn try_impl(
+        comments_and_compiler_res: Result<
+            (CommentMap, SteppedCompiler<'_, PASS_PARSER>),
+            Diagnostics,
+        >,
+    ) -> Result<(Vec<AnnotatedCompiledUnit>, Diagnostics), Diagnostics> {
+        let (_, compiler) = comments_and_compiler_res?;
+
+        let (mut compiler, cfgir) = compiler.run::<PASS_CFGIR>()?.into_ast();
+        let compilation_env = compiler.compilation_env();
+        if compilation_env.flags().is_testing() {
+            unit_test::plan_builder::construct_test_plan(compilation_env, None, &cfgir);
+        }
+
+        let (units, diags) = compiler.at_cfgir(cfgir).build()?;
+        Ok((units, diags))
+    }
+
+    let (units, inner_diags) = match try_impl(comments_and_compiler_res) {
+        Ok((units, inner_diags)) => (units, inner_diags),
+        Err(inner_diags) => return inner_diags,
+    };
+    let mut diags = compiled_unit::verify_units(&units);
+    diags.extend(inner_diags);
+    diags
 }
 
 //**************************************************************************************************

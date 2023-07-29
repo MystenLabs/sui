@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt::{Debug, Display, Formatter};
 use std::mem::size_of;
@@ -16,12 +17,13 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 
+use crate::balance::Balance;
 use crate::base_types::{MoveObjectType, ObjectIDParseError};
-use crate::coin::Coin;
+use crate::coin::{Coin, CoinMetadata, TreasuryCap};
 use crate::crypto::{default_hash, deterministic_random_account_key};
 use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
 use crate::error::{SuiError, SuiResult};
-use crate::gas_coin::TOTAL_SUPPLY_MIST;
+use crate::gas_coin::GAS;
 use crate::is_system_package;
 use crate::move_package::MovePackage;
 use crate::type_resolver::LayoutResolver;
@@ -355,46 +357,97 @@ impl MoveObject {
 
     /// Get the total amount of SUI embedded in `self`. Intended for testing purposes
     pub fn get_total_sui(&self, layout_resolver: &mut dyn LayoutResolver) -> Result<u64, SuiError> {
-        if self.type_.is_gas_coin() {
-            // Fast path without deserialization.
-            return Ok(self.get_coin_value_unsafe());
-        }
-        // If this is a coin but not a SUI coin, the SUI balance must be 0.
-        if self.type_.is_coin() {
-            return Ok(0);
-        }
-        let layout = layout_resolver.get_layout(self, ObjectFormatOptions::with_types())?;
-        let move_struct = self.to_move_struct(&layout)?;
-        Ok(Self::get_total_sui_in_struct(&move_struct, 0))
+        let balances = self.get_coin_balances(layout_resolver)?;
+        Ok(balances.get(&GAS::type_tag()).copied().unwrap_or(0))
+    }
+}
+
+// Helpers for extracting Coin<T> balances for all T
+impl MoveObject {
+    fn is_balance(s: &StructTag) -> Option<&TypeTag> {
+        (Balance::is_balance(s) && s.type_params.len() == 1).then(|| &s.type_params[0])
     }
 
-    /// Get all SUI in `s`, either directly or in its (transitive) fields. Intended for testing purposes
-    fn get_total_sui_in_struct(s: &MoveStruct, acc: u64) -> u64 {
-        match s {
-            MoveStruct::WithTypes { type_, fields } => {
-                if GasCoin::is_gas_balance(type_) {
-                    match fields[0].1 {
-                        MoveValue::U64(n) => acc + n,
-                        _ => unreachable!(), // a Balance<SUI> object should have exactly one field, of type int
-                    }
-                } else {
-                    fields
-                        .iter()
-                        .fold(acc, |acc, (_, v)| Self::get_total_sui_in_value(v, acc))
+    /// Get the total balances for all `Coin<T>` embedded in `self`.
+    pub fn get_coin_balances(
+        &self,
+        layout_resolver: &mut dyn LayoutResolver,
+    ) -> Result<BTreeMap<TypeTag, u64>, SuiError> {
+        let mut balances = BTreeMap::default();
+
+        // Fast path without deserialization.
+        if let Some(type_tag) = self.type_.coin_type_maybe() {
+            let balance = self.get_coin_value_unsafe();
+            if balance > 0 {
+                *balances.entry(type_tag).or_insert(0) += balance;
+            }
+        } else {
+            let layout = layout_resolver.get_layout(self, ObjectFormatOptions::with_types())?;
+            let move_struct = self.to_move_struct(&layout)?;
+            Self::get_coin_balances_in_struct(&move_struct, &mut balances, 0)?;
+        }
+
+        Ok(balances)
+    }
+
+    /// Get the total balances for all `Coin<T>` embedded in `s`, eitehr directly or in its
+    /// (transitive fields).
+    fn get_coin_balances_in_struct(
+        s: &MoveStruct,
+        balances: &mut BTreeMap<TypeTag, u64>,
+        value_depth: u64,
+    ) -> Result<(), SuiError> {
+        let (struct_type, fields) = match s {
+            MoveStruct::WithTypes { type_, fields } => (type_, fields),
+            _ => unreachable!(),
+        };
+
+        if let Some(type_tag) = Self::is_balance(struct_type) {
+            let balance = match fields[0].1 {
+                MoveValue::U64(n) => n,
+                _ => unreachable!(), // a Balance<T> object should have exactly one field, of type int
+            };
+
+            // Accumulate the found balance
+            if balance > 0 {
+                *balances.entry(type_tag.clone()).or_insert(0) += balance;
+            }
+        } else {
+            for field in fields {
+                Self::get_coin_balances_in_value(&field.1, balances, value_depth)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn get_coin_balances_in_value(
+        v: &MoveValue,
+        balances: &mut BTreeMap<TypeTag, u64>,
+        value_depth: u64,
+    ) -> Result<(), SuiError> {
+        const MAX_MOVE_VALUE_DEPTH: u64 = 256; // This is 2x was the current value of
+                                               // `max_move_value_depth` is from protocol config
+
+        let value_depth = value_depth + 1;
+
+        if value_depth > MAX_MOVE_VALUE_DEPTH {
+            return Err(SuiError::GenericAuthorityError {
+                error: "exceeded max move value depth".to_owned(),
+            });
+        }
+
+        match v {
+            MoveValue::Struct(s) => Self::get_coin_balances_in_struct(s, balances, value_depth)?,
+            MoveValue::Vector(vec) => {
+                for entry in vec {
+                    Self::get_coin_balances_in_value(entry, balances, value_depth)?;
                 }
             }
-            _ => unreachable!(),
+            _ => {}
         }
-    }
 
-    fn get_total_sui_in_value(v: &MoveValue, acc: u64) -> u64 {
-        match v {
-            MoveValue::Struct(s) => Self::get_total_sui_in_struct(s, acc),
-            MoveValue::Vector(vec) => vec
-                .iter()
-                .fold(acc, |acc, v| Self::get_total_sui_in_value(v, acc)),
-            _ => acc,
-        }
+        Ok(())
     }
 }
 
@@ -671,7 +724,7 @@ impl Object {
         Self::new_package(
             modules,
             previous_transaction,
-            ProtocolConfig::get_for_max_version().max_move_package_size(),
+            ProtocolConfig::get_for_max_version_UNSAFE().max_move_package_size(),
             &dependencies,
         )
     }
@@ -889,6 +942,36 @@ impl Object {
         }
     }
 
+    pub fn treasury_cap_for_testing(struct_tag: StructTag, treasury_cap: TreasuryCap) -> Self {
+        let data = Data::Move(MoveObject {
+            type_: TreasuryCap::type_(struct_tag).into(),
+            has_public_transfer: true,
+            version: OBJECT_START_VERSION,
+            contents: bcs::to_bytes(&treasury_cap).expect("Failed to serialize"),
+        });
+        Self {
+            owner: Owner::Immutable,
+            data,
+            previous_transaction: TransactionDigest::genesis(),
+            storage_rebate: 0,
+        }
+    }
+
+    pub fn coin_metadata_for_testing(struct_tag: StructTag, metadata: CoinMetadata) -> Self {
+        let data = Data::Move(MoveObject {
+            type_: CoinMetadata::type_(struct_tag).into(),
+            has_public_transfer: true,
+            version: OBJECT_START_VERSION,
+            contents: bcs::to_bytes(&metadata).expect("Failed to serialize"),
+        });
+        Self {
+            owner: Owner::Immutable,
+            data,
+            previous_transaction: TransactionDigest::genesis(),
+            storage_rebate: 0,
+        }
+    }
+
     pub fn with_object_owner_for_testing(id: ObjectID, owner: ObjectID) -> Self {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_().into(),
@@ -964,41 +1047,6 @@ pub fn generate_test_gas_objects() -> Vec<Object> {
     }
 
     GAS_OBJECTS.with(|v| v.clone())
-}
-
-/// Make a few test gas objects (all with the same owner).
-pub fn generate_test_gas_objects_with_owner(count: usize, owner: SuiAddress) -> Vec<Object> {
-    (0..count)
-        .map(|_i| {
-            let gas_object_id = ObjectID::random();
-            Object::with_id_owner_gas_for_testing(gas_object_id, owner, GAS_VALUE_FOR_TESTING)
-        })
-        .collect()
-}
-
-/// Make a few test gas objects (all with the same owner).
-pub fn generate_test_gas_objects_with_owner_and_value(
-    count: usize,
-    owner: SuiAddress,
-    value: u64,
-) -> Vec<Object> {
-    (0..count)
-        .map(|_i| {
-            let gas_object_id = ObjectID::random();
-            Object::with_id_owner_gas_for_testing(gas_object_id, owner, value)
-        })
-        .collect()
-}
-
-/// Make a few test gas objects (all with the same owner) with TOTAL_SUPPLY_MIST / count balance
-pub fn generate_max_test_gas_objects_with_owner(count: u64, owner: SuiAddress) -> Vec<Object> {
-    let coin_size = TOTAL_SUPPLY_MIST / count;
-    (0..count)
-        .map(|_i| {
-            let gas_object_id = ObjectID::random();
-            Object::with_id_owner_gas_for_testing(gas_object_id, owner, coin_size)
-        })
-        .collect()
 }
 
 #[allow(clippy::large_enum_variant)]

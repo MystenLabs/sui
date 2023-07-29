@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeatureValue } from '@growthbook/growthbook-react';
-import { SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS } from '@mysten/sui.js';
+import { SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS } from '@mysten/sui.js/utils';
 
 import useAppSelector from './useAppSelector';
 import { API_ENV } from '_src/shared/api-env';

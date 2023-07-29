@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiAddress } from '@mysten/sui.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -14,6 +13,7 @@ import Loading from '_components/loading';
 import { UserApproveContainer } from '_components/user-approve-container';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { permissionsSelectors, respondToPermissionRequest } from '_redux/slices/permissions';
+import { ampli } from '_src/shared/analytics/ampli';
 
 import type { RootState } from '_redux/RootReducer';
 
@@ -31,12 +31,12 @@ function SiteConnectPage() {
 	const dispatch = useAppDispatch();
 	const permissionRequest = useAppSelector(permissionSelector);
 	const activeAddress = useActiveAddress();
-	const [accountsToConnect, setAccountsToConnect] = useState<SuiAddress[]>(() =>
+	const [accountsToConnect, setAccountsToConnect] = useState<string[]>(() =>
 		activeAddress ? [activeAddress] : [],
 	);
 	const handleOnSubmit = useCallback(
 		async (allowed: boolean) => {
-			if (requestID && accountsToConnect) {
+			if (requestID && accountsToConnect && permissionRequest) {
 				await dispatch(
 					respondToPermissionRequest({
 						id: requestID,
@@ -44,12 +44,18 @@ function SiteConnectPage() {
 						allowed,
 					}),
 				);
+				ampli.respondedToConnectionRequest({
+					applicationName: permissionRequest.name,
+					applicationUrl: permissionRequest.origin,
+					approvedConnection: allowed,
+				});
+				window.close();
 			}
 		},
-		[dispatch, requestID, accountsToConnect],
+		[requestID, accountsToConnect, permissionRequest, dispatch],
 	);
 	useEffect(() => {
-		if (!loading && (!permissionRequest || permissionRequest.responseDate)) {
+		if (!loading && !permissionRequest) {
 			window.close();
 		}
 	}, [loading, permissionRequest]);
@@ -76,7 +82,6 @@ function SiteConnectPage() {
 	useEffect(() => {
 		setDisplayWarning(!isSecure);
 	}, [isSecure]);
-
 	return (
 		<Loading loading={loading}>
 			{permissionRequest &&
@@ -89,6 +94,7 @@ function SiteConnectPage() {
 						onSubmit={handleHideWarning}
 						isWarning
 						addressHidden
+						blended
 					>
 						<PageMainLayoutTitle title="Insecure Website" />
 						<div className={st.warningWrapper}>
@@ -96,8 +102,8 @@ function SiteConnectPage() {
 						</div>
 
 						<div className={st.warningMessage}>
-							This site requesting this wallet connection is not secure, and attackers might be
-							trying to steal your information.
+							If you connect your wallet to this site your data could be exposed to attackers. Click
+							**Reject** if you don't trust this site.
 							<br />
 							<br />
 							Continue at your own risk.
@@ -110,18 +116,20 @@ function SiteConnectPage() {
 						approveTitle="Connect"
 						rejectTitle="Reject"
 						onSubmit={handleOnSubmit}
-						addressHidden
 						approveDisabled={!accountsToConnect.length}
+						blended
 					>
 						<PageMainLayoutTitle title="Approve Connection" />
 						<SummaryCard
 							header="Permissions requested"
 							body={<DAppPermissionsList permissions={permissionRequest.permissions} />}
+							boxShadow
 						/>
 						<WalletListSelect
 							title="Connect Accounts"
 							values={accountsToConnect}
 							onChange={setAccountsToConnect}
+							boxShadow
 						/>
 					</UserApproveContainer>
 				))}

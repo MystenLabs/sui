@@ -1,0 +1,31 @@
+{
+	"name": "@mysten/sdk-docs",
+	"version": "1.0.0",
+	"description": "Docs for @mysten npm packages",
+	"main": "index.js",
+	"scripts": {
+		"dev": "next dev",
+		"build": "next build",
+		"start": "next start",
+		"prettier:check": "prettier -c --ignore-unknown .",
+		"prettier:fix": "prettier -w --ignore-unknown .",
+		"eslint:check": "eslint --max-warnings=0 .",
+		"eslint:fix": "pnpm run eslint:check --fix",
+		"lint": "pnpm run eslint:check && pnpm run prettier:check",
+		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
+	},
+	"publishConfig": {
+		"access": "restricted"
+	},
+	"keywords": [],
+	"author": "Mysten Labs <build@mystenlabs.com>",
+	"license": "Apache-2.0",
+	"dependencies": {
+		"@types/node": "^20.4.2",
+		"next": "^13.4.10",
+		"nextra": "^2.10.0",
+		"nextra-theme-docs": "^2.10.0",
+		"react": "^18.2.0",
+		"react-dom": "^18.2.0"
+	}
+}

@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { BCS, fromB64 } from '@mysten/bcs';
+import type { Infer, Struct } from 'superstruct';
 import {
 	is,
 	any,
 	array,
-	Infer,
 	integer,
 	literal,
 	object,
@@ -14,14 +14,14 @@ import {
 	string,
 	union,
 	assert,
-	Struct,
 	define,
 	unknown,
 	record,
 } from 'superstruct';
-import { ObjectId, normalizeSuiObjectId } from '../types/common';
-import { TRANSACTION_TYPE, WellKnownEncoding, create } from './utils';
-import { TypeTagSerializer } from '../signers/txn-data-serializers/type-tag-serializer';
+import type { WellKnownEncoding } from './utils.js';
+import { TRANSACTION_TYPE, create } from './utils.js';
+import { TypeTagSerializer } from './type-tag-serializer.js';
+import { normalizeSuiObjectId } from '../utils/sui-types.js';
 
 const option = <T extends Struct<any, any>>(some: T) =>
 	union([object({ None: union([literal(true), literal(null)]) }), object({ Some: some })]);
@@ -106,7 +106,7 @@ export type MakeMoveVecTransaction = Infer<typeof MakeMoveVecTransaction>;
 export const PublishTransaction = object({
 	kind: literal('Publish'),
 	modules: array(array(integer())),
-	dependencies: array(ObjectId),
+	dependencies: array(string()),
 });
 export type PublishTransaction = Infer<typeof PublishTransaction>;
 
@@ -121,8 +121,8 @@ export enum UpgradePolicy {
 export const UpgradeTransaction = object({
 	kind: literal('Upgrade'),
 	modules: array(array(integer())),
-	dependencies: array(ObjectId),
-	packageId: ObjectId,
+	dependencies: array(string()),
+	packageId: string(),
 	ticket: ObjectTransactionArgument,
 });
 export type UpgradeTransaction = Infer<typeof UpgradeTransaction>;
@@ -185,7 +185,7 @@ export const Transactions = {
 		dependencies,
 	}: {
 		modules: number[][] | string[];
-		dependencies: ObjectId[];
+		dependencies: string[];
 	}): PublishTransaction {
 		return create(
 			{
@@ -205,8 +205,8 @@ export const Transactions = {
 		ticket,
 	}: {
 		modules: number[][] | string[];
-		dependencies: ObjectId[];
-		packageId: ObjectId;
+		dependencies: string[];
+		packageId: string;
 		ticket: TransactionArgument;
 	}): UpgradeTransaction {
 		return create(

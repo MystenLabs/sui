@@ -4,15 +4,16 @@
 import { Popover, Transition } from '@headlessui/react';
 import { useResolveSuiNSName } from '@mysten/core';
 import { ChevronDown12, Copy12 } from '@mysten/icons';
-import { formatAddress } from '@mysten/sui.js';
+import { formatAddress } from '@mysten/sui.js/utils';
 
+import { AccountList } from './AccountList';
 import { useAccounts } from '../hooks/useAccounts';
 import { useActiveAddress } from '../hooks/useActiveAddress';
 import { useBackgroundClient } from '../hooks/useBackgroundClient';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import { ButtonConnectedTo } from '../shared/ButtonConnectedTo';
 import { Text } from '../shared/text';
-import { AccountList } from './AccountList';
+import { ampli } from '_src/shared/analytics/ampli';
 
 export function AccountSelector() {
 	const allAccounts = useAccounts();
@@ -64,8 +65,11 @@ export function AccountSelector() {
 							<div className="absolute w-3 h-3 bg-white -top-1 left-1/2 -translate-x-1/2 rotate-45" />
 							<div className="relative px-1.25 max-h-80 overflow-y-auto max-w-full z-10">
 								<AccountList
-									onAccountSelected={async ({ address }) => {
+									onAccountSelected={async ({ address, type }) => {
 										if (address !== activeAddress) {
+											ampli.switchedAccount({
+												toAccountType: type,
+											});
 											await backgroundClient.selectAccount(address);
 										}
 										close();

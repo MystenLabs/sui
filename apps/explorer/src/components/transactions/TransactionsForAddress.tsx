@@ -2,15 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '@mysten/core';
-import { type SuiTransactionBlockResponse } from '@mysten/sui.js';
+import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
+import { LoadingIndicator } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 
 import { genTableDataFromTxData } from './TxCardUtils';
-
 import { Banner } from '~/ui/Banner';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { TableCard } from '~/ui/TableCard';
-import { TabGroup, TabList, Tab, TabPanels, TabPanel } from '~/ui/Tabs';
+import { TabHeader } from '~/ui/Tabs';
 
 interface Props {
 	address: string;
@@ -36,7 +35,6 @@ export function TransactionsForAddress({ address, type }: Props) {
 						limit: 100,
 						options: {
 							showEffects: true,
-							showBalanceChanges: true,
 							showInput: true,
 						},
 					}),
@@ -61,7 +59,7 @@ export function TransactionsForAddress({ address, type }: Props) {
 	if (isLoading) {
 		return (
 			<div>
-				<LoadingSpinner />
+				<LoadingIndicator />
 			</div>
 		);
 	}
@@ -78,16 +76,9 @@ export function TransactionsForAddress({ address, type }: Props) {
 
 	return (
 		<div data-testid="tx">
-			<TabGroup size="lg">
-				<TabList>
-					<Tab>Transaction Blocks</Tab>
-				</TabList>
-				<TabPanels>
-					<TabPanel>
-						<TableCard data={tableData.data} columns={tableData.columns} />
-					</TabPanel>
-				</TabPanels>
-			</TabGroup>
+			<TabHeader title="Transaction Blocks">
+				<TableCard data={tableData.data} columns={tableData.columns} />
+			</TabHeader>
 		</div>
 	);
 }

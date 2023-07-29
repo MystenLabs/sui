@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { JsonRpcProvider, SuiAddress, getObjectDisplay, getObjectOwner } from '@mysten/sui.js';
+import { SuiClient } from '@mysten/sui.js/client';
 
 import { DataFields, NetworkType, NameObject, SuiNSContract } from './types/objects';
 import { DEVNET_JSON_FILE, GCS_URL, TESTNET_JSON_FILE } from './utils/constants';
@@ -11,21 +11,21 @@ import { getAvatar, getOwner } from './utils/queries';
 export const AVATAR_NOT_OWNED = 'AVATAR_NOT_OWNED';
 
 class SuinsClient {
-    private suiProvider: JsonRpcProvider;
+    private suiClient: SuiClient;
     contractObjects: SuiNSContract | undefined;
     networkType: NetworkType | undefined;
 
     constructor(
-        suiProvider: JsonRpcProvider,
+        suiClient: SuiClient,
         options?: {
             contractObjects?: SuiNSContract;
             networkType?: NetworkType;
         },
     ) {
-        if (!suiProvider) {
-            throw new Error('Sui JsonRpcProvider must be specified.');
+        if (!suiClient) {
+            throw new Error('SuiClient must be specified.');
         }
-        this.suiProvider = suiProvider;
+        this.suiClient = suiClient;
         this.contractObjects = options?.contractObjects;
         this.networkType = options?.networkType;
     }
@@ -51,11 +51,11 @@ class SuinsClient {
     }
 
     protected async getDynamicFieldObject(
-        parentObjectId: SuiAddress,
+        parentObjectId: string,
         key: unknown,
         type = '0x1::string::String',
     ) {
-        const dynamicFieldObject = await this.suiProvider.getDynamicFieldObject({
+        const dynamicFieldObject = await this.suiClient.getDynamicFieldObject({
             parentId: parentObjectId,
             name: {
                 type: type,
@@ -68,21 +68,21 @@ class SuinsClient {
         return dynamicFieldObject;
     }
 
-    protected async getNameData(dataObjectId: SuiAddress, fields: DataFields[] = []) {
+    protected async getNameData(dataObjectId: string, fields: DataFields[] = []) {
         if (!dataObjectId) return {};
 
-        const { data: dynamicFields } = await this.suiProvider.getDynamicFields({
+        const { data: dynamicFields } = await this.suiClient.getDynamicFields({
             parentId: dataObjectId,
         });
 
         const filteredFields = new Set(fields);
         const filteredDynamicFields = dynamicFields.filter(({ name: { value } }) =>
-            filteredFields.has(value),
+            filteredFields.has(value as DataFields),
         );
 
         const data = await Promise.allSettled(
             filteredDynamicFields?.map(({ objectId }) =>
-                this.suiProvider
+                this.suiClient
                     .getObject({
                         id: objectId,
                         options: { showContent: true },
@@ -140,9 +140,9 @@ class SuinsClient {
         // We use Promise.all to do these calls at the same time.
         if (nameObject.nftId && (includeAvatar || options?.showOwner)) {
             const [owner, avatarNft] = await Promise.all([
-                getOwner(this.suiProvider, nameObject.nftId),
+                getOwner(this.suiClient, nameObject.nftId),
                 includeAvatar
-                    ? getAvatar(this.suiProvider, nameObject.avatar)
+                    ? getAvatar(this.suiClient, nameObject.avatar)
                     : Promise.resolve(null),
             ]);
 
@@ -152,8 +152,8 @@ class SuinsClient {
             if (includeAvatar && avatarNft) {
                 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
                 // @ts-ignore-next-line
-                if (getObjectOwner(avatarNft)?.AddressOwner === nameObject.owner) {
-                    const display = getObjectDisplay(avatarNft);
+                if (avatarNft.data?.owner?.AddressOwner === nameObject.owner) {
+                    const display = avatarNft.data?.display;
                     nameObject.avatar = display?.data?.image_url || null;
                 } else {
                     nameObject.avatar = AVATAR_NOT_OWNED;

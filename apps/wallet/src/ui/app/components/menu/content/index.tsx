@@ -4,14 +4,13 @@
 import { useCallback } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
-import { ConnectLedgerModalContainer } from '../../ledger/ConnectLedgerModalContainer';
-import { ImportLedgerAccounts } from '../../ledger/ImportLedgerAccounts';
 import { AccountsSettings } from './AccountsSettings';
 import { AutoLockSettings } from './AutoLockSettings';
 import { ExportAccount } from './ExportAccount';
 import { ImportPrivateKey } from './ImportPrivateKey';
 import MenuList from './MenuList';
 import { NetworkSettings } from './NetworkSettings';
+import { ConnectLedgerModalContainer } from '../../ledger/ConnectLedgerModalContainer';
 import { ErrorBoundary } from '_components/error-boundary';
 import {
 	MainLocationContext,
@@ -22,6 +21,7 @@ import {
 import { RecoveryPassphrase } from '_components/recovery-passphrase/RecoveryPassphrase';
 import { useOnKeyboardEvent } from '_hooks';
 
+import { ImportLedgerAccountsPage } from '_src/ui/app/pages/accounts/ImportLedgerAccountsPage';
 import type { MouseEvent } from 'react';
 
 const CLOSE_KEY_CODES: string[] = ['Escape'];
@@ -61,7 +61,7 @@ function MenuContent() {
 						<Route path="/network" element={<NetworkSettings />} />
 						<Route path="/auto-lock" element={<AutoLockSettings />} />
 						<Route path="*" element={<Navigate to={menuHomeUrl} replace={true} />} />
-						<Route path="/import-ledger-accounts" element={<ImportLedgerAccounts />} />
+						<Route path="/import-ledger-accounts" element={<ImportLedgerAccountsPage />} />
 						<Route path="/recovery-passphrase" element={<RecoveryPassphrase />} />
 					</Routes>
 				</MainLocationContext.Provider>

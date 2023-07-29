@@ -23,7 +23,7 @@ use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::SuiResult;
 use sui_types::object::{Object, Owner};
-use sui_types::transaction::{VerifiedCertificate, VerifiedTransaction};
+use sui_types::transaction::{Transaction, VerifiedCertificate};
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time::{sleep, timeout};
 
@@ -225,14 +225,14 @@ async fn pending_exec_full() {
 async fn execute_owned_on_first_three_authorities(
     authority_clients: &[Arc<SafeClient<LocalAuthorityClient>>],
     committee: &Committee,
-    txn: &VerifiedTransaction,
+    txn: &Transaction,
 ) -> (VerifiedCertificate, TransactionEffects) {
     do_transaction(&authority_clients[0], txn).await;
     do_transaction(&authority_clients[1], txn).await;
     do_transaction(&authority_clients[2], txn).await;
     let cert = extract_cert(authority_clients, committee, txn.digest())
         .await
-        .verify(committee)
+        .verify_authenticated(committee, &Default::default())
         .unwrap();
     do_cert(&authority_clients[0], &cert).await;
     do_cert(&authority_clients[1], &cert).await;
@@ -257,14 +257,14 @@ pub async fn do_cert_with_shared_objects(
 async fn execute_shared_on_first_three_authorities(
     authority_clients: &[Arc<SafeClient<LocalAuthorityClient>>],
     committee: &Committee,
-    txn: &VerifiedTransaction,
+    txn: &Transaction,
 ) -> (VerifiedCertificate, TransactionEffects) {
     do_transaction(&authority_clients[0], txn).await;
     do_transaction(&authority_clients[1], txn).await;
     do_transaction(&authority_clients[2], txn).await;
     let cert = extract_cert(authority_clients, committee, txn.digest())
         .await
-        .verify(committee)
+        .verify_authenticated(committee, &Default::default())
         .unwrap();
     do_cert_with_shared_objects(&authority_clients[0].authority_client().state, &cert).await;
     do_cert_with_shared_objects(&authority_clients[1].authority_client().state, &cert).await;
@@ -437,14 +437,14 @@ async fn test_execution_with_dependencies() {
 async fn try_sign_on_first_three_authorities(
     authority_clients: &[Arc<SafeClient<LocalAuthorityClient>>],
     committee: &Committee,
-    txn: &VerifiedTransaction,
+    txn: &Transaction,
 ) -> SuiResult<VerifiedCertificate> {
     for client in authority_clients.iter().take(3) {
         client.handle_transaction(txn.clone()).await?;
     }
     extract_cert(authority_clients, committee, txn.digest())
         .await
-        .verify(committee)
+        .verify_authenticated(committee, &Default::default())
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]

@@ -19,6 +19,7 @@ bcs.workspace = true
 
 move-core-types = { path = "../../move-core/types" }
 move-binary-format = { path = "../../move-binary-format" }
+move-vm-profiler = { path = "../profiler" }
 
 [dev-dependencies]
 proptest = "1.0.0"

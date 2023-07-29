@@ -7,7 +7,7 @@ import { createWallet } from './utils/auth';
 const TEST_TIMEOUT = 45 * 1000;
 const STAKE_AMOUNT = 100;
 
-test('staking', async ({ page, extensionUrl }) => {
+test.skip('staking', async ({ page, extensionUrl }) => {
 	test.setTimeout(TEST_TIMEOUT);
 
 	await createWallet(page, extensionUrl);

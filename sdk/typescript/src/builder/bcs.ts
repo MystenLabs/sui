@@ -1,11 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { BCS, TypeName } from '@mysten/bcs';
-import { bcs } from '../types/sui-bcs';
-import { normalizeSuiAddress, TypeTag } from '../types';
-import { TypeTagSerializer } from '../signers/txn-data-serializers/type-tag-serializer';
-import { TransactionArgument, MoveCallTransaction } from './Transactions';
+import type { TypeName } from '@mysten/bcs';
+import { BCS } from '@mysten/bcs';
+import { bcs } from '../bcs/index.js';
+import type { TypeTag } from '../bcs/index.js';
+import { TypeTagSerializer } from './type-tag-serializer.js';
+import type { TransactionArgument, MoveCallTransaction } from './Transactions.js';
+import { normalizeSuiAddress } from '../utils/sui-types.js';
 
 export const ARGUMENT_INNER = 'Argument';
 export const VECTOR = 'vector';

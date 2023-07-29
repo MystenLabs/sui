@@ -14,21 +14,15 @@ use tokio::runtime::Runtime;
 
 use sui_indexer::metrics::IndexerMetrics;
 use sui_indexer::models::checkpoints::Checkpoint;
-use sui_indexer::models::objects::{NamedBcsBytes, Object as DBObject, ObjectStatus};
-use sui_indexer::models::owners::OwnerType;
 use sui_indexer::models::transactions::Transaction;
 use sui_indexer::new_pg_connection_pool;
-use sui_indexer::store::{
-    IndexerStore, PgIndexerStore, TemporaryCheckpointStore, TransactionObjectChanges,
-};
+use sui_indexer::store::{IndexerStore, PgIndexerStore, TemporaryCheckpointStore};
 use sui_indexer::utils::reset_database;
 use sui_json_rpc_types::CheckpointId;
 use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::AggregateAuthoritySignature;
 use sui_types::digests::TransactionDigest;
-use sui_types::gas_coin::GasCoin;
 use sui_types::messages_checkpoint::CheckpointDigest;
-use sui_types::object::Object;
 use sui_types::transaction::{TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER};
 
 fn indexer_benchmark(c: &mut Criterion) {
@@ -39,12 +33,12 @@ fn indexer_benchmark(c: &mut Criterion) {
 
     let rt: Runtime = Runtime::new().unwrap();
     let (mut _checkpoints, store) = rt.block_on(async {
-        let blocking_cp = new_pg_connection_pool(&db_url).await.unwrap();
+        let blocking_cp = new_pg_connection_pool(&db_url).unwrap();
         reset_database(&mut blocking_cp.get().unwrap(), true).unwrap();
         let registry = Registry::default();
         let indexer_metrics = IndexerMetrics::new(&registry);
 
-        let store = PgIndexerStore::new(blocking_cp, indexer_metrics).await;
+        let store = PgIndexerStore::new(blocking_cp, indexer_metrics);
 
         let checkpoints = (0..150).map(create_checkpoint).collect::<Vec<_>>();
         (checkpoints, store)
@@ -83,11 +77,6 @@ fn create_checkpoint(sequence_number: i64) -> TemporaryCheckpointStore {
             .map(|_| create_transaction(sequence_number))
             .collect(),
         events: vec![],
-        object_changes: vec![TransactionObjectChanges {
-            changed_objects: (1..1000).map(|_| create_object(sequence_number)).collect(),
-            deleted_objects: vec![],
-        }],
-        packages: vec![],
         input_objects: vec![],
         changed_objects: vec![],
         move_calls: vec![],
@@ -116,18 +105,11 @@ fn create_transaction(sequence_number: i64) -> Transaction {
         id: None,
         transaction_digest: TransactionDigest::random().base58_encode(),
         sender: SuiAddress::random_for_testing_only().to_string(),
-        recipients: vec![],
         checkpoint_sequence_number: Some(sequence_number),
         timestamp_ms: Some(Utc::now().timestamp_millis()),
         transaction_kind: "test".to_string(),
         transaction_count: 0,
         execution_success: true,
-        created: vec![],
-        mutated: vec![],
-        deleted: vec![],
-        unwrapped: vec![],
-        wrapped: vec![],
-        move_calls: vec![],
         gas_object_id: ObjectID::random().to_string(),
         gas_object_sequence: 0,
         gas_object_digest: ObjectDigest::random().base58_encode(),
@@ -139,38 +121,11 @@ fn create_transaction(sequence_number: i64) -> Transaction {
         non_refundable_storage_fee: 0,
         gas_price: 0,
         raw_transaction: bcs::to_bytes(&tx).unwrap(),
-        transaction_content: serde_json::to_string(&tx).unwrap(),
         transaction_effects_content: "".to_string(),
         confirmed_local_execution: None,
     }
 }
 
-fn create_object(sequence_number: i64) -> DBObject {
-    DBObject {
-        epoch: 0,
-        checkpoint: sequence_number,
-        object_id: ObjectID::random().to_string(),
-        version: 0,
-        object_digest: ObjectDigest::random().to_string(),
-        owner_type: OwnerType::AddressOwner,
-        owner_address: Some(SuiAddress::random_for_testing_only().to_string()),
-        initial_shared_version: None,
-        previous_transaction: TransactionDigest::random().base58_encode(),
-        object_type: GasCoin::type_().to_string(),
-        object_status: ObjectStatus::Created,
-        has_public_transfer: true,
-        storage_rebate: 0,
-        bcs: vec![NamedBcsBytes(
-            "data".to_string(),
-            Object::new_gas_for_testing()
-                .data
-                .try_as_move()
-                .unwrap()
-                .contents()
-                .to_vec(),
-        )],
-    }
-}
 criterion_group! {
     name = benches;
     config = Criterion::default().sample_size(50).measurement_time(Duration::from_secs(10));

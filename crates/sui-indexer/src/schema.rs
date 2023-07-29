@@ -69,6 +69,19 @@ diesel::table! {
 }
 
 diesel::table! {
+    checkpoint_metrics (checkpoint) {
+        checkpoint -> Int8,
+        epoch -> Int8,
+        real_time_tps -> Float8,
+        peak_tps_30d -> Float8,
+        rolling_total_transactions -> Int8,
+        rolling_total_transaction_blocks -> Int8,
+        rolling_total_successful_transactions -> Int8,
+        rolling_total_successful_transaction_blocks -> Int8,
+    }
+}
+
+diesel::table! {
     checkpoints (sequence_number) {
         sequence_number -> Int8,
         checkpoint_digest -> Varchar,
@@ -259,18 +272,11 @@ diesel::table! {
         id -> Int8,
         transaction_digest -> Varchar,
         sender -> Varchar,
-        recipients -> Array<Nullable<Text>>,
         checkpoint_sequence_number -> Nullable<Int8>,
         timestamp_ms -> Nullable<Int8>,
         transaction_kind -> Text,
         transaction_count -> Int8,
         execution_success -> Bool,
-        created -> Array<Nullable<Text>>,
-        mutated -> Array<Nullable<Text>>,
-        deleted -> Array<Nullable<Text>>,
-        unwrapped -> Array<Nullable<Text>>,
-        wrapped -> Array<Nullable<Text>>,
-        move_calls -> Array<Nullable<Text>>,
         gas_object_id -> Varchar,
         gas_object_sequence -> Int8,
         gas_object_digest -> Varchar,
@@ -282,7 +288,6 @@ diesel::table! {
         non_refundable_storage_fee -> Int8,
         gas_price -> Int8,
         raw_transaction -> Bytea,
-        transaction_content -> Text,
         transaction_effects_content -> Text,
         confirmed_local_execution -> Nullable<Bool>,
     }
@@ -339,6 +344,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     addresses,
     at_risk_validators,
     changed_objects,
+    checkpoint_metrics,
     checkpoints,
     epochs,
     events,

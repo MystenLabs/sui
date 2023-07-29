@@ -354,6 +354,16 @@ impl fmt::Debug for CheckpointContentsDigest {
     }
 }
 
+impl std::str::FromStr for CheckpointContentsDigest {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut result = [0; 32];
+        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        Ok(CheckpointContentsDigest::new(result))
+    }
+}
+
 impl fmt::LowerHex for CheckpointContentsDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::LowerHex::fmt(&self.0, f)
@@ -632,6 +642,18 @@ impl fmt::Debug for TransactionEventsDigest {
         f.debug_tuple("TransactionEventsDigest")
             .field(&self.0)
             .finish()
+    }
+}
+
+impl AsRef<[u8]> for TransactionEventsDigest {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
+impl AsRef<[u8; 32]> for TransactionEventsDigest {
+    fn as_ref(&self) -> &[u8; 32] {
+        self.0.as_ref()
     }
 }
 

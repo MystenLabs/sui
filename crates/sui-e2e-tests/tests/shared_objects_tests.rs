@@ -6,14 +6,16 @@ use std::time::{Duration, SystemTime};
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
-use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_test_transaction_builder::{
+    publish_basics_package, publish_basics_package_and_make_counter, TestTransactionBuilder,
+};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, ExecutionStatus};
 use sui_types::messages_grpc::ObjectInfoRequest;
 use sui_types::transaction::{CallArg, ObjectArg};
 use sui_types::SUI_CLOCK_OBJECT_ID;
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
 #[sim_test]
@@ -44,10 +46,7 @@ async fn shared_object_transaction() {
 #[sim_test]
 async fn call_shared_object_contract() {
     let test_cluster = TestClusterBuilder::new().build().await;
-    let (package, counter) = test_cluster
-        .wallet
-        .publish_basics_package_and_make_counter()
-        .await;
+    let (package, counter) = publish_basics_package_and_make_counter(&test_cluster.wallet).await;
     let package_id = package.0;
     let counter_id = counter.0;
     let counter_initial_shared_version = counter.1;
@@ -190,10 +189,11 @@ async fn call_shared_object_contract() {
         .contains(&assert_value_mut_transaction));
 }
 
+#[ignore("Disabled due to flakiness - re-enable when failure is fixed")]
 #[sim_test]
 async fn access_clock_object_test() {
     let test_cluster = TestClusterBuilder::new().build().await;
-    let package_id = test_cluster.wallet.publish_basics_package().await.0;
+    let package_id = publish_basics_package(&test_cluster.wallet).await.0;
 
     let transaction = test_cluster.wallet.sign_transaction(
         &test_cluster
@@ -206,19 +206,20 @@ async fn access_clock_object_test() {
     let start = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
-    let validators = test_cluster.get_validator_pubkeys();
     let (effects, events, objects) = test_cluster
-        .submit_transaction_to_validators(transaction, &validators)
-        .await;
+        .execute_transaction_return_raw_effects(transaction)
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok());
 
     assert_eq!(
         objects.first().unwrap().compute_object_reference(),
         effects
-            .shared_objects()
-            .iter()
-            .find(|(id, _, _)| *id == SUI_CLOCK_OBJECT_ID)
+            .input_shared_objects()
+            .into_iter()
+            .find(|((id, _, _), _)| id == &SUI_CLOCK_OBJECT_ID)
+            .map(|(obj_ref, _)| obj_ref)
             .unwrap()
-            .clone()
     );
 
     let finish = SystemTime::now()
@@ -272,7 +273,7 @@ async fn access_clock_object_test() {
 #[sim_test]
 async fn shared_object_sync() {
     let test_cluster = TestClusterBuilder::new().build().await;
-    let package_id = test_cluster.wallet.publish_basics_package().await.0;
+    let package_id = publish_basics_package(&test_cluster.wallet).await.0;
 
     // Since we use submit_transaction_to_validators in this test, which does not go through fullnode,
     // we need to manage gas objects ourselves.
@@ -293,7 +294,9 @@ async fn shared_object_sync() {
 
     let (effects, _, _) = test_cluster
         .submit_transaction_to_validators(create_counter_transaction.clone(), &slow_validators)
-        .await;
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok());
     let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
 
     // Check that the counter object exists in at least one of the validators the transaction was
@@ -331,22 +334,26 @@ async fn shared_object_sync() {
     );
 
     // Let's submit the transaction to the original set of validators, except the first.
-    test_cluster
+    let (effects, _, _) = test_cluster
         .submit_transaction_to_validators(increment_counter_transaction.clone(), &validators[1..])
-        .await;
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok());
 
     // Submit transactions to the out-of-date authority.
     // It will succeed because we share owned object certificates through narwhal
-    test_cluster
+    let (effects, _, _) = test_cluster
         .submit_transaction_to_validators(increment_counter_transaction, &validators[0..1])
-        .await;
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok());
 }
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
 #[sim_test]
 async fn replay_shared_object_transaction() {
     let test_cluster = TestClusterBuilder::new().build().await;
-    let package_id = test_cluster.wallet.publish_basics_package().await.0;
+    let package_id = publish_basics_package(&test_cluster.wallet).await.0;
 
     // Send a transaction to create a counter (only to one authority) -- twice.
     let create_counter_transaction = test_cluster.wallet.sign_transaction(

@@ -23,6 +23,7 @@ move-bytecode-verifier = { path = "../../move-bytecode-verifier" }
 move-compiler = { path = "../../move-compiler" }
 move-vm-config = { path = "../config" }
 move-vm-runtime = { path = "../runtime" }
+move-vm-profiler = { path = "../profiler" }
 move-vm-types = { path = "../types" }
 move-vm-test-utils = { path = "../test-utils" }
 move-stdlib = { path = "../../move-stdlib" }

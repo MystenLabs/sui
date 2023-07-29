@@ -14,15 +14,12 @@
 	width: 100%;
 	align-items: center;
 	justify-content: stretch;
-	padding: 8px 10px;
-	padding-bottom: 0;
 	overflow: hidden;
 	border: 1px solid rgb(111 188 240 / 1%);
-	border-top-left-radius: 20px;
-	border-top-right-radius: 20px;
 	transition: transform 300ms ease-in-out;
 	opacity: 1;
 	flex-direction: column;
+	z-index: 40;
 }
 
 .nav-menu {
@@ -104,7 +101,9 @@
 .hidden {
 	transform: translateY(100%);
 	opacity: 0;
-	transition: transform 300ms ease-in-out, opacity 0ms ease-in 300ms;
+	transition:
+		transform 300ms ease-in-out,
+		opacity 0ms ease-in 300ms;
 }
 
 /* TODO update icons so they are all the same size */

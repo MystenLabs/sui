@@ -3,7 +3,7 @@
 
 import { useGetKioskContents, isSuiNSName, useRpcClient, useSuiNSEnabled } from '@mysten/core';
 import { ArrowRight16 } from '@mysten/icons';
-import { getTransactionDigest, TransactionBlock } from '@mysten/sui.js';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Form, Field, Formik } from 'formik';
 import { toast } from 'react-hot-toast';
@@ -17,6 +17,7 @@ import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout'
 import { Text } from '_app/shared/text';
 import { AddressInput } from '_components/address-input';
 import { useSigner } from '_hooks';
+import { ampli } from '_src/shared/analytics/ampli';
 import { QredoActionIgnoredByUser } from '_src/ui/app/QredoSigner';
 import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
 import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
@@ -26,7 +27,7 @@ export function TransferNFTForm({
 	objectType,
 }: {
 	objectId: string;
-	objectType?: string;
+	objectType?: string | null;
 }) {
 	const activeAddress = useActiveAddress();
 	const rpc = useRpcClient();
@@ -36,12 +37,9 @@ export function TransferNFTForm({
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
 	const { clientIdentifier, notificationModal } = useQredoTransaction();
-
-	const kioskContents = useGetKioskContents(activeAddress);
+	const { data: kiosk } = useGetKioskContents(activeAddress);
 	const transferKioskItem = useTransferKioskItem({ objectId, objectType });
-	const isContainedInKiosk = kioskContents?.data?.some(
-		(kioskItem) => kioskItem.data?.objectId === objectId,
-	);
+	const isContainedInKiosk = kiosk?.list.some((kioskItem) => kioskItem.data?.objectId === objectId);
 
 	const transferNFT = useMutation({
 		mutationFn: async (to: string) => {
@@ -60,7 +58,7 @@ export function TransferNFTForm({
 			}
 
 			if (isContainedInKiosk) {
-				return transferKioskItem.mutateAsync(to);
+				return transferKioskItem.mutateAsync({ to, clientIdentifier });
 			}
 
 			const tx = new TransactionBlock();
@@ -82,9 +80,12 @@ export function TransferNFTForm({
 			queryClient.invalidateQueries(['object', objectId]);
 			queryClient.invalidateQueries(['get-kiosk-contents']);
 			queryClient.invalidateQueries(['get-owned-objects']);
+
+			ampli.sentCollectible({ objectId });
+
 			return navigate(
 				`/receipt?${new URLSearchParams({
-					txdigest: getTransactionDigest(response),
+					txdigest: response.digest,
 					from: 'nfts',
 				}).toString()}`,
 			);
@@ -119,7 +120,7 @@ export function TransferNFTForm({
 						<Content>
 							<div className="flex gap-2.5 flex-col">
 								<div className="px-2.5 tracking-wider">
-									<Text variant="caption" color="steel-dark" weight="semibold">
+									<Text variant="caption" color="steel" weight="semibold">
 										Enter Recipient Address
 									</Text>
 								</div>

@@ -1,19 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type TransactionFilter } from '@mysten/sui.js';
+import { type TransactionFilter } from '@mysten/sui.js/client';
+import { Heading, RadioGroup, RadioGroupItem } from '@mysten/ui';
 import { useReducer, useState } from 'react';
 
 import { genTableDataFromTxData } from '../transactions/TxCardUtils';
-
 import {
 	DEFAULT_TRANSACTIONS_LIMIT,
 	useGetTransactionBlocks,
 } from '~/hooks/useGetTransactionBlocks';
-import { Heading } from '~/ui/Heading';
 import { Pagination } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
-import { RadioGroup, RadioOption } from '~/ui/Radio';
 import { TableCard } from '~/ui/TableCard';
 
 export enum FILTER_VALUES {
@@ -101,13 +99,12 @@ function TransactionBlocksForAddress({
 
 				{isObject && (
 					<RadioGroup
-						className="flex"
-						ariaLabel="transaction filter"
+						aria-label="transaction filter"
 						value={filterValue}
-						onChange={setFilterValue}
+						onValueChange={(value) => setFilterValue(value as FILTER_VALUES)}
 					>
 						{FILTER_OPTIONS.map((filter) => (
-							<RadioOption key={filter.value} value={filter.value} label={filter.label} />
+							<RadioGroupItem key={filter.value} value={filter.value} label={filter.label} />
 						))}
 					</RadioGroup>
 				)}
@@ -149,7 +146,10 @@ function TransactionBlocksForAddress({
 								filterValue,
 							});
 						}}
-						hasNext={Boolean(hasNextPage) && Boolean(data?.pages[currentPage])}
+						hasNext={
+							(Boolean(hasNextPage) && Boolean(data?.pages[currentPage])) ||
+							currentPage < (data?.pages.length ?? 0) - 1
+						}
 						hasPrev={currentPageState[filterValue] !== 0}
 						onPrev={() =>
 							dispatch({

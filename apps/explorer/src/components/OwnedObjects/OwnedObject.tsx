@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiObjectResponse, getObjectDisplay } from '@mysten/sui.js';
+import { type SuiObjectResponse } from '@mysten/sui.js/client';
 
 import { useResolveVideo } from '~/hooks/useResolveVideo';
 import { ObjectDetails } from '~/ui/ObjectDetails';
@@ -12,9 +12,9 @@ type OwnedObjectTypes = {
 	obj: SuiObjectResponse;
 };
 
-function OwnedObject({ obj }: OwnedObjectTypes): JSX.Element {
+export default function OwnedObject({ obj }: OwnedObjectTypes) {
 	const video = useResolveVideo(obj);
-	const displayMeta = getObjectDisplay(obj).data;
+	const displayMeta = obj.data?.display?.data;
 
 	return (
 		<ObjectDetails
@@ -27,5 +27,3 @@ function OwnedObject({ obj }: OwnedObjectTypes): JSX.Element {
 		/>
 	);
 }
-
-export default OwnedObject;

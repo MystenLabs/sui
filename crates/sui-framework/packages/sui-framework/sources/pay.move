@@ -11,6 +11,7 @@ module sui::pay {
     /// For when empty vector is supplied into join function.
     const ENoCoins: u64 = 0;
 
+    #[lint_allow(self_transfer)]
     /// Transfer `c` to the sender of the current transaction
     public fun keep<T>(c: Coin<T>, ctx: &TxContext) {
         transfer::public_transfer(c, tx_context::sender(ctx))
@@ -45,6 +46,7 @@ module sui::pay {
     }
 
 
+    #[lint_allow(self_transfer)]
     /// Divide coin `self` into `n - 1` coins with equal balances. If the balance is
     /// not evenly divisible by `n`, the remainder is left in `self`.
     public entry fun divide_and_keep<T>(

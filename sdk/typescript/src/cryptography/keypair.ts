@@ -1,11 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64 } from '@mysten/bcs';
-import { Ed25519Keypair } from './ed25519-keypair';
-import { PublicKey } from './publickey';
-import { Secp256k1Keypair } from './secp256k1-keypair';
-import { SignatureScheme } from './signature';
+import type { PublicKey } from './publickey.js';
+import type { SerializedSignature } from './signature.js';
+import { toSerializedSignature } from './signature.js';
+import type { SignatureScheme } from './signature.js';
+import { IntentScope, messageWithIntent } from './intent.js';
+import { blake2b } from '@noble/hashes/blake2b';
+import { bcs } from '../bcs/index.js';
 
 export const PRIVATE_KEY_SIZE = 32;
 export const LEGACY_PRIVATE_KEY_SIZE = 64;
@@ -15,41 +17,75 @@ export type ExportedKeypair = {
 	privateKey: string;
 };
 
+interface SignedMessage {
+	bytes: Uint8Array;
+	signature: SerializedSignature;
+}
+
 /**
- * A keypair used for signing transactions.
+ * TODO: Document
  */
-export interface Keypair {
-	/**
-	 * The public key for this keypair
-	 */
-	getPublicKey(): PublicKey;
+export abstract class BaseSigner {
+	abstract sign(bytes: Uint8Array): Promise<Uint8Array>;
+
+	async signWithIntent(bytes: Uint8Array, intent: IntentScope): Promise<SignedMessage> {
+		const intentMessage = messageWithIntent(intent, bytes);
+		const digest = blake2b(intentMessage, { dkLen: 32 });
+
+		const signature = toSerializedSignature({
+			signature: await this.sign(digest),
+			signatureScheme: this.getKeyScheme(),
+			pubKey: this.getPublicKey(),
+		});
+
+		return {
+			signature,
+			bytes,
+		};
+	}
+
+	async signTransactionBlock(bytes: Uint8Array) {
+		return this.signWithIntent(bytes, IntentScope.TransactionData);
+	}
+
+	async signPersonalMessage(bytes: Uint8Array) {
+		return this.signWithIntent(
+			bcs.ser(['vector', 'u8'], bytes).toBytes(),
+			IntentScope.PersonalMessage,
+		);
+	}
 
 	/**
-	 * Return the signature for the data
+	 * @deprecated use `signPersonalMessage` instead
 	 */
-	signData(data: Uint8Array): Uint8Array;
+	async signMessage(bytes: Uint8Array) {
+		return this.signPersonalMessage(bytes);
+	}
+
+	toSuiAddress(): string {
+		return this.getPublicKey().toSuiAddress();
+	}
+
+	/**
+	 * Return the signature for the data.
+	 * Prefer the async version {@link sign}, as this method will be deprecated in a future release.
+	 */
+	abstract signData(data: Uint8Array): Uint8Array;
 
 	/**
 	 * Get the key scheme of the keypair: Secp256k1 or ED25519
 	 */
-	getKeyScheme(): SignatureScheme;
+	abstract getKeyScheme(): SignatureScheme;
 
-	export(): ExportedKeypair;
+	/**
+	 * The public key for this keypair
+	 */
+	abstract getPublicKey(): PublicKey;
 }
 
-export function fromExportedKeypair(keypair: ExportedKeypair): Keypair {
-	const secretKey = fromB64(keypair.privateKey);
-	switch (keypair.schema) {
-		case 'ED25519':
-			let pureSecretKey = secretKey;
-			if (secretKey.length === LEGACY_PRIVATE_KEY_SIZE) {
-				// This is a legacy secret key, we need to strip the public key bytes and only read the first 32 bytes
-				pureSecretKey = secretKey.slice(0, PRIVATE_KEY_SIZE);
-			}
-			return Ed25519Keypair.fromSecretKey(pureSecretKey);
-		case 'Secp256k1':
-			return Secp256k1Keypair.fromSecretKey(secretKey);
-		default:
-			throw new Error(`Invalid keypair schema ${keypair.schema}`);
-	}
+/**
+ * TODO: Document
+ */
+export abstract class Keypair extends BaseSigner {
+	abstract export(): ExportedKeypair;
 }

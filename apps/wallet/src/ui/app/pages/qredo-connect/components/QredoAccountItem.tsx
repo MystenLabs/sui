@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { CheckFill16 } from '@mysten/icons';
-import { formatAddress } from '@mysten/sui.js';
+import { formatAddress } from '@mysten/sui.js/utils';
 import cn from 'classnames';
 
 import { type Wallet } from '_src/shared/qredo-api';

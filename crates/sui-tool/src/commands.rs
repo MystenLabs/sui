@@ -4,7 +4,8 @@
 use crate::{
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
     get_object, get_transaction_block, make_clients, restore_from_db_checkpoint,
-    state_sync_from_archive, ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
+    state_sync_from_archive, verify_archive, verify_archive_by_checksum, ConciseObjectOutput,
+    GroupedObjectOutput, VerboseObjectOutput,
 };
 use anyhow::Result;
 use std::path::PathBuf;
@@ -124,6 +125,26 @@ pub enum ToolCommand {
         genesis: PathBuf,
         #[clap(long = "db-path")]
         db_path: PathBuf,
+        #[clap(flatten)]
+        object_store_config: ObjectStoreConfig,
+        #[clap(default_value_t = 5)]
+        download_concurrency: usize,
+    },
+
+    /// Tool to verify the archive store
+    #[clap(name = "verify-archive")]
+    VerifyArchive {
+        #[clap(long = "genesis")]
+        genesis: PathBuf,
+        #[clap(flatten)]
+        object_store_config: ObjectStoreConfig,
+        #[clap(default_value_t = 5)]
+        download_concurrency: usize,
+    },
+
+    /// Tool to verify the archive store by comparing file checksums
+    #[clap(name = "verify-archive-from-checksums")]
+    VerifyArchiveByChecksum {
         #[clap(flatten)]
         object_store_config: ObjectStoreConfig,
         #[clap(default_value_t = 5)]
@@ -304,7 +325,7 @@ impl ToolCommand {
             ToolCommand::DbTool { db_path, cmd } => {
                 let path = PathBuf::from(db_path);
                 match cmd {
-                    Some(c) => execute_db_tool_command(path, c)?,
+                    Some(c) => execute_db_tool_command(path, c).await?,
                     None => print_db_all_tables(path)?,
                 }
             }
@@ -389,6 +410,19 @@ impl ToolCommand {
                 )
                 .await?;
             }
+            ToolCommand::VerifyArchive {
+                genesis,
+                object_store_config,
+                download_concurrency,
+            } => {
+                verify_archive(&genesis, object_store_config, download_concurrency, true).await?;
+            }
+            ToolCommand::VerifyArchiveByChecksum {
+                object_store_config,
+                download_concurrency,
+            } => {
+                verify_archive_by_checksum(object_store_config, download_concurrency).await?;
+            }
             ToolCommand::SignTransaction {
                 genesis,
                 sender_signed_data,
@@ -398,7 +432,7 @@ impl ToolCommand {
                     &fastcrypto::encoding::Base64::decode(sender_signed_data.as_str()).unwrap(),
                 )
                 .unwrap();
-                let transaction = Transaction::new(sender_signed_data).verify().unwrap();
+                let transaction = Transaction::new(sender_signed_data);
                 let (agg, _) = AuthorityAggregatorBuilder::from_genesis(&genesis)
                     .build()
                     .unwrap();

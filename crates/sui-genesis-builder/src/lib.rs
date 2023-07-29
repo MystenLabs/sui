@@ -29,7 +29,7 @@ use sui_types::crypto::{
 };
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::epoch_data::EpochData;
-use sui_types::gas::SuiGasStatus;
+use sui_types::gas::GasCharger;
 use sui_types::gas_coin::GasCoin;
 use sui_types::governance::StakedSui;
 use sui_types::in_memory_storage::InMemoryStorage;
@@ -606,7 +606,7 @@ impl Builder {
 
         // Write parameters
         let parameters_file = path.join(GENESIS_BUILDER_PARAMETERS_FILE);
-        fs::write(parameters_file, serde_yaml::to_vec(&self.parameters)?)?;
+        fs::write(parameters_file, serde_yaml::to_string(&self.parameters)?)?;
 
         if let Some(token_distribution_schedule) = &self.token_distribution_schedule {
             token_distribution_schedule.to_csv(fs::File::create(
@@ -628,7 +628,7 @@ impl Builder {
         fs::create_dir_all(&committee_dir)?;
 
         for (_pubkey, validator) in self.validators {
-            let validator_info_bytes = serde_yaml::to_vec(&validator)?;
+            let validator_info_bytes = serde_yaml::to_string(&validator)?;
             fs::write(
                 committee_dir.join(validator.info.name()),
                 validator_info_bytes,
@@ -805,12 +805,13 @@ fn create_genesis_transaction(
             .into_inner()
     };
 
+    let genesis_digest = *genesis_transaction.digest();
     // execute txn to effects
     let (effects, events, objects) = {
         let temporary_store = TemporaryStore::new(
             InMemoryStorage::new(Vec::new()),
             InputObjects::new(vec![]),
-            *genesis_transaction.digest(),
+            genesis_digest,
             protocol_config,
         );
 
@@ -823,7 +824,7 @@ fn create_genesis_transaction(
         let certificate_deny_set = HashSet::new();
         let shared_object_refs = vec![];
         let transaction_data = &genesis_transaction.data().intent_message().value;
-        let (kind, signer, gas) = transaction_data.execution_parts();
+        let (kind, signer, _) = transaction_data.execution_parts();
         let transaction_dependencies = BTreeSet::new();
         let (inner_temp_store, effects, _execution_error) = executor
             .execute_transaction_to_effects(
@@ -835,11 +836,10 @@ fn create_genesis_transaction(
                 epoch_data.epoch_start_timestamp(),
                 temporary_store,
                 shared_object_refs,
-                SuiGasStatus::new_unmetered(protocol_config),
-                &gas,
+                &mut GasCharger::new_unmetered(genesis_digest),
                 kind,
                 signer,
-                *genesis_transaction.digest(),
+                genesis_digest,
                 transaction_dependencies,
             );
         assert!(inner_temp_store.objects.is_empty());
@@ -959,13 +959,13 @@ fn process_package(
         })
         .collect();
 
+    let genesis_digest = ctx.digest();
     let mut temporary_store = TemporaryStore::new(
         store.clone(),
         InputObjects::new(loaded_dependencies),
-        ctx.digest(),
+        genesis_digest,
         protocol_config,
     );
-    let mut gas_status = SuiGasStatus::new_unmetered(protocol_config);
     let module_bytes = modules
         .iter()
         .map(|m| {
@@ -985,7 +985,7 @@ fn process_package(
         metrics,
         &mut temporary_store,
         ctx,
-        &mut gas_status,
+        &mut GasCharger::new_unmetered(genesis_digest),
         pt,
     )?;
 
@@ -1080,7 +1080,7 @@ pub fn generate_genesis_system_object(
         metrics,
         &mut temporary_store,
         genesis_ctx,
-        &mut SuiGasStatus::new_unmetered(&protocol_config),
+        &mut GasCharger::new_unmetered(genesis_digest),
         pt,
     )?;
 

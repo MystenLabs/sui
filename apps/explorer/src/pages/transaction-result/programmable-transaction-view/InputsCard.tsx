@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiCallArg } from '@mysten/sui.js';
+import { type SuiCallArg } from '@mysten/sui.js/client';
+import { Text } from '@mysten/ui';
 
 import { ProgrammableTxnBlockCard } from '~/components/transactions/ProgTxnBlockCard';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
-import { Text } from '~/ui/Text';
 import { TransactionBlockCardSection } from '~/ui/TransactionBlockCard';
 
 const REGEX_NUMBER = /^\d+$/;
@@ -41,7 +41,8 @@ export function InputsCard({ inputs }: InputsCardProps) {
 					) {
 						renderValue = <AddressLink address={stringValue} />;
 					} else if (REGEX_NUMBER.test(stringValue)) {
-						renderValue = Number(value).toLocaleString();
+						const bigNumber = BigInt(stringValue);
+						renderValue = bigNumber.toLocaleString();
 					} else {
 						renderValue = stringValue;
 					}

@@ -4,7 +4,7 @@
 import { useRpcClient } from '@mysten/core';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
-import type { DelegatedStake } from '@mysten/sui.js';
+import type { DelegatedStake } from '@mysten/sui.js/client';
 
 export function useGetDelegatedStake(address: string): UseQueryResult<DelegatedStake[], Error> {
 	const rpc = useRpcClient();
@@ -12,5 +12,6 @@ export function useGetDelegatedStake(address: string): UseQueryResult<DelegatedS
 		queryKey: ['validator', address],
 		queryFn: () => rpc.getStakes({ owner: address }),
 		staleTime: 10 * 1000,
+		refetchInterval: 30 * 1000,
 	});
 }

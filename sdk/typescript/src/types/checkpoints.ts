@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { Infer } from 'superstruct';
 import {
 	array,
-	Infer,
 	number,
 	object,
 	string,
@@ -14,8 +14,6 @@ import {
 	nullable,
 } from 'superstruct';
 
-import { TransactionDigest, TransactionEffectsDigest } from './common';
-
 export const GasCostSummary = object({
 	computationCost: string(),
 	storageCost: string(),
@@ -24,10 +22,14 @@ export const GasCostSummary = object({
 });
 export type GasCostSummary = Infer<typeof GasCostSummary>;
 
+/** @deprecated Use `string` instead. */
 export const CheckPointContentsDigest = string();
+/** @deprecated Use `string` instead. */
 export type CheckPointContentsDigest = Infer<typeof CheckPointContentsDigest>;
 
+/** @deprecated Use `string` instead. */
 export const CheckpointDigest = string();
+/** @deprecated Use `string` instead. */
 export type CheckpointDigest = Infer<typeof CheckpointDigest>;
 
 export const ECMHLiveObjectSetDigest = object({
@@ -38,7 +40,9 @@ export type ECMHLiveObjectSetDigest = Infer<typeof ECMHLiveObjectSetDigest>;
 export const CheckpointCommitment = any();
 export type CheckpointCommitment = Infer<typeof CheckpointCommitment>;
 
+/** @deprecated Use `string` instead. */
 export const ValidatorSignature = string();
+/** @deprecated Use `string` instead. */
 export type ValidatorSignature = Infer<typeof ValidatorSignature>;
 
 export const EndOfEpochData = object({
@@ -49,22 +53,21 @@ export const EndOfEpochData = object({
 export type EndOfEpochData = Infer<typeof EndOfEpochData>;
 
 export const ExecutionDigests = object({
-	transaction: TransactionDigest,
-	effects: TransactionEffectsDigest,
+	transaction: string(),
+	effects: string(),
 });
 
 export const Checkpoint = object({
 	epoch: string(),
 	sequenceNumber: string(),
-	digest: CheckpointDigest,
+	digest: string(),
 	networkTotalTransactions: string(),
-	previousDigest: optional(CheckpointDigest),
+	previousDigest: optional(string()),
 	epochRollingGasCostSummary: GasCostSummary,
 	timestampMs: string(),
 	endOfEpochData: optional(EndOfEpochData),
-	// TODO(jian): remove optional after 0.30.0 is released
-	validatorSignature: optional(ValidatorSignature),
-	transactions: array(TransactionDigest),
+	validatorSignature: string(),
+	transactions: array(string()),
 	checkpointCommitments: array(CheckpointCommitment),
 });
 export type Checkpoint = Infer<typeof Checkpoint>;

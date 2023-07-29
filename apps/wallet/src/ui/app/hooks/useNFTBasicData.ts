@@ -1,12 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getObjectFields } from '@mysten/sui.js';
-
 import useFileExtensionType from './useFileExtensionType';
 import useMediaUrl from './useMediaUrl';
 
-import type { SuiObjectData } from '@mysten/sui.js';
+import type { SuiObjectData } from '@mysten/sui.js/client';
 
 export default function useNFTBasicData(nftObj: SuiObjectData | null) {
 	const nftObjectID = nftObj?.objectId || null;
@@ -15,7 +13,7 @@ export default function useNFTBasicData(nftObj: SuiObjectData | null) {
 	let nftFields = null;
 	if (nftObj && nftObj.content?.dataType === 'moveObject') {
 		objType = nftObj.content?.type;
-		nftFields = getObjectFields(nftObj);
+		nftFields = nftObj?.content?.dataType === 'moveObject' ? nftObj.content.fields : null;
 	}
 	const fileExtensionType = useFileExtensionType(filePath || '');
 	return {

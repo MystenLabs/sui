@@ -3,13 +3,14 @@
 
 use std::str::FromStr;
 
-use crate::signature::{AuthenticatorTrait, AuxVerifyData};
+use crate::signature::{AuthenticatorTrait, VerifyParams};
 use crate::utils::{make_transaction, make_zklogin_tx};
 use crate::{
     base_types::SuiAddress,
     crypto::{get_key_pair_from_rng, DefaultHash, SignatureScheme, SuiKeyPair},
     signature::GenericSignature,
     zk_login_authenticator::{AddressParams, PublicInputs, ZkLoginAuthenticator, ZkLoginProof},
+    zk_login_util::{parse_jwks, OAuthProviderContent, DEFAULT_JWK_BYTES},
 };
 use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::hash::HashFunction;
@@ -20,29 +21,9 @@ use fastcrypto_zkp::bn254::zk_login::{
 use rand::{rngs::StdRng, SeedableRng};
 use shared_crypto::intent::{Intent, IntentMessage};
 
-pub const TEST_JWK_BYTES: &[u8] = r#"{
-    "keys": [
-        {
-          "kty": "RSA",
-          "e": "AQAB",
-          "alg": "RS256",
-          "kid": "2d9a5ef5b12623c91671a7093cb323333cd07d09",
-          "use": "sig",
-          "n": "0NDRXWtH6_HnmuSuTAisgYVZ3Z67PQjHbRFz4XNYuD95BKx0wQr0GWOi_UCGLfI0col3i6J3_AF-b1YrTFTMEr_bL8CYDdK2CYLcGUzc5bLRDAySsqnKdlhWkneqfFdr3J66mHu11KUaIIRWiLsCkR9QFF-8o2PtZzv3F-3Uh7L4q7i_Evs1s7SJlO0OAnI4ew4rP2HbRaO0Q2zK0DL_d1eoAC72apQuEzz-2aXfQ-QYSTlVK74McBhP1MRtgD6zGF2lwg4uhgb55fDDQQh0VHWQSxwbvAL0Oox69zzpkFgpjJAJUqaxegzETU1jf3iKs1vyFIB0C4N-Jr__zwLQZw=="
-        },
-        {
-          "alg": "RS256",
-          "use": "sig",
-          "n": "1qrQCTst3RF04aMC9Ye_kGbsE0sftL4FOtB_WrzBDOFdrfVwLfflQuPX5kJ-0iYv9r2mjD5YIDy8b-iJKwevb69ISeoOrmL3tj6MStJesbbRRLVyFIm_6L7alHhZVyqHQtMKX7IaNndrfebnLReGntuNk76XCFxBBnRaIzAWnzr3WN4UPBt84A0KF74pei17dlqHZJ2HB2CsYbE9Ort8m7Vf6hwxYzFtCvMCnZil0fCtk2OQ73l6egcvYO65DkAJibFsC9xAgZaF-9GYRlSjMPd0SMQ8yU9i3W7beT00Xw6C0FYA9JAYaGaOvbT87l_6ZkAksOMuvIPD_jNVfTCPLQ==",
-          "e": "AQAB",
-          "kty": "RSA",
-          "kid": "6083dd5981673f661fde9dae646b6f0380a0145c"
-        }
-      ]
-  }"#.as_bytes();
-
 #[test]
 fn zklogin_authenticator_scenarios() {
+    use im::hashmap::HashMap as ImHashMap;
     let (user_address, tx, authenticator) = make_zklogin_tx();
 
     let intent_msg = IntentMessage::new(
@@ -50,20 +31,30 @@ fn zklogin_authenticator_scenarios() {
         tx.into_data().transaction_data().clone(),
     );
 
+    let parsed: ImHashMap<String, OAuthProviderContent> =
+        parse_jwks(DEFAULT_JWK_BYTES).unwrap().into_iter().collect();
+
     // Construct the required info required to verify a zk login authenticator
     // in authority server (i.e. epoch and default JWK).
-    let aux_verify_data = AuxVerifyData::new(Some(0), Some(TEST_JWK_BYTES.to_vec()));
+    let aux_verify_data = VerifyParams::new(parsed.clone());
 
     // Verify passes.
     assert!(authenticator
-        .verify_secure_generic(&intent_msg, user_address, aux_verify_data)
+        .verify_authenticator(&intent_msg, user_address, Some(0), &aux_verify_data)
         .is_ok());
-    // Malformed JWK in aux verify data.
-    let aux_verify_data = AuxVerifyData::new(Some(9999), Some(vec![0, 0, 0]));
+
+    let parsed: ImHashMap<String, OAuthProviderContent> = parsed
+        .into_iter()
+        .enumerate()
+        .map(|(i, (_, v))| (format!("nosuchkey_{}", i), v))
+        .collect();
+
+    // correct kid can no longer be found
+    let aux_verify_data = VerifyParams::new(parsed);
 
     // Verify fails.
     assert!(authenticator
-        .verify_secure_generic(&intent_msg, user_address, aux_verify_data)
+        .verify_authenticator(&intent_msg, user_address, Some(9999), &aux_verify_data)
         .is_err());
 }
 

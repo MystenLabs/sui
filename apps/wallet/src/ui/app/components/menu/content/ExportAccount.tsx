@@ -1,17 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64 } from '@mysten/sui.js';
+import { fromB64 } from '@mysten/sui.js/utils';
 import { bytesToHex } from '@noble/hashes/utils';
 import { useMutation } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 
+import { MenuLayout } from './MenuLayout';
+import { PasswordInputDialog } from './PasswordInputDialog';
 import { HideShowDisplayBox } from '../../HideShowDisplayBox';
 import Alert from '../../alert';
 import { useNextMenuUrl } from '../hooks';
-import { MenuLayout } from './MenuLayout';
-import { PasswordInputDialog } from './PasswordInputDialog';
 import { useBackgroundClient } from '_src/ui/app/hooks/useBackgroundClient';
 
 export function ExportAccount() {

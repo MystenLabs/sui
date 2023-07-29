@@ -173,6 +173,7 @@ module sui::kiosk {
 
     // === Kiosk packing and unpacking ===
 
+    #[lint_allow(self_transfer, share_owned)]
     /// Creates a new Kiosk in a default configuration: sender receives the
     /// `KioskOwnerCap` and becomes the Owner, the `Kiosk` is shared.
     entry fun default(ctx: &mut TxContext) {
@@ -330,7 +331,7 @@ module sui::kiosk {
 
         self.item_count = self.item_count - 1;
         assert!(price == coin::value(&payment), EIncorrectAmount);
-        balance::join(&mut self.profits, coin::into_balance(payment));
+        coin::put(&mut self.profits, payment);
         df::remove_if_exists<Lock, bool>(&mut self.id, Lock { id });
 
         event::emit(ItemPurchased<T> { kiosk: object::id(self), id, price });
@@ -366,16 +367,21 @@ module sui::kiosk {
         self: &mut Kiosk, purchase_cap: PurchaseCap<T>, payment: Coin<SUI>
     ): (T, TransferRequest<T>) {
         let PurchaseCap { id, item_id, kiosk_id, min_price } = purchase_cap;
-        let paid = coin::value(&payment);
+        object::delete(id);
 
+        let id = item_id;
+        let paid = coin::value(&payment);
         assert!(paid >= min_price, EIncorrectAmount);
         assert!(object::id(self) == kiosk_id, EWrongKiosk);
 
-        df::remove<Listing, u64>(&mut self.id, Listing { id: item_id, is_exclusive: true });
-        df::add(&mut self.id, Listing { id: item_id, is_exclusive: false }, paid);
-        object::delete(id);
+        df::remove<Listing, u64>(&mut self.id, Listing { id, is_exclusive: true });
 
-        purchase<T>(self, item_id, payment)
+        coin::put(&mut self.profits, payment);
+        self.item_count = self.item_count - 1;
+        df::remove_if_exists<Lock, bool>(&mut self.id, Lock { id });
+        let item = dof::remove<Item, T>(&mut self.id, Item { id });
+
+        (item, transfer_policy::new_request(id, paid, object::id(self)))
     }
 
     /// Return the `PurchaseCap` without making a purchase; remove an active offer and

@@ -1,19 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { formatAmount } from '@mysten/core';
 import { Sui } from '@mysten/icons';
-
-import { StatsWrapper } from './HomeMetrics/FormattedStatsAmount';
+import { Text } from '@mysten/ui';
 
 import { useSuiCoinData } from '~/hooks/useSuiCoinData';
 import { Card } from '~/ui/Card';
-import { Heading } from '~/ui/Heading';
-import { Text } from '~/ui/Text';
+import { ButtonOrLink } from '~/ui/utils/ButtonOrLink';
+
+const COIN_GECKO_SUI_URL = 'https://www.coingecko.com/en/coins/sui';
 
 export function SuiTokenCard() {
-	const { data, isLoading } = useSuiCoinData();
-	const { currentPrice, totalSupply, marketCap } = data || {};
+	const { data } = useSuiCoinData();
+	const { currentPrice } = data || {};
 
 	const formattedPrice = currentPrice
 		? currentPrice.toLocaleString('en', {
@@ -23,32 +22,22 @@ export function SuiTokenCard() {
 		: '--';
 
 	return (
-		<Card bg="lightBlue" spacing="lg" height="full">
-			<div className="md:max-lg:max-w-[336px]">
+		<ButtonOrLink href={COIN_GECKO_SUI_URL}>
+			<Card growOnHover bg="white/80" spacing="lg" height="full">
 				<div className="flex items-center gap-2">
-					<div className="h-4.5 w-4.5 rounded-full bg-sui p-1">
+					<div className="h-5 w-5 flex-shrink-0 rounded-full bg-sui p-1">
 						<Sui className="h-full w-full text-white" />
 					</div>
-					<div className="flex w-full flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-						<div className="flex items-center gap-2">
-							<Heading as="div" variant="heading4/semibold" color="steel-darker">
-								1 SUI = {formattedPrice}
-							</Heading>
-						</div>
+					<div className="flex w-full flex-col gap-0.5">
+						<Text variant="body/semibold" color="steel-darker">
+							1 SUI = {formattedPrice}
+						</Text>
 						<Text variant="subtitleSmallExtra/medium" color="steel">
 							via CoinGecko
 						</Text>
 					</div>
 				</div>
-				<div className="mt-8 flex w-full gap-8">
-					<StatsWrapper label="Market Cap" size="sm" postfix="USD" unavailable={isLoading}>
-						{formatAmount(marketCap)}
-					</StatsWrapper>
-					<StatsWrapper label="Total Supply" size="sm" postfix="SUI" unavailable={isLoading}>
-						{formatAmount(totalSupply)}
-					</StatsWrapper>
-				</div>
-			</div>
-		</Card>
+			</Card>
+		</ButtonOrLink>
 	);
 }

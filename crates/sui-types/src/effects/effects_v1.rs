@@ -5,12 +5,15 @@ use crate::base_types::{
     random_object_ref, EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
 use crate::digests::TransactionEventsDigest;
-use crate::effects::{TransactionEffectsAPI, TransactionEffectsDebugSummary};
+use crate::effects::{
+    InputSharedObjectKind, TransactionEffectsAPI, TransactionEffectsDebugSummary,
+};
 use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
 use crate::object::Owner;
 use crate::storage::{DeleteKind, WriteKind};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fmt::{Display, Formatter, Write};
 
 /// The response from processing a transaction or a certified transaction
@@ -62,32 +65,44 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     fn into_status(self) -> ExecutionStatus {
         self.status
     }
-    fn modified_at_versions(&self) -> &[(ObjectID, SequenceNumber)] {
-        &self.modified_at_versions
+    fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)> {
+        self.modified_at_versions.clone()
     }
-    fn shared_objects(&self) -> &[ObjectRef] {
-        &self.shared_objects
+
+    fn input_shared_objects(&self) -> Vec<(ObjectRef, InputSharedObjectKind)> {
+        let modified: HashSet<_> = self.modified_at_versions.iter().map(|(r, _)| r).collect();
+        self.shared_objects
+            .iter()
+            .map(|r| {
+                let kind = if modified.contains(&r.0) {
+                    InputSharedObjectKind::Mutate
+                } else {
+                    InputSharedObjectKind::ReadOnly
+                };
+                (*r, kind)
+            })
+            .collect()
     }
-    fn created(&self) -> &[(ObjectRef, Owner)] {
-        &self.created
+    fn created(&self) -> Vec<(ObjectRef, Owner)> {
+        self.created.clone()
     }
-    fn mutated(&self) -> &[(ObjectRef, Owner)] {
-        &self.mutated
+    fn mutated(&self) -> Vec<(ObjectRef, Owner)> {
+        self.mutated.clone()
     }
-    fn unwrapped(&self) -> &[(ObjectRef, Owner)] {
-        &self.unwrapped
+    fn unwrapped(&self) -> Vec<(ObjectRef, Owner)> {
+        self.unwrapped.clone()
     }
-    fn deleted(&self) -> &[ObjectRef] {
-        &self.deleted
+    fn deleted(&self) -> Vec<ObjectRef> {
+        self.deleted.clone()
     }
-    fn unwrapped_then_deleted(&self) -> &[ObjectRef] {
-        &self.unwrapped_then_deleted
+    fn unwrapped_then_deleted(&self) -> Vec<ObjectRef> {
+        self.unwrapped_then_deleted.clone()
     }
-    fn wrapped(&self) -> &[ObjectRef] {
-        &self.wrapped
+    fn wrapped(&self) -> Vec<ObjectRef> {
+        self.wrapped.clone()
     }
-    fn gas_object(&self) -> &(ObjectRef, Owner) {
-        &self.gas_object
+    fn gas_object(&self) -> (ObjectRef, Owner) {
+        self.gas_object
     }
     fn events_digest(&self) -> Option<&TransactionEventsDigest> {
         self.events_digest.as_ref()
@@ -104,15 +119,19 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     /// created and unwrapped objects. In other words, all objects that still exist
     /// in the object state after this transaction.
     /// It doesn't include deleted/wrapped objects.
-    fn all_changed_objects(&self) -> Vec<(&ObjectRef, &Owner, WriteKind)> {
+    fn all_changed_objects(&self) -> Vec<(ObjectRef, Owner, WriteKind)> {
         self.mutated
             .iter()
-            .map(|(r, o)| (r, o, WriteKind::Mutate))
-            .chain(self.created.iter().map(|(r, o)| (r, o, WriteKind::Create)))
+            .map(|(r, o)| (*r, *o, WriteKind::Mutate))
+            .chain(
+                self.created
+                    .iter()
+                    .map(|(r, o)| (*r, *o, WriteKind::Create)),
+            )
             .chain(
                 self.unwrapped
                     .iter()
-                    .map(|(r, o)| (r, o, WriteKind::Unwrap)),
+                    .map(|(r, o)| (*r, *o, WriteKind::Unwrap)),
             )
             .collect()
     }
@@ -120,24 +139,25 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     /// Return an iterator that iterates through all deleted objects, including deleted,
     /// unwrapped_then_deleted, and wrapped objects. In other words, all objects that
     /// do not exist in the object state after this transaction.
-    fn all_deleted(&self) -> Vec<(&ObjectRef, DeleteKind)> {
+    fn all_deleted(&self) -> Vec<(ObjectRef, DeleteKind)> {
         self.deleted
             .iter()
-            .map(|r| (r, DeleteKind::Normal))
+            .map(|r| (*r, DeleteKind::Normal))
             .chain(
                 self.unwrapped_then_deleted
                     .iter()
-                    .map(|r| (r, DeleteKind::UnwrapThenDelete)),
+                    .map(|r| (*r, DeleteKind::UnwrapThenDelete)),
             )
-            .chain(self.wrapped.iter().map(|r| (r, DeleteKind::Wrap)))
+            .chain(self.wrapped.iter().map(|r| (*r, DeleteKind::Wrap)))
             .collect()
     }
 
     /// Return an iterator of mutated objects, but excluding the gas object.
-    fn mutated_excluding_gas(&self) -> Vec<&(ObjectRef, Owner)> {
+    fn mutated_excluding_gas(&self) -> Vec<(ObjectRef, Owner)> {
         self.mutated
-            .iter()
-            .filter(|o| *o != &self.gas_object)
+            .clone()
+            .into_iter()
+            .filter(|o| o != &self.gas_object)
             .collect()
     }
 
@@ -176,11 +196,24 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     fn dependencies_mut_for_testing(&mut self) -> &mut Vec<TransactionDigest> {
         &mut self.dependencies
     }
-    fn shared_objects_mut_for_testing(&mut self) -> &mut Vec<ObjectRef> {
-        &mut self.shared_objects
+
+    fn unsafe_add_input_shared_object_for_testing(
+        &mut self,
+        obj_ref: ObjectRef,
+        kind: InputSharedObjectKind,
+    ) {
+        self.shared_objects.push(obj_ref);
+        match kind {
+            InputSharedObjectKind::Mutate => {
+                self.modified_at_versions.push((obj_ref.0, obj_ref.1));
+            }
+            InputSharedObjectKind::ReadOnly => (),
+        }
     }
-    fn modified_at_versions_mut_for_testing(&mut self) -> &mut Vec<(ObjectID, SequenceNumber)> {
-        &mut self.modified_at_versions
+
+    fn unsafe_add_deleted_object_for_testing(&mut self, object: ObjectRef) {
+        self.modified_at_versions.push((object.0, object.1));
+        self.deleted.push(object);
     }
 }
 

@@ -135,6 +135,13 @@ impl<'a, K: Serialize, V> Iter<'a, K, V> {
         self
     }
 
+    /// Seeks to the first key in the database (at this column family).
+    pub fn seek_to_first(mut self) -> Self {
+        self.is_initialized = true;
+        self.db_iter.seek_to_first();
+        self
+    }
+
     /// Will make the direction of the iteration reverse and will
     /// create a new `RevIter` to consume. Every call to `next` method
     /// will give the next element from the end.

@@ -2,13 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import {
 	DryRunTransactionBlockResponse,
-	type SuiAddress,
 	type SuiTransactionBlockResponse,
-	is,
-	getExecutionStatusType,
-	getTransactionDigest,
-	getTransactionSender,
-} from '@mysten/sui.js';
+} from '@mysten/sui.js/client';
 import { useMemo } from 'react';
 
 import { getBalanceChangeSummary } from '../utils/transaction/getBalanceChangeSummary';
@@ -24,9 +19,11 @@ import { getObjectDisplayLookup } from '../utils/transaction/getObjectDisplayLoo
 export function useTransactionSummary({
 	transaction,
 	currentAddress,
+	recognizedPackagesList,
 }: {
 	transaction?: SuiTransactionBlockResponse | DryRunTransactionBlockResponse;
-	currentAddress?: SuiAddress;
+	currentAddress?: string;
+	recognizedPackagesList: string[];
 }) {
 	const { objectChanges } = transaction ?? {};
 
@@ -49,28 +46,30 @@ export function useTransactionSummary({
 	const summary = useMemo(() => {
 		if (!transaction) return null;
 		const objectSummary = getObjectChangeSummary(objectChangesWithDisplay);
-		const balanceChangeSummary = getBalanceChangeSummary(transaction);
+		const balanceChangeSummary = getBalanceChangeSummary(transaction, recognizedPackagesList);
 		const gas = getGasSummary(transaction);
 
-		if (is(transaction, DryRunTransactionBlockResponse)) {
+		if ('digest' in transaction) {
+			// Non-dry-run transaction:
 			return {
 				gas,
-				objectSummary,
+				sender: transaction.transaction?.data.sender,
 				balanceChanges: balanceChangeSummary,
-			};
-		} else {
-			return {
-				gas,
-				sender: getTransactionSender(transaction),
-				balanceChanges: balanceChangeSummary,
-				digest: getTransactionDigest(transaction),
+				digest: transaction.digest,
 				label: getLabel(transaction, currentAddress),
 				objectSummary,
-				status: getExecutionStatusType(transaction),
+				status: transaction.effects?.status.status,
 				timestamp: transaction.timestampMs,
 			};
+		} else {
+			// Dry run transaction:
+			return {
+				gas,
+				objectSummary,
+				balanceChanges: balanceChangeSummary,
+			};
 		}
-	}, [transaction, currentAddress, objectChangesWithDisplay]);
+	}, [transaction, objectChangesWithDisplay, recognizedPackagesList, currentAddress]);
 
 	return summary;
 }

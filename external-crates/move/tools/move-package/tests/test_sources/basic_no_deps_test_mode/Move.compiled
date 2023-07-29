@@ -21,5 +21,7 @@ CompiledPackageInfo {
         additional_named_addresses: {},
         fetch_deps_only: false,
         skip_fetch_latest_git_deps: false,
+        default_flavor: None,
+        default_edition: None,
     },
 }

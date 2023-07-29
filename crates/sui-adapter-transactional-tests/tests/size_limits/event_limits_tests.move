@@ -58,13 +58,13 @@ module Test::M1 {
 //# run Test::M1::emit_n_small_events --args 1 --gas-budget 100000000000000 --summarize
 
 // emit at event count limit should succeed
-//# run Test::M1::emit_n_small_events --args 256 --gas-budget 100000000000000 --summarize
+//# run Test::M1::emit_n_small_events --args 1024 --gas-budget 100000000000000 --summarize
 
 // emit above event count limit should fail
-//# run Test::M1::emit_n_small_events --args 257 --gas-budget 100000000000000
+//# run Test::M1::emit_n_small_events --args 1025 --gas-budget 100000000000000
 
 // emit above event count limit should fail
-//# run Test::M1::emit_n_small_events --args 300 --gas-budget 100000000000000
+//# run Test::M1::emit_n_small_events --args 2093 --gas-budget 100000000000000
 
 // emit below event size limit should succeed
 //# run Test::M1::emit_event_with_size --args 200000 --gas-budget 100000000000000 --summarize

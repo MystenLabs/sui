@@ -1,71 +1,130 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiAddress, SuiObjectResponse } from '@mysten/sui.js';
+import { KIOSK_ITEM, KioskItem, fetchKiosk, getOwnedKiosks } from '@mysten/kiosk';
 import { useQuery } from '@tanstack/react-query';
 import { useRpcClient } from '../api/RpcClientContext';
-import { useGetOwnedObjects } from './useGetOwnedObjects';
+import { ORIGINBYTE_KIOSK_OWNER_TOKEN, getKioskIdFromOwnerCap } from '../utils/kiosk';
+import { SuiClient, SuiObjectResponse } from '@mysten/sui.js/src/client';
 
-// OriginByte module for mainnet (we only support mainnet)
-export const ORIGINBYTE_KIOSK_MODULE =
-	'0x95a441d389b07437d00dd07e0b6f05f513d7659b13fd7c5d3923c7d9d847199b::ob_kiosk' as const;
-export const ORIGINBYTE_KIOSK_OWNER_TOKEN = `${ORIGINBYTE_KIOSK_MODULE}::OwnerToken`;
+export enum KioskTypes {
+	SUI = 'sui',
+	ORIGINBYTE = 'originByte',
+}
 
-const KIOSK_MODULE = '0x2::kiosk';
-const KIOSK_OWNER_CAP = `${KIOSK_MODULE}::KioskOwnerCap`;
+export type Kiosk = {
+	items: Partial<SuiObjectResponse & KioskItem>[];
+	itemIds: string[];
+	kioskId: string;
+	type: KioskTypes;
+	ownerCap?: string;
+};
 
-const getKioskId = (obj: SuiObjectResponse) =>
-	obj.data?.content &&
-	'fields' in obj.data.content &&
-	(obj.data.content.fields.for ?? obj.data.content.fields.kiosk);
+async function getOriginByteKioskContents(address: string, client: SuiClient) {
+	const data = await client.getOwnedObjects({
+		owner: address,
+		filter: {
+			StructType: ORIGINBYTE_KIOSK_OWNER_TOKEN,
+		},
+		options: {
+			showContent: true,
+		},
+	});
+	const ids = data.data.map((object) => getKioskIdFromOwnerCap(object));
 
-export function useGetKioskContents(address?: SuiAddress | null, disableOriginByteKiosk?: boolean) {
-	const rpc = useRpcClient();
-	const { data } = useGetOwnedObjects(address, {
-		MatchAny: [
-			{ StructType: KIOSK_OWNER_CAP },
-			...(!disableOriginByteKiosk ? [{ StructType: ORIGINBYTE_KIOSK_OWNER_TOKEN }] : []),
-		],
+	// fetch the user's kiosks
+	const ownedKiosks = await client.multiGetObjects({
+		ids: ids.flat(),
+		options: {
+			showContent: true,
+		},
 	});
 
-	// find list of kiosk IDs owned by address
-	const kioskIds = data?.pages.flatMap((page) => page.data).map((obj) => getKioskId(obj)) ?? [];
+	const contents = await Promise.all(
+		ownedKiosks
+			.map(async (kiosk) => {
+				if (!kiosk.data) return;
+				const objects = await client.getDynamicFields({
+					parentId: kiosk.data.objectId,
+				});
 
+				const objectIds = objects.data
+					.filter((obj) => obj.name.type === KIOSK_ITEM)
+					.map((obj) => obj.objectId);
+
+				// fetch the contents of the objects within a kiosk
+				const kioskContent = await client.multiGetObjects({
+					ids: objectIds,
+					options: {
+						showDisplay: true,
+						showType: true,
+					},
+				});
+
+				return {
+					itemIds: objectIds,
+					items: kioskContent.map((item) => ({ ...item, kioskId: kiosk.data?.objectId })),
+					kioskId: kiosk.data.objectId,
+					type: KioskTypes.ORIGINBYTE,
+				};
+			})
+			.filter(Boolean) as Promise<Kiosk>[],
+	);
+	return contents;
+}
+
+async function getSuiKioskContents(address: string, client: SuiClient) {
+	const ownedKiosks = await getOwnedKiosks(client, address!);
+
+	const contents = await Promise.all(
+		ownedKiosks.kioskIds.map(async (id) => {
+			const kiosk = await fetchKiosk(client, id, { limit: 1000 }, {});
+			const contents = await client.multiGetObjects({
+				ids: kiosk.data.itemIds,
+				options: { showDisplay: true, showContent: true },
+			});
+			const items = contents.map((object) => {
+				const kioskData = kiosk.data.items.find((item) => item.objectId === object.data?.objectId);
+				return { ...object, ...kioskData, kioskId: id };
+			});
+			return {
+				itemIds: kiosk.data.itemIds,
+				items,
+				kioskId: id,
+				type: KioskTypes.SUI,
+				ownerCap: ownedKiosks.kioskOwnerCaps.find((k) => k.kioskId === id)?.objectId,
+			};
+		}),
+	);
+	return contents;
+}
+
+export function useGetKioskContents(address?: string | null, disableOriginByteKiosk?: boolean) {
+	const rpc = useRpcClient();
 	return useQuery({
-		queryKey: ['get-kiosk-contents', address, kioskIds],
+		// eslint-disable-next-line @tanstack/query/exhaustive-deps
+		queryKey: ['get-kiosk-contents', address, disableOriginByteKiosk],
 		queryFn: async () => {
-			if (!kioskIds.length) return [];
-
-			// fetch the user's kiosks
-			const ownedKiosks = await rpc.multiGetObjects({
-				ids: kioskIds,
-				options: {
-					showContent: true,
-				},
-			});
-
-			// find object IDs within a kiosk
-			const kioskObjectIds = await Promise.all(
-				ownedKiosks.map(async (kiosk) => {
-					if (!kiosk.data?.objectId) return [];
-					const objects = await rpc.getDynamicFields({
-						parentId: kiosk.data.objectId,
-					});
-					return objects.data.map((obj) => obj.objectId);
-				}),
-			);
-
-			// fetch the contents of the objects within a kiosk
-			const kioskContent = await rpc.multiGetObjects({
-				ids: kioskObjectIds.flat(),
-				options: {
-					showDisplay: true,
-					showType: true,
-				},
-			});
-
-			return kioskContent;
+			const suiKiosks = await getSuiKioskContents(address!, rpc);
+			const obKiosks = await getOriginByteKioskContents(address!, rpc);
+			return [...suiKiosks, ...obKiosks];
 		},
-		enabled: !!address,
+		select(data) {
+			const kiosks = new Map<string, Kiosk>();
+			const lookup = new Map<string, string>();
+
+			data.forEach((kiosk) => {
+				kiosks.set(kiosk.kioskId, kiosk);
+				kiosk.itemIds.forEach((id) => {
+					lookup.set(id, kiosk.kioskId);
+				});
+			});
+
+			return {
+				kiosks,
+				list: data.flatMap((kiosk) => kiosk.items),
+				lookup,
+			};
+		},
 	});
 }

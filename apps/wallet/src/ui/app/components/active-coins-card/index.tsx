@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetAllBalances } from '@mysten/core';
-import { SUI_TYPE_ARG } from '@mysten/sui.js';
+import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { Link } from 'react-router-dom';
 
 import { CoinItem } from './CoinItem';

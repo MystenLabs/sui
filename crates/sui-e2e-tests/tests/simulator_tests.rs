@@ -11,11 +11,13 @@ use rand::{
     Rng,
 };
 use std::collections::{HashMap, HashSet};
+use sui_core::authority::EffectsNotifyRead;
+use sui_test_transaction_builder::make_transfer_sui_transaction;
 use tokio::time::{sleep, Duration, Instant};
 use tracing::{debug, trace};
 
 use sui_macros::*;
-use test_utils::{network::TestClusterBuilder, transaction::wait_for_tx};
+use test_cluster::TestClusterBuilder;
 
 async fn make_fut(i: usize) -> usize {
     let count_dist = Uniform::from(1..5);
@@ -126,15 +128,18 @@ async fn test_hash_collections() {
 async fn test_net_determinism() {
     let mut test_cluster = TestClusterBuilder::new().build().await;
 
-    let txn = test_cluster
-        .wallet
-        .make_transfer_sui_transaction(None, None)
-        .await;
+    let txn = make_transfer_sui_transaction(&test_cluster.wallet, None, None).await;
     let digest = test_cluster.execute_transaction(txn).await.digest;
 
     sleep(Duration::from_millis(1000)).await;
 
     let handle = test_cluster.spawn_new_fullnode().await;
 
-    wait_for_tx(digest, handle.sui_node.state()).await;
+    handle
+        .sui_node
+        .state()
+        .db()
+        .notify_read_executed_effects(vec![digest])
+        .await
+        .unwrap();
 }

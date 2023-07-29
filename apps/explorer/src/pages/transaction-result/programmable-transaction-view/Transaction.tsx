@@ -1,14 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type MoveCallSuiTransaction, type SuiArgument, type SuiMovePackage } from '@mysten/sui.js';
+import {
+	type MoveCallSuiTransaction,
+	type SuiArgument,
+	type SuiMovePackage,
+} from '@mysten/sui.js/client';
+import { Text } from '@mysten/ui';
 import { type ReactNode } from 'react';
 
 import { flattenSuiArguments } from './utils';
-
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import { ObjectLink } from '~/ui/InternalLink';
-import { Text } from '~/ui/Text';
 
 export interface TransactionProps<T> {
 	type: string;

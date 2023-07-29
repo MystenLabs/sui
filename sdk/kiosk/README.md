@@ -1,9 +1,10 @@
 # Kiosk SDK
 
-> **This package is still in active development. Use at your own risk**.
-> Currently, the only supported environment is **Sui Testnet**.
+> **This package is still in active development. Use at your own risk**. Currently, the only
+> supported environment is **Sui Testnet**.
 
-This Kiosk SDK library provides different utilities to interact/create/manage a [Kiosk](https://github.com/MystenLabs/sui/tree/main/kiosk).
+This Kiosk SDK library provides different utilities to interact/create/manage a
+[Kiosk](https://github.com/MystenLabs/sui/tree/main/kiosk).
 
 ## Installation
 
@@ -24,17 +25,17 @@ Here are some indicative examples on how to use the kiosk SDK.
 
 ```typescript
 import { fetchKiosk } from '@mysten/kiosk';
-import { Connection, JsonRpcProvider } from '@mysten/sui.js';
+import { SuiClient } from '@mysten/sui.js/client';
 
-const provider = new JsonRpcProvider(
-	new Connection({ fullnode: 'https://fullnode.testnet.sui.io:443' }),
+const client = new SuiClient(
+	url: 'https://fullnode.testnet.sui.io:443',
 );
 
 const getKiosk = async () => {
 	const kioskAddress = `0xSomeKioskAddress`;
 
 	const { data } = await fetchKiosk(
-		provider,
+		client,
 		kioskAddress,
 		{}, // empty pagination, currently disabled.
 		{ withListingPrices: true, withKioskFields: true },
@@ -51,10 +52,10 @@ const getKiosk = async () => {
 
 ```typescript
 import { queryTransferPolicy, purchaseAndResolvePolicies, place, testnetEnvironment } from '@mysten/kiosk';
-import { Connection, JsonRpcProvider } from '@mysten/sui.js';
+import { SuiClient } from '@mysten/sui.js/client';
 
-const provider = new JsonRpcProvider(
-  new Connection({ fullnode: 'https://fullnode.testnet.sui.io:443' }),
+const client = new SuiClient(
+  url: 'https://fullnode.testnet.sui.io:443',
 );
 
  // the kiosk we're purchasing from
@@ -76,7 +77,7 @@ const ownedKioskCap = `0xMyKioskOwnerCap`;
 const purchaseItem = async (item, kioskId) => {
 
   // fetch the policy of the item (could be an array, if there's more than one transfer policy)
-  const policies = await queryTransferPolicy(provider, item.type);
+  const policies = await queryTransferPolicy(client, item.type);
   // selecting the first one for simplicity.
   const policyId = policy[0]?.id;
   // initialize tx block.
@@ -114,7 +115,7 @@ const purchaseItem = async (item, kioskId) => {
 
 ```typescript
 import { createKioskAndShare } from '@mysten/kiosk';
-import { TransactionBlock } from '@mysten/sui.js';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 
 const createKiosk = async () => {
 	const accountAddress = '0xSomeSuiAddress';
@@ -136,7 +137,7 @@ const createKiosk = async () => {
 
 ```typescript
 import { placeAndList } from '@mysten/kiosk';
-import { TransactionBlock } from '@mysten/sui.js';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 
 const placeAndListToKiosk = async () => {
 	const kiosk = 'SomeKioskId';
@@ -161,7 +162,7 @@ const placeAndListToKiosk = async () => {
 
 ```typescript
 import { withdrawFromKiosk } from '@mysten/kiosk';
-import { TransactionBlock } from '@mysten/sui.js';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 
 const withdraw = async () => {
 	const kiosk = 'SomeKioskId';

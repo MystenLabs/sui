@@ -1,11 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetObject } from '@mysten/core';
-import { formatAddress } from '@mysten/sui.js';
-import { cva, cx } from 'class-variance-authority';
+import { isKioskOwnerToken, useGetObject } from '@mysten/core';
+import { formatAddress } from '@mysten/sui.js/utils';
+import { cva } from 'class-variance-authority';
 
+import { Kiosk } from './Kiosk';
 import { useResolveVideo } from '../../hooks/useResolveVideo';
+import { Text } from '../../shared/text';
 import { Heading } from '_app/shared/heading';
 import Loading from '_components/loading';
 import { NftImage, type NftImageProps } from '_components/nft-display/NftImage';
@@ -13,27 +15,33 @@ import { useGetNFTMeta, useFileExtensionType } from '_hooks';
 
 import type { VariantProps } from 'class-variance-authority';
 
-const nftDisplayCardStyles = cva('flex flex-nowrap items-center h-full', {
+const nftDisplayCardStyles = cva('flex flex-nowrap items-center h-full relative', {
 	variants: {
 		animateHover: {
 			true: 'group',
 		},
 		wideView: {
 			true: 'bg-gray-40 p-2.5 rounded-lg gap-2.5 flex-row-reverse justify-between',
-			false: 'flex-col',
+			false: '',
+		},
+		orientation: {
+			horizontal: 'flex truncate',
+			vertical: 'flex-col',
 		},
 	},
 	defaultVariants: {
 		wideView: false,
+		orientation: 'vertical',
 	},
 });
 
-export interface NFTsProps extends VariantProps<typeof nftDisplayCardStyles> {
+export interface NFTDisplayCardProps extends VariantProps<typeof nftDisplayCardStyles> {
 	objectId: string;
 	showLabel?: boolean;
 	size: NftImageProps['size'];
 	borderRadius?: NftImageProps['borderRadius'];
 	playable?: boolean;
+	isLocked?: boolean;
 }
 
 export function NFTDisplayCard({
@@ -44,28 +52,39 @@ export function NFTDisplayCard({
 	animateHover,
 	borderRadius = 'md',
 	playable,
-}: NFTsProps) {
+	orientation,
+	isLocked,
+}: NFTDisplayCardProps) {
 	const { data: objectData } = useGetObject(objectId);
 	const { data: nftMeta, isLoading } = useGetNFTMeta(objectId);
 	const nftName = nftMeta?.name || formatAddress(objectId);
 	const nftImageUrl = nftMeta?.imageUrl || '';
 	const video = useResolveVideo(objectData);
 	const fileExtensionType = useFileExtensionType(nftImageUrl);
+	const isOwnerToken = isKioskOwnerToken(objectData);
+	const shouldShowLabel = !wideView && orientation !== 'horizontal';
 
 	return (
-		<div className={nftDisplayCardStyles({ animateHover, wideView })}>
+		<div className={nftDisplayCardStyles({ animateHover, wideView, orientation })}>
 			<Loading loading={isLoading}>
-				{video && playable ? (
-					<video controls className="h-full w-full rounded-md overflow-hidden" src={video} />
+				{objectData?.data && isOwnerToken ? (
+					<Kiosk
+						object={objectData}
+						borderRadius={borderRadius}
+						size={size}
+						orientation={orientation}
+						playable={playable}
+						showLabel={shouldShowLabel}
+					/>
 				) : (
 					<NftImage
 						name={nftName}
 						src={nftImageUrl}
-						title={nftMeta?.description || ''}
-						animateHover={true}
-						showLabel={!wideView}
+						animateHover={animateHover}
+						showLabel={shouldShowLabel}
 						borderRadius={borderRadius}
 						size={size}
+						isLocked={isLocked}
 						video={video}
 					/>
 				)}
@@ -83,16 +102,18 @@ export function NFTDisplayCard({
 						</div>
 					</div>
 				)}
-				{showLabel && !wideView && (
-					<div
-						className={cx(
-							'flex-1 mt-2 text-steel-dark truncate overflow-hidden max-w-full',
-							animateHover ? 'group-hover:text-black duration-200 ease-ease-in-out-cubic' : '',
-						)}
-					>
-						{nftName}
+
+				{orientation === 'horizontal' ? (
+					<div className="flex-1 text-steel-dark overflow-hidden max-w-full ml-2">{nftName}</div>
+				) : !isOwnerToken ? (
+					<div className="w-10/12 absolute bottom-2 bg-white/90 rounded-lg left-1/2 -translate-x-1/2 flex items-center justify-center opacity-0 group-hover:opacity-100">
+						<div className="mt-0.5 px-2 py-1 overflow-hidden">
+							<Text variant="subtitleSmall" weight="semibold" mono color="steel-darker" truncate>
+								{nftName}
+							</Text>
+						</div>
 					</div>
-				)}
+				) : null}
 			</Loading>
 		</div>
 	);

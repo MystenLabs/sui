@@ -10,7 +10,9 @@ import {
 	useSuiNSEnabled,
 } from '@mysten/core';
 import { ArrowRight16 } from '@mysten/icons';
-import { SUI_TYPE_ARG, Coin as CoinAPI, type CoinStruct } from '@mysten/sui.js';
+import { Coin as CoinAPI } from '@mysten/sui.js';
+import { type CoinStruct } from '@mysten/sui.js/client';
+import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { useQuery } from '@tanstack/react-query';
 import { Field, Form, useFormikContext, Formik } from 'formik';
 import { useMemo, useEffect } from 'react';
@@ -104,7 +106,7 @@ function GasBudgetEstimation({
 			});
 
 			tx.setSender(activeAddress);
-			await tx.build({ provider: rpc });
+			await tx.build({ client: rpc });
 			return tx.blockData.gasConfig.budget;
 		},
 	});

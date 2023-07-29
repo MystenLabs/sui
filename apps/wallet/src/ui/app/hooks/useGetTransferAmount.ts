@@ -1,25 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SUI_TYPE_ARG, getTransactionKind } from '@mysten/sui.js';
+import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { useMemo } from 'react';
 
 import { getAmount } from '_helpers';
 
-import type { SuiTransactionBlockResponse, SuiAddress } from '@mysten/sui.js';
+import type { SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 
 export function useGetTransferAmount({
 	txn,
 	activeAddress,
 }: {
 	txn: SuiTransactionBlockResponse;
-	activeAddress: SuiAddress;
+	activeAddress: string;
 }) {
 	const { effects, events } = txn;
 	// const { coins } = getEventsSummary(events!, activeAddress);
 
 	const suiTransfer = useMemo(() => {
-		const txdetails = getTransactionKind(txn)!;
+		const txdetails = txn.transaction?.data.transaction!;
 		return getAmount(txdetails, effects!, events!)?.map(
 			({ amount, coinType, recipientAddress }) => {
 				return {

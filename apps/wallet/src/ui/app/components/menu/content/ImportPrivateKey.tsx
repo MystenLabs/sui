@@ -2,55 +2,28 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowRight16 } from '@mysten/icons';
-import { type ExportedKeypair, toB64 } from '@mysten/sui.js';
+import { type ExportedKeypair } from '@mysten/sui.js/cryptography';
+import { toB64 } from '@mysten/sui.js/utils';
 import { hexToBytes } from '@noble/hashes/utils';
 import { useMutation } from '@tanstack/react-query';
 import { ErrorMessage, Field, Form, Formik } from 'formik';
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-import { object, string as yupString } from 'yup';
+import { object } from 'yup';
 
-import Alert from '../../alert';
-import { useNextMenuUrl } from '../hooks';
 import { MenuLayout } from './MenuLayout';
 import { PasswordInputDialog } from './PasswordInputDialog';
+import Alert from '../../alert';
+import { useNextMenuUrl } from '../hooks';
+import { ampli } from '_src/shared/analytics/ampli';
+import { deprecatedPrivateKeyValidation } from '_src/ui/app/helpers/validation/privateKeyValidation';
 import { useBackgroundClient } from '_src/ui/app/hooks/useBackgroundClient';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import FieldLabel from '_src/ui/app/shared/field-label';
 
 const validation = object({
-	privateKey: yupString()
-		.ensure()
-		.trim()
-		.required()
-		.transform((value: string) => {
-			if (value.startsWith('0x')) {
-				return value.substring(2);
-			}
-			return value;
-		})
-		.test(
-			'valid-hex',
-			`\${path} must be a hexadecimal value. It may optionally begin with "0x".`,
-			(value: string) => {
-				try {
-					hexToBytes(value);
-					return true;
-				} catch (e) {
-					return false;
-				}
-			},
-		)
-		.test('valid-bytes-length', `\${path} must be either 32 or 64 bytes.`, (value: string) => {
-			try {
-				const bytes = hexToBytes(value);
-				return [32, 64].includes(bytes.length);
-			} catch (e) {
-				return false;
-			}
-		})
-		.label('Private Key'),
+	privateKey: deprecatedPrivateKeyValidation,
 });
 
 export function ImportPrivateKey() {
@@ -68,6 +41,10 @@ export function ImportPrivateKey() {
 			await backgroundClient.importPrivateKey(password, keyPair);
 		},
 		onSuccess: () => {
+			ampli.addedAccounts({
+				accountType: 'Imported',
+				numberOfAccounts: 1,
+			});
 			toast.success('Account imported');
 			navigate(accountsUrl);
 		},

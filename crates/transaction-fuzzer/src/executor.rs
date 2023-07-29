@@ -14,7 +14,7 @@ use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::SuiError;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::object::Object;
-use sui_types::transaction::{TransactionData, VerifiedTransaction};
+use sui_types::transaction::{Transaction, TransactionData};
 use sui_types::utils::to_sender_signed_transaction;
 use tokio::runtime::Runtime;
 
@@ -104,7 +104,7 @@ impl Executor {
         self.rt.block_on(self.state.insert_genesis_objects(objects));
     }
 
-    pub fn execute_transaction(&mut self, txn: VerifiedTransaction) -> ExecutionResult {
+    pub fn execute_transaction(&mut self, txn: Transaction) -> ExecutionResult {
         self.rt
             .block_on(send_and_confirm_transaction(&self.state, None, txn))
             .map(|(_, effects)| effects.into_data().status().clone())
@@ -145,7 +145,7 @@ impl Executor {
 
     pub fn execute_transactions(
         &mut self,
-        txn: impl IntoIterator<Item = VerifiedTransaction>,
+        txn: impl IntoIterator<Item = Transaction>,
     ) -> Vec<ExecutionResult> {
         txn.into_iter()
             .map(|txn| self.execute_transaction(txn))

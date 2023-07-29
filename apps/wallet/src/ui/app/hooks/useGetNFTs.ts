@@ -1,12 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetOwnedObjects, useGetKioskContents, hasDisplayData } from '@mysten/core';
-import { type SuiObjectData, type SuiAddress } from '@mysten/sui.js';
+import { hasDisplayData, isKioskOwnerToken, useGetOwnedObjects } from '@mysten/core';
+import { type SuiObjectData } from '@mysten/sui.js/client';
+import { useMemo } from 'react';
+import { useHiddenAssets } from '../pages/home/hidden-assets/HiddenAssetsProvider';
 
-import useAppSelector from './useAppSelector';
+type OwnedAssets = {
+	visual: SuiObjectData[];
+	other: SuiObjectData[];
+	hidden: SuiObjectData[];
+};
 
-export function useGetNFTs(address?: SuiAddress | null) {
+export enum AssetFilterTypes {
+	visual = 'visual',
+	other = 'other',
+}
+
+export function useGetNFTs(address?: string | null) {
 	const {
 		data,
 		isLoading,
@@ -23,32 +34,34 @@ export function useGetNFTs(address?: SuiAddress | null) {
 		},
 		50,
 	);
-	const { apiEnv } = useAppSelector((state) => state.app);
+	const { hiddenAssetIds } = useHiddenAssets();
 
-	const disableOriginByteKiosk = apiEnv !== 'mainnet';
-	const { data: kioskContents, isLoading: areKioskContentsLoading } = useGetKioskContents(
-		address,
-		disableOriginByteKiosk,
-	);
-
-	const filteredKioskContents = kioskContents
-		?.filter(hasDisplayData)
-		.map((data) => data.data as SuiObjectData);
-
-	const nfts = [
-		...(filteredKioskContents ?? []),
-		...(data?.pages
+	const assets = useMemo(() => {
+		const ownedAssets: OwnedAssets = {
+			visual: [],
+			other: [],
+			hidden: [],
+		};
+		return data?.pages
 			.flatMap((page) => page.data)
-			.filter(hasDisplayData)
-			.map(({ data }) => data as SuiObjectData) || []),
-	];
+			.filter((asset) => !hiddenAssetIds.includes(asset.data?.objectId!))
+			.reduce((acc, curr) => {
+				if (hasDisplayData(curr) || isKioskOwnerToken(curr))
+					acc.visual.push(curr.data as SuiObjectData);
+				if (!hasDisplayData(curr)) acc.other.push(curr.data as SuiObjectData);
+				if (hiddenAssetIds.includes(curr.data?.objectId!))
+					acc.hidden.push(curr.data as SuiObjectData);
+				return acc;
+			}, ownedAssets);
+	}, [hiddenAssetIds, data?.pages]);
+
 	return {
-		data: nfts,
+		data: assets,
 		isInitialLoading,
 		hasNextPage,
 		isFetchingNextPage,
 		fetchNextPage,
-		isLoading: isLoading || areKioskContentsLoading,
+		isLoading: isLoading,
 		isError: isError,
 		error,
 	};

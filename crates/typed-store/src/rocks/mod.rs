@@ -797,6 +797,20 @@ impl<K, V> DBMap<K, V> {
         Ok(())
     }
 
+    pub fn compact_range_raw(
+        &self,
+        cf_name: &str,
+        start: Vec<u8>,
+        end: Vec<u8>,
+    ) -> Result<(), TypedStoreError> {
+        let cf = self
+            .rocksdb
+            .cf_handle(cf_name)
+            .expect("compact range: column family does not exist");
+        self.rocksdb.compact_range_cf(&cf, Some(start), Some(end));
+        Ok(())
+    }
+
     pub fn compact_range_to_bottom<J: Serialize>(
         &self,
         start: &J,
@@ -1712,11 +1726,29 @@ where
         Ok(())
     }
 
+    /// This method first drops the existing column family and then creates a new one
+    /// with the same name. The two operations are not atomic and hence it is possible
+    /// to get into a race condition where the column family has been dropped but new
+    /// one is not created yet
     #[instrument(level = "trace", skip_all, err)]
-    fn clear(&self) -> Result<(), TypedStoreError> {
+    fn unsafe_clear(&self) -> Result<(), TypedStoreError> {
         let _ = self.rocksdb.drop_cf(&self.cf);
         self.rocksdb
             .create_cf(self.cf.clone(), &default_db_options().options)?;
+        Ok(())
+    }
+
+    /// Deletes all entries in the db map using a single delete range operation
+    #[instrument(level = "trace", skip_all, err)]
+    fn delete_all(&self) -> Result<(), TypedStoreError> {
+        let mut iter = self.unbounded_iter().seek_to_first();
+        let first_key = iter.next().map(|(k, _v)| k);
+        let last_key = iter.skip_to_last().next().map(|(k, _v)| k);
+        if let Some((first_key, last_key)) = first_key.zip(last_key) {
+            let mut batch = self.batch();
+            batch.delete_range(self, &first_key, &last_key)?;
+            batch.write()?;
+        }
         Ok(())
     }
 

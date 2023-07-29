@@ -1,26 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { array, boolean, Infer, nullable, number, object, optional, string } from 'superstruct';
-import { ObjectId, TransactionDigest } from './common';
+import type { Infer } from 'superstruct';
+import { array, boolean, nullable, number, object, optional, string } from 'superstruct';
 
 export const CoinStruct = object({
 	coinType: string(),
 	// TODO(chris): rename this to objectId
-	coinObjectId: ObjectId,
+	coinObjectId: string(),
 	version: string(),
-	digest: TransactionDigest,
+	digest: string(),
 	balance: string(),
-	// TODO (jian): remove this when we move to 0.34
-	lockedUntilEpoch: optional(nullable(number())),
-	previousTransaction: TransactionDigest,
+	previousTransaction: string(),
 });
 
 export type CoinStruct = Infer<typeof CoinStruct>;
 
 export const PaginatedCoins = object({
 	data: array(CoinStruct),
-	nextCursor: nullable(ObjectId),
+	nextCursor: nullable(string()),
 	hasNextPage: boolean(),
 });
 

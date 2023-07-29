@@ -2,21 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowUpRight12 } from '@mysten/icons';
-import { type SuiAddress } from '@mysten/sui.js';
 import { cx } from 'class-variance-authority';
 
+import { AccountAddress } from './AccountAddress';
+import { SummaryCard } from './SummaryCard';
 import { Link } from '../shared/Link';
 import { Heading } from '../shared/heading';
 import { Text } from '../shared/text';
-import { AccountAddress } from './AccountAddress';
-import { SummaryCard } from './SummaryCard';
 import { getValidDAppUrl } from '_src/shared/utils';
 
 export type DAppInfoCardProps = {
 	name: string;
 	url: string;
 	iconUrl?: string;
-	connectedAddress?: SuiAddress;
+	connectedAddress?: string;
 };
 
 export function DAppInfoCard({ name, url, iconUrl, connectedAddress }: DAppInfoCardProps) {
@@ -30,7 +29,7 @@ export function DAppInfoCard({ name, url, iconUrl, connectedAddress }: DAppInfoC
 			showDivider
 			body={
 				<>
-					<div className="flex flex-row flex-nowrap items-center gap-3.75 pb-3">
+					<div className="flex flex-row flex-nowrap items-center gap-3.75 py-3">
 						<div className="flex items-stretch h-15 w-15 rounded-full overflow-hidden bg-steel/20 shrink-0 grow-0">
 							{iconUrl ? <img className="flex-1" src={iconUrl} alt={name} /> : null}
 						</div>

@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { ObjectId, getObjectDisplay, SuiObjectData } from '../../src';
+import { SuiObjectData } from '../../src/client';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Test Object Display Standard', () => {
 	let toolbox: TestToolbox;
-	let packageId: ObjectId;
+	let packageId: string;
 
 	beforeAll(async () => {
 		toolbox = await setup();
@@ -17,7 +17,7 @@ describe('Test Object Display Standard', () => {
 
 	it('Test getting Display fields with error object', async () => {
 		const resp = (
-			await toolbox.provider.getOwnedObjects({
+			await toolbox.client.getOwnedObjects({
 				owner: toolbox.address(),
 				options: { showDisplay: true, showType: true },
 				filter: { StructType: `${packageId}::boars::Boar` },
@@ -25,12 +25,12 @@ describe('Test Object Display Standard', () => {
 		).data;
 		const data = resp[0].data as SuiObjectData;
 		const boarId = data.objectId;
-		const display = getObjectDisplay(
-			await toolbox.provider.getObject({
+		const display = (
+			await toolbox.client.getObject({
 				id: boarId,
 				options: { showDisplay: true },
-			}),
-		);
+			})
+		).data?.display!;
 		const expectedData = {
 			data: {
 				age: '10',
@@ -51,18 +51,18 @@ describe('Test Object Display Standard', () => {
 		const errorMessage2 =
 			'Field value idd cannot be found in struct; Field value namee cannot be found in struct';
 
-		expect([errorMessage1, errorMessage2]).toContain(display.error?.error);
+		expect([errorMessage1, errorMessage2]).toContain((display.error as { error: string })?.error);
 	});
 
 	it('Test getting Display fields for object that has no display object', async () => {
 		const coin = (await toolbox.getGasObjectsOwnedByAddress())[0].data as SuiObjectData;
 		const coinId = coin.objectId;
-		const display = getObjectDisplay(
-			await toolbox.provider.getObject({
+		const display = (
+			await toolbox.client.getObject({
 				id: coinId,
 				options: { showDisplay: true },
-			}),
-		);
+			})
+		).data?.display;
 		expect(display?.data).toEqual(null);
 	});
 });

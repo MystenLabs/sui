@@ -13,13 +13,13 @@ import { ChevronDown12, Dot12 } from '@mysten/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 
+import { appDisconnect } from './actions';
 import { useActiveAddress } from '../../hooks/useActiveAddress';
 import { ButtonConnectedTo } from '../ButtonConnectedTo';
-import { appDisconnect } from './actions';
 import Loading from '_components/loading';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { createDappStatusSelector } from '_redux/slices/permissions';
-import { trackEvent } from '_src/shared/plausible';
+import { ampli } from '_src/shared/analytics/ampli';
 
 import st from './DappStatus.module.scss';
 
@@ -73,9 +73,6 @@ function DappStatus() {
 	]);
 	const onHandleDisconnect = useCallback(async () => {
 		if (!disconnecting && isConnected && activeOriginUrl && activeAddress) {
-			trackEvent('AppDisconnect', {
-				props: { source: 'Header' },
-			});
 			setDisconnecting(true);
 			try {
 				await dispatch(
@@ -84,6 +81,11 @@ function DappStatus() {
 						accounts: [activeAddress],
 					}),
 				).unwrap();
+				ampli.disconnectedApplication({
+					applicationUrl: activeOriginUrl,
+					disconnectedAccounts: 1,
+					sourceFlow: 'Header',
+				});
 				setVisible(false);
 			} catch (e) {
 				// Do nothing
@@ -96,7 +98,7 @@ function DappStatus() {
 		return null;
 	}
 	return (
-		<div className="w-40">
+		<>
 			<ButtonConnectedTo
 				truncate
 				iconBefore={<Dot12 className="text-success" />}
@@ -150,7 +152,7 @@ function DappStatus() {
 					</motion.div>
 				) : null}
 			</AnimatePresence>
-		</div>
+		</>
 	);
 }
 

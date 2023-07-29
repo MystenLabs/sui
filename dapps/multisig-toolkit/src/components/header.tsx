@@ -7,14 +7,15 @@ import { NavLink } from 'react-router-dom';
 const links = [
 	{ to: '/offline-signer', label: 'Offline Signer' },
 	{ to: '/signature-analyzer', label: 'Signature Analyzer' },
+	{ to: '/multisig-address', label: 'MultiSig Address' },
 ];
 
 export function Header() {
 	return (
 		<div className="border-b px-8 py-4 flex items-center justify-between">
 			<div className="flex items-center gap-2">
-				<KeyRound strokeWidth={2} size={18} className="text-white/80" />
-				<h1 className="font-bold text-lg bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
+				<KeyRound strokeWidth={2} size={18} className="text-primary/80" />
+				<h1 className="font-bold text-lg bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/60">
 					Sui MultiSig Toolkit
 				</h1>
 			</div>

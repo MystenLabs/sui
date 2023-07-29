@@ -6,8 +6,10 @@ pub mod codes;
 
 use crate::{
     command_line::COLOR_MODE_ENV_VAR,
-    diagnostics::codes::{Category, DiagnosticCode, DiagnosticInfo, Severity, WarningFilter},
-    shared::ast_debug::AstDebug,
+    diagnostics::codes::{
+        CategoryID, DiagnosticCode, DiagnosticInfo, DiagnosticsID, Severity, WarningFilter,
+    },
+    shared::{ast_debug::AstDebug, FILTER_UNUSED_FUNCTION},
 };
 use codespan_reporting::{
     self as csr,
@@ -22,7 +24,7 @@ use move_command_line_common::{env::read_env_var, files::FileHash};
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     iter::FromIterator,
     ops::Range,
 };
@@ -58,12 +60,12 @@ pub struct Diagnostics {
 /// Used to filter out diagnostics, specifically used for warning suppression
 pub enum WarningFilters {
     /// Remove all warnings
-    All,
-    /// Remove all diags of this category
+    All(/* external_prefix */ Option<&'static str>),
+    /// Remove all diags of this category with optional known name
     Specified {
-        category: BTreeSet</* category */ u8>,
-        /// Remove specific diags
-        codes: BTreeSet<(/* category */ u8, /* code */ u8)>,
+        category: BTreeMap<CategoryID, Option<&'static str>>,
+        /// Remove specific diags with optional known filter name
+        codes: BTreeMap<DiagnosticsID, Option<&'static str>>,
     },
     /// No filter
     Empty,
@@ -373,11 +375,14 @@ impl WarningFilters {
 
     fn is_filtered_by_info(&self, info: &DiagnosticInfo) -> bool {
         match self {
-            WarningFilters::All => info.severity() == Severity::Warning,
+            WarningFilters::All(prefix) => {
+                info.severity() == Severity::Warning
+                    && *prefix == info.category_id().external_prefix()
+            }
             WarningFilters::Specified { category, codes } => {
                 info.severity() == Severity::Warning
-                    && (category.contains(&info.category())
-                        || codes.contains(&(info.category(), info.code())))
+                    && (category.contains_key(&info.category_id())
+                        || codes.contains_key(&info.id()))
             }
             WarningFilters::Empty => false,
         }
@@ -389,9 +394,9 @@ impl WarningFilters {
             (s @ Self::Empty, _) => *s = other.clone(),
             // if other is empty, or self is ALL, no change to the filter
             (_, Self::Empty) => (),
-            (Self::All, _) => (),
+            (Self::All(_), _) => (),
             // if other is all, self is now all
-            (s, Self::All) => *s = Self::All,
+            (s, Self::All(prefix)) => *s = Self::All(*prefix),
             // category and code level union
             (
                 Self::Specified { category, codes },
@@ -405,7 +410,7 @@ impl WarningFilters {
                 codes.extend(
                     other_codes
                         .iter()
-                        .filter(|(codes_cat, _)| !category.contains(codes_cat)),
+                        .filter(|(diag_id, _)| !category.contains_key(&diag_id.category_id())),
                 );
             }
         }
@@ -413,27 +418,25 @@ impl WarningFilters {
 
     pub fn add(&mut self, filter: WarningFilter) {
         match self {
-            WarningFilters::All => (),
+            WarningFilters::All(_) => (),
             WarningFilters::Empty => {
                 *self = WarningFilters::Specified {
-                    category: BTreeSet::new(),
-                    codes: BTreeSet::new(),
+                    category: BTreeMap::new(),
+                    codes: BTreeMap::new(),
                 };
                 return self.add(filter);
             }
             WarningFilters::Specified { category, codes } => match filter {
-                WarningFilter::All => *self = WarningFilters::All,
-                WarningFilter::Category(cat) => {
-                    let cat = cat as u8;
-                    category.insert(cat);
+                WarningFilter::All(prefix) => *self = WarningFilters::All(prefix),
+                WarningFilter::Category(category_id, n) => {
+                    category.insert(category_id, n);
                     // remove any codes now covered by this category
-                    codes.retain(|(codes_cat, _)| codes_cat != &cat);
+                    codes.retain(|diag_id, _| diag_id.category() != category_id.category());
                 }
-                WarningFilter::Code(cat, code) => {
-                    let cat = cat as u8;
+                WarningFilter::Code(diag_id, n) => {
                     // no need to add the filter if already covered by the category
-                    if !category.contains(&cat) {
-                        codes.insert((cat, code));
+                    if !category.contains_key(&diag_id.category_id()) {
+                        codes.insert(diag_id, n);
                     }
                 }
             },
@@ -442,10 +445,12 @@ impl WarningFilters {
 
     pub fn unused_function_warnings_filter() -> Self {
         let unused_fn_info = UnusedItem::Function.into_info();
-        let filtered_codes =
-            BTreeSet::from([(unused_fn_info.category() as u8, unused_fn_info.code())]);
+        let filtered_codes = BTreeMap::from([(
+            DiagnosticsID::new(unused_fn_info.category() as u8, unused_fn_info.code(), None),
+            Some(FILTER_UNUSED_FUNCTION),
+        )]);
         WarningFilters::Specified {
-            category: BTreeSet::new(),
+            category: BTreeMap::new(),
             codes: filtered_codes,
         }
     }
@@ -484,20 +489,21 @@ impl From<Option<Diagnostic>> for Diagnostics {
 impl AstDebug for WarningFilters {
     fn ast_debug(&self, w: &mut crate::shared::ast_debug::AstWriter) {
         match self {
-            WarningFilters::All => w.write(&format!(
+            WarningFilters::All(prefix) => w.write(&format!(
                 "#[{}({})]",
                 WARNING_FILTER_ATTR,
-                WarningFilter::All.to_str().unwrap(),
+                WarningFilter::All(*prefix).to_str().unwrap(),
             )),
             WarningFilters::Specified { category, codes } => {
                 w.write(&format!("#[{}(", WARNING_FILTER_ATTR,));
                 let items = category
                     .iter()
-                    .copied()
-                    .map(|cat| WarningFilter::Category(Category::try_from(cat).unwrap()))
-                    .chain(codes.iter().copied().map(|(cat, code)| {
-                        WarningFilter::Code(Category::try_from(cat).unwrap(), code)
-                    }));
+                    .map(|(cat, n)| WarningFilter::Category(*cat, *n))
+                    .chain(
+                        codes
+                            .iter()
+                            .map(|(diag_id, n)| WarningFilter::Code(*diag_id, *n)),
+                    );
                 w.list(items, ",", |w, filter| {
                     w.write(filter.to_str().unwrap());
                     false

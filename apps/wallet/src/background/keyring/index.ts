@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Ed25519Keypair, fromB64 } from '@mysten/sui.js';
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+import { fromB64 } from '@mysten/sui.js/utils';
 import mitt from 'mitt';
 import { throttle } from 'throttle-debounce';
 
-import { getAllQredoConnections } from '../qredo/storage';
-import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
 import {
 	type Account,
 	isImportedOrDerivedAccount,
@@ -23,6 +22,8 @@ import {
 	getStoredAccountsPublicInfo,
 	updateAccountsPublicInfo,
 } from './accounts';
+import { getAllQredoConnections } from '../qredo/storage';
+import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
 import { createMessage } from '_messages';
 import { isKeyringPayload } from '_payloads/keyring';
 import { entropyToSerialized } from '_shared/utils/bip39';
@@ -35,7 +36,7 @@ import {
 import { type Wallet } from '_src/shared/qredo-api';
 
 import type { UiConnection } from '../connections/UiConnection';
-import type { SuiAddress, ExportedKeypair } from '@mysten/sui.js';
+import type { ExportedKeypair } from '@mysten/sui.js/cryptography';
 import type { Message } from '_messages';
 import type { ErrorPayload } from '_payloads';
 import type { KeyringPayload } from '_payloads/keyring';
@@ -56,8 +57,8 @@ type KeyringEvents = {
 export class Keyring {
 	#events = mitt<KeyringEvents>();
 	#locked = true;
-	#mainDerivedAccount: SuiAddress | null = null;
-	#accountsMap: Map<SuiAddress, Account> = new Map();
+	#mainDerivedAccount: string | null = null;
+	#accountsMap: Map<string, Account> = new Map();
 	public readonly reviveDone: Promise<void>;
 
 	constructor() {
@@ -124,13 +125,13 @@ export class Keyring {
 		if (this.isLocked) {
 			return null;
 		}
-		const mnemonic = VaultStorage.getMnemonic();
-		if (!mnemonic) {
+		const mnemonicSeedHex = VaultStorage.getMnemonicSeedHex();
+		if (!mnemonicSeedHex) {
 			return null;
 		}
 		const nextIndex = (await this.getLastDerivedIndex()) + 1;
 		await this.storeLastDerivedIndex(nextIndex);
-		const account = this.deriveAccount(nextIndex, mnemonic);
+		const account = this.deriveAccount(nextIndex, mnemonicSeedHex);
 		this.#accountsMap.set(account.address, account);
 		this.notifyAccountsChanged();
 		return account;
@@ -166,7 +167,7 @@ export class Keyring {
 		return Array.from(this.#accountsMap.values());
 	}
 
-	public async changeActiveAccount(address: SuiAddress) {
+	public async changeActiveAccount(address: string) {
 		if (!this.isLocked && this.#accountsMap.has(address)) {
 			await this.storeActiveAccount(address);
 			this.#events.emit('activeAccountChanged', address);
@@ -184,7 +185,7 @@ export class Keyring {
 	 * @returns null if locked or address not found or the exported keypair
 	 * @throws if wrong password is provided
 	 */
-	public async exportAccountKeypair(address: SuiAddress, password: string) {
+	public async exportAccountKeypair(address: string, password: string) {
 		if (this.isLocked) {
 			return null;
 		}
@@ -425,7 +426,7 @@ export class Keyring {
 			} else if (isKeyringPayload(payload, 'updateAccountPublicInfo') && payload.args) {
 				const { updates } = payload.args;
 				await updateAccountsPublicInfo(payload.args.updates);
-				const ledgerUpdates: Record<SuiAddress, string> = {};
+				const ledgerUpdates: Record<string, string> = {};
 				for (const {
 					accountAddress,
 					changes: { publicKey },
@@ -487,14 +488,14 @@ export class Keyring {
 	}
 
 	private async unlocked() {
-		let mnemonic = VaultStorage.getMnemonic();
-		if (!mnemonic) {
+		let mnemonicSeedHex = VaultStorage.getMnemonicSeedHex();
+		if (!mnemonicSeedHex) {
 			return;
 		}
 		Alarms.setLockAlarm();
 		const lastAccountIndex = await this.getLastDerivedIndex();
 		for (let i = 0; i <= lastAccountIndex; i++) {
-			const account = this.deriveAccount(i, mnemonic);
+			const account = this.deriveAccount(i, mnemonicSeedHex);
 			this.#accountsMap.set(account.address, account);
 			if (i === 0) {
 				this.#mainDerivedAccount = account.address;
@@ -533,15 +534,15 @@ export class Keyring {
 				this.#accountsMap.set(account.address, account);
 			}
 		});
-		mnemonic = null;
+		mnemonicSeedHex = null;
 		this.#locked = false;
 		this.storeAccountsPublicInfo();
 		this.notifyLockedStatusUpdate(this.#locked);
 	}
 
-	private deriveAccount(accountIndex: number, mnemonic: string) {
+	private deriveAccount(accountIndex: number, mnemonicSeedHex: string) {
 		const derivationPath = this.makeDerivationPath(accountIndex);
-		const keypair = Ed25519Keypair.deriveKeypair(mnemonic, derivationPath);
+		const keypair = Ed25519Keypair.deriveKeypairFromSeed(mnemonicSeedHex, derivationPath);
 		return new DerivedAccount({ keypair, derivationPath });
 	}
 
@@ -553,7 +554,7 @@ export class Keyring {
 		return setToLocalStorage(STORAGE_LAST_ACCOUNT_INDEX_KEY, index);
 	}
 
-	private storeActiveAccount(address: SuiAddress) {
+	private storeActiveAccount(address: string) {
 		return setToLocalStorage(STORAGE_ACTIVE_ACCOUNT, address);
 	}
 
@@ -597,4 +598,5 @@ export class Keyring {
 	}
 }
 
-export default new Keyring();
+const keyring = new Keyring();
+export default keyring;

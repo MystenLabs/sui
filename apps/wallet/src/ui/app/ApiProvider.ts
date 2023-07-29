@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SentryRpcClient } from '@mysten/core';
-import { Connection, JsonRpcProvider } from '@mysten/sui.js';
+import { SentryHttpTransport } from '@mysten/core';
 
+import { SuiClient, SuiHTTPTransport } from '@mysten/sui.js/client';
 import { type WalletSigner } from './WalletSigner';
 import { BackgroundServiceSigner } from './background-client/BackgroundServiceSigner';
 import { queryClient } from './helpers/queryClient';
@@ -11,7 +11,7 @@ import { AccountType, type SerializedAccount } from '_src/background/keyring/Acc
 import { API_ENV } from '_src/shared/api-env';
 
 import type { BackgroundClient } from './background-client';
-import type { SuiAddress, SignerWithProvider } from '@mysten/sui.js';
+import type { SignerWithProvider } from '@mysten/sui.js';
 
 type EnvInfo = {
 	name: string;
@@ -20,29 +20,18 @@ type EnvInfo = {
 
 export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
 	[API_ENV.local]: { name: 'Local', env: API_ENV.local },
-	[API_ENV.devNet]: { name: 'Sui Devnet', env: API_ENV.devNet },
-	[API_ENV.customRPC]: { name: 'Custom RPC URL', env: API_ENV.customRPC },
-	[API_ENV.testNet]: { name: 'Sui Testnet', env: API_ENV.testNet },
-	[API_ENV.mainnet]: { name: 'Sui Mainnet', env: API_ENV.mainnet },
+	[API_ENV.devNet]: { name: 'Devnet', env: API_ENV.devNet },
+	[API_ENV.customRPC]: { name: 'Custom RPC', env: API_ENV.customRPC },
+	[API_ENV.testNet]: { name: 'Testnet', env: API_ENV.testNet },
+	[API_ENV.mainnet]: { name: 'Mainnet', env: API_ENV.mainnet },
 };
 
-export const ENV_TO_API: Record<API_ENV, Connection | null> = {
+export const ENV_TO_API: Record<API_ENV, string | null> = {
 	[API_ENV.customRPC]: null,
-	[API_ENV.local]: new Connection({
-		fullnode: process.env.API_ENDPOINT_LOCAL_FULLNODE || '',
-		faucet: process.env.API_ENDPOINT_LOCAL_FAUCET || '',
-	}),
-	[API_ENV.devNet]: new Connection({
-		fullnode: process.env.API_ENDPOINT_DEV_NET_FULLNODE || '',
-		faucet: process.env.API_ENDPOINT_DEV_NET_FAUCET || '',
-	}),
-	[API_ENV.testNet]: new Connection({
-		fullnode: process.env.API_ENDPOINT_TEST_NET_FULLNODE || '',
-		faucet: process.env.API_ENDPOINT_TEST_NET_FAUCET || '',
-	}),
-	[API_ENV.mainnet]: new Connection({
-		fullnode: process.env.API_ENDPOINT_MAINNET_FULLNODE || '',
-	}),
+	[API_ENV.local]: process.env.API_ENDPOINT_LOCAL_FULLNODE || '',
+	[API_ENV.devNet]: process.env.API_ENDPOINT_DEV_NET_FULLNODE || '',
+	[API_ENV.testNet]: process.env.API_ENDPOINT_TEST_NET_FULLNODE || '',
+	[API_ENV.mainnet]: process.env.API_ENDPOINT_MAINNET_FULLNODE || '',
 };
 
 function getDefaultApiEnv() {
@@ -55,7 +44,7 @@ function getDefaultApiEnv() {
 
 function getDefaultAPI(env: API_ENV) {
 	const apiEndpoint = ENV_TO_API[env];
-	if (!apiEndpoint || apiEndpoint.fullnode === '' || apiEndpoint.faucet === '') {
+	if (!apiEndpoint || apiEndpoint === '') {
 		throw new Error(`API endpoint not found for API_ENV ${env}`);
 	}
 	return apiEndpoint;
@@ -71,16 +60,16 @@ export const generateActiveNetworkList = (): NetworkTypes[] => {
 };
 
 export default class ApiProvider {
-	private _apiFullNodeProvider?: JsonRpcProvider;
-	private _signerByAddress: Map<SuiAddress, SignerWithProvider> = new Map();
+	private _apiFullNodeProvider?: SuiClient;
+	private _signerByAddress: Map<string, SignerWithProvider> = new Map();
 
 	public setNewJsonRpcProvider(apiEnv: API_ENV = DEFAULT_API_ENV, customRPC?: string | null) {
-		const connection = customRPC ? new Connection({ fullnode: customRPC }) : getDefaultAPI(apiEnv);
-		this._apiFullNodeProvider = new JsonRpcProvider(connection, {
-			rpcClient:
+		const connection = customRPC ? customRPC : getDefaultAPI(apiEnv);
+		this._apiFullNodeProvider = new SuiClient({
+			transport:
 				!customRPC && SENTRY_MONITORED_ENVS.includes(apiEnv)
-					? new SentryRpcClient(connection.fullnode)
-					: undefined,
+					? new SentryHttpTransport(connection)
+					: new SuiHTTPTransport({ url: connection }),
 		});
 
 		this._signerByAddress.clear();
@@ -130,7 +119,7 @@ export default class ApiProvider {
 	}
 
 	public getBackgroundSignerInstance(
-		address: SuiAddress,
+		address: string,
 		backgroundClient: BackgroundClient,
 	): WalletSigner {
 		if (!this._signerByAddress.has(address)) {

@@ -39,7 +39,7 @@ use sui_types::{
     transaction::VerifiedTransaction,
 };
 use sui_types::{error::SuiResult, transaction::TransactionDataAPI};
-use tap::TapOptional;
+use tap::{TapFallible, TapOptional};
 use tokio::{
     sync::broadcast::{self, error::RecvError},
     task::JoinHandle,
@@ -156,6 +156,11 @@ impl CheckpointExecutor {
                 .check_epoch_last_checkpoint(epoch_store.clone(), &highest_executed)
                 .await
             {
+                self.checkpoint_store
+                    .prune_local_summaries()
+                    .tap_err(|e| error!("Failed to prune local summaries: {}", e))
+                    .ok();
+
                 // be extra careful to ensure we don't have orphans
                 assert!(
                     pending.is_empty(),
@@ -270,6 +275,9 @@ impl CheckpointExecutor {
             .unwrap();
         self.metrics.last_executed_checkpoint.set(seq as i64);
 
+        self.metrics
+            .last_executed_checkpoint_timestamp_ms
+            .set(checkpoint.timestamp_ms as i64);
         checkpoint.report_checkpoint_age_ms(&self.metrics.last_executed_checkpoint_age_ms);
     }
 

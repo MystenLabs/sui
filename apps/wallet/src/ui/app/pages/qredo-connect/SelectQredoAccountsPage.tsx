@@ -6,13 +6,14 @@ import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useParams, useLocation, Navigate, useNavigate } from 'react-router-dom';
 
+import { SelectQredoAccountsSummaryCard } from './components/SelectQredoAccountsSummaryCard';
+import { useQredoUIPendingRequest } from './hooks';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { useQredoInfo } from '../../hooks/useQredoInfo';
 import { Button } from '../../shared/ButtonUI';
-import { SelectQredoAccountsSummaryCard } from './components/SelectQredoAccountsSummaryCard';
-import { useQredoUIPendingRequest } from './hooks';
 import { PasswordInputDialog } from '_components/menu/content/PasswordInputDialog';
 import Overlay from '_components/overlay';
+import { ampli } from '_src/shared/analytics/ampli';
 import { type Wallet } from '_src/shared/qredo-api';
 
 export function SelectQredoAccountsPage() {
@@ -71,6 +72,11 @@ export function SelectQredoAccountsPage() {
 								qredoID: id,
 								accounts: selectedAccounts,
 								password,
+							});
+
+							ampli.addedAccounts({
+								accountType: 'Qredo',
+								numberOfAccounts: selectedAccounts.length,
 							});
 							toast.success(`Qredo account${selectedAccounts.length > 1 ? 's' : ''} added`);
 							navigate('/tokens?menu=/accounts');

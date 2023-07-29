@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Placeholder } from '@mysten/ui';
 import { useMemo } from 'react';
 
-import { Placeholder } from './Placeholder';
 import { TableCard } from './TableCard';
 
 export interface PlaceholderTableProps {

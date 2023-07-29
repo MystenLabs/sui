@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import * as Sentry from '@sentry/react';
-import { createContext, useLayoutEffect, useMemo } from 'react';
+import { createContext, useContext, useLayoutEffect, useMemo } from 'react';
 // eslint-disable-next-line no-restricted-imports
 import { useSearchParams } from 'react-router-dom';
 
@@ -16,6 +16,10 @@ export const DEFAULT_NETWORK =
 export const NetworkContext = createContext<
 	[Network | string, (network: Network | string) => void]
 >(['', () => null]);
+
+export function useNetworkContext() {
+	return useContext(NetworkContext);
+}
 
 export function useNetwork(): [string, (network: Network | string) => void] {
 	const [searchParams, setSearchParams] = useSearchParams();

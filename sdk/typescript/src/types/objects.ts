@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { Infer } from 'superstruct';
 import {
 	any,
 	array,
 	assign,
 	boolean,
-	Infer,
 	literal,
 	number,
 	object,
@@ -17,16 +17,17 @@ import {
 	is,
 	nullable,
 	tuple,
+	unknown,
 } from 'superstruct';
-import { ObjectId, ObjectOwner, SequenceNumber, TransactionDigest } from './common';
-import { OwnedObjectRef } from './transactions';
+import { ObjectOwner } from './common.js';
+import type { OwnedObjectRef } from './transactions.js';
 
 export const ObjectType = union([string(), literal('package')]);
 export type ObjectType = Infer<typeof ObjectType>;
 
 export const SuiObjectRef = object({
 	/** Base64 string representing the object digest */
-	digest: TransactionDigest,
+	digest: string(),
 	/** Hex code as string representing the object id */
 	objectId: string(),
 	/** Object version */
@@ -48,7 +49,7 @@ export const SuiObjectInfo = assign(
 	object({
 		type: string(),
 		owner: ObjectOwner,
-		previousTransaction: TransactionDigest,
+		previousTransaction: string(),
 	}),
 );
 export type SuiObjectInfo = Infer<typeof SuiObjectInfo>;
@@ -56,7 +57,7 @@ export type SuiObjectInfo = Infer<typeof SuiObjectInfo>;
 export const ObjectContentFields = record(string(), any());
 export type ObjectContentFields = Infer<typeof ObjectContentFields>;
 
-export const MovePackageContent = record(string(), string());
+export const MovePackageContent = record(string(), unknown());
 export type MovePackageContent = Infer<typeof MovePackageContent>;
 
 export const SuiMoveObject = object({
@@ -84,13 +85,13 @@ export const SuiRawMoveObject = object({
 	/** Move type (e.g., "0x2::coin::Coin<0x2::sui::SUI>") */
 	type: string(),
 	hasPublicTransfer: boolean(),
-	version: number(),
+	version: string(),
 	bcsBytes: string(),
 });
 export type SuiRawMoveObject = Infer<typeof SuiRawMoveObject>;
 
 export const SuiRawMovePackage = object({
-	id: ObjectId,
+	id: string(),
 	/** A mapping from module name to Move bytecode enocded in base64*/
 	moduleMap: record(string(), string()),
 });
@@ -107,20 +108,23 @@ export const SUI_DECIMALS = 9;
 
 export const MIST_PER_SUI = BigInt(1000000000);
 
+/** @deprecated Use `string` instead. */
 export const ObjectDigest = string();
+/** @deprecated Use `string` instead. */
 export type ObjectDigest = Infer<typeof ObjectDigest>;
+
 export const SuiObjectResponseError = object({
 	code: string(),
 	error: optional(string()),
-	object_id: optional(ObjectId),
-	parent_object_id: optional(ObjectId),
-	version: optional(number()),
-	digest: optional(ObjectDigest),
+	object_id: optional(string()),
+	parent_object_id: optional(string()),
+	version: optional(string()),
+	digest: optional(string()),
 });
 export type SuiObjectResponseError = Infer<typeof SuiObjectResponseError>;
 export const DisplayFieldsResponse = object({
-	data: nullable(record(string(), string())),
-	error: nullable(SuiObjectResponseError),
+	data: nullable(optional(record(string(), string()))),
+	error: nullable(optional(SuiObjectResponseError)),
 });
 export type DisplayFieldsResponse = Infer<typeof DisplayFieldsResponse>;
 // TODO: remove after all envs support the new DisplayFieldsResponse;
@@ -133,43 +137,43 @@ export type DisplayFieldsBackwardCompatibleResponse = Infer<
 >;
 
 export const SuiObjectData = object({
-	objectId: ObjectId,
-	version: SequenceNumber,
-	digest: ObjectDigest,
+	objectId: string(),
+	version: string(),
+	digest: string(),
 	/**
 	 * Type of the object, default to be undefined unless SuiObjectDataOptions.showType is set to true
 	 */
-	type: optional(string()),
+	type: nullable(optional(string())),
 	/**
 	 * Move object content or package content, default to be undefined unless SuiObjectDataOptions.showContent is set to true
 	 */
-	content: optional(SuiParsedData),
+	content: nullable(optional(SuiParsedData)),
 	/**
 	 * Move object content or package content in BCS bytes, default to be undefined unless SuiObjectDataOptions.showBcs is set to true
 	 */
-	bcs: optional(SuiRawData),
+	bcs: nullable(optional(SuiRawData)),
 	/**
 	 * The owner of this object. Default to be undefined unless SuiObjectDataOptions.showOwner is set to true
 	 */
-	owner: optional(ObjectOwner),
+	owner: nullable(optional(ObjectOwner)),
 	/**
 	 * The digest of the transaction that created or last mutated this object.
 	 * Default to be undefined unless SuiObjectDataOptions.showPreviousTransaction is set to true
 	 */
-	previousTransaction: optional(TransactionDigest),
+	previousTransaction: nullable(optional(string())),
 	/**
 	 * The amount of SUI we would rebate if this object gets deleted.
 	 * This number is re-calculated each time the object is mutated based on
 	 * the present storage gas price.
 	 * Default to be undefined unless SuiObjectDataOptions.showStorageRebate is set to true
 	 */
-	storageRebate: optional(string()),
+	storageRebate: nullable(optional(string())),
 	/**
 	 * Display metadata for this object, default to be undefined unless SuiObjectDataOptions.showDisplay is set to true
 	 * This can also be None if the struct type does not have Display defined
 	 * See more details in https://forums.sui.io/t/nft-object-display-proposal/4872
 	 */
-	display: optional(DisplayFieldsBackwardCompatibleResponse),
+	display: nullable(optional(DisplayFieldsBackwardCompatibleResponse)),
 });
 export type SuiObjectData = Infer<typeof SuiObjectData>;
 
@@ -178,19 +182,19 @@ export type SuiObjectData = Infer<typeof SuiObjectData>;
  */
 export const SuiObjectDataOptions = object({
 	/* Whether to fetch the object type, default to be true */
-	showType: optional(boolean()),
+	showType: nullable(optional(boolean())),
 	/* Whether to fetch the object content, default to be false */
-	showContent: optional(boolean()),
+	showContent: nullable(optional(boolean())),
 	/* Whether to fetch the object content in BCS bytes, default to be false */
-	showBcs: optional(boolean()),
+	showBcs: nullable(optional(boolean())),
 	/* Whether to fetch the object owner, default to be false */
-	showOwner: optional(boolean()),
+	showOwner: nullable(optional(boolean())),
 	/* Whether to fetch the previous transaction digest, default to be false */
-	showPreviousTransaction: optional(boolean()),
+	showPreviousTransaction: nullable(optional(boolean())),
 	/* Whether to fetch the storage rebate, default to be false */
-	showStorageRebate: optional(boolean()),
+	showStorageRebate: nullable(optional(boolean())),
 	/* Whether to fetch the display metadata, default to be false */
-	showDisplay: optional(boolean()),
+	showDisplay: nullable(optional(boolean())),
 });
 export type SuiObjectDataOptions = Infer<typeof SuiObjectDataOptions>;
 
@@ -201,8 +205,8 @@ export const GetOwnedObjectsResponse = array(SuiObjectInfo);
 export type GetOwnedObjectsResponse = Infer<typeof GetOwnedObjectsResponse>;
 
 export const SuiObjectResponse = object({
-	data: optional(SuiObjectData),
-	error: optional(SuiObjectResponseError),
+	data: nullable(optional(SuiObjectData)),
+	error: nullable(optional(SuiObjectResponseError)),
 });
 export type SuiObjectResponse = Infer<typeof SuiObjectResponse>;
 
@@ -214,7 +218,7 @@ export type Order = 'ascending' | 'descending';
 
 /* -------------------------- SuiObjectResponse ------------------------- */
 
-export function getSuiObjectData(resp: SuiObjectResponse): SuiObjectData | undefined {
+export function getSuiObjectData(resp: SuiObjectResponse): SuiObjectData | null | undefined {
 	return resp.data;
 }
 
@@ -236,14 +240,14 @@ export function getObjectDeletedResponse(resp: SuiObjectResponse): SuiObjectRef 
 	return undefined;
 }
 
-export function getObjectNotExistsResponse(resp: SuiObjectResponse): ObjectId | undefined {
+export function getObjectNotExistsResponse(resp: SuiObjectResponse): string | undefined {
 	if (
 		resp.error &&
 		'object_id' in resp.error &&
 		!('version' in resp.error) &&
 		!('digest' in resp.error)
 	) {
-		return (resp.error as SuiObjectResponseError).object_id as ObjectId;
+		return (resp.error as SuiObjectResponseError).object_id as string;
 	}
 
 	return undefined;
@@ -268,7 +272,7 @@ export function getObjectReference(
 
 /* ------------------------------ SuiObjectRef ------------------------------ */
 
-export function getObjectId(data: SuiObjectResponse | SuiObjectRef | OwnedObjectRef): ObjectId {
+export function getObjectId(data: SuiObjectResponse | SuiObjectRef | OwnedObjectRef): string {
 	if ('objectId' in data) {
 		return data.objectId;
 	}
@@ -299,7 +303,9 @@ export function isSuiObjectResponse(
  * @returns 'package' if the object is a package, move object type(e.g., 0x2::coin::Coin<0x2::sui::SUI>)
  * if the object is a move object
  */
-export function getObjectType(resp: SuiObjectResponse | SuiObjectData): ObjectType | undefined {
+export function getObjectType(
+	resp: SuiObjectResponse | SuiObjectData,
+): ObjectType | null | undefined {
 	const data = isSuiObjectResponse(resp) ? resp.data : resp;
 
 	if (!data?.type && 'data' in resp) {
@@ -313,11 +319,13 @@ export function getObjectType(resp: SuiObjectResponse | SuiObjectData): ObjectTy
 
 export function getObjectPreviousTransactionDigest(
 	resp: SuiObjectResponse,
-): TransactionDigest | undefined {
+): string | null | undefined {
 	return getSuiObjectData(resp)?.previousTransaction;
 }
 
-export function getObjectOwner(resp: SuiObjectResponse | ObjectOwner): ObjectOwner | undefined {
+export function getObjectOwner(
+	resp: SuiObjectResponse | ObjectOwner,
+): ObjectOwner | null | undefined {
 	if (is(resp, ObjectOwner)) {
 		return resp;
 	}
@@ -340,9 +348,9 @@ export function getObjectDisplay(resp: SuiObjectResponse): DisplayFieldsResponse
 
 export function getSharedObjectInitialVersion(
 	resp: SuiObjectResponse | ObjectOwner,
-): number | undefined {
+): string | null | undefined {
 	const owner = getObjectOwner(resp);
-	if (typeof owner === 'object' && 'Shared' in owner) {
+	if (owner && typeof owner === 'object' && 'Shared' in owner) {
 		return owner.Shared.initial_shared_version;
 	} else {
 		return undefined;
@@ -351,7 +359,7 @@ export function getSharedObjectInitialVersion(
 
 export function isSharedObject(resp: SuiObjectResponse | ObjectOwner): boolean {
 	const owner = getObjectOwner(resp);
-	return typeof owner === 'object' && 'Shared' in owner;
+	return !!owner && typeof owner === 'object' && 'Shared' in owner;
 }
 
 export function isImmutableObject(resp: SuiObjectResponse | ObjectOwner): boolean {
@@ -412,15 +420,14 @@ export function getMovePackageContent(
 }
 
 export const CheckpointedObjectId = object({
-	objectId: ObjectId,
+	objectId: string(),
 	atCheckpoint: optional(number()),
 });
 export type CheckpointedObjectId = Infer<typeof CheckpointedObjectId>;
 
 export const PaginatedObjectsResponse = object({
 	data: array(SuiObjectResponse),
-	// TODO: remove union after 0.30.0 is released
-	nextCursor: union([nullable(ObjectId), nullable(CheckpointedObjectId)]),
+	nextCursor: optional(nullable(string())),
 	hasNextPage: boolean(),
 });
 export type PaginatedObjectsResponse = Infer<typeof PaginatedObjectsResponse>;
@@ -430,8 +437,8 @@ export type SuiObjectDataFilter =
 	| { MatchAll: SuiObjectDataFilter[] }
 	| { MatchAny: SuiObjectDataFilter[] }
 	| { MatchNone: SuiObjectDataFilter[] }
-	| { Package: ObjectId }
-	| { MoveModule: { package: ObjectId; module: string } }
+	| { Package: string }
+	| { MoveModule: { package: string; module: string } }
 	| { StructType: string }
 	| { AddressOwner: string }
 	| { ObjectOwner: string }
@@ -450,7 +457,7 @@ export const ObjectRead = union([
 		status: literal('VersionFound'),
 	}),
 	object({
-		details: ObjectId,
+		details: string(),
 		status: literal('ObjectNotExists'),
 	}),
 	object({
@@ -458,14 +465,14 @@ export const ObjectRead = union([
 		status: literal('ObjectDeleted'),
 	}),
 	object({
-		details: tuple([ObjectId, number()]),
+		details: tuple([string(), number()]),
 		status: literal('VersionNotFound'),
 	}),
 	object({
 		details: object({
 			asked_version: number(),
 			latest_version: number(),
-			object_id: ObjectId,
+			object_id: string(),
 		}),
 		status: literal('VersionTooHigh'),
 	}),

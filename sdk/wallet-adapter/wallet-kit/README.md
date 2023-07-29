@@ -1,8 +1,12 @@
 # Sui Wallet Kit
 
-> **⚠️ These packages are experimental and will change rapidly as they are being developed. Do not consider these APIs to be stable. If you have any feedback, [open an issue](https://github.com/MystenLabs/sui/issues/new/choose) or message us on [Discord](https://discord.gg/Sui).**
+> **⚠️ These packages are experimental and will change rapidly as they are being developed. Do not
+> consider these APIs to be stable. If you have any feedback,
+> [open an issue](https://github.com/MystenLabs/sui/issues/new/choose) or message us on
+> [Discord](https://discord.gg/Sui).**
 
-Sui Wallet Kit is a library that makes it easy to connect your dApp to Sui wallets. It wraps the underlying Sui Wallet Adapters and comes pre-configured with sane defaults.
+Sui Wallet Kit is a library that makes it easy to connect your dApp to Sui wallets. It wraps the
+underlying Sui Wallet Adapters and comes pre-configured with sane defaults.
 
 ## Getting started
 
@@ -22,13 +26,14 @@ export function App() {
 }
 ```
 
-> The `WalletKitProvider` also supports an `adapters` prop, which lets you override the default Sui Wallet Adapters.
+> The `WalletKitProvider` also supports an `adapters` prop, which lets you override the default Sui
+> Wallet Adapters.
 
 You can then add a **Connect Wallet** button to your page:
 
 ```tsx
 import { ConnectButton, useWalletKit } from '@mysten/wallet-kit';
-import { formatAddress } from '@mysten/sui.js';
+import { formatAddress } from '@mysten/sui.js/utils';
 
 function ConnectToWallet() {
 	const { currentAccount } = useWalletKit();
@@ -41,10 +46,11 @@ function ConnectToWallet() {
 }
 ```
 
-To get access to the currently connected wallet, use the `useWalletKit()` hook to interact with the wallet, such as proposing transactions:
+To get access to the currently connected wallet, use the `useWalletKit()` hook to interact with the
+wallet, such as proposing transactions:
 
 ```tsx
-import { TransactionBlock } from '@mysten/sui.js';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { useWalletKit } from '@mysten/wallet-kit';
 
 export function SendTransaction() {
@@ -75,12 +81,18 @@ export function SendTransaction() {
 
 ### Usage without React
 
-We do not currently have non-React UI libraries for connecting to wallets. The wallet adapters and logic in the React library (`@mysten/wallet-adapter-react`) can be used as reference for implementing a wallet connection UI in other UI libraries.
+We do not currently have non-React UI libraries for connecting to wallets. The wallet adapters and
+logic in the React library (`@mysten/wallet-adapter-react`) can be used as reference for
+implementing a wallet connection UI in other UI libraries.
 
 ## Supported wallets
 
-Wallet Kit comes pre-configured with every supported wallet. You can also install individual wallet adapters that you plan on using in your project.
+Wallet Kit comes pre-configured with every supported wallet. You can also install individual wallet
+adapters that you plan on using in your project.
 
 ### Wallet Standard
 
-The `WalletStandardAdapterProvider` adapter (published under `@mysten/wallet-adapter-wallet-standard`) automatically supports wallets that adhere to the cross-chain [Wallet Standard](https://github.com/wallet-standard/wallet-standard/). This adapter detects the available wallets in users' browsers. You do not need to configure additional adapters.
+The `WalletStandardAdapterProvider` adapter (published under
+`@mysten/wallet-adapter-wallet-standard`) automatically supports wallets that adhere to the
+cross-chain [Wallet Standard](https://github.com/wallet-standard/wallet-standard/). This adapter
+detects the available wallets in users' browsers. You do not need to configure additional adapters.

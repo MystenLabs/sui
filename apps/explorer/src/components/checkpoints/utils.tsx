@@ -1,13 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type CheckpointPage } from '@mysten/sui.js/src/types/checkpoints';
+import { type CheckpointPage } from '@mysten/sui.js/client';
+import { Text } from '@mysten/ui';
 
 import { TxTimeType } from '../tx-time/TxTimeType';
-
 import { HighlightedTableCol } from '~/components/Table/HighlightedTableCol';
 import { CheckpointLink, CheckpointSequenceLink } from '~/ui/InternalLink';
-import { Text } from '~/ui/Text';
 
 // Generate table data from the checkpoints data
 export const genTableDataFromCheckpointsData = (data: CheckpointPage) => ({

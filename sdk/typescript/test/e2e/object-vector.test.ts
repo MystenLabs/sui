@@ -2,20 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import {
-	Coin,
-	getCreatedObjects,
-	getExecutionStatusType,
-	ObjectId,
-	SuiObjectData,
-	SUI_FRAMEWORK_ADDRESS,
-	TransactionBlock,
-} from '../../src';
+import { Coin, SUI_FRAMEWORK_ADDRESS } from '../../src';
+import { SuiObjectData } from '../../src/client';
+import { TransactionBlock } from '../../src/builder';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Test Move call with a vector of objects as input', () => {
 	let toolbox: TestToolbox;
-	let packageId: ObjectId;
+	let packageId: string;
 
 	async function mintObject(val: number) {
 		const tx = new TransactionBlock();
@@ -23,17 +17,18 @@ describe('Test Move call with a vector of objects as input', () => {
 			target: `${packageId}::entry_point_vector::mint`,
 			arguments: [tx.pure(String(val))],
 		});
-		const result = await toolbox.signer.signAndExecuteTransactionBlock({
+		const result = await toolbox.client.signAndExecuteTransactionBlock({
+			signer: toolbox.keypair,
 			transactionBlock: tx,
 			options: {
 				showEffects: true,
 			},
 		});
-		expect(getExecutionStatusType(result)).toEqual('success');
-		return getCreatedObjects(result)![0].reference.objectId;
+		expect(result.effects?.status.status).toEqual('success');
+		return result.effects?.created![0].reference.objectId!;
 	}
 
-	async function destroyObjects(objects: ObjectId[], withType = false) {
+	async function destroyObjects(objects: string[], withType = false) {
 		const tx = new TransactionBlock();
 		const vec = tx.makeMoveVec({
 			objects: objects.map((id) => tx.object(id)),
@@ -43,13 +38,14 @@ describe('Test Move call with a vector of objects as input', () => {
 			target: `${packageId}::entry_point_vector::two_obj_vec_destroy`,
 			arguments: [vec],
 		});
-		const result = await toolbox.signer.signAndExecuteTransactionBlock({
+		const result = await toolbox.client.signAndExecuteTransactionBlock({
+			signer: toolbox.keypair,
 			transactionBlock: tx,
 			options: {
 				showEffects: true,
 			},
 		});
-		expect(getExecutionStatusType(result)).toEqual('success');
+		expect(result.effects?.status.status).toEqual('success');
 	}
 
 	beforeEach(async () => {
@@ -60,7 +56,7 @@ describe('Test Move call with a vector of objects as input', () => {
 	});
 
 	it('Test object vector', async () => {
-		await destroyObjects([await mintObject(7), await mintObject(42)], /* withType */ false);
+		await destroyObjects([(await mintObject(7))!, await mintObject(42)], /* withType */ false);
 	});
 
 	it(
@@ -88,12 +84,13 @@ describe('Test Move call with a vector of objects as input', () => {
 			arguments: [tx.object(coinIDs[0]), vec],
 		});
 		tx.setGasPayment([coin]);
-		const result = await toolbox.signer.signAndExecuteTransactionBlock({
+		const result = await toolbox.client.signAndExecuteTransactionBlock({
+			signer: toolbox.keypair,
 			transactionBlock: tx,
 			options: {
 				showEffects: true,
 			},
 		});
-		expect(getExecutionStatusType(result)).toEqual('success');
+		expect(result.effects?.status.status).toEqual('success');
 	});
 });

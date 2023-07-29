@@ -52,15 +52,27 @@ module Test::M1 {
             i = i + 1;
         };
     }
+
+    // emit n events each of size s
+    public fun emit_n_events_with_size(n: u64, s: u64) {
+        let i = 0;
+        while (i < n) {
+            emit_event_with_size(s);
+            i = i + 1;
+        };
+    }
 }
 
 // Check if we run out of gas before hitting limits
 
 // Can't emit above event count limit without running out of gas
-//# run Test::M1::emit_n_small_events --args 257 --gas-budget 1000000000
+//# run Test::M1::emit_n_small_events --args 1025 --gas-budget 1000000000
 
 // emit above event count limit should fail
-//# run Test::M1::emit_n_small_events --args 300 --gas-budget 1000000000
+//# run Test::M1::emit_n_small_events --args 2093 --gas-budget 1000000000
 
 // emit above event size limit should fail
 //# run Test::M1::emit_event_with_size --args 259000 --gas-budget 1000000000
+
+// emit below total event size limit but above gas limit should fail
+//# run Test::M1::emit_n_events_with_size --args 3 256000 --gas-budget 1000000000 --summarize

@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.5.0"
+    "version": "1.7.0"
   },
   "methods": [
     {
@@ -502,7 +502,7 @@
           "name": "Read API"
         }
       ],
-      "description": "Return the chain's identifier",
+      "description": "Return the first four bytes of the chain's genesis checkpoint digest.",
       "params": [],
       "result": {
         "name": "String",
@@ -1347,7 +1347,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "16",
+              "maxSupportedProtocolVersion": "19",
               "protocolVersion": "6",
               "featureFlags": {
                 "advance_epoch_start_time_in_safe_mode": true,
@@ -1360,12 +1360,15 @@
                 "disallow_change_struct_type_params_on_upgrade": false,
                 "loaded_child_objects_fixed": true,
                 "missing_type_is_compatibility_error": true,
+                "narwhal_new_leader_election_schedule": false,
                 "narwhal_versioned_metadata": false,
                 "no_extraneous_module_bytes": false,
                 "package_digest_hash_module": false,
                 "package_upgrades": true,
                 "scoring_decision_with_validity_cutoff": true,
                 "simplified_unwrap_then_delete": false,
+                "txn_base_cost_as_multiplier": false,
+                "upgraded_multisig_supported": false,
                 "zklogin_auth": false
               },
               "attributes": {
@@ -1567,6 +1570,7 @@
                 "event_emit_value_size_derivation_cost_per_byte": {
                   "u64": "2"
                 },
+                "execution_version": null,
                 "gas_model_version": {
                   "u64": "5"
                 },
@@ -1640,6 +1644,7 @@
                 "max_event_emit_size": {
                   "u64": "256000"
                 },
+                "max_event_emit_size_total": null,
                 "max_fields_in_struct": {
                   "u64": "32"
                 },
@@ -1859,7 +1864,7 @@
           "name": "Read API"
         }
       ],
-      "description": "Return the total number of transactions known to the server.",
+      "description": "Return the total number of transaction blocks known to the server.",
       "params": [],
       "result": {
         "name": "BigInt<u64>",
@@ -10316,6 +10321,22 @@
             "properties": {
               "TransactionKind": {
                 "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Query transactions of any given kind in the input.",
+            "type": "object",
+            "required": [
+              "TransactionKindIn"
+            ],
+            "properties": {
+              "TransactionKindIn": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               }
             },
             "additionalProperties": false

@@ -1,14 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Tab, TabGroup, TabList, type TabGroupProps, type TabListProps } from './Tabs';
+// TODO: This component really shouldn't use the `Tabs` component, it should just use radix,
+// and should define it's own styles since the concerns here are pretty different.
+
+import { type ComponentProps } from 'react';
+
+import { TabsList, Tabs, TabsTrigger } from './Tabs';
 
 export interface FilterListProps<T extends string = string> {
 	options: readonly T[];
 	value: T;
 	disabled?: boolean;
-	size?: TabGroupProps['size'];
-	lessSpacing?: TabListProps['lessSpacing'];
+	size?: ComponentProps<typeof Tabs>['size'];
+	lessSpacing?: ComponentProps<typeof TabsList>['lessSpacing'];
 	onChange(value: T): void;
 }
 
@@ -20,23 +25,21 @@ export function FilterList<T extends string>({
 	lessSpacing,
 	onChange,
 }: FilterListProps<T>) {
-	const selectedIndex = options.indexOf(value);
 	return (
-		<TabGroup
+		<Tabs
 			size={size}
-			selectedIndex={selectedIndex}
-			onChange={(index) => {
-				onChange(options[index]);
+			value={value}
+			onValueChange={(value) => {
+				onChange(value as T);
 			}}
 		>
-			<TabList disableBottomBorder lessSpacing={lessSpacing}>
+			<TabsList disableBottomBorder lessSpacing={lessSpacing}>
 				{options.map((option) => (
-					//@ts-expect-error disabled
-					<Tab disabled={disabled} key={option}>
+					<TabsTrigger disabled={disabled} key={option} value={option}>
 						{option}
-					</Tab>
+					</TabsTrigger>
 				))}
-			</TabList>
-		</TabGroup>
+			</TabsList>
+		</Tabs>
 	);
 }

@@ -2,22 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useOnScreen } from '@mysten/core';
-import { useRef, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useRef, useEffect, useMemo } from 'react';
+import { useParams } from 'react-router-dom';
 
+import AssetsOptionsMenu from './AssetsOptionsMenu';
+import NonVisualAssets from './NonVisualAssets';
+import VisualAssets from './VisualAssets';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import Alert from '_components/alert';
-import { ErrorBoundary } from '_components/error-boundary';
+import FiltersPortal from '_components/filters-tags';
 import Loading from '_components/loading';
 import LoadingSpinner from '_components/loading/LoadingIndicator';
-import { NFTDisplayCard } from '_components/nft-display';
-import { useGetNFTs } from '_src/ui/app/hooks/useGetNFTs';
+import { setToSessionStorage } from '_src/background/storage-utils';
+import { AssetFilterTypes, useGetNFTs } from '_src/ui/app/hooks/useGetNFTs';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
 function NftsPage() {
 	const accountAddress = useActiveAddress();
 	const {
-		data: nfts,
+		data: ownedAssets,
 		hasNextPage,
 		isInitialLoading,
 		isFetchingNextPage,
@@ -34,7 +37,17 @@ function NftsPage() {
 		if (isIntersecting && hasNextPage && !isFetchingNextPage) {
 			fetchNextPage();
 		}
-	}, [nfts.length, isIntersecting, fetchNextPage, hasNextPage, isFetchingNextPage]);
+	}, [isIntersecting, fetchNextPage, hasNextPage, isFetchingNextPage]);
+
+	const handleFilterChange = async (tag: any) => {
+		await setToSessionStorage<string>('NFTS_PAGE_NAVIGATION', tag.link);
+	};
+	const { filterType } = useParams();
+	const filteredNFTs = useMemo(() => {
+		if (!filterType) return ownedAssets?.visual;
+		return ownedAssets?.[filterType as AssetFilterTypes] ?? [];
+	}, [ownedAssets, filterType]);
+
 	if (isInitialLoading) {
 		return (
 			<div className="mt-1 flex w-full justify-center">
@@ -43,9 +56,17 @@ function NftsPage() {
 		);
 	}
 
+	const tags = [
+		{ name: 'Visual Assets', link: 'nfts' },
+		{ name: 'Everything Else', link: 'nfts/other' },
+	];
+
 	return (
 		<div className="flex flex-1 flex-col flex-nowrap items-center gap-4">
-			<PageTitle title="NFTs" />
+			<PageTitle title="Assets" after={<AssetsOptionsMenu />} />
+			{!!ownedAssets?.other.length && (
+				<FiltersPortal firstLastMargin tags={tags} callback={handleFilterChange} />
+			)}
 			<Loading loading={isLoading}>
 				{isError ? (
 					<Alert>
@@ -55,41 +76,25 @@ function NftsPage() {
 						<small>{(error as Error).message}</small>
 					</Alert>
 				) : null}
-				{nfts?.length ? (
-					<div className="grid w-full grid-cols-2 gap-x-3.5 gap-y-4">
-						{nfts.map(({ objectId }) => (
-							<Link
-								to={`/nft-details?${new URLSearchParams({
-									objectId,
-								}).toString()}`}
-								key={objectId}
-								className="no-underline"
-							>
-								<ErrorBoundary>
-									<NFTDisplayCard
-										objectId={objectId}
-										size="md"
-										showLabel
-										animateHover
-										borderRadius="xl"
-									/>
-								</ErrorBoundary>
-							</Link>
-						))}
-						<div ref={observerElem}>
-							{isSpinnerVisible ? (
-								<div className="mt-1 flex w-full justify-center">
-									<LoadingSpinner />
-								</div>
-							) : null}
-						</div>
-					</div>
+				{filteredNFTs?.length ? (
+					filterType === AssetFilterTypes.other ? (
+						<NonVisualAssets items={filteredNFTs} />
+					) : (
+						<VisualAssets items={filteredNFTs} />
+					)
 				) : (
 					<div className="flex flex-1 items-center self-center text-caption font-semibold text-steel-darker">
-						No NFTs found
+						No Assets found
 					</div>
 				)}
 			</Loading>
+			<div className="mb-5" ref={observerElem}>
+				{isSpinnerVisible ? (
+					<div className="mt-1 flex w-full justify-center">
+						<LoadingSpinner />
+					</div>
+				) : null}
+			</div>
 		</div>
 	);
 }

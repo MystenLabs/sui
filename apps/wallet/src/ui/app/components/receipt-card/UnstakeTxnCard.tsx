@@ -2,23 +2,28 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFormatCoin } from '@mysten/core';
-import { SUI_TYPE_ARG } from '@mysten/sui.js';
+import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 
 import { Card } from '../../shared/transaction-summary/Card';
 import { ValidatorLogo } from '_app/staking/validators/ValidatorLogo';
 import { TxnAmount } from '_components/receipt-card/TxnAmount';
 import { Text } from '_src/ui/app/shared/text';
 
-import type { SuiEvent } from '@mysten/sui.js';
+import type { SuiEvent } from '@mysten/sui.js/client';
 
 type UnStakeTxnCardProps = {
 	event: SuiEvent;
 };
 
 export function UnStakeTxnCard({ event }: UnStakeTxnCardProps) {
-	const principalAmount = event.parsedJson?.principal_amount || 0;
-	const rewardAmount = event.parsedJson?.reward_amount || 0;
-	const validatorAddress = event.parsedJson?.validator_address;
+	const json = event.parsedJson as {
+		principal_amount?: number;
+		reward_amount?: number;
+		validator_address?: string;
+	};
+	const principalAmount = json?.principal_amount || 0;
+	const rewardAmount = json?.reward_amount || 0;
+	const validatorAddress = json?.validator_address;
 	const totalAmount = Number(principalAmount) + Number(rewardAmount);
 	const [formatPrinciple, symbol] = useFormatCoin(principalAmount, SUI_TYPE_ARG);
 	const [formatRewards] = useFormatCoin(rewardAmount || 0, SUI_TYPE_ARG);

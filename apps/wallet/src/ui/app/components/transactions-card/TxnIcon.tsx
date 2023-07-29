@@ -18,8 +18,11 @@ const icons = {
 	Send: (
 		<ArrowRight16 fill="currentColor" className="text-gradient-blue-start text-body -rotate-45" />
 	),
-	Received: (
+	Receive: (
 		<ArrowRight16 fill="currentColor" className="text-gradient-blue-start text-body rotate-135" />
+	),
+	Transaction: (
+		<ArrowRight16 fill="currentColor" className="text-gradient-blue-start text-body -rotate-45" />
 	),
 	Staked: <WalletActionStake24 className="text-gradient-blue-start text-heading2 bg-transparent" />,
 	Unstaked: <Unstaked className="text-gradient-blue-start text-heading3" />,

@@ -1,20 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toB64 } from '@mysten/bcs';
-import {
-	SIGNATURE_SCHEME_TO_FLAG,
-	SerializedSignature,
-	SignaturePubkeyPair,
-	SignatureScheme,
-	toSingleSignaturePubkeyPair,
-} from './signature';
-import { PublicKey } from './publickey';
+import { fromB64, toB64 } from '@mysten/bcs';
+import type { SerializedSignature, SignatureScheme } from './signature.js';
+import { SIGNATURE_SCHEME_TO_FLAG } from './signature.js';
+import type { SignaturePubkeyPair } from './utils.js';
+// eslint-disable-next-line import/no-cycle
+import { toSingleSignaturePubkeyPair } from './utils.js';
+import type { PublicKey } from './publickey.js';
 import { blake2b } from '@noble/hashes/blake2b';
 import { bytesToHex } from '@noble/hashes/utils';
 
-import { normalizeSuiAddress } from '../types';
-import { Ed25519PublicKey, Secp256k1PublicKey, Secp256r1PublicKey, builder, fromB64 } from '..';
+import { Ed25519PublicKey } from '../keypairs/ed25519/publickey.js';
+import { Secp256k1PublicKey } from '../keypairs/secp256k1/publickey.js';
+import { Secp256r1PublicKey } from '../keypairs/secp256r1/publickey.js';
+import { builder } from '../builder/bcs.js';
+import { normalizeSuiAddress } from '../utils/sui-types.js';
 
 export type PubkeyWeightPair = {
 	pubKey: PublicKey;
@@ -66,9 +67,9 @@ export function toMultiSigAddress(pks: PubkeyWeightPair[], threshold: number): s
 	let i = 3;
 	for (const pk of pks) {
 		tmp.set([pk.pubKey.flag()], i);
-		tmp.set(pk.pubKey.toBytes(), i + 1);
-		tmp.set([pk.weight], i + 1 + pk.pubKey.toBytes().length);
-		i += pk.pubKey.toBytes().length + 2;
+		tmp.set(pk.pubKey.toRawBytes(), i + 1);
+		tmp.set([pk.weight], i + 1 + pk.pubKey.toRawBytes().length);
+		i += pk.pubKey.toRawBytes().length + 2;
 	}
 	return normalizeSuiAddress(bytesToHex(blake2b(tmp.slice(0, i), { dkLen: 32 })));
 }
@@ -149,6 +150,7 @@ export function decodeMultiSig(signature: string): SignaturePubkeyPair[] {
 			signatureScheme: scheme,
 			signature: Uint8Array.from(Object.values(s)[0]),
 			pubKey: new PublicKey(pk_bytes),
+			weight: multisig.multisig_pk.pk_map[pk_index as number].weight,
 		};
 	}
 	return res;

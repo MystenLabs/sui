@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { Infer } from 'superstruct';
 import {
 	array,
 	boolean,
@@ -9,13 +10,10 @@ import {
 	object,
 	string,
 	union,
-	Infer,
 	nullable,
 	tuple,
 	optional,
 } from 'superstruct';
-import { ObjectId, SuiAddress } from './common';
-import { AuthorityName, EpochId } from './transactions';
 
 /* -------------- Types for the SuiSystemState Rust definition -------------- */
 
@@ -26,7 +24,7 @@ export type StakeObject = Infer<typeof StakeObject>;
 // APY Response
 export const Apy = object({
 	apy: number(),
-	address: SuiAddress,
+	address: string(),
 });
 
 export const ValidatorsApy = object({
@@ -42,17 +40,17 @@ export const Balance = object({
 });
 
 export const StakeObject = object({
-	stakedSuiId: ObjectId,
-	stakeRequestEpoch: EpochId,
-	stakeActiveEpoch: EpochId,
+	stakedSuiId: string(),
+	stakeRequestEpoch: string(),
+	stakeActiveEpoch: string(),
 	principal: string(),
 	status: union([literal('Active'), literal('Pending'), literal('Unstaked')]),
 	estimatedReward: optional(string()),
 });
 
 export const DelegatedStake = object({
-	validatorAddress: SuiAddress,
-	stakingPool: ObjectId,
+	validatorAddress: string(),
+	stakingPool: string(),
 	stakes: array(StakeObject),
 });
 
@@ -111,16 +109,16 @@ export const DelegationStakingPool = object({
 	fields: DelegationStakingPoolFields,
 });
 
-export const Validators = array(tuple([AuthorityName, string()]));
+export const Validators = array(tuple([string(), string()]));
 
 export const CommitteeInfo = object({
-	epoch: EpochId,
+	epoch: string(),
 	/** Array of (validator public key, stake unit) tuple */
 	validators: Validators,
 });
 
 export const SuiValidatorSummary = object({
-	suiAddress: SuiAddress,
+	suiAddress: string(),
 	protocolPubkeyBytes: string(),
 	networkPubkeyBytes: string(),
 	workerPubkeyBytes: string(),
@@ -199,8 +197,8 @@ export const SuiSystemStateSummary = object({
 	inactivePoolsSize: string(),
 	validatorCandidatesId: string(),
 	validatorCandidatesSize: string(),
-	atRiskValidators: array(tuple([SuiAddress, string()])),
-	validatorReportRecords: array(tuple([SuiAddress, array(SuiAddress)])),
+	atRiskValidators: array(tuple([string(), string()])),
+	validatorReportRecords: array(tuple([string(), array(string())])),
 });
 
 export type SuiSystemStateSummary = Infer<typeof SuiSystemStateSummary>;

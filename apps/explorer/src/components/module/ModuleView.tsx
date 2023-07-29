@@ -1,18 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { normalizeSuiAddress, type SuiMoveNormalizedType } from '@mysten/sui.js';
+import { type SuiMoveNormalizedType } from '@mysten/sui.js/client';
+import { normalizeSuiAddress } from '@mysten/sui.js/utils';
 import cl from 'clsx';
 import Highlight, { defaultProps, Prism } from 'prism-react-renderer';
 import 'prism-themes/themes/prism-one-light.css';
 import { useMemo } from 'react';
 
+import { useNormalizedMoveModule } from '~/hooks/useNormalizedMoveModule';
+import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
+
 import type { Language } from 'prism-react-renderer';
 
 import styles from './ModuleView.module.css';
-
-import { useNormalizedMoveModule } from '~/hooks/useNormalizedMoveModule';
-import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
 // Include Rust language support.
 // TODO: Write a custom prismjs syntax for Move Bytecode.

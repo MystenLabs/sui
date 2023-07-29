@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiAddress } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -23,8 +22,9 @@ type UserApproveContainerProps = {
 	onSubmit: (approved: boolean) => Promise<void>;
 	isWarning?: boolean;
 	addressHidden?: boolean;
-	address?: SuiAddress;
+	address?: string | null;
 	scrollable?: boolean;
+	blended?: boolean;
 };
 
 export function UserApproveContainer({
@@ -40,6 +40,7 @@ export function UserApproveContainer({
 	addressHidden = false,
 	address,
 	scrollable,
+	blended = false,
 }: UserApproveContainerProps) {
 	const [submitting, setSubmitting] = useState(false);
 	const handleOnResponse = useCallback(
@@ -62,10 +63,17 @@ export function UserApproveContainer({
 					iconUrl={originFavIcon}
 					connectedAddress={!addressHidden && address ? address : undefined}
 				/>
-				<div className={cl(st.children, { [st.scrollable]: scrollable })}>{children}</div>
+				<div className={cl(st.children, { [st.scrollable]: scrollable, [st.blended]: blended })}>
+					{children}
+				</div>
 			</div>
 			<div className={st.actionsContainer}>
-				<div className={cl(st.actions, isWarning && st.flipActions)}>
+				<div
+					className={cl(st.actions, isWarning && st.flipActions, {
+						[st.blended]: blended,
+						[st.blurBorder]: blended,
+					})}
+				>
 					<Button
 						size="tall"
 						variant="warning"

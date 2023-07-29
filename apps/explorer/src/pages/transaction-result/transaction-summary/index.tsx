@@ -2,25 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useTransactionSummary } from '@mysten/core';
-import {
-	getTransactionKind,
-	getTransactionKindName,
-	type SuiTransactionBlockResponse,
-} from '@mysten/sui.js';
+import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 
 import { BalanceChanges } from './BalanceChanges';
 import { ObjectChanges } from './ObjectChanges';
+import { useRecognizedPackages } from '~/hooks/useRecognizedPackages';
 
 interface TransactionSummaryProps {
 	transaction: SuiTransactionBlockResponse;
 }
 
 export function TransactionSummary({ transaction }: TransactionSummaryProps) {
+	const recognizedPackagesList = useRecognizedPackages();
 	const summary = useTransactionSummary({
 		transaction,
+		recognizedPackagesList,
 	});
 
-	const transactionKindName = getTransactionKindName(getTransactionKind(transaction)!);
+	const transactionKindName = transaction.transaction?.data.transaction.kind;
 
 	const balanceChanges = summary?.balanceChanges;
 	const objectSummary = summary?.objectSummary;

@@ -1,0 +1,44 @@
+processed 10 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 8-33:
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5274400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'programmable'. lines 35-37:
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3 'view-object'. lines 39-39:
+Owner: Account Address ( A )
+Version: 2
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, value: 0u64}
+
+task 4 'programmable'. lines 41-42:
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2234628, non_refundable_storage_fee: 22572
+
+task 5 'view-object'. lines 44-47:
+Owner: Account Address ( A )
+Version: 3
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, value: 112u64}
+
+task 6 'programmable'. lines 49-50:
+mutated: object(_), object(2,0)
+gas summary: computation_cost: 500000, storage_cost: 2257200,  storage_rebate: 1256508, non_refundable_storage_fee: 12692
+
+task 7 'programmable'. lines 52-56:
+mutated: object(_), object(2,0)
+gas summary: computation_cost: 500000, storage_cost: 2257200,  storage_rebate: 1256508, non_refundable_storage_fee: 12692
+
+task 8 'programmable'. lines 58-59:
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 2, instruction: 8, function_name: Some("check") }, 0) in command 0
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 2, instruction: 8, function_name: Some("check") }, 0) in command 0
+
+task 9 'programmable'. lines 61-62:
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 2, instruction: 8, function_name: Some("check") }, 0) in command 0
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 2, instruction: 8, function_name: Some("check") }, 0) in command 0

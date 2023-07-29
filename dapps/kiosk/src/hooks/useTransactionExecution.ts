@@ -2,11 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useWalletKit } from '@mysten/wallet-kit';
-import {
-	SuiTransactionBlockResponseOptions,
-	TransactionBlock,
-	getExecutionStatus,
-} from '@mysten/sui.js';
+import { SuiTransactionBlockResponseOptions } from '@mysten/sui.js/client';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 
 import { useRpc } from '../context/RpcClientContext';
 
@@ -35,7 +32,7 @@ export function useTransactionExecution() {
 			options,
 		});
 
-		const status = getExecutionStatus(res)?.status === 'success';
+		const status = res.effects?.status?.status === 'success';
 
 		if (status) return true;
 		else throw new Error('Transaction execution failed.');

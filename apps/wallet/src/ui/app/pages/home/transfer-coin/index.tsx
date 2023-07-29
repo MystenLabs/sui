@@ -3,7 +3,6 @@
 
 import { useCoinMetadata } from '@mysten/core';
 import { ArrowRight16, ArrowLeft16 } from '@mysten/icons';
-import { getTransactionDigest } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
@@ -18,7 +17,7 @@ import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout'
 import { Text } from '_app/shared/text';
 import { ActiveCoinsCard } from '_components/active-coins-card';
 import Overlay from '_components/overlay';
-import { trackEvent } from '_src/shared/plausible';
+import { ampli } from '_src/shared/analytics/ampli';
 import { QredoActionIgnoredByUser } from '_src/ui/app/QredoSigner';
 import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
 import { useSigner } from '_src/ui/app/hooks';
@@ -59,10 +58,6 @@ function TransferCoinPage() {
 				name: 'send-tokens',
 			});
 			try {
-				trackEvent('TransferCoins', {
-					props: { coinType: coinType! },
-				});
-
 				return signer.signAndExecuteTransactionBlock(
 					{
 						transactionBlock: transaction,
@@ -86,8 +81,13 @@ function TransferCoinPage() {
 		onSuccess: (response) => {
 			queryClient.invalidateQueries(['get-coins']);
 			queryClient.invalidateQueries(['coin-balance']);
+
+			ampli.sentCoins({
+				coinType: coinType!,
+			});
+
 			const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
-				getTransactionDigest(response),
+				response.digest,
 			)}&from=transactions`;
 			return navigate(receiptUrl);
 		},

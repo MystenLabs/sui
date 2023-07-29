@@ -83,7 +83,7 @@ macro_rules! serialize_or_execute {
             if $serialize_signed {
                 SuiClientCommandResult::SerializedSignedTransaction(sender_signed_data)
             } else {
-                let transaction = Transaction::new(sender_signed_data).verify()?;
+                let transaction = Transaction::new(sender_signed_data);
                 let response = $context.execute_transaction_may_fail(transaction).await?;
                 let effects = response.effects.as_ref().ok_or_else(|| {
                     anyhow!("Effects from SuiTransactionBlockResult should not be empty")
@@ -199,6 +199,10 @@ pub enum SuiClientCommands {
         /// (SenderSignedData) using base64 encoding, and print out the string.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
+
+        /// If `true`, enable linters
+        #[clap(long, global = true)]
+        lint: bool,
     },
 
     /// Run the bytecode verifier on the package
@@ -269,6 +273,10 @@ pub enum SuiClientCommands {
         /// (SenderSignedData) using base64 encoding, and print out the string.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
+
+        /// If `true`, enable linters
+        #[clap(long, global = true)]
+        lint: bool,
     },
 
     /// Verify local Move packages against on-chain packages, and optionally their dependencies.
@@ -636,6 +644,7 @@ impl SuiClientCommands {
                 legacy_digest,
                 serialize_unsigned_transaction,
                 serialize_signed_transaction,
+                lint,
             } => {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
@@ -648,6 +657,7 @@ impl SuiClientCommands {
                         package_path,
                         with_unpublished_dependencies,
                         skip_dependency_verification,
+                        lint,
                     )
                     .await?;
 
@@ -721,6 +731,7 @@ impl SuiClientCommands {
                 with_unpublished_dependencies,
                 serialize_unsigned_transaction,
                 serialize_signed_transaction,
+                lint,
             } => {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
@@ -732,6 +743,7 @@ impl SuiClientCommands {
                     package_path,
                     with_unpublished_dependencies,
                     skip_dependency_verification,
+                    lint,
                 )
                 .await?;
 
@@ -758,7 +770,7 @@ impl SuiClientCommands {
                 package_path,
                 build_config,
             } => {
-                let protocol_config = ProtocolConfig::get_for_max_version();
+                let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
                 let registry = &Registry::new();
                 let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
 
@@ -777,7 +789,6 @@ impl SuiClientCommands {
                 println!("Running bytecode verifier for {} modules", modules.len());
                 run_metered_move_bytecode_verifier(
                     &modules,
-                    &protocol_config,
                     &metered_verifier_config,
                     &mut meter,
                     &bytecode_verifier_metrics,
@@ -1186,11 +1197,10 @@ impl SuiClientCommands {
                         .map_err(|e| anyhow!(e))?,
                     );
                 }
-                let verified =
-                    Transaction::from_generic_sig_data(data, Intent::sui_transaction(), sigs)
-                        .verify()?;
+                let transaction =
+                    Transaction::from_generic_sig_data(data, Intent::sui_transaction(), sigs);
 
-                let response = context.execute_transaction_may_fail(verified).await?;
+                let response = context.execute_transaction_may_fail(transaction).await?;
                 SuiClientCommandResult::ExecuteSignedTx(response)
             }
             SuiClientCommands::NewEnv { alias, rpc, ws } => {
@@ -1233,6 +1243,7 @@ impl SuiClientCommands {
                     config: build_config,
                     run_bytecode_verifier: true,
                     print_diags_to_stderr: true,
+                    lint: false,
                 }
                 .build(package_path)?;
 
@@ -1272,12 +1283,14 @@ fn compile_package_simple(
         config: resolve_lock_file_path(build_config, Some(package_path.clone()))?,
         run_bytecode_verifier: false,
         print_diags_to_stderr: false,
+        lint: false,
     };
     let resolution_graph = config.resolution_graph(&package_path)?;
 
     Ok(build_from_resolution_graph(
         package_path,
         resolution_graph,
+        false,
         false,
         false,
     )?)
@@ -1289,6 +1302,7 @@ async fn compile_package(
     package_path: PathBuf,
     with_unpublished_dependencies: bool,
     skip_dependency_verification: bool,
+    lint: bool,
 ) -> Result<
     (
         PackageDependencies,
@@ -1305,6 +1319,7 @@ async fn compile_package(
         config,
         run_bytecode_verifier,
         print_diags_to_stderr,
+        lint,
     };
     let resolution_graph = config.resolution_graph(&package_path)?;
     let (package_id, dependencies) = gather_published_ids(&resolution_graph);
@@ -1317,6 +1332,7 @@ async fn compile_package(
         resolution_graph,
         run_bytecode_verifier,
         print_diags_to_stderr,
+        lint,
     )?;
     if !compiled_package.is_system_package() {
         if let Some(already_published) = compiled_package.published_root_module() {
@@ -1605,6 +1621,10 @@ async fn construct_move_call_transaction(
         .map(|value| SuiJsonValue::new(convert_number_to_string(value.to_json_value())))
         .collect::<Result<_, _>>()?;
 
+    let type_args = type_args
+        .into_iter()
+        .map(|arg| arg.try_into())
+        .collect::<Result<Vec<_>, _>>()?;
     let gas_owner = context.try_get_object_owner(&gas).await?;
     let sender = gas_owner.unwrap_or(context.active_address()?);
 
@@ -1612,17 +1632,7 @@ async fn construct_move_call_transaction(
     client
         .transaction_builder()
         .move_call(
-            sender,
-            package,
-            module,
-            function,
-            type_args
-                .into_iter()
-                .map(|arg| arg.try_into())
-                .collect::<Result<Vec<_>, _>>()?,
-            args,
-            gas,
-            gas_budget,
+            sender, package, module, function, type_args, args, gas, gas_budget,
         )
         .await
 }

@@ -13,6 +13,7 @@ use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::net::SocketAddr;
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -132,7 +133,30 @@ pub struct NodeConfig {
     pub state_debug_dump_config: StateDebugDumpConfig,
 
     #[serde(default)]
-    pub state_archive_config: StateArchiveConfig,
+    pub state_archive_write_config: StateArchiveConfig,
+
+    #[serde(default)]
+    pub state_archive_read_config: Vec<StateArchiveConfig>,
+
+    #[serde(default)]
+    pub state_snapshot_write_config: StateSnapshotConfig,
+
+    #[serde(default)]
+    pub indexer_max_subscriptions: Option<usize>,
+
+    #[serde(default)]
+    pub transaction_kv_store_config: TransactionKeyValueStoreConfig,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct TransactionKeyValueStoreConfig {
+    #[serde(default = "default_transaction_kv_store_base_url")]
+    pub base_url: String,
+}
+
+fn default_transaction_kv_store_base_url() -> String {
+    "https://transactions.sui.io/".to_string()
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
@@ -232,6 +256,10 @@ impl NodeConfig {
         self.db_path.join("archive")
     }
 
+    pub fn snapshot_path(&self) -> PathBuf {
+        self.db_path.join("snapshot")
+    }
+
     pub fn network_address(&self) -> &Multiaddr {
         &self.network_address
     }
@@ -246,6 +274,23 @@ impl NodeConfig {
 
     pub fn sui_address(&self) -> SuiAddress {
         (&self.account_key_pair.keypair().public()).into()
+    }
+
+    pub fn archive_reader_config(&self) -> Vec<ArchiveReaderConfig> {
+        self.state_archive_read_config
+            .iter()
+            .flat_map(|config| {
+                config
+                    .object_store_config
+                    .as_ref()
+                    .map(|remote_store_config| ArchiveReaderConfig {
+                        remote_store_config: remote_store_config.clone(),
+                        download_concurrency: NonZeroUsize::new(config.concurrency)
+                            .unwrap_or(NonZeroUsize::new(5).unwrap()),
+                        use_for_pruning_watermark: config.use_for_pruning_watermark,
+                    })
+            })
+            .collect()
     }
 }
 
@@ -351,6 +396,9 @@ pub struct ExpensiveSafetyCheckConfig {
     /// against some (but not all) potential bugs in the bytecode verifier
     #[serde(default)]
     enable_move_vm_paranoid_checks: bool,
+
+    #[serde(default)]
+    enable_secondary_index_checks: bool,
     // TODO: Add more expensive checks here
 }
 
@@ -363,6 +411,7 @@ impl ExpensiveSafetyCheckConfig {
             enable_state_consistency_check: true,
             force_disable_state_consistency_check: false,
             enable_move_vm_paranoid_checks: true,
+            enable_secondary_index_checks: false, // Disable by default for now
         }
     }
 
@@ -374,6 +423,7 @@ impl ExpensiveSafetyCheckConfig {
             enable_state_consistency_check: false,
             force_disable_state_consistency_check: true,
             enable_move_vm_paranoid_checks: false,
+            enable_secondary_index_checks: false,
         }
     }
 
@@ -405,6 +455,10 @@ impl ExpensiveSafetyCheckConfig {
 
     pub fn enable_deep_per_tx_sui_conservation_check(&self) -> bool {
         self.enable_deep_per_tx_sui_conservation_check || cfg!(debug_assertions)
+    }
+
+    pub fn enable_secondary_index_checks(&self) -> bool {
+        self.enable_secondary_index_checks
     }
 }
 
@@ -451,7 +505,7 @@ pub struct AuthorityStorePruningConfig {
     pub periodic_compaction_threshold_days: Option<usize>,
     /// number of epochs to keep the latest version of transactions and effects for
     #[serde(skip_serializing_if = "Option::is_none")]
-    num_epochs_to_retain_for_checkpoints: Option<u64>,
+    pub num_epochs_to_retain_for_checkpoints: Option<u64>,
 }
 
 impl Default for AuthorityStorePruningConfig {
@@ -548,11 +602,28 @@ pub struct DBCheckpointConfig {
     pub prune_and_compact_before_upload: Option<bool>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ArchiveReaderConfig {
+    pub remote_store_config: ObjectStoreConfig,
+    pub download_concurrency: NonZeroUsize,
+    pub use_for_pruning_watermark: bool,
+}
+
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct StateArchiveConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub object_store_config: Option<ObjectStoreConfig>,
+    pub concurrency: usize,
+    pub use_for_pruning_watermark: bool,
+}
+
+#[derive(Default, Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct StateSnapshotConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub object_store_config: Option<ObjectStoreConfig>,
+    pub concurrency: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq)]

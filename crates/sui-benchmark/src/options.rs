@@ -71,8 +71,6 @@ pub struct Opts {
     /// Default workload is 100% transfer object
     #[clap(subcommand)]
     pub run_spec: RunSpec,
-    #[clap(long, default_value = "9091", global = true)]
-    pub server_metric_port: u16,
     #[clap(long, default_value = "127.0.0.1", global = true)]
     pub client_metric_host: String,
     #[clap(long, default_value = "8081", global = true)]

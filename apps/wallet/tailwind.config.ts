@@ -30,6 +30,7 @@ export default {
 				8: '2rem',
 				15: '3.75rem',
 				'popup-height': '600px',
+				'popup-height-v2': '680px',
 				'popup-width': '360px',
 			},
 			boxShadow: {
@@ -59,6 +60,9 @@ export default {
 			},
 			dropShadow: {
 				accountModal: ['0px 10px 30px rgba(0, 0, 0, 0.15)', '0px 10px 50px rgba(0, 0, 0, 0.15)'],
+			},
+			fontFamily: {
+				frankfurter: ['Frankfurter Normal', 'sans-serif'],
 			},
 		},
 	},

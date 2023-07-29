@@ -1,13 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useZodForm } from '@mysten/core';
 import { ArrowRight12 } from '@mysten/icons';
-import {
-	getPureSerializationType,
-	getExecutionStatusType,
-	getExecutionStatusError,
-	TransactionBlock,
-} from '@mysten/sui.js';
+import { TransactionBlock, getPureSerializationType } from '@mysten/sui.js/transactions';
+import { Button } from '@mysten/ui';
 import { useWalletKit, ConnectButton } from '@mysten/wallet-kit';
 import { useMutation } from '@tanstack/react-query';
 import clsx from 'clsx';
@@ -18,14 +15,11 @@ import { z } from 'zod';
 import { FunctionExecutionResult } from './FunctionExecutionResult';
 import { useFunctionParamsDetails } from './useFunctionParamsDetails';
 import { useFunctionTypeArguments } from './useFunctionTypeArguments';
-
-import type { SuiMoveNormalizedFunction, ObjectId } from '@mysten/sui.js';
-import type { TypeOf } from 'zod';
-
-import { useZodForm } from '~/hooks/useZodForm';
-import { Button } from '~/ui/Button';
 import { DisclosureBox } from '~/ui/DisclosureBox';
 import { Input } from '~/ui/Input';
+
+import type { SuiMoveNormalizedFunction } from '@mysten/sui.js/client';
+import type { TypeOf } from 'zod';
 
 const argsSchema = z.object({
 	params: z.optional(z.array(z.string().trim().min(1))),
@@ -33,7 +27,7 @@ const argsSchema = z.object({
 });
 
 export type ModuleFunctionProps = {
-	packageId: ObjectId;
+	packageId: string;
 	moduleName: string;
 	functionName: string;
 	functionDetails: SuiMoveNormalizedFunction;
@@ -82,8 +76,8 @@ export function ModuleFunction({
 					showInput: true,
 				},
 			});
-			if (getExecutionStatusType(result) === 'failure') {
-				throw new Error(getExecutionStatusError(result) || 'Transaction failed');
+			if (result.effects?.status.status === 'failure') {
+				throw new Error(result.effects.status.error || 'Transaction failed');
 			}
 			return result;
 		},

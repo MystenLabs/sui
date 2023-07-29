@@ -103,6 +103,11 @@ pub struct CheckpointStore {
     /// Map from checkpoint digest to certified checkpoint
     pub(crate) checkpoint_by_digest: DBMap<CheckpointDigest, TrustedCheckpoint>,
 
+    /// Store locally computed checkpoint summaries so that we can detect forks and log useful
+    /// information. Can be pruned as soon as we verify that we are in agreement with the latest
+    /// certified checkpoint.
+    pub(crate) locally_computed_checkpoints: DBMap<CheckpointSequenceNumber, CheckpointSummary>,
+
     /// A map from epoch ID to the sequence number of the last checkpoint in that epoch.
     epoch_last_checkpoint_map: DBMap<EpochId, CheckpointSequenceNumber>,
 
@@ -301,6 +306,82 @@ impl CheckpointStore {
         self.full_checkpoint_content.get(&seq)
     }
 
+    fn prune_local_summaries(&self) -> SuiResult {
+        if let Some((last_local_summary, _)) = self
+            .locally_computed_checkpoints
+            .unbounded_iter()
+            .skip_to_last()
+            .next()
+        {
+            let mut batch = self.locally_computed_checkpoints.batch();
+            batch.delete_range(&self.locally_computed_checkpoints, &0, &last_local_summary)?;
+            batch.write()?;
+            info!("Pruned local summaries up to {:?}", last_local_summary);
+        }
+        Ok(())
+    }
+
+    fn check_for_checkpoint_fork(
+        &self,
+        local_checkpoint: &CheckpointSummary,
+        verified_checkpoint: &VerifiedCheckpoint,
+    ) {
+        if local_checkpoint != verified_checkpoint.data() {
+            let verified_contents = self
+                .get_checkpoint_contents(&verified_checkpoint.content_digest)
+                .map(|opt_contents| {
+                    opt_contents
+                        .map(|contents| format!("{:?}", contents))
+                        .unwrap_or_else(|| {
+                            format!(
+                                "Verified checkpoint contents not found, digest: {:?}",
+                                verified_checkpoint.content_digest,
+                            )
+                        })
+                })
+                .map_err(|e| {
+                    format!(
+                        "Failed to get verified checkpoint contents, digest: {:?} error: {:?}",
+                        verified_checkpoint.content_digest, e
+                    )
+                })
+                .unwrap_or_else(|err_msg| err_msg);
+
+            let local_contents = self
+                .get_checkpoint_contents(&local_checkpoint.content_digest)
+                .map(|opt_contents| {
+                    opt_contents
+                        .map(|contents| format!("{:?}", contents))
+                        .unwrap_or_else(|| {
+                            format!(
+                                "Local checkpoint contents not found, digest: {:?}",
+                                local_checkpoint.content_digest
+                            )
+                        })
+                })
+                .map_err(|e| {
+                    format!(
+                        "Failed to get local checkpoint contents, digest: {:?} error: {:?}",
+                        local_checkpoint.content_digest, e
+                    )
+                })
+                .unwrap_or_else(|err_msg| err_msg);
+
+            // checkpoint contents may be too large for panic message.
+            error!(
+                verified_checkpoint = ?verified_checkpoint.data(),
+                ?verified_contents,
+                ?local_checkpoint,
+                ?local_contents,
+                "Local checkpoint fork detected!",
+            );
+            panic!(
+                "Local checkpoint fork detected for sequence number: {}",
+                local_checkpoint.sequence_number()
+            );
+        }
+    }
+
     // Called by consensus (ConsensusAggregator).
     // Different from `insert_verified_checkpoint`, it does not touch
     // the highest_verified_checkpoint watermark such that state sync
@@ -326,7 +407,16 @@ impl CheckpointStore {
                 [(&checkpoint.epoch(), checkpoint.sequence_number())],
             )?;
         }
-        batch.write()
+        batch.write()?;
+
+        if let Some(local_checkpoint) = self
+            .locally_computed_checkpoints
+            .get(checkpoint.sequence_number())?
+        {
+            self.check_for_checkpoint_fork(&local_checkpoint, checkpoint);
+        }
+
+        Ok(())
     }
 
     // Called by state sync, apart from inserting the checkpoint and updating
@@ -541,7 +631,7 @@ pub struct CheckpointSignatureAggregator {
     summary: CheckpointSummary,
     digest: CheckpointDigest,
     signatures: StakeAggregator<AuthoritySignInfo, true>,
-    failures: StakeAggregator<AuthoritySignInfo, false>,
+    metrics: Arc<CheckpointMetrics>,
 }
 
 impl CheckpointBuilder {
@@ -665,8 +755,25 @@ impl CheckpointBuilder {
                 &self.tables.checkpoint_content,
                 [(contents.digest(), contents)],
             )?;
+
+            batch.insert_batch(
+                &self.tables.locally_computed_checkpoints,
+                [(sequence_number, summary)],
+            )?;
         }
         batch.write()?;
+
+        for (local_checkpoint, _) in &new_checkpoint {
+            if let Some(certified_checkpoint) = self
+                .tables
+                .certified_checkpoints
+                .get(local_checkpoint.sequence_number())?
+            {
+                self.tables
+                    .check_for_checkpoint_fork(local_checkpoint, &certified_checkpoint.into());
+            }
+        }
+
         self.notify_aggregator.notify_one();
         self.epoch_store
             .process_pending_checkpoint(height, new_checkpoint)?;
@@ -748,6 +855,12 @@ impl CheckpointBuilder {
             }
         }
         let last_checkpoint_seq = last_checkpoint.as_ref().map(|(seq, _)| *seq);
+        info!(
+            next_checkpoint_seq = last_checkpoint_seq.unwrap_or_default() + 1,
+            checkpoint_timestamp = details.timestamp_ms,
+            "Creating checkpoint(s) for {} transactions",
+            all_effects.len(),
+        );
 
         let all_digests: Vec<_> = all_effects
             .iter()
@@ -1122,7 +1235,7 @@ impl CheckpointAggregator {
                     digest: summary.digest(),
                     summary,
                     signatures: StakeAggregator::new(self.epoch_store.committee().clone()),
-                    failures: StakeAggregator::new(self.epoch_store.committee().clone()),
+                    metrics: self.metrics.clone(),
                 });
                 self.current.as_mut().unwrap()
             };
@@ -1200,17 +1313,10 @@ impl CheckpointSignatureAggregator {
         let their_digest = *data.summary.digest();
         let (_, signature) = data.summary.into_data_and_sig();
         let author = signature.authority;
-        // consensus ensures that authority == narwhal_cert.author
+        // It is not guaranteed that signature.authority == narwhal_cert.author, but we do verify
+        // the signature so we know that the author signed the message at some point.
         if their_digest != self.digest {
-            if let InsertResult::QuorumReached(data) =
-                self.failures.insert_generic(author, signature)
-            {
-                panic!("Checkpoint fork detected - f+1 validators submitted checkpoint digest at seq {} different from our digest {}. Validators with different digests: {:?}",
-                    self.summary.sequence_number,
-                    self.digest,
-                    data.keys()
-                );
-            }
+            self.metrics.remote_checkpoint_forks.inc();
             warn!(
                 checkpoint_seq = self.summary.sequence_number,
                 "Validator {:?} has mismatching checkpoint digest {}, we have digest {}",

@@ -1,13 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	type SerializedSignature,
-	toB64,
-	type SignedTransaction,
-	type ExportedKeypair,
-	type SignedMessage,
-} from '@mysten/sui.js';
+import { type SignedTransaction, type SignedMessage } from '@mysten/sui.js';
+import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
+
+import { type SerializedSignature, type ExportedKeypair } from '@mysten/sui.js/cryptography';
+import { toB64 } from '@mysten/sui.js/utils';
 import { lastValueFrom, map, take } from 'rxjs';
 
 import { growthbook } from '../experimentation/feature-gating';
@@ -32,7 +30,6 @@ import {
 	type QredoConnectPayload,
 } from '_src/shared/messaging/messages/payloads/QredoConnect';
 
-import type { SuiAddress, SuiTransactionBlockResponse } from '@mysten/sui.js';
 import type { Message } from '_messages';
 import type { KeyringPayload } from '_payloads/keyring';
 import type { GetPermissionRequests, PermissionResponse } from '_payloads/permissions';
@@ -73,7 +70,7 @@ export class BackgroundClient {
 
 	public sendPermissionResponse(
 		id: string,
-		accounts: SuiAddress[],
+		accounts: string[],
 		allowed: boolean,
 		responseDate: string,
 	) {
@@ -132,7 +129,7 @@ export class BackgroundClient {
 	 * @param origin The origin of the dapp
 	 * @param specificAccounts Accounts to disconnect. If not provided or it's an empty array all accounts will be disconnected
 	 */
-	public async disconnectApp(origin: string, specificAccounts?: SuiAddress[]) {
+	public async disconnectApp(origin: string, specificAccounts?: string[]) {
 		await lastValueFrom(
 			this.sendMessage(
 				createMessage<DisconnectApp>({
@@ -225,7 +222,7 @@ export class BackgroundClient {
 		);
 	}
 
-	public signData(address: SuiAddress, data: Uint8Array): Promise<SerializedSignature> {
+	public signData(address: string, data: Uint8Array): Promise<SerializedSignature> {
 		return lastValueFrom(
 			this.sendMessage(
 				createMessage<KeyringPayload<'signData'>>({
@@ -256,7 +253,7 @@ export class BackgroundClient {
 		);
 	}
 
-	public selectAccount(address: SuiAddress) {
+	public selectAccount(address: string) {
 		return lastValueFrom(
 			this.sendMessage(
 				createMessage<KeyringPayload<'switchAccount'>>({
@@ -311,7 +308,7 @@ export class BackgroundClient {
 		);
 	}
 
-	public exportAccount(password: string, accountAddress: SuiAddress) {
+	public exportAccount(password: string, accountAddress: string) {
 		return lastValueFrom(
 			this.sendMessage(
 				createMessage<KeyringPayload<'exportAccount'>>({

@@ -60,7 +60,7 @@ async fn main() -> Result<()> {
     // TODO: query the network for the current protocol version.
     let protocol_config = match opts.protocol_version {
         Some(v) => ProtocolConfig::get_for_version(ProtocolVersion::new(v), Chain::Unknown),
-        None => ProtocolConfig::get_for_max_version(),
+        None => ProtocolConfig::get_for_max_version_UNSAFE(),
     };
 
     let max_num_new_move_object_ids = protocol_config.max_num_new_move_object_ids();

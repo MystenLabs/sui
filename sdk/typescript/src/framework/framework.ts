@@ -1,21 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	getObjectFields,
+import type {
 	SuiObjectResponse,
 	SuiMoveObject,
 	SuiObjectInfo,
 	SuiObjectData,
-	getObjectId,
-	getObjectType,
-} from '../types/objects';
-import { normalizeSuiObjectId, ObjectId, SuiAddress } from '../types/common';
+} from '../types/objects.js';
+import { getObjectFields, getObjectId, getObjectType } from '../types/objects.js';
 
-import { getOption, Option } from '../types/option';
-import { CoinStruct } from '../types/coin';
-import { StructTag } from '../types/sui-bcs';
-import { Infer, nullable, number, object, string } from 'superstruct';
+import type { Option } from '../types/option.js';
+import { getOption } from '../types/option.js';
+import type { CoinStruct } from '../types/coin.js';
+import type { StructTag } from '../bcs/index.js';
+import type { Infer } from 'superstruct';
+import { nullable, number, object, string } from 'superstruct';
+import { normalizeSuiObjectId } from '../utils/sui-types.js';
 
 export const SUI_SYSTEM_ADDRESS = '0x3';
 export const SUI_FRAMEWORK_ADDRESS = '0x2';
@@ -47,7 +47,7 @@ export const CoinMetadataStruct = object({
 	symbol: string(),
 	description: string(),
 	iconUrl: nullable(string()),
-	id: nullable(ObjectId),
+	id: nullable(string()),
 });
 
 export type CoinMetadata = Infer<typeof CoinMetadataStruct>;
@@ -89,7 +89,7 @@ export class Coin {
 		};
 	}
 
-	public static getID(obj: ObjectData): ObjectId {
+	public static getID(obj: ObjectData): string {
 		if ('fields' in obj) {
 			return obj.fields.id.id;
 		}
@@ -128,7 +128,7 @@ export class Coin {
 		return BigInt(balance);
 	}
 
-	private static getType(data: ObjectData): string | undefined {
+	private static getType(data: ObjectData): string | null | undefined {
 		if (isObjectDataFull(data)) {
 			return getObjectType(data);
 		}
@@ -143,13 +143,11 @@ export type DelegationData = SuiMoveObject & {
 		active_delegation: Option<number>;
 		delegate_amount: number;
 		next_reward_unclaimed_epoch: number;
-		validator_address: SuiAddress;
+		validator_address: string;
 		info: {
 			id: string;
 			version: number;
 		};
-		// TODO (jian): clean up after 0.34
-		coin_locked_until_epoch: Option<SuiMoveObject>;
 		ending_epoch: Option<number>;
 	};
 };

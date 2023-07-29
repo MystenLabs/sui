@@ -28,18 +28,18 @@ const TOOLTIP_DELAY = 150;
 interface TooltipProps {
 	tip: ReactNode;
 	children: ReactNode;
+	onOpen?: () => void;
 	placement?: Placement;
 }
 
-export function Tooltip({ tip, children, placement = 'top' }: TooltipProps) {
+export function Tooltip({ tip, children, onOpen, placement = 'top' }: TooltipProps) {
 	const [open, setOpen] = useState(false);
 	const arrowRef = useRef(null);
 
 	const {
 		x,
 		y,
-		reference,
-		floating,
+		refs,
 		strategy,
 		context,
 		middlewareData,
@@ -47,7 +47,12 @@ export function Tooltip({ tip, children, placement = 'top' }: TooltipProps) {
 	} = useFloating({
 		placement,
 		open,
-		onOpenChange: setOpen,
+		onOpenChange: (updatedIsOpen) => {
+			if (open !== updatedIsOpen && updatedIsOpen && onOpen) {
+				onOpen();
+			}
+			setOpen(updatedIsOpen);
+		},
 		whileElementsMounted: autoUpdate,
 		middleware: [offset(5), flip(), shift(), arrow({ element: arrowRef, padding: 6 })],
 	});
@@ -87,7 +92,7 @@ export function Tooltip({ tip, children, placement = 'top' }: TooltipProps) {
 
 	return (
 		<>
-			<div tabIndex={0} className="w-fit" {...getReferenceProps({ ref: reference })}>
+			<div tabIndex={0} className="w-fit" ref={refs.setReference} {...getReferenceProps()}>
 				{children}
 			</div>
 			<FloatingPortal>
@@ -121,7 +126,8 @@ export function Tooltip({ tip, children, placement = 'top' }: TooltipProps) {
 								width: 'max-content',
 								maxWidth: '200px',
 							}}
-							{...getFloatingProps({ ref: floating })}
+							ref={refs.setFloating}
+							{...getFloatingProps()}
 						>
 							<div className="leading-1 flex flex-col flex-nowrap gap-px rounded-md bg-gray-90 p-2 leading-130">
 								{tip}

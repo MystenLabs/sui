@@ -1,0 +1,5 @@
+{
+	"private": true,
+	"import": "../dist/esm/builder/export.js",
+	"main": "../dist/cjs/builder/export.js"
+}

@@ -8,7 +8,7 @@ import { useMemo } from 'react';
 import { useActiveAddress } from '../../hooks/useActiveAddress';
 import { getAllStakeSui } from '../getAllStakeSui';
 import { StakeAmount } from '../home/StakeAmount';
-import { StakeCard } from '../home/StakedCard';
+import { type DelegationObjectWithValidator, StakeCard } from '../home/StakedCard';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, { Menu, Content } from '_app/shared/bottom-menu-layout';
@@ -16,6 +16,8 @@ import { Card, CardItem } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
+import { ampli } from '_src/shared/analytics/ampli';
+import type { StakeObject } from '@mysten/sui.js/client';
 
 export function ValidatorsCard() {
 	const accountAddress = useActiveAddress();
@@ -61,7 +63,8 @@ export function ValidatorsCard() {
 			delegatedStake.reduce(
 				(acc, curr) =>
 					curr.stakes.reduce(
-						(total, { estimatedReward }) => total + BigInt(estimatedReward || 0),
+						(total, { estimatedReward }: StakeObject & { estimatedReward?: string }) =>
+							total + BigInt(estimatedReward || 0),
 						acc,
 					),
 				0n,
@@ -108,7 +111,7 @@ export function ValidatorsCard() {
 									?.filter(({ inactiveValidator }) => inactiveValidator)
 									.map((delegation) => (
 										<StakeCard
-											delegationObject={delegation}
+											delegationObject={delegation as DelegationObjectWithValidator}
 											currentEpoch={Number(system.epoch)}
 											key={delegation.stakedSuiId}
 											inactiveValidator
@@ -142,7 +145,7 @@ export function ValidatorsCard() {
 									?.filter(({ inactiveValidator }) => !inactiveValidator)
 									.map((delegation) => (
 										<StakeCard
-											delegationObject={delegation}
+											delegationObject={delegation as DelegationObjectWithValidator}
 											currentEpoch={Number(system.epoch)}
 											key={delegation.stakedSuiId}
 										/>
@@ -151,7 +154,19 @@ export function ValidatorsCard() {
 					</div>
 				</Content>
 				<Menu stuckClass="staked-cta" className="w-full px-0 pb-0 mx-0">
-					<Button size="tall" variant="secondary" to="new" before={<Plus12 />} text="Stake SUI" />
+					<Button
+						size="tall"
+						variant="secondary"
+						to="new"
+						onClick={() =>
+							ampli.clickedStakeSui({
+								isCurrentlyStaking: true,
+								sourceFlow: 'Validator card',
+							})
+						}
+						before={<Plus12 />}
+						text="Stake SUI"
+					/>
 				</Menu>
 			</BottomMenuLayout>
 		</div>

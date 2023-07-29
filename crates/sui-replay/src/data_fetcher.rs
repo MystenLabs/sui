@@ -599,11 +599,14 @@ pub fn extract_epoch_and_version(ev: SuiEvent) -> Result<(u64, u64), ReplayEngin
     Err(ReplayEngineError::UnexpectedEventFormat { event: ev })
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct NodeStateDumpFetcher {
     pub node_state_dump: NodeStateDump,
     pub object_ref_pool: BTreeMap<(ObjectID, SequenceNumber), Object>,
     pub latest_object_version_pool: BTreeMap<ObjectID, Object>,
+
+    // Used when we need to fetch data from remote such as
+    pub backup_remote_fetcher: Option<RemoteFetcher>,
 }
 
 impl From<NodeStateDump> for NodeStateDumpFetcher {
@@ -633,7 +636,19 @@ impl From<NodeStateDump> for NodeStateDumpFetcher {
             node_state_dump,
             object_ref_pool,
             latest_object_version_pool,
+            backup_remote_fetcher: None,
         }
+    }
+}
+
+impl NodeStateDumpFetcher {
+    pub fn new(
+        node_state_dump: NodeStateDump,
+        backup_remote_fetcher: Option<RemoteFetcher>,
+    ) -> Self {
+        let mut s = Self::from(node_state_dump);
+        s.backup_remote_fetcher = backup_remote_fetcher;
+        s
     }
 }
 
@@ -644,7 +659,7 @@ impl DataFetcher for NodeStateDumpFetcher {
         objects: &[(ObjectID, SequenceNumber)],
     ) -> Result<Vec<Object>, ReplayEngineError> {
         let mut resp = vec![];
-        objects.iter().try_for_each(|(id, version)| {
+        match objects.iter().try_for_each(|(id, version)| {
             if let Some(obj) = self.object_ref_pool.get(&(*id, *version)) {
                 resp.push(obj.clone());
                 return Ok(());
@@ -653,8 +668,15 @@ impl DataFetcher for NodeStateDumpFetcher {
                 id: *id,
                 version: *version,
             })
-        })?;
-        Ok(resp)
+        }) {
+            Ok(_) => return Ok(resp),
+            Err(e) => {
+                if let Some(backup_remote_fetcher) = &self.backup_remote_fetcher {
+                    return backup_remote_fetcher.multi_get_versioned(objects).await;
+                }
+                return Err(e);
+            }
+        };
     }
 
     async fn multi_get_latest(
@@ -662,14 +684,21 @@ impl DataFetcher for NodeStateDumpFetcher {
         objects: &[ObjectID],
     ) -> Result<Vec<Object>, ReplayEngineError> {
         let mut resp = vec![];
-        objects.iter().try_for_each(|id| {
+        match objects.iter().try_for_each(|id| {
             if let Some(obj) = self.latest_object_version_pool.get(id) {
                 resp.push(obj.clone());
                 return Ok(());
             }
             Err(ReplayEngineError::ObjectNotExist { id: *id })
-        })?;
-        Ok(resp)
+        }) {
+            Ok(_) => return Ok(resp),
+            Err(e) => {
+                if let Some(backup_remote_fetcher) = &self.backup_remote_fetcher {
+                    return backup_remote_fetcher.multi_get_latest(objects).await;
+                }
+                return Err(e);
+            }
+        };
     }
 
     async fn get_checkpoint_txs(

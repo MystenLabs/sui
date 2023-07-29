@@ -26,6 +26,8 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
+#[cfg(debug_assertions)]
+use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     data_store::DataStore,
     gas::GasMeter,
@@ -459,6 +461,14 @@ impl VMRuntime {
         ) = self
             .loader
             .load_script(script.borrow(), &type_arguments, data_store)?;
+        #[cfg(debug_assertions)]
+        {
+            let rem = gas_meter.remaining_gas().into();
+            gas_meter.set_profiler(GasProfiler::init_default_cfg(
+                func.pretty_string().to_owned(),
+                rem,
+            ));
+        }
         // execute the function
         self.execute_function_impl(
             func,

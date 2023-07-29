@@ -2,13 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { formatDate } from '@mysten/core';
+import { Heading, Text } from '@mysten/ui';
 import clsx from 'clsx';
 
 import { getElapsedTime, useEpochProgress } from '~/pages/epochs/utils';
 import { Card } from '~/ui/Card';
-import { Heading } from '~/ui/Heading';
 import { ProgressBar } from '~/ui/ProgressBar';
-import { Text } from '~/ui/Text';
 
 export interface EpochProgressProps {
 	epoch?: string;

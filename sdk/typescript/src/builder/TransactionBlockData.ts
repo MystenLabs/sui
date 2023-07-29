@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { toB58 } from '@mysten/bcs';
+import type { Infer } from 'superstruct';
 import {
 	array,
 	assert,
 	define,
-	Infer,
 	integer,
 	is,
 	literal,
@@ -16,12 +16,13 @@ import {
 	string,
 	union,
 } from 'superstruct';
-import { hashTypedData } from '../cryptography/hash';
-import { normalizeSuiAddress, SuiObjectRef } from '../types';
-import { builder } from './bcs';
-import { TransactionType, TransactionBlockInput } from './Transactions';
-import { BuilderCallArg, PureCallArg } from './Inputs';
-import { create } from './utils';
+import { hashTypedData } from './hash.js';
+import { SuiObjectRef } from '../types/index.js';
+import { builder } from './bcs.js';
+import { TransactionType, TransactionBlockInput } from './Transactions.js';
+import { BuilderCallArg, PureCallArg } from './Inputs.js';
+import { create } from './utils.js';
+import { normalizeSuiAddress } from '../utils/sui-types.js';
 
 export const TransactionExpiration = optional(
 	nullable(
@@ -29,8 +30,6 @@ export const TransactionExpiration = optional(
 	),
 );
 export type TransactionExpiration = Infer<typeof TransactionExpiration>;
-
-const SuiAddress = string();
 
 const StringEncodedBigint = define<string>('StringEncodedBigint', (val) => {
 	if (!['string', 'number', 'bigint'].includes(typeof val)) return false;
@@ -47,13 +46,13 @@ const GasConfig = object({
 	budget: optional(StringEncodedBigint),
 	price: optional(StringEncodedBigint),
 	payment: optional(array(SuiObjectRef)),
-	owner: optional(SuiAddress),
+	owner: optional(string()),
 });
 type GasConfig = Infer<typeof GasConfig>;
 
 export const SerializedTransactionDataBuilder = object({
 	version: literal(1),
-	sender: optional(SuiAddress),
+	sender: optional(string()),
 	expiration: TransactionExpiration,
 	gasConfig: GasConfig,
 	inputs: array(TransactionBlockInput),

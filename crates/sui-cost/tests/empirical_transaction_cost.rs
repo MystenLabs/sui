@@ -2,38 +2,26 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use insta::assert_json_snapshot;
+use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
-use sui_core::test_utils::make_transfer_object_transaction;
-use sui_core::test_utils::make_transfer_sui_transaction;
-use sui_swarm_config::network_config::NetworkConfig;
-use sui_types::base_types::SuiAddress;
+use strum_macros::Display;
+use strum_macros::EnumString;
+use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
+use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
+use sui_test_transaction_builder::publish_basics_package_and_make_counter;
+use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::coin::PAY_JOIN_FUNC_NAME;
 use sui_types::coin::PAY_MODULE_NAME;
 use sui_types::coin::PAY_SPLIT_VEC_FUNC_NAME;
-use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
-use sui_types::object::{generate_test_gas_objects, Object};
-use sui_types::transaction::VerifiedTransaction;
+use sui_types::gas_coin::GAS;
+use sui_types::transaction::TransactionData;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::{
     gas::GasCostSummary,
     transaction::{CallArg, ObjectArg},
 };
-use test_utils::authority::spawn_test_authorities;
-use test_utils::{
-    authority::test_authority_configs_with_objects,
-    transaction::{
-        publish_counter_package, submit_shared_object_transaction, submit_single_owner_transaction,
-    },
-};
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
-use serde::{Deserialize, Serialize};
-use strum_macros::Display;
-use strum_macros::EnumString;
-use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::effects::TransactionEffectsAPI;
-use sui_types::execution_status::ExecutionStatus;
+use test_cluster::{TestCluster, TestClusterBuilder};
 
 #[derive(
     Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Ord, PartialOrd, Clone, Display, EnumString,
@@ -80,72 +68,65 @@ async fn test_good_snapshot() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-async fn split_n_tx(n: u64, coin: &Object, gas: &Object, gas_price: u64) -> VerifiedTransaction {
+async fn split_n_tx(
+    n: u64,
+    coin: ObjectRef,
+    gas: ObjectRef,
+    gas_price: u64,
+    sender: SuiAddress,
+) -> TransactionData {
     let split_amounts = vec![10u64; n as usize];
-    let type_args = vec![coin.get_move_template_type().unwrap()];
+    let type_args = vec![GAS::type_tag()];
 
-    let (sender, keypair) = deterministic_random_account_key();
-    TestTransactionBuilder::new(sender, gas.compute_object_reference(), gas_price)
+    TestTransactionBuilder::new(sender, gas, gas_price)
         .move_call(
             SUI_FRAMEWORK_PACKAGE_ID,
             PAY_MODULE_NAME.as_str(),
             PAY_SPLIT_VEC_FUNC_NAME.as_str(),
             vec![
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(coin.compute_object_reference())),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(coin)),
                 CallArg::Pure(bcs::to_bytes(&split_amounts).unwrap()),
             ],
         )
         .with_type_args(type_args)
-        .build_and_sign(&keypair)
+        .build()
 }
 
 async fn create_txes(
-    sender: SuiAddress,
-    keypair: &AccountKeyPair,
-    gas_objects: &[Object],
-    configs: &NetworkConfig,
-    gas_price: u64,
-) -> BTreeMap<CommonTransactionCosts, VerifiedTransaction> {
+    test_cluster: &TestCluster,
+) -> BTreeMap<CommonTransactionCosts, TransactionData> {
+    // Initial preparations to create a shared counter. This needs to be done first to not interfere
+    // with the use of gas objects in the rest of this function.
+    let (counter_package, counter) =
+        publish_basics_package_and_make_counter(&test_cluster.wallet).await;
+    let counter_package_id = counter_package.0;
+    let (counter_id, counter_initial_shared_version) = (counter.0, counter.1);
+
     let mut ret = BTreeMap::new();
-    let mut gas_objects = gas_objects.to_vec().clone();
-    // let _handles = spawn_test_authorities(gas_objects.clone(), configs).await;
-    // Publish the move package to all authorities and get the new package ref.
-    tokio::task::yield_now().await;
-    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    let (sender, mut gas_objects) = test_cluster.wallet.get_one_account().await.unwrap();
+    let gas_price = test_cluster.get_reference_gas_price().await;
 
     //
     // Publish
     //
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("dummy_modules_publish");
-    let publish_tx = TestTransactionBuilder::new(
-        sender,
-        gas_objects.pop().unwrap().compute_object_reference(),
-        gas_price,
-    )
-    .publish(package_path)
-    .build_and_sign(keypair);
+    let publish_tx = TestTransactionBuilder::new(sender, gas_objects.pop().unwrap(), gas_price)
+        .publish(package_path)
+        .build();
     ret.insert(CommonTransactionCosts::Publish, publish_tx);
 
     //
     // Transfer Whole Sui Coin and Transfer Portion of Sui Coin
     //
-    let whole_sui_coin_tx = make_transfer_sui_transaction(
-        gas_objects.pop().unwrap().compute_object_reference(),
-        SuiAddress::default(),
-        None,
-        sender,
-        keypair,
-        gas_price,
-    );
-    let partial_sui_coin_tx = make_transfer_sui_transaction(
-        gas_objects.pop().unwrap().compute_object_reference(),
-        SuiAddress::default(),
-        Some(100),
-        sender,
-        keypair,
-        gas_price,
-    );
+    let whole_sui_coin_tx =
+        TestTransactionBuilder::new(sender, gas_objects.pop().unwrap(), gas_price)
+            .transfer_sui(None, SuiAddress::default())
+            .build();
+    let partial_sui_coin_tx =
+        TestTransactionBuilder::new(sender, gas_objects.pop().unwrap(), gas_price)
+            .transfer_sui(Some(10), SuiAddress::default())
+            .build();
     ret.insert(
         CommonTransactionCosts::TransferWholeSuiCoin,
         whole_sui_coin_tx,
@@ -158,14 +139,9 @@ async fn create_txes(
     //
     // Transfer Whole Coin Object
     //
-    let whole_coin_tx = make_transfer_object_transaction(
-        gas_objects.pop().unwrap().compute_object_reference(),
-        gas_objects.pop().unwrap().compute_object_reference(),
-        sender,
-        keypair,
-        SuiAddress::default(),
-        gas_price,
-    );
+    let whole_coin_tx = TestTransactionBuilder::new(sender, gas_objects.pop().unwrap(), gas_price)
+        .transfer(gas_objects.pop().unwrap(), SuiAddress::default())
+        .build();
 
     ret.insert(CommonTransactionCosts::TransferWholeCoin, whole_coin_tx);
 
@@ -173,36 +149,30 @@ async fn create_txes(
     // Merge Two Coins
     //
     let c1 = gas_objects.pop().unwrap();
-    let type_args = vec![c1.get_move_template_type().unwrap()];
+    let type_args = vec![GAS::type_tag()];
 
-    let merge_tx = TestTransactionBuilder::new(
-        sender,
-        gas_objects.pop().unwrap().compute_object_reference(),
-        gas_price,
-    )
-    .move_call(
-        SUI_FRAMEWORK_PACKAGE_ID,
-        PAY_MODULE_NAME.as_str(),
-        PAY_JOIN_FUNC_NAME.as_str(),
-        vec![
-            CallArg::Object(ObjectArg::ImmOrOwnedObject(c1.compute_object_reference())),
-            CallArg::Object(ObjectArg::ImmOrOwnedObject(
-                gas_objects.pop().unwrap().compute_object_reference(),
-            )),
-        ],
-    )
-    .with_type_args(type_args)
-    .build_and_sign(keypair);
+    let merge_tx = TestTransactionBuilder::new(sender, gas_objects.pop().unwrap(), gas_price)
+        .move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            PAY_MODULE_NAME.as_str(),
+            PAY_JOIN_FUNC_NAME.as_str(),
+            vec![
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(c1)),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(gas_objects.pop().unwrap())),
+            ],
+        )
+        .with_type_args(type_args)
+        .build();
     ret.insert(CommonTransactionCosts::MergeCoin, merge_tx);
 
     //
-    // Splt A Coin Into N Specific Amounts
-    // Note spltting complexity does not depend on the amounts but only on the number of amounts
+    // Split A Coin Into N Specific Amounts
+    // Note splitting complexity does not depend on the amounts but only on the number of amounts
     //
     for n in 0..4 {
         let gas = gas_objects.pop().unwrap();
         let coin = gas_objects.pop().unwrap();
-        let split_tx = split_n_tx(n, &gas, &coin, gas_price).await.clone();
+        let split_tx = split_n_tx(n, gas, coin, gas_price, sender).await.clone();
         ret.insert(CommonTransactionCosts::SplitCoin(n as usize), split_tx);
     }
 
@@ -211,51 +181,27 @@ async fn create_txes(
     // Using the `counter` example
     //
 
-    let package_id = publish_counter_package(
-        gas_objects.pop().unwrap(),
-        &configs.net_addresses(),
-        gas_price,
-    )
-    .await
-    .0;
-
-    // Make a transaction to create a counter.
-    tokio::task::yield_now().await;
-    let transaction = TestTransactionBuilder::new(
-        sender,
-        gas_objects.pop().unwrap().compute_object_reference(),
-        gas_price,
-    )
-    .call_counter_create(package_id)
-    .build_and_sign(keypair);
-    let (effects, _, _) =
-        submit_single_owner_transaction(transaction.clone(), &configs.net_addresses()).await;
-    assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
-    let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
+    let transaction = TestTransactionBuilder::new(sender, gas_objects.pop().unwrap(), gas_price)
+        .call_counter_create(counter_package_id)
+        .build();
 
     ret.insert(CommonTransactionCosts::SharedCounterCreate, transaction);
 
-    // Ensure the value of the counter is `0`.
-    tokio::task::yield_now().await;
-    let transaction = TestTransactionBuilder::new(
-        sender,
-        gas_objects.pop().unwrap().compute_object_reference(),
-        gas_price,
-    )
-    .move_call(
-        package_id,
-        "counter",
-        "assert_value",
-        vec![
-            CallArg::Object(ObjectArg::SharedObject {
-                id: counter_id,
-                initial_shared_version: counter_initial_shared_version,
-                mutable: true,
-            }),
-            CallArg::Pure(0u64.to_le_bytes().to_vec()),
-        ],
-    )
-    .build_and_sign(keypair);
+    let transaction = TestTransactionBuilder::new(sender, gas_objects.pop().unwrap(), gas_price)
+        .move_call(
+            counter_package_id,
+            "counter",
+            "assert_value",
+            vec![
+                CallArg::Object(ObjectArg::SharedObject {
+                    id: counter_id,
+                    initial_shared_version: counter_initial_shared_version,
+                    mutable: true,
+                }),
+                CallArg::Pure(0u64.to_le_bytes().to_vec()),
+            ],
+        )
+        .build();
 
     ret.insert(
         CommonTransactionCosts::SharedCounterAssertValue,
@@ -263,14 +209,13 @@ async fn create_txes(
     );
 
     // Make a transaction to increment the counter.
-    tokio::task::yield_now().await;
-    let transaction = TestTransactionBuilder::new(
-        sender,
-        gas_objects.pop().unwrap().compute_object_reference(),
-        gas_price,
-    )
-    .call_counter_increment(package_id, counter_id, counter_initial_shared_version)
-    .build_and_sign(keypair);
+    let transaction = TestTransactionBuilder::new(sender, gas_objects.pop().unwrap(), gas_price)
+        .call_counter_increment(
+            counter_package_id,
+            counter_id,
+            counter_initial_shared_version,
+        )
+        .build();
 
     ret.insert(CommonTransactionCosts::SharedCounterIncrement, transaction);
 
@@ -280,39 +225,23 @@ async fn create_txes(
 async fn run_actual_costs(
 ) -> Result<BTreeMap<CommonTransactionCosts, GasCostSummary>, anyhow::Error> {
     let mut ret = BTreeMap::new();
-    let gas_objects = generate_test_gas_objects();
-    let (sender, keypair) = deterministic_random_account_key();
+    let test_cluster = TestClusterBuilder::new()
+        .with_accounts(vec![AccountConfig {
+            gas_amounts: vec![DEFAULT_GAS_AMOUNT; 30],
+            address: None,
+        }])
+        .build()
+        .await;
 
-    // Get the authority configs and spawn them. Note that it is important to not drop
-    // the handles (or the authorities will stop).
-    let (configs, gas_objects) = test_authority_configs_with_objects(gas_objects);
-    let authorities = spawn_test_authorities(&configs).await;
-    let rgp = authorities
-        .get(0)
-        .unwrap()
-        .with(|sui_node| sui_node.state().reference_gas_price_for_testing())
-        .unwrap();
-
-    // Publish the move package to all authorities and get the new package ref.
-    tokio::task::yield_now().await;
-    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-
-    let tx_map = create_txes(sender, &keypair, &gas_objects, &configs, rgp).await;
+    let tx_map = create_txes(&test_cluster).await;
     for (tx_type, tx) in tx_map {
-        let gas_used = if tx_type.is_shared_object_tx() {
-            submit_shared_object_transaction(tx, &configs.net_addresses())
-                .await
-                .unwrap()
-                .0
-                .gas_cost_summary()
-                .clone()
-        } else {
-            submit_single_owner_transaction(tx, &configs.net_addresses())
-                .await
-                .0
-                .gas_cost_summary()
-                .clone()
-        };
+        let gas_used = test_cluster
+            .sign_and_execute_transaction(&tx)
+            .await
+            .effects
+            .unwrap()
+            .gas_cost_summary()
+            .clone();
 
         ret.insert(tx_type, gas_used);
     }

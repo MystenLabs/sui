@@ -1,21 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { JsonRpcClient } from '@mysten/sui.js';
+import { SuiHTTPTransport } from '@mysten/sui.js/client';
 import * as Sentry from '@sentry/react';
 
-export class SentryRpcClient extends JsonRpcClient {
+export class SentryHttpTransport extends SuiHTTPTransport {
 	#url: string;
 	constructor(url: string) {
-		super(url);
+		super({ url });
 		this.#url = url;
 	}
 
-	async #withRequest(name: string, data: Record<string, unknown>, handler: () => Promise<unknown>) {
+	async #withRequest<T>(input: { method: string; params: unknown[] }, handler: () => Promise<T>) {
 		const transaction = Sentry.startTransaction({
-			name,
+			name: input.method,
 			op: 'http.rpc-request',
-			data: data,
+			data: input.params,
 			tags: {
 				url: this.#url,
 			},
@@ -35,7 +35,7 @@ export class SentryRpcClient extends JsonRpcClient {
 		}
 	}
 
-	async request(method: string, args: any) {
-		return this.#withRequest(method, { args }, () => super.request(method, args));
+	override async request<T>(input: { method: string; params: unknown[] }) {
+		return this.#withRequest(input, () => super.request<T>(input));
 	}
 }

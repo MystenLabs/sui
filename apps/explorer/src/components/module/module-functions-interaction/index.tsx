@@ -1,18 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { LoadingIndicator } from '@mysten/ui';
 import { useMemo } from 'react';
 
 import { ModuleFunction } from './ModuleFunction';
-
-import type { ObjectId } from '@mysten/sui.js';
-
 import { useNormalizedMoveModule } from '~/hooks/useNormalizedMoveModule';
 import { Banner } from '~/ui/Banner';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 export type ModuleFunctionsInteractionProps = {
-	packageId: ObjectId;
+	packageId: string;
 	moduleName: string;
 };
 
@@ -46,7 +43,7 @@ export function ModuleFunctionsInteraction({
 						No public entry functions found.
 					</div>
 				) : (
-					<LoadingSpinner text="Loading data" />
+					<LoadingIndicator text="Loading data" />
 				)}
 			</div>
 		);

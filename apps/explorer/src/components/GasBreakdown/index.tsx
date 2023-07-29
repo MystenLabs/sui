@@ -1,15 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { CoinFormat, type TransactionSummary, useFormatCoin } from '@mysten/core';
-import { SUI_TYPE_ARG } from '@mysten/sui.js';
+import {
+	CoinFormat,
+	type TransactionSummary,
+	useFormatCoin,
+	useResolveSuiNSName,
+} from '@mysten/core';
+import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { Heading, Text } from '@mysten/ui';
 
 import { CopyToClipboard } from '~/ui/CopyToClipboard';
 import { DescriptionItem } from '~/ui/DescriptionList';
 import { Divider } from '~/ui/Divider';
-import { Heading } from '~/ui/Heading';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
-import { Text } from '~/ui/Text';
 import { TransactionBlockCard, TransactionBlockCardSection } from '~/ui/TransactionBlockCard';
 
 interface GasProps {
@@ -86,11 +90,12 @@ function GasPaymentLinks({ objectIds }: { objectIds: string[] }) {
 }
 
 interface GasBreakdownProps {
-	summary?: TransactionSummary;
+	summary?: TransactionSummary | null;
 }
 
 export function GasBreakdown({ summary }: GasBreakdownProps) {
 	const gasData = summary?.gas;
+	const { data: suinsDomainName } = useResolveSuiNSName(gasData?.owner);
 
 	if (!gasData) {
 		return null;
@@ -122,7 +127,7 @@ export function GasBreakdown({ summary }: GasBreakdownProps) {
 						<Text variant="pBody/medium" color="steel-darker">
 							Paid by
 						</Text>
-						<AddressLink address={owner} />
+						<AddressLink label={suinsDomainName || undefined} address={owner} />
 					</div>
 				)}
 
@@ -148,9 +153,6 @@ export function GasBreakdown({ summary }: GasBreakdownProps) {
 				<div className="mt-4 flex flex-col gap-3">
 					<Divider />
 
-					<DescriptionItem align="start" title={<Text variant="pBody/semibold">Gas Price</Text>}>
-						<GasAmount amount={BigInt(gasPrice)} />
-					</DescriptionItem>
 					<DescriptionItem
 						align="start"
 						title={<Text variant="pBody/semibold">Computation Fee</Text>}
@@ -162,17 +164,22 @@ export function GasBreakdown({ summary }: GasBreakdownProps) {
 						<GasAmount amount={Number(gasUsed?.storageCost)} />
 					</DescriptionItem>
 
-					<div className="mt-2 flex flex-col gap-2 rounded-xl border border-dashed border-steel px-4 py-2 md:flex-row md:items-center md:gap-4">
-						<div className="w-full md:w-40">
-							<Text variant="pBody/semibold" color="steel-darker">
-								Storage Rebate
-							</Text>
-						</div>
-
-						<div className="ml-0 min-w-0 flex-1 leading-none">
+					<DescriptionItem
+						align="start"
+						title={<Text variant="pBody/semibold">Storage Rebate</Text>}
+					>
+						<div className="-ml-1.5 min-w-0 flex-1 leading-none">
 							<GasAmount amount={-Number(gasUsed?.storageRebate)} />
 						</div>
-					</div>
+					</DescriptionItem>
+				</div>
+
+				<div className="mt-6 flex flex-col gap-6">
+					<Divider />
+
+					<DescriptionItem align="start" title={<Text variant="pBody/semibold">Gas Price</Text>}>
+						<GasAmount amount={BigInt(gasPrice)} />
+					</DescriptionItem>
 				</div>
 			</TransactionBlockCardSection>
 		</TransactionBlockCard>

@@ -8,7 +8,7 @@ import {
 	useGetCoinBalance,
 } from '@mysten/core';
 import { ArrowLeft16, StakeAdd16, StakeRemove16 } from '@mysten/icons';
-import { SUI_TYPE_ARG } from '@mysten/sui.js';
+import { MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
 
@@ -26,9 +26,11 @@ import { IconTooltip } from '_app/shared/tooltip';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useAppSelector, useCoinsReFetchingConfig } from '_hooks';
+import { ampli } from '_src/shared/analytics/ampli';
 import { API_ENV } from '_src/shared/api-env';
 import { MIN_NUMBER_SUI_TO_STAKE } from '_src/shared/constants';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
+import type { StakeObject } from '@mysten/sui.js/client';
 
 type DelegationDetailCardProps = {
 	validatorAddress: string;
@@ -77,7 +79,9 @@ export function DelegationDetailCard({ validatorAddress, stakedId }: DelegationD
 
 	const totalStake = BigInt(delegationData?.principal || 0n);
 
-	const suiEarned = BigInt(delegationData?.estimatedReward || 0n);
+	const suiEarned = BigInt(
+		(delegationData as Extract<StakeObject, { estimatedReward: string }>)?.estimatedReward || 0n,
+	);
 	const { apy, isApyApproxZero } = rollingAverageApys?.[validatorAddress] ?? {
 		apy: 0,
 	};
@@ -196,6 +200,12 @@ export function DelegationDetailCard({ validatorAddress, stakedId }: DelegationD
 									to={stakeByValidatorAddress}
 									before={<StakeAdd16 />}
 									text="Stake SUI"
+									onClick={() => {
+										ampli.clickedStakeSui({
+											isCurrentlyStaking: true,
+											sourceFlow: 'Delegation detail card',
+										});
+									}}
 									disabled={showRequestMoreSuiToken}
 								/>
 							) : null}
@@ -206,6 +216,12 @@ export function DelegationDetailCard({ validatorAddress, stakedId }: DelegationD
 									size="tall"
 									variant="outline"
 									to={stakeByValidatorAddress + '&unstake=true'}
+									onClick={() => {
+										ampli.clickedUnstakeSui({
+											stakedAmount: Number(totalStake / MIST_PER_SUI),
+											validatorAddress,
+										});
+									}}
 									text="Unstake SUI"
 									before={<StakeRemove16 />}
 								/>

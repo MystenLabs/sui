@@ -349,8 +349,8 @@ static BUILTIN_TYPE_ALL_NAMES: Lazy<BTreeSet<Symbol>> = Lazy::new(|| {
         BuiltinTypeName_::BOOL,
         BuiltinTypeName_::VECTOR,
     ]
-    .iter()
-    .map(|n| Symbol::from(*n))
+    .into_iter()
+    .map(Symbol::from)
     .collect()
 });
 
@@ -363,8 +363,7 @@ static BUILTIN_TYPE_NUMERIC: Lazy<BTreeSet<BuiltinTypeName_>> = Lazy::new(|| {
         BuiltinTypeName_::U128,
         BuiltinTypeName_::U256,
     ]
-    .iter()
-    .cloned()
+    .into_iter()
     .collect()
 });
 
@@ -475,8 +474,8 @@ static BUILTIN_FUNCTION_ALL_NAMES: Lazy<BTreeSet<Symbol>> = Lazy::new(|| {
         BuiltinFunction_::FREEZE,
         BuiltinFunction_::ASSERT_MACRO,
     ]
-    .iter()
-    .map(|n| Symbol::from(*n))
+    .into_iter()
+    .map(Symbol::from)
     .collect()
 });
 
@@ -516,6 +515,22 @@ impl BuiltinFunction_ {
             BF::Exists(_) => BF::EXISTS,
             BF::Freeze(_) => BF::FREEZE,
             BF::Assert(_) => BF::ASSERT_MACRO,
+        }
+    }
+}
+
+impl TypeName_ {
+    pub fn is(
+        &self,
+        address: impl AsRef<str>,
+        module: impl AsRef<str>,
+        name: impl AsRef<str>,
+    ) -> bool {
+        match self {
+            TypeName_::Builtin(_) | TypeName_::Multiple(_) => false,
+            TypeName_::ModuleType(mident, n) => {
+                mident.value.is(address, module) && n == name.as_ref()
+            }
         }
     }
 }

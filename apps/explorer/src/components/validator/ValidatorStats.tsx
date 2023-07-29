@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiValidatorSummary } from '@mysten/sui.js';
+import { type SuiValidatorSummary } from '@mysten/sui.js/client';
+import { Heading } from '@mysten/ui';
 
 import { DelegationAmount } from './DelegationAmount';
-
 import { Card } from '~/ui/Card';
-import { Heading } from '~/ui/Heading';
 import { Stats } from '~/ui/Stats';
 
 type StatsCardProps = {
@@ -36,7 +35,7 @@ export function ValidatorStats({
 	return (
 		<div className="flex flex-col items-stretch gap-5 md:flex-row">
 			<div className="flex-grow">
-				<Card spacing="lg">
+				<Card spacing="lg" height="full">
 					<div className="flex basis-full flex-col gap-8 md:basis-1/3">
 						<Heading as="div" variant="heading4/semibold" color="steel-darker">
 							SUI Staked on Validator
@@ -70,7 +69,7 @@ export function ValidatorStats({
 			</div>
 
 			<div className="flex-grow">
-				<Card spacing="lg">
+				<Card spacing="lg" height="full">
 					<div className="flex basis-full flex-col items-stretch gap-8 md:basis-80">
 						<Heading as="div" variant="heading4/semibold" color="steel-darker">
 							Validator Staking Rewards
@@ -100,7 +99,7 @@ export function ValidatorStats({
 			</div>
 
 			<div className="flex-grow">
-				<Card spacing="lg">
+				<Card spacing="lg" height="full">
 					<div className="flex max-w-full flex-col gap-8">
 						<Heading as="div" variant="heading4/semibold" color="steel-darker">
 							Network Participation

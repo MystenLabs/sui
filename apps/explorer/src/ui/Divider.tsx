@@ -12,6 +12,7 @@ const dividerStyles = cva('', {
 		color: {
 			gray45: 'border-gray-45',
 			gray40: 'border-gray-40',
+			'hero/10': 'border-hero/10',
 		},
 	},
 	defaultVariants: {

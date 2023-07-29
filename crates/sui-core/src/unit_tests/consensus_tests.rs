@@ -80,7 +80,9 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
         )
         .unwrap();
 
-        let transaction = to_sender_signed_transaction(data, &keypair);
+        let transaction = authority
+            .verify_transaction(to_sender_signed_transaction(data, &keypair))
+            .unwrap();
 
         // Submit the transaction and assemble a certificate.
         let response = authority

@@ -3,38 +3,32 @@
 
 import { fromB64 } from '@mysten/bcs';
 import { is, mask } from 'superstruct';
-import { JsonRpcProvider } from '../providers/json-rpc-provider';
+import type { JsonRpcProvider } from '../providers/json-rpc-provider.js';
+import type { SuiObjectResponse } from '../types/index.js';
 import {
 	extractMutableReference,
 	extractStructTag,
 	getObjectReference,
-	getSharedObjectInitialVersion,
-	normalizeSuiObjectId,
-	ObjectId,
-	SuiMoveNormalizedType,
 	SuiObjectRef,
-	SUI_TYPE_ARG,
-	ProtocolConfig,
-} from '../types';
-import {
-	Transactions,
-	TransactionArgument,
-	TransactionType,
-	TransactionBlockInput,
-	getTransactionType,
-	MoveCallTransaction,
-} from './Transactions';
+} from '../types/index.js';
+import type { TransactionArgument, TransactionType, MoveCallTransaction } from './Transactions.js';
+import { Transactions, TransactionBlockInput, getTransactionType } from './Transactions.js';
+import type { ObjectCallArg } from './Inputs.js';
 import {
 	BuilderCallArg,
 	getIdFromCallArg,
 	Inputs,
 	isMutableSharedObjectInput,
-	ObjectCallArg,
 	PureCallArg,
-} from './Inputs';
-import { getPureSerializationType, isTxContext } from './serializer';
-import { TransactionBlockDataBuilder, TransactionExpiration } from './TransactionBlockData';
-import { TRANSACTION_TYPE, create, WellKnownEncoding } from './utils';
+} from './Inputs.js';
+import { getPureSerializationType, isTxContext } from './serializer.js';
+import type { TransactionExpiration } from './TransactionBlockData.js';
+import { TransactionBlockDataBuilder } from './TransactionBlockData.js';
+import type { WellKnownEncoding } from './utils.js';
+import { TRANSACTION_TYPE, create } from './utils.js';
+import type { ProtocolConfig, SuiClient, SuiMoveNormalizedType } from '../client/index.js';
+import { normalizeSuiObjectId } from '../utils/sui-types.js';
+import { SUI_TYPE_ARG } from '../framework/framework.js';
 
 type TransactionResult = TransactionArgument & TransactionArgument[];
 
@@ -91,14 +85,14 @@ function createTransactionResult(index: number): TransactionResult {
 	}) as TransactionResult;
 }
 
-function expectProvider(options: BuildOptions): JsonRpcProvider {
-	if (!options.provider) {
+function expectClient(options: BuildOptions): SuiClient {
+	if (!options.client && !options.provider) {
 		throw new Error(
 			`No provider passed to Transaction#build, but transaction data was not sufficient to build offline.`,
 		);
 	}
 
-	return options.provider;
+	return (options.client ?? options.provider!) as SuiClient;
 }
 
 const TRANSACTION_BRAND = Symbol.for('@mysten/transaction');
@@ -128,7 +122,11 @@ const chunk = <T>(arr: T[], size: number): T[][] =>
 	);
 
 interface BuildOptions {
-	provider?: JsonRpcProvider;
+	/**
+	 * @deprecated Use `client` instead.
+	 */
+	provider?: JsonRpcProvider | SuiClient;
+	client?: SuiClient | JsonRpcProvider;
 	onlyTransactionKind?: boolean;
 	/** Define a protocol config to build against, instead of having it fetched from the provider at build time. */
 	protocolConfig?: ProtocolConfig;
@@ -136,11 +134,17 @@ interface BuildOptions {
 	limits?: Limits;
 }
 
+export function isTransactionBlock(obj: unknown): obj is TransactionBlock {
+	return !!obj && typeof obj === 'object' && (obj as any)[TRANSACTION_BRAND] === true;
+}
+
 /**
  * Transaction Builder
  */
 export class TransactionBlock {
-	/** Returns `true` if the object is an instance of the Transaction builder class. */
+	/** Returns `true` if the object is an instance of the Transaction builder class.
+	 * @deprecated Use `isTransactionBlock` from `@mysten/sui.js/transactions` instead.
+	 */
 	static is(obj: unknown): obj is TransactionBlock {
 		return !!obj && typeof obj === 'object' && (obj as any)[TRANSACTION_BRAND] === true;
 	}
@@ -180,12 +184,18 @@ export class TransactionBlock {
 		return tx;
 	}
 
-	/** A helper to retrieve the Transaction builder `Transactions` */
+	/**
+	 * A helper to retrieve the Transaction builder `Transactions`
+	 * @deprecated Either use the helper methods on the `TransactionBlock` class, or import `Transactions` from `@mysten/sui.js/transactions`.
+	 */
 	static get Transactions() {
 		return Transactions;
 	}
 
-	/** A helper to retrieve the Transaction builder `Inputs` */
+	/**
+	 * A helper to retrieve the Transaction builder `Inputs`
+	 * * @deprecated Either use the helper methods on the `TransactionBlock` class, or import `Inputs` from `@mysten/sui.js/transactions`.
+	 */
 	static get Inputs() {
 		return Inputs;
 	}
@@ -269,7 +279,7 @@ export class TransactionBlock {
 	/**
 	 * Add a new object input to the transaction.
 	 */
-	object(value: ObjectId | ObjectCallArg) {
+	object(value: string | ObjectCallArg) {
 		const id = getIdFromCallArg(value);
 		// deduplicate
 		const inserted = this.#blockData.inputs.find(
@@ -399,12 +409,16 @@ export class TransactionBlock {
 	}
 
 	/** Derive transaction digest */
-	async getDigest({
-		provider,
-	}: {
-		provider?: JsonRpcProvider;
-	} = {}): Promise<string> {
-		await this.#prepare({ provider });
+	async getDigest(
+		options: {
+			/**
+			 * @deprecated Use `client` instead.
+			 */
+			provider?: JsonRpcProvider | SuiClient;
+			client?: SuiClient;
+		} = {},
+	): Promise<string> {
+		await this.#prepare(options);
 		return this.#blockData.getDigest();
 	}
 
@@ -438,7 +452,7 @@ export class TransactionBlock {
 
 		const gasOwner = this.#blockData.gasConfig.owner ?? this.#blockData.sender;
 
-		const coins = await expectProvider(options).getCoins({
+		const coins = await expectClient(options).getCoins({
 			owner: gasOwner!,
 			coinType: SUI_TYPE_ARG,
 		});
@@ -479,7 +493,7 @@ export class TransactionBlock {
 			return;
 		}
 
-		this.setGasPrice(await expectProvider(options).getReferenceGasPrice());
+		this.setGasPrice(await expectClient(options).getReferenceGasPrice());
 	}
 
 	async #prepareTransactions(options: BuildOptions) {
@@ -564,7 +578,7 @@ export class TransactionBlock {
 				moveModulesToResolve.map(async (moveCall) => {
 					const [packageId, moduleName, functionName] = moveCall.target.split('::');
 
-					const normalized = await expectProvider(options).getNormalizedMoveFunction({
+					const normalized = await expectClient(options).getNormalizedMoveFunction({
 						package: normalizeSuiObjectId(packageId),
 						module: moduleName,
 						function: functionName,
@@ -637,7 +651,7 @@ export class TransactionBlock {
 			const objects = (
 				await Promise.all(
 					objectChunks.map((chunk) =>
-						expectProvider(options).multiGetObjects({
+						expectClient(options).multiGetObjects({
 							ids: chunk,
 							options: { showOwner: true },
 						}),
@@ -655,14 +669,16 @@ export class TransactionBlock {
 				.filter(([_, obj]) => obj.error)
 				.map(([id, _]) => id);
 			if (invalidObjects.length) {
-				throw new Error(
-					`The following input objects are not invalid: ${invalidObjects.join(', ')}`,
-				);
+				throw new Error(`The following input objects are invalid: ${invalidObjects.join(', ')}`);
 			}
 
 			objectsToResolve.forEach(({ id, input, normalizedType }) => {
 				const object = objectsById.get(id)!;
-				const initialSharedVersion = getSharedObjectInitialVersion(object);
+				const owner = object.data?.owner;
+				const initialSharedVersion =
+					owner && typeof owner === 'object' && 'Shared' in owner
+						? owner.Shared.initial_shared_version
+						: undefined;
 
 				if (initialSharedVersion) {
 					// There could be multiple transactions that reference the same shared object.
@@ -678,7 +694,7 @@ export class TransactionBlock {
 						mutable,
 					});
 				} else {
-					input.value = Inputs.ObjectRef(getObjectReference(object)!);
+					input.value = Inputs.ObjectRef(getObjectReference(object as SuiObjectResponse)!);
 				}
 			});
 		}
@@ -693,8 +709,10 @@ export class TransactionBlock {
 			throw new Error('Missing transaction sender');
 		}
 
-		if (!options.protocolConfig && !options.limits && options.provider) {
-			options.protocolConfig = await options.provider.getProtocolConfig();
+		const client = options.client || options.provider;
+
+		if (!options.protocolConfig && !options.limits && client) {
+			options.protocolConfig = await client.getProtocolConfig();
 		}
 
 		await Promise.all([this.#prepareGasPrice(options), this.#prepareTransactions(options)]);
@@ -703,7 +721,7 @@ export class TransactionBlock {
 			await this.#prepareGasPayment(options);
 
 			if (!this.#blockData.gasConfig.budget) {
-				const dryRunResult = await expectProvider(options).dryRunTransactionBlock({
+				const dryRunResult = await expectClient(options).dryRunTransactionBlock({
 					transactionBlock: this.#blockData.build({
 						maxSizeBytes: this.#getConfig('maxTxSizeBytes', options),
 						overrides: {

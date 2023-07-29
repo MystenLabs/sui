@@ -2,19 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useTransactionSummary } from '@mysten/core';
-import { type SuiTransactionBlockResponse, type SuiAddress } from '@mysten/sui.js';
+import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 
+import { StakeTxnCard } from './StakeTxnCard';
+import { StatusIcon } from './StatusIcon';
+import { UnStakeTxnCard } from './UnstakeTxnCard';
 import { DateCard } from '../../shared/date-card';
 import { TransactionSummary } from '../../shared/transaction-summary';
 import { ExplorerLinkCard } from '../../shared/transaction-summary/cards/ExplorerLink';
 import { GasSummary } from '../../shared/transaction-summary/cards/GasSummary';
-import { StakeTxnCard } from './StakeTxnCard';
-import { StatusIcon } from './StatusIcon';
-import { UnStakeTxnCard } from './UnstakeTxnCard';
+import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
 
 type ReceiptCardProps = {
 	txn: SuiTransactionBlockResponse;
-	activeAddress: SuiAddress;
+	activeAddress: string;
 };
 
 function TransactionStatus({ success, timestamp }: { success: boolean; timestamp?: string }) {
@@ -31,9 +32,11 @@ function TransactionStatus({ success, timestamp }: { success: boolean; timestamp
 
 export function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
 	const { events } = txn;
+	const recognizedPackagesList = useRecognizedPackages();
 	const summary = useTransactionSummary({
 		transaction: txn,
 		currentAddress: activeAddress,
+		recognizedPackagesList,
 	});
 
 	if (!summary) return null;
@@ -46,14 +49,20 @@ export function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
 	if (stakedTxn || unstakeTxn)
 		return (
 			<div className="block relative w-full h-full">
-				<TransactionStatus success={summary?.status === 'success'} timestamp={txn.timestampMs} />
+				<TransactionStatus
+					success={summary?.status === 'success'}
+					timestamp={txn.timestampMs ?? undefined}
+				/>
 				<section className="-mx-5 bg-sui/10 min-h-full">
 					<div className="px-5 py-10">
 						<div className="flex flex-col gap-4">
 							{stakedTxn ? <StakeTxnCard event={stakedTxn} /> : null}
 							{unstakeTxn ? <UnStakeTxnCard event={unstakeTxn} /> : null}
 							<GasSummary gasSummary={summary?.gas} />
-							<ExplorerLinkCard digest={summary?.digest} timestamp={summary?.timestamp} />
+							<ExplorerLinkCard
+								digest={summary?.digest}
+								timestamp={summary?.timestamp ?? undefined}
+							/>
 						</div>
 					</div>
 				</section>
@@ -62,7 +71,10 @@ export function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
 
 	return (
 		<div className="block relative w-full h-full">
-			<TransactionStatus success={summary.status === 'success'} timestamp={txn.timestampMs} />
+			<TransactionStatus
+				success={summary.status === 'success'}
+				timestamp={txn.timestampMs ?? undefined}
+			/>
 			<TransactionSummary showGasSummary summary={summary} />
 		</div>
 	);

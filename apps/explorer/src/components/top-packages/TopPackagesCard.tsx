@@ -4,12 +4,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import { ErrorBoundary } from '../error-boundary/ErrorBoundary';
 import { TopPackagesTable } from './TopPackagesTable';
-
+import { ErrorBoundary } from '../error-boundary/ErrorBoundary';
 import { useEnhancedRpcClient } from '~/hooks/useEnhancedRpc';
 import { FilterList } from '~/ui/FilterList';
-import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { TabHeader } from '~/ui/Tabs';
 
 export type DateFilter = '3D' | '7D' | '30D';
 export type ApiDateFilter = 'rank3Days' | 'rank7Days' | 'rank30Days';
@@ -40,18 +39,14 @@ export function TopPackagesCard() {
 					onChange={(val) => setSelectedFilter(val)}
 				/>
 			</div>
-			<TabGroup size="lg">
-				<TabList>
-					<Tab>Popular Packages</Tab>
-				</TabList>
-				<TabPanels>
-					<TabPanel>
-						<ErrorBoundary>
-							<TopPackagesTable data={filteredData} isLoading={isLoading} />
-						</ErrorBoundary>
-					</TabPanel>
-				</TabPanels>
-			</TabGroup>
+			<TabHeader
+				title="Popular Packages"
+				tooltip="Popular packages is recomputed on epoch changes."
+			>
+				<ErrorBoundary>
+					<TopPackagesTable data={filteredData} isLoading={isLoading} />
+				</ErrorBoundary>
+			</TabHeader>
 		</div>
 	);
 }

@@ -10,21 +10,18 @@ use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use sui_move_build::{BuildConfig, CompiledPackage};
 use sui_types::crypto::Signature;
+use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair};
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::move_package::UpgradePolicy;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;
-use sui_types::{
-    crypto::{AccountKeyPair, AuthorityKeyPair},
-    transaction::VerifiedTransaction,
-};
 
 use super::test_authority_builder::TestAuthorityBuilder;
 use super::*;
 
 pub async fn send_and_confirm_transaction(
     authority: &AuthorityState,
-    transaction: VerifiedTransaction,
+    transaction: Transaction,
 ) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
     send_and_confirm_transaction_(
         authority,
@@ -37,7 +34,7 @@ pub async fn send_and_confirm_transaction(
 pub async fn send_and_confirm_transaction_(
     authority: &AuthorityState,
     fullnode: Option<&AuthorityState>,
-    transaction: VerifiedTransaction,
+    transaction: Transaction,
     with_shared: bool, // transaction includes shared objects
 ) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
     let (txn, effects, _execution_error_opt) = send_and_confirm_transaction_with_execution_error(
@@ -53,7 +50,7 @@ pub async fn send_and_confirm_transaction_(
 pub async fn send_and_confirm_transaction_with_execution_error(
     authority: &AuthorityState,
     fullnode: Option<&AuthorityState>,
-    transaction: VerifiedTransaction,
+    transaction: Transaction,
     with_shared: bool, // transaction includes shared objects
 ) -> Result<
     (
@@ -65,6 +62,8 @@ pub async fn send_and_confirm_transaction_with_execution_error(
 > {
     // Make the initial request
     let epoch_store = authority.load_epoch_store_one_call_per_task();
+    let transaction = authority.verify_transaction(transaction).unwrap();
+
     let response = authority
         .handle_transaction(&epoch_store, transaction.clone())
         .await?;
@@ -75,24 +74,29 @@ pub async fn send_and_confirm_transaction_with_execution_error(
     let certificate =
         CertifiedTransaction::new(transaction.into_message(), vec![vote.clone()], &committee)
             .unwrap()
-            .verify(&committee)
+            .verify_authenticated(&committee, &Default::default())
             .unwrap();
 
-    if with_shared {
-        send_consensus(authority, &certificate).await;
-    }
-
-    // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
-    // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
-    //
     // We also check the incremental effects of the transaction on the live object set against StateAccumulator
-    // for testing and regression detection
+    // for testing and regression detection.
+    // We must do this before sending to consensus, otherwise consensus may already
+    // lead to transaction execution and state change.
     let state_acc = StateAccumulator::new(authority.database.clone());
     let include_wrapped_tombstone = !authority
         .epoch_store_for_testing()
         .protocol_config()
         .simplified_unwrap_then_delete();
     let mut state = state_acc.accumulate_live_object_set(include_wrapped_tombstone);
+
+    if with_shared {
+        send_consensus(authority, &certificate).await;
+        if let Some(fullnode) = fullnode {
+            send_consensus(fullnode, &certificate).await;
+        }
+    }
+
+    // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
+    // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
     let (result, execution_error_opt) = authority.try_execute_for_test(&certificate).await?;
     let state_after = state_acc.accumulate_live_object_set(include_wrapped_tombstone);
     let effects_acc = state_acc.accumulate_effects(
@@ -210,6 +214,7 @@ pub async fn init_state_with_ids_and_expensive_checks<
 }
 
 pub fn init_transfer_transaction(
+    authority_state: &AuthorityState,
     sender: SuiAddress,
     secret: &AccountKeyPair,
     recipient: SuiAddress,
@@ -226,7 +231,8 @@ pub fn init_transfer_transaction(
         gas_budget,
         gas_price,
     );
-    to_sender_signed_transaction(data, secret)
+    let tx = to_sender_signed_transaction(data, secret);
+    authority_state.verify_transaction(tx).unwrap()
 }
 
 pub fn init_certified_transfer_transaction(
@@ -239,6 +245,7 @@ pub fn init_certified_transfer_transaction(
 ) -> VerifiedCertificate {
     let rgp = authority_state.reference_gas_price_for_testing().unwrap();
     let transfer_transaction = init_transfer_transaction(
+        authority_state,
         sender,
         secret,
         recipient,
@@ -247,27 +254,29 @@ pub fn init_certified_transfer_transaction(
         rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         rgp,
     );
-    init_certified_transaction(transfer_transaction, authority_state)
+    init_certified_transaction(transfer_transaction.into(), authority_state)
 }
 
 pub fn init_certified_transaction(
-    transaction: VerifiedTransaction,
+    transaction: Transaction,
     authority_state: &AuthorityState,
 ) -> VerifiedCertificate {
+    let epoch_store = authority_state.epoch_store_for_testing();
+    let transaction = authority_state.verify_transaction(transaction).unwrap();
+
     let vote = VerifiedSignedTransaction::new(
         0,
         transaction.clone(),
         authority_state.name,
         &*authority_state.secret,
     );
-    let epoch_store = authority_state.epoch_store_for_testing();
     CertifiedTransaction::new(
         transaction.into_message(),
         vec![vote.auth_sig().clone()],
         epoch_store.committee(),
     )
     .unwrap()
-    .verify(epoch_store.committee())
+    .verify_authenticated(epoch_store.committee(), &Default::default())
     .unwrap()
 }
 

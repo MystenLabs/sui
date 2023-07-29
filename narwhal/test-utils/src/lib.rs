@@ -36,15 +36,13 @@ use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::info;
 use types::{
-    Batch, BatchDigest, Certificate, CertificateAPI, CertificateDigest, FetchBatchesRequest,
-    FetchBatchesResponse, FetchCertificatesRequest, FetchCertificatesResponse,
-    GetCertificatesRequest, GetCertificatesResponse, Header, HeaderAPI, HeaderV1Builder,
-    PayloadAvailabilityRequest, PayloadAvailabilityResponse, PrimaryToPrimary,
-    PrimaryToPrimaryServer, PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest,
-    RequestBatchResponse, RequestBatchesRequest, RequestBatchesResponse, RequestVoteRequest,
+    Batch, BatchDigest, BatchV1, Certificate, CertificateAPI, CertificateDigest,
+    FetchBatchesRequest, FetchBatchesResponse, FetchCertificatesRequest, FetchCertificatesResponse,
+    Header, HeaderAPI, HeaderV1Builder, PrimaryToPrimary, PrimaryToPrimaryServer, PrimaryToWorker,
+    PrimaryToWorkerServer, RequestBatchesRequest, RequestBatchesResponse, RequestVoteRequest,
     RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, TimestampMs,
-    Transaction, Vote, VoteAPI, WorkerBatchMessage, WorkerDeleteBatchesMessage,
-    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
+    Transaction, Vote, VoteAPI, WorkerBatchMessage, WorkerSynchronizeMessage, WorkerToWorker,
+    WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -247,23 +245,11 @@ impl PrimaryToPrimary for PrimaryToPrimaryMockServer {
     ) -> Result<anemo::Response<RequestVoteResponse>, anemo::rpc::Status> {
         unimplemented!()
     }
-    async fn get_certificates(
-        &self,
-        _request: anemo::Request<GetCertificatesRequest>,
-    ) -> Result<anemo::Response<GetCertificatesResponse>, anemo::rpc::Status> {
-        unimplemented!()
-    }
+
     async fn fetch_certificates(
         &self,
         _request: anemo::Request<FetchCertificatesRequest>,
     ) -> Result<anemo::Response<FetchCertificatesResponse>, anemo::rpc::Status> {
-        unimplemented!()
-    }
-
-    async fn get_payload_availability(
-        &self,
-        _request: anemo::Request<PayloadAvailabilityRequest>,
-    ) -> Result<anemo::Response<PayloadAvailabilityResponse>, anemo::rpc::Status> {
         unimplemented!()
     }
 }
@@ -312,14 +298,6 @@ impl PrimaryToWorker for PrimaryToWorkerMockServer {
             batches: HashMap::new(),
         }))
     }
-
-    async fn delete_batches(
-        &self,
-        _request: anemo::Request<WorkerDeleteBatchesMessage>,
-    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-        tracing::error!("Not implemented PrimaryToWorkerMockServer::delete_batches");
-        Err(anemo::rpc::Status::internal("Unimplemented"))
-    }
 }
 
 pub struct WorkerToWorkerMockServer {
@@ -358,13 +336,6 @@ impl WorkerToWorker for WorkerToWorkerMockServer {
 
         Ok(anemo::Response::new(()))
     }
-    async fn request_batch(
-        &self,
-        _request: anemo::Request<RequestBatchRequest>,
-    ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
-        tracing::error!("Not implemented WorkerToWorkerMockServer::request_batch");
-        Err(anemo::rpc::Status::internal("Unimplemented"))
-    }
 
     async fn request_batches(
         &self,
@@ -381,7 +352,12 @@ impl WorkerToWorker for WorkerToWorkerMockServer {
 
 // Fixture
 pub fn batch(protocol_config: &ProtocolConfig) -> Batch {
-    Batch::new(vec![transaction(), transaction()], protocol_config)
+    let transactions = vec![transaction(), transaction()];
+    // TODO: Remove once we have removed BatchV1 from the codebase.
+    if protocol_config.version < ProtocolVersion::new(12) {
+        return Batch::V1(BatchV1::new(transactions));
+    }
+    Batch::new(transactions, protocol_config)
 }
 
 /// generate multiple fixture batches. The number of generated batches

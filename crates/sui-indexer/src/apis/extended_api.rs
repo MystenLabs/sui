@@ -43,7 +43,9 @@ impl<S: IndexerStore> ExtendedApi<S> {
         {
             cp
         } else {
-            self.state.get_latest_checkpoint_sequence_number().await? as u64
+            self.state
+                .get_latest_tx_checkpoint_sequence_number()
+                .await? as u64
         };
 
         let object_cursor = cursor.as_ref().map(|c| c.object_id);
@@ -153,6 +155,19 @@ impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<
             .into_iter()
             .map(AddressMetrics::from)
             .collect())
+    }
+
+    async fn get_total_transactions(&self) -> RpcResult<BigInt<u64>> {
+        let latest_cp_metrics = self.state.get_latest_checkpoint_metrics().await?;
+        // NOTE: tx are counted as:
+        // - if a tx is successful, it is counted as # of commands in the tx
+        // - otherwise, it is counted as 1.
+        let total_txes = latest_cp_metrics.rolling_total_successful_transactions
+            + latest_cp_metrics.rolling_total_transaction_blocks
+            - latest_cp_metrics.rolling_total_successful_transaction_blocks;
+        // NOTE: no underflow b/c rolling_total_transaction_blocks is greater than or equal to
+        // rolling_total_successful_transaction_blocks.
+        Ok((total_txes as u64).into())
     }
 }
 

@@ -4,7 +4,7 @@
 import { useRpcClient } from '@mysten/core';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
-import type { TransactionFilter } from '@mysten/sui.js';
+import type { TransactionFilter } from '@mysten/sui.js/client';
 
 export const DEFAULT_TRANSACTIONS_LIMIT = 20;
 
@@ -12,6 +12,7 @@ export const DEFAULT_TRANSACTIONS_LIMIT = 20;
 export function useGetTransactionBlocks(
 	filter?: TransactionFilter,
 	limit = DEFAULT_TRANSACTIONS_LIMIT,
+	refetchInterval?: number,
 ) {
 	const rpc = useRpcClient();
 
@@ -25,7 +26,6 @@ export function useGetTransactionBlocks(
 				limit,
 				options: {
 					showEffects: true,
-					showBalanceChanges: true,
 					showInput: true,
 				},
 			}),
@@ -34,6 +34,7 @@ export function useGetTransactionBlocks(
 			staleTime: 10 * 1000,
 			retry: false,
 			keepPreviousData: true,
+			refetchInterval,
 		},
 	);
 }

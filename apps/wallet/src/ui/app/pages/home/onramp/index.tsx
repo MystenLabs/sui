@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useOnrampProviders } from './useOnrampProviders';
+import { ampli } from '_src/shared/analytics/ampli';
 import Alert from '_src/ui/app/components/alert';
 import Overlay from '_src/ui/app/components/overlay';
 import { useActiveAddress } from '_src/ui/app/hooks';
@@ -23,7 +24,10 @@ export function Onramp() {
 		mutationFn: () => {
 			return preferredProvider.getUrl(address!);
 		},
-		onSuccess: (data) => window.open(data, '_blank'),
+		onSuccess: (data) => {
+			ampli.visitedFiatOnRamp({ providerName: preferredProvider.name });
+			window.open(data, '_blank');
+		},
 	});
 
 	useEffect(() => {

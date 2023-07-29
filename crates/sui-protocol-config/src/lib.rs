@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 16;
+const MAX_PROTOCOL_VERSION: u64 = 19;
 
 // Record history of protocol version allocations here:
 //
@@ -51,6 +51,16 @@ const MAX_PROTOCOL_VERSION: u64 = 16;
 //             to no longer consult the object store when generating unwrapped_then_deleted in the
 //             effects; this also allows us to stop including wrapped tombstones in accumulator.
 //             Add self-matching prevention for deepbook.
+// Version 17: Enable upgraded multisig support.
+// Version 18: Introduce execution layer versioning, preserve all existing behaviour in v0.
+//             Gas minimum charges moved to be a multiplier over the reference gas price. In this
+//             protocol version the multiplier is the same as the lowest bucket of computation
+//             such that the minimum transaction cost is the same as the minimum computation
+//             bucket.
+//             Add a feature flag to indicate the changes semantics of `base_tx_cost_fixed`.
+// Version 19: Changes to sui-system package to enable liquid staking.
+//             Add limit for total size of events.
+//             Increase limit for number of events emitted to 1024.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -216,7 +226,6 @@ struct FeatureFlags {
     // Enable zklogin auth
     #[serde(skip_serializing_if = "is_false")]
     zklogin_auth: bool,
-
     // How we order transactions coming out of consensus before sending to execution.
     #[serde(skip_serializing_if = "ConsensusTransactionOrdering::is_none")]
     consensus_transaction_ordering: ConsensusTransactionOrdering,
@@ -230,6 +239,16 @@ struct FeatureFlags {
     // regardless of their previous state in the store.
     #[serde(skip_serializing_if = "is_false")]
     simplified_unwrap_then_delete: bool,
+    // Enable upgraded multisig support
+    #[serde(skip_serializing_if = "is_false")]
+    upgraded_multisig_supported: bool,
+    // If true minimum txn charge is a multiplier of the gas price
+    #[serde(skip_serializing_if = "is_false")]
+    txn_base_cost_as_multiplier: bool,
+
+    // If true, then the new algorithm for the leader election schedule will be used
+    #[serde(skip_serializing_if = "is_false")]
+    narwhal_new_leader_election_schedule: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -265,19 +284,24 @@ impl ConsensusTransactionOrdering {
 /// - Initialize the field to `None` in prior protocol versions.
 /// - Initialize the field to `Some(val)` for your new protocol version.
 /// - Add a public getter that simply unwraps the field.
-/// - A public getter of the form `field(&self) -> field_type` will be automatically generated for you.
+/// - Two public getters of the form `field(&self) -> field_type`
+///     and `field_as_option(&self) -> Option<field_type>` will be automatically generated for you.
 /// Example for a field: `new_constant: Option<u64>`
 /// ```rust,ignore
 ///      pub fn new_constant(&self) -> u64 {
 ///         self.new_constant.expect(Self::CONSTANT_ERR_MSG)
 ///     }
+///      pub fn new_constant_as_option(&self) -> Option<u64> {
+///         self.new_constant.expect(Self::CONSTANT_ERR_MSG)
+///     }
 /// ```
-/// This way, if the constant is accessed in a protocol version in which it is not defined, the
-/// validator will crash. (Crashing is necessary because this type of error would almost always
-/// result in forking if not prevented here).
-///
+/// With `pub fn new_constant(&self) -> u64`, if the constant is accessed in a protocol version
+/// in which it is not defined, the validator will crash. (Crashing is necessary because
+/// this type of error would almost always result in forking if not prevented here).
+/// If you don't want the validator to crash, you can use the
+/// `pub fn new_constant_as_option(&self) -> Option<u64>` getter, which will
+/// return `None` if the field is not defined at that version.
 /// - If you want a customized getter, you can add a method in the impl.
-///     For example see `max_size_written_objects_as_option`
 #[skip_serializing_none]
 #[derive(Clone, Serialize, Debug, ProtocolConfigGetters)]
 pub struct ProtocolConfig {
@@ -405,6 +429,9 @@ pub struct ProtocolConfig {
     /// Maximum size of a Move user event. Enforced by the VM during execution.
     max_event_emit_size: Option<u64>,
 
+    /// Maximum size of a Move user event. Enforced by the VM during execution.
+    max_event_emit_size_total: Option<u64>,
+
     /// Maximum length of a vector in Move. Enforced by the VM during execution, and for constants, by the verifier.
     max_move_vector_len: Option<u64>,
 
@@ -441,7 +468,6 @@ pub struct ProtocolConfig {
     object_runtime_max_num_store_entries_system_tx: Option<u64>,
 
     // === Execution gas costs ====
-    // note: Option<per-instruction and native function gas costs live in the sui-cost-tables crate
     /// Base cost for any Sui transaction
     base_tx_cost_fixed: Option<u64>,
 
@@ -688,6 +714,9 @@ pub struct ProtocolConfig {
     scoring_decision_mad_divisor: Option<f64>,
     // The cutoff value for the MED outlier detection
     scoring_decision_cutoff_value: Option<f64>,
+
+    /// === Execution Version ===
+    execution_version: Option<u64>,
 }
 
 // feature flags
@@ -789,6 +818,18 @@ impl ProtocolConfig {
     pub fn simplified_unwrap_then_delete(&self) -> bool {
         self.feature_flags.simplified_unwrap_then_delete
     }
+
+    pub fn supports_upgraded_multisig(&self) -> bool {
+        self.feature_flags.upgraded_multisig_supported
+    }
+
+    pub fn txn_base_cost_as_multiplier(&self) -> bool {
+        self.feature_flags.txn_base_cost_as_multiplier
+    }
+
+    pub fn narwhal_new_leader_election_schedule(&self) -> bool {
+        self.feature_flags.narwhal_new_leader_election_schedule
+    }
 }
 
 #[cfg(not(msim))]
@@ -864,11 +905,19 @@ impl ProtocolConfig {
         ProtocolConfig::get_for_version(ProtocolVersion::MIN, Chain::Unknown)
     }
 
+    /// CAREFUL! - You probably want to use `get_for_version` instead.
+    ///
     /// Convenience to get the constants at the current maximum supported version.
-    /// Mainly used by genesis.
-    pub fn get_for_max_version() -> Self {
+    /// Mainly used by genesis. Note well that this function uses the max version
+    /// supported locally by the node, which is not necessarily the current version
+    /// of the network. ALSO, this function disregards chain specific config (by
+    /// using Chain::Unknown), thereby potentially returning a protocol config that
+    /// is incorrect for some feature flags. Definitely safe for testing and for
+    /// protocol version 11 and prior.
+    #[allow(non_snake_case)]
+    pub fn get_for_max_version_UNSAFE() -> Self {
         if Self::load_poison_get_for_min_version() {
-            panic!("get_for_max_version called on validator");
+            panic!("get_for_max_version_UNSAFE called on validator");
         }
         ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown)
     }
@@ -1140,6 +1189,9 @@ impl ProtocolConfig {
 
                 gas_rounding_step: None,
 
+                execution_version: None,
+
+                max_event_emit_size_total: None,
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
@@ -1166,6 +1218,10 @@ impl ProtocolConfig {
                 cfg.feature_flags.package_upgrades = true;
                 cfg
             }
+            // This is the first protocol version currently possible.
+            // Mainnet starts with version 4. Previous versions are pre mainnet and have
+            // all been wiped out.
+            // Every other chain is after version 4.
             4 => {
                 let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 // Change reward slashing rate to 100%.
@@ -1255,6 +1311,43 @@ impl ProtocolConfig {
                 cfg.feature_flags.simplified_unwrap_then_delete = true;
                 cfg
             }
+            17 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.feature_flags.upgraded_multisig_supported = true;
+                cfg
+            }
+            18 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.execution_version = Some(1);
+                // Following flags are implied by this execution version.  Once support for earlier
+                // protocol versions is dropped, these flags can be removed:
+                // cfg.feature_flags.package_upgrades = true;
+                // cfg.feature_flags.disallow_adding_abilities_on_upgrade = true;
+                // cfg.feature_flags.disallow_change_struct_type_params_on_upgrade = true;
+                // cfg.feature_flags.loaded_child_objects_fixed = true;
+                // cfg.feature_flags.ban_entry_init = true;
+                // cfg.feature_flags.pack_digest_hash_modules = true;
+                cfg.feature_flags.txn_base_cost_as_multiplier = true;
+                // this is a multiplier of the gas price
+                cfg.base_tx_cost_fixed = Some(1_000);
+                cfg
+            }
+            19 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.max_num_event_emit = Some(1024);
+                // We maintain the same total size limit for events, but increase the number of
+                // events that can be emitted.
+                cfg.max_event_emit_size_total = Some(
+                    256 /* former event count limit */ * 250 * 1024, /* size limit per event */
+                );
+                cfg
+            }
+            20 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.feature_flags.commit_root_state_digest = true;
+                cfg
+            }
+
             // Use this template when making changes:
             //
             //     // modify an existing constant.
@@ -1312,6 +1405,12 @@ impl ProtocolConfig {
     }
     pub fn set_max_tx_gas_for_testing(&mut self, max_tx_gas: u64) {
         self.max_tx_gas = Some(max_tx_gas)
+    }
+    pub fn set_execution_version_for_testing(&mut self, version: u64) {
+        self.execution_version = Some(version)
+    }
+    pub fn set_upgraded_multisig_for_testing(&mut self, val: bool) {
+        self.feature_flags.upgraded_multisig_supported = val
     }
     #[cfg(msim)]
     pub fn set_simplified_unwrap_then_delete(&mut self, val: bool) {

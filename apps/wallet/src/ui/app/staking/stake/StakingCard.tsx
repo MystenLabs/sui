@@ -4,7 +4,7 @@
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { useCoinMetadata, useGetSystemState, useGetCoinBalance } from '@mysten/core';
 import { ArrowLeft16 } from '@mysten/icons';
-import { getTransactionDigest, SUI_TYPE_ARG, type SuiAddress } from '@mysten/sui.js';
+import { MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import * as Sentry from '@sentry/react';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { Formik } from 'formik';
@@ -12,6 +12,11 @@ import { useCallback, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
+import StakeForm from './StakeForm';
+import { UnStakeForm } from './UnstakeForm';
+import { ValidatorFormDetail } from './ValidatorFormDetail';
+import { createStakeTransaction, createUnstakeTransaction } from './utils/transaction';
+import { createValidationSchema } from './utils/validation';
 import { QredoActionIgnoredByUser } from '../../QredoSigner';
 import Alert from '../../components/alert';
 import { getSignerOperationErrorMessage } from '../../helpers/errorMessages';
@@ -19,11 +24,6 @@ import { useQredoTransaction } from '../../hooks/useQredoTransaction';
 import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
 import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
-import StakeForm from './StakeForm';
-import { UnStakeForm } from './UnstakeForm';
-import { ValidatorFormDetail } from './ValidatorFormDetail';
-import { createStakeTransaction, createUnstakeTransaction } from './utils/transaction';
-import { createValidationSchema } from './utils/validation';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout';
@@ -33,9 +33,10 @@ import Loading from '_components/loading';
 import { parseAmount } from '_helpers';
 import { useSigner, useCoinsReFetchingConfig } from '_hooks';
 import { Coin } from '_redux/slices/sui-objects/Coin';
+import { ampli } from '_src/shared/analytics/ampli';
 import { MIN_NUMBER_SUI_TO_STAKE } from '_src/shared/constants';
 import { FEATURES } from '_src/shared/experimentation/features';
-import { trackEvent } from '_src/shared/plausible';
+import type { StakeObject } from '@mysten/sui.js/client';
 
 import type { FormikHelpers } from 'formik';
 
@@ -81,7 +82,8 @@ function StakingCard() {
 
 	const coinSymbol = useMemo(() => (coinType && Coin.getCoinSymbol(coinType)) || '', [coinType]);
 
-	const suiEarned = stakeData?.estimatedReward || '0';
+	const suiEarned =
+		(stakeData as Extract<StakeObject, { estimatedReward: string }>)?.estimatedReward || '0';
 
 	const { data: metadata } = useCoinMetadata(coinType);
 	const coinDecimals = metadata?.decimals ?? 0;
@@ -111,14 +113,12 @@ function StakingCard() {
 		}: {
 			tokenTypeArg: string;
 			amount: bigint;
-			validatorAddress: SuiAddress;
+			validatorAddress: string;
 		}) => {
 			if (!validatorAddress || !amount || !tokenTypeArg || !signer) {
 				throw new Error('Failed, missing required field');
 			}
-			trackEvent('Stake', {
-				props: { validator: validatorAddress },
-			});
+
 			const sentryTransaction = Sentry.startTransaction({
 				name: 'stake',
 			});
@@ -142,6 +142,12 @@ function StakingCard() {
 				sentryTransaction.finish();
 			}
 		},
+		onSuccess: (_, { amount, validatorAddress }) => {
+			ampli.stakedSui({
+				stakedAmount: Number(amount / MIST_PER_SUI),
+				validatorAddress: validatorAddress,
+			});
+		},
 	});
 
 	const unStakeToken = useMutation({
@@ -149,8 +155,6 @@ function StakingCard() {
 			if (!stakedSuiId || !signer) {
 				throw new Error('Failed, missing required field.');
 			}
-
-			trackEvent('Unstake');
 
 			const sentryTransaction = Sentry.startTransaction({
 				name: 'stake',
@@ -175,6 +179,11 @@ function StakingCard() {
 				sentryTransaction.finish();
 			}
 		},
+		onSuccess: () => {
+			ampli.unstakedSui({
+				validatorAddress: validatorAddress!,
+			});
+		},
 	});
 
 	const onHandleSubmit = useCallback(
@@ -195,14 +204,14 @@ function StakingCard() {
 						stakedSuiId: stakeSuiIdParams,
 					});
 
-					txDigest = getTransactionDigest(response);
+					txDigest = response.digest;
 				} else {
 					response = await stakeToken.mutateAsync({
 						amount: bigIntAmount,
 						tokenTypeArg: coinType,
 						validatorAddress: validatorAddress,
 					});
-					txDigest = getTransactionDigest(response);
+					txDigest = response.digest;
 				}
 
 				// Invalidate the react query for system state and validator

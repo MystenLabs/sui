@@ -11,6 +11,7 @@ use rand::rngs::OsRng;
 use serde_json::json;
 use std::sync::Arc;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
+use sui_core::authority::EffectsNotifyRead;
 use sui_json_rpc_types::{
     type_and_fields_from_move_struct, EventPage, SuiEvent, SuiExecutionStatus,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
@@ -20,7 +21,11 @@ use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_node::SuiNodeHandle;
 use sui_sdk::wallet_context::WalletContext;
-use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_test_transaction_builder::{
+    batch_make_transfer_transactions, create_devnet_nft, delete_devnet_nft, increment_counter,
+    publish_basics_package, publish_basics_package_and_make_counter, publish_nfts_package,
+    TestTransactionBuilder,
+};
 use sui_tool::restore_from_db_checkpoint;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::base_types::{ObjectRef, SequenceNumber};
@@ -41,9 +46,7 @@ use sui_types::transaction::{
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };
-use sui_types::SUI_CLOCK_OBJECT_ID;
-use test_utils::network::TestClusterBuilder;
-use test_utils::transaction::{wait_for_all_txes, wait_for_tx};
+use test_cluster::TestClusterBuilder;
 use tokio::sync::Mutex;
 use tokio::time::timeout;
 use tokio::time::{sleep, Duration};
@@ -62,7 +65,12 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 
     let (transferred_object, _, receiver, digest, _) = transfer_coin(context).await?;
 
-    wait_for_tx(digest, fullnode.state()).await;
+    fullnode
+        .state()
+        .db()
+        .notify_read_executed_effects(vec![digest])
+        .await
+        .unwrap();
 
     // A small delay is needed for post processing operations following the transaction to finish.
     sleep(Duration::from_secs(1)).await;
@@ -72,10 +80,6 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     let object = object_read.into_object()?;
 
     assert_eq!(object.owner.get_owner_address().unwrap(), receiver);
-
-    // timestamp is recorded
-    let ts = fullnode.state().get_timestamp_ms(&digest).await?;
-    assert!(ts.is_some());
 
     Ok(())
 }
@@ -88,13 +92,25 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let context = &mut test_cluster.wallet;
 
     let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
-    let (package_ref, counter_ref) = context.publish_basics_package_and_make_counter().await;
+    let (package_ref, counter_ref) = publish_basics_package_and_make_counter(context).await;
 
-    let response = context
-        .increment_counter(sender, None, package_ref.0, counter_ref.0, counter_ref.1)
-        .await;
+    let response = increment_counter(
+        context,
+        sender,
+        None,
+        package_ref.0,
+        counter_ref.0,
+        counter_ref.1,
+    )
+    .await;
     let digest = response.digest;
-    wait_for_tx(digest, handle.sui_node.state()).await;
+    handle
+        .sui_node
+        .state()
+        .db()
+        .notify_read_executed_effects(vec![digest])
+        .await
+        .unwrap();
 
     Ok(())
 }
@@ -176,13 +192,18 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
     let sender = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
-    let (package_ref, counter_ref) = context.publish_basics_package_and_make_counter().await;
-    let response = context
-        .increment_counter(sender, None, package_ref.0, counter_ref.0, counter_ref.1)
-        .await;
+    let (package_ref, counter_ref) = publish_basics_package_and_make_counter(context).await;
+    let response = increment_counter(
+        context,
+        sender,
+        None,
+        package_ref.0,
+        counter_ref.0,
+        counter_ref.1,
+    )
+    .await;
     let digest = response.digest;
 
-    wait_for_tx(digest, node.state()).await;
     let txes = node.state().get_transactions(
         Some(TransactionFilter::MoveFunction {
             package: package_ref.0,
@@ -243,8 +264,6 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
 
     let (transferred_object, sender, receiver, digest, _) = transfer_coin(context).await?;
 
-    wait_for_tx(digest, node.state().clone()).await;
-
     let txes = node.state().get_transactions(
         Some(TransactionFilter::InputObject(transferred_object)),
         None,
@@ -301,10 +320,6 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         false,
     )?;
     assert_eq!(txes.len(), 0);
-
-    // timestamp is recorded
-    let ts = node.state().get_timestamp_ms(&digest).await?;
-    assert!(ts.is_some());
 
     // This is a poor substitute for the post processing taking some time
     // Unfortunately event store writes seem to add some latency so this wait is needed
@@ -456,7 +471,12 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
     // Start a new fullnode that is not on the write path
     let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
 
-    wait_for_tx(digest, fullnode.state()).await;
+    fullnode
+        .state()
+        .db()
+        .notify_read_executed_effects(vec![digest])
+        .await
+        .unwrap();
 
     let info = fullnode
         .state()
@@ -481,7 +501,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
 
     let mut futures = Vec::new();
 
-    let (package_ref, counter_ref) = context.publish_basics_package_and_make_counter().await;
+    let (package_ref, counter_ref) = publish_basics_package_and_make_counter(&context).await;
 
     let context = Arc::new(Mutex::new(context));
 
@@ -530,16 +550,16 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
 
                 let context = &context.lock().await;
                 shared_tx_digest = Some(
-                    context
-                        .increment_counter(
-                            sender,
-                            Some(gas_object_id),
-                            package_ref.0,
-                            counter_ref.0,
-                            counter_ref.1,
-                        )
-                        .await
-                        .digest,
+                    increment_counter(
+                        context,
+                        sender,
+                        Some(gas_object_id),
+                        package_ref.0,
+                        counter_ref.0,
+                        counter_ref.1,
+                    )
+                    .await
+                    .digest,
                 );
             }
             tx.send((owned_tx_digest.unwrap(), shared_tx_digest.unwrap()))
@@ -555,7 +575,12 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
         .map(|r| r.clone().unwrap())
         .flat_map(|(a, b)| std::iter::once(a).chain(std::iter::once(b)))
         .collect();
-    wait_for_all_txes(digests, fullnode.state()).await;
+    fullnode
+        .state()
+        .db()
+        .notify_read_executed_effects(digests)
+        .await
+        .unwrap();
 
     Ok(())
 }
@@ -574,7 +599,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
     let ws_client = fullnode.ws_client;
 
     let context = &mut test_cluster.wallet;
-    let package_id = context.publish_nfts_package().await.0;
+    let package_id = publish_nfts_package(context).await.0;
 
     let struct_tag_str = format!("{package_id}::devnet_nft::MintNFTEvent");
     let struct_tag = parse_struct_tag(&struct_tag_str).unwrap();
@@ -588,8 +613,12 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
         .await
         .unwrap();
 
-    let (sender, object_id, digest) = context.create_devnet_nft(package_id).await;
-    wait_for_tx(digest, node.state().clone()).await;
+    let (sender, object_id, digest) = create_devnet_nft(context, package_id).await;
+    node.state()
+        .db()
+        .notify_read_executed_effects(vec![digest])
+        .await
+        .unwrap();
 
     // Wait for streaming
     let bcs = match timeout(Duration::from_secs(5), sub.next()).await {
@@ -670,11 +699,9 @@ async fn test_full_node_event_read_api_ok() {
     let node = &test_cluster.fullnode_handle.sui_node;
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
-    let (package_id, gas_id_1, _) = context.publish_nfts_package().await;
+    let (package_id, gas_id_1, _) = publish_nfts_package(context).await;
 
     let (transferred_object, _, _, digest, _) = transfer_coin(context).await.unwrap();
-
-    wait_for_tx(digest, node.state().clone()).await;
 
     let txes = node
         .state()
@@ -694,15 +721,10 @@ async fn test_full_node_event_read_api_ok() {
         assert_eq!(txes[0], digest);
     }
 
-    // timestamp is recorded
-    let ts = node.state().get_timestamp_ms(&digest).await.unwrap();
-    assert!(ts.is_some());
-
     // This is a poor substitute for the post processing taking some time
     sleep(Duration::from_millis(1000)).await;
 
-    let (_sender, _object_id, digest2) = context.create_devnet_nft(package_id).await;
-    wait_for_tx(digest2, node.state().clone()).await;
+    let (_sender, _object_id, digest2) = create_devnet_nft(context, package_id).await;
 
     // Add a delay to ensure event processing is done after transaction commits.
     sleep(Duration::from_secs(5)).await;
@@ -725,16 +747,14 @@ async fn test_full_node_event_query_by_module_ok() {
         .await;
 
     let context = &mut test_cluster.wallet;
-    let node = &test_cluster.fullnode_handle.sui_node;
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
-    let (package_id, _, _) = context.publish_nfts_package().await;
+    let (package_id, _, _) = publish_nfts_package(context).await;
 
     // This is a poor substitute for the post processing taking some time
     sleep(Duration::from_millis(1000)).await;
 
-    let (_sender, _object_id, digest2) = context.create_devnet_nft(package_id).await;
-    wait_for_tx(digest2, node.state().clone()).await;
+    let (_sender, _object_id, digest2) = create_devnet_nft(context, package_id).await;
 
     // Add a delay to ensure event processing is done after transaction commits.
     sleep(Duration::from_secs(5)).await;
@@ -768,7 +788,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     });
 
     let txn_count = 4;
-    let mut txns = context.batch_make_transfer_transactions(txn_count).await;
+    let mut txns = batch_make_transfer_transactions(context, txn_count).await;
     assert!(
         txns.len() >= txn_count,
         "Expect at least {} txns. Do we generate enough gas objects during genesis?",
@@ -780,7 +800,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let digest = *txn.digest();
     let res = transaction_orchestrator
         .execute_transaction_block(ExecuteTransactionRequest {
-            transaction: txn.into(),
+            transaction: txn,
             request_type: ExecuteTransactionRequestType::WaitForLocalExecution,
         })
         .await
@@ -809,7 +829,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let digest = *txn.digest();
     let res = transaction_orchestrator
         .execute_transaction_block(ExecuteTransactionRequest {
-            transaction: txn.into(),
+            transaction: txn,
             request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
         })
         .await
@@ -829,7 +849,12 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert_eq!(txn_events.digest(), events.digest());
     assert!(!is_executed_locally);
-    wait_for_tx(digest, fullnode.state()).await;
+    fullnode
+        .state()
+        .db()
+        .notify_read_executed_effects(vec![digest])
+        .await
+        .unwrap();
     fullnode.state().get_executed_transaction_and_effects(digest).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForEffectsCert: {:?}", digest, e));
 
@@ -869,7 +894,7 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
     let txn_count = 4;
-    let txns = context.batch_make_transfer_transactions(txn_count).await;
+    let txns = batch_make_transfer_transactions(context, txn_count).await;
     for txn in txns {
         let tx_digest = txn.digest();
         let (tx_bytes, signatures) = txn.to_tx_bytes_and_signatures();
@@ -902,7 +927,7 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
     let txn_count = 4;
-    let mut txns = context.batch_make_transfer_transactions(txn_count).await;
+    let mut txns = batch_make_transfer_transactions(context, txn_count).await;
     assert!(
         txns.len() >= txn_count,
         "Expect at least {} txns. Do we generate enough gas objects during genesis?",
@@ -993,10 +1018,10 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     let test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let node = &test_cluster.fullnode_handle.sui_node;
-    let package_id = test_cluster.wallet.publish_nfts_package().await.0;
+    let package_id = publish_nfts_package(&test_cluster.wallet).await.0;
 
     // Create the object
-    let (sender, object_id, _) = test_cluster.wallet.create_devnet_nft(package_id).await;
+    let (sender, object_id, _) = create_devnet_nft(&test_cluster.wallet, package_id).await;
 
     let recipient = test_cluster.get_address_1();
     assert_ne!(sender, recipient);
@@ -1027,10 +1052,8 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         .expect("Failed to transfer coins to recipient");
 
     // Delete the object
-    let response = test_cluster
-        .wallet
-        .delete_devnet_nft(recipient, package_id, object_ref_v2)
-        .await;
+    let response =
+        delete_devnet_nft(&test_cluster.wallet, recipient, package_id, object_ref_v2).await;
     assert_eq!(
         *response.effects.unwrap().status(),
         SuiExecutionStatus::Success
@@ -1126,7 +1149,11 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
         .await
         .sui_node;
 
-    wait_for_tx(digest, node.state().clone()).await;
+    node.state()
+        .db()
+        .notify_read_executed_effects(vec![digest])
+        .await
+        .unwrap();
 
     loop {
         // Ensure this full node is able to transition to the next epoch
@@ -1142,12 +1169,17 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
 
     let (_transferred_object, _, _, digest_after_restore, ..) =
         transfer_coin(&test_cluster.wallet).await?;
-    wait_for_tx(digest_after_restore, node.state().clone()).await;
+    node.state()
+        .db()
+        .notify_read_executed_effects(vec![digest_after_restore])
+        .await
+        .unwrap();
     Ok(())
 }
 
+// Object fast path should be disabled and unused.
 #[sim_test]
-async fn test_pass_back_clock_object() -> Result<(), anyhow::Error> {
+async fn test_pass_back_no_object() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
@@ -1157,7 +1189,7 @@ async fn test_pass_back_clock_object() -> Result<(), anyhow::Error> {
     let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
 
     // TODO: this is publishing the wrong package - we should be publishing the one in `sui-core/src/unit_tests/data` instead.
-    let package_ref = context.publish_basics_package().await;
+    let package_ref = publish_basics_package(context).await;
 
     let gas_obj = context
         .get_one_gas_object_owned_by_address(sender)
@@ -1192,7 +1224,7 @@ async fn test_pass_back_clock_object() -> Result<(), anyhow::Error> {
     let digest = *tx.digest();
     let _res = transaction_orchestrator
         .execute_transaction_block(ExecuteTransactionRequest {
-            transaction: tx.into(),
+            transaction: tx,
             request_type: ExecuteTransactionRequestType::WaitForLocalExecution,
         })
         .await
@@ -1207,7 +1239,7 @@ async fn test_pass_back_clock_object() -> Result<(), anyhow::Error> {
             objects,
         },
     ) = rx.recv().await.unwrap().unwrap();
-    assert!(objects.iter().any(|o| o.id() == SUI_CLOCK_OBJECT_ID));
+    assert!(objects.is_empty(), "{objects:?}");
     Ok(())
 }
 

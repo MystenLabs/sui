@@ -1,9 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromExportedKeypair } from '@mysten/sui.js';
 import { randomBytes } from '@noble/hashes/utils';
 
+import { type DerivedAccount } from './DerivedAccount';
+import { type ImportedAccount } from './ImportedAccount';
+import { Vault } from './Vault';
 import {
 	getFromLocalStorage,
 	getFromSessionStorage,
@@ -11,13 +13,11 @@ import {
 	setToLocalStorage,
 	setToSessionStorage,
 } from '../storage-utils';
-import { type DerivedAccount } from './DerivedAccount';
-import { type ImportedAccount } from './ImportedAccount';
-import { Vault } from './Vault';
 import { getRandomEntropy, toEntropy } from '_shared/utils/bip39';
+import { fromExportedKeypair } from '_shared/utils/from-exported-keypair';
 
 import type { StoredData } from './Vault';
-import type { ExportedKeypair } from '@mysten/sui.js';
+import type { ExportedKeypair } from '@mysten/sui.js/cryptography';
 
 // we use this password + a random one for each time we store the encrypted
 // vault to session storage
@@ -97,12 +97,12 @@ class VaultStorageClass {
 		return !!(await getFromLocalStorage<StoredData>(VAULT_KEY));
 	}
 
-	public getMnemonic() {
-		return this.#vault?.getMnemonic() || null;
-	}
-
 	public get entropy() {
 		return this.#vault?.entropy || null;
+	}
+
+	public getMnemonicSeedHex() {
+		return this.#vault?.mnemonicSeedHex || null;
 	}
 
 	public async verifyPassword(password: string) {

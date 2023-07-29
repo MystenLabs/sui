@@ -1,15 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useTransactionSummary } from '@mysten/core';
-import {
-	getExecutionStatusError,
-	getExecutionStatusType,
-	getTransactionDigest,
-	getTransactionKindName,
-	getTransactionKind,
-	getTransactionSender,
-} from '@mysten/sui.js';
+import { useTransactionSummary, getLabel } from '@mysten/core';
 import { Link } from 'react-router-dom';
 
 import { TxnTypeLabel } from './TxnActionLabel';
@@ -17,37 +9,33 @@ import { TxnIcon } from './TxnIcon';
 import { DateCard } from '_app/shared/date-card';
 import { Text } from '_app/shared/text';
 import { useGetTxnRecipientAddress } from '_hooks';
+import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
 
-import type {
-	SuiAddress,
-	// SuiEvent,
-	SuiTransactionBlockResponse,
-	// TransactionEvents,
-} from '@mysten/sui.js';
+import type { SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 
 export function TransactionCard({
 	txn,
 	address,
 }: {
 	txn: SuiTransactionBlockResponse;
-	address: SuiAddress;
+	address: string;
 }) {
-	const transaction = getTransactionKind(txn)!;
-	const executionStatus = getExecutionStatusType(txn);
-	getTransactionKindName(transaction);
+	const executionStatus = txn.effects?.status.status;
+	const recognizedPackagesList = useRecognizedPackages();
 
 	const summary = useTransactionSummary({
 		transaction: txn,
 		currentAddress: address,
+		recognizedPackagesList,
 	});
 
 	// we only show Sui Transfer amount or the first non-Sui transfer amount
 
 	const recipientAddress = useGetTxnRecipientAddress({ txn, address });
 
-	const isSender = address === getTransactionSender(txn);
+	const isSender = address === txn.transaction?.data.sender;
 
-	const error = getExecutionStatusError(txn);
+	const error = txn.effects?.status.error;
 
 	// Transition label - depending on the transaction type and amount
 	// Epoch change without amount is delegation object
@@ -64,7 +52,7 @@ export function TransactionCard({
 		<Link
 			data-testid="link-to-txn"
 			to={`/receipt?${new URLSearchParams({
-				txdigest: getTransactionDigest(txn),
+				txdigest: txn.digest,
 			}).toString()}`}
 			className="flex items-center w-full flex-col gap-2 py-4 no-underline"
 		>
@@ -73,7 +61,7 @@ export function TransactionCard({
 					<TxnIcon
 						txnFailed={executionStatus !== 'success' || !!error}
 						// TODO: Support programmable transactions variable icons here:
-						variant="Send"
+						variant={getLabel(txn, address)}
 					/>
 				</div>
 				<div className="flex flex-col w-full gap-1.5">

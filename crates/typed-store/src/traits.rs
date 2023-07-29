@@ -63,7 +63,10 @@ where
     fn remove(&self, key: &K) -> Result<(), Self::Error>;
 
     /// Removes every key-value pair from the map.
-    fn clear(&self) -> Result<(), Self::Error>;
+    fn unsafe_clear(&self) -> Result<(), Self::Error>;
+
+    /// Uses delete range on the entire key range
+    fn delete_all(&self) -> Result<(), TypedStoreError>;
 
     /// Returns true if the map is empty, otherwise false.
     fn is_empty(&self) -> bool;

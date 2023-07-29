@@ -36,6 +36,7 @@ use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::crypto::{SignatureScheme, SuiKeyPair};
+use sui_types::multiaddr::Multiaddr;
 use tracing::info;
 
 #[allow(clippy::large_enum_variant)]
@@ -82,6 +83,11 @@ pub enum SuiCommand {
             help = "A list of ip addresses to generate a genesis suitable for benchmarks"
         )]
         benchmark_ips: Option<Vec<String>>,
+        #[clap(
+            long,
+            help = "Creates an extra faucet configuration for sui-test-validator persisted runs."
+        )]
+        with_faucet: bool,
     },
     GenesisCeremony(Ceremony),
     /// Sui keystore tool.
@@ -89,6 +95,9 @@ pub enum SuiCommand {
     KeyTool {
         #[clap(long)]
         keystore_path: Option<PathBuf>,
+        ///Return command outputs in json format
+        #[clap(long, global = true)]
+        json: bool,
         /// Subcommands.
         #[clap(subcommand)]
         cmd: KeyToolCommand,
@@ -160,7 +169,7 @@ impl SuiCommand {
             } => {
                 // Auto genesis if path is none and sui directory doesn't exists.
                 if config.is_none() && !sui_config_dir()?.join(SUI_NETWORK_CONFIG).exists() {
-                    genesis(None, None, None, false, None, None).await?;
+                    genesis(None, None, None, false, None, None, false).await?;
                 }
 
                 // Load the config of the Sui authority.
@@ -238,6 +247,7 @@ impl SuiCommand {
                 write_config,
                 epoch_duration_ms,
                 benchmark_ips,
+                with_faucet,
             } => {
                 genesis(
                     from_config,
@@ -246,15 +256,21 @@ impl SuiCommand {
                     force,
                     epoch_duration_ms,
                     benchmark_ips,
+                    with_faucet,
                 )
                 .await
             }
             SuiCommand::GenesisCeremony(cmd) => run(cmd),
-            SuiCommand::KeyTool { keystore_path, cmd } => {
+            SuiCommand::KeyTool {
+                keystore_path,
+                json,
+                cmd,
+            } => {
                 let keystore_path =
                     keystore_path.unwrap_or(sui_config_dir()?.join(SUI_KEYSTORE_FILENAME));
                 let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
-                cmd.execute(&mut keystore).await
+                cmd.execute(&mut keystore).await?.print(!json);
+                Ok(())
             }
             SuiCommand::Console { config } => {
                 let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
@@ -317,6 +333,7 @@ async fn genesis(
     force: bool,
     epoch_duration_ms: Option<u64>,
     benchmark_ips: Option<Vec<String>>,
+    with_faucet: bool,
 ) -> Result<(), anyhow::Error> {
     let sui_config_dir = &match working_dir {
         // if a directory is specified, it must exist (it
@@ -403,6 +420,12 @@ async fn genesis(
         }
     };
 
+    // Adds an extra faucet account to the genesis
+    if with_faucet {
+        info!("Adding faucet account in genesis config...");
+        genesis_conf = genesis_conf.add_faucet_account();
+    }
+
     if let Some(path) = write_config {
         let persisted = genesis_conf.persisted(&path);
         persisted.save()?;
@@ -454,7 +477,10 @@ async fn genesis(
     let mut ssfn_nodes = vec![];
     if let Some(ssfn_info) = ssfn_info {
         for (i, ssfn) in ssfn_info.into_iter().enumerate() {
-            let path = sui_config_dir.join(sui_config::ssfn_config_file(i));
+            let path = sui_config_dir.join(multiaddr_to_filename(
+                ssfn.p2p_address.clone(),
+                sui_config::ssfn_config_file(i),
+            ));
             // join base fullnode config with each SsfnGenesisConfig entry
             let ssfn_config = FullnodeConfigBuilder::new()
                 .with_config_directory(FULL_NODE_DB_PATH.into())
@@ -487,7 +513,10 @@ async fn genesis(
             .into_iter()
             .enumerate()
         {
-            let path = sui_config_dir.join(sui_config::validator_config_file(i));
+            let path = sui_config_dir.join(multiaddr_to_filename(
+                validator.network_address.clone(),
+                sui_config::validator_config_file(i),
+            ));
             let mut val_p2p = validator.p2p_config.clone();
             val_p2p.seed_peers = ssfn_seed_peers.clone();
             validator.p2p_config = val_p2p;
@@ -499,7 +528,10 @@ async fn genesis(
             .into_iter()
             .enumerate()
         {
-            let path = sui_config_dir.join(sui_config::validator_config_file(i));
+            let path = sui_config_dir.join(multiaddr_to_filename(
+                validator.network_address.clone(),
+                sui_config::validator_config_file(i),
+            ));
             validator.save(path)?;
         }
     }
@@ -625,4 +657,13 @@ fn read_line() -> Result<String, anyhow::Error> {
     let _ = stdout().flush();
     io::stdin().read_line(&mut s)?;
     Ok(s.trim_end().to_string())
+}
+
+fn multiaddr_to_filename(address: Multiaddr, default: String) -> String {
+    if let Some(hostname) = address.hostname() {
+        if let Some(port) = address.port() {
+            return format!("{}-{}.yaml", hostname, port);
+        }
+    }
+    default
 }

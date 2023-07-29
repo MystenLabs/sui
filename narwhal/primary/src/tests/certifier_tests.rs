@@ -114,7 +114,6 @@ async fn propose_header() {
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
         rx_synchronizer_network,
-        None,
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -216,7 +215,6 @@ async fn propose_header_failure() {
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
         rx_synchronizer_network,
-        None,
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -351,7 +349,6 @@ async fn run_vote_aggregator_with_param(
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
         rx_synchronizer_network,
-        None,
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -424,7 +421,6 @@ async fn shutdown_core() {
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
         rx_synchronizer_network,
-        None,
         metrics.clone(),
         &primary_channel_metrics,
     ));

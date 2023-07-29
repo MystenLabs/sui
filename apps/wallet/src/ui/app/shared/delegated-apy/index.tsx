@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { roundFloat, useGetValidatorsApy, useGetSystemState } from '@mysten/core';
-import { type SuiAddress } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { Text } from '_app/shared/text';
@@ -12,7 +11,7 @@ import LoadingIndicator from '_components/loading/LoadingIndicator';
 const APY_DECIMALS = 3;
 
 type DelegatedAPYProps = {
-	stakedValidators: SuiAddress[];
+	stakedValidators: string[];
 };
 
 export function DelegatedAPY({ stakedValidators }: DelegatedAPYProps) {

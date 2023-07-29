@@ -1,0 +1,46 @@
+[package]
+name = "test-cluster"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+version = "0.1.0"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+tempfile.workspace = true
+tracing.workspace = true
+bcs.workspace = true
+jsonrpsee.workspace = true
+prometheus.workspace = true
+tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
+serde_json.workspace = true
+rand.workspace = true
+sui-config.workspace = true
+sui-core = { workspace = true, features = ["test-utils"] }
+sui-framework.workspace = true
+sui-swarm-config.workspace = true
+sui-json-rpc.workspace = true
+sui-json-rpc-types.workspace = true
+sui-move-build.workspace = true
+sui-node.workspace = true
+sui-protocol-config.workspace = true
+sui-swarm.workspace = true
+sui-types = { workspace = true, features = ["test-utils"] }
+sui-keys.workspace = true
+sui-sdk.workspace = true
+sui-test-transaction-builder.workspace = true
+mysten-metrics.workspace = true
+shared-crypto.workspace = true
+
+move-binary-format.workspace = true
+move-core-types.workspace = true
+move-package.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[target.'cfg(msim)'.dependencies]
+sui-simulator.workspace = true
+
+[dev-dependencies]
+sui-macros.workspace = true

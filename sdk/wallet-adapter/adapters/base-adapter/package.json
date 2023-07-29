@@ -1,6 +1,6 @@
 {
 	"name": "@mysten/wallet-adapter-base",
-	"version": "0.7.10",
+	"version": "0.7.12",
 	"description": "Base wallet adapter for Sui",
 	"license": "Apache-2.0",
 	"author": "Mysten Labs <build@mystenlabs.com>",
@@ -39,7 +39,7 @@
 		"@mysten/wallet-standard": "workspace:*"
 	},
 	"devDependencies": {
-		"tsup": "^6.7.0",
-		"typescript": "^5.0.4"
+		"tsup": "^7.1.0",
+		"typescript": "^5.1.6"
 	}
 }
