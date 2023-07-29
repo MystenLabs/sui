@@ -144,7 +144,7 @@ pub struct NodeConfig {
     #[serde(default)]
     pub indexer_max_subscriptions: Option<usize>,
 
-    #[serde(default)]
+    #[serde(default = "default_transaction_kv_store_config")]
     pub transaction_kv_store_config: TransactionKeyValueStoreConfig,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -154,12 +154,13 @@ pub struct NodeConfig {
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct TransactionKeyValueStoreConfig {
-    #[serde(default = "default_transaction_kv_store_base_url")]
     pub base_url: String,
 }
 
-fn default_transaction_kv_store_base_url() -> String {
-    "https://transactions.sui.io/".to_string()
+fn default_transaction_kv_store_config() -> TransactionKeyValueStoreConfig {
+    TransactionKeyValueStoreConfig {
+        base_url: "https://transactions.sui.io/".to_string(),
+    }
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
