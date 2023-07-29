@@ -146,6 +146,20 @@ pub struct NodeConfig {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kv_store_config: Option<KVStoreConfig>,
+
+    #[serde(default)]
+    pub transaction_kv_store_config: TransactionKeyValueStoreConfig,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct TransactionKeyValueStoreConfig {
+    #[serde(default = "default_transaction_kv_store_base_url")]
+    pub base_url: String,
+}
+
+fn default_transaction_kv_store_base_url() -> String {
+    "https://transactions.sui.io/".to_string()
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {

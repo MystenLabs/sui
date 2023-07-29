@@ -10484,6 +10484,7 @@ dependencies = [
  "tower",
  "tracing",
  "typed-store",
+ "url",
  "workspace-hack",
 ]
 
