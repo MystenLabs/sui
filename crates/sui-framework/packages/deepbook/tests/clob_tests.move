@@ -811,6 +811,15 @@ module deepbook::clob_test {
             test::return_shared(pool);
             test::return_to_address<AccountCap>(alice, account_cap);
         };
+        next_tx(&mut test, alice);
+        {
+            let pool = test::take_shared<Pool<SUI, USD>>(&mut test);
+            let account_cap = test::take_from_address<AccountCap>(&test, alice);
+            let (base_custodian, quote_custodian) = clob::borrow_custodian(&mut pool);
+            clob::check_balance_invariants_for_account(&account_cap, quote_custodian, base_custodian, &pool);
+            test::return_shared(pool);            
+            test::return_to_address<AccountCap>(alice, account_cap);
+        };
         next_tx(&mut test, bob);
         {
             let pool = test::take_shared<Pool<SUI, USD>>(&mut test);
@@ -833,6 +842,15 @@ module deepbook::clob_test {
             clob::test_inject_limit_order_with_expiration(&mut pool, CLIENT_ID_BOB, 5 * FLOAT_SCALING, 5000, 5000, true,
                 CANCEL_OLDEST, 0, &account_cap, ctx(&mut test));
             test::return_shared(pool);
+            test::return_to_address<AccountCap>(bob, account_cap);
+        };
+        next_tx(&mut test, bob);
+        {
+            let pool = test::take_shared<Pool<SUI, USD>>(&mut test);
+            let account_cap = test::take_from_address<AccountCap>(&test, bob);
+            let (base_custodian, quote_custodian) = clob::borrow_custodian(&mut pool);
+            clob::check_balance_invariants_for_account(&account_cap, quote_custodian, base_custodian, &pool);
+            test::return_shared(pool);            
             test::return_to_address<AccountCap>(bob, account_cap);
         };
         next_tx(&mut test, owner);
@@ -993,6 +1011,15 @@ module deepbook::clob_test {
             test::return_shared(clock);
             test::return_shared(pool);
             test::return_to_sender<AccountCap>(&test, account_cap);
+        };
+        next_tx(&mut test, alice);
+        {
+            let pool = test::take_shared<Pool<SUI, USD>>(&mut test);
+            let account_cap = test::take_from_address<AccountCap>(&test, alice);
+            let (base_custodian, quote_custodian) = clob::borrow_custodian(&mut pool);
+            clob::check_balance_invariants_for_account(&account_cap, quote_custodian, base_custodian, &pool);
+            test::return_shared(pool);            
+            test::return_to_address<AccountCap>(alice, account_cap);
         };
         next_tx(&mut test, alice);
         {
@@ -1200,7 +1227,15 @@ module deepbook::clob_test {
             test::return_shared(clock);
             test::return_to_address<AccountCap>(alice, account_cap);
         };
-
+        next_tx(&mut test, alice);
+        {
+            let pool = test::take_shared<Pool<SUI, USD>>(&mut test);
+            let account_cap = test::take_from_address<AccountCap>(&test, alice);
+            let (base_custodian, quote_custodian) = clob::borrow_custodian(&mut pool);
+            clob::check_balance_invariants_for_account(&account_cap, quote_custodian, base_custodian, &pool);
+            test::return_shared(pool);            
+            test::return_to_address<AccountCap>(alice, account_cap);
+        };
         // bob places market order
         next_tx(&mut test, bob);
         {
@@ -1986,6 +2021,15 @@ module deepbook::clob_test {
             test::return_shared(pool);
             test::return_to_address<AccountCap>(alice, account_cap);
         };
+        next_tx(&mut test, alice);
+        {
+            let pool = test::take_shared<Pool<SUI, USD>>(&mut test);
+            let account_cap = test::take_from_address<AccountCap>(&test, alice);
+            let (base_custodian, quote_custodian) = clob::borrow_custodian(&mut pool);
+            clob::check_balance_invariants_for_account(&account_cap, quote_custodian, base_custodian, &pool);
+            test::return_shared(pool);            
+            test::return_to_address<AccountCap>(alice, account_cap);
+        };
         next_tx(&mut test, bob);
         // Buys some sui from alice
         {
@@ -2010,6 +2054,15 @@ module deepbook::clob_test {
             test::return_shared(pool);
             test::return_shared(clock);
             test::return_to_address<AccountCap>(bob, account_cap);
+        };
+        next_tx(&mut test, alice);
+        {
+            let pool = test::take_shared<Pool<SUI, USD>>(&mut test);
+            let account_cap = test::take_from_address<AccountCap>(&test, alice);
+            let (base_custodian, quote_custodian) = clob::borrow_custodian(&mut pool);
+            clob::check_balance_invariants_for_account(&account_cap, quote_custodian, base_custodian, &pool);
+            test::return_shared(pool);            
+            test::return_to_address<AccountCap>(alice, account_cap);
         };
         // Alice cancels orders 
         next_tx(&mut test, alice);
