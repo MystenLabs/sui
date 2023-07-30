@@ -2031,7 +2031,6 @@ Emitted when user withdraw asset from custodian
                         filled_base_quantity,
                     ),
                 );
-
                 <a href="clob_v2.md#0xdee9_clob_v2_emit_order_filled">emit_order_filled</a>&lt;BaseAsset, QuoteAsset&gt;(
                     *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id),
                     client_order_id,
@@ -2582,7 +2581,11 @@ Abort if order_id is invalid or if the order is not submitted by the transaction
         owner
     );
     <b>if</b> (is_bid) {
-        <b>let</b> balance_locked = clob_math::mul(order.quantity, order.price);
+        <b>let</b> (is_round_down, balance_locked) = clob_math::unsafe_mul_round(order.quantity, order.price);
+        // make sure when we cancel we unlock the extra bit so we can fully unlock the amount for our users
+        <b>if</b> (is_round_down) {
+            balance_locked = balance_locked + 1;
+        };
         <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.quote_custodian, owner, balance_locked);
     } <b>else</b> {
         <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.base_custodian, owner, order.quantity);
@@ -2771,7 +2774,11 @@ Grouping order_ids like [0, 2, 1, 3] would make it the most gas efficient.
             owner
         );
         <b>if</b> (is_bid) {
-            <b>let</b> balance_locked = clob_math::mul(order.quantity, order.price);
+            <b>let</b> (is_round_down, balance_locked) = clob_math::unsafe_mul_round(order.quantity, order.price);
+            // make sure when we cancel we unlock the extra bit so we can fully unlock the amount for our users
+            <b>if</b> (is_round_down) {
+                balance_locked = balance_locked + 1;
+            };
             <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.quote_custodian, owner, balance_locked);
         } <b>else</b> {
             <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.base_custodian, owner, order.quantity);
