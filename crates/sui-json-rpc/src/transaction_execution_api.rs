@@ -186,7 +186,7 @@ impl TransactionExecutionApi {
                     sender,
                     effects.effects.modified_at_versions(),
                     effects.effects.all_changed_objects(),
-                    effects.effects.all_deleted(),
+                    effects.effects.all_removed_objects(),
                 )
                 .await?,
             )
@@ -251,7 +251,7 @@ impl TransactionExecutionApi {
             sender,
             transaction_effects.modified_at_versions(),
             transaction_effects.all_changed_objects(),
-            transaction_effects.all_deleted(),
+            transaction_effects.all_removed_objects(),
         )
         .await?;
 
