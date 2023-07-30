@@ -9,7 +9,7 @@ import { Text } from '../../shared/text';
 export function ForgotPasswordPage() {
 	const navigate = useNavigate();
 	return (
-		<div className="rounded-20 bg-sui-lightest shadow-wallet-content flex flex-col items-center px-6 py-10 h-full overflow-auto">
+		<div className="rounded-20 bg-sui-lightest shadow-wallet-content flex flex-col items-center px-6 py-10 h-full overflow-auto gap-6">
 			<div className="flex flex-col items-center gap-2">
 				<Heading variant="heading1" color="gray-90" as="h1" weight="bold">
 					Forgot Password?
@@ -18,7 +18,7 @@ export function ForgotPasswordPage() {
 					Enter your 12-word Recovery Phrase
 				</Text>
 			</div>
-			<div className="mt-6 grow">
+			<div className="grow">
 				<ImportRecoveryPhraseForm
 					cancelButtonText="Cancel"
 					submitButtonText="Next"
