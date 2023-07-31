@@ -797,9 +797,9 @@ impl SuiNode {
                 .into_inner();
 
             let mut anemo_config = config.p2p_config.anemo_config.clone().unwrap_or_default();
-            // Set the max_frame_size to be 2 GB to work around the issue of there being too many
+            // Set the max_frame_size to be 1 GB to work around the issue of there being too many
             // staking events in the epoch change txn.
-            anemo_config.max_frame_size = Some(2 << 30);
+            anemo_config.max_frame_size = Some(1 << 30);
 
             // Set a higher default value for socket send/receive buffers if not already
             // configured.
