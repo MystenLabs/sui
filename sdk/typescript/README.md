@@ -1,3 +1,7 @@
+# Docs site
+
+For more complete docs, visit the [Sui Typescript SDK docs](https://sui-typescript-docs.vercel.app/)
+
 # Sui TypeScript SDK
 
 This is the Sui TypeScript SDK built on the Sui
