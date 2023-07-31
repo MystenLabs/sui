@@ -11,6 +11,7 @@ import { useState } from 'react';
 
 import CoinsPanel from './OwnedCoinsPanel';
 import { Banner } from '~/ui/Banner';
+import { CoinIcon } from './CoinIcon';
 
 type OwnedCoinViewProps = {
 	coin: CoinBalance;
@@ -32,9 +33,13 @@ export default function OwnedCoinView({ coin, id, isRecognized }: OwnedCoinViewP
 					<ArrowShowAndHideRight12
 						className={clsx('text-gray-60', open && 'rotate-90 transform')}
 					/>
-					<Text color="steel-darker" variant="body/medium">
-						{symbol}
-					</Text>
+					<div className='flex gap-2 items-center'>
+						<CoinIcon coinType={coin.coinType} size="sm" />
+						<Text color="steel-darker" variant="body/medium">
+							{symbol}
+						</Text>
+					</div>
+
 					{!isRecognized && (
 						<Banner variant="warning" icon={null} border spacing="sm">
 							<div className="max-w-[70px] overflow-hidden truncate whitespace-nowrap text-captionSmallExtra font-medium uppercase leading-3 tracking-wider lg:max-w-full">
