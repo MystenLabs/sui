@@ -29,7 +29,7 @@ const DialogOverlay = React.forwardRef<
 export const DialogContent = React.forwardRef<
 	React.ElementRef<typeof RadixDialog.Content>,
 	React.ComponentPropsWithoutRef<typeof RadixDialog.Content>
->(({ className, children, ...props }, ref) => (
+>(({ className, ...props }, ref) => (
 	<DialogPortal>
 		<DialogOverlay />
 		<RadixDialog.Content
@@ -39,9 +39,7 @@ export const DialogContent = React.forwardRef<
 				className,
 			)}
 			{...props}
-		>
-			{children}
-		</RadixDialog.Content>
+		/>
 	</DialogPortal>
 ));
 
