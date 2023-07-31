@@ -9,7 +9,7 @@ use aws_sdk_dynamodb::types::{AttributeValue, PutRequest, WriteRequest};
 use serde::Serialize;
 use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet};
-use sui_config::node::KVStoreConfig;
+use sui_config::node::TransactionKeyValueStoreWriteConfig;
 
 #[derive(Hash, Eq, PartialEq, Debug, Copy, Clone)]
 pub enum KVTable {
@@ -44,7 +44,7 @@ pub struct DynamoDbClient {
 }
 
 impl DynamoDbClient {
-    pub async fn new(config: &KVStoreConfig) -> Self {
+    pub async fn new(config: &TransactionKeyValueStoreWriteConfig) -> Self {
         let credentials = Credentials::new(
             &config.aws_access_key_id,
             &config.aws_secret_access_key,
