@@ -8,6 +8,7 @@ import type { SignatureScheme } from './signature.js';
 import { IntentScope, messageWithIntent } from './intent.js';
 import { blake2b } from '@noble/hashes/blake2b';
 import { bcs } from '../bcs/index.js';
+import { toB64 } from '@mysten/bcs';
 
 export const PRIVATE_KEY_SIZE = 32;
 export const LEGACY_PRIVATE_KEY_SIZE = 64;
@@ -17,8 +18,8 @@ export type ExportedKeypair = {
 	privateKey: string;
 };
 
-interface SignedMessage {
-	bytes: Uint8Array;
+export interface SignatureWithBytes {
+	bytes: string;
 	signature: SerializedSignature;
 }
 
@@ -28,7 +29,7 @@ interface SignedMessage {
 export abstract class BaseSigner {
 	abstract sign(bytes: Uint8Array): Promise<Uint8Array>;
 
-	async signWithIntent(bytes: Uint8Array, intent: IntentScope): Promise<SignedMessage> {
+	async signWithIntent(bytes: Uint8Array, intent: IntentScope): Promise<SignatureWithBytes> {
 		const intentMessage = messageWithIntent(intent, bytes);
 		const digest = blake2b(intentMessage, { dkLen: 32 });
 
@@ -40,7 +41,7 @@ export abstract class BaseSigner {
 
 		return {
 			signature,
-			bytes,
+			bytes: toB64(bytes),
 		};
 	}
 
