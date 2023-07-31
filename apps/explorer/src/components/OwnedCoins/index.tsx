@@ -11,9 +11,9 @@ import OwnedCoinView from './OwnedCoinView';
 import { useRecognizedPackages } from '~/hooks/useRecognizedPackages';
 import { Pagination } from '~/ui/Pagination';
 
-// export type CoinBalance = CoinBalance & {
-// 	isRecognized?: boolean;
-// };
+export type CoinBalanceVerified = CoinBalance & {
+	isRecognized?: boolean;
+};
 
 enum COIN_FILTERS {
 	ALL = 'allBalances',
@@ -42,8 +42,8 @@ export function OwnedCoins({ id }: { id: string }) {
 				return acc;
 			},
 			{
-				recognizedBalances: [] as CoinBalance[],
-				unrecognizedBalances: [] as CoinBalance[],
+				recognizedBalances: [] as CoinBalanceVerified[],
+				unrecognizedBalances: [] as CoinBalanceVerified[],
 			},
 		) ?? { recognizedBalances: [], unrecognizedBalances: [] };
 
