@@ -7,7 +7,7 @@ use mysten_metrics::spawn_monitored_task;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::collections::HashSet;
 use std::time::Duration;
-use sui_config::node::KVStoreConfig;
+use sui_config::node::TransactionKeyValueStoreWriteConfig;
 use sui_core::storage::RocksDbStore;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -35,7 +35,7 @@ impl KVStoreMetrics {
 
 pub async fn setup_key_value_store_uploader(
     store: RocksDbStore,
-    config: &Option<KVStoreConfig>,
+    config: &Option<TransactionKeyValueStoreWriteConfig>,
     registry: &Registry,
 ) -> Result<Option<oneshot::Sender<()>>> {
     if config.is_none() {
@@ -56,7 +56,7 @@ pub async fn setup_key_value_store_uploader(
 async fn upload_to_kv_store(
     store: RocksDbStore,
     mut receiver: oneshot::Receiver<()>,
-    config: KVStoreConfig,
+    config: TransactionKeyValueStoreWriteConfig,
     metrics: KVStoreMetrics,
 ) -> Result<()> {
     let mut updates: HashSet<u64> = HashSet::new();
@@ -119,7 +119,7 @@ pub async fn uploader<S>(
     shard_id: u64,
     mut checkpoint_number: CheckpointSequenceNumber,
     store: S,
-    config: KVStoreConfig,
+    config: TransactionKeyValueStoreWriteConfig,
     progress_sender: mpsc::Sender<u64>,
     mut receiver: oneshot::Receiver<()>,
 ) -> Result<()>
