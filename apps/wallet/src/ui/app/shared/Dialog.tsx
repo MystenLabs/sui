@@ -15,13 +15,13 @@ const DialogPortal = ({ className, ...props }: RadixDialog.DialogPortalProps) =>
 );
 
 const DialogOverlay = React.forwardRef<
-	React.ElementRef<typeof AnimatedOverlay>,
-	React.ComponentPropsWithoutRef<typeof AnimatedOverlay>
+	React.ElementRef<typeof RadixDialog.Overlay>,
+	React.ComponentPropsWithoutRef<typeof RadixDialog.Overlay>
 >(({ className, ...props }, ref) => (
 	<RadixDialog.Overlay
 		ref={ref}
 		className={cx(
-			'bg-gray-95/10 backdrop-blur-lg z-[99998] fixed inset-0 bg-background/80',
+			'bg-gray-95/10 backdrop-blur-lg z-[99998] fixed inset-0 bg-background/80 duration-300 data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
 			className,
 		)}
 		{...props}
@@ -29,15 +29,15 @@ const DialogOverlay = React.forwardRef<
 ));
 
 export const DialogContent = React.forwardRef<
-	React.ElementRef<typeof AnimatedContent>,
-	React.ComponentPropsWithoutRef<typeof AnimatedContent>
+	React.ElementRef<typeof RadixDialog.Content>,
+	React.ComponentPropsWithoutRef<typeof RadixDialog.Content>
 >(({ className, children, ...props }, ref) => (
 	<DialogPortal>
 		<DialogOverlay />
 		<RadixDialog.Content
 			ref={ref}
 			className={cx(
-				'fixed flex flex-col items-center justify-center z-[99999] left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] shadow-wallet-modal bg-white p-6 rounded-xl w-80 max-w-[85vw] max-h-[60vh] overflow-hidden gap-1.5',
+				'fixed flex flex-col justify-center z-[99999] left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] shadow-wallet-modal bg-white p-6 rounded-xl w-80 max-w-[85vw] max-h-[60vh] overflow-hidden gap-3 duration-300 data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
 				className,
 			)}
 			{...props}
@@ -47,11 +47,19 @@ export const DialogContent = React.forwardRef<
 	</DialogPortal>
 ));
 
+export const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+	<div className={cx('flex flex-col gap-1.5 text-center', className)} {...props} />
+);
+
+export const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+	<div className={cx('mt-3', className)} {...props} />
+);
+
 export const DialogTitle = React.forwardRef<
 	React.ElementRef<typeof RadixDialog.Title>,
 	Omit<React.ComponentPropsWithoutRef<typeof RadixDialog.Title>, 'asChild' | 'className'>
 >(({ children, ...props }, ref) => (
-	<RadixDialog.Title ref={ref} asChild {...props} id="WTF">
+	<RadixDialog.Title ref={ref} asChild {...props}>
 		<Heading variant="heading6" weight="semibold" color="gray-90" as="h2">
 			{children}
 		</Heading>

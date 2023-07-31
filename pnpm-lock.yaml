@@ -651,6 +651,9 @@ importers:
       tailwindcss:
         specifier: ^3.3.3
         version: 3.3.3(ts-node@10.9.1)
+      tailwindcss-animate:
+        specifier: ^1.0.6
+        version: 1.0.6(tailwindcss@3.3.3)
       throttle-debounce:
         specifier: ^5.0.0
         version: 5.0.0
