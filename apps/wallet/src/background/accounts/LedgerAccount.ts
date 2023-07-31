@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiAddress } from '@mysten/sui.js';
 import {
 	type PasswordUnLockableAccount,
 	type SerializedAccount,
@@ -28,8 +27,12 @@ export function isLedgerAccountSerializedUI(
 	return account.type === 'ledger';
 }
 
+type EphemeralData = {
+	unlocked: true;
+};
+
 export class LedgerAccount
-	extends Account<LedgerAccountSerialized, null>
+	extends Account<LedgerAccountSerialized, EphemeralData>
 	implements PasswordUnLockableAccount
 {
 	readonly unlockType = 'password';
@@ -40,7 +43,7 @@ export class LedgerAccount
 		password,
 		derivationPath,
 	}: {
-		address: SuiAddress;
+		address: string;
 		publicKey: string | null;
 		password: string;
 		derivationPath: string;
@@ -52,6 +55,7 @@ export class LedgerAccount
 			publicKey,
 			encrypted: await encrypt(password, {}),
 			derivationPath,
+			lastUnlockedOn: null,
 		};
 	}
 
@@ -63,12 +67,20 @@ export class LedgerAccount
 		super({ type: 'ledger', id });
 	}
 
-	lock(): Promise<void> {
-		return Promise.resolve();
+	async lock(allowRead = false): Promise<void> {
+		await this.clearEphemeralValue();
+		await this.onLocked(allowRead);
 	}
 
-	isLocked(): Promise<boolean> {
-		return Promise.resolve(false);
+	async isLocked(): Promise<boolean> {
+		return !(await this.getEphemeralValue())?.unlocked;
+	}
+
+	async passwordUnlock(password: string): Promise<void> {
+		const { encrypted } = await this.getStoredData();
+		await decrypt<string>(password, encrypted);
+		await this.setEphemeralValue({ unlocked: true });
+		await this.onUnlocked();
 	}
 
 	async toUISerialized(): Promise<LedgerAccountSerializedUI> {
@@ -77,14 +89,10 @@ export class LedgerAccount
 			id: this.id,
 			type,
 			address,
-			isLocked: false,
+			isLocked: await this.isLocked(),
 			publicKey,
 			derivationPath,
+			lastUnlockedOn: await this.lastUnlockedOn,
 		};
-	}
-
-	async passwordUnlock(password: string): Promise<void> {
-		const { encrypted } = await this.getStoredData();
-		await decrypt<string>(password, encrypted);
 	}
 }

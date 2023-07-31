@@ -35,9 +35,26 @@ export abstract class Account<
 		this.type = type;
 	}
 
-	abstract lock(): Promise<void>;
+	abstract lock(allowRead: boolean): Promise<void>;
+	/**
+	 * Indicates if the account is unlocked and allows write actions (eg. signing)
+	 */
 	abstract isLocked(): Promise<boolean>;
 	abstract toUISerialized(): Promise<SerializedUIAccount>;
+
+	get address() {
+		if (!this.cachedData) {
+			this.cachedData = this.getStoredData();
+		}
+		return this.cachedData.then(({ address }) => address);
+	}
+
+	get lastUnlockedOn() {
+		if (!this.cachedData) {
+			this.cachedData = this.getStoredData();
+		}
+		return this.cachedData.then(({ lastUnlockedOn }) => lastUnlockedOn);
+	}
 
 	protected async getStoredData() {
 		const data = await getStorageEntity<T>(this.id, 'account-entity');
@@ -59,30 +76,36 @@ export abstract class Account<
 		});
 	}
 
-	updateStoredData(update: Parameters<typeof updateStorageEntity<T>>['1']) {
+	protected updateStoredData(update: Parameters<typeof updateStorageEntity<T>>['2']) {
 		return updateStorageEntity<T>(this.id, 'account-entity', update);
 	}
 
-	getEphemeralValue(): Promise<V | null> {
+	protected getEphemeralValue(): Promise<V | null> {
 		return getEphemeralValue<NonNullable<V>>(this.id);
 	}
 
-	setEphemeralValue(value: V) {
+	protected setEphemeralValue(value: V) {
 		if (!value) {
 			return;
 		}
 		return setEphemeralValue(this.id, value);
 	}
 
-	clearEphemeralValue() {
+	protected clearEphemeralValue() {
 		return clearEphemeralValue(this.id);
 	}
 
-	get address() {
-		if (!this.cachedData) {
-			this.cachedData = this.getStoredData();
+	protected onUnlocked() {
+		return this.updateStoredData({ lastUnlockedOn: Date.now() });
+	}
+
+	protected onLocked(allowRead: boolean) {
+		// skip clearing last unlocked value to allow read access
+		// when possible (last unlocked withing time limits)
+		if (allowRead) {
+			return;
 		}
-		return this.cachedData.then(({ address }) => address);
+		return this.updateStoredData({ lastUnlockedOn: null });
 	}
 }
 
@@ -91,14 +114,24 @@ export interface SerializedAccount extends StorageEntity {
 	readonly type: AccountType;
 	readonly address: string;
 	readonly publicKey: string | null;
+	readonly lastUnlockedOn: number | null;
 }
 
 export interface SerializedUIAccount {
 	readonly id: string;
 	readonly type: AccountType;
 	readonly address: string;
+	/**
+	 * This means the account is not able to sign when isLocked is true (write locked)
+	 */
 	readonly isLocked: boolean;
 	readonly publicKey: string | null;
+	/**
+	 * Timestamp of the last time the account was unlocked. It is cleared when the account is locked
+	 * because of a user action (manual lock) or lock timer.
+	 * This is used to determine if the account is locked for read or not. (eg. lastUnlockedOn more than 4 hours ago -> read locked)
+	 */
+	readonly lastUnlockedOn: number | null;
 }
 
 export interface PasswordUnLockableAccount {

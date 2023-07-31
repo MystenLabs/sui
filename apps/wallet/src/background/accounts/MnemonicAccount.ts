@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ExportedKeypair, fromExportedKeypair } from '@mysten/sui.js';
+import { type ExportedKeypair } from '@mysten/sui.js/cryptography';
 import {
 	Account,
 	type SerializedAccount,
@@ -10,6 +10,7 @@ import {
 	type SigningAccount,
 } from './Account';
 import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
+import { fromExportedKeypair } from '_src/shared/utils/from-exported-keypair';
 
 export interface MnemonicSerializedAccount extends SerializedAccount {
 	type: 'mnemonic-derived';
@@ -52,17 +53,19 @@ export class MnemonicAccount
 		return !(await this.#getKeyPair());
 	}
 
-	lock(): Promise<void> {
-		return this.clearEphemeralValue();
+	async lock(allowRead = false): Promise<void> {
+		await this.clearEphemeralValue();
+		await this.onLocked(allowRead);
 	}
 
 	async passwordUnlock(password: string): Promise<void> {
 		const { derivationPath } = await this.getStoredData();
 		const mnemonicSource = await this.#getMnemonicSource();
 		await mnemonicSource.unlock(password);
-		return this.setEphemeralValue({
+		await this.setEphemeralValue({
 			keyPair: (await mnemonicSource.deriveKeyPair(derivationPath)).export(),
 		});
+		await this.onUnlocked();
 	}
 
 	async toUISerialized(): Promise<MnemonicSerializedUiAccount> {
@@ -75,6 +78,7 @@ export class MnemonicAccount
 			derivationPath,
 			publicKey,
 			sourceID,
+			lastUnlockedOn: await this.lastUnlockedOn,
 		};
 	}
 

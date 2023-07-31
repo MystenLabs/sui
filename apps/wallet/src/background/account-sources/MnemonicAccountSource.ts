@@ -113,6 +113,7 @@ export class MnemonicAccountSource extends AccountSource<
 			address: keyPair.getPublicKey().toSuiAddress(),
 			derivationPath,
 			publicKey: keyPair.getPublicKey().toBase64(),
+			lastUnlockedOn: null,
 		};
 	}
 

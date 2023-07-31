@@ -50,13 +50,15 @@ export class QredoAccount
 		return (await (await this.#getQredoSource()).isLocked()) || !(await this.getEphemeralValue());
 	}
 
-	lock(): Promise<void> {
-		return this.clearEphemeralValue();
+	async lock(allowRead = false): Promise<void> {
+		await this.clearEphemeralValue();
+		await this.onLocked(allowRead);
 	}
 
 	async passwordUnlock(password: string): Promise<void> {
 		await (await this.#getQredoSource()).unlock(password);
-		return this.setEphemeralValue({ unlocked: true });
+		await this.setEphemeralValue({ unlocked: true });
+		await this.onUnlocked();
 	}
 
 	async toUISerialized(): Promise<QredoSerializedUiAccount> {
@@ -72,6 +74,7 @@ export class QredoAccount
 			labels,
 			network,
 			walletID,
+			lastUnlockedOn: await this.lastUnlockedOn,
 		};
 	}
 
