@@ -5,12 +5,11 @@ import { useNavigate } from 'react-router-dom';
 import { ImportRecoveryPhraseForm } from '../../components/accounts/ImportRecoveryPhraseForm';
 import { Heading } from '../../shared/heading';
 import { Text } from '_app/shared/text';
-import { UnlockAccountModal } from '../../components/accounts/UnlockAccountModal';
 
 export function ImportPassphrasePage() {
 	const navigate = useNavigate();
 	return (
-		<div className="rounded-20 bg-sui-lightest shadow-wallet-content flex flex-col items-center px-6 py-10 h-full overflow-auto gap-6">
+		<div className="rounded-20 bg-sui-lightest shadow-wallet-content flex flex-col items-center px-6 py-10 h-full overflow-auto">
 			<Text variant="caption" color="steel-dark" weight="semibold">
 				Wallet Setup
 			</Text>
@@ -41,14 +40,6 @@ export function ImportPassphrasePage() {
 					}}
 				/>
 			</div>
-			<UnlockAccountModal
-				onClose={function (): void {
-					throw new Error('Function not implemented.');
-				}}
-				onConfirm={function (): void {
-					throw new Error('Function not implemented.');
-				}}
-			/>
 		</div>
 	);
 }
