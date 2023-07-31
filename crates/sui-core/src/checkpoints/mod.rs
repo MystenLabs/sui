@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_handler::SequencedConsensusTransactionKey;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -1100,29 +1100,19 @@ impl CheckpointBuilder {
         loop {
             let mut pending = HashSet::new();
 
-            let digests = roots
-                .iter()
-                .map(|e| *e.transaction_digest())
-                .collect::<Vec<_>>();
-
-            let included_transactions = self
+            let transactions_included = self
                 .epoch_store
-                .builder_included_transactions_in_checkpoint(digests.iter())?;
+                .builder_included_transactions_in_checkpoint(
+                    roots.iter().map(|e| e.transaction_digest()),
+                )?;
 
-            let digest_inclusion_map: HashMap<_, _> = digests
-                .into_iter()
-                .zip(included_transactions.into_iter())
-                .collect();
-
-            for effect in roots {
+            for (effect, tx_included) in roots.into_iter().zip(transactions_included.into_iter()) {
                 let digest = effect.transaction_digest();
                 // Unnecessary to read effects of a dependency if the effect is already processed.
                 seen.insert(*digest);
 
                 // Skip roots already included in checkpoints or roots from previous epochs
-                if *digest_inclusion_map.get(digest).unwrap_or(&false)
-                    || effect.executed_epoch() < self.epoch_store.epoch()
-                {
+                if tx_included || effect.executed_epoch() < self.epoch_store.epoch() {
                     continue;
                 }
 

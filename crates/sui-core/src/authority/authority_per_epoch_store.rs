@@ -1093,16 +1093,15 @@ impl AuthorityPerEpochStore {
         &self,
         keys: Vec<SequencedConsensusTransactionKey>,
     ) -> Result<(), SuiError> {
-        let unprocessed_keys = keys
-            .iter()
-            .zip(
-                self.are_consensus_messages_processed(keys.iter())?
-                    .into_iter(),
-            )
-            .filter_map(|(key, processed)| if !processed { Some(*key) } else { None })
-            .collect::<Vec<SequencedConsensusTransactionKey>>();
-        let registrations = self.consensus_notify_read.register_all(unprocessed_keys);
-        join_all(registrations).await;
+        let registrations = self.consensus_notify_read.register_all(keys.clone());
+
+        let unprocessed_keys_registrations = registrations
+            .into_iter()
+            .zip(self.are_consensus_messages_processed(keys.iter())?)
+            .filter(|(_, processed)| !processed)
+            .map(|(registration, _)| registration);
+
+        join_all(unprocessed_keys_registrations).await;
         Ok(())
     }
 
