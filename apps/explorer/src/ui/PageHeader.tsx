@@ -45,7 +45,9 @@ export function PageHeader({ title, subtitle, type, before, error, loading }: Pa
 								<Placeholder rounded="xl" width="100%" height="100%" />
 							</div>
 						) : (
-							before
+							<div className="sm:min-w-16 flex h-10 w-10 min-w-10 items-center justify-center rounded-xl bg-white/60 sm:h-16 sm:w-16 lg:h-18 lg:w-18 lg:min-w-18">
+								{before}
+							</div>
 						)}
 					</div>
 				)}

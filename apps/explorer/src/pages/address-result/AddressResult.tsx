@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { isSuiNSName, useResolveSuiNSAddress, useResolveSuiNSName } from '@mysten/core';
+import { Domain32 } from '@mysten/icons';
 import { Heading, LoadingIndicator } from '@mysten/ui';
 import { useParams } from 'react-router-dom';
 
@@ -13,11 +14,8 @@ import { OwnedObjects } from '~/components/OwnedObjects';
 import { PageHeader } from '~/ui/PageHeader';
 
 function AddressResult({ address }: { address: string }) {
-	const { data: domainName } = useResolveSuiNSName(address);
-
 	return (
 		<div className="space-y-12">
-			<PageHeader type="Address" title={address} subtitle={domainName} />
 			<div>
 				<div className="border-b border-gray-45 pb-5 md:mt-12">
 					<Heading color="gray-90" variant="heading4/semibold">
@@ -61,8 +59,21 @@ function SuiNSAddressResult({ name }: { name: string }) {
 
 export default function AddressResultPage() {
 	const { id } = useParams();
+	const { data: domainName } = useResolveSuiNSName(id);
+
 	return (
 		<PageLayout
+			gradient={{
+				size: 'md',
+				content: (
+					<PageHeader
+						type="Address"
+						title={id || ''}
+						subtitle={domainName}
+						before={<Domain32 className="h-10 w-10" />}
+					/>
+				),
+			}}
 			content={
 				isSuiNSName(id!) ? <SuiNSAddressResult name={id!} /> : <AddressResult address={id!} />
 			}
