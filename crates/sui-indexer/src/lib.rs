@@ -318,7 +318,7 @@ struct PgConectionPoolConfig {
 }
 
 impl PgConectionPoolConfig {
-    const DEFAULT_POOL_SIZE: u32 = 10;
+    const DEFAULT_POOL_SIZE: u32 = 100;
     const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_secs(30);
     const DEFAULT_STATEMENT_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -331,8 +331,12 @@ impl PgConectionPoolConfig {
 
 impl Default for PgConectionPoolConfig {
     fn default() -> Self {
+        let db_pool_size = std::env::var("DB_POOL_SIZE")
+            .ok()
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(Self::DEFAULT_POOL_SIZE);
         Self {
-            pool_size: Self::DEFAULT_POOL_SIZE,
+            pool_size: db_pool_size,
             connection_timeout: Self::DEFAULT_CONNECTION_TIMEOUT,
             statement_timeout: Self::DEFAULT_STATEMENT_TIMEOUT,
         }
@@ -342,7 +346,6 @@ impl Default for PgConectionPoolConfig {
 #[derive(Debug, Clone, Copy)]
 struct PgConnectionConfig {
     statement_timeout: Duration,
-    // read_only: bool,
 }
 
 impl diesel::r2d2::CustomizeConnection<PgConnection, diesel::r2d2::Error> for PgConnectionConfig {
@@ -355,13 +358,6 @@ impl diesel::r2d2::CustomizeConnection<PgConnection, diesel::r2d2::Error> for Pg
         ))
         .execute(conn)
         .map_err(diesel::r2d2::Error::QueryError)?;
-
-        // if self.read_only {
-        //     sql_query("SET default_transaction_read_only = 't'")
-        //         .execute(conn)
-        //         .map_err(r2d2::Error::QueryError)?;
-        // }
-
         Ok(())
     }
 }
