@@ -24,6 +24,7 @@ fastcrypto = { workspace = true, features = ["copy_key"] }
 telemetry-subscribers.workspace = true
 tower.workspace = true
 lru.workspace = true
+rand.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 msim.workspace = true
