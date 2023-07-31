@@ -4,8 +4,6 @@
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { cx } from 'class-variance-authority';
 import * as React from 'react';
-import { Heading } from './heading';
-import { Text } from './text';
 
 export const Dialog = RadixDialog.Root;
 export const DialogTrigger = RadixDialog.Trigger;
@@ -57,22 +55,22 @@ export const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLD
 
 export const DialogTitle = React.forwardRef<
 	React.ElementRef<typeof RadixDialog.Title>,
-	Omit<React.ComponentPropsWithoutRef<typeof RadixDialog.Title>, 'asChild' | 'className'>
->(({ children, ...props }, ref) => (
-	<RadixDialog.Title ref={ref} asChild {...props}>
-		<Heading variant="heading6" weight="semibold" color="gray-90" as="h2">
-			{children}
-		</Heading>
-	</RadixDialog.Title>
+	React.ComponentPropsWithoutRef<typeof RadixDialog.Title>
+>(({ className, ...props }, ref) => (
+	<RadixDialog.Title
+		ref={ref}
+		className={cx('text-heading6 text-semibold m-0 text-gray-90', className)}
+		{...props}
+	/>
 ));
 
 export const DialogDescription = React.forwardRef<
 	React.ElementRef<typeof RadixDialog.Description>,
-	Omit<React.ComponentPropsWithoutRef<typeof RadixDialog.Description>, 'asChild' | 'className'>
->(({ children, ...props }, ref) => (
-	<RadixDialog.Description ref={ref} asChild {...props}>
-		<Text variant="pBodySmall" color="steel">
-			{children}
-		</Text>
-	</RadixDialog.Description>
+	React.ComponentPropsWithoutRef<typeof RadixDialog.Description>
+>(({ className, ...props }, ref) => (
+	<RadixDialog.Description
+		ref={ref}
+		className={cx('text-pBodySmall text-steel', className)}
+		{...props}
+	/>
 ));

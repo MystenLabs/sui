@@ -49,10 +49,13 @@ export function UnlockAccountModal({ onClose, onConfirm }: UnlockAccountModalPro
 			<DialogContent>
 				<DialogHeader>
 					<DialogTitle>Enter Account Password</DialogTitle>
+					<DialogDescription asChild>
+						<span className="sr-only">Enter your account password to unlock your account</span>
+					</DialogDescription>
 				</DialogHeader>
 				<form id="unlock-account-modal" onSubmit={handleSubmit(onSubmit)}>
 					<label className="sr-only" htmlFor="password">
-						Account Password
+						Password
 					</label>
 					<PasswordInput {...register('password')} />
 				</form>
