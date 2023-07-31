@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { cva, type VariantProps } from 'class-variance-authority';
-import { type ReactNode, type HTMLAttributes } from 'react';
+import { type ReactNode } from 'react';
 
 const textStyles = cva([], {
 	variants: {
@@ -68,28 +68,14 @@ const textStyles = cva([], {
 	},
 });
 
-export type TextProps = {
+export interface TextProps extends VariantProps<typeof textStyles> {
 	children: ReactNode;
-} & HTMLAttributes<HTMLDivElement> &
-	VariantProps<typeof textStyles>;
+	title?: string;
+}
 
-export function Text({
-	children,
-	title,
-	weight,
-	variant,
-	italic,
-	truncate,
-	mono,
-	nowrap,
-	color,
-	...props
-}: TextProps) {
+export function Text({ children, title, ...styleProps }: TextProps) {
 	return (
-		<div
-			className={textStyles({ weight, variant, italic, truncate, mono, nowrap, color })}
-			{...props}
-		>
+		<div title={title} className={textStyles(styleProps)}>
 			{children}
 		</div>
 	);

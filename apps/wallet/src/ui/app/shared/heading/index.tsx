@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { cva, type VariantProps } from 'class-variance-authority';
-import { type HTMLAttributes, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 
 const headingStyles = cva(
 	[
@@ -81,44 +81,15 @@ const headingStyles = cva(
 	},
 );
 
-export type HeadingProps = {
+export interface HeadingProps extends VariantProps<typeof headingStyles> {
 	/**
 	 * The HTML element that will be rendered.
 	 * By default, we render a "div" in order to separate presentational styles from semantic markup.
 	 */
 	as?: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' | 'div';
 	children: ReactNode;
-} & HTMLAttributes<HTMLHeadingElement | HTMLDivElement> &
-	VariantProps<typeof headingStyles>;
+}
 
-export function Heading({
-	as: Tag = 'div',
-	children,
-	variant,
-	color,
-	weight,
-	mono,
-	leading,
-	truncate,
-	centered,
-	fixed,
-	...props
-}: HeadingProps) {
-	return (
-		<Tag
-			className={headingStyles({
-				variant,
-				color,
-				weight,
-				mono,
-				leading,
-				truncate,
-				centered,
-				fixed,
-			})}
-			{...props}
-		>
-			{children}
-		</Tag>
-	);
+export function Heading({ as: Tag = 'div', children, ...styleProps }: HeadingProps) {
+	return <Tag className={headingStyles(styleProps)}>{children}</Tag>;
 }
