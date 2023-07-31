@@ -9,9 +9,9 @@ import * as Collapsible from '@radix-ui/react-collapsible';
 import clsx from 'clsx';
 import { useState } from 'react';
 
+import { CoinIcon } from './CoinIcon';
 import CoinsPanel from './OwnedCoinsPanel';
 import { Banner } from '~/ui/Banner';
-import { CoinIcon } from './CoinIcon';
 
 type OwnedCoinViewProps = {
 	coin: CoinBalance;
@@ -33,7 +33,7 @@ export default function OwnedCoinView({ coin, id, isRecognized }: OwnedCoinViewP
 					<ArrowShowAndHideRight12
 						className={clsx('text-gray-60', open && 'rotate-90 transform')}
 					/>
-					<div className='flex gap-2 items-center'>
+					<div className="flex items-center gap-2">
 						<CoinIcon coinType={coin.coinType} size="sm" />
 						<Text color="steel-darker" variant="body/medium">
 							{symbol}

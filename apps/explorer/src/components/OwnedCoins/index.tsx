@@ -3,6 +3,7 @@
 
 import { useGetAllBalances } from '@mysten/core';
 import { type CoinBalance } from '@mysten/sui.js';
+import { Coin } from '@mysten/sui.js';
 import { Heading, Text, LoadingIndicator, RadioGroup, RadioGroupItem } from '@mysten/ui';
 import { useMemo, useState } from 'react';
 
@@ -10,9 +11,9 @@ import OwnedCoinView from './OwnedCoinView';
 import { useRecognizedPackages } from '~/hooks/useRecognizedPackages';
 import { Pagination } from '~/ui/Pagination';
 
-export type CoinBalanceVerified = CoinBalance & {
-	isRecognized?: boolean;
-};
+// export type CoinBalance = CoinBalance & {
+// 	isRecognized?: boolean;
+// };
 
 enum COIN_FILTERS {
 	ALL = 'allBalances',
@@ -27,7 +28,7 @@ export function OwnedCoins({ id }: { id: string }) {
 	const { isLoading, data, isError } = useGetAllBalances(id);
 	const recognizedPackages = useRecognizedPackages();
 
-	const balances: Record<COIN_FILTERS, CoinBalanceVerified[]> = useMemo(() => {
+	const balances: Record<COIN_FILTERS, CoinBalance[]> = useMemo(() => {
 		const balanceData = data?.reduce(
 			(acc, coinBalance) => {
 				if (recognizedPackages.includes(coinBalance.coinType.split('::')[0])) {
@@ -41,13 +42,31 @@ export function OwnedCoins({ id }: { id: string }) {
 				return acc;
 			},
 			{
-				recognizedBalances: [] as CoinBalanceVerified[],
-				unrecognizedBalances: [] as CoinBalanceVerified[],
+				recognizedBalances: [] as CoinBalance[],
+				unrecognizedBalances: [] as CoinBalance[],
 			},
 		) ?? { recognizedBalances: [], unrecognizedBalances: [] };
 
+		const recognizedBalances = balanceData.recognizedBalances.sort((a, b) => {
+			// Make sure SUI always comes first
+			if (Coin.getCoinSymbol(a.coinType) === 'SUI') {
+				return -1;
+			} else if (Coin.getCoinSymbol(b.coinType) === 'SUI') {
+				return 1;
+			} else {
+				return Coin.getCoinSymbol(a.coinType).localeCompare(
+					Coin.getCoinSymbol(b.coinType, undefined, { sensitivity: 'base' }),
+				);
+			}
+		});
+
 		return {
-			...balanceData,
+			recognizedBalances,
+			unrecognizedBalances: balanceData.unrecognizedBalances.sort((a, b) =>
+				Coin.getCoinSymbol(a.coinType).localeCompare(
+					Coin.getCoinSymbol(b.coinType, undefined, { sensitivity: 'base' }),
+				),
+			),
 			allBalances: balanceData.recognizedBalances.concat(balanceData.unrecognizedBalances),
 		};
 	}, [data, recognizedPackages]);
