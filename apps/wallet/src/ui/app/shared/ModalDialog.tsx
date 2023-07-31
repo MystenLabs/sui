@@ -15,6 +15,7 @@ export type ModalDialogProps = {
 	onClose: () => void;
 };
 
+/** @deprecated: Use the new Dialog component that is built using Radix UI! */
 export function ModalDialog({
 	isOpen,
 	title,
