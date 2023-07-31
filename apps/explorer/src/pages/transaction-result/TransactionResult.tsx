@@ -63,7 +63,6 @@ export default function TransactionResult() {
 				),
 				size: 'md',
 			}}
-			backgroundGradient={!!data}
 			isError={!!txnErrorText}
 			content={
 				getTxnErrorBool || !data ? (
