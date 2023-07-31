@@ -1,5 +1,12 @@
 # @mysten/wallet-standard
 
+## 0.5.14
+
+### Patch Changes
+
+- Updated dependencies [47ea5ec7c]
+  - @mysten/sui.js@0.39.0
+
 ## 0.5.13
 
 ### Patch Changes
