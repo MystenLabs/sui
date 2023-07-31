@@ -10964,6 +10964,7 @@ dependencies = [
  "sui-test-transaction-builder",
  "sui-types",
  "tap",
+ "telemetry-subscribers",
  "tempfile",
  "tokio",
  "tracing",
