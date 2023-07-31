@@ -40,13 +40,9 @@ export function PageHeader({ title, subtitle, type, before, error, loading }: Pa
 			<div className="flex items-center gap-3 sm:gap-5">
 				{before && (
 					<div className="self-start sm:self-center">
-						{loading ? (
-							<div className="sm:min-w-16 flex h-10 w-10 min-w-10 items-center justify-center rounded-xl bg-white/60 sm:h-16 sm:w-16 lg:h-18 lg:w-18 lg:min-w-18">
-								<Placeholder rounded="xl" width="100%" height="100%" />
-							</div>
-						) : (
-							before
-						)}
+						<div className="sm:min-w-16 flex h-10 w-10 min-w-10 items-center justify-center rounded-lg bg-white/60 sm:h-16 sm:w-16 sm:rounded-xl lg:h-18 lg:w-18 lg:min-w-18">
+							{loading ? <Placeholder rounded="xl" width="100%" height="100%" /> : before}
+						</div>
 					</div>
 				)}
 				<div>
@@ -69,7 +65,7 @@ export function PageHeader({ title, subtitle, type, before, error, loading }: Pa
 									<Heading as="h3" variant="heading3/semibold" color="gray-90" mono>
 										{title}
 									</Heading>
-									<div className="ml-2 h-4 w-4 self-center sm:self-end md:h-6 md:w-6">
+									<div className="ml-2 h-4 w-4 self-start md:h-6 md:w-6">
 										<CopyToClipboard size="lg" color="steel" copyText={title} />
 									</div>
 								</div>
