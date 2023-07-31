@@ -94,6 +94,7 @@ members = [
     "crates/sui-json-rpc-tests",
     "crates/sui-json-rpc-types",
     "crates/sui-keys",
+    "crates/sui-kvstore",
     "crates/sui-macros",
     "crates/sui-metric-checker",
     "crates/sui-move",
@@ -202,6 +203,8 @@ arc-swap = { version = "1.5.1", features = ["serde"] }
 assert_cmd = "2.0.6"
 async-recursion = "1.0.4"
 async-trait = "0.1.61"
+aws-config = "0.55.3"
+aws-sdk-dynamodb.workspace = "0.28.0"
 axum = { version = "0.6.6", default-features = false, features = ["headers", "tokio", "http1", "http2", "json", "matched-path", "original-uri", "form", "query"] }
 axum-extra = "0.4.2"
 axum-server = { version = "0.4.4", default-features = false, features = ["tls-rustls"] }
@@ -445,6 +448,7 @@ sui-json = { path = "crates/sui-json" }
 sui-json-rpc = { path = "crates/sui-json-rpc" }
 sui-json-rpc-types = { path = "crates/sui-json-rpc-types" }
 sui-keys = { path = "crates/sui-keys" }
+sui-kvstore = { path = "crates/sui-kvstore" }
 sui-macros = { path = "crates/sui-macros" }
 sui-metric-checker = { path = "crates/sui-metric-checker" }
 sui-move = { path = "crates/sui-move" }

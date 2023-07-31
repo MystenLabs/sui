@@ -635,6 +635,10 @@ impl TransactionEventsDigest {
     pub fn next_lexicographical(&self) -> Option<Self> {
         self.0.next_lexicographical().map(Self)
     }
+
+    pub fn into_inner(self) -> [u8; 32] {
+        self.0.into_inner()
+    }
 }
 
 impl fmt::Debug for TransactionEventsDigest {
