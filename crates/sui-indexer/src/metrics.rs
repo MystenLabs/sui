@@ -13,6 +13,11 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
     80.0, 100.0, 200.0,
 ];
 
+const DB_COMMIT_LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 2.0, 3.0,
+    5.0, 10.0, 20.0, 40.0, 60.0, 80.0, 100.0, 200.0,
+];
+
 #[derive(Clone)]
 pub struct IndexerMetrics {
     pub total_checkpoint_received: IntCounter,
@@ -35,6 +40,10 @@ pub struct IndexerMetrics {
     pub checkpoint_index_latency: Histogram,
     pub checkpoint_objects_index_latency: Histogram,
     pub checkpoint_db_commit_latency: Histogram,
+    // average latency of committing 1000 transactions.
+    // 1000 is not necessarily the batch size, it's to roughly map average tx commit latency to [0.1, 1] seconds,
+    // which is well covered by DB_COMMIT_LATENCY_SEC_BUCKETS.
+    pub thousand_transaction_avg_db_commit_latency: Histogram,
     pub object_db_commit_latency: Histogram,
     pub object_mutation_db_commit_latency: Histogram,
     pub object_deletion_db_commit_latency: Histogram,
@@ -183,35 +192,42 @@ impl IndexerMetrics {
             checkpoint_db_commit_latency: register_histogram_with_registry!(
                 "checkpoint_db_commit_latency",
                 "Time spent commiting a checkpoint to the db",
-                LATENCY_SEC_BUCKETS.to_vec(),
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            thousand_transaction_avg_db_commit_latency: register_histogram_with_registry!(
+                "transaction_db_commit_latency",
+                "Average time spent commiting 1000 transactions to the db",
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             object_db_commit_latency: register_histogram_with_registry!(
                 "object_db_commit_latency",
                 "Time spent commiting a object to the db",
-                LATENCY_SEC_BUCKETS.to_vec(),
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             object_mutation_db_commit_latency: register_histogram_with_registry!(
                 "object_mutation_db_commit_latency",
                 "Time spent commiting a object mutation to the db",
-                LATENCY_SEC_BUCKETS.to_vec(),
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             object_deletion_db_commit_latency: register_histogram_with_registry!(
                 "object_deletion_db_commit_latency",
                 "Time spent commiting a object deletion to the db",
-                LATENCY_SEC_BUCKETS.to_vec(),
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             epoch_db_commit_latency: register_histogram_with_registry!(
                 "epoch_db_commit_latency",
                 "Time spent commiting a epoch to the db",
-                LATENCY_SEC_BUCKETS.to_vec(),
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
