@@ -25,7 +25,7 @@ function AddressResultPageHeader({
 			type="Address"
 			title={address}
 			subtitle={domainName}
-			before={<Domain32 className="h-10 w-10" />}
+			before={<Domain32 className="h-6 w-6 text-steel-darker sm:h-10 sm:w-10" />}
 		/>
 	);
 }
@@ -86,7 +86,6 @@ export default function AddressResultPage() {
 
 	return (
 		<PageLayout
-			backgroundGradient
 			gradient={{
 				size: 'md',
 				content: isSuiNSAddress ? (

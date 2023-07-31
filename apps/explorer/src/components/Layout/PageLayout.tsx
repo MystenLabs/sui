@@ -21,16 +21,9 @@ export type PageLayoutProps = {
 	isError?: boolean;
 	content: ReactNode;
 	loading?: boolean;
-	backgroundGradient?: boolean;
 };
 
-export function PageLayout({
-	gradient,
-	content,
-	loading,
-	isError,
-	backgroundGradient,
-}: PageLayoutProps) {
+export function PageLayout({ gradient, content, loading, isError }: PageLayoutProps) {
 	const [network] = useNetworkContext();
 	const { request } = useAppsBackend();
 	const { data } = useQuery({
@@ -45,17 +38,12 @@ export function PageLayout({
 		enabled: network === Network.MAINNET,
 	});
 	const isGradientVisible = !!gradient;
+	const renderNetworkDegradeBanner = network === Network.MAINNET && data?.degraded;
 
 	return (
-		<div
-			className={clsx(
-				'relative min-h-screen w-full',
-				isGradientVisible && backgroundGradient && isError && 'bg-gradients-failure-start',
-				isGradientVisible && backgroundGradient && !isError && 'bg-gradients-graph-cards-start',
-			)}
-		>
-			<section className="sticky top-0 z-20 flex flex-col">
-				{network === Network.MAINNET && data?.degraded && (
+		<div className="relative min-h-screen w-full">
+			<section className="fixed top-0 z-20 flex w-full flex-col">
+				{renderNetworkDegradeBanner && (
 					<Banner rounded="none" align="center" variant="warning" fullWidth>
 						The explorer is running slower than usual. We&rsquo;re working to fix the issue and
 						appreciate your patience.
@@ -73,6 +61,7 @@ export function PageLayout({
 					<section
 						className={clsx(
 							'group/gradientContent',
+							renderNetworkDegradeBanner ? 'pt-headerNetworkDegrade' : 'pt-header',
 							loading && 'bg-gradients-graph-cards',
 							isError && 'bg-gradients-failure',
 							!isError && 'bg-gradients-graph-cards',
