@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { getExecutionStatusType, SuiSystemStateUtil, SUI_TYPE_ARG } from '../../src';
+import { SuiSystemStateUtil, SUI_TYPE_ARG } from '../../src';
 import { setup, TestToolbox } from './utils/setup';
 import { Keypair } from '../../src/cryptography';
 import { SuiClient } from '../../src/client';
@@ -18,7 +18,7 @@ describe('Governance API', () => {
 
 	it('test requestAddStake', async () => {
 		const result = await addStake(toolbox.client, toolbox.keypair);
-		expect(getExecutionStatusType(result)).toEqual('success');
+		expect(result.effects?.status.status).toEqual('success');
 	});
 
 	it('test getDelegatedStakes', async () => {

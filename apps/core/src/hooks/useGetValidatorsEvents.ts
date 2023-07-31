@@ -44,7 +44,7 @@ export function useGetValidatorsEvents({ limit, order }: GetValidatorsEvent) {
 
 					hasNextPage = validatorEventsResponse.hasNextPage;
 					currCursor = validatorEventsResponse.nextCursor;
-					results.push(...validatorEventsResponse.data);
+					results.push(...(validatorEventsResponse.data as SuiEvent[]));
 				}
 				return results.slice(0, limit);
 			}

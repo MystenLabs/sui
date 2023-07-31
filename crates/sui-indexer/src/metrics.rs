@@ -28,6 +28,7 @@ pub struct IndexerMetrics {
     pub latest_indexer_object_checkpoint_sequence_number: IntGauge,
     // checkpoint E2E latency is:
     // fullnode_download_latency + checkpoint_index_latency + db_commit_latency
+    pub fullnode_checkpoint_data_download_latency: Histogram,
     pub fullnode_checkpoint_wait_and_download_latency: Histogram,
     pub fullnode_transaction_download_latency: Histogram,
     pub fullnode_object_download_latency: Histogram,
@@ -133,6 +134,13 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            fullnode_checkpoint_data_download_latency: register_histogram_with_registry!(
+                "fullnode_checkpoint_data_download_latency",
+                "Time spent in downloading checkpoint and transation for a new checkpoint from the Full Node",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
             fullnode_checkpoint_wait_and_download_latency: register_histogram_with_registry!(
                 "fullnode_checkpoint_wait_and_download_latency",
                 "Time spent in waiting for a new checkpoint from the Full Node",
@@ -140,6 +148,7 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+
             fullnode_transaction_download_latency: register_histogram_with_registry!(
                 "fullnode_transaction_download_latency",
                 "Time spent in waiting for a new transaction from the Full Node",

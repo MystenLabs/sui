@@ -189,6 +189,10 @@
 				"fileName": "build/sui-kiosk"
 			},
 			{
+				"label": "Sui Transfer Policy",
+				"fileName": "build/sui-transfer-policy"
+			},			
+			{
 				"label": "Create Smart Contracts with Move",
 				"fileName": "build/move/index",
 				"title": "Smart Contracts with Move",

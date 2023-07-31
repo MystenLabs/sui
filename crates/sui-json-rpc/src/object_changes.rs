@@ -5,8 +5,9 @@ use std::collections::BTreeMap;
 
 use sui_json_rpc_types::ObjectChange;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
+use sui_types::effects::ObjectRemoveKind;
 use sui_types::object::Owner;
-use sui_types::storage::{DeleteKind, WriteKind};
+use sui_types::storage::WriteKind;
 
 use crate::ObjectProvider;
 
@@ -15,7 +16,7 @@ pub async fn get_object_changes<P: ObjectProvider<Error = E>, E>(
     sender: SuiAddress,
     modified_at_versions: Vec<(ObjectID, SequenceNumber)>,
     all_changed_objects: Vec<(ObjectRef, Owner, WriteKind)>,
-    all_deleted: Vec<(ObjectRef, DeleteKind)>,
+    all_removed_objects: Vec<(ObjectRef, ObjectRemoveKind)>,
 ) -> Result<Vec<ObjectChange>, E> {
     let mut object_changes = vec![];
 
@@ -62,7 +63,7 @@ pub async fn get_object_changes<P: ObjectProvider<Error = E>, E>(
         };
     }
 
-    for ((id, version, _), kind) in all_deleted {
+    for ((id, version, _), kind) in all_removed_objects {
         let o = object_provider
             .find_object_lt_or_eq_version(&id, &version)
             .await?;
@@ -70,19 +71,18 @@ pub async fn get_object_changes<P: ObjectProvider<Error = E>, E>(
             if let Some(type_) = o.type_() {
                 let object_type = type_.clone().into();
                 match kind {
-                    DeleteKind::Normal => object_changes.push(ObjectChange::Deleted {
+                    ObjectRemoveKind::Delete => object_changes.push(ObjectChange::Deleted {
                         sender,
                         object_type,
                         object_id: id,
                         version,
                     }),
-                    DeleteKind::Wrap => object_changes.push(ObjectChange::Wrapped {
+                    ObjectRemoveKind::Wrap => object_changes.push(ObjectChange::Wrapped {
                         sender,
                         object_type,
                         object_id: id,
                         version,
                     }),
-                    _ => {}
                 }
             }
         };
