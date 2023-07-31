@@ -17,7 +17,7 @@ const commonToastClasses =
 	'!px-0 !py-1 !text-pBodySmall !font-medium !rounded-2lg !shadow-notification';
 export function Toaster({ bottomNavEnabled }: ToasterProps) {
 	const { pathname } = useLocation();
-	const isExtraNavTabsVisible = pathname.startsWith('/apps');
+	const isExtraNavTabsVisible = ['/apps', '/nfts'].includes(pathname);
 	const menuVisible = useMenuIsOpen();
 	const isBottomNavVisible = useAppSelector(getNavIsVisible);
 	const includeBottomNavSpace = !menuVisible && isBottomNavVisible && bottomNavEnabled;

@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SignedTransaction, SuiTransactionBlockResponse, SignedMessage } from '@mysten/sui.js';
+import { SignedTransaction, SignedMessage } from '@mysten/sui.js';
+import { SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 import {
 	SuiSignTransactionBlockInput,
 	SuiSignAndExecuteTransactionBlockInput,

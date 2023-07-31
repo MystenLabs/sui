@@ -21,7 +21,7 @@ export type DataType = {
 			[key: string]: any;
 		};
 		owner?: { ObjectOwner: [] };
-		tx_digest?: string;
+		tx_digest?: string | null;
 	};
 	loadState?: string;
 	display?: Record<string, string>;

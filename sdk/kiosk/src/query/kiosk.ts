@@ -99,7 +99,7 @@ export async function getOwnedKiosks(
 	// get kioskIds from the OwnerCaps.
 	const kioskIdList = data?.map((x: SuiObjectResponse) => {
 		const fields = x.data?.content?.dataType === 'moveObject' ? x.data.content.fields : null;
-		return fields?.for;
+		return (fields as { for: string })?.for;
 	});
 
 	// clean up data that might have an error in them.
