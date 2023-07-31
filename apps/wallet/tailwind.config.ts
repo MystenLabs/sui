@@ -18,6 +18,16 @@ export default {
 	},
 	theme: {
 		extend: {
+			animation: {
+				scaleAndFadeIn: 'scaleAndFadeIn 300ms ease-out',
+				scaleAndFadeOut: 'scaleAndFadeIn reverse 300ms ease-in',
+			},
+			keyframes: {
+				scaleAndFadeIn: {
+					from: { scale: '.95', opacity: '0' },
+					to: { scale: '1', opacity: '1' },
+				},
+			},
 			colors: {
 				'gradient-blue-start': '#589AEA',
 				'gradient-blue-end': '#4C75A6',

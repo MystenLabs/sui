@@ -50,31 +50,35 @@ export function UnlockAccountModal({ onClose, onConfirm }: UnlockAccountModalPro
 				<DialogHeader>
 					<DialogTitle>Enter Account Password</DialogTitle>
 				</DialogHeader>
-				<form onSubmit={handleSubmit(onSubmit)}>
+				<form id="unlock-account-modal" onSubmit={handleSubmit(onSubmit)}>
+					<label className="sr-only" htmlFor="password">
+						Account Password
+					</label>
 					<PasswordInput {...register('password')} />
-					<DialogFooter>
-						<div className="flex flex-col gap-3">
-							<div className="flex gap-2.5">
-								<Button variant="outline" size="tall" text="Cancel" onClick={() => onClose()} />
-								<Button
-									type="submit"
-									disabled={isSubmitting || !isValid}
-									variant="primary"
-									size="tall"
-									loading={isSubmitting}
-									text="Unlock"
-								/>
-							</div>
-							<Link
-								color="steelDark"
-								weight="medium"
-								size="bodySmall"
-								text="Forgot Password?"
-								to="/account/forgot-password"
+				</form>
+				<DialogFooter>
+					<div className="flex flex-col gap-3">
+						<div className="flex gap-2.5">
+							<Button variant="outline" size="tall" text="Cancel" onClick={() => onClose()} />
+							<Button
+								type="submit"
+								form="unlock-account-modal"
+								disabled={isSubmitting || !isValid}
+								variant="primary"
+								size="tall"
+								loading={isSubmitting}
+								text="Unlock"
 							/>
 						</div>
-					</DialogFooter>
-				</form>
+						<Link
+							color="steelDark"
+							weight="medium"
+							size="bodySmall"
+							text="Forgot Password?"
+							to="/account/forgot-password"
+						/>
+					</div>
+				</DialogFooter>
 			</DialogContent>
 		</Dialog>
 	);
