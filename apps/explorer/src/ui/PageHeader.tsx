@@ -50,42 +50,40 @@ export function PageHeader({ title, subtitle, type, before, error, loading }: Pa
 					</div>
 				)}
 				<div>
-					<div className="flex">
-						<div>
-							<div className="mb-1 flex items-center gap-2">
-								{Icon && <Icon className="text-steel-dark" />}
-								{loading ? (
-									<Placeholder rounded="lg" width="140px" />
-								) : (
-									<Heading variant="heading6/semibold" color="steel-darker">
-										{type in TYPE_TO_COPY ? TYPE_TO_COPY[type] : type}
-									</Heading>
-								)}
-							</div>
-							<div className="min-w-0 break-words break-all">
-								{loading ? (
-									<Placeholder rounded="lg" width="540px" height="20px" />
-								) : (
+					<div>
+						<div className="mb-1 flex items-center gap-2">
+							{Icon && <Icon className="text-steel-dark" />}
+							{loading ? (
+								<Placeholder rounded="lg" width="140px" />
+							) : (
+								<Heading variant="heading6/semibold" color="steel-darker">
+									{type in TYPE_TO_COPY ? TYPE_TO_COPY[type] : type}
+								</Heading>
+							)}
+						</div>
+						<div className="min-w-0 break-words break-all">
+							{loading ? (
+								<Placeholder rounded="lg" width="540px" height="20px" />
+							) : (
+								<div className="flex items-center">
 									<Heading as="h3" variant="heading3/semibold" color="gray-90" mono>
 										{title}
 									</Heading>
-								)}
-							</div>
-							{subtitle && (
-								<div className="mt-2 break-words">
-									{loading ? (
-										<Placeholder rounded="lg" width="540px" height="20px" />
-									) : (
-										<Heading variant="heading4/semibold" color="gray-75">
-											{subtitle}
-										</Heading>
-									)}
+									<div className="ml-2 h-4 w-4 self-center sm:self-end md:h-6 md:w-6">
+										<CopyToClipboard size="lg" color="steel" copyText={title} />
+									</div>
 								</div>
 							)}
 						</div>
-						{!loading && (
-							<div className="ml-2 h-4 w-4 self-center sm:self-end md:h-6 md:w-6">
-								<CopyToClipboard size="lg" color="steel" copyText={title} />
+						{subtitle && (
+							<div className="mt-2 break-words">
+								{loading ? (
+									<Placeholder rounded="lg" width="540px" height="20px" />
+								) : (
+									<Heading variant="heading4/semibold" color="gray-75">
+										{subtitle}
+									</Heading>
+								)}
 							</div>
 						)}
 					</div>

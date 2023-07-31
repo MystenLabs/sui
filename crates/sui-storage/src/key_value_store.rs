@@ -4,167 +4,151 @@
 //! Immutable key/value store trait for storing/retrieving transactions, effects, and events
 //! to/from a scalable.
 
+use crate::key_value_store_metrics::KeyValueStoreMetrics;
 use async_trait::async_trait;
 use std::sync::Arc;
-use sui_types::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
+use std::time::Instant;
+use sui_types::digests::{TransactionDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::transaction::Transaction;
-use tracing::error;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Key {
-    Tx(TransactionDigest),
-    Fx(TransactionEffectsDigest),
-    Events(TransactionEventsDigest),
-
-    // Separate key type so that you can do
-    // multi_get(&[Key::Tx(tx_digest), Key::FxByTxDigest(tx_digest)])
-    FxByTxDigest(TransactionDigest),
+pub struct TransactionKeyValueStore {
+    store_name: &'static str,
+    metrics: Arc<KeyValueStoreMetrics>,
+    inner: Arc<dyn TransactionKeyValueStoreTrait + Send + Sync>,
 }
 
-impl From<TransactionDigest> for Key {
-    fn from(tx: TransactionDigest) -> Self {
-        Key::Tx(tx)
+impl TransactionKeyValueStore {
+    pub fn new(
+        store_name: &'static str,
+        metrics: Arc<KeyValueStoreMetrics>,
+        inner: Arc<dyn TransactionKeyValueStoreTrait + Send + Sync>,
+    ) -> Self {
+        Self {
+            store_name,
+            metrics,
+            inner,
+        }
     }
-}
 
-impl From<TransactionEffectsDigest> for Key {
-    fn from(fx: TransactionEffectsDigest) -> Self {
-        Key::Fx(fx)
-    }
-}
-
-impl From<TransactionEventsDigest> for Key {
-    fn from(events: TransactionEventsDigest) -> Self {
-        Key::Events(events)
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Value {
-    Tx(Box<Transaction>),
-    Fx(Box<TransactionEffects>),
-    Events(Box<TransactionEvents>),
-}
-
-impl From<Transaction> for Value {
-    fn from(tx: Transaction) -> Self {
-        Value::Tx(tx.into())
-    }
-}
-
-impl From<TransactionEffects> for Value {
-    fn from(fx: TransactionEffects) -> Self {
-        Value::Fx(fx.into())
-    }
-}
-
-impl From<TransactionEvents> for Value {
-    fn from(events: TransactionEvents) -> Self {
-        Value::Events(events.into())
-    }
-}
-
-/// Immutable key/value store trait for storing/retrieving transactions, effects, and events.
-/// Only defines multi_get/multi_put methods to discourage single key/value operations.
-#[async_trait]
-pub trait TransactionKeyValueStore {
     /// Generic multi_get, allows implementors to get heterogenous values with a single round trip.
-    async fn multi_get(&self, keys: &[Key]) -> SuiResult<Vec<Option<Value>>>;
+    pub async fn multi_get(
+        &self,
+        transactions: &[TransactionDigest],
+        effects: &[TransactionDigest],
+        events: &[TransactionEventsDigest],
+    ) -> SuiResult<(
+        Vec<Option<Transaction>>,
+        Vec<Option<TransactionEffects>>,
+        Vec<Option<TransactionEvents>>,
+    )> {
+        let start = Instant::now();
+        let res = self.inner.multi_get(transactions, effects, events).await;
+        let elapsed = start.elapsed();
 
-    // Convenience methods for getting transactions, effects, and events without converting
-    // to/from Key and Value.
-    async fn multi_get_tx(
+        let num_txns = transactions.len() as u64;
+        let num_effects = effects.len() as u64;
+        let num_events = events.len() as u64;
+        let total_keys = num_txns + num_effects + num_events;
+
+        self.metrics
+            .key_value_store_num_fetches_latency_ms
+            .with_label_values(&[self.store_name])
+            .observe(elapsed.as_millis() as u64);
+        self.metrics
+            .key_value_store_num_fetches_batch_size
+            .with_label_values(&[self.store_name])
+            .observe(total_keys);
+
+        if let Ok(res) = &res {
+            let txns_not_found = res.0.iter().filter(|v| v.is_none()).count() as u64;
+            let effects_not_found = res.1.iter().filter(|v| v.is_none()).count() as u64;
+            let events_not_found = res.2.iter().filter(|v| v.is_none()).count() as u64;
+
+            if num_txns > 0 {
+                self.metrics
+                    .key_value_store_num_fetches_success
+                    .with_label_values(&[self.store_name, "tx"])
+                    .inc_by(num_txns);
+            }
+            if num_effects > 0 {
+                self.metrics
+                    .key_value_store_num_fetches_success
+                    .with_label_values(&[self.store_name, "fx"])
+                    .inc_by(num_effects);
+            }
+            if num_events > 0 {
+                self.metrics
+                    .key_value_store_num_fetches_success
+                    .with_label_values(&[self.store_name, "events"])
+                    .inc_by(num_events);
+            }
+
+            if txns_not_found > 0 {
+                self.metrics
+                    .key_value_store_num_fetches_not_found
+                    .with_label_values(&[self.store_name, "tx"])
+                    .inc_by(txns_not_found);
+            }
+            if effects_not_found > 0 {
+                self.metrics
+                    .key_value_store_num_fetches_not_found
+                    .with_label_values(&[self.store_name, "fx"])
+                    .inc_by(effects_not_found);
+            }
+            if events_not_found > 0 {
+                self.metrics
+                    .key_value_store_num_fetches_not_found
+                    .with_label_values(&[self.store_name, "events"])
+                    .inc_by(events_not_found);
+            }
+        } else {
+            self.metrics
+                .key_value_store_num_fetches_error
+                .with_label_values(&[self.store_name, "tx"])
+                .inc_by(num_txns);
+            self.metrics
+                .key_value_store_num_fetches_error
+                .with_label_values(&[self.store_name, "fx"])
+                .inc_by(num_effects);
+            self.metrics
+                .key_value_store_num_fetches_error
+                .with_label_values(&[self.store_name, "events"])
+                .inc_by(num_events);
+        }
+
+        res
+    }
+
+    pub async fn multi_get_tx(
         &self,
         keys: &[TransactionDigest],
     ) -> SuiResult<Vec<Option<Transaction>>> {
-        let keys = keys.iter().map(|k| Key::Tx(*k)).collect::<Vec<_>>();
-        self.multi_get(&keys).await.map(|values| {
-            values
-                .into_iter()
-                .enumerate()
-                .map(|(i, v)| match v {
-                    Some(Value::Tx(tx)) => Some(*tx),
-                    Some(_) => {
-                        error!("Key {:?} had unexpected value type {:?}", keys[i], v);
-                        None
-                    }
-                    _ => None,
-                })
-                .collect()
-        })
+        self.multi_get(keys, &[], &[])
+            .await
+            .map(|(txns, _, _)| txns)
     }
 
-    async fn multi_get_fx(
-        &self,
-        keys: &[TransactionEffectsDigest],
-    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        let keys = keys.iter().map(|k| Key::Fx(*k)).collect::<Vec<_>>();
-        self.multi_get(&keys).await.map(|values| {
-            values
-                .into_iter()
-                .enumerate()
-                .map(|(i, v)| match v {
-                    Some(Value::Fx(fx)) => Some(*fx),
-                    Some(_) => {
-                        error!("Key {:?} had unexpected value type {:?}", keys[i], v);
-                        None
-                    }
-                    _ => None,
-                })
-                .collect()
-        })
-    }
-
-    async fn multi_get_fx_by_tx_digest(
+    pub async fn multi_get_fx_by_tx_digest(
         &self,
         keys: &[TransactionDigest],
     ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        let keys = keys
-            .iter()
-            .map(|k| Key::FxByTxDigest(*k))
-            .collect::<Vec<_>>();
-        self.multi_get(&keys).await.map(|values| {
-            values
-                .into_iter()
-                .enumerate()
-                .map(|(i, v)| match v {
-                    Some(Value::Fx(fx)) => Some(*fx),
-                    Some(_) => {
-                        error!("Key {:?} had unexpected value type {:?}", keys[i], v);
-                        None
-                    }
-                    _ => None,
-                })
-                .collect()
-        })
+        self.multi_get(&[], keys, &[]).await.map(|(_, fx, _)| fx)
     }
 
-    async fn multi_get_events(
+    pub async fn multi_get_events(
         &self,
         keys: &[TransactionEventsDigest],
     ) -> SuiResult<Vec<Option<TransactionEvents>>> {
-        let keys = keys.iter().map(|k| Key::Events(*k)).collect::<Vec<_>>();
-        self.multi_get(&keys).await.map(|values| {
-            values
-                .into_iter()
-                .enumerate()
-                .map(|(i, v)| match v {
-                    Some(Value::Events(events)) => Some(*events),
-                    Some(_) => {
-                        error!("Key {:?} had unexpected value type {:?}", keys[i], v);
-                        None
-                    }
-                    _ => None,
-                })
-                .collect()
-        })
+        self.multi_get(&[], &[], keys)
+            .await
+            .map(|(_, _, events)| events)
     }
 
     /// Convenience method for fetching single digest, and returning an error if it's not found.
     /// Prefer using multi_get_tx whenever possible.
-    async fn get_tx(&self, digest: TransactionDigest) -> SuiResult<Transaction> {
+    pub async fn get_tx(&self, digest: TransactionDigest) -> SuiResult<Transaction> {
         self.multi_get_tx(&[digest])
             .await?
             .into_iter()
@@ -175,7 +159,7 @@ pub trait TransactionKeyValueStore {
 
     /// Convenience method for fetching single digest, and returning an error if it's not found.
     /// Prefer using multi_get_fx_by_tx_digest whenever possible.
-    async fn get_fx_by_tx_digest(
+    pub async fn get_fx_by_tx_digest(
         &self,
         digest: TransactionDigest,
     ) -> SuiResult<TransactionEffects> {
@@ -189,7 +173,10 @@ pub trait TransactionKeyValueStore {
 
     /// Convenience method for fetching single digest, and returning an error if it's not found.
     /// Prefer using multi_get_events whenever possible.
-    async fn get_events(&self, digest: TransactionEventsDigest) -> SuiResult<TransactionEvents> {
+    pub async fn get_events(
+        &self,
+        digest: TransactionEventsDigest,
+    ) -> SuiResult<TransactionEvents> {
         self.multi_get_events(&[digest])
             .await?
             .into_iter()
@@ -199,72 +186,100 @@ pub trait TransactionKeyValueStore {
     }
 }
 
-/// A TransactionKeyValueStore that falls back to a secondary store for any key for which the
+/// Immutable key/value store trait for storing/retrieving transactions, effects, and events.
+/// Only defines multi_get/multi_put methods to discourage single key/value operations.
+#[async_trait]
+pub trait TransactionKeyValueStoreTrait {
+    /// Generic multi_get, allows implementors to get heterogenous values with a single round trip.
+    async fn multi_get(
+        &self,
+        transactions: &[TransactionDigest],
+        effects: &[TransactionDigest],
+        events: &[TransactionEventsDigest],
+    ) -> SuiResult<(
+        Vec<Option<Transaction>>,
+        Vec<Option<TransactionEffects>>,
+        Vec<Option<TransactionEvents>>,
+    )>;
+}
+
+/// A TransactionKeyValueStoreTrait that falls back to a secondary store for any key for which the
 /// primary store returns None.
 ///
 /// Will be used to check the local rocksdb store, before falling back to a remote scalable store.
 pub struct FallbackTransactionKVStore {
-    primary: Arc<dyn TransactionKeyValueStore + Send + Sync>,
-    fallback: Arc<dyn TransactionKeyValueStore + Send + Sync>,
+    primary: TransactionKeyValueStore,
+    fallback: TransactionKeyValueStore,
 }
 
 impl FallbackTransactionKVStore {
-    pub fn new(
-        primary: Arc<dyn TransactionKeyValueStore + Send + Sync>,
-        fallback: Arc<dyn TransactionKeyValueStore + Send + Sync>,
-    ) -> Self {
-        Self { primary, fallback }
+    pub fn new_kv(
+        primary: TransactionKeyValueStore,
+        fallback: TransactionKeyValueStore,
+        metrics: Arc<KeyValueStoreMetrics>,
+        label: &'static str,
+    ) -> TransactionKeyValueStore {
+        let store = Arc::new(Self { primary, fallback });
+        TransactionKeyValueStore::new(label, metrics, store)
     }
-}
-
-macro_rules! fallback_fetch {
-    ($self:ident, $keys:ident, $method:ident) => {{
-        let mut values = $self.primary.$method(&$keys).await?;
-        let mut fallback_keys = Vec::new();
-        let mut fallback_indices = Vec::new();
-
-        for (i, value) in values.iter().enumerate() {
-            if value.is_none() {
-                fallback_keys.push($keys[i]);
-                fallback_indices.push(i);
-            }
-        }
-
-        if !fallback_keys.is_empty() {
-            let fallback_values = $self.fallback.$method(&fallback_keys).await?;
-            for (fallback_value, &index) in fallback_values.into_iter().zip(&fallback_indices) {
-                values[index] = fallback_value;
-            }
-        }
-
-        Ok(values)
-    }};
 }
 
 #[async_trait]
-impl TransactionKeyValueStore for FallbackTransactionKVStore {
-    async fn multi_get(&self, keys: &[Key]) -> SuiResult<Vec<Option<Value>>> {
-        fallback_fetch!(self, keys, multi_get)
-    }
-
-    async fn multi_get_tx(
+impl TransactionKeyValueStoreTrait for FallbackTransactionKVStore {
+    async fn multi_get(
         &self,
-        keys: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<Transaction>>> {
-        fallback_fetch!(self, keys, multi_get_tx)
-    }
+        transactions: &[TransactionDigest],
+        effects: &[TransactionDigest],
+        events: &[TransactionEventsDigest],
+    ) -> SuiResult<(
+        Vec<Option<Transaction>>,
+        Vec<Option<TransactionEffects>>,
+        Vec<Option<TransactionEvents>>,
+    )> {
+        let mut res = self
+            .primary
+            .multi_get(transactions, effects, events)
+            .await?;
 
-    async fn multi_get_fx(
-        &self,
-        keys: &[TransactionEffectsDigest],
-    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        fallback_fetch!(self, keys, multi_get_fx)
-    }
+        let (fallback_transactions, indices_transactions) = find_fallback(&res.0, transactions);
+        let (fallback_effects, indices_effects) = find_fallback(&res.1, effects);
+        let (fallback_events, indices_events) = find_fallback(&res.2, events);
 
-    async fn multi_get_events(
-        &self,
-        keys: &[TransactionEventsDigest],
-    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
-        fallback_fetch!(self, keys, multi_get_events)
+        if fallback_transactions.is_empty()
+            && fallback_effects.is_empty()
+            && fallback_events.is_empty()
+        {
+            return Ok(res);
+        }
+
+        let secondary_res = self
+            .fallback
+            .multi_get(&fallback_transactions, &fallback_effects, &fallback_events)
+            .await?;
+
+        merge_res(&mut res.0, secondary_res.0, &indices_transactions);
+        merge_res(&mut res.1, secondary_res.1, &indices_effects);
+        merge_res(&mut res.2, secondary_res.2, &indices_events);
+
+        Ok((res.0, res.1, res.2))
+    }
+}
+
+fn find_fallback<T, K: Clone>(values: &[Option<T>], keys: &[K]) -> (Vec<K>, Vec<usize>) {
+    let num_nones = values.iter().filter(|v| v.is_none()).count();
+    let mut fallback_keys = Vec::with_capacity(num_nones);
+    let mut fallback_indices = Vec::with_capacity(num_nones);
+    for (i, value) in values.iter().enumerate() {
+        if value.is_none() {
+            fallback_keys.push(keys[i].clone());
+            fallback_indices.push(i);
+        }
+    }
+    (fallback_keys, fallback_indices)
+}
+
+fn merge_res<T>(values: &mut [Option<T>], fallback_values: Vec<Option<T>>, indices: &[usize]) {
+    for (&index, fallback_value) in indices.iter().zip(fallback_values) {
+        values[index] = fallback_value;
     }
 }

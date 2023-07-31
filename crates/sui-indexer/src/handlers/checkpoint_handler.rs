@@ -638,7 +638,9 @@ where
                 .latest_tx_checkpoint_sequence_number
                 .set(last_checkpoint_seq);
 
-            self.metrics.total_tx_checkpoint_committed.inc();
+            self.metrics
+                .total_tx_checkpoint_committed
+                .inc_by(checkpoint_batch.len() as u64);
             let tx_count = tx_batch.len();
             self.metrics
                 .total_transaction_committed
@@ -653,6 +655,11 @@ where
             self.metrics
                 .transaction_per_checkpoint
                 .observe(tx_count as f64 / (last_checkpoint_seq - first_checkpoint_seq + 1) as f64);
+            // 1000.0 is not necessarily the batch size, it's to roughly map average tx commit latency to [0.1, 1] seconds,
+            // which is well covered by DB_COMMIT_LATENCY_SEC_BUCKETS.
+            self.metrics
+                .thousand_transaction_avg_db_commit_latency
+                .observe(elapsed * 1000.0 / tx_count as f64);
         }
     }
 

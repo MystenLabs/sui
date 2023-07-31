@@ -86,6 +86,7 @@ use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
+use sui_kvstore::writer::setup_key_value_store_uploader;
 use sui_macros::fail_point_async;
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
@@ -97,6 +98,7 @@ use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use sui_storage::{
     http_key_value_store::HttpKVStore,
     key_value_store::{FallbackTransactionKVStore, TransactionKeyValueStore},
+    key_value_store_metrics::KeyValueStoreMetrics,
 };
 use sui_storage::{FileCompression, IndexStore, StorageFormat};
 use sui_types::base_types::{AuthorityName, EpochId};
@@ -166,6 +168,7 @@ pub struct SuiNode {
     _state_archive_handle: Option<broadcast::Sender<()>>,
 
     _state_snapshot_uploader_handle: Option<oneshot::Sender<()>>,
+    _kv_store_uploader_handle: Option<oneshot::Sender<()>>,
 }
 
 impl fmt::Debug for SuiNode {
@@ -414,6 +417,14 @@ impl SuiNode {
         )
         .expect("Initial trusted peers must be set");
 
+        // Start uploading transactions/events to remote key value store
+        let kv_store_uploader_handle = setup_key_value_store_uploader(
+            state_sync_store.clone(),
+            &config.transaction_kv_store_write_config,
+            &prometheus_registry,
+        )
+        .await?;
+
         // Start archiving local state to remote store
         let state_archive_handle =
             Self::start_state_archival(&config, &prometheus_registry, state_sync_store).await?;
@@ -581,6 +592,7 @@ impl SuiNode {
 
             _state_archive_handle: state_archive_handle,
             _state_snapshot_uploader_handle: state_snapshot_handle,
+            _kv_store_uploader_handle: kv_store_uploader_handle,
         };
 
         info!("SuiNode started!");
@@ -785,9 +797,9 @@ impl SuiNode {
                 .into_inner();
 
             let mut anemo_config = config.p2p_config.anemo_config.clone().unwrap_or_default();
-            // Set the max_frame_size to be 2 GB to work around the issue of there being too many
+            // Set the max_frame_size to be 1 GB to work around the issue of there being too many
             // staking events in the epoch change txn.
-            anemo_config.max_frame_size = Some(2 << 30);
+            anemo_config.max_frame_size = Some(1 << 30);
 
             // Set a higher default value for socket send/receive buffers if not already
             // configured.
@@ -1420,14 +1432,16 @@ fn send_trusted_peer_change(
 fn build_kv_store(
     state: &Arc<AuthorityState>,
     config: &NodeConfig,
-) -> Result<Arc<dyn TransactionKeyValueStore + Send + Sync>> {
-    let db_store = state.db();
+    registry: &Registry,
+) -> Result<Arc<TransactionKeyValueStore>> {
+    let metrics = KeyValueStoreMetrics::new(registry);
+    let db_store = TransactionKeyValueStore::new("rocksdb", metrics.clone(), state.db());
 
-    let base_url = &config.transaction_kv_store_config.base_url;
+    let base_url = &config.transaction_kv_store_read_config.base_url;
 
     if base_url.is_empty() {
         info!("no http kv store url provided, using local db only");
-        return Ok(db_store);
+        return Ok(Arc::new(db_store));
     }
 
     let base_url: url::Url = base_url.parse().tap_err(|e| {
@@ -1442,15 +1456,18 @@ fn build_kv_store(
         Some(Chain::Testnet) => "/testnet",
         _ => {
             info!("using local db only for kv store for unknown chain");
-            return Ok(db_store);
+            return Ok(Arc::new(db_store));
         }
     };
 
     let base_url = base_url.join(network_str)?.to_string();
-    let http_store = Arc::new(HttpKVStore::new(&base_url)?);
+    let http_store = HttpKVStore::new_kv(&base_url, metrics.clone())?;
     info!("using local key-value store with fallback to http key-value store");
-    Ok(Arc::new(FallbackTransactionKVStore::new(
-        db_store, http_store,
+    Ok(Arc::new(FallbackTransactionKVStore::new_kv(
+        db_store,
+        http_store,
+        metrics,
+        "json_rpc_fallback",
     )))
 }
 
@@ -1466,14 +1483,16 @@ pub async fn build_server(
         return Ok(None);
     }
 
-    let db = state.database.clone();
-
     let mut server = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
 
-    let kv_store = build_kv_store(&state, config)?;
+    let kv_store = build_kv_store(&state, config, prometheus_registry)?;
 
     let metrics = Arc::new(JsonRpcMetrics::new(prometheus_registry));
-    server.register_module(ReadApi::new(state.clone(), kv_store, metrics.clone()))?;
+    server.register_module(ReadApi::new(
+        state.clone(),
+        kv_store.clone(),
+        metrics.clone(),
+    ))?;
     server.register_module(CoinReadApi::new(state.clone(), metrics.clone()))?;
     server.register_module(TransactionBuilderApi::new(state.clone()))?;
     server.register_module(GovernanceReadApi::new(state.clone(), metrics.clone()))?;
@@ -1488,7 +1507,7 @@ pub async fn build_server(
 
     server.register_module(IndexerApi::new(
         state.clone(),
-        ReadApi::new(state.clone(), db, metrics.clone()),
+        ReadApi::new(state.clone(), kv_store, metrics.clone()),
         config.name_service_package_address,
         config.name_service_registry_id,
         config.name_service_reverse_registry_id,
@@ -1498,7 +1517,7 @@ pub async fn build_server(
     server.register_module(MoveUtils::new(state.clone()))?;
 
     let rpc_server_handle = server
-        .start(config.json_rpc_address, custom_runtime)
+        .start(config.json_rpc_address, custom_runtime, None)
         .await?;
 
     Ok(Some(rpc_server_handle))
