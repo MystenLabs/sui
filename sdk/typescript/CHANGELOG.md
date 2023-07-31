@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 0.39.0
+
+### Minor Changes
+
+- 47ea5ec7c: Update keypair signature methods to return bytes as a base64 encoded string for better compatability
+
 ## 0.38.0
 
 ### Minor Changes
