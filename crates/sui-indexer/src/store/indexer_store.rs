@@ -224,7 +224,7 @@ pub trait IndexerStore {
         tx_object_changes: &[TransactionObjectChanges],
         object_mutation_latency: Histogram,
         object_deletion_latency: Histogram,
-        counter_committed_object: IntCounter,
+        object_commit_chunk_counter: IntCounter,
     ) -> Result<(), IndexerError>;
     async fn persist_events(&self, events: &[Event]) -> Result<(), IndexerError>;
     async fn persist_addresses(
