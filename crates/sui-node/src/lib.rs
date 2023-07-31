@@ -420,7 +420,7 @@ impl SuiNode {
         // Start uploading transactions/events to remote key value store
         let kv_store_uploader_handle = setup_key_value_store_uploader(
             state_sync_store.clone(),
-            &config.kv_store_config,
+            &config.transaction_kv_store_write_config,
             &prometheus_registry,
         )
         .await?;
@@ -1437,7 +1437,7 @@ fn build_kv_store(
     let metrics = KeyValueStoreMetrics::new(registry);
     let db_store = TransactionKeyValueStore::new("rocksdb", metrics.clone(), state.db());
 
-    let base_url = &config.transaction_kv_store_config.base_url;
+    let base_url = &config.transaction_kv_store_read_config.base_url;
 
     if base_url.is_empty() {
         info!("no http kv store url provided, using local db only");
