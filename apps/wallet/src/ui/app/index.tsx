@@ -56,7 +56,7 @@ const HIDDEN_MENU_PATHS = [
 
 const App = () => {
 	const dispatch = useAppDispatch();
-	const isSocialSignInEnabled = true; // useFeatureIsOn('enoki-social-sign-in');
+	const isSocialSignInEnabled = useFeatureIsOn('enoki-social-sign-in');
 	const isPopup = useAppSelector((state) => state.app.appType === AppType.popup);
 	useEffect(() => {
 		document.body.classList.remove('app-initializing');
