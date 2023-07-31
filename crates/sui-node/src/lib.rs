@@ -1509,7 +1509,7 @@ pub async fn build_server(
     server.register_module(MoveUtils::new(state.clone()))?;
 
     let rpc_server_handle = server
-        .start(config.json_rpc_address, custom_runtime)
+        .start(config.json_rpc_address, custom_runtime, None)
         .await?;
 
     Ok(Some(rpc_server_handle))
