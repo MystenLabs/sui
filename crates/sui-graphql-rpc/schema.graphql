@@ -47,7 +47,7 @@ type Query {
   consistentRange: ConsistentRange
 
   owner(address: SuiAddress!): Owner
-  object(address: SuiAddress!, version: U64): Object
+  object(address: SuiAddress!, version: BigInt): Object
   address(address: SuiAddress!): Address
 
   epoch(epochId: Int): Epoch
@@ -56,10 +56,10 @@ type Query {
   checkpoint(filter: CheckpointFilter): Checkpoint
   checkpoints(order: Order!): CheckpointConnection
 
-  transactionBlock(digest: Digest!): TransactionBlock
+  transactionBlock(digest: Bytes!): TransactionBlock
   transactionBlocks: TransactionBlockConnection
 
-  coinMetadata(coinType: TypeInst!): CoinMetadata
+  coinMetadata(coinType: String!): CoinMetadata
 
   queryObjects(query: ObjectQuery): ObjectQueryConnection
   queryEvents(filter: EventFilter, order: Order!): EventQueryConnection
@@ -68,11 +68,11 @@ type Query {
     order: Order!,
   ): TransactionBlockQueryConnection
 
-  resolveNameServiceAddress(name: String!): SuiAddress
+  resolveNameServiceAddress(name: String!): Address
 
   networkMetrics: NetworkMetrics
   moveCallMetrics: MoveCallMetrics
-  checkpointAddressMetrics(checkpoint: U64): AddressMetric
+  checkpointAddressMetrics(checkpoint: BigInt): AddressMetric
   allEpochAddressMetrics(order: Order!): AddressMetricConnection
 }
 
@@ -84,39 +84,17 @@ type Subscription {
 # String containing 32B hex-encoded address
 scalar SuiAddress
 
-# String containing 32B Base58-encoded BLAKE2b256 digest
-scalar Digest
-
-# String representation of a 64 bit unsigned integer
-scalar U64
-
-# String representation of a 128 bit signed integer
-scalar I128
-
-# String representation of a 128 bit unsigned integer
-scalar U128
+# String representation of an arbitrary width, possibly signed integer
+scalar BigInt
 
 # String containing Base58-encoded binary data.
 scalar Bytes
 
-scalar JSON
-
-# Fully qualified concrete type instantiation, with a flat
-# representation:
-#
-# ([package]::[module]::)?[name](<[param], ...>)?.
-scalar TypeInst
-
-# Move type from a function (parameter or return type) or struct
-# (field) signature.  May contain type parameters, referred to by
-# index.
-scalar TypeSignature
-
 # Filter either by the digest, or the sequence number, or neither, to
 # get the latest checkpoint.
 input CheckpointFilter {
-  digest: Digest
-  sequenceNumber: U64
+  digest: Bytes
+  sequenceNumber: BigInt
 }
 
 enum Order { ASC, DESC }
@@ -136,7 +114,7 @@ input ObjectQuery {
 
   owner: SuiAddress
   objectId: SuiAddress
-  version: U64
+  version: BigInt
 }
 
 input EventFilter {
@@ -147,7 +125,7 @@ input EventFilter {
 
   # (x)or any of these
   sender: SuiAddress
-  transaction: Digest
+  transactionDigest: Bytes
 
   # Cascading (module requires package)
   emittingPackage: SuiAddress
@@ -160,13 +138,13 @@ input EventFilter {
 
   eventField: EventField
 
-  startTimeMs: U64
-  endTimeMs: U64
+  startTimeMs: BigInt
+  endTimeMs: BigInt
 }
 
 input EventField {
   path: String!
-  value: JSON!
+  json: String!
 }
 
 input TransactionBlockFilter {
@@ -183,7 +161,7 @@ input TransactionBlockFilter {
   function: String
 
   kind: TransactionBlockKindInput
-  checkpoint: U64
+  checkpoint: BigInt
   fromAddress: SuiAddress
   toAddress: SuiAddress
 
@@ -197,14 +175,14 @@ type ConsistentRange {
 }
 
 interface Owner {
-  id: SuiAddress!
+  location: SuiAddress!
 
   objects(query: ObjectQuery): ObjectQueryConnection
 
-  balance(type: TypeInst!): Balance
+  balance(type: String!): Balance
   balances: BalanceConnection
 
-  coins(type: TypeInst): CoinConnection
+  coins(type: String): CoinConnection
 
   stakes: StakeConnection
 
@@ -231,14 +209,14 @@ enum AddressTransactionBlockFilter {
 
 type Object implements Owner {
   owner: AmbiguousOwner
-  version: U64
-  digest: Digest
+  version: BigInt
+  digest: Bytes
 
-  previousVersion: U64
+  previousVersion: BigInt
   previousTransactionBlock: TransactionBlock
-  storageRebate: U64
+  storageRebate: BigInt
 
-  display: [DisplayEntry]
+  display: [DisplayEntry!]
 
   asMoveObject: MoveObject
   asMovePackage: MovePackage
@@ -253,15 +231,15 @@ type Object implements Owner {
 }
 
 type DisplayEntry {
-  key: String
-  value: String
+  key: String!
+  value: String!
 }
 
 type Epoch {
   epochId: Int!
   systemStateVersion: Int
-  protocolConfig: ProtocolConfig
-  referenceGasPrice: U64
+  protocolConfigs: ProtocolConfigs
+  referenceGasPrice: BigInt
 
   systemParameters: SystemParameters
   stakeSubsidy: StakeSubsidy
@@ -269,8 +247,8 @@ type Epoch {
   storageFund: StorageFund
   safeMode: SafeMode
 
-  startTimestampMs: U64
-  endTimestampMs: U64
+  startTimestampMs: BigInt
+  endTimestampMs: BigInt
 
   # TODO: Identify non-duplicate fields in `EndOfEpochInfo`
 
@@ -278,51 +256,57 @@ type Epoch {
   transactionBlocks(order: Order!): TransactionBlockConnection
 }
 
-type ProtocolConfig {
+type ProtocolConfigs {
   protocolVersion: Int!
-  # Omitting for brevity
+  configs: [ProtocolConfig]
+  config(key: String!): ProtocolConfig
+}
+
+type ProtocolConfig {
+  key: String!
+  value: String!
 }
 
 type SystemParameters {
-  durationMs: U64
+  durationMs: BigInt
   stakeSubsidyStartEpoch: Int
 
   minValidatorCount: Int
   maxValidatorCount: Int
 
-  minValidatorJoiningStake: U64
-  validatorLowStakeThreshold: U64
-  validatorVeryLowStakeThreshold: U64
+  minValidatorJoiningStake: BigInt
+  validatorLowStakeThreshold: BigInt
+  validatorVeryLowStakeThreshold: BigInt
   validatorLowStakeGracePeriod: Int
 }
 
 type StakeSubsidy {
-  balance: U64
-  distributionCounter: U64
-  currentDistributionAmount: U64
+  balance: BigInt
+  distributionCounter: BigInt
+  currentDistributionAmount: BigInt
   periodLength: Int
   decreaseRate: Int
 }
 
 type ValidatorSet {
-  totalStake: U64
+  totalStake: BigInt
 
   activeValidators: [Validator]
 
   # Indices into `activeValidators`
-  pendingRemovals: [U64]
+  pendingRemovals: [BigInt]
 
   pendingActiveValidators: MoveObject
-  pendingActiveValidatorsSize: U64
+  pendingActiveValidatorsSize: BigInt
 
   stakePoolMappings: MoveObject
-  stakePoolMappingsSize: U64
+  stakePoolMappingsSize: BigInt
 
   inactivePools: MoveObject
-  inactivePoolsSize: U64
+  inactivePoolsSize: BigInt
 
   validatorCandidates: MoveObject
-  validatorCandidatesSize: U64
+  validatorCandidatesSize: BigInt
 }
 
 type Validator {
@@ -341,21 +325,21 @@ type Validator {
   exchangeRates: MoveObject
 
   stakingPoolActivationEpoch: Int
-  stakingPoolSuiBalance: U64
-  rewardsPool: U64
-  poolTokenBalance: U64
-  pendingStake: U64
-  pendingTotalSuiWithdraw: U64
-  pendingPoolTokenWithdraw: U64
-  exchangeRatesSize: U64
+  stakingPoolSuiBalance: BigInt
+  rewardsPool: BigInt
+  poolTokenBalance: BigInt
+  pendingStake: BigInt
+  pendingTotalSuiWithdraw: BigInt
+  pendingPoolTokenWithdraw: BigInt
+  exchangeRatesSize: BigInt
 
   votingPower: Int
   stakeUnits: Int
-  gasPrice: U64
-  commissionRate: U64
-  nextEpochStake: U64
-  nextEpochGasPrice: U64
-  nextEpochCommissionRate: U64
+  gasPrice: BigInt
+  commissionRate: BigInt
+  nextEpochStake: BigInt
+  nextEpochGasPrice: BigInt
+  nextEpochCommissionRate: BigInt
 
   # The number of epochs for which this validator has been below the
   # low stake threshold.
@@ -380,8 +364,8 @@ type ValidatorCredentials {
 }
 
 type StorageFund {
-  totalObjectStorageRebates: U64
-  nonRefundableBalance: U64
+  totalObjectStorageRebates: BigInt
+  nonRefundableBalance: BigInt
 }
 
 type SafeMode {
@@ -390,16 +374,16 @@ type SafeMode {
 }
 
 type Checkpoint {
-  digest: Digest!
-  sequenceNumber: U64!
-  timestampMs: U64
+  digest: Bytes!
+  sequenceNumber: BigInt!
+  timestampMs: BigInt
   validatorSignature: Bytes
 
   # Commitments
-  previousCheckpoint: Digest
-  liveObjectSet: Digest
+  previousCheckpointDigest: Bytes
+  liveObjectSetDigest: Bytes
 
-  networkTotalTransactions: U64
+  networkTotalTransactions: BigInt
   rollingGasSummary: GasCostSummary
 
   epoch: Epoch
@@ -421,7 +405,7 @@ type CommitteeMember {
 }
 
 type TransactionBlock {
-  digest: Digest!
+  digest: Bytes!
   sender: Address
   gasInput: GasInput
   kind: TransactionBlockKind
@@ -451,8 +435,8 @@ type ConsensusCommitPrologueTransaction {
   # TODO: This is the "leader round" -- does this line up with
   # checkpoints? In which case, it may suffice to have a `Checkpoint`
   # here.
-  round: U64
-  timestampMs: U64
+  round: BigInt
+  timestampMs: BigInt
 }
 
 type GenesisTransaction {
@@ -461,11 +445,11 @@ type GenesisTransaction {
 
 type ChangeEpochTransaction {
   epoch: Epoch
-  timestampMs: U64
+  timestampMs: BigInt
 
-  storageCharge: U64
-  computationCharge: U64
-  storageRebate: U64
+  storageCharge: BigInt
+  computationCharge: BigInt
+  storageRebate: BigInt
 }
 
 type ProgrammableTransactionBlock {
@@ -477,7 +461,7 @@ union TransactionInput = MovePackage | MoveObject | ShareInput
 
 type SharedInput {
   id: SuiAddress
-  initialSharedVersion: U64
+  initialSharedVersion: BigInt
   mutable: Boolean
 }
 
@@ -540,13 +524,13 @@ type MakeMoveVecTransaction {
 type TransactionSignature {}
 
 type TransactionBlockEffects {
-  digest: Digest!
+  digest: Bytes!
   status: ExecutionStatus!
   errors: String
   transactionBlock: TransactionBlock
   dependencies: [TransactionBlock]
 
-  lamportVersion: U64
+  lamportVersion: BigInt
   gasEffects: GasEffects
   objectReads: [Object]
   objectChanges: [ObjectChange]
@@ -569,8 +553,8 @@ type GasInput {
   gasSponsor: Address
   gasPayment: [Object]
 
-  gasPrice: U64
-  gasBudget: U64
+  gasPrice: BigInt
+  gasBudget: BigInt
 }
 
 type GasEffects {
@@ -579,10 +563,10 @@ type GasEffects {
 }
 
 type GasCostSummary {
-  computationCost: U64
-  storageCost: U64
-  storageRebate: U64
-  nonRefundableStorageFee: U64
+  computationCost: BigInt
+  storageCost: BigInt
+  storageRebate: BigInt
+  nonRefundableStorageFee: BigInt
 }
 
 type ObjectChange {
@@ -596,27 +580,27 @@ type ObjectChange {
 type BalanceChange {
   owner: Owner
   coinType: MoveType
-  amount: I128
+  amount: BigInt
 }
 
 type Event {
   moduleId: MoveModuleId
   type: MoveType
   sender: Address
-  timestampMs: U64
+  timestampMs: BigInt
 
-  json: JSON
+  json: String
   bcs: Bytes
 }
 
 type Balance {
   coinType: MoveType
-  coinObjectCount: U64
-  totalBalance: U128
+  coinObjectCount: BigInt
+  totalBalance: BigInt
 }
 
 type Coin {
-  balance: U64
+  balance: BigInt
   asMoveObject: MoveObject
 }
 
@@ -624,10 +608,10 @@ type StakedSui {
   status: StakeStatus
   requestEpoch: Epoch
   activeEpoch: Epoch
-  principal: U64
+  principal: BigInt
 
   # Only available if status is `ACTIVE`.
-  estimatedReward: U64
+  estimatedReward: BigInt
 
   asMoveObject: MoveObject
 }
@@ -644,13 +628,13 @@ type CoinMetadata {
   symbol: String
   description: String
   iconURL: String
-  supply: U64
+  supply: BigInt
 
   asMoveObject: MoveObject
 }
 
 input DynamicFieldName {
-  type: TypeInst!
+  type: String!
   bcs: Bytes!
 }
 
@@ -792,14 +776,13 @@ type MoveTypeName {
 type MoveType {
   # Scalar representation of the type instantiation (type and type
   # parameters)
-  repr: TypeInst!
+  repr: String!
   typeName: MoveTypeName!
   typeParameters: [MoveType]
 }
 
 type MoveTypeUse {
-  # Scalar representation of the use of a type in a signature.
-  repr: TypeSignature!
+  repr: String!
   ref: MoveReference
   type: MoveTypeBody
 }
