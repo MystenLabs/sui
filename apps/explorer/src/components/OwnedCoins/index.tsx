@@ -28,7 +28,7 @@ export function OwnedCoins({ id }: { id: string }) {
 	const { isLoading, data, isError } = useGetAllBalances(id);
 	const recognizedPackages = useRecognizedPackages();
 
-	const balances: Record<COIN_FILTERS, CoinBalance[]> = useMemo(() => {
+	const balances: Record<COIN_FILTERS, CoinBalanceVerified[]> = useMemo(() => {
 		const balanceData = data?.reduce(
 			(acc, coinBalance) => {
 				if (recognizedPackages.includes(coinBalance.coinType.split('::')[0])) {
