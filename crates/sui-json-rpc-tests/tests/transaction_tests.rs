@@ -200,17 +200,25 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     }
 
     // test get_recent_transactions with smaller range
+    let query = SuiTransactionBlockResponseQuery {
+        options: Some(SuiTransactionBlockResponseOptions {
+            show_input: true,
+            show_effects: true,
+            show_events: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
     let tx = client
         .read_api()
-        .query_transaction_blocks(
-            SuiTransactionBlockResponseQuery::default(),
-            None,
-            Some(3),
-            true,
-        )
+        .query_transaction_blocks(query, None, Some(3), true)
         .await
         .unwrap();
     assert_eq!(3, tx.data.len());
+    assert!(tx.data[0].transaction.is_some());
+    assert!(tx.data[0].effects.is_some());
+    assert!(tx.data[0].events.is_some());
     assert!(tx.has_next_page);
 
     // test get all transactions paged

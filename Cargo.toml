@@ -204,12 +204,13 @@ assert_cmd = "2.0.6"
 async-recursion = "1.0.4"
 async-trait = "0.1.61"
 aws-config = "0.55.3"
-aws-sdk-dynamodb.workspace = "0.28.0"
+aws-sdk-dynamodb = "0.28.0"
 axum = { version = "0.6.6", default-features = false, features = ["headers", "tokio", "http1", "http2", "json", "matched-path", "original-uri", "form", "query"] }
 axum-extra = "0.4.2"
 axum-server = { version = "0.4.4", default-features = false, features = ["tls-rustls"] }
 backoff = { version = "0.4.0", features = ["futures", "futures-core", "pin-project-lite", "tokio", "tokio_1"] }
 base64 = "0.21.2"
+base64-url = "2"
 bcs = "0.1.4"
 better_any = "0.1.1"
 bimap = "0.6.2"
@@ -263,6 +264,7 @@ http = "0.2.8"
 http-body = "0.4.5"
 humantime = "2.1.0"
 hyper = "0.14.20"
+hyper-rustls = { version = "0.24", features = ["rustls-native-certs", "http2"] }
 im = "15"
 impl-trait-for-tuples = "0.2.0"
 indexmap = { version = "1.9.2", features = ["serde"] }

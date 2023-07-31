@@ -33,7 +33,7 @@ use tokio::sync::oneshot;
 use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 use tracing::{error_span, info, Instrument};
 
 use checkpoint_executor::CheckpointExecutor;
@@ -92,9 +92,14 @@ use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::discovery::TrustedPeerChangeEvent;
 use sui_network::state_sync;
-use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
+use sui_protocol_config::{Chain, ProtocolConfig, SupportedProtocolVersions};
 use sui_snapshot::uploader::StateSnapshotUploader;
 use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
+use sui_storage::{
+    http_key_value_store::HttpKVStore,
+    key_value_store::{FallbackTransactionKVStore, TransactionKeyValueStore},
+    key_value_store_metrics::KeyValueStoreMetrics,
+};
 use sui_storage::{FileCompression, IndexStore, StorageFormat};
 use sui_types::base_types::{AuthorityName, EpochId};
 use sui_types::committee::Committee;
@@ -415,7 +420,7 @@ impl SuiNode {
         // Start uploading transactions/events to remote key value store
         let kv_store_uploader_handle = setup_key_value_store_uploader(
             state_sync_store.clone(),
-            &config.kv_store_config,
+            &config.transaction_kv_store_write_config,
             &prometheus_registry,
         )
         .await?;
@@ -1424,6 +1429,48 @@ fn send_trusted_peer_change(
         })
 }
 
+fn build_kv_store(
+    state: &Arc<AuthorityState>,
+    config: &NodeConfig,
+    registry: &Registry,
+) -> Result<Arc<TransactionKeyValueStore>> {
+    let metrics = KeyValueStoreMetrics::new(registry);
+    let db_store = TransactionKeyValueStore::new("rocksdb", metrics.clone(), state.db());
+
+    let base_url = &config.transaction_kv_store_read_config.base_url;
+
+    if base_url.is_empty() {
+        info!("no http kv store url provided, using local db only");
+        return Ok(Arc::new(db_store));
+    }
+
+    let base_url: url::Url = base_url.parse().tap_err(|e| {
+        error!(
+            "failed to parse config.transaction_kv_store_config.base_url ({:?}) as url: {}",
+            base_url, e
+        )
+    })?;
+
+    let network_str = match state.get_chain_identifier().map(|c| c.chain()) {
+        Some(Chain::Mainnet) => "/mainnet",
+        Some(Chain::Testnet) => "/testnet",
+        _ => {
+            info!("using local db only for kv store for unknown chain");
+            return Ok(Arc::new(db_store));
+        }
+    };
+
+    let base_url = base_url.join(network_str)?.to_string();
+    let http_store = HttpKVStore::new_kv(&base_url, metrics.clone())?;
+    info!("using local key-value store with fallback to http key-value store");
+    Ok(Arc::new(FallbackTransactionKVStore::new_kv(
+        db_store,
+        http_store,
+        metrics,
+        "json_rpc_fallback",
+    )))
+}
+
 pub async fn build_server(
     state: Arc<AuthorityState>,
     transaction_orchestrator: &Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
@@ -1437,8 +1484,15 @@ pub async fn build_server(
     }
 
     let mut server = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
+
+    let kv_store = build_kv_store(&state, config, prometheus_registry)?;
+
     let metrics = Arc::new(JsonRpcMetrics::new(prometheus_registry));
-    server.register_module(ReadApi::new(state.clone(), metrics.clone()))?;
+    server.register_module(ReadApi::new(
+        state.clone(),
+        kv_store.clone(),
+        metrics.clone(),
+    ))?;
     server.register_module(CoinReadApi::new(state.clone(), metrics.clone()))?;
     server.register_module(TransactionBuilderApi::new(state.clone()))?;
     server.register_module(GovernanceReadApi::new(state.clone(), metrics.clone()))?;
@@ -1453,7 +1507,7 @@ pub async fn build_server(
 
     server.register_module(IndexerApi::new(
         state.clone(),
-        ReadApi::new(state.clone(), metrics.clone()),
+        ReadApi::new(state.clone(), kv_store, metrics.clone()),
         config.name_service_package_address,
         config.name_service_registry_id,
         config.name_service_reverse_registry_id,
