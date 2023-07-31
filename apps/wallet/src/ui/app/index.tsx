@@ -19,6 +19,7 @@ import LockedPage from '_app/wallet/locked-page';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { AccountsPage } from '_pages/accounts/AccountsPage';
 import { AddAccountPage } from '_pages/accounts/AddAccountPage';
+import { ForgotPasswordPage as ForgotPasswordPageV2 } from '_pages/accounts/ForgotPasswordPage';
 import { ImportLedgerAccountsPage } from '_pages/accounts/ImportLedgerAccountsPage';
 import { ImportPassphrasePage } from '_pages/accounts/ImportPassphrasePage';
 import { ImportPrivateKeyPage } from '_pages/accounts/ImportPrivateKeyPage';
@@ -55,7 +56,7 @@ const HIDDEN_MENU_PATHS = [
 
 const App = () => {
 	const dispatch = useAppDispatch();
-	const useNewOnboardingFlow = useFeatureIsOn('enoki-social-sign-in');
+	const isSocialSignInEnabled = useFeatureIsOn('enoki-social-sign-in');
 	const isPopup = useAppSelector((state) => state.app.appType === AppType.popup);
 	useEffect(() => {
 		document.body.classList.remove('app-initializing');
@@ -93,10 +94,11 @@ const App = () => {
 				<Route path="qredo-connect/:id/select" element={<SelectQredoAccountsPage />} />
 			</Route>
 
-			<Route path="welcome" element={useNewOnboardingFlow ? <WelcomePageV2 /> : <WelcomePage />} />
-			{useNewOnboardingFlow && (
+			<Route path="welcome" element={isSocialSignInEnabled ? <WelcomePageV2 /> : <WelcomePage />} />
+			{isSocialSignInEnabled && (
 				<Route path="/accounts" element={<AccountsPage />}>
 					<Route path="add-account" element={<AddAccountPage />} />
+					<Route path="forgot-password" element={<ForgotPasswordPageV2 />} />
 					<Route path="protect-account" element={<ProtectAccountPage />} />
 					<Route path="import-ledger-accounts" element={<ImportLedgerAccountsPage />} />
 					<Route path="import-passphrase" element={<ImportPassphrasePage />} />
