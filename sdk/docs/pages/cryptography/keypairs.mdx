@@ -5,11 +5,11 @@ using the cryptographic key pairs associated with a Sui address.
 
 The Sui TypeScript SDK supports three signing schemes:
 
-| Sign scheme     | Class name         | Import folder                     |
-| --------------- | ------------------ | --------------------------------- |
-| Ed25519         | `Ed25519Keypair`   | `@mysten/sui.js/keypairs/ed25519` |
-| ECDSA Secp256k1 | `Secp256k1Keypair` | `@mysten/sui.js/keypairs/ed25519` |
-| ECDSA Secp256r1 | `Secp256r1Keypair` | `@mysten/sui.js/keypairs/ed25519` |
+| Sign scheme     | Class name         | Import folder                       |
+| --------------- | ------------------ | ----------------------------------- |
+| Ed25519         | `Ed25519Keypair`   | `@mysten/sui.js/keypairs/ed25519`   |
+| ECDSA Secp256k1 | `Secp256k1Keypair` | `@mysten/sui.js/keypairs/secp256k1` |
+| ECDSA Secp256r1 | `Secp256r1Keypair` | `@mysten/sui.js/keypairs/secp256r1` |
 
 For information on these schemes, see the
 [Sui Wallet Specifications](https://docs.sui.io/testnet/learn/cryptography/sui-wallet-specs) topic.
