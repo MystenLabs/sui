@@ -1934,109 +1934,39 @@ impl GetModule for AuthorityStore {
 }
 
 #[async_trait]
-impl key_value_store::TransactionKeyValueStore for AuthorityStore {
-    /// Generic multi_get, allows implementors to get heterogenous values with a single round trip.
+impl key_value_store::TransactionKeyValueStoreTrait for AuthorityStore {
     async fn multi_get(
         &self,
-        keys: &[key_value_store::Key],
-    ) -> SuiResult<Vec<Option<key_value_store::Value>>> {
-        let mut tx_keys = Vec::new();
-        let mut fx_keys = Vec::new();
-        let mut fx_by_tx_digest_keys = Vec::new();
-        let mut events_keys = Vec::new();
-
-        for key in keys {
-            match key {
-                key_value_store::Key::Tx(digest) => tx_keys.push(*digest),
-                key_value_store::Key::Fx(digest) => fx_keys.push(*digest),
-                key_value_store::Key::Events(digest) => events_keys.push(*digest),
-                key_value_store::Key::FxByTxDigest(digest) => fx_by_tx_digest_keys.push(*digest),
-            }
-        }
-
-        let tx_results = if !tx_keys.is_empty() {
-            self.multi_get_tx(&tx_keys).await?
+        transactions: &[TransactionDigest],
+        effects: &[TransactionDigest],
+        events: &[TransactionEventsDigest],
+    ) -> SuiResult<(
+        Vec<Option<Transaction>>,
+        Vec<Option<TransactionEffects>>,
+        Vec<Option<TransactionEvents>>,
+    )> {
+        let txns = if !transactions.is_empty() {
+            self.multi_get_transaction_blocks(transactions)?
+                .into_iter()
+                .map(|t| t.map(|t| t.into_inner()))
+                .collect()
         } else {
-            Vec::new()
+            vec![]
         };
 
-        let fx_results = if !fx_keys.is_empty() {
-            self.multi_get_fx(&fx_keys).await?
+        let fx = if !effects.is_empty() {
+            self.multi_get_executed_effects(effects)?
         } else {
-            Vec::new()
+            vec![]
         };
 
-        let events_results = if !events_keys.is_empty() {
-            key_value_store::TransactionKeyValueStore::multi_get_events(self, &events_keys).await?
+        let evts = if !events.is_empty() {
+            self.multi_get_events(events)?
         } else {
-            Vec::new()
+            vec![]
         };
 
-        let fx_by_tx_digest_results = if !fx_by_tx_digest_keys.is_empty() {
-            self.multi_get_fx_by_tx_digest(&fx_by_tx_digest_keys)
-                .await?
-        } else {
-            Vec::new()
-        };
-
-        // re-assemble original order
-        let mut tx_iter = tx_results.into_iter();
-        let mut fx_iter = fx_results.into_iter();
-        let mut events_iter = events_results.into_iter();
-        let mut fx_by_tx_digest_iter = fx_by_tx_digest_results.into_iter();
-
-        let mut results = Vec::new();
-
-        for key in keys {
-            match key {
-                key_value_store::Key::Tx(_) => {
-                    results.push(tx_iter.next().unwrap().map(|tx| tx.into()))
-                }
-                key_value_store::Key::Fx(_) => {
-                    results.push(fx_iter.next().unwrap().map(|fx| fx.into()))
-                }
-                key_value_store::Key::Events(_) => {
-                    results.push(events_iter.next().unwrap().map(|e| e.into()))
-                }
-                key_value_store::Key::FxByTxDigest(_) => {
-                    results.push(fx_by_tx_digest_iter.next().unwrap().map(|fx| fx.into()))
-                }
-            }
-        }
-
-        Ok(results)
-    }
-
-    async fn multi_get_tx(
-        &self,
-        keys: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<Transaction>>> {
-        Ok(self
-            .multi_get_transaction_blocks(keys)?
-            .into_iter()
-            .map(|t| t.map(|t| t.into_inner()))
-            .collect())
-    }
-
-    async fn multi_get_fx(
-        &self,
-        keys: &[TransactionEffectsDigest],
-    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        Ok(self.multi_get_effects(keys.iter())?)
-    }
-
-    async fn multi_get_events(
-        &self,
-        keys: &[TransactionEventsDigest],
-    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
-        Ok(self.multi_get_events(keys)?)
-    }
-
-    async fn multi_get_fx_by_tx_digest(
-        &self,
-        keys: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        Ok(self.multi_get_executed_effects(keys)?)
+        Ok((txns, fx, evts))
     }
 }
 

@@ -24,6 +24,7 @@ use tracing::debug;
 pub mod blob;
 pub mod http_key_value_store;
 pub mod key_value_store;
+pub mod key_value_store_metrics;
 pub mod mutex_table;
 pub mod object_store;
 pub mod package_object_cache;
