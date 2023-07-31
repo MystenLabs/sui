@@ -268,6 +268,24 @@ jobs:
     steps:
       - run: 'echo "No build required" '
 
+  # This is a no-op job that allows the resulting action names to line up when
+  # there are no rust changes in a given PR/commit. This ensures that we can
+  # continue to block on the rust tests passing in the case of rust changes and
+  # otherwise not block pushes to main.
+  test-extra-notrust:
+    name: test-extra
+    needs: diff
+    if: needs.diff.outputs.isRust == 'false'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - [ubuntu-ghcloud]
+          - [windows-ghcloud]
+      fail-fast: false
+    steps:
+      - run: 'echo "No build required" '
+
   clippy:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
