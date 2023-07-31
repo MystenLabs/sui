@@ -8,6 +8,7 @@ import Alarms, { CLEAN_UP_ALARM_NAME, LOCK_ALARM_NAME } from './Alarms';
 import NetworkEnv from './NetworkEnv';
 import Permissions from './Permissions';
 import Transactions from './Transactions';
+import { onAccountsEvent } from './accounts';
 import { Connections } from './connections';
 import Keyring from './keyring';
 import { deleteAccountsPublicInfo, getStoredAccountsPublicInfo } from './keyring/accounts';
@@ -93,6 +94,12 @@ Keyring.on('accountsChanged', async (accounts) => {
 		toKeep: accounts.map(({ address }) => address),
 	});
 	await Permissions.ensurePermissionAccountsUpdated(accounts);
+});
+
+onAccountsEvent('accountsChanged', async ({ allAccounts }) => {
+	await Permissions.ensurePermissionAccountsUpdated(
+		await Promise.all(allAccounts.map(async (anAccount) => ({ address: await anAccount.address }))),
+	);
 });
 
 Browser.alarms.onAlarm.addListener((alarm) => {

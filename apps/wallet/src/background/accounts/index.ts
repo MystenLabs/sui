@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64 } from '@mysten/sui.js/utils';
-import { isSigningAccount, type SerializedAccount } from './Account';
+import mitt from 'mitt';
+import { type Account, isSigningAccount, type SerializedAccount } from './Account';
 import { ImportedAccount } from './ImportedAccount';
 import { LedgerAccount } from './LedgerAccount';
 import { MnemonicAccount } from './MnemonicAccount';
@@ -22,6 +23,15 @@ import {
 	type MethodPayload,
 	isMethodPayload,
 } from '_src/shared/messaging/messages/payloads/MethodPayload';
+
+type AccountsEvents = {
+	accountsChanged: { allAccounts: Account[] };
+};
+
+const events = mitt<AccountsEvents>();
+
+export const onAccountsEvent = events.on;
+export const offAccountsEvent = events.off;
 
 function toAccount(account: SerializedAccount) {
 	switch (true) {
@@ -134,8 +144,8 @@ export async function addNewAccounts<T extends SerializedAccount>(accounts: Omit
 	for (const anAccountID of accountsToDelete) {
 		await deleteStorageEntity(anAccountID);
 	}
+	events.emit('accountsChanged', { allAccounts: await getAllAccounts() });
 	return accountInstances;
-	// TODO: emit event
 }
 
 export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConnection) {
@@ -153,9 +163,7 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 		const account = await getAccountByID(id);
 		if (account) {
 			await account.passwordUnlock(password);
-			// TODO: Auto lock timer
 			await uiConnection.send(createMessage({ type: 'done' }, msg.id));
-			// TODO: emit event to notify UI?
 			return true;
 		}
 	}
