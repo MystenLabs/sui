@@ -53,43 +53,41 @@ Create a new `index.js` file in the root of your project with the following code
 
 ```js
 import { requestSuiFromFaucetV0, getFaucetHost } from '@mysten/sui.js/faucet';
-import { SuiClient } from '@mysten/sui.js/client';
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { MIST_PER_SUI } from '@mysten/sui.js/utils';
 
-const SUI_NETWORK = 'https://fullnode.devnet.sui.io:443/';
 // replace <YOUR_SUI_ADDRESS> with your actual address, which is in the form 0x123...
 const MY_ADDRESS = '<YOUR_SUI_ADDRESS>';
 
 // create a new SuiClient object pointing to the network you want to use
-const suiClient = new SuiClient({ url: SUI_NETWORK });
+const suiClient = new SuiClient({ url: getFullnodeUrl('devnet') });
 
-// function to process the JSON that getCoins provides and then return number of SUI
-const balance = (coins) => {
-	let bal = 0;
-	coins.data.map((coin) => (bal += Number(coin.balance)));
-	return bal / 1000000000;
+// Convert MIST to Sui
+const balance = (balance) => {
+	return Number.parseInt(balance.totalBalance) / Number(MIST_PER_SUI);
 };
 
 // store the JSON representation for the SUI the address owns before using faucet
-const coinsBefore = await suiClient.getCoins({
+const suiBefore = await suiClient.getBalance({
 	owner: MY_ADDRESS,
 });
 
-const statusId = await requestSuiFromFaucetV0({
+await requestSuiFromFaucetV0({
 	// use getFaucetHost to make sure you're using correct faucet address
 	// you can also just use the address (see Sui Typescript SDK Quick Start for values)
-	host: getFaucetHost('testnet'),
+	host: getFaucetHost('devnet'),
 	recipient: MY_ADDRESS,
 });
 
 // store the JSON representation for the SUI the address owns after using faucet
-const coinsAfter = await suiClient.getCoins({
+const suiAfter = await suiClient.getBalance({
 	owner: MY_ADDRESS,
 });
 
 // Output result to console.
 console.log(
-	`Balance before faucet: ${balance(coinsBefore)} SUI. Balance after: ${balance(
-		coinsAfter,
+	`Balance before faucet: ${balance(suiBefore)} SUI. Balance after: ${balance(
+		suiAfter,
 	)} SUI. Hello, SUI!`,
 );
 ```

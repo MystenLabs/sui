@@ -7,6 +7,11 @@ const config = {
 		link: 'https://github.com/MystenLabs/sui/tree/main/sdk/typescript',
 	},
 	docsRepositoryBase: 'https://github.com/MystenLabs/sui/tree/main/sdk/docs/pages',
+	useNextSeoProps() {
+		return {
+			titleTemplate: '%s',
+		};
+	},
 };
 
 export default config;
