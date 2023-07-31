@@ -4,9 +4,10 @@
 use crate::authority::AuthorityMetrics;
 use crate::math::median;
 use arc_swap::ArcSwap;
+use fastcrypto::traits::ToFromBytes;
 use narwhal_config::{Committee, Stake};
+use narwhal_crypto::PublicKey;
 use narwhal_types::ReputationScores;
-use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
@@ -57,7 +58,6 @@ pub fn update_low_scoring_authorities(
             metrics,
             protocol_config.scoring_decision_mad_divisor(),
             protocol_config.scoring_decision_cutoff_value(),
-            protocol_config,
         );
     } else {
         // TODO remove this after the protocol version upgrade to 5
@@ -183,9 +183,8 @@ fn update_low_scoring_authorities_with_no_disable_mechanism(
     reputation_scores: ReputationScores,
     authority_names_to_hostnames: HashMap<AuthorityName, String>,
     metrics: &Arc<AuthorityMetrics>,
-    _mad_divisor: f64,
-    _cut_off_value: f64,
-    protocol_config: &ProtocolConfig,
+    mad_divisor: f64,
+    cut_off_value: f64,
 ) {
     if !reputation_scores.final_of_schedule {
         return;
@@ -193,7 +192,7 @@ fn update_low_scoring_authorities_with_no_disable_mechanism(
 
     // Convert the narwhal authority ids to the corresponding AuthorityName in SUI
     // Also capture the stake so can calculate later is strong quorum is reached for the non-low scoring authorities.
-    let mut scores_per_authority: Vec<(AuthorityName, u64, Stake)> = reputation_scores
+    let scores_per_authority: HashMap<AuthorityName, (u64, Stake)> = reputation_scores
         .scores_per_authority
         .into_iter()
         .map(|(authority_id, score)| {
@@ -210,48 +209,69 @@ fn update_low_scoring_authorities_with_no_disable_mechanism(
                     .set(score as i64);
             }
 
-            (name, score, authority.stake())
+            (name, (score, authority.stake()))
         })
         .collect();
 
-    // sort the low scoring authorities in asc order
-    // Keep marking low scoring authorities up to f.
-    // Important: the ordering has to be deterministic, otherwise different validators will see
-    // different order and latency might increase. Here we order with the following properties:
-    // * by score ascending
-    // * if scores are equal, then we order by stake ascending
-    // * if stakes are equal, then we do order by name (where we can't have equality unless is the same validator)
-    scores_per_authority.sort_by(|(name1, score1, stake1), (name2, score2, stake2)| {
-        match score1.cmp(score2) {
-            // if scores are equal, then consider lower scorer an authority with lower stake
-            Ordering::Equal => {
-                match stake1.cmp(stake2) {
-                    // if stake is equal, then just order by name.
-                    Ordering::Equal => name1.cmp(name2),
-                    result => result,
-                }
-            }
-            result => result,
-        }
-    });
     let mut final_low_scoring_map = HashMap::new();
+
+    let mut score_list = vec![];
+    let mut nonzero_scores = vec![];
+    for (score, _stake) in scores_per_authority.values() {
+        score_list.push(*score as f64);
+        if score != &0_u64 {
+            nonzero_scores.push(*score as f64);
+        }
+    }
+
+    let median_value = median(&nonzero_scores);
+    let mut deviations = vec![];
+    let mut abs_deviations = vec![];
+    for (i, _) in score_list.clone().iter().enumerate() {
+        deviations.push(score_list[i] - median_value);
+        if score_list[i] != 0.0 {
+            abs_deviations.push((score_list[i] - median_value).abs());
+        }
+    }
+
+    // adjusted median absolute deviation
+    let mad = median(&abs_deviations) / mad_divisor;
+    let mut low_scoring = vec![];
+    for (i, (a, (score, _stake))) in scores_per_authority.iter().enumerate() {
+        let temp = deviations[i] / mad;
+
+        // We expect the methodology to include the zero scoring validators, but we explicitly
+        // include them to make sure, as we know for sure that those have no contribution.
+        if *score == 0 || temp < -cut_off_value {
+            low_scoring.push((a, *score));
+        }
+    }
+
+    // report new scores
+    let len_low_scoring = low_scoring.len();
+    info!("{:?} low scoring authorities calculated", len_low_scoring);
+
+    // Do not disable the scoring mechanism when more than f validators are excluded. Just keep
+    // marking low scoring authorities up to f.
+
+    // sort the low scoring authorities in asc order
+    low_scoring.sort_by_key(|(_, score)| *score);
 
     // take low scoring authorities while we haven't reached validity threshold (f+1)
     let mut total_stake = 0;
-    for (authority, score, stake) in scores_per_authority {
-        total_stake += stake;
+    for (authority, score) in low_scoring {
+        total_stake += committee
+            .authority_by_key(&PublicKey::from_bytes(authority.as_ref()).unwrap())
+            .unwrap()
+            .stake();
 
-        let included = if total_stake
-            <= (protocol_config.consensus_bad_nodes_stake_threshold()
-                * committee.total_stake() as f64) as Stake
-        {
-            final_low_scoring_map.insert(authority, score);
+        let included = if !committee.reached_validity(total_stake) {
+            final_low_scoring_map.insert(*authority, score);
             true
         } else {
             false
         };
-
-        if let Some(hostname) = authority_names_to_hostnames.get(&authority) {
+        if let Some(hostname) = authority_names_to_hostnames.get(authority) {
             info!(
                 "low scoring authority {} has score {}, included: {}",
                 hostname, score, included
