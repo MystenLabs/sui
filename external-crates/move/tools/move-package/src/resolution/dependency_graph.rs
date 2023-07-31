@@ -1242,20 +1242,12 @@ impl DependencyGraph {
     }
 }
 
-impl<'a> fmt::Display for PackageTOML<'a> {
+impl fmt::Display for Package {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let Package {
-            kind,
-            version,
-            resolver: _,
-        } = self.0;
-
-        f.write_str("{ ")?;
-
-        match kind {
+        match &self.kind {
             PM::DependencyKind::Local(local) => {
                 write!(f, "local = ")?;
-                f.write_str(&path_escape(local)?)?;
+                f.write_str(&path_escape(&local)?)?;
             }
 
             PM::DependencyKind::Git(PM::GitInfo {
@@ -1270,7 +1262,7 @@ impl<'a> fmt::Display for PackageTOML<'a> {
                 f.write_str(&str_escape(git_rev.as_str())?)?;
 
                 write!(f, ", subdir = ")?;
-                f.write_str(&path_escape(subdir)?)?;
+                f.write_str(&path_escape(&subdir)?)?;
             }
 
             PM::DependencyKind::Custom(PM::CustomDepInfo {
@@ -1289,14 +1281,21 @@ impl<'a> fmt::Display for PackageTOML<'a> {
                 f.write_str(&str_escape(package_address.as_str())?)?;
 
                 write!(f, ", subdir = ")?;
-                f.write_str(&path_escape(subdir)?)?;
+                f.write_str(&path_escape(&subdir)?)?;
             }
         }
 
-        if let Some((major, minor, bugfix)) = version {
+        if let Some((major, minor, bugfix)) = self.version {
             write!(f, ", version = \"{}.{}.{}\"", major, minor, bugfix)?;
         }
+        Ok(())
+    }
+}
 
+impl<'a> fmt::Display for PackageTOML<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("{ ")?;
+        write!(f, "{}", self.0)?;
         f.write_str(" }")?;
         Ok(())
     }
@@ -1407,15 +1406,16 @@ fn format_deps(
     if !dependencies.is_empty() {
         for (dep, pkg_name, pkg) in dependencies {
             s.push_str("\n\t");
-            s.push_str(
-                format!(
-                    "{} = {} (via dependency {})",
-                    pkg_name,
-                    PackageWithResolverTOML(pkg),
-                    DependencyTOML(pkg_name, dep),
-                )
-                .as_str(),
-            );
+            s.push_str(&format!("{pkg_name} = "));
+            s.push_str("{ ");
+            s.push_str(&format!("{pkg}"));
+            if let Some(digest) = dep.digest {
+                s.push_str(&format!(", digest = {digest}"));
+            }
+            if let Some(subst) = &dep.subst {
+                s.push_str(&format!(", addr_subst = {}", SubstTOML(subst)));
+            }
+            s.push_str(" }");
         }
     } else {
         s.push_str("\n\tno dependencies");

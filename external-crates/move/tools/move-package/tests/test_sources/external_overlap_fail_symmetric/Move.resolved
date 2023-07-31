@@ -1,6 +1,6 @@
 When resolving dependencies for package Root, conflicting dependencies found:
 
 At A -> ADep
-	ADepOther = { local = "deps_only/ADepOther" } # Resolved by ../resolvers/successful_dep.sh (via dependency { name = "ADepOther" })
+	ADepOther = { local = "deps_only/ADepOther" }
 At ADep
-	ADepDep = { local = "deps_only/ADepDep" } (via dependency { name = "ADepDep" })
+	ADepDep = { local = "deps_only/ADepDep" }
