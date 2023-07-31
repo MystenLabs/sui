@@ -1,5 +1,12 @@
 # @mysten/suins-toolkit
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies [47ea5ec7c]
+  - @mysten/sui.js@0.39.0
+
 ## 0.3.0
 
 ### Minor Changes
