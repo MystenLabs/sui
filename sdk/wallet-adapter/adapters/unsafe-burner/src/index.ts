@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Connection, RawSigner, localnetConnection } from '@mysten/sui.js';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { SuiClient } from '@mysten/sui.js/client';
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
 import { WalletAdapter, WalletAdapterEvents } from '@mysten/wallet-adapter-base';
 import { ReadonlyWalletAccount } from '@mysten/wallet-standard';
+import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
 
 export class UnsafeBurnerWalletAdapter implements WalletAdapter {
 	name = 'Unsafe Burner Wallet';
@@ -17,21 +17,26 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
 
 	#client: SuiClient;
 	#keypair: Ed25519Keypair;
-	#signer: RawSigner;
 	#account: ReadonlyWalletAccount;
 
-	constructor(network: Connection = localnetConnection) {
+	#faucetUrl?: string;
+
+	constructor(client?: SuiClient, faucetUrl?: string) {
 		this.#keypair = new Ed25519Keypair();
-		this.#client = new SuiClient({
-			url: network.fullnode,
-		});
+		this.#faucetUrl = faucetUrl;
+		this.#client =
+			client ||
+			new SuiClient({
+				url: getFullnodeUrl('localnet'),
+			});
+
 		this.#account = new ReadonlyWalletAccount({
 			address: this.#keypair.getPublicKey().toSuiAddress(),
 			chains: ['sui:unknown'],
 			features: ['sui:signAndExecuteTransactionBlock', 'sui:signTransactionBlock'],
 			publicKey: this.#keypair.getPublicKey().toBytes(),
 		});
-		this.#signer = new RawSigner(this.#keypair, this.#client);
+
 		this.connecting = false;
 		this.connected = false;
 
@@ -45,19 +50,38 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
 	}
 
 	signMessage: WalletAdapter['signMessage'] = async (messageInput) => {
-		return this.#signer.signMessage({ message: messageInput.message });
+		const { bytes, signature } = await this.#keypair.signPersonalMessage(messageInput.message);
+		return {
+			messageBytes: bytes,
+			signature: signature,
+		};
+	};
+
+	signPersonalMessage: WalletAdapter['signPersonalMessage'] = async (messageInput) => {
+		const { bytes, signature } = await this.#keypair.signPersonalMessage(messageInput.message);
+		return {
+			bytes: bytes,
+			signature: signature,
+		};
 	};
 
 	signTransactionBlock: WalletAdapter['signTransactionBlock'] = async (transactionInput) => {
-		return this.#signer.signTransactionBlock({
-			transactionBlock: transactionInput.transactionBlock,
+		const { bytes, signature } = await transactionInput.transactionBlock.sign({
+			signer: this.#keypair,
+			client: this.#client,
 		});
+
+		return {
+			transactionBlockBytes: bytes,
+			signature: signature,
+		};
 	};
 
 	signAndExecuteTransactionBlock: WalletAdapter['signAndExecuteTransactionBlock'] = async (
 		transactionInput,
 	) => {
-		return await this.#signer.signAndExecuteTransactionBlock({
+		return await this.#client.signAndExecuteTransactionBlock({
+			signer: this.#keypair,
 			transactionBlock: transactionInput.transactionBlock,
 			options: transactionInput.options,
 			requestType: transactionInput.requestType,
@@ -67,7 +91,10 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
 	async connect() {
 		this.connecting = true;
 		try {
-			this.#signer.requestSuiFromFaucet();
+			requestSuiFromFaucetV0({
+				host: this.#faucetUrl ?? getFaucetHost('localnet'),
+				recipient: this.#keypair.getPublicKey().toSuiAddress(),
+			});
 		} catch (e) {
 			console.warn(
 				'Failed to request Sui from the faucet. This may prevent transactions from being submitted.',

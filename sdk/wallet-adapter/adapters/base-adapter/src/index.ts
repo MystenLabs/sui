@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SignedTransaction, SignedMessage } from '@mysten/sui.js';
 import { SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 import {
 	SuiSignTransactionBlockInput,
 	SuiSignAndExecuteTransactionBlockInput,
 	WalletAccount,
 	SuiSignMessageInput,
+	SuiSignPersonalMessageInput,
 } from '@mysten/wallet-standard';
 
 export interface WalletAdapterEvents {
@@ -28,8 +28,18 @@ export interface WalletAdapter {
 		event: E,
 		callback: WalletAdapterEvents[E],
 	) => () => void;
-	signMessage(messageInput: SuiSignMessageInput): Promise<SignedMessage>;
-	signTransactionBlock(transactionInput: SuiSignTransactionBlockInput): Promise<SignedTransaction>;
+	/** @deprecated Use `signPersonalMessage` instead. */
+	signMessage?(messageInput: SuiSignMessageInput): Promise<{
+		messageBytes: string;
+		signature: string;
+	}>;
+	signPersonalMessage(
+		messageInput: SuiSignPersonalMessageInput,
+	): Promise<{ bytes: string; signature: string }>;
+	signTransactionBlock(transactionInput: SuiSignTransactionBlockInput): Promise<{
+		transactionBlockBytes: string;
+		signature: string;
+	}>;
 	/**
 	 * Suggest a transaction for the user to sign. Supports all valid transaction types.
 	 */
