@@ -55,7 +55,9 @@ export function OwnedCoins({ id }: { id: string }) {
 				return 1;
 			} else {
 				return Coin.getCoinSymbol(a.coinType).localeCompare(
-					Coin.getCoinSymbol(b.coinType, undefined, { sensitivity: 'base' }),
+					Coin.getCoinSymbol(b.coinType),
+					undefined,
+					{ sensitivity: 'base' },
 				);
 			}
 		});
@@ -63,9 +65,9 @@ export function OwnedCoins({ id }: { id: string }) {
 		return {
 			recognizedBalances,
 			unrecognizedBalances: balanceData.unrecognizedBalances.sort((a, b) =>
-				Coin.getCoinSymbol(a.coinType).localeCompare(
-					Coin.getCoinSymbol(b.coinType, undefined, { sensitivity: 'base' }),
-				),
+				Coin.getCoinSymbol(a.coinType).localeCompare(Coin.getCoinSymbol(b.coinType), undefined, {
+					sensitivity: 'base',
+				}),
 			),
 			allBalances: balanceData.recognizedBalances.concat(balanceData.unrecognizedBalances),
 		};
