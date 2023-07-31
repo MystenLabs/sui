@@ -33,8 +33,8 @@ module axelar::gateway {
 
     use axelar::axelar;
     use axelar::axelar::{Axelar, validate_proof};
-    use axelar::message;
-    use axelar::message::Message;
+    use axelar::messaging;
+    use axelar::messaging::Message;
     use axelar::utils::to_sui_signed;
     use sui::bcs;
 
@@ -113,6 +113,8 @@ module axelar::gateway {
 
         // make sure number of commands passed matches command IDs
         assert!(vector::length(&command_ids) == commands_len, EInvalidCommands);
+        // make sure number of commands passed matches params
+        assert!(vector::length(&params) == commands_len, EInvalidCommands);
 
         while (i < commands_len) {
             let msg_id = *vector::borrow(&command_ids, i);
@@ -124,7 +126,7 @@ module axelar::gateway {
             // in order, so field reads have to be done carefully and in order!
             if (cmd_selector == &SELECTOR_APPROVE_CONTRACT_CALL) {
                 let payload = bcs::new(payload);
-                vector::push_back(&mut messages, message::create(
+                vector::push_back(&mut messages, messaging::create(
                     msg_id,
                     bcs::peel_vec_u8(&mut payload),
                     bcs::peel_vec_u8(&mut payload),
@@ -179,7 +181,7 @@ module axelar::gateway {
 
         let messages = validate_and_create_messages(&mut axelar, MESSAGE);
         axelar::delete(axelar);
-        message::delete(messages);
+        messaging::delete(messages);
         ts::end(test);
     }
 
@@ -210,7 +212,7 @@ module axelar::gateway {
         assert!(axelar::epoch(&axelar) == 2, 0);
 
         axelar::delete(axelar);
-        message::delete(messages);
+        messaging::delete(messages);
         ts::end(test);
     }
 }
@@ -218,8 +220,8 @@ module axelar::gateway {
 module axelar::axelar {
     use std::vector;
 
-    use axelar::message;
-    use axelar::message::Message;
+    use axelar::messaging;
+    use axelar::messaging::Message;
     use axelar::utils::{normalize_signature, operators_hash};
     use sui::bcs;
     use sui::dynamic_field as df;
@@ -398,22 +400,16 @@ module axelar::axelar {
     }
 
     public fun add_message(axelar: &mut Axelar, msg: Message) {
-        df::add(&mut axelar.id, message::msg_id(&msg), msg);
+        let (msg_id, stored_message) = messaging::to_stored_message(msg);
+        df::add(&mut axelar.id, msg_id, stored_message);
     }
 
     public fun remove_message(axelar: &mut Axelar, msg_id: vector<u8>): Message {
-        df::remove(&mut axelar.id, msg_id)
-    }
-
-    public fun epoch_for_hash(axelar: &Axelar): &VecMap<vector<u8>, u64> {
-        &axelar.epoch_for_hash
+        let stored_message = df::remove(&mut axelar.id, msg_id);
+        messaging::from_stored_message(msg_id, stored_message)
     }
 
     public fun epoch(axelar: &Axelar): u64 {
         axelar.epoch
-    }
-
-    public fun set_epoch(axelar: &mut Axelar, epoch: u64) {
-        axelar.epoch = epoch
     }
 }

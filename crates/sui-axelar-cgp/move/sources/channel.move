@@ -4,8 +4,8 @@
 module axelar::channel {
     use axelar::axelar;
     use axelar::axelar::Axelar;
-    use axelar::message;
-    use axelar::message::Message;
+    use axelar::messaging;
+    use axelar::messaging::Message;
     use sui::bcs;
     use sui::object;
     use sui::object::UID;
@@ -63,7 +63,7 @@ module axelar::channel {
     }
 
     /// Emitted when a new message is sent from the SUI network.
-    struct MessageSent has copy, drop {
+    struct OutboundMessage has copy, drop {
         source: vector<u8>,
         destination: vector<u8>,
         destination_address: vector<u8>,
@@ -101,7 +101,7 @@ module axelar::channel {
         destination_address: vector<u8>,
         payload: vector<u8>
     ) {
-        sui::event::emit(MessageSent {
+        sui::event::emit(OutboundMessage {
             source: bcs::to_bytes(&t.id),
             destination,
             destination_address,
@@ -117,15 +117,15 @@ module axelar::channel {
     /// by single-owner targets.
     ///
     /// For Capability-locking, a mutable reference to the `Channel.data` field is
-    /// returned; the rest are the fields of the `Message`.
-    public fun consume_message<T: store>(
+    /// returned; plus the hot potato message object.
+    public fun retrieve_message<T: store>(
         axelar: &mut Axelar,
         t: &mut Channel<T>,
         msg_id: vector<u8>,
     ): (&mut T, Message) {
         let message = axelar::remove_message(axelar, msg_id);
         assert!(!vec_set::contains(&t.messages, &msg_id), EDuplicateMessage);
-        assert!(message::target_id(&message) == object::uid_to_address(&t.id), EWrongDestination);
+        assert!(messaging::target_id(&message) == object::uid_to_address(&t.id), EWrongDestination);
         (&mut t.data, message)
     }
 }
