@@ -1239,13 +1239,7 @@ impl PgIndexerStore {
             for transaction_chunk in transactions.chunks(PG_COMMIT_CHUNK_SIZE) {
                 diesel::insert_into(transactions::table)
                     .values(transaction_chunk)
-                    .on_conflict(transactions::transaction_digest)
-                    .do_update()
-                    .set((
-                        transactions::timestamp_ms.eq(excluded(transactions::timestamp_ms)),
-                        transactions::checkpoint_sequence_number
-                            .eq(excluded(transactions::checkpoint_sequence_number)),
-                    ))
+                    .on_conflict_do_nothing()
                     .execute(conn)
                     .map_err(IndexerError::from)
                     .context("Failed writing transactions to PostgresDB")?;
@@ -1274,19 +1268,19 @@ impl PgIndexerStore {
         object_deletion_latency: Histogram,
         counter_committed_object: IntCounter,
     ) -> Result<(), IndexerError> {
+        let mutated_objects: Vec<Object> = tx_object_changes
+            .iter()
+            .flat_map(|changes| changes.changed_objects.iter().cloned())
+            .collect();
+        let deleted_changes = tx_object_changes
+            .iter()
+            .flat_map(|changes| changes.deleted_objects.iter().cloned())
+            .collect::<Vec<_>>();
+        let deleted_objects: Vec<Object> = deleted_changes
+            .iter()
+            .map(|deleted_object| deleted_object.clone().into())
+            .collect();
         transactional_blocking!(&self.blocking_cp, |conn| {
-            let mutated_objects: Vec<Object> = tx_object_changes
-                .iter()
-                .flat_map(|changes| changes.changed_objects.iter().cloned())
-                .collect();
-            let deleted_changes = tx_object_changes
-                .iter()
-                .flat_map(|changes| changes.deleted_objects.iter().cloned())
-                .collect::<Vec<_>>();
-            let deleted_objects: Vec<Object> = deleted_changes
-                .iter()
-                .map(|deleted_object| deleted_object.clone().into())
-                .collect();
             persist_transaction_object_changes(
                 conn,
                 mutated_objects,
