@@ -1233,28 +1233,25 @@ impl PgIndexerStore {
         tx_object_changes: &[TransactionObjectChanges],
         object_mutation_latency: Histogram,
         object_deletion_latency: Histogram,
-        counter_committed_object: IntCounter,
+        object_commit_chunk_counter: IntCounter,
     ) -> Result<(), IndexerError> {
         transactional_blocking!(&self.blocking_cp, |conn| {
-            let mutated_objects: Vec<Object> = tx_object_changes
-                .iter()
-                .flat_map(|changes| changes.changed_objects.iter().cloned())
-                .collect();
-            let deleted_changes = tx_object_changes
-                .iter()
-                .flat_map(|changes| changes.deleted_objects.iter().cloned())
-                .collect::<Vec<_>>();
-            let deleted_objects: Vec<Object> = deleted_changes
-                .iter()
-                .map(|deleted_object| deleted_object.clone().into())
-                .collect();
-            persist_transaction_object_changes(
+            persist_object_mutations(
                 conn,
                 mutated_objects,
-                deleted_objects,
                 object_mutation_latency,
+                object_commit_chunk_counter.clone(),
+            )?;
+            Ok::<(), IndexerError>(())
+        })?;
+        // commit object deletions after mutations b/c objects cannot be mutated after deletion,
+        // otherwise object mutations might override object deletions.
+        transactional_blocking!(&self.blocking_cp, |conn| {
+            persist_object_deletions(
+                conn,
+                deleted_objects,
                 object_deletion_latency,
-                counter_committed_object,
+                object_commit_chunk_counter,
             )?;
             Ok::<(), IndexerError>(())
         })?;
@@ -2043,7 +2040,7 @@ impl IndexerStore for PgIndexerStore {
         tx_object_changes: &[TransactionObjectChanges],
         object_mutation_latency: Histogram,
         object_deletion_latency: Histogram,
-        counter_committed_object: IntCounter,
+        object_commit_chunk_counter: IntCounter,
     ) -> Result<(), IndexerError> {
         let tx_object_changes = tx_object_changes.to_owned();
         self.spawn_blocking(move |this| {
@@ -2051,7 +2048,7 @@ impl IndexerStore for PgIndexerStore {
                 &tx_object_changes,
                 object_mutation_latency,
                 object_deletion_latency,
-                counter_committed_object,
+                object_commit_chunk_counter,
             )
         })
         .await
@@ -2177,19 +2174,13 @@ impl IndexerStore for PgIndexerStore {
     }
 }
 
-fn persist_transaction_object_changes(
+fn persist_object_mutations(
     conn: &mut PgConnection,
     mutated_objects: Vec<Object>,
-    deleted_objects: Vec<Object>,
     object_mutation_latency: Histogram,
-    object_deletion_latency: Histogram,
-    committed_object_counter: IntCounter,
+    object_commit_chunk_counter: IntCounter,
 ) -> Result<(), IndexerError> {
-    // NOTE: to avoid error of `ON CONFLICT DO UPDATE command cannot affect row a second time`,
-    // we have to limit update of one object once in a query.
-    // Also we only need to update the latest object into DB.
     let mutated_objects = filter_latest_objects(mutated_objects);
-
     let object_mutation_guard = object_mutation_latency.start_timer();
     // bulk insert/update via UNNEST trick to bypass the 65535 parameters limit
     // ref: https://klotzandrew.com/blog/postgres-passing-65535-parameter-limit
@@ -2203,7 +2194,16 @@ fn persist_transaction_object_changes(
             ))
         })?;
     object_mutation_guard.stop_and_record();
+    object_commit_chunk_counter.inc();
+    Ok(())
+}
 
+fn persist_object_deletions(
+    conn: &mut PgConnection,
+    deleted_objects: Vec<Object>,
+    object_deletion_latency: Histogram,
+    object_commit_chunk_counter: IntCounter,
+) -> Result<(), IndexerError> {
     let object_deletion_guard = object_deletion_latency.start_timer();
     for deleted_object_change_chunk in deleted_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
         diesel::insert_into(objects::table)
@@ -2224,10 +2224,9 @@ fn persist_transaction_object_changes(
                     e
                 ))
             })?;
-        committed_object_counter.inc();
+        object_commit_chunk_counter.inc();
     }
     object_deletion_guard.stop_and_record();
-
     Ok(())
 }
 
