@@ -204,7 +204,7 @@ assert_cmd = "2.0.6"
 async-recursion = "1.0.4"
 async-trait = "0.1.61"
 aws-config = "0.55.3"
-aws-sdk-dynamodb.workspace = "0.28.0"
+aws-sdk-dynamodb = "0.28.0"
 axum = { version = "0.6.6", default-features = false, features = ["headers", "tokio", "http1", "http2", "json", "matched-path", "original-uri", "form", "query"] }
 axum-extra = "0.4.2"
 axum-server = { version = "0.4.4", default-features = false, features = ["tls-rustls"] }
