@@ -9,20 +9,19 @@ import * as Collapsible from '@radix-ui/react-collapsible';
 import clsx from 'clsx';
 import { useState } from 'react';
 
+import { type CoinBalanceVerified } from '.';
 import { CoinIcon } from './CoinIcon';
 import CoinsPanel from './OwnedCoinsPanel';
 import { Banner } from '~/ui/Banner';
 import { Tooltip } from '~/ui/Tooltip';
 import { ampli } from '~/utils/analytics/ampli';
-import { CoinBalanceVerified } from '.';
 
 type OwnedCoinViewProps = {
 	coin: CoinBalanceVerified;
 	id: string;
-	isRecognized?: boolean;
 };
 
-export default function OwnedCoinView({ coin, id, isRecognized }: OwnedCoinViewProps) {
+export default function OwnedCoinView({ coin, id }: OwnedCoinViewProps) {
 	const [open, setOpen] = useState(false);
 	const [formattedTotalBalance, symbol] = useFormatCoin(coin.totalBalance, coin.coinType);
 
@@ -51,7 +50,7 @@ export default function OwnedCoinView({ coin, id, isRecognized }: OwnedCoinViewP
 						</Text>
 					</div>
 
-					{!isRecognized && (
+					{!coin.isRecognized && (
 						<Tooltip
 							tip="This coin has not been recognized by Sui Foundation."
 							onOpen={() =>
@@ -68,13 +67,13 @@ export default function OwnedCoinView({ coin, id, isRecognized }: OwnedCoinViewP
 				</div>
 
 				<div className="flex w-[25%] px-2">
-					<Text color={isRecognized ? 'steel-darker' : 'gray-60'} variant="body/medium">
+					<Text color={coin.isRecognized ? 'steel-darker' : 'gray-60'} variant="body/medium">
 						{coin.coinObjectCount}
 					</Text>
 				</div>
 
 				<div className="flex w-[30%] items-center gap-1">
-					<Text color={isRecognized ? 'steel-darker' : 'gray-60'} variant="bodySmall/medium">
+					<Text color={coin.isRecognized ? 'steel-darker' : 'gray-60'} variant="bodySmall/medium">
 						{formattedTotalBalance}
 					</Text>
 					<Text color="steel" variant="subtitleSmallExtra/normal">

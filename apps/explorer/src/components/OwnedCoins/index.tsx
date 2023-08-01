@@ -143,12 +143,7 @@ export function OwnedCoins({ id }: { id: string }) {
 							{displayedBalances
 								.slice((currentSlice - 1) * limit, currentSlice * limit)
 								.map((coin) => (
-									<OwnedCoinView
-										id={id}
-										key={coin.coinType}
-										coin={coin}
-										isRecognized={coin.isRecognized}
-									/>
+									<OwnedCoinView id={id} key={coin.coinType} coin={coin} />
 								))}
 						</div>
 					</div>
