@@ -1,7 +1,6 @@
 # Kiosk SDK
 
-> **This package is still in active development. Use at your own risk**. Currently, the only
-> supported environment is **Sui Testnet**.
+> **This package is still in active development. Use at your own risk**.
 
 This Kiosk SDK library provides different utilities to interact/create/manage a
 [Kiosk](https://github.com/MystenLabs/sui/tree/main/kiosk).
@@ -21,7 +20,29 @@ You can also use your preferred package manager, such as yarn or pnpm.
 Here are some indicative examples on how to use the kiosk SDK.
 
 <details>
-<summary>Getting the listings & items by the kiosk's id</summary>
+<summary>Find the kiosks owned by an address</summary>
+
+```typescript
+import { getOwnedKiosks } from '@mysten/kiosk';
+import { SuiClient } from '@mysten/sui.js/client';
+
+const client = new SuiClient(
+  url: 'https://fullnode.testnet.sui.io:443',
+);
+
+
+// You could use these to fetch the contents for each kiosk, or use the `kioskOwnerCap` data for other actions.
+const getUserKiosks = async () => {
+	const address = `0xAddress`;
+	const { data } = await getOwnedKiosks(client, address);
+	console.log(data); // kioskOwnerCaps:[], kioskIds: []
+};
+```
+
+</details>
+
+<details>
+<summary>Getting the listings & items by the kiosk's ID</summary>
 
 ```typescript
 import { fetchKiosk } from '@mysten/kiosk';
@@ -176,6 +197,93 @@ const withdraw = async () => {
 
 	// transfer the Coin to self or any other address.
 	tx.transferObjects([coin], tx.pure(address, 'address'));
+
+	// ... continue to sign and execute the transaction
+	// ...
+};
+```
+
+</details>
+
+<details>
+
+<summary>Create a Transfer Policy for a Type</summary>
+
+You can create a TransferPolicy only for packages for which you own the `publisher` object.
+
+As a best practice, you should use a single Transfer policy per type (T). If you use more than one
+policy for a type, and the rules for each differ, anyone that meets the conditions for any of the
+attached policies can purchase an asset from a kiosk. You can't specify which policy applies to a
+specific asset for the type when there is more than one policy attached. When someone meets the
+conditions that are easiest to meet, they are allowed to purchase and transfer the asset.
+
+Before you create a transfer policy, you can use the `queryTransferpolicy` function to check the
+transfer policy associated with a type. This is similar to the `purchaseAndResolvePolicies` example
+above.
+
+```typescript
+import { createTransferPolicy } from '@mysten/kiosk';
+import { TransactionBlock } from '@mysten/sui.js';
+
+const createPolicyForType = async () => {
+	const type = 'SomePackageId::type::MyType'; // the Type for which we're creating a Transfer Policy.
+	const publisher = 'publisherObjectId'; // the publisher object id that you got when claiming the package that defines the Type.
+	const address = 'AddressToReceiveTheCap';
+
+	const tx = new TransactionBlock();
+	// create transfer policy
+	let transferPolicyCap = createTransferPolicy(tx, type, publisher);
+	// transfer the Cap to the address.
+	tx.transferObjects([transferPolicyCap], tx.pure(address, 'address'));
+
+	// ... continue to sign and execute the transaction
+	// ...
+};
+```
+
+</details>
+
+<details>
+
+<summary>Attach Royalty and Lock rules to a Transfer policy</summary>
+
+```typescript
+import {
+	createTransferPolicy,
+	attachKioskLockRule,
+	attachRoyaltyRule,
+	testnetEnvironment,
+	percentageToBasisPoints,
+} from '@mysten/kiosk';
+import { TransactionBlock } from '@mysten/sui.js';
+
+// Attaches a royalty rule of 1% or 0.1 SUI (whichever is bigger)
+// as well as a kiosk lock, making the objects trade-able only from/to a kiosk.
+const attachStrongRoyalties = async () => {
+	const type = 'SomePackageId::type::MyType'; // the Type for which we're attaching rules.
+	const policyId = 'policyObjectId'; // the transfer Policy ID that was created for that Type.
+	const transferPolicyCap = 'transferPolicyCapId'; // the transferPolicyCap for that policy.
+
+	// royalties configuration.
+	const percentage = 2.55; // 2.55%
+	const minAmount = 100_000_000; // 0.1 SUI.
+
+	// the environment on which we're referecing the rules package.
+	// use `mainnetEnvironment` for mainnet.
+	const enviroment = testnetEnvironment;
+
+	const tx = new TransactionBlock();
+
+	attachKioskLockRule(tx, type, policyId, policyCapId, enviroment);
+	attachRoyaltyRule(
+		tx,
+		type,
+		policyId,
+		policyCapId,
+		percentageToBasisPoints(percentage),
+		minAmount,
+		enviroment,
+	);
 
 	// ... continue to sign and execute the transaction
 	// ...
