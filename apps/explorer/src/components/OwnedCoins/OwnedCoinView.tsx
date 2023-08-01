@@ -3,7 +3,6 @@
 
 import { useFormatCoin } from '@mysten/core';
 import { ArrowShowAndHideRight12, Warning16 } from '@mysten/icons';
-import { type CoinBalance } from '@mysten/sui.js/client';
 import { Text } from '@mysten/ui';
 import * as Collapsible from '@radix-ui/react-collapsible';
 import clsx from 'clsx';
