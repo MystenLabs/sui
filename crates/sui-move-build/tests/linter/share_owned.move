@@ -5,6 +5,7 @@ module 0x42::test1 {
     use sui::transfer;
     use sui::object::UID;
 
+    #[allow(unused_field)]
     struct Obj has key, store {
         id: UID
     }

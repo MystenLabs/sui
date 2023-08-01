@@ -22,7 +22,7 @@ fn test_runner(path: &Path) -> datatest_stable::Result<()> {
     let env = run_model_builder(
         targets,
         vec![],
-        Some(WarningFilters::unused_function_warnings_filter()),
+        Some(WarningFilters::unused_warnings_filter_for_test()),
     )?;
     let diags = if env.diag_count(Severity::Warning) > 0 {
         let mut writer = Buffer::no_color();

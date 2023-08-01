@@ -1,4 +1,5 @@
 address 0x2 {
+#[allow(unused_field)]
 module M {
     #[test_only]
     use std::ascii;

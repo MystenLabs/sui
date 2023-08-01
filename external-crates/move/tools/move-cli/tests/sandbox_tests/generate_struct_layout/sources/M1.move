@@ -1,3 +1,4 @@
+#[allow(unused_field)]
 module 0x1::M1 {
     use 0x1::M2::C;
 
