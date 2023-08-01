@@ -9,6 +9,7 @@ import { useMemo, useState } from 'react';
 
 import OwnedCoinView from './OwnedCoinView';
 import { useRecognizedPackages } from '~/hooks/useRecognizedPackages';
+import { Banner } from '~/ui/Banner';
 import { Pagination } from '~/ui/Pagination';
 
 export type CoinBalanceVerified = CoinBalance & {
@@ -113,6 +114,13 @@ export function OwnedCoins({ id }: { id: string }) {
 							</RadioGroup>
 						</div>
 					</div>
+					{filterValue === COIN_FILTERS.UNRECOGNIZED && (
+						<div className="rounded-full border border-gray-45">
+							<Banner variant="neutralWhite">
+								These coins have not been recognized by Sui Foundation.
+							</Banner>
+						</div>
+					)}
 
 					<div className="flex max-h-80 flex-col overflow-auto">
 						<div className="flex py-2 uppercase tracking-wider text-gray-80">

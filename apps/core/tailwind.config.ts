@@ -195,6 +195,7 @@ export default {
 			},
 			borderRadius: {
 				'2lg': '0.625rem',
+				'full': '4rem'
 			},
 		},
 	},
