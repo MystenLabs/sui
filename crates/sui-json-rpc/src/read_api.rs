@@ -58,7 +58,7 @@ const MAX_DISPLAY_NESTED_LEVEL: usize = 10;
 #[derive(Clone)]
 pub struct ReadApi {
     pub state: Arc<AuthorityState>,
-    pub transaction_kv_store: Arc<dyn TransactionKeyValueStore + Send + Sync>,
+    pub transaction_kv_store: Arc<TransactionKeyValueStore>,
     pub metrics: Arc<JsonRpcMetrics>,
 }
 
@@ -94,7 +94,7 @@ impl IntermediateTransactionResponse {
 impl ReadApi {
     pub fn new(
         state: Arc<AuthorityState>,
-        transaction_kv_store: Arc<dyn TransactionKeyValueStore + Send + Sync>,
+        transaction_kv_store: Arc<TransactionKeyValueStore>,
         metrics: Arc<JsonRpcMetrics>,
     ) -> Self {
         Self {
@@ -182,9 +182,8 @@ impl ReadApi {
 
         // Fetch effects when `show_events` is true because events relies on effects
         if opts.require_effects() {
-            let transaction_kv_store = self.transaction_kv_store.clone();
             let digests_clone = digests.clone();
-            let effects_list = transaction_kv_store
+            let effects_list = self.transaction_kv_store
                 .multi_get_fx_by_tx_digest(&digests_clone)
                 .await
                 .tap_err(
@@ -379,7 +378,7 @@ impl ReadApi {
                         .sender(),
                     effects.modified_at_versions(),
                     effects.all_changed_objects(),
-                    effects.all_deleted(),
+                    effects.all_removed_objects(),
                 ));
             }
             let results = join_all(results).await;
@@ -757,7 +756,7 @@ impl ReadApiServer for ReadApi {
                         sender,
                         effects.modified_at_versions(),
                         effects.all_changed_objects(),
-                        effects.all_deleted(),
+                        effects.all_removed_objects(),
                     )
                     .await;
 

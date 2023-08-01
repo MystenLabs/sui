@@ -62,7 +62,9 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
 	}
 
 	const fieldsData =
-		data.data?.content?.dataType === 'moveObject' ? data.data?.content?.fields : null;
+		data.data?.content?.dataType === 'moveObject'
+			? (data.data?.content?.fields as Record<string, string | number | object>)
+			: null;
 
 	const filteredFieldNames =
 		query === ''

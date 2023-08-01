@@ -17,14 +17,13 @@ export type PageLayoutProps = {
 	gradient?: {
 		content: ReactNode;
 		size: 'lg' | 'md';
-		type?: 'success' | 'error';
 	};
+	isError?: boolean;
 	content: ReactNode;
-	error?: string;
 	loading?: boolean;
 };
 
-export function PageLayout({ gradient, content, loading }: PageLayoutProps) {
+export function PageLayout({ gradient, content, loading, isError }: PageLayoutProps) {
 	const [network] = useNetworkContext();
 	const { request } = useAppsBackend();
 	const { data } = useQuery({
@@ -39,36 +38,41 @@ export function PageLayout({ gradient, content, loading }: PageLayoutProps) {
 		enabled: network === Network.MAINNET,
 	});
 	const isGradientVisible = !!gradient;
-	const isError = gradient?.type === 'error';
+	const renderNetworkDegradeBanner = network === Network.MAINNET && data?.degraded;
 
 	return (
-		<div
-			className={clsx(
-				'w-full',
-				isGradientVisible && isError && 'bg-gradients-failure-start',
-				isGradientVisible && !isError && 'bg-gradients-graph-cards-start',
+		<div className="relative min-h-screen w-full">
+			<section className="fixed top-0 z-20 flex w-full flex-col">
+				{renderNetworkDegradeBanner && (
+					<Banner rounded="none" align="center" variant="warning" fullWidth>
+						The explorer is running slower than usual. We&rsquo;re working to fix the issue and
+						appreciate your patience.
+					</Banner>
+				)}
+				<Header />
+			</section>
+			{loading && (
+				<div className="absolute left-1/2 right-0 top-1/2 flex -translate-x-1/2 -translate-y-1/2 transform justify-center">
+					<LoadingIndicator variant="lg" />
+				</div>
 			)}
-		>
-			<Header />
-			<main className="relative z-10 min-h-screen bg-offwhite">
+			<main
+				className={clsx(
+					'relative z-10 bg-offwhite',
+					!isGradientVisible && renderNetworkDegradeBanner && 'pt-headerNetworkDegrade',
+					!isGradientVisible && !renderNetworkDegradeBanner && 'pt-header',
+				)}
+			>
 				{isGradientVisible ? (
 					<section
 						className={clsx(
 							'group/gradientContent',
-							isGradientVisible && isError && 'bg-gradients-failure',
-							isGradientVisible && !isError && 'bg-gradients-graph-cards',
+							renderNetworkDegradeBanner ? 'pt-headerNetworkDegrade' : 'pt-header',
+							loading && 'bg-gradients-graph-cards',
+							isError && 'bg-gradients-failure',
+							!isError && 'bg-gradients-graph-cards',
 						)}
 					>
-						{network === Network.MAINNET && data?.degraded && (
-							<div className={clsx(isGradientVisible && 'bg-gradients-graph-cards-bg')}>
-								<div className="mx-auto max-w-[1440px] px-4 pt-3 lg:px-6 xl:px-10">
-									<Banner variant="warning" border fullWidth>
-										We&rsquo;re sorry that the explorer is running slower than usual. We&rsquo;re
-										working to fix the issue and appreciate your patience.
-									</Banner>
-								</div>
-							</div>
-						)}
 						<div
 							className={clsx(
 								'mx-auto max-w-[1440px] py-8 lg:px-6 xl:px-10',
@@ -80,11 +84,7 @@ export function PageLayout({ gradient, content, loading }: PageLayoutProps) {
 						</div>
 					</section>
 				) : null}
-				{loading ? (
-					<div className="absolute left-1/2 right-0 top-1/2 flex -translate-x-1/2 -translate-y-1/2 transform justify-center">
-						<LoadingIndicator variant="lg" />
-					</div>
-				) : (
+				{!loading && (
 					<section className="mx-auto max-w-[1440px] p-5 sm:py-8 md:p-10">{content}</section>
 				)}
 			</main>
@@ -92,5 +92,3 @@ export function PageLayout({ gradient, content, loading }: PageLayoutProps) {
 		</div>
 	);
 }
-
-//mx-auto max-w-[1440px] px-5 py-8 md:p-10

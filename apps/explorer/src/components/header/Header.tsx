@@ -20,10 +20,11 @@ function Header() {
 			document.removeEventListener('scroll', callback);
 		};
 	}, []);
+
 	return (
 		<header
 			className={clsx(
-				'sticky top-0 z-20 flex h-header justify-center overflow-visible bg-white/40 backdrop-blur-xl transition-shadow',
+				'flex h-header justify-center overflow-visible bg-white/40 backdrop-blur-xl transition-shadow',
 				isScrolled && 'shadow-mistyEdge',
 			)}
 		>

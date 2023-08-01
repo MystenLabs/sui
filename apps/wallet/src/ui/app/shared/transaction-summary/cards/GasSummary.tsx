@@ -16,7 +16,7 @@ export function GasSummary({ gasSummary }: { gasSummary?: GasSummaryType }) {
 	if (!gasSummary) return null;
 
 	return (
-		<div className="bg-white relative flex flex-col shadow-summary-card rounded-2xl">
+		<div className="bg-white relative flex flex-col shadow-card-soft rounded-2xl">
 			<div className="bg-gray-40 rounded-t-2xl py-2.5 px-4">
 				<Text color="steel-darker" variant="captionSmall" weight="semibold">
 					Gas Fees

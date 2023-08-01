@@ -90,7 +90,7 @@ function GasPaymentLinks({ objectIds }: { objectIds: string[] }) {
 }
 
 interface GasBreakdownProps {
-	summary?: TransactionSummary;
+	summary?: TransactionSummary | null;
 }
 
 export function GasBreakdown({ summary }: GasBreakdownProps) {

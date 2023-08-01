@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { isSuiNSName, useResolveSuiNSAddress, useResolveSuiNSName } from '@mysten/core';
-import { LoadingIndicator } from '@mysten/ui';
+import { Domain32 } from '@mysten/icons';
+import { Heading, LoadingIndicator } from '@mysten/ui';
 import { useParams } from 'react-router-dom';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
@@ -13,12 +14,29 @@ import { OwnedObjects } from '~/components/OwnedObjects';
 import { PageHeader } from '~/ui/PageHeader';
 import { TabHeader } from '~/ui/Tabs';
 
-function AddressResult({ address }: { address: string }) {
-	const { data: domainName } = useResolveSuiNSName(address);
+function AddressResultPageHeader({ address, loading }: { address: string; loading?: boolean }) {
+	const { data: domainName, isFetching } = useResolveSuiNSName(address);
 
 	return (
+		<PageHeader
+			loading={loading || isFetching}
+			type="Address"
+			title={address}
+			subtitle={domainName}
+			before={<Domain32 className="h-6 w-6 text-steel-darker sm:h-10 sm:w-10" />}
+		/>
+	);
+}
+
+function SuiNSAddressResultPageHeader({ name }: { name: string }) {
+	const { data: address, isFetching } = useResolveSuiNSAddress(name);
+
+	return <AddressResultPageHeader address={address ?? name} loading={isFetching} />;
+}
+
+function AddressResult({ address }: { address: string }) {
+	return (
 		<div className="space-y-12">
-			<PageHeader type="Address" title={address} subtitle={domainName} />
 			<div>
 				<TabHeader title="Owned Objects" noGap>
 					<ErrorBoundary>
@@ -59,11 +77,19 @@ function SuiNSAddressResult({ name }: { name: string }) {
 
 export default function AddressResultPage() {
 	const { id } = useParams();
+	const isSuiNSAddress = isSuiNSName(id!);
+
 	return (
 		<PageLayout
-			content={
-				isSuiNSName(id!) ? <SuiNSAddressResult name={id!} /> : <AddressResult address={id!} />
-			}
+			gradient={{
+				size: 'md',
+				content: isSuiNSAddress ? (
+					<SuiNSAddressResultPageHeader name={id!} />
+				) : (
+					<AddressResultPageHeader address={id!} />
+				),
+			}}
+			content={isSuiNSAddress ? <SuiNSAddressResult name={id!} /> : <AddressResult address={id!} />}
 		/>
 	);
 }

@@ -51,7 +51,7 @@ describe('Test Object Display Standard', () => {
 		const errorMessage2 =
 			'Field value idd cannot be found in struct; Field value namee cannot be found in struct';
 
-		expect([errorMessage1, errorMessage2]).toContain(display.error?.error);
+		expect([errorMessage1, errorMessage2]).toContain((display.error as { error: string })?.error);
 	});
 
 	it('Test getting Display fields for object that has no display object', async () => {

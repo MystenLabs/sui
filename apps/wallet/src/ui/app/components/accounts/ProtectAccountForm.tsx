@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { yupResolver } from '@hookform/resolvers/yup';
-import { useForm, type SubmitHandler } from 'react-hook-form';
+import { useZodForm } from '@mysten/core';
+import { type SubmitHandler } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
-import * as Yup from 'yup';
+import { z } from 'zod';
 import { CheckboxField } from '../../shared/forms/CheckboxField';
 import { Form } from '../../shared/forms/Form';
 import { TextField } from '../../shared/forms/TextField';
@@ -12,14 +12,14 @@ import ExternalLink from '../external-link';
 import { Button } from '_app/shared/ButtonUI';
 import { ToS_LINK } from '_src/shared/constants';
 
-const formSchema = Yup.object({
-	password: Yup.string().required('Required'),
-	confirmedPassword: Yup.string().required('Required'),
-	acceptedTos: Yup.boolean().required().oneOf([true]),
-	enabledAutolock: Yup.boolean(),
+const formSchema = z.object({
+	password: z.string().nonempty('Required'),
+	confirmedPassword: z.string().nonempty('Required'),
+	acceptedTos: z.literal<boolean>(true),
+	enabledAutolock: z.boolean(),
 });
 
-type FormValues = Yup.InferType<typeof formSchema>;
+type FormValues = z.infer<typeof formSchema>;
 
 type ProtectAccountFormProps = {
 	submitButtonText: string;
@@ -32,15 +32,15 @@ export function ProtectAccountForm({
 	cancelButtonText,
 	onSubmit,
 }: ProtectAccountFormProps) {
-	const form = useForm({
+	const form = useZodForm({
 		mode: 'all',
+		schema: formSchema,
 		defaultValues: {
 			password: '',
 			confirmedPassword: '',
 			acceptedTos: false,
 			enabledAutolock: true,
 		},
-		resolver: yupResolver(formSchema),
 	});
 	const {
 		register,

@@ -1,29 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { yupResolver } from '@hookform/resolvers/yup';
-import { useForm, type SubmitHandler } from 'react-hook-form';
+import { useZodForm } from '@mysten/core';
+import { type SubmitHandler } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
-import * as Yup from 'yup';
+import { z } from 'zod';
 import { privateKeyValidation } from '../../helpers/validation/privateKeyValidation';
 import { Form } from '../../shared/forms/Form';
 import { TextAreaField } from '../../shared/forms/TextAreaField';
 import { Button } from '_app/shared/ButtonUI';
 
-const formSchema = Yup.object({
+const formSchema = z.object({
 	privateKey: privateKeyValidation,
 });
 
-type FormValues = Yup.InferType<typeof formSchema>;
+type FormValues = z.infer<typeof formSchema>;
 
 type ImportPrivateKeyFormProps = {
 	onSubmit: SubmitHandler<FormValues>;
 };
 
 export function ImportPrivateKeyForm({ onSubmit }: ImportPrivateKeyFormProps) {
-	const form = useForm({
+	const form = useZodForm({
 		mode: 'onTouched',
-		resolver: yupResolver(formSchema),
+		schema: formSchema,
 	});
 	const {
 		register,
