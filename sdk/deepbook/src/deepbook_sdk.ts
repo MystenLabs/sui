@@ -20,13 +20,11 @@ export type smartRouteResultWithExactPath = {
 
 export class DeepBook_sdk {
 	public provider: SuiClient;
-	public currentAddress: string;
 	public gasBudget: number;
 	public records: Records;
 
 	constructor(
 		provider: SuiClient = new SuiClient({ url: getFullnodeUrl('localnet') }),
-		currentAddress: string,
 		gasBudget: number,
 		records: Records,
 	) {
@@ -261,44 +259,44 @@ export class DeepBook_sdk {
 	 * @description: swap exact quote for base
 	 * @param token1 Full coin type of the base asset, eg: "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::wbtc::WBTC"
 	 * @param token2 Full coin type of quote asset, eg: "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::usdt::USDT"
-	 * @param client_order_id an id which identify who make the order, you can define it by yourself, eg: "1" , "2", ...
+	 * @param clientOrderId an id which identify who make the order, you can define it by yourself, eg: 1 , 2, ...
 	 * @param poolId Object id of pool, created after invoking createPool, eg: "0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4"
 	 * @param quantity Amount of quote asset to swap in base asset
-	 * @param is_bid true if the order is bid, false if the order is ask
+	 * @param isBid true if the order is bid, false if the order is ask
 	 * @param baseCoin the objectId of the base coin
 	 * @param quoteCoin the objectId of the quote coin
 	 * @param currentAddress: current user address, eg: "0xbddc9d4961b46a130c2e1f38585bbc6fa8077ce54bcb206b26874ac08d607966"
 	 * @param accountCap Object id of Account Capacity under user address, created after invoking createAccount, eg: "0x6f699fef193723277559c8f499ca3706121a65ac96d273151b8e52deb29135d3"
 	 */
-	public place_market_order(
+	public placeMarketOrder(
 		token1: string,
 		token2: string,
-		client_order_id: string,
+		clientOrderId: number,
 		poolId: string,
 		quantity: number,
-		is_bid: boolean,
+		isBid: boolean,
 		baseCoin: string,
 		quoteCoin: string,
 		currentAddress: string,
 		accountCap: string,
 	): TransactionBlock {
 		const txb = new TransactionBlock();
-		const [base_coin_ret, quote_coin_ret] = txb.moveCall({
+		const [baseCoinRet, quoteCoinRet] = txb.moveCall({
 			typeArguments: [token1, token2],
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::place_market_order`,
 			arguments: [
 				txb.object(poolId),
 				txb.object(accountCap),
-				txb.pure(client_order_id),
+				txb.pure(clientOrderId),
 				txb.pure(quantity),
-				txb.pure(is_bid),
+				txb.pure(isBid),
 				txb.object(baseCoin),
 				txb.object(quoteCoin),
 				txb.object(normalizeSuiObjectId(CLOCK)),
 			],
 		});
-		txb.transferObjects([base_coin_ret], txb.pure(currentAddress));
-		txb.transferObjects([quote_coin_ret], txb.pure(currentAddress));
+		txb.transferObjects([baseCoinRet], txb.pure(currentAddress));
+		txb.transferObjects([quoteCoinRet], txb.pure(currentAddress));
 		txb.setSenderIfNotSet(currentAddress);
 		txb.setGasBudget(this.gasBudget);
 		return txb;
@@ -308,7 +306,7 @@ export class DeepBook_sdk {
 	 * @description: swap exact quote for base
 	 * @param token1 Full coin type of the base asset, eg: "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::wbtc::WBTC"
 	 * @param token2 Full coin type of quote asset, eg: "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::usdt::USDT"
-	 * @param client_order_id an id which identify who make the order, you can define it by yourself, eg: "1" , "2", ...
+	 * @param clientOrderId an id which identify who make the order, you can define it by yourself, eg: 1 , 2, ...
 	 * @param poolId Object id of pool, created after invoking createPool, eg: "0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4"
 	 * @param tokenObjectIn: Object id of the token to swap: eg: "0x6e566fec4c388eeb78a7dab832c9f0212eb2ac7e8699500e203def5b41b9c70d"
 	 * @param amountIn: amount of token to buy or sell, eg: 10000000
@@ -318,7 +316,7 @@ export class DeepBook_sdk {
 	public swap_exact_quote_for_base(
 		token1: string,
 		token2: string,
-		client_order_id: string,
+		clientOrderId: number,
 		poolId: string,
 		tokenObjectIn: string,
 		amountIn: number,
@@ -327,20 +325,20 @@ export class DeepBook_sdk {
 	): TransactionBlock {
 		const txb = new TransactionBlock();
 		// in this case, we assume that the tokenIn--tokenOut always exists.
-		const [base_coin_ret, quote_coin_ret, amount] = txb.moveCall({
+		const [baseCoinRet, quoteCoinRet, amount] = txb.moveCall({
 			typeArguments: [token1, token2],
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::swap_exact_quote_for_base`,
 			arguments: [
 				txb.object(poolId),
-				txb.pure(client_order_id),
+				txb.pure(clientOrderId),
 				txb.object(accountCap),
 				txb.object(String(amountIn)),
 				txb.object(normalizeSuiObjectId(CLOCK)),
 				txb.object(tokenObjectIn),
 			],
 		});
-		txb.transferObjects([base_coin_ret], txb.pure(currentAddress));
-		txb.transferObjects([quote_coin_ret], txb.pure(currentAddress));
+		txb.transferObjects([baseCoinRet], txb.pure(currentAddress));
+		txb.transferObjects([quoteCoinRet], txb.pure(currentAddress));
 		txb.setSenderIfNotSet(currentAddress);
 		txb.setGasBudget(this.gasBudget);
 		return txb;
@@ -350,7 +348,7 @@ export class DeepBook_sdk {
 	 * @description swap exact base for quote
 	 * @param token1 Full coin type of the base asset, eg: "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::wbtc::WBTC"
 	 * @param token2 Full coin type of quote asset, eg: "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::usdt::USDT"
-	 * @param client_order_id an id which identify who make the order, you can define it by yourself, eg: "1" , "2", ...
+	 * @param clientOrderId an id which identify who make the order, you can define it by yourself, eg: 1 , 2, ...
 	 * @param poolId Object id of pool, created after invoking createPool, eg: "0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4"
 	 * @param tokenObjectIn Object id of the token to swap: eg: "0x6e566fec4c388eeb78a7dab832c9f0212eb2ac7e8699500e203def5b41b9c70d"
 	 * @param amountIn amount of token to buy or sell, eg: 10000000
@@ -360,7 +358,7 @@ export class DeepBook_sdk {
 	public swap_exact_base_for_quote(
 		token1: string,
 		token2: string,
-		client_order_id: string,
+		clientOrderId: number,
 		poolId: string,
 		tokenObjectIn: string,
 		amountIn: number,
@@ -369,12 +367,12 @@ export class DeepBook_sdk {
 	): TransactionBlock {
 		const txb = new TransactionBlock();
 		// in this case, we assume that the tokenIn--tokenOut always exists.
-		const [base_coin_ret, quote_coin_ret, amount] = txb.moveCall({
+		const [baseCoinRet, quoteCoinRet, amount] = txb.moveCall({
 			typeArguments: [token1, token2],
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::swap_exact_base_for_quote`,
 			arguments: [
 				txb.object(poolId),
-				txb.pure(client_order_id),
+				txb.pure(clientOrderId),
 				txb.object(accountCap),
 				txb.object(String(amountIn)),
 				txb.object(tokenObjectIn),
@@ -386,8 +384,8 @@ export class DeepBook_sdk {
 				txb.object(normalizeSuiObjectId(CLOCK)),
 			],
 		});
-		txb.transferObjects([base_coin_ret], txb.pure(currentAddress));
-		txb.transferObjects([quote_coin_ret], txb.pure(currentAddress));
+		txb.transferObjects([baseCoinRet], txb.pure(currentAddress));
+		txb.transferObjects([quoteCoinRet], txb.pure(currentAddress));
 		txb.setSenderIfNotSet(currentAddress);
 		txb.setGasBudget(this.gasBudget);
 		return txb;
@@ -397,11 +395,11 @@ export class DeepBook_sdk {
 	 * @description: place a limit order
 	 * @param token1 Full coin type of the base asset, eg: "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::wbtc::WBTC"
 	 * @param token2 Full coin type of quote asset, eg: "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::usdt::USDT"
-	 * @param client_order_id
+	 * @param clientOrderId an id which identify who make the order, you can define it by yourself, eg: 1 , 2, ...
 	 * @param poolId Object id of pool, created after invoking createPool, eg: "0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4"
 	 * @param price: price of the limit order, eg: 180000000
 	 * @param quantity: quantity of the limit order in BASE ASSET, eg: 100000000
-	 * @param self_matching_prevention: true for self matching prevention, false for not, eg: true
+	 * @param selfMatchingPrevention: 1 for self matching prevention, 0 for not, eg: 1
 	 * @param isBid: true for buying base with quote, false for selling base for quote
 	 * @param expireTimestamp: expire timestamp of the limit order in ms, eg: 1620000000000
 	 * @param restriction restrictions on limit orders, explain in doc for more details, eg: 0
@@ -410,11 +408,11 @@ export class DeepBook_sdk {
 	public placeLimitOrder(
 		token1: string,
 		token2: string,
-		client_order_id: string,
+		clientOrderId: number,
 		poolId: string,
 		price: number,
 		quantity: number,
-		self_matching_prevention: boolean,
+		selfMatchingPrevention: number,
 		isBid: boolean,
 		expireTimestamp: number,
 		restriction: number,
@@ -423,10 +421,10 @@ export class DeepBook_sdk {
 		const txb = new TransactionBlock();
 		const args = [
 			txb.object(poolId),
-			txb.pure(client_order_id),
+			txb.pure(clientOrderId),
 			txb.pure(Math.floor(price * 1000000000)), // to avoid float number
 			txb.pure(quantity),
-			txb.pure(self_matching_prevention),
+			txb.pure(selfMatchingPrevention),
 			txb.pure(isBid),
 			txb.pure(expireTimestamp),
 			txb.pure(restriction),
@@ -551,7 +549,7 @@ export class DeepBook_sdk {
 	/**
 	 * @param tokenInObject the tokenObject you want to swap
 	 * @param tokenOut the token you want to swap to
-	 * @param client_order_id an id which identify who make the order, you can define it by yourself, eg: "1" , "2", ...
+	 * @param clientOrderId an id which identify who make the order, you can define it by yourself, eg: 1 , 2, ...
 	 * @param amountIn the amount of token you want to swap
 	 * @param isBid true for bid, false for ask
 	 * @param currentAddress current user address
@@ -560,7 +558,7 @@ export class DeepBook_sdk {
 	public async findBestRoute(
 		tokenInObject: string,
 		tokenOut: string,
-		client_order_id: string,
+		clientOrderId: number,
 		amountIn: number,
 		isBid: boolean,
 		currentAddress: string,
@@ -585,7 +583,7 @@ export class DeepBook_sdk {
 			const smartRouteResultWithExactPath = await this.placeMarketOrderWithSmartRouting(
 				tokenInObject,
 				tokenOut,
-				client_order_id,
+				clientOrderId,
 				isBid,
 				amountIn,
 				currentAddress,
@@ -603,7 +601,7 @@ export class DeepBook_sdk {
 	/**
 	 * @param tokenInObject the tokenObject you want to swap
 	 * @param tokenTypeOut the token type you want to swap to
-	 * @param client_order_id the client order id
+	 * @param clientOrderId the client order id
 	 * @param isBid true for bid, false for ask
 	 * @param amountIn the amount of token you want to swap: eg, 1000000
 	 * @param currentAddress your own address, eg: "0xbddc9d4961b46a130c2e1f38585bbc6fa8077ce54bcb206b26874ac08d607966"
@@ -613,7 +611,7 @@ export class DeepBook_sdk {
 	public async placeMarketOrderWithSmartRouting(
 		tokenInObject: string,
 		tokenTypeOut: string,
-		client_order_id: string,
+		clientOrderId: number,
 		isBid: boolean,
 		amountIn: number,
 		currentAddress: string,
@@ -625,8 +623,8 @@ export class DeepBook_sdk {
 		txb.setGasBudget(this.gasBudget);
 		txb.setSenderIfNotSet(currentAddress);
 		let i = 0;
-		let base_coin_ret: TransactionArgument;
-		let quote_coin_ret: TransactionArgument;
+		let baseCoinRet: TransactionArgument;
+		let quoteCoinRet: TransactionArgument;
 		let amount: TransactionArgument;
 		let lastBid: boolean;
 		while (path[i]) {
@@ -653,12 +651,12 @@ export class DeepBook_sdk {
 				if (!isBid) {
 					txb.transferObjects(
 						// @ts-ignore
-						[lastBid ? quote_coin_ret : base_coin_ret],
+						[lastBid ? quoteCoinRet : baseCoinRet],
 						txb.pure(currentAddress),
 					);
 					_isBid = false;
 					// @ts-ignore
-					_tokenIn = lastBid ? base_coin_ret : quote_coin_ret;
+					_tokenIn = lastBid ? baseCoinRet : quoteCoinRet;
 					_tokenOut = txb.moveCall({
 						typeArguments: [nextPath],
 						target: `0x2::coin::zero`,
@@ -669,13 +667,13 @@ export class DeepBook_sdk {
 				} else {
 					txb.transferObjects(
 						// @ts-ignore
-						[lastBid ? quote_coin_ret : base_coin_ret],
+						[lastBid ? quoteCoinRet : baseCoinRet],
 						txb.pure(currentAddress),
 					);
 					_isBid = true;
 					// _tokenIn = this.mint(txb, nextPath, 0)
 					// @ts-ignore
-					_tokenOut = lastBid ? base_coin_ret : quote_coin_ret;
+					_tokenOut = lastBid ? baseCoinRet : quoteCoinRet;
 					// @ts-ignore
 					_amount = amount;
 				}
@@ -686,12 +684,12 @@ export class DeepBook_sdk {
 			// is !isBid, we will use swap_exact_base_for_quote
 			if (_isBid) {
 				// here swap_exact_quote_for_base
-				[base_coin_ret, quote_coin_ret, amount] = txb.moveCall({
+				[baseCoinRet, quoteCoinRet, amount] = txb.moveCall({
 					typeArguments: [isBid ? nextPath : path[i], isBid ? path[i] : nextPath],
 					target: `${PACKAGE_ID}::${MODULE_CLOB}::swap_exact_quote_for_base`,
 					arguments: [
 						txb.object(poolInfo.clob_v2),
-						txb.pure(client_order_id),
+						txb.pure(clientOrderId),
 						txb.object(accountCap),
 						_amount,
 						txb.object(normalizeSuiObjectId(CLOCK)),
@@ -700,12 +698,12 @@ export class DeepBook_sdk {
 				});
 			} else {
 				// here swap_exact_base_for_quote
-				[base_coin_ret, quote_coin_ret, amount] = txb.moveCall({
+				[baseCoinRet, quoteCoinRet, amount] = txb.moveCall({
 					typeArguments: [isBid ? nextPath : path[i], isBid ? path[i] : nextPath],
 					target: `${PACKAGE_ID}::${MODULE_CLOB}::swap_exact_base_for_quote`,
 					arguments: [
 						txb.object(poolInfo.clob_v2),
-						txb.pure(client_order_id),
+						txb.pure(clientOrderId),
 						txb.object(accountCap),
 						_amount,
 						// @ts-ignore
@@ -716,8 +714,8 @@ export class DeepBook_sdk {
 				});
 			}
 			if (nextPath == tokenTypeOut) {
-				txb.transferObjects([base_coin_ret], txb.pure(currentAddress));
-				txb.transferObjects([quote_coin_ret], txb.pure(currentAddress));
+				txb.transferObjects([baseCoinRet], txb.pure(currentAddress));
+				txb.transferObjects([quoteCoinRet], txb.pure(currentAddress));
 				break;
 			} else {
 				i += 1;
