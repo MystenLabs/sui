@@ -25,7 +25,7 @@ enum COIN_FILTERS {
 export function OwnedCoins({ id }: { id: string }) {
 	const [currentSlice, setCurrentSlice] = useState(1);
 	const [limit, setLimit] = useState(20);
-	const [filterValue, setFilterValue] = useState(COIN_FILTERS.ALL);
+	const [filterValue, setFilterValue] = useState(COIN_FILTERS.RECOGNIZED);
 	const { isLoading, data, isError } = useGetAllBalances(id);
 	const recognizedPackages = useRecognizedPackages();
 
@@ -76,7 +76,7 @@ export function OwnedCoins({ id }: { id: string }) {
 
 	const filterOptions = useMemo(
 		() => [
-			{ label: 'All', value: COIN_FILTERS.ALL },
+			{ label: 'ALL', value: COIN_FILTERS.ALL },
 			{ label: `${balances.recognizedBalances.length} RECOGNIZED`, value: COIN_FILTERS.RECOGNIZED },
 			{
 				label: `${balances.unrecognizedBalances.length} UNRECOGNIZED`,
@@ -123,11 +123,11 @@ export function OwnedCoins({ id }: { id: string }) {
 					)}
 
 					<div className="flex max-h-80 flex-col overflow-auto">
-						<div className="flex py-2 uppercase tracking-wider text-gray-80">
+						<div className="mb-2.5 flex uppercase tracking-wider text-gray-80">
 							<div className="w-[45%]">
 								<Text variant="caption/medium">Type</Text>
 							</div>
-							<div className="w-[25%]">
+							<div className="w-[25%] px-2">
 								<Text variant="caption/medium">Objects</Text>
 							</div>
 							<div className="w-[30%]">
@@ -148,7 +148,7 @@ export function OwnedCoins({ id }: { id: string }) {
 						</div>
 					</div>
 					{displayedBalances.length > limit && (
-						<div className="flex justify-between">
+						<div className="flex flex-col justify-between gap-2 md:flex-row">
 							<Pagination
 								onNext={() => setCurrentSlice(currentSlice + 1)}
 								hasNext={currentSlice !== Math.ceil(displayedBalances.length / limit)}
@@ -156,7 +156,7 @@ export function OwnedCoins({ id }: { id: string }) {
 								onPrev={() => setCurrentSlice(currentSlice - 1)}
 								onFirst={() => setCurrentSlice(1)}
 							/>
-							<div className="flex items-center gap-4">
+							<div className="flex items-center gap-3">
 								<Text variant="body/medium" color="steel-dark">
 									{`Showing `}
 									{(currentSlice - 1) * limit + 1}-

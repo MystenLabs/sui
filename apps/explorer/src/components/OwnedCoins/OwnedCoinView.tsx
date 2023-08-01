@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFormatCoin } from '@mysten/core';
-import { ArrowShowAndHideRight12 } from '@mysten/icons';
+import { ArrowShowAndHideRight12, Warning16 } from '@mysten/icons';
 import { type CoinBalance } from '@mysten/sui.js/client';
 import { Text } from '@mysten/ui';
 import * as Collapsible from '@radix-ui/react-collapsible';
@@ -12,6 +12,8 @@ import { useState } from 'react';
 import { CoinIcon } from './CoinIcon';
 import CoinsPanel from './OwnedCoinsPanel';
 import { Banner } from '~/ui/Banner';
+import { Tooltip } from '~/ui/Tooltip';
+import { ampli } from '~/utils/analytics/ampli';
 
 type OwnedCoinViewProps = {
 	coin: CoinBalance;
@@ -28,18 +30,20 @@ export default function OwnedCoinView({ coin, id, isRecognized }: OwnedCoinViewP
 			<Collapsible.Trigger
 				data-testid="ownedcoinlabel"
 				className={clsx(
-					'flex w-full items-center rounded-lg bg-opacity-5 py-2 text-left hover:bg-hero-darkest hover:bg-opacity-5',
-					open && 'bg-hero-darkest',
+					'mt-1 flex w-full items-center rounded-lg bg-opacity-5 p-2 text-left hover:bg-hero-darkest hover:bg-opacity-5',
+					open && 'bg-hero-darkest pt-3',
 				)}
 				style={{
 					borderBottomLeftRadius: open ? '0' : '8px',
 					borderBottomRightRadius: open ? '0' : '8px',
 				}}
 			>
-				<div className="flex w-[45%] items-center gap-1">
+				<div className="flex w-[45%] items-center gap-1 truncate">
 					<ArrowShowAndHideRight12
 						className={clsx('text-gray-60', open && 'rotate-90 transform')}
 					/>
+					{/* TODO: change unrecognized coin balances and amounts to sui-40 */}
+					{/* fade in 300ms for pills */}
 					<div className="flex items-center gap-3">
 						<CoinIcon coinType={coin.coinType} size="sm" />
 						<Text color="steel-darker" variant="body/medium">
@@ -48,15 +52,22 @@ export default function OwnedCoinView({ coin, id, isRecognized }: OwnedCoinViewP
 					</div>
 
 					{!isRecognized && (
-						<Banner variant="warning" icon={null} border spacing="sm">
-							<div className="max-w-[70px] overflow-hidden truncate whitespace-nowrap text-captionSmallExtra font-medium uppercase leading-3 tracking-wider lg:max-w-full">
-								Unrecognized
-							</div>
-						</Banner>
+						<Tooltip
+							tip="This coin has not been recognized by Sui Foundation."
+							onOpen={() =>
+								ampli.activatedTooltip({
+									tooltipLabel: 'unrecognizedCoinWarning',
+								})
+							}
+						>
+							<Banner variant="warning" icon={null} border spacing="sm">
+								<Warning16 />
+							</Banner>
+						</Tooltip>
 					)}
 				</div>
 
-				<div className="flex w-[25%]">
+				<div className="flex w-[25%] px-2">
 					<Text color="steel-darker" variant="body/medium">
 						{coin.coinObjectCount}
 					</Text>

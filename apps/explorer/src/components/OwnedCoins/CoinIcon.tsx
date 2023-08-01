@@ -6,7 +6,7 @@ import { Sui, Unstaked } from '@mysten/icons';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { cva, type VariantProps } from 'class-variance-authority';
 
-import { ImageIcon } from './ImageIcon';
+import { ImageIcon } from '~/ui/ImageIcon';
 
 const imageStyle = cva(['rounded-full flex rounded-full'], {
 	variants: {

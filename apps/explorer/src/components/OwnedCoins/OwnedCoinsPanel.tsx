@@ -26,8 +26,8 @@ export default function CoinsPanel({ coinType, id }: CoinsPanelProps) {
 	}, [isIntersecting, hasNextPage, isFetching, fetchNextPage]);
 
 	return (
-		<div>
-			<div className="grid grid-cols-2 gap-3 pl-2 pr-6">
+		<div className="pb-3">
+			<div className="grid grid-cols-1 gap-3 pl-2 pr-6 md:grid-cols-2">
 				{data &&
 					data.pages.map((page) =>
 						page.data.map((coin) => <CoinItem key={coin.coinObjectId} coin={coin} />),
