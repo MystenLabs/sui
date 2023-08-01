@@ -54,16 +54,17 @@ type Query {
   protocolConfig(protocolVersion: Int): ProtocolConfig
 
   checkpoint(filter: CheckpointFilter): Checkpoint
-  checkpoints(order: Order!): CheckpointConnection
+  checkpointsConnection(cursor: String!, count: Int!, order: Order!): CheckpointConnection
 
   transactionBlock(digest: Bytes!): TransactionBlock
-  transactionBlocks: TransactionBlockConnection
+  transactionBlocksConnection(cursor: String!, count: Int!, order: Order!): TransactionBlockConnection
 
   coinMetadata(coinType: String!): CoinMetadata
 
-  queryObjects(query: ObjectQuery): ObjectQueryConnection
-  queryEvents(filter: EventFilter, order: Order!): EventQueryConnection
-  queryTransactionBlocks(
+  queryObjectsConnection(cursor: String!, count: Int!, order: Order!, query: ObjectQuery): ObjectQueryConnection
+  queryEventsConnection(cursor: String!, count: Int!, order: Order!, filter: EventFilter, order: Order!): EventQueryConnection
+  queryTransactionBlocksConnection(
+    cursor: String!, count: Int!, order: Order!,
     filter: TransactionBlockFilter,
     order: Order!,
   ): TransactionBlockQueryConnection
@@ -73,7 +74,7 @@ type Query {
   networkMetrics: NetworkMetrics
   moveCallMetrics: MoveCallMetrics
   checkpointAddressMetrics(checkpoint: BigInt): AddressMetric
-  allEpochAddressMetrics(order: Order!): AddressMetricConnection
+  allEpochAddressMetricsConnection(cursor: String!, count: Int!, order: Order!): AddressMetricConnection
 }
 
 type Subscription {
@@ -177,17 +178,17 @@ type ConsistentRange {
 interface Owner {
   location: SuiAddress!
 
-  objects(query: ObjectQuery): ObjectQueryConnection
+  objectsConnection(cursor: String!, count: Int!, order: Order!, query: ObjectQuery): ObjectQueryConnection
 
   balance(type: String!): Balance
-  balances: BalanceConnection
+  balancesConnection(cursor: String!, count: Int!, order: Order!): BalanceConnection
 
-  coins(type: String): CoinConnection
+  coinsConnection(cursor: String!, count: Int!, order: Order!, type: String): CoinConnection
 
-  stakes: StakeConnection
+  stakesConnection(cursor: String!, count: Int!, order: Order!): StakeConnection
 
   defaultNameServiceName: String
-  nameServiceNames: NameServiceNamesConnection
+  nameServiceNamesConnection(cursor: String!, count: Int!, order: Order!): NameServiceNamesConnection
 }
 
 # Returned by Object.owner, where we can't disambiguate between
@@ -195,7 +196,8 @@ interface Owner {
 type AmbiguousOwner implements Owner {}
 
 type Address implements Owner {
-  transactionBlocks(
+  transactionBlocksConnection(
+    cursor: String!, count: Int!, order: Order!,
     filter: AddressTransactionBlockFilter,
   ): TransactionBlockConnection
 }
@@ -222,10 +224,10 @@ type Object implements Owner {
   asMovePackage: MovePackage
 
   # Transaction Blocks that sent objects to this object
-  receivedTransactionBlocks: TransactionBlockConnection
+  receivedTransactionBlocksConnection(cursor: String!, count: Int!, order: Order!): TransactionBlockConnection
 
   dynamicField(dynamicFieldName: DynamicFieldName!): DynamicField
-  dynamicFields: DynamicFieldConnection
+  dynamicFieldsConnection(cursor: String!, count: Int!, order: Order!): DynamicFieldConnection
 
   bcs: Bytes
 }
@@ -252,8 +254,8 @@ type Epoch {
 
   # TODO: Identify non-duplicate fields in `EndOfEpochInfo`
 
-  checkpoints(order: Order!): CheckpointConnection
-  transactionBlocks(order: Order!): TransactionBlockConnection
+  checkpointsConnection(cursor: String!, count: Int!, order: Order!): CheckpointConnection
+  transactionBlocksConnection(cursor: String!, count: Int!, order: Order!): TransactionBlockConnection
 }
 
 type ProtocolConfigs {
@@ -374,6 +376,7 @@ type SafeMode {
 }
 
 type Checkpoint {
+  id: ID!
   digest: Bytes!
   sequenceNumber: BigInt!
   timestampMs: BigInt
@@ -391,7 +394,7 @@ type Checkpoint {
   # Only available on the final checkpoint in an epoch
   endOfEpoch: EndOfEpochData
 
-  transactions: TransactionBlockConnection
+  transactionsConnection(cursor: String!, count: Int!, order: Order!): TransactionBlockConnection
 }
 
 type EndOfEpochData {
@@ -539,7 +542,7 @@ type TransactionBlockEffects {
   epoch: Epoch
   checkpoint: Checkpoint
 
-  events: TransactionEventConnection
+  eventsConnection(cursor: String!, count: Int!, order: Order!): TransactionEventConnection
 
   bcs: Bytes
 }
@@ -594,12 +597,14 @@ type Event {
 }
 
 type Balance {
+  id: ID!
   coinType: MoveType
   coinObjectCount: BigInt
   totalBalance: BigInt
 }
 
 type Coin {
+  id: ID!
   balance: BigInt
   asMoveObject: MoveObject
 }
@@ -655,9 +660,9 @@ type MoveObject {
 }
 
 type MovePackage {
-  modules: MovePackageModuleConnection
+  modulesConnection(cursor: String!, count: Int!, order: Order!): MovePackageModuleConnection
 
-  normalizedModules: NormalizedModulesConnection
+  normalizedModulesConnection(cursor: String!, count: Int!, order: Order!): NormalizedModulesConnection
   normalizedModule(name: String!): NormalizedModule
 
   asObject: Object
@@ -701,10 +706,10 @@ type NormalizedModule {
   moduleId: MoveModuleId
   friends: [MoveModuleId]
 
-  structs: NormalizedStructConnection
+  structsConnection(cursor: String!, count: Int!, order: Order!): NormalizedStructConnection
   struct(name: String!): NormalizedStruct
 
-  functions: NormalizedFunctionConnection
+  functionsConnection(cursor: String!, count: Int!, order: Order!): NormalizedFunctionConnection
   function(name: String!): NormalizedFunction
 }
 
@@ -806,9 +811,6 @@ type AddressMetrics {}
 # Connections
 
 type AddressMetricConnection {}
-type BalanceConnection {}
-type CheckpointConnection {}
-type CoinConnection {}
 type DynamicFieldConnection {}
 type EventQueryConnection {}
 type MovePackageModuleConnection {}
@@ -821,3 +823,44 @@ type StakeConnection {}
 type TransactionBlockConnection {}
 type TransactionBlockQueryConnection {}
 type TransactionEventConnection {}
+
+# Pagination
+type PageInfo {
+    hasNextPage: Boolean!
+    hasPreviousPage: Boolean!
+    startCursor: String
+    endCursor: String
+}
+
+# Checkpoints
+type CheckpointConnection {
+  edges: [CheckpointEdge!]!
+  pageInfo: PageInfo!
+}
+
+type CheckpointEdge {
+  cursor: String
+  node: Checkpoint!
+}
+
+# Balance
+type BalanceConnection {
+  edges: [BalanceEdge!]!
+  pageInfo: PageInfo!
+}
+
+type BalanceEdge {
+  cursor: String
+  node: Balance!
+}
+
+# Coin
+type CoinConnection {
+  edges: [CoinEdge!]!
+  pageInfo: PageInfo!
+}
+
+type CoinEdge {
+  cursor: String
+  node: Coin!
+}
