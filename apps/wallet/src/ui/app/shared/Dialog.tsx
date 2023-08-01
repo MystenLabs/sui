@@ -5,8 +5,8 @@ import * as RadixDialog from '@radix-ui/react-dialog';
 import { cx } from 'class-variance-authority';
 import * as React from 'react';
 
-export const Dialog = RadixDialog.Root;
-export const DialogTrigger = RadixDialog.Trigger;
+const Dialog = RadixDialog.Root;
+const DialogTrigger = RadixDialog.Trigger;
 
 const DialogOverlay = React.forwardRef<
 	React.ElementRef<typeof RadixDialog.Overlay>,
@@ -22,7 +22,7 @@ const DialogOverlay = React.forwardRef<
 	/>
 ));
 
-export const DialogContent = React.forwardRef<
+const DialogContent = React.forwardRef<
 	React.ElementRef<typeof RadixDialog.Content>,
 	React.ComponentPropsWithoutRef<typeof RadixDialog.Content>
 >(({ className, ...props }, ref) => (
@@ -38,16 +38,17 @@ export const DialogContent = React.forwardRef<
 		/>
 	</RadixDialog.Portal>
 ));
+DialogOverlay.displayName = RadixDialog.Overlay.displayName;
 
-export const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
 	<div className={cx('flex flex-col gap-1.5 text-center', className)} {...props} />
 );
 
-export const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
 	<div className={cx('mt-3', className)} {...props} />
 );
 
-export const DialogTitle = React.forwardRef<
+const DialogTitle = React.forwardRef<
 	React.ElementRef<typeof RadixDialog.Title>,
 	React.ComponentPropsWithoutRef<typeof RadixDialog.Title>
 >(({ className, ...props }, ref) => (
@@ -57,8 +58,9 @@ export const DialogTitle = React.forwardRef<
 		{...props}
 	/>
 ));
+DialogTitle.displayName = RadixDialog.Title.displayName;
 
-export const DialogDescription = React.forwardRef<
+const DialogDescription = React.forwardRef<
 	React.ElementRef<typeof RadixDialog.Description>,
 	React.ComponentPropsWithoutRef<typeof RadixDialog.Description>
 >(({ className, ...props }, ref) => (
@@ -68,3 +70,14 @@ export const DialogDescription = React.forwardRef<
 		{...props}
 	/>
 ));
+DialogDescription.displayName = RadixDialog.Description.displayName;
+
+export {
+	Dialog,
+	DialogTrigger,
+	DialogContent,
+	DialogHeader,
+	DialogFooter,
+	DialogTitle,
+	DialogDescription,
+};
