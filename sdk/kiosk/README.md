@@ -253,6 +253,7 @@ import {
 	attachKioskLockRule,
 	attachRoyaltyRule,
 	testnetEnvironment,
+	percentageToBasisPoints,
 } from '@mysten/kiosk';
 import { TransactionBlock } from '@mysten/sui.js';
 
@@ -264,7 +265,7 @@ const attachStrongRoyalties = async () => {
 	const transferPolicyCap = 'transferPolicyCapId'; // the transferPolicyCap for that policy.
 
 	// royalties configuration.
-	const percentage = 100; // 1%
+	const percentage = 2.55; // 2.55%
 	const minAmount = 100_000_000; // 0.1 SUI.
 
 	// the environment on which we're referecing the rules package.
@@ -274,7 +275,15 @@ const attachStrongRoyalties = async () => {
 	const tx = new TransactionBlock();
 
 	attachKioskLockRule(tx, type, policyId, policyCapId, enviroment);
-	attachRoyaltyRule(tx, type, policyId, policyCapId, percentage, minAmount, enviroment);
+	attachRoyaltyRule(
+		tx,
+		type,
+		policyId,
+		policyCapId,
+		percentageToBasisPoints(percentage),
+		minAmount,
+		enviroment,
+	);
 
 	// ... continue to sign and execute the transaction
 	// ...

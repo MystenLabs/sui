@@ -11,24 +11,30 @@ import { getRulePackageAddress, objArg } from '../utils';
  *  The royalty that will be paid is the MAX(percentage, minAmount).
  * 	You can pass 0 in either value if you want only percentage royalty, or a fixed amount fee.
  * 	(but you should define at least one of them for the rule to make sense).
+ *
+ * 	@param percentageBps The royalty percentage in basis points. Use `percentageToBasisPoints` helper to convert from percentage [0,100].
+ * 	@param minAmount The minimum royalty amount per request in MIST.
  */
 export const attachRoyaltyRule = (
 	tx: TransactionBlock,
 	type: string,
 	policy: ObjectArgument,
 	policyCap: ObjectArgument,
-	percentage: number | string,
-	min_amount: number | string,
+	percentageBps: number | string, // this is in basis points.
+	minAmount: number | string,
 	environment: RulesEnvironmentParam,
 ) => {
+	if (Number(percentageBps) < 0 || Number(percentageBps) > 10_000)
+		throw new Error('Invalid basis point percentage.');
+
 	tx.moveCall({
 		target: `${getRulePackageAddress(environment)}::royalty_rule::add`,
 		typeArguments: [type],
 		arguments: [
 			objArg(tx, policy),
 			objArg(tx, policyCap),
-			tx.pure(percentage, 'u16'),
-			tx.pure(min_amount, 'u64'),
+			tx.pure(percentageBps, 'u16'),
+			tx.pure(minAmount, 'u64'),
 		],
 	});
 };
