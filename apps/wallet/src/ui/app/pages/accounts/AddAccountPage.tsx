@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { LedgerLogo17 as LedgerLogo } from '@mysten/icons';
 import { useState, type ReactNode } from 'react';
 import toast from 'react-hot-toast';
@@ -22,7 +21,6 @@ export function AddAccountPage({ showSocialSignInOptions = false }: AddAccountPa
 	const [isConnectLedgerModalOpen, setConnectLedgerModalOpen] = useState(false);
 	const [searchParams] = useSearchParams();
 	const navigate = useNavigate();
-	const isSocialSignInEnabled = useFeatureIsOn('enoki-social-sign-in');
 
 	const sourceFlow = searchParams.get('sourceFlow') || 'Unknown';
 
@@ -30,7 +28,7 @@ export function AddAccountPage({ showSocialSignInOptions = false }: AddAccountPa
 		<Overlay showModal title="Add Account" closeOverlay={() => navigate('/')}>
 			<div className="w-full flex flex-col gap-8 pt-3">
 				<div className="flex flex-col gap-3">
-					{isSocialSignInEnabled && (
+					{showSocialSignInOptions && (
 						<>
 							<SocialButton
 								provider="google"

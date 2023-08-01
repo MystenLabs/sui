@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Filter16, Plus12 } from '@mysten/icons';
+import { Filter16, Plus12, SocialGoogle24 } from '@mysten/icons';
 import * as ToggleGroup from '@radix-ui/react-toggle-group';
+import { useState } from 'react';
+import { UnlockAccountModal } from './UnlockAccountModal';
 import { AccountListItem } from '../../components/accounts/AccountListItem';
 import { useActiveAddress } from '../../hooks';
 import { Heading } from '../../shared/heading';
@@ -17,6 +19,14 @@ export function AccountsList() {
 	const activeAddress = useActiveAddress();
 	const accounts = useAccounts();
 	const backgroundClient = useBackgroundClient();
+
+	// todo: replace this with a real flow
+	const [unlockModalOpen, setUnlockModalOpen] = useState(false);
+	const handleUnlockAccount = () => {
+		setUnlockModalOpen(true);
+	};
+
+	const close = () => setUnlockModalOpen(false);
 
 	const handleSelectAccount = async (address: string) => {
 		const account = accounts.find((a) => a.address === address);
@@ -43,7 +53,11 @@ export function AccountsList() {
 			>
 				<>
 					<Collapsible title="Current" defaultOpen>
-						<AccountListItem address={activeAddress!} />
+						<AccountListItem
+							icon={<SocialGoogle24 />}
+							address={activeAddress!}
+							handleUnlockAccount={handleUnlockAccount}
+						/>
 					</Collapsible>
 
 					<Collapsible title="Switch To">
@@ -51,7 +65,14 @@ export function AccountsList() {
 							{accounts
 								.filter((account) => account.address !== activeAddress)
 								.map((account) => {
-									return <AccountListItem address={account.address} />;
+									return (
+										<AccountListItem
+											key={account.address}
+											icon={<SocialGoogle24 />}
+											address={account.address}
+											handleUnlockAccount={handleUnlockAccount}
+										/>
+									);
 								})}
 						</div>
 					</Collapsible>
@@ -59,7 +80,7 @@ export function AccountsList() {
 			</ToggleGroup.Root>
 
 			<div className="flex justify-between">
-				<div className="appearance-none flex gap-1 uppercase bg-none rounded-sm text-steel-darker hover:bg-white/60 p-1 items-center justify-center">
+				<div className="flex gap-1 uppercase bg-none rounded-sm text-steel-darker hover:bg-white/60 p-1 items-center justify-center">
 					<Link
 						before={<Filter16 />}
 						color="steelDarker"
@@ -70,7 +91,7 @@ export function AccountsList() {
 					/>
 				</div>
 
-				<div className="appearance-none flex gap-1 uppercase bg-none rounded-sm text-steel-darker hover:bg-white/60 p-1 items-center">
+				<div className="flex gap-1 uppercase bg-none rounded-sm text-steel-darker hover:bg-white/60 p-1 items-center">
 					<Link
 						before={<Plus12 />}
 						color="steelDarker"
@@ -81,6 +102,7 @@ export function AccountsList() {
 					/>
 				</div>
 			</div>
+			{unlockModalOpen ? <UnlockAccountModal onClose={close} onConfirm={close} /> : null}
 		</div>
 	);
 }

@@ -98,20 +98,14 @@ const App = () => {
 			<Route path="welcome" element={isSocialSignInEnabled ? <WelcomePageV2 /> : <WelcomePage />} />
 			{isSocialSignInEnabled && (
 				<>
-<<<<<<< HEAD
+					<Route path="/*" element={<HomePage />}>
+						<Route path="home" element={<TokensV2 />} />
+					</Route>
 					<Route path="/account">
 						<Route path="forgot-password" element={<ForgotPasswordPageV2 />} />
 					</Route>
 					<Route path="/accounts" element={<AccountsPage />}>
 						<Route path="add-account" element={<AddAccountPage />} />
-=======
-					<Route path="/" element={<HomePage />}>
-						<Route path="home" element={<TokensV2 />} />
-					</Route>
-					<Route path="/accounts" element={<AccountsPage />}>
-						<Route path="add-account" element={<AddAccountPage />} />
-						<Route path="forgot-password" element={<ForgotPasswordPageV2 />} />
->>>>>>> 70059f4738 (add updated account selector)
 						<Route path="protect-account" element={<ProtectAccountPage />} />
 						<Route path="import-ledger-accounts" element={<ImportLedgerAccountsPage />} />
 						<Route path="import-passphrase" element={<ImportPassphrasePage />} />

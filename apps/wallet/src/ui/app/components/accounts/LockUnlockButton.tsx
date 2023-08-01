@@ -9,12 +9,12 @@ interface LockUnlockButtonProps extends ComponentPropsWithoutRef<'button'> {
 	isLocked: boolean;
 }
 
-export function LockUnlockButton({ onClick, isLocked }: LockUnlockButtonProps) {
+export function LockUnlockButton({ isLocked, ...buttonProps }: LockUnlockButtonProps) {
 	return (
 		<Tooltip tip={isLocked ? 'Unlock Account' : 'Lock Account'}>
 			<button
-				onClick={onClick}
 				className="appearance-none bg-transparent border-none cursor-pointer text-steel hover:text-hero-dark ml-auto flex items-center justify-center"
+				{...buttonProps}
 			>
 				{isLocked ? <LockLocked16 className="h-4 w-4" /> : <LockUnlocked16 className="h-4 w-4" />}
 			</button>

@@ -1,5 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+import { formatAddress } from '@mysten/sui.js/utils';
 import * as ToggleGroup from '@radix-ui/react-toggle-group';
 
 import { AccountMultiSelectItem } from './AccountMultiSelectItem';
@@ -7,14 +9,18 @@ import { type SerializedAccount } from '_src/background/keyring/Account';
 
 type AccountMultiSelectProps = {
 	accounts: SerializedAccount[];
-	value: string[];
+	selectedAccounts: string[];
 	onChange: (value: string[]) => void;
 };
 
-export function AccountMultiSelect({ accounts, value, onChange }: AccountMultiSelectProps) {
+export function AccountMultiSelect({
+	accounts,
+	selectedAccounts,
+	onChange,
+}: AccountMultiSelectProps) {
 	return (
 		<ToggleGroup.Root
-			value={value}
+			value={selectedAccounts}
 			onValueChange={onChange}
 			type="multiple"
 			className="flex flex-col gap-3"
@@ -22,8 +28,9 @@ export function AccountMultiSelect({ accounts, value, onChange }: AccountMultiSe
 			{accounts.map((account) => (
 				<AccountMultiSelectItem
 					key={account.address}
+					name={formatAddress(account.address)}
 					address={account.address}
-					selected={value?.includes(account.address) ?? false}
+					state={selectedAccounts?.includes(account.address) ? 'selected' : undefined}
 				/>
 			))}
 		</ToggleGroup.Root>
