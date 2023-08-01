@@ -9,6 +9,22 @@ warning[Lint W03001]: sub-optimal 'sui::coin::Coin' field type
    │
    = This warning can be suppressed with '#[lint_allow(coin_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
+warning[W09009]: unused struct field
+   ┌─ tests/linter/coin_field.move:11:9
+   │
+11 │         id: UID,
+   │         ^^ The 'id' field of the 'S2' type is unused
+   │
+   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09009]: unused struct field
+   ┌─ tests/linter/coin_field.move:12:9
+   │
+12 │         c: Coin<S1>,
+   │         ^ The 'c' field of the 'S2' type is unused
+   │
+   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 warning[Lint W03001]: sub-optimal 'sui::coin::Coin' field type
    ┌─ tests/linter/coin_field.move:23:12
    │
@@ -19,4 +35,20 @@ warning[Lint W03001]: sub-optimal 'sui::coin::Coin' field type
    │         - Storing 'sui::balance::Balance' in this field will typically be more space-efficient
    │
    = This warning can be suppressed with '#[lint_allow(coin_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09009]: unused struct field
+   ┌─ tests/linter/coin_field.move:24:9
+   │
+24 │         id: UID,
+   │         ^^ The 'id' field of the 'S2' type is unused
+   │
+   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09009]: unused struct field
+   ┌─ tests/linter/coin_field.move:25:9
+   │
+25 │         c: Balance<S1>,
+   │         ^ The 'c' field of the 'S2' type is unused
+   │
+   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

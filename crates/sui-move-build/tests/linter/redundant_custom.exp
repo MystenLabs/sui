@@ -1,13 +1,5 @@
-<<<<<<< HEAD
 warning[Lint W02001]: potentially unenforceable custom transfer/share/freeze policy
-   ┌─ tests/linter/redundant_custom.move:14:16
-||||||| parent of 41b386b4a9 (Added warning suppression to failing linter tests)
-warning[Lint W03001]: potentially unenforceable custom transfer/share/freeze policy
-   ┌─ tests/linter/redundant_custom.move:14:16
-=======
-warning[Lint W03001]: potentially unenforceable custom transfer/share/freeze policy
    ┌─ tests/linter/redundant_custom.move:15:16
->>>>>>> 41b386b4a9 (Added warning suppression to failing linter tests)
    │
 15 │     public fun custom_transfer_bad(o: S1, ctx: &mut TxContext) {
    │                ^^^^^^^^^^^^^^^^^^^ - An instance of a module-private type with a store ability to be transferred coming from here
@@ -19,16 +11,8 @@ warning[Lint W03001]: potentially unenforceable custom transfer/share/freeze pol
    = A custom transfer policy for a given type is implemented through calling the private transfer function variant in the module defining this type
    = This warning can be suppressed with '#[lint_allow(custom_state_change)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-<<<<<<< HEAD
 warning[Lint W02001]: potentially unenforceable custom transfer/share/freeze policy
-   ┌─ tests/linter/redundant_custom.move:19:16
-||||||| parent of 41b386b4a9 (Added warning suppression to failing linter tests)
-warning[Lint W03001]: potentially unenforceable custom transfer/share/freeze policy
-   ┌─ tests/linter/redundant_custom.move:19:16
-=======
-warning[Lint W03001]: potentially unenforceable custom transfer/share/freeze policy
    ┌─ tests/linter/redundant_custom.move:20:16
->>>>>>> 41b386b4a9 (Added warning suppression to failing linter tests)
    │
 20 │     public fun custom_share_bad(o: S1) {
    │                ^^^^^^^^^^^^^^^^ - An instance of a module-private type with a store ability to be shared coming from here
@@ -40,16 +24,8 @@ warning[Lint W03001]: potentially unenforceable custom transfer/share/freeze pol
    = A custom share policy for a given type is implemented through calling the private share_object function variant in the module defining this type
    = This warning can be suppressed with '#[lint_allow(custom_state_change)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-<<<<<<< HEAD
 warning[Lint W02001]: potentially unenforceable custom transfer/share/freeze policy
-   ┌─ tests/linter/redundant_custom.move:23:16
-||||||| parent of 41b386b4a9 (Added warning suppression to failing linter tests)
-warning[Lint W03001]: potentially unenforceable custom transfer/share/freeze policy
-   ┌─ tests/linter/redundant_custom.move:23:16
-=======
-warning[Lint W03001]: potentially unenforceable custom transfer/share/freeze policy
    ┌─ tests/linter/redundant_custom.move:24:16
->>>>>>> 41b386b4a9 (Added warning suppression to failing linter tests)
    │
 24 │     public fun custom_freeze_bad(o: S1) {
    │                ^^^^^^^^^^^^^^^^^ - An instance of a module-private type with a store ability to be frozen coming from here

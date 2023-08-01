@@ -1,13 +1,5 @@
-<<<<<<< HEAD
 warning[Lint W00001]: possible owned object share
-   ┌─ tests/linter/share_owned.move:14:9
-||||||| parent of 41b386b4a9 (Added warning suppression to failing linter tests)
-warning[Lint W01001]: possible owned object share
-   ┌─ tests/linter/share_owned.move:14:9
-=======
-warning[Lint W01001]: possible owned object share
    ┌─ tests/linter/share_owned.move:15:9
->>>>>>> 41b386b4a9 (Added warning suppression to failing linter tests)
    │
 13 │     public entry fun arg_object(o: Obj) {
    │                                 - A potentially owned object coming from here
@@ -20,23 +12,15 @@ warning[Lint W01001]: possible owned object share
    │
    = This warning can be suppressed with '#[lint_allow(share_owned)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-<<<<<<< HEAD
-warning[Lint W00001]: possible owned object share
-   ┌─ tests/linter/share_owned.move:35:9
-||||||| parent of 41b386b4a9 (Added warning suppression to failing linter tests)
-warning[Lint W01001]: possible owned object share
-   ┌─ tests/linter/share_owned.move:35:9
-=======
 warning[W09009]: unused struct field
    ┌─ tests/linter/share_owned.move:25:9
->>>>>>> 41b386b4a9 (Added warning suppression to failing linter tests)
    │
 25 │         id: UID
-   │         ^^ The id field of the Obj type is unused
+   │         ^^ The 'id' field of the 'Obj' type is unused
    │
    = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01001]: possible owned object share
+warning[Lint W00001]: possible owned object share
    ┌─ tests/linter/share_owned.move:36:9
    │
 35 │         let Wrapper { id, i: _, o } = w;
