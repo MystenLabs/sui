@@ -39,11 +39,15 @@ export default function OwnedCoinView({ coin, id }: OwnedCoinViewProps) {
 			>
 				<div className="flex w-[45%] items-center gap-1 truncate">
 					<ArrowShowAndHideRight12
+						width={12}
 						className={clsx('text-gray-60', open && 'rotate-90 transform')}
 					/>
-					<div className="flex items-center gap-3">
-						<CoinIcon coinType={coin.coinType} size="sm" />
-						<Text color="steel-darker" variant="body/medium">
+
+					<div className="flex items-center gap-3 truncate">
+						<div className="w-4">
+							<CoinIcon coinType={coin.coinType} size="sm" />
+						</div>
+						<Text color="steel-darker" variant="body/medium" truncate>
 							{symbol}
 						</Text>
 					</div>
