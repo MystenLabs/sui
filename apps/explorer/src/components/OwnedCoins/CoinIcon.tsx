@@ -17,7 +17,6 @@ const imageStyle = cva(['rounded-full flex rounded-full'], {
 			xl: 'md:w-31.5 md:h-31.5 w-16 h-16 ',
 		},
 	},
-
 	defaultVariants: {
 		size: 'md',
 	},
@@ -36,7 +35,7 @@ type NonSuiCoinProps = {
 function NonSuiCoin({ coinType }: NonSuiCoinProps) {
 	const { data: coinMeta } = useCoinMetadata(coinType);
 	return (
-		<div className="flex h-full w-full items-center justify-center rounded-full bg-steel text-white">
+		<div className="flex h-full w-full items-center justify-center rounded-full bg-gray-40 text-hero-darkest text-opacity-30">
 			{coinMeta?.iconUrl ? (
 				<ImageIcon
 					size="sm"
@@ -46,7 +45,9 @@ function NonSuiCoin({ coinType }: NonSuiCoinProps) {
 					circle
 				/>
 			) : (
-				<Unstaked />
+				<div className="flex h-full w-full items-center justify-center rounded-full border-2 border-hero-darkest border-opacity-10">
+					<Unstaked className="h-2.5 w-2.5" />
+				</div>
 			)}
 		</div>
 	);
