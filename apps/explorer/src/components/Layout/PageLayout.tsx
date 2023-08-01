@@ -56,7 +56,13 @@ export function PageLayout({ gradient, content, loading, isError }: PageLayoutPr
 					<LoadingIndicator variant="lg" />
 				</div>
 			)}
-			<main className="relative z-10 bg-offwhite">
+			<main
+				className={clsx(
+					'relative z-10 bg-offwhite',
+					!isGradientVisible && renderNetworkDegradeBanner && 'pt-headerNetworkDegrade',
+					!isGradientVisible && !renderNetworkDegradeBanner && 'pt-header',
+				)}
+			>
 				{isGradientVisible ? (
 					<section
 						className={clsx(
