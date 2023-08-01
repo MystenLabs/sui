@@ -2034,7 +2034,7 @@ fn gen_unused_warnings(
                     .get(sname)
                     .is_some_and(|names| names.contains(&f.value()))
                 {
-                    let msg = format!("The {} field of the {sname} type is unused", f.value());
+                    let msg = format!("The '{}' field of the '{sname}' type is unused", f.value());
                     context
                         .env
                         .add_diag(diag!(UnusedItem::StructField, (f.loc(), msg)));

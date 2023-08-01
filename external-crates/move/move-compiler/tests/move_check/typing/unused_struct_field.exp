@@ -1,0 +1,6 @@
+error[E04001]: restricted visibility
+   ┌─ tests/move_check/typing/unused_struct_field.move:63:57
+   │
+63 │     public fun flaky(x: 0x42::private_struct::S): u64 { x.f }
+   │                                                         ^^^ Invalid access of field 'f' on '0x42::private_struct::S'. Fields can only be accessed inside the struct's module
+
