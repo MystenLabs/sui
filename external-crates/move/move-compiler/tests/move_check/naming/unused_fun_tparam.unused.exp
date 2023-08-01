@@ -1,4 +1,4 @@
-warning[W09009]: unused function type parameter
+warning[W09010]: unused function type parameter
   ┌─ tests/move_check/naming/unused_fun_tparam.move:3:23
   │
 3 │     public fun unused<T>(): u64 {
@@ -6,7 +6,7 @@ warning[W09009]: unused function type parameter
   │
   = This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09009]: unused function type parameter
+warning[W09010]: unused function type parameter
   ┌─ tests/move_check/naming/unused_fun_tparam.move:7:31
   │
 7 │     public fun one_unused<T1, T2>(v: T1): T1 {
@@ -14,7 +14,7 @@ warning[W09009]: unused function type parameter
   │
   = This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09009]: unused function type parameter
+warning[W09010]: unused function type parameter
    ┌─ tests/move_check/naming/unused_fun_tparam.move:11:27
    │
 11 │     public fun all_unused<T1, T2>(): u64 {
@@ -22,7 +22,7 @@ warning[W09009]: unused function type parameter
    │
    = This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09009]: unused function type parameter
+warning[W09010]: unused function type parameter
    ┌─ tests/move_check/naming/unused_fun_tparam.move:11:31
    │
 11 │     public fun all_unused<T1, T2>(): u64 {
