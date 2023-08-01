@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetAllBalances } from '@mysten/core';
+import { Info16 } from '@mysten/icons';
 import { type CoinBalance } from '@mysten/sui.js';
 import { Coin } from '@mysten/sui.js';
 import { Heading, Text, LoadingIndicator, RadioGroup, RadioGroupItem } from '@mysten/ui';
@@ -9,9 +10,7 @@ import { useMemo, useState } from 'react';
 
 import OwnedCoinView from './OwnedCoinView';
 import { useRecognizedPackages } from '~/hooks/useRecognizedPackages';
-import { Banner } from '~/ui/Banner';
 import { Pagination } from '~/ui/Pagination';
-import { Info16 } from '@mysten/icons';
 
 export type CoinBalanceVerified = CoinBalance & {
 	isRecognized?: boolean;
@@ -94,9 +93,11 @@ export function OwnedCoins({ id }: { id: string }) {
 	}
 
 	return (
-		<div>
-			{isLoading ? (
-				<LoadingIndicator />
+		<div className="h-full w-full">
+			{!isLoading ? (
+				<div className="m-auto flex h-full w-full justify-center text-white">
+					<LoadingIndicator />
+				</div>
 			) : (
 				<div className="flex flex-col gap-4 pt-5 text-left">
 					<div className='md:mt-12" flex w-full justify-between border-b border-gray-45 pb-3'>
@@ -116,11 +117,13 @@ export function OwnedCoins({ id }: { id: string }) {
 						</div>
 					</div>
 					{filterValue === COIN_FILTERS.UNRECOGNIZED && (
-						<div className="flex items-center border border-gray-45 rounded-full p-2 gap-1 text-steel-darker">
+						<div className="flex items-center gap-1 rounded-full border border-gray-45 p-2 text-steel-darker">
 							<div>
-								<Info16 width={"16px"} />
+								<Info16 width="16px" />
 							</div>
-							<Text color="steel-darker" variant="body/medium">These coins have not been recognized by Sui Foundation.</Text>
+							<Text color="steel-darker" variant="body/medium">
+								These coins have not been recognized by Sui Foundation.
+							</Text>
 						</div>
 					)}
 

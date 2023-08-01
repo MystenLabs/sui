@@ -33,8 +33,8 @@ export default function CoinsPanel({ coinType, id }: CoinsPanelProps) {
 						page.data.map((coin) => <CoinItem key={coin.coinObjectId} coin={coin} />),
 					)}
 			</div>
-			{isSpinnerVisible && (
-				<div ref={containerRef}>
+			{!isSpinnerVisible && (
+				<div className="flex justify-center" ref={containerRef}>
 					<LoadingIndicator />
 				</div>
 			)}
