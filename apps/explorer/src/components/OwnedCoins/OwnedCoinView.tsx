@@ -28,8 +28,8 @@ export default function OwnedCoinView({ coin, id, isRecognized }: OwnedCoinViewP
 			<Collapsible.Trigger
 				data-testid="ownedcoinlabel"
 				className={clsx(
-					'flex w-full items-center rounded-lg py-2 text-left hover:bg-hero-darkest hover:bg-opacity-5',
-					open && 'bg-hero-darkest bg-opacity-5',
+					'flex w-full items-center rounded-lg bg-opacity-5 py-2 text-left hover:bg-hero-darkest hover:bg-opacity-5',
+					open && 'bg-hero-darkest',
 				)}
 				style={{
 					borderBottomLeftRadius: open ? '0' : '8px',
