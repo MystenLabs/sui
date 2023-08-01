@@ -13,15 +13,12 @@ import { OwnedCoins } from '~/components/OwnedCoins';
 import { OwnedObjects } from '~/components/OwnedObjects';
 import { PageHeader } from '~/ui/PageHeader';
 
-function AddressResultPageHeader({
-	address,
-	domainName,
-}: {
-	address: string;
-	domainName?: string;
-}) {
+function AddressResultPageHeader({ address, loading }: { address: string; loading?: boolean }) {
+	const { data: domainName, isLoading } = useResolveSuiNSName(address);
+
 	return (
 		<PageHeader
+			loading={isLoading || loading}
 			type="Address"
 			title={address}
 			subtitle={domainName}
@@ -30,10 +27,10 @@ function AddressResultPageHeader({
 	);
 }
 
-function SuiNSAddressResultPageHeader({ address }: { address: string }) {
-	const { data: domainName } = useResolveSuiNSName(address);
+function SuiNSAddressResultPageHeader({ name }: { name: string }) {
+	const { data: address, isLoading } = useResolveSuiNSAddress(name);
 
-	return <AddressResultPageHeader address={address} domainName={domainName!} />;
+	return <AddressResultPageHeader address={address ?? name} loading={isLoading} />;
 }
 
 function AddressResult({ address }: { address: string }) {
@@ -89,7 +86,7 @@ export default function AddressResultPage() {
 			gradient={{
 				size: 'md',
 				content: isSuiNSAddress ? (
-					<SuiNSAddressResultPageHeader address={id!} />
+					<SuiNSAddressResultPageHeader name={id!} />
 				) : (
 					<AddressResultPageHeader address={id!} />
 				),
