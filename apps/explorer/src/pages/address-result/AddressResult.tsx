@@ -61,6 +61,7 @@ function SuiNSAddressResult({ name }: { name: string }) {
 
 export default function AddressResultPage() {
 	const { id } = useParams();
+	console.log('isSuiNSName(id!)', id, isSuiNSName(id!));
 	return (
 		<PageLayout
 			content={
