@@ -17,6 +17,7 @@ export function WalletSettingsButton() {
 				'appearance-none bg-transparent border-none cursor-pointer hover:text-hero-dark ml-auto flex items-center justify-center',
 				{ 'text-steel': !isOpen, 'text-gray-90': isOpen },
 			)}
+			aria-label={isOpen ? 'Close settings menu' : 'Open settings menu'}
 			to={menuUrl}
 		>
 			<IconComponent className="h-6 w-6" />
