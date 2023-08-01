@@ -11,6 +11,7 @@ import OwnedCoinView from './OwnedCoinView';
 import { useRecognizedPackages } from '~/hooks/useRecognizedPackages';
 import { Banner } from '~/ui/Banner';
 import { Pagination } from '~/ui/Pagination';
+import { Info16 } from '@mysten/icons';
 
 export type CoinBalanceVerified = CoinBalance & {
 	isRecognized?: boolean;
@@ -115,10 +116,11 @@ export function OwnedCoins({ id }: { id: string }) {
 						</div>
 					</div>
 					{filterValue === COIN_FILTERS.UNRECOGNIZED && (
-						<div className="border border-gray-45 rounded-full">
-							{/* <Banner variant="neutralWhite"> */}
-								<Text variant="body/medium">These coins have not been recognized by Sui Foundation.</Text>
-							{/* </Banner> */}
+						<div className="flex items-center border border-gray-45 rounded-full p-2 gap-1 text-steel-darker">
+							<div>
+								<Info16 width={"16px"} />
+							</div>
+							<Text color="steel-darker" variant="body/medium">These coins have not been recognized by Sui Foundation.</Text>
 						</div>
 					)}
 
