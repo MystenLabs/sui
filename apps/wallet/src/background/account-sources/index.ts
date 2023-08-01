@@ -9,9 +9,9 @@ import {
 import { MnemonicAccountSource } from './MnemonicAccountSource';
 import { QredoAccountSource } from './QredoAccountSource';
 import { type UiConnection } from '../connections/UiConnection';
+import { db } from '../db';
 import { type QredoConnectIdentity } from '../qredo/types';
 import { isSameQredoConnection } from '../qredo/utils';
-import { getAllStoredEntities, getStorageEntity } from '../storage-entities-utils';
 import { type Message, createMessage } from '_src/shared/messaging/messages';
 import {
 	type MethodPayload,
@@ -31,20 +31,16 @@ function toAccountSource(accountSource: AccountSourceSerialized) {
 }
 
 export async function getAccountSources(filter?: { type: AccountSourceType }) {
-	const all = (await getAllStoredEntities<AccountSourceSerialized>('account-source-entity')).map(
-		toAccountSource,
-	);
-	if (!filter?.type) {
-		return all;
-	}
-	return all.filter((anAccountSource) => anAccountSource.type === filter.type);
+	return (
+		await (filter?.type
+			? await db.accountSources.where('type').equals(filter.type)
+			: await db.accountSources
+		).toArray()
+	).map(toAccountSource);
 }
 
 export async function getAccountSourceByID(id: string) {
-	const serializedAccountSource = await getStorageEntity<AccountSourceSerialized>(
-		id,
-		'account-source-entity',
-	);
+	const serializedAccountSource = await db.accountSources.get(id);
 	if (!serializedAccountSource) {
 		return null;
 	}
@@ -81,7 +77,7 @@ export async function getQredoAccountSource(filter: string | QredoConnectIdentit
 		accountSource = await getAccountSourceByID(filter);
 	} else {
 		const accountSourceSerialized = (
-			await getAllStoredEntities<AccountSourceSerialized>('account-source-entity')
+			await db.accountSources.where('type').equals('qredo').toArray()
 		)
 			.filter(QredoAccountSource.isOfType)
 			.find((anAccountSource) => isSameQredoConnection(filter, anAccountSource));

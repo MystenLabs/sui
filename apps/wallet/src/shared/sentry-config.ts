@@ -1,10 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import * as Sentry from '@sentry/react';
+import { type BrowserOptions } from '@sentry/browser';
 import Browser from 'webextension-polyfill';
-
-import { growthbook } from '_src/ui/app/experimentation/feature-gating';
 
 const WALLET_VERSION = Browser.runtime.getManifest().version;
 const IS_PROD = process.env.NODE_ENV === 'production';
@@ -16,36 +14,21 @@ const SENTRY_DSN = IS_PROD
 	? 'https://e52a4e5c90224fe0800cc96aa2570581@o1314142.ingest.sentry.io/6761112'
 	: 'https://d1022411f6284cab9660146f3aa514d2@o1314142.ingest.sentry.io/4504697974751232';
 
-export default function initSentry() {
-	Sentry.init({
+export function getSentryConfig({
+	integrations,
+	tracesSampler,
+}: Pick<BrowserOptions, 'integrations' | 'tracesSampler'>): BrowserOptions {
+	return {
 		enabled: ENABLE_SENTRY,
 		dsn: SENTRY_DSN,
-		integrations: [new Sentry.BrowserTracing()],
+		integrations,
 		release: WALLET_VERSION,
-		tracesSampler: () => {
-			if (!IS_PROD) return 1;
-			return growthbook.getFeatureValue('wallet-sentry-tracing', 0);
-		},
+		tracesSampler: IS_PROD ? tracesSampler : () => 1,
 		allowUrls: IS_PROD
 			? [
 					'ehndjpedolgphielnhnpnkomdhgpaaei', // chrome beta
 					'opcgpfmipidbgpenhmajoajpbobppdil', // chrome prod
 			  ]
 			: undefined,
-	});
-}
-
-// expand this breadcrumb
-type Breadcrumbs = {
-	type: 'debug';
-	category: string;
-	message: string;
-};
-
-export function addSentryBreadcrumb(breadcrumbs: Breadcrumbs) {
-	Sentry.addBreadcrumb(breadcrumbs);
-}
-
-export function reportSentryError(error: Error) {
-	Sentry.captureException(error);
+	};
 }

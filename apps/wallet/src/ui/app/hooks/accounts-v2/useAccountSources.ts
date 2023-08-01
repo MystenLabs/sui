@@ -11,8 +11,7 @@ export function useAccountSources() {
 	const backgroundClient = useBackgroundClient();
 	return useQuery({
 		queryKey: accountSourcesQueryKey,
-		queryFn: () =>
-			backgroundClient.getStoredEntities<AccountSourceSerializedUI>('account-source-entity'),
+		queryFn: () => backgroundClient.getStoredEntities<AccountSourceSerializedUI>('accountSources'),
 		cacheTime: 30 * 1000,
 		staleTime: 15 * 1000,
 		refetchInterval: 5 * 1000,

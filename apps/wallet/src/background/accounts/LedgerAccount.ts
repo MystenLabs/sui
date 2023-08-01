@@ -49,7 +49,6 @@ export class LedgerAccount
 		derivationPath: string;
 	}): Promise<Omit<LedgerAccountSerialized, 'id'>> {
 		return {
-			storageEntityType: 'account-entity',
 			type: 'ledger',
 			address,
 			publicKey,
@@ -63,8 +62,8 @@ export class LedgerAccount
 		return serialized.type === 'ledger';
 	}
 
-	constructor({ id }: { id: string }) {
-		super({ type: 'ledger', id });
+	constructor({ id, cachedData }: { id: string; cachedData?: LedgerAccountSerialized }) {
+		super({ type: 'ledger', id, cachedData });
 	}
 
 	async lock(allowRead = false): Promise<void> {

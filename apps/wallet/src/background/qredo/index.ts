@@ -251,7 +251,6 @@ export async function acceptQredoConnection({
 				...aWallet,
 				type: 'qredo',
 				sourceID: qredoAccountSource.id,
-				storageEntityType: 'account-entity',
 				lastUnlockedOn: null,
 			});
 		}

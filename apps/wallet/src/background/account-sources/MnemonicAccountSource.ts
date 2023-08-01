@@ -14,7 +14,7 @@ import {
 } from './AccountSource';
 import { getAllAccounts } from '../accounts';
 import { MnemonicAccount, type MnemonicSerializedAccount } from '../accounts/MnemonicAccount';
-import { setStorageEntity } from '../storage-entities-utils';
+import { backupDB, db } from '../db';
 import { makeUniqueKey } from '../storage-utils';
 import {
 	getRandomEntropy,
@@ -63,7 +63,6 @@ export class MnemonicAccountSource extends AccountSource<
 		};
 		const dataSerialized: MnemonicAccountSourceSerialized = {
 			id: makeUniqueKey(),
-			storageEntityType: 'account-source-entity',
 			type: 'mnemonic',
 			encrypted: await encrypt(password, decryptedData),
 			sourceHash: bytesToHex(sha256(entropy)),
@@ -77,7 +76,8 @@ export class MnemonicAccountSource extends AccountSource<
 				throw new Error('Mnemonic account source already exists');
 			}
 		}
-		await setStorageEntity(dataSerialized);
+		await db.accountSources.put(dataSerialized);
+		await backupDB();
 		return new MnemonicAccountSource(dataSerialized.id);
 	}
 
@@ -108,7 +108,6 @@ export class MnemonicAccountSource extends AccountSource<
 		const keyPair = await this.deriveKeyPair(derivationPath);
 		return {
 			type: 'mnemonic-derived',
-			storageEntityType: 'account-entity',
 			sourceID: this.id,
 			address: keyPair.getPublicKey().toSuiAddress(),
 			derivationPath,
@@ -145,7 +144,7 @@ export class MnemonicAccountSource extends AccountSource<
 
 	private async getAvailableDerivationPath() {
 		const derivationPathMap: Record<string, boolean> = {};
-		for (const anAccount of await getAllAccounts()) {
+		for (const anAccount of await getAllAccounts({ sourceID: this.id })) {
 			if (anAccount instanceof MnemonicAccount && (await anAccount.sourceID) === this.id) {
 				derivationPathMap[await anAccount.derivationPath] = true;
 			}

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SignedTransaction, type SignedMessage } from '@mysten/sui.js';
+import { type SignedMessage, type SignedTransaction } from '@mysten/sui.js';
 import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 
 import { type SerializedSignature, type ExportedKeypair } from '@mysten/sui.js/cryptography';
@@ -25,11 +25,11 @@ import { setTransactionRequests } from '_redux/slices/transaction-requests';
 import { type MnemonicSerializedUiAccount } from '_src/background/accounts/MnemonicAccount';
 import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
 import { type AccountsPublicInfoUpdates } from '_src/background/keyring/accounts';
-import { type UIAccessibleEntityType } from '_src/background/storage-entities-utils';
 import { NEW_ACCOUNTS_ENABLED } from '_src/shared/constants';
 import {
 	type MethodPayload,
 	isMethodPayload,
+	type UIAccessibleEntityType,
 } from '_src/shared/messaging/messages/payloads/MethodPayload';
 import {
 	isQredoConnectPayload,

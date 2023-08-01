@@ -16,7 +16,6 @@ import {
 	getUIQredoPendingRequest,
 	rejectQredoConnection,
 } from '../qredo';
-import { type UIAccessibleEntityType } from '../storage-entities-utils';
 import { createMessage } from '_messages';
 import { type ErrorPayload, isBasePayload } from '_payloads';
 import { isSetNetworkPayload, type SetNetworkPayload } from '_payloads/network';
@@ -32,6 +31,7 @@ import { growthbook } from '_src/shared/experimentation/features';
 import {
 	type MethodPayload,
 	isMethodPayload,
+	type UIAccessibleEntityType,
 } from '_src/shared/messaging/messages/payloads/MethodPayload';
 import {
 	type QredoConnectPayload,
@@ -238,10 +238,10 @@ export class UiConnection extends Connection {
 
 	private getUISerializedEntities(type: UIAccessibleEntityType) {
 		switch (type) {
-			case 'account-entity': {
+			case 'accounts': {
 				return getAllSerializedUIAccounts();
 			}
-			case 'account-source-entity': {
+			case 'accountSources': {
 				return getAllSerializedUIAccountSources();
 			}
 			default: {

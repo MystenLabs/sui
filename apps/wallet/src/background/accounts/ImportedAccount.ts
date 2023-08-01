@@ -49,7 +49,6 @@ export class ImportedAccount
 			keyPair: inputs.keyPair,
 		};
 		return {
-			storageEntityType: 'account-entity',
 			type: 'imported',
 			address: keyPair.getPublicKey().toSuiAddress(),
 			publicKey: keyPair.getPublicKey().toBase64(),
@@ -62,8 +61,8 @@ export class ImportedAccount
 		return serialized.type === 'imported';
 	}
 
-	constructor({ id }: { id: string }) {
-		super({ type: 'imported', id });
+	constructor({ id, cachedData }: { id: string; cachedData?: ImportedAccountSerialized }) {
+		super({ type: 'imported', id, cachedData });
 	}
 
 	async lock(allowRead = false): Promise<void> {

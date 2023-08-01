@@ -42,8 +42,8 @@ export class QredoAccount
 		return serialized.type === 'qredo';
 	}
 
-	constructor({ id }: { id: string }) {
-		super({ type: 'qredo', id });
+	constructor({ id, cachedData }: { id: string; cachedData?: QredoSerializedAccount }) {
+		super({ type: 'qredo', id, cachedData });
 	}
 
 	async isLocked(): Promise<boolean> {

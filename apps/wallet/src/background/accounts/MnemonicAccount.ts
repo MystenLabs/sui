@@ -45,8 +45,8 @@ export class MnemonicAccount
 		return serialized.type === 'mnemonic-derived';
 	}
 
-	constructor({ id }: { id: string }) {
-		super({ type: 'mnemonic-derived', id });
+	constructor({ id, cachedData }: { id: string; cachedData?: MnemonicSerializedAccount }) {
+		super({ type: 'mnemonic-derived', id, cachedData });
 	}
 
 	async isLocked(): Promise<boolean> {

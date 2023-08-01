@@ -1,16 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ExportedKeypair, type SerializedSignature } from '@mysten/sui.js';
+import { type ExportedKeypair, type SerializedSignature } from '@mysten/sui.js/cryptography';
 import { isBasePayload } from './BasePayload';
 import {
 	type AccountSourceSerializedUI,
 	type AccountSourceType,
 } from '_src/background/account-sources/AccountSource';
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
-import { type UIAccessibleEntityType } from '_src/background/storage-entities-utils';
 
 import type { Payload } from './Payload';
+
+export type UIAccessibleEntityType = 'accountSources' | 'accounts';
 
 type MethodPayloads = {
 	getStoredEntities: { type: UIAccessibleEntityType };

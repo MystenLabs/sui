@@ -7,16 +7,12 @@ import {
 	type Keypair,
 } from '@mysten/sui.js/cryptography';
 import { blake2b } from '@noble/hashes/blake2b';
+import { db } from '../db';
 import {
 	clearEphemeralValue,
 	getEphemeralValue,
 	setEphemeralValue,
 } from '../session-ephemeral-values';
-import {
-	type StorageEntity,
-	getStorageEntity,
-	updateStorageEntity,
-} from '../storage-entities-utils';
 import { type Serializable } from '_src/shared/cryptography/keystore';
 
 export type AccountType = 'mnemonic-derived' | 'imported' | 'ledger' | 'qredo';
@@ -30,9 +26,12 @@ export abstract class Account<
 	// optimization to avoid accessing storage for properties that don't change
 	protected cachedData: Promise<T> | null = null;
 
-	constructor({ id, type }: { id: string; type: AccountType }) {
+	constructor({ id, type, cachedData }: { id: string; type: AccountType; cachedData?: T }) {
 		this.id = id;
 		this.type = type;
+		if (cachedData) {
+			this.cachedData = Promise.resolve(cachedData);
+		}
 	}
 
 	abstract lock(allowRead: boolean): Promise<void>;
@@ -57,11 +56,11 @@ export abstract class Account<
 	}
 
 	protected async getStoredData() {
-		const data = await getStorageEntity<T>(this.id, 'account-entity');
+		const data = await db.accounts.get(this.id);
 		if (!data) {
 			throw new Error(`Account data not found. (id: ${this.id})`);
 		}
-		return data;
+		return data as T;
 	}
 
 	protected generateSignature(data: Uint8Array, keyPair: Keypair) {
@@ -74,10 +73,6 @@ export abstract class Account<
 			signatureScheme,
 			pubKey: pubkey,
 		});
-	}
-
-	protected updateStoredData(update: Parameters<typeof updateStorageEntity<T>>['2']) {
-		return updateStorageEntity<T>(this.id, 'account-entity', update);
 	}
 
 	protected getEphemeralValue(): Promise<V | null> {
@@ -95,22 +90,22 @@ export abstract class Account<
 		return clearEphemeralValue(this.id);
 	}
 
-	protected onUnlocked() {
-		return this.updateStoredData({ lastUnlockedOn: Date.now() });
+	protected async onUnlocked() {
+		return db.accounts.update(this.id, { lastUnlockedOn: Date.now() });
 	}
 
-	protected onLocked(allowRead: boolean) {
+	protected async onLocked(allowRead: boolean) {
 		// skip clearing last unlocked value to allow read access
 		// when possible (last unlocked withing time limits)
 		if (allowRead) {
 			return;
 		}
-		return this.updateStoredData({ lastUnlockedOn: null });
+		return db.accounts.update(this.id, { lastUnlockedOn: null });
 	}
 }
 
-export interface SerializedAccount extends StorageEntity {
-	readonly storageEntityType: 'account-entity';
+export interface SerializedAccount {
+	readonly id: string;
 	readonly type: AccountType;
 	readonly address: string;
 	readonly publicKey: string | null;

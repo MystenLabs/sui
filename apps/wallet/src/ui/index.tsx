@@ -21,7 +21,7 @@ import { initAppType } from '_redux/slices/app';
 import { getFromLocationSearch } from '_redux/slices/app/AppType';
 import { initAmplitude } from '_src/shared/analytics/amplitude';
 import { setAttributes } from '_src/shared/experimentation/features';
-import initSentry from '_src/shared/sentry';
+import initSentry from '_src/ui/app/helpers/sentry';
 import store from '_store';
 import { api, thunkExtras } from '_store/thunk-extras';
 

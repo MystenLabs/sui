@@ -6,9 +6,9 @@ import {
 	type AccountSourceSerialized,
 	type AccountSourceSerializedUI,
 } from './AccountSource';
+import { backupDB, db } from '../db';
 import { type QredoConnectIdentity } from '../qredo/types';
 import { isSameQredoConnection } from '../qredo/utils';
-import { setStorageEntity } from '../storage-entities-utils';
 import { makeUniqueKey } from '../storage-utils';
 import { decrypt, encrypt } from '_src/shared/cryptography/keystore';
 import { QredoAPI } from '_src/shared/qredo-api';
@@ -57,7 +57,6 @@ export class QredoAccountSource extends AccountSource<QredoAccountSourceSerializ
 		};
 		const dataSerialized: QredoAccountSourceSerialized = {
 			id: makeUniqueKey(),
-			storageEntityType: 'account-source-entity',
 			type: 'qredo',
 			apiUrl,
 			organization,
@@ -82,7 +81,8 @@ export class QredoAccountSource extends AccountSource<QredoAccountSourceSerializ
 				throw new Error('Qredo account source already exists');
 			}
 		}
-		await setStorageEntity(dataSerialized);
+		await db.accountSources.put(dataSerialized);
+		await backupDB();
 		return new QredoAccountSource(dataSerialized.id);
 	}
 

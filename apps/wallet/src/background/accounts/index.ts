@@ -11,12 +11,7 @@ import { QredoAccount } from './QredoAccount';
 import { getAccountSourceByID } from '../account-sources';
 import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
 import { type UiConnection } from '../connections/UiConnection';
-import {
-	deleteStorageEntity,
-	getAllStoredEntities,
-	getStorageEntity,
-	setStorageEntity,
-} from '../storage-entities-utils';
+import { backupDB, db } from '../db';
 import { getFromLocalStorage, makeUniqueKey } from '../storage-utils';
 import { createMessage, type Message } from '_src/shared/messaging/messages';
 import {
@@ -34,40 +29,41 @@ export const onAccountsEvent = events.on;
 export const offAccountsEvent = events.off;
 
 function toAccount(account: SerializedAccount) {
-	switch (true) {
-		case MnemonicAccount.isOfType(account):
-			return new MnemonicAccount({ id: account.id });
-		case ImportedAccount.isOfType(account):
-			return new ImportedAccount({ id: account.id });
-		case LedgerAccount.isOfType(account):
-			return new LedgerAccount({ id: account.id });
-		case QredoAccount.isOfType(account):
-			return new QredoAccount({ id: account.id });
-		default:
-			throw new Error(`Unknown account of type ${account.type}`);
+	if (MnemonicAccount.isOfType(account)) {
+		return new MnemonicAccount({ id: account.id, cachedData: account });
 	}
+	if (ImportedAccount.isOfType(account)) {
+		return new ImportedAccount({ id: account.id, cachedData: account });
+	}
+	if (LedgerAccount.isOfType(account)) {
+		return new LedgerAccount({ id: account.id, cachedData: account });
+	}
+	if (QredoAccount.isOfType(account)) {
+		return new QredoAccount({ id: account.id, cachedData: account });
+	}
+	throw new Error(`Unknown account of type ${account.type}`);
 }
 
-export async function getAllAccounts() {
-	return (await getAllStoredEntities<SerializedAccount>('account-entity')).map(toAccount);
+export async function getAllAccounts(filter?: { sourceID: string }) {
+	let accounts;
+	if (filter?.sourceID) {
+		accounts = await db.accounts.where('sourceID').equals(filter.sourceID);
+	} else {
+		accounts = db.accounts;
+	}
+	return (await accounts.toArray()).map(toAccount);
 }
 
 export async function getAccountByID(id: string) {
-	const serializedAccount = await getStorageEntity<SerializedAccount>(id, 'account-entity');
+	const serializedAccount = await db.accounts.get(id);
 	if (!serializedAccount) {
 		return null;
 	}
 	return toAccount(serializedAccount);
 }
 
-export async function getAccountByAddress(address: string) {
-	const allAccounts = await getAllAccounts();
-	for (const anAccount of allAccounts) {
-		if ((await anAccount.address) === address) {
-			return anAccount;
-		}
-	}
-	return null;
+export async function getAccountsByAddress(address: string) {
+	return (await db.accounts.where('address').equals(address).toArray()).map(toAccount);
 }
 
 export async function getAllSerializedUIAccounts() {
@@ -75,7 +71,7 @@ export async function getAllSerializedUIAccounts() {
 }
 
 export async function isAccountsInitialized() {
-	return (await getAllAccounts()).length > 0;
+	return (await db.accounts.count()) > 0;
 }
 
 export async function getActiveAccount() {
@@ -86,66 +82,79 @@ export async function getActiveAccount() {
 	return getAccountByID(accountID);
 }
 
-async function getQreqoAccountsToDelete<T extends SerializedAccount>(accounts: Omit<T, 'id'>[]) {
-	const accountIDsToDelete: string[] = [];
-	const allCurrentQredoAccounts = await Promise.all(
-		(await getAllAccounts())
-			.filter((anAccount): anAccount is QredoAccount => anAccount instanceof QredoAccount)
-			.map(async (anAccount) => ({ accountID: anAccount.id, sourceID: await anAccount.sourceID })),
-	);
-	const newAccountsQredoSourceIDs = new Set();
+async function deleteQredoAccounts<T extends SerializedAccount>(accounts: Omit<T, 'id'>[]) {
+	const newAccountsQredoSourceIDs = new Set<string>();
+	const walletIDsSet = new Set<string>();
 	for (const aNewAccount of accounts) {
-		if (aNewAccount.type === 'qredo' && 'sourceID' in aNewAccount) {
+		if (
+			aNewAccount.type === 'qredo' &&
+			'sourceID' in aNewAccount &&
+			typeof aNewAccount.sourceID === 'string' &&
+			'walletID' in aNewAccount &&
+			typeof aNewAccount.walletID === 'string'
+		) {
 			newAccountsQredoSourceIDs.add(aNewAccount.sourceID);
+			walletIDsSet.add(aNewAccount.walletID);
 		}
 	}
-	newAccountsQredoSourceIDs.forEach((anAccountSourceID) => {
-		for (const { accountID, sourceID } of allCurrentQredoAccounts) {
-			if (sourceID === anAccountSourceID) {
-				accountIDsToDelete.push(accountID);
-			}
-		}
-	});
-	return accountIDsToDelete;
+	if (!newAccountsQredoSourceIDs.size) {
+		return 0;
+	}
+	return db.accounts
+		.where('sourceID')
+		.anyOf(Array.from(newAccountsQredoSourceIDs.values()))
+		.filter(
+			(anExistingAccount) =>
+				anExistingAccount.type === 'qredo' &&
+				'walletID' in anExistingAccount &&
+				typeof anExistingAccount.walletID === 'string' &&
+				!walletIDsSet.has(anExistingAccount.walletID),
+		)
+		.delete();
 }
 
 export async function addNewAccounts<T extends SerializedAccount>(accounts: Omit<T, 'id'>[]) {
-	const accountInstances = [];
-	const accountsToDelete = await getQreqoAccountsToDelete(accounts);
-	for (const anAccountToAdd of accounts) {
-		for (const anAccount of await getAllAccounts()) {
-			if (
-				anAccountToAdd.type === 'qredo' &&
-				anAccount instanceof QredoAccount &&
-				'sourceID' in anAccountToAdd &&
-				anAccountToAdd.sourceID === (await anAccount.sourceID)
-			) {
-				// The existing account will be deleted after adding the new one
-				continue;
+	const accountsCreated = await db.transaction('rw', db.accounts, async () => {
+		// delete all existing qredo accounts that have the same sourceID (come from the same connection)
+		// and not in the new accounts list
+		await deleteQredoAccounts(accounts);
+		const accountInstances = [];
+		for (const anAccountToAdd of accounts) {
+			let id = '';
+			const existingSameAddressAccounts = await getAccountsByAddress(anAccountToAdd.address);
+			for (const anExistingAccount of existingSameAddressAccounts) {
+				if (
+					anAccountToAdd.type === 'qredo' &&
+					anExistingAccount instanceof QredoAccount &&
+					'sourceID' in anAccountToAdd &&
+					anAccountToAdd.sourceID === (await anExistingAccount.sourceID)
+				) {
+					id = anExistingAccount.id;
+					continue;
+				}
+				if (
+					(await anExistingAccount.address) === anAccountToAdd.address &&
+					anExistingAccount.type === anAccountToAdd.type
+				) {
+					// allow importing accounts that have the same address but are of different type
+					// probably it's an edge case and we used to see this problem with importing
+					// accounts that were exported from the mnemonic while testing
+					throw new Error(`Duplicated account ${anAccountToAdd.address}`);
+				}
 			}
-			if (
-				(await anAccount.address) === anAccountToAdd.address &&
-				anAccount.type === anAccountToAdd.type
-			) {
-				// allow importing accounts that have the same address but are of different type
-				// probably it's an edge case and we used to see this problem with importing
-				// accounts that were exported from the mnemonic while testing
-				throw new Error(`Duplicated account ${anAccountToAdd.address}`);
+			id = id || makeUniqueKey();
+			await db.accounts.put({ ...anAccountToAdd, id });
+			const accountInstance = await getAccountByID(id);
+			if (!accountInstance) {
+				throw new Error(`Something went wrong account with id ${id} not found`);
 			}
+			accountInstances.push(accountInstance);
 		}
-		const id = makeUniqueKey();
-		await setStorageEntity<SerializedAccount>({ ...anAccountToAdd, id });
-		const accountInstance = await getAccountByID(id);
-		if (!accountInstance) {
-			throw new Error(`Something went wrong account with id ${id} not found`);
-		}
-		accountInstances.push(accountInstance);
-	}
-	for (const anAccountID of accountsToDelete) {
-		await deleteStorageEntity(anAccountID);
-	}
+		return accountInstances;
+	});
+	await backupDB();
 	events.emit('accountsChanged', { allAccounts: await getAllAccounts() });
-	return accountInstances;
+	return accountsCreated;
 }
 
 export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConnection) {
@@ -228,6 +237,5 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 		);
 		return true;
 	}
-	// TODO implement
 	return false;
 }

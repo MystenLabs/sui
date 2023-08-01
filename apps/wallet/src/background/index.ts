@@ -13,10 +13,16 @@ import { Connections } from './connections';
 import Keyring from './keyring';
 import { deleteAccountsPublicInfo, getStoredAccountsPublicInfo } from './keyring/accounts';
 import * as Qredo from './qredo';
+import { initSentry } from './sentry';
 import { isSessionStorageSupported } from './storage-utils';
 import { openInNewTab } from '_shared/utils';
 import { MSG_CONNECT } from '_src/content-script/keep-bg-alive';
-import { setAttributes } from '_src/shared/experimentation/features';
+import { growthbook, setAttributes } from '_src/shared/experimentation/features';
+
+growthbook.loadFeatures().catch(() => {
+	// silence the error
+});
+initSentry();
 
 Browser.runtime.onInstalled.addListener(async ({ reason, previousVersion }) => {
 	// Skip automatically opening the onboarding in end-to-end tests.

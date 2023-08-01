@@ -11,7 +11,7 @@ export function useAccounts() {
 	const backgroundClient = useBackgroundClient();
 	return useQuery({
 		queryKey: accountsQueryKey,
-		queryFn: () => backgroundClient.getStoredEntities<SerializedUIAccount>('account-entity'),
+		queryFn: () => backgroundClient.getStoredEntities<SerializedUIAccount>('accounts'),
 		cacheTime: 30 * 1000,
 		staleTime: 15 * 1000,
 		refetchInterval: 5 * 1000,
