@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import cl from 'classnames';
 import { createContext, type ReactNode, useState } from 'react';
 
@@ -12,7 +11,7 @@ import DappStatus from '../dapp-status';
 import { Header } from '../header/Header';
 import { Toaster } from '../toaster';
 import { ErrorBoundary } from '_components/error-boundary';
-import { MenuButton, MenuContent } from '_components/menu';
+import { MenuContent } from '_components/menu';
 import Navigation from '_components/navigation';
 
 import st from './PageMainLayout.module.scss';
@@ -38,8 +37,6 @@ export default function PageMainLayout({
 	const appType = useAppSelector((state) => state.app.appType);
 	const isFullScreen = appType === AppType.fullscreen;
 	const [titlePortalContainer, setTitlePortalContainer] = useState<HTMLDivElement | null>(null);
-	const isSocialSignInEnabled = useFeatureIsOn('enoki-social-sign-in');
-	const menuButton = isSocialSignInEnabled ? <WalletSettingsButton /> : <MenuButton />;
 
 	return (
 		<div
@@ -50,7 +47,7 @@ export default function PageMainLayout({
 			<Header
 				networkName={networkName}
 				middleContent={dappStatusEnabled ? <DappStatus /> : <div ref={setTitlePortalContainer} />}
-				rightContent={topNavMenuEnabled ? menuButton : undefined}
+				rightContent={topNavMenuEnabled ? <WalletSettingsButton /> : undefined}
 			/>
 			<div
 				className={cl(st.content, {
