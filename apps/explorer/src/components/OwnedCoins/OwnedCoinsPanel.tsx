@@ -27,10 +27,12 @@ export default function CoinsPanel({ coinType, id }: CoinsPanelProps) {
 
 	return (
 		<div>
-			{data &&
-				data.pages.map((page) =>
-					page.data.map((coin) => <CoinItem key={coin.coinObjectId} coin={coin} />),
-				)}
+			<div className="grid grid-cols-2 gap-3">
+				{data &&
+					data.pages.map((page) =>
+						page.data.map((coin) => <CoinItem key={coin.coinObjectId} coin={coin} />),
+					)}
+			</div>
 			{isSpinnerVisible && (
 				<div ref={containerRef}>
 					<LoadingIndicator />

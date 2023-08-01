@@ -27,7 +27,14 @@ export default function OwnedCoinView({ coin, id, isRecognized }: OwnedCoinViewP
 		<Collapsible.Root open={open} onOpenChange={setOpen}>
 			<Collapsible.Trigger
 				data-testid="ownedcoinlabel"
-				className="flex w-full items-center rounded-lg py-2 text-left hover:bg-hero-darkest hover:bg-opacity-5"
+				className={clsx(
+					'flex w-full items-center rounded-lg py-2 text-left hover:bg-hero-darkest hover:bg-opacity-5',
+					open && 'bg-hero-darkest bg-opacity-5',
+				)}
+				style={{
+					borderBottomLeftRadius: open ? '0' : '8px',
+					borderBottomRightRadius: open ? '0' : '8px',
+				}}
 			>
 				<div className="flex w-[45%] items-center gap-1">
 					<ArrowShowAndHideRight12
@@ -66,7 +73,13 @@ export default function OwnedCoinView({ coin, id, isRecognized }: OwnedCoinViewP
 			</Collapsible.Trigger>
 
 			<Collapsible.Content>
-				<div className="flex flex-col gap-1 bg-gray-40 p-3">
+				<div
+					className="flex flex-col gap-1 bg-gray-40 p-3"
+					style={{
+						borderBottomLeftRadius: '8px',
+						borderBottomRightRadius: '8px',
+					}}
+				>
 					<CoinsPanel id={id} coinType={coin.coinType} />
 				</div>
 			</Collapsible.Content>
