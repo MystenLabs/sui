@@ -14,9 +14,10 @@ import CoinsPanel from './OwnedCoinsPanel';
 import { Banner } from '~/ui/Banner';
 import { Tooltip } from '~/ui/Tooltip';
 import { ampli } from '~/utils/analytics/ampli';
+import { CoinBalanceVerified } from '.';
 
 type OwnedCoinViewProps = {
-	coin: CoinBalance;
+	coin: CoinBalanceVerified;
 	id: string;
 	isRecognized?: boolean;
 };
