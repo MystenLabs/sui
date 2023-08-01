@@ -20,7 +20,7 @@ const AssetsOptionsMenu = () => {
 				<Ooo24 className="text-gray-90 w-full h-full" />
 			</Menu.Button>
 			<Menu.Items className="absolute top-4 right-0 mt-2 w-50 bg-white divide-y divide-gray-200 rounded-md z-50">
-				<div className="rounded-md w-full h-full p-2 shadow-summary-card">
+				<div className="rounded-md w-full h-full p-2 shadow-card-soft">
 					<Menu.Item>
 						{({ active }) => (
 							<Link
