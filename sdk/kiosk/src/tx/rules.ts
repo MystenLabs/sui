@@ -25,7 +25,7 @@ export function attachRoyaltyRule(
 	environment: RulesEnvironmentParam,
 ) {
 	if (Number(percentageBps) < 0 || Number(percentageBps) > 10_000)
-		throw new Error('Invalid basis point percentage.');
+		throw new Error('Invalid basis point percentage. Use a value between [0,10000].');
 
 	tx.moveCall({
 		target: `${getRulePackageAddress(environment)}::royalty_rule::add`,
