@@ -14,11 +14,11 @@ import { OwnedObjects } from '~/components/OwnedObjects';
 import { PageHeader } from '~/ui/PageHeader';
 
 function AddressResultPageHeader({ address, loading }: { address: string; loading?: boolean }) {
-	const { data: domainName, isLoading } = useResolveSuiNSName(address);
+	const { data: domainName, isFetching } = useResolveSuiNSName(address);
 
 	return (
 		<PageHeader
-			loading={isLoading || loading}
+			loading={loading || isFetching}
 			type="Address"
 			title={address}
 			subtitle={domainName}
@@ -28,9 +28,9 @@ function AddressResultPageHeader({ address, loading }: { address: string; loadin
 }
 
 function SuiNSAddressResultPageHeader({ name }: { name: string }) {
-	const { data: address, isLoading } = useResolveSuiNSAddress(name);
+	const { data: address, isFetching } = useResolveSuiNSAddress(name);
 
-	return <AddressResultPageHeader address={address ?? name} loading={isLoading} />;
+	return <AddressResultPageHeader address={address ?? name} loading={isFetching} />;
 }
 
 function AddressResult({ address }: { address: string }) {
