@@ -89,6 +89,18 @@ export class UiConnection extends Connection {
 		);
 	}
 
+	public async notifyEntitiesUpdated(entitiesType: UIAccessibleEntityType) {
+		this.send(
+			createMessage<MethodPayload<'entitiesUpdated'>>({
+				type: 'method-payload',
+				method: 'entitiesUpdated',
+				args: {
+					type: entitiesType,
+				},
+			}),
+		);
+	}
+
 	protected async handleMessage(msg: Message) {
 		const { payload, id } = msg;
 		try {

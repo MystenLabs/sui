@@ -34,6 +34,7 @@ type MethodPayloads = {
 	accountsCreatedResponse: { accounts: SerializedUIAccount[] };
 	signData: { data: string; id: string };
 	signDataResponse: { signature: SerializedSignature };
+	entitiesUpdated: { type: UIAccessibleEntityType };
 };
 
 type Methods = keyof MethodPayloads;

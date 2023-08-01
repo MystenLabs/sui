@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64 } from '@mysten/sui.js/utils';
-import mitt from 'mitt';
-import { type Account, isSigningAccount, type SerializedAccount } from './Account';
+import { isSigningAccount, type SerializedAccount } from './Account';
 import { ImportedAccount } from './ImportedAccount';
 import { LedgerAccount } from './LedgerAccount';
 import { MnemonicAccount } from './MnemonicAccount';
 import { QredoAccount } from './QredoAccount';
+import { accountsEvents } from './events';
 import { getAccountSourceByID } from '../account-sources';
 import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
 import { type UiConnection } from '../connections/UiConnection';
@@ -18,15 +18,6 @@ import {
 	type MethodPayload,
 	isMethodPayload,
 } from '_src/shared/messaging/messages/payloads/MethodPayload';
-
-type AccountsEvents = {
-	accountsChanged: { allAccounts: Account[] };
-};
-
-const events = mitt<AccountsEvents>();
-
-export const onAccountsEvent = events.on;
-export const offAccountsEvent = events.off;
 
 function toAccount(account: SerializedAccount) {
 	if (MnemonicAccount.isOfType(account)) {
@@ -153,7 +144,7 @@ export async function addNewAccounts<T extends SerializedAccount>(accounts: Omit
 		return accountInstances;
 	});
 	await backupDB();
-	events.emit('accountsChanged', { allAccounts: await getAllAccounts() });
+	accountsEvents.emit('accountsChanged');
 	return accountsCreated;
 }
 

@@ -6,6 +6,7 @@ import {
 	type AccountSourceSerialized,
 	type AccountSourceSerializedUI,
 } from './AccountSource';
+import { accountSourcesEvents } from './events';
 import { backupDB, db } from '../db';
 import { type QredoConnectIdentity } from '../qredo/types';
 import { isSameQredoConnection } from '../qredo/utils';
@@ -83,6 +84,7 @@ export class QredoAccountSource extends AccountSource<QredoAccountSourceSerializ
 		}
 		await db.accountSources.put(dataSerialized);
 		await backupDB();
+		accountSourcesEvents.emit('accountSourcesChanged');
 		return new QredoAccountSource(dataSerialized.id);
 	}
 
@@ -107,17 +109,19 @@ export class QredoAccountSource extends AccountSource<QredoAccountSourceSerializ
 		return !(await this.getEphemeralValue());
 	}
 
-	lock(): Promise<void> {
-		return this.clearEphemeralValue();
+	async lock(): Promise<void> {
+		await this.clearEphemeralValue();
+		accountSourcesEvents.emit('accountSourceStatusUpdated', { accountSourceID: this.id });
 	}
 
 	async unlock(password: string) {
 		const { encrypted } = await this.getStoredData();
 		const { refreshToken } = await decrypt<DataDecryptedV0>(password, encrypted);
-		return this.setEphemeralValue({
+		await this.setEphemeralValue({
 			refreshToken,
 			accessToken: await this.#createAccessToken(refreshToken),
 		});
+		accountSourcesEvents.emit('accountSourceStatusUpdated', { accountSourceID: this.id });
 	}
 
 	async renewAccessToken() {

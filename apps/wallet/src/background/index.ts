@@ -8,7 +8,9 @@ import Alarms, { CLEAN_UP_ALARM_NAME, LOCK_ALARM_NAME } from './Alarms';
 import NetworkEnv from './NetworkEnv';
 import Permissions from './Permissions';
 import Transactions from './Transactions';
-import { onAccountsEvent } from './accounts';
+import { accountSourcesEvents } from './account-sources/events';
+import { getAllAccounts } from './accounts';
+import { accountsEvents } from './accounts/events';
 import { Connections } from './connections';
 import Keyring from './keyring';
 import { deleteAccountsPublicInfo, getStoredAccountsPublicInfo } from './keyring/accounts';
@@ -102,10 +104,22 @@ Keyring.on('accountsChanged', async (accounts) => {
 	await Permissions.ensurePermissionAccountsUpdated(accounts);
 });
 
-onAccountsEvent('accountsChanged', async ({ allAccounts }) => {
+accountsEvents.on('accountsChanged', async () => {
+	connections.notifyUI({ event: 'storedEntitiesUpdated', type: 'accounts' });
 	await Permissions.ensurePermissionAccountsUpdated(
-		await Promise.all(allAccounts.map(async (anAccount) => ({ address: await anAccount.address }))),
+		await Promise.all(
+			(await getAllAccounts()).map(async (anAccount) => ({ address: await anAccount.address })),
+		),
 	);
+});
+accountsEvents.on('accountStatusChanged', () => {
+	connections.notifyUI({ event: 'storedEntitiesUpdated', type: 'accounts' });
+});
+accountSourcesEvents.on('accountSourceStatusUpdated', () => {
+	connections.notifyUI({ event: 'storedEntitiesUpdated', type: 'accountSources' });
+});
+accountSourcesEvents.on('accountSourcesChanged', () => {
+	connections.notifyUI({ event: 'storedEntitiesUpdated', type: 'accountSources' });
 });
 
 Browser.alarms.onAlarm.addListener((alarm) => {

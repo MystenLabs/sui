@@ -5,17 +5,14 @@ import { type ExportedKeypair } from '@mysten/sui.js/cryptography';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { toB64 } from '@mysten/sui.js/utils';
 import { hexToBytes } from '@noble/hashes/utils';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Toaster, toast } from 'react-hot-toast';
 import { type BackgroundClient } from '../../background-client';
 import { ConnectLedgerModal } from '../../components/ledger/ConnectLedgerModal';
 import LoadingIndicator from '../../components/loading/LoadingIndicator';
-import {
-	accountSourcesQueryKey,
-	useAccountSources,
-} from '../../hooks/accounts-v2/useAccountSources';
-import { accountsQueryKey, useAccounts } from '../../hooks/accounts-v2/useAccounts';
+import { useAccountSources } from '../../hooks/accounts-v2/useAccountSources';
+import { useAccounts } from '../../hooks/accounts-v2/useAccounts';
 import { useSigner } from '../../hooks/accounts-v2/useSigner';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { useQredoTransaction } from '../../hooks/useQredoTransaction';
@@ -53,7 +50,6 @@ export function AccountsDev() {
 	const accountSources = useAccountSources();
 	const accounts = useAccounts();
 	const backgroundClient = useBackgroundClient();
-	const queryClient = useQueryClient();
 	const createMnemonic = useMutation({
 		mutationKey: ['accounts', 'v2', 'new', 'mnemonic', 'account source'],
 		mutationFn: (entropy?: Uint8Array) =>
@@ -61,9 +57,6 @@ export function AccountsDev() {
 				password: testPassNewAccounts,
 				entropy: entropy ? entropyToSerialized(entropy) : undefined,
 			}),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ exact: true, queryKey: accountSourcesQueryKey });
-		},
 	});
 	const importKey = useMutation({
 		mutationKey: ['accounts', 'v2', 'import key'],
@@ -73,9 +66,6 @@ export function AccountsDev() {
 				password: testPassNewAccounts,
 				keyPair,
 			}),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ exact: true, queryKey: accountsQueryKey });
-		},
 	});
 	const [isConnectLedgerModalVisible, setIsConnectLedgerModalVisible] = useState(false);
 	const [isImportLedgerModalVisible, setIsImportLedgerModalVisible] = useState(false);
@@ -195,7 +185,6 @@ export function AccountsDev() {
 							onClose={() => setIsImportLedgerModalVisible(false)}
 							onConfirmed={() => {
 								setIsImportLedgerModalVisible(false);
-								queryClient.invalidateQueries({ exact: true, queryKey: accountsQueryKey });
 							}}
 						/>
 					</>
@@ -207,42 +196,28 @@ export function AccountsDev() {
 
 function useLockMutation() {
 	const backgroundClient = useBackgroundClient();
-	const queryClient = useQueryClient();
 	return useMutation({
 		mutationKey: ['accounts', 'v2', 'lock', 'account source or account'],
 		mutationFn: async (inputs: { id: string }) =>
 			backgroundClient.lockAccountSourceOrAccount(inputs),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ exact: true, queryKey: accountSourcesQueryKey });
-			queryClient.invalidateQueries({ exact: true, queryKey: accountsQueryKey });
-		},
 	});
 }
 
 function useUnlockMutation() {
 	const backgroundClient = useBackgroundClient();
-	const queryClient = useQueryClient();
 	return useMutation({
 		mutationKey: ['accounts', 'v2', 'unlock', 'account source or account'],
 		mutationFn: async (inputs: Parameters<BackgroundClient['unlockAccountSourceOrAccount']>['0']) =>
 			backgroundClient.unlockAccountSourceOrAccount(inputs),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ exact: true, queryKey: accountSourcesQueryKey });
-			queryClient.invalidateQueries({ exact: true, queryKey: accountsQueryKey });
-		},
 	});
 }
 
 function AccountSource({ accountSource }: { accountSource: AccountSourceSerializedUI }) {
 	const backgroundClient = useBackgroundClient();
-	const queryClient = useQueryClient();
 	const deriveNextMnemonicAccount = useMutation({
 		mutationKey: ['accounts', 'v2', 'mnemonic', 'new account'],
 		mutationFn: (inputs: { sourceID: string }) =>
 			backgroundClient.createAccounts({ type: 'mnemonic-derived', ...inputs }),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ exact: true, queryKey: accountsQueryKey });
-		},
 	});
 	const lock = useLockMutation();
 	const unlock = useUnlockMutation();

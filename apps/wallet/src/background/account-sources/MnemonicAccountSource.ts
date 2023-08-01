@@ -12,6 +12,7 @@ import {
 	type AccountSourceSerializedUI,
 	type AccountSourceSerialized,
 } from './AccountSource';
+import { accountSourcesEvents } from './events';
 import { getAllAccounts } from '../accounts';
 import { MnemonicAccount, type MnemonicSerializedAccount } from '../accounts/MnemonicAccount';
 import { backupDB, db } from '../db';
@@ -78,6 +79,7 @@ export class MnemonicAccountSource extends AccountSource<
 		}
 		await db.accountSources.put(dataSerialized);
 		await backupDB();
+		accountSourcesEvents.emit('accountSourcesChanged');
 		return new MnemonicAccountSource(dataSerialized.id);
 	}
 
@@ -96,11 +98,13 @@ export class MnemonicAccountSource extends AccountSource<
 	}
 
 	async unlock(password: string) {
-		return this.setEphemeralValue(await decrypt(password, (await this.getStoredData()).encrypted));
+		await this.setEphemeralValue(await decrypt(password, (await this.getStoredData()).encrypted));
+		accountSourcesEvents.emit('accountSourceStatusUpdated', { accountSourceID: this.id });
 	}
 
-	lock() {
-		return this.clearEphemeralValue();
+	async lock() {
+		await this.clearEphemeralValue();
+		accountSourcesEvents.emit('accountSourceStatusUpdated', { accountSourceID: this.id });
 	}
 
 	async deriveAccount(): Promise<Omit<MnemonicSerializedAccount, 'id'>> {

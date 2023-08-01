@@ -111,9 +111,7 @@ export async function accountSourcesHandleUIMessage(msg: Message, uiConnection: 
 		const accountSource = await getAccountSourceByID(id);
 		if (accountSource) {
 			await accountSource.unlock(password);
-			// TODO: Auto lock timer
 			await uiConnection.send(createMessage({ type: 'done' }, msg.id));
-			// TODO: emit event to notify UI?
 			return true;
 		}
 	}

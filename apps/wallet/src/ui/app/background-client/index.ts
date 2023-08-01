@@ -6,9 +6,13 @@ import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 
 import { type SerializedSignature, type ExportedKeypair } from '@mysten/sui.js/cryptography';
 import { toB64 } from '@mysten/sui.js/utils';
+import { type QueryKey } from '@tanstack/react-query';
 import { lastValueFrom, map, take } from 'rxjs';
 
 import { growthbook } from '../experimentation/feature-gating';
+import { queryClient } from '../helpers/queryClient';
+import { accountSourcesQueryKey } from '../hooks/accounts-v2/useAccountSources';
+import { accountsQueryKey } from '../hooks/accounts-v2/useAccounts';
 import { createMessage } from '_messages';
 import { PortStream } from '_messaging/PortStream';
 import { type BasePayload } from '_payloads';
@@ -44,6 +48,11 @@ import type { GetTransactionRequests } from '_payloads/transactions/ui/GetTransa
 import type { TransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
 import type { NetworkEnvType } from '_src/background/NetworkEnv';
 import type { AppDispatch } from '_store';
+
+const entitiesToClientQueryKeys: Record<UIAccessibleEntityType, QueryKey> = {
+	accounts: accountsQueryKey,
+	accountSources: accountSourcesQueryKey,
+};
 
 /**
  * The duration in milliseconds that the UI sends status updates (active/inactive) to the background service.
@@ -600,6 +609,11 @@ export class BackgroundClient {
 			action = changeActiveNetwork({
 				network: payload.network,
 			});
+		} else if (isMethodPayload(payload, 'entitiesUpdated')) {
+			const entitiesQueryKey = entitiesToClientQueryKeys[payload.args.type];
+			if (entitiesQueryKey) {
+				queryClient.invalidateQueries(entitiesQueryKey);
+			}
 		}
 		if (action) {
 			this._dispatch(action);
