@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import cl from 'classnames';
 import { memo } from 'react';
 
@@ -22,15 +21,13 @@ export type PageLayoutProps = {
 function PageLayout({ forceFullscreen = false, children, className }: PageLayoutProps) {
 	const guardLoading = useFullscreenGuard(forceFullscreen);
 	const isNavVisible = useAppSelector(getNavIsVisible);
-	const isSocialSignInEnabled = useFeatureIsOn('enoki-social-sign-in');
 
 	return (
 		<Loading loading={guardLoading}>
 			<div
 				className={cl('w-popup-width h-popup-height', st.container, className, {
 					[st.navHidden]: !isNavVisible,
-					'h-popup-height': !isSocialSignInEnabled,
-					'h-popup-height-v2': isSocialSignInEnabled,
+					'h-popup-height': true,
 				})}
 			>
 				{children}

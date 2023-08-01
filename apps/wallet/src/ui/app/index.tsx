@@ -7,6 +7,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { useInitialPageView } from './hooks/useInitialPageView';
 import { ProtectAccountPage } from './pages/accounts/ProtectAccountPage';
+import { TokensV2 } from './pages/enoki-onboarding/TokensV2';
 import AssetsPage from './pages/home/assets';
 import { QredoConnectInfoPage } from './pages/qredo-connect/QredoConnectInfoPage';
 import { SelectQredoAccountsPage } from './pages/qredo-connect/SelectQredoAccountsPage';
@@ -97,6 +98,9 @@ const App = () => {
 			<Route path="welcome" element={isSocialSignInEnabled ? <WelcomePageV2 /> : <WelcomePage />} />
 			{isSocialSignInEnabled && (
 				<>
+					<Route path="/*" element={<HomePage />}>
+						<Route path="home" element={<TokensV2 />} />
+					</Route>
 					<Route path="/account">
 						<Route path="forgot-password" element={<ForgotPasswordPageV2 />} />
 					</Route>
