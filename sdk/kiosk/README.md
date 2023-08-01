@@ -211,9 +211,15 @@ const withdraw = async () => {
 
 You can create a TransferPolicy only for packages for which you own the `publisher` object.
 
-As a best practice, you should use a single Transfer policy per type (T). If you use more than one policy for a type, and the rules for each differ, anyone that meets the conditions for any of the attached policies can purchase an asset from a kiosk. You can't specify which policy applies to a specific asset for the type when there is more than one policy attached. When someone meets the conditions that are easiest to meet, they are allowed to purchase and transfer the asset.
+As a best practice, you should use a single Transfer policy per type (T). If you use more than one
+policy for a type, and the rules for each differ, anyone that meets the conditions for any of the
+attached policies can purchase an asset from a kiosk. You can't specify which policy applies to a
+specific asset for the type when there is more than one policy attached. When someone meets the
+conditions that are easiest to meet, they are allowed to purchase and transfer the asset.
 
-Before you create a transfer policy, you can use the `queryTransferpolicy` function to check the transfer policy associated with a type. This is similar to the `purchaseAndResolvePolicies` example above.
+Before you create a transfer policy, you can use the `queryTransferpolicy` function to check the
+transfer policy associated with a type. This is similar to the `purchaseAndResolvePolicies` example
+above.
 
 ```typescript
 import { createTransferPolicy } from '@mysten/kiosk';
