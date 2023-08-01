@@ -15,7 +15,7 @@ import { getRulePackageAddress, objArg } from '../utils';
  * 	@param percentageBps The royalty percentage in basis points. Use `percentageToBasisPoints` helper to convert from percentage [0,100].
  * 	@param minAmount The minimum royalty amount per request in MIST.
  */
-export const attachRoyaltyRule = (
+export function attachRoyaltyRule(
 	tx: TransactionBlock,
 	type: string,
 	policy: ObjectArgument,
@@ -23,7 +23,7 @@ export const attachRoyaltyRule = (
 	percentageBps: number | string, // this is in basis points.
 	minAmount: number | string,
 	environment: RulesEnvironmentParam,
-) => {
+) {
 	if (Number(percentageBps) < 0 || Number(percentageBps) > 10_000)
 		throw new Error('Invalid basis point percentage.');
 
@@ -37,22 +37,22 @@ export const attachRoyaltyRule = (
 			tx.pure(minAmount, 'u64'),
 		],
 	});
-};
+}
 
 /**
  * Adds the Kiosk Lock Rule to the Transfer Policy.
  * This Rule forces buyer to lock the item in the kiosk, preserving strong royalties.
  */
-export const attachKioskLockRule = (
+export function attachKioskLockRule(
 	tx: TransactionBlock,
 	type: string,
 	policy: ObjectArgument,
 	policyCap: ObjectArgument,
 	environment: RulesEnvironmentParam,
-) => {
+) {
 	tx.moveCall({
 		target: `${getRulePackageAddress(environment)}::kiosk_lock_rule::add`,
 		typeArguments: [type],
 		arguments: [objArg(tx, policy), objArg(tx, policyCap)],
 	});
-};
+}
