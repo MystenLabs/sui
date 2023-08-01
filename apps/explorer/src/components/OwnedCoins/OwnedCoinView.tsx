@@ -27,7 +27,7 @@ export default function OwnedCoinView({ coin, id, isRecognized }: OwnedCoinViewP
 		<Collapsible.Root open={open} onOpenChange={setOpen}>
 			<Collapsible.Trigger
 				data-testid="ownedcoinlabel"
-				className="flex w-full items-center rounded-none py-2 text-left hover:bg-sui-light"
+				className="flex w-full items-center py-2 text-left rounded-lg hover:bg-hero-darkest hover:bg-opacity-5"
 			>
 				<div className="flex w-[40%] items-center gap-1">
 					<ArrowShowAndHideRight12
