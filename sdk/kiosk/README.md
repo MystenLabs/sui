@@ -41,6 +41,7 @@ const getUserKiosks = async () => {
 
 </details>
 
+<details>
 <summary>Getting the listings & items by the kiosk's ID</summary>
 
 ```typescript
