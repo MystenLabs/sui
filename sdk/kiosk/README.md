@@ -20,49 +20,28 @@ You can also use your preferred package manager, such as yarn or pnpm.
 Here are some indicative examples on how to use the kiosk SDK.
 
 <details>
-<summary>Find an addresses' owned kiosk(s)</summary>
+<summary>Find the kiosks owned by an address</summary>
 
 ```typescript
 import { getOwnedKiosks } from '@mysten/kiosk';
 import { SuiClient } from '@mysten/sui.js/client';
 
-const provider = new JsonRpcProvider(
-	new Connection({ fullnode: 'https://fullnode.testnet.sui.io:443' }),
-);
-
-// You could use these to fetch the contents for each kiosk, or use the `kioskOwnerCap` data for other actions.
-const getUserKiosks = async () => {
-	const address = `0xAddress`;
-	const { data } = await getOwnedKiosks(provider, address);
-	console.log(data); // kioskOwnerCaps:[], kioskIds: []
-};
-```
-
-</details>
-
-<details>
-<summary>Find an addresses' owned kiosk(s)</summary>
-
-```typescript
-import { fetchKiosk } from '@mysten/kiosk';
-import { Connection, JsonRpcProvider } from '@mysten/sui.js';
-
 const client = new SuiClient(
-	url: 'https://fullnode.testnet.sui.io:443',
+  url: 'https://fullnode.testnet.sui.io:443',
 );
+
 
 // You could use these to fetch the contents for each kiosk, or use the `kioskOwnerCap` data for other actions.
 const getUserKiosks = async () => {
 	const address = `0xAddress`;
-	const { data } = await getOwnedKiosks(provider, address);
+	const { data } = await getOwnedKiosks(client, address);
 	console.log(data); // kioskOwnerCaps:[], kioskIds: []
 };
 ```
 
 </details>
 
-<details>
-<summary>Getting the listings & items by the kiosk's id</summary>
+<summary>Getting the listings & items by the kiosk's ID</summary>
 
 ```typescript
 import { fetchKiosk } from '@mysten/kiosk';
@@ -229,13 +208,11 @@ const withdraw = async () => {
 
 <summary>Create a Transfer Policy for a Type</summary>
 
-You can only create a TransferPolicy for packages that you own the `publisher` Object.
+You can create a TransferPolicy only for packages for which you own the `publisher` object.
 
-It's recommended (unless you have a more advanced use case) to create only one transfer policy per type, or make sure that all transfer policies have the same rules.
+As a best practice, you should use a single Transfer policy per type (T). If you use more than one policy for a type, and the rules for each differ, anyone that meets the conditions for any of the attached policies can purchase an asset from a kiosk. You can't specify which policy applies to a specific asset for the type when there is more than one policy attached. When someone meets the conditions that are easiest to meet, they are allowed to purchase and transfer the asset.
 
-If you have multiple transfer policies, someone could purchase an item of that Type from a kiosk by using the easiest (to resolve) rules.
-
-You could extend the following snippet to do a check before creating the transfer policy, by using the `queryTransferPolicy` function, similar to the `purchaseAndResolvePolicies` example.
+Before you create a transfer policy, you can use the `queryTransferpolicy` function to check the transfer policy associated with a type. This is similar to the `purchaseAndResolvePolicies` example above.
 
 ```typescript
 import { createTransferPolicy } from '@mysten/kiosk';
@@ -261,7 +238,7 @@ const createPolicyForType = async () => {
 
 <details>
 
-<summary>Attach Rules (Royalty, Kiosk Lock) to the Transfer Policy</summary>
+<summary>Attach Royalty and Lock rules to a Transfer policy</summary>
 
 ```typescript
 import {
