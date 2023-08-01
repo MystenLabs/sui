@@ -130,13 +130,13 @@ export function OwnedCoins({ id }: { id: string }) {
 					<div className="flex max-h-80 flex-col overflow-auto">
 						<div className="mb-2.5 flex uppercase tracking-wider text-gray-80">
 							<div className="w-[45%]">
-								<Text variant="caption/medium">Type</Text>
+								<Text variant="caption/medium" color="steel-dark">Type</Text>
 							</div>
 							<div className="w-[25%] px-2">
-								<Text variant="caption/medium">Objects</Text>
+								<Text variant="caption/medium" color="steel-dark">Objects</Text>
 							</div>
 							<div className="w-[30%]">
-								<Text variant="caption/medium">Balance</Text>
+								<Text variant="caption/medium" color="steel-dark">Balance</Text>
 							</div>
 						</div>
 						<div>
