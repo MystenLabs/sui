@@ -8,10 +8,6 @@ import * as React from 'react';
 export const Dialog = RadixDialog.Root;
 export const DialogTrigger = RadixDialog.Trigger;
 
-const DialogPortal = ({ className, ...props }: RadixDialog.DialogPortalProps) => (
-	<RadixDialog.Portal className={cx(className)} {...props} />
-);
-
 const DialogOverlay = React.forwardRef<
 	React.ElementRef<typeof RadixDialog.Overlay>,
 	React.ComponentPropsWithoutRef<typeof RadixDialog.Overlay>
@@ -30,7 +26,7 @@ export const DialogContent = React.forwardRef<
 	React.ElementRef<typeof RadixDialog.Content>,
 	React.ComponentPropsWithoutRef<typeof RadixDialog.Content>
 >(({ className, ...props }, ref) => (
-	<DialogPortal>
+	<RadixDialog.Portal>
 		<DialogOverlay />
 		<RadixDialog.Content
 			ref={ref}
@@ -40,7 +36,7 @@ export const DialogContent = React.forwardRef<
 			)}
 			{...props}
 		/>
-	</DialogPortal>
+	</RadixDialog.Portal>
 ));
 
 export const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
