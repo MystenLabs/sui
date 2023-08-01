@@ -115,6 +115,7 @@ export { default as Search24 } from './Search24';
 export { default as Send24 } from './Send24';
 export { default as SendReceive16 } from './SendReceive16';
 export { default as Sender16 } from './Sender16';
+export { default as Settings24 } from './Settings24';
 export { default as Settings32 } from './Settings32';
 export { default as SocialDiscord24 } from './SocialDiscord24';
 export { default as SocialFacebook24 } from './SocialFacebook24';

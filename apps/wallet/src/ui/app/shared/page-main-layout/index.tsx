@@ -1,9 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import cl from 'classnames';
 import { createContext, type ReactNode, useState } from 'react';
 
+import { WalletSettingsButton } from '../../components/menu/button/WalletSettingsButton';
 import { useAppSelector } from '../../hooks';
 import { AppType } from '../../redux/slices/app/AppType';
 import DappStatus from '../dapp-status';
@@ -36,6 +38,9 @@ export default function PageMainLayout({
 	const appType = useAppSelector((state) => state.app.appType);
 	const isFullScreen = appType === AppType.fullscreen;
 	const [titlePortalContainer, setTitlePortalContainer] = useState<HTMLDivElement | null>(null);
+	const isSocialSignInEnabled = useFeatureIsOn('enoki-social-sign-in');
+	const menuButton = isSocialSignInEnabled ? <WalletSettingsButton /> : <MenuButton />;
+
 	return (
 		<div
 			className={cl(st.container, {
@@ -45,7 +50,7 @@ export default function PageMainLayout({
 			<Header
 				networkName={networkName}
 				middleContent={dappStatusEnabled ? <DappStatus /> : <div ref={setTitlePortalContainer} />}
-				rightContent={topNavMenuEnabled ? <MenuButton /> : undefined}
+				rightContent={topNavMenuEnabled ? menuButton : undefined}
 			/>
 			<div
 				className={cl(st.content, {
