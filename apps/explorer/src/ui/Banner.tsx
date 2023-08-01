@@ -112,7 +112,7 @@ export function Banner({
 			{icon && <div className="flex items-center justify-center">{icon}</div>}
 			<div className="flex flex-col gap-1">
 				{title && <Text variant="bodySmall/semibold">{title}</Text>}
-				<div className="overflow-hidden break-words">{children}</div>
+				<div className="overflow-hidden break-words break-all">{children}</div>
 			</div>
 			{onDismiss ? (
 				<div className="absolute right-0 top-0">

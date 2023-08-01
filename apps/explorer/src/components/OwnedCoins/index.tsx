@@ -116,9 +116,9 @@ export function OwnedCoins({ id }: { id: string }) {
 					</div>
 					{filterValue === COIN_FILTERS.UNRECOGNIZED && (
 						<div className="border border-gray-45 rounded-full">
-							<Banner variant="neutralWhite" break="words">
+							{/* <Banner variant="neutralWhite"> */}
 								<Text variant="body/medium">These coins have not been recognized by Sui Foundation.</Text>
-							</Banner>
+							{/* </Banner> */}
 						</div>
 					)}
 
