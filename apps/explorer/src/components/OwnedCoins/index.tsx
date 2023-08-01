@@ -94,7 +94,7 @@ export function OwnedCoins({ id }: { id: string }) {
 
 	return (
 		<div className="h-full w-full">
-			{!isLoading ? (
+			{isLoading ? (
 				<div className="m-auto flex h-full w-full justify-center text-white">
 					<LoadingIndicator />
 				</div>
