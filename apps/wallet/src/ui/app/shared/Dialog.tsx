@@ -21,6 +21,7 @@ const DialogOverlay = React.forwardRef<
 		{...props}
 	/>
 ));
+DialogOverlay.displayName = RadixDialog.Overlay.displayName;
 
 const DialogContent = React.forwardRef<
 	React.ElementRef<typeof RadixDialog.Content>,
@@ -38,7 +39,7 @@ const DialogContent = React.forwardRef<
 		/>
 	</RadixDialog.Portal>
 ));
-DialogOverlay.displayName = RadixDialog.Overlay.displayName;
+DialogContent.displayName = RadixDialog.Content.displayName;
 
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
 	<div className={cx('flex flex-col gap-1.5 text-center', className)} {...props} />
