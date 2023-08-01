@@ -10,13 +10,14 @@ use std::collections::BTreeMap;
 use sui_types::base_types::ObjectRef;
 use sui_types::digests::TransactionDigest;
 use sui_types::error::{SuiError, SuiObjectResponseError, UserInputError};
-use sui_types::quorum_driver_types::{QuorumDriverError, NON_RECOVERABLE_ERROR_MSG};
+use sui_types::quorum_driver_types::QuorumDriverError;
 use thiserror::Error;
 use tokio::task::JoinError;
 
 use crate::authority_state::StateReadError;
 
 pub const TRANSIENT_ERROR_CODE: i32 = -32001;
+pub const TRANSACTION_EXECUTION_CLIENT_ERROR_CODE: i32 = -32002;
 
 pub type RpcInterimResult<T = ()> = Result<T, Error>;
 
@@ -144,7 +145,11 @@ pub fn match_quorum_driver_error(err: QuorumDriverError) -> RpcError {
 
             let error_message = format!("Invalid user signature: {inner_error_str}");
 
-            let error_object = ErrorObject::owned(INVALID_PARAMS_CODE, error_message, None::<()>);
+            let error_object = ErrorObject::owned(
+                TRANSACTION_EXECUTION_CLIENT_ERROR_CODE,
+                error_message,
+                None::<()>,
+            );
             RpcError::Call(CallError::Custom(error_object))
         }
         QuorumDriverError::TimeoutBeforeFinality
@@ -181,7 +186,7 @@ pub fn match_quorum_driver_error(err: QuorumDriverError) -> RpcError {
             RpcError::Call(CallError::Custom(error_object))
         }
         QuorumDriverError::NonRecoverableTransactionError { errors } => {
-            let mut new_errors: Vec<String> = errors
+            let new_errors: Vec<String> = errors
                 .into_iter()
                 .filter(|(err, _, _)| !err.is_retryable().0) // consider retryable errors as transient errors
                 .map(|(err, _, _)| {
@@ -193,17 +198,16 @@ pub fn match_quorum_driver_error(err: QuorumDriverError) -> RpcError {
                 })
                 .collect();
 
+            let mut error_code = TRANSACTION_EXECUTION_CLIENT_ERROR_CODE;
+            let mut error_msg = "Transaction execution failed due to issues with transaction inputs. Please review the 'data' field and try again.";
+
             if new_errors.is_empty() {
-                new_errors.push(
-                    "Transient errors occurred during execution. Please try again.".to_string(),
-                );
+                error_code = TRANSIENT_ERROR_CODE;
+                error_msg =
+                    "Transaction execution failed due to transient errors. Please try again."
             }
 
-            let error_object = ErrorObject::owned(
-                INVALID_PARAMS_CODE,
-                NON_RECOVERABLE_ERROR_MSG,
-                Some(new_errors),
-            );
+            let error_object = ErrorObject::owned(error_code, error_msg, Some(new_errors));
             RpcError::Call(CallError::Custom(error_object))
         }
         QuorumDriverError::QuorumDriverInternalError(_) => {
@@ -289,7 +293,7 @@ mod tests {
             let rpc_error = match_quorum_driver_error(quorum_driver_error);
 
             let error_object: ErrorObjectOwned = rpc_error.into();
-            let expected_code = expect!["-32602"];
+            let expected_code = expect!["-32001"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message = expect![
                 "Invalid user signature: Signature is not valid: Test inner invalid signature"
@@ -304,7 +308,7 @@ mod tests {
             let rpc_error = match_quorum_driver_error(quorum_driver_error);
 
             let error_object: ErrorObjectOwned = rpc_error.into();
-            let expected_code = expect!["-32001"];
+            let expected_code = expect!["-32002"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message = expect!["Transaction timed out before reaching finality"];
             expected_message.assert_eq(error_object.message());
@@ -320,7 +324,7 @@ mod tests {
             let rpc_error = match_quorum_driver_error(quorum_driver_error);
 
             let error_object: ErrorObjectOwned = rpc_error.into();
-            let expected_code = expect!["-32001"];
+            let expected_code = expect!["-32002"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message = expect![
                 "Transaction failed to reach finality with transient error after 10 attempts."
@@ -355,7 +359,7 @@ mod tests {
             let expected_message = expect!["Failed to sign transaction by a quorum of validators because of locked objects. Retried a conflicting transaction Some(TransactionDigest(11111111111111111111111111111111)), success: Some(true)"];
             expected_message.assert_eq(error_object.message());
             let expected_data = expect![[
-                r#"{"11111111111111111111111111111111":[["0x7da78de297e53bf42590250788d7e5e0e3ff355330ea1393d4d7dce86682ec7b",0,"11111111111111111111111111111111"]]}"#
+                r#"{"11111111111111111111111111111111":[["0xaa7c752529db203b5bf37795d37bb998650e8baba9302441fcb1eebb682942a8",0,"11111111111111111111111111111111"]]}"#
             ]];
             let actual_data = error_object.data().unwrap().to_string();
             expected_data.assert_eq(&actual_data);
@@ -391,13 +395,13 @@ mod tests {
             let rpc_error = match_quorum_driver_error(quorum_driver_error);
 
             let error_object: ErrorObjectOwned = rpc_error.into();
-            let expected_code = expect!["-32602"];
+            let expected_code = expect!["-32001"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message =
-                expect!["Transaction has non recoverable errors from at least 1/3 of validators"];
+                expect!["Transaction execution failed due to issues with transaction inputs. Please review the 'data' field and try again."];
             expected_message.assert_eq(error_object.message());
             let expected_data = expect![[
-                r#"["Balance of gas object 10 is lower than the needed amount: 100.","Object (0xcf9722a6c9421d8c5b1df13455da03d81e0372bd8ac982a3c0092112235fef14, SequenceNumber(0), o#11111111111111111111111111111111) is not available for consumption, its current version: SequenceNumber(10)."]"#
+                r#"["Balance of gas object 10 is lower than the needed amount: 100.","Object (0x88d272a6773e6b8ed57f28b9e0eabb45f34ba39aaa1e88610ef242f0847071a6, SequenceNumber(0), o#11111111111111111111111111111111) is not available for consumption, its current version: SequenceNumber(10)."]"#
             ]];
             let actual_data = error_object.data().unwrap().to_string();
             expected_data.assert_eq(&actual_data);
@@ -428,13 +432,12 @@ mod tests {
             let rpc_error = match_quorum_driver_error(quorum_driver_error);
 
             let error_object: ErrorObjectOwned = rpc_error.into();
-            let expected_code = expect!["-32602"];
+            let expected_code = expect!["-32002"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message =
-                expect!["Transaction has non recoverable errors from at least 1/3 of validators"];
+                expect!["Transaction execution failed due to transient errors. Please try again."];
             expected_message.assert_eq(error_object.message());
-            let expected_data =
-                expect![[r#"["Transient errors occurred during execution. Please try again."]"#]];
+            let expected_data = expect!["[]"];
             let actual_data = error_object.data().unwrap().to_string();
             expected_data.assert_eq(&actual_data);
         }
