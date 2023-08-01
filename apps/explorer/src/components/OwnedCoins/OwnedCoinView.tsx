@@ -42,7 +42,6 @@ export default function OwnedCoinView({ coin, id, isRecognized }: OwnedCoinViewP
 					<ArrowShowAndHideRight12
 						className={clsx('text-gray-60', open && 'rotate-90 transform')}
 					/>
-					{/* TODO: change unrecognized coin balances and amounts to sui-40 */}
 					{/* fade in 300ms for pills */}
 					<div className="flex items-center gap-3">
 						<CoinIcon coinType={coin.coinType} size="sm" />
@@ -68,13 +67,13 @@ export default function OwnedCoinView({ coin, id, isRecognized }: OwnedCoinViewP
 				</div>
 
 				<div className="flex w-[25%] px-2">
-					<Text color="steel-darker" variant="body/medium">
+					<Text color={isRecognized ? 'steel-darker' : 'gray-60'} variant="body/medium">
 						{coin.coinObjectCount}
 					</Text>
 				</div>
 
 				<div className="flex w-[30%] items-center gap-1">
-					<Text color="steel-darker" variant="bodySmall/medium">
+					<Text color={isRecognized ? 'steel-darker' : 'gray-60'} variant="bodySmall/medium">
 						{formattedTotalBalance}
 					</Text>
 					<Text color="steel" variant="subtitleSmallExtra/normal">
