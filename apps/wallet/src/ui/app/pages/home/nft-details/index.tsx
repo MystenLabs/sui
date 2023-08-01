@@ -10,7 +10,7 @@ import { Navigate, useSearchParams } from 'react-router-dom';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import { Button } from '_app/shared/ButtonUI';
 import { Link } from '_app/shared/Link';
-import { Collapse } from '_app/shared/collapse';
+import { Collapsible } from '_app/shared/collapse';
 import { LabelValueItem } from '_components/LabelValueItem';
 import { LabelValuesContainer } from '_components/LabelValuesContainer';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
@@ -137,7 +137,7 @@ function NFTDetailsPage() {
 									}
 								/>
 							</LabelValuesContainer>
-							<Collapse initialIsOpen title="Details">
+							<Collapsible defaultOpen title="Details">
 								<LabelValuesContainer>
 									<LabelValueItem label="Name" value={nftDisplayData?.name} />
 									<LabelValueItem
@@ -149,9 +149,9 @@ function NFTDetailsPage() {
 									<LabelValueItem label="Link" value={nftDisplayData?.link} parseUrl />
 									<LabelValueItem label="Website" value={nftDisplayData?.projectUrl} parseUrl />
 								</LabelValuesContainer>
-							</Collapse>
+							</Collapsible>
 							{metaKeys.length ? (
-								<Collapse title="Attributes" initialIsOpen>
+								<Collapsible title="Attributes" defaultOpen>
 									<LabelValuesContainer>
 										{metaKeys.map((aKey, idx) => (
 											<LabelValueItem
@@ -165,7 +165,7 @@ function NFTDetailsPage() {
 											/>
 										))}
 									</LabelValuesContainer>
-								</Collapse>
+								</Collapsible>
 							) : null}
 
 							{isContainedInKiosk && kioskItem?.isLocked ? (

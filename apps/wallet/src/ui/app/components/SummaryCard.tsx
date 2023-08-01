@@ -29,7 +29,7 @@ export function SummaryCard({
 	return (
 		<div
 			className={clsx(
-				{ 'border border-solid border-gray-45': !noBorder, 'shadow-summary-card': boxShadow },
+				{ 'border border-solid border-gray-45': !noBorder, 'shadow-card-soft': boxShadow },
 				'bg-white flex flex-col flex-nowrap rounded-2xl w-full',
 			)}
 		>

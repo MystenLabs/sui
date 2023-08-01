@@ -14,7 +14,7 @@ import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerL
 import Loading from '_src/ui/app/components/loading';
 import { NFTDisplayCard } from '_src/ui/app/components/nft-display';
 import PageTitle from '_src/ui/app/shared/PageTitle';
-import { Collapse } from '_src/ui/app/shared/collapse';
+import { Collapsible } from '_src/ui/app/shared/collapse';
 
 function KioskDetailsPage() {
 	const [searchParams] = useSearchParams();
@@ -58,7 +58,7 @@ function KioskDetailsPage() {
 						</div>
 					</>
 				)}
-				<Collapse initialIsOpen title="Details">
+				<Collapsible defaultOpen title="Details">
 					<LabelValuesContainer>
 						<LabelValueItem label="Number of Items" value={items?.length || '0'} />
 						<LabelValueItem
@@ -74,7 +74,7 @@ function KioskDetailsPage() {
 							}
 						/>
 					</LabelValuesContainer>
-				</Collapse>
+				</Collapsible>
 			</Loading>
 		</div>
 	);
