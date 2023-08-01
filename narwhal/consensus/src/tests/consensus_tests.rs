@@ -48,6 +48,7 @@ async fn test_consensus_recovery_with_bullshark() {
     // Run with the new leader election schedule enabled
     let mut config: ProtocolConfig = latest_protocol_version();
     config.set_narwhal_new_leader_election_schedule(true);
+    config.set_consensus_bad_nodes_stake_threshold(0.33);
     test_consensus_recovery_with_bullshark_with_config(config).await;
 }
 
