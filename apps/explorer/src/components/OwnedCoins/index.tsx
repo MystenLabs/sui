@@ -77,9 +77,9 @@ export function OwnedCoins({ id }: { id: string }) {
 	const filterOptions = useMemo(
 		() => [
 			{ label: 'All', value: COIN_FILTERS.ALL },
-			{ label: `${balances.recognizedBalances.length} Recognized`, value: COIN_FILTERS.RECOGNIZED },
+			{ label: `${balances.recognizedBalances.length} RECOGNIZED`, value: COIN_FILTERS.RECOGNIZED },
 			{
-				label: `${balances.unrecognizedBalances.length} Unrecognized`,
+				label: `${balances.unrecognizedBalances.length} UNRECOGNIZED`,
 				value: COIN_FILTERS.UNRECOGNIZED,
 			},
 		],
