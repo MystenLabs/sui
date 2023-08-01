@@ -111,7 +111,11 @@ export function OwnedCoins({ id }: { id: string }) {
 								onValueChange={(value) => setFilterValue(value as COIN_FILTERS)}
 							>
 								{filterOptions.map((filter) => (
-									<RadioGroupItem key={filter.value} value={filter.value} label={filter.label} />
+									<RadioGroupItem 
+									key={filter.value} 
+									value={filter.value} 
+									label={filter.label} 
+									disabled={!Boolean(balances[filter.value].length)} />
 								))}
 							</RadioGroup>
 						</div>
