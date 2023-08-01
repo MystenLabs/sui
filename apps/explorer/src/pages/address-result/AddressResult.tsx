@@ -3,7 +3,7 @@
 
 import { isSuiNSName, useResolveSuiNSAddress, useResolveSuiNSName } from '@mysten/core';
 import { Domain32 } from '@mysten/icons';
-import { Heading, LoadingIndicator } from '@mysten/ui';
+import { LoadingIndicator } from '@mysten/ui';
 import { useParams } from 'react-router-dom';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
