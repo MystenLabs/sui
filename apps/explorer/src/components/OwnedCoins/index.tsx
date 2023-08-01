@@ -116,10 +116,10 @@ export function OwnedCoins({ id }: { id: string }) {
 
 					<div className="flex max-h-80 flex-col overflow-auto">
 						<div className="flex py-2 uppercase tracking-wider text-gray-80">
-							<div className="w-[40%]">
+							<div className="w-[45%]">
 								<Text variant="caption/medium">Type</Text>
 							</div>
-							<div className="w-[30%]">
+							<div className="w-[25%]">
 								<Text variant="caption/medium">Objects</Text>
 							</div>
 							<div className="w-[30%]">

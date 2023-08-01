@@ -29,11 +29,11 @@ export default function OwnedCoinView({ coin, id, isRecognized }: OwnedCoinViewP
 				data-testid="ownedcoinlabel"
 				className="flex w-full items-center rounded-lg py-2 text-left hover:bg-hero-darkest hover:bg-opacity-5"
 			>
-				<div className="flex w-[40%] items-center gap-1">
+				<div className="flex w-[45%] items-center gap-1">
 					<ArrowShowAndHideRight12
 						className={clsx('text-gray-60', open && 'rotate-90 transform')}
 					/>
-					<div className="flex items-center gap-2">
+					<div className="flex items-center gap-3">
 						<CoinIcon coinType={coin.coinType} size="sm" />
 						<Text color="steel-darker" variant="body/medium">
 							{symbol}
@@ -49,7 +49,7 @@ export default function OwnedCoinView({ coin, id, isRecognized }: OwnedCoinViewP
 					)}
 				</div>
 
-				<div className="flex w-[30%]">
+				<div className="flex w-[25%]">
 					<Text color="steel-darker" variant="body/medium">
 						{coin.coinObjectCount}
 					</Text>
