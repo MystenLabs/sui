@@ -41,7 +41,6 @@ export default function OwnedCoinView({ coin, id }: OwnedCoinViewProps) {
 					<ArrowShowAndHideRight12
 						className={clsx('text-gray-60', open && 'rotate-90 transform')}
 					/>
-					{/* fade in 300ms for pills */}
 					<div className="flex items-center gap-3">
 						<CoinIcon coinType={coin.coinType} size="sm" />
 						<Text color="steel-darker" variant="body/medium">

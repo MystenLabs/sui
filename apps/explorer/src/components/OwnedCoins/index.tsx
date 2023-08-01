@@ -117,7 +117,7 @@ export function OwnedCoins({ id }: { id: string }) {
 						</div>
 					</div>
 					{filterValue === COIN_FILTERS.UNRECOGNIZED && (
-						<div className="flex items-center gap-1 rounded-full border border-gray-45 p-2 text-steel-darker">
+						<div className="flex items-center gap-2 rounded-full border border-gray-45 p-2 text-steel-darker">
 							<div>
 								<Info16 width="16px" />
 							</div>
