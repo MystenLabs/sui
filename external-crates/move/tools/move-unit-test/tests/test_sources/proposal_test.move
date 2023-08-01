@@ -42,7 +42,7 @@ module Module {
     use 0x1::TestonlyModule;
 
     // A test only struct. This will only be included in test mode.
-    #[test_only]
+    #[test_only, allow(unused_field)]
     struct C<T> has drop, key, store { x: T }
 
     // Not a test entrypoint, can only be called from #[test] and #[test_only] functions

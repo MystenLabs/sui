@@ -152,6 +152,7 @@ pub const FILTER_UNUSED_TRAILING_SEMI: &str = "unused_trailing_semi";
 pub const FILTER_UNUSED_ATTRIBUTE: &str = "unused_attribute";
 pub const FILTER_UNUSED_TYPE_PARAMETER: &str = "unused_type_parameter";
 pub const FILTER_UNUSED_FUNCTION: &str = "unused_function";
+pub const FILTER_UNUSED_STRUCT_FIELD: &str = "unused_field";
 pub const FILTER_DEAD_CODE: &str = "dead_code";
 
 pub type NamedAddressMap = BTreeMap<Symbol, NumericalAddress>;
@@ -305,6 +306,11 @@ impl CompilationEnv {
             known_code_filter!(
                 FILTER_UNUSED_FUNCTION,
                 UnusedItem::Function,
+                filter_attr_name
+            ),
+            known_code_filter!(
+                FILTER_UNUSED_STRUCT_FIELD,
+                UnusedItem::StructField,
                 filter_attr_name
             ),
             known_code_filter!(FILTER_DEAD_CODE, UnusedItem::DeadCode, filter_attr_name),

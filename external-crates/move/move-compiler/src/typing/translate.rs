@@ -2292,7 +2292,7 @@ fn make_arg_types<S: std::fmt::Display, F: Fn() -> S>(
 // Module-wide warnings
 //**************************************************************************************************
 
-/// Generates warnings for unused struct types and unused (private) functions.
+/// Generates warnings for unused (private) functions.
 fn gen_unused_warnings(context: &mut Context, mdef: &T::ModuleDefinition) {
     if !mdef.is_source_module {
         // generate warnings only for modules compiled in this pass rather than for all modules
