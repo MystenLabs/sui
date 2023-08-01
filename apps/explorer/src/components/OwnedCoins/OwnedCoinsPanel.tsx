@@ -35,7 +35,9 @@ export default function CoinsPanel({ coinType, id }: CoinsPanelProps) {
 			</div>
 			{isSpinnerVisible && (
 				<div className="flex justify-center" ref={containerRef}>
-					<LoadingIndicator />
+					<div className="mt-5 flex">
+						<LoadingIndicator />
+					</div>
 				</div>
 			)}
 		</div>
