@@ -70,11 +70,11 @@ export default function OwnedCoinView({ coin, id }: OwnedCoinViewProps) {
 					</Text>
 				</div>
 
-				<div className="flex w-[30%] items-center gap-1">
-					<Text color={coin.isRecognized ? 'steel-darker' : 'gray-60'} variant="bodySmall/medium">
+				<div className="flex w-[30%] items-center gap-1 truncate">
+					<Text color={coin.isRecognized ? 'steel-darker' : 'gray-60'} variant="bodySmall/medium" truncate>
 						{formattedTotalBalance}
 					</Text>
-					<Text color="steel" variant="subtitleSmallExtra/normal">
+					<Text color="steel" variant="subtitleSmallExtra/normal" truncate>
 						{symbol}
 					</Text>
 				</div>
