@@ -50,6 +50,8 @@ pub struct ConsensusMetrics {
     pub leader_commit_accuracy: IntCounterVec,
     /// Count leader certificates committed, and whether the leader has strong support.
     pub leader_commits: IntCounterVec,
+    /// number of bad nodes in the committee
+    pub num_of_bad_nodes: IntGauge,
 }
 
 impl ConsensusMetrics {
@@ -111,6 +113,11 @@ impl ConsensusMetrics {
                 "leader_commits",
                 "Count leader commits, broken down by strong vs weak support",
                 &["type"],
+                registry
+            ).unwrap(),
+            num_of_bad_nodes: register_int_gauge_with_registry!(
+                "num_of_bad_nodes",
+                "The number of bad nodes in the new leader schedule",
                 registry
             ).unwrap(),
         }

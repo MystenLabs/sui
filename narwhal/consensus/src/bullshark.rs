@@ -413,6 +413,10 @@ impl Bullshark {
                     reputation_scores,
                 ));
 
+            self.metrics
+                .num_of_bad_nodes
+                .set(self.leader_schedule.num_of_bad_nodes() as i64);
+
             return true;
         }
         false

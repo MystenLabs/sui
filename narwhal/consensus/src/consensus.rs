@@ -93,6 +93,31 @@ impl LeaderSwapTable {
         .map(|authority| (authority.id(), authority))
         .collect::<HashMap<AuthorityIdentifier, Authority>>();
 
+        // print the good nodes
+        good_nodes.iter().for_each(|good_node| {
+            debug!(
+                "Good node on round {}: {} -> {}",
+                round,
+                good_node.hostname(),
+                reputation_scores
+                    .scores_per_authority
+                    .get(&good_node.id())
+                    .unwrap()
+            );
+        });
+
+        bad_nodes.iter().for_each(|(_id, bad_node)| {
+            debug!(
+                "Bad node on round {}: {} -> {}",
+                round,
+                bad_node.hostname(),
+                reputation_scores
+                    .scores_per_authority
+                    .get(&bad_node.id())
+                    .unwrap()
+            );
+        });
+
         debug!("Reputation scores on round {round}: {reputation_scores:?}");
 
         Self {
@@ -265,6 +290,11 @@ impl LeaderSchedule {
             None => (leader, None),
             Some((_, certificate)) => (leader, Some(certificate)),
         }
+    }
+
+    pub fn num_of_bad_nodes(&self) -> usize {
+        let read = self.leader_swap_table.read();
+        read.bad_nodes.len()
     }
 }
 
