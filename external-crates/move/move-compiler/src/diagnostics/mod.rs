@@ -443,7 +443,7 @@ impl WarningFilters {
         }
     }
 
-    pub fn unused_fun_and_field_warnings_filter() -> Self {
+    pub fn unused_warnings_filter_for_test() -> Self {
         let unused_fun_info = UnusedItem::Function.into_info();
         let unused_field_info = UnusedItem::StructField.into_info();
         let filtered_codes = BTreeMap::from([
