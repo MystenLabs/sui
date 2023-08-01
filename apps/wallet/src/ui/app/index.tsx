@@ -96,14 +96,18 @@ const App = () => {
 
 			<Route path="welcome" element={isSocialSignInEnabled ? <WelcomePageV2 /> : <WelcomePage />} />
 			{isSocialSignInEnabled && (
-				<Route path="/accounts" element={<AccountsPage />}>
-					<Route path="add-account" element={<AddAccountPage />} />
-					<Route path="forgot-password" element={<ForgotPasswordPageV2 />} />
-					<Route path="protect-account" element={<ProtectAccountPage />} />
-					<Route path="import-ledger-accounts" element={<ImportLedgerAccountsPage />} />
-					<Route path="import-passphrase" element={<ImportPassphrasePage />} />
-					<Route path="import-private-key" element={<ImportPrivateKeyPage />} />
-				</Route>
+				<>
+					<Route path="/account">
+						<Route path="forgot-password" element={<ForgotPasswordPageV2 />} />
+					</Route>
+					<Route path="/accounts" element={<AccountsPage />}>
+						<Route path="add-account" element={<AddAccountPage />} />
+						<Route path="protect-account" element={<ProtectAccountPage />} />
+						<Route path="import-ledger-accounts" element={<ImportLedgerAccountsPage />} />
+						<Route path="import-passphrase" element={<ImportPassphrasePage />} />
+						<Route path="import-private-key" element={<ImportPrivateKeyPage />} />
+					</Route>
+				</>
 			)}
 			<Route path="/initialize" element={<InitializePage />}>
 				<Route path="select" element={<SelectPage />} />

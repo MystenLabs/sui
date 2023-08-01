@@ -567,6 +567,9 @@ importers:
       '@radix-ui/react-checkbox':
         specifier: ^1.0.4
         version: 1.0.4(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0)(react@18.2.0)
+      '@radix-ui/react-dialog':
+        specifier: ^1.0.4
+        version: 1.0.4(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0)(react@18.2.0)
       '@reduxjs/toolkit':
         specifier: ^1.9.5
         version: 1.9.5(react-redux@8.1.1)(react@18.2.0)
@@ -645,9 +648,6 @@ importers:
       stream-browserify:
         specifier: ^3.0.0
         version: 3.0.0
-      tailwindcss:
-        specifier: ^3.3.3
-        version: 3.3.3(ts-node@10.9.1)
       throttle-debounce:
         specifier: ^5.0.0
         version: 5.0.0
@@ -811,6 +811,12 @@ importers:
       storybook:
         specifier: ^7.1.0
         version: 7.1.0
+      tailwindcss:
+        specifier: ^3.3.3
+        version: 3.3.3(ts-node@10.9.1)
+      tailwindcss-animate:
+        specifier: ^1.0.6
+        version: 1.0.6(tailwindcss@3.3.3)
       ts-loader:
         specifier: ^9.4.4
         version: 9.4.4(typescript@5.1.6)(webpack@5.79.0)
@@ -21393,7 +21399,6 @@ packages:
       tailwindcss: '>=3.0.0 || insiders'
     dependencies:
       tailwindcss: 3.3.3(ts-node@10.9.1)
-    dev: false
 
   /tailwindcss@3.3.3(ts-node@10.9.1):
     resolution: {integrity: sha512-A0KgSkef7eE4Mf+nKJ83i75TMyq8HqY3qmFIJSWy8bNt0v1lG7jUcpGpoTFxAwYcWOphcTBLPPJg+bDfhDf52w==}
