@@ -444,7 +444,9 @@ impl ReadApiServer for ReadApi {
                 ObjectRead::Exists(object_ref, o, layout) => {
                     let mut display_fields = None;
                     if options.show_display {
-                        match get_display_fields(self, &o, &layout) {
+                        match get_display_fields(self, &self.transaction_kv_store, &o, &layout)
+                            .await
+                        {
                             Ok(rendered_fields) => display_fields = Some(rendered_fields),
                             Err(e) => {
                                 return Ok(SuiObjectResponse::new(
@@ -541,7 +543,10 @@ impl ReadApiServer for ReadApi {
                 PastObjectRead::VersionFound(object_ref, o, layout) => {
                     let display_fields = if options.show_display {
                         // TODO (jian): api breaking change to also modify past objects.
-                        Some(get_display_fields(self, &o, &layout)?)
+                        Some(
+                            get_display_fields(self, &self.transaction_kv_store, &o, &layout)
+                                .await?,
+                        )
                     } else {
                         None
                     };
@@ -1020,15 +1025,18 @@ fn to_sui_transaction_events(
     )?)
 }
 
-fn get_display_fields(
+async fn get_display_fields(
     fullnode_api: &ReadApi,
+    kv_store: &Arc<TransactionKeyValueStore>,
     original_object: &Object,
     original_layout: &Option<MoveStructLayout>,
 ) -> Result<DisplayFieldsResponse, Error> {
     let Some((object_type, layout)) = get_object_type_and_struct(original_object, original_layout)? else {
         return Ok(DisplayFieldsResponse { data: None, error: None });
     };
-    if let Some(display_object) = get_display_object_by_type(fullnode_api, &object_type)? {
+    if let Some(display_object) =
+        get_display_object_by_type(kv_store, fullnode_api, &object_type).await?
+    {
         return get_rendered_fields(display_object.fields, &layout);
     }
     Ok(DisplayFieldsResponse {
@@ -1037,17 +1045,22 @@ fn get_display_fields(
     })
 }
 
-fn get_display_object_by_type(
+async fn get_display_object_by_type(
+    kv_store: &Arc<TransactionKeyValueStore>,
     fullnode_api: &ReadApi,
     object_type: &StructTag,
     // TODO: add query version support
 ) -> Result<Option<DisplayVersionUpdatedEvent>, Error> {
-    let mut events = fullnode_api.state.query_events(
-        EventFilter::MoveEventType(DisplayVersionUpdatedEvent::type_(object_type)),
-        None,
-        1,
-        true,
-    )?;
+    let mut events = fullnode_api
+        .state
+        .query_events(
+            kv_store,
+            EventFilter::MoveEventType(DisplayVersionUpdatedEvent::type_(object_type)),
+            None,
+            1,
+            true,
+        )
+        .await?;
 
     // If there's any recent version of Display, give it to the client.
     // TODO: add support for version query.

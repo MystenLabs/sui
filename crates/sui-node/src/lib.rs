@@ -1507,7 +1507,8 @@ pub async fn build_server(
 
     server.register_module(IndexerApi::new(
         state.clone(),
-        ReadApi::new(state.clone(), kv_store, metrics.clone()),
+        ReadApi::new(state.clone(), kv_store.clone(), metrics.clone()),
+        kv_store,
         config.name_service_package_address,
         config.name_service_registry_id,
         config.name_service_reverse_registry_id,
