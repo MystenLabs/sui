@@ -6,6 +6,7 @@ use aws_sdk_dynamodb as dynamodb;
 use aws_sdk_dynamodb::config::{Credentials, Region};
 use aws_sdk_dynamodb::primitives::Blob;
 use aws_sdk_dynamodb::types::{AttributeValue, PutRequest, WriteRequest};
+use aws_sdk_s3 as s3;
 use serde::Serialize;
 use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet};
@@ -16,6 +17,8 @@ pub enum KVTable {
     Transactions,
     Effects,
     Events,
+    CheckpointContent,
+    CheckpointSummary,
     State,
 }
 
@@ -30,6 +33,12 @@ pub trait KVWriteClient {
     ) -> anyhow::Result<()>;
     async fn get_state(&self) -> anyhow::Result<Option<u64>>;
     async fn update_state(&mut self, value: u64) -> anyhow::Result<()>;
+    async fn upload_blob<V: Serialize + std::marker::Send>(
+        &mut self,
+        table: KVTable,
+        key: Vec<u8>,
+        value: V,
+    ) -> anyhow::Result<()>;
 
     fn deserialize_state(bytes: Vec<u8>) -> u64 {
         let mut array: [u8; 8] = [0; 8];
@@ -39,8 +48,10 @@ pub trait KVWriteClient {
 }
 
 pub struct DynamoDbClient {
-    client: dynamodb::Client,
+    dynamo_client: dynamodb::Client,
+    s3_client: s3::Client,
     table_name: String,
+    bucket_name: String,
 }
 
 impl DynamoDbClient {
@@ -57,10 +68,13 @@ impl DynamoDbClient {
             .region(Region::new(config.aws_region.clone()))
             .load()
             .await;
-        let client = dynamodb::Client::new(&aws_config);
+        let dynamo_client = dynamodb::Client::new(&aws_config);
+        let s3_client = s3::Client::new(&aws_config);
         Self {
-            client,
+            dynamo_client,
+            s3_client,
             table_name: config.table_name.clone(),
+            bucket_name: config.bucket_name.clone(),
         }
     }
 
@@ -70,6 +84,8 @@ impl DynamoDbClient {
             KVTable::Effects => "fx",
             KVTable::Events => "ev",
             KVTable::State => "state",
+            KVTable::CheckpointContent => "cc",
+            KVTable::CheckpointSummary => "cs",
         }
         .to_string()
     }
@@ -107,7 +123,7 @@ impl KVWriteClient for DynamoDbClient {
             return Ok(());
         }
         for chunk in items.chunks(25) {
-            self.client
+            self.dynamo_client
                 .batch_write_item()
                 .set_request_items(Some(HashMap::from([(
                     self.table_name.clone(),
@@ -121,7 +137,7 @@ impl KVWriteClient for DynamoDbClient {
 
     async fn get_state(&self) -> anyhow::Result<Option<u64>> {
         let item = self
-            .client
+            .dynamo_client
             .get_item()
             .table_name(self.table_name.clone())
             .key("digest", AttributeValue::B(Blob::new(UPLOAD_PROGRESS_KEY)))
@@ -137,7 +153,7 @@ impl KVWriteClient for DynamoDbClient {
     }
 
     async fn update_state(&mut self, value: u64) -> anyhow::Result<()> {
-        self.client
+        self.dynamo_client
             .put_item()
             .table_name(self.table_name.clone())
             .item("digest", AttributeValue::B(Blob::new(UPLOAD_PROGRESS_KEY)))
@@ -146,6 +162,23 @@ impl KVWriteClient for DynamoDbClient {
                 "value",
                 AttributeValue::B(Blob::new(bcs::to_bytes(&value)?)),
             )
+            .send()
+            .await?;
+        Ok(())
+    }
+
+    async fn upload_blob<V: Serialize + std::marker::Send>(
+        &mut self,
+        _table: KVTable,
+        key: Vec<u8>,
+        value: V,
+    ) -> anyhow::Result<()> {
+        let body = bcs::to_bytes(value.borrow())?.into();
+        self.s3_client
+            .put_object()
+            .bucket(self.bucket_name.clone())
+            .key(base64_url::encode(&key))
+            .body(body)
             .send()
             .await?;
         Ok(())
