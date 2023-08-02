@@ -44,7 +44,7 @@ export default function OwnedCoinView({ coin, id }: OwnedCoinViewProps) {
 					/>
 
 					<div className="flex items-center gap-3 truncate">
-						<div className="w-4">
+						<div className="w-6">
 							<CoinIcon coinType={coin.coinType} size="sm" />
 						</div>
 						<Text color="steel-darker" variant="body/medium" truncate>
