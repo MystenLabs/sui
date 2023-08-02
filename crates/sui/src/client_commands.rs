@@ -1364,9 +1364,9 @@ async fn compile_package(
                      Fix this by rebuilding your packages with source versions matching on-chain \
                      versions of dependencies, or ignore this warning by re-running with the \
                      --skip-dependency-verification flag."
-                )
+                ),
             }
-            .into())
+            .into());
         } else {
             eprintln!(
                 "{}",
