@@ -8,9 +8,10 @@ use hyper::client::HttpConnector;
 use hyper::Client;
 use hyper::Uri;
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::{
     digests::{TransactionDigest, TransactionEventsDigest},
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
@@ -31,6 +32,12 @@ pub struct HttpKVStore {
 
 pub fn encode_digest<T: AsRef<[u8]>>(digest: &T) -> String {
     base64_url::encode(digest)
+}
+
+// for non-digest keys, we need a tag to make sure we don't have collisions
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub enum TaggedKey {
+    CheckpointSequenceNumber(CheckpointSequenceNumber),
 }
 
 trait IntoSuiResult<T> {

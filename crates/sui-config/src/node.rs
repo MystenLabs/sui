@@ -637,6 +637,7 @@ pub struct TransactionKeyValueStoreWriteConfig {
     pub aws_secret_access_key: String,
     pub aws_region: String,
     pub table_name: String,
+    pub bucket_name: String,
     pub concurrency: usize,
 }
 
