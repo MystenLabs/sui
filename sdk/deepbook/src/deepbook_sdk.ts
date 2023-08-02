@@ -612,7 +612,7 @@ export class DeepBook_sdk {
 			const nextPath = path[i + 1] ? path[i + 1] : tokenTypeOut;
 			const poolInfo: PoolInfo = getPoolInfoByRecords(path[i], nextPath, this.records);
 			let _isBid, _tokenIn, _tokenOut, _amount;
-			if (i == 0) {
+			if (i === 0) {
 				if (!isBid) {
 					_isBid = false;
 					_tokenIn = tokenIn;
@@ -694,7 +694,7 @@ export class DeepBook_sdk {
 					],
 				});
 			}
-			if (nextPath == tokenTypeOut) {
+			if (nextPath === tokenTypeOut) {
 				txb.transferObjects([base_coin_ret], txb.pure(currentAddress));
 				txb.transferObjects([quote_coin_ret], txb.pure(currentAddress));
 				break;
@@ -709,7 +709,7 @@ export class DeepBook_sdk {
 		});
 		if (r.effects.status.status === 'success') {
 			for (const ele of r.balanceChanges) {
-				if (ele.coinType == tokenTypeOut) {
+				if (ele.coinType === tokenTypeOut) {
 					return {
 						txb: txb,
 						amount: Number(ele.amount),
@@ -734,7 +734,7 @@ export class DeepBook_sdk {
 		records: Records,
 		path: string[] = [],
 		depth: number = 2,
-		res: string[][] = new Array().fill([]),
+		res: string[][] = [[]],
 	): string[][] {
 		// first updates the records
 		if (depth < 0) {
@@ -752,7 +752,7 @@ export class DeepBook_sdk {
 				String((record as any).type)
 					.split(',')
 					.forEach((token: string) => {
-						if (token.indexOf('${MODULE_CLOB}') !== -1) {
+						if (token.indexOf(MODULE_CLOB) !== -1) {
 							token = token.split('<')[1];
 						} else {
 							token = token.split('>')[0].substring(1);
