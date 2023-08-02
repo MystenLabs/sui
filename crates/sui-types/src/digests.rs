@@ -661,6 +661,16 @@ impl AsRef<[u8; 32]> for TransactionEventsDigest {
     }
 }
 
+impl std::str::FromStr for TransactionEventsDigest {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut result = [0; 32];
+        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        Ok(Self::new(result))
+    }
+}
+
 // Each object has a unique digest
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct ObjectDigest(Digest);

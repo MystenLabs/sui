@@ -7,7 +7,7 @@ use std::sync::Arc;
 use sui_storage::http_key_value_store::*;
 use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
-use sui_types::digests::TransactionDigest;
+use sui_types::digests::{TransactionDigest, TransactionEventsDigest};
 
 // Command line options are:
 // --base-url <url> - the base URL of the HTTP server
@@ -37,15 +37,48 @@ async fn main() {
 
     let options = Options::parse();
 
-    let digests: Vec<_> = options
-        .digest
-        .into_iter()
-        .map(|digest| TransactionDigest::from_str(&digest).expect("invalid transaction digest"))
-        .collect();
+    let http_kv = Arc::new(HttpKVStore::new(&options.base_url).unwrap());
+    let kv =
+        TransactionKeyValueStore::new("http_kv", KeyValueStoreMetrics::new_for_tests(), http_kv);
 
     // verify that type is valid
     match options.type_.as_str() {
-        "tx" | "fx" | "ev" => (),
+        "tx" | "fx" => {
+            let digests: Vec<_> = options
+                .digest
+                .into_iter()
+                .map(|digest| {
+                    TransactionDigest::from_str(&digest).expect("invalid transaction digest")
+                })
+                .collect();
+
+            if options.type_ == "tx" {
+                let tx = kv.multi_get_tx(&digests).await.unwrap();
+                for (digest, tx) in digests.iter().zip(tx.iter()) {
+                    println!("fetched tx: {:?} {:?}", digest, tx);
+                }
+            } else {
+                let fx = kv.multi_get_fx_by_tx_digest(&digests).await.unwrap();
+                for (digest, fx) in digests.iter().zip(fx.iter()) {
+                    println!("fetched fx: {:?} {:?}", digest, fx);
+                }
+            }
+        }
+
+        "ev" => {
+            let digests: Vec<_> = options
+                .digest
+                .into_iter()
+                .map(|digest| {
+                    TransactionEventsDigest::from_str(&digest).expect("invalid events digest")
+                })
+                .collect();
+
+            let tx = kv.multi_get_events(&digests).await.unwrap();
+            for (digest, ev) in digests.iter().zip(tx.iter()) {
+                println!("fetched events: {:?} {:?}", digest, ev);
+            }
+        }
         _ => {
             println!(
                 "Invalid key type: {}. Must be one of 'tx', 'fx', or 'ev'.",
@@ -53,14 +86,5 @@ async fn main() {
             );
             std::process::exit(1);
         }
-    }
-
-    let http_kv = Arc::new(HttpKVStore::new(&options.base_url).unwrap());
-    let kv =
-        TransactionKeyValueStore::new("http_kv", KeyValueStoreMetrics::new_for_tests(), http_kv);
-    let tx = kv.multi_get_tx(&digests).await.unwrap();
-
-    for (digest, tx) in digests.iter().zip(tx.iter()) {
-        println!("fetched tx: {:?} {:?}", digest, tx);
     }
 }
