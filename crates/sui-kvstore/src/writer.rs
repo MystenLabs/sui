@@ -16,6 +16,13 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tracing::info;
 
+struct Watermarks {
+    // covers txns, effects, and events
+    txns: u64,
+    // covers checkpoint headers and contents
+    checkpoint_contents: u64,
+}
+
 pub struct KVStoreMetrics {
     pub latest_checkpoint_uploaded_to_kv_store: IntGauge,
 }
@@ -120,7 +127,10 @@ pub async fn uploader<S>(
     mut checkpoint_number: CheckpointSequenceNumber,
     store: S,
     config: TransactionKeyValueStoreWriteConfig,
-    progress_sender: mpsc::Sender<u64>,
+    progress_sender: mpsc::Sender<(
+        u64, // tx/fx progress
+        u64, // ckpt contents progress
+    )>,
     mut receiver: oneshot::Receiver<()>,
 ) -> Result<()>
 where

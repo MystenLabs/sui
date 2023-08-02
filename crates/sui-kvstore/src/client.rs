@@ -19,7 +19,8 @@ pub enum KVTable {
     State,
 }
 
-const UPLOAD_PROGRESS_KEY: [u8; 1] = [0];
+// increment this if you need to start a new key
+const UPLOAD_PROGRESS_KEY: [u8; 1] = [1];
 
 #[async_trait]
 pub trait KVWriteClient {
