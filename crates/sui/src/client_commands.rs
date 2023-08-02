@@ -1310,7 +1310,7 @@ async fn compile_package(
         CompiledPackage,
         Result<ObjectID, PublishedAtError>,
     ),
-    anemo::Error,
+    anyhow::Error,
 > {
     let config = resolve_lock_file_path(build_config, Some(package_path.clone()))?;
     let run_bytecode_verifier = true;
@@ -1339,7 +1339,7 @@ async fn compile_package(
             return Err(SuiError::ModulePublishFailure {
                 error: format!(
                     "Modules must all have 0x0 as their addresses. \
-                           Violated by module {:?}",
+                     Violated by module {:?}",
                     already_published.self_id(),
                 ),
             }
@@ -1351,15 +1351,30 @@ async fn compile_package(
     }
     let compiled_modules = compiled_package.get_package_bytes(with_unpublished_dependencies);
     if !skip_dependency_verification {
-        BytecodeSourceVerifier::new(client.read_api())
-            .verify_package_deps(&compiled_package)
-            .await?;
-        eprintln!(
-            "{}",
-            "Successfully verified dependencies on-chain against source."
-                .bold()
-                .green(),
-        );
+        let verifier = BytecodeSourceVerifier::new(client.read_api());
+        if let Err(e) = verifier.verify_package_deps(&compiled_package).await {
+            return Err(SuiError::ModulePublishFailure {
+                error: format!(
+                    "[warning] {e}\n\
+                     \n\
+                     This may indicate that the on-chain version(s) of your package's dependencies \
+                     may behave differently than the source version(s) your package was built \
+                     against.\n\
+                     \n\
+                     Fix this by rebuilding your packages with source versions matching on-chain \
+                     versions of dependencies, or ignore this warning by re-running with the \
+                     --skip-dependency-verification flag."
+                ),
+            }
+            .into());
+        } else {
+            eprintln!(
+                "{}",
+                "Successfully verified dependencies on-chain against source."
+                    .bold()
+                    .green(),
+            );
+        }
     } else {
         eprintln!("{}", "Skipping dependency verification".bold().yellow());
     }
