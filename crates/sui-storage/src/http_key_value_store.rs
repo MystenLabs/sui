@@ -8,7 +8,7 @@ use hyper::client::HttpConnector;
 use hyper::Client;
 use hyper::Uri;
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_types::{
@@ -32,6 +32,17 @@ pub struct HttpKVStore {
 
 pub fn encode_digest<T: AsRef<[u8]>>(digest: &T) -> String {
     base64_url::encode(digest)
+}
+
+// for non-digest keys, we need a tag to make sure we don't have collisions
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub enum TaggedKey {
+    CheckpointSequenceNumber(CheckpointSequenceNumber),
+}
+
+pub fn encoded_tagged_key(key: &TaggedKey) -> String {
+    let bytes = bcs::to_bytes(key).expect("failed to serialize key");
+    base64_url::encode(&bytes)
 }
 
 trait IntoSuiResult<T> {
@@ -68,7 +79,10 @@ fn key_to_path_elements(key: &Key) -> SuiResult<(String, &'static str)> {
         Key::Tx(digest) => Ok((encode_digest(digest), "tx")),
         Key::Fx(digest) => Ok((encode_digest(digest), "fx")),
         Key::Events(digest) => Ok((encode_digest(digest), "ev")),
-        Key::CheckpointContents(seq) => Ok((seq.to_string(), "cc")),
+        Key::CheckpointContents(seq) => Ok((
+            encoded_tagged_key(&TaggedKey::CheckpointSequenceNumber(*seq)),
+            "cc",
+        )),
     }
 }
 
