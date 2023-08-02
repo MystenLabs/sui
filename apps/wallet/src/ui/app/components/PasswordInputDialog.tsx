@@ -8,7 +8,7 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { object, string as YupString } from 'yup';
 
-import Alert from '../../alert';
+import Alert from './alert';
 import { useBackgroundClient } from '_src/ui/app/hooks/useBackgroundClient';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import FieldLabel from '_src/ui/app/shared/field-label';
@@ -25,7 +25,7 @@ export type PasswordExportDialogProps = {
 	continueLabel?: string;
 	showArrowIcon?: boolean;
 	onPasswordVerified: (password: string) => Promise<void> | void;
-	onBackClicked?: () => void;
+	onBackClicked?: (() => void) | boolean;
 	spacing?: boolean;
 	background?: boolean;
 };
@@ -37,7 +37,7 @@ export function PasswordInputDialog({
 	spacing = false,
 	background = false,
 	onPasswordVerified,
-	onBackClicked,
+	onBackClicked = false,
 }: PasswordExportDialogProps) {
 	const navigate = useNavigate();
 	const backgroundService = useBackgroundClient();
@@ -83,21 +83,23 @@ export function PasswordInputDialog({
 						</div>
 					</div>
 					<div className="flex flex-nowrap gap-3.75 self-stretch">
-						<Button
-							text="Back"
-							color="heroDark"
-							size="tall"
-							variant="outline"
-							before={<ArrowLeft16 />}
-							onClick={() => {
-								if (typeof onBackClicked === 'function') {
-									onBackClicked();
-								} else {
-									navigate(-1);
-								}
-							}}
-							disabled={isSubmitting}
-						/>
+						{onBackClicked ? (
+							<Button
+								text="Back"
+								color="heroDark"
+								size="tall"
+								variant="outline"
+								before={<ArrowLeft16 />}
+								onClick={() => {
+									if (typeof onBackClicked === 'function') {
+										onBackClicked();
+									} else {
+										navigate(-1);
+									}
+								}}
+								disabled={isSubmitting}
+							/>
+						) : null}
 						<Button
 							type="submit"
 							variant="primary"

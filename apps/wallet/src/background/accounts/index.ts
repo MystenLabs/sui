@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64 } from '@mysten/sui.js/utils';
+import Dexie from 'dexie';
 import { isSigningAccount, type SerializedAccount } from './Account';
 import { ImportedAccount } from './ImportedAccount';
 import { LedgerAccount } from './LedgerAccount';
@@ -105,8 +106,11 @@ async function deleteQredoAccounts<T extends SerializedAccount>(accounts: Omit<T
 		.delete();
 }
 
-export async function addNewAccounts<T extends SerializedAccount>(accounts: Omit<T, 'id'>[]) {
-	const db = await getDB();
+export async function addNewAccounts<T extends SerializedAccount>(
+	accounts: Omit<T, 'id'>[],
+	{ skipBackup = false }: { skipBackup?: boolean } = {},
+) {
+	const db = await Dexie.waitFor(getDB());
 	const accountsCreated = await db.transaction('rw', db.accounts, async () => {
 		// delete all existing qredo accounts that have the same sourceID (come from the same connection)
 		// and not in the new accounts list
@@ -145,7 +149,9 @@ export async function addNewAccounts<T extends SerializedAccount>(accounts: Omit
 		}
 		return accountInstances;
 	});
-	await backupDB();
+	if (!skipBackup) {
+		await backupDB();
+	}
 	accountsEvents.emit('accountsChanged');
 	return accountsCreated;
 }

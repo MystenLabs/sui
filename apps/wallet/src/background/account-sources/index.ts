@@ -60,10 +60,12 @@ async function createAccountSource({
 	switch (type) {
 		case 'mnemonic':
 			return (
-				await MnemonicAccountSource.createNew({
-					password,
-					entropyInput: entropy ? toEntropy(entropy) : undefined,
-				})
+				await MnemonicAccountSource.save(
+					await MnemonicAccountSource.createNew({
+						password,
+						entropyInput: entropy ? toEntropy(entropy) : undefined,
+					}),
+				)
 			).toUISerialized();
 		default: {
 			throw new Error(`Unknown Account source type ${type}`);

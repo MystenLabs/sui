@@ -11,11 +11,11 @@ import { useQredoUIPendingRequest } from './hooks';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { Button } from '../../shared/ButtonUI';
 import { testPassNewAccounts } from '../accounts-dev';
-import { PasswordInputDialog } from '_components/menu/content/PasswordInputDialog';
 import Overlay from '_components/overlay';
 import { ampli } from '_src/shared/analytics/ampli';
 import { NEW_ACCOUNTS_ENABLED } from '_src/shared/constants';
 import { type Wallet } from '_src/shared/qredo-api';
+import { PasswordInputDialog } from '_src/ui/app/components/PasswordInputDialog';
 
 export function SelectQredoAccountsPage() {
 	const { id } = useParams();

@@ -11,11 +11,11 @@ import { useAppSelector } from '_hooks';
 import { getNavIsVisible } from '_redux/slices/app';
 
 export type ToasterProps = {
-	bottomNavEnabled: boolean;
+	bottomNavEnabled?: boolean;
 };
 const commonToastClasses =
 	'!px-0 !py-1 !text-pBodySmall !font-medium !rounded-2lg !shadow-notification';
-export function Toaster({ bottomNavEnabled }: ToasterProps) {
+export function Toaster({ bottomNavEnabled = false }: ToasterProps) {
 	const { pathname } = useLocation();
 	const isExtraNavTabsVisible = ['/apps', '/nfts'].includes(pathname);
 	const menuVisible = useMenuIsOpen();

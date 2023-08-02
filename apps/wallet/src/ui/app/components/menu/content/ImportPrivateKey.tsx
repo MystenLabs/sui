@@ -13,7 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { object } from 'yup';
 
 import { MenuLayout } from './MenuLayout';
-import { PasswordInputDialog } from './PasswordInputDialog';
+import { PasswordInputDialog } from '../../PasswordInputDialog';
 import Alert from '../../alert';
 import { useNextMenuUrl } from '../hooks';
 import { ampli } from '_src/shared/analytics/ampli';
