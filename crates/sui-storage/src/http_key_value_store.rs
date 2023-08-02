@@ -16,6 +16,7 @@ use sui_types::{
     digests::{TransactionDigest, TransactionEventsDigest},
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
     error::{SuiError, SuiResult},
+    messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber},
     transaction::Transaction,
 };
 use tap::TapFallible;
@@ -40,6 +41,11 @@ pub enum TaggedKey {
     CheckpointSequenceNumber(CheckpointSequenceNumber),
 }
 
+pub fn encoded_tagged_key(key: &TaggedKey) -> String {
+    let bytes = bcs::to_bytes(key).expect("failed to serialize key");
+    base64_url::encode(&bytes)
+}
+
 trait IntoSuiResult<T> {
     fn into_sui_result(self) -> SuiResult<T>;
 }
@@ -58,6 +64,7 @@ pub enum Key {
     Tx(TransactionDigest),
     Fx(TransactionDigest),
     Events(TransactionEventsDigest),
+    CheckpointContents(CheckpointSequenceNumber),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -65,6 +72,7 @@ enum Value {
     Tx(Box<Transaction>),
     Fx(Box<TransactionEffects>),
     Events(Box<TransactionEvents>),
+    CheckpointContents(Box<CheckpointContents>),
 }
 
 fn key_to_path_elements(key: &Key) -> SuiResult<(String, &'static str)> {
@@ -72,6 +80,10 @@ fn key_to_path_elements(key: &Key) -> SuiResult<(String, &'static str)> {
         Key::Tx(digest) => Ok((encode_digest(digest), "tx")),
         Key::Fx(digest) => Ok((encode_digest(digest), "fx")),
         Key::Events(digest) => Ok((encode_digest(digest), "ev")),
+        Key::CheckpointContents(seq) => Ok((
+            encoded_tagged_key(&TaggedKey::CheckpointSequenceNumber(*seq)),
+            "cc",
+        )),
     }
 }
 
@@ -162,6 +174,21 @@ where
         .ok()
 }
 
+fn map_fetch<'a, K>(fetch: (&'a SuiResult<Option<Bytes>>, &'a K)) -> Option<(&'a Bytes, &'a K)>
+where
+    K: std::fmt::Debug,
+{
+    let (fetch, key) = fetch;
+    match fetch {
+        Ok(Some(bytes)) => Some((bytes, key)),
+        Ok(None) => None,
+        Err(err) => {
+            warn!("Error fetching key: {:?}, error: {:?}", key, err);
+            None
+        }
+    }
+}
+
 #[async_trait]
 impl TransactionKeyValueStoreTrait for HttpKVStore {
     async fn multi_get(
@@ -189,23 +216,6 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
         let txn_slice = fetches[..num_txns].to_vec();
         let fx_slice = fetches[num_txns..num_txns + num_effects].to_vec();
         let events_slice = fetches[num_txns + num_effects..].to_vec();
-
-        fn map_fetch<'a, Digest>(
-            fetch: (&'a SuiResult<Option<Bytes>>, &'a Digest),
-        ) -> Option<(&'a Bytes, &'a Digest)>
-        where
-            Digest: std::fmt::Debug,
-        {
-            let (fetch, digest) = fetch;
-            match fetch {
-                Ok(Some(bytes)) => Some((bytes, digest)),
-                Ok(None) => None,
-                Err(err) => {
-                    warn!("Error fetching key: {:?}, error: {:?}", digest, err);
-                    None
-                }
-            }
-        }
 
         fn deser_check_digest<T, D: std::fmt::Debug>(
             digest: &D,
@@ -269,5 +279,28 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
             .collect::<Vec<_>>();
 
         Ok((txn_results, fx_results, events_results))
+    }
+
+    async fn multi_get_checkpoints_contents(
+        &self,
+        checkpoints: &[CheckpointSequenceNumber],
+    ) -> SuiResult<Vec<Option<CheckpointContents>>> {
+        let keys = checkpoints
+            .iter()
+            .map(|cp| Key::CheckpointContents(*cp))
+            .collect::<Vec<_>>();
+
+        let fetches = self.multi_fetch(keys).await;
+
+        let results = fetches
+            .iter()
+            .zip(checkpoints.iter())
+            .map(map_fetch)
+            .map(|maybe_bytes| {
+                maybe_bytes.and_then(|(bytes, seq)| deser::<_, CheckpointContents>(seq, bytes))
+            })
+            .collect::<Vec<_>>();
+
+        Ok(results)
     }
 }
