@@ -13,8 +13,7 @@ use crate::{
     },
     expansion,
     expansion::ast as E,
-    hlir::{self, visitor::HlirVisitorObj},
-    interface_generator, naming, parser,
+    hlir, interface_generator, naming, parser,
     parser::{comments::*, *},
     shared::{
         CompilationEnv, Flags, IndexedPackagePath, NamedAddressMap, NamedAddressMaps,
@@ -110,7 +109,6 @@ pub struct FullyCompiledProgram {
 
 pub enum Visitor {
     TypingVisitor(TypingVisitorObj),
-    HlirVisitor(HlirVisitorObj),
     AbsIntVisitor(AbsIntVisitorObj),
 }
 

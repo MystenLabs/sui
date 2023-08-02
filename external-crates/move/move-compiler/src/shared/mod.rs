@@ -11,7 +11,6 @@ use crate::{
     },
     editions::{Edition, Flavor},
     expansion::ast as E,
-    hlir::visitor::HlirVisitorObj,
     naming::ast::ModuleDefinition,
     sui_mode,
     typing::visitor::{TypingVisitor, TypingVisitorObj},
@@ -699,7 +698,6 @@ impl Default for PackageConfig {
 
 pub struct Visitors {
     pub typing: Vec<RefCell<TypingVisitorObj>>,
-    pub hlir: Vec<RefCell<HlirVisitorObj>>,
     pub abs_int: Vec<RefCell<AbsIntVisitorObj>>,
 }
 
@@ -708,13 +706,11 @@ impl Visitors {
         use cli::compiler::Visitor;
         let mut vs = Visitors {
             typing: vec![],
-            hlir: vec![],
             abs_int: vec![],
         };
         for pass in passes {
             match pass {
                 Visitor::AbsIntVisitor(f) => vs.abs_int.push(RefCell::new(f)),
-                Visitor::HlirVisitor(f) => vs.hlir.push(RefCell::new(f)),
                 Visitor::TypingVisitor(f) => vs.typing.push(RefCell::new(f)),
             }
         }

@@ -8,9 +8,10 @@ use move_compiler::{
     diag,
     diagnostics::codes::{custom, DiagnosticInfo, Severity},
     expansion::ast as E,
-    hlir::{ast as H, visitor::HlirVisitor},
+    naming::ast as N,
     parser::ast as P,
     shared::{unique_map::UniqueMap, CompilationEnv, Identifier},
+    typing::{ast as T, core::ProgramInfo, visitor::TypingVisitor},
 };
 use move_ir_types::location::*;
 
@@ -34,16 +35,21 @@ const FREEZE_FUNCTIONS: &[(&str, &str, &str)] = &[
 
 pub struct FreezeWrappedVisitor;
 
-impl HlirVisitor for FreezeWrappedVisitor {
-    fn visit(&mut self, env: &mut CompilationEnv, program: &mut H::Program) {
+impl TypingVisitor for FreezeWrappedVisitor {
+    fn visit(
+        &mut self,
+        env: &mut CompilationEnv,
+        _program_info: &ProgramInfo,
+        program: &mut T::Program,
+    ) {
         for (_, _, mdef) in program.modules.iter() {
             env.add_warning_filter_scope(mdef.warning_filter.clone());
 
             for (_, _, fdef) in mdef.functions.iter() {
                 env.add_warning_filter_scope(fdef.warning_filter.clone());
 
-                if let H::FunctionBody_::Defined { locals: _, body } = &fdef.body.value {
-                    visit_block(body, env, &program.modules);
+                if let T::FunctionBody_::Defined(seq) = &fdef.body.value {
+                    visit_seq(seq, env, &program.modules);
                 }
 
                 env.pop_warning_filter_scope();
@@ -54,122 +60,59 @@ impl HlirVisitor for FreezeWrappedVisitor {
     }
 }
 
-fn visit_stmt(
-    sp!(_, stmt): &H::Statement,
+fn visit_seq_item(
+    sp!(_, seq_item): &T::SequenceItem,
     env: &mut CompilationEnv,
-    modules: &UniqueMap<E::ModuleIdent, H::ModuleDefinition>,
+    modules: &UniqueMap<E::ModuleIdent, T::ModuleDefinition>,
 ) {
-    use H::Statement_ as S;
-    match stmt {
-        S::Command(cmd) => visit_cmd(cmd, env, modules),
-        S::IfElse {
-            cond,
-            if_block,
-            else_block,
-        } => {
-            visit_exp(cond, env, modules);
-            visit_block(if_block, env, modules);
-            visit_block(else_block, env, modules);
-        }
-        S::While {
-            cond: (c, b),
-            block,
-        } => {
-            visit_block(c, env, modules);
-            visit_exp(b, env, modules);
-            visit_block(block, env, modules);
-        }
-        S::Loop {
-            block,
-            has_break: _,
-        } => visit_block(block, env, modules),
-    }
-}
-
-fn visit_block(
-    block: &H::Block,
-    env: &mut CompilationEnv,
-    modules: &UniqueMap<E::ModuleIdent, H::ModuleDefinition>,
-) {
-    for s in block {
-        visit_stmt(s, env, modules);
-    }
-}
-
-fn visit_cmd(
-    sp!(_, cmd): &H::Command,
-    env: &mut CompilationEnv,
-    modules: &UniqueMap<E::ModuleIdent, H::ModuleDefinition>,
-) {
-    use H::Command_ as C;
-    match cmd {
-        C::Assign(_, e) => visit_exp(e, env, modules),
-        C::Mutate(e1, e2) => {
-            visit_exp(e1, env, modules);
-            visit_exp(e2, env, modules);
-        }
-        C::Abort(e) => visit_exp(e, env, modules),
-        C::Return { from_user: _, exp } => visit_exp(exp, env, modules),
-        C::IgnoreAndPop { pop_num: _, exp } => visit_exp(exp, env, modules),
-        C::JumpIf {
-            cond,
-            if_true: _,
-            if_false: _,
-        } => visit_exp(cond, env, modules),
-        C::Break | C::Continue | C::Jump { .. } => (),
+    use T::SequenceItem_ as SI;
+    match seq_item {
+        SI::Seq(e) => visit_exp(e, env, modules),
+        SI::Declare(_) => (),
+        SI::Bind(_, _, e) => visit_exp(e, env, modules),
     }
 }
 
 fn visit_exp(
-    exp: &H::Exp,
+    exp: &T::Exp,
     env: &mut CompilationEnv,
-    modules: &UniqueMap<E::ModuleIdent, H::ModuleDefinition>,
+    modules: &UniqueMap<E::ModuleIdent, T::ModuleDefinition>,
 ) {
-    use H::UnannotatedExp_ as E;
+    use T::UnannotatedExp_ as E;
     let sp!(_, uexp) = &exp.exp;
     match uexp {
         E::ModuleCall(fun) => {
-            if FREEZE_FUNCTIONS
-                .iter()
-                .any(|(addr, module, fname)| fun.is(addr, module, fname))
-            {
-                // single argument passed by value
-                let H::Type_::Single(st) = &fun.arguments.ty.value else {
-                    return;
-                };
-                let bt = match &st.value {
-                    H::SingleType_::Base(bt) => bt,
-                    H::SingleType_::Ref(_, bt) => bt,
-                };
-                let H::BaseType_::Apply(_, tname ,_ ) = &bt.value else {
-                    return;
-                };
-                if let H::TypeName_::ModuleType(mident, sname) = tname.value {
-                    if let Some((sfields, sloc)) = struct_fields(&sname, &mident, modules) {
-                        for (f, t) in sfields {
-                            if let Some((nested_sname, nested)) =
-                                contains_key(t, modules, /*field_depth*/ 0)
-                            {
-                                let msg = "Freezing an object containing other wrapped objects will disallow unwrapping these objects in the future.";
-                                let uid_msg = format!(
-                                    "The field {} of {} contains {} wrapped objects",
-                                    f.value(),
-                                    sname.value(),
-                                    if nested { "indirectly" } else { "" }
-                                );
-                                let mut d = diag!(
-                                    FREEZE_KEY_DIAG,
-                                    (fun.arguments.exp.loc, msg),
-                                    (sloc, uid_msg)
-                                );
+            if FREEZE_FUNCTIONS.iter().any(|(addr, module, fname)| {
+                fun.module.value.is(*addr, *module) && &fun.name.value().as_str() == fname
+            }) {
+                if let Some((tname, _)) = type_info(&fun.type_arguments[0]) {
+                    if let N::TypeName_::ModuleType(mident, sname) = tname.value {
+                        if let Some((sfields, sloc)) = struct_fields(&sname, &mident, modules) {
+                            for (_, f, (_, t)) in sfields {
+                                if let Some((nested_sname, nested)) =
+                                    contains_key(t, modules, /*field_depth*/ 0)
+                                {
+                                    let msg = "Freezing an object containing other wrapped objects will disallow unwrapping these objects in the future.";
+                                    let uid_msg = format!(
+                                        "The field {} of {} contains {} wrapped objects",
+                                        f,
+                                        sname.value(),
+                                        if nested { "indirectly" } else { "" }
+                                    );
+                                    let mut d = diag!(
+                                        FREEZE_KEY_DIAG,
+                                        (fun.arguments.exp.loc, msg),
+                                        (sloc, uid_msg)
+                                    );
 
-                                if nested {
-                                    d.add_secondary_label((
-                                        nested_sname.loc(),
-                                        "Indirectly wrapped object is of this type",
-                                    ));
+                                    if nested {
+                                        d.add_secondary_label((
+                                            nested_sname.loc(),
+                                            "Indirectly wrapped object is of this type",
+                                        ));
+                                    }
+                                    env.add_diag(d);
                                 }
-                                env.add_diag(d);
                             }
                         }
                     }
@@ -177,47 +120,78 @@ fn visit_exp(
             }
         }
         E::Builtin(_, e) => visit_exp(e, env, modules),
-        E::Freeze(e) => visit_exp(e, env, modules),
         E::Vector(_, _, _, e) => visit_exp(e, env, modules),
-        E::Dereference(e) => visit_exp(e, env, modules),
-        E::UnaryExp(_, e) => visit_exp(e, env, modules),
-        E::BinopExp(e1, _, e2) => {
+        E::IfElse(e1, e2, e3) => {
+            visit_exp(e1, env, modules);
+            visit_exp(e2, env, modules);
+            visit_exp(e3, env, modules);
+        }
+        E::While(e1, e2) => {
             visit_exp(e1, env, modules);
             visit_exp(e2, env, modules);
         }
-        E::Pack(_, _, fields) => fields
+        E::Loop { has_break: _, body } => visit_exp(body, env, modules),
+        E::Block(seq) => visit_seq(seq, env, modules),
+        E::Assign(_, _, e) => visit_exp(e, env, modules),
+        E::Mutate(e1, e2) => {
+            visit_exp(e1, env, modules);
+            visit_exp(e2, env, modules);
+        }
+        E::Return(e) => visit_exp(e, env, modules),
+        E::Abort(e) => visit_exp(e, env, modules),
+        E::Dereference(e) => visit_exp(e, env, modules),
+        E::UnaryExp(_, e) => visit_exp(e, env, modules),
+        E::BinopExp(e1, _, _, e2) => {
+            visit_exp(e1, env, modules);
+            visit_exp(e2, env, modules);
+        }
+        E::Pack(_, _, _, fields) => fields
             .iter()
-            .for_each(|(_, _, e)| visit_exp(e, env, modules)),
+            .for_each(|(_, _, (_, (_, e)))| visit_exp(e, env, modules)),
         E::ExpList(list) => {
             for l in list {
                 match l {
-                    H::ExpListItem::Single(e, _) => visit_exp(e, env, modules),
-                    H::ExpListItem::Splat(_, e, _) => visit_exp(e, env, modules),
+                    T::ExpListItem::Single(e, _) => visit_exp(e, env, modules),
+                    T::ExpListItem::Splat(_, e, _) => visit_exp(e, env, modules),
                 }
             }
         }
         E::Borrow(_, e, _) => visit_exp(e, env, modules),
+        E::TempBorrow(_, e) => visit_exp(e, env, modules),
         E::Cast(e, _) => visit_exp(e, env, modules),
+        E::Annotate(e, _) => visit_exp(e, env, modules),
         E::Unit { .. }
         | E::Value(_)
         | E::Move { .. }
         | E::Copy { .. }
+        | E::Use(_)
         | E::Constant(..)
+        | E::Break
+        | E::Continue
         | E::BorrowLocal(..)
-        | E::Unreachable
         | E::Spec(..)
         | E::UnresolvedError => (),
+    }
+}
+
+fn visit_seq(
+    seq: &T::Sequence,
+    env: &mut CompilationEnv,
+    modules: &UniqueMap<E::ModuleIdent, T::ModuleDefinition>,
+) {
+    for s in seq {
+        visit_seq_item(s, env, modules);
     }
 }
 
 fn struct_fields<'a>(
     sname: &P::StructName,
     mident: &E::ModuleIdent,
-    modules: &'a UniqueMap<E::ModuleIdent, H::ModuleDefinition>,
-) -> Option<(&'a Vec<(P::Field, H::BaseType)>, Loc)> {
+    modules: &'a UniqueMap<E::ModuleIdent, T::ModuleDefinition>,
+) -> Option<(&'a E::Fields<N::Type>, Loc)> {
     if let Some(mdef) = modules.get(mident) {
         if let Some(sdef) = mdef.structs.get(sname) {
-            if let H::StructFields::Defined(sfields) = &sdef.fields {
+            if let N::StructFields::Defined(sfields) = &sdef.fields {
                 // unwrap is safe since we know that mdef.structs.get succeeded
                 return Some((sfields, *mdef.structs.get_loc(sname).unwrap()));
             }
@@ -227,33 +201,41 @@ fn struct_fields<'a>(
 }
 
 fn contains_key(
-    sp!(_, bt): &H::BaseType,
-    modules: &UniqueMap<E::ModuleIdent, H::ModuleDefinition>,
+    t: &N::Type,
+    modules: &UniqueMap<E::ModuleIdent, T::ModuleDefinition>,
     field_depth: usize,
 ) -> Option<(P::StructName, bool)> {
-    let H::BaseType_::Apply(ability_set, tname ,_ ) = bt else {
-        return None;
-    };
-
-    let sp!(_, tname) = tname;
-    if let H::TypeName_::ModuleType(mident, sname) = tname {
-        // don't have to check all variants of H::TypeName_ as only H::TypeName_::ModuleType can be
-        // a struct or have abilities
-        if let Some((sfields, sloc)) = struct_fields(sname, mident, modules) {
-            // we could take out the ability set check out of the if condition but it should not
-            // matter as only struct can have abilities defined on them and having it here allows us
-            // to return the location of the struct type (rather than the location of struct
-            // name)
-            if ability_set.has_ability_(P::Ability_::Key) {
-                return Some((
-                    P::StructName(sp(sloc, (*sname.value()).into())),
-                    field_depth > 0,
-                ));
+    if let Some((tname, abilities)) = type_info(t) {
+        if let N::TypeName_::ModuleType(mident, sname) = tname.value {
+            // don't have to check all variants of H::TypeName_ as only H::TypeName_::ModuleType
+            // can be a struct or have abilities
+            if let Some((sfields, sloc)) = struct_fields(&sname, &mident, modules) {
+                // we could take out the ability set check out of the if condition but it should
+                // not matter as only struct can have abilities defined on them and having it
+                // here allows us to return the location of the struct type (rather than the
+                // location of struct name)
+                if let Some(ability_set) = abilities {
+                    if ability_set.has_ability_(P::Ability_::Key) {
+                        return Some((
+                            P::StructName(sp(sloc, (*sname.value()).into())),
+                            field_depth > 0,
+                        ));
+                    }
+                }
+                return sfields
+                    .iter()
+                    .find_map(|(_, _, (_, ftype))| contains_key(ftype, modules, field_depth + 1));
             }
-            return sfields
-                .iter()
-                .find_map(|(_, ftype)| contains_key(ftype, modules, field_depth + 1));
         }
     }
     None
+}
+
+fn type_info(sp!(_, t): &N::Type) -> Option<(N::TypeName, Option<E::AbilitySet>)> {
+    use N::Type_ as T;
+    match t {
+        T::Ref(_, inner_t) => type_info(inner_t),
+        T::Apply(abilities, tname, _) => Some((tname.clone(), abilities.clone())),
+        T::Unit | T::Param(_) | T::Var(_) | T::Anything | T::UnresolvedError => None,
+    }
 }

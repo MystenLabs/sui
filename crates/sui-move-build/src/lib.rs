@@ -25,7 +25,6 @@ use move_compiler::{
     },
     diagnostics::{report_diagnostics_to_color_buffer, report_warnings},
     expansion::ast::{AttributeName_, Attributes},
-    hlir::visitor::HlirVisitor,
     shared::known_attributes::KnownAttribute,
     typing::visitor::TypingVisitor,
 };

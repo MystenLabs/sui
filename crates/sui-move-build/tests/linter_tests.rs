@@ -13,7 +13,6 @@ use move_compiler::{
     diagnostics::codes::{self, WarningFilter},
     editions::Flavor,
     expansion::ast as E,
-    hlir::visitor::HlirVisitor,
     shared::{NumericalAddress, PackageConfig},
     typing::visitor::TypingVisitor,
     Compiler, PASS_PARSER,

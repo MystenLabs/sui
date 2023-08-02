@@ -193,12 +193,7 @@ pub fn program(
     let modules = modules(&mut context, tmodules);
     let scripts = scripts(&mut context, tscripts);
 
-    let mut prog = H::Program { modules, scripts };
-    for v in &compilation_env.visitors().hlir {
-        let mut v = v.borrow_mut();
-        v.visit(compilation_env, &mut prog);
-    }
-    prog
+    H::Program { modules, scripts }
 }
 
 fn modules(
