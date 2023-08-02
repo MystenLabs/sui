@@ -66,7 +66,6 @@ type Query {
   queryTransactionBlocksConnection(
     first: Int, after: String, last: Int, before: String,
     filter: TransactionBlockFilter,
-    order: Order,
   ): TransactionBlockQueryConnection
 
   resolveNameServiceAddress(name: String!): Address
