@@ -1,11 +1,11 @@
 warning[Lint W04001]: attempting to freeze wrapped objects
    ┌─ tests/linter/freeze_wrapped.move:42:40
    │
-12 │     struct Wrapper has key, store {
-   │            ------- The field 'inner' of 'Wrapper' contains  wrapped objects
+14 │         inner: Inner,
+   │                ----- The field of this type is a wrapped object
    ·
 42 │         transfer::public_freeze_object(w);
-   │                                        ^ Freezing an object containing other objects will prevent the wrapped objects from being unwrapped in the future.
+   │                                        ^ Freezing an object of type 'Wrapper' also freezes all objects wrapped in its field 'inner'.
    │
    = This warning can be suppressed with '#[lint_allow(freeze_wrapped)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
@@ -15,33 +15,33 @@ warning[Lint W04001]: attempting to freeze wrapped objects
  8 │     struct Inner has key, store {
    │            ----- Indirectly wrapped object is of this type
    ·
-21 │     struct IndirectWrapper has key, store {
-   │            --------------- The field 's' of 'IndirectWrapper' contains indirectly wrapped objects
+23 │         s: S,
+   │            - The field of this type indirectly contains a wrapped object
    ·
 46 │         transfer::public_freeze_object(w);
-   │                                        ^ Freezing an object containing other objects will prevent the wrapped objects from being unwrapped in the future.
+   │                                        ^ Freezing an object of type 'IndirectWrapper' also freezes all objects wrapped in its field 's'.
    │
    = This warning can be suppressed with '#[lint_allow(freeze_wrapped)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W04001]: attempting to freeze wrapped objects
    ┌─ tests/linter/freeze_wrapped.move:51:40
    │
-12 │     struct Wrapper has key, store {
-   │            ------- The field 'inner' of 'Wrapper' contains  wrapped objects
+14 │         inner: Inner,
+   │                ----- The field of this type is a wrapped object
    ·
 51 │         transfer::public_freeze_object(v);
-   │                                        ^ Freezing an object containing other objects will prevent the wrapped objects from being unwrapped in the future.
+   │                                        ^ Freezing an object of type 'Wrapper' also freezes all objects wrapped in its field 'inner'.
    │
    = This warning can be suppressed with '#[lint_allow(freeze_wrapped)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W04001]: attempting to freeze wrapped objects
    ┌─ tests/linter/freeze_wrapped.move:55:40
    │
-26 │     struct GenWrapper<T: key + store> has key, store {
-   │            ---------- The field 'inner' of 'GenWrapper' contains  wrapped objects
+28 │         inner: T,
+   │                - The field of this type is a wrapped object
    ·
 55 │         transfer::public_freeze_object(w);
-   │                                        ^ Freezing an object containing other objects will prevent the wrapped objects from being unwrapped in the future.
+   │                                        ^ Freezing an object of type 'GenWrapper' also freezes all objects wrapped in its field 'inner'.
    │
    = This warning can be suppressed with '#[lint_allow(freeze_wrapped)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
@@ -51,11 +51,11 @@ warning[Lint W04001]: attempting to freeze wrapped objects
 31 │     struct S2<T: key + store> has store {
    │               - Indirectly wrapped object is of this type
    ·
-35 │     struct IndirectGenWrapper<T: key + store> has key, store {
-   │            ------------------ The field 'inner' of 'IndirectGenWrapper' contains indirectly wrapped objects
+37 │         inner: S2<T>,
+   │                ----- The field of this type indirectly contains a wrapped object
    ·
 59 │         transfer::public_freeze_object(w);
-   │                                        ^ Freezing an object containing other objects will prevent the wrapped objects from being unwrapped in the future.
+   │                                        ^ Freezing an object of type 'IndirectGenWrapper' also freezes all objects wrapped in its field 'inner'.
    │
    = This warning can be suppressed with '#[lint_allow(freeze_wrapped)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

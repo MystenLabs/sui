@@ -97,7 +97,7 @@ fn visit_exp(
                     // struct with a given name not found
                     return;
                 };
-                let Some((sfields, sloc)) = struct_fields(&sname, &mident, modules) else {
+                let Some((sfields, _)) = struct_fields(&sname, &mident, modules) else {
                     // fields for a given struct could not be located
                     return;
                 };
@@ -105,17 +105,20 @@ fn visit_exp(
                     if let Some((nested_tname, nested)) =
                         contains_key(t, modules, /*field_depth*/ 0)
                     {
-                        let msg = "Freezing an object containing other objects will prevent the wrapped objects from being unwrapped in the future.";
-                        let uid_msg = format!(
-                            "The field '{}' of '{}' contains {} wrapped objects",
-                            f,
+                        let msg = format!(
+                            "Freezing an object of type '{}' also \
+                             freezes all objects wrapped in its field '{}'.",
                             sname.value(),
-                            if nested { "indirectly" } else { "" }
+                            f
+                        );
+                        let uid_msg = format!(
+                            "The field of this type {} a wrapped object",
+                            if nested { "indirectly contains" } else { "is" }
                         );
                         let mut d = diag!(
                             FREEZE_KEY_DIAG,
                             (fun.arguments.exp.loc, msg),
-                            (sloc, uid_msg)
+                            (t.loc, uid_msg)
                         );
 
                         if nested {
