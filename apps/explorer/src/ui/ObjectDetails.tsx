@@ -10,6 +10,12 @@ import { ObjectLink } from './InternalLink';
 import { ObjectModal } from './Modal/ObjectModal';
 import { Image } from './image/Image';
 
+export enum OBJECT_VIEW_MODES {
+	LIST,
+	SMALL_THUMBNAILS,
+	THUMBNAILS,
+}
+
 const imageStyles = cva(['cursor-pointer z-0 flex-shrink-0 relative'], {
 	variants: {
 		size: {
@@ -35,6 +41,7 @@ export interface ObjectDetailsProps {
 	name?: string;
 	type: string;
 	variant: 'small' | 'large';
+	viewMode?: OBJECT_VIEW_MODES;
 }
 
 export function ObjectDetails({
@@ -44,13 +51,14 @@ export function ObjectDetails({
 	video,
 	type,
 	variant = 'small',
+	viewMode,
 }: ObjectDetailsProps) {
 	const [open, setOpen] = useState(false);
 	const close = () => setOpen(false);
 	const openPreview = () => setOpen(true);
 
 	return (
-		<div className="flex items-center gap-3.75 overflow-auto">
+		<div className="flex items-center gap-3.75">
 			<ObjectModal
 				open={open}
 				onClose={close}
@@ -73,30 +81,32 @@ export function ObjectDetails({
 					</div>
 				)}
 			</div>
-			<div className={textStyles({ size: variant })}>
-				{variant === 'large' ? (
-					<Heading variant="heading4/semibold" truncate>
-						{name}
-					</Heading>
-				) : (
-					<Text variant="bodySmall/medium" color="gray-90" truncate>
-						{name}
+			{viewMode !== OBJECT_VIEW_MODES.THUMBNAILS && (
+				<div className={textStyles({ size: variant })}>
+					{variant === 'large' ? (
+						<Heading variant="heading4/semibold" truncate>
+							{name}
+						</Heading>
+					) : (
+						<Text variant="bodySmall/medium" color="gray-90" truncate>
+							{name}
+						</Text>
+					)}
+					{id && <ObjectLink objectId={id} />}
+					<Text variant="bodySmall/medium" color="steel-dark" truncate>
+						{type}
 					</Text>
-				)}
-				{id && <ObjectLink objectId={id} />}
-				<Text variant="bodySmall/medium" color="steel-dark" truncate>
-					{type}
-				</Text>
-				{variant === 'large' ? (
-					<div
-						onClick={openPreview}
-						className="mt-2.5 flex cursor-pointer items-center gap-1 text-steel-dark"
-					>
-						<Text variant="caption/semibold">Preview</Text>
-						<ArrowUpRight16 className="inline-block" />
-					</div>
-				) : null}
-			</div>
+					{variant === 'large' ? (
+						<div
+							onClick={openPreview}
+							className="mt-2.5 flex cursor-pointer items-center gap-1 text-steel-dark"
+						>
+							<Text variant="caption/semibold">Preview</Text>
+							<ArrowUpRight16 className="inline-block" />
+						</div>
+					) : null}
+				</div>
+			)}
 		</div>
 	);
 }
