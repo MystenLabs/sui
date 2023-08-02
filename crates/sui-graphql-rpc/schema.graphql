@@ -728,7 +728,7 @@ type NormalizedStruct {
 
 type NormalizedField {
   name: String
-  type: MoveTypeUse
+  type: OpenMoveType
 }
 
 type NormalizedFunction {
@@ -740,8 +740,8 @@ type NormalizedFunction {
   isEntry: Boolean
 
   typeParameters: [MoveFunctionTypeParameterDecl]
-  parameters: [MoveTypeUse]
-  return: [MoveTypeUse]
+  parameters: [OpenMoveType]
+  return: [OpenMoveType]
 }
 
 type MoveValue {
@@ -783,6 +783,7 @@ type MoveTypeName {
   struct: NormalizedStruct
 }
 
+# Represents concrete types (no type parameters, no references)
 type MoveType {
   # Scalar representation of the type instantiation (type and type
   # parameters)
@@ -791,20 +792,23 @@ type MoveType {
   typeParameters: [MoveType]
 }
 
-type MoveTypeUse {
+# Represents types that could contain unbound type parameters, or
+# references. Such types can appear as function parameters, or fields
+# in structs.
+type OpenMoveType {
   repr: String!
   ref: MoveReference
-  type: MoveTypeBody
+  type: OpenMoveTypeBody
 }
 
-union MoveTypeBody = MoveTypeNameUse | MoveTypeParameterUse
+union OpenMoveTypeBody = MoveTypeApplicatioon | MoveTypeParameter
 
-type MoveTypeNameUse {
+type MoveTypeApplication {
   name: MoveTypeName!
-  typeParameters: [MoveTypeUse]
+  typeParameters: [OpenMoveType]
 }
 
-type MoveTypeParameterUse {
+type MoveTypeParameter {
   index: Int
 }
 
