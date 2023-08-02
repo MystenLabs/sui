@@ -14,19 +14,9 @@ type CoinItemProps = {
 export default function CoinItem({ coin }: CoinItemProps) {
 	const [formattedBalance, symbol] = useFormatCoin(coin.balance, coin.coinType);
 	return (
-		<div className="bg-grey-40 grid grid-flow-row auto-rows-fr grid-cols-4 items-center">
-			<Text color="steel-darker" variant="bodySmall/medium">
-				Object ID
-			</Text>
-			<div className="col-span-3">
-				<ObjectLink objectId={coin.coinObjectId} noTruncate />
-			</div>
-
-			<Text color="steel-darker" variant="bodySmall/medium">
-				Balance
-			</Text>
-
-			<div className="col-span-3 inline-flex items-end gap-1">
+		<div className="flex items-center justify-between rounded-lg bg-white px-3 py-2 shadow-panel">
+			<ObjectLink objectId={coin.coinObjectId} />
+			<div className="col-span-3 inline-flex items-center gap-1">
 				<Text color="steel-darker" variant="bodySmall/medium">
 					{formattedBalance}
 				</Text>
