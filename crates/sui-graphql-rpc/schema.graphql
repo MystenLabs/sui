@@ -56,7 +56,7 @@ type Query {
   checkpoint(filter: CheckpointFilter): Checkpoint
   checkpointsConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
 
-  transactionBlock(digest: Bytes!): TransactionBlock
+  transactionBlock(digest: String!): TransactionBlock
   transactionBlocksConnection(first: Int, after: String, last: Int, before: String): TransactionBlockConnection
 
   coinMetadata(coinType: String!): CoinMetadata
@@ -88,13 +88,13 @@ scalar SuiAddress
 # String representation of an arbitrary width, possibly signed integer
 scalar BigInt
 
-# String containing Base58-encoded binary data.
-scalar Bytes
+# String containing Base64-encoded binary data.
+scalar Base64
 
 # Filter either by the digest, or the sequence number, or neither, to
 # get the latest checkpoint.
 input CheckpointFilter {
-  digest: Bytes
+  digest: String
   sequenceNumber: BigInt
 }
 
@@ -126,7 +126,7 @@ input EventFilter {
 
   # (x)or any of these
   sender: SuiAddress
-  transactionDigest: Bytes
+  transactionDigest: String
 
   # Cascading (module requires package)
   emittingPackage: SuiAddress
@@ -213,7 +213,7 @@ type Object implements Owner {
   id: ID!
   owner: AmbiguousOwner
   version: BigInt
-  digest: Bytes
+  digest: String
 
   previousVersion: BigInt
   previousTransactionBlock: TransactionBlock
@@ -230,7 +230,7 @@ type Object implements Owner {
   dynamicField(dynamicFieldName: DynamicFieldName!): DynamicField
   dynamicFieldsConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 
-  bcs: Bytes
+  bcs: Base64
 }
 
 type DisplayEntry {
@@ -355,10 +355,10 @@ type Validator {
 }
 
 type ValidatorCredentials {
-  protocolPubKey: Bytes
-  networkPubKey: Bytes
-  workerPubKey: Bytes
-  proofOfPossession: Bytes
+  protocolPubKey: Base64
+  networkPubKey: Base64
+  workerPubKey: Base64
+  proofOfPossession: Base64
 
   netAddress: String
   p2pAddreess: String
@@ -378,14 +378,14 @@ type SafeMode {
 
 type Checkpoint {
   id: ID!
-  digest: Bytes!
+  digest: String!
   sequenceNumber: BigInt!
   timestampMs: BigInt
-  validatorSignature: Bytes
+  validatorSignature: Base64
 
   # Commitments
-  previousCheckpointDigest: Bytes
-  liveObjectSetDigest: Bytes
+  previousCheckpointDigest: String
+  liveObjectSetDigest: String
 
   networkTotalTransactions: BigInt
   rollingGasSummary: GasCostSummary
@@ -409,7 +409,7 @@ type CommitteeMember {
 }
 
 type TransactionBlock {
-  digest: Bytes!
+  digest: String!
   sender: Address
   gasInput: GasInput
   kind: TransactionBlockKind
@@ -418,7 +418,7 @@ type TransactionBlock {
 
   expiration: Epoch
 
-  bcs: Bytes
+  bcs: Base64
 }
 
 enum TransactionBlockKindInput {
@@ -528,7 +528,7 @@ type MakeMoveVecTransaction {
 type TransactionSignature {}
 
 type TransactionBlockEffects {
-  digest: Bytes!
+  digest: String!
   status: ExecutionStatus!
   errors: String
   transactionBlock: TransactionBlock
@@ -545,7 +545,7 @@ type TransactionBlockEffects {
 
   eventsConnection(first: Int, after: String, last: Int, before: String): TransactionEventConnection
 
-  bcs: Bytes
+  bcs: Base64
 }
 
 enum ExecutionStatus {
@@ -595,7 +595,7 @@ type Event {
   timestampMs: BigInt
 
   json: String
-  bcs: Bytes
+  bcs: Base64
 }
 
 type Balance {
@@ -642,7 +642,7 @@ type CoinMetadata {
 
 input DynamicFieldName {
   type: String!
-  bcs: Bytes!
+  bcs: Base64!
 }
 
 type DynamicField {
@@ -747,7 +747,7 @@ type MoveValue {
   type: MoveType!
   data: MoveData
 
-  bcs: Bytes
+  bcs: Base64
 }
 
 union MoveData =
