@@ -3,11 +3,15 @@
 
 import { PoolInfo, Records } from './dto';
 
-export function getPoolInfoByRecords(tokenType1: string, tokenType2: string, records: Records): PoolInfo {
+export function getPoolInfoByRecords(
+	tokenType1: string,
+	tokenType2: string,
+	records: Records,
+): PoolInfo {
 	for (const ele of records.pools) {
 		if (
-			ele.type.indexOf(tokenType1) != -1 &&
-			ele.type.indexOf(tokenType2) != -1 &&
+			ele.type.indexOf(tokenType1) !== -1 &&
+			ele.type.indexOf(tokenType2) !== -1 &&
 			ele.type.indexOf(tokenType1) < ele.type.indexOf(tokenType2)
 		) {
 			return {
@@ -17,8 +21,8 @@ export function getPoolInfoByRecords(tokenType1: string, tokenType2: string, rec
 				tickSize: ele.tickSize,
 			};
 		} else if (
-			ele.type.indexOf(tokenType1) != -1 &&
-			ele.type.indexOf(tokenType2) != -1 &&
+			ele.type.indexOf(tokenType1) !== -1 &&
+			ele.type.indexOf(tokenType2) !== -1 &&
 			ele.type.indexOf(tokenType1) > ele.type.indexOf(tokenType2)
 		) {
 			return {

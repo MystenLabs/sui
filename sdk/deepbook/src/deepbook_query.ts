@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { DevInspectResults } from '@mysten/sui.js/client';
-import { normalizeSuiObjectId } from '@mysten/sui.js/utils';
+import { SUI_CLOCK_OBJECT_ID } from '@mysten/sui.js/utils';
 import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { CLOCK, MODULE_CLOB, PACKAGE_ID } from './utils';
+import { MODULE_CLOB, PACKAGE_ID } from './utils';
 
 export class DeepBook_query {
 	public provider: SuiClient;
@@ -146,7 +146,7 @@ export class DeepBook_query {
 				txb.object(poolId),
 				txb.pure(String(lowerPrice)),
 				txb.pure(String(higherPrice)),
-				txb.object(normalizeSuiObjectId(CLOCK)),
+				txb.object(SUI_CLOCK_OBJECT_ID),
 			],
 		});
 		return await this.provider.devInspectTransactionBlock({

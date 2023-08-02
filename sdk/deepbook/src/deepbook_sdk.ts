@@ -2,12 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { TransactionArgument, TransactionBlock } from '@mysten/sui.js/transactions';
-import { normalizeSuiObjectId } from '@mysten/sui.js/utils';
+import { SUI_CLOCK_OBJECT_ID } from '@mysten/sui.js/utils';
 import { PoolInfo, Records } from './utils';
 import { defaultGasBudget } from './utils';
 import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
 import {
-	CLOCK,
 	CREATION_FEE,
 	getPoolInfoByRecords,
 	MODULE_CLOB,
@@ -278,7 +277,7 @@ export class DeepBook_sdk {
 				txb.pure(is_bid),
 				txb.object(baseCoin),
 				txb.object(quoteCoin),
-				txb.object(normalizeSuiObjectId(CLOCK)),
+				txb.object(SUI_CLOCK_OBJECT_ID),
 			],
 		});
 		txb.transferObjects([base_coin_ret], txb.pure(currentAddress));
@@ -311,7 +310,7 @@ export class DeepBook_sdk {
 	): TransactionBlock {
 		const txb = new TransactionBlock();
 		// in this case, we assume that the tokenIn--tokenOut always exists.
-		const [base_coin_ret, quote_coin_ret, amount] = txb.moveCall({
+		const [base_coin_ret, quote_coin_ret, _amount] = txb.moveCall({
 			typeArguments: [token1, token2],
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::swap_exact_quote_for_base`,
 			arguments: [
@@ -319,7 +318,7 @@ export class DeepBook_sdk {
 				txb.pure(client_order_id),
 				txb.object(accountCap),
 				txb.object(String(amountIn)),
-				txb.object(normalizeSuiObjectId(CLOCK)),
+				txb.object(SUI_CLOCK_OBJECT_ID),
 				txb.object(tokenObjectIn),
 			],
 		});
@@ -353,7 +352,7 @@ export class DeepBook_sdk {
 	): TransactionBlock {
 		const txb = new TransactionBlock();
 		// in this case, we assume that the tokenIn--tokenOut always exists.
-		const [base_coin_ret, quote_coin_ret, amount] = txb.moveCall({
+		const [base_coin_ret, quote_coin_ret, _amount] = txb.moveCall({
 			typeArguments: [token1, token2],
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::swap_exact_base_for_quote`,
 			arguments: [
@@ -367,7 +366,7 @@ export class DeepBook_sdk {
 					target: `0x2::coin::zero`,
 					arguments: [],
 				}),
-				txb.object(normalizeSuiObjectId(CLOCK)),
+				txb.object(SUI_CLOCK_OBJECT_ID),
 			],
 		});
 		txb.transferObjects([base_coin_ret], txb.pure(currentAddress));
@@ -414,7 +413,7 @@ export class DeepBook_sdk {
 			txb.pure(isBid),
 			txb.pure(expireTimestamp),
 			txb.pure(restriction),
-			txb.object(normalizeSuiObjectId(CLOCK)),
+			txb.object(SUI_CLOCK_OBJECT_ID),
 			txb.object(accountCap),
 		];
 		txb.moveCall({
@@ -519,7 +518,7 @@ export class DeepBook_sdk {
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::clean_up_expired_orders`,
 			arguments: [
 				txb.object(poolId),
-				txb.object(normalizeSuiObjectId(CLOCK)),
+				txb.object(SUI_CLOCK_OBJECT_ID),
 				txb.pure(orderIds),
 				txb.pure(orderOwners),
 			],
@@ -674,7 +673,7 @@ export class DeepBook_sdk {
 						txb.pure(client_order_id),
 						txb.object(accountCap),
 						_amount,
-						txb.object(normalizeSuiObjectId(CLOCK)),
+						txb.object(SUI_CLOCK_OBJECT_ID),
 						_tokenOut,
 					],
 				});
@@ -691,7 +690,7 @@ export class DeepBook_sdk {
 						// @ts-ignore
 						_tokenIn,
 						_tokenOut,
-						txb.object(normalizeSuiObjectId(CLOCK)),
+						txb.object(SUI_CLOCK_OBJECT_ID),
 					],
 				});
 			}
@@ -718,6 +717,7 @@ export class DeepBook_sdk {
 				}
 			}
 		}
+		return undefined;
 	}
 
 	/**
@@ -735,7 +735,7 @@ export class DeepBook_sdk {
 		path: string[] = [],
 		depth: number = 2,
 		res: string[][] = new Array().fill([]),
-	) {
+	): string[][] {
 		// first updates the records
 		if (depth < 0) {
 			return res;
@@ -752,7 +752,7 @@ export class DeepBook_sdk {
 				String((record as any).type)
 					.split(',')
 					.forEach((token: string) => {
-						if (token.indexOf('${MODULE_CLOB}') != -1) {
+						if (token.indexOf('${MODULE_CLOB}') !== -1) {
 							token = token.split('<')[1];
 						} else {
 							token = token.split('>')[0].substring(1);
@@ -763,12 +763,13 @@ export class DeepBook_sdk {
 					});
 			}
 		}
-		children.forEach((child: string) => {
+
+		for (const child of children.values()) {
 			const result = this.dfs(child, tokenTypeOut, records, [...path, tokenTypeIn], depth, res);
 			if (result) {
 				return result;
 			}
-		});
+		}
 		return res;
 	}
 }
