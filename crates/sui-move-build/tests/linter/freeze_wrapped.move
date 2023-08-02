@@ -23,6 +23,20 @@ module 0x42::test {
         s: S,
     }
 
+    struct GenWrapper<T: key + store> has key, store {
+        id: UID,
+        inner: T,
+    }
+
+    struct S2<T: key + store> has store {
+        inner: T
+    }
+
+    struct IndirectGenWrapper<T: key + store> has key, store {
+        id: UID,
+        inner: S2<T>,
+    }
+
 
     public fun freeze_direct(w: Wrapper) {
         transfer::public_freeze_object(w);
@@ -36,4 +50,13 @@ module 0x42::test {
         let v = w;
         transfer::public_freeze_object(v);
     }
+
+    public fun freeze_direct_gen<T: key + store>(w: GenWrapper<T>) {
+        transfer::public_freeze_object(w);
+    }
+
+    public fun freeze_indirect_gen<T: key + store>(w: IndirectGenWrapper<T>) {
+        transfer::public_freeze_object(w);
+    }
+
 }
