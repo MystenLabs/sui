@@ -74,6 +74,7 @@ use sui_macros::{fail_point, fail_point_async};
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::indexes::{CoinInfo, ObjectIndexChanges};
 use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
+use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_storage::IndexStore;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{
@@ -2867,8 +2868,26 @@ impl AuthorityState {
             .loaded_child_object_versions(transaction_digest)
     }
 
-    pub fn get_transactions(
+    pub async fn get_transactions_for_tests(
+        self: &Arc<Self>,
+        filter: Option<TransactionFilter>,
+        cursor: Option<TransactionDigest>,
+        limit: Option<usize>,
+        reverse: bool,
+    ) -> SuiResult<Vec<TransactionDigest>> {
+        let metrics = KeyValueStoreMetrics::new_for_tests();
+        let kv_store = Arc::new(TransactionKeyValueStore::new(
+            "rocksdb",
+            metrics,
+            self.clone(),
+        ));
+        self.get_transactions(&kv_store, filter, cursor, limit, reverse)
+            .await
+    }
+
+    pub async fn get_transactions(
         &self,
+        kv_store: &Arc<TransactionKeyValueStore>,
         filter: Option<TransactionFilter>,
         // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<TransactionDigest>,
@@ -2876,8 +2895,7 @@ impl AuthorityState {
         reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
         if let Some(TransactionFilter::Checkpoint(sequence_number)) = filter {
-            let checkpoint_contents =
-                self.get_checkpoint_contents_by_sequence_number(sequence_number)?;
+            let checkpoint_contents = kv_store.get_checkpoint_contents(sequence_number).await?;
             let iter = checkpoint_contents.iter().map(|c| c.transaction);
             if reverse {
                 let iter = iter

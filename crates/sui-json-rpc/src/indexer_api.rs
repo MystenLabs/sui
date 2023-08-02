@@ -216,7 +216,14 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             // Retrieve 1 extra item for next cursor
             let mut digests = self
                 .state
-                .get_transactions(query.filter, cursor, Some(limit + 1), descending)
+                .get_transactions(
+                    &self.transaction_kv_store,
+                    query.filter,
+                    cursor,
+                    Some(limit + 1),
+                    descending,
+                )
+                .await
                 .map_err(Error::from)?;
 
             // extract next cursor
