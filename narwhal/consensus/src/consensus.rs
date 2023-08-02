@@ -72,12 +72,14 @@ impl Debug for LeaderSwapTable {
 impl LeaderSwapTable {
     // constructs a new table based on the provided reputation scores. The `bad_nodes_stake_threshold` designates the
     // total (by stake) nodes that will be considered as "bad" based on their scores and will be replaced by good nodes.
+    // The `bad_nodes_stake_threshold` should be in the range of [0.0 - 0.33]
     pub fn new(
         committee: &Committee,
         round: Round,
         reputation_scores: &ReputationScores,
         bad_nodes_stake_threshold: f64,
     ) -> Self {
+        assert!((0.0..=0.33).contains(&bad_nodes_stake_threshold), "The bad_nodes_stake_threshold should be in range [0.0 - 0.33], out of bounds parameter detected");
         assert!(reputation_scores.final_of_schedule, "Only reputation scores that have been calculated on the end of a schedule are accepted");
 
         // calculating the good nodes

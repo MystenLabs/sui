@@ -718,8 +718,8 @@ pub struct ProtocolConfig {
     /// === Execution Version ===
     execution_version: Option<u64>,
 
-    // Dictates the threshold (percentage of stake) that is used to calculate the "bad" nodes to be
-    // swapped when creating the consensus schedule.
+    // Dictates the threshold (fraction of stake) that is used to calculate the "bad" nodes to be
+    // swapped when creating the consensus schedule. The values should be of the range [0.0 - 0.33].
     consensus_bad_nodes_stake_threshold: Option<f64>,
 }
 
