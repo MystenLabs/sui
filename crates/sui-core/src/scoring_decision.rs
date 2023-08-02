@@ -306,7 +306,10 @@ mod tests {
     pub fn test_update_low_scoring_authorities_v2() {
         // GIVEN
         let peer_id_map = HashMap::new();
+
+        // Total stake is 8 for this committee and every authority has equal stake = 1
         let committee = generate_committee(8);
+
         let mut authorities = committee.authorities();
         let a1 = authorities.next().unwrap();
         let a2 = authorities.next().unwrap();
@@ -343,14 +346,15 @@ mod tests {
 
         let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
         protocol_config.set_narwhal_new_leader_election_schedule(true);
-        protocol_config.set_consensus_bad_nodes_stake_threshold(0.33);
 
         // WHEN
+        protocol_config.set_consensus_bad_nodes_stake_threshold(0.33); // 0.33 * 8 = 2.64 maximum stake that will considered low scoring
+
         update_low_scoring_authorities(
             low_scoring.clone(),
             &committee,
-            reputation_scores,
-            peer_id_map,
+            reputation_scores.clone(),
+            peer_id_map.clone(),
             &metrics,
             &protocol_config,
         );
@@ -361,6 +365,24 @@ mod tests {
             *low_scoring.load().get(&a4.protocol_key().into()).unwrap(),
             50
         );
+        assert_eq!(
+            *low_scoring.load().get(&a5.protocol_key().into()).unwrap(),
+            0
+        );
+
+        // WHEN setting the threshold to lower
+        protocol_config.set_consensus_bad_nodes_stake_threshold(0.2); // 0.2 * 8 = 1.6 maximum
+        update_low_scoring_authorities(
+            low_scoring.clone(),
+            &committee,
+            reputation_scores,
+            peer_id_map,
+            &metrics,
+            &protocol_config,
+        );
+
+        // THEN
+        assert_eq!(low_scoring.load().len(), 1);
         assert_eq!(
             *low_scoring.load().get(&a5.protocol_key().into()).unwrap(),
             0
