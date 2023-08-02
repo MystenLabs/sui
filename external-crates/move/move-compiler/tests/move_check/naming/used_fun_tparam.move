@@ -28,7 +28,7 @@ module 0x42::used_fun_tparam {
     }
 
     public fun no_warn_pack_unpack<T: key + drop>() {
-        let x = S<T> {};
+        let x = S {};
         let S<T> {} = x;
     }
 
@@ -40,8 +40,8 @@ module 0x42::used_fun_tparam {
         let _ = foo<T>();
     }
 
-    public fun no_warn_cast<T: key + drop>() {
-        let x = foo<T>();
+    public fun no_warn_annotation<T: key + drop>() {
+        let x = foo();
         bar((x: T));
     }
 
