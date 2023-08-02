@@ -70,12 +70,14 @@ type Query {
 
   resolveNameServiceAddress(name: String!): Address
 
+  # NB. Will be moved into a private, explorer-specific extension.
   networkMetrics: NetworkMetrics
   moveCallMetrics: MoveCallMetrics
   checkpointAddressMetrics(checkpoint: BigInt): AddressMetric
   allEpochAddressMetricsConnection(first: Int, after: String, last: Int, before: String): AddressMetricConnection
 }
 
+# NB. Add after MVP has stabilised.
 type Subscription {
   events(filter: EventFilter): Event
   transactions(filter: TransactionBlockFilter): TransactionBlock
