@@ -30,6 +30,7 @@ use sui_json_rpc_types::{
     TransactionFilter,
 };
 use sui_open_rpc::Module;
+use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::digests::TransactionDigest;
 use sui_types::dynamic_field::DynamicFieldName;
@@ -87,6 +88,7 @@ const DEFAULT_MAX_SUBSCRIPTIONS: usize = 100;
 pub struct IndexerApi<R> {
     state: Arc<AuthorityState>,
     read_api: R,
+    transaction_kv_store: Arc<TransactionKeyValueStore>,
     ns_package_addr: Option<SuiAddress>,
     ns_registry_id: Option<ObjectID>,
     ns_reverse_registry_id: Option<ObjectID>,
@@ -98,6 +100,7 @@ impl<R: ReadApiServer> IndexerApi<R> {
     pub fn new(
         state: Arc<AuthorityState>,
         read_api: R,
+        transaction_kv_store: Arc<TransactionKeyValueStore>,
         ns_package_addr: Option<SuiAddress>,
         ns_registry_id: Option<ObjectID>,
         ns_reverse_registry_id: Option<ObjectID>,
@@ -108,6 +111,7 @@ impl<R: ReadApiServer> IndexerApi<R> {
         Self {
             state,
             read_api,
+            transaction_kv_store,
             ns_registry_id,
             ns_package_addr,
             ns_reverse_registry_id,
@@ -260,7 +264,14 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             // Retrieve 1 extra item for next cursor
             let mut data = self
                 .state
-                .query_events(query, cursor.clone(), limit + 1, descending)
+                .query_events(
+                    &self.transaction_kv_store,
+                    query,
+                    cursor.clone(),
+                    limit + 1,
+                    descending,
+                )
+                .await
                 .map_err(Error::from)?;
             let has_next_page = data.len() > limit;
             data.truncate(limit);

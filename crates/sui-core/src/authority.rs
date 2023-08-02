@@ -31,7 +31,13 @@ use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
-use std::{collections::HashMap, fs, pin::Pin, sync::Arc, thread};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+    pin::Pin,
+    sync::Arc,
+    thread,
+};
 use sui_config::node::StateDebugDumpConfig;
 use sui_config::NodeConfig;
 use tap::{TapFallible, TapOptional};
@@ -66,6 +72,7 @@ use sui_json_rpc_types::{
 use sui_macros::{fail_point, fail_point_async};
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::indexes::{CoinInfo, ObjectIndexChanges};
+use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_storage::IndexStore;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{
@@ -3068,8 +3075,9 @@ impl AuthorityState {
         Ok(checkpoints)
     }
 
-    pub fn query_events(
+    pub async fn query_events(
         &self,
+        kv_store: &Arc<TransactionKeyValueStore>,
         query: EventFilter,
         // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<EventID>,
@@ -3160,25 +3168,42 @@ impl AuthorityState {
         } else {
             event_keys.truncate(limit - 1);
         }
-        let keys = event_keys.iter().map(|(digest, _, seq, _)| (*digest, *seq));
 
-        let stored_events = self
-            .database
-            .perpetual_tables
-            .events
-            .multi_get(keys)?
+        // get the unique set of digests from the event_keys
+        let event_digests = event_keys
+            .iter()
+            .map(|(digest, _, _, _)| *digest)
+            .collect::<HashSet<_>>()
             .into_iter()
-            .zip(event_keys.into_iter())
-            .map(|(e, (digest, tx_digest, event_seq, timestamp))| {
-                e.map(|e| (e, tx_digest, event_seq, timestamp))
+            .collect::<Vec<_>>();
+
+        let events = kv_store.multi_get_events(&event_digests).await?;
+
+        let events_map: HashMap<_, _> = event_digests.iter().zip(events.into_iter()).collect();
+
+        let stored_events = event_keys
+            .into_iter()
+            .map(|k| {
+                (
+                    k,
+                    events_map
+                        .get(&k.0)
+                        .expect("fetched digest is missing")
+                        .clone()
+                        .and_then(|e| e.data.get(k.2).cloned()),
+                )
+            })
+            .map(|((digest, tx_digest, event_seq, timestamp), event)| {
+                event
+                    .map(|e| (e, tx_digest, event_seq, timestamp))
                     .ok_or(SuiError::TransactionEventsNotFound { digest })
             })
             .collect::<Result<Vec<_>, _>>()?;
 
         let mut events = vec![];
-        for (e, tx_digest, event_seq, timestamp) in stored_events {
+        for (e, tx_digest, event_seq, timestamp) in stored_events.into_iter() {
             events.push(SuiEvent::try_from(
-                e,
+                e.clone(),
                 tx_digest,
                 event_seq as u64,
                 Some(timestamp),
