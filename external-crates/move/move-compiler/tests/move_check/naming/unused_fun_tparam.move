@@ -12,7 +12,4 @@ module 0x42::unused_fun_tparam {
         42
     }
 
-    public fun no_warning1<T>(v: T): T {
-        v
-    }
 }
