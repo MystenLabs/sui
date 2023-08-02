@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client::{DynamoDbClient, KVTable, KVWriteClient};
+use crate::client::{DynamoDbClient, KVTable, KVWriteClient, Watermarks};
 use anyhow::{anyhow, Result};
 use mysten_metrics::spawn_monitored_task;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
@@ -15,13 +15,6 @@ use sui_types::storage::ReadStore;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tracing::info;
-
-struct Watermarks {
-    // covers txns, effects, and events
-    txns: u64,
-    // covers checkpoint headers and contents
-    checkpoint_contents: u64,
-}
 
 pub struct KVStoreMetrics {
     pub latest_checkpoint_uploaded_to_kv_store: IntGauge,
@@ -68,11 +61,10 @@ async fn upload_to_kv_store(
 ) -> Result<()> {
     let mut updates: HashSet<u64> = HashSet::new();
     let mut client = DynamoDbClient::new(&config).await;
-    let mut checkpoint_number = client
-        .get_state()
+    let mut watermarks = client
+        .get_watermarks()
         .await
-        .expect("failed to fetch key value uploader state")
-        .unwrap_or_default();
+        .expect("failed to fetch key value uploader watermarks");
     info!(
         "Key value store backfill. Current checkpoint is {}",
         checkpoint_number
