@@ -10,7 +10,8 @@ use std::sync::Arc;
 use std::time::Instant;
 use sui_types::digests::{TransactionDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::{SuiError, SuiResult, UserInputError};
+use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::transaction::Transaction;
 
 pub struct TransactionKeyValueStore {
@@ -121,6 +122,51 @@ impl TransactionKeyValueStore {
         res
     }
 
+    pub async fn multi_get_checkpoints_contents(
+        &self,
+        keys: &[CheckpointSequenceNumber],
+    ) -> SuiResult<Vec<Option<CheckpointContents>>> {
+        let start = Instant::now();
+        let res = self.inner.multi_get_checkpoints_contents(keys).await;
+        let elapsed = start.elapsed();
+
+        let num_ckpts = keys.len() as u64;
+
+        self.metrics
+            .key_value_store_num_fetches_latency_ms
+            .with_label_values(&[self.store_name])
+            .observe(elapsed.as_millis() as u64);
+        self.metrics
+            .key_value_store_num_fetches_batch_size
+            .with_label_values(&[self.store_name])
+            .observe(num_ckpts);
+
+        if let Ok(res) = &res {
+            let ckpts_not_found = res.iter().filter(|v| v.is_none()).count() as u64;
+
+            if num_ckpts > 0 {
+                self.metrics
+                    .key_value_store_num_fetches_success
+                    .with_label_values(&[self.store_name, "ckpts"])
+                    .inc_by(num_ckpts);
+            }
+
+            if ckpts_not_found > 0 {
+                self.metrics
+                    .key_value_store_num_fetches_not_found
+                    .with_label_values(&[self.store_name, "ckpts"])
+                    .inc_by(ckpts_not_found);
+            }
+        } else {
+            self.metrics
+                .key_value_store_num_fetches_error
+                .with_label_values(&[self.store_name, "ckpts"])
+                .inc_by(num_ckpts);
+        }
+
+        res
+    }
+
     pub async fn multi_get_tx(
         &self,
         keys: &[TransactionDigest],
@@ -184,6 +230,20 @@ impl TransactionKeyValueStore {
             .flatten()
             .ok_or(SuiError::TransactionEventsNotFound { digest })
     }
+
+    pub async fn get_checkpoint_contents(
+        &self,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> SuiResult<CheckpointContents> {
+        self.multi_get_checkpoints_contents(&[checkpoint])
+            .await?
+            .into_iter()
+            .next()
+            .flatten()
+            .ok_or(SuiError::UserInputError {
+                error: UserInputError::VerifiedCheckpointNotFound(checkpoint),
+            })
+    }
 }
 
 /// Immutable key/value store trait for storing/retrieving transactions, effects, and events.
@@ -201,6 +261,11 @@ pub trait TransactionKeyValueStoreTrait {
         Vec<Option<TransactionEffects>>,
         Vec<Option<TransactionEvents>>,
     )>;
+
+    async fn multi_get_checkpoints_contents(
+        &self,
+        checkpoints: &[CheckpointSequenceNumber],
+    ) -> SuiResult<Vec<Option<CheckpointContents>>>;
 }
 
 /// A TransactionKeyValueStoreTrait that falls back to a secondary store for any key for which the
@@ -262,6 +327,31 @@ impl TransactionKeyValueStoreTrait for FallbackTransactionKVStore {
         merge_res(&mut res.2, secondary_res.2, &indices_events);
 
         Ok((res.0, res.1, res.2))
+    }
+
+    async fn multi_get_checkpoints_contents(
+        &self,
+        checkpoints: &[CheckpointSequenceNumber],
+    ) -> SuiResult<Vec<Option<CheckpointContents>>> {
+        let mut res = self
+            .primary
+            .multi_get_checkpoints_contents(checkpoints)
+            .await?;
+
+        let (fallback_checkpoints, indices_checkpoints) = find_fallback(&res, checkpoints);
+
+        if fallback_checkpoints.is_empty() {
+            return Ok(res);
+        }
+
+        let secondary_res = self
+            .fallback
+            .multi_get_checkpoints_contents(&fallback_checkpoints)
+            .await?;
+
+        merge_res(&mut res, secondary_res, &indices_checkpoints);
+
+        Ok(res)
     }
 }
 

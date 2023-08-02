@@ -1435,7 +1435,7 @@ fn build_kv_store(
     registry: &Registry,
 ) -> Result<Arc<TransactionKeyValueStore>> {
     let metrics = KeyValueStoreMetrics::new(registry);
-    let db_store = TransactionKeyValueStore::new("rocksdb", metrics.clone(), state.db());
+    let db_store = TransactionKeyValueStore::new("rocksdb", metrics.clone(), state.clone());
 
     let base_url = &config.transaction_kv_store_read_config.base_url;
 
