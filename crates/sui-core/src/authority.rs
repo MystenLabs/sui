@@ -6,6 +6,7 @@ use crate::authority::authority_store_types::{StoreObject, StoreObjectWrapper};
 use crate::verify_indexes::verify_indexes;
 use anyhow::anyhow;
 use arc_swap::{ArcSwap, Guard};
+use async_trait::async_trait;
 use chrono::prelude::*;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
@@ -72,7 +73,7 @@ use sui_json_rpc_types::{
 use sui_macros::{fail_point, fail_point_async};
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::indexes::{CoinInfo, ObjectIndexChanges};
-use sui_storage::key_value_store::TransactionKeyValueStore;
+use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
 use sui_storage::IndexStore;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{
@@ -4075,6 +4076,57 @@ impl AuthorityState {
             .unwrap()
             .send(())
             .unwrap();
+    }
+}
+
+#[async_trait]
+impl TransactionKeyValueStoreTrait for AuthorityState {
+    async fn multi_get(
+        &self,
+        transactions: &[TransactionDigest],
+        effects: &[TransactionDigest],
+        events: &[TransactionEventsDigest],
+    ) -> SuiResult<(
+        Vec<Option<Transaction>>,
+        Vec<Option<TransactionEffects>>,
+        Vec<Option<TransactionEvents>>,
+    )> {
+        let txns = if !transactions.is_empty() {
+            self.database
+                .multi_get_transaction_blocks(transactions)?
+                .into_iter()
+                .map(|t| t.map(|t| t.into_inner()))
+                .collect()
+        } else {
+            vec![]
+        };
+
+        let fx = if !effects.is_empty() {
+            self.database.multi_get_executed_effects(effects)?
+        } else {
+            vec![]
+        };
+
+        let evts = if !events.is_empty() {
+            self.database.multi_get_events(events)?
+        } else {
+            vec![]
+        };
+
+        Ok((txns, fx, evts))
+    }
+
+    async fn multi_get_checkpoints_contents(
+        &self,
+        checkpoints: &[CheckpointSequenceNumber],
+    ) -> SuiResult<Vec<Option<CheckpointContents>>> {
+        let mut ret = Vec::with_capacity(checkpoints.len());
+        for checkpoint in checkpoints {
+            let checkpoint = self.get_checkpoint_contents_by_sequence_number(*checkpoint)?;
+            ret.push(Some(checkpoint));
+        }
+
+        Ok(ret)
     }
 }
 

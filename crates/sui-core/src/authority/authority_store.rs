@@ -7,7 +7,6 @@ use std::ops::Not;
 use std::sync::Arc;
 use std::{iter, mem, thread};
 
-use async_trait::async_trait;
 use either::Either;
 use fastcrypto::hash::{HashFunction, MultisetHash, Sha3_256};
 use futures::stream::FuturesUnordered;
@@ -43,7 +42,6 @@ use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfigura
 use super::authority_store_tables::LiveObject;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use mysten_common::sync::notify_read::NotifyRead;
-use sui_storage::key_value_store;
 use sui_storage::package_object_cache::PackageObjectCache;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
@@ -1930,43 +1928,6 @@ impl GetModule for AuthorityStore {
 
     fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
         get_module_by_id(self, id)
-    }
-}
-
-#[async_trait]
-impl key_value_store::TransactionKeyValueStoreTrait for AuthorityStore {
-    async fn multi_get(
-        &self,
-        transactions: &[TransactionDigest],
-        effects: &[TransactionDigest],
-        events: &[TransactionEventsDigest],
-    ) -> SuiResult<(
-        Vec<Option<Transaction>>,
-        Vec<Option<TransactionEffects>>,
-        Vec<Option<TransactionEvents>>,
-    )> {
-        let txns = if !transactions.is_empty() {
-            self.multi_get_transaction_blocks(transactions)?
-                .into_iter()
-                .map(|t| t.map(|t| t.into_inner()))
-                .collect()
-        } else {
-            vec![]
-        };
-
-        let fx = if !effects.is_empty() {
-            self.multi_get_executed_effects(effects)?
-        } else {
-            vec![]
-        };
-
-        let evts = if !events.is_empty() {
-            self.multi_get_events(events)?
-        } else {
-            vec![]
-        };
-
-        Ok((txns, fx, evts))
     }
 }
 

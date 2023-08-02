@@ -12,6 +12,7 @@ use sui_types::digests::{TransactionDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::SuiResult;
 use sui_types::event::Event;
+use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::transaction::Transaction;
 
 use sui_storage::key_value_store::*;
@@ -119,6 +120,13 @@ impl TransactionKeyValueStoreTrait for MockTxStore {
         }
 
         Ok((txs, fxs, evts))
+    }
+
+    async fn multi_get_checkpoints_contents(
+        &self,
+        _checkpoints: &[CheckpointSequenceNumber],
+    ) -> SuiResult<Vec<Option<CheckpointContents>>> {
+        todo!()
     }
 }
 
