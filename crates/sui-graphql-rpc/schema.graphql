@@ -54,19 +54,19 @@ type Query {
   protocolConfig(protocolVersion: Int): ProtocolConfig
 
   checkpoint(filter: CheckpointFilter): Checkpoint
-  checkpointsConnection(cursor: String!, count: Int!, order: Order!): CheckpointConnection
+  checkpointsConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
 
   transactionBlock(digest: Bytes!): TransactionBlock
-  transactionBlocksConnection(cursor: String!, count: Int!, order: Order!): TransactionBlockConnection
+  transactionBlocksConnection(first: Int, after: String, last: Int, before: String): TransactionBlockConnection
 
   coinMetadata(coinType: String!): CoinMetadata
 
-  queryObjectsConnection(cursor: String!, count: Int!, order: Order!, query: ObjectQuery): ObjectQueryConnection
-  queryEventsConnection(cursor: String!, count: Int!, order: Order!, filter: EventFilter, order: Order!): EventQueryConnection
+  queryObjectsConnection(first: Int, after: String, last: Int, before: String, query: ObjectQuery): ObjectQueryConnection
+  queryEventsConnection(first: Int, after: String, last: Int, before: String, filter: EventFilter, order: Order): EventQueryConnection
   queryTransactionBlocksConnection(
-    cursor: String!, count: Int!, order: Order!,
+    first: Int, after: String, last: Int, before: String,
     filter: TransactionBlockFilter,
-    order: Order!,
+    order: Order,
   ): TransactionBlockQueryConnection
 
   resolveNameServiceAddress(name: String!): Address
@@ -74,7 +74,7 @@ type Query {
   networkMetrics: NetworkMetrics
   moveCallMetrics: MoveCallMetrics
   checkpointAddressMetrics(checkpoint: BigInt): AddressMetric
-  allEpochAddressMetricsConnection(cursor: String!, count: Int!, order: Order!): AddressMetricConnection
+  allEpochAddressMetricsConnection(first: Int, after: String, last: Int, before: String): AddressMetricConnection
 }
 
 type Subscription {
@@ -178,17 +178,17 @@ type ConsistentRange {
 interface Owner {
   location: SuiAddress!
 
-  objectsConnection(cursor: String!, count: Int!, order: Order!, query: ObjectQuery): ObjectQueryConnection
+  objectsConnection(first: Int, after: String, last: Int, before: String, query: ObjectQuery): ObjectQueryConnection
 
   balance(type: String!): Balance
-  balancesConnection(cursor: String!, count: Int!, order: Order!): BalanceConnection
+  balancesConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 
-  coinsConnection(cursor: String!, count: Int!, order: Order!, type: String): CoinConnection
+  coinsConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 
-  stakesConnection(cursor: String!, count: Int!, order: Order!): StakeConnection
+  stakesConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 
   defaultNameServiceName: String
-  nameServiceNamesConnection(cursor: String!, count: Int!, order: Order!): NameServiceNamesConnection
+  nameServiceNamesConnection(first: Int, after: String, last: Int, before: String): NameServiceNamesConnection
 }
 
 # Returned by Object.owner, where we can't disambiguate between
@@ -197,7 +197,7 @@ type AmbiguousOwner implements Owner {}
 
 type Address implements Owner {
   transactionBlocksConnection(
-    cursor: String!, count: Int!, order: Order!,
+    first: Int, after: String, last: Int, before: String,
     filter: AddressTransactionBlockFilter,
   ): TransactionBlockConnection
 }
@@ -210,6 +210,7 @@ enum AddressTransactionBlockFilter {
 }
 
 type Object implements Owner {
+  id: ID!
   owner: AmbiguousOwner
   version: BigInt
   digest: Bytes
@@ -224,10 +225,10 @@ type Object implements Owner {
   asMovePackage: MovePackage
 
   # Transaction Blocks that sent objects to this object
-  receivedTransactionBlocksConnection(cursor: String!, count: Int!, order: Order!): TransactionBlockConnection
+  receivedTransactionBlocksConnection(first: Int, after: String, last: Int, before: String): TransactionBlockConnection
 
   dynamicField(dynamicFieldName: DynamicFieldName!): DynamicField
-  dynamicFieldsConnection(cursor: String!, count: Int!, order: Order!): DynamicFieldConnection
+  dynamicFieldsConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 
   bcs: Bytes
 }
@@ -254,8 +255,8 @@ type Epoch {
 
   # TODO: Identify non-duplicate fields in `EndOfEpochInfo`
 
-  checkpointsConnection(cursor: String!, count: Int!, order: Order!): CheckpointConnection
-  transactionBlocksConnection(cursor: String!, count: Int!, order: Order!): TransactionBlockConnection
+  checkpointsConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
+  transactionBlocksConnection(first: Int, after: String, last: Int, before: String): TransactionBlockConnection
 }
 
 type ProtocolConfigs {
@@ -394,7 +395,7 @@ type Checkpoint {
   # Only available on the final checkpoint in an epoch
   endOfEpoch: EndOfEpochData
 
-  transactionsConnection(cursor: String!, count: Int!, order: Order!): TransactionBlockConnection
+  transactionsConnection(first: Int, after: String, last: Int, before: String): TransactionBlockConnection
 }
 
 type EndOfEpochData {
@@ -542,7 +543,7 @@ type TransactionBlockEffects {
   epoch: Epoch
   checkpoint: Checkpoint
 
-  eventsConnection(cursor: String!, count: Int!, order: Order!): TransactionEventConnection
+  eventsConnection(first: Int, after: String, last: Int, before: String): TransactionEventConnection
 
   bcs: Bytes
 }
@@ -587,6 +588,7 @@ type BalanceChange {
 }
 
 type Event {
+  id : ID!
   moduleId: MoveModuleId
   type: MoveType
   sender: Address
@@ -644,6 +646,7 @@ input DynamicFieldName {
 }
 
 type DynamicField {
+  id: ID!
   name: MoveValue
   value: DynamicFieldValue
 }
@@ -660,9 +663,9 @@ type MoveObject {
 }
 
 type MovePackage {
-  modulesConnection(cursor: String!, count: Int!, order: Order!): MovePackageModuleConnection
+  modulesConnection(first: Int, after: String, last: Int, before: String): MovePackageModuleConnection
 
-  normalizedModulesConnection(cursor: String!, count: Int!, order: Order!): NormalizedModulesConnection
+  normalizedModulesConnection(first: Int, after: String, last: Int, before: String): NormalizedModulesConnection
   normalizedModule(name: String!): NormalizedModule
 
   asObject: Object
@@ -706,10 +709,10 @@ type NormalizedModule {
   moduleId: MoveModuleId
   friends: [MoveModuleId]
 
-  structsConnection(cursor: String!, count: Int!, order: Order!): NormalizedStructConnection
+  structsConnection(first: Int, after: String, last: Int, before: String): NormalizedStructConnection
   struct(name: String!): NormalizedStruct
 
-  functionsConnection(cursor: String!, count: Int!, order: Order!): NormalizedFunctionConnection
+  functionsConnection(first: Int, after: String, last: Int, before: String): NormalizedFunctionConnection
   function(name: String!): NormalizedFunction
 }
 
@@ -728,6 +731,7 @@ type NormalizedField {
 }
 
 type NormalizedFunction {
+  id : ID!
   module: NormalizedModule
   name: String
 
@@ -811,14 +815,10 @@ type AddressMetrics {}
 # Connections
 
 type AddressMetricConnection {}
-type DynamicFieldConnection {}
-type EventQueryConnection {}
 type MovePackageModuleConnection {}
 type NameServiceNamesConnection {}
-type NormalizedFunctionConnection {}
 type NormalizedModuleConnection {}
 type NormalizedStructConnection {}
-type ObjectQueryConnection {}
 type StakeConnection {}
 type TransactionBlockConnection {}
 type TransactionBlockQueryConnection {}
@@ -863,4 +863,48 @@ type CoinConnection {
 type CoinEdge {
   cursor: String
   node: Coin!
+}
+
+# DynamicField
+type DynamicFieldConnection {
+  edges: [DynamicFieldEdge!]!
+  pageInfo: PageInfo!
+}
+
+type DynamicFieldEdge {
+  cursor: String
+  node: DynamicField!
+}
+
+# ObjectQuery
+type ObjectQueryConnection {
+  edges: [ObjectQueryEdge!]!
+  pageInfo: PageInfo!
+}
+
+type ObjectQueryEdge {
+  cursor: String
+  node: Object!
+}
+
+# Event
+type EventQueryConnection {
+  edges: [EventQueryEdge!]!
+  pageInfo: PageInfo!
+}
+
+type EventQueryEdge {
+  cursor: String
+  node: Event!
+}
+
+# NormalizedFunction
+type NormalizedFunctionConnection {
+  edges: [NormalizedFunctionEdge!]!
+  pageInfo: PageInfo!
+}
+
+type NormalizedFunctionEdge {
+  cursor: String
+  node: NormalizedFunction!
 }
