@@ -9,7 +9,10 @@ use crate::{
     diagnostics::codes::{
         CategoryID, DiagnosticCode, DiagnosticInfo, DiagnosticsID, Severity, WarningFilter,
     },
-    shared::{ast_debug::AstDebug, FILTER_UNUSED_FUNCTION, FILTER_UNUSED_STRUCT_FIELD},
+    shared::{
+        ast_debug::AstDebug, FILTER_UNUSED_FUNCTION, FILTER_UNUSED_STRUCT_FIELD,
+        FILTER_UNUSED_TYPE_PARAMETER,
+    },
 };
 use codespan_reporting::{
     self as csr,
@@ -446,6 +449,7 @@ impl WarningFilters {
     pub fn unused_warnings_filter_for_test() -> Self {
         let unused_fun_info = UnusedItem::Function.into_info();
         let unused_field_info = UnusedItem::StructField.into_info();
+        let unused_fn_tparam_info = UnusedItem::FunTypeParam.into_info();
         let filtered_codes = BTreeMap::from([
             (
                 DiagnosticsID::new(
@@ -462,6 +466,14 @@ impl WarningFilters {
                     None,
                 ),
                 Some(FILTER_UNUSED_STRUCT_FIELD),
+            ),
+            (
+                DiagnosticsID::new(
+                    unused_fn_tparam_info.category() as u8,
+                    unused_fn_tparam_info.code(),
+                    None,
+                ),
+                Some(FILTER_UNUSED_TYPE_PARAMETER),
             ),
         ]);
         WarningFilters::Specified {

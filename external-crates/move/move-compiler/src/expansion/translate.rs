@@ -770,14 +770,19 @@ fn warning_filter(
                     n
                 }
             };
-            let Some(filter) = context.env.filter_from_str(name_.to_string(), allow.clone()) else {
+            let filters = context
+                .env
+                .filter_from_str(name_.to_string(), allow.clone());
+            if filters.is_empty() {
                 let msg = format!("Unknown warning filter '{name_}'");
                 context
                     .env
                     .add_diag(diag!(Attributes::InvalidValue, (attr.loc, msg)));
-                continue
+                continue;
             };
-            warning_filters.add(filter);
+            for f in filters {
+                warning_filters.add(f);
+            }
         }
     }
     warning_filters
