@@ -4,15 +4,16 @@
 import { type SuiObjectResponse } from '@mysten/sui.js/client';
 
 import { useResolveVideo } from '~/hooks/useResolveVideo';
-import { ObjectDetails } from '~/ui/ObjectDetails';
+import { type OBJECT_VIEW_MODES, ObjectDetails } from '~/ui/ObjectDetails';
 import { parseObjectType } from '~/utils/objectUtils';
 import { trimStdLibPrefix } from '~/utils/stringUtils';
 
 type OwnedObjectTypes = {
 	obj: SuiObjectResponse;
+	viewMode?: OBJECT_VIEW_MODES;
 };
 
-export default function OwnedObject({ obj }: OwnedObjectTypes) {
+export default function OwnedObject({ obj, viewMode }: OwnedObjectTypes) {
 	const video = useResolveVideo(obj);
 	const displayMeta = obj.data?.display?.data;
 
@@ -24,6 +25,7 @@ export default function OwnedObject({ obj }: OwnedObjectTypes) {
 			name={displayMeta?.name ?? displayMeta?.description}
 			image={displayMeta?.image_url}
 			video={video}
+			viewMode={viewMode}
 		/>
 	);
 }
