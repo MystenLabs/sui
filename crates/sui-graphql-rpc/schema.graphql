@@ -3,38 +3,15 @@
 
 # Open Questions
 # --------------
-# - Rules for nullabilit/non-nullability
-# - Pattern for multi-gets
 # - Encoding RPC errors
-# - `type` (vs `scalar`) for Move Types
-# - Pattern for upcasting and downcasting
 
-# Check Completeness Against Existing APIs
-# -------------
-# DONE Read
-# DONE - Objects
-# DONE - Transactions
-# DONE - Checkpoints
-# DONE - Events
-# DONE - ProtocolConfig
-# DONE - Chain Identifier
-# DONE Coin
-# DONE Extended
-# DONE Governance
-# DONE Indexer
-# DONE Move Utils
-# TODO Write
-
-# DONE Port designs from Notion
-# DONE - Display
-# DONE - SuiNS
-# DONE Data Consistency API
-# IN PROGRESS - Flesh out Connections
+# TODO Flesh out Connections
 # TODO - TotalTransactionBlocks for the PTB connection
 
 schema {
   query: Query
   subscription: Subscription
+  mutation: Mutation
 }
 
 type Query {
@@ -42,18 +19,62 @@ type Query {
   # (uniquely defines the network)
   chainIdentifier: String!
 
-  # First and last checkpoint that the RPC can answer consistent
-  # queries for.
-  consistentRange: ConsistentRange
+  # Range of checkpoints that the RPC has data available for (for data
+  # that can be tied to a particular checkpoint).
+  availableRange: AvailableRange!
+
+  # Simulate running a transaction to inspect its effects without
+  # committing to them on-chain.
+  #
+  # `txBytes` either a `TransactionData` struct or a `TransactionKind`
+  #     struct, BCS-encoded and then Base64-encoded.  The expected
+  #     type is controlled by the presence or absence of `txMeta`: If
+  #     present, `txBytes` is assumed to be a `TransactionKind`, if
+  #     absent, then `TransactionData`.
+  #
+  # `txMeta` the data that is missing from a `TransactionKind` to make
+  #     a `TransactionData` (sender address and gas information).  All
+  #     its fields are nullable: `sender` defaults to `0x0`, if
+  #     `gasObjects` is not present, or is an empty list, it is
+  #     substituted with a mock Coin object, and `gasPrice` defaults to
+  #     the reference gas price.
+  #
+  # `skipChecks` optional flag to disable the usual verification
+  #     checks that prevent access to objects that are owned by
+  #     addresses other than the sender, and calling non-public,
+  #     non-entry functions.  Defaults to false.
+  #
+  # `epoch` the epoch to simulate executing the transaction in.
+  #     Defaults to the current epoch.
+  dryRunTransactionBlock(
+    txBytes: Base64!,
+    txMeta: TransactionMetadata,
+    skipChecks: Boolean,
+    sender: SuiAddress,
+    gasPrice: U64
+    gasObjects: [SuiAddress!],
+    epoch: Int
+  ): DryRunResult
 
   owner(address: SuiAddress!): Owner
   object(address: SuiAddress!, version: BigInt): Object
   address(address: SuiAddress!): Address
 
+  # `epochId` defaults to the latest epoch.
   epoch(epochId: Int): Epoch
+
+  # `protocolVersion` defaults to the latest protocol version.
   protocolConfig(protocolVersion: Int): ProtocolConfig
 
+  # If no `filter` is provided, fetch the latest available checkpoint.
   checkpoint(filter: CheckpointFilter): Checkpoint
+
+  # Find a transaction block either by its transaction digest or its
+  # effects digest.
+  transactionBlock(filter: TransactionBlockFilter!): TransactionBlock
+
+  coinMetadata(coinType: String!): CoinMetadata
+
   checkpointsConnection(
     first: Int,
     after: String,
@@ -61,46 +82,37 @@ type Query {
     before: String,
   ): CheckpointConnection
 
-  transactionBlock(digest: String!): TransactionBlock
   transactionBlocksConnection(
     first: Int,
     after: String,
     last: Int,
     before: String,
+    filter: TransactionBlockFilter,
   ): TransactionBlockConnection
 
-  coinMetadata(coinType: String!): CoinMetadata
-
-  queryObjectsConnection(
-    first: Int,
-    after: String,
-    last: Int,
-    before: String,
-    query: ObjectQuery,
-  ): ObjectQueryConnection
-
-  queryEventsConnection(
+  eventsConnection(
     first: Int,
     after: String,
     last: Int,
     before: String,
     filter: EventFilter,
-    order: Order,
-  ): EventQueryConnection
+  ): EventConnection
 
-  queryTransactionBlocksConnection(
+  objectsConnection(
     first: Int,
     after: String,
     last: Int,
     before: String,
-    filter: TransactionBlockFilter,
-  ): TransactionBlockQueryConnection
+    filter: ObjectFilter,
+  ): ObjectConnection
 
   resolveNameServiceAddress(name: String!): Address
 
   # NB. Will be moved into a private, explorer-specific extension.
   networkMetrics: NetworkMetrics
   moveCallMetrics: MoveCallMetrics
+
+  # `checkpoint` defaults to the latest available checkpoint.
   checkpointAddressMetrics(checkpoint: BigInt): AddressMetric
 
   allEpochAddressMetricsConnection(
@@ -112,9 +124,46 @@ type Query {
 }
 
 # NB. Add after MVP has stabilised.
+#
+# Subscriptions use a "push-pull" system: Subscribers are notified
+# when there is new data by being sent the cursor pointing after that
+# new data.  To actually fetch the data, a call must be made to the
+# equivalent Connection API:
+#
+# e.g. When subscription `subscribe { events(filter: F) }` pushes
+# cursor `E`.  Then
+#
+#     query { eventsConnection(before: E, filter: F) }
+#
+# Will start paginating events up to the new data (multiple calls may
+# be required if there are multiple pages of information between the
+# start and the latest).  If the client has already processed some
+# prefix, up to cursor `P`, then they can resume with:
+#
+#    query { eventsConnection(after: P, before: E, filter: F) }
+#
+# The API for transactions is similar.
 type Subscription {
-  events(filter: EventFilter): Event
-  transactions(filter: TransactionBlockFilter): TransactionBlock
+  events(filter: EventFilter): String!
+  transactions(filter: TransactionBlockFilter): String!
+}
+
+type Mutation {
+  # Execute a transaction, committing its effects on chain.
+  #
+  # `txBytes` is a `TransactionData` struct that has been BCS-encoded
+  #     and then Base64-encoded.
+  # `signatures` are a list of `flag || signature || pubkey` bytes,
+  #     Base64-encoded.
+  #
+  # Waits until the transaction has been finalised on chain and an
+  # effects digest is available, and returns that.  If the
+  # transactioon could not be finalised, returns the errors that
+  # prevented it, instead.
+  executeTransactionBlock(
+    txBytes: Base64!,
+    signatures: [Base64!]!,
+  ): ExecutionResult
 }
 
 # String containing 32B hex-encoded address
@@ -129,6 +178,14 @@ scalar Base64
 # ISO-8601 Date and Time
 scalar DateTime
 
+# The extra data required to turn a `TransactionKind` into a
+# `TransactionData` in a dry-run.
+input TransactionMetadata {
+  sender: SuiAddress
+  gasPrice: U64
+  gasObjects: [SuiAddress!]
+}
+
 # Filter either by the digest, or the sequence number, or neither, to
 # get the latest checkpoint.
 input CheckpointFilter {
@@ -136,13 +193,18 @@ input CheckpointFilter {
   sequenceNumber: BigInt
 }
 
-enum Order { ASC, DESC }
+# Find a transaction block either by its transaction digest, or its
+# effects digest (can't be both, can't be neither).
+input TransactionBlockFilter {
+  transactionDigest: String
+  effectsDigest: String
+}
 
-input ObjectQuery {
+input ObjectFilter {
   # one of these
-  any: [ObjectQuery]
-  all: [ObjectQuery]
-  not: ObjectQuery
+  any: [ObjectFilter]
+  all: [ObjectFilter]
+  not: ObjectFilter
 
   # (x)or any of these
 
@@ -201,14 +263,29 @@ input TransactionBlockFilter {
 
   kind: TransactionBlockKindInput
   checkpoint: BigInt
-  fromAddress: SuiAddress
-  toAddress: SuiAddress
+
+  signAddress: SuiAddress
+  sentAddress: SuiAddress
+  recvAddress: SuiAddress
+  paidAddress: SuiAddress
 
   inputObject: SuiAddress
   changedObject: SuiAddress
 }
 
-type ConsistentRange {
+input DynamicFieldFilter {
+  # Cascading (type requires module requires package)
+  namePackage: SuiAddress
+  nameModule: String
+  nameType: String
+
+  # Cascading (type requires module requires package)
+  valuePackage: SuiAddress
+  valueModule: String
+  valueType: String
+}
+
+type AvailableRange {
   first: Checkpoint
   last: Checkpoint
 }
@@ -221,8 +298,8 @@ interface Owner {
     after: String,
     last: Int,
     before: String,
-    query: ObjectQuery,
-  ): ObjectQueryConnection
+    filter: ObjectFilter,
+  ): ObjectConnection
 
   balance(type: String!): Balance
   balancesConnection(
@@ -232,6 +309,7 @@ interface Owner {
     before: String,
   ): BalanceConnection
 
+  # `type` defaults to `0x2::sui::SUI`.
   coinsConnection(
     first: Int,
     after: String,
@@ -262,12 +340,16 @@ type AmbiguousOwner implements Owner {}
 
 type Address implements Owner {
   transactionBlocksConnection(
-    first: Int, after: String, last: Int, before: String,
-    filter: AddressTransactionBlockFilter,
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+    relation: AddressTransactionBlockRelationship,
+    filter: TransactionBlockFilter,
   ): TransactionBlockConnection
 }
 
-enum AddressTransactionBlockFilter {
+enum AddressTransactionBlockRelationship {
   SIGN # Transactions this address has signed
   SENT # Transactions that transferred objects from this address
   RECV # Transactions that received objects into this address
@@ -276,9 +358,9 @@ enum AddressTransactionBlockFilter {
 
 type Object implements Owner {
   id: ID!
+  version: BigInt!
+  digest: String!
   owner: AmbiguousOwner
-  version: BigInt
-  digest: String
 
   previousVersion: BigInt
   previousTransactionBlock: TransactionBlock
@@ -295,6 +377,7 @@ type Object implements Owner {
     after: String,
     last: Int,
     before: String,
+    filter: TransactionBlockFilter,
   ): TransactionBlockConnection
 
   dynamicField(dynamicFieldName: DynamicFieldName!): DynamicField
@@ -303,6 +386,8 @@ type Object implements Owner {
     after: String,
     last: Int,
     before: String,
+    # Enhancement (post-MVP) to filter dynamic fields by type.
+    filter: DynamicFieldFilter,
   ): DynamicFieldConnection
 
   bcs: Base64
@@ -466,6 +551,7 @@ type Checkpoint {
   id: ID!
   digest: String!
   sequenceNumber: BigInt!
+
   timestamp: DateTime
   validatorSignature: Base64
 
@@ -496,6 +582,7 @@ type CommitteeMember {
 
 type TransactionBlock {
   digest: String!
+
   sender: Address
   gasInput: GasInput
   kind: TransactionBlockKind
@@ -613,6 +700,7 @@ type TransactionSignature {}
 type TransactionBlockEffects {
   digest: String!
   status: ExecutionStatus!
+
   errors: String
   transactionBlock: TransactionBlock
   dependencies: [TransactionBlock]
@@ -643,7 +731,7 @@ enum ExecutionStatus {
 
 type GasInput {
   gasSponsor: Address
-  gasPayment: [Object]
+  gasPayment: [Object!]
 
   gasPrice: BigInt
   gasBudget: BigInt
@@ -676,9 +764,14 @@ type BalanceChange {
 }
 
 type Event {
-  id : ID!
-  moduleId: MoveModuleId
-  type: MoveType
+  id: ID!
+
+  # Module that the event was emitted by
+  sendingModuleId: MoveModuleId
+
+  # Type of the event being sent
+  eventType: MoveType
+
   sender: Address
   timestamp: DateTime
 
@@ -725,7 +818,7 @@ type CoinMetadata {
   iconURL: String
   supply: BigInt
 
-  asMoveObject: MoveObject
+  asMoveObject: MoveObject!
 }
 
 input DynamicFieldName {
@@ -747,7 +840,7 @@ type MoveObject {
 
   asCoin: Coin
   asStakedSui: StakedSui
-  asObject: Object
+  asObject: Object!
 }
 
 type MovePackage {
@@ -756,12 +849,12 @@ type MovePackage {
   normalizedModulesConnection(first: Int, after: String, last: Int, before: String): NormalizedModulesConnection
   normalizedModule(name: String!): NormalizedModule
 
-  asObject: Object
+  asObject: Object!
 }
 
 type MoveModuleId {
-  package: MovePackage
-  name: String
+  package: MovePackage!
+  name: String!
 }
 
 enum MoveAbility {
@@ -792,9 +885,9 @@ type MoveFunctionTypeParameterDecl {
 }
 
 type NormalizedModule {
-  fileFormatVersion: Int
+  fileFormatVersion: Int!
 
-  moduleId: MoveModuleId
+  moduleId: MoveModuleId!
   friends: [MoveModuleId]
 
   structsConnection(first: Int, after: String, last: Int, before: String): NormalizedStructConnection
@@ -806,9 +899,8 @@ type NormalizedModule {
 
 type NormalizedStruct {
   id : ID!
-  module: NormalizedModule
-  name: String
-
+  module: NormalizedModule!
+  name: String!
   abilities: [MoveAbility]
   typeParameters: [MoveStructTypeParameterDecl]
   fields: [NormalizedField]
@@ -820,9 +912,9 @@ type NormalizedField {
 }
 
 type NormalizedFunction {
-  id : ID!
-  module: NormalizedModule
-  name: String
+  id: ID!
+  module: NormalizedModule!
+  name: String!
 
   visibility: MoveVisibility
   isEntry: Boolean
@@ -868,7 +960,7 @@ type MoveTypeName {
   # `struct`.
   moduleId: MoveModuleId
   name: String!
-  struct: NormalizedStruct
+  struct: NormalizedStruct!
 }
 
 # Represents concrete types (no type parameters, no references)
@@ -897,13 +989,48 @@ type MoveTypeApplication {
 }
 
 type MoveTypeParameter {
-  index: Int
+  index: Int!
 }
 
 # Metrics (omitted for brevity)
 type NetworkMetrics {}
 type MoveCallMetrics {}
 type AddressMetrics {}
+
+# Execution
+
+type ExecutionResult {
+  effectsDigest: String
+  errors: String
+}
+
+type DryRunResult {
+  transaction: TransactionBlock
+  errors: String
+
+  events: [Event!]
+  results: [DryRunEffect!]
+}
+
+type DryRunEffect {
+  # Changes made to arguments that were mutably borrowed by this
+  # transaction
+  mutatedReferences: [DryRunMutation!]
+
+  # Results of this transaction
+  returnValues: [DryRunReturn!]
+}
+
+type DryRunMutation {
+  input: TransactionInput
+  type: MoveType
+  bcs: Base64
+}
+
+type DryRunReturn {
+  type: MoveType
+  bcs: Base64
+}
 
 # Connections
 
@@ -913,7 +1040,6 @@ type NameServiceNamesConnection {}
 type NormalizedModuleConnection {}
 type StakeConnection {}
 type TransactionBlockConnection {}
-type TransactionBlockQueryConnection {}
 
 # Pagination
 type PageInfo {
@@ -967,24 +1093,24 @@ type DynamicFieldEdge {
   node: DynamicField!
 }
 
-# ObjectQuery
-type ObjectQueryConnection {
-  edges: [ObjectQueryEdge!]!
+# Object
+type ObjectConnection {
+  edges: [ObjectEdge!]!
   pageInfo: PageInfo!
 }
 
-type ObjectQueryEdge {
+type ObjectEdge {
   cursor: String
   node: Object!
 }
 
 # Event
-type EventQueryConnection {
-  edges: [EventQueryEdge!]!
+type EventConnection {
+  edges: [EventEdge!]!
   pageInfo: PageInfo!
 }
 
-type EventQueryEdge {
+type EventEdge {
   cursor: String
   node: Event!
 }
