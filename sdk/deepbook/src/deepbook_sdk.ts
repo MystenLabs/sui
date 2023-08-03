@@ -4,7 +4,6 @@
 import { TransactionArgument, TransactionBlock } from '@mysten/sui.js/transactions';
 import { SUI_CLOCK_OBJECT_ID } from '@mysten/sui.js/utils';
 import { PoolInfo, Records } from './utils';
-import { defaultGasBudget } from './utils';
 import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
 import {
 	CREATION_FEE,
@@ -26,16 +25,13 @@ export type smartRouteResultWithExactPath = {
 
 export class DeepBook_sdk {
 	public provider: SuiClient;
-	public gasBudget: number;
 	public records: Records;
 
 	constructor(
 		provider: SuiClient = new SuiClient({ url: getFullnodeUrl('localnet') }),
-		gasBudget: number,
 		records: Records,
 	) {
 		this.provider = provider;
-		this.gasBudget = gasBudget;
 		this.records = records;
 	}
 
@@ -60,7 +56,6 @@ export class DeepBook_sdk {
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::create_pool`,
 			arguments: [txb.pure(tickSize), txb.pure(lotSize), coin],
 		});
-		txb.setGasBudget(this.gasBudget);
 		return txb;
 	}
 
@@ -95,7 +90,6 @@ export class DeepBook_sdk {
 				coin,
 			],
 		});
-		txb.setGasBudget(this.gasBudget);
 		return txb;
 	}
 
@@ -111,8 +105,6 @@ export class DeepBook_sdk {
 			arguments: [],
 		});
 		txb.transferObjects([cap], txb.pure(currentAddress));
-		txb.setSenderIfNotSet(currentAddress);
-		txb.setGasBudget(this.gasBudget);
 		return txb;
 	}
 
@@ -129,8 +121,6 @@ export class DeepBook_sdk {
 			arguments: [txb.object(accountCap)],
 		});
 		txb.transferObjects([child_cap], txb.pure(currentAddress));
-		txb.setSenderIfNotSet(currentAddress);
-		txb.setGasBudget(this.gasBudget);
 		return txb;
 	}
 
@@ -155,7 +145,6 @@ export class DeepBook_sdk {
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::deposit_base`,
 			arguments: [txb.object(poolId), txb.object(coin), txb.object(accountCap)],
 		});
-		txb.setGasBudget(this.gasBudget);
 		return txb;
 	}
 
@@ -180,7 +169,6 @@ export class DeepBook_sdk {
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::deposit_quote`,
 			arguments: [txb.object(poolId), txb.object(coin), txb.object(accountCap)],
 		});
-		txb.setGasBudget(this.gasBudget);
 		return txb;
 	}
 
@@ -208,7 +196,6 @@ export class DeepBook_sdk {
 			arguments: [txb.object(poolId), txb.pure(quantity), txb.object(accountCap)],
 		});
 		txb.transferObjects([withdraw], txb.pure(currentAddress));
-		txb.setGasBudget(this.gasBudget);
 		return txb;
 	}
 
@@ -236,7 +223,6 @@ export class DeepBook_sdk {
 			arguments: [txb.object(poolId), txb.pure(quantity), txb.object(accountCap)],
 		});
 		txb.transferObjects([withdraw], txb.pure(currentAddress));
-		txb.setGasBudget(this.gasBudget);
 		return txb;
 	}
 
@@ -282,8 +268,6 @@ export class DeepBook_sdk {
 		});
 		txb.transferObjects([base_coin_ret], txb.pure(currentAddress));
 		txb.transferObjects([quote_coin_ret], txb.pure(currentAddress));
-		txb.setSenderIfNotSet(currentAddress);
-		txb.setGasBudget(this.gasBudget);
 		return txb;
 	}
 
@@ -324,8 +308,6 @@ export class DeepBook_sdk {
 		});
 		txb.transferObjects([base_coin_ret], txb.pure(currentAddress));
 		txb.transferObjects([quote_coin_ret], txb.pure(currentAddress));
-		txb.setSenderIfNotSet(currentAddress);
-		txb.setGasBudget(this.gasBudget);
 		return txb;
 	}
 
@@ -371,8 +353,6 @@ export class DeepBook_sdk {
 		});
 		txb.transferObjects([base_coin_ret], txb.pure(currentAddress));
 		txb.transferObjects([quote_coin_ret], txb.pure(currentAddress));
-		txb.setSenderIfNotSet(currentAddress);
-		txb.setGasBudget(this.gasBudget);
 		return txb;
 	}
 
@@ -421,7 +401,6 @@ export class DeepBook_sdk {
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::place_limit_order`,
 			arguments: args,
 		});
-		txb.setGasBudget(this.gasBudget);
 		return txb;
 	}
 
@@ -446,7 +425,6 @@ export class DeepBook_sdk {
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::cancel_order`,
 			arguments: [txb.object(poolId), txb.pure(orderId), txb.object(accountCap)],
 		});
-		txb.setGasBudget(this.gasBudget);
 		return txb;
 	}
 
@@ -469,7 +447,6 @@ export class DeepBook_sdk {
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::cancel_all_orders`,
 			arguments: [txb.object(poolId), txb.object(accountCap)],
 		});
-		txb.setGasBudget(this.gasBudget);
 		return txb;
 	}
 
@@ -494,7 +471,6 @@ export class DeepBook_sdk {
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::batch_cancel_order`,
 			arguments: [txb.object(poolId), txb.pure(orderIds), txb.object(accountCap)],
 		});
-		txb.setGasBudget(defaultGasBudget);
 		return txb;
 	}
 
@@ -523,7 +499,6 @@ export class DeepBook_sdk {
 				txb.pure(orderOwners),
 			],
 		});
-		txb.setGasBudget(defaultGasBudget);
 		return txb;
 	}
 
@@ -601,8 +576,6 @@ export class DeepBook_sdk {
 	): Promise<smartRouteResultWithExactPath | undefined> {
 		const txb = new TransactionBlock();
 		const tokenIn = txb.object(tokenInObject);
-		txb.setGasBudget(this.gasBudget);
-		txb.setSenderIfNotSet(currentAddress);
 		let i = 0;
 		let base_coin_ret: TransactionArgument;
 		let quote_coin_ret: TransactionArgument;
