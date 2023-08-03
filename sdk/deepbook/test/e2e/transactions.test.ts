@@ -3,8 +3,16 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 
-import { TestToolbox, setupSuiClient, setupPool, setupDeepbookAccount } from './setup';
+import {
+	TestToolbox,
+	setupSuiClient,
+	setupPool,
+	setupDeepbookAccount,
+	depositAsset,
+} from './setup';
 import { PoolSummary } from '../../src/types/pool';
+
+const DEPOSIT_AMOUNT = 100;
 
 describe('Interacting with the pool', () => {
 	let toolbox: TestToolbox;
@@ -15,6 +23,7 @@ describe('Interacting with the pool', () => {
 		toolbox = await setupSuiClient();
 		pool = await setupPool(toolbox);
 		accountCapId = await setupDeepbookAccount(toolbox);
+		depositAsset(toolbox, pool.poolId, accountCapId, DEPOSIT_AMOUNT);
 	});
 
 	it('test creating a pool', async () => {

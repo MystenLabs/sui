@@ -16,8 +16,8 @@ import {
 } from '@mysten/sui.js/client';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { PoolSummary } from '../../src/types/pool';
-import { normalizeSuiObjectId, SUI_FRAMEWORK_ADDRESS } from '@mysten/sui.js/utils';
-import { createAccount, createPool } from '../../src';
+import { DeepBookClient, createAccount, createPool } from '../../src';
+import { NORMALIZED_SUI_COIN_TYPE } from '../../src/utils';
 
 const DEFAULT_FAUCET_URL = import.meta.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');
 const DEFAULT_FULLNODE_URL = import.meta.env.VITE_FULLNODE_URL ?? getFullnodeUrl('localnet');
@@ -116,7 +116,7 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 export async function setupPool(toolbox: TestToolbox): Promise<PoolSummary> {
 	const packagePath = __dirname + '/./data/test_coin';
 	const { packageId } = await publishPackage(packagePath, toolbox);
-	const baseAsset = `${normalizeSuiObjectId(SUI_FRAMEWORK_ADDRESS)}::sui::SUI`;
+	const baseAsset = NORMALIZED_SUI_COIN_TYPE;
 	const quoteAsset = `${packageId}::test::TEST`;
 	const txb = createPool(baseAsset, quoteAsset, DEFAULT_TICK_SIZE, DEFAULT_LOT_SIZE);
 	const resp = await executeTransactionBlock(toolbox, txb);
@@ -136,6 +136,17 @@ export async function setupDeepbookAccount(toolbox: TestToolbox): Promise<string
 		(a) => a.type === 'created',
 	) as SuiObjectChangeCreated[]) ?? [])[0].objectId;
 	return accountCap;
+}
+
+export async function depositAsset(
+	toolbox: TestToolbox,
+	poolId: string,
+	accountCap: string,
+	amount: number,
+): Promise<void> {
+	const deepbook = new DeepBookClient(toolbox.client, accountCap);
+	const txb = await deepbook.deposit(poolId, undefined, amount);
+	await executeTransactionBlock(toolbox, txb);
 }
 
 async function executeTransactionBlock(
