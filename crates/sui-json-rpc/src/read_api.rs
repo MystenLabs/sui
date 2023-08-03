@@ -32,11 +32,15 @@ use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::collection_types::VecMap;
+use sui_types::crypto::AggregateAuthoritySignature;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::display::DisplayVersionUpdatedEvent;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
-use sui_types::error::{SuiError, SuiObjectResponseError};
-use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointTimestamp};
+use sui_types::error::{SuiError, SuiObjectResponseError, SuiResult};
+use sui_types::messages_checkpoint::{
+    CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, CheckpointSummary,
+    CheckpointTimestamp,
+};
 use sui_types::object::{Object, ObjectRead, PastObjectRead};
 use sui_types::sui_serde::BigInt;
 use sui_types::transaction::Transaction;
@@ -104,38 +108,89 @@ impl ReadApi {
         }
     }
 
-    fn get_checkpoint_internal(&self, id: CheckpointId) -> Result<Checkpoint, Error> {
+    async fn get_checkpoint_internal(&self, id: CheckpointId) -> Result<Checkpoint, Error> {
         Ok(match id {
             CheckpointId::SequenceNumber(seq) => {
-                let verified_summary =
-                    self.state.get_verified_checkpoint_by_sequence_number(seq)?;
+                let verified_summary = self
+                    .transaction_kv_store
+                    .get_checkpoint_summary(seq)
+                    .await?;
                 let content = self
-                    .state
-                    .get_checkpoint_contents(verified_summary.content_digest)?;
+                    .transaction_kv_store
+                    .get_checkpoint_contents_by_digest(verified_summary.content_digest)
+                    .await?;
                 let signature = verified_summary.auth_sig().signature.clone();
-                (
-                    verified_summary.into_inner().into_data(),
-                    content,
-                    signature,
-                )
-                    .into()
+                (verified_summary.into_data(), content, signature).into()
             }
             CheckpointId::Digest(digest) => {
                 let verified_summary = self
-                    .state
-                    .get_verified_checkpoint_summary_by_digest(digest)?;
+                    .transaction_kv_store
+                    .get_checkpoint_summary_by_digest(digest)
+                    .await?;
                 let content = self
-                    .state
-                    .get_checkpoint_contents(verified_summary.content_digest)?;
+                    .transaction_kv_store
+                    .get_checkpoint_contents_by_digest(verified_summary.content_digest)
+                    .await?;
                 let signature = verified_summary.auth_sig().signature.clone();
-                (
-                    verified_summary.into_inner().into_data(),
-                    content,
-                    signature,
-                )
-                    .into()
+                (verified_summary.into_data(), content, signature).into()
             }
         })
+    }
+
+    pub async fn get_checkpoints_internal(
+        state: Arc<AuthorityState>,
+        transaction_kv_store: Arc<TransactionKeyValueStore>,
+        // If `Some`, the query will start from the next item after the specified cursor
+        cursor: Option<CheckpointSequenceNumber>,
+        limit: u64,
+        descending_order: bool,
+    ) -> SuiResult<Vec<Checkpoint>> {
+        let max_checkpoint = state.get_latest_checkpoint_sequence_number()?;
+        let checkpoint_numbers =
+            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
+
+        let verified_checkpoints = transaction_kv_store
+            .multi_get_checkpoints_summaries(&checkpoint_numbers)
+            .await?;
+
+        let checkpoint_summaries_and_signatures: Vec<(
+            CheckpointSummary,
+            AggregateAuthoritySignature,
+        )> = verified_checkpoints
+            .into_iter()
+            .flatten()
+            .map(|check| {
+                (
+                    check.clone().into_summary_and_sequence().1,
+                    check.get_validator_signature(),
+                )
+            })
+            .collect();
+
+        let checkpoint_contents_digest: Vec<CheckpointContentsDigest> =
+            checkpoint_summaries_and_signatures
+                .iter()
+                .map(|summary| summary.0.content_digest)
+                .collect();
+        let checkpoint_contents = transaction_kv_store
+            .multi_get_checkpoints_contents_by_digest(checkpoint_contents_digest.as_slice())
+            .await?;
+        let contents: Vec<CheckpointContents> = checkpoint_contents.into_iter().flatten().collect();
+
+        let mut checkpoints: Vec<Checkpoint> = vec![];
+
+        for (summary_and_sig, content) in checkpoint_summaries_and_signatures
+            .into_iter()
+            .zip(contents.into_iter())
+        {
+            checkpoints.push(Checkpoint::from((
+                summary_and_sig.0,
+                content,
+                summary_and_sig.1,
+            )));
+        }
+
+        Ok(checkpoints)
     }
 
     async fn multi_get_transaction_blocks_internal(
@@ -225,8 +280,9 @@ impl ReadApi {
 
         // fetch timestamp from the DB
         let timestamps = self
-            .state
-            .multi_get_checkpoint_by_sequence_number(&unique_checkpoint_numbers)
+            .transaction_kv_store
+            .multi_get_checkpoints_summaries(&unique_checkpoint_numbers)
+            .await
             .map_err(|e| {
                 Error::UnexpectedError(format!("Failed to fetch checkpoint summaries by these checkpoint ids: {unique_checkpoint_numbers:?} with error: {e:?}"))
             })?
@@ -682,24 +738,25 @@ impl ReadApiServer for ReadApi {
                         error!("Failed to retrieve checkpoint sequence for transaction {digest:?} with error: {e:?}");
                         Error::from(e)
                     })
-            }).await.map_err(Error::from)??
-        {
-            temp_response.checkpoint_seq = Some(seq);
-        }
+            }).await.map_err(Error::from)?? {
+                temp_response.checkpoint_seq = Some(seq);
+            }
 
             if let Some(checkpoint_seq) = &temp_response.checkpoint_seq {
-                let state = self.state.clone();
+                let kv_store = self.transaction_kv_store.clone();
                 let checkpoint_seq = *checkpoint_seq;
                 let checkpoint = spawn_monitored_task!(async move {
-                state
-                // safe to unwrap because we have checked `is_some` above
-                .get_checkpoint_by_sequence_number(checkpoint_seq)
-                .map_err(|e| {
-                    error!("Failed to get checkpoint by sequence number: {checkpoint_seq:?} with error: {e:?}");
-                    Error::from(e)
-                })}).await.map_err(Error::from)??;
+                    kv_store
+                    // safe to unwrap because we have checked `is_some` above
+                    .get_checkpoint_summary(checkpoint_seq)
+                    .await
+                    .map_err(|e| {
+                        error!("Failed to get checkpoint by sequence number: {checkpoint_seq:?} with error: {e:?}");
+                        Error::from(e)
+                    })
+                }).await.map_err(Error::from)??;
                 // TODO(chris): we don't need to fetch the whole checkpoint summary
-                temp_response.timestamp = checkpoint.as_ref().map(|c| c.timestamp_ms);
+                temp_response.timestamp = Some(checkpoint.timestamp_ms);
             }
 
             if opts.show_events && temp_response.effects.is_some() {
@@ -858,7 +915,7 @@ impl ReadApiServer for ReadApi {
 
     #[instrument(skip(self))]
     async fn get_checkpoint(&self, id: CheckpointId) -> RpcResult<Checkpoint> {
-        with_tracing!(async move { self.get_checkpoint_internal(id) })
+        with_tracing!(self.get_checkpoint_internal(id))
     }
 
     #[instrument(skip(self))]
@@ -874,12 +931,17 @@ impl ReadApiServer for ReadApi {
                 .map_err(SuiRpcInputError::from)?;
 
             let state = self.state.clone();
+            let kv_store = self.transaction_kv_store.clone();
 
             self.metrics.get_checkpoints_limit.report(limit as u64);
 
-            let mut data = spawn_monitored_task!(async move {
-                state.get_checkpoints(cursor.map(|s| *s), limit as u64 + 1, descending_order)
-            })
+            let mut data = spawn_monitored_task!(Self::get_checkpoints_internal(
+                state,
+                kv_store,
+                cursor.map(|s| *s),
+                limit as u64 + 1,
+                descending_order,
+            ))
             .await
             .map_err(Error::from)?
             .map_err(Error::from)?;
@@ -1289,4 +1351,126 @@ fn convert_to_response(
         response.object_changes = cache.object_changes;
     }
     Ok(response)
+}
+
+fn calculate_checkpoint_numbers(
+    // If `Some`, the query will start from the next item after the specified cursor
+    cursor: Option<CheckpointSequenceNumber>,
+    limit: u64,
+    descending_order: bool,
+    max_checkpoint: CheckpointSequenceNumber,
+) -> Vec<CheckpointSequenceNumber> {
+    let (start_index, end_index) = match cursor {
+        Some(t) => {
+            if descending_order {
+                let start = std::cmp::min(t.saturating_sub(1), max_checkpoint);
+                let end = start.saturating_sub(limit - 1);
+                (end, start)
+            } else {
+                let start =
+                    std::cmp::min(t.checked_add(1).unwrap_or(max_checkpoint), max_checkpoint);
+                let end = std::cmp::min(
+                    start.checked_add(limit - 1).unwrap_or(max_checkpoint),
+                    max_checkpoint,
+                );
+                (start, end)
+            }
+        }
+        None => {
+            if descending_order {
+                (max_checkpoint.saturating_sub(limit - 1), max_checkpoint)
+            } else {
+                (0, std::cmp::min(limit - 1, max_checkpoint))
+            }
+        }
+    };
+
+    if descending_order {
+        (start_index..=end_index).rev().collect()
+    } else {
+        (start_index..=end_index).collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calculate_checkpoint_numbers() {
+        let cursor = Some(10);
+        let limit = 5;
+        let descending_order = true;
+        let max_checkpoint = 15;
+
+        let checkpoint_numbers =
+            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
+
+        assert_eq!(checkpoint_numbers, vec![9, 8, 7, 6, 5]);
+    }
+
+    #[test]
+    fn test_calculate_checkpoint_numbers_descending_no_cursor() {
+        let cursor = None;
+        let limit = 5;
+        let descending_order = true;
+        let max_checkpoint = 15;
+
+        let checkpoint_numbers =
+            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
+
+        assert_eq!(checkpoint_numbers, vec![15, 14, 13, 12, 11]);
+    }
+
+    #[test]
+    fn test_calculate_checkpoint_numbers_ascending_no_cursor() {
+        let cursor = None;
+        let limit = 5;
+        let descending_order = false;
+        let max_checkpoint = 15;
+
+        let checkpoint_numbers =
+            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
+
+        assert_eq!(checkpoint_numbers, vec![0, 1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn test_calculate_checkpoint_numbers_ascending_with_cursor() {
+        let cursor = Some(10);
+        let limit = 5;
+        let descending_order = false;
+        let max_checkpoint = 15;
+
+        let checkpoint_numbers =
+            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
+
+        assert_eq!(checkpoint_numbers, vec![11, 12, 13, 14, 15]);
+    }
+
+    #[test]
+    fn test_calculate_checkpoint_numbers_ascending_limit_exceeds_max() {
+        let cursor = None;
+        let limit = 20;
+        let descending_order = false;
+        let max_checkpoint = 15;
+
+        let checkpoint_numbers =
+            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
+
+        assert_eq!(checkpoint_numbers, (0..=15).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn test_calculate_checkpoint_numbers_descending_limit_exceeds_max() {
+        let cursor = None;
+        let limit = 20;
+        let descending_order = true;
+        let max_checkpoint = 15;
+
+        let checkpoint_numbers =
+            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
+
+        assert_eq!(checkpoint_numbers, (0..=15).rev().collect::<Vec<_>>());
+    }
 }

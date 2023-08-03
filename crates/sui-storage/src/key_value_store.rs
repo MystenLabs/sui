@@ -311,7 +311,7 @@ impl TransactionKeyValueStore {
 
     /// Convenience method for fetching single checkpoint, and returning an error if it's not found.
     /// Prefer using multi_get_checkpoints_summaries whenever possible.
-    pub async fn get_checkpoint_summaries(
+    pub async fn get_checkpoint_summary(
         &self,
         checkpoint: CheckpointSequenceNumber,
     ) -> SuiResult<CertifiedCheckpointSummary> {
@@ -343,7 +343,7 @@ impl TransactionKeyValueStore {
 
     /// Convenience method for fetching single checkpoint, and returning an error if it's not found.
     /// Prefer using multi_get_checkpoints_summaries_by_digest whenever possible.
-    pub async fn get_checkpoint_summaries_by_digest(
+    pub async fn get_checkpoint_summary_by_digest(
         &self,
         digest: CheckpointDigest,
     ) -> SuiResult<CertifiedCheckpointSummary> {
