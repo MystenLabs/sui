@@ -54,6 +54,9 @@ type Query {
   protocolConfig(protocolVersion: Int): ProtocolConfig
 
   checkpoint(filter: CheckpointFilter): Checkpoint
+  transactionBlock(digest: String!): TransactionBlock
+  coinMetadata(coinType: String!): CoinMetadata
+
   checkpointsConnection(
     first: Int,
     after: String,
@@ -61,39 +64,29 @@ type Query {
     before: String,
   ): CheckpointConnection
 
-  transactionBlock(digest: String!): TransactionBlock
   transactionBlocksConnection(
     first: Int,
     after: String,
     last: Int,
     before: String,
+    filter: TransactionBlockFilter,
   ): TransactionBlockConnection
 
-  coinMetadata(coinType: String!): CoinMetadata
-
-  queryObjectsConnection(
-    first: Int,
-    after: String,
-    last: Int,
-    before: String,
-    query: ObjectQuery,
-  ): ObjectQueryConnection
-
-  queryEventsConnection(
+  eventsConnection(
     first: Int,
     after: String,
     last: Int,
     before: String,
     filter: EventFilter,
-  ): EventQueryConnection
+  ): EventConnection
 
-  queryTransactionBlocksConnection(
+  objectsConnection(
     first: Int,
     after: String,
     last: Int,
     before: String,
-    filter: TransactionBlockFilter,
-  ): TransactionBlockQueryConnection
+    filter: ObjectFilter,
+  ): ObjectConnection
 
   resolveNameServiceAddress(name: String!): Address
 
@@ -135,11 +128,11 @@ input CheckpointFilter {
   sequenceNumber: BigInt
 }
 
-input ObjectQuery {
+input ObjectFilter {
   # one of these
-  any: [ObjectQuery]
-  all: [ObjectQuery]
-  not: ObjectQuery
+  any: [ObjectFilter]
+  all: [ObjectFilter]
+  not: ObjectFilter
 
   # (x)or any of these
 
@@ -218,8 +211,8 @@ interface Owner {
     after: String,
     last: Int,
     before: String,
-    query: ObjectQuery,
-  ): ObjectQueryConnection
+    filter: ObjectFilter,
+  ): ObjectConnection
 
   balance(type: String!): Balance
   balancesConnection(
@@ -910,7 +903,7 @@ type NormalizedModuleConnection {}
 type NormalizedStructConnection {}
 type StakeConnection {}
 type TransactionBlockConnection {}
-type TransactionBlockQueryConnection {}
+type TransactionBlockConnection {}
 type TransactionEventConnection {}
 
 # Pagination
@@ -965,24 +958,24 @@ type DynamicFieldEdge {
   node: DynamicField!
 }
 
-# ObjectQuery
-type ObjectQueryConnection {
-  edges: [ObjectQueryEdge!]!
+# Object
+type ObjectConnection {
+  edges: [ObjectEdge!]!
   pageInfo: PageInfo!
 }
 
-type ObjectQueryEdge {
+type ObjectEdge {
   cursor: String
   node: Object!
 }
 
 # Event
-type EventQueryConnection {
-  edges: [EventQueryEdge!]!
+type EventConnection {
+  edges: [EventEdge!]!
   pageInfo: PageInfo!
 }
 
-type EventQueryEdge {
+type EventEdge {
   cursor: String
   node: Event!
 }
