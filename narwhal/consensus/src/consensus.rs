@@ -72,14 +72,14 @@ impl Debug for LeaderSwapTable {
 impl LeaderSwapTable {
     // constructs a new table based on the provided reputation scores. The `bad_nodes_stake_threshold` designates the
     // total (by stake) nodes that will be considered as "bad" based on their scores and will be replaced by good nodes.
-    // The `bad_nodes_stake_threshold` should be in the range of [0.0 - 0.33]
+    // The `bad_nodes_stake_threshold` should be in the range of [0 - 33].
     pub fn new(
         committee: &Committee,
         round: Round,
         reputation_scores: &ReputationScores,
-        bad_nodes_stake_threshold: f64,
+        bad_nodes_stake_threshold: u64,
     ) -> Self {
-        assert!((0.0..=0.33).contains(&bad_nodes_stake_threshold), "The bad_nodes_stake_threshold should be in range [0.0 - 0.33], out of bounds parameter detected");
+        assert!((0..=33).contains(&bad_nodes_stake_threshold), "The bad_nodes_stake_threshold should be in range [0 - 33], out of bounds parameter detected");
         assert!(reputation_scores.final_of_schedule, "Only reputation scores that have been calculated on the end of a schedule are accepted");
 
         // calculating the good nodes
@@ -169,14 +169,14 @@ impl LeaderSwapTable {
     }
 
     // Retrieves the first nodes provided by the iterator `authorities` until the `stake_threshold` has been
-    // reached. The `stake_threshold` should be between [0, 1] and expresses the percentage of stake that is
+    // reached. The `stake_threshold` should be between [0, 100] and expresses the percentage of stake that is
     // considered the cutoff. Basically we keep adding to the response authorities until the sum of the stake
     // reaches the `stake_threshold`. It's the caller's responsibility to ensure that the elements of the `authorities`
     // input is already sorted.
     fn retrieve_first_nodes(
         committee: &Committee,
         authorities: impl Iterator<Item = (AuthorityIdentifier, u64)>,
-        stake_threshold: f64,
+        stake_threshold: u64,
     ) -> Vec<Authority> {
         let mut filtered_authorities = Vec::new();
 
@@ -186,7 +186,7 @@ impl LeaderSwapTable {
 
             // if the total accumulated stake has surpassed the stake threshold then we omit this
             // last authority and we exit the loop.
-            if stake > (stake_threshold * committee.total_stake() as f64) as Stake {
+            if stake > (stake_threshold * committee.total_stake()) / 100 as Stake {
                 break;
             }
             filtered_authorities.push(committee.authority_safe(&authority_id).to_owned());

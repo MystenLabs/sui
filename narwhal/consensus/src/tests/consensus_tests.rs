@@ -48,7 +48,7 @@ async fn test_consensus_recovery_with_bullshark() {
     // Run with the new leader election schedule enabled
     let mut config: ProtocolConfig = latest_protocol_version();
     config.set_narwhal_new_leader_election_schedule(true);
-    config.set_consensus_bad_nodes_stake_threshold(0.33);
+    config.set_consensus_bad_nodes_stake_threshold(33);
     test_consensus_recovery_with_bullshark_with_config(config).await;
 }
 
@@ -338,7 +338,7 @@ async fn test_leader_swap_table() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let mut protocol_config: ProtocolConfig = latest_protocol_version();
-    protocol_config.set_consensus_bad_nodes_stake_threshold(0.33);
+    protocol_config.set_consensus_bad_nodes_stake_threshold(33);
 
     // the authority ids
     let authority_ids: Vec<AuthorityIdentifier> = fixture.authorities().map(|a| a.id()).collect();
@@ -421,7 +421,7 @@ async fn test_leader_schedule() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let mut protocol_config: ProtocolConfig = latest_protocol_version();
-    protocol_config.set_consensus_bad_nodes_stake_threshold(0.33);
+    protocol_config.set_consensus_bad_nodes_stake_threshold(33);
 
     // the authority ids
     let authority_ids: Vec<AuthorityIdentifier> = fixture.authorities().map(|a| a.id()).collect();
@@ -525,7 +525,7 @@ async fn test_leader_schedule_from_store() {
     // WHEN flag is enabled for the new schedule algorithm
     let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
     protocol_config.set_narwhal_new_leader_election_schedule(true);
-    protocol_config.set_consensus_bad_nodes_stake_threshold(0.33);
+    protocol_config.set_consensus_bad_nodes_stake_threshold(33);
     let schedule = LeaderSchedule::from_store(committee, store, protocol_config);
 
     // THEN the stored schedule should be returned and eventually the low score leader should be
