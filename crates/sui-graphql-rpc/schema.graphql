@@ -54,17 +54,45 @@ type Query {
   protocolConfig(protocolVersion: Int): ProtocolConfig
 
   checkpoint(filter: CheckpointFilter): Checkpoint
-  checkpointsConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
+  checkpointsConnection(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+  ): CheckpointConnection
 
   transactionBlock(digest: String!): TransactionBlock
-  transactionBlocksConnection(first: Int, after: String, last: Int, before: String): TransactionBlockConnection
+  transactionBlocksConnection(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+  ): TransactionBlockConnection
 
   coinMetadata(coinType: String!): CoinMetadata
 
-  queryObjectsConnection(first: Int, after: String, last: Int, before: String, query: ObjectQuery): ObjectQueryConnection
-  queryEventsConnection(first: Int, after: String, last: Int, before: String, filter: EventFilter, order: Order): EventQueryConnection
+  queryObjectsConnection(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+    query: ObjectQuery,
+  ): ObjectQueryConnection
+
+  queryEventsConnection(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+    filter: EventFilter,
+    order: Order,
+  ): EventQueryConnection
+
   queryTransactionBlocksConnection(
-    first: Int, after: String, last: Int, before: String,
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
     filter: TransactionBlockFilter,
   ): TransactionBlockQueryConnection
 
@@ -74,7 +102,13 @@ type Query {
   networkMetrics: NetworkMetrics
   moveCallMetrics: MoveCallMetrics
   checkpointAddressMetrics(checkpoint: BigInt): AddressMetric
-  allEpochAddressMetricsConnection(first: Int, after: String, last: Int, before: String): AddressMetricConnection
+
+  allEpochAddressMetricsConnection(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+  ): AddressMetricConnection
 }
 
 # NB. Add after MVP has stabilised.
@@ -182,17 +216,44 @@ type ConsistentRange {
 interface Owner {
   location: SuiAddress!
 
-  objectsConnection(first: Int, after: String, last: Int, before: String, query: ObjectQuery): ObjectQueryConnection
+  objectsConnection(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+    query: ObjectQuery,
+  ): ObjectQueryConnection
 
   balance(type: String!): Balance
-  balancesConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+  balancesConnection(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+  ): BalanceConnection
 
-  coinsConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+  coinsConnection(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+    type: String,
+  ): CoinConnection
 
-  stakesConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+  stakesConnection(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+  ): StakeConnection
 
   defaultNameServiceName: String
-  nameServiceNamesConnection(first: Int, after: String, last: Int, before: String): NameServiceNamesConnection
+  nameServiceNamesConnection(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+  ): NameServiceNamesConnection
 }
 
 # Returned by Object.owner, where we can't disambiguate between
@@ -229,10 +290,20 @@ type Object implements Owner {
   asMovePackage: MovePackage
 
   # Transaction Blocks that sent objects to this object
-  receivedTransactionBlocksConnection(first: Int, after: String, last: Int, before: String): TransactionBlockConnection
+  receivedTransactionBlocksConnection(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+  ): TransactionBlockConnection
 
   dynamicField(dynamicFieldName: DynamicFieldName!): DynamicField
-  dynamicFieldsConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+  dynamicFieldsConnection(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+  ): DynamicFieldConnection
 
   bcs: Base64
 }
@@ -259,8 +330,19 @@ type Epoch {
 
   # TODO: Identify non-duplicate fields in `EndOfEpochInfo`
 
-  checkpointsConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
-  transactionBlocksConnection(first: Int, after: String, last: Int, before: String): TransactionBlockConnection
+  checkpointsConnection(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+  ): CheckpointConnection
+
+  transactionBlocksConnection(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+  ): TransactionBlockConnection
 }
 
 type ProtocolConfigs {
@@ -544,7 +626,12 @@ type TransactionBlockEffects {
   epoch: Epoch
   checkpoint: Checkpoint
 
-  eventsConnection(first: Int, after: String, last: Int, before: String): TransactionEventConnection
+  eventsConnection(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+  ): TransactionEventConnection
 
   bcs: Base64
 }
