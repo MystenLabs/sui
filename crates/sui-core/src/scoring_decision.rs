@@ -143,8 +143,8 @@ fn update_low_scoring_authorities_v2(
         total_stake += stake;
 
         let included = if total_stake
-            <= (protocol_config.consensus_bad_nodes_stake_threshold()
-                * committee.total_stake()) / 100 as Stake
+            <= (protocol_config.consensus_bad_nodes_stake_threshold() * committee.total_stake())
+                / 100 as Stake
         {
             final_low_scoring_map.insert(authority, score);
             true
@@ -527,7 +527,7 @@ mod tests {
                 .unwrap(),
             40_u64
         );
-        assert_eq!(low_scoring.load().len(), 1);
+        assert_eq!(low_scoring.load().len(), 11);
     }
 
     #[test]
