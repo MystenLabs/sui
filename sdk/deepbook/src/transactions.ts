@@ -105,7 +105,7 @@ export function createChildAccountCap(
  * @param coin Object id of coin to deposit, eg: "0x316467544c7e719384579ac5745c75be5984ca9f004d6c09fd7ca24e4d8a3d14"
  * @param accountCap Object id of Account Capacity under user address, created after invoking createAccount, eg: "0x6f699fef193723277559c8f499ca3706121a65ac96d273151b8e52deb29135d3"
  */
-export function depositBase(
+export function depositBaseAsset(
 	token1: string,
 	token2: string,
 	poolId: string,
@@ -129,7 +129,7 @@ export function depositBase(
  * @param coin: Object id of coin to deposit, eg: "0x6e566fec4c388eeb78a7dab832c9f0212eb2ac7e8699500e203def5b41b9c70d"
  * @param accountCap Object id of Account Capacity under user address, created after invoking createAccount, eg: "0x6f699fef193723277559c8f499ca3706121a65ac96d273151b8e52deb29135d3"
  */
-export function depositQuote(
+export function depositQuoteAsset(
 	token1: string,
 	token2: string,
 	poolId: string,
@@ -154,7 +154,7 @@ export function depositQuote(
  * @param currentAddress: current user address, eg: "0xbddc9d4961b46a130c2e1f38585bbc6fa8077ce54bcb206b26874ac08d607966"
  * @param accountCap Object id of Account Capacity under user address, created after invoking createAccount, eg: "0x6f699fef193723277559c8f499ca3706121a65ac96d273151b8e52deb29135d3"
  */
-export function withdrawBase(
+export function withdrawBaseAsset(
 	token1: string,
 	token2: string,
 	poolId: string,
@@ -181,7 +181,7 @@ export function withdrawBase(
  * @param currentAddress: current user address, eg: "0xbddc9d4961b46a130c2e1f38585bbc6fa8077ce54bcb206b26874ac08d607966"
  * @param accountCap Object id of Account Capacity under user address, created after invoking createAccount, eg: "0x6f699fef193723277559c8f499ca3706121a65ac96d273151b8e52deb29135d3"
  */
-export function withdrawQuote(
+export function withdrawQuoteAsset(
 	token1: string,
 	token2: string,
 	poolId: string,
