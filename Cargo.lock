@@ -9895,6 +9895,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-sdk",
  "sui-simulator",
+ "sui-storage",
  "sui-swarm",
  "sui-swarm-config",
  "sui-test-transaction-builder",

@@ -21,6 +21,8 @@ use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_node::SuiNodeHandle;
 use sui_sdk::wallet_context::WalletContext;
+use sui_storage::key_value_store::TransactionKeyValueStore;
+use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_test_transaction_builder::{
     batch_make_transfer_transactions, create_devnet_nft, delete_devnet_nft, increment_counter,
     publish_basics_package, publish_basics_package_and_make_counter, publish_nfts_package,
@@ -804,6 +806,12 @@ async fn test_full_node_event_query_by_module_ok() {
 async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
+    let metrics = KeyValueStoreMetrics::new_for_tests();
+    let kv_store = Arc::new(TransactionKeyValueStore::new(
+        "rocksdb",
+        metrics,
+        fullnode.state(),
+    ));
 
     let context = &mut test_cluster.wallet;
     let transaction_orchestrator = fullnode.with(|node| {
@@ -849,7 +857,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     assert!(is_executed_locally);
     assert_eq!(events.digest(), txn_events.digest());
     // verify that the node has sequenced and executed the txn
-    fullnode.state().get_executed_transaction_and_effects(digest).await
+    fullnode.state().get_executed_transaction_and_effects(digest, kv_store.clone()).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForLocalExecution: {:?}", digest, e));
 
     // Test WaitForEffectsCert
@@ -883,7 +891,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         .notify_read_executed_effects(vec![digest])
         .await
         .unwrap();
-    fullnode.state().get_executed_transaction_and_effects(digest).await
+    fullnode.state().get_executed_transaction_and_effects(digest, kv_store).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForEffectsCert: {:?}", digest, e));
 
     Ok(())
