@@ -42,9 +42,9 @@ type Query {
   # (uniquely defines the network)
   chainIdentifier: String!
 
-  # First and last checkpoint that the RPC can answer consistent
-  # queries for.
-  consistentRange: ConsistentRange
+  # Range of checkpoints that the RPC has data available for (for data
+  # that can be tied to a particular checkpoint).
+  availableRange: AvailableRange
 
   owner(address: SuiAddress!): Owner
   object(address: SuiAddress!, version: BigInt): Object
@@ -198,7 +198,7 @@ input TransactionBlockFilter {
   changedObject: SuiAddress
 }
 
-type ConsistentRange {
+type AvailableRange {
   first: Checkpoint
   last: Checkpoint
 }
