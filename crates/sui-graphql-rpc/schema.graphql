@@ -180,7 +180,7 @@ scalar DateTime
 
 # The extra data required to turn a `TransactionKind` into a
 # `TransactionData` in a dry-run.
-input TxMeta {
+input TransactionMetadata {
   sender: SuiAddress
   gasPrice: U64
   gasObjects: [SuiAddress!]
