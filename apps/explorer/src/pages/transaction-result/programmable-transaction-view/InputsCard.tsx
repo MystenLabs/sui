@@ -67,8 +67,10 @@ export function InputsCard({ inputs }: InputsCardProps) {
 
 	return (
 		<ProgrammableTxnBlockCard
+			initialClose
 			items={expandableItems}
-			itemsLabel="Inputs"
+			itemsLabel={inputs.length > 1 ? 'Inputs' : 'Input'}
+			count={inputs.length}
 			defaultItemsToShow={DEFAULT_ITEMS_TO_SHOW}
 			noExpandableList={defaultOpen}
 		/>

@@ -34,8 +34,10 @@ export function TransactionsCard({ transactions }: TransactionsCardProps) {
 
 	return (
 		<ProgrammableTxnBlockCard
+			initialClose
 			items={expandableItems}
-			itemsLabel="Transactions"
+			itemsLabel={transactions.length > 1 ? 'Transactions' : 'Transaction'}
+			count={transactions.length}
 			defaultItemsToShow={DEFAULT_ITEMS_TO_SHOW}
 			noExpandableList={defaultOpen}
 		/>
