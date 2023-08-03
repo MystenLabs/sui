@@ -3,37 +3,15 @@
 
 # Open Questions
 # --------------
-# - Pattern for multi-gets
 # - Encoding RPC errors
-# - `type` (vs `scalar`) for Move Types
-# - Pattern for upcasting and downcasting
 
-# Check Completeness Against Existing APIs
-# -------------
-# DONE Read
-# DONE - Objects
-# DONE - Transactions
-# DONE - Checkpoints
-# DONE - Events
-# DONE - ProtocolConfig
-# DONE - Chain Identifier
-# DONE Coin
-# DONE Extended
-# DONE Governance
-# DONE Indexer
-# DONE Move Utils
-# TODO Write
-
-# DONE Port designs from Notion
-# DONE - Display
-# DONE - SuiNS
-# DONE Data Consistency API
 # TODO Flesh out Connections
 # TODO - TotalTransactionBlocks for the PTB connection
 
 schema {
   query: Query
   subscription: Subscription
+  mutation: Mutation
 }
 
 type Query {
@@ -44,6 +22,39 @@ type Query {
   # Range of checkpoints that the RPC has data available for (for data
   # that can be tied to a particular checkpoint).
   availableRange: AvailableRange!
+
+  # Simulate running a transaction to inspect its effects without
+  # committing to them on-chain.
+  #
+  # `txBytes` either a `TransactionData` struct or a `TransactionKind`
+  #     struct, BCS-encoded and then Base64-encoded.  The expected
+  #     type is controlled by the presence or absence of `txMeta`: If
+  #     present, `txBytes` is assumed to be a `TransactionKind`, if
+  #     absent, then `TransactionData`.
+  #
+  # `txMeta` the data that is missing from a `TransactionKind` to make
+  #     a `TransactionData` (sender address and gas information).  All
+  #     its fields are nullable: `sender` defaults to `0x0`, if
+  #     `gasObjects` is not present, or is an empty list, it is
+  #     substituted with a mock Coin object, and `gasPrice` defaults to
+  #     the reference gas price.
+  #
+  # `skipChecks` optional flag to disable the usual verification
+  #     checks that prevent access to objects that are owned by
+  #     addresses other than the sender, and calling non-public,
+  #     non-entry functions.  Defaults to false.
+  #
+  # `epoch` the epoch to simulate executing the transaction in.
+  #     Defaults to the current epoch.
+  dryRunTransactionBlock(
+    txBytes: Base64!,
+    txMeta: TransactionMetadata,
+    skipChecks: Boolean,
+    sender: SuiAddress,
+    gasPrice: U64
+    gasObjects: [SuiAddress!],
+    epoch: Int
+  ): DryRunResult
 
   owner(address: SuiAddress!): Owner
   object(address: SuiAddress!, version: BigInt): Object
@@ -58,7 +69,10 @@ type Query {
   # If no `filter` is provided, fetch the latest available checkpoint.
   checkpoint(filter: CheckpointFilter): Checkpoint
 
-  transactionBlock(digest: String!): TransactionBlock
+  # Find a transaction block either by its transaction digest or its
+  # effects digest.
+  transactionBlock(filter: TransactionBlockFilter!): TransactionBlock
+
   coinMetadata(coinType: String!): CoinMetadata
 
   checkpointsConnection(
@@ -134,6 +148,24 @@ type Subscription {
   transactions(filter: TransactionBlockFilter): String!
 }
 
+type Mutation {
+  # Execute a transaction, committing its effects on chain.
+  #
+  # `txBytes` is a `TransactionData` struct that has been BCS-encoded
+  #     and then Base64-encoded.
+  # `signatures` are a list of `flag || signature || pubkey` bytes,
+  #     Base64-encoded.
+  #
+  # Waits until the transaction has been finalised on chain and an
+  # effects digest is available, and returns that.  If the
+  # transactioon could not be finalised, returns the errors that
+  # prevented it, instead.
+  executeTransactionBlock(
+    txBytes: Base64!,
+    signatures: [Base64!]!,
+  ): ExecutionResult
+}
+
 # String containing 32B hex-encoded address
 scalar SuiAddress
 
@@ -146,11 +178,26 @@ scalar Base64
 # ISO-8601 Date and Time
 scalar DateTime
 
+# The extra data required to turn a `TransactionKind` into a
+# `TransactionData` in a dry-run.
+input TxMeta {
+  sender: SuiAddress
+  gasPrice: U64
+  gasObjects: [SuiAddress!]
+}
+
 # Filter either by the digest, or the sequence number, or neither, to
 # get the latest checkpoint.
 input CheckpointFilter {
   digest: String
   sequenceNumber: BigInt
+}
+
+# Find a transaction block either by its transaction digest, or its
+# effects digest (can't be both, can't be neither).
+input TransactionBlockFilter {
+  transactionDigest: String
+  effectsDigest: String
 }
 
 input ObjectFilter {
@@ -717,7 +764,7 @@ type BalanceChange {
 }
 
 type Event {
-  id : ID!
+  id: ID!
 
   # Module that the event was emitted by
   sendingModuleId: MoveModuleId
@@ -865,7 +912,7 @@ type NormalizedField {
 }
 
 type NormalizedFunction {
-  id : ID!
+  id: ID!
   module: NormalizedModule!
   name: String!
 
@@ -949,6 +996,41 @@ type MoveTypeParameter {
 type NetworkMetrics {}
 type MoveCallMetrics {}
 type AddressMetrics {}
+
+# Execution
+
+type ExecutionResult {
+  effectsDigest: String
+  errors: String
+}
+
+type DryRunResult {
+  transaction: TransactionBlock
+  errors: String
+
+  events: [Event!]
+  results: [DryRunEffect!]
+}
+
+type DryRunEffect {
+  # Changes made to arguments that were mutably borrowed by this
+  # transaction
+  mutatedReferences: [DryRunMutation!]
+
+  # Results of this transaction
+  returnValues: [DryRunReturn!]
+}
+
+type DryRunMutation {
+  input: TransactionInput
+  type: MoveType
+  bcs: Base64
+}
+
+type DryRunReturn {
+  type: MoveType
+  bcs: Base64
+}
 
 # Connections
 
