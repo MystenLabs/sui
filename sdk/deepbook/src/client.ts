@@ -1,22 +1,51 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { DevInspectResults } from '@mysten/sui.js/client';
+import {
+	DevInspectResults,
+	OrderArguments,
+	PaginatedEvents,
+	PaginationArguments,
+} from '@mysten/sui.js/client';
 import { SUI_CLOCK_OBJECT_ID } from '@mysten/sui.js/utils';
 import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { MODULE_CLOB, PACKAGE_ID } from './utils';
+import { PaginatedPoolSummary } from './types/pool';
+
+const DUMMY_ADDRESS = '0x0';
 
 export class DeepBookClient {
-	public provider: SuiClient;
-	public currentAddress: string;
-
 	constructor(
-		provider: SuiClient = new SuiClient({ url: getFullnodeUrl('testnet') }),
-		currentAddress: string,
-	) {
-		this.provider = provider;
-		this.currentAddress = currentAddress;
+		public suiClient: SuiClient = new SuiClient({ url: getFullnodeUrl('testnet') }),
+		public currentAddress: string = DUMMY_ADDRESS,
+	) {}
+
+	/**
+	 * @description returns paginated list of pools created in DeepBook by querying for the
+	 * `PoolCreated` event. Warning: this method can return incomplete results if the upstream data source
+	 * is pruned.
+	 */
+	public async getAllPools(
+		input: PaginationArguments<PaginatedEvents['nextCursor']> & OrderArguments,
+	): Promise<PaginatedPoolSummary> {
+		const resp = await this.suiClient.queryEvents({
+			query: { MoveEventType: `${PACKAGE_ID}::${MODULE_CLOB}::PoolCreated` },
+			...input,
+		});
+		const pools = resp.data.map((event) => {
+			const rawEvent = event.parsedJson as any;
+			return {
+				poolId: rawEvent.pool_id as string,
+				baseAsset: ('0x' + rawEvent.base_asset.name) as string,
+				quoteAsset: ('0x' + rawEvent.quote_asset.name) as string,
+			};
+		});
+		return {
+			data: pools,
+			nextCursor: resp.nextCursor,
+			hasNextPage: resp.hasNextPage,
+		};
 	}
 
 	/**
@@ -41,7 +70,7 @@ export class DeepBookClient {
 			arguments: [txb.object(poolId), txb.object(orderId), txb.object(accountCap)],
 		});
 		txb.setSender(this.currentAddress);
-		return await this.provider.devInspectTransactionBlock({
+		return await this.suiClient.devInspectTransactionBlock({
 			transactionBlock: txb,
 			sender: this.currentAddress,
 		});
@@ -67,7 +96,7 @@ export class DeepBookClient {
 			arguments: [txb.object(poolId), txb.object(accountCap)],
 		});
 		txb.setSender(this.currentAddress);
-		return await this.provider.devInspectTransactionBlock({
+		return await this.suiClient.devInspectTransactionBlock({
 			transactionBlock: txb,
 			sender: this.currentAddress,
 		});
@@ -94,7 +123,7 @@ export class DeepBookClient {
 		});
 		txb.setSender(this.currentAddress);
 
-		return await this.provider.devInspectTransactionBlock({
+		return await this.suiClient.devInspectTransactionBlock({
 			transactionBlock: txb,
 			sender: this.currentAddress,
 		});
@@ -113,7 +142,7 @@ export class DeepBookClient {
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::get_market_price`,
 			arguments: [txb.object(poolId)],
 		});
-		return await this.provider.devInspectTransactionBlock({
+		return await this.suiClient.devInspectTransactionBlock({
 			transactionBlock: txb,
 			sender: this.currentAddress,
 		});
@@ -149,7 +178,7 @@ export class DeepBookClient {
 				txb.object(SUI_CLOCK_OBJECT_ID),
 			],
 		});
-		return await this.provider.devInspectTransactionBlock({
+		return await this.suiClient.devInspectTransactionBlock({
 			transactionBlock: txb,
 			sender: this.currentAddress,
 		});

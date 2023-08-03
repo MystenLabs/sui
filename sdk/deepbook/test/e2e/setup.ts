@@ -9,10 +9,15 @@ import { retry } from 'ts-retry-promise';
 import { FaucetRateLimitError, getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
 import { SuiClient, SuiObjectChangePublished, getFullnodeUrl } from '@mysten/sui.js/client';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { PoolSummary } from '../../src/types/pool';
+import { normalizeSuiObjectId, SUI_FRAMEWORK_ADDRESS } from '@mysten/sui.js/utils';
+import { createPool } from '../../src';
 
 const DEFAULT_FAUCET_URL = import.meta.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');
 const DEFAULT_FULLNODE_URL = import.meta.env.VITE_FULLNODE_URL ?? getFullnodeUrl('localnet');
 const SUI_BIN = import.meta.env.VITE_SUI_BIN ?? 'cargo run --bin sui';
+const DEFAULT_TICK_SIZE = 10000000;
+const DEFAULT_LOT_SIZE = 10000;
 
 export const DEFAULT_RECIPIENT =
 	'0x0c567ffdf8162cb6d51af74be0199443b92e823d4ba6ced24de5c6c463797d46';
@@ -45,7 +50,8 @@ export function getClient(): SuiClient {
 	});
 }
 
-export async function setup() {
+// TODO: expose these testing utils from @mysten/sui.js
+export async function setupSuiClient() {
 	const keypair = Ed25519Keypair.generate();
 	const address = keypair.getPublicKey().toSuiAddress();
 	const client = getClient();
@@ -63,7 +69,7 @@ export async function setup() {
 export async function publishPackage(packagePath: string, toolbox?: TestToolbox) {
 	// TODO: We create a unique publish address per publish, but we really could share one for all publishes.
 	if (!toolbox) {
-		toolbox = await setup();
+		toolbox = await setupSuiClient();
 	}
 
 	// remove all controlled temporary objects on process exit
@@ -107,11 +113,26 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 	return { packageId, publishTxn };
 }
 
-export function getRandomAddresses(n: number): string[] {
-	return Array(n)
-		.fill(null)
-		.map(() => {
-			const keypair = Ed25519Keypair.generate();
-			return keypair.getPublicKey().toSuiAddress();
-		});
+export async function setupPool(toolbox: TestToolbox): Promise<PoolSummary> {
+	const packagePath = __dirname + '/./data/test_coin';
+	const { packageId } = await publishPackage(packagePath, toolbox);
+	const baseAsset = `${normalizeSuiObjectId(SUI_FRAMEWORK_ADDRESS)}::sui::SUI`;
+	const quoteAsset = `${packageId}::test::TEST`;
+	const txb = createPool(baseAsset, quoteAsset, DEFAULT_TICK_SIZE, DEFAULT_LOT_SIZE);
+	const resp = await toolbox.client.signAndExecuteTransactionBlock({
+		signer: toolbox.keypair,
+		transactionBlock: txb,
+		options: {
+			showEffects: true,
+			showEvents: true,
+		},
+	});
+	expect(resp.effects?.status.status).toEqual('success');
+
+	const event = resp.events?.find((e) => e.type.includes('PoolCreated')) as any;
+	return {
+		poolId: event.parsedJson.pool_id,
+		baseAsset,
+		quoteAsset,
+	};
 }
