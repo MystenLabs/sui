@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use futures::stream::{self, StreamExt};
 use hyper::client::HttpConnector;
+use hyper::header::{HeaderValue, CONTENT_LENGTH};
 use hyper::Client;
 use hyper::Uri;
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
@@ -160,10 +161,12 @@ impl HttpKVStore {
         trace!("fetching uri: {}", uri);
         let resp = self.client.get(uri.clone()).await.into_sui_result()?;
         trace!(
-            "got response {} for uri: {}, len: {}",
+            "got response {} for uri: {}, len: {:?}",
             uri,
             resp.status(),
-            resp.headers().len()
+            resp.headers()
+                .get(CONTENT_LENGTH)
+                .unwrap_or(&HeaderValue::from_static("0"))
         );
         // return None if 400
         if resp.status().is_success() {
