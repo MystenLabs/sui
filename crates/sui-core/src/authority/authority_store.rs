@@ -1608,21 +1608,24 @@ impl AuthorityStore {
             .map(|v| v.map(|v| v.into()))
     }
 
-    pub fn get_transaction_and_serialized_size(
+    pub fn get_transactions_and_serialized_sizes<'a>(
         &self,
-        tx_digest: &TransactionDigest,
-    ) -> Result<Option<(VerifiedTransaction, usize)>, TypedStoreError> {
+        digests: impl IntoIterator<Item = &'a TransactionDigest>,
+    ) -> Result<Vec<Option<(VerifiedTransaction, usize)>>, TypedStoreError> {
         self.perpetual_tables
             .transactions
-            .get_raw_bytes(tx_digest)
-            .and_then(|v| match v {
-                Some(tx_bytes) => {
-                    let tx: VerifiedTransaction =
-                        bcs::from_bytes::<TrustedTransaction>(&tx_bytes)?.into();
-                    Ok(Some((tx, tx_bytes.len())))
-                }
-                None => Ok(None),
+            .multi_get_raw_bytes(digests)?
+            .into_iter()
+            .map(|raw_bytes_option| {
+                raw_bytes_option
+                    .map(|tx_bytes| {
+                        let tx: VerifiedTransaction =
+                            bcs::from_bytes::<TrustedTransaction>(&tx_bytes)?.into();
+                        Ok((tx, tx_bytes.len()))
+                    })
+                    .transpose()
             })
+            .collect()
     }
 
     // TODO: Transaction Orchestrator also calls this, which is not ideal.
