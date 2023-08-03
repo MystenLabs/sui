@@ -7,7 +7,9 @@ use std::sync::Arc;
 use sui_storage::http_key_value_store::*;
 use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
-use sui_types::digests::{TransactionDigest, TransactionEventsDigest};
+use sui_types::digests::{
+    CheckpointContentsDigest, CheckpointDigest, TransactionDigest, TransactionEventsDigest,
+};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 // Command line options are:
@@ -23,6 +25,9 @@ struct Options {
 
     #[clap(short, long)]
     digest: Vec<String>,
+
+    #[clap(short, long)]
+    seq: Vec<String>,
 
     // must be either 'tx', 'fx', 'events', or 'ckpt_contents'
     // default value of 'tx'
@@ -41,6 +46,14 @@ async fn main() {
     let http_kv = Arc::new(HttpKVStore::new(&options.base_url).unwrap());
     let kv =
         TransactionKeyValueStore::new("http_kv", KeyValueStoreMetrics::new_for_tests(), http_kv);
+
+    let seqs: Vec<_> = options
+        .seq
+        .into_iter()
+        .map(|s| {
+            CheckpointSequenceNumber::from_str(&s).expect("invalid checkpoint sequence number")
+        })
+        .collect();
 
     // verify that type is valid
     match options.type_.as_str() {
@@ -82,18 +95,50 @@ async fn main() {
         }
 
         "ckpt_contents" => {
-            let seqs: Vec<_> = options
+            let digests: Vec<_> = options
                 .digest
                 .into_iter()
-                .map(|s| {
-                    CheckpointSequenceNumber::from_str(&s)
-                        .expect("invalid checkpoint sequence number")
-                })
+                .map(|s| CheckpointContentsDigest::from_str(&s).expect("invalid checkpoint digest"))
                 .collect();
 
-            let tx = kv.multi_get_checkpoints_contents(&seqs).await.unwrap();
-            for (digest, ckpt) in seqs.iter().zip(tx.iter()) {
-                println!("fetched ckpt: {:?} {:?}", digest, ckpt);
+            let ckpts = kv
+                .multi_get_checkpoints(&[], &seqs, &[], &digests)
+                .await
+                .unwrap();
+
+            for (seq, ckpt) in seqs.iter().zip(ckpts.1.iter()) {
+                // populate digest before printing
+                ckpt.as_ref().map(|c| c.digest());
+                println!("fetched ckpt contents: {:?} {:?}", seq, ckpt);
+            }
+            for (digest, ckpt) in digests.iter().zip(ckpts.3.iter()) {
+                // populate digest before printing
+                ckpt.as_ref().map(|c| c.digest());
+                println!("fetched ckpt contents: {:?} {:?}", digest, ckpt);
+            }
+        }
+
+        "ckpt_summary" => {
+            let digests: Vec<_> = options
+                .digest
+                .into_iter()
+                .map(|s| CheckpointDigest::from_str(&s).expect("invalid checkpoint digest"))
+                .collect();
+
+            let ckpts = kv
+                .multi_get_checkpoints(&seqs, &[], &digests, &[])
+                .await
+                .unwrap();
+
+            for (seq, ckpt) in seqs.iter().zip(ckpts.0.iter()) {
+                // populate digest before printing
+                ckpt.as_ref().map(|c| c.digest());
+                println!("fetched ckpt summary: {:?} {:?}", seq, ckpt);
+            }
+            for (digest, ckpt) in digests.iter().zip(ckpts.2.iter()) {
+                // populate digest before printing
+                ckpt.as_ref().map(|c| c.digest());
+                println!("fetched ckpt summary: {:?} {:?}", digest, ckpt);
             }
         }
 
