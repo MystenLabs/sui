@@ -7,24 +7,23 @@ import tmp from 'tmp';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { retry } from 'ts-retry-promise';
 import { FaucetRateLimitError, getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
-import { SuiClient, SuiObjectChangePublished, getFullnodeUrl } from '@mysten/sui.js/client';
+import {
+	SuiClient,
+	SuiObjectChangeCreated,
+	SuiObjectChangePublished,
+	SuiTransactionBlockResponse,
+	getFullnodeUrl,
+} from '@mysten/sui.js/client';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { PoolSummary } from '../../src/types/pool';
 import { normalizeSuiObjectId, SUI_FRAMEWORK_ADDRESS } from '@mysten/sui.js/utils';
-import { createPool } from '../../src';
+import { createAccount, createPool } from '../../src';
 
 const DEFAULT_FAUCET_URL = import.meta.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');
 const DEFAULT_FULLNODE_URL = import.meta.env.VITE_FULLNODE_URL ?? getFullnodeUrl('localnet');
 const SUI_BIN = import.meta.env.VITE_SUI_BIN ?? 'cargo run --bin sui';
 const DEFAULT_TICK_SIZE = 10000000;
 const DEFAULT_LOT_SIZE = 10000;
-
-export const DEFAULT_RECIPIENT =
-	'0x0c567ffdf8162cb6d51af74be0199443b92e823d4ba6ced24de5c6c463797d46';
-export const DEFAULT_RECIPIENT_2 =
-	'0xbb967ddbebfee8c40d8fdd2c24cb02452834cd3a7061d18564448f900eb9e66d';
-export const DEFAULT_GAS_BUDGET = 10000000;
-export const DEFAULT_SEND_AMOUNT = 1000;
 
 export class TestToolbox {
 	keypair: Ed25519Keypair;
@@ -66,6 +65,7 @@ export async function setupSuiClient() {
 	return new TestToolbox(keypair, client);
 }
 
+// TODO: expose these testing utils from @mysten/sui.js
 export async function publishPackage(packagePath: string, toolbox?: TestToolbox) {
 	// TODO: We create a unique publish address per publish, but we really could share one for all publishes.
 	if (!toolbox) {
@@ -119,20 +119,38 @@ export async function setupPool(toolbox: TestToolbox): Promise<PoolSummary> {
 	const baseAsset = `${normalizeSuiObjectId(SUI_FRAMEWORK_ADDRESS)}::sui::SUI`;
 	const quoteAsset = `${packageId}::test::TEST`;
 	const txb = createPool(baseAsset, quoteAsset, DEFAULT_TICK_SIZE, DEFAULT_LOT_SIZE);
-	const resp = await toolbox.client.signAndExecuteTransactionBlock({
-		signer: toolbox.keypair,
-		transactionBlock: txb,
-		options: {
-			showEffects: true,
-			showEvents: true,
-		},
-	});
-	expect(resp.effects?.status.status).toEqual('success');
-
+	const resp = await executeTransactionBlock(toolbox, txb);
 	const event = resp.events?.find((e) => e.type.includes('PoolCreated')) as any;
 	return {
 		poolId: event.parsedJson.pool_id,
 		baseAsset,
 		quoteAsset,
 	};
+}
+
+export async function setupDeepbookAccount(toolbox: TestToolbox): Promise<string> {
+	const txb = createAccount(toolbox.address());
+	const resp = await executeTransactionBlock(toolbox, txb);
+
+	const accountCap = ((resp.objectChanges?.filter(
+		(a) => a.type === 'created',
+	) as SuiObjectChangeCreated[]) ?? [])[0].objectId;
+	return accountCap;
+}
+
+async function executeTransactionBlock(
+	toolbox: TestToolbox,
+	txb: TransactionBlock,
+): Promise<SuiTransactionBlockResponse> {
+	const resp = await toolbox.client.signAndExecuteTransactionBlock({
+		signer: toolbox.keypair,
+		transactionBlock: txb,
+		options: {
+			showEffects: true,
+			showEvents: true,
+			showObjectChanges: true,
+		},
+	});
+	expect(resp.effects?.status.status).toEqual('success');
+	return resp;
 }
