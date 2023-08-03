@@ -163,7 +163,6 @@ export default {
 				verticalListLong: '35.6875rem',
 				600: '37.5rem',
 				header: '68px',
-				headerNetworkDegrade: '102.2px',
 			},
 			height: {
 				31.5: '7.5rem',

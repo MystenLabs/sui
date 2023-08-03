@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useAppsBackend } from '@mysten/core';
+import { useAppsBackend, useElementHeight } from '@mysten/core';
 import { LoadingIndicator } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { type ReactNode } from 'react';
+import { type ReactNode, useRef } from 'react';
 
 import Footer from '../footer/Footer';
 import Header from '../header/Header';
@@ -23,9 +23,12 @@ export type PageLayoutProps = {
 	loading?: boolean;
 };
 
+const DEFAULT_HEADER_HEIGHT = 68;
+
 export function PageLayout({ gradient, content, loading, isError }: PageLayoutProps) {
 	const [network] = useNetworkContext();
 	const { request } = useAppsBackend();
+
 	const { data } = useQuery({
 		queryKey: ['apps-backend', 'monitor-network'],
 		queryFn: () =>
@@ -39,14 +42,18 @@ export function PageLayout({ gradient, content, loading, isError }: PageLayoutPr
 	});
 	const isGradientVisible = !!gradient;
 	const renderNetworkDegradeBanner = network === Network.MAINNET && data?.degraded;
+	const headerRef = useRef<HTMLElement | null>(null);
+	const headerHeight = useElementHeight(headerRef, DEFAULT_HEADER_HEIGHT);
 
 	return (
 		<div className="relative min-h-screen w-full">
-			<section className="fixed top-0 z-20 flex w-full flex-col">
+			<section ref={headerRef} className="fixed top-0 z-20 flex w-full flex-col">
 				{renderNetworkDegradeBanner && (
 					<Banner rounded="none" align="center" variant="warning" fullWidth>
-						The explorer is running slower than usual. We&rsquo;re working to fix the issue and
-						appreciate your patience.
+						<div className="break-normal">
+							The explorer is running slower than usual. We&rsquo;re working to fix the issue and
+							appreciate your patience.
+						</div>
 					</Banner>
 				)}
 				<Header />
@@ -57,17 +64,22 @@ export function PageLayout({ gradient, content, loading, isError }: PageLayoutPr
 				</div>
 			)}
 			<main
-				className={clsx(
-					'relative z-10 bg-offwhite',
-					!isGradientVisible && renderNetworkDegradeBanner && 'pt-headerNetworkDegrade',
-					!isGradientVisible && !renderNetworkDegradeBanner && 'pt-header',
-				)}
+				className="relative z-10 bg-offwhite"
+				style={
+					!isGradientVisible
+						? {
+								paddingTop: `${headerHeight}px`,
+						  }
+						: {}
+				}
 			>
 				{isGradientVisible ? (
 					<section
+						style={{
+							paddingTop: `${headerHeight}px`,
+						}}
 						className={clsx(
 							'group/gradientContent',
-							renderNetworkDegradeBanner ? 'pt-headerNetworkDegrade' : 'pt-header',
 							loading && 'bg-gradients-graph-cards',
 							isError && 'bg-gradients-failure',
 							!isError && 'bg-gradients-graph-cards',
