@@ -27,9 +27,10 @@ aho-corasick-dff4ba8e3ae991db = { package = "aho-corasick", version = "1" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "d2d8487c0c14c0fb0a2285660dacd4af55667be6" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "d2d8487c0c14c0fb0a2285660dacd4af55667be6"}
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "d2d8487c0c14c0fb0a2285660dacd4af55667be6"}
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "d2d8487c0c14c0fb0a2285660dacd4af55667be6", default-features = false }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "d2d8487c0c14c0fb0a2285660dacd4af55667be6", default-features = false }
+anemo-tls = { git = "https://github.com/mystenlabs/anemo.git", rev = "d2d8487c0c14c0fb0a2285660dacd4af55667be6", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "d2d8487c0c14c0fb0a2285660dacd4af55667be6", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anstream = { version = "0.3" }
@@ -160,7 +161,7 @@ colored-diff = { version = "0.2", default-features = false }
 combine = { version = "4" }
 comfy-table = { version = "6" }
 console = { version = "0.15", default-features = false, features = ["ansi-parsing", "unicode-width"] }
-console-api = { version = "0.4", default-features = false, features = ["transport"] }
+console-api = { version = "0.5", default-features = false, features = ["transport"] }
 console-subscriber = { version = "0.1" }
 const-oid = { version = "0.9", default-features = false }
 const-str = { version = "0.5" }
@@ -258,7 +259,7 @@ futures-lite = { version = "1" }
 futures-sink = { version = "0.3" }
 futures-task = { version = "0.3", default-features = false, features = ["std", "unstable"] }
 futures-timer = { version = "3", default-features = false, features = ["wasm-bindgen"] }
-futures-util = { version = "0.3", default-features = false, features = ["async-await-macro", "bilock", "channel", "io", "sink", "unstable"] }
+futures-util = { version = "0.3", features = ["bilock", "channel", "io", "sink", "unstable"] }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "serde", "zeroize"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 getrandom-c65f7effa3be6d31 = { package = "getrandom", version = "0.1", default-features = false, features = ["std"] }
@@ -413,6 +414,7 @@ nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c7876
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5", default-features = false }
 nibble_vec = { version = "0.1", default-features = false }
 no-std-compat = { version = "0.4", default-features = false, features = ["alloc", "std"] }
+nohash-hasher = { version = "0.2" }
 nom = { version = "7" }
 nonzero_ext = { version = "0.3" }
 normalize-line-endings = { version = "0.3", default-features = false }
@@ -635,7 +637,7 @@ tokio = { version = "1", features = ["full", "test-util", "tracing"] }
 tokio-io-timeout = { version = "1", default-features = false }
 tokio-retry = { version = "0.3", default-features = false }
 tokio-rustls-2b5c6dc72f624058 = { package = "tokio-rustls", version = "0.23" }
-tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24", default-features = false, features = ["logging", "tls12"] }
+tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24", features = ["dangerous_configuration"] }
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
 tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
 toml-ca01ad9e24f5d932 = { package = "toml", version = "0.7", features = ["preserve_order"] }
@@ -645,7 +647,8 @@ toml_datetime-d8f496e17d97b5cb = { package = "toml_datetime", version = "0.5", d
 toml_edit-3575ec1268b04181 = { package = "toml_edit", version = "0.15" }
 toml_edit-582f2526e08bb6a0 = { package = "toml_edit", version = "0.14", features = ["easy"] }
 toml_edit-cdcf2f9584511fe6 = { package = "toml_edit", version = "0.19", features = ["serde"] }
-tonic = { version = "0.8", features = ["tls"] }
+tonic-274715c4dabd11b0 = { package = "tonic", version = "0.9" }
+tonic-c38e5c1d305a1b54 = { package = "tonic", version = "0.8", features = ["tls"] }
 tonic-health = { version = "0.8" }
 tower = { version = "0.4", features = ["full"] }
 tower-http = { version = "0.3", features = ["full"] }
@@ -710,6 +713,7 @@ x509-parser = { version = "0.14" }
 xml-rs = { version = "0.8", default-features = false }
 xmlparser = { version = "0.13" }
 yaml-rust = { version = "0.4", default-features = false }
+yamux = { git = "https://github.com/aschran/rust-yamux.git", rev = "ed1bd31a75305ca7f13bdc0ccd309905fa2a42c0", default-features = false }
 yansi = { version = "0.5", default-features = false }
 yasna = { version = "0.5", features = ["std", "time"] }
 zeroize = { version = "1", features = ["zeroize_derive"] }
@@ -731,10 +735,11 @@ aho-corasick-dff4ba8e3ae991db = { package = "aho-corasick", version = "1" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "d2d8487c0c14c0fb0a2285660dacd4af55667be6" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "d2d8487c0c14c0fb0a2285660dacd4af55667be6" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "d2d8487c0c14c0fb0a2285660dacd4af55667be6"}
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "d2d8487c0c14c0fb0a2285660dacd4af55667be6"}
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "d2d8487c0c14c0fb0a2285660dacd4af55667be6", default-features = false }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "d2d8487c0c14c0fb0a2285660dacd4af55667be6", default-features = false }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "d2d8487c0c14c0fb0a2285660dacd4af55667be6", default-features = false }
+anemo-tls = { git = "https://github.com/mystenlabs/anemo.git", rev = "d2d8487c0c14c0fb0a2285660dacd4af55667be6", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "d2d8487c0c14c0fb0a2285660dacd4af55667be6", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anstream = { version = "0.3" }
@@ -884,7 +889,7 @@ colored-diff = { version = "0.2", default-features = false }
 combine = { version = "4" }
 comfy-table = { version = "6" }
 console = { version = "0.15", default-features = false, features = ["ansi-parsing", "unicode-width"] }
-console-api = { version = "0.4", default-features = false, features = ["transport"] }
+console-api = { version = "0.5", default-features = false, features = ["transport"] }
 console-subscriber = { version = "0.1" }
 const-oid = { version = "0.9", default-features = false }
 const-str = { version = "0.5" }
@@ -1000,7 +1005,7 @@ futures-macro = { version = "0.3", default-features = false }
 futures-sink = { version = "0.3" }
 futures-task = { version = "0.3", default-features = false, features = ["std", "unstable"] }
 futures-timer = { version = "3", default-features = false, features = ["wasm-bindgen"] }
-futures-util = { version = "0.3", default-features = false, features = ["async-await-macro", "bilock", "channel", "io", "sink", "unstable"] }
+futures-util = { version = "0.3", features = ["bilock", "channel", "io", "sink", "unstable"] }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "serde", "zeroize"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 getrandom-c65f7effa3be6d31 = { package = "getrandom", version = "0.1", default-features = false, features = ["std"] }
@@ -1172,6 +1177,7 @@ nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c7876
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5", default-features = false }
 nibble_vec = { version = "0.1", default-features = false }
 no-std-compat = { version = "0.4", default-features = false, features = ["alloc", "std"] }
+nohash-hasher = { version = "0.2" }
 nom = { version = "7" }
 nonzero_ext = { version = "0.3" }
 normalize-line-endings = { version = "0.3", default-features = false }
@@ -1445,7 +1451,8 @@ tokio = { version = "1", features = ["full", "test-util", "tracing"] }
 tokio-io-timeout = { version = "1", default-features = false }
 tokio-macros = { version = "2", default-features = false }
 tokio-retry = { version = "0.3", default-features = false }
-tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24", default-features = false, features = ["logging", "tls12"] }
+tokio-rustls-2b5c6dc72f624058 = { package = "tokio-rustls", version = "0.23" }
+tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24", features = ["dangerous_configuration"] }
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
 tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
 toml-ca01ad9e24f5d932 = { package = "toml", version = "0.7", features = ["preserve_order"] }
@@ -1455,8 +1462,9 @@ toml_datetime-d8f496e17d97b5cb = { package = "toml_datetime", version = "0.5", d
 toml_edit-3575ec1268b04181 = { package = "toml_edit", version = "0.15" }
 toml_edit-582f2526e08bb6a0 = { package = "toml_edit", version = "0.14", features = ["easy"] }
 toml_edit-cdcf2f9584511fe6 = { package = "toml_edit", version = "0.19", features = ["serde"] }
-tonic = { version = "0.8", features = ["tls"] }
+tonic-274715c4dabd11b0 = { package = "tonic", version = "0.9" }
 tonic-build = { version = "0.8" }
+tonic-c38e5c1d305a1b54 = { package = "tonic", version = "0.8", features = ["tls"] }
 tonic-health = { version = "0.8" }
 toolchain_find = { version = "0.2", default-features = false }
 tower = { version = "0.4", features = ["full"] }
@@ -1534,6 +1542,7 @@ x509-parser = { version = "0.14" }
 xml-rs = { version = "0.8", default-features = false }
 xmlparser = { version = "0.13" }
 yaml-rust = { version = "0.4", default-features = false }
+yamux = { git = "https://github.com/aschran/rust-yamux.git", rev = "ed1bd31a75305ca7f13bdc0ccd309905fa2a42c0", default-features = false }
 yansi = { version = "0.5", default-features = false }
 yasna = { version = "0.5", features = ["std", "time"] }
 zeroize = { version = "1", features = ["zeroize_derive"] }
@@ -1581,7 +1590,6 @@ signal-hook-registry = { version = "1", default-features = false }
 str_stack = { version = "0.1", default-features = false }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
-tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 
 [target.aarch64-apple-darwin.build-dependencies]
@@ -1625,7 +1633,6 @@ signal-hook-registry = { version = "1", default-features = false }
 str_stack = { version = "0.1", default-features = false }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
-tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
@@ -1664,7 +1671,6 @@ signal-hook-registry = { version = "1", default-features = false }
 str_stack = { version = "0.1", default-features = false }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
-tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
@@ -1705,7 +1711,6 @@ signal-hook-registry = { version = "1", default-features = false }
 str_stack = { version = "0.1", default-features = false }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
-tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]
@@ -1725,7 +1730,6 @@ rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", defau
 raw-cpuid = { version = "10", default-features = false }
 schannel = { version = "0.1", default-features = false }
 str-buf = { version = "1", default-features = false }
-tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 widestring = { version = "0.5" }
 winapi = { version = "0.3", default-features = false, features = ["basetsd", "cfg", "combaseapi", "consoleapi", "errhandlingapi", "evntrace", "fileapi", "handleapi", "heapapi", "ifdef", "impl-debug", "impl-default", "in6addr", "inaddr", "ioapiset", "iphlpapi", "knownfolders", "libloaderapi", "lmaccess", "lmapibuf", "lmcons", "memoryapi", "minwinbase", "minwindef", "namedpipeapi", "netioapi", "ntdef", "ntlsa", "ntsecapi", "ntstatus", "objbase", "objidl", "oleauto", "pdh", "powerbase", "processenv", "processthreadsapi", "profileapi", "psapi", "rpcdce", "securitybaseapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "wbemcli", "winbase", "wincon", "windef", "winerror", "winioctl", "winnt", "winreg", "winsock2", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
@@ -1755,7 +1759,6 @@ rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", defau
 raw-cpuid = { version = "10", default-features = false }
 schannel = { version = "0.1", default-features = false }
 str-buf = { version = "1", default-features = false }
-tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
 vcpkg = { version = "0.2", default-features = false }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 widestring = { version = "0.5" }
