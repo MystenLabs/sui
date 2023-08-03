@@ -7,7 +7,7 @@ import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { MODULE_CLOB, PACKAGE_ID } from './utils';
 
-export class DeepBook_query {
+export class DeepBookClient {
 	public provider: SuiClient;
 	public currentAddress: string;
 
@@ -27,7 +27,7 @@ export class DeepBook_query {
 	 * @param orderId the order id, eg: "1"
 	 * @param accountCap: your accountCap, eg: 0x6f699fef193723277559c8f499ca3706121a65ac96d273151b8e52deb29135d3
 	 */
-	public async get_order_status(
+	public async getOrderStatus(
 		token1: string,
 		token2: string,
 		poolId: string,
@@ -54,7 +54,7 @@ export class DeepBook_query {
 	 * @param poolId the pool id, eg: 0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4
 	 * @param accountCap your accountCap, eg: 0x6f699fef193723277559c8f499ca3706121a65ac96d273151b8e52deb29135d3
 	 */
-	public async get_usr_position(
+	public async getUsrPosition(
 		token1: string,
 		token2: string,
 		poolId: string,
@@ -80,7 +80,7 @@ export class DeepBook_query {
 	 * @param poolId the pool id, eg: 0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4
 	 * @param accountCap your accountCap, eg: 0x6f699fef193723277559c8f499ca3706121a65ac96d273151b8e52deb29135d3
 	 */
-	public async list_open_orders(
+	public async listOpenOrders(
 		token1: string,
 		token2: string,
 		poolId: string,
@@ -106,7 +106,7 @@ export class DeepBook_query {
 	 * @param token2 token2 of a certain pair,  eg: 0x5378a0e7495723f7d942366a125a6556cf56f573fa2bb7171b554a2986c4229a::usdt::USDT
 	 * @param poolId the pool id, eg: 0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4
 	 */
-	public async get_market_price(token1: string, token2: string, poolId: string) {
+	public async getMarketPrice(token1: string, token2: string, poolId: string) {
 		const txb = new TransactionBlock();
 		txb.moveCall({
 			typeArguments: [token1, token2],
@@ -126,20 +126,20 @@ export class DeepBook_query {
 	 * @param poolId the pool id, eg: 0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4
 	 * @param lowerPrice lower price you want to query in the level2 book, eg: 18000000000
 	 * @param higherPrice higher price you want to query in the level2 book, eg: 20000000000
-	 * @param is_bid_side true: query bid side, false: query ask side
+	 * @param isBidSide true: query bid side, false: query ask side
 	 */
-	public async get_level2_book_status(
+	public async getLevel2BookStatus(
 		token1: string,
 		token2: string,
 		poolId: string,
 		lowerPrice: number,
 		higherPrice: number,
-		is_bid_side: boolean,
+		isBidSide: boolean,
 	): Promise<DevInspectResults> {
 		const txb = new TransactionBlock();
 		txb.moveCall({
 			typeArguments: [token1, token2],
-			target: is_bid_side
+			target: isBidSide
 				? `${PACKAGE_ID}::${MODULE_CLOB}::get_level2_book_status_bid_side`
 				: `${PACKAGE_ID}::${MODULE_CLOB}::get_level2_book_status_ask_side`,
 			arguments: [

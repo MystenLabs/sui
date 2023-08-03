@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
 import { TestToolbox, publishPackage, setup } from './setup';
-import { DeepBook_sdk } from '../../src';
+import { createPool } from '../../src';
 import { SUI_FRAMEWORK_ADDRESS, normalizeSuiObjectId } from '@mysten/sui.js/utils';
 
 const DEFAULT_TICK_SIZE = 10000000;
@@ -22,19 +22,9 @@ describe('Create a pool', () => {
 
 	it('test creating a pool', async () => {
 		const toolbox = await setup();
-		const deepbook = new DeepBook_sdk(toolbox.client, {
-			pools: [],
-			tokens: [],
-			caps: [],
-		});
-        const baseToken = `${normalizeSuiObjectId(SUI_FRAMEWORK_ADDRESS)}::sui::SUI`;
-        const quoteToken = `${packageId}::test::TEST`;
-		const txb = deepbook.createPool(
-			baseToken,
-			quoteToken,
-			DEFAULT_TICK_SIZE,
-			DEFAULT_LOT_SIZE,
-		);
+		const baseToken = `${normalizeSuiObjectId(SUI_FRAMEWORK_ADDRESS)}::sui::SUI`;
+		const quoteToken = `${packageId}::test::TEST`;
+		const txb = createPool(baseToken, quoteToken, DEFAULT_TICK_SIZE, DEFAULT_LOT_SIZE);
 		const resp = await toolbox.client.signAndExecuteTransactionBlock({
 			signer: toolbox.keypair,
 			transactionBlock: txb,
@@ -42,6 +32,6 @@ describe('Create a pool', () => {
 				showEffects: true,
 			},
 		});
-        expect(resp.effects?.status.status).toEqual('success');
+		expect(resp.effects?.status.status).toEqual('success');
 	});
 });
