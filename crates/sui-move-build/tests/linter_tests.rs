@@ -68,7 +68,7 @@ fn run_tests(path: &Path) -> anyhow::Result<()> {
         SelfTransferVerifier.visitor(),
         CustomStateChangeVerifier.visitor(),
         CoinFieldVisitor.visitor(),
-        FreezeWrappedVisitor.visitor(),
+        FreezeWrappedVisitor::default().visitor(),
     ];
     let (filter_attr_name, filters) = known_filters_for_test();
     let (files, comments_and_compiler_res) = Compiler::from_files(

@@ -142,7 +142,7 @@ impl BuildConfig {
                     SelfTransferVerifier.visitor(),
                     CustomStateChangeVerifier.visitor(),
                     CoinFieldVisitor.visitor(),
-                    FreezeWrappedVisitor.visitor(),
+                    FreezeWrappedVisitor::default().visitor(),
                 ];
                 let (filter_attr_name, filters) = known_filters();
                 compiler
