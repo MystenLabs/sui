@@ -32,6 +32,7 @@ alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "7be09c99471eff736196b54a1ab80b436eae6672", default-features = false }
 anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "7be09c99471eff736196b54a1ab80b436eae6672", default-features = false }
+anemo-tls = { git = "https://github.com/mystenlabs/anemo.git", rev = "7be09c99471eff736196b54a1ab80b436eae6672", default-features = false }
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "7be09c99471eff736196b54a1ab80b436eae6672", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
@@ -1178,6 +1179,7 @@ alloc-stdlib = { version = "0.2", default-features = false }
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "7be09c99471eff736196b54a1ab80b436eae6672", default-features = false }
 anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "7be09c99471eff736196b54a1ab80b436eae6672", default-features = false }
 anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "7be09c99471eff736196b54a1ab80b436eae6672", default-features = false }
+anemo-tls = { git = "https://github.com/mystenlabs/anemo.git", rev = "7be09c99471eff736196b54a1ab80b436eae6672", default-features = false }
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "7be09c99471eff736196b54a1ab80b436eae6672", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
