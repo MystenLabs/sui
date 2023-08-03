@@ -19,3 +19,10 @@ export interface PaginatedPoolSummary {
 	hasNextPage: boolean;
 	nextCursor?: EventId | null;
 }
+
+export interface UserPosition {
+	availableBaseAmount: bigint;
+	lockedBaseAmount: bigint;
+	availableQuoteAmount: bigint;
+	lockedQuoteAmount: bigint;
+}

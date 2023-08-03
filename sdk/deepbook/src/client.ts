@@ -1,20 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { bcs } from '@mysten/sui.js/bcs';
 import {
 	DevInspectResults,
 	OrderArguments,
 	PaginatedEvents,
 	PaginationArguments,
 } from '@mysten/sui.js/client';
-import { SUI_CLOCK_OBJECT_ID, normalizeStructTag, parseStructTag } from '@mysten/sui.js/utils';
+import {
+	SUI_CLOCK_OBJECT_ID,
+	normalizeStructTag,
+	normalizeSuiAddress,
+	normalizeSuiObjectId,
+	parseStructTag,
+} from '@mysten/sui.js/utils';
 import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { MODULE_CLOB, PACKAGE_ID, NORMALIZED_SUI_COIN_TYPE } from './utils';
-import { PaginatedPoolSummary, PoolSummary } from './types/pool';
+import { PaginatedPoolSummary, PoolSummary, UserPosition } from './types/pool';
 import { Coin } from '@mysten/sui.js';
 
-const DUMMY_ADDRESS = '0x0';
+const DUMMY_ADDRESS = normalizeSuiAddress('0x123');
 
 export class DeepBookClient {
 	/**
@@ -103,6 +110,11 @@ export class DeepBookClient {
 		};
 	}
 
+	/**
+	 * @description Fetch metadata for a pool
+	 * @param poolId object id of the pool
+	 * @returns Metadata for the Pool
+	 */
 	async getPoolInfo(poolId: string): Promise<PoolSummary> {
 		const resp = await this.suiClient.getObject({
 			id: poolId,
@@ -154,48 +166,52 @@ export class DeepBookClient {
 
 	/**
 	 * @description: get the base and quote token in custodian account
-	 * @param baseAssetType baseAssetType of a certain pair, eg: 0x5378a0e7495723f7d942366a125a6556cf56f573fa2bb7171b554a2986c4229a::weth::WETH
-	 * @param quoteAssetType quoteAssetType of a certain pair, eg: 0x5378a0e7495723f7d942366a125a6556cf56f573fa2bb7171b554a2986c4229a::usdt::USDT
 	 * @param poolId the pool id, eg: 0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4
 	 * @param accountCap your accountCap, eg: 0x6f699fef193723277559c8f499ca3706121a65ac96d273151b8e52deb29135d3. If not provided, `this.accountCap` will be used.
 	 */
-	async getUsrPosition(
-		baseAssetType: string,
-		quoteAssetType: string,
+	async getUserPosition(
 		poolId: string,
 		accountCap: string | undefined = undefined,
-	): Promise<DevInspectResults> {
+	): Promise<UserPosition> {
 		const txb = new TransactionBlock();
 		const cap = this.#checkAccountCap(accountCap);
+		const { baseAsset, quoteAsset } = await this.getPoolInfo(poolId);
+
 		txb.moveCall({
-			typeArguments: [baseAssetType, quoteAssetType],
+			typeArguments: [baseAsset, quoteAsset],
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::account_balance`,
-			arguments: [txb.object(poolId), txb.object(cap)],
+			arguments: [txb.object(normalizeSuiObjectId(poolId)), txb.object(cap)],
 		});
 		txb.setSender(this.currentAddress);
-		return await this.suiClient.devInspectTransactionBlock({
-			transactionBlock: txb,
-			sender: this.currentAddress,
-		});
+		const [availableBaseAmount, lockedBaseAmount, availableQuoteAmount, lockedQuoteAmount] = (
+			await this.suiClient.devInspectTransactionBlock({
+				transactionBlock: txb,
+				sender: this.currentAddress,
+			})
+		).results![0].returnValues!.map(([bytes, _]) => BigInt(bcs.de('u64', Uint8Array.from(bytes))));
+		return {
+			availableBaseAmount,
+			lockedBaseAmount,
+			availableQuoteAmount,
+			lockedQuoteAmount,
+		};
 	}
 
 	/**
 	 * @description get the open orders of the current user
-	 * @param baseAssetType baseAssetType of a certain pair, eg: 0x5378a0e7495723f7d942366a125a6556cf56f573fa2bb7171b554a2986c4229a::weth::WETH
-	 * @param quoteAssetType quoteAssetType of a certain pair, eg: 0x5378a0e7495723f7d942366a125a6556cf56f573fa2bb7171b554a2986c4229a::usdt::USDT
 	 * @param poolId the pool id, eg: 0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4
 	 * @param accountCap your accountCap, eg: 0x6f699fef193723277559c8f499ca3706121a65ac96d273151b8e52deb29135d3. If not provided, `this.accountCap` will be used.
 	 */
 	async listOpenOrders(
-		baseAssetType: string,
-		quoteAssetType: string,
 		poolId: string,
 		accountCap: string | undefined = undefined,
 	): Promise<DevInspectResults> {
 		const txb = new TransactionBlock();
 		const cap = this.#checkAccountCap(accountCap);
+		const { baseAsset, quoteAsset } = await this.getPoolInfo(poolId);
+
 		txb.moveCall({
-			typeArguments: [baseAssetType, quoteAssetType],
+			typeArguments: [baseAsset, quoteAsset],
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::list_open_orders`,
 			arguments: [txb.object(poolId), txb.object(cap)],
 		});
@@ -267,7 +283,7 @@ export class DeepBookClient {
 		if (cap === undefined) {
 			throw new Error('accountCap is undefined, please call setAccountCap() first');
 		}
-		return cap;
+		return normalizeSuiObjectId(cap);
 	}
 
 	async #getCoinType(coinId: string) {

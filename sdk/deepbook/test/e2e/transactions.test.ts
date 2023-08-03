@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 
 import {
 	TestToolbox,
@@ -11,6 +11,7 @@ import {
 	depositAsset,
 } from './setup';
 import { PoolSummary } from '../../src/types/pool';
+import { DeepBookClient } from '../../src';
 
 const DEPOSIT_AMOUNT = 100;
 
@@ -19,11 +20,11 @@ describe('Interacting with the pool', () => {
 	let pool: PoolSummary;
 	let accountCapId: string;
 
-	beforeEach(async () => {
+	beforeAll(async () => {
 		toolbox = await setupSuiClient();
 		pool = await setupPool(toolbox);
 		accountCapId = await setupDeepbookAccount(toolbox);
-		depositAsset(toolbox, pool.poolId, accountCapId, DEPOSIT_AMOUNT);
+		await depositAsset(toolbox, pool.poolId, accountCapId, DEPOSIT_AMOUNT);
 	});
 
 	it('test creating a pool', async () => {
@@ -36,5 +37,8 @@ describe('Interacting with the pool', () => {
 
 	it('test deposit base asset', async () => {
 		expect(accountCapId).toBeDefined();
+		const deepbook = new DeepBookClient(toolbox.client, accountCapId);
+		const resp = await deepbook.getUserPosition(pool.poolId);
+		expect(resp.availableBaseAmount).toBe(BigInt(DEPOSIT_AMOUNT));
 	});
 });
