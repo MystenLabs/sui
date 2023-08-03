@@ -704,8 +704,13 @@ type BalanceChange {
 
 type Event {
   id : ID!
-  moduleId: MoveModuleId
-  type: MoveType
+
+  # Module that the event was emitted by
+  sendingModuleId: MoveModuleId
+
+  # Type of the event being sent
+  eventType: MoveType
+
   sender: Address
   timestamp: DateTime
 
