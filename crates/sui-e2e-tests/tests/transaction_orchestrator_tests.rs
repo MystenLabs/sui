@@ -79,9 +79,16 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let (_, _, executed_locally) = *result;
     assert!(executed_locally);
 
+    let metrics = KeyValueStoreMetrics::new_for_tests();
+    let kv_store = Arc::new(TransactionKeyValueStore::new(
+        "rocksdb",
+        metrics,
+        self.clone(),
+    ));
+
     assert!(handle
         .state()
-        .get_executed_transaction_and_effects(digest)
+        .get_executed_transaction_and_effects(digest, kv_store)
         .await
         .is_ok());
 

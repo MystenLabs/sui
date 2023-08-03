@@ -12,7 +12,7 @@ use jsonrpsee::RpcModule;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use sui_storage::indexes::TotalBalance;
 use sui_types::digests::TransactionDigest;
-use sui_types::transaction::VerifiedTransaction;
+use sui_types::transaction::Transaction;
 use tap::TapFallible;
 use tracing::{debug, info, instrument};
 
@@ -21,6 +21,7 @@ use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{Balance, Coin as SuiCoin};
 use sui_json_rpc_types::{CoinPage, SuiCoinMetadata};
 use sui_open_rpc::Module;
+use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::coin::{CoinMetadata, TreasuryCap};
@@ -55,10 +56,22 @@ pub struct CoinReadApi {
 }
 
 impl CoinReadApi {
-    pub fn new(state: Arc<AuthorityState>, metrics: Arc<JsonRpcMetrics>) -> Self {
+    pub fn new(
+        state: Arc<AuthorityState>,
+        transaction_kv_store: Arc<TransactionKeyValueStore>,
+        metrics: Arc<JsonRpcMetrics>,
+    ) -> Self {
         Self {
-            internal: Box::new(CoinReadInternalImpl::new(state, metrics)),
+            internal: Box::new(CoinReadInternalImpl::new(
+                state,
+                transaction_kv_store,
+                metrics,
+            )),
         }
+    }
+
+    pub fn get_kv_store(&self) -> Arc<TransactionKeyValueStore> {
+        self.internal.get_kv_store()
     }
 }
 
@@ -200,6 +213,7 @@ impl CoinReadApiServer for CoinReadApi {
                 .find_package_object(
                     &coin_struct.address.into(),
                     CoinMetadata::type_(coin_struct),
+                    self.get_kv_store(),
                 )
                 .await
                 .ok();
@@ -219,6 +233,7 @@ impl CoinReadApiServer for CoinReadApi {
                     .find_package_object(
                         &coin_struct.address.into(),
                         TreasuryCap::type_(coin_struct),
+                        self.get_kv_store(),
                     )
                     .await?;
                 let treasury_cap = TreasuryCap::from_bcs_bytes(
@@ -249,7 +264,8 @@ pub trait State {
     async fn get_executed_transaction_and_effects(
         &self,
         digest: TransactionDigest,
-    ) -> SuiResult<(VerifiedTransaction, TransactionEffects)>;
+        kv_store: &Arc<TransactionKeyValueStore>,
+    ) -> SuiResult<(Transaction, TransactionEffects)>;
     async fn get_balance(&self, owner: SuiAddress, coin_type: TypeTag) -> SuiResult<TotalBalance>;
     async fn get_all_balance(
         &self,
@@ -294,8 +310,10 @@ impl State for AuthorityState {
     async fn get_executed_transaction_and_effects(
         &self,
         digest: TransactionDigest,
-    ) -> SuiResult<(VerifiedTransaction, TransactionEffects)> {
-        self.get_executed_transaction_and_effects(digest).await
+        kv_store: &Arc<TransactionKeyValueStore>,
+    ) -> SuiResult<(Transaction, TransactionEffects)> {
+        self.get_executed_transaction_and_effects(digest, kv_store)
+            .await
     }
 
     async fn get_balance(&self, owner: SuiAddress, coin_type: TypeTag) -> SuiResult<TotalBalance> {
@@ -328,12 +346,13 @@ async fn find_package_object_id(
     state: Arc<dyn State + Send + Sync>,
     package_id: ObjectID,
     object_struct_tag: StructTag,
+    kv_store: Arc<TransactionKeyValueStore>,
 ) -> RpcInterimResult<ObjectID> {
     spawn_monitored_task!(async move {
         let publish_txn_digest = state.find_publish_txn_digest(package_id)?;
 
         let (_, effect) = state
-            .get_executed_transaction_and_effects(publish_txn_digest)
+            .get_executed_transaction_and_effects(publish_txn_digest, &kv_store)
             .await?;
 
         for ((id, _, _), _) in effect.created() {
@@ -360,6 +379,7 @@ async fn find_package_object_id(
 #[async_trait]
 pub trait CoinReadInternal {
     fn get_state(&self) -> Arc<dyn State + Send + Sync>;
+    fn get_kv_store(&self) -> Arc<TransactionKeyValueStore>;
     async fn get_object(&self, object_id: &ObjectID) -> RpcInterimResult<Option<Object>>;
     async fn get_balance(
         &self,
@@ -374,6 +394,7 @@ pub trait CoinReadInternal {
         &self,
         package_id: &ObjectID,
         object_struct_tag: StructTag,
+        kv_store: Arc<TransactionKeyValueStore>,
     ) -> RpcInterimResult<Object>;
     async fn get_coins_iterator(
         &self,
@@ -387,12 +408,21 @@ pub trait CoinReadInternal {
 pub struct CoinReadInternalImpl {
     // Trait object w/ Arc as we have methods that require sharing this across multiple threads
     state: Arc<dyn State + Send + Sync>,
+    pub transaction_kv_store: Arc<TransactionKeyValueStore>,
     pub metrics: Arc<JsonRpcMetrics>,
 }
 
 impl CoinReadInternalImpl {
-    pub fn new(state: Arc<AuthorityState>, metrics: Arc<JsonRpcMetrics>) -> Self {
-        Self { state, metrics }
+    pub fn new(
+        state: Arc<AuthorityState>,
+        transaction_kv_store: Arc<TransactionKeyValueStore>,
+        metrics: Arc<JsonRpcMetrics>,
+    ) -> Self {
+        Self {
+            state,
+            transaction_kv_store,
+            metrics,
+        }
     }
 }
 
@@ -400,6 +430,10 @@ impl CoinReadInternalImpl {
 impl CoinReadInternal for CoinReadInternalImpl {
     fn get_state(&self) -> Arc<dyn State + Send + Sync> {
         self.state.clone()
+    }
+
+    fn get_kv_store(&self) -> Arc<TransactionKeyValueStore> {
+        self.transaction_kv_store.clone()
     }
 
     async fn get_object(&self, object_id: &ObjectID) -> RpcInterimResult<Option<Object>> {
@@ -425,9 +459,11 @@ impl CoinReadInternal for CoinReadInternalImpl {
         &self,
         package_id: &ObjectID,
         object_struct_tag: StructTag,
+        kv_store: Arc<TransactionKeyValueStore>,
     ) -> RpcInterimResult<Object> {
         let state = self.get_state();
-        let object_id = find_package_object_id(state, *package_id, object_struct_tag).await?;
+        let object_id =
+            find_package_object_id(state, *package_id, object_struct_tag, kv_store).await?;
         Ok(self.state.get_object_read(&object_id)?.into_object()?)
     }
 
@@ -572,9 +608,16 @@ mod tests {
                     predicate::eq(true),
                 )
                 .return_once(move |_, _, _, _| Ok(vec![gas_coin_clone]));
+            let metrics = KeyValueStoreMetrics::new_for_tests();
+            let transaction_kv_store = Arc::new(TransactionKeyValueStore::new(
+                "rocksdb",
+                metrics,
+                self.clone(),
+            ));
             let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+                transaction_kv_store,
             };
             let coin_read_api = CoinReadApi {
                 internal: Box::new(internal),
@@ -613,9 +656,16 @@ mod tests {
                     predicate::eq(true),
                 )
                 .return_once(move |_, _, _, _| Ok(coins_clone));
+            let metrics = KeyValueStoreMetrics::new_for_tests();
+            let transaction_kv_store = Arc::new(TransactionKeyValueStore::new(
+                "rocksdb",
+                metrics,
+                self.clone(),
+            ));
             let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+                transaction_kv_store,
             };
             let coin_read_api = CoinReadApi {
                 internal: Box::new(internal),
@@ -656,9 +706,16 @@ mod tests {
                     predicate::eq(true),
                 )
                 .return_once(move |_, _, _, _| Ok(vec![coin_clone]));
+            let metrics = KeyValueStoreMetrics::new_for_tests();
+            let transaction_kv_store = Arc::new(TransactionKeyValueStore::new(
+                "rocksdb",
+                metrics,
+                self.clone(),
+            ));
             let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+                transaction_kv_store,
             };
             let coin_read_api = CoinReadApi {
                 internal: Box::new(internal),
@@ -706,9 +763,16 @@ mod tests {
                     predicate::eq(true),
                 )
                 .return_once(move |_, _, _, _| Ok(coins_clone));
+            let metrics = KeyValueStoreMetrics::new_for_tests();
+            let transaction_kv_store = Arc::new(TransactionKeyValueStore::new(
+                "rocksdb",
+                metrics,
+                self.clone(),
+            ));
             let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+                transaction_kv_store,
             };
             let coin_read_api = CoinReadApi {
                 internal: Box::new(internal),
@@ -785,9 +849,16 @@ mod tests {
             mock_state
                 .expect_get_owned_coins()
                 .returning(move |_, _, _, _| Err(SuiError::IndexStoreNotAvailable));
+            let metrics = KeyValueStoreMetrics::new_for_tests();
+            let transaction_kv_store = Arc::new(TransactionKeyValueStore::new(
+                "rocksdb",
+                metrics,
+                self.clone(),
+            ));
             let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+                transaction_kv_store,
             };
             let coin_read_api = CoinReadApi {
                 internal: Box::new(internal),
@@ -818,9 +889,16 @@ mod tests {
                 .returning(move |_, _, _, _| {
                     Err(TypedStoreError::RocksDBError("mock rocksdb error".to_string()).into())
                 });
+            let metrics = KeyValueStoreMetrics::new_for_tests();
+            let transaction_kv_store = Arc::new(TransactionKeyValueStore::new(
+                "rocksdb",
+                metrics,
+                self.clone(),
+            ));
             let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+                transaction_kv_store,
             };
             let coin_read_api = CoinReadApi {
                 internal: Box::new(internal),
@@ -864,9 +942,16 @@ mod tests {
                     predicate::eq(false),
                 )
                 .return_once(move |_, _, _, _| Ok(vec![gas_coin_clone]));
+            let metrics = KeyValueStoreMetrics::new_for_tests();
+            let transaction_kv_store = Arc::new(TransactionKeyValueStore::new(
+                "rocksdb",
+                metrics,
+                self.clone(),
+            ));
             let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+                transaction_kv_store,
             };
             let coin_read_api = CoinReadApi {
                 internal: Box::new(internal),
@@ -912,9 +997,16 @@ mod tests {
                     predicate::eq(false),
                 )
                 .return_once(move |_, _, _, _| Ok(coins_clone));
+            let metrics = KeyValueStoreMetrics::new_for_tests();
+            let transaction_kv_store = Arc::new(TransactionKeyValueStore::new(
+                "rocksdb",
+                metrics,
+                self.clone(),
+            ));
             let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+                transaction_kv_store,
             };
             let coin_read_api = CoinReadApi {
                 internal: Box::new(internal),
@@ -941,9 +1033,16 @@ mod tests {
                     panic!("should not be called with any other object id")
                 }
             });
+            let metrics = KeyValueStoreMetrics::new_for_tests();
+            let transaction_kv_store = Arc::new(TransactionKeyValueStore::new(
+                "rocksdb",
+                metrics,
+                self.clone(),
+            ));
             let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+                transaction_kv_store,
             };
             let coin_read_api = CoinReadApi {
                 internal: Box::new(internal),
@@ -970,9 +1069,16 @@ mod tests {
             let mut mock_state = MockState::new();
             mock_state.expect_get_object().returning(move |_| Ok(None));
 
+            let metrics = KeyValueStoreMetrics::new_for_tests();
+            let transaction_kv_store = Arc::new(TransactionKeyValueStore::new(
+                "rocksdb",
+                metrics,
+                self.clone(),
+            ));
             let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+                transaction_kv_store,
             };
 
             let coin_read_api = CoinReadApi {
@@ -1017,9 +1123,16 @@ mod tests {
                         num_coins: 9,
                     })
                 });
+            let metrics = KeyValueStoreMetrics::new_for_tests();
+            let transaction_kv_store = Arc::new(TransactionKeyValueStore::new(
+                "rocksdb",
+                metrics,
+                self.clone(),
+            ));
             let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+                transaction_kv_store,
             };
 
             let coin_read_api = CoinReadApi {
@@ -1059,9 +1172,16 @@ mod tests {
                         num_coins: 11,
                     })
                 });
+            let metrics = KeyValueStoreMetrics::new_for_tests();
+            let transaction_kv_store = Arc::new(TransactionKeyValueStore::new(
+                "rocksdb",
+                metrics,
+                self.clone(),
+            ));
             let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+                transaction_kv_store,
             };
 
             let coin_read_api = CoinReadApi {
@@ -1117,9 +1237,16 @@ mod tests {
             mock_state
                 .expect_get_balance()
                 .returning(move |_, _| Err(SuiError::IndexStoreNotAvailable));
+            let metrics = KeyValueStoreMetrics::new_for_tests();
+            let transaction_kv_store = Arc::new(TransactionKeyValueStore::new(
+                "rocksdb",
+                metrics,
+                self.clone(),
+            ));
             let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+                transaction_kv_store,
             };
             let coin_read_api = CoinReadApi {
                 internal: Box::new(internal),
@@ -1149,9 +1276,16 @@ mod tests {
             mock_state
                 .expect_get_balance()
                 .returning(move |_, _| Err(SuiError::ExecutionError("mock db error".to_string())));
+            let metrics = KeyValueStoreMetrics::new_for_tests();
+            let transaction_kv_store = Arc::new(TransactionKeyValueStore::new(
+                "rocksdb",
+                metrics,
+                self.clone(),
+            ));
             let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+                transaction_kv_store,
             };
             let coin_read_api = CoinReadApi {
                 internal: Box::new(internal),
@@ -1209,9 +1343,16 @@ mod tests {
                     );
                     Ok(Arc::new(hash_map))
                 });
+            let metrics = KeyValueStoreMetrics::new_for_tests();
+            let transaction_kv_store = Arc::new(TransactionKeyValueStore::new(
+                "rocksdb",
+                metrics,
+                self.clone(),
+            ));
             let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+                transaction_kv_store,
             };
             let coin_read_api = CoinReadApi {
                 internal: Box::new(internal),
@@ -1253,9 +1394,16 @@ mod tests {
             mock_state
                 .expect_get_all_balance()
                 .returning(move |_| Err(SuiError::IndexStoreNotAvailable));
+            let metrics = KeyValueStoreMetrics::new_for_tests();
+            let transaction_kv_store = Arc::new(TransactionKeyValueStore::new(
+                "rocksdb",
+                metrics,
+                self.clone(),
+            ));
             let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+                transaction_kv_store,
             };
             let coin_read_api = CoinReadApi {
                 internal: Box::new(internal),
@@ -1303,8 +1451,12 @@ mod tests {
             // return TreasuryCap instead of CoinMetadata to set up test
             mock_internal
                 .expect_find_package_object()
-                .with(predicate::always(), predicate::eq(coin_metadata_struct))
-                .return_once(move |object_id, _| {
+                .with(
+                    predicate::always(),
+                    predicate::eq(coin_metadata_struct),
+                    predicate::always(),
+                )
+                .return_once(move |object_id, _, _| {
                     if object_id == &package_id {
                         Ok(coin_metadata_object)
                     } else {
@@ -1324,8 +1476,6 @@ mod tests {
         #[tokio::test]
         async fn test_object_not_found() {
             let transaction_digest = TransactionDigest::from([0; 32]);
-            let verified_transaction =
-                VerifiedTransaction::new_unchecked(create_fake_transaction());
             let transaction_effects: TransactionEffects =
                 TransactionEffects::V1(TransactionEffectsV1::default());
 
@@ -1335,11 +1485,19 @@ mod tests {
                 .return_once(move |_| Ok(transaction_digest));
             mock_state
                 .expect_get_executed_transaction_and_effects()
-                .return_once(move |_| Ok((verified_transaction, transaction_effects)));
+                .return_once(move |_| Ok((create_fake_transaction(), transaction_effects)));
+
+            let metrics = KeyValueStoreMetrics::new_for_tests();
+            let transaction_kv_store = Arc::new(TransactionKeyValueStore::new(
+                "rocksdb",
+                metrics,
+                self.clone(),
+            ));
 
             let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+                transaction_kv_store,
             };
             let coin_read_api = CoinReadApi {
                 internal: Box::new(internal),
@@ -1370,8 +1528,12 @@ mod tests {
             // return TreasuryCap instead of CoinMetadata to set up test
             mock_internal
                 .expect_find_package_object()
-                .with(predicate::always(), predicate::eq(coin_metadata_struct))
-                .returning(move |object_id, _| {
+                .with(
+                    predicate::always(),
+                    predicate::eq(coin_metadata_struct),
+                    predicate::always(),
+                )
+                .returning(move |object_id, _, _| {
                     if object_id == &package_id {
                         Ok(treasury_cap_object.clone())
                     } else {
@@ -1418,8 +1580,12 @@ mod tests {
             let mut mock_internal = MockCoinReadInternal::new();
             mock_internal
                 .expect_find_package_object()
-                .with(predicate::always(), predicate::eq(treasury_cap_struct))
-                .returning(move |object_id, _| {
+                .with(
+                    predicate::always(),
+                    predicate::eq(treasury_cap_struct),
+                    predicate::always(),
+                )
+                .returning(move |object_id, _, _| {
                     if object_id == &package_id {
                         Ok(treasury_cap_object.clone())
                     } else {
@@ -1443,8 +1609,6 @@ mod tests {
             let package_id = get_test_package_id();
             let (coin_name, _, _, _, _) = get_test_treasury_cap_peripherals(package_id);
             let transaction_digest = TransactionDigest::from([0; 32]);
-            let verified_transaction =
-                VerifiedTransaction::new_unchecked(create_fake_transaction());
             let transaction_effects: TransactionEffects =
                 TransactionEffects::V1(TransactionEffectsV1::default());
 
@@ -1454,11 +1618,19 @@ mod tests {
                 .return_once(move |_| Ok(transaction_digest));
             mock_state
                 .expect_get_executed_transaction_and_effects()
-                .return_once(move |_| Ok((verified_transaction, transaction_effects)));
+                .return_once(move |_| Ok((create_fake_transaction(), transaction_effects)));
+
+            let metrics = KeyValueStoreMetrics::new_for_tests();
+            let transaction_kv_store = Arc::new(TransactionKeyValueStore::new(
+                "rocksdb",
+                metrics,
+                self.clone(),
+            ));
 
             let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+                transaction_kv_store,
             };
             let coin_read_api = CoinReadApi {
                 internal: Box::new(internal),
@@ -1493,8 +1665,12 @@ mod tests {
             let mut mock_internal = MockCoinReadInternal::new();
             mock_internal
                 .expect_find_package_object()
-                .with(predicate::always(), predicate::eq(treasury_cap_struct))
-                .returning(move |object_id, _| {
+                .with(
+                    predicate::always(),
+                    predicate::eq(treasury_cap_struct),
+                    predicate::always(),
+                )
+                .returning(move |object_id, _, _| {
                     if object_id == &package_id {
                         Ok(coin_metadata_object.clone())
                     } else {
