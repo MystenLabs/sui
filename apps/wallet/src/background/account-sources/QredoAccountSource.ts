@@ -7,7 +7,7 @@ import {
 	type AccountSourceSerializedUI,
 } from './AccountSource';
 import { accountSourcesEvents } from './events';
-import { backupDB, db } from '../db';
+import { backupDB, getDB } from '../db';
 import { type QredoConnectIdentity } from '../qredo/types';
 import { isSameQredoConnection } from '../qredo/utils';
 import { makeUniqueKey } from '../storage-utils';
@@ -82,7 +82,7 @@ export class QredoAccountSource extends AccountSource<QredoAccountSourceSerializ
 				throw new Error('Qredo account source already exists');
 			}
 		}
-		await db.accountSources.put(dataSerialized);
+		await (await getDB()).accountSources.put(dataSerialized);
 		await backupDB();
 		accountSourcesEvents.emit('accountSourcesChanged');
 		return new QredoAccountSource(dataSerialized.id);

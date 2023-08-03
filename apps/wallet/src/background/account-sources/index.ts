@@ -9,7 +9,7 @@ import {
 import { MnemonicAccountSource } from './MnemonicAccountSource';
 import { QredoAccountSource } from './QredoAccountSource';
 import { type UiConnection } from '../connections/UiConnection';
-import { db } from '../db';
+import { getDB } from '../db';
 import { type QredoConnectIdentity } from '../qredo/types';
 import { isSameQredoConnection } from '../qredo/utils';
 import { type Message, createMessage } from '_src/shared/messaging/messages';
@@ -31,6 +31,7 @@ function toAccountSource(accountSource: AccountSourceSerialized) {
 }
 
 export async function getAccountSources(filter?: { type: AccountSourceType }) {
+	const db = await getDB();
 	return (
 		await (filter?.type
 			? await db.accountSources.where('type').equals(filter.type)
@@ -40,7 +41,7 @@ export async function getAccountSources(filter?: { type: AccountSourceType }) {
 }
 
 export async function getAccountSourceByID(id: string) {
-	const serializedAccountSource = await db.accountSources.get(id);
+	const serializedAccountSource = await (await getDB()).accountSources.get(id);
 	if (!serializedAccountSource) {
 		return null;
 	}
@@ -77,7 +78,7 @@ export async function getQredoAccountSource(filter: string | QredoConnectIdentit
 		accountSource = await getAccountSourceByID(filter);
 	} else {
 		const accountSourceSerialized = (
-			await db.accountSources.where('type').equals('qredo').toArray()
+			await (await getDB()).accountSources.where('type').equals('qredo').toArray()
 		)
 			.filter(QredoAccountSource.isOfType)
 			.find((anAccountSource) => isSameQredoConnection(filter, anAccountSource));

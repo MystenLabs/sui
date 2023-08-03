@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { db } from '../db';
+import { getDB } from '../db';
 import {
 	clearEphemeralValue,
 	getEphemeralValue,
@@ -28,7 +28,7 @@ export abstract class AccountSource<
 	abstract lock(): Promise<void>;
 
 	protected async getStoredData() {
-		const data = await db.accountSources.get(this.id);
+		const data = await (await getDB()).accountSources.get(this.id);
 		if (!data) {
 			throw new Error(`Account data not found. (id: ${this.id})`);
 		}

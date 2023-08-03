@@ -15,7 +15,7 @@ import {
 import { accountSourcesEvents } from './events';
 import { getAllAccounts } from '../accounts';
 import { MnemonicAccount, type MnemonicSerializedAccount } from '../accounts/MnemonicAccount';
-import { backupDB, db } from '../db';
+import { backupDB, getDB } from '../db';
 import { makeUniqueKey } from '../storage-utils';
 import {
 	getRandomEntropy,
@@ -77,7 +77,7 @@ export class MnemonicAccountSource extends AccountSource<
 				throw new Error('Mnemonic account source already exists');
 			}
 		}
-		await db.accountSources.put(dataSerialized);
+		await (await getDB()).accountSources.put(dataSerialized);
 		await backupDB();
 		accountSourcesEvents.emit('accountSourcesChanged');
 		return new MnemonicAccountSource(dataSerialized.id);

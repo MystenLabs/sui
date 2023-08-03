@@ -8,7 +8,7 @@ import {
 } from '@mysten/sui.js/cryptography';
 import { blake2b } from '@noble/hashes/blake2b';
 import { accountsEvents } from './events';
-import { db } from '../db';
+import { getDB } from '../db';
 import {
 	clearEphemeralValue,
 	getEphemeralValue,
@@ -57,7 +57,7 @@ export abstract class Account<
 	}
 
 	protected async getStoredData() {
-		const data = await db.accounts.get(this.id);
+		const data = await (await getDB()).accounts.get(this.id);
 		if (!data) {
 			throw new Error(`Account data not found. (id: ${this.id})`);
 		}
@@ -92,7 +92,7 @@ export abstract class Account<
 	}
 
 	protected async onUnlocked() {
-		await db.accounts.update(this.id, { lastUnlockedOn: Date.now() });
+		await (await getDB()).accounts.update(this.id, { lastUnlockedOn: Date.now() });
 		accountsEvents.emit('accountStatusChanged', { accountID: this.id });
 	}
 
@@ -102,7 +102,7 @@ export abstract class Account<
 		if (allowRead) {
 			return;
 		}
-		await db.accounts.update(this.id, { lastUnlockedOn: null });
+		await (await getDB()).accounts.update(this.id, { lastUnlockedOn: null });
 		accountsEvents.emit('accountStatusChanged', { accountID: this.id });
 	}
 }

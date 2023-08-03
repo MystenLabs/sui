@@ -11,7 +11,7 @@ import { accountsEvents } from './events';
 import { getAccountSourceByID } from '../account-sources';
 import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
 import { type UiConnection } from '../connections/UiConnection';
-import { backupDB, db } from '../db';
+import { backupDB, getDB } from '../db';
 import { getFromLocalStorage, makeUniqueKey } from '../storage-utils';
 import { createMessage, type Message } from '_src/shared/messaging/messages';
 import {
@@ -36,6 +36,7 @@ function toAccount(account: SerializedAccount) {
 }
 
 export async function getAllAccounts(filter?: { sourceID: string }) {
+	const db = await getDB();
 	let accounts;
 	if (filter?.sourceID) {
 		accounts = await db.accounts.where('sourceID').equals(filter.sourceID);
@@ -46,7 +47,7 @@ export async function getAllAccounts(filter?: { sourceID: string }) {
 }
 
 export async function getAccountByID(id: string) {
-	const serializedAccount = await db.accounts.get(id);
+	const serializedAccount = await (await getDB()).accounts.get(id);
 	if (!serializedAccount) {
 		return null;
 	}
@@ -54,7 +55,7 @@ export async function getAccountByID(id: string) {
 }
 
 export async function getAccountsByAddress(address: string) {
-	return (await db.accounts.where('address').equals(address).toArray()).map(toAccount);
+	return (await (await getDB()).accounts.where('address').equals(address).toArray()).map(toAccount);
 }
 
 export async function getAllSerializedUIAccounts() {
@@ -62,7 +63,7 @@ export async function getAllSerializedUIAccounts() {
 }
 
 export async function isAccountsInitialized() {
-	return (await db.accounts.count()) > 0;
+	return (await (await getDB()).accounts.count()) > 0;
 }
 
 export async function getActiveAccount() {
@@ -91,7 +92,7 @@ async function deleteQredoAccounts<T extends SerializedAccount>(accounts: Omit<T
 	if (!newAccountsQredoSourceIDs.size) {
 		return 0;
 	}
-	return db.accounts
+	return (await getDB()).accounts
 		.where('sourceID')
 		.anyOf(Array.from(newAccountsQredoSourceIDs.values()))
 		.filter(
@@ -105,6 +106,7 @@ async function deleteQredoAccounts<T extends SerializedAccount>(accounts: Omit<T
 }
 
 export async function addNewAccounts<T extends SerializedAccount>(accounts: Omit<T, 'id'>[]) {
+	const db = await getDB();
 	const accountsCreated = await db.transaction('rw', db.accounts, async () => {
 		// delete all existing qredo accounts that have the same sourceID (come from the same connection)
 		// and not in the new accounts list

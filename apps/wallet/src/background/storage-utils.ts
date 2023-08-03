@@ -13,19 +13,13 @@ import {
 
 import type { Storage } from 'webextension-polyfill';
 
-/**
- * [NOTE: not a complete list]
- * Keys that can be found in local storage
- */
-export type LocalStorageKey = 'active-account-id-key';
-
 const SESSION_STORAGE: Storage.LocalStorageArea | null =
 	// @ts-expect-error chrome
 	global?.chrome?.storage?.session || null;
 
 async function getFromStorage<T>(
 	storage: Storage.LocalStorageArea,
-	key: LocalStorageKey | string, // TODO: try to log all LocalStorage keys and remove string
+	key: string,
 	defaultValue: T | null = null,
 ): Promise<T | null> {
 	return (await storage.get({ [key]: defaultValue }))[key];
