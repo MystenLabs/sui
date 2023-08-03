@@ -216,8 +216,11 @@ input TransactionBlockFilter {
 
   kind: TransactionBlockKindInput
   checkpoint: BigInt
-  fromAddress: SuiAddress
-  toAddress: SuiAddress
+
+  signAddress: SuiAddress
+  sentAddress: SuiAddress
+  recvAddress: SuiAddress
+  paidAddress: SuiAddress
 
   inputObject: SuiAddress
   changedObject: SuiAddress
@@ -278,12 +281,16 @@ type AmbiguousOwner implements Owner {}
 
 type Address implements Owner {
   transactionBlocksConnection(
-    first: Int, after: String, last: Int, before: String,
-    filter: AddressTransactionBlockFilter,
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+    relation: AddressTransactionBlockRelationship,
+    filter: TransactionBlockFilter,
   ): TransactionBlockConnection
 }
 
-enum AddressTransactionBlockFilter {
+enum AddressTransactionBlockRelationship {
   SIGN # Transactions this address has signed
   SENT # Transactions that transferred objects from this address
   RECV # Transactions that received objects into this address
@@ -311,6 +318,7 @@ type Object implements Owner {
     after: String,
     last: Int,
     before: String,
+    filter: TransactionBlockFilter,
   ): TransactionBlockConnection
 
   dynamicField(dynamicFieldName: DynamicFieldName!): DynamicField
