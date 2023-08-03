@@ -3,7 +3,6 @@
 
 # Open Questions
 # --------------
-# - Rules for nullabilit/non-nullability
 # - Pattern for multi-gets
 # - Encoding RPC errors
 # - `type` (vs `scalar`) for Move Types
@@ -44,16 +43,21 @@ type Query {
 
   # Range of checkpoints that the RPC has data available for (for data
   # that can be tied to a particular checkpoint).
-  availableRange: AvailableRange
+  availableRange: AvailableRange!
 
   owner(address: SuiAddress!): Owner
   object(address: SuiAddress!, version: BigInt): Object
   address(address: SuiAddress!): Address
 
+  # `epochId` defaults to the latest epoch.
   epoch(epochId: Int): Epoch
+
+  # `protocolVersion` defaults to the latest protocol version.
   protocolConfig(protocolVersion: Int): ProtocolConfig
 
+  # If no `filter` is provided, fetch the latest available checkpoint.
   checkpoint(filter: CheckpointFilter): Checkpoint
+
   transactionBlock(digest: String!): TransactionBlock
   coinMetadata(coinType: String!): CoinMetadata
 
@@ -93,6 +97,8 @@ type Query {
   # NB. Will be moved into a private, explorer-specific extension.
   networkMetrics: NetworkMetrics
   moveCallMetrics: MoveCallMetrics
+
+  # `checkpoint` defaults to the latest available checkpoint.
   checkpointAddressMetrics(checkpoint: BigInt): AddressMetric
 
   allEpochAddressMetricsConnection(
@@ -120,7 +126,7 @@ type Query {
 # start and the latest).  If the client has already processed some
 # prefix, up to cursor `P`, then they can resume with:
 #
-#    query { eventsConnection(after: P, before: E, filter F) }
+#    query { eventsConnection(after: P, before: E, filter: F) }
 #
 # The API for transactions is similar.
 type Subscription {
@@ -241,6 +247,7 @@ interface Owner {
     before: String,
   ): BalanceConnection
 
+  # `type` defaults to `0x2::sui::SUI`.
   coinsConnection(
     first: Int,
     after: String,
@@ -285,9 +292,9 @@ enum AddressTransactionBlockFilter {
 
 type Object implements Owner {
   id: ID!
+  version: BigInt!
+  digest: String!
   owner: AmbiguousOwner
-  version: BigInt
-  digest: String
 
   previousVersion: BigInt
   previousTransactionBlock: TransactionBlock
@@ -475,6 +482,7 @@ type Checkpoint {
   id: ID!
   digest: String!
   sequenceNumber: BigInt!
+
   timestamp: DateTime
   validatorSignature: Base64
 
@@ -505,6 +513,7 @@ type CommitteeMember {
 
 type TransactionBlock {
   digest: String!
+
   sender: Address
   gasInput: GasInput
   kind: TransactionBlockKind
@@ -622,6 +631,7 @@ type TransactionSignature {}
 type TransactionBlockEffects {
   digest: String!
   status: ExecutionStatus!
+
   errors: String
   transactionBlock: TransactionBlock
   dependencies: [TransactionBlock]
@@ -652,7 +662,7 @@ enum ExecutionStatus {
 
 type GasInput {
   gasSponsor: Address
-  gasPayment: [Object]
+  gasPayment: [Object!]
 
   gasPrice: BigInt
   gasBudget: BigInt
@@ -734,7 +744,7 @@ type CoinMetadata {
   iconURL: String
   supply: BigInt
 
-  asMoveObject: MoveObject
+  asMoveObject: MoveObject!
 }
 
 input DynamicFieldName {
@@ -756,7 +766,7 @@ type MoveObject {
 
   asCoin: Coin
   asStakedSui: StakedSui
-  asObject: Object
+  asObject: Object!
 }
 
 type MovePackage {
@@ -765,12 +775,12 @@ type MovePackage {
   normalizedModulesConnection(first: Int, after: String, last: Int, before: String): NormalizedModulesConnection
   normalizedModule(name: String!): NormalizedModule
 
-  asObject: Object
+  asObject: Object!
 }
 
 type MoveModuleId {
-  package: MovePackage
-  name: String
+  package: MovePackage!
+  name: String!
 }
 
 enum MoveAbility {
@@ -801,9 +811,9 @@ type MoveFunctionTypeParameterDecl {
 }
 
 type NormalizedModule {
-  fileFormatVersion: Int
+  fileFormatVersion: Int!
 
-  moduleId: MoveModuleId
+  moduleId: MoveModuleId!
   friends: [MoveModuleId]
 
   structsConnection(first: Int, after: String, last: Int, before: String): NormalizedStructConnection
@@ -814,8 +824,8 @@ type NormalizedModule {
 }
 
 type NormalizedStruct {
-  module: NormalizedModule
-  name: String
+  module: NormalizedModule!
+  name: String!
 
   abilities: [MoveAbility]
   typeParameters: [MoveStructTypeParameterDecl]
@@ -829,8 +839,8 @@ type NormalizedField {
 
 type NormalizedFunction {
   id : ID!
-  module: NormalizedModule
-  name: String
+  module: NormalizedModule!
+  name: String!
 
   visibility: MoveVisibility
   isEntry: Boolean
@@ -876,7 +886,7 @@ type MoveTypeName {
   # `struct`.
   moduleId: MoveModuleId
   name: String!
-  struct: NormalizedStruct
+  struct: NormalizedStruct!
 }
 
 # Represents concrete types (no type parameters, no references)
@@ -905,7 +915,7 @@ type MoveTypeApplication {
 }
 
 type MoveTypeParameter {
-  index: Int
+  index: Int!
 }
 
 # Metrics (omitted for brevity)
