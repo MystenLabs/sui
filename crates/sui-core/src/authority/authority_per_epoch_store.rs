@@ -1079,7 +1079,7 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn are_consensus_messages_processed<'a>(
+    pub fn check_consensus_messages_processed<'a>(
         &self,
         keys: impl Iterator<Item = &'a SequencedConsensusTransactionKey>,
     ) -> SuiResult<Vec<bool>> {
@@ -1097,7 +1097,7 @@ impl AuthorityPerEpochStore {
 
         let unprocessed_keys_registrations = registrations
             .into_iter()
-            .zip(self.are_consensus_messages_processed(keys.iter())?)
+            .zip(self.check_consensus_messages_processed(keys.iter())?)
             .filter(|(_, processed)| !processed)
             .map(|(registration, _)| registration);
 

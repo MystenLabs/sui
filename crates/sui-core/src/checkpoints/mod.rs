@@ -880,22 +880,22 @@ impl CheckpointBuilder {
                 all_effects_and_transaction_sizes.len()
             );
 
-            for (effect, transaction_and_size) in all_effects
+            for (effects, transaction_and_size) in all_effects
                 .into_iter()
                 .zip(transactions_and_sizes.into_iter())
             {
                 let (transaction, size) = transaction_and_size
-                    .unwrap_or_else(|| panic!("Could not find executed transaction {:?}", effect));
+                    .unwrap_or_else(|| panic!("Could not find executed transaction {:?}", effects));
                 // ConsensusCommitPrologue is guaranteed to be processed before we reach here
                 if !matches!(
                     transaction.inner().transaction_data().kind(),
                     TransactionKind::ConsensusCommitPrologue(_)
                 ) {
                     transaction_keys.push(SequencedConsensusTransactionKey::External(
-                        ConsensusTransactionKey::Certificate(*effect.transaction_digest()),
+                        ConsensusTransactionKey::Certificate(*effects.transaction_digest()),
                     ));
                 }
-                all_effects_and_transaction_sizes.push((effect.clone(), size));
+                all_effects_and_transaction_sizes.push((effects, size));
             }
 
             self.epoch_store
