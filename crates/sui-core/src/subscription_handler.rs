@@ -23,6 +23,8 @@ use sui_types::transaction::TransactionData;
 #[path = "unit_tests/subscription_handler_tests.rs"]
 mod subscription_handler_tests;
 
+// delete me
+
 pub const EVENT_DISPATCH_BUFFER_SIZE: usize = 1000;
 
 pub struct SubscriptionMetrics {
