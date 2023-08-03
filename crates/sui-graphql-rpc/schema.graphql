@@ -581,6 +581,7 @@ type CommitteeMember {
 }
 
 type TransactionBlock {
+  id: ID!
   digest: String!
 
   sender: Address
@@ -885,6 +886,7 @@ type MoveFunctionTypeParameterDecl {
 }
 
 type NormalizedModule {
+  id: ID!
   fileFormatVersion: Int!
 
   moduleId: MoveModuleId!
@@ -1037,9 +1039,7 @@ type DryRunReturn {
 type AddressMetricConnection {}
 type MovePackageModuleConnection {}
 type NameServiceNamesConnection {}
-type NormalizedModuleConnection {}
 type StakeConnection {}
-type TransactionBlockConnection {}
 
 # Pagination
 type PageInfo {
@@ -1146,4 +1146,26 @@ type TransactionEventConnection {
 type TransactionEventEdge {
   cursor: String
   node: Event!
+}
+
+# TransactionBlockConnection
+type TransactionBlockConnection {
+  edges: [TransactionBlockEdge!]!
+  pageInfo: PageInfo!
+}
+
+type TransactionBlockEdge {
+  cursor: String
+  node: TransactionBlock!
+}
+
+# NormalizedModulesConnection
+type NormalizedModulesConnection {
+  edges: [NormalizedModuleEdge!]!
+  pageInfo: PageInfo!
+}
+
+type NormalizedModuleEdge {
+  cursor: String
+  node: NormalizedModule!
 }
