@@ -85,7 +85,6 @@ type Query {
     last: Int,
     before: String,
     filter: EventFilter,
-    order: Order,
   ): EventQueryConnection
 
   queryTransactionBlocksConnection(
@@ -135,8 +134,6 @@ input CheckpointFilter {
   digest: String
   sequenceNumber: BigInt
 }
-
-enum Order { ASC, DESC }
 
 input ObjectQuery {
   # one of these
