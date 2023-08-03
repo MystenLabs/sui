@@ -106,7 +106,8 @@ bit-set = { version = "0.5" }
 bit-vec = { version = "0.6", default-features = false, features = ["std"] }
 bitcoin-private = { version = "0.1" }
 bitcoin_hashes = { version = "0.12", default-features = false }
-bitflags = { version = "1" }
+bitflags-dff4ba8e3ae991db = { package = "bitflags", version = "1" }
+bitflags-f595c2ba2a3f28df = { package = "bitflags", version = "2", default-features = false }
 bitmaps = { version = "2" }
 bitvec = { version = "0.20", default-features = false, features = ["std"] }
 blake2 = { version = "0.10" }
@@ -822,7 +823,8 @@ bit-set = { version = "0.5" }
 bit-vec = { version = "0.6", default-features = false, features = ["std"] }
 bitcoin-private = { version = "0.1" }
 bitcoin_hashes = { version = "0.12", default-features = false }
-bitflags = { version = "1" }
+bitflags-dff4ba8e3ae991db = { package = "bitflags", version = "1" }
+bitflags-f595c2ba2a3f28df = { package = "bitflags", version = "2", default-features = false }
 bitmaps = { version = "2" }
 bitvec = { version = "0.20", default-features = false, features = ["std"] }
 blake2 = { version = "0.10" }
@@ -935,8 +937,9 @@ determinator = { version = "0.10", default-features = false }
 deunicode = { version = "0.4", default-features = false }
 diesel = { version = "2", features = ["64-column-tables", "chrono", "postgres", "r2d2", "serde_json"] }
 diesel-derive-enum = { version = "2", default-features = false, features = ["postgres"] }
-diesel_derives = { version = "2", features = ["64-column-tables", "postgres", "with-deprecated"] }
+diesel_derives = { version = "2", features = ["64-column-tables", "postgres", "r2d2", "with-deprecated"] }
 diesel_migrations = { version = "2" }
+diesel_table_macro_syntax = { version = "0.1", default-features = false }
 diff = { version = "0.1", default-features = false }
 difference = { version = "2" }
 difflib = { version = "0.4", default-features = false }
