@@ -866,7 +866,12 @@ impl CheckpointBuilder {
             .iter()
             .map(|effect| *effect.transaction_digest())
             .collect();
+        let transactions_and_sizes = self
+            .state
+            .database
+            .get_transactions_and_serialized_sizes(&all_digests)?;
         let mut all_effects_and_transaction_sizes = Vec::with_capacity(all_effects.len());
+        let mut transaction_keys = Vec::new();
         {
             let _guard = monitored_scope("CheckpointBuilder::wait_for_transactions_sequenced");
             debug!(
@@ -874,28 +879,28 @@ impl CheckpointBuilder {
                 "Waiting for {:?} certificates to appear in consensus",
                 all_effects_and_transaction_sizes.len()
             );
-            for effects in all_effects {
-                let (transaction, transaction_size) = self
-                    .state
-                    .database
-                    .get_transaction_and_serialized_size(effects.transaction_digest())?
-                    .unwrap_or_else(|| panic!("Could not find executed transaction {effects:?}"));
+
+            for (effects, transaction_and_size) in all_effects
+                .into_iter()
+                .zip(transactions_and_sizes.into_iter())
+            {
+                let (transaction, size) = transaction_and_size
+                    .unwrap_or_else(|| panic!("Could not find executed transaction {:?}", effects));
                 // ConsensusCommitPrologue is guaranteed to be processed before we reach here
                 if !matches!(
                     transaction.inner().transaction_data().kind(),
                     TransactionKind::ConsensusCommitPrologue(_)
                 ) {
-                    // todo - use NotifyRead::register_all might be faster
-                    self.epoch_store
-                        .consensus_message_processed_notify(
-                            SequencedConsensusTransactionKey::External(
-                                ConsensusTransactionKey::Certificate(*effects.transaction_digest()),
-                            ),
-                        )
-                        .await?;
+                    transaction_keys.push(SequencedConsensusTransactionKey::External(
+                        ConsensusTransactionKey::Certificate(*effects.transaction_digest()),
+                    ));
                 }
-                all_effects_and_transaction_sizes.push((effects, transaction_size));
+                all_effects_and_transaction_sizes.push((effects, size));
             }
+
+            self.epoch_store
+                .consensus_messages_processed_notify(transaction_keys)
+                .await?;
         }
 
         let signatures = self
@@ -992,12 +997,6 @@ impl CheckpointBuilder {
                     epoch_commitments,
                 })
             } else {
-                self.accumulator.accumulate_checkpoint(
-                    effects.clone(),
-                    sequence_number,
-                    self.epoch_store.clone(),
-                )?;
-
                 None
             };
 
@@ -1100,30 +1099,35 @@ impl CheckpointBuilder {
         let mut seen = HashSet::new();
         loop {
             let mut pending = HashSet::new();
-            for effect in roots {
+
+            let transactions_included = self
+                .epoch_store
+                .builder_included_transactions_in_checkpoint(
+                    roots.iter().map(|e| e.transaction_digest()),
+                )?;
+
+            for (effect, tx_included) in roots.into_iter().zip(transactions_included.into_iter()) {
                 let digest = effect.transaction_digest();
-                // Unnecessary to read effects of a depndency if the effect is already processed.
+                // Unnecessary to read effects of a dependency if the effect is already processed.
                 seen.insert(*digest);
-                if self
+
+                // Skip roots already included in checkpoints or roots from previous epochs
+                if tx_included || effect.executed_epoch() < self.epoch_store.epoch() {
+                    continue;
+                }
+
+                let existing_effects = self
                     .epoch_store
-                    .builder_included_transaction_in_checkpoint(digest)?
+                    .effects_signatures_exists(effect.dependencies().iter())?;
+
+                for (dependency, effects_signature_exists) in
+                    effect.dependencies().iter().zip(existing_effects.iter())
                 {
-                    continue;
-                }
-                // Skip roots from previous epochs
-                if effect.executed_epoch() < self.epoch_store.epoch() {
-                    continue;
-                }
-                for dependency in effect.dependencies().iter() {
                     // Skip here if dependency not executed in the current epoch.
                     // Note that the existence of an effects signature in the
                     // epoch store for the given digest indicates that the transaction
                     // was locally executed in the current epoch
-                    if self
-                        .epoch_store
-                        .get_effects_signature(dependency)?
-                        .is_none()
-                    {
+                    if !effects_signature_exists {
                         continue;
                     }
                     if seen.insert(*dependency) {
