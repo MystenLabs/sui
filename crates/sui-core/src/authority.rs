@@ -2803,13 +2803,11 @@ impl AuthorityState {
     pub async fn get_executed_transaction_and_effects(
         &self,
         digest: TransactionDigest,
-    ) -> SuiResult<(VerifiedTransaction, TransactionEffects)> {
-        let transaction = self.database.get_transaction_block(&digest)?;
-        let effects = self.database.get_executed_effects(&digest)?;
-        match (transaction, effects) {
-            (Some(transaction), Some(effects)) => Ok((transaction, effects)),
-            _ => Err(SuiError::TransactionNotFound { digest }),
-        }
+        kv_store: Arc<TransactionKeyValueStore>,
+    ) -> SuiResult<(Transaction, TransactionEffects)> {
+        let transaction = kv_store.get_tx(digest).await?;
+        let effects = kv_store.get_fx_by_tx_digest(digest).await?;
+        Ok((transaction, effects))
     }
 
     pub fn multi_get_transaction_checkpoint(
