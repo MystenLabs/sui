@@ -88,7 +88,7 @@ fn update_low_scoring_authorities_v2(
     metrics: &Arc<AuthorityMetrics>,
     protocol_config: &ProtocolConfig,
 ) {
-    assert!((0.0..=0.33).contains(&protocol_config.consensus_bad_nodes_stake_threshold()), "The bad_nodes_stake_threshold should be in range [0.0 - 0.33], out of bounds parameter detected");
+    assert!((0..=33).contains(&protocol_config.consensus_bad_nodes_stake_threshold()), "The bad_nodes_stake_threshold should be in range [0 - 33], out of bounds parameter detected");
 
     if !reputation_scores.final_of_schedule {
         return;
@@ -144,7 +144,7 @@ fn update_low_scoring_authorities_v2(
 
         let included = if total_stake
             <= (protocol_config.consensus_bad_nodes_stake_threshold()
-                * committee.total_stake() as f64) as Stake
+                * committee.total_stake()) / 100 as Stake
         {
             final_low_scoring_map.insert(authority, score);
             true
@@ -348,7 +348,7 @@ mod tests {
         protocol_config.set_narwhal_new_leader_election_schedule(true);
 
         // WHEN
-        protocol_config.set_consensus_bad_nodes_stake_threshold(0.33); // 0.33 * 8 = 2.64 maximum stake that will considered low scoring
+        protocol_config.set_consensus_bad_nodes_stake_threshold(33); // 33 * 8 / 100 = 2 maximum stake that will considered low scoring
 
         update_low_scoring_authorities(
             low_scoring.clone(),
@@ -371,7 +371,7 @@ mod tests {
         );
 
         // WHEN setting the threshold to lower
-        protocol_config.set_consensus_bad_nodes_stake_threshold(0.2); // 0.2 * 8 = 1.6 maximum
+        protocol_config.set_consensus_bad_nodes_stake_threshold(20); // 20 * 8 / 100 = 1 maximum
         update_low_scoring_authorities(
             low_scoring.clone(),
             &committee,
