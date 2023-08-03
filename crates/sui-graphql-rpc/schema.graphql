@@ -92,6 +92,9 @@ scalar BigInt
 # String containing Base64-encoded binary data.
 scalar Base64
 
+# ISO-8601 Date and Time
+scalar DateTime
+
 # Filter either by the digest, or the sequence number, or neither, to
 # get the latest checkpoint.
 input CheckpointFilter {
@@ -140,8 +143,8 @@ input EventFilter {
 
   eventField: EventField
 
-  startTimeMs: BigInt
-  endTimeMs: BigInt
+  startTime: DateTime
+  endTime: DateTime
 }
 
 input EventField {
@@ -251,8 +254,8 @@ type Epoch {
   storageFund: StorageFund
   safeMode: SafeMode
 
-  startTimestampMs: BigInt
-  endTimestampMs: BigInt
+  startTimestamp: DateTime
+  endTimestamp: DateTime
 
   # TODO: Identify non-duplicate fields in `EndOfEpochInfo`
 
@@ -381,7 +384,7 @@ type Checkpoint {
   id: ID!
   digest: String!
   sequenceNumber: BigInt!
-  timestampMs: BigInt
+  timestamp: DateTime
   validatorSignature: Base64
 
   # Commitments
@@ -441,7 +444,7 @@ type ConsensusCommitPrologueTransaction {
   # checkpoints? In which case, it may suffice to have a `Checkpoint`
   # here.
   round: BigInt
-  timestampMs: BigInt
+  timestamp: DateTime
 }
 
 type GenesisTransaction {
@@ -450,7 +453,7 @@ type GenesisTransaction {
 
 type ChangeEpochTransaction {
   epoch: Epoch
-  timestampMs: BigInt
+  timestamp: DateTime
 
   storageCharge: BigInt
   computationCharge: BigInt
@@ -593,7 +596,7 @@ type Event {
   moduleId: MoveModuleId
   type: MoveType
   sender: Address
-  timestampMs: BigInt
+  timestamp: DateTime
 
   json: String
   bcs: Base64
