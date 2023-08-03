@@ -489,10 +489,7 @@ union ProgrammableTransaction =
   | MakeMoveVecTransaction
 
 type MoveCallTransaction {
-  moduleId: MoveModuleId
-  name: String
   function: NormalizedFunction
-
   typeArguments: [MoveType]
   arguments: [TransactionArgument]
 }
