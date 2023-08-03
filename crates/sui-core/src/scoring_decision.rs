@@ -48,6 +48,11 @@ pub fn update_low_scoring_authorities(
     metrics: &Arc<AuthorityMetrics>,
     protocol_config: &ProtocolConfig,
 ) {
+    info!(
+        "The current protocol config version: {:?}",
+        protocol_config.version
+    );
+
     if protocol_config.scoring_decision_with_validity_cutoff()
         && protocol_config.narwhal_new_leader_election_schedule()
     {
