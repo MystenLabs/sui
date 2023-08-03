@@ -1,29 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { ArrowUpRight16, MediaPlay16 } from '@mysten/icons';
+import { ArrowUpRight16 } from '@mysten/icons';
 import { Text, Heading } from '@mysten/ui';
 import { cva } from 'class-variance-authority';
-import clsx from 'clsx';
 import { useState } from 'react';
 
 import { ObjectLink } from './InternalLink';
-import { ObjectModal } from './Modal/ObjectModal';
-import { Image } from './image/Image';
-
-export enum OBJECT_VIEW_MODES {
-	LIST,
-	SMALL_THUMBNAILS,
-	THUMBNAILS,
-}
-
-const imageStyles = cva(['cursor-pointer z-0 flex-shrink-0 relative'], {
-	variants: {
-		size: {
-			small: 'h-16 w-16',
-			large: 'h-50 w-50',
-		},
-	},
-});
+import { ObjectVideoImage } from '~/ui/ObjectVideoImage';
 
 const textStyles = cva(['flex min-w-0 flex-col flex-nowrap'], {
 	variants: {
@@ -41,7 +24,7 @@ export interface ObjectDetailsProps {
 	name?: string;
 	type: string;
 	variant: 'small' | 'large';
-	viewMode?: OBJECT_VIEW_MODES;
+	noTypeRender?: boolean;
 }
 
 export function ObjectDetails({
@@ -51,62 +34,48 @@ export function ObjectDetails({
 	video,
 	type,
 	variant = 'small',
-	viewMode,
+	noTypeRender,
 }: ObjectDetailsProps) {
 	const [open, setOpen] = useState(false);
-	const close = () => setOpen(false);
 	const openPreview = () => setOpen(true);
 
 	return (
-		<div className="flex items-center gap-3.75">
-			<ObjectModal
-				open={open}
-				onClose={close}
+		<div className="flex items-center gap-3.75 overflow-auto">
+			<ObjectVideoImage
 				title={name}
 				subtitle={type}
 				src={image}
 				video={video}
-				alt={name}
+				variant={variant}
+				open={open}
+				setOpen={setOpen}
 			/>
-			<div className={imageStyles({ size: variant })}>
-				<Image rounded="md" onClick={openPreview} alt={name} src={image} />
-				{video && (
-					<div className="pointer-events-none absolute bottom-2 right-2 z-10 flex items-center justify-center rounded-full opacity-80">
-						<MediaPlay16
-							className={clsx({
-								'h-8 w-8': variant === 'large',
-								'h-5 w-5': variant === 'small',
-							})}
-						/>
-					</div>
+			<div className={textStyles({ size: variant })}>
+				{variant === 'large' ? (
+					<Heading variant="heading4/semibold" truncate>
+						{name}
+					</Heading>
+				) : (
+					<Text variant="bodySmall/medium" color="gray-90" truncate>
+						{name}
+					</Text>
 				)}
-			</div>
-			{viewMode !== OBJECT_VIEW_MODES.THUMBNAILS && (
-				<div className={textStyles({ size: variant })}>
-					{variant === 'large' ? (
-						<Heading variant="heading4/semibold" truncate>
-							{name}
-						</Heading>
-					) : (
-						<Text variant="bodySmall/medium" color="gray-90" truncate>
-							{name}
-						</Text>
-					)}
-					{id && <ObjectLink objectId={id} />}
+				{id && <ObjectLink objectId={id} />}
+				{!noTypeRender && (
 					<Text variant="bodySmall/medium" color="steel-dark" truncate>
 						{type}
 					</Text>
-					{variant === 'large' ? (
-						<div
-							onClick={openPreview}
-							className="mt-2.5 flex cursor-pointer items-center gap-1 text-steel-dark"
-						>
-							<Text variant="caption/semibold">Preview</Text>
-							<ArrowUpRight16 className="inline-block" />
-						</div>
-					) : null}
-				</div>
-			)}
+				)}
+				{variant === 'large' ? (
+					<div
+						onClick={openPreview}
+						className="mt-2.5 flex cursor-pointer items-center gap-1 text-steel-dark"
+					>
+						<Text variant="caption/semibold">Preview</Text>
+						<ArrowUpRight16 className="inline-block" />
+					</div>
+				) : null}
+			</div>
 		</div>
 	);
 }

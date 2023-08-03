@@ -100,7 +100,7 @@ export function OwnedCoins({ id }: { id: string }) {
 				</div>
 			) : (
 				<div className="flex flex-col gap-4 pt-5 text-left">
-					<div className='md:mt-12" flex w-full justify-between border-b border-gray-45 pb-3'>
+					<div className="flex w-full flex-col justify-between gap-y-3 border-b border-gray-45 pb-3 sm:flex-row">
 						<Heading color="steel-darker" variant="heading4/semibold">
 							{balances.allBalances.length} Coins
 						</Heading>

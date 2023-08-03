@@ -5,7 +5,7 @@ import { useRpcClient } from '../api/RpcClientContext';
 import { type SuiObjectDataFilter } from '@mysten/sui.js/client';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
-const MAX_OBJECTS_PER_REQ = 20;
+const MAX_OBJECTS_PER_REQ = 6;
 
 export function useGetOwnedObjects(
 	address?: string | null,
