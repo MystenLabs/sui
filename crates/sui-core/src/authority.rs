@@ -94,8 +94,9 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::gas::{GasCharger, GasCostSummary, SuiGasStatus};
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
-    CheckpointCommitment, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
-    CheckpointSequenceNumber, CheckpointSummary, CheckpointTimestamp, VerifiedCheckpoint,
+    CertifiedCheckpointSummary, CheckpointCommitment, CheckpointContents, CheckpointContentsDigest,
+    CheckpointDigest, CheckpointSequenceNumber, CheckpointSummary, CheckpointTimestamp,
+    VerifiedCheckpoint,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::messages_consensus::AuthorityCapabilities;
@@ -4134,17 +4135,56 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
         Ok((txns, fx, evts))
     }
 
-    async fn multi_get_checkpoints_contents(
+    async fn multi_get_checkpoints(
         &self,
-        checkpoints: &[CheckpointSequenceNumber],
-    ) -> SuiResult<Vec<Option<CheckpointContents>>> {
-        let mut ret = Vec::with_capacity(checkpoints.len());
-        for checkpoint in checkpoints {
-            let checkpoint = self.get_checkpoint_contents_by_sequence_number(*checkpoint)?;
-            ret.push(Some(checkpoint));
+        checkpoint_summaries: &[CheckpointSequenceNumber],
+        checkpoint_contents: &[CheckpointSequenceNumber],
+        checkpoint_summaries_by_digest: &[CheckpointDigest],
+        checkpoint_contents_by_digest: &[CheckpointContentsDigest],
+    ) -> SuiResult<(
+        Vec<Option<CertifiedCheckpointSummary>>,
+        Vec<Option<CheckpointContents>>,
+        Vec<Option<CertifiedCheckpointSummary>>,
+        Vec<Option<CheckpointContents>>,
+    )> {
+        // TODO: use multi-get methods if it ever becomes important (unlikely)
+        let mut summaries = Vec::with_capacity(checkpoint_summaries.len());
+        let store = self.get_checkpoint_store();
+        for seq in checkpoint_summaries {
+            let checkpoint = store
+                .get_checkpoint_by_sequence_number(*seq)?
+                .map(|c| c.into_inner());
+
+            summaries.push(checkpoint);
         }
 
-        Ok(ret)
+        let mut contents = Vec::with_capacity(checkpoint_contents.len());
+        for seq in checkpoint_contents {
+            let checkpoint = store
+                .get_checkpoint_by_sequence_number(*seq)?
+                .and_then(|summary| {
+                    store
+                        .get_checkpoint_contents(&summary.content_digest)
+                        .expect("db read cannot fail")
+                });
+            contents.push(checkpoint);
+        }
+
+        let mut summaries_by_digest = Vec::with_capacity(checkpoint_summaries_by_digest.len());
+        for digest in checkpoint_summaries_by_digest {
+            let checkpoint = store
+                .get_checkpoint_by_digest(digest)?
+                .map(|c| c.into_inner());
+            summaries_by_digest.push(checkpoint);
+        }
+
+        let mut contents_by_digest = Vec::with_capacity(checkpoint_contents_by_digest.len());
+        for digest in checkpoint_contents_by_digest {
+            let checkpoint = store.get_checkpoint_contents(digest)?;
+            contents_by_digest.push(checkpoint);
+        }
+
+        Ok((summaries, contents, summaries_by_digest, contents_by_digest))
     }
 }
 

@@ -8,10 +8,14 @@ use crate::key_value_store_metrics::KeyValueStoreMetrics;
 use async_trait::async_trait;
 use std::sync::Arc;
 use std::time::Instant;
-use sui_types::digests::{TransactionDigest, TransactionEventsDigest};
+use sui_types::digests::{
+    CheckpointContentsDigest, CheckpointDigest, TransactionDigest, TransactionEventsDigest,
+};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult, UserInputError};
-use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
+use sui_types::messages_checkpoint::{
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
+};
 use sui_types::transaction::Transaction;
 
 pub struct TransactionKeyValueStore {
@@ -122,15 +126,34 @@ impl TransactionKeyValueStore {
         res
     }
 
-    pub async fn multi_get_checkpoints_contents(
+    pub async fn multi_get_checkpoints(
         &self,
-        keys: &[CheckpointSequenceNumber],
-    ) -> SuiResult<Vec<Option<CheckpointContents>>> {
+        checkpoint_summaries: &[CheckpointSequenceNumber],
+        checkpoint_contents: &[CheckpointSequenceNumber],
+        checkpoint_summaries_by_digest: &[CheckpointDigest],
+        checkpoint_contents_by_digest: &[CheckpointContentsDigest],
+    ) -> SuiResult<(
+        Vec<Option<CertifiedCheckpointSummary>>,
+        Vec<Option<CheckpointContents>>,
+        Vec<Option<CertifiedCheckpointSummary>>,
+        Vec<Option<CheckpointContents>>,
+    )> {
         let start = Instant::now();
-        let res = self.inner.multi_get_checkpoints_contents(keys).await;
+        let res = self
+            .inner
+            .multi_get_checkpoints(
+                checkpoint_summaries,
+                checkpoint_contents,
+                checkpoint_summaries_by_digest,
+                checkpoint_contents_by_digest,
+            )
+            .await;
         let elapsed = start.elapsed();
 
-        let num_ckpts = keys.len() as u64;
+        let num_summaries =
+            checkpoint_summaries.len() as u64 + checkpoint_summaries_by_digest.len() as u64;
+        let num_contents =
+            checkpoint_contents.len() as u64 + checkpoint_contents_by_digest.len() as u64;
 
         self.metrics
             .key_value_store_num_fetches_latency_ms
@@ -139,32 +162,87 @@ impl TransactionKeyValueStore {
         self.metrics
             .key_value_store_num_fetches_batch_size
             .with_label_values(&[self.store_name])
-            .observe(num_ckpts);
+            .observe(num_summaries + num_contents);
 
         if let Ok(res) = &res {
-            let ckpts_not_found = res.iter().filter(|v| v.is_none()).count() as u64;
+            let summaries_not_found = res.0.iter().filter(|v| v.is_none()).count() as u64
+                + res.2.iter().filter(|v| v.is_none()).count() as u64;
+            let contents_not_found = res.1.iter().filter(|v| v.is_none()).count() as u64
+                + res.3.iter().filter(|v| v.is_none()).count() as u64;
 
-            if num_ckpts > 0 {
+            if num_summaries > 0 {
                 self.metrics
                     .key_value_store_num_fetches_success
-                    .with_label_values(&[self.store_name, "ckpts"])
-                    .inc_by(num_ckpts);
+                    .with_label_values(&[self.store_name, "ckpt_summary"])
+                    .inc_by(num_summaries);
+            }
+            if num_contents > 0 {
+                self.metrics
+                    .key_value_store_num_fetches_success
+                    .with_label_values(&[self.store_name, "ckpt_contents"])
+                    .inc_by(num_contents);
             }
 
-            if ckpts_not_found > 0 {
+            if summaries_not_found > 0 {
                 self.metrics
                     .key_value_store_num_fetches_not_found
-                    .with_label_values(&[self.store_name, "ckpts"])
-                    .inc_by(ckpts_not_found);
+                    .with_label_values(&[self.store_name, "ckpt_summary"])
+                    .inc_by(summaries_not_found);
+            }
+            if contents_not_found > 0 {
+                self.metrics
+                    .key_value_store_num_fetches_not_found
+                    .with_label_values(&[self.store_name, "ckpt_contents"])
+                    .inc_by(contents_not_found);
             }
         } else {
             self.metrics
                 .key_value_store_num_fetches_error
-                .with_label_values(&[self.store_name, "ckpts"])
-                .inc_by(num_ckpts);
+                .with_label_values(&[self.store_name, "ckpt_summary"])
+                .inc_by(num_summaries);
+            self.metrics
+                .key_value_store_num_fetches_error
+                .with_label_values(&[self.store_name, "ckpt_contents"])
+                .inc_by(num_contents);
         }
 
         res
+    }
+
+    pub async fn multi_get_checkpoints_summaries(
+        &self,
+        keys: &[CheckpointSequenceNumber],
+    ) -> SuiResult<Vec<Option<CertifiedCheckpointSummary>>> {
+        self.multi_get_checkpoints(keys, &[], &[], &[])
+            .await
+            .map(|(summaries, _, _, _)| summaries)
+    }
+
+    pub async fn multi_get_checkpoints_contents(
+        &self,
+        keys: &[CheckpointSequenceNumber],
+    ) -> SuiResult<Vec<Option<CheckpointContents>>> {
+        self.multi_get_checkpoints(&[], keys, &[], &[])
+            .await
+            .map(|(_, contents, _, _)| contents)
+    }
+
+    pub async fn multi_get_checkpoints_summaries_by_digest(
+        &self,
+        keys: &[CheckpointDigest],
+    ) -> SuiResult<Vec<Option<CertifiedCheckpointSummary>>> {
+        self.multi_get_checkpoints(&[], &[], keys, &[])
+            .await
+            .map(|(_, _, summaries, _)| summaries)
+    }
+
+    pub async fn multi_get_checkpoints_contents_by_digest(
+        &self,
+        keys: &[CheckpointContentsDigest],
+    ) -> SuiResult<Vec<Option<CheckpointContents>>> {
+        self.multi_get_checkpoints(&[], &[], &[], keys)
+            .await
+            .map(|(_, _, _, contents)| contents)
     }
 
     pub async fn multi_get_tx(
@@ -231,6 +309,24 @@ impl TransactionKeyValueStore {
             .ok_or(SuiError::TransactionEventsNotFound { digest })
     }
 
+    /// Convenience method for fetching single checkpoint, and returning an error if it's not found.
+    /// Prefer using multi_get_checkpoints_summaries whenever possible.
+    pub async fn get_checkpoint_summaries(
+        &self,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> SuiResult<CertifiedCheckpointSummary> {
+        self.multi_get_checkpoints_summaries(&[checkpoint])
+            .await?
+            .into_iter()
+            .next()
+            .flatten()
+            .ok_or(SuiError::UserInputError {
+                error: UserInputError::VerifiedCheckpointNotFound(checkpoint),
+            })
+    }
+
+    /// Convenience method for fetching single checkpoint, and returning an error if it's not found.
+    /// Prefer using multi_get_checkpoints_contents whenever possible.
     pub async fn get_checkpoint_contents(
         &self,
         checkpoint: CheckpointSequenceNumber,
@@ -242,6 +338,38 @@ impl TransactionKeyValueStore {
             .flatten()
             .ok_or(SuiError::UserInputError {
                 error: UserInputError::VerifiedCheckpointNotFound(checkpoint),
+            })
+    }
+
+    /// Convenience method for fetching single checkpoint, and returning an error if it's not found.
+    /// Prefer using multi_get_checkpoints_summaries_by_digest whenever possible.
+    pub async fn get_checkpoint_summaries_by_digest(
+        &self,
+        digest: CheckpointDigest,
+    ) -> SuiResult<CertifiedCheckpointSummary> {
+        self.multi_get_checkpoints_summaries_by_digest(&[digest])
+            .await?
+            .into_iter()
+            .next()
+            .flatten()
+            .ok_or(SuiError::UserInputError {
+                error: UserInputError::VerifiedCheckpointDigestNotFound(format!("{:?}", digest)),
+            })
+    }
+
+    /// Convenience method for fetching single checkpoint, and returning an error if it's not found.
+    /// Prefer using multi_get_checkpoints_contents_by_digest whenever possible.
+    pub async fn get_checkpoint_contents_by_digest(
+        &self,
+        digest: CheckpointContentsDigest,
+    ) -> SuiResult<CheckpointContents> {
+        self.multi_get_checkpoints_contents_by_digest(&[digest])
+            .await?
+            .into_iter()
+            .next()
+            .flatten()
+            .ok_or(SuiError::UserInputError {
+                error: UserInputError::VerifiedCheckpointDigestNotFound(format!("{:?}", digest)),
             })
     }
 }
@@ -262,10 +390,19 @@ pub trait TransactionKeyValueStoreTrait {
         Vec<Option<TransactionEvents>>,
     )>;
 
-    async fn multi_get_checkpoints_contents(
+    /// Generic multi_get to allow implementors to get heterogenous values with a single round trip.
+    async fn multi_get_checkpoints(
         &self,
-        checkpoints: &[CheckpointSequenceNumber],
-    ) -> SuiResult<Vec<Option<CheckpointContents>>>;
+        checkpoint_summaries: &[CheckpointSequenceNumber],
+        checkpoint_contents: &[CheckpointSequenceNumber],
+        checkpoint_summaries_by_digest: &[CheckpointDigest],
+        checkpoint_contents_by_digest: &[CheckpointContentsDigest],
+    ) -> SuiResult<(
+        Vec<Option<CertifiedCheckpointSummary>>,
+        Vec<Option<CheckpointContents>>,
+        Vec<Option<CertifiedCheckpointSummary>>,
+        Vec<Option<CheckpointContents>>,
+    )>;
 }
 
 /// A TransactionKeyValueStoreTrait that falls back to a secondary store for any key for which the
@@ -329,29 +466,59 @@ impl TransactionKeyValueStoreTrait for FallbackTransactionKVStore {
         Ok((res.0, res.1, res.2))
     }
 
-    async fn multi_get_checkpoints_contents(
+    async fn multi_get_checkpoints(
         &self,
-        checkpoints: &[CheckpointSequenceNumber],
-    ) -> SuiResult<Vec<Option<CheckpointContents>>> {
+        checkpoint_summaries: &[CheckpointSequenceNumber],
+        checkpoint_contents: &[CheckpointSequenceNumber],
+        checkpoint_summaries_by_digest: &[CheckpointDigest],
+        checkpoint_contents_by_digest: &[CheckpointContentsDigest],
+    ) -> SuiResult<(
+        Vec<Option<CertifiedCheckpointSummary>>,
+        Vec<Option<CheckpointContents>>,
+        Vec<Option<CertifiedCheckpointSummary>>,
+        Vec<Option<CheckpointContents>>,
+    )> {
         let mut res = self
             .primary
-            .multi_get_checkpoints_contents(checkpoints)
+            .multi_get_checkpoints(
+                checkpoint_summaries,
+                checkpoint_contents,
+                checkpoint_summaries_by_digest,
+                checkpoint_contents_by_digest,
+            )
             .await?;
 
-        let (fallback_checkpoints, indices_checkpoints) = find_fallback(&res, checkpoints);
+        let (fallback_summaries, indices_summaries) = find_fallback(&res.0, checkpoint_summaries);
+        let (fallback_contents, indices_contents) = find_fallback(&res.1, checkpoint_contents);
+        let (fallback_summaries_by_digest, indices_summaries_by_digest) =
+            find_fallback(&res.2, checkpoint_summaries_by_digest);
+        let (fallback_contents_by_digest, indices_contents_by_digest) =
+            find_fallback(&res.3, checkpoint_contents_by_digest);
 
-        if fallback_checkpoints.is_empty() {
+        if fallback_summaries.is_empty()
+            && fallback_contents.is_empty()
+            && fallback_summaries_by_digest.is_empty()
+            && fallback_contents_by_digest.is_empty()
+        {
             return Ok(res);
         }
 
         let secondary_res = self
             .fallback
-            .multi_get_checkpoints_contents(&fallback_checkpoints)
+            .multi_get_checkpoints(
+                &fallback_summaries,
+                &fallback_contents,
+                &fallback_summaries_by_digest,
+                &fallback_contents_by_digest,
+            )
             .await?;
 
-        merge_res(&mut res, secondary_res, &indices_checkpoints);
+        merge_res(&mut res.0, secondary_res.0, &indices_summaries);
+        merge_res(&mut res.1, secondary_res.1, &indices_contents);
+        merge_res(&mut res.2, secondary_res.2, &indices_summaries_by_digest);
+        merge_res(&mut res.3, secondary_res.3, &indices_contents_by_digest);
 
-        Ok(res)
+        Ok((res.0, res.1, res.2, res.3))
     }
 }
 
