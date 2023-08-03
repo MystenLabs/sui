@@ -48,7 +48,9 @@ pub fn update_low_scoring_authorities(
     metrics: &Arc<AuthorityMetrics>,
     protocol_config: &ProtocolConfig,
 ) {
-    if protocol_config.scoring_decision_with_validity_cutoff() {
+    if protocol_config.scoring_decision_with_validity_cutoff()
+        && protocol_config.narwhal_new_leader_election_schedule()
+    {
         update_low_scoring_authorities_with_no_disable_mechanism(
             low_scoring_authorities,
             committee,
@@ -258,6 +260,8 @@ fn update_low_scoring_authorities_with_no_disable_mechanism(
             );
         }
     }
+
+    info!("New low scoring used");
 
     // Report the actual flagged final low scoring authorities
     metrics
