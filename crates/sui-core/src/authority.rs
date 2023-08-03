@@ -2803,7 +2803,7 @@ impl AuthorityState {
     pub async fn get_executed_transaction_and_effects(
         &self,
         digest: TransactionDigest,
-        kv_store: &Arc<TransactionKeyValueStore>,
+        kv_store: Arc<TransactionKeyValueStore>,
     ) -> SuiResult<(Transaction, TransactionEffects)> {
         let transaction = kv_store.get_tx(digest).await?;
         let effects = kv_store.get_fx_by_tx_digest(digest).await?;

@@ -21,6 +21,8 @@ use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_node::SuiNodeHandle;
 use sui_sdk::wallet_context::WalletContext;
+use sui_storage::key_value_store::TransactionKeyValueStore;
+use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_test_transaction_builder::{
     batch_make_transfer_transactions, create_devnet_nft, delete_devnet_nft, increment_counter,
     publish_basics_package, publish_basics_package_and_make_counter, publish_nfts_package,
@@ -808,7 +810,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let kv_store = Arc::new(TransactionKeyValueStore::new(
         "rocksdb",
         metrics,
-        self.clone(),
+        fullnode.state(),
     ));
 
     let context = &mut test_cluster.wallet;
@@ -855,7 +857,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     assert!(is_executed_locally);
     assert_eq!(events.digest(), txn_events.digest());
     // verify that the node has sequenced and executed the txn
-    fullnode.state().get_executed_transaction_and_effects(digest, kv_store).await
+    fullnode.state().get_executed_transaction_and_effects(digest, kv_store.clone()).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForLocalExecution: {:?}", digest, e));
 
     // Test WaitForEffectsCert
