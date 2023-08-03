@@ -226,6 +226,18 @@ input TransactionBlockFilter {
   changedObject: SuiAddress
 }
 
+input DynamicFieldFilter {
+  # Cascading (type requires module requires package)
+  namePackage: SuiAddress
+  nameModule: String
+  nameType: String
+
+  # Cascading (type requires module requires package)
+  valuePackage: SuiAddress
+  valueModule: String
+  valueType: String
+}
+
 type AvailableRange {
   first: Checkpoint
   last: Checkpoint
@@ -327,6 +339,8 @@ type Object implements Owner {
     after: String,
     last: Int,
     before: String,
+    # Enhancement (post-MVP) to filter dynamic fields by type.
+    filter: DynamicFieldFilter,
   ): DynamicFieldConnection
 
   bcs: Base64
