@@ -13,10 +13,13 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use axum::routing::{get, IntoMakeService};
 use axum::{Json, Router, Server};
+// use futures::StreamExt;
 use hyper::http::Method;
 use hyper::server::conn::AddrIncoming;
 use hyper::{HeaderMap, StatusCode};
 use serde::{Deserialize, Serialize};
+use sui_sdk::rpc_types::SuiObjectDataOptions;
+use sui_sdk::types::base_types::ObjectID;
 use tower::ServiceBuilder;
 use tracing::{debug, info};
 use url::Url;
@@ -25,6 +28,7 @@ use move_compiler::compiled_unit::CompiledUnitEnum;
 use move_core_types::account_address::AccountAddress;
 use move_package::BuildConfig as MoveBuildConfig;
 use move_symbol_pool::Symbol;
+// use sui_json_rpc_types::EventFilter;
 use sui_move::build::resolve_lock_file_path;
 use sui_move_build::{BuildConfig, SuiPackageHooks};
 use sui_sdk::SuiClientBuilder;
@@ -38,6 +42,7 @@ pub const MAINNET_URL: &str = "https://fullnode.mainnet.sui.io:443";
 pub const TESTNET_URL: &str = "https://fullnode.testnet.sui.io:443";
 pub const DEVNET_URL: &str = "https://fullnode.devnet.sui.io:443";
 pub const LOCALNET_URL: &str = "http://127.0.0.1:9000";
+pub const LOCALNET_WS_URL: &str = "ws://127.0.0.1:9000";
 
 pub fn host_port() -> String {
     match option_env!("HOST_PORT") {
@@ -72,7 +77,7 @@ pub struct DirectorySource {
     pub network: Option<Network>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SourceInfo {
     pub path: PathBuf,
     // Is Some when content is hydrated from disk.
@@ -338,6 +343,43 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
     lookup.insert(Network::Localnet, localnet_lookup);
     Ok(lookup)
 }
+
+pub async fn upgrade_listener(lookup: &NetworkLookup) -> anyhow::Result<()> {
+    for (_k, v) in lookup {
+        for (addr, _) in v.keys() {
+            // FIXME don't call for each (addr, module). Only do addr.
+            // FIXME: don't only LOCALNET
+            let client = SuiClientBuilder::default().build(LOCALNET_URL).await?;
+            let prev_txn = client
+                .read_api()
+                .get_object_with_options(
+                    ObjectID::from_address(*addr),
+                    SuiObjectDataOptions::new().with_previous_transaction(),
+                )
+                .await?
+                .into_object()
+                .unwrap()
+                .previous_transaction
+                .unwrap();
+            info!("get_object result: {:#?}", prev_txn);
+        }
+    }
+    Ok(())
+}
+
+/*
+pub async fn listen_for_upgrades() -> anyhow::Result<()> {
+    info!("listening for all events...");
+    let client = SuiClientBuilder::default().build(MAINNET_URL).await?;
+    let mut subscribe_all = client
+        .event_api()
+        .subscribe_event(EventFilter::All(vec![]))
+        .await?;
+    loop {
+        info!("Event: {:?}", subscribe_all.next().await);
+    }
+}
+*/
 
 pub struct AppState {
     pub sources: NetworkLookup,

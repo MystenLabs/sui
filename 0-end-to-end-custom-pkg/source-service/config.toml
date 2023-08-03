@@ -1,0 +1,7 @@
+[[packages]]
+source = "Directory"
+[packages.values]
+network = "localnet"
+paths = [ 
+  "/Users/rijnard/sui/0-end-to-end-custom-pkg/rvt"
+]

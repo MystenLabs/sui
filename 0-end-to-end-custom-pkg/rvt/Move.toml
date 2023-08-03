@@ -1,0 +1,10 @@
+[package]
+name = "rvt"
+version = "0.0.1"
+published-at = "0xbb388ea111356c57d28211105edcd2375acd8ed5a73170daf8f56aee4df0e91a"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
+
+[addresses]
+rvt = "0xbb388ea111356c57d28211105edcd2375acd8ed5a73170daf8f56aee4df0e91a"
