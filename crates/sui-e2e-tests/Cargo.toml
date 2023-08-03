@@ -42,6 +42,7 @@ sui-json-rpc.workspace = true
 sui-node.workspace = true
 sui-macros.workspace = true
 sui-simulator.workspace = true
+sui-storage.workspace = true
 mysten-metrics.workspace = true
 sui-tool.workspace = true
 sui-protocol-config.workspace = true

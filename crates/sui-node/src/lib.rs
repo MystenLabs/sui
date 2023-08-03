@@ -1493,7 +1493,11 @@ pub async fn build_server(
         kv_store.clone(),
         metrics.clone(),
     ))?;
-    server.register_module(CoinReadApi::new(state.clone(), metrics.clone()))?;
+    server.register_module(CoinReadApi::new(
+        state.clone(),
+        kv_store.clone(),
+        metrics.clone(),
+    ))?;
     server.register_module(TransactionBuilderApi::new(state.clone()))?;
     server.register_module(GovernanceReadApi::new(state.clone(), metrics.clone()))?;
 
