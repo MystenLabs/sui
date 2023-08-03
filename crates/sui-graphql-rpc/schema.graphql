@@ -29,7 +29,7 @@
 # DONE - Display
 # DONE - SuiNS
 # DONE Data Consistency API
-# TODO Flesh out Connections
+# IN PROGRESS - Flesh out Connections
 # TODO - TotalTransactionBlocks for the PTB connection
 
 schema {
@@ -805,6 +805,7 @@ type NormalizedModule {
 }
 
 type NormalizedStruct {
+  id : ID!
   module: NormalizedModule
   name: String
 
@@ -910,11 +911,9 @@ type AddressMetricConnection {}
 type MovePackageModuleConnection {}
 type NameServiceNamesConnection {}
 type NormalizedModuleConnection {}
-type NormalizedStructConnection {}
 type StakeConnection {}
 type TransactionBlockConnection {}
 type TransactionBlockQueryConnection {}
-type TransactionEventConnection {}
 
 # Pagination
 type PageInfo {
@@ -999,4 +998,26 @@ type NormalizedFunctionConnection {
 type NormalizedFunctionEdge {
   cursor: String
   node: NormalizedFunction!
+}
+
+# NormalizedStructConnection
+type NormalizedStructConnection {
+  edges: [NormalizedStructEdge!]!
+  pageInfo: PageInfo!
+}
+
+type NormalizedStructEdge {
+  cursor: String
+  node: NormalizedStruct!
+}
+
+# TransactionEventConnection
+type TransactionEventConnection {
+  edges: [TransactionEventEdge!]!
+  pageInfo: PageInfo!
+}
+
+type TransactionEventEdge {
+  cursor: String
+  node: Event!
 }
