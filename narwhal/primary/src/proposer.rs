@@ -314,7 +314,8 @@ impl Proposer {
 
     fn max_delay(&self) -> Duration {
         // If this node is going to be the leader of the next round, we set a lower max
-        // timeout value to increase its chance of being included in the dag.
+        // timeout value to increase its chance of being included in the dag. As leaders are elected
+        // on even rounds only we apply the reduced max delay only for those ones.
         if (self.round + 1) % 2 == 0
             && self.leader_schedule.leader(self.round + 1).id() == self.authority_id
         {
@@ -341,7 +342,7 @@ impl Proposer {
 
         // Give a boost on the odd rounds to a node by using the whole committee here, not just the
         // nodes of the leader_schedule. By doing this we keep the proposal rate as high as possible
-        // which leads to higher round rate and also acting as a score booster to the less storng nodes
+        // which leads to higher round rate and also acting as a score booster to the less strong nodes
         // as well.
         if self.committee.size() > 1
             && next_round % 2 != 0
