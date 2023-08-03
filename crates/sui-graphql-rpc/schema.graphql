@@ -104,9 +104,28 @@ type Query {
 }
 
 # NB. Add after MVP has stabilised.
+#
+# Subscriptions use a "push-pull" system: Subscribers are notified
+# when there is new data by being sent the cursor pointing after that
+# new data.  To actually fetch the data, a call must be made to the
+# equivalent Connection API:
+#
+# e.g. When subscription `subscribe { events(filter: F) }` pushes
+# cursor `E`.  Then
+#
+#     query { eventsConnection(before: E, filter: F) }
+#
+# Will start paginating events up to the new data (multiple calls may
+# be required if there are multiple pages of information between the
+# start and the latest).  If the client has already processed some
+# prefix, up to cursor `P`, then they can resume with:
+#
+#    query { eventsConnection(after: P, before: E, filter F) }
+#
+# The API for transactions is similar.
 type Subscription {
-  events(filter: EventFilter): Event
-  transactions(filter: TransactionBlockFilter): TransactionBlock
+  events(filter: EventFilter): String!
+  transactions(filter: TransactionBlockFilter): String!
 }
 
 # String containing 32B hex-encoded address
