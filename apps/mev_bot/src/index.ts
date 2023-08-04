@@ -4,6 +4,8 @@
 import {SuiClient} from '@mysten/sui.js/client';
 import {BCS, fromB58, fromB64, getSuiMoveConfig} from "@mysten/bcs";
 import {TransactionBlock} from "@mysten/sui.js/transactions";
+import pLimit from "p-limit";
+const limit = pLimit(5);
 
 let bcs = new BCS(getSuiMoveConfig());
 bcs.registerStructType("Order", {
@@ -101,7 +103,8 @@ let allExpiredOrders = (await Promise.all(allExpiredOrdersPromises)).flat();
 // Create a transaction to clean up all expired orders and get the estimated profit using devInspectTransactionBlock
 let {profit, tx} = await createCleanUpTransaction(allExpiredOrders);
 
-console.log(`Total estimated profit: ${profit/1e9} SUI`);
+console.log(`Total estimated profit: ${profit / 1e9} SUI`);
+// Todo : sign and execute the transaction
 
 async function retrieveAllPools() {
     let page = await client.queryEvents({query: {MoveEventType: "0xdee9::clob_v2::PoolCreated"}});
@@ -125,6 +128,7 @@ async function retrieveExpiredOrders(poolId: string) {
     let poolData = pool.data?.bcs!;
 
     switch (poolData.dataType) {
+        // Pool data type is a move object
         case "moveObject": {
             let pool = bcs.de("Pool", fromB64(poolData.bcsBytes));
             let asks = await getAllDFPages(pool.asks.leaves.id);
@@ -151,11 +155,14 @@ async function retrieveExpiredOrders(poolId: string) {
                     }))
             }
 
-            let orderIds = [];
+            let orderIdsPromises = [];
             for (let tickLevel of tickLevels.filter((tickLevel) => tickLevel !== undefined)) {
-                let data = await getAllDFPages(tickLevel.open_orders.id);
-                orderIds.push(...data.map((node) => node.objectId));
+                // restrict concurrent requests to avoid rate limit on public full node
+                orderIdsPromises.push(limit(() => getAllDFPages(tickLevel.open_orders.id)
+                    .then((data) => data.map((node) => node.objectId)))
+                );
             }
+            let orderIds = (await Promise.all(orderIdsPromises)).flat();
             let orders = await getOrders(orderIds);
             let expiredOrders = orders.filter((order) => order.expire_timestamp <= Date.now());
             console.log(`Pool ${poolId} has ${expiredOrders?.length} expired orders out of ${orders?.length} orders`);
@@ -197,6 +204,7 @@ async function createCleanUpTransaction(poolOrders: { pool: any, expiredOrders: 
     return {profit, tx};
 }
 
+// helper functions to retrieve all pages of dynamic fields
 async function getAllDFPages(parentId: string) {
     let page = await client.getDynamicFields({
         parentId: parentId
@@ -237,6 +245,7 @@ async function getOrders(ids: string[]) {
     return result.filter((order) => order !== undefined);
 }
 
+// helper function to split an array into chunks
 function chunks(data: any[], size: number) {
     return Array.from(
         new Array(Math.ceil(data.length / size)),
