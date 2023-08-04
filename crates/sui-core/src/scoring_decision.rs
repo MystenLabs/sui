@@ -154,7 +154,7 @@ fn update_low_scoring_authorities_v2(
 
         if let Some(hostname) = authority_names_to_hostnames.get(&authority) {
             info!(
-                "low scoring authority {} has score {}, included: {}",
+                "authority {} has score {}, is low scoring: {}",
                 hostname, score, included
             );
         }
