@@ -659,7 +659,7 @@ union ProgrammableTransaction =
   | MakeMoveVecTransaction
 
 type MoveCallTransaction {
-  function: NormalizedFunction
+  function: MoveFunction
   typeArguments: [MoveType]
   arguments: [TransactionArgument]
 }
@@ -845,10 +845,13 @@ type MoveObject {
 }
 
 type MovePackage {
-  modulesConnection(first: Int, after: String, last: Int, before: String): MovePackageModuleConnection
-
-  normalizedModulesConnection(first: Int, after: String, last: Int, before: String): NormalizedModulesConnection
-  normalizedModule(name: String!): NormalizedModule
+  module(name: String!): MoveModule
+  modulesConnection(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+  ): MoveModulesConnection
 
   asObject: Object!
 }
@@ -885,37 +888,50 @@ type MoveFunctionTypeParameterDecl {
   constraints: [MoveAbility]
 }
 
-type NormalizedModule {
+type MoveModule {
   id: ID!
   fileFormatVersion: Int!
 
   moduleId: MoveModuleId!
   friends: [MoveModuleId]
 
-  structsConnection(first: Int, after: String, last: Int, before: String): NormalizedStructConnection
-  struct(name: String!): NormalizedStruct
+  struct(name: String!): MoveStructDecl
+  structsConnection(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+  ): MoveStructConnection
 
-  functionsConnection(first: Int, after: String, last: Int, before: String): NormalizedFunctionConnection
-  function(name: String!): NormalizedFunction
+  function(name: String!): MoveFunction
+  functionsConnection(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+  ): MoveFunctionConnection
+
+  bytes: Base64
+  disassembly: String
 }
 
-type NormalizedStruct {
+type MoveStructDecl {
   id : ID!
-  module: NormalizedModule!
+  module: MoveModule!
   name: String!
   abilities: [MoveAbility]
   typeParameters: [MoveStructTypeParameterDecl]
-  fields: [NormalizedField]
+  fields: [MoveField]
 }
 
-type NormalizedField {
+type MoveField {
   name: String
   type: OpenMoveType
 }
 
-type NormalizedFunction {
+type MoveFunction {
   id: ID!
-  module: NormalizedModule!
+  module: MoveModule!
   name: String!
 
   visibility: MoveVisibility
@@ -962,7 +978,7 @@ type MoveTypeName {
   # `struct`.
   moduleId: MoveModuleId
   name: String!
-  struct: NormalizedStruct!
+  struct: MoveStructDecl!
 }
 
 # Represents concrete types (no type parameters, no references)
@@ -1115,26 +1131,26 @@ type EventEdge {
   node: Event!
 }
 
-# NormalizedFunction
-type NormalizedFunctionConnection {
-  edges: [NormalizedFunctionEdge!]!
+# MoveFunction
+type MoveFunctionConnection {
+  edges: [MoveFunctionEdge!]!
   pageInfo: PageInfo!
 }
 
-type NormalizedFunctionEdge {
+type MoveFunctionEdge {
   cursor: String
-  node: NormalizedFunction!
+  node: MoveFunction!
 }
 
-# NormalizedStructConnection
-type NormalizedStructConnection {
-  edges: [NormalizedStructEdge!]!
+# MoveStructDeclConnection
+type MoveStructConnection {
+  edges: [MoveStructEdge!]!
   pageInfo: PageInfo!
 }
 
-type NormalizedStructEdge {
+type MoveStructEdge {
   cursor: String
-  node: NormalizedStruct!
+  node: MoveStructDecl!
 }
 
 # TransactionEventConnection
@@ -1159,13 +1175,13 @@ type TransactionBlockEdge {
   node: TransactionBlock!
 }
 
-# NormalizedModulesConnection
-type NormalizedModulesConnection {
-  edges: [NormalizedModuleEdge!]!
+# MoveModuleConnection
+type MoveModuleConnection {
+  edges: [MoveModuleEdge!]!
   pageInfo: PageInfo!
 }
 
-type NormalizedModuleEdge {
+type MoveModuleEdge {
   cursor: String
-  node: NormalizedModule!
+  node: MoveModule!
 }
