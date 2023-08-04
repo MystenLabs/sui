@@ -390,8 +390,8 @@ module deepbook::clob_v2 {
         coin: Coin<BaseAsset>,
         account_cap: &AccountCap
     ) {
-        let coin_amount = coin::value(&coin);
-        assert!(coin_amount != 0, EInsufficientBaseCoin);
+        let quantity = coin::value(&coin);
+        assert!(quantity != 0, EInsufficientBaseCoin);
 
         custodian::increase_user_available_balance(
             &mut pool.base_custodian,
@@ -401,8 +401,8 @@ module deepbook::clob_v2 {
 
         event::emit(DepositAsset<BaseAsset>{
             pool_id: *object::uid_as_inner(&pool.id),
-            quantity: coin_amount,
-            owner: account_owner(account_cap)
+            owner: account_owner(account_cap),
+            quantity,
         })
     }
 
@@ -411,8 +411,8 @@ module deepbook::clob_v2 {
         coin: Coin<QuoteAsset>,
         account_cap: &AccountCap
     ) {
-        let coin_amount = coin::value(&coin);
-        assert!(coin_amount != 0, EInsufficientQuoteCoin);
+        let quantity = coin::value(&coin);
+        assert!(quantity != 0, EInsufficientQuoteCoin);
 
         custodian::increase_user_available_balance(
             &mut pool.quote_custodian,
@@ -422,8 +422,8 @@ module deepbook::clob_v2 {
 
         event::emit(DepositAsset<QuoteAsset>{
             pool_id: *object::uid_as_inner(&pool.id),
-            quantity: coin_amount,
-            owner: account_owner(account_cap)
+            owner: account_owner(account_cap),
+            quantity,
         })
     }
 
@@ -439,8 +439,8 @@ module deepbook::clob_v2 {
 
         event::emit(WithdrawAsset<BaseAsset>{
             pool_id: *object::uid_as_inner(&pool.id),
+            owner: account_owner(account_cap),
             quantity,
-            owner: account_owner(account_cap)
         });
 
         custodian::withdraw_asset(
@@ -552,9 +552,12 @@ module deepbook::clob_v2 {
         let base_balance_filled = balance::zero<BaseAsset>();
         let quote_balance_left = quote_balance;
         let all_open_orders = &mut pool.asks;
+
+        // Early return if there are no open orders.
         if (critbit::is_empty(all_open_orders)) {
             return (base_balance_filled, quote_balance_left)
         };
+
         let (tick_price, tick_index) = min_leaf(all_open_orders);
         let terminate_loop = false;
         let canceled_order_events = vector[];
@@ -572,18 +575,9 @@ module deepbook::clob_v2 {
                     skip_order = true;
                     custodian::unlock_balance(&mut pool.base_custodian, maker_order.owner, maker_order.quantity);
                     emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, maker_order);
-                    let canceled_order_event = AllOrdersCanceledComponent<BaseAsset, QuoteAsset> {
-                        client_order_id: maker_order.client_order_id,
-                        order_id: maker_order.order_id,
-                        is_bid: maker_order.is_bid,
-                        owner: maker_order.owner,
-                        original_quantity: maker_order.original_quantity,
-                        base_asset_quantity_canceled: maker_order.quantity,
-                        price: maker_order.price
-                    };
+                    let canceled_order_event = all_orders_canceled_from_order<BaseAsset, QuoteAsset>(maker_order);
 
                     vector::push_back(&mut canceled_order_events, canceled_order_event);
-
                 } else {
                     // Calculate how much quote asset (maker_quote_quantity) is required, including the commission, to fill the maker order.
                     let maker_quote_quantity_without_commission = clob_math::mul(
@@ -701,15 +695,18 @@ module deepbook::clob_v2 {
                         order_id);
                     maker_order_mut.quantity = maker_base_quantity;
                 };
+
                 if (terminate_loop) {
                     break
                 };
             };
+
             if (linked_table::is_empty(&tick_level.open_orders)) {
                 (tick_price, _) = next_leaf(all_open_orders, tick_price);
                 destroy_empty_level(remove_leaf_by_index(all_open_orders, tick_index));
                 (_, tick_index) = find_leaf(all_open_orders, tick_price);
             };
+
             if (terminate_loop) {
                 break
             };
@@ -722,7 +719,7 @@ module deepbook::clob_v2 {
             });
         };
 
-        return (base_balance_filled, quote_balance_left)
+        (base_balance_filled, quote_balance_left)
     }
 
     fun match_bid<BaseAsset, QuoteAsset>(
@@ -741,9 +738,12 @@ module deepbook::clob_v2 {
         let base_balance_filled = balance::zero<BaseAsset>();
         let quote_balance_left = quote_balance;
         let all_open_orders = &mut pool.asks;
+
+        // If there are no open orders, return immediately.
         if (critbit::is_empty(all_open_orders)) {
             return (base_balance_filled, quote_balance_left)
         };
+
         let (tick_price, tick_index) = min_leaf(all_open_orders);
         let canceled_order_events = vector[];
 
@@ -760,21 +760,15 @@ module deepbook::clob_v2 {
                     skip_order = true;
                     custodian::unlock_balance(&mut pool.base_custodian, maker_order.owner, maker_order.quantity);
                     emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, maker_order);
-                    let canceled_order_event = AllOrdersCanceledComponent<BaseAsset, QuoteAsset> {
-                        client_order_id: maker_order.client_order_id,
-                        order_id: maker_order.order_id,
-                        is_bid: maker_order.is_bid,
-                        owner: maker_order.owner,
-                        original_quantity: maker_order.original_quantity,
-                        base_asset_quantity_canceled: maker_order.quantity,
-                        price: maker_order.price
-                    };
-                    vector::push_back(&mut canceled_order_events, canceled_order_event);
+                    let canceled_order_event = all_orders_canceled_from_order<BaseAsset, QuoteAsset>(maker_order);
 
+                    vector::push_back(&mut canceled_order_events, canceled_order_event);
                 } else {
-                    let filled_base_quantity =
-                        if (taker_base_quantity_remaining > maker_base_quantity) { maker_base_quantity }
-                        else { taker_base_quantity_remaining };
+                    let filled_base_quantity = if (taker_base_quantity_remaining > maker_base_quantity) {
+                        maker_base_quantity
+                    } else {
+                        taker_base_quantity_remaining
+                    };
 
                     let filled_quote_quantity = clob_math::mul(filled_base_quantity, maker_order.price);
 
@@ -785,12 +779,15 @@ module deepbook::clob_v2 {
                         filled_quote_quantity,
                         pool.taker_fee_rate
                     );
-                    if (is_round_down) taker_commission = taker_commission + 1;
+
+                    if (is_round_down) {
+                        taker_commission = taker_commission + 1
+                    };
 
                     maker_base_quantity = maker_base_quantity - filled_base_quantity;
-
                     // maker in ask side, decrease maker's locked base asset, increase maker's available quote asset
                     taker_base_quantity_remaining = taker_base_quantity_remaining - filled_base_quantity;
+
                     let locked_base_balance = custodian::decrease_user_locked_balance<BaseAsset>(
                         &mut pool.base_custodian,
                         maker_order.owner,
@@ -808,6 +805,7 @@ module deepbook::clob_v2 {
                             maker_rebate,
                         ),
                     );
+
                     balance::join(&mut pool.quote_asset_trading_fees, taker_commission_balance);
                     balance::join(&mut base_balance_filled, locked_base_balance);
 
@@ -845,18 +843,23 @@ module deepbook::clob_v2 {
                     // Update the maker order.
                     let maker_order_mut = linked_table::borrow_mut(
                         &mut tick_level.open_orders,
-                        order_id);
+                        order_id
+                    );
+
                     maker_order_mut.quantity = maker_base_quantity;
                 };
+
                 if (taker_base_quantity_remaining == 0) {
                     break
                 };
             };
+
             if (linked_table::is_empty(&tick_level.open_orders)) {
                 (tick_price, _) = next_leaf(all_open_orders, tick_price);
                 destroy_empty_level(remove_leaf_by_index(all_open_orders, tick_index));
                 (_, tick_index) = find_leaf(all_open_orders, tick_price);
             };
+
             if (taker_base_quantity_remaining == 0) {
                 break
             };
@@ -868,7 +871,8 @@ module deepbook::clob_v2 {
                 orders_canceled: canceled_order_events,
             });
         };
-        return (base_balance_filled, quote_balance_left)
+
+        (base_balance_filled, quote_balance_left)
     }
 
     fun match_ask<BaseAsset, QuoteAsset>(
@@ -884,14 +888,18 @@ module deepbook::clob_v2 {
         // Base balance received by taker, taking into account of taker commission.
         let quote_balance_filled = balance::zero<QuoteAsset>();
         let all_open_orders = &mut pool.bids;
+
         if (critbit::is_empty(all_open_orders)) {
             return (base_balance_left, quote_balance_filled)
         };
+
         let (tick_price, tick_index) = max_leaf(all_open_orders);
         let canceled_order_events = vector[];
+
         while (!is_empty<TickLevel>(all_open_orders) && tick_price >= price_limit) {
             let tick_level = borrow_mut_leaf_by_index(all_open_orders, tick_index);
             let order_id = *option::borrow(linked_table::front(&tick_level.open_orders));
+
             while (!linked_table::is_empty(&tick_level.open_orders)) {
                 let maker_order = linked_table::borrow(&tick_level.open_orders, order_id);
                 let maker_base_quantity = maker_order.quantity;
@@ -903,15 +911,8 @@ module deepbook::clob_v2 {
                     custodian::unlock_balance(&mut pool.quote_custodian, maker_order.owner, maker_quote_quantity);
                     // TODO (jian): remove the canceled orders after we ensure market makers update
                     emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, maker_order);
-                    let canceled_order_event = AllOrdersCanceledComponent<BaseAsset, QuoteAsset> {
-                        client_order_id: maker_order.client_order_id,
-                        order_id: maker_order.order_id,
-                        is_bid: maker_order.is_bid,
-                        owner: maker_order.owner,
-                        original_quantity: maker_order.original_quantity,
-                        base_asset_quantity_canceled: maker_order.quantity,
-                        price: maker_order.price
-                    };
+                    let canceled_order_event = all_orders_canceled_from_order<BaseAsset, QuoteAsset>(maker_order);
+
                     vector::push_back(&mut canceled_order_events, canceled_order_event);
                 } else {
                     let taker_base_quantity_remaining = balance::value(&base_balance_left);
@@ -1009,7 +1010,7 @@ module deepbook::clob_v2 {
             });
         };
 
-        return (base_balance_left, quote_balance_filled)
+        (base_balance_left, quote_balance_filled)
     }
 
     /// Place a market order to the order book.
@@ -1098,19 +1099,19 @@ module deepbook::clob_v2 {
     ): u64 {
         let owner = account_owner(account_cap);
         let order_id: u64;
-        let open_orders: &mut CritbitTree<TickLevel>;
-        if (is_bid) {
+        let open_orders = if (is_bid) {
             let quote_quantity = clob_math::mul(quantity, price);
             custodian::lock_balance<QuoteAsset>(&mut pool.quote_custodian, account_cap, quote_quantity);
             order_id = pool.next_bid_order_id;
             pool.next_bid_order_id = pool.next_bid_order_id + 1;
-            open_orders = &mut pool.bids;
+            &mut pool.bids
         } else {
             custodian::lock_balance<BaseAsset>(&mut pool.base_custodian, account_cap, quantity);
             order_id = pool.next_ask_order_id;
             pool.next_ask_order_id = pool.next_ask_order_id + 1;
-            open_orders = &mut pool.asks;
+            &mut pool.asks
         };
+
         let order = Order {
             order_id,
             client_order_id,
@@ -1146,9 +1147,11 @@ module deepbook::clob_v2 {
             price,
             expire_timestamp
         });
+
         if (!contains(&pool.usr_open_orders, owner)) {
             add(&mut pool.usr_open_orders, owner, linked_table::new(ctx));
         };
+
         linked_table::push_back(borrow_mut(&mut pool.usr_open_orders, owner), order_id, price);
 
         order_id
@@ -1262,10 +1265,9 @@ module deepbook::clob_v2 {
             return (base_quantity_filled, quote_quantity_filled, false, 0)
         };
 
-        let order_id;
         if (restriction == POST_OR_ABORT) {
             assert!(base_quantity_filled == 0, EOrderCannotBeFullyPassive);
-            order_id = inject_limit_order(
+            let order_id = inject_limit_order(
                 pool,
                 client_order_id,
                 price,
@@ -1277,11 +1279,12 @@ module deepbook::clob_v2 {
                 account_cap,
                 ctx
             );
-            return (base_quantity_filled, quote_quantity_filled, true, order_id)
+
+            (base_quantity_filled, quote_quantity_filled, true, order_id)
         } else {
             assert!(restriction == NO_RESTRICTION, EInvalidRestriction);
             if (quantity > base_quantity_filled) {
-                order_id = inject_limit_order(
+                let order_id = inject_limit_order(
                     pool,
                     client_order_id,
                     price,
@@ -1293,14 +1296,16 @@ module deepbook::clob_v2 {
                     account_cap,
                     ctx
                 );
-                return (base_quantity_filled, quote_quantity_filled, true, order_id)
-            };
-            return (base_quantity_filled, quote_quantity_filled, false, 0)
+
+                (base_quantity_filled, quote_quantity_filled, true, order_id)
+            } else {
+                (base_quantity_filled, quote_quantity_filled, false, 0)
+            }
         }
     }
 
     fun order_is_bid(order_id: u64): bool {
-        return order_id < MIN_ASK_ORDER_ID
+        order_id < MIN_ASK_ORDER_ID
     }
 
     fun emit_order_canceled<BaseAsset, QuoteAsset>(
@@ -1385,7 +1390,8 @@ module deepbook::clob_v2 {
         } else {
             custodian::unlock_balance(&mut pool.base_custodian, owner, order.quantity);
         };
-        emit_order_canceled<BaseAsset, QuoteAsset>(*object::uid_as_inner(&pool.id), &order);
+
+        emit_order_canceled<BaseAsset, QuoteAsset>(*object::uid_as_inner(&pool.id), &order)
     }
 
     fun remove_order<BaseAsset, QuoteAsset>(
@@ -1398,12 +1404,15 @@ module deepbook::clob_v2 {
         linked_table::remove(usr_open_orders, order_id);
         let tick_level = borrow_leaf_by_index(open_orders, tick_index);
         assert!(linked_table::contains(&tick_level.open_orders, order_id), EInvalidOrderId);
+
         let mut_tick_level = borrow_mut_leaf_by_index(open_orders, tick_index);
         let order = linked_table::remove(&mut mut_tick_level.open_orders, order_id);
         assert!(order.owner == owner, EUnauthorizedCancel);
+
         if (linked_table::is_empty(&mut_tick_level.open_orders)) {
             destroy_empty_level(remove_leaf_by_index(open_orders, tick_index));
         };
+
         order
     }
 
@@ -1420,9 +1429,12 @@ module deepbook::clob_v2 {
             let order_id = *option::borrow(linked_table::back(usr_open_order_ids));
             let order_price = *linked_table::borrow(usr_open_order_ids, order_id);
             let is_bid = order_is_bid(order_id);
-            let open_orders =
-                if (is_bid) { &mut pool.bids }
-                else { &mut pool.asks };
+            let open_orders = if (is_bid) {
+                &mut pool.bids
+            } else {
+                &mut pool.asks
+            };
+
             let (_, tick_index) = critbit::find_leaf(open_orders, order_price);
             let order = remove_order<BaseAsset, QuoteAsset>(
                 open_orders,
@@ -1437,18 +1449,10 @@ module deepbook::clob_v2 {
             } else {
                 custodian::unlock_balance(&mut pool.base_custodian, owner, order.quantity);
             };
+
             // TODO (jian): remove the canceled orders after we ensure market makers update
             emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, &order);
-            let canceled_order_event = AllOrdersCanceledComponent<BaseAsset, QuoteAsset> {
-                client_order_id: order.client_order_id,
-                order_id: order.order_id,
-                is_bid: order.is_bid,
-                owner: order.owner,
-                original_quantity: order.original_quantity,
-                base_asset_quantity_canceled: order.quantity,
-                price: order.price
-            };
-
+            let canceled_order_event = all_orders_canceled_from_order<BaseAsset, QuoteAsset>(&order);
             vector::push_back(&mut canceled_order_events, canceled_order_event);
         };
 
@@ -1481,11 +1485,12 @@ module deepbook::clob_v2 {
         // retrieve and remove the order from open orders of the PriceLevel.
         let owner = account_owner(account_cap);
         assert!(contains(&pool.usr_open_orders, owner), 0);
+        let usr_open_orders = borrow_mut(&mut pool.usr_open_orders, owner);
+
         let tick_index: u64 = 0;
         let tick_price: u64 = 0;
         let n_order = vector::length(&order_ids);
         let i_order = 0;
-        let usr_open_orders = borrow_mut(&mut pool.usr_open_orders, owner);
         let canceled_order_events = vector[];
 
         while (i_order < n_order) {
@@ -1520,15 +1525,17 @@ module deepbook::clob_v2 {
                 custodian::unlock_balance(&mut pool.base_custodian, owner, order.quantity);
             };
             emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, &order);
-            let canceled_order_event = AllOrdersCanceledComponent<BaseAsset, QuoteAsset> {
-                client_order_id: order.client_order_id,
-                order_id: order.order_id,
-                is_bid: order.is_bid,
-                owner: order.owner,
-                original_quantity: order.original_quantity,
-                base_asset_quantity_canceled: order.quantity,
-                price: order.price
-            };
+
+            let canceled_order_event = all_orders_canceled_from_order<BaseAsset, QuoteAsset>(&order);
+            // AllOrdersCanceledComponent<BaseAsset, QuoteAsset> {
+            //     client_order_id: order.client_order_id,
+            //     order_id: order.order_id,
+            //     is_bid: order.is_bid,
+            //     owner: order.owner,
+            //     original_quantity: order.original_quantity,
+            //     base_asset_quantity_canceled: order.quantity,
+            //     price: order.price
+            // };
             vector::push_back(&mut canceled_order_events, canceled_order_event);
 
             i_order = i_order + 1;
@@ -1558,20 +1565,33 @@ module deepbook::clob_v2 {
         let pool_id = *object::uid_as_inner(&pool.id);
         let now = clock::timestamp_ms(clock);
         let n_order = vector::length(&order_ids);
-        assert!(n_order == vector::length(&order_owners), ENotEqual);
         let i_order = 0;
         let tick_index: u64 = 0;
         let tick_price: u64 = 0;
         let canceled_order_events = vector[];
+
+        assert!(n_order == vector::length(&order_owners), ENotEqual);
+
         while (i_order < n_order) {
             let order_id = *vector::borrow(&order_ids, i_order);
             let owner = *vector::borrow(&order_owners, i_order);
-            if (!table::contains(&pool.usr_open_orders, owner)) { continue };
+            if (!table::contains(&pool.usr_open_orders, owner)) {
+                continue
+            };
+
             let usr_open_orders = borrow_mut(&mut pool.usr_open_orders, owner);
-            if (!linked_table::contains(usr_open_orders, order_id)) { continue };
+            if (!linked_table::contains(usr_open_orders, order_id)) {
+                continue
+            };
+
             let new_tick_price = *linked_table::borrow(usr_open_orders, order_id);
             let is_bid = order_is_bid(order_id);
-            let open_orders = if (is_bid) { &mut pool.bids } else { &mut pool.asks };
+            let open_orders = if (is_bid) {
+                &mut pool.bids
+            } else {
+                &mut pool.asks
+            };
+
             if (new_tick_price != tick_price) {
                 tick_price = new_tick_price;
                 let (tick_exists, new_tick_index) = find_leaf(
@@ -1583,6 +1603,7 @@ module deepbook::clob_v2 {
             };
             let order = remove_order<BaseAsset, QuoteAsset>(open_orders, usr_open_orders, tick_index, order_id, owner);
             assert!(order.expire_timestamp < now, EInvalidExpireTimestamp);
+
             if (is_bid) {
                 let balance_locked = clob_math::mul(order.quantity, order.price);
                 custodian::unlock_balance(&mut pool.quote_custodian, owner, balance_locked);
@@ -1591,17 +1612,18 @@ module deepbook::clob_v2 {
             };
             // TODO (jian): remove the canceled orders after we ensure market makers update
             emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, &order);
-            let canceled_order_event = AllOrdersCanceledComponent<BaseAsset, QuoteAsset> {
-                client_order_id: order.client_order_id,
-                order_id: order.order_id,
-                is_bid: order.is_bid,
-                owner: order.owner,
-                original_quantity: order.original_quantity,
-                base_asset_quantity_canceled: order.quantity,
-                price: order.price
-            };
-            vector::push_back(&mut canceled_order_events, canceled_order_event);
+            let canceled_order_event = all_orders_canceled_from_order(&order);
+            // AllOrdersCanceledComponent<BaseAsset, QuoteAsset> {
+            //     client_order_id: order.client_order_id,
+            //     order_id: order.order_id,
+            //     is_bid: order.is_bid,
+            //     owner: order.owner,
+            //     original_quantity: order.original_quantity,
+            //     base_asset_quantity_canceled: order.quantity,
+            //     price: order.price
+            // };
 
+            vector::push_back(&mut canceled_order_events, canceled_order_event);
             i_order = i_order + 1;
         };
 
@@ -1621,12 +1643,17 @@ module deepbook::clob_v2 {
         let usr_open_order_ids = table::borrow(&pool.usr_open_orders, owner);
         let open_orders = vector::empty<Order>();
         let order_id = linked_table::front(usr_open_order_ids);
+
         while (!option::is_none(order_id)) {
             let order_price = *linked_table::borrow(usr_open_order_ids, *option::borrow(order_id));
-            let tick_level =
-                if (order_is_bid(*option::borrow(order_id))) borrow_leaf_by_key(&pool.bids, order_price)
-                else borrow_leaf_by_key(&pool.asks, order_price);
+            let tick_level = if (order_is_bid(*option::borrow(order_id))) {
+                borrow_leaf_by_key(&pool.bids, order_price)
+            } else {
+                borrow_leaf_by_key(&pool.asks, order_price)
+            };
+
             let order = linked_table::borrow(&tick_level.open_orders, *option::borrow(order_id));
+
             vector::push_back(&mut open_orders, Order {
                 order_id: order.order_id,
                 client_order_id: order.client_order_id,
@@ -1638,8 +1665,10 @@ module deepbook::clob_v2 {
                 expire_timestamp: order.expire_timestamp,
                 self_matching_prevention: order.self_matching_prevention
             });
+
             order_id = linked_table::next(usr_open_order_ids, *option::borrow(order_id));
         };
+
         open_orders
     }
 
@@ -1653,6 +1682,7 @@ module deepbook::clob_v2 {
         let owner = account_owner(account_cap);
         let (base_avail, base_locked) = custodian::account_balance(&pool.base_custodian, owner);
         let (quote_avail, quote_locked) = custodian::account_balance(&pool.quote_custodian, owner);
+
         (base_avail, base_locked, quote_avail, quote_locked)
     }
 
@@ -1668,13 +1698,15 @@ module deepbook::clob_v2 {
         } else {
             option::none<u64>()
         };
+
         let ask_price = if (!critbit::is_empty(&pool.asks)) {
             let (result, _) = critbit::min_leaf(&pool.asks);
             option::some<u64>(result)
         } else {
             option::none<u64>()
         };
-        return (bid_price, ask_price)
+
+        (bid_price, ask_price)
     }
 
     /// Enter a price range and return the level2 order depth of all valid prices within this price range in bid side
@@ -1689,13 +1721,21 @@ module deepbook::clob_v2 {
     ): (vector<u64>, vector<u64>) {
         let price_vec = vector::empty<u64>();
         let depth_vec = vector::empty<u64>();
-        if (critbit::is_empty(&pool.bids)) { return (price_vec, depth_vec) };
+
+        if (critbit::is_empty(&pool.bids)) {
+            return (price_vec, depth_vec)
+        };
+
         let (price_low_, _) = critbit::min_leaf(&pool.bids);
-        if (price_low < price_low_) price_low = price_low_;
+        price_low = sui::math::max(price_low, price_low_);
+
         let (price_high_, _) = critbit::max_leaf(&pool.bids);
-        if (price_high > price_high_) price_high = price_high_;
+        price_high = sui::math::min(price_high, price_high_);
+
+
         price_low = critbit::find_closest_key(&pool.bids, price_low);
         price_high = critbit::find_closest_key(&pool.bids, price_high);
+
         while (price_low <= price_high) {
             let depth = get_level2_book_status<BaseAsset, QuoteAsset>(
                 &pool.bids,
@@ -1707,9 +1747,12 @@ module deepbook::clob_v2 {
                 vector::push_back(&mut depth_vec, depth);
             };
             let (next_price, _) = critbit::next_leaf(&pool.bids, price_low);
-            if (next_price == 0) { break }
-            else { price_low = next_price };
+
+            if (next_price != 0) {
+                price_low = next_price
+            } else break;
         };
+
         (price_vec, depth_vec)
     }
 
@@ -1725,13 +1768,20 @@ module deepbook::clob_v2 {
     ): (vector<u64>, vector<u64>) {
         let price_vec = vector::empty<u64>();
         let depth_vec = vector::empty<u64>();
-        if (critbit::is_empty(&pool.asks)) { return (price_vec, depth_vec) };
+
+        if (critbit::is_empty(&pool.asks)) {
+            return (price_vec, depth_vec)
+        };
+
         let (price_low_, _) = critbit::min_leaf(&pool.asks);
-        if (price_low < price_low_) price_low = price_low_;
+        price_low = sui::math::max(price_low, price_low_);
+
         let (price_high_, _) = critbit::max_leaf(&pool.asks);
-        if (price_high > price_high_) price_high = price_high_;
+        price_high = sui::math::min(price_high, price_high_);
+
         price_low = critbit::find_closest_key(&pool.asks, price_low);
         price_high = critbit::find_closest_key(&pool.asks, price_high);
+
         while (price_low <= price_high) {
             let depth = get_level2_book_status<BaseAsset, QuoteAsset>(
                 &pool.asks,
@@ -1743,9 +1793,11 @@ module deepbook::clob_v2 {
                 vector::push_back(&mut depth_vec, depth);
             };
             let (next_price, _) = critbit::next_leaf(&pool.asks, price_low);
-            if (next_price == 0) { break }
-            else { price_low = next_price };
+            if (next_price != 0) {
+                price_low = next_price
+            } else break;
         };
+
         (price_vec, depth_vec)
     }
 
@@ -1757,15 +1809,32 @@ module deepbook::clob_v2 {
     ): u64 {
         let tick_level = critbit::borrow_leaf_by_key(open_orders, price);
         let tick_open_orders = &tick_level.open_orders;
-        let depth = 0;
         let order_id = linked_table::front(tick_open_orders);
-        let order: &Order;
+        let depth = 0;
+
         while (!option::is_none(order_id)) {
-            order = linked_table::borrow(tick_open_orders, *option::borrow(order_id));
-            if (order.expire_timestamp > time_stamp) depth = depth + order.quantity;
+            let order = linked_table::borrow(tick_open_orders, *option::borrow(order_id));
+            if (order.expire_timestamp > time_stamp) {
+                depth = depth + order.quantity;
+            };
+
             order_id = linked_table::next(tick_open_orders, *option::borrow(order_id));
         };
+
         depth
+    }
+
+    /// Internal: create `AllOrdersCanceledComponent` from `Order`.
+    fun all_orders_canceled_from_order<Base, Quote>(order: &Order): AllOrdersCanceledComponent<Base, Quote> {
+        AllOrdersCanceledComponent<Base, Quote> {
+            client_order_id: order.client_order_id,
+            order_id: order.order_id,
+            is_bid: order.is_bid,
+            owner: order.owner,
+            original_quantity: order.original_quantity,
+            base_asset_quantity_canceled: order.quantity,
+            price: order.price
+        }
     }
 
     public fun get_order_status<BaseAsset, QuoteAsset>(
@@ -1778,13 +1847,16 @@ module deepbook::clob_v2 {
         let usr_open_order_ids = table::borrow(&pool.usr_open_orders, owner);
         assert!(linked_table::contains(usr_open_order_ids, order_id), EInvalidOrderId);
         let order_price = *linked_table::borrow(usr_open_order_ids, order_id);
-        let open_orders =
-            if (order_id < MIN_ASK_ORDER_ID) { &pool.bids }
-            else { &pool.asks };
+        let open_orders = if (order_id < MIN_ASK_ORDER_ID) {
+            &pool.bids
+        } else {
+            &pool.asks
+        };
+
         let tick_level = critbit::borrow_leaf_by_key(open_orders, order_price);
         let tick_open_orders = &tick_level.open_orders;
-        let order = linked_table::borrow(tick_open_orders, order_id);
-        order
+
+        linked_table::borrow(tick_open_orders, order_id)
     }
 
 
@@ -1849,7 +1921,7 @@ module deepbook::clob_v2 {
         order_left: &Order,
         order_right: &Order,
     ): bool {
-        return (order_left.order_id == order_right.order_id) &&
+        (order_left.order_id == order_right.order_id) &&
             (order_left.price == order_right.price) &&
             (order_left.quantity == order_right.quantity) &&
             (order_left.is_bid == order_right.is_bid) &&
@@ -1863,9 +1935,10 @@ module deepbook::clob_v2 {
     ): bool {
         if (!linked_table::contains(tree, expected_order.order_id)) {
             return false
-        };
-        let order = linked_table::borrow(tree, expected_order.order_id);
-        return order_equal(order, expected_order)
+        } else {
+            let order = linked_table::borrow(tree, expected_order.order_id);
+            order_equal(order, expected_order)
+        }
     }
 
     #[test_only]
@@ -1905,7 +1978,7 @@ module deepbook::clob_v2 {
         sequence_id: u64,
         is_bid: bool
     ): u64 {
-        return if (is_bid) { MIN_BID_ORDER_ID + sequence_id } else { MIN_ASK_ORDER_ID + sequence_id }
+        if (is_bid) { MIN_BID_ORDER_ID + sequence_id } else { MIN_ASK_ORDER_ID + sequence_id }
     }
 
     #[test_only]
