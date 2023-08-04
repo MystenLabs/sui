@@ -1,5 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-export * from './hooks/index.js';
-export * from './components/index.js';
+export * from './hooks/useSuiClient.js';
+export * from './components/SuiClientProvider.js';

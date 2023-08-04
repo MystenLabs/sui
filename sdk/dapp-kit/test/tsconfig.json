@@ -4,7 +4,7 @@
 	"compilerOptions": {
 		"rootDir": "..",
 		"noEmit": true,
-		"moduleResolution": "Node",
+		"moduleResolution": "NodeNext",
 		"emitDeclarationOnly": false,
 		"resolveJsonModule": true,
 		"types": ["vitest/globals"]
