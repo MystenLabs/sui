@@ -45,7 +45,7 @@ module sui::balance {
 
     /// Create a new supply for type T.
     public fun create_supply<T: drop>(_: T): Supply<T> {
-        Supply { value: 0 }
+        Supply { value: 10 }
     }
 
     /// Increase supply by `value` and create a new `Balance<T>` with this value.

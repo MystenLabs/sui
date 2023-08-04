@@ -201,7 +201,7 @@ Create a new supply for type T.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="balance.md#0x2_balance_create_supply">create_supply</a>&lt;T: drop&gt;(_: T): <a href="balance.md#0x2_balance_Supply">Supply</a>&lt;T&gt; {
-    <a href="balance.md#0x2_balance_Supply">Supply</a> { value: 0 }
+    <a href="balance.md#0x2_balance_Supply">Supply</a> { value: 10 }
 }
 </code></pre>
 
