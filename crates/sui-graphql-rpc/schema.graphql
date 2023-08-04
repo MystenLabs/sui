@@ -50,9 +50,6 @@ type Query {
     txBytes: Base64!,
     txMeta: TransactionMetadata,
     skipChecks: Boolean,
-    sender: SuiAddress,
-    gasPrice: U64
-    gasObjects: [SuiAddress!],
     epoch: Int
   ): DryRunResult
 
