@@ -48,6 +48,7 @@ async fn test_consensus_recovery_with_bullshark() {
     // Run with the new leader election schedule enabled
     let mut config: ProtocolConfig = latest_protocol_version();
     config.set_narwhal_new_leader_election_schedule(true);
+    config.set_consensus_bad_nodes_stake_threshold(33);
     test_consensus_recovery_with_bullshark_with_config(config).await;
 }
 
@@ -336,6 +337,8 @@ async fn test_leader_swap_table() {
     // GIVEN
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
+    let mut protocol_config: ProtocolConfig = latest_protocol_version();
+    protocol_config.set_consensus_bad_nodes_stake_threshold(33);
 
     // the authority ids
     let authority_ids: Vec<AuthorityIdentifier> = fixture.authorities().map(|a| a.id()).collect();
@@ -347,7 +350,12 @@ async fn test_leader_swap_table() {
         scores.add_score(*id, score as u64);
     }
 
-    let table = LeaderSwapTable::new(&committee, 2, &scores);
+    let table = LeaderSwapTable::new(
+        &committee,
+        2,
+        &scores,
+        protocol_config.consensus_bad_nodes_stake_threshold(),
+    );
 
     // Only one bad authority should be calculated since all have equal stake
     assert_eq!(table.bad_nodes.len(), 1);
@@ -382,7 +390,12 @@ async fn test_leader_swap_table() {
     }
 
     // We expect the first 3 authorities (f) to be amongst the bad nodes
-    let table = LeaderSwapTable::new(&committee, 2, &scores);
+    let table = LeaderSwapTable::new(
+        &committee,
+        2,
+        &scores,
+        protocol_config.consensus_bad_nodes_stake_threshold(),
+    );
 
     assert_eq!(table.bad_nodes.len(), 3);
     assert!(table.bad_nodes.contains_key(&authority_ids[0]));
@@ -407,6 +420,8 @@ async fn test_leader_schedule() {
     // GIVEN
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
+    let mut protocol_config: ProtocolConfig = latest_protocol_version();
+    protocol_config.set_consensus_bad_nodes_stake_threshold(33);
 
     // the authority ids
     let authority_ids: Vec<AuthorityIdentifier> = fixture.authorities().map(|a| a.id()).collect();
@@ -428,7 +443,12 @@ async fn test_leader_schedule() {
     }
 
     // Update the schedule
-    let table = LeaderSwapTable::new(&committee, 2, &scores);
+    let table = LeaderSwapTable::new(
+        &committee,
+        2,
+        &scores,
+        protocol_config.consensus_bad_nodes_stake_threshold(),
+    );
     schedule.update_leader_swap_table(table.clone());
 
     // Now call the leader for round 2 again. It should be swapped with another node
@@ -505,6 +525,7 @@ async fn test_leader_schedule_from_store() {
     // WHEN flag is enabled for the new schedule algorithm
     let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
     protocol_config.set_narwhal_new_leader_election_schedule(true);
+    protocol_config.set_consensus_bad_nodes_stake_threshold(33);
     let schedule = LeaderSchedule::from_store(committee, store, protocol_config);
 
     // THEN the stored schedule should be returned and eventually the low score leader should be

@@ -70,14 +70,23 @@ impl Debug for LeaderSwapTable {
 }
 
 impl LeaderSwapTable {
-    // constructs a new table based on the provided reputation scores.
-    pub fn new(committee: &Committee, round: Round, reputation_scores: &ReputationScores) -> Self {
+    // constructs a new table based on the provided reputation scores. The `bad_nodes_stake_threshold` designates the
+    // total (by stake) nodes that will be considered as "bad" based on their scores and will be replaced by good nodes.
+    // The `bad_nodes_stake_threshold` should be in the range of [0 - 33].
+    pub fn new(
+        committee: &Committee,
+        round: Round,
+        reputation_scores: &ReputationScores,
+        bad_nodes_stake_threshold: u64,
+    ) -> Self {
+        assert!((0..=33).contains(&bad_nodes_stake_threshold), "The bad_nodes_stake_threshold should be in range [0 - 33], out of bounds parameter detected");
         assert!(reputation_scores.final_of_schedule, "Only reputation scores that have been calculated on the end of a schedule are accepted");
 
         // calculating the good nodes
         let good_nodes = Self::retrieve_first_nodes(
             committee,
             reputation_scores.authorities_by_score_desc().into_iter(),
+            bad_nodes_stake_threshold,
         );
 
         // calculating the bad nodes
@@ -88,6 +97,7 @@ impl LeaderSwapTable {
                 .authorities_by_score_desc()
                 .into_iter()
                 .rev(),
+            bad_nodes_stake_threshold,
         )
         .into_iter()
         .map(|authority| (authority.id(), authority))
@@ -158,12 +168,15 @@ impl LeaderSwapTable {
         None
     }
 
-    // Retrieves the first f by stake nodes provided by the iterator `authorities`. It's the
-    // caller's responsibility to ensure that the elements of the `authorities` input is already
-    // sorted.
+    // Retrieves the first nodes provided by the iterator `authorities` until the `stake_threshold` has been
+    // reached. The `stake_threshold` should be between [0, 100] and expresses the percentage of stake that is
+    // considered the cutoff. Basically we keep adding to the response authorities until the sum of the stake
+    // reaches the `stake_threshold`. It's the caller's responsibility to ensure that the elements of the `authorities`
+    // input is already sorted.
     fn retrieve_first_nodes(
         committee: &Committee,
         authorities: impl Iterator<Item = (AuthorityIdentifier, u64)>,
+        stake_threshold: u64,
     ) -> Vec<Authority> {
         let mut filtered_authorities = Vec::new();
 
@@ -171,9 +184,9 @@ impl LeaderSwapTable {
         for (authority_id, _score) in authorities {
             stake += committee.stake_by_id(authority_id);
 
-            // if by adding the authority we have reached validity, then we exit so we make sure that
-            // we gather < f + 1
-            if committee.reached_validity(stake) {
+            // if the total accumulated stake has surpassed the stake threshold then we omit this
+            // last authority and we exit the loop.
+            if stake > (stake_threshold * committee.total_stake()) / 100 as Stake {
                 break;
             }
             filtered_authorities.push(committee.authority_safe(&authority_id).to_owned());
@@ -217,6 +230,7 @@ impl LeaderSchedule {
                         &committee,
                         commit.leader_round(),
                         &commit.reputation_score(),
+                        protocol_config.consensus_bad_nodes_stake_threshold(),
                     )
                 })
         } else {
