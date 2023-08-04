@@ -151,7 +151,7 @@ module sui::kiosk_marketplace_ext {
 module sui::kiosk_extensions_tests {
     use sui::kiosk_test_utils::{Self as test};
     use sui::kiosk_extension as ext;
-    // use sui::bag;
+    use sui::kiosk;
 
     /// The `Ext` witness to use for testing.
     struct Extension has drop {}
@@ -232,17 +232,21 @@ module sui::kiosk_extensions_tests {
         abort 1337
     }
 
-    #[test, expected_failure(abort_code = sui::kiosk_extension::EExtensionNotAllowed)]
-    fun test_place_not_allowed_but_lock() {
+    #[test]
+    fun test_place_allowed_with_lock() {
         let ctx = &mut test::ctx();
-        let (policy, _policy_cap) = test::get_policy(ctx);
-        let (asset, _asset_id) = test::get_asset(ctx);
+        let (policy, policy_cap) = test::get_policy(ctx);
+        let (asset, asset_id) = test::get_asset(ctx);
         let (kiosk, owner_cap) = test::get_kiosk(ctx);
 
         ext::add(Extension {}, &mut kiosk, &owner_cap, 2, ctx);
         ext::place(Extension {}, &mut kiosk, asset, &policy);
 
-        abort 1337
+        let asset = kiosk::take(&mut kiosk, &owner_cap, asset_id);
+
+        test::return_kiosk(kiosk, owner_cap, ctx);
+        test::return_policy(policy, policy_cap, ctx);
+        test::return_assets(vector[ asset ]);
     }
 
     // === EExtensionNotInstalled ===

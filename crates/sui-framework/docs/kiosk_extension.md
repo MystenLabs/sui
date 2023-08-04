@@ -115,7 +115,7 @@ dynamic field.
  the ability to store any data they want.
 </dd>
 <dt>
-<code>permissions: u32</code>
+<code>permissions: u128</code>
 </dt>
 <dd>
  Bitmap of permissions that the extension has (can be revoked any
@@ -123,7 +123,7 @@ dynamic field.
  required permissions or no permissions at all.
 
  1st bit - <code>place</code> - allows to place items for sale
- 2nd bit - <code>lock</code> - allows to lock items
+ 2nd bit - <code>lock</code> and <code>place</code> - allows to lock items (and place)
 
  For example:
  - <code>11</code> - allows to place items and lock them.
@@ -221,6 +221,27 @@ Extension is not installed in the Kiosk.
 
 
 
+<a name="0x2_kiosk_extension_LOCK"></a>
+
+Value that represents the <code>lock</code> and <code>place</code> permission in the
+permissions bitmap.
+
+
+<pre><code><b>const</b> <a href="kiosk_extension.md#0x2_kiosk_extension_LOCK">LOCK</a>: u128 = 2;
+</code></pre>
+
+
+
+<a name="0x2_kiosk_extension_PLACE"></a>
+
+Value that represents the <code>place</code> permission in the permissions bitmap.
+
+
+<pre><code><b>const</b> <a href="kiosk_extension.md#0x2_kiosk_extension_PLACE">PLACE</a>: u128 = 1;
+</code></pre>
+
+
+
 <a name="0x2_kiosk_extension_add"></a>
 
 ## Function `add`
@@ -230,7 +251,7 @@ extension witness is required to allow extensions define their set of
 permissions in the custom <code>add</code> call.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_add">add</a>&lt;Ext: drop&gt;(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, permissions: u32, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_add">add</a>&lt;Ext: drop&gt;(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, permissions: u128, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -243,7 +264,7 @@ permissions in the custom <code>add</code> call.
     _ext: Ext,
     self: &<b>mut</b> Kiosk,
     cap: &KioskOwnerCap,
-    permissions: u32,
+    permissions: u128,
     ctx: &<b>mut</b> TxContext
 ) {
     <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">kiosk::has_access</a>(self, cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ENotOwner">ENotOwner</a>);
@@ -437,7 +458,8 @@ aware of the risks.
 ## Function `place`
 
 Protected action: place an item into the Kiosk. Can be performed by an
-authorized extension. The extension must have the <code>place</code> permission.
+authorized extension. The extension must have the <code>place</code> permission or
+a <code>lock</code> permission.
 
 To prevent non-tradable items from being placed into <code>Kiosk</code> the method
 requires a <code>TransferPolicy</code> for the placed type to exist.
@@ -456,7 +478,7 @@ requires a <code>TransferPolicy</code> for the placed type to exist.
     _ext: Ext, self: &<b>mut</b> Kiosk, item: T, _policy: &TransferPolicy&lt;T&gt;
 ) {
     <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
-    <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_can_place">can_place</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotAllowed">EExtensionNotAllowed</a>);
+    <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_can_place">can_place</a>&lt;Ext&gt;(self) || <a href="kiosk_extension.md#0x2_kiosk_extension_can_lock">can_lock</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotAllowed">EExtensionNotAllowed</a>);
 
     <a href="kiosk.md#0x2_kiosk_place_internal">kiosk::place_internal</a>(self, item)
 }
@@ -564,7 +586,7 @@ Check whether an extension of type <code>Ext</code> can <code>place</code> into 
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_can_place">can_place</a>&lt;Ext: drop&gt;(self: &Kiosk): bool {
-    <a href="kiosk_extension.md#0x2_kiosk_extension_is_enabled">is_enabled</a>&lt;Ext&gt;(self) && <a href="kiosk_extension.md#0x2_kiosk_extension_extension">extension</a>&lt;Ext&gt;(self).permissions & 1 != 0
+    <a href="kiosk_extension.md#0x2_kiosk_extension_is_enabled">is_enabled</a>&lt;Ext&gt;(self) && <a href="kiosk_extension.md#0x2_kiosk_extension_extension">extension</a>&lt;Ext&gt;(self).permissions & <a href="kiosk_extension.md#0x2_kiosk_extension_PLACE">PLACE</a> != 0
 }
 </code></pre>
 
@@ -577,6 +599,7 @@ Check whether an extension of type <code>Ext</code> can <code>place</code> into 
 ## Function `can_lock`
 
 Check whether an extension of type <code>Ext</code> can <code>lock</code> items in Kiosk.
+Locking also enables <code>place</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_can_lock">can_lock</a>&lt;Ext: drop&gt;(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>): bool
@@ -589,7 +612,7 @@ Check whether an extension of type <code>Ext</code> can <code>lock</code> items 
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_can_lock">can_lock</a>&lt;Ext: drop&gt;(self: &Kiosk): bool {
-    <a href="kiosk_extension.md#0x2_kiosk_extension_is_enabled">is_enabled</a>&lt;Ext&gt;(self) && <a href="kiosk_extension.md#0x2_kiosk_extension_extension">extension</a>&lt;Ext&gt;(self).permissions & 2 != 0
+    <a href="kiosk_extension.md#0x2_kiosk_extension_is_enabled">is_enabled</a>&lt;Ext&gt;(self) && <a href="kiosk_extension.md#0x2_kiosk_extension_extension">extension</a>&lt;Ext&gt;(self).permissions & <a href="kiosk_extension.md#0x2_kiosk_extension_LOCK">LOCK</a> != 0
 }
 </code></pre>
 

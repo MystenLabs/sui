@@ -143,10 +143,11 @@ module sui::kiosk {
         /// Number of items stored in a Kiosk. Used to allow unpacking
         /// an empty Kiosk if it was wrapped or has a single owner.
         item_count: u32,
-        /// Whether to open the UID to public. Set to `false` by default
-        /// but the owner can switch the state if necessary. Keeping the base
-        /// UID read-only prevents the base UID from having too many dynamic
-        /// fields as well as protects from potentially malicious fields.
+        /// [DEPRECATED] Please, don't use the `allow_extensions` and the matching
+        /// `set_allow_extensions` function - it is a legacy feature that is being
+        /// replaced by the `kiosk_extension` module and its Extensions API.
+        ///
+        /// Exposes `uid_mut` publicly when set to `true`, set to `false` by default.
         allow_extensions: bool
     }
 
@@ -571,7 +572,7 @@ module sui::kiosk {
         balance::value(&self.profits)
     }
 
-    /// Get mutable access to `profits` - useful for extendability.
+    /// Get mutable access to `profits` - owner only action.
     public fun profits_mut(self: &mut Kiosk, cap: &KioskOwnerCap): &mut Balance<SUI> {
         assert!(has_access(self, cap), ENotOwner);
         &mut self.profits

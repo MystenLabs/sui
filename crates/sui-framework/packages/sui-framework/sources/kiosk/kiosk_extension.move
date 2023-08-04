@@ -55,6 +55,13 @@ module sui::kiosk_extension {
     /// Extension is not installed in the Kiosk.
     const EExtensionNotInstalled: u64 = 3;
 
+    /// Value that represents the `place` permission in the permissions bitmap.
+    const PLACE: u128 = 1;
+
+    /// Value that represents the `lock` and `place` permission in the
+    /// permissions bitmap.
+    const LOCK: u128 = 2;
+
     /// The Extension struct contains the data used by the extension and the
     /// configuration for this extension. Stored under the `ExtensionKey`
     /// dynamic field.
@@ -69,7 +76,7 @@ module sui::kiosk_extension {
         /// required permissions or no permissions at all.
         ///
         /// 1st bit - `place` - allows to place items for sale
-        /// 2nd bit - `lock` - allows to lock items
+        /// 2nd bit - `lock` and `place` - allows to lock items (and place)
         ///
         /// For example:
         /// - `11` - allows to place items and lock them.
@@ -187,7 +194,8 @@ module sui::kiosk_extension {
     // === Protected Actions ===
 
     /// Protected action: place an item into the Kiosk. Can be performed by an
-    /// authorized extension. The extension must have the `place` permission.
+    /// authorized extension. The extension must have the `place` permission or
+    /// a `lock` permission.
     ///
     /// To prevent non-tradable items from being placed into `Kiosk` the method
     /// requires a `TransferPolicy` for the placed type to exist.
@@ -195,7 +203,7 @@ module sui::kiosk_extension {
         _ext: Ext, self: &mut Kiosk, item: T, _policy: &TransferPolicy<T>
     ) {
         assert!(is_installed<Ext>(self), EExtensionNotInstalled);
-        assert!(can_place<Ext>(self), EExtensionNotAllowed);
+        assert!(can_place<Ext>(self) || can_lock<Ext>(self), EExtensionNotAllowed);
 
         kiosk::place_internal(self, item)
     }
@@ -225,12 +233,13 @@ module sui::kiosk_extension {
 
     /// Check whether an extension of type `Ext` can `place` into Kiosk.
     public fun can_place<Ext: drop>(self: &Kiosk): bool {
-        is_enabled<Ext>(self) && extension<Ext>(self).permissions & 1 != 0
+        is_enabled<Ext>(self) && extension<Ext>(self).permissions & PLACE != 0
     }
 
     /// Check whether an extension of type `Ext` can `lock` items in Kiosk.
+    /// Locking also enables `place`.
     public fun can_lock<Ext: drop>(self: &Kiosk): bool {
-        is_enabled<Ext>(self) && extension<Ext>(self).permissions & 2 != 0
+        is_enabled<Ext>(self) && extension<Ext>(self).permissions & LOCK != 0
     }
 
     // === Internal ===

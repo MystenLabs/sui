@@ -223,10 +223,11 @@ needs to be approved via the <code>TransferPolicy</code>.
 <code>allow_extensions: bool</code>
 </dt>
 <dd>
- Whether to open the UID to public. Set to <code><b>false</b></code> by default
- but the owner can switch the state if necessary. Keeping the base
- UID read-only prevents the base UID from having too many dynamic
- fields as well as protects from potentially malicious fields.
+ [DEPRECATED] Please, don't use the <code>allow_extensions</code> and the matching
+ <code>set_allow_extensions</code> function - it is a legacy feature that is being
+ replaced by the <code><a href="kiosk_extension.md#0x2_kiosk_extension">kiosk_extension</a></code> module and its Extensions API.
+
+ Exposes <code>uid_mut</code> publicly when set to <code><b>true</b></code>, set to <code><b>false</b></code> by default.
 </dd>
 </dl>
 
@@ -1683,7 +1684,7 @@ Get the amount of profits collected by selling items.
 
 ## Function `profits_mut`
 
-Get mutable access to <code>profits</code> - useful for extendability.
+Get mutable access to <code>profits</code> - owner only action.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_profits_mut">profits_mut</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>): &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
