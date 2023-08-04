@@ -786,7 +786,7 @@ type Balance {
 type Coin {
   id: ID!
   balance: BigInt
-  asMoveObject: MoveObject
+  asMoveObject: MoveObject!
 }
 
 type StakedSui {
@@ -798,7 +798,7 @@ type StakedSui {
   # Only available if status is `ACTIVE`.
   estimatedReward: BigInt
 
-  asMoveObject: MoveObject
+  asMoveObject: MoveObject!
 }
 
 enum StakeStatus {
