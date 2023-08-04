@@ -31,7 +31,7 @@ use sui_types::{
 };
 use tokio::sync::oneshot::{self, Sender};
 use tokio::time::Instant;
-use tracing::log::{debug, error, info};
+use tracing::{debug, error, info};
 use typed_store::{Map, TypedStoreError};
 
 use super::authority_store_tables::AuthorityPerpetualTables;
@@ -289,8 +289,15 @@ impl AuthorityStorePruner {
             .get_archive_watermark()
             .await?
             .unwrap_or(u64::MAX);
-        let highest_pruned_checkpoint = perpetual_db.get_highest_pruned_checkpoint()?;
-        info!("Latest archived checkpoint: {latest_archived_checkpoint}, highest pruned checkpoint: {highest_pruned_checkpoint}");
+        let max_eligible_checkpoint = if config.num_epochs_to_retain != u64::MAX {
+            min(
+                perpetual_db.get_highest_pruned_checkpoint()?,
+                latest_archived_checkpoint,
+            )
+        } else {
+            latest_archived_checkpoint
+        };
+        info!("Max eligible checkpoint {}", max_eligible_checkpoint);
         Self::prune_for_eligible_epochs(
             perpetual_db,
             checkpoint_store,
@@ -299,7 +306,7 @@ impl AuthorityStorePruner {
                 .num_epochs_to_retain_for_checkpoints()
                 .ok_or_else(|| anyhow!("config value not set"))?,
             pruned_checkpoint_number,
-            min(highest_pruned_checkpoint, latest_archived_checkpoint),
+            max_eligible_checkpoint,
             objects_lock_table,
             config,
             metrics.clone(),
