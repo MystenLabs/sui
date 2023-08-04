@@ -8,7 +8,6 @@ use fastcrypto::traits::ToFromBytes;
 use narwhal_config::{Committee, Stake};
 use narwhal_crypto::PublicKey;
 use narwhal_types::ReputationScores;
-use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
@@ -94,69 +93,45 @@ fn update_low_scoring_authorities_v2(
         return;
     }
 
-    // Convert the narwhal authority ids to the corresponding AuthorityName in SUI
-    // Also capture the stake so can calculate later is strong quorum is reached for the non-low scoring authorities.
-    let mut scores_per_authority: Vec<(AuthorityName, u64, Stake)> = reputation_scores
-        .scores_per_authority
-        .into_iter()
+    // We order the authorities by score ascending order in the exact same way as the reputation
+    // scores do - so we keep complete alignment between implementations
+    let scores_per_authority_order_asc: Vec<(AuthorityName, u64, Stake)> = reputation_scores
+        .authorities_by_score_desc()
+        .iter()
+        .rev() // we revert so we get them in asc order
         .map(|(authority_id, score)| {
-            let authority = committee.authority(&authority_id).unwrap();
+            let authority = committee.authority(authority_id).unwrap();
             let name: AuthorityName = authority.protocol_key().into();
-            // report the scores
-            if let Some(hostname) = authority_names_to_hostnames.get(&name) {
-                info!("authority {} has score {}", hostname, score);
-                metrics
-                    .consensus_handler_scores
-                    .with_label_values(&[&format!("{:?}", hostname)])
-                    .set(score as i64);
-            }
 
-            (name, score, authority.stake())
+            (name, *score, authority.stake())
         })
         .collect();
 
-    // sort the low scoring authorities in asc order
-    // Keep marking low scoring authorities up to f.
-    // Important: the ordering has to be deterministic, otherwise different validators will see
-    // different order and latency might increase. Here we order with the following properties:
-    // * by score ascending
-    // * if scores are equal, then we order by stake ascending
-    // * if stakes are equal, then we do order by name (where we can't have equality unless is the same validator)
-    scores_per_authority.sort_by(|(name1, score1, stake1), (name2, score2, stake2)| {
-        match score1.cmp(score2) {
-            // if scores are equal, then consider lower scorer an authority with lower stake
-            Ordering::Equal => {
-                match stake1.cmp(stake2) {
-                    // if stake is equal, then just order by name.
-                    Ordering::Equal => name1.cmp(name2),
-                    result => result,
-                }
-            }
-            result => result,
-        }
-    });
     let mut final_low_scoring_map = HashMap::new();
-
-    // take low scoring authorities while we haven't reached validity threshold (f+1)
     let mut total_stake = 0;
-    for (authority, score, stake) in scores_per_authority {
+    for (authority_name, score, stake) in scores_per_authority_order_asc {
         total_stake += stake;
 
         let included = if total_stake
             <= (protocol_config.consensus_bad_nodes_stake_threshold() * committee.total_stake())
                 / 100 as Stake
         {
-            final_low_scoring_map.insert(authority, score);
+            final_low_scoring_map.insert(authority_name, score);
             true
         } else {
             false
         };
 
-        if let Some(hostname) = authority_names_to_hostnames.get(&authority) {
+        if let Some(hostname) = authority_names_to_hostnames.get(&authority_name) {
             info!(
                 "authority {} has score {}, is low scoring: {}",
                 hostname, score, included
             );
+
+            metrics
+                .consensus_handler_scores
+                .with_label_values(&[&format!("{:?}", hostname)])
+                .set(score as i64);
         }
     }
     // Report the actual flagged final low scoring authorities
@@ -321,19 +296,13 @@ mod tests {
         let a8 = authorities.next().unwrap();
 
         let low_scoring = Arc::new(ArcSwap::from_pointee(HashMap::new()));
-
-        let mut inner = HashMap::new();
-        inner.insert(a1.protocol_key().into(), 50);
-
-        low_scoring.swap(Arc::new(inner));
-
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
 
         // there is a low outlier in the non zero scores, exclude it as well as down nodes
         let mut scores = HashMap::new();
         scores.insert(a1.id(), 350_u64);
         scores.insert(a2.id(), 390_u64);
-        scores.insert(a3.id(), 350_u64);
+        scores.insert(a3.id(), 50_u64);
         scores.insert(a4.id(), 50_u64);
         scores.insert(a5.id(), 0_u64); // down node
         scores.insert(a6.id(), 300_u64);
@@ -361,8 +330,9 @@ mod tests {
 
         // THEN
         assert_eq!(low_scoring.load().len(), 2);
+        println!("low scoring {:?}", low_scoring.load());
         assert_eq!(
-            *low_scoring.load().get(&a4.protocol_key().into()).unwrap(),
+            *low_scoring.load().get(&a3.protocol_key().into()).unwrap(), // Since a3 & a4 have equal scores, we resolve the decision with a3.id < a4.id
             50
         );
         assert_eq!(

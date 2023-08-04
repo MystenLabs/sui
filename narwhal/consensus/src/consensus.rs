@@ -90,7 +90,8 @@ impl LeaderSwapTable {
         );
 
         // calculating the bad nodes
-        // we revert the sorted authorities to score ascending so we get the first f low scorers
+        // we revert the sorted authorities to score ascending so we get the first low scorers
+        // up to the dictated stake threshold.
         let bad_nodes = Self::retrieve_first_nodes(
             committee,
             reputation_scores
@@ -103,7 +104,6 @@ impl LeaderSwapTable {
         .map(|authority| (authority.id(), authority))
         .collect::<HashMap<AuthorityIdentifier, Authority>>();
 
-        // print the good nodes
         good_nodes.iter().for_each(|good_node| {
             debug!(
                 "Good node on round {}: {} -> {}",
