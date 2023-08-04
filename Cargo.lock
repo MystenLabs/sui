@@ -10704,6 +10704,7 @@ dependencies = [
  "sui-macros",
  "sui-network",
  "sui-protocol-config",
+ "sui-rest-api",
  "sui-simulator",
  "sui-snapshot",
  "sui-storage",
