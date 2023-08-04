@@ -156,6 +156,7 @@ impl ValidatorConfigBuilder {
             indexer_max_subscriptions: Default::default(),
             transaction_kv_store_read_config: Default::default(),
             transaction_kv_store_write_config: None,
+            enable_experimental_rest_api: true,
         }
     }
 
@@ -388,6 +389,7 @@ impl FullnodeConfigBuilder {
             indexer_max_subscriptions: Default::default(),
             transaction_kv_store_read_config: Default::default(),
             transaction_kv_store_write_config: Default::default(),
+            enable_experimental_rest_api: true,
         }
     }
 }
