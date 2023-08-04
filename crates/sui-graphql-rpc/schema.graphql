@@ -72,14 +72,14 @@ type Query {
 
   coinMetadata(coinType: String!): CoinMetadata
 
-  checkpointsConnection(
+  checkpointConnection(
     first: Int,
     after: String,
     last: Int,
     before: String,
   ): CheckpointConnection
 
-  transactionBlocksConnection(
+  transactionBlockConnection(
     first: Int,
     after: String,
     last: Int,
@@ -87,7 +87,7 @@ type Query {
     filter: TransactionBlockFilter,
   ): TransactionBlockConnection
 
-  eventsConnection(
+  eventConnection(
     first: Int,
     after: String,
     last: Int,
@@ -95,7 +95,7 @@ type Query {
     filter: EventFilter,
   ): EventConnection
 
-  objectsConnection(
+  objectConnection(
     first: Int,
     after: String,
     last: Int,
@@ -112,7 +112,7 @@ type Query {
   # `checkpoint` defaults to the latest available checkpoint.
   checkpointAddressMetrics(checkpoint: BigInt): AddressMetric
 
-  allEpochAddressMetricsConnection(
+  allEpochAddressMetricConnection(
     first: Int,
     after: String,
     last: Int,
@@ -290,7 +290,7 @@ type AvailableRange {
 interface Owner {
   location: SuiAddress!
 
-  objectsConnection(
+  objectConnection(
     first: Int,
     after: String,
     last: Int,
@@ -299,7 +299,7 @@ interface Owner {
   ): ObjectConnection
 
   balance(type: String!): Balance
-  balancesConnection(
+  balanceConnection(
     first: Int,
     after: String,
     last: Int,
@@ -307,7 +307,7 @@ interface Owner {
   ): BalanceConnection
 
   # `type` defaults to `0x2::sui::SUI`.
-  coinsConnection(
+  coinConnection(
     first: Int,
     after: String,
     last: Int,
@@ -315,20 +315,20 @@ interface Owner {
     type: String,
   ): CoinConnection
 
-  stakesConnection(
+  stakeConnection(
     first: Int,
     after: String,
     last: Int,
     before: String,
-  ): StakesConnection
+  ): StakeConnection
 
   defaultNameServiceName: String
-  nameServiceNamesConnection(
+  nameServiceNameConnection(
     first: Int,
     after: String,
     last: Int,
     before: String,
-  ): NameServiceNamesConnection
+  ): NameServiceNameConnection
 }
 
 # Returned by Object.owner, where we can't disambiguate between
@@ -336,7 +336,7 @@ interface Owner {
 type AmbiguousOwner implements Owner {}
 
 type Address implements Owner {
-  transactionBlocksConnection(
+  transactionBlockConnection(
     first: Int,
     after: String,
     last: Int,
@@ -369,7 +369,7 @@ type Object implements Owner {
   asMovePackage: MovePackage
 
   # Transaction Blocks that sent objects to this object
-  receivedTransactionBlocksConnection(
+  receivedTransactionBlockConnection(
     first: Int,
     after: String,
     last: Int,
@@ -378,7 +378,7 @@ type Object implements Owner {
   ): TransactionBlockConnection
 
   dynamicField(dynamicFieldName: DynamicFieldName!): DynamicField
-  dynamicFieldsConnection(
+  dynamicFieldConnection(
     first: Int,
     after: String,
     last: Int,
@@ -412,14 +412,14 @@ type Epoch {
 
   # TODO: Identify non-duplicate fields in `EndOfEpochInfo`
 
-  checkpointsConnection(
+  checkpointConnection(
     first: Int,
     after: String,
     last: Int,
     before: String,
   ): CheckpointConnection
 
-  transactionBlocksConnection(
+  transactionBlockConnection(
     first: Int,
     after: String,
     last: Int,
@@ -564,7 +564,7 @@ type Checkpoint {
   # Only available on the final checkpoint in an epoch
   endOfEpoch: EndOfEpochData
 
-  transactionsConnection(first: Int, after: String, last: Int, before: String): TransactionBlockConnection
+  transactionConnection(first: Int, after: String, last: Int, before: String): TransactionBlockConnection
 }
 
 type EndOfEpochData {
@@ -712,7 +712,7 @@ type TransactionBlockEffects {
   epoch: Epoch
   checkpoint: Checkpoint
 
-  eventsConnection(
+  eventConnection(
     first: Int,
     after: String,
     last: Int,
@@ -843,12 +843,12 @@ type MoveObject {
 
 type MovePackage {
   module(name: String!): MoveModule
-  modulesConnection(
+  moduleConnection(
     first: Int,
     after: String,
     last: Int,
     before: String,
-  ): MoveModulesConnection
+  ): MoveModuleConnection
 
   asObject: Object!
 }
@@ -893,7 +893,7 @@ type MoveModule {
   friends: [MoveModuleId]
 
   struct(name: String!): MoveStructDecl
-  structsConnection(
+  structConnection(
     first: Int,
     after: String,
     last: Int,
@@ -901,7 +901,7 @@ type MoveModule {
   ): MoveStructConnection
 
   function(name: String!): MoveFunction
-  functionsConnection(
+  functionConnection(
     first: Int,
     after: String,
     last: Int,
@@ -1051,7 +1051,7 @@ type DryRunReturn {
 
 # Connections
 
-type StakesConnection {}
+type StakeConnection {}
 
 # Pagination
 type PageInfo {
@@ -1183,24 +1183,13 @@ type MoveModuleEdge {
   node: MoveModule!
 }
 
-# MoveModulesConnection
-type MoveModulesConnection {
-  edges: [MoveModuleEdge!]!
+# NameServiceNameConnection
+type NameServiceNameConnection {
+  edges: [NameServiceNameEdge!]!
   pageInfo: PageInfo!
 }
 
-type MoveModulesEdge {
-  cursor: String
-  node: MoveModule!
-}
-
-# NameServiceNamesConnection
-type NameServiceNamesConnection {
-  edges: [NameServiceNamesEdge!]!
-  pageInfo: PageInfo!
-}
-
-type NameServiceNamesEdge {
+type NameServiceNameEdge {
   cursor: String
   node: String!  # is this correct?
 }
