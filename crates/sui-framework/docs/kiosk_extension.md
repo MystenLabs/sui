@@ -126,7 +126,8 @@ dynamic field.
  2nd bit - <code>lock</code> and <code>place</code> - allows to lock items (and place)
 
  For example:
- - <code>11</code> - allows to place items and lock them.
+ - <code>10</code> - allows to place items and lock them.
+ - <code>11</code> - allows to place items and lock them (<code>lock</code> includes <code>place</code>).
  - <code>01</code> - allows to place items, but not lock them.
  - <code>00</code> - no permissions.
 </dd>

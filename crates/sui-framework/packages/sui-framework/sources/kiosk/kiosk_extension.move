@@ -79,7 +79,8 @@ module sui::kiosk_extension {
         /// 2nd bit - `lock` and `place` - allows to lock items (and place)
         ///
         /// For example:
-        /// - `11` - allows to place items and lock them.
+        /// - `10` - allows to place items and lock them.
+        /// - `11` - allows to place items and lock them (`lock` includes `place`).
         /// - `01` - allows to place items, but not lock them.
         /// - `00` - no permissions.
         permissions: u128,
