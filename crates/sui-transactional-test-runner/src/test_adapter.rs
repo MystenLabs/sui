@@ -264,7 +264,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     ProtocolConfig::get_for_max_version_UNSAFE()
                 };
                 if let Some(mx_tx_gas_override) = max_gas {
-                    protocol_config.set_max_tx_gas_for_testing_UNSAFE(mx_tx_gas_override)
+                    protocol_config.set_max_tx_gas_for_testing(mx_tx_gas_override)
                 }
                 (map, accounts, protocol_config)
             }

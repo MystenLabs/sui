@@ -189,7 +189,6 @@ pub fn accessors_macro(input: TokenStream) -> TokenStream {
         }
 
         // For each attr, derive a setter from the raw value and from string repr
-        #[cfg(debug_assertions)]
         impl #struct_name {
             #(#test_setters)*
 
