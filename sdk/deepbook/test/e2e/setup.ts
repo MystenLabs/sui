@@ -149,6 +149,18 @@ export async function depositAsset(
 	await executeTransactionBlock(toolbox, txb);
 }
 
+export async function withdrawAsset(
+	toolbox: TestToolbox,
+	poolId: string,
+	accountCap: string,
+	amount: number,
+	assetType: 'Base' | 'Quote' = 'Base',
+): Promise<void> {
+	const deepbook = new DeepBookClient(toolbox.client, accountCap, toolbox.address());
+	const txb = await deepbook.withdraw(poolId, amount, assetType);
+	await executeTransactionBlock(toolbox, txb);
+}
+
 async function executeTransactionBlock(
 	toolbox: TestToolbox,
 	txb: TransactionBlock,

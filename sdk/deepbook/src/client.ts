@@ -21,7 +21,7 @@ import { MODULE_CLOB, PACKAGE_ID, NORMALIZED_SUI_COIN_TYPE } from './utils';
 import { PaginatedPoolSummary, PoolSummary, UserPosition } from './types/pool';
 import { Coin } from '@mysten/sui.js';
 
-const DUMMY_ADDRESS = normalizeSuiAddress('0x123');
+const DUMMY_ADDRESS = normalizeSuiAddress('0x0');
 
 export class DeepBookClient {
 	/**
@@ -80,6 +80,36 @@ export class DeepBookClient {
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::${functionName}`,
 			arguments: [txb.object(poolId), coin, txb.object(this.#checkAccountCap())],
 		});
+		return txb;
+	}
+
+	/**
+	 * @description construct transaction block for withdrawing asset into a pool.
+	 * @param poolId the pool id for the withdraw
+	 * @param amount the amount of coin to withdraw
+	 * @param assetType Base or Quote
+	 * @param recipientAddress the address to receive the withdrawn asset. If omitted, `this.currentAddress` will be used. The function
+	 * will throw if the `recipientAddress == DUMMY_ADDRESS`
+	 */
+	async withdraw(
+		poolId: string,
+		// TODO: implement withdraw all
+		amount: bigint | number,
+		assetType: 'Base' | 'Quote',
+		recipientAddress: string = this.currentAddress,
+	): Promise<TransactionBlock> {
+		const txb = new TransactionBlock();
+
+		const { baseAsset, quoteAsset } = await this.getPoolInfo(poolId);
+
+		const functionName = assetType === 'Base' ? 'withdraw_base' : 'withdraw_quote';
+
+		const [withdraw] = txb.moveCall({
+			typeArguments: [baseAsset, quoteAsset],
+			target: `${PACKAGE_ID}::${MODULE_CLOB}::${functionName}`,
+			arguments: [txb.object(poolId), txb.pure(amount), txb.object(this.#checkAccountCap())],
+		});
+		txb.transferObjects([withdraw], txb.pure(this.#checkCurrentAddress(recipientAddress)));
 		return txb;
 	}
 
@@ -284,6 +314,13 @@ export class DeepBookClient {
 			throw new Error('accountCap is undefined, please call setAccountCap() first');
 		}
 		return normalizeSuiObjectId(cap);
+	}
+
+	#checkCurrentAddress(recipientAddress: string): string {
+		if (recipientAddress === DUMMY_ADDRESS) {
+			throw new Error('Current address cannot be DUMMY_ADDRESS');
+		}
+		return normalizeSuiAddress(recipientAddress);
 	}
 
 	async #getCoinType(coinId: string) {

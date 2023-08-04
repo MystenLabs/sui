@@ -9,6 +9,7 @@ import {
 	setupPool,
 	setupDeepbookAccount,
 	depositAsset,
+	withdrawAsset,
 } from './setup';
 import { PoolSummary } from '../../src/types/pool';
 import { DeepBookClient } from '../../src';
@@ -40,5 +41,13 @@ describe('Interacting with the pool', () => {
 		const deepbook = new DeepBookClient(toolbox.client, accountCapId);
 		const resp = await deepbook.getUserPosition(pool.poolId);
 		expect(resp.availableBaseAmount).toBe(BigInt(DEPOSIT_AMOUNT));
+	});
+
+	it('test withdraw base asset', async () => {
+		expect(accountCapId).toBeDefined();
+		await withdrawAsset(toolbox, pool.poolId, accountCapId, DEPOSIT_AMOUNT);
+		const deepbook = new DeepBookClient(toolbox.client, accountCapId);
+		const resp = await deepbook.getUserPosition(pool.poolId);
+		expect(resp.availableBaseAmount).toBe(0n);
 	});
 });
