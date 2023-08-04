@@ -1916,7 +1916,7 @@ module deepbook::clob_v2 {
         expected_order: &Order,
     ): bool {
         if (!linked_table::contains(tree, expected_order.order_id)) {
-            return false
+            false
         } else {
             let order = linked_table::borrow(tree, expected_order.order_id);
             order_equal(order, expected_order)
