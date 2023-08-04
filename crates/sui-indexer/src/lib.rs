@@ -38,6 +38,7 @@ pub mod apis;
 pub mod errors;
 pub mod fetcher;
 mod handlers;
+pub mod interface;
 pub mod metrics;
 pub mod models;
 pub mod processors;
@@ -89,6 +90,8 @@ pub struct IndexerConfig {
     pub db_name: Option<String>,
     #[clap(long)]
     pub rpc_client_url: String,
+    #[clap(long)]
+    pub rest_client_url: String,
     #[clap(long, default_value = "0.0.0.0", global = true)]
     pub client_metric_host: String,
     #[clap(long, default_value = "9184", global = true)]
@@ -153,6 +156,7 @@ impl Default for IndexerConfig {
             db_port: None,
             db_name: None,
             rpc_client_url: "http://127.0.0.1:9000".to_string(),
+            rest_client_url: "http://127.0.0.1:9001".to_string(),
             client_metric_host: "0.0.0.0".to_string(),
             client_metric_port: 9184,
             rpc_server_url: "0.0.0.0".to_string(),
