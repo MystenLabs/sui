@@ -326,6 +326,128 @@ async fn not_enough_support_with_leader_schedule_change() {
     assert_eq!(total_15_certs, 4);
 }
 
+// We test here the leader schedule change when we experience a long period of asynchrony. That prohibit
+// us from committing for 8 rounds where 2 schedule changes should have happened given our setup. Then
+// once we manage to commit on round 15 we observe 2 schedule changes happening and 5 commits.
+#[tokio::test]
+async fn test_long_period_of_asynchrony_for_leader_schedule_change() {
+    // GIVEN
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+
+    let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
+    let genesis = Certificate::genesis(&committee)
+        .iter()
+        .map(|x| x.digest())
+        .collect::<BTreeSet<_>>();
+
+    let mut certificates: VecDeque<Certificate> = VecDeque::new();
+    let mut leader_configs = HashMap::new();
+
+    // A vector of tuples (leader_round, leader_authority_id)
+    let leaders_with_weak_support = vec![(6, 2), (8, 3), (10, 0), (12, 1)];
+
+    // We make the leaders for the corresponding rounds receive weak support, so we can't commit immediately
+    for (round, authority_id) in leaders_with_weak_support {
+        leader_configs.insert(
+            round,
+            test_utils::TestLeaderConfiguration {
+                round,
+                authority: AuthorityIdentifier(authority_id),
+                should_omit: false,
+                support: Some(test_utils::TestLeaderSupport::Weak),
+            },
+        );
+    }
+
+    let (out, _parents) = test_utils::make_certificates_with_leader_configuration(
+        &committee,
+        &latest_protocol_version(),
+        1..=15,
+        &genesis,
+        &ids,
+        leader_configs,
+    );
+    certificates.extend(out);
+
+    let mut config: ProtocolConfig = latest_protocol_version();
+    config.set_narwhal_new_leader_election_schedule(true);
+    config.set_consensus_bad_nodes_stake_threshold(33);
+
+    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+    let gc_depth = 50;
+    let sub_dags_per_schedule = 4;
+    let mut state = ConsensusState::new(metrics.clone(), gc_depth);
+    let store = make_consensus_store(&test_utils::temp_dir());
+    let schedule = LeaderSchedule::new(committee.clone(), LeaderSwapTable::default());
+    let mut bullshark = Bullshark::new(
+        committee.clone(),
+        store,
+        config,
+        metrics,
+        sub_dags_per_schedule,
+        schedule,
+    );
+
+    let mut total = 0;
+    for certificate in certificates {
+        let (outcome, committed) = bullshark
+            .process_certificate(&mut state, certificate.clone())
+            .unwrap();
+
+        if certificate.round() == 7
+            || certificate.round() == 9
+            || certificate.round() == 11
+            || certificate.round() == 13
+        {
+            assert_eq!(outcome, Outcome::NotEnoughSupportForLeader);
+        }
+
+        if certificate.round() == 15 {
+            total += 1;
+
+            if total == 2 {
+                assert_eq!(committed.len(), 5);
+
+                let committed_dag_6 = &committed[0];
+                let committed_dag_8 = &committed[1];
+                let committed_dag_10 = &committed[2];
+                let committed_dag_12 = &committed[3];
+                let committed_dag_14 = &committed[4];
+
+                assert_eq!(committed_dag_6.leader_round(), 6);
+                assert_eq!(committed_dag_8.leader_round(), 8);
+                assert_eq!(committed_dag_10.leader_round(), 10);
+                assert_eq!(committed_dag_12.leader_round(), 12);
+                assert_eq!(committed_dag_14.leader_round(), 14);
+
+                // Two schedule changes have happened during this commit
+                assert!(committed_dag_6.reputation_score.final_of_schedule);
+                assert!(committed_dag_14.reputation_score.final_of_schedule);
+
+                // Originally, as we do round robin the leaders in testing, we would expect the
+                // leader of round 10 to be the Authority 0. However, since a reputation scores update
+                // happened the leader schedule changed and now the Authority 0 is flagged as low
+                // score and it will be swapped with Authority 3.
+                assert_eq!(committed_dag_10.leader.origin(), AuthorityIdentifier(3));
+
+                // The leaders of round 12 & 14 shouldn't change from the "original" schedule
+                let schedule = LeaderSchedule::new(committee, LeaderSwapTable::default());
+
+                assert_eq!(committed_dag_12.leader.origin(), schedule.leader(12).id());
+                assert_eq!(committed_dag_14.leader.origin(), schedule.leader(14).id());
+
+                assert_eq!(outcome, Outcome::Commit);
+
+                break;
+            }
+        }
+    }
+
+    // ensure that we actually reached the point of processing two certificates of round 15.
+    assert_eq!(total, 2);
+}
+
 // Run for 4 dag rounds in ideal conditions (all nodes reference all other nodes). We should commit
 // the leader of round 2.
 #[tokio::test]
