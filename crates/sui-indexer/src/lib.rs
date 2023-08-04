@@ -180,29 +180,8 @@ impl Indexer {
             env!("CARGO_PKG_VERSION")
         );
         mysten_metrics::init_metrics(registry);
-        if config.rpc_server_worker && config.fullnode_sync_worker {
-            info!("Starting indexer with both fullnode sync and RPC server");
-            // let JSON RPC server run forever.
-            let handle = build_json_rpc_server(registry, store.clone(), config, custom_runtime)
-                .await
-                .expect("Json rpc server should not run into errors upon start.");
-            spawn_monitored_task!(handle.stopped());
 
-            // let async processor run forever.
-            let mut processor_orchestrator = ProcessorOrchestrator::new(store.clone(), registry);
-            spawn_monitored_task!(processor_orchestrator.run_forever());
-
-            backoff::future::retry(ExponentialBackoff::default(), || async {
-                let metrics_clone = metrics.clone();
-                let http_client = get_http_client(config.rpc_client_url.as_str())?;
-                let cp = CheckpointHandler::new(store.clone(), http_client, metrics_clone, config);
-                cp.spawn()
-                    .await
-                    .expect("Indexer main should not run into errors.");
-                Ok(())
-            })
-            .await
-        } else if config.rpc_server_worker {
+        if config.rpc_server_worker {
             info!("Starting indexer with only RPC server");
             let handle = build_json_rpc_server(registry, store.clone(), config, custom_runtime)
                 .await
