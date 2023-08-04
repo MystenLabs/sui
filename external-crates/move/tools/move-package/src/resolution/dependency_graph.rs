@@ -743,15 +743,13 @@ impl DependencyGraph {
         parent: &PM::DependencyKind,
     ) -> Result<bool> {
         match dep {
-            PM::Dependency::Internal(internal) => {
-                let PM::InternalDependency {
-                    kind,
-                    version,
-                    subst,
-                    digest,
-                    dep_override,
-                } = internal;
-
+            PM::Dependency::Internal(PM::InternalDependency {
+                kind,
+                version,
+                subst,
+                digest,
+                dep_override,
+            }) => {
                 if let Entry::Vacant(entry) = self.package_table.entry(dep_pkg_name) {
                     let mut pkg = Package {
                         kind: kind.clone(),
@@ -1463,7 +1461,7 @@ fn deps_equal<'a>(
     let (graph1_pkgs, graph2_pkgs): (Vec<_>, Vec<_>) = graph1_edges
         .symmetric_difference(&graph2_edges)
         .partition(|dep| graph1_edges.contains(dep));
-    if graph1_pkgs == graph2_pkgs {
+    if graph1_pkgs.is_empty() && graph2_pkgs.is_empty() {
         Ok(())
     } else {
         Err((graph1_pkgs, graph2_pkgs))

@@ -74,7 +74,7 @@ ResolvedGraph {
             "Root",
         },
         manifest_digest: Some(
-            "E678706820BFFF10C021A990D306708DB85521BAB1E9592CD2F54F02DF7CB771",
+            "B0F678B9227387AF29ACA8CFA4EB437787A2FC7690E2627761402DE85C728E51",
         ),
         deps_digest: None,
     },
