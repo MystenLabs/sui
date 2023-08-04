@@ -916,6 +916,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-sdk-s3"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fba197193cbb4bcb6aad8d99796b2291f36fa89562ded5d4501363055b0de89f"
+dependencies = [
+ "aws-credential-types 0.55.3",
+ "aws-endpoint 0.55.3",
+ "aws-http 0.55.3",
+ "aws-sig-auth 0.55.3",
+ "aws-sigv4 0.55.3",
+ "aws-smithy-async 0.55.3",
+ "aws-smithy-checksums",
+ "aws-smithy-client 0.55.3",
+ "aws-smithy-eventstream",
+ "aws-smithy-http 0.55.3",
+ "aws-smithy-http-tower 0.55.3",
+ "aws-smithy-json 0.55.3",
+ "aws-smithy-types 0.55.3",
+ "aws-smithy-xml 0.55.3",
+ "aws-types 0.55.3",
+ "bytes",
+ "http",
+ "http-body",
+ "once_cell",
+ "percent-encoding",
+ "regex",
+ "tokio-stream",
+ "tower",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "aws-sdk-sso"
 version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1038,6 +1071,7 @@ checksum = "3b94acb10af0c879ecd5c7bdf51cda6679a0a4f4643ce630905a77673bfa3c61"
 dependencies = [
  "aws-credential-types 0.55.3",
  "aws-sigv4 0.55.3",
+ "aws-smithy-eventstream",
  "aws-smithy-http 0.55.3",
  "aws-types 0.55.3",
  "http",
@@ -1069,7 +1103,9 @@ version = "0.55.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d2ce6f507be68e968a33485ced670111d1cbad161ddbbab1e313c03d37d8f4c"
 dependencies = [
+ "aws-smithy-eventstream",
  "aws-smithy-http 0.55.3",
+ "bytes",
  "form_urlencoded",
  "hex",
  "hmac 0.12.1",
@@ -1104,6 +1140,27 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tokio-stream",
+]
+
+[[package]]
+name = "aws-smithy-checksums"
+version = "0.55.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07ed8b96d95402f3f6b8b57eb4e0e45ee365f78b1a924faf20ff6e97abf1eae6"
+dependencies = [
+ "aws-smithy-http 0.55.3",
+ "aws-smithy-types 0.55.3",
+ "bytes",
+ "crc32c",
+ "crc32fast",
+ "hex",
+ "http",
+ "http-body",
+ "md-5 0.10.5",
+ "pin-project-lite",
+ "sha1",
+ "sha2 0.10.6",
+ "tracing",
 ]
 
 [[package]]
@@ -1154,6 +1211,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-smithy-eventstream"
+version = "0.55.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "460c8da5110835e3d9a717c61f5556b20d03c32a1dec57f8fc559b360f733bb8"
+dependencies = [
+ "aws-smithy-types 0.55.3",
+ "bytes",
+ "crc32fast",
+]
+
+[[package]]
 name = "aws-smithy-http"
 version = "0.54.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1179,6 +1247,7 @@ version = "0.55.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b3b693869133551f135e1f2c77cb0b8277d9e3e17feaf2213f735857c4f0d28"
 dependencies = [
+ "aws-smithy-eventstream",
  "aws-smithy-types 0.55.3",
  "bytes",
  "bytes-utils",
@@ -2401,6 +2470,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28d997bd5e24a5928dd43e46dc529867e207907fe0b239c3477d924f7f2ca320"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "crc32c"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8f48d60e5b4d2c53d5c2b1d8a58c849a70ae5e5509b08a48d047e3b65714a74"
+dependencies = [
+ "rustc_version",
 ]
 
 [[package]]
@@ -5068,6 +5146,15 @@ dependencies = [
  "block-buffer 0.9.0",
  "digest 0.9.0",
  "opaque-debug",
+]
+
+[[package]]
+name = "md-5"
+version = "0.10.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6365506850d44bff6e2fbcb5176cf63650e48bd45ef2fe2665ae1570e0f4b9ca"
+dependencies = [
+ "digest 0.10.6",
 ]
 
 [[package]]
@@ -8448,7 +8535,7 @@ dependencies = [
  "http",
  "hyper",
  "log",
- "md-5",
+ "md-5 0.9.1",
  "percent-encoding",
  "pin-project-lite",
  "rusoto_credential",
@@ -10295,6 +10382,8 @@ dependencies = [
  "async-trait",
  "aws-config 0.55.3",
  "aws-sdk-dynamodb",
+ "aws-sdk-s3",
+ "base64-url",
  "bcs",
  "mysten-metrics",
  "prometheus",
@@ -10303,6 +10392,7 @@ dependencies = [
  "strum_macros",
  "sui-config",
  "sui-core",
+ "sui-storage",
  "sui-types",
  "tokio",
  "tracing",
@@ -13169,12 +13259,15 @@ dependencies = [
  "aws-endpoint 0.55.3",
  "aws-http 0.55.3",
  "aws-sdk-dynamodb",
+ "aws-sdk-s3",
  "aws-sdk-sso 0.28.0",
  "aws-sdk-sts 0.28.0",
  "aws-sig-auth 0.55.3",
  "aws-sigv4 0.55.3",
  "aws-smithy-async 0.55.3",
+ "aws-smithy-checksums",
  "aws-smithy-client 0.55.3",
+ "aws-smithy-eventstream",
  "aws-smithy-http 0.55.3",
  "aws-smithy-http-tower 0.55.3",
  "aws-smithy-json 0.55.3",
@@ -13284,6 +13377,7 @@ dependencies = [
  "core2",
  "cpp_demangle",
  "cpufeatures",
+ "crc32c",
  "crc32fast",
  "criterion",
  "criterion-plot",
@@ -13516,7 +13610,8 @@ dependencies = [
  "matchers",
  "matchit 0.5.0",
  "matchit 0.7.0",
- "md-5",
+ "md-5 0.10.5",
+ "md-5 0.9.1",
  "memchr",
  "memmap2",
  "memoffset 0.6.5",
