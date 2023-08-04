@@ -1527,15 +1527,6 @@ module deepbook::clob_v2 {
             emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, &order);
 
             let canceled_order_event = all_orders_canceled_from_order<BaseAsset, QuoteAsset>(&order);
-            // AllOrdersCanceledComponent<BaseAsset, QuoteAsset> {
-            //     client_order_id: order.client_order_id,
-            //     order_id: order.order_id,
-            //     is_bid: order.is_bid,
-            //     owner: order.owner,
-            //     original_quantity: order.original_quantity,
-            //     base_asset_quantity_canceled: order.quantity,
-            //     price: order.price
-            // };
             vector::push_back(&mut canceled_order_events, canceled_order_event);
 
             i_order = i_order + 1;
@@ -1613,15 +1604,6 @@ module deepbook::clob_v2 {
             // TODO (jian): remove the canceled orders after we ensure market makers update
             emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, &order);
             let canceled_order_event = all_orders_canceled_from_order(&order);
-            // AllOrdersCanceledComponent<BaseAsset, QuoteAsset> {
-            //     client_order_id: order.client_order_id,
-            //     order_id: order.order_id,
-            //     is_bid: order.is_bid,
-            //     owner: order.owner,
-            //     original_quantity: order.original_quantity,
-            //     base_asset_quantity_canceled: order.quantity,
-            //     price: order.price
-            // };
 
             vector::push_back(&mut canceled_order_events, canceled_order_event);
             i_order = i_order + 1;
