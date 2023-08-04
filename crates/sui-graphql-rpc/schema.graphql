@@ -66,12 +66,12 @@ type Query {
   # `protocolVersion` defaults to the latest protocol version.
   protocolConfig(protocolVersion: Int): ProtocolConfig
 
-  # If no `filter` is provided, fetch the latest available checkpoint.
-  checkpoint(filter: CheckpointFilter): Checkpoint
+  # If no `id` is provided, fetch the latest available checkpoint.
+  checkpoint(id: CheckpointID): Checkpoint
 
   # Find a transaction block either by its transaction digest or its
   # effects digest.
-  transactionBlock(filter: TransactionBlockFilter!): TransactionBlock
+  transactionBlock(filter: TransactionBlockID!): TransactionBlock
 
   coinMetadata(coinType: String!): CoinMetadata
 
@@ -188,14 +188,14 @@ input TransactionMetadata {
 
 # Filter either by the digest, or the sequence number, or neither, to
 # get the latest checkpoint.
-input CheckpointFilter {
+input CheckpointID {
   digest: String
   sequenceNumber: BigInt
 }
 
 # Find a transaction block either by its transaction digest, or its
 # effects digest (can't be both, can't be neither).
-input TransactionBlockFilter {
+input TransactionBlockID {
   transactionDigest: String
   effectsDigest: String
 }
