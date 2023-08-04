@@ -12,6 +12,7 @@ import { OwnedObjects } from '~/components/OwnedObjects';
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import { TransactionsForAddress } from '~/components/transactions/TransactionsForAddress';
 import { useBreakpoint } from '~/hooks/useBreakpoint';
+import { Divider } from '~/ui/Divider';
 import { PageHeader } from '~/ui/PageHeader';
 import { SplitPanes } from '~/ui/SplitPanes';
 import { TabHeader } from '~/ui/Tabs';
@@ -49,11 +50,7 @@ function AddressResult({ address }: { address: string }) {
 	};
 
 	const rightPane = {
-		panel: (
-			<div className="mt-10 h-auto flex-1 overflow-hidden sm:h-120 md:mt-0 md:pl-7">
-				<OwnedObjects id={address} />
-			</div>
-		),
+		panel: <OwnedObjects id={address} />,
 		minSize: 30,
 	};
 
@@ -67,9 +64,13 @@ function AddressResult({ address }: { address: string }) {
 						) : (
 							<>
 								{leftPane.panel}
+								<div className="my-8">
+									<Divider />
+								</div>
 								{rightPane.panel}
 							</>
 						)}
+						<Divider />
 					</ErrorBoundary>
 				</TabHeader>
 			</div>

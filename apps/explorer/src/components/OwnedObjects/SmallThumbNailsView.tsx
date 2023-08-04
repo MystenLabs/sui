@@ -14,7 +14,7 @@ interface Props {
 
 function OwnObjectContainer({ children }: { children: ReactNode }) {
 	return (
-		<div className="w-full min-w-ownObjectContainer pb-3 pr-4 sm:basis-1/2 md:basis-1/3">
+		<div className="w-full min-w-ownObjectContainerMobile basis-1/2 pb-3 pr-4 md:min-w-ownObjectContainer md:basis-1/4">
 			<div className="rounded-lg p-2 hover:bg-hero/5">{children}</div>
 		</div>
 	);
@@ -25,7 +25,7 @@ function SmallThumbNailsViewLoading() {
 		<>
 			{new Array(10).fill(0).map((_, index) => (
 				<OwnObjectContainer key={index}>
-					<Placeholder rounded="lg" height="66px" />
+					<Placeholder rounded="lg" height="80px" />
 				</OwnObjectContainer>
 			))}
 		</>
@@ -34,7 +34,7 @@ function SmallThumbNailsViewLoading() {
 
 export function SmallThumbNailsView({ data, loading }: Props) {
 	return (
-		<div className="flex h-full flex-row flex-wrap overflow-x-hidden">
+		<div className="flex flex-row flex-wrap overflow-auto">
 			{loading && <SmallThumbNailsViewLoading />}
 			{data?.map((obj, index) => (
 				<OwnObjectContainer key={index}>
