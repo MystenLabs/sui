@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::AuthorityName;
-use tracing::{debug, info};
+use tracing::debug;
 
 /// Updates list of authorities that are deemed to have low reputation scores by consensus
 /// these may be lagging behind the network, byzantine, or not reliably participating for any reason.
