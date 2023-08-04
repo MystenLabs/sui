@@ -6,7 +6,6 @@ module deepbook::critbit {
     use sui::table::{Self, Table};
     use deepbook::math::{count_leading_zeros};
 
-    friend deepbook::clob;
     friend deepbook::clob_v2;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<

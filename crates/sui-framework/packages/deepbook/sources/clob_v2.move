@@ -42,9 +42,10 @@ module deepbook::clob_v2 {
     };
     use deepbook::math::Self as clob_math;
 
-    // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
-    /// [NOT USED] The function is not implemented.
-    const ENotImplemented: u64 = 1;
+    // const ENotImplemented: u64 = 1;
+    // const ELevelNotEmpty: u64 = 15;
+    // const EInvalidBaseBalance: u64 = 17;
+
     /// Taker fee rate is lower than maker rebate rate.
     const EInvalidFeeRateRebateRate: u64 = 2;
     /// Trying to access a non-existent order.
@@ -67,16 +68,11 @@ module deepbook::clob_v2 {
     const EInvalidUser: u64 = 12;
     const ENotEqual: u64 = 13;
     const EInvalidRestriction: u64 = 14;
-    /// [NOT USED]
-    const ELevelNotEmpty: u64 = 15;
     const EInvalidPair: u64 = 16;
-    /// [NOT USED]
-    const EInvalidBaseBalance: u64 = 17;
     const EInvalidFee: u64 = 18;
     const EInvalidExpireTimestamp: u64 = 19;
     const EInvalidTickSizeLotSize: u64 = 20;
     const EInvalidSelfMatchingPreventionArg: u64 = 21;
-
 
 
     const FLOAT_SCALING: u64 = 1_000_000_000;
@@ -1189,6 +1185,7 @@ module deepbook::clob_v2 {
         assert!(price % pool.tick_size == 0, EInvalidPrice);
         assert!(quantity % pool.lot_size == 0, EInvalidQuantity);
         assert!(expire_timestamp > clock::timestamp_ms(clock), EInvalidExpireTimestamp);
+
         let owner = account_owner(account_cap);
         let original_quantity = quantity;
         let base_quantity_filled;

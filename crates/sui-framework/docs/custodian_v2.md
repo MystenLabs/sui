@@ -149,20 +149,20 @@ Custodian for limit orders.
 ## Constants
 
 
-<a name="0xdee9_custodian_v2_EUserBalanceDoesNotExist"></a>
-
-
-
-<pre><code><b>const</b> <a href="custodian_v2.md#0xdee9_custodian_v2_EUserBalanceDoesNotExist">EUserBalanceDoesNotExist</a>: u64 = 1;
-</code></pre>
-
-
-
 <a name="0xdee9_custodian_v2_EAdminAccountCapRequired"></a>
 
 
 
 <pre><code><b>const</b> <a href="custodian_v2.md#0xdee9_custodian_v2_EAdminAccountCapRequired">EAdminAccountCapRequired</a>: u64 = 2;
+</code></pre>
+
+
+
+<a name="0xdee9_custodian_v2_EUserBalanceDoesNotExist"></a>
+
+
+
+<pre><code><b>const</b> <a href="custodian_v2.md#0xdee9_custodian_v2_EUserBalanceDoesNotExist">EUserBalanceDoesNotExist</a>: u64 = 1;
 </code></pre>
 
 

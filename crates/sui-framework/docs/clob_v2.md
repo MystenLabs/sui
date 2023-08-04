@@ -792,12 +792,13 @@ Emitted when user withdraw asset from custodian
 
 
 
-<a name="0xdee9_clob_v2_ENotImplemented"></a>
+<a name="0xdee9_clob_v2_CANCEL_OLDEST"></a>
 
-[NOT USED] The function is not implemented.
+Self-Trade Prevention option
+Cancel older (resting) order in full. Continue to execute the newer taking order.
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_ENotImplemented">ENotImplemented</a>: u64 = 1;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_CANCEL_OLDEST">CANCEL_OLDEST</a>: u8 = 0;
 </code></pre>
 
 
@@ -818,16 +819,6 @@ Insufficient amount of quote coin.
 
 
 <pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInsufficientQuoteCoin">EInsufficientQuoteCoin</a>: u64 = 8;
-</code></pre>
-
-
-
-<a name="0xdee9_clob_v2_EInvalidBaseBalance"></a>
-
-[NOT USED]
-
-
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidBaseBalance">EInvalidBaseBalance</a>: u64 = 17;
 </code></pre>
 
 
@@ -910,6 +901,15 @@ an order with a quantity that does not match the lot size.
 
 
 
+<a name="0xdee9_clob_v2_EInvalidSelfMatchingPreventionArg"></a>
+
+
+
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidSelfMatchingPreventionArg">EInvalidSelfMatchingPreventionArg</a>: u64 = 21;
+</code></pre>
+
+
+
 <a name="0xdee9_clob_v2_EInvalidTickPrice"></a>
 
 
@@ -933,16 +933,6 @@ an order with a quantity that does not match the lot size.
 
 
 <pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidUser">EInvalidUser</a>: u64 = 12;
-</code></pre>
-
-
-
-<a name="0xdee9_clob_v2_ELevelNotEmpty"></a>
-
-[NOT USED]
-
-
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_ELevelNotEmpty">ELevelNotEmpty</a>: u64 = 15;
 </code></pre>
 
 
@@ -1079,6 +1069,15 @@ Mandates that the entire order be passive. Otherwise, cancel the order.
 
 
 
+<a name="0xdee9_clob_v2_PREVENT_SELF_MATCHING_DEFAULT"></a>
+
+
+
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_PREVENT_SELF_MATCHING_DEFAULT">PREVENT_SELF_MATCHING_DEFAULT</a>: u8 = 0;
+</code></pre>
+
+
+
 <a name="0xdee9_clob_v2_REFERENCE_MAKER_REBATE_RATE"></a>
 
 
@@ -1102,35 +1101,6 @@ Mandates that the entire order be passive. Otherwise, cancel the order.
 
 
 <pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_TIMESTAMP_INF">TIMESTAMP_INF</a>: u64 = 9223372036854775808;
-</code></pre>
-
-
-
-<a name="0xdee9_clob_v2_CANCEL_OLDEST"></a>
-
-Self-Trade Prevention option
-Cancel older (resting) order in full. Continue to execute the newer taking order.
-
-
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_CANCEL_OLDEST">CANCEL_OLDEST</a>: u8 = 0;
-</code></pre>
-
-
-
-<a name="0xdee9_clob_v2_EInvalidSelfMatchingPreventionArg"></a>
-
-
-
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidSelfMatchingPreventionArg">EInvalidSelfMatchingPreventionArg</a>: u64 = 21;
-</code></pre>
-
-
-
-<a name="0xdee9_clob_v2_PREVENT_SELF_MATCHING_DEFAULT"></a>
-
-
-
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_PREVENT_SELF_MATCHING_DEFAULT">PREVENT_SELF_MATCHING_DEFAULT</a>: u8 = 0;
 </code></pre>
 
 
@@ -1232,8 +1202,8 @@ Cancel older (resting) order in full. Continue to execute the newer taking order
             maker_rebate_rate,
             tick_size,
             lot_size,
-            base_custodian: <a href="custodian.md#0xdee9_custodian_new">custodian::new</a>&lt;BaseAsset&gt;(ctx),
-            quote_custodian: <a href="custodian.md#0xdee9_custodian_new">custodian::new</a>&lt;QuoteAsset&gt;(ctx),
+            base_custodian: custodian::new&lt;BaseAsset&gt;(ctx),
+            quote_custodian: custodian::new&lt;QuoteAsset&gt;(ctx),
             creation_fee,
             base_asset_trading_fees: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_zero">balance::zero</a>(),
             quote_asset_trading_fees: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_zero">balance::zero</a>(),
@@ -1358,7 +1328,7 @@ Emits: <code><a href="clob_v2.md#0xdee9_clob_v2_DepositAsset">DepositAsset</a>&l
     <b>let</b> coin_amount = <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&<a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>);
     <b>assert</b>!(coin_amount != 0, <a href="clob_v2.md#0xdee9_clob_v2_EInsufficientBaseCoin">EInsufficientBaseCoin</a>);
 
-    <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>(
+    custodian::increase_user_available_balance(
         &<b>mut</b> pool.base_custodian,
         account_owner(account_cap),
         <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_into_balance">coin::into_balance</a>(<a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>)
@@ -1399,7 +1369,7 @@ Emits: <code><a href="clob_v2.md#0xdee9_clob_v2_DepositAsset">DepositAsset</a>&l
     <b>let</b> coin_amount = <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&<a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>);
     <b>assert</b>!(coin_amount != 0, <a href="clob_v2.md#0xdee9_clob_v2_EInsufficientQuoteCoin">EInsufficientQuoteCoin</a>);
 
-    <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>(
+    custodian::increase_user_available_balance(
         &<b>mut</b> pool.quote_custodian,
         account_owner(account_cap),
         <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_into_balance">coin::into_balance</a>(<a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>)
@@ -1448,7 +1418,7 @@ Aborts if the quantity is zero.
         owner: account_owner(account_cap)
     });
 
-    <a href="custodian.md#0xdee9_custodian_withdraw_asset">custodian::withdraw_asset</a>(
+    custodian::withdraw_asset(
         &<b>mut</b> pool.base_custodian, quantity, account_cap, ctx
     )
 }
@@ -1489,7 +1459,7 @@ Aborts if the quantity is zero.
         owner: account_owner(account_cap)
     });
 
-    <a href="custodian.md#0xdee9_custodian_withdraw_asset">custodian::withdraw_asset</a>(
+    custodian::withdraw_asset(
         &<b>mut</b> pool.quote_custodian, quantity, account_cap, ctx
     )
 }
@@ -1655,7 +1625,7 @@ Returns the Coin<BaseAsset>, Coin<QuoteAsset> and the base asset balance.
 
             <b>if</b> (maker_order.expire_timestamp &lt;= current_timestamp || account_owner(account_cap) == maker_order.owner) {
                 skip_order = <b>true</b>;
-                <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.base_custodian, maker_order.owner, maker_order.quantity);
+                custodian::unlock_balance(&<b>mut</b> pool.base_custodian, maker_order.owner, maker_order.quantity);
                 <a href="clob_v2.md#0xdee9_clob_v2_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, maker_order);
                 <b>let</b> canceled_order_event = <a href="clob_v2.md#0xdee9_clob_v2_AllOrdersCanceledComponent">AllOrdersCanceledComponent</a>&lt;BaseAsset, QuoteAsset&gt; {
                     client_order_id: maker_order.client_order_id,
@@ -1732,7 +1702,7 @@ Returns the Coin<BaseAsset>, Coin<QuoteAsset> and the base asset balance.
 
                 // maker in ask side, decrease maker's locked base asset, increase maker's available quote asset
                 taker_quote_quantity_remaining = taker_quote_quantity_remaining - filled_quote_quantity;
-                <b>let</b> locked_base_balance = <a href="custodian.md#0xdee9_custodian_decrease_user_locked_balance">custodian::decrease_user_locked_balance</a>&lt;BaseAsset&gt;(
+                <b>let</b> locked_base_balance = custodian::decrease_user_locked_balance&lt;BaseAsset&gt;(
                     &<b>mut</b> pool.base_custodian,
                     maker_order.owner,
                     filled_base_quantity
@@ -1743,7 +1713,7 @@ Returns the Coin<BaseAsset>, Coin<QuoteAsset> and the base asset balance.
                     filled_quote_quantity,
                 );
                 // Send quote asset including rebate <b>to</b> maker.
-                <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>&lt;QuoteAsset&gt;(
+                custodian::increase_user_available_balance&lt;QuoteAsset&gt;(
                     &<b>mut</b> pool.quote_custodian,
                     maker_order.owner,
                     <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_split">balance::split</a>(
@@ -1863,7 +1833,7 @@ Returns the Coin<BaseAsset>, Coin<QuoteAsset> and the base asset balance.
 
             <b>if</b> (maker_order.expire_timestamp &lt;= current_timestamp || account_owner(account_cap) == maker_order.owner) {
                 skip_order = <b>true</b>;
-                <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.base_custodian, maker_order.owner, maker_order.quantity);
+                custodian::unlock_balance(&<b>mut</b> pool.base_custodian, maker_order.owner, maker_order.quantity);
                 <a href="clob_v2.md#0xdee9_clob_v2_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, maker_order);
                 <b>let</b> canceled_order_event = <a href="clob_v2.md#0xdee9_clob_v2_AllOrdersCanceledComponent">AllOrdersCanceledComponent</a>&lt;BaseAsset, QuoteAsset&gt; {
                     client_order_id: maker_order.client_order_id,
@@ -1896,7 +1866,7 @@ Returns the Coin<BaseAsset>, Coin<QuoteAsset> and the base asset balance.
 
                 // maker in ask side, decrease maker's locked base asset, increase maker's available quote asset
                 taker_base_quantity_remaining = taker_base_quantity_remaining - filled_base_quantity;
-                <b>let</b> locked_base_balance = <a href="custodian.md#0xdee9_custodian_decrease_user_locked_balance">custodian::decrease_user_locked_balance</a>&lt;BaseAsset&gt;(
+                <b>let</b> locked_base_balance = custodian::decrease_user_locked_balance&lt;BaseAsset&gt;(
                     &<b>mut</b> pool.base_custodian,
                     maker_order.owner,
                     filled_base_quantity
@@ -1905,7 +1875,7 @@ Returns the Coin<BaseAsset>, Coin<QuoteAsset> and the base asset balance.
                     &<b>mut</b> quote_balance_left,
                     taker_commission,
                 );
-                <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>&lt;QuoteAsset&gt;(
+                custodian::increase_user_available_balance&lt;QuoteAsset&gt;(
                     &<b>mut</b> pool.quote_custodian,
                     maker_order.owner,
                     <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_split">balance::split</a>(
@@ -1916,7 +1886,7 @@ Returns the Coin<BaseAsset>, Coin<QuoteAsset> and the base asset balance.
                 <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> pool.quote_asset_trading_fees, taker_commission_balance);
                 <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> base_balance_filled, locked_base_balance);
 
-                <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>&lt;QuoteAsset&gt;(
+                custodian::increase_user_available_balance&lt;QuoteAsset&gt;(
                     &<b>mut</b> pool.quote_custodian,
                     maker_order.owner,
                     <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_split">balance::split</a>(
@@ -2025,7 +1995,7 @@ Returns the Coin<BaseAsset>, Coin<QuoteAsset> and the base asset balance.
             <b>if</b> (maker_order.expire_timestamp &lt;= current_timestamp || account_owner(account_cap) == maker_order.owner) {
                 skip_order = <b>true</b>;
                 <b>let</b> maker_quote_quantity = clob_math::mul(maker_order.quantity, maker_order.price);
-                <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.quote_custodian, maker_order.owner, maker_quote_quantity);
+                custodian::unlock_balance(&<b>mut</b> pool.quote_custodian, maker_order.owner, maker_quote_quantity);
                 // TODO (jian): remove the canceled orders after we ensure market makers <b>update</b>
                 <a href="clob_v2.md#0xdee9_clob_v2_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, maker_order);
                 <b>let</b> canceled_order_event = <a href="clob_v2.md#0xdee9_clob_v2_AllOrdersCanceledComponent">AllOrdersCanceledComponent</a>&lt;BaseAsset, QuoteAsset&gt; {
@@ -2057,7 +2027,7 @@ Returns the Coin<BaseAsset>, Coin<QuoteAsset> and the base asset balance.
 
                 maker_base_quantity = maker_base_quantity - filled_base_quantity;
                 // maker in bid side, decrease maker's locked quote asset, increase maker's available base asset
-                <b>let</b> locked_quote_balance = <a href="custodian.md#0xdee9_custodian_decrease_user_locked_balance">custodian::decrease_user_locked_balance</a>&lt;QuoteAsset&gt;(
+                <b>let</b> locked_quote_balance = custodian::decrease_user_locked_balance&lt;QuoteAsset&gt;(
                     &<b>mut</b> pool.quote_custodian,
                     maker_order.owner,
                     filled_quote_quantity
@@ -2066,7 +2036,7 @@ Returns the Coin<BaseAsset>, Coin<QuoteAsset> and the base asset balance.
                     &<b>mut</b> locked_quote_balance,
                     taker_commission,
                 );
-                <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>&lt;QuoteAsset&gt;(
+                custodian::increase_user_available_balance&lt;QuoteAsset&gt;(
                     &<b>mut</b> pool.quote_custodian,
                     maker_order.owner,
                     <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_split">balance::split</a>(
@@ -2077,7 +2047,7 @@ Returns the Coin<BaseAsset>, Coin<QuoteAsset> and the base asset balance.
                 <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> pool.quote_asset_trading_fees, taker_commission_balance);
                 <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> quote_balance_filled, locked_quote_balance);
 
-                <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>&lt;BaseAsset&gt;(
+                custodian::increase_user_available_balance&lt;BaseAsset&gt;(
                     &<b>mut</b> pool.base_custodian,
                     maker_order.owner,
                     <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_split">balance::split</a>(
@@ -2266,12 +2236,12 @@ Returns the order id.
     <b>let</b> open_orders: &<b>mut</b> CritbitTree&lt;<a href="clob_v2.md#0xdee9_clob_v2_TickLevel">TickLevel</a>&gt;;
     <b>if</b> (is_bid) {
         <b>let</b> quote_quantity = clob_math::mul(quantity, price);
-        <a href="custodian.md#0xdee9_custodian_lock_balance">custodian::lock_balance</a>&lt;QuoteAsset&gt;(&<b>mut</b> pool.quote_custodian, account_cap, quote_quantity);
+        custodian::lock_balance&lt;QuoteAsset&gt;(&<b>mut</b> pool.quote_custodian, account_cap, quote_quantity);
         order_id = pool.next_bid_order_id;
         pool.next_bid_order_id = pool.next_bid_order_id + 1;
         open_orders = &<b>mut</b> pool.bids;
     } <b>else</b> {
-        <a href="custodian.md#0xdee9_custodian_lock_balance">custodian::lock_balance</a>&lt;BaseAsset&gt;(&<b>mut</b> pool.base_custodian, account_cap, quantity);
+        custodian::lock_balance&lt;BaseAsset&gt;(&<b>mut</b> pool.base_custodian, account_cap, quantity);
         order_id = pool.next_ask_order_id;
         pool.next_ask_order_id = pool.next_ask_order_id + 1;
         open_orders = &<b>mut</b> pool.asks;
@@ -2370,17 +2340,18 @@ So please check that boolean value first before using the order id.
     <b>assert</b>!(price % pool.tick_size == 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidPrice">EInvalidPrice</a>);
     <b>assert</b>!(quantity % pool.lot_size == 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidQuantity">EInvalidQuantity</a>);
     <b>assert</b>!(expire_timestamp &gt; <a href="../../../.././build/Sui/docs/clock.md#0x2_clock_timestamp_ms">clock::timestamp_ms</a>(<a href="../../../.././build/Sui/docs/clock.md#0x2_clock">clock</a>), <a href="clob_v2.md#0xdee9_clob_v2_EInvalidExpireTimestamp">EInvalidExpireTimestamp</a>);
+
     <b>let</b> owner = account_owner(account_cap);
     <b>let</b> original_quantity = quantity;
     <b>let</b> base_quantity_filled;
     <b>let</b> quote_quantity_filled;
 
     <b>if</b> (is_bid) {
-        <b>let</b> quote_quantity_original = <a href="custodian.md#0xdee9_custodian_account_available_balance">custodian::account_available_balance</a>&lt;QuoteAsset&gt;(
+        <b>let</b> quote_quantity_original = custodian::account_available_balance&lt;QuoteAsset&gt;(
             &pool.quote_custodian,
             owner
         );
-        <b>let</b> quote_balance = <a href="custodian.md#0xdee9_custodian_decrease_user_available_balance">custodian::decrease_user_available_balance</a>&lt;QuoteAsset&gt;(
+        <b>let</b> quote_balance = custodian::decrease_user_available_balance&lt;QuoteAsset&gt;(
             &<b>mut</b> pool.quote_custodian,
             account_cap,
             quote_quantity_original,
@@ -2397,18 +2368,18 @@ So please check that boolean value first before using the order id.
         base_quantity_filled = <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&base_balance_filled);
         quote_quantity_filled = quote_quantity_original - <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&quote_balance_left);
 
-        <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>&lt;BaseAsset&gt;(
+        custodian::increase_user_available_balance&lt;BaseAsset&gt;(
             &<b>mut</b> pool.base_custodian,
             owner,
             base_balance_filled,
         );
-        <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>&lt;QuoteAsset&gt;(
+        custodian::increase_user_available_balance&lt;QuoteAsset&gt;(
             &<b>mut</b> pool.quote_custodian,
             owner,
             quote_balance_left,
         );
     } <b>else</b> {
-        <b>let</b> base_balance = <a href="custodian.md#0xdee9_custodian_decrease_user_available_balance">custodian::decrease_user_available_balance</a>&lt;BaseAsset&gt;(
+        <b>let</b> base_balance = custodian::decrease_user_available_balance&lt;BaseAsset&gt;(
             &<b>mut</b> pool.base_custodian,
             account_cap,
             quantity,
@@ -2425,12 +2396,12 @@ So please check that boolean value first before using the order id.
         base_quantity_filled = quantity - <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&base_balance_left);
         quote_quantity_filled = <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&quote_balance_filled);
 
-        <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>&lt;BaseAsset&gt;(
+        custodian::increase_user_available_balance&lt;BaseAsset&gt;(
             &<b>mut</b> pool.base_custodian,
             owner,
             base_balance_left,
         );
-        <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>&lt;QuoteAsset&gt;(
+        custodian::increase_user_available_balance&lt;QuoteAsset&gt;(
             &<b>mut</b> pool.quote_custodian,
             owner,
             quote_balance_filled,
@@ -2645,9 +2616,9 @@ Abort if order_id is invalid or if the order is not submitted by the transaction
         <b>if</b> (is_round_down) {
             balance_locked = balance_locked + 1;
         };
-        <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.quote_custodian, owner, balance_locked);
+        custodian::unlock_balance(&<b>mut</b> pool.quote_custodian, owner, balance_locked);
     } <b>else</b> {
-        <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.base_custodian, owner, order.quantity);
+        custodian::unlock_balance(&<b>mut</b> pool.base_custodian, owner, order.quantity);
     };
     <a href="clob_v2.md#0xdee9_clob_v2_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(*<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id), &order);
 }
@@ -2737,9 +2708,9 @@ Abort if order_id is invalid or if the order is not submitted by the transaction
         );
         <b>if</b> (is_bid) {
             <b>let</b> balance_locked = clob_math::mul(order.quantity, order.price);
-            <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.quote_custodian, owner, balance_locked);
+            custodian::unlock_balance(&<b>mut</b> pool.quote_custodian, owner, balance_locked);
         } <b>else</b> {
-            <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.base_custodian, owner, order.quantity);
+            custodian::unlock_balance(&<b>mut</b> pool.base_custodian, owner, order.quantity);
         };
         // TODO (jian): remove the canceled orders after we ensure market makers <b>update</b>
         <a href="clob_v2.md#0xdee9_clob_v2_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, &order);
@@ -2838,9 +2809,9 @@ Grouping order_ids like [0, 2, 1, 3] would make it the most gas efficient.
             <b>if</b> (is_round_down) {
                 balance_locked = balance_locked + 1;
             };
-            <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.quote_custodian, owner, balance_locked);
+            custodian::unlock_balance(&<b>mut</b> pool.quote_custodian, owner, balance_locked);
         } <b>else</b> {
-            <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.base_custodian, owner, order.quantity);
+            custodian::unlock_balance(&<b>mut</b> pool.base_custodian, owner, order.quantity);
         };
         <a href="clob_v2.md#0xdee9_clob_v2_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, &order);
         <b>let</b> canceled_order_event = <a href="clob_v2.md#0xdee9_clob_v2_AllOrdersCanceledComponent">AllOrdersCanceledComponent</a>&lt;BaseAsset, QuoteAsset&gt; {
@@ -2928,9 +2899,9 @@ and they should correspond to the order IDs one by one.
         <b>assert</b>!(order.expire_timestamp &lt; now, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidExpireTimestamp">EInvalidExpireTimestamp</a>);
         <b>if</b> (is_bid) {
             <b>let</b> balance_locked = clob_math::mul(order.quantity, order.price);
-            <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.quote_custodian, owner, balance_locked);
+            custodian::unlock_balance(&<b>mut</b> pool.quote_custodian, owner, balance_locked);
         } <b>else</b> {
-            <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.base_custodian, owner, order.quantity);
+            custodian::unlock_balance(&<b>mut</b> pool.base_custodian, owner, order.quantity);
         };
         // TODO (jian): remove the canceled orders after we ensure market makers <b>update</b>
         <a href="clob_v2.md#0xdee9_clob_v2_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, &order);
@@ -3034,8 +3005,8 @@ Aborts if the <code>Account</code> does not exist in the <code>base_custodian</c
     account_cap: &AccountCap
 ): (u64, u64, u64, u64) {
     <b>let</b> owner = account_owner(account_cap);
-    <b>let</b> (base_avail, base_locked) = <a href="custodian.md#0xdee9_custodian_account_balance">custodian::account_balance</a>(&pool.base_custodian, owner);
-    <b>let</b> (quote_avail, quote_locked) = <a href="custodian.md#0xdee9_custodian_account_balance">custodian::account_balance</a>(&pool.quote_custodian, owner);
+    <b>let</b> (base_avail, base_locked) = custodian::account_balance(&pool.base_custodian, owner);
+    <b>let</b> (quote_avail, quote_locked) = custodian::account_balance(&pool.quote_custodian, owner);
     (base_avail, base_locked, quote_avail, quote_locked)
 }
 </code></pre>

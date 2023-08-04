@@ -128,7 +128,6 @@ module sui::kiosk_tests {
         abort 1337
     }
 
-    #[test_only]
     #[allow(unused_field)]
     struct WrongAsset has key, store { id: sui::object::UID }
 

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
+#[allow(unused_field)]
 module sui::test_scenarioTests {
     use sui::object;
     use sui::test_scenario::Self as ts;
