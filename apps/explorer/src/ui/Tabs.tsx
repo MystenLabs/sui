@@ -55,13 +55,16 @@ const TabsList = forwardRef<
 		fullWidth?: boolean;
 		disableBottomBorder?: boolean;
 		lessSpacing?: boolean;
+		dynamicSpacing?: boolean;
 	}
->(({ fullWidth, disableBottomBorder, lessSpacing, ...props }, ref) => (
+>(({ fullWidth, disableBottomBorder, lessSpacing, dynamicSpacing, ...props }, ref) => (
 	<TabsPrimitive.List
 		ref={ref}
 		className={clsx(
 			'flex items-center border-gray-45',
-			lessSpacing ? 'gap-3' : 'gap-6',
+			lessSpacing && !dynamicSpacing && 'gap-3',
+			!lessSpacing && !dynamicSpacing && 'gap-6',
+			!lessSpacing && dynamicSpacing && 'gap-4 sm:gap-6',
 			fullWidth && 'flex-1',
 			!disableBottomBorder && 'border-b',
 		)}
