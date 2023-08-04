@@ -5,8 +5,6 @@
 # --------------
 # - Encoding RPC errors
 
-# TODO Flesh out Connections
-# TODO NameService type
 
 schema {
   query: Query
@@ -1051,8 +1049,6 @@ type DryRunReturn {
 
 # Connections
 
-type StakeConnection {}
-
 # Pagination
 type PageInfo {
     hasNextPage: Boolean!
@@ -1203,4 +1199,15 @@ type AddressMetricConnection {
 type AddressMetricEdge {
   cursor: String
   node: AddressMetric!
+}
+
+# StakeConnection
+type StakeConnection {
+  edges: [StakeEdge!]!
+  pageInfo: PageInfo!
+}
+
+type StakeEdge {
+  cursor: String
+  node: StakedSui!
 }
