@@ -352,7 +352,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let kv_store = Arc::new(TransactionKeyValueStore::new(
             "rocksdb",
             metrics,
-            validator.db(),
+            validator.clone(),
         ));
 
         let mut test_adapter = Self {

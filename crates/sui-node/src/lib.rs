@@ -1435,7 +1435,7 @@ fn build_kv_store(
     registry: &Registry,
 ) -> Result<Arc<TransactionKeyValueStore>> {
     let metrics = KeyValueStoreMetrics::new(registry);
-    let db_store = TransactionKeyValueStore::new("rocksdb", metrics.clone(), state.db());
+    let db_store = TransactionKeyValueStore::new("rocksdb", metrics.clone(), state.clone());
 
     let base_url = &config.transaction_kv_store_read_config.base_url;
 
@@ -1493,7 +1493,11 @@ pub async fn build_server(
         kv_store.clone(),
         metrics.clone(),
     ))?;
-    server.register_module(CoinReadApi::new(state.clone(), metrics.clone()))?;
+    server.register_module(CoinReadApi::new(
+        state.clone(),
+        kv_store.clone(),
+        metrics.clone(),
+    ))?;
     server.register_module(TransactionBuilderApi::new(state.clone()))?;
     server.register_module(GovernanceReadApi::new(state.clone(), metrics.clone()))?;
 

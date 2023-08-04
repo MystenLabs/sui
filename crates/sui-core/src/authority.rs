@@ -6,6 +6,7 @@ use crate::authority::authority_store_types::{StoreObject, StoreObjectWrapper};
 use crate::verify_indexes::verify_indexes;
 use anyhow::anyhow;
 use arc_swap::{ArcSwap, Guard};
+use async_trait::async_trait;
 use chrono::prelude::*;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
@@ -65,19 +66,19 @@ use sui_config::node::{
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_framework::{BuiltInFramework, SystemPackage};
 use sui_json_rpc_types::{
-    Checkpoint, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
-    SuiMoveValue, SuiObjectDataFilter, SuiTransactionBlockData, SuiTransactionBlockEffects,
+    DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent, SuiMoveValue,
+    SuiObjectDataFilter, SuiTransactionBlockData, SuiTransactionBlockEffects,
     SuiTransactionBlockEvents, TransactionFilter,
 };
 use sui_macros::{fail_point, fail_point_async};
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::indexes::{CoinInfo, ObjectIndexChanges};
-use sui_storage::key_value_store::TransactionKeyValueStore;
+use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
+use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_storage::IndexStore;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{
-    default_hash, AggregateAuthoritySignature, AuthorityKeyPair, AuthoritySignInfo, NetworkKeyPair,
-    Signer,
+    default_hash, AuthorityKeyPair, AuthoritySignInfo, NetworkKeyPair, Signer,
 };
 use sui_types::digests::ChainIdentifier;
 use sui_types::digests::TransactionEventsDigest;
@@ -92,8 +93,9 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::gas::{GasCharger, GasCostSummary, SuiGasStatus};
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
-    CheckpointCommitment, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
-    CheckpointSequenceNumber, CheckpointSummary, CheckpointTimestamp, VerifiedCheckpoint,
+    CertifiedCheckpointSummary, CheckpointCommitment, CheckpointContents, CheckpointContentsDigest,
+    CheckpointDigest, CheckpointSequenceNumber, CheckpointSummary, CheckpointTimestamp,
+    VerifiedCheckpoint,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::messages_consensus::AuthorityCapabilities;
@@ -2801,13 +2803,11 @@ impl AuthorityState {
     pub async fn get_executed_transaction_and_effects(
         &self,
         digest: TransactionDigest,
-    ) -> SuiResult<(VerifiedTransaction, TransactionEffects)> {
-        let transaction = self.database.get_transaction_block(&digest)?;
-        let effects = self.database.get_executed_effects(&digest)?;
-        match (transaction, effects) {
-            (Some(transaction), Some(effects)) => Ok((transaction, effects)),
-            _ => Err(SuiError::TransactionNotFound { digest }),
-        }
+        kv_store: Arc<TransactionKeyValueStore>,
+    ) -> SuiResult<(Transaction, TransactionEffects)> {
+        let transaction = kv_store.get_tx(digest).await?;
+        let effects = kv_store.get_fx_by_tx_digest(digest).await?;
+        Ok((transaction, effects))
     }
 
     pub fn multi_get_transaction_checkpoint(
@@ -2866,8 +2866,26 @@ impl AuthorityState {
             .loaded_child_object_versions(transaction_digest)
     }
 
-    pub fn get_transactions(
+    pub async fn get_transactions_for_tests(
+        self: &Arc<Self>,
+        filter: Option<TransactionFilter>,
+        cursor: Option<TransactionDigest>,
+        limit: Option<usize>,
+        reverse: bool,
+    ) -> SuiResult<Vec<TransactionDigest>> {
+        let metrics = KeyValueStoreMetrics::new_for_tests();
+        let kv_store = Arc::new(TransactionKeyValueStore::new(
+            "rocksdb",
+            metrics,
+            self.clone(),
+        ));
+        self.get_transactions(&kv_store, filter, cursor, limit, reverse)
+            .await
+    }
+
+    pub async fn get_transactions(
         &self,
+        kv_store: &Arc<TransactionKeyValueStore>,
         filter: Option<TransactionFilter>,
         // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<TransactionDigest>,
@@ -2875,8 +2893,7 @@ impl AuthorityState {
         reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
         if let Some(TransactionFilter::Checkpoint(sequence_number)) = filter {
-            let checkpoint_contents =
-                self.get_checkpoint_contents_by_sequence_number(sequence_number)?;
+            let checkpoint_contents = kv_store.get_checkpoint_contents(sequence_number).await?;
             let iter = checkpoint_contents.iter().map(|c| c.transaction);
             if reverse {
                 let iter = iter
@@ -3018,61 +3035,6 @@ impl AuthorityState {
                 error: UserInputError::VerifiedCheckpointNotFound(sequence_number),
             }),
         }
-    }
-
-    pub fn get_checkpoints(
-        &self,
-        // If `Some`, the query will start from the next item after the specified cursor
-        cursor: Option<CheckpointSequenceNumber>,
-        limit: u64,
-        descending_order: bool,
-    ) -> SuiResult<Vec<Checkpoint>> {
-        let max_checkpoint = self.get_latest_checkpoint_sequence_number()?;
-        let checkpoint_numbers =
-            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
-
-        let verified_checkpoints = self
-            .get_checkpoint_store()
-            .multi_get_checkpoint_by_sequence_number(&checkpoint_numbers)?;
-
-        let checkpoint_summaries_and_signatures: Vec<(
-            CheckpointSummary,
-            AggregateAuthoritySignature,
-        )> = verified_checkpoints
-            .into_iter()
-            .flatten()
-            .map(|check| {
-                (
-                    check.clone().into_summary_and_sequence().1,
-                    check.get_validator_signature(),
-                )
-            })
-            .collect();
-
-        let checkpoint_contents_digest: Vec<CheckpointContentsDigest> =
-            checkpoint_summaries_and_signatures
-                .iter()
-                .map(|summary| summary.0.content_digest)
-                .collect();
-        let checkpoint_contents = self
-            .get_checkpoint_store()
-            .multi_get_checkpoint_content(checkpoint_contents_digest.as_slice())?;
-        let contents: Vec<CheckpointContents> = checkpoint_contents.into_iter().flatten().collect();
-
-        let mut checkpoints: Vec<Checkpoint> = vec![];
-
-        for (summary_and_sig, content) in checkpoint_summaries_and_signatures
-            .into_iter()
-            .zip(contents.into_iter())
-        {
-            checkpoints.push(Checkpoint::from((
-                summary_and_sig.0,
-                content,
-                summary_and_sig.1,
-            )));
-        }
-
-        Ok(checkpoints)
     }
 
     pub async fn query_events(
@@ -4078,125 +4040,93 @@ impl AuthorityState {
     }
 }
 
-fn calculate_checkpoint_numbers(
-    // If `Some`, the query will start from the next item after the specified cursor
-    cursor: Option<CheckpointSequenceNumber>,
-    limit: u64,
-    descending_order: bool,
-    max_checkpoint: CheckpointSequenceNumber,
-) -> Vec<CheckpointSequenceNumber> {
-    let (start_index, end_index) = match cursor {
-        Some(t) => {
-            if descending_order {
-                let start = std::cmp::min(t.saturating_sub(1), max_checkpoint);
-                let end = start.saturating_sub(limit - 1);
-                (end, start)
-            } else {
-                let start =
-                    std::cmp::min(t.checked_add(1).unwrap_or(max_checkpoint), max_checkpoint);
-                let end = std::cmp::min(
-                    start.checked_add(limit - 1).unwrap_or(max_checkpoint),
-                    max_checkpoint,
-                );
-                (start, end)
-            }
+#[async_trait]
+impl TransactionKeyValueStoreTrait for AuthorityState {
+    async fn multi_get(
+        &self,
+        transactions: &[TransactionDigest],
+        effects: &[TransactionDigest],
+        events: &[TransactionEventsDigest],
+    ) -> SuiResult<(
+        Vec<Option<Transaction>>,
+        Vec<Option<TransactionEffects>>,
+        Vec<Option<TransactionEvents>>,
+    )> {
+        let txns = if !transactions.is_empty() {
+            self.database
+                .multi_get_transaction_blocks(transactions)?
+                .into_iter()
+                .map(|t| t.map(|t| t.into_inner()))
+                .collect()
+        } else {
+            vec![]
+        };
+
+        let fx = if !effects.is_empty() {
+            self.database.multi_get_executed_effects(effects)?
+        } else {
+            vec![]
+        };
+
+        let evts = if !events.is_empty() {
+            self.database.multi_get_events(events)?
+        } else {
+            vec![]
+        };
+
+        Ok((txns, fx, evts))
+    }
+
+    async fn multi_get_checkpoints(
+        &self,
+        checkpoint_summaries: &[CheckpointSequenceNumber],
+        checkpoint_contents: &[CheckpointSequenceNumber],
+        checkpoint_summaries_by_digest: &[CheckpointDigest],
+        checkpoint_contents_by_digest: &[CheckpointContentsDigest],
+    ) -> SuiResult<(
+        Vec<Option<CertifiedCheckpointSummary>>,
+        Vec<Option<CheckpointContents>>,
+        Vec<Option<CertifiedCheckpointSummary>>,
+        Vec<Option<CheckpointContents>>,
+    )> {
+        // TODO: use multi-get methods if it ever becomes important (unlikely)
+        let mut summaries = Vec::with_capacity(checkpoint_summaries.len());
+        let store = self.get_checkpoint_store();
+        for seq in checkpoint_summaries {
+            let checkpoint = store
+                .get_checkpoint_by_sequence_number(*seq)?
+                .map(|c| c.into_inner());
+
+            summaries.push(checkpoint);
         }
-        None => {
-            if descending_order {
-                (max_checkpoint.saturating_sub(limit - 1), max_checkpoint)
-            } else {
-                (0, std::cmp::min(limit - 1, max_checkpoint))
-            }
+
+        let mut contents = Vec::with_capacity(checkpoint_contents.len());
+        for seq in checkpoint_contents {
+            let checkpoint = store
+                .get_checkpoint_by_sequence_number(*seq)?
+                .and_then(|summary| {
+                    store
+                        .get_checkpoint_contents(&summary.content_digest)
+                        .expect("db read cannot fail")
+                });
+            contents.push(checkpoint);
         }
-    };
 
-    if descending_order {
-        (start_index..=end_index).rev().collect()
-    } else {
-        (start_index..=end_index).collect()
-    }
-}
+        let mut summaries_by_digest = Vec::with_capacity(checkpoint_summaries_by_digest.len());
+        for digest in checkpoint_summaries_by_digest {
+            let checkpoint = store
+                .get_checkpoint_by_digest(digest)?
+                .map(|c| c.into_inner());
+            summaries_by_digest.push(checkpoint);
+        }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+        let mut contents_by_digest = Vec::with_capacity(checkpoint_contents_by_digest.len());
+        for digest in checkpoint_contents_by_digest {
+            let checkpoint = store.get_checkpoint_contents(digest)?;
+            contents_by_digest.push(checkpoint);
+        }
 
-    #[test]
-    fn test_calculate_checkpoint_numbers() {
-        let cursor = Some(10);
-        let limit = 5;
-        let descending_order = true;
-        let max_checkpoint = 15;
-
-        let checkpoint_numbers =
-            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
-
-        assert_eq!(checkpoint_numbers, vec![9, 8, 7, 6, 5]);
-    }
-
-    #[test]
-    fn test_calculate_checkpoint_numbers_descending_no_cursor() {
-        let cursor = None;
-        let limit = 5;
-        let descending_order = true;
-        let max_checkpoint = 15;
-
-        let checkpoint_numbers =
-            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
-
-        assert_eq!(checkpoint_numbers, vec![15, 14, 13, 12, 11]);
-    }
-
-    #[test]
-    fn test_calculate_checkpoint_numbers_ascending_no_cursor() {
-        let cursor = None;
-        let limit = 5;
-        let descending_order = false;
-        let max_checkpoint = 15;
-
-        let checkpoint_numbers =
-            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
-
-        assert_eq!(checkpoint_numbers, vec![0, 1, 2, 3, 4]);
-    }
-
-    #[test]
-    fn test_calculate_checkpoint_numbers_ascending_with_cursor() {
-        let cursor = Some(10);
-        let limit = 5;
-        let descending_order = false;
-        let max_checkpoint = 15;
-
-        let checkpoint_numbers =
-            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
-
-        assert_eq!(checkpoint_numbers, vec![11, 12, 13, 14, 15]);
-    }
-
-    #[test]
-    fn test_calculate_checkpoint_numbers_ascending_limit_exceeds_max() {
-        let cursor = None;
-        let limit = 20;
-        let descending_order = false;
-        let max_checkpoint = 15;
-
-        let checkpoint_numbers =
-            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
-
-        assert_eq!(checkpoint_numbers, (0..=15).collect::<Vec<_>>());
-    }
-
-    #[test]
-    fn test_calculate_checkpoint_numbers_descending_limit_exceeds_max() {
-        let cursor = None;
-        let limit = 20;
-        let descending_order = true;
-        let max_checkpoint = 15;
-
-        let checkpoint_numbers =
-            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
-
-        assert_eq!(checkpoint_numbers, (0..=15).rev().collect::<Vec<_>>());
+        Ok((summaries, contents, summaries_by_digest, contents_by_digest))
     }
 }
 
