@@ -224,13 +224,15 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             DependencyMode::Always,
             &root_manifest.dependencies,
         )?;
-        let mut dev_dep_graphs = self.collect_graphs(
+        let dev_dep_graphs = self.collect_graphs(
             parent,
             root_manifest.package.name,
             root_path.clone(),
             DependencyMode::DevOnly,
             &root_manifest.dev_dependencies,
         )?;
+
+        dep_graphs.extend(dev_dep_graphs);
 
         let mut combined_graph = DependencyGraph {
             root_path: root_path.clone(),
@@ -250,41 +252,21 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         let overrides = collect_overrides(parent, &root_manifest.dependencies)?;
         let dev_overrides = collect_overrides(parent, &root_manifest.dev_dependencies)?;
 
-        for (dep_name, (g, is_override, _)) in dep_graphs.iter_mut() {
+        for (dep_name, (g, mode, is_override, _)) in dep_graphs.iter_mut() {
             g.prune_subgraph(
                 root_manifest.package.name,
                 *dep_name,
                 *is_override,
-                DependencyMode::Always,
-                &overrides,
-                &dev_overrides,
-            )?;
-        }
-        for (dep_name, (g, is_override, _)) in dev_dep_graphs.iter_mut() {
-            g.prune_subgraph(
-                root_manifest.package.name,
-                *dep_name,
-                *is_override,
-                DependencyMode::DevOnly,
+                *mode,
                 &overrides,
                 &dev_overrides,
             )?;
         }
 
-        combined_graph.merge(
-            dep_graphs,
-            DependencyMode::Always,
-            root_manifest.package.name,
-            parent,
-            &root_manifest.dependencies,
-        )?;
-        combined_graph.merge(
-            dev_dep_graphs,
-            DependencyMode::DevOnly,
-            root_manifest.package.name,
-            parent,
-            &root_manifest.dev_dependencies,
-        )?;
+        let mut all_deps = root_manifest.dependencies.clone();
+        all_deps.extend(root_manifest.dev_dependencies.clone());
+
+        combined_graph.merge(dep_graphs, parent, &all_deps)?;
 
         combined_graph.check_acyclic()?;
         combined_graph.discover_always_deps();
@@ -301,7 +283,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         root_path: PathBuf,
         mode: DependencyMode,
         dependencies: &PM::Dependencies,
-    ) -> Result<BTreeMap<PM::PackageName, (DependencyGraph, bool, bool)>> {
+    ) -> Result<BTreeMap<PM::PackageName, (DependencyGraph, DependencyMode, bool, bool)>> {
         let mut dep_graphs = BTreeMap::new();
         for (dep_pkg_name, dep) in dependencies {
             let (pkg_graph, is_override, is_external) = self
@@ -319,7 +301,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                         parent_pkg
                     )
                 })?;
-            dep_graphs.insert(*dep_pkg_name, (pkg_graph, is_override, is_external));
+            dep_graphs.insert(*dep_pkg_name, (pkg_graph, mode, is_override, is_external));
         }
         Ok(dep_graphs)
     }
@@ -580,9 +562,7 @@ impl DependencyGraph {
     /// subgraphs to form the parent dependency graph.
     pub fn merge(
         &mut self,
-        dep_graphs: BTreeMap<PM::PackageName, (DependencyGraph, bool, bool)>,
-        mode: DependencyMode,
-        root_package: PM::PackageName,
+        mut dep_graphs: BTreeMap<PM::PackageName, (DependencyGraph, DependencyMode, bool, bool)>,
         parent: &PM::DependencyKind,
         dependencies: &PM::Dependencies,
     ) -> Result<()> {
@@ -590,23 +570,53 @@ impl DependencyGraph {
             bail!("Merging dependencies into a graph after calculating its 'always' dependencies");
         }
 
+        // insert direct dependency edges and (if necessary) packages for the remaining graph nodes
+        // (not present in package table)
+        for (dep_name, (g, mode, _, _)) in &dep_graphs {
+            let Some(dep) = dependencies.get(dep_name) else {
+                bail!(
+                    "Can't merge dependencies for '{}' because nothing depends on it",
+                    dep_name
+                );
+            };
+
+            let internally_resolved = self.insert_direct_dep(dep, *dep_name, g, *mode, parent)?;
+
+            if internally_resolved {
+                // insert edges from the directly dependent package to its neighbors for
+                // internally resolved sub-graphs - due to how external graphs are constructed,
+                // edges between directly dependent packages and their neighbors are already in
+                // the sub-graph and would have been inserted in the first loop in this function
+                for (_, to_pkg_name, sub_dep) in g.package_graph.edges(*dep_name) {
+                    self.package_graph
+                        .add_edge(*dep_name, to_pkg_name, sub_dep.clone());
+                }
+            }
+        }
+
         // collect all package names in all graphs in package table
-        let mut all_packages: BTreeSet<PM::PackageName> = BTreeSet::new();
-        for (g, _, _) in (&dep_graphs).values() {
+        let mut all_packages: BTreeSet<PM::PackageName> =
+            BTreeSet::from_iter(self.package_table.keys().cloned());
+        for (g, _, _, _) in (&dep_graphs).values() {
             all_packages.extend(g.package_table.keys());
         }
 
-        // analyze all packages in all package tables of all sub-graphs to determine if any of these
-        // packages represent a conflicting dependency; insert the packages and their respective
-        // edges into the combined graph along the way
+        dep_graphs.insert(
+            self.root_package,
+            (self.clone(), DependencyMode::Always, false, false),
+        );
+
+        // analyze all packages to determine if any of these packages represent a conflicting
+        // dependency; insert the packages and their respective edges into the combined graph along
+        // the way
         for pkg_name in all_packages {
             let mut existing_pkg_info: Option<(&DependencyGraph, &Package, bool)> = None;
-            for (_, (g, _, is_external)) in &dep_graphs {
+            for (_, (g, _, _, is_external)) in &dep_graphs {
                 let Some(pkg) = g.package_table.get(&pkg_name) else {
                     continue;
                 };
                 // graph g has a package with name pkg_name
-                let Some((existing_graph, existing_pkg, existing_is_external)) =
+                let Some(( existing_graph, existing_pkg, existing_is_external)) =
                     existing_pkg_info else
                 {
                     // first time this package was encountered
@@ -618,31 +628,43 @@ impl DependencyGraph {
                     bail!(
                         "When resolving dependencies for package {0}, conflicting versions \
                          of package {1} found:\nAt {4}\n\t{1} = {2}\nAt {5}\n\t{1} = {3}",
-                        root_package,
+                        self.root_package,
                         pkg_name,
                         PackageWithResolverTOML(existing_pkg),
                         PackageWithResolverTOML(&pkg),
                         dep_path_from_root(
-                            root_package,
+                            self.root_package,
                             &existing_graph,
                             pkg_name,
                             existing_is_external
                         )?,
-                        dep_path_from_root(root_package, &g, pkg_name, *is_external)?
+                        dep_path_from_root(self.root_package, &g, pkg_name, *is_external)?
                     );
                 }
+
                 // both packages are the same but we need to check if their dependencies
                 // are the same as well
-                match deps_equal(pkg_name, &existing_graph, &g) {
+                match deps_equal(
+                    pkg_name,
+                    &existing_graph,
+                    self.pkg_table_for_deps_compare(
+                        pkg_name,
+                        existing_graph,
+                        &dep_graphs,
+                        existing_is_external,
+                    ),
+                    g,
+                    self.pkg_table_for_deps_compare(pkg_name, g, &dep_graphs, *is_external),
+                ) {
                     Ok(_) => continue,
                     Err((existing_pkg_deps, pkg_deps)) => {
                         bail!(
                             "When resolving dependencies for package {}, \
                              conflicting dependencies found:{}{}",
-                            root_package,
+                            self.root_package,
                             format_deps(
                                 dep_path_from_root(
-                                    root_package,
+                                    self.root_package,
                                     &existing_graph,
                                     pkg_name,
                                     existing_is_external
@@ -650,7 +672,7 @@ impl DependencyGraph {
                                 existing_pkg_deps
                             ),
                             format_deps(
-                                dep_path_from_root(root_package, &g, pkg_name, *is_external,)?,
+                                dep_path_from_root(self.root_package, &g, pkg_name, *is_external,)?,
                                 pkg_deps,
                             ),
                         )
@@ -667,60 +689,46 @@ impl DependencyGraph {
             }
         }
 
-        // insert direct dependency edges and (if necessary) packages for the remaining graph nodes
-        // (not present in package table)
-        for (dep_name, (g, _, is_external)) in &dep_graphs {
-            let Some(dep) = dependencies.get(dep_name) else {
-                bail!(
-                    "Can't merge dependencies for '{}' because nothing depends on it",
-                    dep_name
-                );
-            };
-
-            let internally_resolved =
-                self.insert_direct_dep(dep, root_package, *dep_name, g, mode, parent)?;
-            // make sure that dependencies of the directly dependent package do not differ from
-            // the dependencies of the same package in other sub-graphs (if any)
-            for (other_dep_name, (other_g, _, is_other_external)) in &dep_graphs {
-                if dep_name != other_dep_name && other_g.package_graph.contains_node(*dep_name) {
-                    match deps_equal(*dep_name, &other_g, &g) {
-                        Ok(_) => continue,
-                        Err((other_pkg_deps, pkg_deps)) => {
-                            bail!(
-                                "When resolving dependencies for package {}, \
-                                 conflicting dependencies found:\n{}{}",
-                                root_package,
-                                format_deps(
-                                    dep_path_from_root(
-                                        root_package,
-                                        &other_g,
-                                        *dep_name,
-                                        *is_other_external
-                                    )?,
-                                    other_pkg_deps
-                                ),
-                                format_deps(
-                                    dep_path_from_root(root_package, &g, *dep_name, *is_external)?,
-                                    pkg_deps
-                                ),
-                            )
-                        }
-                    }
-                }
-            }
-
-            if internally_resolved {
-                // insert edges from the directly dependent package to its neighbors for
-                // internally resolved sub-graphs - due to how external graphs are constructed,
-                // edges between directly dependent packages and their neighbors are already in
-                // the sub-graph and would have been inserted in the first loop in this function
-                for (_, to_pkg_name, sub_dep) in g.package_graph.edges(*dep_name) {
-                    self.package_graph
-                        .add_edge(*dep_name, to_pkg_name, sub_dep.clone());
-                }
-            }
-        }
         Ok(())
+    }
+
+    /// The merge algorithm relies on the combined graph to be pre-populated with direct
+    /// dependencies for internally resolved packages (in terms of both entries in the package table
+    /// and nodes/edges in the package graph). This means that if a conflict is detected between
+    /// pre-populated combined graph and one of the sub-graphs, the pre-populated graph does not
+    /// (yet) contains target packages for edges outgoing from direct dependencies, and these are
+    /// needed to verify that direct dependencies are the same. Fortunately, these packages are
+    /// available in a package tables of a respective (dependent) subgraph. This function return the
+    /// right package table, depending on whether conflict was detected between pre-populated
+    /// combined graph and another sub-graph or between two separate sub-graphs. If we tried to use
+    /// combined graphs's package table "as is" we would get an error in all cases similar to the on
+    /// in the direct_and_indirect_dep test where A is a direct dependency of Root (as C would be
+    /// missing from the combined graph's table):
+    ///
+    ///                 +----+
+    ///           +---->| B  |----+
+    ///           |     +----+    |
+    ///           |               |
+    /// +----+    |               +-->+----+     +----+
+    /// |Root|----+------------------>| A  |---->| C  |
+    /// +----+                        +----+     +----+
+    ///
+    fn pkg_table_for_deps_compare<'a>(
+        &self,
+        dep_name: Symbol,
+        g: &'a DependencyGraph,
+        dep_graphs: &'a BTreeMap<PM::PackageName, (DependencyGraph, DependencyMode, bool, bool)>,
+        external: bool,
+    ) -> &'a BTreeMap<PM::PackageName, Package> {
+        if !external && g.root_package == self.root_package {
+            // unwrap is safe since dep_graphs are actually built using information about
+            // dependencies (including their name, represented here by dep_name) from the root
+            // package
+            let (g_with_nodes, _, _, _) = dep_graphs.get(&dep_name).unwrap();
+            &g_with_nodes.package_table
+        } else {
+            &g.package_table
+        }
     }
 
     /// Inserts a single direct dependency with given (package) name representing a sub-graph into
@@ -729,7 +737,6 @@ impl DependencyGraph {
     fn insert_direct_dep(
         &mut self,
         dep: &PM::Dependency,
-        root_package: PM::PackageName,
         dep_pkg_name: PM::PackageName,
         sub_graph: &DependencyGraph,
         mode: DependencyMode,
@@ -755,7 +762,7 @@ impl DependencyGraph {
                     entry.insert(pkg);
                 }
                 self.package_graph.add_edge(
-                    root_package,
+                    self.root_package,
                     dep_pkg_name,
                     Dependency {
                         mode,
@@ -772,10 +779,10 @@ impl DependencyGraph {
                 // sub-graph
                 let d = sub_graph
                     .package_graph
-                    .edge_weight(root_package, dep_pkg_name)
+                    .edge_weight(self.root_package, dep_pkg_name)
                     .unwrap();
                 self.package_graph
-                    .add_edge(root_package, dep_pkg_name, d.clone());
+                    .add_edge(self.root_package, dep_pkg_name, d.clone());
                 Ok(false)
             }
         }
@@ -1429,8 +1436,10 @@ fn format_deps(
 /// dependencies inside Err if they aren't.
 fn deps_equal<'a>(
     pkg_name: Symbol,
-    combined_graph: &'a DependencyGraph,
-    sub_graph: &'a DependencyGraph,
+    graph1: &'a DependencyGraph,
+    graph1_pkg_table: &'a BTreeMap<PM::PackageName, Package>,
+    graph2: &'a DependencyGraph,
+    graph2_pkg_table: &'a BTreeMap<PM::PackageName, Package>,
 ) -> std::result::Result<
     (),
     (
@@ -1438,26 +1447,26 @@ fn deps_equal<'a>(
         Vec<(&'a Dependency, PM::PackageName, &'a Package)>,
     ),
 > {
-    let combined_edges = BTreeSet::from_iter(
-        combined_graph
+    let graph1_edges = BTreeSet::from_iter(
+        graph1
             .package_graph
             .edges(pkg_name)
-            .map(|(_, pkg, dep)| (dep, pkg, combined_graph.package_table.get(&pkg).unwrap())),
+            .map(|(_, pkg, dep)| (dep, pkg, graph1_pkg_table.get(&pkg).unwrap())),
     );
-    let sub_pkg_edges = BTreeSet::from_iter(
-        sub_graph
+    let graph2_edges = BTreeSet::from_iter(
+        graph2
             .package_graph
             .edges(pkg_name)
-            .map(|(_, pkg, dep)| (dep, pkg, sub_graph.package_table.get(&pkg).unwrap())),
+            .map(|(_, pkg, dep)| (dep, pkg, graph2_pkg_table.get(&pkg).unwrap())),
     );
 
-    let (combined_pkgs, sub_pkgs): (Vec<_>, Vec<_>) = combined_edges
-        .symmetric_difference(&sub_pkg_edges)
-        .partition(|dep| combined_edges.contains(dep));
-    if combined_pkgs == sub_pkgs {
+    let (graph1_pkgs, graph2_pkgs): (Vec<_>, Vec<_>) = graph1_edges
+        .symmetric_difference(&graph2_edges)
+        .partition(|dep| graph1_edges.contains(dep));
+    if graph1_pkgs == graph2_pkgs {
         Ok(())
     } else {
-        Err((combined_pkgs, sub_pkgs))
+        Err((graph1_pkgs, graph2_pkgs))
     }
 }
 
@@ -1532,10 +1541,12 @@ fn dep_path_from_root(
         ),
         Some((_, p)) => {
             let mut i = p.iter();
-            if is_external {
-                // externally resolved graphs contain a path to the package in the enclosing graph -
-                // this package has to be removed from the path for the output to be consistent
-                // between internally and externally resolved graphs
+            if is_external || root_package == graph.root_package {
+                // Externally resolved graphs contain a path to the package in the enclosing graph.
+                // This package has to be removed from the path for the output to be consistent
+                // between internally and externally resolved graphs. We have a similar situation
+                // when computing a path in an already combined graph (which was pre-populated with
+                // direct dependencies).
                 i.next();
             }
             let p = i.map(|s| s.as_str()).collect::<Vec<_>>();

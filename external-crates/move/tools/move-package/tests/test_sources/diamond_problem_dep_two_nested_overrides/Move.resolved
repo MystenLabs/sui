@@ -17,48 +17,6 @@ ResolvedGraph {
                     Outgoing,
                 ),
             ],
-            "C": [
-                (
-                    "E",
-                    Outgoing,
-                ),
-                (
-                    "A",
-                    Incoming,
-                ),
-            ],
-            "E": [
-                (
-                    "C",
-                    Incoming,
-                ),
-                (
-                    "D",
-                    Incoming,
-                ),
-                (
-                    "A",
-                    Incoming,
-                ),
-                (
-                    "B",
-                    Incoming,
-                ),
-                (
-                    "Root",
-                    Incoming,
-                ),
-            ],
-            "D": [
-                (
-                    "E",
-                    Outgoing,
-                ),
-                (
-                    "A",
-                    Incoming,
-                ),
-            ],
             "A": [
                 (
                     "Root",
@@ -75,6 +33,48 @@ ResolvedGraph {
                 (
                     "E",
                     Outgoing,
+                ),
+            ],
+            "C": [
+                (
+                    "A",
+                    Incoming,
+                ),
+                (
+                    "E",
+                    Outgoing,
+                ),
+            ],
+            "D": [
+                (
+                    "A",
+                    Incoming,
+                ),
+                (
+                    "E",
+                    Outgoing,
+                ),
+            ],
+            "E": [
+                (
+                    "A",
+                    Incoming,
+                ),
+                (
+                    "B",
+                    Incoming,
+                ),
+                (
+                    "Root",
+                    Incoming,
+                ),
+                (
+                    "C",
+                    Incoming,
+                ),
+                (
+                    "D",
+                    Incoming,
                 ),
             ],
             "B": [

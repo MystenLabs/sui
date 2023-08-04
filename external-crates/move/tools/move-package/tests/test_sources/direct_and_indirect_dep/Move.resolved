@@ -1,6 +1,6 @@
 ResolvedGraph {
     graph: DependencyGraph {
-        root_path: "tests/test_sources/dep_dev_dep_diamond",
+        root_path: "tests/test_sources/direct_and_indirect_dep",
         root_package: "Root",
         package_graph: {
             "Root": [
@@ -12,10 +12,6 @@ ResolvedGraph {
                     "B",
                     Outgoing,
                 ),
-                (
-                    "C",
-                    Outgoing,
-                ),
             ],
             "A": [
                 (
@@ -23,42 +19,28 @@ ResolvedGraph {
                     Incoming,
                 ),
                 (
-                    "B",
-                    Outgoing,
-                ),
-                (
-                    "D",
-                    Outgoing,
-                ),
-            ],
-            "B": [
-                (
-                    "A",
-                    Incoming,
-                ),
-                (
-                    "Root",
-                    Incoming,
-                ),
-                (
                     "C",
                     Outgoing,
                 ),
-            ],
-            "D": [
                 (
-                    "A",
+                    "B",
                     Incoming,
                 ),
             ],
             "C": [
                 (
-                    "B",
+                    "A",
                     Incoming,
                 ),
+            ],
+            "B": [
                 (
                     "Root",
                     Incoming,
+                ),
+                (
+                    "A",
+                    Outgoing,
                 ),
             ],
         },
@@ -84,13 +66,6 @@ ResolvedGraph {
                 version: None,
                 resolver: None,
             },
-            "D": Package {
-                kind: Local(
-                    "deps_only/D",
-                ),
-                version: None,
-                resolver: None,
-            },
         },
         always_deps: {
             "A",
@@ -99,7 +74,7 @@ ResolvedGraph {
             "Root",
         },
         manifest_digest: Some(
-            "3FFCC3493EF75DBA3C6232A841BC1FB786BCAFE6B3B799AF601C6EDCA342340C",
+            "9668C1DAFA74BECBEB89FDCE86BDF4C1024020661B65DB41471BBB051EA6CE4D",
         ),
         deps_digest: None,
     },
@@ -141,10 +116,10 @@ ResolvedGraph {
                 dev_address_assignments: None,
                 build: None,
                 dependencies: {
-                    "B": Internal(
+                    "C": Internal(
                         InternalDependency {
                             kind: Local(
-                                "../B",
+                                "../C",
                             ),
                             subst: None,
                             version: None,
@@ -153,19 +128,7 @@ ResolvedGraph {
                         },
                     ),
                 },
-                dev_dependencies: {
-                    "D": Internal(
-                        InternalDependency {
-                            kind: Local(
-                                "../D",
-                            ),
-                            subst: None,
-                            version: None,
-                            digest: None,
-                            dep_override: false,
-                        },
-                    ),
-                },
+                dev_dependencies: {},
             },
             package_path: "ELIDED_FOR_TEST",
             renaming: {},
@@ -190,12 +153,11 @@ ResolvedGraph {
                 addresses: None,
                 dev_address_assignments: None,
                 build: None,
-                dependencies: {},
-                dev_dependencies: {
-                    "C": Internal(
+                dependencies: {
+                    "A": Internal(
                         InternalDependency {
                             kind: Local(
-                                "../C",
+                                "../A",
                             ),
                             subst: None,
                             version: None,
@@ -204,6 +166,7 @@ ResolvedGraph {
                         },
                     ),
                 },
+                dev_dependencies: {},
             },
             package_path: "ELIDED_FOR_TEST",
             renaming: {},
@@ -214,32 +177,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "C",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
-                    authors: [],
-                    license: None,
-                    edition: None,
-                    flavor: None,
-                    custom_properties: {},
-                },
-                addresses: None,
-                dev_address_assignments: None,
-                build: None,
-                dependencies: {},
-                dev_dependencies: {},
-            },
-            package_path: "ELIDED_FOR_TEST",
-            renaming: {},
-            resolved_table: {},
-            source_digest: "ELIDED_FOR_TEST",
-        },
-        "D": Package {
-            source_package: SourceManifest {
-                package: PackageInfo {
-                    name: "D",
                     version: (
                         0,
                         0,
@@ -292,19 +229,6 @@ ResolvedGraph {
                             dep_override: false,
                         },
                     ),
-                    "C": Internal(
-                        InternalDependency {
-                            kind: Local(
-                                "deps_only/C",
-                            ),
-                            subst: None,
-                            version: None,
-                            digest: None,
-                            dep_override: false,
-                        },
-                    ),
-                },
-                dev_dependencies: {
                     "B": Internal(
                         InternalDependency {
                             kind: Local(
@@ -317,6 +241,7 @@ ResolvedGraph {
                         },
                     ),
                 },
+                dev_dependencies: {},
             },
             package_path: "ELIDED_FOR_TEST",
             renaming: {},

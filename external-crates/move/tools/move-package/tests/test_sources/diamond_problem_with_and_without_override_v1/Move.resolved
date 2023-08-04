@@ -13,32 +13,6 @@ ResolvedGraph {
                     Outgoing,
                 ),
             ],
-            "C": [
-                (
-                    "D",
-                    Outgoing,
-                ),
-                (
-                    "B",
-                    Incoming,
-                ),
-            ],
-            "D": [
-                (
-                    "C",
-                    Incoming,
-                ),
-                (
-                    "E",
-                    Outgoing,
-                ),
-            ],
-            "E": [
-                (
-                    "D",
-                    Incoming,
-                ),
-            ],
             "A": [
                 (
                     "Root",
@@ -61,6 +35,32 @@ ResolvedGraph {
                 (
                     "C",
                     Outgoing,
+                ),
+            ],
+            "C": [
+                (
+                    "B",
+                    Incoming,
+                ),
+                (
+                    "D",
+                    Outgoing,
+                ),
+            ],
+            "D": [
+                (
+                    "C",
+                    Incoming,
+                ),
+                (
+                    "E",
+                    Outgoing,
+                ),
+            ],
+            "E": [
+                (
+                    "D",
+                    Incoming,
                 ),
             ],
         },

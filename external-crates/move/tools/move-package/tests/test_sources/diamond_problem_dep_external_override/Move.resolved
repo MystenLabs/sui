@@ -19,25 +19,25 @@ ResolvedGraph {
             ],
             "A": [
                 (
-                    "ADep",
-                    Outgoing,
-                ),
-                (
                     "Root",
                     Incoming,
                 ),
+                (
+                    "ADep",
+                    Outgoing,
+                ),
             ],
             "ADep": [
-                (
-                    "A",
-                    Incoming,
-                ),
                 (
                     "Root",
                     Incoming,
                 ),
                 (
                     "B",
+                    Incoming,
+                ),
+                (
+                    "A",
                     Incoming,
                 ),
             ],

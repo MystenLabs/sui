@@ -208,7 +208,10 @@ fn merge_simple() {
     )
     .expect("Reading inner");
 
-    let dep_graphs = BTreeMap::from([(Symbol::from("A"), (inner, false, false))]);
+    let dep_graphs = BTreeMap::from([(
+        Symbol::from("A"),
+        (inner, DependencyMode::Always, false, false),
+    )]);
     let dependencies = &BTreeMap::from([(
         Symbol::from("A"),
         Dependency::Internal(InternalDependency {
@@ -220,13 +223,7 @@ fn merge_simple() {
         }),
     )]);
     assert!(outer
-        .merge(
-            dep_graphs,
-            DependencyMode::Always,
-            Symbol::from("Root"),
-            &DependencyKind::default(),
-            dependencies,
-        )
+        .merge(dep_graphs, &DependencyKind::default(), dependencies,)
         .is_ok(),);
     assert_eq!(
         outer.topological_order(),
@@ -257,11 +254,14 @@ fn merge_into_root() {
     )
     .expect("Reading inner");
 
-    let dep_graphs = BTreeMap::from([(Symbol::from("A"), (inner, false, false))]);
+    let dep_graphs = BTreeMap::from([(
+        Symbol::from("A"),
+        (inner, DependencyMode::Always, false, false),
+    )]);
     let dependencies = &BTreeMap::from([(
         Symbol::from("A"),
         Dependency::Internal(InternalDependency {
-            kind: DependencyKind::default(),
+            kind: DependencyKind::Local("A".into()),
             subst: None,
             version: None,
             digest: None,
@@ -269,13 +269,7 @@ fn merge_into_root() {
         }),
     )]);
     assert!(outer
-        .merge(
-            dep_graphs,
-            DependencyMode::Always,
-            Symbol::from("Root"),
-            &DependencyKind::default(),
-            dependencies,
-        )
+        .merge(dep_graphs, &DependencyKind::default(), dependencies,)
         .is_ok());
 
     assert_eq!(
@@ -307,11 +301,12 @@ fn merge_detached() {
     )
     .expect("Reading inner");
 
-    let dep_graphs = BTreeMap::from([(Symbol::from("OtherDep"), (inner, false, false))]);
+    let dep_graphs = BTreeMap::from([(
+        Symbol::from("OtherDep"),
+        (inner, DependencyMode::Always, false, false),
+    )]);
     let Err(err) = outer.merge(
         dep_graphs,
-        DependencyMode::Always,
-        Symbol::from("Root"),
         &DependencyKind::default(),
         &BTreeMap::new(),
     ) else {
@@ -340,11 +335,12 @@ fn merge_after_calculating_always_deps() {
     )
     .expect("Reading inner");
 
-    let dep_graphs = BTreeMap::from([(Symbol::from("A"), (inner, false, false))]);
+    let dep_graphs = BTreeMap::from([(
+        Symbol::from("A"),
+        (inner, DependencyMode::Always, false, false),
+    )]);
     let Err(err) = outer.merge(
         dep_graphs,
-        DependencyMode::Always,
-        Symbol::from("Root"),
         &DependencyKind::default(),
         &BTreeMap::new(),
     ) else {
@@ -357,10 +353,11 @@ fn merge_after_calculating_always_deps() {
 #[test]
 fn merge_overlapping() {
     let tmp = tempfile::tempdir().unwrap();
+
     let mut outer = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
-        &mut AB_LOCK.as_bytes(),
+        &mut EMPTY_LOCK.as_bytes(),
         None,
     )
     .expect("Reading outer");
@@ -369,33 +366,56 @@ fn merge_overlapping() {
     // built, not after it has been entirely read.
     outer.always_deps.clear();
 
-    let inner = DependencyGraph::read_from_lock(
+    let inner1 = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
-        Symbol::from("B"),
+        Symbol::from("C"),
+        &mut AB_LOCK.as_bytes(),
+        None,
+    )
+    .expect("Reading inner1");
+
+    let inner2 = DependencyGraph::read_from_lock(
+        tmp.path().to_path_buf(),
+        Symbol::from("C"),
         &mut A_LOCK.as_bytes(),
         None,
     )
-    .expect("Reading inner");
+    .expect("Reading inner2");
 
-    let dep_graphs = BTreeMap::from([(Symbol::from("B"), (inner, false, false))]);
-    let dependencies = &BTreeMap::from([(
-        Symbol::from("B"),
-        Dependency::Internal(InternalDependency {
-            kind: DependencyKind::default(),
-            subst: None,
-            version: None,
-            digest: None,
-            dep_override: false,
-        }),
-    )]);
+    let dep_graphs = BTreeMap::from([
+        (
+            Symbol::from("B"),
+            (inner1, DependencyMode::Always, false, false),
+        ),
+        (
+            Symbol::from("C"),
+            (inner2, DependencyMode::Always, false, false),
+        ),
+    ]);
+    let dependencies = &BTreeMap::from([
+        (
+            Symbol::from("B"),
+            Dependency::Internal(InternalDependency {
+                kind: DependencyKind::Local("B".into()),
+                subst: None,
+                version: None,
+                digest: None,
+                dep_override: false,
+            }),
+        ),
+        (
+            Symbol::from("C"),
+            Dependency::Internal(InternalDependency {
+                kind: DependencyKind::default(),
+                subst: None,
+                version: None,
+                digest: None,
+                dep_override: false,
+            }),
+        ),
+    ]);
     assert!(outer
-        .merge(
-            dep_graphs,
-            DependencyMode::Always,
-            Symbol::from("Root"),
-            &DependencyKind::default(),
-            dependencies,
-        )
+        .merge(dep_graphs, &DependencyKind::default(), dependencies,)
         .is_ok());
 }
 
@@ -411,6 +431,10 @@ fn merge_overlapping_different_deps() {
     )
     .expect("Reading outer");
 
+    // Test only -- clear always deps because usually `merge` is used while the graph is being
+    // built, not after it has been entirely read.
+    outer.always_deps.clear();
+
     let inner1 = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
         Symbol::from("C"),
@@ -419,36 +443,48 @@ fn merge_overlapping_different_deps() {
     )
     .expect("Reading inner1");
 
-    // Test only -- clear always deps because usually `merge` is used while the graph is being
-    // built, not after it has been entirely read.
-    outer.always_deps.clear();
-
     let inner2 = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
-        Symbol::from("B"),
+        Symbol::from("C"),
         &mut A_LOCK.as_bytes(),
         None,
     )
     .expect("Reading inner2");
 
     let dep_graphs = BTreeMap::from([
-        (Symbol::from("C"), (inner1, false, false)),
-        (Symbol::from("B"), (inner2, false, false)),
+        (
+            Symbol::from("B"),
+            (inner1, DependencyMode::Always, false, false),
+        ),
+        (
+            Symbol::from("C"),
+            (inner2, DependencyMode::Always, false, false),
+        ),
     ]);
-    let dependencies = &BTreeMap::from([(
-        Symbol::from("B"),
-        Dependency::Internal(InternalDependency {
-            kind: DependencyKind::default(),
-            subst: None,
-            version: None,
-            digest: None,
-            dep_override: false,
-        }),
-    )]);
+    let dependencies = &BTreeMap::from([
+        (
+            Symbol::from("B"),
+            Dependency::Internal(InternalDependency {
+                kind: DependencyKind::default(),
+                subst: None,
+                version: None,
+                digest: None,
+                dep_override: false,
+            }),
+        ),
+        (
+            Symbol::from("C"),
+            Dependency::Internal(InternalDependency {
+                kind: DependencyKind::default(),
+                subst: None,
+                version: None,
+                digest: None,
+                dep_override: false,
+            }),
+        ),
+    ]);
     let Err(err) = outer.merge(
         dep_graphs,
-        DependencyMode::Always,
-        Symbol::from("Root"),
         &DependencyKind::default(),
         dependencies,
     ) else {
