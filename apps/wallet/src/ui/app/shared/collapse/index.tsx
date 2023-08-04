@@ -21,7 +21,7 @@ export function Collapsible({ title, children, defaultOpen }: CollapsibleProps) 
 			onOpenChange={setOpen}
 		>
 			<CollapsiblePrimitive.Trigger className="flex items-center gap-2 w-full bg-transparent border-none p-0 cursor-pointer group">
-				<div className="text-captionSmall font-semibold uppercase text-steel-darker group-hover:text-hero">
+				<div className="text-captionSmall font-semibold uppercase text-steel group-hover:text-hero">
 					{title}
 				</div>
 				<div className="h-px bg-steel group-hover:bg-hero flex-1" />

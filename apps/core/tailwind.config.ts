@@ -39,6 +39,7 @@ export default {
 				DEFAULT: '#6fbcf0',
 				bright: '#2A38EB',
 				light: '#E1F3FF',
+				primaryBlue2023: '#4CA3FF',
 				lightest: '#F1F8FD',
 				dark: '#1F6493',
 			},

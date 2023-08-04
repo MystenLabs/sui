@@ -1,46 +1,56 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFormatCoin } from '@mysten/core';
-import cl from 'classnames';
-import { memo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-
-import { CoinItem } from '_components/active-coins-card/CoinItem';
-
-import st from './CoinBalance.module.scss';
+import { useFormatCoin, useSuiCoinData } from '@mysten/core';
+import { SUI_DECIMALS } from '@mysten/sui.js/utils';
+import BigNumber from 'bignumber.js';
+import { useMemo } from 'react';
+import { CoinIcon } from '_src/ui/app/components/coin-icon';
+import { Heading } from '_src/ui/app/shared/heading';
+import { Text } from '_src/ui/app/shared/text';
 
 export type CoinProps = {
 	type: string;
-	balance: bigint;
-	hideStake?: boolean;
-	mode?: 'row-item' | 'standalone';
+	amount: bigint;
 };
 
-function CoinBalance({ type, balance, mode = 'row-item' }: CoinProps) {
-	const [formatted, symbol] = useFormatCoin(balance, type);
-	const navigate = useNavigate();
+export function CoinBalance({ amount: walletBalance, type }: CoinProps) {
+	const [formatted, symbol] = useFormatCoin(walletBalance, type);
+	const { data } = useSuiCoinData();
+	const { currentPrice } = data || {};
 
-	// TODO: use a different logic to differentiate between view types
-	const coinDetail = useCallback(() => {
-		if (mode !== 'row-item') return;
+	const walletBalanceInUsd = useMemo(() => {
+		if (!currentPrice) return null;
+		const suiPriceInUsd = new BigNumber(currentPrice);
+		const walletBalanceInSui = new BigNumber(walletBalance.toString()).shiftedBy(-1 * SUI_DECIMALS);
+		const value = walletBalanceInSui.multipliedBy(suiPriceInUsd).toNumber();
 
-		navigate(`/send?type=${encodeURIComponent(type)}`);
-	}, [mode, navigate, type]);
+		return `~${value.toLocaleString('en', {
+			style: 'currency',
+			currency: 'USD',
+		})} USD`;
+	}, [currentPrice, walletBalance]);
 
 	return (
-		<div
-			className={cl(st.container, st[mode], mode === 'row-item' && st.coinBalanceBtn)}
-			onClick={coinDetail}
-			role="button"
-		>
-			{mode === 'row-item' ? <CoinItem coinType={type} balance={balance} /> : null}
-			<div className={cl(st.valueContainer, st[mode])}>
-				<span className={cl(st.value, st[mode])}>{formatted}</span>
-				<span className={cl(st.symbol, st[mode])}>{symbol}</span>
+		<div className="flex flex-col gap-1 items-center justify-center">
+			<div className="flex items-center justify-center gap-2">
+				<CoinIcon fill="suiPrimary2023" coinType={type} size="sm" />
+				<Heading leading="none" variant="heading1" color="gray-90">
+					{formatted}
+				</Heading>
+				<div className="self-start mt-0.5">
+					<Heading variant="heading6" weight="medium" color="steel">
+						{symbol}
+					</Heading>
+				</div>
+			</div>
+			<div>
+				{walletBalanceInUsd ? (
+					<Text variant="caption" weight="medium" color="steel">
+						{walletBalanceInUsd}
+					</Text>
+				) : null}
 			</div>
 		</div>
 	);
 }
-
-export default memo(CoinBalance);
