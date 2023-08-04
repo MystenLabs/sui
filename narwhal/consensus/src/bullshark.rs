@@ -411,6 +411,7 @@ impl Bullshark {
                     &self.committee,
                     leader_round,
                     reputation_scores,
+                    self.protocol_config.consensus_bad_nodes_stake_threshold(),
                 ));
 
             self.metrics
