@@ -10914,6 +10914,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-rest-api"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "bcs",
+ "futures",
+ "reqwest",
+ "serde",
+ "sui-core",
+ "sui-types",
+ "tap",
+ "tokio",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-rosetta"
 version = "0.1.0"
 dependencies = [
