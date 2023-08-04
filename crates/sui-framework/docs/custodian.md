@@ -3,6 +3,8 @@
 
 # Module `0xdee9::custodian`
 
+Defines the <code><a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a></code> object that is responsible for managing the balances
+of <code><a href="custodian.md#0xdee9_custodian_Account">Account</a></code>s.
 
 
 -  [Struct `Account`](#0xdee9_custodian_Account)
@@ -21,7 +23,7 @@
 -  [Function `unlock_balance`](#0xdee9_custodian_unlock_balance)
 -  [Function `account_available_balance`](#0xdee9_custodian_account_available_balance)
 -  [Function `account_locked_balance`](#0xdee9_custodian_account_locked_balance)
--  [Function `borrow_mut_account_balance`](#0xdee9_custodian_borrow_mut_account_balance)
+-  [Function `borrow_mut_account_balance_or_create`](#0xdee9_custodian_borrow_mut_account_balance_or_create)
 -  [Function `borrow_account_balance`](#0xdee9_custodian_borrow_account_balance)
 
 
@@ -38,6 +40,8 @@
 
 ## Struct `Account`
 
+A single account stored in the <code><a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a></code> object in the <code>account_balances</code>
+table.
 
 
 <pre><code><b>struct</b> <a href="custodian.md#0xdee9_custodian_Account">Account</a>&lt;T&gt; <b>has</b> store
@@ -71,6 +75,7 @@
 
 ## Resource `AccountCap`
 
+TODO: documentation
 
 
 <pre><code><b>struct</b> <a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a> <b>has</b> store, key
@@ -98,6 +103,7 @@
 
 ## Resource `Custodian`
 
+Custodian for limit orders.
 
 
 <pre><code><b>struct</b> <a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;T&gt; <b>has</b> store, key
@@ -134,6 +140,7 @@
 
 <a name="0xdee9_custodian_EUserBalanceDoesNotExist"></a>
 
+Trying to get an account balance for a user that does not exist.
 
 
 <pre><code><b>const</b> <a href="custodian.md#0xdee9_custodian_EUserBalanceDoesNotExist">EUserBalanceDoesNotExist</a>: u64 = 1;
@@ -170,6 +177,10 @@ Create an <code><a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a
 
 ## Function `account_balance`
 
+Returns the <code>available_balance</code> and the <code>locked_balance</code> of the Account.
+
+TODO: consider aborting if the account does not exist (go through the
+usages of the function and see if it is safe to abort)
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_account_balance">account_balance</a>&lt;Asset&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian.md#0xdee9_custodian_Custodian">custodian::Custodian</a>&lt;Asset&gt;, user: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a>): (u64, u64)
@@ -189,10 +200,13 @@ Create an <code><a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a
     <b>if</b> (!<a href="../../../.././build/Sui/docs/table.md#0x2_table_contains">table::contains</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, user)) {
         <b>return</b> (0, 0)
     };
-    <b>let</b> account_balances = <a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow">table::borrow</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, user);
-    <b>let</b> avail_balance = <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&account_balances.available_balance);
-    <b>let</b> locked_balance = <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&account_balances.locked_balance);
-    (avail_balance, locked_balance)
+
+    <b>let</b> account = <a href="custodian.md#0xdee9_custodian_borrow_account_balance">borrow_account_balance</a>(<a href="custodian.md#0xdee9_custodian">custodian</a>, user);
+
+    (
+        <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&account.available_balance),
+        <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&account.locked_balance)
+    )
 }
 </code></pre>
 
@@ -204,6 +218,7 @@ Create an <code><a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a
 
 ## Function `new`
 
+Create a new <code><a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a></code> object.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_new">new</a>&lt;T&gt;(ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="custodian.md#0xdee9_custodian_Custodian">custodian::Custodian</a>&lt;T&gt;
@@ -276,7 +291,7 @@ Create an <code><a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a
     user: ID,
     quantity: Balance&lt;T&gt;,
 ) {
-    <b>let</b> account = <a href="custodian.md#0xdee9_custodian_borrow_mut_account_balance">borrow_mut_account_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>, user);
+    <b>let</b> account = <a href="custodian.md#0xdee9_custodian_borrow_mut_account_balance_or_create">borrow_mut_account_balance_or_create</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>, user);
     <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> account.available_balance, quantity);
 }
 </code></pre>
@@ -305,7 +320,7 @@ Create an <code><a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a
     account_cap: &<a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a>,
     quantity: u64,
 ): Balance&lt;T&gt; {
-    <b>let</b> account = <a href="custodian.md#0xdee9_custodian_borrow_mut_account_balance">borrow_mut_account_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>, <a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_to_inner">object::uid_to_inner</a>(&account_cap.id));
+    <b>let</b> account = <a href="custodian.md#0xdee9_custodian_borrow_mut_account_balance_or_create">borrow_mut_account_balance_or_create</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>, <a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_to_inner">object::uid_to_inner</a>(&account_cap.id));
     <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> account.available_balance, quantity)
 }
 </code></pre>
@@ -334,7 +349,7 @@ Create an <code><a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a
     account_cap: &<a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a>,
     quantity: Balance&lt;T&gt;,
 ) {
-    <b>let</b> account = <a href="custodian.md#0xdee9_custodian_borrow_mut_account_balance">borrow_mut_account_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>, <a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_to_inner">object::uid_to_inner</a>(&account_cap.id));
+    <b>let</b> account = <a href="custodian.md#0xdee9_custodian_borrow_mut_account_balance_or_create">borrow_mut_account_balance_or_create</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>, <a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_to_inner">object::uid_to_inner</a>(&account_cap.id));
     <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> account.locked_balance, quantity);
 }
 </code></pre>
@@ -363,7 +378,7 @@ Create an <code><a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a
     user: ID,
     quantity: u64,
 ): Balance&lt;T&gt; {
-    <b>let</b> account = <a href="custodian.md#0xdee9_custodian_borrow_mut_account_balance">borrow_mut_account_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>, user);
+    <b>let</b> account = <a href="custodian.md#0xdee9_custodian_borrow_mut_account_balance_or_create">borrow_mut_account_balance_or_create</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>, user);
     split(&<b>mut</b> account.locked_balance, quantity)
 }
 </code></pre>
@@ -451,7 +466,8 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;T&gt;,
     user: ID,
 ): u64 {
-    <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&<a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow">table::borrow</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, user).available_balance)
+    <b>let</b> account = <a href="custodian.md#0xdee9_custodian_borrow_account_balance">borrow_account_balance</a>(<a href="custodian.md#0xdee9_custodian">custodian</a>, user);
+    <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&account.available_balance)
 }
 </code></pre>
 
@@ -478,7 +494,8 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;T&gt;,
     user: ID,
 ): u64 {
-    <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&<a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow">table::borrow</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, user).locked_balance)
+    <b>let</b> account = <a href="custodian.md#0xdee9_custodian_borrow_account_balance">borrow_account_balance</a>(<a href="custodian.md#0xdee9_custodian">custodian</a>, user);
+    <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&account.locked_balance)
 }
 </code></pre>
 
@@ -486,13 +503,17 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 
 </details>
 
-<a name="0xdee9_custodian_borrow_mut_account_balance"></a>
+<a name="0xdee9_custodian_borrow_mut_account_balance_or_create"></a>
 
-## Function `borrow_mut_account_balance`
+## Function `borrow_mut_account_balance_or_create`
+
+Internal: mutably borrow the account balance of a <code>user</code>.
+If the account does not exist - create it and give a mutable reference.
+
+TODO: consider renaming to avoid confusion with <code>borrow_account_balance</code>
 
 
-
-<pre><code><b>fun</b> <a href="custodian.md#0xdee9_custodian_borrow_mut_account_balance">borrow_mut_account_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Custodian">custodian::Custodian</a>&lt;T&gt;, user: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a>): &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Account">custodian::Account</a>&lt;T&gt;
+<pre><code><b>fun</b> <a href="custodian.md#0xdee9_custodian_borrow_mut_account_balance_or_create">borrow_mut_account_balance_or_create</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Custodian">custodian::Custodian</a>&lt;T&gt;, user: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a>): &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Account">custodian::Account</a>&lt;T&gt;
 </code></pre>
 
 
@@ -501,17 +522,19 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="custodian.md#0xdee9_custodian_borrow_mut_account_balance">borrow_mut_account_balance</a>&lt;T&gt;(
+<pre><code><b>fun</b> <a href="custodian.md#0xdee9_custodian_borrow_mut_account_balance_or_create">borrow_mut_account_balance_or_create</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;T&gt;,
     user: ID,
 ): &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Account">Account</a>&lt;T&gt; {
     <b>if</b> (!<a href="../../../.././build/Sui/docs/table.md#0x2_table_contains">table::contains</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, user)) {
-        <a href="../../../.././build/Sui/docs/table.md#0x2_table_add">table::add</a>(
-            &<b>mut</b> <a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances,
-            user,
-            <a href="custodian.md#0xdee9_custodian_Account">Account</a> { available_balance: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_zero">balance::zero</a>(), locked_balance: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_zero">balance::zero</a>() }
-        );
+        <b>let</b> account = <a href="custodian.md#0xdee9_custodian_Account">Account</a> {
+            available_balance: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_zero">balance::zero</a>(),
+            locked_balance: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_zero">balance::zero</a>()
+        };
+
+        <a href="../../../.././build/Sui/docs/table.md#0x2_table_add">table::add</a>(&<b>mut</b> <a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, user, account);
     };
+
     <a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> <a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, user)
 }
 </code></pre>
@@ -524,6 +547,8 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 
 ## Function `borrow_account_balance`
 
+Internal: borrow the account balance of a <code>user</code>.
+If the account does not exist, abort with <code><a href="custodian.md#0xdee9_custodian_EUserBalanceDoesNotExist">EUserBalanceDoesNotExist</a></code>.
 
 
 <pre><code><b>fun</b> <a href="custodian.md#0xdee9_custodian_borrow_account_balance">borrow_account_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian.md#0xdee9_custodian_Custodian">custodian::Custodian</a>&lt;T&gt;, user: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a>): &<a href="custodian.md#0xdee9_custodian_Account">custodian::Account</a>&lt;T&gt;

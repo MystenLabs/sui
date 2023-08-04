@@ -9,7 +9,7 @@ module deepbook::clob_v2 {
 
     use sui::balance::{Self, Balance};
     use sui::clock::{Self, Clock};
-    use sui::coin::{Self, Coin, join};
+    use sui::coin::{Self, Coin};
     use sui::event;
     use sui::linked_table::{Self, LinkedTable};
     use sui::object::{Self, UID, ID};
@@ -18,20 +18,48 @@ module deepbook::clob_v2 {
     use sui::transfer;
     use sui::tx_context::TxContext;
 
-    use deepbook::critbit::{Self, CritbitTree, is_empty, borrow_mut_leaf_by_index, min_leaf, remove_leaf_by_index, max_leaf, next_leaf, previous_leaf, borrow_leaf_by_index, borrow_leaf_by_key, find_leaf, insert_leaf};
-    use deepbook::custodian_v2::{Self as custodian, Custodian, AccountCap, mint_account_cap, account_owner};
+    use deepbook::critbit::{
+        Self,
+        CritbitTree,
+        is_empty,
+        borrow_mut_leaf_by_index,
+        min_leaf,
+        remove_leaf_by_index,
+        max_leaf,
+        next_leaf,
+        previous_leaf,
+        borrow_leaf_by_index,
+        borrow_leaf_by_key,
+        find_leaf,
+        insert_leaf
+    };
+    use deepbook::custodian_v2::{
+        Self as custodian,
+        Custodian,
+        AccountCap,
+        mint_account_cap,
+        account_owner
+    };
     use deepbook::math::Self as clob_math;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
+    /// [NOT USED] The function is not implemented.
     const ENotImplemented: u64 = 1;
+    /// Taker fee rate is lower than maker rebate rate.
     const EInvalidFeeRateRebateRate: u64 = 2;
+    /// Trying to access a non-existent order.
     const EInvalidOrderId: u64 = 3;
+    /// Attempt to cancel an order that is not owned by the caller.
     const EUnauthorizedCancel: u64 = 4;
+    /// Trying to place a limit order with `0` price or with a value that does
+    /// not match the tick size.
     const EInvalidPrice: u64 = 5;
+    /// Trying to withdraw or swap with a quantity of `0`. Or trying to place
+    /// an order with a quantity that does not match the lot size.
     const EInvalidQuantity: u64 = 6;
-    // Insufficient amount of base coin.
+    /// Insufficient amount of base coin.
     const EInsufficientBaseCoin: u64 = 7;
-    // Insufficient amount of quote coin.
+    /// Insufficient amount of quote coin.
     const EInsufficientQuoteCoin: u64 = 8;
     const EOrderCannotBeFullyFilled: u64 = 9;
     const EOrderCannotBeFullyPassive: u64 = 10;
@@ -39,30 +67,39 @@ module deepbook::clob_v2 {
     const EInvalidUser: u64 = 12;
     const ENotEqual: u64 = 13;
     const EInvalidRestriction: u64 = 14;
+    /// [NOT USED]
     const ELevelNotEmpty: u64 = 15;
     const EInvalidPair: u64 = 16;
+    /// [NOT USED]
     const EInvalidBaseBalance: u64 = 17;
     const EInvalidFee: u64 = 18;
     const EInvalidExpireTimestamp: u64 = 19;
     const EInvalidTickSizeLotSize: u64 = 20;
     const EInvalidSelfMatchingPreventionArg: u64 = 21;
 
-    // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
 
-    // <<<<<<<<<<<<<<<<<<<<<<<< Constants <<<<<<<<<<<<<<<<<<<<<<<<
+
     const FLOAT_SCALING: u64 = 1_000_000_000;
-    // Self-Trade Prevention option
-    // Cancel older (resting) order in full. Continue to execute the newer taking order.
+    /// Self-Trade Prevention option
+    /// Cancel older (resting) order in full. Continue to execute the newer taking order.
     const CANCEL_OLDEST: u8 = 0;
-    // Restrictions on limit orders.
+    // [NOT USED] Restrictions on limit orders.
+    // TODO: either use or remove.
     const N_RESTRICTIONS: u8 = 4;
+
+    // === Restrictions on Limit Orders ===
+
+    /// No restrictions on limit orders.
     const NO_RESTRICTION: u8 = 0;
-    // Mandates that whatever amount of an order that can be executed in the current transaction, be filled and then the rest of the order canceled.
+    /// Mandates that whatever amount of an order that can be executed in the current transaction,
+    /// be filled and then the rest of the order canceled.
     const IMMEDIATE_OR_CANCEL: u8 = 1;
-    // Mandates that the entire order size be filled in the current transaction. Otherwise, the order is canceled.
+    /// Mandates that the entire order size be filled in the current transaction. Otherwise, the order is canceled.
     const FILL_OR_KILL: u8 = 2;
-    // Mandates that the entire order be passive. Otherwise, cancel the order.
+    /// Mandates that the entire order be passive. Otherwise, cancel the order.
     const POST_OR_ABORT: u8 = 3;
+
+
     const MIN_BID_ORDER_ID: u64 = 1;
     const MIN_ASK_ORDER_ID: u64 = 1 << 63;
     const MIN_PRICE: u64 = 0;
@@ -348,21 +385,27 @@ module deepbook::clob_v2 {
         )
     }
 
+    /// Deposit base asset into the pool.
+    ///
+    /// Aborts if the `Coin` is zero.
+    /// Emits: `DepositAsset<BaseAsset>` event.
     public fun deposit_base<BaseAsset, QuoteAsset>(
         pool: &mut Pool<BaseAsset, QuoteAsset>,
         coin: Coin<BaseAsset>,
         account_cap: &AccountCap
     ) {
-        let quantity = coin::value(&coin);
-        assert!(quantity != 0, EInsufficientBaseCoin);
+        let coin_amount = coin::value(&coin);
+        assert!(coin_amount != 0, EInsufficientBaseCoin);
+
         custodian::increase_user_available_balance(
             &mut pool.base_custodian,
             account_owner(account_cap),
             coin::into_balance(coin)
         );
+
         event::emit(DepositAsset<BaseAsset>{
             pool_id: *object::uid_as_inner(&pool.id),
-            quantity,
+            quantity: coin_amount,
             owner: account_owner(account_cap)
         })
     }
@@ -372,20 +415,24 @@ module deepbook::clob_v2 {
         coin: Coin<QuoteAsset>,
         account_cap: &AccountCap
     ) {
-        let quantity = coin::value(&coin);
-        assert!(quantity != 0, EInsufficientQuoteCoin);
+        let coin_amount = coin::value(&coin);
+        assert!(coin_amount != 0, EInsufficientQuoteCoin);
+
         custodian::increase_user_available_balance(
             &mut pool.quote_custodian,
             account_owner(account_cap),
             coin::into_balance(coin)
         );
+
         event::emit(DepositAsset<QuoteAsset>{
             pool_id: *object::uid_as_inner(&pool.id),
-            quantity,
+            quantity: coin_amount,
             owner: account_owner(account_cap)
         })
     }
 
+    /// Withdraw base asset from the pool in the specified quantity.
+    /// Aborts if the quantity is zero.
     public fun withdraw_base<BaseAsset, QuoteAsset>(
         pool: &mut Pool<BaseAsset, QuoteAsset>,
         quantity: u64,
@@ -393,14 +440,20 @@ module deepbook::clob_v2 {
         ctx: &mut TxContext
     ): Coin<BaseAsset> {
         assert!(quantity > 0, EInvalidQuantity);
+
         event::emit(WithdrawAsset<BaseAsset>{
             pool_id: *object::uid_as_inner(&pool.id),
             quantity,
             owner: account_owner(account_cap)
         });
-        custodian::withdraw_asset(&mut pool.base_custodian, quantity, account_cap, ctx)
+
+        custodian::withdraw_asset(
+            &mut pool.base_custodian, quantity, account_cap, ctx
+        )
     }
 
+    /// Withdraw quote asset from the pool in the specified quantity.
+    /// Aborts if the quantity is zero.
     public fun withdraw_quote<BaseAsset, QuoteAsset>(
         pool: &mut Pool<BaseAsset, QuoteAsset>,
         quantity: u64,
@@ -408,15 +461,19 @@ module deepbook::clob_v2 {
         ctx: &mut TxContext
     ): Coin<QuoteAsset> {
         assert!(quantity > 0, EInvalidQuantity);
+
         event::emit(WithdrawAsset<QuoteAsset>{
             pool_id: *object::uid_as_inner(&pool.id),
             quantity,
             owner: account_owner(account_cap)
         });
-        custodian::withdraw_asset(&mut pool.quote_custodian, quantity, account_cap, ctx)
+
+        custodian::withdraw_asset(
+            &mut pool.quote_custodian, quantity, account_cap, ctx
+        )
     }
 
-    // for smart routing
+    /// For smart routing
     public fun swap_exact_base_for_quote<BaseAsset, QuoteAsset>(
         pool: &mut Pool<BaseAsset, QuoteAsset>,
         client_order_id: u64,
@@ -429,6 +486,7 @@ module deepbook::clob_v2 {
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64) {
         assert!(quantity > 0, EInvalidQuantity);
         assert!(coin::value(&base_coin) >= quantity, EInsufficientBaseCoin);
+
         let original_val = coin::value(&quote_coin);
         let (ret_base_coin, ret_quote_coin) = place_market_order(
             pool,
@@ -442,10 +500,17 @@ module deepbook::clob_v2 {
             ctx
         );
         let ret_val = coin::value(&ret_quote_coin);
-        (ret_base_coin, ret_quote_coin, ret_val - original_val)
+
+        (
+            ret_base_coin,
+            ret_quote_coin,
+            ret_val - original_val
+        )
     }
 
-    // for smart routing
+    /// For smart routing
+    ///
+    /// Returns the Coin<BaseAsset>, Coin<QuoteAsset> and the base asset balance.
     public fun swap_exact_quote_for_base<BaseAsset, QuoteAsset>(
         pool: &mut Pool<BaseAsset, QuoteAsset>,
         client_order_id: u64,
@@ -467,7 +532,12 @@ module deepbook::clob_v2 {
             coin::into_balance(quote_coin)
         );
         let val = balance::value(&base_asset_balance);
-        (coin::from_balance(base_asset_balance, ctx), coin::from_balance(quote_asset_balance, ctx), val)
+
+        (
+            coin::from_balance(base_asset_balance, ctx),
+            coin::from_balance(quote_asset_balance, ctx),
+            val
+        )
     }
 
     fun match_bid_with_quote_quantity<BaseAsset, QuoteAsset>(
@@ -976,6 +1046,7 @@ module deepbook::clob_v2 {
         // Then iterate over the price levels in descending order until the market order is completely filled.
         assert!(quantity % pool.lot_size == 0, EInvalidQuantity);
         assert!(quantity != 0, EInvalidQuantity);
+
         if (is_bid) {
             let (base_balance_filled, quote_balance_left) = match_bid(
                 pool,
@@ -986,9 +1057,9 @@ module deepbook::clob_v2 {
                 clock::timestamp_ms(clock),
                 coin::into_balance(quote_coin),
             );
-            join(
-                &mut base_coin,
-                coin::from_balance(base_balance_filled, ctx),
+            balance::join(
+                coin::balance_mut(&mut base_coin),
+                base_balance_filled
             );
             quote_coin = coin::from_balance(quote_balance_left, ctx);
         } else {
@@ -1002,14 +1073,16 @@ module deepbook::clob_v2 {
                 clock::timestamp_ms(clock),
                 coin::into_balance(base_coin_to_sell),
             );
-            join(
-                &mut base_coin,
-                coin::from_balance(base_balance_left, ctx));
-            join(
-                &mut quote_coin,
-                coin::from_balance(quote_balance_filled, ctx),
+            balance::join(
+                coin::balance_mut(&mut base_coin),
+                base_balance_left
+            );
+            balance::join(
+                coin::balance_mut(&mut quote_coin),
+                quote_balance_filled
             );
         };
+
         (base_coin, quote_coin)
     }
 
@@ -1082,7 +1155,7 @@ module deepbook::clob_v2 {
         };
         linked_table::push_back(borrow_mut(&mut pool.usr_open_orders, owner), order_id, price);
 
-        return order_id
+        order_id
     }
 
     /// Place a limit order to the order book.
@@ -1183,14 +1256,16 @@ module deepbook::clob_v2 {
             );
         };
 
-        let order_id;
         if (restriction == IMMEDIATE_OR_CANCEL) {
             return (base_quantity_filled, quote_quantity_filled, false, 0)
         };
+
         if (restriction == FILL_OR_KILL) {
             assert!(base_quantity_filled == quantity, EOrderCannotBeFullyFilled);
             return (base_quantity_filled, quote_quantity_filled, false, 0)
         };
+
+        let order_id;
         if (restriction == POST_OR_ABORT) {
             assert!(base_quantity_filled == 0, EOrderCannotBeFullyPassive);
             order_id = inject_limit_order(
@@ -1571,7 +1646,9 @@ module deepbook::clob_v2 {
         open_orders
     }
 
-    /// query user balance inside custodian
+    /// Query user balance inside custodian
+    ///
+    /// Aborts if the `Account` does not exist in the `base_custodian` or `quote_custodian`.
     public fun account_balance<BaseAsset, QuoteAsset>(
         pool: &Pool<BaseAsset, QuoteAsset>,
         account_cap: &AccountCap
@@ -1717,11 +1794,9 @@ module deepbook::clob_v2 {
     // Note that open orders and quotes can be directly accessed by loading in the entire Pool.
 
     #[test_only] use sui::coin::mint_for_testing;
-
     #[test_only] use sui::test_scenario::{Self, Scenario};
 
     #[test_only] const E_NULL: u64 = 0;
-
     #[test_only] const CLIENT_ID_ALICE: u64 = 0;
     #[test_only] const CLIENT_ID_BOB: u64 = 1;
 
@@ -1881,7 +1956,8 @@ module deepbook::clob_v2 {
         let quote_quantity_filled = quote_quantity_original - balance::value(&quote_balance_left);
         balance::destroy_for_testing(base_balance_filled);
         balance::destroy_for_testing(quote_balance_left);
-        return (base_quantity_filled, quote_quantity_filled)
+
+        (base_quantity_filled, quote_quantity_filled)
     }
 
     #[test_only]
@@ -1907,7 +1983,8 @@ module deepbook::clob_v2 {
         let quote_quantity_filled = quote_quantity_original - balance::value(&quote_balance_left);
         balance::destroy_for_testing(base_balance_filled);
         balance::destroy_for_testing(quote_balance_left);
-        return (base_quantity_filled, quote_quantity_filled)
+
+        (base_quantity_filled, quote_quantity_filled)
     }
 
     #[test_only]
@@ -1931,7 +2008,8 @@ module deepbook::clob_v2 {
         let quote_quantity_filled = balance::value(&quote_balance_filled);
         balance::destroy_for_testing(base_balance_left);
         balance::destroy_for_testing(quote_balance_filled);
-        return (base_quantity_filled, quote_quantity_filled)
+
+        (base_quantity_filled, quote_quantity_filled)
     }
 
     #[test_only]
@@ -2053,9 +2131,8 @@ module deepbook::clob_v2 {
         is_bid: bool,
         owner: address,
     ): Order {
-        let order;
         if (is_bid) {
-            order = remove_order<BaseAsset, QuoteAsset>(
+            remove_order<BaseAsset, QuoteAsset>(
                 &mut pool.bids,
                 borrow_mut(&mut pool.usr_open_orders, owner),
                 tick_index,
@@ -2063,15 +2140,14 @@ module deepbook::clob_v2 {
                 owner
             )
         } else {
-            order = remove_order<BaseAsset, QuoteAsset>(
+            remove_order<BaseAsset, QuoteAsset>(
                 &mut pool.asks,
                 borrow_mut(&mut pool.usr_open_orders, owner),
                 tick_index,
                 order_id(sequence_id, is_bid),
                 owner
             )
-        };
-        order
+        }
     }
 
     #[test]
@@ -2619,7 +2695,7 @@ module deepbook::clob_v2 {
     public fun check_balance_invariants_for_account<BaseAsset, QuoteAsset>(
         account_cap: &AccountCap,
         quote_custodian: &Custodian<QuoteAsset>,
-        base_custodian: &Custodian<BaseAsset>, 
+        base_custodian: &Custodian<BaseAsset>,
         pool: &Pool<BaseAsset, QuoteAsset>
     ) {
         let account_cap_user = custodian::account_owner(account_cap);

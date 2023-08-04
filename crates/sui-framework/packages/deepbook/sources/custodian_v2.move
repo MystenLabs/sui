@@ -10,11 +10,10 @@ module deepbook::custodian_v2 {
 
     friend deepbook::clob_v2;
 
-    // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     const EUserBalanceDoesNotExist: u64 = 1;
     const EAdminAccountCapRequired: u64 = 2;
-    // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
 
+    /// Account holds the available and locked balance of a user in a `Custodian`.
     struct Account<phantom T> has store {
         available_balance: Balance<T>,
         locked_balance: Balance<T>,
@@ -32,7 +31,7 @@ module deepbook::custodian_v2 {
         owner: address
     }
 
-    // Custodian for limit orders.
+    /// Custodian for limit orders.
     struct Custodian<phantom T> has key, store {
         id: UID,
         /// Map from the owner address of AccountCap object to an Account object
@@ -78,10 +77,13 @@ module deepbook::custodian_v2 {
         if (!table::contains(&custodian.account_balances, owner)) {
             return (0, 0)
         };
-        let account_balances = table::borrow(&custodian.account_balances, owner);
-        let avail_balance = balance::value(&account_balances.available_balance);
-        let locked_balance = balance::value(&account_balances.locked_balance);
-        (avail_balance, locked_balance)
+
+        let account = borrow_account_balance(custodian, owner);
+
+        (
+            balance::value(&account.available_balance),
+            balance::value(&account.locked_balance)
+        )
     }
 
     public(friend) fun new<T>(ctx: &mut TxContext): Custodian<T> {
@@ -160,27 +162,33 @@ module deepbook::custodian_v2 {
         custodian: &Custodian<T>,
         owner: address,
     ): u64 {
-        balance::value(&table::borrow(&custodian.account_balances, owner).available_balance)
+        let account = borrow_account_balance(custodian, owner);
+        balance::value(&account.available_balance)
     }
 
     public(friend) fun account_locked_balance<T>(
         custodian: &Custodian<T>,
         owner: address,
     ): u64 {
-        balance::value(&table::borrow(&custodian.account_balances, owner).locked_balance)
+        let account = borrow_account_balance(custodian, owner);
+        balance::value(&account.locked_balance)
     }
 
+    /// Return the account balance of `user`. If the account does not exist,
+    /// create it with zero balance.
     fun borrow_mut_account_balance<T>(
         custodian: &mut Custodian<T>,
         owner: address,
     ): &mut Account<T> {
         if (!table::contains(&custodian.account_balances, owner)) {
-            table::add(
-                &mut custodian.account_balances,
-                owner,
-                Account { available_balance: balance::zero(), locked_balance: balance::zero() }
-            );
+            let account = Account {
+                available_balance: balance::zero(),
+                locked_balance: balance::zero()
+            };
+
+            table::add(&mut custodian.account_balances, owner, account);
         };
+
         table::borrow_mut(&mut custodian.account_balances, owner)
     }
 
@@ -192,27 +200,19 @@ module deepbook::custodian_v2 {
             table::contains(&custodian.account_balances, owner),
             EUserBalanceDoesNotExist
         );
+
         table::borrow(&custodian.account_balances, owner)
     }
 
-    #[test_only]
-    friend deepbook::clob_test;
-    #[test_only]
-    use sui::test_scenario::{Self, Scenario, take_shared, take_from_sender, ctx};
-    #[test_only]
-    use sui::transfer;
-    #[test_only]
-    use sui::coin::{mint_for_testing};
-    #[test_only]
-    use sui::test_utils::{assert_eq, destroy};
-    #[test_only]
-    use sui::tx_context;
+    #[test_only] friend deepbook::clob_test;
+    #[test_only] use sui::test_scenario::{Self, Scenario, take_shared, take_from_sender, ctx};
+    #[test_only] use sui::transfer;
+    #[test_only] use sui::coin::{mint_for_testing};
+    #[test_only] use sui::test_utils::{assert_eq, destroy};
+    #[test_only] use sui::tx_context;
 
-    #[test_only]
-    const ENull: u64 = 0;
-
-    #[test_only]
-    struct USD {}
+    #[test_only] const ENull: u64 = 0;
+    #[test_only] struct USD {}
 
     #[test_only]
     public(friend) fun assert_user_balance<T>(

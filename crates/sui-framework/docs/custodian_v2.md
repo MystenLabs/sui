@@ -41,6 +41,7 @@
 
 ## Struct `Account`
 
+Account holds the available and locked balance of a user in a <code><a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a></code>.
 
 
 <pre><code><b>struct</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Account">Account</a>&lt;T&gt; <b>has</b> store
@@ -113,6 +114,7 @@ that can access funds, but cannot create new <code><a href="custodian_v2.md#0xde
 
 ## Resource `Custodian`
 
+Custodian for limit orders.
 
 
 <pre><code><b>struct</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt; <b>has</b> store, key
@@ -299,10 +301,13 @@ Return the owner of an AccountCap
     <b>if</b> (!<a href="../../../.././build/Sui/docs/table.md#0x2_table_contains">table::contains</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner)) {
         <b>return</b> (0, 0)
     };
-    <b>let</b> account_balances = <a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow">table::borrow</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner);
-    <b>let</b> avail_balance = <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&account_balances.available_balance);
-    <b>let</b> locked_balance = <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&account_balances.locked_balance);
-    (avail_balance, locked_balance)
+
+    <b>let</b> account = <a href="custodian_v2.md#0xdee9_custodian_v2_borrow_account_balance">borrow_account_balance</a>(<a href="custodian.md#0xdee9_custodian">custodian</a>, owner);
+
+    (
+        <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&account.available_balance),
+        <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&account.locked_balance)
+    )
 }
 </code></pre>
 
@@ -561,7 +566,8 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     owner: <b>address</b>,
 ): u64 {
-    <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&<a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow">table::borrow</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner).available_balance)
+    <b>let</b> account = <a href="custodian_v2.md#0xdee9_custodian_v2_borrow_account_balance">borrow_account_balance</a>(<a href="custodian.md#0xdee9_custodian">custodian</a>, owner);
+    <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&account.available_balance)
 }
 </code></pre>
 
@@ -588,7 +594,8 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     owner: <b>address</b>,
 ): u64 {
-    <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&<a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow">table::borrow</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner).locked_balance)
+    <b>let</b> account = <a href="custodian_v2.md#0xdee9_custodian_v2_borrow_account_balance">borrow_account_balance</a>(<a href="custodian.md#0xdee9_custodian">custodian</a>, owner);
+    <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&account.locked_balance)
 }
 </code></pre>
 
@@ -600,6 +607,8 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 
 ## Function `borrow_mut_account_balance`
 
+Return the account balance of <code>user</code>. If the account does not exist,
+create it with zero balance.
 
 
 <pre><code><b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_borrow_mut_account_balance">borrow_mut_account_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;T&gt;, owner: <b>address</b>): &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Account">custodian_v2::Account</a>&lt;T&gt;
@@ -616,12 +625,14 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
     owner: <b>address</b>,
 ): &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Account">Account</a>&lt;T&gt; {
     <b>if</b> (!<a href="../../../.././build/Sui/docs/table.md#0x2_table_contains">table::contains</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner)) {
-        <a href="../../../.././build/Sui/docs/table.md#0x2_table_add">table::add</a>(
-            &<b>mut</b> <a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances,
-            owner,
-            <a href="custodian_v2.md#0xdee9_custodian_v2_Account">Account</a> { available_balance: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_zero">balance::zero</a>(), locked_balance: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_zero">balance::zero</a>() }
-        );
+        <b>let</b> account = <a href="custodian_v2.md#0xdee9_custodian_v2_Account">Account</a> {
+            available_balance: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_zero">balance::zero</a>(),
+            locked_balance: <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_zero">balance::zero</a>()
+        };
+
+        <a href="../../../.././build/Sui/docs/table.md#0x2_table_add">table::add</a>(&<b>mut</b> <a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner, account);
     };
+
     <a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> <a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner)
 }
 </code></pre>
@@ -653,6 +664,7 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
         <a href="../../../.././build/Sui/docs/table.md#0x2_table_contains">table::contains</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner),
         <a href="custodian_v2.md#0xdee9_custodian_v2_EUserBalanceDoesNotExist">EUserBalanceDoesNotExist</a>
     );
+
     <a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow">table::borrow</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner)
 }
 </code></pre>

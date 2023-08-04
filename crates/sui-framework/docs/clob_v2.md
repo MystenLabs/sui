@@ -794,6 +794,7 @@ Emitted when user withdraw asset from custodian
 
 <a name="0xdee9_clob_v2_ENotImplemented"></a>
 
+[NOT USED] The function is not implemented.
 
 
 <pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_ENotImplemented">ENotImplemented</a>: u64 = 1;
@@ -803,6 +804,7 @@ Emitted when user withdraw asset from custodian
 
 <a name="0xdee9_clob_v2_EInsufficientBaseCoin"></a>
 
+Insufficient amount of base coin.
 
 
 <pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInsufficientBaseCoin">EInsufficientBaseCoin</a>: u64 = 7;
@@ -812,6 +814,7 @@ Emitted when user withdraw asset from custodian
 
 <a name="0xdee9_clob_v2_EInsufficientQuoteCoin"></a>
 
+Insufficient amount of quote coin.
 
 
 <pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInsufficientQuoteCoin">EInsufficientQuoteCoin</a>: u64 = 8;
@@ -821,6 +824,7 @@ Emitted when user withdraw asset from custodian
 
 <a name="0xdee9_clob_v2_EInvalidBaseBalance"></a>
 
+[NOT USED]
 
 
 <pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidBaseBalance">EInvalidBaseBalance</a>: u64 = 17;
@@ -848,6 +852,7 @@ Emitted when user withdraw asset from custodian
 
 <a name="0xdee9_clob_v2_EInvalidFeeRateRebateRate"></a>
 
+Taker fee rate is lower than maker rebate rate.
 
 
 <pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidFeeRateRebateRate">EInvalidFeeRateRebateRate</a>: u64 = 2;
@@ -857,6 +862,7 @@ Emitted when user withdraw asset from custodian
 
 <a name="0xdee9_clob_v2_EInvalidOrderId"></a>
 
+Trying to access a non-existent order.
 
 
 <pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidOrderId">EInvalidOrderId</a>: u64 = 3;
@@ -875,6 +881,8 @@ Emitted when user withdraw asset from custodian
 
 <a name="0xdee9_clob_v2_EInvalidPrice"></a>
 
+Trying to place a limit order with <code>0</code> price or with a value that does
+not match the tick size.
 
 
 <pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidPrice">EInvalidPrice</a>: u64 = 5;
@@ -884,6 +892,8 @@ Emitted when user withdraw asset from custodian
 
 <a name="0xdee9_clob_v2_EInvalidQuantity"></a>
 
+Trying to withdraw or swap with a quantity of <code>0</code>. Or trying to place
+an order with a quantity that does not match the lot size.
 
 
 <pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidQuantity">EInvalidQuantity</a>: u64 = 6;
@@ -929,6 +939,7 @@ Emitted when user withdraw asset from custodian
 
 <a name="0xdee9_clob_v2_ELevelNotEmpty"></a>
 
+[NOT USED]
 
 
 <pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_ELevelNotEmpty">ELevelNotEmpty</a>: u64 = 15;
@@ -965,6 +976,7 @@ Emitted when user withdraw asset from custodian
 
 <a name="0xdee9_clob_v2_EUnauthorizedCancel"></a>
 
+Attempt to cancel an order that is not owned by the caller.
 
 
 <pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EUnauthorizedCancel">EUnauthorizedCancel</a>: u64 = 4;
@@ -983,6 +995,7 @@ Emitted when user withdraw asset from custodian
 
 <a name="0xdee9_clob_v2_FILL_OR_KILL"></a>
 
+Mandates that the entire order size be filled in the current transaction. Otherwise, the order is canceled.
 
 
 <pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_FILL_OR_KILL">FILL_OR_KILL</a>: u8 = 2;
@@ -992,6 +1005,8 @@ Emitted when user withdraw asset from custodian
 
 <a name="0xdee9_clob_v2_IMMEDIATE_OR_CANCEL"></a>
 
+Mandates that whatever amount of an order that can be executed in the current transaction,
+be filled and then the rest of the order canceled.
 
 
 <pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_IMMEDIATE_OR_CANCEL">IMMEDIATE_OR_CANCEL</a>: u8 = 1;
@@ -1037,6 +1052,7 @@ Emitted when user withdraw asset from custodian
 
 <a name="0xdee9_clob_v2_NO_RESTRICTION"></a>
 
+No restrictions on limit orders.
 
 
 <pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_NO_RESTRICTION">NO_RESTRICTION</a>: u8 = 0;
@@ -1055,6 +1071,7 @@ Emitted when user withdraw asset from custodian
 
 <a name="0xdee9_clob_v2_POST_OR_ABORT"></a>
 
+Mandates that the entire order be passive. Otherwise, cancel the order.
 
 
 <pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_POST_OR_ABORT">POST_OR_ABORT</a>: u8 = 3;
@@ -1091,6 +1108,8 @@ Emitted when user withdraw asset from custodian
 
 <a name="0xdee9_clob_v2_CANCEL_OLDEST"></a>
 
+Self-Trade Prevention option
+Cancel older (resting) order in full. Continue to execute the newer taking order.
 
 
 <pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_CANCEL_OLDEST">CANCEL_OLDEST</a>: u8 = 0;
@@ -1316,6 +1335,10 @@ Emitted when user withdraw asset from custodian
 
 ## Function `deposit_base`
 
+Deposit base asset into the pool.
+
+Aborts if the <code>Coin</code> is zero.
+Emits: <code><a href="clob_v2.md#0xdee9_clob_v2_DepositAsset">DepositAsset</a>&lt;BaseAsset&gt;</code> event.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_deposit_base">deposit_base</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, <a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>: <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>)
@@ -1332,16 +1355,18 @@ Emitted when user withdraw asset from custodian
     <a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>: Coin&lt;BaseAsset&gt;,
     account_cap: &AccountCap
 ) {
-    <b>let</b> quantity = <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&<a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>);
-    <b>assert</b>!(quantity != 0, <a href="clob_v2.md#0xdee9_clob_v2_EInsufficientBaseCoin">EInsufficientBaseCoin</a>);
+    <b>let</b> coin_amount = <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&<a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>);
+    <b>assert</b>!(coin_amount != 0, <a href="clob_v2.md#0xdee9_clob_v2_EInsufficientBaseCoin">EInsufficientBaseCoin</a>);
+
     <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>(
         &<b>mut</b> pool.base_custodian,
         account_owner(account_cap),
         <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_into_balance">coin::into_balance</a>(<a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>)
     );
+
     <a href="../../../.././build/Sui/docs/event.md#0x2_event_emit">event::emit</a>(<a href="clob_v2.md#0xdee9_clob_v2_DepositAsset">DepositAsset</a>&lt;BaseAsset&gt;{
         pool_id: *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id),
-        quantity,
+        quantity: coin_amount,
         owner: account_owner(account_cap)
     })
 }
@@ -1371,16 +1396,18 @@ Emitted when user withdraw asset from custodian
     <a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>: Coin&lt;QuoteAsset&gt;,
     account_cap: &AccountCap
 ) {
-    <b>let</b> quantity = <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&<a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>);
-    <b>assert</b>!(quantity != 0, <a href="clob_v2.md#0xdee9_clob_v2_EInsufficientQuoteCoin">EInsufficientQuoteCoin</a>);
+    <b>let</b> coin_amount = <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&<a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>);
+    <b>assert</b>!(coin_amount != 0, <a href="clob_v2.md#0xdee9_clob_v2_EInsufficientQuoteCoin">EInsufficientQuoteCoin</a>);
+
     <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">custodian::increase_user_available_balance</a>(
         &<b>mut</b> pool.quote_custodian,
         account_owner(account_cap),
         <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_into_balance">coin::into_balance</a>(<a href="../../../.././build/Sui/docs/coin.md#0x2_coin">coin</a>)
     );
+
     <a href="../../../.././build/Sui/docs/event.md#0x2_event_emit">event::emit</a>(<a href="clob_v2.md#0xdee9_clob_v2_DepositAsset">DepositAsset</a>&lt;QuoteAsset&gt;{
         pool_id: *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id),
-        quantity,
+        quantity: coin_amount,
         owner: account_owner(account_cap)
     })
 }
@@ -1394,6 +1421,8 @@ Emitted when user withdraw asset from custodian
 
 ## Function `withdraw_base`
 
+Withdraw base asset from the pool in the specified quantity.
+Aborts if the quantity is zero.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_withdraw_base">withdraw_base</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, quantity: u64, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;
@@ -1412,12 +1441,16 @@ Emitted when user withdraw asset from custodian
     ctx: &<b>mut</b> TxContext
 ): Coin&lt;BaseAsset&gt; {
     <b>assert</b>!(quantity &gt; 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidQuantity">EInvalidQuantity</a>);
+
     <a href="../../../.././build/Sui/docs/event.md#0x2_event_emit">event::emit</a>(<a href="clob_v2.md#0xdee9_clob_v2_WithdrawAsset">WithdrawAsset</a>&lt;BaseAsset&gt;{
         pool_id: *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id),
         quantity,
         owner: account_owner(account_cap)
     });
-    <a href="custodian.md#0xdee9_custodian_withdraw_asset">custodian::withdraw_asset</a>(&<b>mut</b> pool.base_custodian, quantity, account_cap, ctx)
+
+    <a href="custodian.md#0xdee9_custodian_withdraw_asset">custodian::withdraw_asset</a>(
+        &<b>mut</b> pool.base_custodian, quantity, account_cap, ctx
+    )
 }
 </code></pre>
 
@@ -1429,6 +1462,8 @@ Emitted when user withdraw asset from custodian
 
 ## Function `withdraw_quote`
 
+Withdraw quote asset from the pool in the specified quantity.
+Aborts if the quantity is zero.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_withdraw_quote">withdraw_quote</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, quantity: u64, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;
@@ -1447,12 +1482,16 @@ Emitted when user withdraw asset from custodian
     ctx: &<b>mut</b> TxContext
 ): Coin&lt;QuoteAsset&gt; {
     <b>assert</b>!(quantity &gt; 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidQuantity">EInvalidQuantity</a>);
+
     <a href="../../../.././build/Sui/docs/event.md#0x2_event_emit">event::emit</a>(<a href="clob_v2.md#0xdee9_clob_v2_WithdrawAsset">WithdrawAsset</a>&lt;QuoteAsset&gt;{
         pool_id: *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id),
         quantity,
         owner: account_owner(account_cap)
     });
-    <a href="custodian.md#0xdee9_custodian_withdraw_asset">custodian::withdraw_asset</a>(&<b>mut</b> pool.quote_custodian, quantity, account_cap, ctx)
+
+    <a href="custodian.md#0xdee9_custodian_withdraw_asset">custodian::withdraw_asset</a>(
+        &<b>mut</b> pool.quote_custodian, quantity, account_cap, ctx
+    )
 }
 </code></pre>
 
@@ -1464,6 +1503,7 @@ Emitted when user withdraw asset from custodian
 
 ## Function `swap_exact_base_for_quote`
 
+For smart routing
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_swap_exact_base_for_quote">swap_exact_base_for_quote</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, client_order_id: u64, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, quantity: u64, base_coin: <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, quote_coin: <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, <a href="../../../.././build/Sui/docs/clock.md#0x2_clock">clock</a>: &<a href="../../../.././build/Sui/docs/clock.md#0x2_clock_Clock">clock::Clock</a>, ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../../../.././build/Sui/docs/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, u64)
@@ -1487,6 +1527,7 @@ Emitted when user withdraw asset from custodian
 ): (Coin&lt;BaseAsset&gt;, Coin&lt;QuoteAsset&gt;, u64) {
     <b>assert</b>!(quantity &gt; 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidQuantity">EInvalidQuantity</a>);
     <b>assert</b>!(<a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&base_coin) &gt;= quantity, <a href="clob_v2.md#0xdee9_clob_v2_EInsufficientBaseCoin">EInsufficientBaseCoin</a>);
+
     <b>let</b> original_val = <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&quote_coin);
     <b>let</b> (ret_base_coin, ret_quote_coin) = <a href="clob_v2.md#0xdee9_clob_v2_place_market_order">place_market_order</a>(
         pool,
@@ -1500,7 +1541,12 @@ Emitted when user withdraw asset from custodian
         ctx
     );
     <b>let</b> ret_val = <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&ret_quote_coin);
-    (ret_base_coin, ret_quote_coin, ret_val - original_val)
+
+    (
+        ret_base_coin,
+        ret_quote_coin,
+        ret_val - original_val
+    )
 }
 </code></pre>
 
@@ -1512,6 +1558,9 @@ Emitted when user withdraw asset from custodian
 
 ## Function `swap_exact_quote_for_base`
 
+For smart routing
+
+Returns the Coin<BaseAsset>, Coin<QuoteAsset> and the base asset balance.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_swap_exact_quote_for_base">swap_exact_quote_for_base</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, client_order_id: u64, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, quantity: u64, <a href="../../../.././build/Sui/docs/clock.md#0x2_clock">clock</a>: &<a href="../../../.././build/Sui/docs/clock.md#0x2_clock_Clock">clock::Clock</a>, quote_coin: <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../../../.././build/Sui/docs/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;BaseAsset&gt;, <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;, u64)
@@ -1544,7 +1593,12 @@ Emitted when user withdraw asset from custodian
         <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_into_balance">coin::into_balance</a>(quote_coin)
     );
     <b>let</b> val = <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&base_asset_balance);
-    (<a href="../../../.././build/Sui/docs/coin.md#0x2_coin_from_balance">coin::from_balance</a>(base_asset_balance, ctx), <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_from_balance">coin::from_balance</a>(quote_asset_balance, ctx), val)
+
+    (
+        <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_from_balance">coin::from_balance</a>(base_asset_balance, ctx),
+        <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_from_balance">coin::from_balance</a>(quote_asset_balance, ctx),
+        val
+    )
 }
 </code></pre>
 
@@ -2133,6 +2187,7 @@ Place a market order to the order book.
     // Then iterate over the price levels in descending order until the market order is completely filled.
     <b>assert</b>!(quantity % pool.lot_size == 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidQuantity">EInvalidQuantity</a>);
     <b>assert</b>!(quantity != 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidQuantity">EInvalidQuantity</a>);
+
     <b>if</b> (is_bid) {
         <b>let</b> (base_balance_filled, quote_balance_left) = <a href="clob_v2.md#0xdee9_clob_v2_match_bid">match_bid</a>(
             pool,
@@ -2143,9 +2198,9 @@ Place a market order to the order book.
             <a href="../../../.././build/Sui/docs/clock.md#0x2_clock_timestamp_ms">clock::timestamp_ms</a>(<a href="../../../.././build/Sui/docs/clock.md#0x2_clock">clock</a>),
             <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_into_balance">coin::into_balance</a>(quote_coin),
         );
-        join(
-            &<b>mut</b> base_coin,
-            <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_from_balance">coin::from_balance</a>(base_balance_filled, ctx),
+        <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_join">balance::join</a>(
+            <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_balance_mut">coin::balance_mut</a>(&<b>mut</b> base_coin),
+            base_balance_filled
         );
         quote_coin = <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_from_balance">coin::from_balance</a>(quote_balance_left, ctx);
     } <b>else</b> {
@@ -2159,14 +2214,16 @@ Place a market order to the order book.
             <a href="../../../.././build/Sui/docs/clock.md#0x2_clock_timestamp_ms">clock::timestamp_ms</a>(<a href="../../../.././build/Sui/docs/clock.md#0x2_clock">clock</a>),
             <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_into_balance">coin::into_balance</a>(base_coin_to_sell),
         );
-        join(
-            &<b>mut</b> base_coin,
-            <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_from_balance">coin::from_balance</a>(base_balance_left, ctx));
-        join(
-            &<b>mut</b> quote_coin,
-            <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_from_balance">coin::from_balance</a>(quote_balance_filled, ctx),
+        <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_join">balance::join</a>(
+            <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_balance_mut">coin::balance_mut</a>(&<b>mut</b> base_coin),
+            base_balance_left
+        );
+        <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_join">balance::join</a>(
+            <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_balance_mut">coin::balance_mut</a>(&<b>mut</b> quote_coin),
+            quote_balance_filled
         );
     };
+
     (base_coin, quote_coin)
 }
 </code></pre>
@@ -2259,7 +2316,7 @@ Returns the order id.
     };
     <a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_push_back">linked_table::push_back</a>(borrow_mut(&<b>mut</b> pool.usr_open_orders, owner), order_id, price);
 
-    <b>return</b> order_id
+    order_id
 }
 </code></pre>
 
@@ -2380,14 +2437,16 @@ So please check that boolean value first before using the order id.
         );
     };
 
-    <b>let</b> order_id;
     <b>if</b> (restriction == <a href="clob_v2.md#0xdee9_clob_v2_IMMEDIATE_OR_CANCEL">IMMEDIATE_OR_CANCEL</a>) {
         <b>return</b> (base_quantity_filled, quote_quantity_filled, <b>false</b>, 0)
     };
+
     <b>if</b> (restriction == <a href="clob_v2.md#0xdee9_clob_v2_FILL_OR_KILL">FILL_OR_KILL</a>) {
         <b>assert</b>!(base_quantity_filled == quantity, <a href="clob_v2.md#0xdee9_clob_v2_EOrderCannotBeFullyFilled">EOrderCannotBeFullyFilled</a>);
         <b>return</b> (base_quantity_filled, quote_quantity_filled, <b>false</b>, 0)
     };
+
+    <b>let</b> order_id;
     <b>if</b> (restriction == <a href="clob_v2.md#0xdee9_clob_v2_POST_OR_ABORT">POST_OR_ABORT</a>) {
         <b>assert</b>!(base_quantity_filled == 0, <a href="clob_v2.md#0xdee9_clob_v2_EOrderCannotBeFullyPassive">EOrderCannotBeFullyPassive</a>);
         order_id = <a href="clob_v2.md#0xdee9_clob_v2_inject_limit_order">inject_limit_order</a>(
@@ -2956,7 +3015,9 @@ and they should correspond to the order IDs one by one.
 
 ## Function `account_balance`
 
-query user balance inside custodian
+Query user balance inside custodian
+
+Aborts if the <code>Account</code> does not exist in the <code>base_custodian</code> or <code>quote_custodian</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_account_balance">account_balance</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>): (u64, u64, u64, u64)

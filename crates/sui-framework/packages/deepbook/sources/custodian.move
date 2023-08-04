@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/// Defines the `Custodian` object that is responsible for managing the balances
+/// of `Account`s.
 module deepbook::custodian {
     use sui::balance::{Self, Balance, split};
     use sui::coin::{Self, Coin};
@@ -10,18 +12,20 @@ module deepbook::custodian {
 
     friend deepbook::clob;
 
-    // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
+    /// Trying to get an account balance for a user that does not exist.
     const EUserBalanceDoesNotExist: u64 = 1;
-    // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
 
+    /// A single account stored in the `Custodian` object in the `account_balances`
+    /// table.
     struct Account<phantom T> has store {
         available_balance: Balance<T>,
         locked_balance: Balance<T>,
     }
 
+    /// TODO: documentation
     struct AccountCap has key, store { id: UID }
 
-    // Custodian for limit orders.
+    /// Custodian for limit orders.
     struct Custodian<phantom T> has key, store {
         id: UID,
         /// Map from an AccountCap object ID to an Account object
@@ -33,6 +37,10 @@ module deepbook::custodian {
         AccountCap { id: object::new(ctx) }
     }
 
+    /// Returns the `available_balance` and the `locked_balance` of the Account.
+    ///
+    /// TODO: consider aborting if the account does not exist (go through the
+    ///       usages of the function and see if it is safe to abort)
     public(friend) fun account_balance<Asset>(
         custodian: &Custodian<Asset>,
         user: ID
@@ -41,12 +49,16 @@ module deepbook::custodian {
         if (!table::contains(&custodian.account_balances, user)) {
             return (0, 0)
         };
-        let account_balances = table::borrow(&custodian.account_balances, user);
-        let avail_balance = balance::value(&account_balances.available_balance);
-        let locked_balance = balance::value(&account_balances.locked_balance);
-        (avail_balance, locked_balance)
+
+        let account = borrow_account_balance(custodian, user);
+
+        (
+            balance::value(&account.available_balance),
+            balance::value(&account.locked_balance)
+        )
     }
 
+    /// Create a new `Custodian` object.
     public(friend) fun new<T>(ctx: &mut TxContext): Custodian<T> {
         Custodian<T> {
             id: object::new(ctx),
@@ -68,7 +80,7 @@ module deepbook::custodian {
         user: ID,
         quantity: Balance<T>,
     ) {
-        let account = borrow_mut_account_balance<T>(custodian, user);
+        let account = borrow_mut_account_balance_or_create<T>(custodian, user);
         balance::join(&mut account.available_balance, quantity);
     }
 
@@ -77,7 +89,7 @@ module deepbook::custodian {
         account_cap: &AccountCap,
         quantity: u64,
     ): Balance<T> {
-        let account = borrow_mut_account_balance<T>(custodian, object::uid_to_inner(&account_cap.id));
+        let account = borrow_mut_account_balance_or_create<T>(custodian, object::uid_to_inner(&account_cap.id));
         balance::split(&mut account.available_balance, quantity)
     }
 
@@ -86,7 +98,7 @@ module deepbook::custodian {
         account_cap: &AccountCap,
         quantity: Balance<T>,
     ) {
-        let account = borrow_mut_account_balance<T>(custodian, object::uid_to_inner(&account_cap.id));
+        let account = borrow_mut_account_balance_or_create<T>(custodian, object::uid_to_inner(&account_cap.id));
         balance::join(&mut account.locked_balance, quantity);
     }
 
@@ -95,7 +107,7 @@ module deepbook::custodian {
         user: ID,
         quantity: u64,
     ): Balance<T> {
-        let account = borrow_mut_account_balance<T>(custodian, user);
+        let account = borrow_mut_account_balance_or_create<T>(custodian, user);
         split(&mut account.locked_balance, quantity)
     }
 
@@ -123,30 +135,40 @@ module deepbook::custodian {
         custodian: &Custodian<T>,
         user: ID,
     ): u64 {
-        balance::value(&table::borrow(&custodian.account_balances, user).available_balance)
+        let account = borrow_account_balance(custodian, user);
+        balance::value(&account.available_balance)
     }
 
     public(friend) fun account_locked_balance<T>(
         custodian: &Custodian<T>,
         user: ID,
     ): u64 {
-        balance::value(&table::borrow(&custodian.account_balances, user).locked_balance)
+        let account = borrow_account_balance(custodian, user);
+        balance::value(&account.locked_balance)
     }
 
-    fun borrow_mut_account_balance<T>(
+    /// Internal: mutably borrow the account balance of a `user`.
+    /// If the account does not exist - create it and give a mutable reference.
+    ///
+    /// TODO: consider renaming to avoid confusion with `borrow_account_balance`
+    fun borrow_mut_account_balance_or_create<T>(
         custodian: &mut Custodian<T>,
         user: ID,
     ): &mut Account<T> {
         if (!table::contains(&custodian.account_balances, user)) {
-            table::add(
-                &mut custodian.account_balances,
-                user,
-                Account { available_balance: balance::zero(), locked_balance: balance::zero() }
-            );
+            let account = Account {
+                available_balance: balance::zero(),
+                locked_balance: balance::zero()
+            };
+
+            table::add(&mut custodian.account_balances, user, account);
         };
+
         table::borrow_mut(&mut custodian.account_balances, user)
     }
 
+    /// Internal: borrow the account balance of a `user`.
+    /// If the account does not exist, abort with `EUserBalanceDoesNotExist`.
     fun borrow_account_balance<T>(
         custodian: &Custodian<T>,
         user: ID,
@@ -158,21 +180,22 @@ module deepbook::custodian {
         table::borrow(&custodian.account_balances, user)
     }
 
-    #[test_only]
-    friend deepbook::clob_test;
-    #[test_only]
-    use sui::test_scenario::{Self, Scenario, take_shared, take_from_sender, ctx};
-    #[test_only]
-    use sui::transfer;
-    #[test_only]
-    use sui::coin::{mint_for_testing};
-    #[test_only]
-    use sui::test_utils::assert_eq;
-    #[test_only]
-    const ENull: u64 = 0;
+    // === Tests ===
 
-    #[test_only]
-    struct USD {}
+    #[test_only] friend deepbook::clob_test;
+    #[test_only] use sui::test_scenario::{
+        Self,
+        Scenario,
+        take_shared,
+        take_from_sender,
+        ctx
+    };
+
+    #[test_only] use sui::transfer;
+    #[test_only] use sui::coin::{mint_for_testing};
+    #[test_only] use sui::test_utils::assert_eq;
+    #[test_only] const ENull: u64 = 0;
+    #[test_only] struct USD {}
 
     #[test_only]
     public(friend) fun assert_user_balance<T>(
