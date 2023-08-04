@@ -6,7 +6,7 @@
 # - Encoding RPC errors
 
 # TODO Flesh out Connections
-# TODO - TotalTransactionBlocks for the PTB connection
+# TODO NameService type
 
 schema {
   query: Query
@@ -323,7 +323,7 @@ interface Owner {
     after: String,
     last: Int,
     before: String,
-  ): StakeConnection
+  ): StakesConnection
 
   defaultNameServiceName: String
   nameServiceNamesConnection(
@@ -1013,7 +1013,9 @@ type MoveTypeParameter {
 # Metrics (omitted for brevity)
 type NetworkMetrics {}
 type MoveCallMetrics {}
-type AddressMetrics {}
+type AddressMetrics {
+  id: ID!
+}
 
 # Execution
 
@@ -1052,10 +1054,7 @@ type DryRunReturn {
 
 # Connections
 
-type AddressMetricConnection {}
-type MovePackageModuleConnection {}
-type NameServiceNamesConnection {}
-type StakeConnection {}
+type StakesConnection {}
 
 # Pagination
 type PageInfo {
@@ -1166,6 +1165,7 @@ type TransactionEventEdge {
 
 # TransactionBlockConnection
 type TransactionBlockConnection {
+  totalTransactionBlocks: Int
   edges: [TransactionBlockEdge!]!
   pageInfo: PageInfo!
 }
@@ -1184,4 +1184,37 @@ type MoveModuleConnection {
 type MoveModuleEdge {
   cursor: String
   node: MoveModule!
+}
+
+# MoveModulesConnection
+type MoveModulesConnection {
+  edges: [MoveModuleEdge!]!
+  pageInfo: PageInfo!
+}
+
+type MoveModulesEdge {
+  cursor: String
+  node: MoveModule!
+}
+
+# NameServiceNamesConnection
+type NameServiceNamesConnection {
+  edges: [NameServiceNamesEdge!]!
+  pageInfo: PageInfo!
+}
+
+type NameServiceNamesEdge {
+  cursor: String
+  node: String!  # is this correct?
+}
+
+# AddressMetricConnection
+type AddressMetricConnection {
+  edges: [AddressMetricEdge!]!
+  pageInfo: PageInfo!
+}
+
+type AddressMetricEdge {
+  cursor: String
+  node: AddressMetric!
 }
