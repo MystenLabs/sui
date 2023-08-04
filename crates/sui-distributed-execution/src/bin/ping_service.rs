@@ -31,10 +31,10 @@ async fn main() {
     // Initialize and run the server
     let kind = global_config.get(&my_id).unwrap().kind.as_str();
     if kind == "echo" {
-        let mut server = Server::<EchoAgent, String>::new(global_config.clone(), my_id);
+        let mut server = Server::<EchoAgent, String>::new(global_config, my_id);
         server.run().await;
     } else {
-        let mut server = Server::<PingAgent, String>::new(global_config.clone(), my_id);
+        let mut server = Server::<PingAgent, String>::new(global_config, my_id);
         server.run().await;
     }
 }
