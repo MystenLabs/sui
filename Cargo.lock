@@ -10280,6 +10280,7 @@ dependencies = [
  "sui-move-build",
  "sui-node",
  "sui-open-rpc",
+ "sui-rest-api",
  "sui-sdk",
  "sui-test-transaction-builder",
  "sui-types",

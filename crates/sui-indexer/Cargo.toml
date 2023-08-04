@@ -45,6 +45,7 @@ sui-sdk.workspace = true
 sui-types.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 telemetry-subscribers.workspace = true
+sui-rest-api.workspace = true
 
 move-core-types.workspace = true
 move-bytecode-utils.workspace = true
