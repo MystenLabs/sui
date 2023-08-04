@@ -1524,6 +1524,7 @@ Access the <code>UID</code> using the <code><a href="kiosk.md#0x2_kiosk_KioskOwn
 
 ## Function `set_allow_extensions`
 
+[DEPRECATED]
 Allow or disallow <code>uid</code> and <code>uid_mut</code> access via the <code>allow_extensions</code>
 setting.
 

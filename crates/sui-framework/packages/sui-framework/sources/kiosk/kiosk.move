@@ -532,6 +532,7 @@ module sui::kiosk {
         &mut self.id
     }
 
+    /// [DEPRECATED]
     /// Allow or disallow `uid` and `uid_mut` access via the `allow_extensions`
     /// setting.
     public fun set_allow_extensions(
