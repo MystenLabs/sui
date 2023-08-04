@@ -1,0 +1,6 @@
+2023-05-30T11:24:41.3140285Z ##[group]Run echo "hasChanges=$(pnpm list --filter "...[$(git rev-parse HEAD^1)]" --depth -1 --json | jq "any(.[] | select(.private != true) ; length > 0)")" >> $GITHUB_OUTPUT
+2023-05-30T11:24:41.3142134Z [36;1mecho "hasChanges=$(pnpm list --filter "...[$(git rev-parse HEAD^1)]" --depth -1 --json | jq "any(.[] | select(.private != true) ; length > 0)")" >> $GITHUB_OUTPUT[0m
+2023-05-30T11:24:41.3222009Z shell: /usr/bin/bash -e {0}
+2023-05-30T11:24:41.3222273Z env:
+2023-05-30T11:24:41.3222559Z   PNPM_HOME: /home/runner/setup-pnpm/node_modules/.bin
+2023-05-30T11:24:41.3222863Z ##[endgroup]
