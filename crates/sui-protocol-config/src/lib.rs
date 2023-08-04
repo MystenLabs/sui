@@ -61,6 +61,9 @@ const MAX_PROTOCOL_VERSION: u64 = 20;
 // Version 19: Changes to sui-system package to enable liquid staking.
 //             Add limit for total size of events.
 //             Increase limit for number of events emitted to 1024.
+// Version 20: Enabling the flag `narwhal_new_leader_election_schedule` for the new narwhal leader
+//             schedule algorithm for enhanced fault tolerance and sets the bad node stake threshold
+//             value. Both values are set for all the environments except mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1352,6 +1355,12 @@ impl ProtocolConfig {
             20 => {
                 let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.commit_root_state_digest = true;
+
+                if chain != Chain::Mainnet {
+                    cfg.feature_flags.narwhal_new_leader_election_schedule = true;
+                    cfg.consensus_bad_nodes_stake_threshold = Some(20);
+                }
+
                 cfg
             }
 

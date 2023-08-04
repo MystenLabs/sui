@@ -371,7 +371,6 @@ async fn test_long_period_of_asynchrony_for_leader_schedule_change() {
     certificates.extend(out);
 
     let mut config: ProtocolConfig = latest_protocol_version();
-    config.set_narwhal_new_leader_election_schedule(true);
     config.set_consensus_bad_nodes_stake_threshold(33);
 
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
