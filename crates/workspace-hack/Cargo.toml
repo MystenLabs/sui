@@ -69,13 +69,16 @@ aws-credential-types = { version = "0.55", default-features = false }
 aws-endpoint = { version = "0.55", default-features = false }
 aws-http = { version = "0.55", default-features = false }
 aws-sdk-dynamodb = { version = "0.28" }
+aws-sdk-s3 = { version = "0.28" }
 aws-sdk-sso = { version = "0.28", default-features = false }
 aws-sdk-sts = { version = "0.28", default-features = false }
-aws-sig-auth = { version = "0.55", default-features = false }
-aws-sigv4 = { version = "0.55" }
+aws-sig-auth = { version = "0.55", default-features = false, features = ["sign-eventstream"] }
+aws-sigv4 = { version = "0.55", features = ["sign-eventstream"] }
 aws-smithy-async = { version = "0.55", default-features = false, features = ["rt-tokio"] }
+aws-smithy-checksums = { version = "0.55", default-features = false }
 aws-smithy-client = { version = "0.55", default-features = false, features = ["rustls"] }
-aws-smithy-http = { version = "0.55", default-features = false, features = ["rt-tokio"] }
+aws-smithy-eventstream = { version = "0.55", default-features = false }
+aws-smithy-http = { version = "0.55", default-features = false, features = ["event-stream", "rt-tokio"] }
 aws-smithy-http-tower = { version = "0.55", default-features = false }
 aws-smithy-json = { version = "0.55", default-features = false }
 aws-smithy-query = { version = "0.55", default-features = false }
@@ -167,6 +170,7 @@ const-oid = { version = "0.9", default-features = false }
 const-str = { version = "0.5" }
 constant_time_eq = { version = "0.2", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
+crc32c = { version = "0.6", default-features = false }
 crc32fast = { version = "1" }
 criterion = { version = "0.4", features = ["async_tokio", "html_reports"] }
 criterion-plot = { version = "0.5", default-features = false }
@@ -352,7 +356,8 @@ match_opt = { version = "0.1", default-features = false }
 matchers = { version = "0.1", default-features = false }
 matchit-ca01ad9e24f5d932 = { package = "matchit", version = "0.7" }
 matchit-d8f496e17d97b5cb = { package = "matchit", version = "0.5" }
-md-5 = { version = "0.9" }
+md-5-274715c4dabd11b0 = { package = "md-5", version = "0.9" }
+md-5-93f6ce9d446188ac = { package = "md-5", version = "0.10" }
 memchr = { version = "2" }
 memoffset-ca01ad9e24f5d932 = { package = "memoffset", version = "0.7" }
 merlin = { version = "3" }
@@ -784,13 +789,16 @@ aws-credential-types = { version = "0.55", default-features = false }
 aws-endpoint = { version = "0.55", default-features = false }
 aws-http = { version = "0.55", default-features = false }
 aws-sdk-dynamodb = { version = "0.28" }
+aws-sdk-s3 = { version = "0.28" }
 aws-sdk-sso = { version = "0.28", default-features = false }
 aws-sdk-sts = { version = "0.28", default-features = false }
-aws-sig-auth = { version = "0.55", default-features = false }
-aws-sigv4 = { version = "0.55" }
+aws-sig-auth = { version = "0.55", default-features = false, features = ["sign-eventstream"] }
+aws-sigv4 = { version = "0.55", features = ["sign-eventstream"] }
 aws-smithy-async = { version = "0.55", default-features = false, features = ["rt-tokio"] }
+aws-smithy-checksums = { version = "0.55", default-features = false }
 aws-smithy-client = { version = "0.55", default-features = false, features = ["rustls"] }
-aws-smithy-http = { version = "0.55", default-features = false, features = ["rt-tokio"] }
+aws-smithy-eventstream = { version = "0.55", default-features = false }
+aws-smithy-http = { version = "0.55", default-features = false, features = ["event-stream", "rt-tokio"] }
 aws-smithy-http-tower = { version = "0.55", default-features = false }
 aws-smithy-json = { version = "0.55", default-features = false }
 aws-smithy-query = { version = "0.55", default-features = false }
@@ -894,6 +902,7 @@ constant_time_eq = { version = "0.2", default-features = false }
 convert_case-3b31131e45eafb45 = { package = "convert_case", version = "0.6", default-features = false }
 convert_case-9fbad63c4bcf4a8f = { package = "convert_case", version = "0.4", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
+crc32c = { version = "0.6", default-features = false }
 crc32fast = { version = "1" }
 criterion = { version = "0.4", features = ["async_tokio", "html_reports"] }
 criterion-plot = { version = "0.5", default-features = false }
@@ -1108,7 +1117,8 @@ match_opt = { version = "0.1", default-features = false }
 matchers = { version = "0.1", default-features = false }
 matchit-ca01ad9e24f5d932 = { package = "matchit", version = "0.7" }
 matchit-d8f496e17d97b5cb = { package = "matchit", version = "0.5" }
-md-5 = { version = "0.9" }
+md-5-274715c4dabd11b0 = { package = "md-5", version = "0.9" }
+md-5-93f6ce9d446188ac = { package = "md-5", version = "0.10" }
 memchr = { version = "2" }
 memoffset-ca01ad9e24f5d932 = { package = "memoffset", version = "0.7" }
 merlin = { version = "3" }
