@@ -1,14 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { COIN_GECKO_SUI_URL, useSuiCoinData } from '@mysten/core';
 import { Sui } from '@mysten/icons';
 import { Text } from '@mysten/ui';
 
-import { useSuiCoinData } from '~/hooks/useSuiCoinData';
 import { Card } from '~/ui/Card';
 import { ButtonOrLink } from '~/ui/utils/ButtonOrLink';
-
-const COIN_GECKO_SUI_URL = 'https://www.coingecko.com/en/coins/sui';
 
 export function SuiTokenCard() {
 	const { data } = useSuiCoinData();
