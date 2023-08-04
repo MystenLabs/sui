@@ -9,12 +9,15 @@ import {
 	setupPool,
 	setupDeepbookAccount,
 	depositAsset,
-	withdrawAsset,
+	executeTransactionBlock,
+	DEFAULT_TICK_SIZE,
+	DEFAULT_LOT_SIZE,
+	devInspectTransactionBlock,
 } from './setup';
 import { PoolSummary } from '../../src/types/pool';
 import { DeepBookClient } from '../../src';
 
-const DEPOSIT_AMOUNT = 100;
+const DEPOSIT_AMOUNT = 100n;
 
 describe('Interacting with the pool', () => {
 	let toolbox: TestToolbox;
@@ -48,9 +51,24 @@ describe('Interacting with the pool', () => {
 
 	it('test withdraw base asset', async () => {
 		expect(accountCapId).toBeDefined();
-		await withdrawAsset(toolbox, pool.poolId, accountCapId, DEPOSIT_AMOUNT);
-		const deepbook = new DeepBookClient(toolbox.client, accountCapId);
+		const deepbook = new DeepBookClient(toolbox.client, accountCapId, toolbox.address());
+		const txb = await deepbook.withdraw(pool.poolId, DEPOSIT_AMOUNT, 'Base');
+		await executeTransactionBlock(toolbox, txb);
 		const resp = await deepbook.getUserPosition(pool.poolId);
 		expect(resp.availableBaseAmount).toBe(0n);
+	});
+
+	it('test place limit order', async () => {
+		expect(accountCapId).toBeDefined();
+		const deepbook = new DeepBookClient(toolbox.client, accountCapId);
+		await depositAsset(toolbox, pool.poolId, accountCapId, DEPOSIT_AMOUNT);
+		const resp = await deepbook.getUserPosition(pool.poolId);
+		expect(resp.availableBaseAmount).toBe(BigInt(DEPOSIT_AMOUNT));
+
+		const txb = await deepbook.placeLimitOrder(pool.poolId, 1n * DEFAULT_TICK_SIZE, 1n * DEFAULT_LOT_SIZE, true);
+		//await executeTransactionBlock(toolbox, txb);
+
+		const resp1 = await devInspectTransactionBlock(toolbox, txb);
+		console.log(resp1);
 	});
 });

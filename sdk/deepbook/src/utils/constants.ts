@@ -15,6 +15,6 @@ export const CREATION_FEE = 100 * 1e9;
 
 export const NORMALIZED_SUI_COIN_TYPE = normalizeStructTag(SUI_TYPE_ARG);
 
-export const FLOAT_SCALING = 1_000_000_000;
-
 export const ORDER_DEFAULT_EXPIRATION_IN_MS = 1000 * 60 * 60 * 24; // 24 hours
+
+export const FLOAT_SCALING_FACTOR = 1_000_000_000n;

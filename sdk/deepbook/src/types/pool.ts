@@ -37,3 +37,11 @@ export enum LimitOrderType {
 	// Only proceed if the entire order size can be posted to the order book as maker in the current transaction. Otherwise, abort the entire transaction.
 	POST_OR_ABORT = 3,
 }
+
+// The self-matching prevention mechanism ensures that the matching engine takes measures to avoid unnecessary trades
+// when matching a user's buy/sell order with their own sell/buy order.
+// NOTE: we have only implemented one variant for now
+export enum SelfMatchingPreventionStyle {
+	// Cancel older (resting) order in full. Continue to execute the newer taking order.
+	CANCEL_OLDEST = 0,
+}

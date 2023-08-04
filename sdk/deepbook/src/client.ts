@@ -21,12 +21,11 @@ import {
 	MODULE_CLOB,
 	PACKAGE_ID,
 	NORMALIZED_SUI_COIN_TYPE,
-	FLOAT_SCALING,
 	CREATION_FEE,
 	MODULE_CUSTODIAN,
 	ORDER_DEFAULT_EXPIRATION_IN_MS,
 } from './utils';
-import { LimitOrderType, PaginatedPoolSummary, PoolSummary, UserPosition } from './types/pool';
+import { LimitOrderType, PaginatedPoolSummary, PoolSummary, SelfMatchingPreventionStyle, UserPosition } from './types/pool';
 import { Coin } from '@mysten/sui.js';
 
 const DUMMY_ADDRESS = normalizeSuiAddress('0x0');
@@ -57,14 +56,14 @@ export class DeepBookClient {
 	 * @description: Create pool for trading pair
 	 * @param baseAssetType Full coin type of the base asset, eg: "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::wbtc::WBTC"
 	 * @param quoteAssetType Full coin type of quote asset, eg: "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::usdt::USDT"
-	 * @param tickSize Minimal Price Change Accuracy of this pool, eg: 10000000
-	 * @param lotSize Minimal Lot Change Accuracy of this pool, eg: 10000
+	 * @param tickSize Minimal Price Change Accuracy of this pool, eg: 10000000. The number must be an integer float scaled by `FLOAT_SCALING_FACTOR`.
+	 * @param lotSize Minimal Lot Change Accuracy of this pool, eg: 10000.
 	 */
 	createPool(
 		baseAssetType: string,
 		quoteAssetType: string,
-		tickSize: number,
-		lotSize: number,
+		tickSize: bigint,
+		lotSize: bigint,
 	): TransactionBlock {
 		const txb = new TransactionBlock();
 		// create a pool with CREATION_FEE
@@ -81,18 +80,18 @@ export class DeepBookClient {
 	 * @description: Create pool for trading pair
 	 * @param baseAssetType Full coin type of the base asset, eg: "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::wbtc::WBTC"
 	 * @param quoteAssetType Full coin type of quote asset, eg: "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::usdt::USDT"
-	 * @param tickSize Minimal Price Change Accuracy of this pool, eg: 10000000
-	 * @param lotSize Minimal Lot Change Accuracy of this pool, eg: 10000
-	 * @param takerFeeRate Customized taker fee rate, 10^9 scaling, Taker_fee_rate of 0.25% should be 2_500_000 for example
-	 * @param makerRebateRate Customized maker rebate rate, 10^9 scaling,  should be less than or equal to the taker_rebate_rate
+	 * @param tickSize Minimal Price Change Accuracy of this pool, eg: 10000000. The number must be an interger float scaled by `FLOAT_SCALING_FACTOR`.
+	 * @param lotSize Minimal Lot Change Accuracy of this pool, eg: 10000. 
+	 * @param takerFeeRate Customized taker fee rate, float scaled by `FLOAT_SCALING_FACTOR`, Taker_fee_rate of 0.25% should be 2_500_000 for example
+	 * @param makerRebateRate Customized maker rebate rate, float scaled by `FLOAT_SCALING_FACTOR`,  should be less than or equal to the taker_rebate_rate
 	 */
 	createCustomizedPool(
 		baseAssetType: string,
 		quoteAssetType: string,
-		tickSize: number,
-		lotSize: number,
-		takerFeeRate: number,
-		makerRebateRate: number,
+		tickSize: bigint,
+		lotSize: bigint,
+		takerFeeRate: bigint,
+		makerRebateRate: bigint,
 	): TransactionBlock {
 		const txb = new TransactionBlock();
 		// create a pool with CREATION_FEE
@@ -155,7 +154,7 @@ export class DeepBookClient {
 	async deposit(
 		poolId: string,
 		coinId: string | undefined = undefined,
-		quantity: bigint | number | undefined = undefined,
+		quantity: bigint | undefined = undefined,
 	): Promise<TransactionBlock> {
 		const txb = new TransactionBlock();
 
@@ -196,7 +195,7 @@ export class DeepBookClient {
 	async withdraw(
 		poolId: string,
 		// TODO: implement withdraw all
-		quantity: bigint | number,
+		quantity: bigint,
 		assetType: 'Base' | 'Quote',
 		recipientAddress: string = this.currentAddress,
 	): Promise<TransactionBlock> {
@@ -214,36 +213,36 @@ export class DeepBookClient {
 	/**
 	 * @description: place a limit order
 	 * @param poolId Object id of pool, created after invoking createPool, eg: "0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4"
-	 * @param price: price of the limit order, eg: 180000000
-	 * @param quantity: quantity of the limit order in BASE ASSET, eg: 100000000
+	 * @param price: price of the limit order. The number must be an interger float scaled by `FLOAT_SCALING_FACTOR`.
+	 * @param quantity: quantity of the limit order in BASE ASSET, eg: 100000000. 
 	 * @param isBid: true for buying base with quote, false for selling base for quote
 	 * @param expirationTimestamp: expiration timestamp of the limit order in ms, eg: 1620000000000. If omitted, the order will expire in 1 day
 	 * from the time this function is called(not the time the transaction is executed)
 	 * @param restriction restrictions on limit orders, explain in doc for more details, eg: 0
 	 * @param clientOrderId a client side defined order number for bookkeeping purpose, e.g., "1", "2", etc. If omitted, the sdk will
 	 * assign a increasing number starting from 0. But this number might be duplicated if you are using multiple sdk instances
-	 * @param selfMatchingPrevention: whether to use self matching prevention. If omitted, the default value is true
+	 * @param selfMatchingPrevention: Options for self-match prevention. Right now only support `CANCEL_OLDEST`
 	 */
 	async placeLimitOrder(
 		poolId: string,
-		price: number,
-		quantity: bigint | number,
+		price: bigint,
+		quantity: bigint,
 		isBid: boolean,
-		expirationTimestamp: number | undefined = Date.now() + ORDER_DEFAULT_EXPIRATION_IN_MS,
-		orderType: LimitOrderType = LimitOrderType.NO_RESTRICTION,
-		clientOrderId: string | undefined,
-		selfMatchingPrevention: boolean = true,
+		expirationTimestamp: number = Date.now() + ORDER_DEFAULT_EXPIRATION_IN_MS,
+		restriction: LimitOrderType = LimitOrderType.NO_RESTRICTION,
+		clientOrderId: string | undefined = undefined,
+		selfMatchingPrevention: SelfMatchingPreventionStyle = SelfMatchingPreventionStyle.CANCEL_OLDEST,
 	): Promise<TransactionBlock> {
 		const txb = new TransactionBlock();
 		const args = [
 			txb.object(poolId),
 			txb.pure(clientOrderId ?? this.#nextClientOrderId()),
-			txb.pure(Math.floor(price * FLOAT_SCALING)), // to avoid float number
+			txb.pure(price),
 			txb.pure(quantity),
 			txb.pure(selfMatchingPrevention),
 			txb.pure(isBid),
 			txb.pure(expirationTimestamp),
-			txb.pure(orderType),
+			txb.pure(restriction),
 			txb.object(SUI_CLOCK_OBJECT_ID),
 			txb.object(this.#checkAccountCap()),
 		];
@@ -268,7 +267,7 @@ export class DeepBookClient {
 	 */
 	async placeMarketOrder(
 		poolId: string,
-		quantity: bigint | number,
+		quantity: bigint,
 		isBid: boolean,
 		baseCoin: string,
 		quoteCoin: string,
@@ -300,7 +299,7 @@ export class DeepBookClient {
 	 * @description: swap exact quote for base
 	 * @param poolId Object id of pool, created after invoking createPool, eg: "0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4"
 	 * @param tokenObjectIn: Object id of the token to swap: eg: "0x6e566fec4c388eeb78a7dab832c9f0212eb2ac7e8699500e203def5b41b9c70d"
-	 * @param amountIn: amount of token to buy or sell, eg: 10000000
+	 * @param amountIn: amount of token to buy or sell, eg: 10000000. 
 	 * @param currentAddress: current user address, eg: "0xbddc9d4961b46a130c2e1f38585bbc6fa8077ce54bcb206b26874ac08d607966"
 	 * @param clientOrderId a client side defined order id for bookkeeping purpose, eg: "1" , "2", ... If omitted, the sdk will
 	 * assign a increasing number starting from 0. But this number might be duplicated if you are using multiple sdk instances
@@ -308,7 +307,7 @@ export class DeepBookClient {
 	async swapExactQuoteForBase(
 		poolId: string,
 		tokenObjectIn: string,
-		amountIn: bigint | number,
+		amountIn: bigint,
 		currentAddress: string,
 		clientOrderId: string | undefined = undefined,
 	): Promise<TransactionBlock> {
@@ -342,7 +341,7 @@ export class DeepBookClient {
 	async swapExactBaseForQuote(
 		poolId: string,
 		tokenObjectIn: string,
-		amountIn: bigint | number,
+		amountIn: bigint,
 		currentAddress: string,
 		clientOrderId: string | undefined = undefined,
 	): Promise<TransactionBlock> {
@@ -523,7 +522,6 @@ export class DeepBookClient {
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::get_order_status`,
 			arguments: [txb.object(poolId), txb.object(orderId), txb.object(cap)],
 		});
-		txb.setSender(this.currentAddress);
 		return await this.suiClient.devInspectTransactionBlock({
 			transactionBlock: txb,
 			sender: this.currentAddress,
@@ -548,7 +546,6 @@ export class DeepBookClient {
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::account_balance`,
 			arguments: [txb.object(normalizeSuiObjectId(poolId)), txb.object(cap)],
 		});
-		txb.setSender(this.currentAddress);
 		const [availableBaseAmount, lockedBaseAmount, availableQuoteAmount, lockedQuoteAmount] = (
 			await this.suiClient.devInspectTransactionBlock({
 				transactionBlock: txb,
@@ -581,7 +578,6 @@ export class DeepBookClient {
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::list_open_orders`,
 			arguments: [txb.object(poolId), txb.object(cap)],
 		});
-		txb.setSender(this.currentAddress);
 
 		return await this.suiClient.devInspectTransactionBlock({
 			transactionBlock: txb,

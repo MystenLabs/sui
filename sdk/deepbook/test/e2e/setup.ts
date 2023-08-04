@@ -8,6 +8,7 @@ import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { retry } from 'ts-retry-promise';
 import { FaucetRateLimitError, getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
 import {
+	DevInspectResults,
 	SuiClient,
 	SuiObjectChangeCreated,
 	SuiObjectChangePublished,
@@ -17,13 +18,14 @@ import {
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { PoolSummary } from '../../src/types/pool';
 import { DeepBookClient } from '../../src';
-import { NORMALIZED_SUI_COIN_TYPE } from '../../src/utils';
+import { FLOAT_SCALING_FACTOR, NORMALIZED_SUI_COIN_TYPE } from '../../src/utils';
 
 const DEFAULT_FAUCET_URL = import.meta.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');
 const DEFAULT_FULLNODE_URL = import.meta.env.VITE_FULLNODE_URL ?? getFullnodeUrl('localnet');
 const SUI_BIN = import.meta.env.VITE_SUI_BIN ?? 'cargo run --bin sui';
-const DEFAULT_TICK_SIZE = 10000000;
-const DEFAULT_LOT_SIZE = 10000;
+
+export const DEFAULT_TICK_SIZE = 1n * FLOAT_SCALING_FACTOR;
+export const DEFAULT_LOT_SIZE = 1n;
 
 export class TestToolbox {
 	keypair: Ed25519Keypair;
@@ -144,26 +146,14 @@ export async function depositAsset(
 	toolbox: TestToolbox,
 	poolId: string,
 	accountCap: string,
-	amount: number,
+	amount: bigint,
 ): Promise<void> {
 	const deepbook = new DeepBookClient(toolbox.client, accountCap);
 	const txb = await deepbook.deposit(poolId, undefined, amount);
 	await executeTransactionBlock(toolbox, txb);
 }
 
-export async function withdrawAsset(
-	toolbox: TestToolbox,
-	poolId: string,
-	accountCap: string,
-	amount: number,
-	assetType: 'Base' | 'Quote' = 'Base',
-): Promise<void> {
-	const deepbook = new DeepBookClient(toolbox.client, accountCap, toolbox.address());
-	const txb = await deepbook.withdraw(poolId, amount, assetType);
-	await executeTransactionBlock(toolbox, txb);
-}
-
-async function executeTransactionBlock(
+export async function executeTransactionBlock(
 	toolbox: TestToolbox,
 	txb: TransactionBlock,
 ): Promise<SuiTransactionBlockResponse> {
@@ -178,4 +168,14 @@ async function executeTransactionBlock(
 	});
 	expect(resp.effects?.status.status).toEqual('success');
 	return resp;
+}
+
+export async function devInspectTransactionBlock(
+	toolbox: TestToolbox,
+	txb: TransactionBlock,
+): Promise<DevInspectResults> {
+	return await toolbox.client.devInspectTransactionBlock({
+		transactionBlock: txb,
+		sender: toolbox.address(),
+	});
 }
