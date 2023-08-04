@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::AuthorityName;
-use tracing::info;
+use tracing::{debug, info};
 
 /// Updates list of authorities that are deemed to have low reputation scores by consensus
 /// these may be lagging behind the network, byzantine, or not reliably participating for any reason.
@@ -87,7 +87,7 @@ fn update_low_scoring_authorities_v2(
     metrics: &Arc<AuthorityMetrics>,
     protocol_config: &ProtocolConfig,
 ) {
-    assert!((0..=33).contains(&protocol_config.consensus_bad_nodes_stake_threshold()), "The bad_nodes_stake_threshold should be in range [0 - 33], out of bounds parameter detected");
+    assert!((0..=33).contains(&protocol_config.consensus_bad_nodes_stake_threshold()), "The bad_nodes_stake_threshold should be in range [0 - 33], out of bounds parameter detected {}", protocol_config.consensus_bad_nodes_stake_threshold());
 
     if !reputation_scores.final_of_schedule {
         return;
@@ -98,7 +98,7 @@ fn update_low_scoring_authorities_v2(
     let scores_per_authority_order_asc: Vec<(AuthorityName, u64, Stake)> = reputation_scores
         .authorities_by_score_desc()
         .iter()
-        .rev() // we revert so we get them in asc order
+        .rev() // we reverse so we get them in asc order
         .map(|(authority_id, score)| {
             let authority = committee.authority(authority_id).unwrap();
             let name: AuthorityName = authority.protocol_key().into();
@@ -123,7 +123,7 @@ fn update_low_scoring_authorities_v2(
         };
 
         if let Some(hostname) = authority_names_to_hostnames.get(&authority_name) {
-            info!(
+            debug!(
                 "authority {} has score {}, is low scoring: {}",
                 hostname, score, included
             );
@@ -165,7 +165,7 @@ fn update_low_scoring_authorities_v1(
 
             // report the scores
             if let Some(hostname) = authority_names_to_hostnames.get(&name) {
-                info!("authority {} has score {}", hostname, score);
+                debug!("authority {} has score {}", hostname, score);
 
                 metrics
                     .consensus_handler_scores
@@ -213,7 +213,7 @@ fn update_low_scoring_authorities_v1(
 
     // report new scores
     let len_low_scoring = low_scoring.len();
-    info!("{:?} low scoring authorities calculated", len_low_scoring);
+    debug!("{:?} low scoring authorities calculated", len_low_scoring);
 
     // Do not disable the scoring mechanism when more than f validators are excluded. Just keep
     // marking low scoring authorities up to f.
@@ -236,7 +236,7 @@ fn update_low_scoring_authorities_v1(
             false
         };
         if let Some(hostname) = authority_names_to_hostnames.get(authority) {
-            info!(
+            debug!(
                 "low scoring authority {} has score {}, included: {}",
                 hostname, score, included
             );
