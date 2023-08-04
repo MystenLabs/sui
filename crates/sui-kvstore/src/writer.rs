@@ -6,9 +6,11 @@ use anyhow::{anyhow, Result};
 use mysten_metrics::spawn_monitored_task;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::collections::HashSet;
+use std::iter::repeat;
 use std::time::Duration;
 use sui_config::node::TransactionKeyValueStoreWriteConfig;
 use sui_core::storage::RocksDbStore;
+use sui_storage::http_key_value_store::TaggedKey;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::storage::ReadStore;
@@ -160,6 +162,33 @@ where
                     .await?;
                 client.multi_set(KVTable::Effects, effects).await?;
                 client.multi_set(KVTable::Events, events).await?;
+
+                let serialized_checkpoint_number = bcs::to_bytes(
+                    &TaggedKey::CheckpointSequenceNumber(checkpoint_summary.sequence_number),
+                )?;
+                client
+                    .multi_set(
+                        KVTable::CheckpointSummary,
+                        [
+                            serialized_checkpoint_number.clone(),
+                            checkpoint_summary.digest().into_inner().to_vec(),
+                        ]
+                        .into_iter()
+                        .zip(repeat(checkpoint_summary.inner())),
+                    )
+                    .await?;
+                for key in [
+                    serialized_checkpoint_number,
+                    checkpoint_summary.content_digest.into_inner().to_vec(),
+                ] {
+                    client
+                        .upload_blob(
+                            KVTable::CheckpointContent,
+                            key,
+                            contents.checkpoint_contents(),
+                        )
+                        .await?;
+                }
                 progress_sender.send(checkpoint_number + shard_id).await?;
                 checkpoint_number += config.concurrency as u64;
                 continue;
