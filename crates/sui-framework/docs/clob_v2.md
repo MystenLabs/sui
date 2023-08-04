@@ -2107,7 +2107,7 @@ Returns the Coin<BaseAsset>, Coin<QuoteAsset> and the base asset balance.
         });
     };
 
-    <b>return</b> (base_balance_left, quote_balance_filled)
+    (base_balance_left, quote_balance_filled)
 }
 </code></pre>
 
@@ -2482,7 +2482,7 @@ So please check that boolean value first before using the order id.
 
 
 <pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_order_is_bid">order_is_bid</a>(order_id: u64): bool {
-    <b>return</b> order_id &lt; <a href="clob_v2.md#0xdee9_clob_v2_MIN_ASK_ORDER_ID">MIN_ASK_ORDER_ID</a>
+    order_id &lt; <a href="clob_v2.md#0xdee9_clob_v2_MIN_ASK_ORDER_ID">MIN_ASK_ORDER_ID</a>
 }
 </code></pre>
 
@@ -2823,15 +2823,6 @@ Grouping order_ids like [0, 2, 1, 3] would make it the most gas efficient.
         <a href="clob_v2.md#0xdee9_clob_v2_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, &order);
 
         <b>let</b> canceled_order_event = <a href="clob_v2.md#0xdee9_clob_v2_all_orders_canceled_from_order">all_orders_canceled_from_order</a>&lt;BaseAsset, QuoteAsset&gt;(&order);
-        // <a href="clob_v2.md#0xdee9_clob_v2_AllOrdersCanceledComponent">AllOrdersCanceledComponent</a>&lt;BaseAsset, QuoteAsset&gt; {
-        //     client_order_id: order.client_order_id,
-        //     order_id: order.order_id,
-        //     is_bid: order.is_bid,
-        //     owner: order.owner,
-        //     original_quantity: order.original_quantity,
-        //     base_asset_quantity_canceled: order.quantity,
-        //     price: order.price
-        // };
         <a href="_push_back">vector::push_back</a>(&<b>mut</b> canceled_order_events, canceled_order_event);
 
         i_order = i_order + 1;
@@ -2929,15 +2920,6 @@ and they should correspond to the order IDs one by one.
         // TODO (jian): remove the canceled orders after we ensure market makers <b>update</b>
         <a href="clob_v2.md#0xdee9_clob_v2_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, &order);
         <b>let</b> canceled_order_event = <a href="clob_v2.md#0xdee9_clob_v2_all_orders_canceled_from_order">all_orders_canceled_from_order</a>(&order);
-        // <a href="clob_v2.md#0xdee9_clob_v2_AllOrdersCanceledComponent">AllOrdersCanceledComponent</a>&lt;BaseAsset, QuoteAsset&gt; {
-        //     client_order_id: order.client_order_id,
-        //     order_id: order.order_id,
-        //     is_bid: order.is_bid,
-        //     owner: order.owner,
-        //     original_quantity: order.original_quantity,
-        //     base_asset_quantity_canceled: order.quantity,
-        //     price: order.price
-        // };
 
         <a href="_push_back">vector::push_back</a>(&<b>mut</b> canceled_order_events, canceled_order_event);
         i_order = i_order + 1;
