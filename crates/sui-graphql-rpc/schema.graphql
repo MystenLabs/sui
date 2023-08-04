@@ -715,7 +715,8 @@ type TransactionBlockEffects {
     after: String,
     last: Int,
     before: String,
-  ): TransactionEventConnection
+    filter: EventFilter,
+  ): EventConnection
 
   bcs: Base64
 }
@@ -1143,17 +1144,6 @@ type MoveStructConnection {
 type MoveStructEdge {
   cursor: String
   node: MoveStructDecl!
-}
-
-# TransactionEventConnection
-type TransactionEventConnection {
-  edges: [TransactionEventEdge!]!
-  pageInfo: PageInfo!
-}
-
-type TransactionEventEdge {
-  cursor: String
-  node: Event!
 }
 
 # TransactionBlockConnection
