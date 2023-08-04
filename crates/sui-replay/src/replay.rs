@@ -2019,3 +2019,21 @@ async fn create_epoch_store(
         ChainIdentifier::from(CheckpointDigest::random()),
     )
 }
+
+// We can add a hack like this in the object fetching code to make sure we load local
+// custom framework packages.
+// if *object_id == DEEPBOOK_PACKAGE_ID {
+//    let deepbook = get_custom_deepbook();
+//    return Ok(deepbook);
+// }
+pub fn get_custom_deepbook() -> Object {
+    let package = BuiltInFramework::get_package_by_id(&DEEPBOOK_PACKAGE_ID);
+    info!("Downloaded deepbook custom object");
+    let custom = Object {
+        data: Data::Package(package.genesis_move_package()),
+        owner: Owner::Immutable,
+        previous_transaction: TransactionDigest::ZERO,
+        storage_rebate: 0,
+    };
+    custom
+}
