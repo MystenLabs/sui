@@ -20,7 +20,7 @@ async fn main() {
     // Parse config from json
     let config_json = fs::read_to_string(FILE_PATH)
         .expect("Failed to read config file");
-    let global_config: HashMap<UniqueId, AppConfig> 
+    let global_config: HashMap<UniqueId, ServerConfig> 
         = serde_json::from_str(&config_json).unwrap();   
 
     // Parse command line

@@ -261,6 +261,7 @@ impl SequenceWorkerState {
         (highest_synced_seq, highest_executed_seq)
     }
 
+    // Main loop
     pub async fn run(&mut self, 
         sw_sender: mpsc::Sender<SailfishMessage>,
         mut ew_receiver: mpsc::Receiver<SailfishMessage>,

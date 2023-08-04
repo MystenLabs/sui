@@ -12,10 +12,10 @@ use super::agents::*;
 use super::types::*;
 
 pub struct Server<T: Agent<M>, M: Debug + Message + Send + 'static> {
-    global_config: GlobalConfig,
+    global_config: GlobalConfig,    // global configuration from parsing json
     my_id: UniqueId,
-    agent_type: PhantomData<T>,
-    msg_type: PhantomData<M>
+    agent_type: PhantomData<T>,     // type of agent living on this server
+    msg_type: PhantomData<M>        // type of message used by agent
 }
 
 impl<T: Agent<M>, M: Debug + Message + Send + 'static> Server<T, M> {
@@ -29,7 +29,8 @@ impl<T: Agent<M>, M: Debug + Message + Send + 'static> Server<T, M> {
     }
 
     // Helper function to initialize Agent
-    fn init_agent(id: UniqueId, conf: AppConfig) 
+    // Outputs ingress and egress channels of the Agent
+    fn init_agent(id: UniqueId, conf: ServerConfig) 
     -> (T,
         mpsc::Sender<NetworkMessage<M>>,
         mpsc::Receiver<NetworkMessage<M>>,) 
@@ -51,6 +52,7 @@ impl<T: Agent<M>, M: Debug + Message + Send + 'static> Server<T, M> {
         }
 
         // Initialize Agent and Network Manager
+        // Network manager connects to agent through channels
         let agent_config = self.global_config.get(&self.my_id).unwrap().clone();
         let (mut agent, in_sender, out_receiver) = 
             Self::init_agent(self.my_id, agent_config);
@@ -79,15 +81,16 @@ impl<T: Agent<M>, M: Debug + Message + Send + 'static> Server<T, M> {
  *                                     Network Manager                                   *
  *****************************************************************************************/
 
-// Network Manager spawns and manages TCP connections
-
+// Network Manager spawns and manages TCP connections for the server.
 struct NetworkManager<M: Debug + Message + Send> {
     my_id: UniqueId,
     my_addr: IpAddr,    // listening addr
     my_port: u16,       // listening port
     addr_table: HashMap<UniqueId, (IpAddr, u16)>,
-    application_in: mpsc::Sender<NetworkMessage<M>>,     // incoming messages for server
-    application_out: mpsc::Receiver<NetworkMessage<M>>,  // outgoing messages from server
+    // channel to pipe incoming messages for server
+    application_in: mpsc::Sender<NetworkMessage<M>>,
+    // channel to get outgoing messages from server, to be sent over network
+    application_out: mpsc::Receiver<NetworkMessage<M>>,
 }
 
 impl<M: Debug + Message + Send + 'static> NetworkManager<M> {
@@ -107,6 +110,7 @@ impl<M: Debug + Message + Send + 'static> NetworkManager<M> {
         }
     }
 
+    // Procedure to handle a single TCP connection
     async fn handle_connection(
         my_id:UniqueId,
         socket: TcpStream, 
@@ -221,6 +225,8 @@ impl<M: Debug + Message + Send + 'static> NetworkManager<M> {
                     self.application_in.send(message).await.expect("send failed");
                 }
                 // NetManager from application
+                // TODO: What happens when Agent sends to itself? Spawn a task to stick 
+                // the message back to the Agent ingress channel?
                 Some(message) = self.application_out.recv() => {
                     let dst = message.dst;
                     let out_chan = routing_table.get(&dst).unwrap().clone();

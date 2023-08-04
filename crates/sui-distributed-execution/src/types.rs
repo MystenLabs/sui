@@ -14,14 +14,14 @@ use sui_types::{
 pub type UniqueId = u16;
 
 #[derive(Clone, Deserialize, Debug)]
-pub struct AppConfig {
+pub struct ServerConfig {
     pub kind: String,
     pub ip_addr: IpAddr,
     pub port: u16,
     pub attrs: HashMap<String, String>,
 }
 
-pub type GlobalConfig = HashMap<UniqueId, AppConfig>;
+pub type GlobalConfig = HashMap<UniqueId, ServerConfig>;
 
 pub trait Message {
     fn serialize(&self) -> String;
@@ -45,6 +45,7 @@ pub struct NetworkMessage<M: Debug + Message> {
     pub payload: M,
 }
 
+// TODO: Maybe serialize directly to bytes, rather than String and then to bytes
 impl<M: Debug + Message> NetworkMessage<M> {
     pub fn serialize(&self) -> String {
         format!("{}\t{}\t{}\t\n", self.src, self.dst, self.payload.serialize())
