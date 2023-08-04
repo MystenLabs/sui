@@ -44,6 +44,10 @@ export function toParsedSignaturePubkeyPair(
 			throw new Error('legacy multisig viewing unsupported');
 		}
 	}
+	if (signatureScheme === 'Zk') {
+		// TODO
+		throw new Error('Zk not ready yet');
+	}
 
 	const SIGNATURE_SCHEME_TO_PUBLIC_KEY = {
 		ED25519: Ed25519PublicKey,

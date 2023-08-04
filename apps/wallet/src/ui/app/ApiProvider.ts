@@ -1,9 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SentryHttpTransport } from '@mysten/core';
-
-import { SuiClient, SuiHTTPTransport } from '@mysten/sui.js/client';
+import { type SuiClient } from '@mysten/sui.js/client';
 import { type WalletSigner } from './WalletSigner';
 import { BackgroundServiceSigner } from './background-client/BackgroundServiceSigner';
 import { queryClient } from './helpers/queryClient';
@@ -11,6 +9,7 @@ import { type SerializedUIAccount } from '_src/background/accounts/Account';
 import { AccountType, type SerializedAccount } from '_src/background/keyring/Account';
 import { API_ENV } from '_src/shared/api-env';
 
+import { getSuiClient } from '_src/shared/sui-client';
 import type { BackgroundClient } from './background-client';
 import type { SignerWithProvider } from '@mysten/sui.js';
 
@@ -27,14 +26,6 @@ export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
 	[API_ENV.mainnet]: { name: 'Mainnet', env: API_ENV.mainnet },
 };
 
-export const ENV_TO_API: Record<API_ENV, string | null> = {
-	[API_ENV.customRPC]: null,
-	[API_ENV.local]: process.env.API_ENDPOINT_LOCAL_FULLNODE || '',
-	[API_ENV.devNet]: process.env.API_ENDPOINT_DEV_NET_FULLNODE || '',
-	[API_ENV.testNet]: process.env.API_ENDPOINT_TEST_NET_FULLNODE || '',
-	[API_ENV.mainnet]: process.env.API_ENDPOINT_MAINNET_FULLNODE || '',
-};
-
 function getDefaultApiEnv() {
 	const apiEnv = process.env.API_ENV;
 	if (apiEnv && !Object.keys(API_ENV).includes(apiEnv)) {
@@ -43,16 +34,7 @@ function getDefaultApiEnv() {
 	return apiEnv ? API_ENV[apiEnv as keyof typeof API_ENV] : API_ENV.devNet;
 }
 
-function getDefaultAPI(env: API_ENV) {
-	const apiEndpoint = ENV_TO_API[env];
-	if (!apiEndpoint || apiEndpoint === '') {
-		throw new Error(`API endpoint not found for API_ENV ${env}`);
-	}
-	return apiEndpoint;
-}
-
 export const DEFAULT_API_ENV = getDefaultApiEnv();
-const SENTRY_MONITORED_ENVS = [API_ENV.mainnet];
 
 type NetworkTypes = keyof typeof API_ENV;
 
@@ -65,13 +47,11 @@ export default class ApiProvider {
 	private _signerByAddress: Map<string, SignerWithProvider> = new Map();
 
 	public setNewJsonRpcProvider(apiEnv: API_ENV = DEFAULT_API_ENV, customRPC?: string | null) {
-		const connection = customRPC ? customRPC : getDefaultAPI(apiEnv);
-		this._apiFullNodeProvider = new SuiClient({
-			transport:
-				!customRPC && SENTRY_MONITORED_ENVS.includes(apiEnv)
-					? new SentryHttpTransport(connection)
-					: new SuiHTTPTransport({ url: connection }),
-		});
+		this._apiFullNodeProvider = getSuiClient(
+			apiEnv === API_ENV.customRPC
+				? { env: apiEnv, customRpcUrl: customRPC || '' }
+				: { env: apiEnv, customRpcUrl: null },
+		);
 
 		this._signerByAddress.clear();
 
@@ -99,7 +79,7 @@ export default class ApiProvider {
 			this.setNewJsonRpcProvider();
 		}
 		if (
-			[AccountType.DERIVED, AccountType.IMPORTED, 'mnemonic-derived', 'imported'].includes(
+			[AccountType.DERIVED, AccountType.IMPORTED, 'mnemonic-derived', 'imported', 'zk'].includes(
 				account.type,
 			)
 		) {

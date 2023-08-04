@@ -46,7 +46,7 @@ import type { GetPermissionRequests, PermissionResponse } from '_payloads/permis
 import type { DisconnectApp } from '_payloads/permissions/DisconnectApp';
 import type { GetTransactionRequests } from '_payloads/transactions/ui/GetTransactionRequests';
 import type { TransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
-import type { NetworkEnvType } from '_src/background/NetworkEnv';
+import type { NetworkEnvType } from '_src/shared/api-env';
 import type { AppDispatch } from '_store';
 
 const entitiesToClientQueryKeys: Record<UIAccessibleEntityType, QueryKey> = {

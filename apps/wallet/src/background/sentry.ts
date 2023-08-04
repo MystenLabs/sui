@@ -6,6 +6,7 @@ import { growthbook } from '_src/shared/experimentation/features';
 import { getSentryConfig } from '_src/shared/sentry-config';
 
 export function initSentry() {
+	Sentry.addTracingExtensions();
 	Sentry.init(
 		getSentryConfig({
 			tracesSampler: () => {

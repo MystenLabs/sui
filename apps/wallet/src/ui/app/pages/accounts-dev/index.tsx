@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Popover } from '@headlessui/react';
 import { type ExportedKeypair } from '@mysten/sui.js/cryptography';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { toB64 } from '@mysten/sui.js/utils';
@@ -11,6 +12,9 @@ import { Toaster, toast } from 'react-hot-toast';
 import { type BackgroundClient } from '../../background-client';
 import { ConnectLedgerModal } from '../../components/ledger/ConnectLedgerModal';
 import LoadingIndicator from '../../components/loading/LoadingIndicator';
+import Logo from '../../components/logo';
+import NetworkSelector from '../../components/network-selector';
+import { useAppSelector } from '../../hooks';
 import { useAccountSources } from '../../hooks/accounts-v2/useAccountSources';
 import { useAccounts } from '../../hooks/accounts-v2/useAccounts';
 import { useSigner } from '../../hooks/accounts-v2/useSigner';
@@ -27,6 +31,7 @@ import { type AccountType, type SerializedUIAccount } from '_src/background/acco
 import { isLedgerAccountSerializedUI } from '_src/background/accounts/LedgerAccount';
 import { isMnemonicSerializedUiAccount } from '_src/background/accounts/MnemonicAccount';
 import { isQredoAccountSerializedUI } from '_src/background/accounts/QredoAccount';
+import { type ZkProvider } from '_src/background/accounts/zk/providers';
 import { entropyToSerialized, mnemonicToEntropy } from '_src/shared/utils/bip39';
 
 export const testPassNewAccounts = '61916a448d7885641';
@@ -37,10 +42,11 @@ const mnemonicFirstKeyPair: ExportedKeypair = {
 	privateKey: toB64(hexToBytes('5051bc918ec4991c62969d6cd0f1edaabfbe5244e509d7a96f39fe52e76cf54f')),
 };
 const typeOrder: Record<AccountType, number> = {
-	'mnemonic-derived': 0,
-	imported: 1,
-	ledger: 2,
-	qredo: 3,
+	zk: 0,
+	'mnemonic-derived': 1,
+	imported: 2,
+	ledger: 3,
+	qredo: 4,
 };
 
 /**
@@ -67,11 +73,25 @@ export function AccountsDev() {
 				keyPair,
 			}),
 	});
+	const zkCreateAccount = useMutation({
+		mutationKey: ['accounts v2 create zk'],
+		mutationFn: async ({ provider }: { provider: ZkProvider }) =>
+			backgroundClient.createAccounts({ type: 'zk', provider }),
+	});
 	const [isConnectLedgerModalVisible, setIsConnectLedgerModalVisible] = useState(false);
 	const [isImportLedgerModalVisible, setIsImportLedgerModalVisible] = useState(false);
+	const networkName = useAppSelector(({ app: { apiEnv } }) => apiEnv);
 	return (
 		<>
-			<div className="overflow-auto h-[100vh] w-[100vw] flex flex-col items-center p-5">
+			<div className="overflow-auto h-[100vh] w-[100vw] flex flex-col items-center p-5 gap-3">
+				<Popover className="relative self-stretch flex justify-center">
+					<Popover.Button as="div">
+						<Logo networkName={networkName} />
+					</Popover.Button>
+					<Popover.Panel className="absolute z-10 top-[100%] shadow-lg">
+						<NetworkSelector />
+					</Popover.Panel>
+				</Popover>
 				<div className="flex flex-col gap-10">
 					<div className="grid grid-cols-2 gap-2">
 						<Button
@@ -105,6 +125,11 @@ export function AccountsDev() {
 						<Button
 							text="Connect Ledger account"
 							onClick={() => setIsConnectLedgerModalVisible(true)}
+						/>
+						<Button
+							text="Connect Google Account"
+							loading={zkCreateAccount.isLoading}
+							onClick={() => zkCreateAccount.mutate({ provider: 'Google' })}
 						/>
 					</div>
 					{accounts.isLoading ? (

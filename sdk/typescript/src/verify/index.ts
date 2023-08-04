@@ -67,6 +67,9 @@ function parseSignature(signature: SerializedSignature) {
 			publicKey: new MultiSigPublicKey(parsedSignature.multisig.multisig_pk),
 		};
 	}
+	if (parsedSignature.signatureScheme === 'Zk') {
+		throw new Error('Zk not ready yet');
+	}
 
 	const publicKey = publicKeyFromRawBytes(
 		parsedSignature.signatureScheme,

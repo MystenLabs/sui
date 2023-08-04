@@ -54,7 +54,7 @@ import type {
 	SignTransactionRequest,
 	SignTransactionResponse,
 } from '_payloads/transactions';
-import type { NetworkEnvType } from '_src/background/NetworkEnv';
+import type { NetworkEnvType } from '_src/shared/api-env';
 
 type WalletEventsMap = {
 	[E in keyof StandardEventsListeners]: Parameters<StandardEventsListeners[E]>[0];
