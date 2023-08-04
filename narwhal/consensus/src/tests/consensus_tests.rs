@@ -12,7 +12,7 @@ use std::sync::Arc;
 use storage::{ConsensusStore, NodeStorage};
 use sui_protocol_config::ProtocolConfig;
 use telemetry_subscribers::TelemetryGuards;
-use test_utils::{latest_protocol_version, mock_certificate};
+use test_utils::{get_protocol_config, latest_protocol_version, mock_certificate};
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::sync::watch;
 
@@ -42,12 +42,11 @@ async fn test_consensus_recovery_with_bullshark() {
 
     // TODO: remove once the new leader schedule has been enabled.
     // Run with default config settings where the new leader schedule is disabled
-    let config: ProtocolConfig = latest_protocol_version();
+    let config: ProtocolConfig = get_protocol_config(19);
     test_consensus_recovery_with_bullshark_with_config(config).await;
 
     // Run with the new leader election schedule enabled
     let mut config: ProtocolConfig = latest_protocol_version();
-    config.set_narwhal_new_leader_election_schedule(true);
     config.set_consensus_bad_nodes_stake_threshold(33);
     test_consensus_recovery_with_bullshark_with_config(config).await;
 }
