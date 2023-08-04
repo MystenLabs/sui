@@ -1,0 +1,79 @@
+{
+	"name": "@mysten/dapp-kit",
+	"private": true,
+	"author": "Mysten Labs <build@mystenlabs.com>",
+	"description": "A collection of React hooks for querying and interacting with the Sui blockchain.",
+	"homepage": "https://sui-typescript-docs.vercel.app",
+	"version": "0.0.0",
+	"license": "Apache-2.0",
+	"files": [
+		"CHANGELOG.md",
+		"LICENSE",
+		"README.md",
+		"dist",
+		"src"
+	],
+	"type": "commonjs",
+	"main": "./dist/cjs/index.js",
+	"module": "./dist/esm/index.js",
+	"types": "./dist/cjs/index.d.ts",
+	"exports": {
+		".": {
+			"source": "./src/index.ts",
+			"import": "./dist/esm/index.js",
+			"require": "./dist/cjs/index.js"
+		}
+	},
+	"scripts": {
+		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
+		"build": "build-package",
+		"test": "pnpm test:typecheck && pnpm vitest",
+		"test:typecheck": "tsc -p ./test",
+		"prepublishOnly": "pnpm build",
+		"size": "size-limit",
+		"analyze": "size-limit --why",
+		"prettier:check": "prettier -c --ignore-unknown .",
+		"prettier:fix": "prettier -w --ignore-unknown .",
+		"eslint:check": "eslint --max-warnings=0 .",
+		"eslint:fix": "pnpm run eslint:check --fix",
+		"lint": "pnpm run eslint:check && pnpm run prettier:check",
+		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
+	},
+	"bugs": {
+		"url": "https://github.com/MystenLabs/sui/issues/new"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"size-limit": [
+		{
+			"path": "dist/esm/index.js",
+			"limit": "100 KB"
+		},
+		{
+			"path": "dist/cjs/index.js",
+			"limit": "100 KB"
+		}
+	],
+	"devDependencies": {
+		"@mysten/build-scripts": "workspace:*",
+		"@size-limit/preset-small-lib": "^8.2.6",
+		"@testing-library/react": "^14.0.0",
+		"@types/react": "^18.2.15",
+		"happy-dom": "^10.5.1",
+		"react": "^18.2.0",
+		"react-dom": "^18.2.0",
+		"size-limit": "^8.2.6",
+		"tsx": "^3.12.7",
+		"typescript": "^5.1.6",
+		"vite-tsconfig-paths": "^4.2.0",
+		"vitest": "^0.33.0"
+	},
+	"dependencies": {
+		"@mysten/sui.js": "workspace:*"
+	},
+	"peerDependencies": {
+		"react": "*"
+	},
+	"sideEffects": false
+}
