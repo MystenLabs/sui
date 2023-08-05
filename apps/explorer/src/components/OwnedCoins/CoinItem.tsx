@@ -14,7 +14,7 @@ type CoinItemProps = {
 export default function CoinItem({ coin }: CoinItemProps) {
 	const [formattedBalance, symbol] = useFormatCoin(coin.balance, coin.coinType);
 	return (
-		<div className="flex items-center justify-between rounded-lg bg-white px-3 py-2 shadow-panel">
+		<div className="flex min-w-50 max-w-80 items-center justify-between rounded-lg bg-white px-3 py-2 shadow-panel">
 			<ObjectLink objectId={coin.coinObjectId} />
 			<div className="col-span-3 inline-flex items-center gap-1">
 				<Text color="steel-darker" variant="bodySmall/medium">

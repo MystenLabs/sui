@@ -76,9 +76,9 @@ export function PageHeader({ title, subtitle, type, before, error, loading }: Pa
 								{loading ? (
 									<Placeholder rounded="lg" width="540px" height="20px" />
 								) : (
-									<Heading variant="heading4/semibold" color="gray-75">
+									<Text variant="body/medium" color="gray-75">
 										{subtitle}
-									</Heading>
+									</Text>
 								)}
 							</div>
 						)}
