@@ -16,7 +16,7 @@ import {
 	getFullnodeUrl,
 } from '@mysten/sui.js/client';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { PoolSummary } from '../../src/types/pool';
+import { PoolSummary } from '../../src/types';
 import { DeepBookClient } from '../../src';
 import { FLOAT_SCALING_FACTOR, NORMALIZED_SUI_COIN_TYPE } from '../../src/utils';
 
@@ -118,8 +118,8 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 export async function setupPool(toolbox: TestToolbox): Promise<PoolSummary> {
 	const packagePath = __dirname + '/./data/test_coin';
 	const { packageId } = await publishPackage(packagePath, toolbox);
-	const baseAsset = NORMALIZED_SUI_COIN_TYPE;
-	const quoteAsset = `${packageId}::test::TEST`;
+	const baseAsset = `${packageId}::test::TEST`;
+	const quoteAsset = NORMALIZED_SUI_COIN_TYPE;
 	const deepbook = new DeepBookClient(toolbox.client);
 	const txb = deepbook.createPool(baseAsset, quoteAsset, DEFAULT_TICK_SIZE, DEFAULT_LOT_SIZE);
 	const resp = await executeTransactionBlock(toolbox, txb);

@@ -12,9 +12,8 @@ import {
 	executeTransactionBlock,
 	DEFAULT_TICK_SIZE,
 	DEFAULT_LOT_SIZE,
-	devInspectTransactionBlock,
 } from './setup';
-import { PoolSummary } from '../../src/types/pool';
+import { PoolSummary } from '../../src/types';
 import { DeepBookClient } from '../../src';
 
 const DEPOSIT_AMOUNT = 100n;
@@ -42,33 +41,49 @@ describe('Interacting with the pool', () => {
 		expect(accountCapId).toBeDefined();
 	});
 
-	it('test deposit base asset', async () => {
+	it('test deposit quote asset', async () => {
 		expect(accountCapId).toBeDefined();
 		const deepbook = new DeepBookClient(toolbox.client, accountCapId);
 		const resp = await deepbook.getUserPosition(pool.poolId);
-		expect(resp.availableBaseAmount).toBe(BigInt(DEPOSIT_AMOUNT));
+		expect(resp.availableQuoteAmount).toBe(BigInt(DEPOSIT_AMOUNT));
 	});
 
-	it('test withdraw base asset', async () => {
+	it('test withdraw quote asset', async () => {
 		expect(accountCapId).toBeDefined();
 		const deepbook = new DeepBookClient(toolbox.client, accountCapId, toolbox.address());
-		const txb = await deepbook.withdraw(pool.poolId, DEPOSIT_AMOUNT, 'Base');
+		const txb = await deepbook.withdraw(pool.poolId, DEPOSIT_AMOUNT, 'Quote');
 		await executeTransactionBlock(toolbox, txb);
 		const resp = await deepbook.getUserPosition(pool.poolId);
-		expect(resp.availableBaseAmount).toBe(0n);
+		expect(resp.availableQuoteAmount).toBe(0n);
 	});
 
 	it('test place limit order', async () => {
 		expect(accountCapId).toBeDefined();
 		const deepbook = new DeepBookClient(toolbox.client, accountCapId);
-		await depositAsset(toolbox, pool.poolId, accountCapId, DEPOSIT_AMOUNT);
-		const resp = await deepbook.getUserPosition(pool.poolId);
-		expect(resp.availableBaseAmount).toBe(BigInt(DEPOSIT_AMOUNT));
+		const depositAmount = DEPOSIT_AMOUNT;
+		await depositAsset(toolbox, pool.poolId, accountCapId, depositAmount);
+		const position = await deepbook.getUserPosition(pool.poolId);
+		expect(position.availableQuoteAmount).toBe(BigInt(depositAmount));
 
-		const txb = await deepbook.placeLimitOrder(pool.poolId, 1n * DEFAULT_TICK_SIZE, 1n * DEFAULT_LOT_SIZE, true);
-		//await executeTransactionBlock(toolbox, txb);
+		const price = 1n;
+		const amount = 1n * DEFAULT_LOT_SIZE;
+		const totalLocked = price * amount;
+		const txb = await deepbook.placeLimitOrder(
+			pool.poolId,
+			price * DEFAULT_TICK_SIZE,
+			amount,
+			true,
+		);
+		await executeTransactionBlock(toolbox, txb);
 
-		const resp1 = await devInspectTransactionBlock(toolbox, txb);
-		console.log(resp1);
+		const position2 = await deepbook.getUserPosition(pool.poolId);
+		expect(position2.availableQuoteAmount).toBe(depositAmount - totalLocked);
+		expect(position2.lockedQuoteAmount).toBe(totalLocked);
+
+		const openOrders = await deepbook.listOpenOrders(pool.poolId);
+		expect(openOrders.length).toBe(1);
+		const { price: oprice, originalQuantity } = openOrders[0];
+		expect(BigInt(oprice)).toBe(price * DEFAULT_TICK_SIZE);
+		expect(BigInt(originalQuantity)).toBe(amount);
 	});
 });

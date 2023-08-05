@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs } from '@mysten/sui.js/bcs';
 import {
 	DevInspectResults,
 	OrderArguments,
@@ -25,7 +24,15 @@ import {
 	MODULE_CUSTODIAN,
 	ORDER_DEFAULT_EXPIRATION_IN_MS,
 } from './utils';
-import { LimitOrderType, PaginatedPoolSummary, PoolSummary, SelfMatchingPreventionStyle, UserPosition } from './types/pool';
+import {
+	LimitOrderType,
+	Order,
+	PaginatedPoolSummary,
+	PoolSummary,
+	SelfMatchingPreventionStyle,
+	UserPosition,
+	bcs,
+} from './types';
 import { Coin } from '@mysten/sui.js';
 
 const DUMMY_ADDRESS = normalizeSuiAddress('0x0');
@@ -81,7 +88,7 @@ export class DeepBookClient {
 	 * @param baseAssetType Full coin type of the base asset, eg: "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::wbtc::WBTC"
 	 * @param quoteAssetType Full coin type of quote asset, eg: "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::usdt::USDT"
 	 * @param tickSize Minimal Price Change Accuracy of this pool, eg: 10000000. The number must be an interger float scaled by `FLOAT_SCALING_FACTOR`.
-	 * @param lotSize Minimal Lot Change Accuracy of this pool, eg: 10000. 
+	 * @param lotSize Minimal Lot Change Accuracy of this pool, eg: 10000.
 	 * @param takerFeeRate Customized taker fee rate, float scaled by `FLOAT_SCALING_FACTOR`, Taker_fee_rate of 0.25% should be 2_500_000 for example
 	 * @param makerRebateRate Customized maker rebate rate, float scaled by `FLOAT_SCALING_FACTOR`,  should be less than or equal to the taker_rebate_rate
 	 */
@@ -214,7 +221,7 @@ export class DeepBookClient {
 	 * @description: place a limit order
 	 * @param poolId Object id of pool, created after invoking createPool, eg: "0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4"
 	 * @param price: price of the limit order. The number must be an interger float scaled by `FLOAT_SCALING_FACTOR`.
-	 * @param quantity: quantity of the limit order in BASE ASSET, eg: 100000000. 
+	 * @param quantity: quantity of the limit order in BASE ASSET, eg: 100000000.
 	 * @param isBid: true for buying base with quote, false for selling base for quote
 	 * @param expirationTimestamp: expiration timestamp of the limit order in ms, eg: 1620000000000. If omitted, the order will expire in 1 day
 	 * from the time this function is called(not the time the transaction is executed)
@@ -299,7 +306,7 @@ export class DeepBookClient {
 	 * @description: swap exact quote for base
 	 * @param poolId Object id of pool, created after invoking createPool, eg: "0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4"
 	 * @param tokenObjectIn: Object id of the token to swap: eg: "0x6e566fec4c388eeb78a7dab832c9f0212eb2ac7e8699500e203def5b41b9c70d"
-	 * @param amountIn: amount of token to buy or sell, eg: 10000000. 
+	 * @param amountIn: amount of token to buy or sell, eg: 10000000.
 	 * @param currentAddress: current user address, eg: "0xbddc9d4961b46a130c2e1f38585bbc6fa8077ce54bcb206b26874ac08d607966"
 	 * @param clientOrderId a client side defined order id for bookkeeping purpose, eg: "1" , "2", ... If omitted, the sdk will
 	 * assign a increasing number starting from 0. But this number might be duplicated if you are using multiple sdk instances
@@ -568,7 +575,7 @@ export class DeepBookClient {
 	async listOpenOrders(
 		poolId: string,
 		accountCap: string | undefined = undefined,
-	): Promise<DevInspectResults> {
+	): Promise<Order[]> {
 		const txb = new TransactionBlock();
 		const cap = this.#checkAccountCap(accountCap);
 		const { baseAsset, quoteAsset } = await this.getPoolInfo(poolId);
@@ -579,10 +586,14 @@ export class DeepBookClient {
 			arguments: [txb.object(poolId), txb.object(cap)],
 		});
 
-		return await this.suiClient.devInspectTransactionBlock({
-			transactionBlock: txb,
-			sender: this.currentAddress,
-		});
+		const ordersInBcs = (
+			await this.suiClient.devInspectTransactionBlock({
+				transactionBlock: txb,
+				sender: this.currentAddress,
+			})
+		).results![0].returnValues![0][0];
+
+		return bcs.de('vector<Order>', Uint8Array.from(ordersInBcs));
 	}
 
 	/**

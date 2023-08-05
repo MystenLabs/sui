@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+export * from './bcs';
+
 import { EventId } from '@mysten/sui.js/src/client';
 
 export interface PoolSummary {
@@ -44,4 +46,16 @@ export enum LimitOrderType {
 export enum SelfMatchingPreventionStyle {
 	// Cancel older (resting) order in full. Continue to execute the newer taking order.
 	CANCEL_OLDEST = 0,
+}
+
+export interface Order {
+	orderId: string;
+	clientOrderId: string;
+	price: string;
+	originalQuantity: string;
+	quantity: string;
+	isBid: boolean;
+	owner: string;
+	expireTimestamp: string;
+	selfMatchingPrevention: SelfMatchingPreventionStyle;
 }
