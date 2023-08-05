@@ -76,12 +76,12 @@ export function OwnedCoins({ id }: { id: string }) {
 
 	const filterOptions = useMemo(
 		() => [
-			{ label: 'ALL', value: COIN_FILTERS.ALL },
 			{ label: `${balances.recognizedBalances.length} RECOGNIZED`, value: COIN_FILTERS.RECOGNIZED },
 			{
 				label: `${balances.unrecognizedBalances.length} UNRECOGNIZED`,
 				value: COIN_FILTERS.UNRECOGNIZED,
 			},
+			{ label: 'ALL', value: COIN_FILTERS.ALL },
 		],
 		[balances],
 	);
@@ -99,8 +99,8 @@ export function OwnedCoins({ id }: { id: string }) {
 					<LoadingIndicator />
 				</div>
 			) : (
-				<div className="flex flex-col gap-4 pt-5 text-left">
-					<div className='md:mt-12" flex w-full justify-between border-b border-gray-45 pb-3'>
+				<div className="flex max-h-coinsAndAssetsContainer flex-col gap-4 pt-5 text-left ">
+					<div className="flex w-full flex-col justify-between gap-y-3 border-b border-gray-45 pb-3 sm:flex-row">
 						<Heading color="steel-darker" variant="heading4/semibold">
 							{balances.allBalances.length} Coins
 						</Heading>
@@ -132,7 +132,7 @@ export function OwnedCoins({ id }: { id: string }) {
 						</div>
 					)}
 
-					<div className="flex max-h-80 flex-col overflow-auto">
+					<div className="flex flex-col overflow-auto">
 						<div className="mb-2.5 flex uppercase tracking-wider text-gray-80">
 							<div className="w-[45%] pl-3">
 								<Text variant="caption/medium" color="steel-dark">

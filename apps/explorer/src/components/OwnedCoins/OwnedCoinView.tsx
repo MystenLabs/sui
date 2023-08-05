@@ -68,13 +68,13 @@ export default function OwnedCoinView({ coin, id }: OwnedCoinViewProps) {
 					)}
 				</div>
 
-				<div className="flex w-[25%] px-2">
+				<div className="flex w-[25%] pl-2">
 					<Text color={coin.isRecognized ? 'steel-darker' : 'gray-60'} variant="body/medium">
 						{coin.coinObjectCount}
 					</Text>
 				</div>
 
-				<div className="flex w-[30%] items-center gap-1 truncate">
+				<div className="flex w-[30%] items-center gap-1 truncate pl-1">
 					<Text
 						color={coin.isRecognized ? 'steel-darker' : 'gray-60'}
 						variant="bodySmall/medium"

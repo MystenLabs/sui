@@ -160,6 +160,8 @@ export { default as Unpin16 } from './Unpin16';
 export { default as Unstaked } from './Unstaked';
 export { default as Version24 } from './Version24';
 export { default as Video32 } from './Video32';
+export { default as ViewList16 } from './ViewList16';
+export { default as ViewSmallThumbnails16 } from './ViewSmallThumbnails16';
 export { default as Wallet24 } from './Wallet24';
 export { default as Wallet32 } from './Wallet32';
 export { default as WalletActionBuy24 } from './WalletActionBuy24';
