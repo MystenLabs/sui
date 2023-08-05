@@ -4,15 +4,22 @@
 import { ChevronDown12, ChevronRight12 } from '@mysten/icons';
 
 import * as CollapsiblePrimitive from '@radix-ui/react-collapsible';
+import classNames from 'classnames';
 import { useState, type ReactNode } from 'react';
 
 type CollapsibleProps = {
 	title: string;
 	defaultOpen?: boolean;
 	children: ReactNode | ReactNode[];
+	titleColor?: 'steel' | 'steel-darker';
 };
 
-export function Collapsible({ title, children, defaultOpen }: CollapsibleProps) {
+export function Collapsible({
+	title,
+	children,
+	defaultOpen,
+	titleColor = 'steel',
+}: CollapsibleProps) {
 	const [open, setOpen] = useState(defaultOpen ?? false);
 	return (
 		<CollapsiblePrimitive.Root
@@ -21,7 +28,12 @@ export function Collapsible({ title, children, defaultOpen }: CollapsibleProps) 
 			onOpenChange={setOpen}
 		>
 			<CollapsiblePrimitive.Trigger className="flex items-center gap-2 w-full bg-transparent border-none p-0 cursor-pointer group">
-				<div className="text-captionSmall font-semibold uppercase text-steel group-hover:text-hero">
+				<div
+					className={classNames(
+						'text-captionSmall font-semibold uppercase group-hover:text-hero',
+						`text-${titleColor}`,
+					)}
+				>
 					{title}
 				</div>
 				<div className="h-px bg-steel group-hover:bg-hero flex-1" />

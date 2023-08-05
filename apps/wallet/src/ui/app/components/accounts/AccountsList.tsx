@@ -20,6 +20,8 @@ export function AccountsList() {
 	const accounts = useAccounts();
 	const backgroundClient = useBackgroundClient();
 
+	const otherAccounts = accounts.filter((a) => a.address !== activeAddress);
+
 	// todo: replace this with a real flow
 	const [unlockModalOpen, setUnlockModalOpen] = useState(false);
 	const handleUnlockAccount = () => {
@@ -40,7 +42,7 @@ export function AccountsList() {
 	};
 
 	return (
-		<div className="bg-gradients-graph-cards flex flex-col rounded-xl p-4 gap-5 border border-solid border-hero/10">
+		<div className="bg-gradients-graph-cards flex flex-col rounded-xl p-4 gap-5 border border-solid border-hero/10 w-full">
 			<Heading variant="heading5" weight="semibold" color="steel-darker">
 				Accounts
 			</Heading>
@@ -52,7 +54,7 @@ export function AccountsList() {
 				onValueChange={handleSelectAccount}
 			>
 				<>
-					<Collapsible title="Current" defaultOpen>
+					<Collapsible title="Current" defaultOpen titleColor="steel-darker">
 						<AccountListItem
 							icon={<SocialGoogle24 />}
 							address={activeAddress!}
@@ -60,11 +62,10 @@ export function AccountsList() {
 						/>
 					</Collapsible>
 
-					<Collapsible title="Switch To">
-						<div className="flex flex-col gap-3">
-							{accounts
-								.filter((account) => account.address !== activeAddress)
-								.map((account) => {
+					{otherAccounts.length ? (
+						<Collapsible title="Switch To" titleColor="steel-darker">
+							<div className="flex flex-col gap-3">
+								{otherAccounts.map((account) => {
 									return (
 										<AccountListItem
 											key={account.address}
@@ -74,8 +75,9 @@ export function AccountsList() {
 										/>
 									);
 								})}
-						</div>
-					</Collapsible>
+							</div>
+						</Collapsible>
+					) : null}
 				</>
 			</ToggleGroup.Root>
 

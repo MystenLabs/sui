@@ -6,6 +6,7 @@ import { AccountMultiSelect } from '../../components/accounts/AccountMultiSelect
 import { AccountsList } from '../../components/accounts/AccountsList';
 import { useActiveAddress } from '../../hooks';
 import { useAccounts } from '../../hooks/useAccounts';
+import TokenDetails from '../home/tokens/TokensDetails';
 
 export function TokensV2() {
 	const accounts = useAccounts();
@@ -14,14 +15,7 @@ export function TokensV2() {
 
 	return (
 		<div className="flex flex-col gap-4">
-			<AccountsList />
-			<div className="bg-gray-40 -mx-5 p-5 h-full">
-				<AccountMultiSelect
-					accounts={accounts}
-					selectedAccounts={selectedAccounts}
-					onChange={setSelectedAccounts}
-				/>
-			</div>
+			<TokenDetails />
 		</div>
 	);
 }

@@ -40,6 +40,7 @@ import { usePinnedCoinTypes } from '_src/ui/app/hooks/usePinnedCoinTypes';
 import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
+import { AccountsList } from '_src/ui/app/components/accounts/AccountsList';
 
 type TokenDetailsProps = {
 	coinType?: string;
@@ -241,8 +242,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 					className="flex flex-col h-full flex-1 flex-grow items-center overflow-y-auto"
 					data-testid="coin-page"
 				>
-					<div className="max-w-full">{!coinType && <AccountSelector />}</div>
-
+					<AccountsList />
 					<div
 						data-testid="coin-balance"
 						className="bg-sui/10 rounded-2xl py-5 px-4 flex flex-col w-full gap-3 items-center mt-4"
