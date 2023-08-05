@@ -65,7 +65,7 @@ export function Activity({ initialTab, initialLimit, disablePagination }: Props)
 		<div>
 			<Tabs size="lg" value={activeTab} onValueChange={setActiveTab}>
 				<div className="relative">
-					<TabsList dynamicSpacing>
+					<TabsList>
 						<TabsTrigger value="transactions">
 							<Heading variant="heading4/semibold">Transaction Blocks</Heading>
 						</TabsTrigger>
