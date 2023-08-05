@@ -39,7 +39,6 @@ const tabStyles = cva(
 		},
 	},
 );
-
 const tabListStyles = cva(['flex items-center border-gray-45'], {
 	variants: {
 		fullWidth: {
@@ -47,7 +46,7 @@ const tabListStyles = cva(['flex items-center border-gray-45'], {
 		},
 		disableBottomBorder: {
 			true: '',
-			false: '!border-b',
+			false: 'border-b',
 		},
 		gap: {
 			3: 'gap-3',
@@ -56,6 +55,7 @@ const tabListStyles = cva(['flex items-center border-gray-45'], {
 	},
 	defaultVariants: {
 		gap: 6,
+		disableBottomBorder: false,
 	},
 });
 
