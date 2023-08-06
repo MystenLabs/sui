@@ -64,3 +64,8 @@ export interface MarketPrice {
 	bestBidPrice: bigint | undefined;
 	bestAskPrice: bigint | undefined;
 }
+
+export interface Level2BookStatusPoint {
+	price: bigint;
+	depth: bigint;
+}

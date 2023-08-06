@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-	DevInspectResults,
 	OrderArguments,
 	PaginatedEvents,
 	PaginationArguments,
@@ -25,6 +24,7 @@ import {
 	ORDER_DEFAULT_EXPIRATION_IN_MS,
 } from './utils';
 import {
+	Level2BookStatusPoint,
 	LimitOrderType,
 	MarketPrice,
 	Order,
@@ -200,7 +200,7 @@ export class DeepBookClient {
 	 * @param amount the amount of coin to withdraw
 	 * @param assetType Base or Quote
 	 * @param recipientAddress the address to receive the withdrawn asset. If omitted, `this.currentAddress` will be used. The function
-	 * will throw if the `recipientAddress == DUMMY_ADDRESS`
+	 * will throw if the `recipientAddress === DUMMY_ADDRESS`
 	 */
 	async withdraw(
 		poolId: string,
@@ -641,27 +641,21 @@ export class DeepBookClient {
 
 	/**
 	 * @description get level2 book status
-	 * @param baseAssetType baseAssetType of a certain pair, eg: 0x5378a0e7495723f7d942366a125a6556cf56f573fa2bb7171b554a2986c4229a::weth::WETH
-	 * @param quoteAssetType quoteAssetType of a certain pair, eg: 0x5378a0e7495723f7d942366a125a6556cf56f573fa2bb7171b554a2986c4229a::usdt::USDT
 	 * @param poolId the pool id, eg: 0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4
-	 * @param lowerPrice lower price you want to query in the level2 book, eg: 18000000000
-	 * @param higherPrice higher price you want to query in the level2 book, eg: 20000000000
+	 * @param lowerPrice lower price you want to query in the level2 book, eg: 18000000000. The number must be an integer float scaled by `FLOAT_SCALING_FACTOR`.
+	 * @param higherPrice higher price you want to query in the level2 book, eg: 20000000000. The number must be an integer float scaled by `FLOAT_SCALING_FACTOR`.
 	 * @param isBidSide true: query bid side, false: query ask side
 	 */
 	async getLevel2BookStatus(
-		baseAssetType: string,
-		quoteAssetType: string,
 		poolId: string,
-		lowerPrice: number,
-		higherPrice: number,
-		isBidSide: boolean,
-	): Promise<DevInspectResults> {
+		lowerPrice: bigint,
+		higherPrice: bigint,
+		side: 'bid' | 'ask',
+	): Promise<Level2BookStatusPoint[]> {
 		const txb = new TransactionBlock();
 		txb.moveCall({
-			typeArguments: [baseAssetType, quoteAssetType],
-			target: isBidSide
-				? `${PACKAGE_ID}::${MODULE_CLOB}::get_level2_book_status_bid_side`
-				: `${PACKAGE_ID}::${MODULE_CLOB}::get_level2_book_status_ask_side`,
+			typeArguments: await this.getPoolTypeArgs(poolId),
+			target: `${PACKAGE_ID}::${MODULE_CLOB}::get_level2_book_status_${side}_side`,
 			arguments: [
 				txb.object(poolId),
 				txb.pure(String(lowerPrice)),
@@ -669,10 +663,15 @@ export class DeepBookClient {
 				txb.object(SUI_CLOCK_OBJECT_ID),
 			],
 		});
-		return await this.suiClient.devInspectTransactionBlock({
-			transactionBlock: txb,
-			sender: this.currentAddress,
-		});
+		const results = (
+			await this.suiClient.devInspectTransactionBlock({
+				transactionBlock: txb,
+				sender: this.currentAddress,
+			})
+		).results![0].returnValues!.map(([bytes, _]) =>
+			bcs.de('vector<u64>', Uint8Array.from(bytes)).map((s: string) => BigInt(s)),
+		);
+		return results[0].map((price: bigint, i: number) => ({ price, depth: results[1][i] }));
 	}
 
 	#checkAccountCap(accountCap: string | undefined = undefined): string {

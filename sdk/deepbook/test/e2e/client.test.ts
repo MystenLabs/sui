@@ -114,6 +114,19 @@ describe('Interacting with the pool', () => {
 		expect(price.bestBidPrice).toBe(LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE);
 	});
 
+	it('test getting Level 2 Book status', async () => {
+		const deepbook = new DeepBookClient(toolbox.client, accountCapId, toolbox.address());
+		const status = await deepbook.getLevel2BookStatus(
+			pool.poolId,
+			LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE,
+			LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE,
+			'bid',
+		);
+		expect(status.length).toBe(1);
+		expect(status[0].price).toBe(LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE);
+		expect(status[0].depth).toBe(LIMIT_ORDER_QUANTITY);
+	});
+
 	it('test place market order with Account 2', async () => {
 		const deepbook = new DeepBookClient(toolbox.client, accountCapId2, toolbox.address());
 		const resp = await toolbox.client.getCoins({
