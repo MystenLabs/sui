@@ -134,12 +134,31 @@ describe('Interacting with the pool', () => {
 		});
 		const baseCoin = resp.data[0].coinObjectId;
 
+		const balanceBefore = BigInt(
+			(
+				await toolbox.client.getBalance({
+					owner: toolbox.address(),
+					coinType: pool.baseAsset,
+				})
+			).totalBalance,
+		);
+
 		const txb = await deepbook.placeMarketOrder(pool.poolId, LIMIT_ORDER_QUANTITY, 'ask', baseCoin);
 		await executeTransactionBlock(toolbox, txb);
 
 		// the limit order should be cleared out after matching with the market order
 		const openOrders = await deepbook.listOpenOrders(pool.poolId);
 		expect(openOrders.length).toBe(0);
+
+		const balanceAfter = BigInt(
+			(
+				await toolbox.client.getBalance({
+					owner: toolbox.address(),
+					coinType: pool.baseAsset,
+				})
+			).totalBalance,
+		);
+		expect(balanceBefore).toBe(balanceAfter + LIMIT_ORDER_QUANTITY);
 	});
 
 	it('test cancelling limit order with account 1', async () => {
