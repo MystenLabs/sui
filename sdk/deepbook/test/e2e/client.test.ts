@@ -53,7 +53,10 @@ describe('Interacting with the pool', () => {
 	});
 
 	it('test deposit base asset with account 2', async () => {
-		const resp = await toolbox.client.getCoins({owner: toolbox.address(), coinType: pool.baseAsset});
+		const resp = await toolbox.client.getCoins({
+			owner: toolbox.address(),
+			coinType: pool.baseAsset,
+		});
 		const baseCoin = resp.data[0].coinObjectId;
 
 		const deepbook = new DeepBookClient(toolbox.client, accountCapId2);
@@ -79,7 +82,6 @@ describe('Interacting with the pool', () => {
 		const position = await deepbook.getUserPosition(pool.poolId);
 		expect(position.availableQuoteAmount).toBe(BigInt(depositAmount));
 
-	
 		const totalLocked = LIMIT_ORDER_PRICE * LIMIT_ORDER_QUANTITY;
 		const txb = await deepbook.placeLimitOrder(
 			pool.poolId,
@@ -92,28 +94,38 @@ describe('Interacting with the pool', () => {
 		const position2 = await deepbook.getUserPosition(pool.poolId);
 		expect(position2.availableQuoteAmount).toBe(depositAmount - totalLocked);
 		expect(position2.lockedQuoteAmount).toBe(totalLocked);
-
-		const openOrders = await deepbook.listOpenOrders(pool.poolId);
-		expect(openOrders.length).toBe(1);
-		const { price: oprice, originalQuantity } = openOrders[0];
-		expect(BigInt(oprice)).toBe(LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE);
-		expect(BigInt(originalQuantity)).toBe(LIMIT_ORDER_QUANTITY);
 	});
 
-	// // expect to run after placing limit order
+	it('test listing open orders', async () => {
+		const deepbook = new DeepBookClient(toolbox.client, accountCapId, toolbox.address());
+		const openOrders = await deepbook.listOpenOrders(pool.poolId);
+		expect(openOrders.length).toBe(1);
+		const { price: oprice, originalQuantity, orderId } = openOrders[0];
+		expect(BigInt(oprice)).toBe(LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE);
+		expect(BigInt(originalQuantity)).toBe(LIMIT_ORDER_QUANTITY);
+
+		const { price: priceFromOrderStatus } = (await deepbook.getOrderStatus(pool.poolId, orderId))!;
+		expect(priceFromOrderStatus).toBe(oprice);
+	});
+
+	it('test getting market price', async () => {
+		const deepbook = new DeepBookClient(toolbox.client, accountCapId, toolbox.address());
+		const price = await deepbook.getMarketPrice(pool.poolId);
+		expect(price.bestBidPrice).toBe(LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE);
+	});
+
 	it('test place market order with Account 2', async () => {
 		const deepbook = new DeepBookClient(toolbox.client, accountCapId2, toolbox.address());
-		const resp = await toolbox.client.getCoins({owner: toolbox.address(), coinType: pool.baseAsset});
+		const resp = await toolbox.client.getCoins({
+			owner: toolbox.address(),
+			coinType: pool.baseAsset,
+		});
 		const baseCoin = resp.data[0].coinObjectId;
-		
-		const txb = await deepbook.placeMarketOrder(
-			pool.poolId,
-			LIMIT_ORDER_QUANTITY,
-			'ask',
-			baseCoin,
-		);
+
+		const txb = await deepbook.placeMarketOrder(pool.poolId, LIMIT_ORDER_QUANTITY, 'ask', baseCoin);
 		await executeTransactionBlock(toolbox, txb);
 
+		// the limit order should be cleared out after matching with the market order
 		const openOrders = await deepbook.listOpenOrders(pool.poolId);
 		expect(openOrders.length).toBe(0);
 	});

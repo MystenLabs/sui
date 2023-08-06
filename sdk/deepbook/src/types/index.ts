@@ -59,3 +59,8 @@ export interface Order {
 	expireTimestamp: string;
 	selfMatchingPrevention: SelfMatchingPreventionStyle;
 }
+
+export interface MarketPrice {
+	bestBidPrice: bigint | undefined;
+	bestAskPrice: bigint | undefined;
+}

@@ -26,6 +26,7 @@ import {
 } from './utils';
 import {
 	LimitOrderType,
+	MarketPrice,
 	Order,
 	PaginatedPoolSummary,
 	PoolSummary,
@@ -179,7 +180,9 @@ export class DeepBookClient {
 
 		const coinType = coinId ? await this.#getCoinType(coinId) : NORMALIZED_SUI_COIN_TYPE;
 		if (coinType !== baseAsset && coinType !== quoteAsset) {
-			throw new Error(`coin ${coinId} of ${coinType} type is not a valid asset for pool ${poolId}, which supports ${baseAsset} and ${quoteAsset}`);
+			throw new Error(
+				`coin ${coinId} of ${coinType} type is not a valid asset for pool ${poolId}, which supports ${baseAsset} and ${quoteAsset}`,
+			);
 		}
 		const functionName = coinType === baseAsset ? 'deposit_base' : 'deposit_quote';
 
@@ -284,12 +287,12 @@ export class DeepBookClient {
 		const txb = new TransactionBlock();
 		const [baseAssetType, quoteAssetType] = await this.getPoolTypeArgs(poolId);
 		if (!baseCoin && orderType === 'ask') {
-			throw new Error("Must specify a valid base coin for an ask order");
+			throw new Error('Must specify a valid base coin for an ask order');
 		} else if (!quoteCoin && orderType === 'bid') {
-			throw new Error("Must specify a valid quote coin for a bid order");
+			throw new Error('Must specify a valid quote coin for a bid order');
 		}
 		const emptyCoin = txb.moveCall({
-			typeArguments: [ baseCoin ? quoteAssetType : baseAssetType],
+			typeArguments: [baseCoin ? quoteAssetType : baseAssetType],
 			target: `0x2::coin::zero`,
 			arguments: [],
 		});
@@ -520,30 +523,33 @@ export class DeepBookClient {
 
 	/**
 	 * @description get the order status
-	 * @param baseAssetType baseAssetType of a certain pair, eg: 0x5378a0e7495723f7d942366a125a6556cf56f573fa2bb7171b554a2986c4229a::weth::WETH
-	 * @param quoteAssetType quoteAssetType of a certain pair, eg: 0x5378a0e7495723f7d942366a125a6556cf56f573fa2bb7171b554a2986c4229a::usdt::USDT
 	 * @param poolId: the pool id, eg: 0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4
 	 * @param orderId the order id, eg: "1"
-	 * @param accountCap: accountCap, eg: 0x6f699fef193723277559c8f499ca3706121a65ac96d273151b8e52deb29135d3. If not provided, `this.accountCap` will be used.
 	 */
 	async getOrderStatus(
-		baseAssetType: string,
-		quoteAssetType: string,
 		poolId: string,
 		orderId: string,
-		accountCap: string | undefined,
-	): Promise<DevInspectResults> {
+		accountCap: string | undefined = this.accountCap,
+	): Promise<Order | undefined> {
 		const txb = new TransactionBlock();
 		const cap = this.#checkAccountCap(accountCap);
 		txb.moveCall({
-			typeArguments: [baseAssetType, quoteAssetType],
+			typeArguments: await this.getPoolTypeArgs(poolId),
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::get_order_status`,
 			arguments: [txb.object(poolId), txb.object(orderId), txb.object(cap)],
 		});
-		return await this.suiClient.devInspectTransactionBlock({
-			transactionBlock: txb,
-			sender: this.currentAddress,
-		});
+		const results = (
+			await this.suiClient.devInspectTransactionBlock({
+				transactionBlock: txb,
+				sender: this.currentAddress,
+			})
+		).results;
+
+		if (!results) {
+			return undefined;
+		}
+
+		return bcs.de('Order', Uint8Array.from(results![0].returnValues![0][0]));
 	}
 
 	/**
@@ -557,10 +563,9 @@ export class DeepBookClient {
 	): Promise<UserPosition> {
 		const txb = new TransactionBlock();
 		const cap = this.#checkAccountCap(accountCap);
-		const { baseAsset, quoteAsset } = await this.getPoolInfo(poolId);
 
 		txb.moveCall({
-			typeArguments: [baseAsset, quoteAsset],
+			typeArguments: await this.getPoolTypeArgs(poolId),
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::account_balance`,
 			arguments: [txb.object(normalizeSuiObjectId(poolId)), txb.object(cap)],
 		});
@@ -589,10 +594,9 @@ export class DeepBookClient {
 	): Promise<Order[]> {
 		const txb = new TransactionBlock();
 		const cap = this.#checkAccountCap(accountCap);
-		const { baseAsset, quoteAsset } = await this.getPoolInfo(poolId);
 
 		txb.moveCall({
-			typeArguments: [baseAsset, quoteAsset],
+			typeArguments: await this.getPoolTypeArgs(poolId),
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::list_open_orders`,
 			arguments: [txb.object(poolId), txb.object(cap)],
 		});
@@ -607,27 +611,32 @@ export class DeepBookClient {
 		if (!results) {
 			return [];
 		}
-		
+
 		return bcs.de('vector<Order>', Uint8Array.from(results![0].returnValues![0][0]));
 	}
 
 	/**
 	 * @description get the market price {bestBidPrice, bestAskPrice}
-	 * @param baseAssetType baseAssetType of a certain pair,  eg: 0x5378a0e7495723f7d942366a125a6556cf56f573fa2bb7171b554a2986c4229a::weth::WETH
-	 * @param quoteAssetType quoteAssetType of a certain pair,  eg: 0x5378a0e7495723f7d942366a125a6556cf56f573fa2bb7171b554a2986c4229a::usdt::USDT
 	 * @param poolId the pool id, eg: 0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4
 	 */
-	async getMarketPrice(baseAssetType: string, quoteAssetType: string, poolId: string) {
+	async getMarketPrice(poolId: string): Promise<MarketPrice> {
 		const txb = new TransactionBlock();
 		txb.moveCall({
-			typeArguments: [baseAssetType, quoteAssetType],
+			typeArguments: await this.getPoolTypeArgs(poolId),
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::get_market_price`,
 			arguments: [txb.object(poolId)],
 		});
-		return await this.suiClient.devInspectTransactionBlock({
-			transactionBlock: txb,
-			sender: this.currentAddress,
+		const resp = (
+			await this.suiClient.devInspectTransactionBlock({
+				transactionBlock: txb,
+				sender: this.currentAddress,
+			})
+		).results![0].returnValues!.map(([bytes, _]) => {
+			const opt = bcs.de('Option<u64>', Uint8Array.from(bytes));
+			return 'Some' in opt ? BigInt(opt.Some) : undefined;
 		});
+
+		return { bestBidPrice: resp[0], bestAskPrice: resp[1] };
 	}
 
 	/**
