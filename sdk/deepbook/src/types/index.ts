@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-export * from './bcs';
-
 import { EventId } from '@mysten/sui.js/src/client';
+
+export * from './bcs';
 
 export interface PoolSummary {
 	poolId: string;
