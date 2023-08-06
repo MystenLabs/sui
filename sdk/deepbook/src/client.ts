@@ -1,11 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	OrderArguments,
-	PaginatedEvents,
-	PaginationArguments,
-} from '@mysten/sui.js/client';
+import { OrderArguments, PaginatedEvents, PaginationArguments } from '@mysten/sui.js/client';
 import {
 	SUI_CLOCK_OBJECT_ID,
 	normalizeStructTag,
