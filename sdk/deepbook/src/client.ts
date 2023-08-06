@@ -177,9 +177,9 @@ export class DeepBookClient {
 
 		const [coin] = quantity ? txb.splitCoins(inputCoin, [txb.pure(quantity)]) : [inputCoin];
 
-		const coinType = coinId ? this.#getCoinType(coinId) : NORMALIZED_SUI_COIN_TYPE;
+		const coinType = coinId ? await this.#getCoinType(coinId) : NORMALIZED_SUI_COIN_TYPE;
 		if (coinType !== baseAsset && coinType !== quoteAsset) {
-			throw new Error(`coin ${coinId} is not a valid asset for pool ${poolId}`);
+			throw new Error(`coin ${coinId} of ${coinType} type is not a valid asset for pool ${poolId}, which supports ${baseAsset} and ${quoteAsset}`);
 		}
 		const functionName = coinType === baseAsset ? 'deposit_base' : 'deposit_quote';
 
@@ -203,11 +203,11 @@ export class DeepBookClient {
 		poolId: string,
 		// TODO: implement withdraw all
 		quantity: bigint,
-		assetType: 'Base' | 'Quote',
+		assetType: 'base' | 'quote',
 		recipientAddress: string = this.currentAddress,
 	): Promise<TransactionBlock> {
 		const txb = new TransactionBlock();
-		const functionName = assetType === 'Base' ? 'withdraw_base' : 'withdraw_quote';
+		const functionName = assetType === 'base' ? 'withdraw_base' : 'withdraw_quote';
 		const [withdraw] = txb.moveCall({
 			typeArguments: await this.getPoolTypeArgs(poolId),
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::${functionName}`,
@@ -222,7 +222,7 @@ export class DeepBookClient {
 	 * @param poolId Object id of pool, created after invoking createPool, eg: "0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4"
 	 * @param price: price of the limit order. The number must be an interger float scaled by `FLOAT_SCALING_FACTOR`.
 	 * @param quantity: quantity of the limit order in BASE ASSET, eg: 100000000.
-	 * @param isBid: true for buying base with quote, false for selling base for quote
+	 * @param orderType: bid for buying base with quote, ask for selling base for quote
 	 * @param expirationTimestamp: expiration timestamp of the limit order in ms, eg: 1620000000000. If omitted, the order will expire in 1 day
 	 * from the time this function is called(not the time the transaction is executed)
 	 * @param restriction restrictions on limit orders, explain in doc for more details, eg: 0
@@ -234,7 +234,7 @@ export class DeepBookClient {
 		poolId: string,
 		price: bigint,
 		quantity: bigint,
-		isBid: boolean,
+		orderType: 'bid' | 'ask',
 		expirationTimestamp: number = Date.now() + ORDER_DEFAULT_EXPIRATION_IN_MS,
 		restriction: LimitOrderType = LimitOrderType.NO_RESTRICTION,
 		clientOrderId: string | undefined = undefined,
@@ -247,7 +247,7 @@ export class DeepBookClient {
 			txb.pure(price),
 			txb.pure(quantity),
 			txb.pure(selfMatchingPrevention),
-			txb.pure(isBid),
+			txb.pure(orderType === 'bid'),
 			txb.pure(expirationTimestamp),
 			txb.pure(restriction),
 			txb.object(SUI_CLOCK_OBJECT_ID),
@@ -265,7 +265,7 @@ export class DeepBookClient {
 	 * @description: place a market order
 	 * @param poolId Object id of pool, created after invoking createPool, eg: "0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4"
 	 * @param quantity Amount of quote asset to swap in base asset
-	 * @param isBid true if the order is bid, false if the order is ask
+	 * @param orderType bid for buying base with quote, ask for selling base for quote
 	 * @param baseCoin the objectId of the base coin
 	 * @param quoteCoin the objectId of the quote coin
 	 * @param clientOrderId a client side defined order id for bookkeeping purpose. eg: "1" , "2", ... If omitted, the sdk will
@@ -275,24 +275,35 @@ export class DeepBookClient {
 	async placeMarketOrder(
 		poolId: string,
 		quantity: bigint,
-		isBid: boolean,
-		baseCoin: string,
-		quoteCoin: string,
+		orderType: 'bid' | 'ask',
+		baseCoin: string | undefined = undefined,
+		quoteCoin: string | undefined = undefined,
 		clientOrderId: string | undefined = undefined,
 		recipientAddress: string = this.currentAddress,
 	): Promise<TransactionBlock> {
 		const txb = new TransactionBlock();
+		const [baseAssetType, quoteAssetType] = await this.getPoolTypeArgs(poolId);
+		if (!baseCoin && orderType === 'ask') {
+			throw new Error("Must specify a valid base coin for an ask order");
+		} else if (!quoteCoin && orderType === 'bid') {
+			throw new Error("Must specify a valid quote coin for a bid order");
+		}
+		const emptyCoin = txb.moveCall({
+			typeArguments: [ baseCoin ? quoteAssetType : baseAssetType],
+			target: `0x2::coin::zero`,
+			arguments: [],
+		});
 		const [base_coin_ret, quote_coin_ret] = txb.moveCall({
-			typeArguments: await this.getPoolTypeArgs(poolId),
+			typeArguments: [baseAssetType, quoteAssetType],
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::place_market_order`,
 			arguments: [
 				txb.object(poolId),
 				txb.object(this.#checkAccountCap()),
 				txb.pure(clientOrderId ?? this.#nextClientOrderId()),
 				txb.pure(quantity),
-				txb.pure(isBid),
-				txb.object(baseCoin),
-				txb.object(quoteCoin),
+				txb.pure(orderType === 'bid'),
+				baseCoin ? txb.object(baseCoin) : emptyCoin,
+				quoteCoin ? txb.object(quoteCoin) : emptyCoin,
 				txb.object(SUI_CLOCK_OBJECT_ID),
 			],
 		});
@@ -586,14 +597,18 @@ export class DeepBookClient {
 			arguments: [txb.object(poolId), txb.object(cap)],
 		});
 
-		const ordersInBcs = (
+		const results = (
 			await this.suiClient.devInspectTransactionBlock({
 				transactionBlock: txb,
 				sender: this.currentAddress,
 			})
-		).results![0].returnValues![0][0];
+		).results;
 
-		return bcs.de('vector<Order>', Uint8Array.from(ordersInBcs));
+		if (!results) {
+			return [];
+		}
+		
+		return bcs.de('vector<Order>', Uint8Array.from(results![0].returnValues![0][0]));
 	}
 
 	/**

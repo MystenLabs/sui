@@ -142,17 +142,6 @@ export async function setupDeepbookAccount(toolbox: TestToolbox): Promise<string
 	return accountCap;
 }
 
-export async function depositAsset(
-	toolbox: TestToolbox,
-	poolId: string,
-	accountCap: string,
-	amount: bigint,
-): Promise<void> {
-	const deepbook = new DeepBookClient(toolbox.client, accountCap);
-	const txb = await deepbook.deposit(poolId, undefined, amount);
-	await executeTransactionBlock(toolbox, txb);
-}
-
 export async function executeTransactionBlock(
 	toolbox: TestToolbox,
 	txb: TransactionBlock,
