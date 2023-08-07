@@ -260,10 +260,6 @@ pub enum SuiClientCommands {
         #[clap(long)]
         with_unpublished_dependencies: bool,
 
-        /// Use the legacy digest calculation algorithm
-        #[clap(long)]
-        legacy_digest: bool,
-
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
         /// (TransactionData) using base64 encoding, and print out the string.
         #[clap(long, required = false)]
@@ -641,7 +637,6 @@ impl SuiClientCommands {
                 gas_budget,
                 skip_dependency_verification,
                 with_unpublished_dependencies,
-                legacy_digest,
                 serialize_unsigned_transaction,
                 serialize_signed_transaction,
                 lint,
@@ -697,8 +692,8 @@ impl SuiClientCommands {
                 // policy at the moment. To change the policy you can call a Move function in the
                 // `package` module to change this policy.
                 let upgrade_policy = upgrade_cap.policy;
-                let package_digest = compiled_package
-                    .get_package_digest(with_unpublished_dependencies, !legacy_digest);
+                let package_digest =
+                    compiled_package.get_package_digest(with_unpublished_dependencies);
 
                 let data = client
                     .transaction_builder()
