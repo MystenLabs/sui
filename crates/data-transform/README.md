@@ -1,4 +1,5 @@
-Sui indexer is an off-fullnode service to serve data from Sui protocol, including both data directly generated from chain and derivative data.
+
+data-transform is a separate process used to transform data, by decoding columns into other formats in preparation to upload to Snowflake.
 
 ### Running standalone transformer
 
