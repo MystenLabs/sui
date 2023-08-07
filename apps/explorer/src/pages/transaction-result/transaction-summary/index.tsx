@@ -31,7 +31,9 @@ export function TransactionSummary({ transaction }: TransactionSummaryProps) {
 			{balanceChanges && transactionKindName === 'ProgrammableTransaction' && (
 				<BalanceChanges changes={balanceChanges} />
 			)}
-			{upgradedSystemPackages && <UpgradedSystemPackages data={upgradedSystemPackages} />}
+			{upgradedSystemPackages?.length ? (
+				<UpgradedSystemPackages data={upgradedSystemPackages} />
+			) : null}
 			{objectSummary && <ObjectChanges objectSummary={objectSummary} />}
 		</div>
 	);

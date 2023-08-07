@@ -60,7 +60,9 @@ export function useTransactionSummary({
 				objectSummary,
 				status: transaction.effects?.status.status,
 				timestamp: transaction.timestampMs,
-				upgradedSystemPackages: transaction.effects?.mutated,
+				upgradedSystemPackages: transaction.effects?.mutated?.filter(
+					(object) => object.owner === 'Immutable',
+				),
 			};
 		} else {
 			// Dry run transaction:
