@@ -58,6 +58,7 @@
 	"devDependencies": {
 		"@mysten/build-scripts": "workspace:*",
 		"@size-limit/preset-small-lib": "^8.2.6",
+		"@tanstack/react-query": "^4.29.25",
 		"@testing-library/react": "^14.0.0",
 		"@types/react": "^18.2.15",
 		"happy-dom": "^10.5.1",
@@ -73,6 +74,7 @@
 		"@mysten/sui.js": "workspace:*"
 	},
 	"peerDependencies": {
+		"@tanstack/react-query": "^4.0.0",
 		"react": "*"
 	},
 	"sideEffects": false

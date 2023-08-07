@@ -14,6 +14,7 @@ import {
 } from './open-rpc';
 /** @ts-ignore */
 import prettierConfig from '../../../prettier.config.js';
+import { generateHooks } from './hooks';
 
 const packageRoot = path.resolve(import.meta.url.slice(5), '../..');
 const openRpcSpec: OpenRpcSpec = JSON.parse(
@@ -22,7 +23,7 @@ const openRpcSpec: OpenRpcSpec = JSON.parse(
 		'utf-8',
 	),
 );
-const LICENSE_HEADER = `
+export const LICENSE_HEADER = `
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -220,7 +221,7 @@ const options: {
 	},
 };
 
-class FileGenerator {
+export class FileGenerator {
 	imports: ts.ImportDeclaration[] = [];
 	statements: ts.Statement[] = [];
 
@@ -315,6 +316,7 @@ await fs.writeFile(
 	path.resolve(packageRoot, './src/client/types/generated.ts'),
 	await fileGenerator.printFile(),
 );
+await generateHooks();
 
 const methodGenerator = new FileGenerator();
 
@@ -760,7 +762,7 @@ function normalizeName(name: string) {
 	return name;
 }
 
-function normalizeMethodName(name: string): string {
+export function normalizeMethodName(name: string): string {
 	if (name.startsWith('sui_')) {
 		return normalizeMethodName(name.slice(4));
 	}
@@ -774,7 +776,7 @@ function normalizeMethodName(name: string): string {
 	return parts.map((part) => part[0].toUpperCase() + part.slice(1)).join('');
 }
 
-function normalizeParamName(method: string, name: string) {
+export function normalizeParamName(method: string, name: string) {
 	const alias = options.methods[method]?.params[name]?.alias;
 
 	if (alias) {
