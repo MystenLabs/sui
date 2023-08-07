@@ -120,7 +120,7 @@ export function ValidatorFormDetail({ validatorAddress, unstake }: ValidatorForm
 						)
 					}
 				>
-					<div className="divide-x flex divide-solid divide-gray-45 divide-y-0 flex-col gap-3.5">
+					<div className="flex flex-col gap-3.5">
 						<div className="flex gap-2 items-center justify-between">
 							<div className="flex gap-1 items-baseline text-steel">
 								<Text variant="body" weight="medium" color="steel-darker">
