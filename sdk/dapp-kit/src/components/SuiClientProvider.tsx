@@ -9,17 +9,22 @@ export interface SuiClientProviderProps {
 	children: React.ReactNode;
 	client?: SuiClient;
 	url?: string;
+	queryKeyPrefix: string;
 }
 
 export const SuiClientProvider = (props: SuiClientProviderProps) => {
-	const client = useMemo(
-		() =>
+	const ctx = useMemo(() => {
+		const client =
 			props.client ??
 			new SuiClient({
 				url: props.url ?? getFullnodeUrl('devnet'),
-			}),
-		[props.client, props.url],
-	);
+			});
 
-	return <SuiClientContext.Provider value={client}>{props.children}</SuiClientContext.Provider>;
+		return {
+			client,
+			queryKey: (key: unknown[]) => [props.queryKeyPrefix, ...key],
+		};
+	}, [props.client, props.url, props.queryKeyPrefix]);
+
+	return <SuiClientContext.Provider value={ctx}>{props.children}</SuiClientContext.Provider>;
 };

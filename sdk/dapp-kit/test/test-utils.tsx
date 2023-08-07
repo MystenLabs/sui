@@ -6,6 +6,10 @@ import { SuiClientProvider } from 'dapp-kit/src';
 
 export function createSuiClientContextWrapper(client: SuiClient) {
 	return function SuiClientContextWrapper({ children }: { children: React.ReactNode }) {
-		return <SuiClientProvider client={client}>{children}</SuiClientProvider>;
+		return (
+			<SuiClientProvider queryKeyPrefix="devnet" client={client}>
+				{children}
+			</SuiClientProvider>
+		);
 	};
 }
