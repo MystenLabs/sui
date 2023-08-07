@@ -29,6 +29,7 @@ import { TRANSACTION_TYPE, create } from './utils.js';
 import type { ProtocolConfig, SuiClient, SuiMoveNormalizedType } from '../client/index.js';
 import { normalizeSuiObjectId } from '../utils/sui-types.js';
 import { SUI_TYPE_ARG } from '../framework/framework.js';
+import type { Keypair, SignatureWithBytes } from '../cryptography/index.js';
 
 type TransactionResult = TransactionArgument & TransactionArgument[];
 
@@ -132,6 +133,10 @@ interface BuildOptions {
 	protocolConfig?: ProtocolConfig;
 	/** Define limits that are used when building the transaction. In general, we recommend using the protocol configuration instead of defining limits. */
 	limits?: Limits;
+}
+
+interface SignOptions extends BuildOptions {
+	signer: Keypair;
 }
 
 export function isTransactionBlock(obj: unknown): obj is TransactionBlock {
@@ -397,6 +402,13 @@ export class TransactionBlock {
 
 		// NOTE: Technically this is not a safe conversion, but we know all of the values in protocol config are safe
 		return Number(value);
+	}
+
+	/** Build the transaction to BCS bytes, and sign it with the provided keypair. */
+	async sign(options: SignOptions): Promise<SignatureWithBytes> {
+		const { signer, ...buildOptions } = options;
+		const bytes = await this.build(buildOptions);
+		return signer.signTransactionBlock(bytes);
 	}
 
 	/** Build the transaction to BCS bytes. */

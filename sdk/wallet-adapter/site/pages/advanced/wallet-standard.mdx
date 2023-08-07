@@ -35,7 +35,7 @@ Features are standard methods consumers can use to interact with a wallet. To be
 
 -   `standard:connect` - Used to initiate a connection to the wallet.
 -   `standard:events` - Used to listen for changes that happen within the wallet, such as accounts being added or removed.
--   `sui:signMessage` - Used to prompt the user to sign a personal message, and return the message signature back to the dapp. This can be used to verify the user’s public key.
+-   `sui:signPersonalMessage` - Used to prompt the user to sign a personal message, and return the message signature back to the dapp. This can be used to verify the user’s public key.
 -   `sui:signTransactionBlock` - Used to prompt the user to sign a transaction block, and return the serialized transaction block and signature back to the dapp. This method does not submit the transaction block for execution.
 -   `sui:signAndExecuteTransactionBlock` - Used to prompt the user to sign a transaction, then submit it for execution to the blockchain.
 
@@ -48,7 +48,7 @@ import {
   EventsFeature,
   EventsOnMethod,
   SuiFeatures,
-  SuiSignMessageMethod,
+  SuiSignPersonalMessageMethod,
   SuiSignTransactionBlockMethod,
   SuiSignAndExecuteTransactionBlockMethod
 } from "@mysten/wallet-standard";
@@ -66,9 +66,9 @@ class YourWallet implements Wallet {
         version: "1.0.0",
         on: this.#on,
       },
-			"sui:signMessage": {
+			"sui:signPersonalMessage": {
         version: "1.0.0",
-				signMessage: this.#signMessage,
+				signPersonalMessage: this.#signPersonalMessage,
 			},
       "sui:signTransactionBlock": {
         version: "1.0.0",
@@ -89,7 +89,7 @@ class YourWallet implements Wallet {
     // Your wallet's connect implementation
   };
 
-	#signMessage: SuiSignMessageMethod = () => {
+	#signPersonalMessage: SuiSignPersonalMessageMethod = () => {
     // Your wallet's signTransaction implementation
   };
 
@@ -126,7 +126,7 @@ class YourWallet implements Wallet {
                     // The features that this account supports. This can be a subset of the wallet's supported features.
                     // These features must exist on the wallet as well.
                     features: [
-                        'sui:signMessage',
+                        'sui:signPersonalMessage',
                         'sui:signTransactionBlock',
                         'sui:signAndExecuteTransactionBlock',
                     ],
