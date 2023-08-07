@@ -74,8 +74,8 @@
 		"@mysten/sui.js": "workspace:*"
 	},
 	"peerDependencies": {
-		"react": "*",
-		"@tanstack/react-query": "^4.0.0"
+		"@tanstack/react-query": "^4.0.0",
+		"react": "*"
 	},
 	"sideEffects": false
 }
