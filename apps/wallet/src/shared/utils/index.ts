@@ -106,9 +106,8 @@ export async function fetchWithSentry(name: string, ...params: Parameters<typeof
 		if (!response.ok) {
 			throw new Error(`Request failed with status ${response.status} (${response.statusText})`);
 		}
-		const responseData = await response.json();
 		transaction.setStatus('ok' as Sentry.SpanStatusType);
-		return responseData;
+		return response;
 	} catch (e) {
 		transaction.setStatus('unknown_error' as Sentry.SpanStatusType);
 		throw e;

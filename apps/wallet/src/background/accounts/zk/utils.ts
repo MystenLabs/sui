@@ -6,7 +6,7 @@ import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { SUI_ADDRESS_LENGTH, normalizeSuiAddress } from '@mysten/sui.js/utils';
 import { blake2b } from '@noble/hashes/blake2b';
 import { bytesToHex, randomBytes } from '@noble/hashes/utils';
-import { toBufferBE, toBigIntBE } from 'bigint-buffer';
+import { toBigIntBE } from 'bigint-buffer';
 import { base64url } from 'jose';
 import {
 	poseidon1,
@@ -156,6 +156,13 @@ async function genAddressSeed(pin: bigint, { name, value }: UserInfo) {
 	]);
 }
 
+// use custom function because when having a width 20 the library
+// returns different results between native and browser computations
+function toBufferBE(num: bigint, width: number) {
+	const hex = num.toString(16);
+	return Buffer.from(hex.padStart(width * 2, '0').slice(-width * 2), 'hex');
+}
+
 function generateNonce(ephemeralPublicKey: bigint, maxEpoch: number, randomness: bigint) {
 	const eph_public_key_0 = ephemeralPublicKey / 2n ** 128n;
 	const eph_public_key_1 = ephemeralPublicKey % 2n ** 128n;
@@ -221,7 +228,7 @@ export async function zkLogin({
 	provider: ZkProvider;
 	nonce?: string;
 	loginHint?: string;
-	prompt?: 'select_account' | 'concent';
+	prompt?: 'select_account' | 'consent';
 }) {
 	if (!nonce) {
 		nonce = base64url.encode(randomBytes(20));
@@ -257,34 +264,54 @@ export async function zkLogin({
 	return jwt;
 }
 
-const pinRegistryUrl =
-	process.env.NODE_ENV === 'production'
-		? // TODO: update when we have the final url
-		  'https://enoki-server-7e33d356b89c.herokuapp.com'
-		: 'http://localhost:8000';
+const pinRegistryUrl = 'https://enoki-server-7e33d356b89c.herokuapp.com';
 
-export function fetchPin(jwt: string): Promise<{ id: string; pin: string }> {
-	return fetchWithSentry('fetchUserPin', `${pinRegistryUrl}/get_pin/${jwt}`);
+export async function fetchPin(jwt: string): Promise<{ id: string; pin: string }> {
+	const response = await fetchWithSentry('fetchUserPin', `${pinRegistryUrl}/get_pin/${jwt}`);
+	return response.json();
 }
 
-export interface ZkProofsParams {
+type WalletInputs = {
 	jwt: string;
 	ephemeralPublicKey: bigint;
 	maxEpoch: number;
 	jwtRandomness: bigint;
 	userPin: bigint;
 	keyClaimName?: 'sub' | 'email';
-}
+};
+type Claim = {
+	name: string;
+	value_base64: string;
+	index_mod_4: number;
+};
+type ProofPoints = {
+	pi_a: string[];
+	pi_b: string[][];
+	pi_c: string[];
+	// TODO: seems protocol & curve is missing from the actual response
+	protocol: string;
+	curve: string;
+};
+export type PartialZkSignature = {
+	// TODO: is proof_points the expected field name?
+	proof_points: ProofPoints;
+	address_seed: string;
+	claims: Claim[];
+	header_base64: string;
+};
 
-export async function createZKProofs({
+// TODO: update when we have the final url (and a https one)
+const zkProofsServerUrl = 'http://185.209.177.123:8000';
+
+export async function createPartialZKSignature({
 	jwt,
 	ephemeralPublicKey,
 	jwtRandomness,
 	maxEpoch,
 	userPin,
 	keyClaimName = 'sub',
-}: ZkProofsParams): Promise<any> {
-	const response = await fetch('http://185.209.177.123:8000/zkp', {
+}: WalletInputs): Promise<PartialZkSignature> {
+	const response = await fetchWithSentry('createZKProofs', `${zkProofsServerUrl}/zkp`, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
@@ -298,8 +325,5 @@ export async function createZKProofs({
 			key_claim_name: keyClaimName,
 		}),
 	});
-	if (!response.ok) {
-		throw new Error(`Failed to fetch proofs, ${response.status} (${response.statusText})`);
-	}
 	return response.json();
 }

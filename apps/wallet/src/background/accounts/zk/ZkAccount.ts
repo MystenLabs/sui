@@ -1,21 +1,44 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SerializedSignature, type ExportedKeypair } from '@mysten/sui.js/cryptography';
+import {
+	type SerializedSignature,
+	type ExportedKeypair,
+	SIGNATURE_SCHEME_TO_FLAG,
+	toSerializedSignature,
+} from '@mysten/sui.js/cryptography';
+import { fromB64, toB64 } from '@mysten/sui.js/utils';
 import { toBigIntBE } from 'bigint-buffer';
 import { decodeJwt } from 'jose';
+import { bcs } from './bcs';
+import { getCurrentEpoch } from './current-epoch';
 import { type ZkProvider } from './providers';
-import { createZKProofs, fetchPin, getAddress, prepareZKLogin, zkLogin } from './utils';
+import {
+	type PartialZkSignature,
+	createPartialZKSignature,
+	fetchPin,
+	getAddress,
+	prepareZKLogin,
+	zkLogin,
+} from './utils';
 import {
 	Account,
 	type SerializedUIAccount,
 	type SigningAccount,
 	type SerializedAccount,
 } from '../Account';
+import networkEnv from '_src/background/NetworkEnv';
+import { type NetworkEnvType } from '_src/shared/api-env';
 import { deobfuscate, obfuscate } from '_src/shared/cryptography/keystore';
-import { getActiveNetworkSuiClient } from '_src/shared/sui-client';
+import { fromExportedKeypair } from '_src/shared/utils/from-exported-keypair';
 
-type SessionStorageData = { ephemeralKeyPair: ExportedKeypair };
+type SessionStorageData = {
+	ephemeralKeyPair: ExportedKeypair;
+	proofs: PartialZkSignature;
+	minEpoch: number;
+	maxEpoch: number;
+	network: NetworkEnvType;
+};
 
 type JwtSerializedClaims = {
 	email: string;
@@ -41,7 +64,7 @@ export interface ZkAccountSerialized extends SerializedAccount {
 	claims: string;
 }
 
-export interface ZkAccountSerializedUI extends SerializedUIAccount {
+export interface ZkAccountSerializedUI extends SerializedUIAccount, JwtSerializedClaims {
 	type: 'zk';
 }
 
@@ -118,16 +141,27 @@ export class ZkAccount
 	}
 
 	async isLocked(): Promise<boolean> {
-		// TODO:
-		return true;
+		const credentials = await this.getEphemeralValue();
+		if (!credentials) {
+			return true;
+		}
+		const { maxEpoch, network } = credentials;
+		const currentNetwork = await networkEnv.getActiveNetwork();
+		if (
+			currentNetwork.env !== network.env ||
+			currentNetwork.customRpcUrl !== network.customRpcUrl
+		) {
+			await this.lock(true);
+			return true;
+		}
+		return (await getCurrentEpoch()) > maxEpoch;
 	}
 
 	async unlock() {
 		const { provider, claims, pin: obfuscatedPin } = await this.getStoredData();
 		const pin = await deobfuscate<string>(obfuscatedPin);
 		const { email, sub, aud, iss } = await deobfuscate<JwtSerializedClaims>(claims);
-		const suiClient = await getActiveNetworkSuiClient();
-		const { epoch } = await suiClient.getLatestSuiSystemState();
+		const epoch = await getCurrentEpoch();
 		const { ephemeralKeyPair, nonce, randomness, maxEpoch } = prepareZKLogin(Number(epoch));
 		const jwt = await zkLogin({ provider, nonce, loginHint: sub });
 		const decodedJWT = decodeJwt(jwt);
@@ -137,9 +171,9 @@ export class ZkAccount
 			decodedJWT.sub !== sub ||
 			decodedJWT.iss !== iss
 		) {
-			throw new Error("Logged in account doesn't much with saved account");
+			throw new Error("Logged in account doesn't match with saved account");
 		}
-		const proofs = await createZKProofs({
+		const proofs = await createPartialZKSignature({
 			jwt,
 			ephemeralPublicKey: toBigIntBE(Buffer.from(ephemeralKeyPair.getPublicKey().toRawBytes())),
 			userPin: BigInt(pin),
@@ -147,12 +181,19 @@ export class ZkAccount
 			keyClaimName: 'sub',
 			maxEpoch,
 		});
-		console.log({ jwt, proofs });
-		// TODO:
+		await this.setEphemeralValue({
+			ephemeralKeyPair: await ephemeralKeyPair.export(),
+			minEpoch: Number(epoch),
+			maxEpoch,
+			proofs,
+			network: await networkEnv.getActiveNetwork(),
+		});
+		await this.onUnlocked();
 	}
 
 	async toUISerialized(): Promise<ZkAccountSerializedUI> {
-		const { address, publicKey, type } = await this.getStoredData();
+		const { address, publicKey, type, claims } = await this.getStoredData();
+		const jwtInfo = await deobfuscate<JwtSerializedClaims>(claims);
 		return {
 			id: this.id,
 			type,
@@ -160,11 +201,45 @@ export class ZkAccount
 			publicKey,
 			isLocked: await this.isLocked(),
 			lastUnlockedOn: await this.lastUnlockedOn,
+			...jwtInfo,
 		};
 	}
 
 	async signData(data: Uint8Array): Promise<SerializedSignature> {
-		// TODO:
-		return '';
+		if (await this.isLocked()) {
+			// check is locked to handle cases of different network, current epoch higher than max epoch etc.
+			throw new Error('Account is locked');
+		}
+		const credentials = await this.getEphemeralValue();
+		if (!credentials) {
+			// checking the isLocked above should catch this but keep it just in case
+			throw new Error('Account is locked');
+		}
+		const { ephemeralKeyPair, proofs, maxEpoch } = credentials;
+		const keyPair = fromExportedKeypair(ephemeralKeyPair);
+		const userSignature = toSerializedSignature({
+			signature: await keyPair.sign(data),
+			signatureScheme: keyPair.getKeyScheme(),
+			publicKey: keyPair.getPublicKey(),
+		});
+		const bytes = bcs
+			.ser(
+				'ZkSignature',
+				{
+					proof_points: proofs.proof_points,
+					address_seed: proofs.address_seed,
+					claims: proofs.claims,
+					header_base64: proofs.header_base64,
+					eph_public_key: keyPair.getPublicKey().toRawBytes(),
+					max_epoch: String(maxEpoch),
+					tx_sign: fromB64(userSignature),
+				},
+				{ maxSize: 2048 },
+			)
+			.toBytes();
+		const signatureBytes = new Uint8Array(bytes.length + 1);
+		signatureBytes.set([SIGNATURE_SCHEME_TO_FLAG['Zk']]);
+		signatureBytes.set(bytes, 1);
+		return toB64(signatureBytes);
 	}
 }
