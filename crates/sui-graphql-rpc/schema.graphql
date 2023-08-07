@@ -107,15 +107,12 @@ type Query {
   networkMetrics: NetworkMetrics
   moveCallMetrics: MoveCallMetrics
 
-  # `checkpoint` defaults to the latest available checkpoint.
-  checkpointAddressMetrics(checkpoint: Int): AddressMetric
-
-  allEpochAddressMetricConnection(
+  allEpochAddressMetricsConnection(
     first: Int,
     after: String,
     last: Int,
     before: String,
-  ): AddressMetricConnection
+  ): AddressMetricsConnection
 }
 
 # NB. Add after MVP has stabilised.
@@ -564,6 +561,9 @@ type Checkpoint {
   endOfEpoch: EndOfEpochData
 
   transactionConnection(first: Int, after: String, last: Int, before: String): TransactionBlockConnection
+
+  # NB. Will be moved into a private, explorer-specific extension.
+  addressMetrics: AddressMetrics
 }
 
 type EndOfEpochData {
@@ -1189,7 +1189,7 @@ type AddressMetricConnection {
 
 type AddressMetricEdge {
   cursor: String
-  node: AddressMetric!
+  node: AddressMetrics!
 }
 
 # StakeConnection
