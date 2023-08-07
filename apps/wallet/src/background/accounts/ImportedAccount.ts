@@ -4,7 +4,7 @@
 import { type ExportedKeypair } from '@mysten/sui.js/cryptography';
 import {
 	Account,
-	type PasswordUnLockableAccount,
+	type PasswordUnlockableAccount,
 	type SerializedUIAccount,
 	type SigningAccount,
 	type SerializedAccount,
@@ -35,7 +35,7 @@ export function isImportedAccountSerializedUI(
 
 export class ImportedAccount
 	extends Account<ImportedAccountSerialized, SessionStorageData>
-	implements PasswordUnLockableAccount, SigningAccount
+	implements PasswordUnlockableAccount, SigningAccount
 {
 	readonly canSign = true;
 	readonly unlockType = 'password' as const;

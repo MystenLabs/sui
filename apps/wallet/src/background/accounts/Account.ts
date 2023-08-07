@@ -132,14 +132,18 @@ export interface SerializedUIAccount {
 	readonly lastUnlockedOn: number | null;
 }
 
-export interface PasswordUnLockableAccount {
+export interface PasswordUnlockableAccount {
 	readonly unlockType: 'password';
 	passwordUnlock(password: string): Promise<void>;
 }
 
-export function isPasswordUnLockable(account: any): account is PasswordUnLockableAccount {
-	return (
-		'passwordUnlock' in account && 'unlockType' in account && account.unlockType === 'password'
+export function isPasswordUnLockable(account: unknown): account is PasswordUnlockableAccount {
+	return !!(
+		account &&
+		typeof account === 'object' &&
+		'passwordUnlock' in account &&
+		'unlockType' in account &&
+		account.unlockType === 'password'
 	);
 }
 

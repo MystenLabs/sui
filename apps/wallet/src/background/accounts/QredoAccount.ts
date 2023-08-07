@@ -4,7 +4,7 @@
 import {
 	Account,
 	type SerializedAccount,
-	type PasswordUnLockableAccount,
+	type PasswordUnlockableAccount,
 	type SerializedUIAccount,
 } from './Account';
 import { QredoAccountSource } from '../account-sources/QredoAccountSource';
@@ -34,7 +34,7 @@ type EphemeralData = {
 
 export class QredoAccount
 	extends Account<QredoSerializedAccount, EphemeralData>
-	implements PasswordUnLockableAccount
+	implements PasswordUnlockableAccount
 {
 	readonly unlockType = 'password' as const;
 

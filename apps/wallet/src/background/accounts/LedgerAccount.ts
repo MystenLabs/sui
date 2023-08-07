@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-	type PasswordUnLockableAccount,
+	type PasswordUnlockableAccount,
 	type SerializedAccount,
 	type SerializedUIAccount,
 	Account,
@@ -33,7 +33,7 @@ type EphemeralData = {
 
 export class LedgerAccount
 	extends Account<LedgerAccountSerialized, EphemeralData>
-	implements PasswordUnLockableAccount
+	implements PasswordUnlockableAccount
 {
 	readonly unlockType = 'password';
 

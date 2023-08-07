@@ -33,7 +33,7 @@ type DataDecryptedV0 = {
 
 interface MnemonicAccountSourceSerialized extends AccountSourceSerialized {
 	type: 'mnemonic';
-	encrypted: string;
+	encryptedData: string;
 	// hash of entropy to be used for comparing sources (even when locked)
 	sourceHash: string;
 }
@@ -65,7 +65,7 @@ export class MnemonicAccountSource extends AccountSource<
 		const dataSerialized: MnemonicAccountSourceSerialized = {
 			id: makeUniqueKey(),
 			type: 'mnemonic',
-			encrypted: await encrypt(password, decryptedData),
+			encryptedData: await encrypt(password, decryptedData),
 			sourceHash: bytesToHex(sha256(entropy)),
 		};
 		const allAccountSources = await getAccountSources();
@@ -98,7 +98,9 @@ export class MnemonicAccountSource extends AccountSource<
 	}
 
 	async unlock(password: string) {
-		await this.setEphemeralValue(await decrypt(password, (await this.getStoredData()).encrypted));
+		await this.setEphemeralValue(
+			await decrypt(password, (await this.getStoredData()).encryptedData),
+		);
 		accountSourcesEvents.emit('accountSourceStatusUpdated', { accountSourceID: this.id });
 	}
 

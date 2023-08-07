@@ -20,14 +20,13 @@ import {
 import { toEntropy } from '_src/shared/utils/bip39';
 
 function toAccountSource(accountSource: AccountSourceSerialized) {
-	switch (true) {
-		case MnemonicAccountSource.isOfType(accountSource):
-			return new MnemonicAccountSource(accountSource.id);
-		case QredoAccountSource.isOfType(accountSource):
-			return new QredoAccountSource(accountSource.id);
-		default:
-			throw new Error(`Unknown account source of type ${accountSource.type}`);
+	if (MnemonicAccountSource.isOfType(accountSource)) {
+		return new MnemonicAccountSource(accountSource.id);
 	}
+	if (QredoAccountSource.isOfType(accountSource)) {
+		return new QredoAccountSource(accountSource.id);
+	}
+	throw new Error(`Unknown account source of type ${accountSource.type}`);
 }
 
 export async function getAccountSources(filter?: { type: AccountSourceType }) {

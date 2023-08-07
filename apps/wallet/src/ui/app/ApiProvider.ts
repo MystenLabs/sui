@@ -91,6 +91,7 @@ export default class ApiProvider {
 	}
 
 	public getSignerInstance(
+		// TODO: Remove SerializedAccount
 		account: SerializedAccount | SerializedUIAccount,
 		backgroundClient: BackgroundClient,
 	): SignerWithProvider {
