@@ -100,10 +100,10 @@ for (let pool of allPools) {
 }
 let allExpiredOrders = (await Promise.all(allExpiredOrdersPromises)).flat();
 
-// Create a transaction to clean up all expired orders and get the estimated profit using devInspectTransactionBlock
-let {profit, tx} = await createCleanUpTransaction(allExpiredOrders);
+// Create a transaction to clean up all expired orders and get the estimated rebate using devInspectTransactionBlock
+let {rebate, tx} = await createCleanUpTransaction(allExpiredOrders);
 
-console.log(`Total estimated profit: ${profit / 1e9} SUI`);
+console.log(`Total estimated storage fee rebate: ${rebate / 1e9} SUI`);
 // Todo : sign and execute the transaction
 
 async function retrieveAllPools() {
@@ -128,7 +128,7 @@ async function retrieveExpiredOrders(poolId: string) {
     let poolData = pool.data?.bcs!;
 
     switch (poolData.dataType) {
-        // Pool data type is a move object
+        // Pool is a move object
         case "moveObject": {
             let pool = bcs.de("Pool", fromB64(poolData.bcsBytes));
             let asks = await getAllDFPages(pool.asks.leaves.id);
@@ -199,9 +199,9 @@ async function createCleanUpTransaction(poolOrders: { pool: any, expiredOrders: 
     });
 
     let costSummary = result.effects.gasUsed;
-    let profit = parseInt(costSummary.storageRebate) - parseInt(costSummary.storageCost) - parseInt(costSummary.computationCost);
+    let rebate = parseInt(costSummary.storageRebate) - parseInt(costSummary.storageCost) - parseInt(costSummary.computationCost);
 
-    return {profit, tx};
+    return {rebate, tx};
 }
 
 // helper functions to retrieve all pages of dynamic fields
