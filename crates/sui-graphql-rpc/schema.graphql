@@ -52,7 +52,7 @@ type Query {
   ): DryRunResult
 
   owner(address: SuiAddress!): Owner
-  object(address: SuiAddress!, version: BigInt): Object
+  object(address: SuiAddress!, version: Int): Object
   address(address: SuiAddress!): Address
 
   # `epochId` defaults to the latest epoch.
@@ -108,7 +108,7 @@ type Query {
   moveCallMetrics: MoveCallMetrics
 
   # `checkpoint` defaults to the latest available checkpoint.
-  checkpointAddressMetrics(checkpoint: BigInt): AddressMetric
+  checkpointAddressMetrics(checkpoint: Int): AddressMetric
 
   allEpochAddressMetricConnection(
     first: Int,
@@ -185,7 +185,7 @@ input TransactionMetadata {
 # get the latest checkpoint.
 input CheckpointID {
   digest: String
-  sequenceNumber: BigInt
+  sequenceNumber: Int
 }
 
 # Find a transaction block either by its transaction digest, or its
@@ -210,7 +210,7 @@ input ObjectFilter {
 
   owner: SuiAddress
   objectId: SuiAddress
-  version: BigInt
+  version: Int
 }
 
 input EventFilter {
@@ -257,7 +257,7 @@ input TransactionBlockFilter {
   function: String
 
   kind: TransactionBlockKindInput
-  checkpoint: BigInt
+  checkpoint: Int
 
   signAddress: SuiAddress
   sentAddress: SuiAddress
@@ -353,11 +353,11 @@ enum AddressTransactionBlockRelationship {
 
 type Object implements Owner {
   id: ID!
-  version: BigInt!
+  version: Int!
   digest: String!
   owner: AmbiguousOwner
 
-  previousVersion: BigInt
+  previousVersion: Int
   previousTransactionBlock: TransactionBlock
   storageRebate: BigInt
 
@@ -451,7 +451,7 @@ type SystemParameters {
 
 type StakeSubsidy {
   balance: BigInt
-  distributionCounter: BigInt
+  distributionCounter: Int
   currentDistributionAmount: BigInt
   periodLength: Int
   decreaseRate: Int
@@ -463,19 +463,19 @@ type ValidatorSet {
   activeValidators: [Validator]
 
   # Indices into `activeValidators`
-  pendingRemovals: [BigInt]
+  pendingRemovals: [Int]
 
   pendingActiveValidators: MoveObject
-  pendingActiveValidatorsSize: BigInt
+  pendingActiveValidatorsSize: Int
 
   stakePoolMappings: MoveObject
-  stakePoolMappingsSize: BigInt
+  stakePoolMappingsSize: Int
 
   inactivePools: MoveObject
-  inactivePoolsSize: BigInt
+  inactivePoolsSize: Int
 
   validatorCandidates: MoveObject
-  validatorCandidatesSize: BigInt
+  validatorCandidatesSize: Int
 }
 
 type Validator {
@@ -491,7 +491,9 @@ type Validator {
 
   operationCap: MoveObject
   stakingPool: MoveObject
+
   exchangeRates: MoveObject
+  exchangeRatesSize: Int
 
   stakingPoolActivationEpoch: Int
   stakingPoolSuiBalance: BigInt
@@ -500,15 +502,14 @@ type Validator {
   pendingStake: BigInt
   pendingTotalSuiWithdraw: BigInt
   pendingPoolTokenWithdraw: BigInt
-  exchangeRatesSize: BigInt
 
   votingPower: Int
   stakeUnits: Int
   gasPrice: BigInt
-  commissionRate: BigInt
+  commissionRate: Int
   nextEpochStake: BigInt
   nextEpochGasPrice: BigInt
-  nextEpochCommissionRate: BigInt
+  nextEpochCommissionRate: Int
 
   # The number of epochs for which this validator has been below the
   # low stake threshold.
@@ -545,7 +546,7 @@ type SafeMode {
 type Checkpoint {
   id: ID!
   digest: String!
-  sequenceNumber: BigInt!
+  sequenceNumber: Int!
 
   timestamp: DateTime
   validatorSignature: Base64
@@ -554,7 +555,7 @@ type Checkpoint {
   previousCheckpointDigest: String
   liveObjectSetDigest: String
 
-  networkTotalTransactions: BigInt
+  networkTotalTransactions: Int
   rollingGasSummary: GasCostSummary
 
   epoch: Epoch
@@ -608,7 +609,7 @@ type ConsensusCommitPrologueTransaction {
   # TODO: This is the "leader round" -- does this line up with
   # checkpoints? In which case, it may suffice to have a `Checkpoint`
   # here.
-  round: BigInt
+  round: Int
   timestamp: DateTime
 }
 
@@ -634,7 +635,7 @@ union TransactionInput = MovePackage | MoveObject | ShareInput
 
 type SharedInput {
   id: SuiAddress
-  initialSharedVersion: BigInt
+  initialSharedVersion: Int
   mutable: Boolean
 }
 
@@ -701,7 +702,7 @@ type TransactionBlockEffects {
   transactionBlock: TransactionBlock
   dependencies: [TransactionBlock]
 
-  lamportVersion: BigInt
+  lamportVersion: Int
   gasEffects: GasEffects
   objectReads: [Object]
   objectChanges: [ObjectChange]
@@ -779,7 +780,7 @@ type Event {
 type Balance {
   id: ID!
   coinType: MoveType
-  coinObjectCount: BigInt
+  coinObjectCount: Int
   totalBalance: BigInt
 }
 
