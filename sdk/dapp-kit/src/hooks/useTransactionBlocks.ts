@@ -10,17 +10,17 @@
  * /crates/sui-open-rpc/spec/openrpc.json
  */
 
-import type { QueryTransactionBlocksParams } from '@mysten/sui.js/client';
+import type { MultiGetTransactionBlocksParams } from '@mysten/sui.js/client';
 import type { UseSuiClientQueryOptions } from './useSuiClientQuery.js';
 import { useSuiClientQuery } from './useSuiClientQuery.js';
 
-export function useQueryTransactionBlocks(
-	params: QueryTransactionBlocksParams,
-	options?: UseSuiClientQueryOptions<'queryTransactionBlocks'>,
+export function useTransactionBlocks(
+	params: MultiGetTransactionBlocksParams,
+	options?: UseSuiClientQueryOptions<'multiGetTransactionBlocks'>,
 ) {
 	return useSuiClientQuery(
 		{
-			method: 'queryTransactionBlocks',
+			method: 'multiGetTransactionBlocks',
 			params,
 		},
 		options,

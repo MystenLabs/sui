@@ -10,17 +10,17 @@
  * /crates/sui-open-rpc/spec/openrpc.json
  */
 
-import type { TryGetPastObjectParams } from '@mysten/sui.js/client';
+import type { QueryEventsParams } from '@mysten/sui.js/client';
 import type { UseSuiClientQueryOptions } from './useSuiClientQuery.js';
 import { useSuiClientQuery } from './useSuiClientQuery.js';
 
-export function useTryGetPastObject(
-	params: TryGetPastObjectParams,
-	options?: UseSuiClientQueryOptions<'tryGetPastObject'>,
+export function useEventsQuery(
+	params: QueryEventsParams,
+	options?: UseSuiClientQueryOptions<'queryEvents'>,
 ) {
 	return useSuiClientQuery(
 		{
-			method: 'tryGetPastObject',
+			method: 'queryEvents',
 			params,
 		},
 		options,

@@ -67,7 +67,9 @@ export async function generateHooks() {
 async function generateHook(method: OpenRpcMethod) {
 	const methodTypeName = normalizeMethodName(method.name);
 	const methodName = methodTypeName[0].toLocaleLowerCase() + methodTypeName.slice(1);
-	const hookName = `use${methodTypeName.replace(/^get/i, '')}`;
+	const hookName = `use${methodTypeName
+		.replace(/^get|multiGet|tryGet/i, '')
+		.replace(/^query(.*)/i, '$1Query')}`;
 	const hasRequiredParams = method.params.some((param) => param.required);
 
 	const source = hookTemplate

@@ -14,7 +14,7 @@ import type { MultiGetObjectsParams } from '@mysten/sui.js/client';
 import type { UseSuiClientQueryOptions } from './useSuiClientQuery.js';
 import { useSuiClientQuery } from './useSuiClientQuery.js';
 
-export function useMultiGetObjects(
+export function useObjects(
 	params: MultiGetObjectsParams,
 	options?: UseSuiClientQueryOptions<'multiGetObjects'>,
 ) {
