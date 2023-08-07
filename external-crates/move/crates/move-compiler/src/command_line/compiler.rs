@@ -677,6 +677,8 @@ fn generate_interface_files_for_deps(
     let interface_files_paths =
         generate_interface_files(deps, interface_files_dir_opt, module_to_named_address, true)?;
     deps.extend(interface_files_paths);
+    // Remove bytecode files
+    deps.retain(|p| !p.path.as_str().ends_with(MOVE_COMPILED_EXTENSION));
     Ok(())
 }
 

@@ -87,9 +87,15 @@ impl BuildPlan {
                     .package_table
                     .get(&package_name)
                     .unwrap();
-                let dep_source_paths = dep_package
+                let mut dep_source_paths = dep_package
                     .get_sources(&self.resolution_graph.build_options)
                     .unwrap();
+                let mut source_available = true;
+                // If source is empty, search bytecode(mv) files
+                if dep_source_paths.is_empty() {
+                    dep_source_paths = dep_package.get_bytecodes().unwrap();
+                    source_available = false;
+                }
                 (
                     package_name,
                     immediate_dependencies_names.contains(&package_name),
@@ -99,6 +105,7 @@ impl BuildPlan {
                         /* is_dependency */ true,
                         &self.resolution_graph.build_options,
                     ),
+                    source_available,
                 )
             })
             .collect();
