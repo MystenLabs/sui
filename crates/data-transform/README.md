@@ -4,5 +4,8 @@ data-transform is a separate process used to transform data, by decoding columns
 ### Running standalone transformer
 
 1. in sui/crates/data-transform:
+```sh
 $ echo DATABASE_URL=postgres://username:password@localhost/diesel_demo > .env
+
+
 
