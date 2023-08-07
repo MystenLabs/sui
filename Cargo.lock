@@ -11035,6 +11035,7 @@ dependencies = [
  "expect-test",
  "fs_extra",
  "hyper",
+ "jsonrpsee",
  "move-compiler",
  "move-core-types",
  "move-package",

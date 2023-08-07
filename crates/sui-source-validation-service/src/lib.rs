@@ -16,7 +16,12 @@ use axum::{Json, Router, Server};
 use hyper::http::Method;
 use hyper::server::conn::AddrIncoming;
 use hyper::{HeaderMap, StatusCode};
+use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
+use jsonrpsee::rpc_params;
+use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use serde::{Deserialize, Serialize};
+use sui_sdk::rpc_types::{SuiObjectDataOptions, SuiTransactionBlockEffects, TransactionFilter};
+use sui_sdk::types::base_types::ObjectID;
 use tower::ServiceBuilder;
 use tracing::{debug, info};
 use url::Url;
@@ -38,6 +43,7 @@ pub const MAINNET_URL: &str = "https://fullnode.mainnet.sui.io:443";
 pub const TESTNET_URL: &str = "https://fullnode.testnet.sui.io:443";
 pub const DEVNET_URL: &str = "https://fullnode.devnet.sui.io:443";
 pub const LOCALNET_URL: &str = "http://127.0.0.1:9000";
+pub const LOCALNET_WS_URL: &str = "ws://127.0.0.1:9000";
 
 pub fn host_port() -> String {
     match option_env!("HOST_PORT") {
@@ -46,12 +52,12 @@ pub fn host_port() -> String {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug)]
 pub struct Config {
     pub packages: Vec<PackageSources>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug)]
 #[serde(tag = "source", content = "values")]
 pub enum PackageSources {
     Repository(RepositorySource),
@@ -72,7 +78,7 @@ pub struct DirectorySource {
     pub network: Option<Network>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SourceInfo {
     pub path: PathBuf,
     // Is Some when content is hydrated from disk.
@@ -112,6 +118,62 @@ impl fmt::Display for Network {
 type SourceLookup = BTreeMap<(AccountAddress, Symbol), SourceInfo>;
 /// Top-level lookup that maps network to sources for corresponding on-chain networks.
 pub type NetworkLookup = BTreeMap<Network, SourceLookup>;
+
+pub async fn upgrade_listener(lookup: &NetworkLookup) -> anyhow::Result<()> {
+    info!("listening for upgrades...");
+    let cap = ObjectID::from_hex_literal(
+        "0xf23bab071d84c0f97d881d1a3da55aa2eb5e4d4094a1a6c28cdd7bff6b45eb06",
+    )
+    .unwrap();
+    let client: WsClient = WsClientBuilder::default().build(LOCALNET_WS_URL).await?;
+    let mut subscription: Subscription<SuiTransactionBlockEffects> = client
+        .subscribe(
+            "suix_subscribeTransaction",
+            rpc_params![TransactionFilter::ChangedObject(cap.into())],
+            "suix_unsubscribeTransaction",
+        )
+        .await
+        .unwrap();
+
+    loop {
+        info!("Txn: {:?}", subscription.next().await);
+    }
+
+    /*
+        let subscription = client.subscribe(
+            "suix_subscribeTransaction",
+            rpc_params![TransactionFilter::FromAddress(*address)],
+            "suix_unsubscribeTransaction",
+    );
+     */
+
+    /*
+        let _client = SuiClientBuilder::default()
+            .ws_url(LOCALNET_WS_URL)
+            .build(LOCALNET_URL)
+            .await?;
+        for (_k, v) in lookup {
+            for (addr, _) in v.keys() {
+                // FIXME don't call for each (addr, module). Only do addr.
+                // FIXME: don't only LOCALNET
+                let client = SuiClientBuilder::default().build(LOCALNET_URL).await?;
+                let prev_txn = client
+                    .read_api()
+                    .get_object_with_options(
+                        ObjectID::from_address(*addr),
+                        SuiObjectDataOptions::new().with_previous_transaction(),
+                    )
+                    .await?
+                    .into_object()
+                    .unwrap()
+                    .previous_transaction
+                    .unwrap();
+                info!("get_object result: {:#?}", prev_txn);
+            }
+    }
+    Ok(())
+        */
+}
 
 pub async fn verify_package(
     network: &Network,
