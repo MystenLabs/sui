@@ -66,7 +66,6 @@ exclude = [
 
 members = [
     "crates/anemo-benchmark",
-    "crates/move-binary-format-wasm",
     "crates/mysten-common",
     "crates/mysten-metrics",
     "crates/mysten-network",
@@ -151,6 +150,7 @@ members = [
     "narwhal/test-utils",
     "narwhal/types",
     "narwhal/worker",
+    "sdk/move-binary-format",
     "sui-execution",
     "sui-execution/cut",
     "sui-execution/latest/sui-adapter",

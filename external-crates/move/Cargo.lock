@@ -2502,6 +2502,7 @@ version = "0.0.3"
 dependencies = [
  "anyhow",
  "arbitrary",
+ "enum-compat-util",
  "getrandom 0.2.9",
  "move-core-types",
  "move-proc-macros",

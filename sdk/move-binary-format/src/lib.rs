@@ -18,7 +18,7 @@ pub fn version() -> String {
 /// Deserialize the bytecode into a JSON string.
 pub fn deserialize(binary: String) -> Result<JsValue, JsErr> {
     let bytes = hex::decode(&binary)?;
-    let compiled_module = CompiledModule::deserialize(&bytes[..])?;
+    let compiled_module = CompiledModule::deserialize_with_defaults(&bytes[..])?;
     let serialized = serde_json::to_string(&compiled_module)?;
     Ok(to_value(&serialized)?)
 }
