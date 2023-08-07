@@ -9,9 +9,7 @@ import { TransactionBlockCard, TransactionBlockCardSection } from '~/ui/Transact
 import type { OwnedObjectRef } from '@mysten/sui.js/client';
 
 export function UpgradedSystemPackages({ data }: { data: OwnedObjectRef[] }) {
-	const packages = data?.filter((object) => object.owner === 'Immutable');
-
-	if (!packages?.length) return null;
+	if (!data?.length) return null;
 
 	return (
 		<TransactionBlockCard title="Changes" size="sm" shadow>
@@ -23,7 +21,7 @@ export function UpgradedSystemPackages({ data }: { data: OwnedObjectRef[] }) {
 				}
 			>
 				<div className="flex flex-col gap-2">
-					{packages.map((object) => {
+					{data.map((object) => {
 						const { objectId } = object.reference;
 						return (
 							<div className="flex flex-wrap items-center justify-between" key={objectId}>
