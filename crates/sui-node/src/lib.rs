@@ -811,6 +811,27 @@ impl SuiNode {
                 quic_config.socket_receive_buffer_size = Some(20 << 20);
             }
             quic_config.allow_failed_socket_buffer_size_setting = true;
+
+            // Set high-performance defaults for quinn transport.
+            // With 200MiB buffer size and ~500ms RTT, max throughput ~400MiB/s.
+            if quic_config.stream_receive_window.is_none() {
+                quic_config.stream_receive_window = Some(100 << 20);
+            }
+            if quic_config.receive_window.is_none() {
+                quic_config.receive_window = Some(200 << 20);
+            }
+            if quic_config.send_window.is_none() {
+                quic_config.send_window = Some(200 << 20);
+            }
+            if quic_config.crypto_buffer_size.is_none() {
+                quic_config.crypto_buffer_size = Some(1 << 20);
+            }
+            if quic_config.max_idle_timeout_ms.is_none() {
+                quic_config.max_idle_timeout_ms = Some(30_000);
+            }
+            if quic_config.keep_alive_interval_ms.is_none() {
+                quic_config.keep_alive_interval_ms = Some(5_000);
+            }
             anemo_config.quic = Some(quic_config);
 
             let server_name = format!("sui-{}", chain_identifier);
