@@ -41,7 +41,7 @@ async fn propose_header() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(0, 0));
-    let (header_store, certificate_store, payload_store) = create_db_stores();
+    let (certificate_store, payload_store) = create_db_stores();
 
     // Create a fake header.
     let proposed_header = primary.header(&committee);
@@ -119,7 +119,6 @@ async fn propose_header() {
     let _handle = Certifier::spawn(
         id,
         committee.clone(),
-        header_store.clone(),
         certificate_store.clone(),
         synchronizer,
         signature_service,
@@ -157,7 +156,7 @@ async fn propose_header_failure() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::default());
-    let (header_store, certificate_store, payload_store) = create_db_stores();
+    let (certificate_store, payload_store) = create_db_stores();
 
     // Create a fake header.
     let proposed_header = primary.header(&committee);
@@ -218,7 +217,6 @@ async fn propose_header_failure() {
     let _handle = Certifier::spawn(
         authority_id,
         committee.clone(),
-        header_store.clone(),
         certificate_store.clone(),
         synchronizer,
         signature_service,
@@ -277,7 +275,7 @@ async fn run_vote_aggregator_with_param(
     let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(0, 0));
-    let (header_store, certificate_store, payload_store) = create_db_stores();
+    let (certificate_store, payload_store) = create_db_stores();
 
     // Create a fake header.
     let proposed_header = primary.header(&committee);
@@ -349,7 +347,6 @@ async fn run_vote_aggregator_with_param(
     let _handle = Certifier::spawn(
         id,
         committee.clone(),
-        header_store.clone(),
         certificate_store.clone(),
         synchronizer,
         signature_service,
@@ -398,7 +395,7 @@ async fn shutdown_core() {
         watch::channel(ConsensusRound::new(0, 0));
 
     // Create test stores.
-    let (header_store, certificate_store, payload_store) = create_db_stores();
+    let (certificate_store, payload_store) = create_db_stores();
 
     // Make a synchronizer for the core.
     let synchronizer = Arc::new(Synchronizer::new(
@@ -434,7 +431,6 @@ async fn shutdown_core() {
     let handle = Certifier::spawn(
         id,
         committee.clone(),
-        header_store.clone(),
         certificate_store.clone(),
         synchronizer.clone(),
         signature_service.clone(),
