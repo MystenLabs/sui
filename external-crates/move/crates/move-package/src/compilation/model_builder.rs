@@ -7,6 +7,7 @@ use crate::{
     resolution::resolution_graph::ResolvedGraph, ModelConfig,
 };
 use anyhow::Result;
+use itertools::Itertools;
 use move_compiler::shared::PackagePaths;
 use move_model::{model::GlobalEnv, options::ModelBuilderOptions, run_model_builder_with_options};
 
@@ -31,14 +32,12 @@ impl ModelBuilder {
     // where we want to support building a Move model.
     pub fn build_model(&self) -> Result<GlobalEnv> {
         // Make sure no renamings have been performed
-        for (pkg_name, pkg) in self.resolution_graph.package_table.iter() {
-            if !pkg.renaming.is_empty() {
-                anyhow::bail!(
-                    "Found address renaming in package '{}' when \
+        if let Some(pkg_name) = self.resolution_graph.contains_renaming() {
+            anyhow::bail!(
+                "Found address renaming in package '{}' when \
                     building Move model -- this is currently not supported",
-                    pkg_name
-                )
-            }
+                pkg_name
+            )
         }
 
         // Targets are all files in the root package
@@ -52,9 +51,15 @@ impl ModelBuilder {
                 if *nm == root_name {
                     return None;
                 }
-                let dep_source_paths = pkg
+                let mut dep_source_paths = pkg
                     .get_sources(&self.resolution_graph.build_options)
                     .unwrap();
+                let mut source_available = true;
+                // If source is empty, search bytecode(mv) files
+                if dep_source_paths.is_empty() {
+                    dep_source_paths = pkg.get_bytecodes().unwrap();
+                    source_available = false;
+                }
                 Some(Ok((
                     *nm,
                     dep_source_paths,
@@ -63,6 +68,7 @@ impl ModelBuilder {
                         /* is_dependency */ true,
                         &self.resolution_graph.build_options,
                     ),
+                    source_available,
                 )))
             })
             .collect::<Result<Vec<_>>>()?;
@@ -74,7 +80,7 @@ impl ModelBuilder {
         )?;
         let (all_targets, all_deps) = if self.model_config.all_files_as_targets {
             let mut targets = vec![target];
-            targets.extend(deps);
+            targets.extend(deps.into_iter().map(|(p, _)| p).collect_vec());
             (targets, vec![])
         } else {
             (vec![target], deps)
@@ -82,7 +88,7 @@ impl ModelBuilder {
         let (all_targets, all_deps) = match &self.model_config.target_filter {
             Some(filter) => {
                 let mut new_targets = vec![];
-                let mut new_deps = all_deps;
+                let mut new_deps = all_deps.into_iter().map(|(p, _)| p).collect_vec();
                 for PackagePaths {
                     name,
                     paths,
@@ -108,7 +114,10 @@ impl ModelBuilder {
                 }
                 (new_targets, new_deps)
             }
-            None => (all_targets, all_deps),
+            None => (
+                all_targets,
+                all_deps.into_iter().map(|(p, _)| p).collect_vec(),
+            ),
         };
 
         run_model_builder_with_options(all_targets, all_deps, ModelBuilderOptions::default(), None)
