@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeature } from '@growthbook/growthbook-react';
+import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import {
     ConnectButton,
     useWalletKit,
@@ -11,7 +11,6 @@ import {
 import { useParams } from 'react-router-dom';
 
 import { Button } from '~/ui/Button';
-import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
 
 // This is a custom feature supported by the Sui Wallet:
 type StakeInput = { validatorAddress: string };
@@ -25,9 +24,7 @@ type SuiWalletStakeFeature = {
 type StakeWallet = WalletWithFeatures<Partial<SuiWalletStakeFeature>>;
 
 export function StakeButton() {
-    const stakeButtonEnabled = useFeature(
-        GROWTHBOOK_FEATURES.VALIDATOR_PAGE_STAKING
-    ).on;
+    const stakeButtonEnabled = useFeatureIsOn('validator-page-staking');
     const { id } = useParams();
     const { wallets, currentWallet, connect } = useWalletKit();
 

@@ -5,11 +5,14 @@ use mysten_metrics::RegistryService;
 use prometheus::Registry;
 use rand::{prelude::StdRng, SeedableRng};
 use std::net::IpAddr;
+use std::num::NonZeroUsize;
 use std::time::Duration;
-use sui_config::{builder::ConfigBuilder, NetworkConfig, NodeConfig};
+use sui_config::NodeConfig;
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::authority_client::NetworkAuthorityClient;
 pub use sui_node::{SuiNode, SuiNodeHandle};
+use sui_swarm_config::network_config::NetworkConfig;
+use sui_swarm_config::network_config_builder::{ConfigBuilder, FullnodeConfigBuilder};
 use sui_types::base_types::ObjectID;
 use sui_types::messages_grpc::ObjectInfoRequest;
 use sui_types::multiaddr::Multiaddr;
@@ -29,7 +32,10 @@ pub fn test_authority_configs() -> NetworkConfig {
 pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkConfig {
     let config_dir = tempfile::tempdir().unwrap().into_path();
     let rng = StdRng::from_seed([0; 32]);
-    let mut configs = NetworkConfig::generate_with_rng(&config_dir, committee_size, rng);
+    let mut configs = ConfigBuilder::new(config_dir)
+        .committee_size(NonZeroUsize::new(committee_size).unwrap())
+        .rng(rng)
+        .build();
     for config in configs.validator_configs.iter_mut() {
         let parameters = &mut config.consensus_config.as_mut().unwrap().narwhal_config;
         // NOTE: the following parameters are important to ensure tests run fast. Using the default
@@ -144,7 +150,7 @@ pub async fn spawn_test_authorities(config: &NetworkConfig) -> Vec<SuiNodeHandle
 pub async fn spawn_fullnode(config: &NetworkConfig, rpc_port: Option<u16>) -> SuiNodeHandle {
     let registry_service = RegistryService::new(Registry::new());
 
-    let mut builder = config.fullnode_config_builder();
+    let mut builder = FullnodeConfigBuilder::new(config);
 
     if cfg!(msim) {
         let ip_addr: IpAddr = "11.10.0.0".to_string().parse().unwrap();

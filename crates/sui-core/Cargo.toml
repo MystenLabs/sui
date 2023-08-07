@@ -39,7 +39,6 @@ tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
 tokio-retry = "0.3"
 tokio-stream = { version = "0.1.8", features = ["sync", "net"] }
 tracing = "0.1.36"
-url = "2.3.1"
 
 fastcrypto.workspace = true
 move-binary-format.workspace = true
@@ -55,6 +54,10 @@ telemetry-subscribers.workspace = true
 typed-store-derive.workspace = true
 typed-store.workspace = true
 
+# TODO use sui-execution versioned crate
+sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
+sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
+
 mysten-metrics = { path = "../mysten-metrics" }
 narwhal-config = { path = "../../narwhal/config" }
 narwhal-crypto = { path = "../../narwhal/crypto" }
@@ -64,19 +67,20 @@ narwhal-node = { path = "../../narwhal/node" }
 narwhal-types = { path = "../../narwhal/types" }
 narwhal-worker = { path = "../../narwhal/worker" }
 shared-crypto = { path = "../shared-crypto" }
-sui-adapter = { path = "../sui-adapter" }
 sui-config = { path = "../sui-config" }
 sui-framework = { path = "../sui-framework" }
+sui-swarm-config = { path = "../sui-swarm-config" }
+sui-genesis-builder = { path = "../sui-genesis-builder" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 sui-macros = { path = "../sui-macros" }
 sui-move-build = { path = "../sui-move-build" }
-sui-move-natives = { path = "../sui-move-natives" }
 sui-network = { path = "../sui-network" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-simulator = { path = "../sui-simulator" }
 sui-storage = { path = "../sui-storage" }
 sui-test-transaction-builder = { path = "../sui-test-transaction-builder" }
 sui-types = { path = "../sui-types" }
+sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
@@ -91,9 +95,11 @@ serde_yaml = "0.8.26"
 
 move-symbol-pool.workspace = true
 
+# TODO use sui-execution versioned crate
+sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }
+
 narwhal-test-utils = { path = "../../narwhal/test-utils" }
 sui-types = { path = "../sui-types", features = ["test-utils"] }
-sui-verifier = { path = "../sui-verifier" }
 
 [target.'cfg(not(target_env = "msvc"))'.dev-dependencies]
 pprof = { version = "0.11.0", features = ["cpp", "frame-pointer"] }

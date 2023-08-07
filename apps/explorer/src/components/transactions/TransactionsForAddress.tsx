@@ -20,9 +20,9 @@ interface Props {
 export function TransactionsForAddress({ address, type }: Props) {
     const rpc = useRpcClient();
 
-    const { data, isLoading, isError } = useQuery(
-        ['transactions-for-address', address, type],
-        async () => {
+    const { data, isLoading, isError } = useQuery({
+        queryKey: ['transactions-for-address', address, type],
+        queryFn: async () => {
             const filters =
                 type === 'object'
                     ? [{ InputObject: address }, { ChangedObject: address }]
@@ -58,8 +58,8 @@ export function TransactionsForAddress({ address, type }: Props) {
                 });
 
             return uniqueList;
-        }
-    );
+        },
+    });
 
     if (isLoading) {
         return (

@@ -30,9 +30,9 @@ function ReceiptPage() {
     const fromParam = searchParams.get('from');
     const rpc = useRpcClient();
 
-    const { data, isLoading, isError } = useQuery(
-        ['transactions-by-id', transactionId],
-        async () => {
+    const { data, isLoading, isError } = useQuery({
+        queryKey: ['transactions-by-id', transactionId],
+        queryFn: async () => {
             return rpc.getTransactionBlock({
                 digest: transactionId!,
                 options: {
@@ -44,13 +44,10 @@ function ReceiptPage() {
                 },
             });
         },
-        {
-            enabled: !!transactionId,
-            retry: 8,
-            // The initial data can be provided from the previous page in the event that we already have it from the execution.
-            initialData: location.state?.response,
-        }
-    );
+        enabled: !!transactionId,
+        retry: 8,
+        initialData: location.state?.response,
+    });
 
     const navigate = useNavigate();
     // return to previous route or from param if available

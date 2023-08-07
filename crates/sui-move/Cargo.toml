@@ -10,13 +10,13 @@ edition = "2021"
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 clap = { version = "3.2.17", features = ["derive"] }
 colored = "2.0.0"
-const-str = "0.5.3"
-git-version = "0.3.5"
 once_cell = { version = "1.16", optional = true }
 serde_json = "1.0.88"
 serde_yaml = "0.8.26"
 tracing = "0.1.36"
 prometheus = "0.13.3"
+git-version = "0.3.5"
+const-str = "0.5.3"
 
 fastcrypto.workspace = true
 move-binary-format.workspace = true
@@ -32,10 +32,11 @@ move-vm-test-utils.workspace = true
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full"] }
 
+sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
+
 sui-core = { path = "../sui-core", optional = true }
 sui-cost-tables = { path = "../sui-cost-tables" }
 sui-move-build = { path = "../sui-move-build" }
-sui-move-natives = { path = "../sui-move-natives" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-types = { path = "../sui-types" }
 
@@ -56,7 +57,6 @@ sui-core = { path = "../sui-core" }
 sui-macros = { path = "../sui-macros" }
 sui-node = { path = "../sui-node" }
 sui-simulator = { path = "../sui-simulator" }
-test-utils = { path = "../test-utils" }
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["jemalloc-ctl"]

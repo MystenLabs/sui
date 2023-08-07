@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// TODO: consider renaming this to `example_nft`
 /// A minimalist example to demonstrate how to create an NFT like object
 /// on Sui.
 module nfts::devnet_nft {

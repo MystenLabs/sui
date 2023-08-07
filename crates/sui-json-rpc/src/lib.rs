@@ -33,6 +33,7 @@ pub mod indexer_api;
 pub mod logger;
 mod metrics;
 pub mod move_utils;
+mod name_service;
 mod object_changes;
 pub mod read_api;
 mod routing_layer;
@@ -66,7 +67,7 @@ pub fn sui_rpc_doc(version: &str) -> Project {
     Project::new(
         version,
         "Sui JSON-RPC",
-        "Sui JSON-RPC API for interaction with Sui Full node.",
+        "Sui JSON-RPC API for interaction with Sui Full node. Make RPC calls using https://fullnode.NETWORK.sui.io:443, where NETWORK is the network you want to use (testnet, devnet, mainnet). By default, local networks use port 9000.",
         "Mysten Labs",
         "https://mystenlabs.com",
         "build@mystenlabs.com",

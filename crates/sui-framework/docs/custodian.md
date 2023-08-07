@@ -185,6 +185,10 @@ Create an <code><a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;Asset&gt;,
     user: ID
 ): (u64, u64) {
+    // <b>if</b> <a href="custodian.md#0xdee9_custodian">custodian</a> account is not created yet, directly <b>return</b> (0, 0) rather than <b>abort</b>
+    <b>if</b> (!<a href="../../../.././build/Sui/docs/table.md#0x2_table_contains">table::contains</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, user)) {
+        <b>return</b> (0, 0)
+    };
     <b>let</b> account_balances = <a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow">table::borrow</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, user);
     <b>let</b> avail_balance = <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&account_balances.available_balance);
     <b>let</b> locked_balance = <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&account_balances.locked_balance);

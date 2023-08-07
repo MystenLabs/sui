@@ -12,7 +12,6 @@ runs:
     - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
       with:
         ref: ${{ inputs.ref }}
-    - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
     # Disabled for now as it makes test runs take longer
     # - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
     - uses: pnpm/action-setup@c3b53f6a16e57305370b4ae5a540c2077a1d50dd # pin@v2.2.4

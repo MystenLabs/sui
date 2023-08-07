@@ -33,9 +33,12 @@ describe('Test Move call with a vector of objects as input', () => {
     return getCreatedObjects(result)![0].reference.objectId;
   }
 
-  async function destroyObjects(objects: ObjectId[]) {
+  async function destroyObjects(objects: ObjectId[], withType = false) {
     const tx = new TransactionBlock();
-    const vec = tx.makeMoveVec({ objects: objects.map((id) => tx.object(id)) });
+    const vec = tx.makeMoveVec({
+      objects: objects.map((id) => tx.object(id)),
+      type: withType ? `${packageId}::entry_point_vector::Obj` : undefined,
+    });
     tx.moveCall({
       target: `${packageId}::entry_point_vector::two_obj_vec_destroy`,
       arguments: [vec],
@@ -58,7 +61,17 @@ describe('Test Move call with a vector of objects as input', () => {
   });
 
   it('Test object vector', async () => {
-    await destroyObjects([await mintObject(7), await mintObject(42)]);
+    await destroyObjects(
+      [await mintObject(7), await mintObject(42)],
+      /* withType */ false,
+    );
+  });
+
+  it('Test object vector with type hint', async () => {
+    await destroyObjects(
+      [await mintObject(7), await mintObject(42)],
+      /* withType */ true,
+    );
   });
 
   it('Test regular arg mixed with object vector arg', async () => {

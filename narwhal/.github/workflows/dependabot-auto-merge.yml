@@ -23,7 +23,6 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
           token: ${{ secrets.AUTOMERGE_TOKEN }}
-      - uses: actions-rs/toolchain@v1
       - name: Install cargo-hakari, and cache the binary
         uses: baptiste0928/cargo-install@v1
         with:

@@ -3,18 +3,18 @@
 
 use std::path::PathBuf;
 use std::time::Duration;
-use sui_config::NetworkConfig;
 use sui_macros::*;
 use sui_node::SuiNodeHandle;
+use sui_swarm_config::network_config::NetworkConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::crypto::deterministic_random_account_key;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::SuiResult;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
-use sui_types::messages::{CallArg, ObjectArg};
 use sui_types::multiaddr::Multiaddr;
 use sui_types::object::{generate_test_gas_objects, Object, Owner, OBJECT_START_VERSION};
+use sui_types::transaction::{CallArg, ObjectArg};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use test_utils::authority::{spawn_test_authorities, test_authority_configs_with_objects};
 use test_utils::transaction::{

@@ -7,6 +7,7 @@ use move_binary_format::file_format::{
     IdentifierIndex, ModuleHandleIndex, Signature, SignatureIndex, SignatureToken,
     Visibility::Public,
 };
+use move_bytecode_verifier::meter::BoundMeter;
 use move_core_types::{identifier::Identifier, vm_status::StatusCode};
 
 const MAX_BASIC_BLOCKS: u16 = 1024;
@@ -84,10 +85,13 @@ fn many_backedges() {
         code.push(Bytecode::Ret);
     }
 
+    let config = production_config();
+    let mut meter = BoundMeter::new(&config);
     let result = move_bytecode_verifier::verify_module_with_config_for_test(
         "many_backedges",
-        &production_config(),
+        &config,
         &m,
+        &mut meter,
     );
     assert_eq!(
         result.unwrap_err().major_status(),

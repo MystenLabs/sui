@@ -423,7 +423,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                         _ => typed_store::rocks::open_cf_opts(path, global_db_options_override, metric_conf, &opt_cfs)
                     };
                     db.map(|d| (d, rwopt_cfs))
-                }.expect("Cannot open DB.");
+                }.expect(&format!("Cannot open DB at {:?}", path));
                 let (
                         #(
                             #field_names
@@ -795,7 +795,7 @@ pub fn derive_sallydb_general(input: TokenStream) -> TokenStream {
                                 _ => typed_store::rocks::open_cf_opts(path, global_db_options_override, metric_conf, &opt_cfs)
                             };
                             db.map(|d| (d, rwopt_cfs))
-                        }.expect("Cannot open DB.");
+                        }.expect(&format!("Cannot open DB at {:?}", path));
                         let (
                             #(
                                 #field_names

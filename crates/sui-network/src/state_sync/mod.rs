@@ -49,8 +49,9 @@
 
 use anemo::{types::PeerEvent, PeerId, Request, Response, Result};
 use futures::{stream::FuturesOrdered, FutureExt, StreamExt};
+use rand::Rng;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     sync::{Arc, RwLock},
     time::Duration,
 };
@@ -234,6 +235,55 @@ impl PeerHeights {
 
     pub fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<&Checkpoint> {
         self.unprocessed_checkpoints.get(digest)
+    }
+}
+
+// PeerBalancer is an Iterator that selects peers based on RTT with some added randomness.
+#[derive(Clone)]
+struct PeerBalancer {
+    peers: VecDeque<(anemo::Peer, PeerStateSyncInfo)>,
+    requested_checkpoint: Option<CheckpointSequenceNumber>,
+}
+
+impl PeerBalancer {
+    pub fn new(network: &anemo::Network, peer_heights: Arc<RwLock<PeerHeights>>) -> Self {
+        let mut peers: Vec<_> = peer_heights
+            .read()
+            .unwrap()
+            .peers_on_same_chain()
+            // Filter out any peers who we aren't connected with.
+            .filter_map(|(peer_id, info)| network.peer(*peer_id).map(|peer| (peer, *info)))
+            .collect();
+        peers.sort_by(|(peer_a, _), (peer_b, _)| {
+            peer_a.connection_rtt().cmp(&peer_b.connection_rtt())
+        });
+        Self {
+            peers: peers.into(),
+            requested_checkpoint: None,
+        }
+    }
+
+    pub fn with_checkpoint(mut self, checkpoint: CheckpointSequenceNumber) -> Self {
+        self.requested_checkpoint = Some(checkpoint);
+        self
+    }
+}
+
+impl Iterator for PeerBalancer {
+    type Item = StateSyncClient<anemo::Peer>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while !self.peers.is_empty() {
+            const SELECTION_WINDOW: usize = 2;
+            let idx =
+                rand::thread_rng().gen_range(0..std::cmp::min(SELECTION_WINDOW, self.peers.len()));
+            let (peer, info) = self.peers.remove(idx).unwrap();
+
+            if info.height >= self.requested_checkpoint.unwrap_or(0) {
+                return Some(StateSyncClient::new(peer));
+            }
+        }
+        None
     }
 }
 
@@ -812,30 +862,12 @@ where
         ));
     }
 
-    let mut rng = <rand::rngs::StdRng as rand::SeedableRng>::from_entropy();
-    // get a list of peers that can help
-    let peers = peer_heights
-        .read()
-        .unwrap()
-        .peers_on_same_chain()
-        // Filter out any peers who can't help
-        .filter(|(_peer_id, info)| info.height > *current.sequence_number())
-        .map(|(&peer_id, &info)| (peer_id, info))
-        .collect::<Vec<_>>();
-
+    let peer_balancer = PeerBalancer::new(&network, peer_heights.clone());
     // range of the next sequence_numbers to fetch
     let mut request_stream = (current.sequence_number().saturating_add(1)
         ..=*checkpoint.sequence_number())
         .map(|next| {
-            let mut peers = peers
-                .iter()
-                // Filter out any peers who can't help with this particular checkpoint
-                .filter(|(_peer_id, info)| info.height >= next)
-                // Filter out any peers who we aren't connected with
-                .flat_map(|(peer_id, _height)| network.peer(*peer_id))
-                .map(StateSyncClient::new)
-                .collect::<Vec<_>>();
-            rand::seq::SliceRandom::shuffle(peers.as_mut_slice(), &mut rng);
+            let peers = peer_balancer.clone().with_checkpoint(next);
             let peer_heights = peer_heights.clone();
             async move {
                 if let Some(checkpoint) = peer_heights
@@ -846,7 +878,7 @@ where
                     return (Some(checkpoint.to_owned()), next, None);
                 }
 
-                // Iterate through our selected peers trying each one in turn until we're able to
+                // Iterate through peers trying each one in turn until we're able to
                 // successfully get the target checkpoint
                 for mut peer in peers {
                     let request = Request::new(GetCheckpointSummaryRequest::BySequenceNumber(next))
@@ -1116,21 +1148,9 @@ where
     S: WriteStore + Clone,
     <S as ReadStore>::Error: std::error::Error,
 {
-    let mut rng = <rand::rngs::StdRng as rand::SeedableRng>::from_entropy();
-    // get a list of peers that can help
-    let mut peers = peer_heights
-        .read()
-        .unwrap()
-        .peers_on_same_chain()
-        // Filter out any peers who can't help with this particular checkpoint
-        .filter(|(_peer_id, info)| info.height >= *checkpoint.sequence_number())
-        // Filter out any peers who we aren't connected with
-        .flat_map(|(peer_id, _height)| network.peer(*peer_id))
-        .map(StateSyncClient::new)
-        .collect::<Vec<_>>();
-    rand::seq::SliceRandom::shuffle(peers.as_mut_slice(), &mut rng);
-
-    let Some(contents) = get_full_checkpoint_contents(&mut peers, &store, &checkpoint, timeout).await else {
+    let peers = PeerBalancer::new(&network, peer_heights.clone())
+        .with_checkpoint(*checkpoint.sequence_number());
+    let Some(contents) = get_full_checkpoint_contents(peers, &store, &checkpoint, timeout).await else {
         // Delay completion in case of error so we don't hammer the network with retries.
         tokio::time::sleep(Duration::from_secs(10)).await;
         return Err(checkpoint);
@@ -1142,7 +1162,7 @@ where
 }
 
 async fn get_full_checkpoint_contents<S>(
-    peers: &mut [StateSyncClient<anemo::Peer>],
+    peers: PeerBalancer,
     store: S,
     checkpoint: &VerifiedCheckpoint,
     timeout: Duration,
@@ -1166,7 +1186,7 @@ where
 
     // Iterate through our selected peers trying each one in turn until we're able to
     // successfully get the target checkpoint
-    for peer in peers.iter_mut() {
+    for mut peer in peers {
         let request = Request::new(digest).with_timeout(timeout);
         if let Some(contents) = peer
             .get_checkpoint_contents(request)

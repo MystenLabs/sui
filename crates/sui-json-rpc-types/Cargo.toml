@@ -18,6 +18,8 @@ itertools = "0.10.5"
 tracing = "0.1.36"
 bcs = "0.1.4"
 sui-protocol-config = { path = "../sui-protocol-config" }
+sui-macros = { path = "../sui-macros" }
+sui-enum-compat-util = { path = "../sui-enum-compat-util" }
 enum_dispatch = "^0.3"
 
 move-binary-format.workspace = true
@@ -27,3 +29,6 @@ move-bytecode-utils.workspace = true
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+sui-types = { path = "../sui-types", features = ["test-utils"] }

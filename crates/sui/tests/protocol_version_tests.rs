@@ -11,7 +11,7 @@ use test_utils::authority::start_node;
 async fn test_validator_panics_on_unsupported_protocol_version() {
     let dir = tempfile::TempDir::new().unwrap();
     let latest_version = ProtocolVersion::MAX;
-    let network_config = sui_config::builder::ConfigBuilder::new(&dir)
+    let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir)
         .with_protocol_version(ProtocolVersion::new(latest_version.as_u64() + 1))
         .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
             latest_version.as_u64(),
@@ -73,17 +73,18 @@ mod sim_only_tests {
     use sui_types::base_types::ObjectID;
     use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
     use sui_types::id::ID;
-    use sui_types::messages::{Command, ProgrammableMoveCall};
     use sui_types::object::Owner;
     use sui_types::sui_system_state::{
         epoch_start_sui_system_state::EpochStartSystemStateTrait, get_validator_from_table,
         SuiSystemState, SuiSystemStateTrait, SUI_SYSTEM_STATE_SIM_TEST_DEEP_V2,
         SUI_SYSTEM_STATE_SIM_TEST_SHALLOW_V2, SUI_SYSTEM_STATE_SIM_TEST_V1,
     };
+    use sui_types::transaction::{Command, ProgrammableMoveCall};
     use sui_types::{
-        base_types::SequenceNumber, digests::TransactionDigest, messages::TransactionKind,
-        object::Object, programmable_transaction_builder::ProgrammableTransactionBuilder,
-        storage::ObjectStore, MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_OBJECT_ID,
+        base_types::SequenceNumber, digests::TransactionDigest, object::Object,
+        programmable_transaction_builder::ProgrammableTransactionBuilder, storage::ObjectStore,
+        transaction::TransactionKind, MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID,
+        SUI_SYSTEM_PACKAGE_ID,
     };
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use tokio::time::{sleep, Duration};
@@ -446,7 +447,7 @@ mod sim_only_tests {
         dev_inspect_call(
             cluster,
             ProgrammableMoveCall {
-                package: SUI_SYSTEM_OBJECT_ID,
+                package: SUI_SYSTEM_PACKAGE_ID,
                 module: ident_str!("msim_extra_1").to_owned(),
                 function: ident_str!("canary").to_owned(),
                 type_arguments: vec![],
@@ -494,17 +495,17 @@ mod sim_only_tests {
     async fn get_framework_upgrade_versions(
         cluster: &TestCluster,
     ) -> (Option<SequenceNumber>, Option<SequenceNumber>) {
-        let effects = get_framework_upgrade_effects(cluster, &SUI_SYSTEM_OBJECT_ID).await;
+        let effects = get_framework_upgrade_effects(cluster, &SUI_SYSTEM_PACKAGE_ID).await;
 
         let modified_at = effects
             .modified_at_versions()
             .iter()
-            .find_map(|(id, v)| (id == &SUI_SYSTEM_OBJECT_ID).then_some(*v));
+            .find_map(|(id, v)| (id == &SUI_SYSTEM_PACKAGE_ID).then_some(*v));
 
         let mutated_to = effects
             .mutated()
             .iter()
-            .find_map(|((id, v, _), _)| (id == &SUI_SYSTEM_OBJECT_ID).then_some(*v));
+            .find_map(|((id, v, _), _)| (id == &SUI_SYSTEM_PACKAGE_ID).then_some(*v));
 
         (modified_at, mutated_to)
     }
@@ -833,11 +834,11 @@ mod sim_only_tests {
     }
 
     fn override_sui_system_modules(path: &str) {
-        framework_injection::set_override(SUI_SYSTEM_OBJECT_ID, sui_system_modules(path));
+        framework_injection::set_override(SUI_SYSTEM_PACKAGE_ID, sui_system_modules(path));
     }
 
     fn override_sui_system_modules_cb(f: framework_injection::PackageUpgradeCallback) {
-        framework_injection::set_override_cb(SUI_SYSTEM_OBJECT_ID, f)
+        framework_injection::set_override_cb(SUI_SYSTEM_PACKAGE_ID, f)
     }
 
     /// Get compiled modules for Sui System, built from fixture `fixture` in the
@@ -856,8 +857,8 @@ mod sim_only_tests {
             TransactionDigest::genesis(),
             u64::MAX,
             &[
-                BuiltInFramework::get_package_by_id(&MOVE_STDLIB_OBJECT_ID).genesis_move_package(),
-                BuiltInFramework::get_package_by_id(&SUI_FRAMEWORK_OBJECT_ID)
+                BuiltInFramework::get_package_by_id(&MOVE_STDLIB_PACKAGE_ID).genesis_move_package(),
+                BuiltInFramework::get_package_by_id(&SUI_FRAMEWORK_PACKAGE_ID)
                     .genesis_move_package(),
             ],
         )

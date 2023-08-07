@@ -15,10 +15,13 @@ use sui_replay::{execute_replay_command, ReplayToolCommand};
 use sui_types::{base_types::*, object::Owner};
 
 use clap::*;
+use fastcrypto::encoding::Encoding;
 use sui_config::Config;
+use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
+use sui_types::transaction::{SenderSignedData, Transaction};
 
 #[derive(Parser, Clone, ValueEnum)]
 pub enum Verbosity {
@@ -51,11 +54,14 @@ pub enum ToolCommand {
         )]
         validator: Option<AuthorityName>,
 
+        // At least one of genesis or fullnode_rpc_url must be provided
         #[clap(long = "genesis")]
-        genesis: PathBuf,
+        genesis: Option<PathBuf>,
 
-        #[clap(long = "history", help = "show full history of object")]
-        history: bool,
+        // At least one of genesis or fullnode_rpc_url must be provided
+        // RPC address to provide the up-to-date committee info
+        #[clap(long = "fullnode-rpc-url")]
+        fullnode_rpc_url: Option<String>,
 
         /// Concise mode groups responses by results.
         /// prints tabular output suitable for processing with unix tools. For
@@ -63,7 +69,7 @@ pub enum ToolCommand {
         /// ```text
         /// $ sui-tool fetch-object --id 0x260efde76ebccf57f4c5e951157f5c361cde822c \
         ///      --genesis $HOME/.sui/sui_config/genesis.blob \
-        ///      --history --verbosity concise --concise-no-header
+        ///      --verbosity concise --concise-no-header
         /// ```
         #[clap(
             value_enum,
@@ -83,8 +89,14 @@ pub enum ToolCommand {
     /// Fetch the effects association with transaction `digest`
     #[clap(name = "fetch-transaction")]
     FetchTransaction {
+        // At least one of genesis or fullnode_rpc_url must be provided
         #[clap(long = "genesis")]
-        genesis: PathBuf,
+        genesis: Option<PathBuf>,
+
+        // At least one of genesis or fullnode_rpc_url must be provided
+        // RPC address to provide the up-to-date committee info
+        #[clap(long = "fullnode-rpc-url")]
+        fullnode_rpc_url: Option<String>,
 
         #[clap(long, help = "The transaction ID to fetch")]
         digest: TransactionDigest,
@@ -126,8 +138,15 @@ pub enum ToolCommand {
     /// If sequence number is not specified, get the latest authenticated checkpoint.
     #[clap(name = "fetch-checkpoint")]
     FetchCheckpoint {
+        // At least one of genesis or fullnode_rpc_url must be provided
         #[clap(long = "genesis")]
-        genesis: PathBuf,
+        genesis: Option<PathBuf>,
+
+        // At least one of genesis or fullnode_rpc_url must be provided
+        // RPC address to provide the up-to-date committee info
+        #[clap(long = "fullnode-rpc-url")]
+        fullnode_rpc_url: Option<String>,
+
         #[clap(long, help = "Fetch checkpoint at a specific sequence number")]
         sequence_number: Option<CheckpointSequenceNumber>,
     },
@@ -156,6 +175,19 @@ pub enum ToolCommand {
         use_authority: bool,
         #[clap(subcommand)]
         cmd: ReplayToolCommand,
+    },
+
+    /// Ask all validators to sign a transaction through AuthorityAggregator.
+    #[clap(name = "sign-transaction")]
+    SignTransaction {
+        #[clap(long = "genesis")]
+        genesis: PathBuf,
+
+        #[clap(
+            long,
+            help = "The Base64-encoding of the bcs bytes of SenderSignedData"
+        )]
+        sender_signed_data: String,
     },
 }
 
@@ -221,11 +253,11 @@ impl ToolCommand {
                 validator,
                 genesis,
                 version,
-                history,
+                fullnode_rpc_url,
                 verbosity,
                 concise_no_header,
             } => {
-                let output = get_object(id, version, validator, genesis, history).await?;
+                let output = get_object(id, version, validator, genesis, fullnode_rpc_url).await?;
 
                 match verbosity {
                     Verbosity::Grouped => {
@@ -246,10 +278,11 @@ impl ToolCommand {
                 genesis,
                 digest,
                 show_input_tx,
+                fullnode_rpc_url,
             } => {
                 print!(
                     "{}",
-                    get_transaction_block(digest, genesis, show_input_tx).await?
+                    get_transaction_block(digest, genesis, show_input_tx, fullnode_rpc_url).await?
                 );
             }
             ToolCommand::DbTool { db_path, cmd } => {
@@ -284,8 +317,9 @@ impl ToolCommand {
             ToolCommand::FetchCheckpoint {
                 genesis,
                 sequence_number,
+                fullnode_rpc_url,
             } => {
-                let clients = make_clients(genesis)?;
+                let clients = make_clients(genesis, fullnode_rpc_url).await?;
 
                 for (name, (_, client)) in clients {
                     let resp = client
@@ -322,6 +356,22 @@ impl ToolCommand {
                 use_authority,
             } => {
                 execute_replay_command(rpc_url, safety_checks, use_authority, cmd).await?;
+            }
+            ToolCommand::SignTransaction {
+                genesis,
+                sender_signed_data,
+            } => {
+                let genesis = Genesis::load(genesis)?;
+                let sender_signed_data = bcs::from_bytes::<SenderSignedData>(
+                    &fastcrypto::encoding::Base64::decode(sender_signed_data.as_str()).unwrap(),
+                )
+                .unwrap();
+                let transaction = Transaction::new(sender_signed_data).verify().unwrap();
+                let (agg, _) = AuthorityAggregatorBuilder::from_genesis(&genesis)
+                    .build()
+                    .unwrap();
+                let result = agg.process_transaction(transaction).await;
+                println!("{:?}", result);
             }
         };
         Ok(())

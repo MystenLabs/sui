@@ -385,7 +385,8 @@ async fn init_executor_test(
     Sender<VerifiedCheckpoint>,
     CommitteeFixture,
 ) {
-    let network_config = sui_config::builder::ConfigBuilder::new_with_temp_dir().build();
+    let network_config =
+        sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir().build();
     let state = TestAuthorityBuilder::new()
         .with_network_config(&network_config)
         .build()

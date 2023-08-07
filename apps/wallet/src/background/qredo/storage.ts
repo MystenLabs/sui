@@ -7,16 +7,30 @@ import {
     setToSessionStorage,
     getFromSessionStorage,
     isSessionStorageSupported,
+    getFromLocalStorage,
+    setToLocalStorage,
 } from '../storage-utils';
+import { isSameQredoConnection } from './utils';
 
 import type {
     QredoConnectPendingRequest,
-    QredoConnectRequestIdentity,
+    QredoConnectIdentity,
+    QredoConnection,
 } from './types';
 
 const SESSION_STORAGE_KEY = 'qredo-connect-requests';
+const STORAGE_ACCEPTED_CONNECTIONS_KEY = 'qredo-connections';
+
+function sessionStorageAssert() {
+    if (!isSessionStorageSupported()) {
+        throw new Error(
+            'Session storage is required. Please update your browser'
+        );
+    }
+}
 
 export async function getAllPendingRequests() {
+    sessionStorageAssert();
     return (
         (await getFromSessionStorage<QredoConnectPendingRequest[]>(
             SESSION_STORAGE_KEY,
@@ -25,39 +39,24 @@ export async function getAllPendingRequests() {
     );
 }
 
-export async function getPendingRequest(
-    requestIdentity: QredoConnectRequestIdentity | string
+export function storeAllPendingRequests(
+    requests: QredoConnectPendingRequest[]
 ) {
-    if (!isSessionStorageSupported()) {
-        throw new Error(
-            'Session storage is required. Please update your browser'
-        );
-    }
-    const allPendingRequests = await getAllPendingRequests();
+    sessionStorageAssert();
+    return setToSessionStorage(SESSION_STORAGE_KEY, requests);
+}
+
+export async function getPendingRequest(
+    requestIdentity: QredoConnectIdentity | string
+) {
     return (
-        allPendingRequests.find(
-            (aRequest) =>
-                (typeof requestIdentity === 'string' &&
-                    aRequest.id === requestIdentity) ||
-                (typeof requestIdentity === 'object' &&
-                    requestIdentity.apiUrl === aRequest.apiUrl &&
-                    requestIdentity.origin === aRequest.origin &&
-                    requestIdentity.service === aRequest.service) ||
-                false
+        (await getAllPendingRequests()).find((aRequest) =>
+            isSameQredoConnection(requestIdentity, aRequest)
         ) || null
     );
 }
 
-export function storePendingRequests(requests: QredoConnectPendingRequest[]) {
-    return setToSessionStorage(SESSION_STORAGE_KEY, requests);
-}
-
 export async function storePendingRequest(request: QredoConnectPendingRequest) {
-    if (!isSessionStorageSupported()) {
-        throw new Error(
-            'Session storage is required. Please update your browser'
-        );
-    }
     const allPendingRequests = await getAllPendingRequests();
     const existingIndex = allPendingRequests.findIndex(
         (aRequest) => aRequest.id === request.id
@@ -67,7 +66,15 @@ export async function storePendingRequest(request: QredoConnectPendingRequest) {
     } else {
         allPendingRequests.push(request);
     }
-    await storePendingRequests(allPendingRequests);
+    await storeAllPendingRequests(allPendingRequests);
+}
+
+export async function deletePendingRequest(
+    request: QredoConnectPendingRequest
+) {
+    await storeAllPendingRequests(
+        (await getAllPendingRequests()).filter(({ id }) => request.id !== id)
+    );
 }
 
 export async function createPendingRequest(
@@ -75,8 +82,8 @@ export async function createPendingRequest(
     messageID: string
 ) {
     const newRequest: QredoConnectPendingRequest = {
-        id: uuid(),
         ...options,
+        id: uuid(),
         windowID: null,
         messageIDs: [messageID],
     };
@@ -91,6 +98,7 @@ export async function updatePendingRequest(
         messageID?: string;
         append?: boolean;
         token?: string;
+        accessToken?: string;
     }
 ) {
     const request = await getPendingRequest(id);
@@ -110,5 +118,54 @@ export async function updatePendingRequest(
     if (change.token) {
         request.token = change.token;
     }
+    if (change.accessToken) {
+        request.accessToken = change.accessToken;
+    }
     await storePendingRequest(request);
+}
+
+export async function getAllQredoConnections() {
+    return (
+        (await getFromLocalStorage<QredoConnection[]>(
+            STORAGE_ACCEPTED_CONNECTIONS_KEY,
+            []
+        )) || []
+    );
+}
+
+export function storeAllQredoConnections(qredoConnections: QredoConnection[]) {
+    return setToLocalStorage<QredoConnection[]>(
+        STORAGE_ACCEPTED_CONNECTIONS_KEY,
+        qredoConnections
+    );
+}
+
+export async function getQredoConnection(
+    identity: QredoConnectIdentity | string
+) {
+    return (
+        (await getAllQredoConnections()).find((aConnection) =>
+            isSameQredoConnection(identity, aConnection)
+        ) || null
+    );
+}
+
+export async function storeQredoConnection(qredoConnection: QredoConnection) {
+    const allConnections = await getAllQredoConnections();
+    const newConnections = allConnections.filter(
+        (aConnection) => !isSameQredoConnection(qredoConnection.id, aConnection)
+    );
+    newConnections.push(qredoConnection);
+    await storeAllQredoConnections(newConnections);
+}
+
+export async function storeQredoConnectionAccessToken(
+    qredoID: string,
+    accessToken: string
+) {
+    const existingConnection = await getQredoConnection(qredoID);
+    if (existingConnection) {
+        existingConnection.accessToken = accessToken;
+        await storeQredoConnection(existingConnection);
+    }
 }

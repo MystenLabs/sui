@@ -3,7 +3,6 @@
 
 use std::fmt::{Display, Formatter};
 use std::net::SocketAddr;
-use std::path::Path;
 use std::str::FromStr;
 
 use fastcrypto::encoding::{Encoding, Hex};
@@ -31,10 +30,8 @@ use sui_types::crypto::SuiSignature;
 
 pub async fn start_rosetta_test_server(
     client: SuiClient,
-    dir: &Path,
 ) -> (RosettaClient, Vec<JoinHandle<hyper::Result<()>>>) {
-    let online_server =
-        RosettaOnlineServer::new(SuiEnv::LocalNet, client, &dir.join("rosetta_data"));
+    let online_server = RosettaOnlineServer::new(SuiEnv::LocalNet, client);
     let offline_server = RosettaOfflineServer::new(SuiEnv::LocalNet);
     let local_ip = utils::get_local_ip_for_tests().to_string();
     let port = utils::get_available_port(&local_ip);

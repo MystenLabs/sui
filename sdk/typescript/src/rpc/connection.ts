@@ -43,3 +43,7 @@ export const testnetConnection = new Connection({
   fullnode: 'https://fullnode.testnet.sui.io:443/',
   faucet: 'https://faucet.testnet.sui.io/gas',
 });
+
+export const mainnetConnection = new Connection({
+  fullnode: 'https://fullnode.mainnet.sui.io:443/',
+});

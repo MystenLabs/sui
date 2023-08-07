@@ -19,7 +19,7 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::crypto::get_key_pair;
 use sui_types::{
     base_types::{ObjectDigest, ObjectID, SequenceNumber},
-    messages::VerifiedTransaction,
+    transaction::VerifiedTransaction,
 };
 use tracing::{debug, error, info};
 

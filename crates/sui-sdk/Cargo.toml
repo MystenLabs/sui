@@ -21,6 +21,7 @@ tokio = { workspace = true }
 bcs = "0.1.4"
 thiserror = "1.0.37"
 
+sui-swarm-config = { path = "../sui-swarm-config" }
 sui-json-rpc = { path = "../sui-json-rpc" }
 sui-test-transaction-builder = { path = "../sui-test-transaction-builder" }
 sui-transaction-builder = { path = "../sui-transaction-builder" }

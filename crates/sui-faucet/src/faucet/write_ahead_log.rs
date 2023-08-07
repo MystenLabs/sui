@@ -5,7 +5,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use sui_types::base_types::SuiAddress;
-use sui_types::{base_types::ObjectID, messages::TransactionData};
+use sui_types::{base_types::ObjectID, transaction::TransactionData};
 use typed_store::rocks::{DBMap, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::Map;
@@ -109,7 +109,7 @@ impl WriteAheadLog {
 mod tests {
     use sui_types::{
         base_types::{random_object_ref, ObjectRef},
-        messages::TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        transaction::TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
     };
 
     use super::*;

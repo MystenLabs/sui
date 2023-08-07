@@ -71,7 +71,7 @@ export function validatorsTableData(
                     commission: Number(validator.commissionRate) / 100,
                     img: img,
                     address: validator.suiAddress,
-                    lastReward: lastReward ? Number(lastReward) : null,
+                    lastReward: lastReward ?? null,
                     votingPower: Number(validator.votingPower) / 100,
                     atRisk: isAtRisk
                         ? VALIDATOR_LOW_STAKE_GRACE_PERIOD -
@@ -172,8 +172,8 @@ export function validatorsTableData(
                 accessorKey: 'lastReward',
                 cell: (props: any) => {
                     const lastReward = props.getValue();
-                    return lastReward >= 0 ? (
-                        <StakeColumn stake={lastReward} />
+                    return lastReward !== null ? (
+                        <StakeColumn stake={Number(lastReward)} />
                     ) : (
                         <Text variant="bodySmall/medium" color="steel-darker">
                             --
@@ -306,7 +306,7 @@ function ValidatorPageResult() {
 
     return (
         <div>
-            <div className="mt-8 grid gap-5 md:grid-cols-2">
+            <div className="grid gap-5 md:grid-cols-2">
                 <Card spacing="lg">
                     <div className="flex w-full basis-full flex-col gap-8">
                         <Heading

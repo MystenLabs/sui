@@ -21,9 +21,9 @@ use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{get_authority_key_pair, EncodeDecodeBase64, SignatureScheme, SuiKeyPair};
 use sui_types::crypto::{DefaultHash, PublicKey, Signature};
-use sui_types::messages::TransactionData;
 use sui_types::multisig::{MultiSig, MultiSigPublicKey, ThresholdUnit, WeightUnit};
 use sui_types::signature::GenericSignature;
+use sui_types::transaction::TransactionData;
 use tracing::info;
 
 #[cfg(test)]
@@ -146,22 +146,34 @@ pub enum KeyToolCommand {
         threshold: ThresholdUnit,
     },
 
-    /// Converts a Base64 encoded string to its hexademical representation.
+    /// Given a Base64 encoded MultiSig signature, decode its components.
+    DecodeMultiSig {
+        #[clap(long)]
+        multisig: MultiSig,
+    },
+
+    /// Given a Base64 encoded transaction bytes, decode its components.
+    DecodeTxBytes {
+        #[clap(long)]
+        tx_bytes: String,
+    },
+
+    /// Converts a Base64 encoded string to its hexadecimal representation.
     Base64ToHex {
         base64: String,
     },
 
-    /// Converts a hexademical string to its Base64 encoded representation.
+    /// Converts a hexadecimal string to its Base64 encoded representation.
     HexToBase64 {
         hex: String,
     },
 
-    /// Converts a hexademical string to its correspinding bytes.
+    /// Converts a hexadecimal string to its corresponding bytes.
     HexToBytes {
         hex: String,
     },
 
-    /// Converts an array of bytes to its hexademical string representation.
+    /// Converts an array of bytes to its hexadecimal string representation.
     BytesToHex {
         bytes: Vec<u8>,
     },
@@ -210,7 +222,7 @@ impl KeyToolCommand {
                         println!("Public Key: {}", keypair.public().encode_base64());
                         println!("Flag: {}", keypair.public().flag());
                         if let PublicKey::Ed25519(public_key) = keypair.public() {
-                            let peer_id = anemo::PeerId(public_key.0.into());
+                            let peer_id = anemo::PeerId(public_key.0);
                             println!("PeerId: {}", peer_id);
                         }
                     }
@@ -443,7 +455,7 @@ impl KeyToolCommand {
                 weights,
             } => {
                 let multisig_pk = MultiSigPublicKey::new(pks.clone(), weights.clone(), threshold)?;
-                let address: SuiAddress = multisig_pk.into();
+                let address: SuiAddress = (&multisig_pk).into();
                 println!("MultiSig address: {address}");
 
                 println!("Participating parties:");
@@ -468,15 +480,55 @@ impl KeyToolCommand {
                 threshold,
             } => {
                 let multisig_pk = MultiSigPublicKey::new(pks, weights, threshold)?;
-                let address: SuiAddress = multisig_pk.clone().into();
+                let address: SuiAddress = (&multisig_pk).into();
                 let multisig = MultiSig::combine(sigs, multisig_pk)?;
                 let generic_sig: GenericSignature = multisig.into();
                 println!("MultiSig address: {address}");
                 println!("MultiSig parsed: {:?}", generic_sig);
                 println!("MultiSig serialized: {:?}", generic_sig.encode_base64());
             }
-        }
 
+            KeyToolCommand::DecodeMultiSig { multisig } => {
+                let pks = multisig.get_pk().pubkeys();
+                let sigs = multisig.get_sigs();
+                let bitmap = multisig.get_bitmap();
+                println!(
+                    "All pubkeys: {:?}, threshold: {:?}",
+                    pks.iter()
+                        .map(|(pk, w)| format!("{:?} - {:?}", pk.encode_base64(), w))
+                        .collect::<Vec<String>>(),
+                    multisig.get_pk().threshold()
+                );
+                println!("Participating signatures and pubkeys");
+                println!(
+                    " {0: ^45} | {1: ^45} | {2: ^6}",
+                    "Public Key (Base64)", "Sig (Base64)", "Weight"
+                );
+                println!("{}", ["-"; 100].join(""));
+                for (sig, i) in sigs.iter().zip(bitmap) {
+                    let (pk, w) = pks
+                        .get(i as usize)
+                        .ok_or(anyhow!("Invalid public keys index".to_string()))?;
+                    println!(
+                        " {0: ^45} | {1: ^45} | {2: ^6}",
+                        Base64::encode(sig.as_ref()),
+                        pk.encode_base64(),
+                        w
+                    );
+                }
+                println!(
+                    "Multisig address: {:?}",
+                    SuiAddress::from(multisig.get_pk())
+                );
+            }
+
+            KeyToolCommand::DecodeTxBytes { tx_bytes } => {
+                let tx_bytes = Base64::decode(&tx_bytes)
+                    .map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
+                let tx_data: TransactionData = bcs::from_bytes(&tx_bytes)?;
+                println!("Transaction data: {:?}", tx_data);
+            }
+        }
         Ok(())
     }
 }

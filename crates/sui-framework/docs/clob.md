@@ -8,11 +8,12 @@
 -  [Struct `PoolCreated`](#0xdee9_clob_PoolCreated)
 -  [Struct `OrderPlacedV2`](#0xdee9_clob_OrderPlacedV2)
 -  [Struct `OrderCanceled`](#0xdee9_clob_OrderCanceled)
--  [Struct `OrderFilled`](#0xdee9_clob_OrderFilled)
+-  [Struct `OrderFilledV2`](#0xdee9_clob_OrderFilledV2)
 -  [Struct `Order`](#0xdee9_clob_Order)
 -  [Struct `TickLevel`](#0xdee9_clob_TickLevel)
 -  [Resource `Pool`](#0xdee9_clob_Pool)
 -  [Struct `OrderPlaced`](#0xdee9_clob_OrderPlaced)
+-  [Struct `OrderFilled`](#0xdee9_clob_OrderFilled)
 -  [Constants](#@Constants_0)
 -  [Function `destroy_empty_level`](#0xdee9_clob_destroy_empty_level)
 -  [Function `create_account`](#0xdee9_clob_create_account)
@@ -32,6 +33,7 @@
 -  [Function `place_limit_order`](#0xdee9_clob_place_limit_order)
 -  [Function `order_is_bid`](#0xdee9_clob_order_is_bid)
 -  [Function `emit_order_canceled`](#0xdee9_clob_emit_order_canceled)
+-  [Function `emit_order_filled`](#0xdee9_clob_emit_order_filled)
 -  [Function `cancel_order`](#0xdee9_clob_cancel_order)
 -  [Function `remove_order`](#0xdee9_clob_remove_order)
 -  [Function `cancel_all_orders`](#0xdee9_clob_cancel_all_orders)
@@ -249,14 +251,14 @@ Emitted when a maker order is canceled.
 
 </details>
 
-<a name="0xdee9_clob_OrderFilled"></a>
+<a name="0xdee9_clob_OrderFilledV2"></a>
 
-## Struct `OrderFilled`
+## Struct `OrderFilledV2`
 
 Emitted only when a maker order is filled.
 
 
-<pre><code><b>struct</b> <a href="clob.md#0xdee9_clob_OrderFilled">OrderFilled</a>&lt;BaseAsset, QuoteAsset&gt; <b>has</b> <b>copy</b>, drop, store
+<pre><code><b>struct</b> <a href="clob.md#0xdee9_clob_OrderFilledV2">OrderFilledV2</a>&lt;BaseAsset, QuoteAsset&gt; <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -310,6 +312,18 @@ Emitted only when a maker order is filled.
 </dd>
 <dt>
 <code>price: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>taker_commission: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>maker_rebates: u64</code>
 </dt>
 <dd>
 
@@ -524,7 +538,7 @@ Emitted only when a maker order is filled.
 
 ## Struct `OrderPlaced`
 
-Emitted when a maker order is injected into the order book.
+Deprecated since v1.0.0, use <code><a href="clob.md#0xdee9_clob_OrderPlacedV2">OrderPlacedV2</a></code> instead.
 
 
 <pre><code><b>struct</b> <a href="clob.md#0xdee9_clob_OrderPlaced">OrderPlaced</a>&lt;BaseAsset, QuoteAsset&gt; <b>has</b> <b>copy</b>, drop, store
@@ -563,6 +577,76 @@ Emitted when a maker order is injected into the order book.
 </dd>
 <dt>
 <code>base_asset_quantity_placed: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>price: u64</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0xdee9_clob_OrderFilled"></a>
+
+## Struct `OrderFilled`
+
+Deprecated since v1.0.0, use <code><a href="clob.md#0xdee9_clob_OrderFilledV2">OrderFilledV2</a></code> instead.
+
+
+<pre><code><b>struct</b> <a href="clob.md#0xdee9_clob_OrderFilled">OrderFilled</a>&lt;BaseAsset, QuoteAsset&gt; <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>pool_id: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+ object ID of the pool the order was placed on
+</dd>
+<dt>
+<code>order_id: u64</code>
+</dt>
+<dd>
+ ID of the order within the pool
+</dd>
+<dt>
+<code>is_bid: bool</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>owner: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+ object ID of the <code>AccountCap</code> that placed the order
+</dd>
+<dt>
+<code>total_quantity: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>base_asset_quantity_filled: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>base_asset_quantity_remaining: u64</code>
 </dt>
 <dd>
 
@@ -821,7 +905,7 @@ Emitted when a maker order is injected into the order book.
 
 
 
-<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_MIN_BID_ORDER_ID">MIN_BID_ORDER_ID</a>: u64 = 0;
+<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_MIN_BID_ORDER_ID">MIN_BID_ORDER_ID</a>: u64 = 1;
 </code></pre>
 
 
@@ -968,7 +1052,7 @@ Emitted when a maker order is injected into the order book.
     <b>let</b> base_type_name = <a href="_get">type_name::get</a>&lt;BaseAsset&gt;();
     <b>let</b> quote_type_name = <a href="_get">type_name::get</a>&lt;QuoteAsset&gt;();
 
-    <b>assert</b>!(clob_math::mul(lot_size, tick_size) &gt; 0, <a href="clob.md#0xdee9_clob_EInvalidTickSizeLotSize">EInvalidTickSizeLotSize</a>);
+    <b>assert</b>!(clob_math::unsafe_mul(lot_size, tick_size) &gt; 0, <a href="clob.md#0xdee9_clob_EInvalidTickSizeLotSize">EInvalidTickSizeLotSize</a>);
     <b>assert</b>!(base_type_name != quote_type_name, <a href="clob.md#0xdee9_clob_EInvalidPair">EInvalidPair</a>);
     <b>assert</b>!(taker_fee_rate &gt;= maker_rebate_rate, <a href="clob.md#0xdee9_clob_EInvalidFeeRateRebateRate">EInvalidFeeRateRebateRate</a>);
 
@@ -1306,7 +1390,10 @@ Emitted when a maker order is injected into the order book.
                 <a href="clob.md#0xdee9_clob_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, maker_order);
             } <b>else</b> {
                 // Calculate how much quote asset (maker_quote_quantity) is required, including the commission, <b>to</b> fill the maker order.
-                <b>let</b> (flag, maker_quote_quantity) = clob_math::mul_round(maker_base_quantity, maker_order.price);
+                <b>let</b> (flag, maker_quote_quantity) = clob_math::mul_round(
+                    maker_base_quantity,
+                    maker_order.price
+                );
                 <b>if</b> (flag) maker_quote_quantity = maker_quote_quantity + 1;
                 (flag, maker_quote_quantity) = clob_math::mul_round(
                     maker_quote_quantity,
@@ -1330,21 +1417,25 @@ Emitted when a maker order is injected into the order book.
                     filled_base_quantity = maker_base_quantity;
                 } <b>else</b> {
                     terminate_loop = <b>true</b>;
-                    (_, filled_quote_quantity_without_commission) = clob_math::div_round(
+                    // <b>if</b> not enough quote quantity <b>to</b> pay for taker commission, then no quantity will be filled
+                    (_, filled_quote_quantity_without_commission) = clob_math::unsafe_div_round(
                         taker_quote_quantity_remaining,
                         <a href="clob.md#0xdee9_clob_FLOAT_SCALING">FLOAT_SCALING</a> + pool.taker_fee_rate
                     );
-                    (_, filled_base_quantity) = clob_math::div_round(
+                    // filled_base_quantity = 0 is permitted since filled_quote_quantity_without_commission can be 0
+                    (_, filled_base_quantity) = clob_math::unsafe_div_round(
                         filled_quote_quantity_without_commission,
                         maker_order.price
                     );
                     <b>let</b> filled_base_lot = filled_base_quantity / pool.lot_size;
                     filled_base_quantity = filled_base_lot * pool.lot_size;
-                    filled_quote_quantity_without_commission = clob_math::mul(
+                    // filled_quote_quantity_without_commission = 0 is permitted here since filled_base_quantity could be 0
+                    filled_quote_quantity_without_commission = clob_math::unsafe_mul(
                         filled_base_quantity,
                         maker_order.price
                     );
-                    <b>let</b> (round_down, taker_commission) = clob_math::mul_round(
+                    // <b>if</b> taker_commission = 0 due <b>to</b> underflow, round it up <b>to</b> 1
+                    <b>let</b> (round_down, taker_commission) = clob_math::unsafe_mul_round(
                         filled_quote_quantity_without_commission,
                         pool.taker_fee_rate
                     );
@@ -1353,7 +1444,11 @@ Emitted when a maker order is injected into the order book.
                     };
                     filled_quote_quantity = filled_quote_quantity_without_commission + taker_commission;
                 };
-                <b>let</b> maker_rebate = clob_math::mul(filled_quote_quantity_without_commission, pool.maker_rebate_rate);
+                // <b>if</b> maker_rebate = 0 due <b>to</b> underflow, maker will not receive a rebate
+                <b>let</b> maker_rebate = clob_math::unsafe_mul(
+                    filled_quote_quantity_without_commission,
+                    pool.maker_rebate_rate
+                );
                 maker_base_quantity = maker_base_quantity - filled_base_quantity;
 
                 // maker in ask side, decrease maker's locked base asset, increase maker's available quote asset
@@ -1385,16 +1480,15 @@ Emitted when a maker order is injected into the order book.
                 <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> pool.quote_asset_trading_fees, quote_balance_filled);
                 <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> base_balance_filled, locked_base_balance);
 
-                <a href="../../../.././build/Sui/docs/event.md#0x2_event_emit">event::emit</a>(<a href="clob.md#0xdee9_clob_OrderFilled">OrderFilled</a>&lt;BaseAsset, QuoteAsset&gt; {
-                    pool_id: *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id),
-                    order_id: maker_order.order_id,
-                    is_bid: <b>false</b>,
-                    owner: maker_order.owner,
-                    total_quantity: maker_order.quantity,
-                    base_asset_quantity_filled: filled_base_quantity,
-                    base_asset_quantity_remaining: maker_base_quantity,
-                    price: maker_order.price
-                })
+                <a href="clob.md#0xdee9_clob_emit_order_filled">emit_order_filled</a>&lt;BaseAsset, QuoteAsset&gt;(
+                    *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id),
+                    maker_order,
+                    filled_base_quantity,
+                    // taker_commission = filled_quote_quantity - filled_quote_quantity_without_commission
+                    // This guarantees that the subtraction will not underflow
+                    filled_quote_quantity - filled_quote_quantity_without_commission,
+                    maker_rebate
+                )
             };
 
             <b>if</b> (skip_order || maker_base_quantity == 0) {
@@ -1484,14 +1578,16 @@ Emitted when a maker order is injected into the order book.
                 <a href="clob.md#0xdee9_clob_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, maker_order);
             } <b>else</b> {
                 <b>let</b> filled_base_quantity =
-                    <b>if</b> (taker_base_quantity_remaining &gt;= maker_base_quantity) { maker_base_quantity }
+                    <b>if</b> (taker_base_quantity_remaining &gt; maker_base_quantity) { maker_base_quantity }
                     <b>else</b> { taker_base_quantity_remaining };
                 // filled_quote_quantity <b>to</b> maker,  no need <b>to</b> round up
                 <b>let</b> filled_quote_quantity = clob_math::mul(filled_base_quantity, maker_order.price);
 
                 // rebate_fee <b>to</b> maker, no need <b>to</b> round up
-                <b>let</b> maker_rebate = clob_math::mul(filled_quote_quantity, pool.maker_rebate_rate);
-                <b>let</b> (is_round_down, taker_commission) = clob_math::mul_round(
+                // <b>if</b> maker_rebate = 0 due <b>to</b> underflow, maker will not receive a rebate
+                <b>let</b> maker_rebate = clob_math::unsafe_mul(filled_quote_quantity, pool.maker_rebate_rate);
+                // <b>if</b> taker_commission = 0 due <b>to</b> underflow, round it up <b>to</b> 1
+                <b>let</b> (is_round_down, taker_commission) = clob_math::unsafe_mul_round(
                     filled_quote_quantity,
                     pool.taker_fee_rate
                 );
@@ -1530,16 +1626,13 @@ Emitted when a maker order is injected into the order book.
                     ),
                 );
 
-                <a href="../../../.././build/Sui/docs/event.md#0x2_event_emit">event::emit</a>(<a href="clob.md#0xdee9_clob_OrderFilled">OrderFilled</a>&lt;BaseAsset, QuoteAsset&gt; {
-                    pool_id,
-                    order_id: maker_order.order_id,
-                    is_bid: <b>false</b>,
-                    owner: maker_order.owner,
-                    total_quantity: maker_order.quantity,
-                    base_asset_quantity_filled: filled_base_quantity,
-                    base_asset_quantity_remaining: maker_base_quantity,
-                    price: maker_order.price
-                })
+                <a href="clob.md#0xdee9_clob_emit_order_filled">emit_order_filled</a>&lt;BaseAsset, QuoteAsset&gt;(
+                    *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id),
+                    maker_order,
+                    filled_base_quantity,
+                    taker_commission,
+                    maker_rebate
+                );
             };
 
             <b>if</b> (skip_order || maker_base_quantity == 0) {
@@ -1632,8 +1725,10 @@ Emitted when a maker order is injected into the order book.
                 <b>let</b> filled_quote_quantity = clob_math::mul(filled_base_quantity, maker_order.price);
 
                 // rebate_fee <b>to</b> maker, no need <b>to</b> round up
-                <b>let</b> maker_rebate = clob_math::mul(filled_quote_quantity, pool.maker_rebate_rate);
-                <b>let</b> (is_round_down, taker_commission) = clob_math::mul_round(
+                // <b>if</b> maker_rebate = 0 due <b>to</b> underflow, maker will not receive a rebate
+                <b>let</b> maker_rebate = clob_math::unsafe_mul(filled_quote_quantity, pool.maker_rebate_rate);
+                // <b>if</b> taker_commission = 0 due <b>to</b> underflow, round it up <b>to</b> 1
+                <b>let</b> (is_round_down, taker_commission) = clob_math::unsafe_mul_round(
                     filled_quote_quantity,
                     pool.taker_fee_rate
                 );
@@ -1670,16 +1765,13 @@ Emitted when a maker order is injected into the order book.
                     ),
                 );
 
-                <a href="../../../.././build/Sui/docs/event.md#0x2_event_emit">event::emit</a>(<a href="clob.md#0xdee9_clob_OrderFilled">OrderFilled</a>&lt;BaseAsset, QuoteAsset&gt; {
-                    pool_id: *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id),
-                    order_id: maker_order.order_id,
-                    is_bid: <b>true</b>,
-                    owner: maker_order.owner,
-                    total_quantity: maker_order.quantity,
-                    base_asset_quantity_filled: filled_base_quantity,
-                    base_asset_quantity_remaining: maker_base_quantity,
-                    price: maker_order.price
-                })
+                <a href="clob.md#0xdee9_clob_emit_order_filled">emit_order_filled</a>&lt;BaseAsset, QuoteAsset&gt;(
+                    *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id),
+                    maker_order,
+                    filled_base_quantity,
+                    taker_commission,
+                    maker_rebate
+                );
             };
 
             <b>if</b> (skip_order || maker_base_quantity == 0) {
@@ -2072,6 +2164,49 @@ So please check that boolean value first before using the order id.
         owner: order.owner,
         base_asset_quantity_canceled: order.quantity,
         price: order.price
+    })
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_clob_emit_order_filled"></a>
+
+## Function `emit_order_filled`
+
+
+
+<pre><code><b>fun</b> <a href="clob.md#0xdee9_clob_emit_order_filled">emit_order_filled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a>, order: &<a href="clob.md#0xdee9_clob_Order">clob::Order</a>, base_asset_quantity_filled: u64, taker_commission: u64, maker_rebates: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="clob.md#0xdee9_clob_emit_order_filled">emit_order_filled</a>&lt;BaseAsset, QuoteAsset&gt;(
+    pool_id: ID,
+    order: &<a href="clob.md#0xdee9_clob_Order">Order</a>,
+    base_asset_quantity_filled: u64,
+    taker_commission: u64,
+    maker_rebates: u64
+) {
+    <a href="../../../.././build/Sui/docs/event.md#0x2_event_emit">event::emit</a>(<a href="clob.md#0xdee9_clob_OrderFilledV2">OrderFilledV2</a>&lt;BaseAsset, QuoteAsset&gt; {
+        pool_id,
+        order_id: order.order_id,
+        is_bid: order.is_bid,
+        owner: order.owner,
+        total_quantity: order.quantity,
+        base_asset_quantity_filled,
+        // order.quantity = base_asset_quantity_filled + base_asset_quantity_remaining
+        // This guarantees that the subtraction will not underflow
+        base_asset_quantity_remaining: order.quantity - base_asset_quantity_filled,
+        price: order.price,
+        taker_commission,
+        maker_rebates
     })
 }
 </code></pre>

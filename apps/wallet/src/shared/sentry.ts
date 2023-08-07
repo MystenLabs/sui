@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import * as Sentry from '@sentry/react';
-import { BrowserTracing } from '@sentry/tracing';
 import Browser from 'webextension-polyfill';
 
 import { growthbook } from '_src/ui/app/experimentation/feature-gating';
@@ -21,7 +20,7 @@ export default function initSentry() {
     Sentry.init({
         enabled: ENABLE_SENTRY,
         dsn: SENTRY_DSN,
-        integrations: [new BrowserTracing()],
+        integrations: [new Sentry.BrowserTracing()],
         release: WALLET_VERSION,
         tracesSampler: () => {
             if (!IS_PROD) return 1;

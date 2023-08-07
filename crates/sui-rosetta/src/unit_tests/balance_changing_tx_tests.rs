@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::operations::Operations;
-use crate::state::extract_balance_changes_from_ops;
-use crate::types::ConstructionMetadata;
+use crate::types::{ConstructionMetadata, OperationStatus, OperationType};
 use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use rand::seq::{IteratorRandom, SliceRandom};
@@ -27,14 +26,14 @@ use sui_sdk::rpc_types::{
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::{
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
+use sui_types::transaction::{
     CallArg, InputObjectKind, ObjectArg, ProgrammableTransaction, Transaction, TransactionData,
     TransactionDataAPI, TransactionKind, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN, TEST_ONLY_GAS_UNIT_FOR_STAKING,
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use test_utils::network::TestClusterBuilder;
 
 #[tokio::test]
@@ -749,6 +748,28 @@ async fn test_transaction(
         tx, effects
     );
     response
+}
+
+fn extract_balance_changes_from_ops(ops: Operations) -> HashMap<SuiAddress, i128> {
+    ops.into_iter()
+        .fold(HashMap::<SuiAddress, i128>::new(), |mut changes, op| {
+            if let Some(OperationStatus::Success) = op.status {
+                match op.type_ {
+                    OperationType::SuiBalanceChange
+                    | OperationType::Gas
+                    | OperationType::PaySui
+                    | OperationType::StakeReward
+                    | OperationType::StakePrinciple
+                    | OperationType::Stake => {
+                        if let (Some(addr), Some(amount)) = (op.account, op.amount) {
+                            *changes.entry(addr.address).or_default() += amount.value
+                        }
+                    }
+                    _ => {}
+                };
+            }
+            changes
+        })
 }
 
 async fn get_random_sui(

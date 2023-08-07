@@ -54,22 +54,25 @@ export default function ValidatorMap({ minHeight }: Props) {
     const [isError, setIsError] = useState(false);
     const appsBe = useAppsBackend();
 
-    const { data: nodeData, isSuccess } = useQuery(['node-map'], async () => {
-        const res = await fetch(
-            `${HOST}/location?${new URLSearchParams({
-                version: 'v2',
-                window: '1d',
-            })}`,
-            {
-                method: 'GET',
+    const { data: nodeData, isSuccess } = useQuery({
+        queryKey: ['node-map'],
+        queryFn: async () => {
+            const res = await fetch(
+                `${HOST}/location?${new URLSearchParams({
+                    version: 'v2',
+                    window: '1d',
+                })}`,
+                {
+                    method: 'GET',
+                }
+            );
+
+            if (!res.ok) {
+                throw new Error('Failed to fetch node map data');
             }
-        );
 
-        if (!res.ok) {
-            throw new Error('Failed to fetch node map data');
-        }
-
-        return res.json() as Promise<NodeLocation[]>;
+            return res.json() as Promise<NodeLocation[]>;
+        },
     });
 
     // TODO: make sure this is the right way to get node count

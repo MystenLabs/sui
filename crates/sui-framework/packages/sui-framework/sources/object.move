@@ -183,36 +183,6 @@ module sui::object {
         // TODO: specify actual function behavior
      }
 
-    // Cost calibration functions
-    #[test_only]
-    public fun calibrate_address_from_bytes(bytes: vector<u8>) {
-        sui::address::from_bytes(bytes);
-    }
-
-    #[test_only]
-    public fun calibrate_address_from_bytes_nop(bytes: vector<u8>) {
-        let _ = bytes;
-    }
-
-    #[test_only]
-    public fun calibrate_borrow_uid<T: key>(obj: &T) {
-        borrow_uid(obj);
-    }
-    #[test_only]
-    public fun calibrate_borrow_uid_nop<T: key>(obj: &T) {
-        let _ = obj;
-    }
-
-    // TBD
-
-    // #[test_only]
-    // public fun calibrate_delete_impl(id: UID) {
-    //     delete_impl(id);
-    // }
-    // #[test_only]
-    // public fun calibrate_delete_impl(_id: UID) {
-    // }
-
     #[test_only]
     /// Return the most recent created object ID.
     public fun last_created(ctx: &TxContext): ID {

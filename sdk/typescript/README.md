@@ -169,7 +169,7 @@ const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
 const tx = new TransactionBlock();
-const [coin] = tx.splitCoins(tx.gas, tx.pure(1000));
+const [coin] = tx.splitCoins(tx.gas, [tx.pure(1000)]);
 tx.transferObjects([coin], tx.pure(keypair.getPublicKey().toSuiAddress()));
 const result = await signer.signAndExecuteTransactionBlock({
   transactionBlock: tx,

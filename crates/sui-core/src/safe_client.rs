@@ -27,7 +27,7 @@ use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 use sui_types::{
     error::{SuiError, SuiResult},
-    messages::*,
+    transaction::*,
 };
 use tap::TapFallible;
 use tracing::{debug, error, warn};

@@ -24,8 +24,6 @@ use crate::gas_coin::GAS;
 use crate::governance::StakedSui;
 use crate::governance::STAKED_SUI_STRUCT_NAME;
 use crate::governance::STAKING_POOL_MODULE_NAME;
-use crate::messages::Transaction;
-use crate::messages::VerifiedTransaction;
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::multisig::MultiSigPublicKey;
 use crate::object::{Object, Owner};
@@ -33,6 +31,8 @@ use crate::parse_sui_struct_tag;
 use crate::signature::GenericSignature;
 use crate::sui_serde::Readable;
 use crate::sui_serde::{to_sui_struct_tag_string, HexAccountAddress};
+use crate::transaction::Transaction;
+use crate::transaction::VerifiedTransaction;
 use crate::MOVE_STDLIB_ADDRESS;
 use crate::SUI_CLOCK_OBJECT_ID;
 use crate::SUI_FRAMEWORK_ADDRESS;
@@ -90,6 +90,10 @@ impl SequenceNumber {
         } else {
             Some(SequenceNumber(self.0 - 1))
         }
+    }
+
+    pub fn next(&self) -> SequenceNumber {
+        SequenceNumber(self.0 + 1)
     }
 }
 
@@ -557,13 +561,13 @@ impl From<&PublicKey> for SuiAddress {
     }
 }
 
-impl From<MultiSigPublicKey> for SuiAddress {
+impl From<&MultiSigPublicKey> for SuiAddress {
     /// Derive a SuiAddress from [struct MultiSigPublicKey]. A MultiSig address
     /// is defined as the 32-byte Blake2b hash of serializing the flag, the
-    /// threshold, concatenation of each participating flag, public keys and
+    /// threshold, concatenation of all n flag, public keys and
     /// its weight. `flag_MultiSig || threshold || flag_1 || pk_1 || weight_1
     /// || ... || flag_n || pk_n || weight_n`.
-    fn from(multisig_pk: MultiSigPublicKey) -> Self {
+    fn from(multisig_pk: &MultiSigPublicKey) -> Self {
         let mut hasher = DefaultHash::default();
         hasher.update([SignatureScheme::MultiSig.flag()]);
         hasher.update(multisig_pk.threshold().to_le_bytes());
@@ -591,7 +595,7 @@ impl TryFrom<&GenericSignature> for SuiAddress {
                 })?;
                 SuiAddress::from(&pub_key)
             }
-            GenericSignature::MultiSig(ms) => ms.multisig_pk.clone().into(),
+            GenericSignature::MultiSig(ms) => ms.get_pk().into(),
         })
     }
 }

@@ -16,13 +16,13 @@ use sui_types::{
     digests::CertificateDigest,
     error::{SuiError, SuiResult},
     message_envelope::Message,
-    messages::{CertifiedTransaction, VerifiedCertificate},
     messages_checkpoint::SignedCheckpointSummary,
+    transaction::{CertifiedTransaction, VerifiedCertificate},
 };
 
 use mysten_metrics::monitored_scope;
 use sui_types::digests::SenderSignedDataDigest;
-use sui_types::messages::SenderSignedData;
+use sui_types::transaction::SenderSignedData;
 use tap::TapFallible;
 use tokio::runtime::Handle;
 use tokio::{

@@ -22,7 +22,7 @@ use sui_sdk::{
     types::{
         base_types::{ObjectID, SuiAddress},
         id::UID,
-        messages::Transaction,
+        transaction::Transaction,
     },
     SuiClient, SuiClientBuilder,
 };

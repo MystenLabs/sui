@@ -11,7 +11,7 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::crypto::EmptySignInfo;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::message_envelope::TrustedEnvelope;
-use sui_types::messages::{SenderSignedData, VerifiedTransaction};
+use sui_types::transaction::{SenderSignedData, VerifiedTransaction};
 use typed_store::rocks::MetricConf;
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::{rocks::DBMap, traits::Map};

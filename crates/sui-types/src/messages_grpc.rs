@@ -6,10 +6,10 @@ use crate::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use crate::effects::{
     SignedTransactionEffects, TransactionEvents, VerifiedSignedTransactionEffects,
 };
-use crate::messages::{
+use crate::object::{Object, ObjectFormatOptions};
+use crate::transaction::{
     SenderSignedData, SignedTransaction, VerifiedCertificate, VerifiedTransaction,
 };
-use crate::object::{Object, ObjectFormatOptions};
 use move_core_types::value::MoveStructLayout;
 use serde::{Deserialize, Serialize};
 

@@ -23,7 +23,6 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
           token: ${{ secrets.AUTOMERGE_TOKEN }}
-      - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
       - name: Install cargo-hakari, and cache the binary
         uses: baptiste0928/cargo-install@48c92f3d491efa23daace9891498a14c5aaa1afd # pin@v2
         with:
@@ -44,7 +43,8 @@ jobs:
           git remote set-url origin https://x-access-token:${{ secrets.AUTOMERGE_TOKEN }}@github.com/${{ github.repository }}
           git commit -am "chore(deps): cargo hakari"
           git push
-      - uses: ahmadnassri/action-dependabot-auto-merge@45fc124d949b19b6b8bf6645b6c9d55f4f9ac61a # pin@v2.6
+      - name: Dependabot Auto Merge
+        uses: ahmadnassri/action-dependabot-auto-merge@v2.6.6
         with:
           github-token: ${{ secrets.AUTOMERGE_TOKEN }}
           command: 'squash and merge'

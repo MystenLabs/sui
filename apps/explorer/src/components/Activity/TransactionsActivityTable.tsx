@@ -30,11 +30,13 @@ export function TransactionsActivityTable({
 }: Props) {
     const [limit, setLimit] = useState(initialLimit);
     const rpc = useRpcClient();
-    const { data: count } = useQuery(
-        ['transactions', 'count'],
-        () => rpc.getTotalTransactionBlocks(),
-        { cacheTime: 24 * 60 * 60 * 1000, staleTime: Infinity, retry: false }
-    );
+    const { data: count } = useQuery({
+        queryKey: ['transactions', 'count'],
+        queryFn: () => rpc.getTotalTransactionBlocks(),
+        cacheTime: 24 * 60 * 60 * 1000,
+        staleTime: Infinity,
+        retry: false,
+    });
 
     const transactions = useGetTransactionBlocks(undefined, limit);
     const { data, isFetching, pagination, isLoading, isError } =

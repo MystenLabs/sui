@@ -229,6 +229,8 @@ fail = { version = "0.4", default-features = false }
 fallible-iterator = { version = "0.2" }
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c96c7422cf6a120d5bad921523bc6587c8160988", features = ["copy_key"] }
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c96c7422cf6a120d5bad921523bc6587c8160988", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c27e87fb539c88b6fe1eac7dd82561254bb1e07a", features = ["copy_key"] }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c27e87fb539c88b6fe1eac7dd82561254bb1e07a", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -310,6 +312,7 @@ inout = { version = "0.1", default-features = false, features = ["std"] }
 inquire = { version = "0.6" }
 insta = { version = "1", features = ["json", "redactions", "yaml"] }
 instant = { version = "0.1", default-features = false }
+integer-encoding = { version = "3", default-features = false }
 internment = { version = "0.5", default-features = false, features = ["arc"] }
 io-lifetimes = { version = "1" }
 iri-string = { version = "0.4" }
@@ -419,6 +422,7 @@ num-rational = { version = "0.4", default-features = false, features = ["num-big
 num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", features = ["i128", "libm"] }
 num-traits-c65f7effa3be6d31 = { package = "num-traits", version = "0.1", default-features = false }
 num_cpus = { version = "1", default-features = false }
+num_enum = { version = "0.6" }
 number_prefix = { version = "0.4" }
 object = { version = "0.30", default-features = false, features = ["archive", "elf", "macho", "pe", "read_core", "unaligned"] }
 oid-registry = { version = "0.6", features = ["crypto", "x509"] }
@@ -700,7 +704,9 @@ yaml-rust = { version = "0.4", default-features = false }
 yansi = { version = "0.5", default-features = false }
 yasna = { version = "0.5", features = ["std", "time"] }
 zeroize = { version = "1", features = ["zeroize_derive"] }
-zstd-sys = { version = "2" }
+zstd = { version = "0.12" }
+zstd-safe = { version = "6", default-features = false, features = ["arrays", "legacy", "std", "zdict_builder"] }
+zstd-sys = { version = "2", features = ["std"] }
 
 [build-dependencies]
 Inflector = { version = "0.11", default-features = false }
@@ -955,6 +961,9 @@ fallible-iterator = { version = "0.2" }
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c96c7422cf6a120d5bad921523bc6587c8160988", features = ["copy_key"] }
 fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c96c7422cf6a120d5bad921523bc6587c8160988", default-features = false }
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c96c7422cf6a120d5bad921523bc6587c8160988", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c27e87fb539c88b6fe1eac7dd82561254bb1e07a", features = ["copy_key"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c27e87fb539c88b6fe1eac7dd82561254bb1e07a", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c27e87fb539c88b6fe1eac7dd82561254bb1e07a", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -1045,6 +1054,7 @@ inout = { version = "0.1", default-features = false, features = ["std"] }
 inquire = { version = "0.6" }
 insta = { version = "1", features = ["json", "redactions", "yaml"] }
 instant = { version = "0.1", default-features = false }
+integer-encoding = { version = "3", default-features = false }
 internment = { version = "0.5", default-features = false, features = ["arc"] }
 io-lifetimes = { version = "1" }
 iri-string = { version = "0.4" }
@@ -1164,6 +1174,8 @@ num-rational = { version = "0.4", default-features = false, features = ["num-big
 num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", features = ["i128", "libm"] }
 num-traits-c65f7effa3be6d31 = { package = "num-traits", version = "0.1", default-features = false }
 num_cpus = { version = "1", default-features = false }
+num_enum = { version = "0.6" }
+num_enum_derive = { version = "0.6", default-features = false, features = ["std"] }
 number_prefix = { version = "0.4" }
 object = { version = "0.30", default-features = false, features = ["archive", "elf", "macho", "pe", "read_core", "unaligned"] }
 oid-registry = { version = "0.6", features = ["crypto", "x509"] }
@@ -1381,7 +1393,7 @@ subtle = { version = "2", default-features = false, features = ["i128", "std"] }
 subtle-ng = { version = "2", default-features = false, features = ["std"] }
 syn-3575ec1268b04181 = { package = "syn", version = "0.15", features = ["extra-traits", "full", "visit"] }
 syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
-syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "fold", "full"] }
+syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "fold", "full", "visit-mut"] }
 sync_wrapper = { version = "0.1", default-features = false }
 synstructure = { version = "0.12" }
 sysinfo = { version = "0.27" }
@@ -1506,7 +1518,9 @@ yansi = { version = "0.5", default-features = false }
 yasna = { version = "0.5", features = ["std", "time"] }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 zeroize_derive = { version = "1", default-features = false }
-zstd-sys = { version = "2" }
+zstd = { version = "0.12" }
+zstd-safe = { version = "6", default-features = false, features = ["arrays", "legacy", "std", "zdict_builder"] }
+zstd-sys = { version = "2", features = ["std"] }
 
 [target.aarch64-apple-darwin.dependencies]
 ahash-c38e5c1d305a1b54 = { package = "ahash", version = "0.8" }
@@ -1690,11 +1704,9 @@ web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 widestring = { version = "0.5" }
 winapi = { version = "0.3", default-features = false, features = ["basetsd", "cfg", "combaseapi", "consoleapi", "errhandlingapi", "evntrace", "fileapi", "handleapi", "heapapi", "ifdef", "impl-debug", "impl-default", "in6addr", "inaddr", "ioapiset", "iphlpapi", "knownfolders", "libloaderapi", "lmaccess", "lmapibuf", "lmcons", "memoryapi", "minwinbase", "minwindef", "namedpipeapi", "netioapi", "ntdef", "ntlsa", "ntsecapi", "ntstatus", "objbase", "objidl", "oleauto", "pdh", "powerbase", "processenv", "processthreadsapi", "profileapi", "psapi", "rpcdce", "securitybaseapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "wbemcli", "winbase", "wincon", "windef", "winerror", "winioctl", "winnt", "winreg", "winsock2", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
-windows-sys-53888c27b7ba5cf4 = { package = "windows-sys", version = "0.45", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
 windows-sys-b32c9ddb6d93a9d2 = { package = "windows-sys", version = "0.42", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse"] }
-windows-sys-c8eced492e86ede7 = { package = "windows-sys", version = "0.48", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_Console"] }
-windows-targets-b32c9ddb6d93a9d2 = { package = "windows-targets", version = "0.42", default-features = false }
-windows-targets-c8eced492e86ede7 = { package = "windows-targets", version = "0.48", default-features = false }
+windows-sys-c8eced492e86ede7 = { package = "windows-sys", version = "0.48", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
+windows-targets = { version = "0.48", default-features = false }
 windows_x86_64_msvc-b32c9ddb6d93a9d2 = { package = "windows_x86_64_msvc", version = "0.42", default-features = false }
 windows_x86_64_msvc-c8eced492e86ede7 = { package = "windows_x86_64_msvc", version = "0.48", default-features = false }
 winreg = { version = "0.10", default-features = false }
@@ -1721,11 +1733,9 @@ web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 widestring = { version = "0.5" }
 winapi = { version = "0.3", default-features = false, features = ["basetsd", "cfg", "combaseapi", "consoleapi", "errhandlingapi", "evntrace", "fileapi", "handleapi", "heapapi", "ifdef", "impl-debug", "impl-default", "in6addr", "inaddr", "ioapiset", "iphlpapi", "knownfolders", "libloaderapi", "lmaccess", "lmapibuf", "lmcons", "memoryapi", "minwinbase", "minwindef", "namedpipeapi", "netioapi", "ntdef", "ntlsa", "ntsecapi", "ntstatus", "objbase", "objidl", "oleauto", "pdh", "powerbase", "processenv", "processthreadsapi", "profileapi", "psapi", "rpcdce", "securitybaseapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "wbemcli", "winbase", "wincon", "windef", "winerror", "winioctl", "winnt", "winreg", "winsock2", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
-windows-sys-53888c27b7ba5cf4 = { package = "windows-sys", version = "0.45", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
 windows-sys-b32c9ddb6d93a9d2 = { package = "windows-sys", version = "0.42", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse"] }
-windows-sys-c8eced492e86ede7 = { package = "windows-sys", version = "0.48", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_Console"] }
-windows-targets-b32c9ddb6d93a9d2 = { package = "windows-targets", version = "0.42", default-features = false }
-windows-targets-c8eced492e86ede7 = { package = "windows-targets", version = "0.48", default-features = false }
+windows-sys-c8eced492e86ede7 = { package = "windows-sys", version = "0.48", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
+windows-targets = { version = "0.48", default-features = false }
 windows_x86_64_msvc-b32c9ddb6d93a9d2 = { package = "windows_x86_64_msvc", version = "0.42", default-features = false }
 windows_x86_64_msvc-c8eced492e86ede7 = { package = "windows_x86_64_msvc", version = "0.48", default-features = false }
 winreg = { version = "0.10", default-features = false }

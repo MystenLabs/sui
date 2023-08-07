@@ -9,6 +9,10 @@ use std::ops::Mul;
 /// Scope of meterinng
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Scope {
+    // Metering is for transaction level
+    Transaction,
+    // Metering is for package level
+    Package,
     // Metering is for module level
     Module,
     // Metering is for function level
@@ -117,7 +121,7 @@ impl BoundMeter {
             mod_bounds: Bounds {
                 name: "<unknown>".to_string(),
                 units: 0,
-                max: config.max_per_fun_meter_units,
+                max: config.max_per_mod_meter_units,
             },
             fun_bounds: Bounds {
                 name: "<unknown>".to_string(),

@@ -193,10 +193,7 @@ impl StoreMoveObject {
 
 pub struct StoreObjectPair(pub StoreObjectWrapper, pub Option<StoreMoveObjectWrapper>);
 
-pub(crate) fn get_store_object_pair(
-    object: Object,
-    indirect_objects_threshold: usize,
-) -> StoreObjectPair {
+pub fn get_store_object_pair(object: Object, indirect_objects_threshold: usize) -> StoreObjectPair {
     let mut indirect_object = None;
 
     let data = match object.data {

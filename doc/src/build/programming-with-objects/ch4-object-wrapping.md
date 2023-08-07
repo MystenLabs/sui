@@ -160,7 +160,7 @@ The preceding code sends `object1` to the original owner of `object2`, and sends
 ```rust
 let service_address = tx_context::sender(ctx);
 balance::join(&mut fee1, fee2);
-transfer::transfer(coin::from_balance(fee1, ctx), service_address);
+transfer::public_transfer(coin::from_balance(fee1, ctx), service_address);
 ```
 
 The `fee2` is merged into `fee1`, turned into a `Coin` and sent to the `service_address`. Finally, delete  both wrapped objects: 

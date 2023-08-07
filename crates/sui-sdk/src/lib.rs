@@ -35,7 +35,6 @@ pub mod error;
 pub mod sui_client_config;
 pub mod wallet_context;
 pub const SUI_COIN_TYPE: &str = "0x2::sui::SUI";
-const WAIT_FOR_TX_TIMEOUT_SEC: u64 = 60;
 
 pub struct SuiClientBuilder {
     request_timeout: Duration,

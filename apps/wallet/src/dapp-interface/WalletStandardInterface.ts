@@ -361,6 +361,9 @@ export class SuiWallet implements Wallet {
     }
 
     #qredoConnect = async (input: QredoConnectInput): Promise<void> => {
+        if (process.env.NODE_ENV !== 'development') {
+            throw new Error('This feature is not implemented yet.');
+        }
         const allowed = await mapToPromise(
             this.#send<
                 QredoConnectPayload<'connect'>,

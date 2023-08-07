@@ -22,6 +22,8 @@ similar = "2.2.0"
 thiserror = "1.0.34"
 tracing = "0.1.36"
 rand = "0.8.5"
+lru = "0.10"
+parking_lot = "0.12.1"
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
@@ -30,13 +32,15 @@ move-package.workspace = true
 tokio.workspace = true
 typed-store.workspace = true
 
-sui-adapter = { path = "../sui-adapter" }
+# TODO use sui-execution versioned crate
+sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
+sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
+
 sui-config = { path = "../sui-config" }
 sui-core = { path = "../sui-core" }
 sui-framework = { path = "../sui-framework" }
 sui-json-rpc = { path = "../sui-json-rpc" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
-sui-move-natives = { path = "../sui-move-natives" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-sdk = { path = "../sui-sdk" }
 sui-storage = { path = "../sui-storage" }

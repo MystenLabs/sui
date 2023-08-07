@@ -78,7 +78,7 @@ function BalanceChangeCard({
     return (
         <TransactionBlockCard
             title={
-                <div className="flex w-full items-center justify-between">
+                <div className="flex w-full flex-wrap items-center justify-between gap-y-2">
                     <Heading variant="heading6/semibold" color="steel-darker">
                         Balance Changes
                     </Heading>

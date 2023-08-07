@@ -20,9 +20,10 @@ use sui_types::base_types::{
     ObjectID, SuiAddress, TransactionDigest, STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME,
     STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME,
 };
+use sui_types::dynamic_field::derive_dynamic_field_id;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::Object;
-use sui_types::MOVE_STDLIB_ADDRESS;
+use sui_types::{parse_sui_type_tag, MOVE_STDLIB_ADDRESS};
 
 use crate::ResolvedCallArg;
 
@@ -850,4 +851,80 @@ fn test_convert_struct() {
             .unwrap()
     );
     assert_eq!(coin.0.balance.value(), 1000000);
+}
+
+#[test]
+fn test_convert_string_vec() {
+    let test_vec = vec!["0xbbb", "test_str"];
+    let bcs = bcs::to_bytes(&test_vec).unwrap();
+    let string_layout = MoveTypeLayout::Struct(MoveStructLayout::WithTypes {
+        type_: StructTag {
+            address: MOVE_STDLIB_ADDRESS,
+            module: STD_ASCII_MODULE_NAME.into(),
+            name: STD_ASCII_STRUCT_NAME.into(),
+            type_params: vec![],
+        },
+        fields: vec![MoveFieldLayout {
+            name: ident_str!("bytes").into(),
+            layout: MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
+        }],
+    });
+
+    let layout = MoveTypeLayout::Vector(Box::new(string_layout));
+
+    let value = json!(test_vec);
+    let sui_json = SuiJsonValue::new(value).unwrap();
+
+    let bcs2 = sui_json.to_bcs_bytes(&layout).unwrap();
+
+    assert_eq!(bcs, bcs2);
+}
+
+#[test]
+fn test_string_vec_df_name_child_id_eq() {
+    let parent_id =
+        ObjectID::from_str("0x13a3ab664bfbdff0ab03cd1ce8c6fb3f31a8803f2e6e0b14b610f8e94fcb8509")
+            .unwrap();
+    let name = json!({
+        "labels": [
+            "0x0001",
+            "sui"
+        ]
+    });
+
+    let string_layout = MoveTypeLayout::Struct(MoveStructLayout::WithTypes {
+        type_: StructTag {
+            address: MOVE_STDLIB_ADDRESS,
+            module: STD_ASCII_MODULE_NAME.into(),
+            name: STD_ASCII_STRUCT_NAME.into(),
+            type_params: vec![],
+        },
+        fields: vec![MoveFieldLayout {
+            name: ident_str!("bytes").into(),
+            layout: MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
+        }],
+    });
+
+    let layout = MoveTypeLayout::Struct(MoveStructLayout::WithFields(vec![MoveFieldLayout::new(
+        Identifier::from_str("labels").unwrap(),
+        MoveTypeLayout::Vector(Box::new(string_layout)),
+    )]));
+
+    let sui_json = SuiJsonValue::new(name).unwrap();
+    let bcs2 = sui_json.to_bcs_bytes(&layout).unwrap();
+
+    let child_id = derive_dynamic_field_id(
+        parent_id,
+        &parse_sui_type_tag(
+            "0x3278d6445c6403c96abe9e25cc1213a85de2bd627026ee57906691f9bbf2bf8a::domain::Domain",
+        )
+        .unwrap(),
+        &bcs2,
+    )
+    .unwrap();
+
+    assert_eq!(
+        "0x2c2e361ee262b9f1f9a930e27e092cce5906b1e63a699ee60aec2de452ab9c70",
+        child_id.to_string()
+    );
 }

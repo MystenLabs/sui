@@ -3,7 +3,6 @@
 
 import { JsonRpcClient } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
-import { type SpanStatusType } from '@sentry/tracing';
 
 export class SentryRpcClient extends JsonRpcClient {
     #url: string;
@@ -28,11 +27,11 @@ export class SentryRpcClient extends JsonRpcClient {
 
         try {
             const res = await handler();
-            const status: SpanStatusType = 'ok';
+            const status: Sentry.SpanStatusType = 'ok';
             transaction.setStatus(status);
             return res;
         } catch (e) {
-            const status: SpanStatusType = 'internal_error';
+            const status: Sentry.SpanStatusType = 'internal_error';
             transaction.setStatus(status);
             throw e;
         } finally {

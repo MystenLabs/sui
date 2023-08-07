@@ -4,7 +4,7 @@ title: Validators
 
 The Sui network is operated by a set of independent *validators*, each running its own instance of the Sui software on a separate machine (or a sharded cluster of machines operated by the same entity). A validator participates in the network by handling read and write requests sent by clients. This section focuses on the latter.
 
-To learn how to set up and run a Sui Validator node, including how staking and rewards work, see [Sui Validator Node](../build/validator-node.md).
+To learn how to set up and run a Sui Validator node, including how staking and rewards work, see [Sui Validator Node](../../build/validator-node.md).
 
 Sui uses Delegated Proof-of-Stake (DPoS) to determine which validators operate the network and their voting power. Validators are incentivized to participate in good faith via a share of transaction fees, staking rewards, and slashing stake and staking rewards in case of misbehavior.
 

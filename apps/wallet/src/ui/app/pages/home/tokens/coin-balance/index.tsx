@@ -6,13 +6,13 @@ import cl from 'classnames';
 import { memo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { CoinIcon } from '_components/coin-icon';
+import { CoinItem } from '_components/active-coins-card/CoinItem';
 
 import st from './CoinBalance.module.scss';
 
 export type CoinProps = {
     type: string;
-    balance: bigint | number;
+    balance: bigint;
     hideStake?: boolean;
     mode?: 'row-item' | 'standalone';
 };
@@ -39,15 +39,7 @@ function CoinBalance({ type, balance, mode = 'row-item' }: CoinProps) {
             role="button"
         >
             {mode === 'row-item' ? (
-                <>
-                    <CoinIcon coinType={type} />
-                    <div className={cl(st.coinNameContainer, st[mode])}>
-                        <span className={st.coinName}>
-                            {symbol.toLocaleLowerCase()}
-                        </span>
-                        <span className={st.coinSymbol}>{symbol}</span>
-                    </div>
-                </>
+                <CoinItem coinType={type} balance={balance} />
             ) : null}
             <div className={cl(st.valueContainer, st[mode])}>
                 <span className={cl(st.value, st[mode])}>{formatted}</span>

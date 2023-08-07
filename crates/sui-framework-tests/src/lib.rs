@@ -11,14 +11,32 @@ mod test {
 
     #[test]
     #[cfg_attr(msim, ignore)]
-    fn run_framework_move_unit_tests() {
-        for package in ["sui-framework", "sui-system"] {
-            check_move_unit_tests({
-                let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-                buf.extend(["..", "sui-framework", "packages", package]);
-                buf
-            });
-        }
+    fn run_sui_framework_tests() {
+        check_move_unit_tests({
+            let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            buf.extend(["..", "sui-framework", "packages", "sui-framework"]);
+            buf
+        });
+    }
+
+    #[test]
+    #[cfg_attr(msim, ignore)]
+    fn run_sui_system_tests() {
+        check_move_unit_tests({
+            let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            buf.extend(["..", "sui-framework", "packages", "sui-system"]);
+            buf
+        });
+    }
+
+    #[test]
+    #[cfg_attr(msim, ignore)]
+    fn run_deepbook_tests() {
+        check_move_unit_tests({
+            let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            buf.extend(["..", "sui-framework", "packages", "deepbook"]);
+            buf
+        });
     }
 
     #[test]

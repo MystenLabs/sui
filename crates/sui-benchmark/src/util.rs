@@ -10,7 +10,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ObjectRef;
-use sui_types::messages::{TransactionData, VerifiedTransaction, TEST_ONLY_GAS_UNIT_FOR_TRANSFER};
+use sui_types::transaction::{
+    TransactionData, VerifiedTransaction, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+};
 use sui_types::utils::to_sender_signed_transaction;
 
 use crate::workloads::Gas;

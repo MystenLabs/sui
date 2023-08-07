@@ -4,10 +4,10 @@
 use crate::base_types::{AuthorityName, ObjectRef, TransactionDigest};
 use crate::committee::Committee;
 use crate::error::SuiResult;
-use crate::messages::CertifiedTransaction;
 use crate::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointTimestamp,
 };
+use crate::transaction::CertifiedTransaction;
 use byteorder::{BigEndian, ReadBytesExt};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;

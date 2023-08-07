@@ -3,6 +3,7 @@
 
 import '@fontsource/inter/variable.css';
 import '@fontsource/red-hat-mono/variable.css';
+import { GrowthBookProvider } from '@growthbook/growthbook-react';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
@@ -19,7 +20,9 @@ growthbook.loadFeatures();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
-        <RouterProvider router={router} />
+        <GrowthBookProvider growthbook={growthbook}>
+            <RouterProvider router={router} />
+        </GrowthBookProvider>
     </React.StrictMode>
 );
 

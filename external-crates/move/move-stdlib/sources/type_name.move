@@ -13,8 +13,18 @@ module std::type_name {
         name: String
     }
 
-    /// Return a value representation of the type `T`.
+    /// Return a value representation of the type `T`.  Package IDs
+    /// that appear in fully qualified type names in the output from
+    /// this function are defining IDs (the ID of the package in
+    /// storage that first introduced the type).
     public native fun get<T>(): TypeName;
+
+    /// Return a value representation of the type `T`.  Package IDs
+    /// that appear in fully qualified type names in the output from
+    /// this function are original IDs (the ID of the first version of
+    /// the package, even if the type in question was introduced in a
+    /// later upgrade).
+    public native fun get_with_original_ids<T>(): TypeName;
 
     /// Get the String representation of `self`
     public fun borrow_string(self: &TypeName): &String {

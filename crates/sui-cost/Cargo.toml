@@ -21,7 +21,8 @@ sui-test-transaction-builder = { path = "../sui-test-transaction-builder" }
 [dev-dependencies]
 insta = { version = "1.21.1", features = ["redactions", "json"] }
 test-utils = { path = "../test-utils" }
-sui-config = {path = "../sui-config"}
+sui-config = { path = "../sui-config" }
+sui-swarm-config = { path = "../sui-swarm-config" }
 sui-move-build = { path = "../sui-move-build" }
 move-cli.workspace = true
 move-disassembler.workspace = true

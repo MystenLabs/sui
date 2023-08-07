@@ -7,12 +7,9 @@
     rust_2021_compatibility
 )]
 
-use base_types::{SequenceNumber, SuiAddress, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR};
-use messages::{CallArg, ObjectArg};
-use move_binary_format::{
-    binary_views::BinaryIndexedView,
-    file_format::{AbilitySet, SignatureToken},
-};
+use base_types::{SequenceNumber, SuiAddress};
+use move_binary_format::binary_views::BinaryIndexedView;
+use move_binary_format::file_format::{AbilitySet, SignatureToken};
 use move_bytecode_utils::resolve_struct;
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
 pub use move_core_types::{identifier::Identifier, language_storage::TypeTag};
@@ -22,6 +19,7 @@ use base_types::ObjectID;
 
 pub use mysten_network::multiaddr;
 
+use crate::base_types::{RESOLVED_ASCII_STR, RESOLVED_UTF8_STR};
 use crate::{base_types::RESOLVED_STD_OPTION, id::RESOLVED_SUI_ID};
 
 #[macro_use]
@@ -48,8 +46,8 @@ pub mod gas_model;
 pub mod governance;
 pub mod id;
 pub mod in_memory_storage;
+pub mod layout_resolver;
 pub mod message_envelope;
-pub mod messages;
 pub mod messages_checkpoint;
 pub mod messages_consensus;
 pub mod messages_grpc;
@@ -64,6 +62,7 @@ pub mod storage;
 pub mod sui_serde;
 pub mod sui_system_state;
 pub mod temporary_store;
+pub mod transaction;
 pub mod versioned;
 
 pub mod epoch_data;
@@ -75,33 +74,27 @@ pub mod utils;
 /// 0x1-- account address where Move stdlib modules are stored
 /// Same as the ObjectID
 pub const MOVE_STDLIB_ADDRESS: AccountAddress = AccountAddress::ONE;
-pub const MOVE_STDLIB_OBJECT_ID: ObjectID = ObjectID::from_address(MOVE_STDLIB_ADDRESS);
+pub const MOVE_STDLIB_PACKAGE_ID: ObjectID = ObjectID::from_address(MOVE_STDLIB_ADDRESS);
 
 /// 0x2-- account address where sui framework modules are stored
 /// Same as the ObjectID
 pub const SUI_FRAMEWORK_ADDRESS: AccountAddress = address_from_single_byte(2);
-pub const SUI_FRAMEWORK_OBJECT_ID: ObjectID = ObjectID::from_address(SUI_FRAMEWORK_ADDRESS);
+pub const SUI_FRAMEWORK_PACKAGE_ID: ObjectID = ObjectID::from_address(SUI_FRAMEWORK_ADDRESS);
 
 /// 0x3-- account address where sui system modules are stored
 /// Same as the ObjectID
 pub const SUI_SYSTEM_ADDRESS: AccountAddress = address_from_single_byte(3);
-pub const SUI_SYSTEM_OBJECT_ID: ObjectID = ObjectID::from_address(SUI_SYSTEM_ADDRESS);
+pub const SUI_SYSTEM_PACKAGE_ID: ObjectID = ObjectID::from_address(SUI_SYSTEM_ADDRESS);
 
 /// 0xdee9-- account address where DeepBook modules are stored
 /// Same as the ObjectID
 pub const DEEPBOOK_ADDRESS: AccountAddress = deepbook_addr();
-pub const DEEPBOOK_OBJECT_ID: ObjectID = ObjectID::from_address(DEEPBOOK_ADDRESS);
+pub const DEEPBOOK_PACKAGE_ID: ObjectID = ObjectID::from_address(DEEPBOOK_ADDRESS);
 
 /// 0x5: hardcoded object ID for the singleton sui system state object.
 pub const SUI_SYSTEM_STATE_ADDRESS: AccountAddress = address_from_single_byte(5);
 pub const SUI_SYSTEM_STATE_OBJECT_ID: ObjectID = ObjectID::from_address(SUI_SYSTEM_STATE_ADDRESS);
 pub const SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
-
-pub const SUI_SYSTEM_OBJ_CALL_ARG: CallArg = CallArg::Object(ObjectArg::SharedObject {
-    id: SUI_SYSTEM_STATE_OBJECT_ID,
-    initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-    mutable: true,
-});
 
 /// 0x6: hardcoded object ID for the singleton clock object.
 pub const SUI_CLOCK_ADDRESS: AccountAddress = address_from_single_byte(6);
@@ -113,7 +106,10 @@ pub const SUI_CLOCK_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION
 pub fn is_system_package(id: ObjectID) -> bool {
     matches!(
         id,
-        MOVE_STDLIB_OBJECT_ID | SUI_FRAMEWORK_OBJECT_ID | SUI_SYSTEM_OBJECT_ID | DEEPBOOK_OBJECT_ID
+        MOVE_STDLIB_PACKAGE_ID
+            | SUI_FRAMEWORK_PACKAGE_ID
+            | SUI_SYSTEM_PACKAGE_ID
+            | DEEPBOOK_PACKAGE_ID
     )
 }
 

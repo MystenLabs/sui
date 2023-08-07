@@ -13,7 +13,7 @@ use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::IdentStr;
-use move_core_types::language_storage::{ModuleId, TypeTag};
+use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use move_core_types::value::MoveTypeLayout;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -24,14 +24,9 @@ use sui_types::base_types::{
 };
 use sui_types::digests::{ObjectDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
-use sui_types::error::{ExecutionError, SuiError};
+use sui_types::error::{ExecutionError, SuiError, SuiResult};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas::GasCostSummary;
-use sui_types::messages::{
-    Argument, CallArg, Command, GenesisObject, InputObjectKind, ObjectArg, ProgrammableMoveCall,
-    ProgrammableTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
-    TransactionKind, VersionedProtocolMessage,
-};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Owner;
 use sui_types::parse_sui_type_tag;
@@ -42,6 +37,12 @@ use sui_types::sui_serde::Readable;
 use sui_types::sui_serde::{
     BigInt, SequenceNumber as AsSequenceNumber, SuiTypeTag as AsSuiTypeTag,
 };
+use sui_types::transaction::{
+    Argument, CallArg, Command, GenesisObject, InputObjectKind, ObjectArg, ProgrammableMoveCall,
+    ProgrammableTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
+    TransactionKind, VersionedProtocolMessage,
+};
+use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 // similar to EpochId of sui-types but BigInt
 pub type SuiEpochId = BigInt<u64>;
@@ -235,6 +236,39 @@ impl PartialEq for SuiTransactionBlockResponse {
             && self.confirmed_local_execution == other.confirmed_local_execution
             && self.checkpoint == other.checkpoint
     }
+}
+
+pub fn get_new_package_obj_from_response(
+    response: &SuiTransactionBlockResponse,
+) -> Option<ObjectRef> {
+    response.object_changes.as_ref().and_then(|changes| {
+        changes
+            .iter()
+            .find(|change| matches!(change, ObjectChange::Published { .. }))
+            .map(|change| change.object_ref())
+    })
+}
+
+pub fn get_new_package_upgrade_cap_from_response(
+    response: &SuiTransactionBlockResponse,
+) -> Option<ObjectRef> {
+    response.object_changes.as_ref().and_then(|changes| {
+        changes
+            .iter()
+            .find(|change| {
+                matches!(change, ObjectChange::Created {
+                    owner: Owner::AddressOwner(_),
+                    object_type: StructTag {
+                        address: SUI_FRAMEWORK_ADDRESS,
+                        module,
+                        name,
+                        ..
+                    },
+                    ..
+                } if module.as_str() == "package" && name.as_str() == "UpgradeCap")
+            })
+            .map(|change| change.object_ref())
+    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
@@ -672,7 +706,7 @@ impl SuiTransactionBlockEvents {
         tx_digest: TransactionDigest,
         timestamp_ms: Option<u64>,
         resolver: &impl GetModule,
-    ) -> Result<Self, SuiError> {
+    ) -> SuiResult<Self> {
         Ok(Self {
             data: events
                 .data
@@ -727,7 +761,7 @@ impl DevInspectResults {
         events: TransactionEvents,
         return_values: Result<Vec<ExecutionResult>, ExecutionError>,
         resolver: &impl GetModule,
-    ) -> Result<Self, anyhow::Error> {
+    ) -> SuiResult<Self> {
         let tx_digest = *effects.transaction_digest();
         let mut error = None;
         let mut results = None;

@@ -3,8 +3,6 @@
 
 use std::sync::Arc;
 
-use anyhow::anyhow;
-
 use async_trait::async_trait;
 use cached::proc_macro::cached;
 use cached::SizedCache;
@@ -28,7 +26,7 @@ use sui_types::object::Object;
 use sui_types::parse_sui_struct_tag;
 
 use crate::api::{cap_page_limit, CoinReadApiServer, JsonRpcMetrics};
-use crate::error::Error;
+use crate::error::{Error, SuiRpcInputError};
 use crate::{with_tracing, SuiRpcModule};
 
 pub struct CoinReadApi {
@@ -47,7 +45,7 @@ impl CoinReadApi {
         cursor: (String, ObjectID),
         limit: Option<usize>,
         one_coin_type_only: bool,
-    ) -> anyhow::Result<CoinPage> {
+    ) -> Result<CoinPage, Error> {
         let limit = cap_page_limit(limit);
         self.metrics.get_coins_limit.report(limit as u64);
         let state = self.state.clone();
@@ -156,7 +154,7 @@ impl CoinReadApiServer for CoinReadApi {
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<CoinPage> {
-        with_tracing!("get_coins", async move {
+        with_tracing!(async move {
             let coin_type_tag = TypeTag::Struct(Box::new(match coin_type {
                 Some(c) => parse_sui_struct_tag(&c)?,
                 None => GAS::type_(),
@@ -186,7 +184,7 @@ impl CoinReadApiServer for CoinReadApi {
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<CoinPage> {
-        with_tracing!("get_all_coins", async move {
+        with_tracing!(async move {
             let cursor = match cursor {
                 Some(object_id) => {
                     let obj = self
@@ -198,15 +196,16 @@ impl CoinReadApiServer for CoinReadApi {
                         Some(obj) => {
                             let coin_type = obj.coin_type_maybe();
                             if coin_type.is_none() {
-                                Err(anyhow!(
-                                    "Invalid Cursor {:?}, Object is not a coin",
-                                    object_id
-                                ))
+                                Err(Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(
+                                    format!("Invalid Cursor {:?}, Object is not a coin", object_id),
+                                )))
                             } else {
                                 Ok((coin_type.unwrap().to_string(), object_id))
                             }
                         }
-                        None => Err(anyhow!("Invalid Cursor {:?}, Object not found", object_id)),
+                        None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(
+                            format!("Invalid Cursor {:?}, Object not found", object_id),
+                        ))),
                     }
                 }
                 None => {
@@ -231,7 +230,7 @@ impl CoinReadApiServer for CoinReadApi {
         owner: SuiAddress,
         coin_type: Option<String>,
     ) -> RpcResult<Balance> {
-        with_tracing!("get_balance", async move {
+        with_tracing!(async move {
             let coin_type = TypeTag::Struct(Box::new(match coin_type {
                 Some(c) => parse_sui_struct_tag(&c)?,
                 None => GAS::type_(),
@@ -259,7 +258,7 @@ impl CoinReadApiServer for CoinReadApi {
 
     #[instrument(skip(self))]
     async fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
-        with_tracing!("get_all_balances", async move {
+        with_tracing!(async move {
             let all_balance = self
                 .state
                 .indexes
@@ -288,7 +287,7 @@ impl CoinReadApiServer for CoinReadApi {
 
     #[instrument(skip(self))]
     async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<Option<SuiCoinMetadata>> {
-        with_tracing!("get_coin_metadata", async move {
+        with_tracing!(async move {
             let coin_struct = parse_sui_struct_tag(&coin_type)?;
 
             let metadata_object = self
@@ -305,7 +304,7 @@ impl CoinReadApiServer for CoinReadApi {
 
     #[instrument(skip(self))]
     async fn get_total_supply(&self, coin_type: String) -> RpcResult<Supply> {
-        with_tracing!("get_total_supply", async move {
+        with_tracing!(async move {
             let coin_struct = parse_sui_struct_tag(&coin_type)?;
 
             Ok(if GAS::is_gas(&coin_struct) {

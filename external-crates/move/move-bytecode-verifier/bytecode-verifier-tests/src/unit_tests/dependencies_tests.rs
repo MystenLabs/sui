@@ -81,7 +81,7 @@ fn mk_script_function_module() -> CompiledModule {
         function_instantiations: vec![],
         field_instantiations: vec![],
     };
-    move_bytecode_verifier::verify_module(&m).unwrap();
+    move_bytecode_verifier::verify_module_unmetered(&m).unwrap();
     m
 }
 
@@ -173,7 +173,7 @@ fn mk_invoking_module(use_generic: bool, valid: bool) -> CompiledModule {
         struct_def_instantiations: vec![],
         field_instantiations: vec![],
     };
-    move_bytecode_verifier::verify_module(&m).unwrap();
+    move_bytecode_verifier::verify_module_unmetered(&m).unwrap();
     m
 }
 
@@ -237,7 +237,7 @@ fn mk_invoking_script(use_generic: bool) -> CompiledScript {
         constant_pool: vec![],
         metadata: vec![],
     };
-    move_bytecode_verifier::verify_script(&s).unwrap();
+    move_bytecode_verifier::verify_script_unmetered(&s).unwrap();
     s
 }
 

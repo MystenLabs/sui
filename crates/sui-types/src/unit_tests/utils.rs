@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::crypto::Signer;
-use crate::messages::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use crate::transaction::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
 use crate::{
     base_types::{dbg_addr, ExecutionDigests, ObjectID},
     committee::Committee,
@@ -12,11 +12,11 @@ use crate::{
         AuthorityPublicKeyBytes, Signature,
     },
     gas::GasCostSummary,
-    messages::{Transaction, TransactionData, VerifiedTransaction},
     messages_checkpoint::{
         CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, SignedCheckpointSummary,
     },
     object::Object,
+    transaction::{Transaction, TransactionData, VerifiedTransaction},
 };
 use fastcrypto::traits::KeyPair as KeypairTraits;
 use shared_crypto::intent::Intent;

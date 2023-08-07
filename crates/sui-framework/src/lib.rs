@@ -10,13 +10,13 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Formatter;
 use sui_types::base_types::ObjectRef;
 use sui_types::storage::ObjectStore;
-use sui_types::DEEPBOOK_OBJECT_ID;
+use sui_types::DEEPBOOK_PACKAGE_ID;
 use sui_types::{
     base_types::ObjectID,
     digests::TransactionDigest,
     move_package::MovePackage,
     object::{Object, OBJECT_START_VERSION},
-    MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_OBJECT_ID,
+    MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
 };
 use tracing::error;
 
@@ -107,21 +107,21 @@ impl BuiltInFramework {
         // place we need to worry about if any of them changes.
         // TODO: Is it possible to derive dependencies from the bytecode instead of manually specifying them?
         define_system_packages!([
-            (MOVE_STDLIB_OBJECT_ID, "move-stdlib", []),
+            (MOVE_STDLIB_PACKAGE_ID, "move-stdlib", []),
             (
-                SUI_FRAMEWORK_OBJECT_ID,
+                SUI_FRAMEWORK_PACKAGE_ID,
                 "sui-framework",
-                [MOVE_STDLIB_OBJECT_ID]
+                [MOVE_STDLIB_PACKAGE_ID]
             ),
             (
-                SUI_SYSTEM_OBJECT_ID,
+                SUI_SYSTEM_PACKAGE_ID,
                 "sui-system",
-                [MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID]
+                [MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID]
             ),
             (
-                DEEPBOOK_OBJECT_ID,
+                DEEPBOOK_PACKAGE_ID,
                 "deepbook",
-                [MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID]
+                [MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID]
             )
         ])
         .iter()

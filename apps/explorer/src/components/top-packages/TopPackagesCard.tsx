@@ -23,10 +23,10 @@ export function TopPackagesCard() {
     const rpc = useEnhancedRpcClient();
     const [selectedFilter, setSelectedFilter] = useState<DateFilter>('3D');
 
-    const { data, isLoading } = useQuery(
-        ['top-packages', selectedFilter],
-        async () => rpc.getMoveCallMetrics()
-    );
+    const { data, isLoading } = useQuery({
+        queryKey: ['top-packages', selectedFilter],
+        queryFn: async () => rpc.getMoveCallMetrics(),
+    });
 
     const filteredData = data ? data[FILTER_TO_API_FILTER[selectedFilter]] : [];
 

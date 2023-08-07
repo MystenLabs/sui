@@ -4,7 +4,7 @@
 use crate::unit_tests::production_config;
 use move_binary_format::file_format::*;
 use move_bytecode_verifier::{
-    limits::LimitsVerifier, verifier::DEFAULT_MAX_IDENTIFIER_LENGTH,
+    limits::LimitsVerifier, meter::DummyMeter, verifier::DEFAULT_MAX_IDENTIFIER_LENGTH,
     verify_module_with_config_for_test, VerifierConfig,
 };
 use move_core_types::{
@@ -258,6 +258,7 @@ fn big_vec_unpacks() {
             ..Default::default()
         },
         &module,
+        &mut DummyMeter,
     );
     assert_eq!(
         res.unwrap_err().major_status(),

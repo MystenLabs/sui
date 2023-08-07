@@ -4,7 +4,6 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityStore;
 use crate::transaction_signing_filter;
-use move_bytecode_verifier::meter::BoundMeter;
 use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 use sui_adapter::adapter::default_verifier_config;
@@ -15,17 +14,20 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::ObjectRef;
 use sui_types::error::{UserInputError, UserInputResult};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::messages::{TransactionKind, VersionedProtocolMessage};
 use sui_types::metrics::BytecodeVerifierMetrics;
+use sui_types::transaction::{
+    InputObjectKind, InputObjects, TransactionData, TransactionDataAPI, TransactionKind,
+    VersionedProtocolMessage,
+};
 use sui_types::{
     base_types::{SequenceNumber, SuiAddress},
     error::SuiResult,
     fp_ensure,
     gas::{SuiCostTable, SuiGasStatus},
-    messages::{InputObjectKind, InputObjects, TransactionData, TransactionDataAPI},
     object::{Object, Owner},
 };
 use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
+use sui_verifier::meter::SuiVerifierMeter;
 use tracing::instrument;
 
 checked_arithmetic! {
@@ -138,7 +140,7 @@ pub(crate) async fn check_dev_inspect_input(
     config: &ProtocolConfig,
     kind: &TransactionKind,
     gas_object: Object,
-) -> Result<(ObjectRef, InputObjects), anyhow::Error> {
+) -> SuiResult<(ObjectRef, InputObjects)> {
     let gas_object_ref = gas_object.compute_object_reference();
     kind.validity_check(config)?;
     match kind {
@@ -146,7 +148,7 @@ pub(crate) async fn check_dev_inspect_input(
         TransactionKind::ChangeEpoch(_)
         | TransactionKind::Genesis(_)
         | TransactionKind::ConsensusCommitPrologue(_) => {
-            anyhow::bail!("Transaction kind {} is not supported in dev-inspect", kind)
+            return Err(UserInputError::Unsupported(format!("Transaction kind {} is not supported in dev-inspect", kind)).into())
         }
     }
     let mut input_objects = kind.input_objects()?;
@@ -439,7 +441,7 @@ pub fn check_non_system_packages_to_be_published(
         let metered_verifier_config =
             default_verifier_config(protocol_config, true /* enable metering */);
         // Use the same meter for all packages
-        let mut meter = BoundMeter::new(&metered_verifier_config);
+        let mut meter = SuiVerifierMeter::new(&metered_verifier_config);
         if let TransactionKind::ProgrammableTransaction(pt) = transaction.kind() {
             // Measure time for verifying all packages in the PTB
             let shared_meter_verifier_timer = metrics.verifier_runtime_per_ptb_success_latency.start_timer();

@@ -17,6 +17,7 @@ use strum_macros::EnumIter;
 use sui_types::error::SuiError;
 
 use crate::types::{BlockHash, OperationType, PublicKey, SuiEnv};
+use strum::EnumProperty;
 use strum_macros::Display;
 use strum_macros::EnumDiscriminants;
 use thiserror::Error;
@@ -24,7 +25,7 @@ use typed_store::rocks::TypedStoreError;
 
 /// Sui-Rosetta specific error types.
 /// This contains all the errors returns by the sui-rosetta server.
-#[derive(Debug, Error, EnumDiscriminants)]
+#[derive(Debug, Error, EnumDiscriminants, EnumProperty)]
 #[strum_discriminants(
     name(ErrorType),
     derive(Display, EnumIter),
@@ -78,6 +79,10 @@ pub enum Error {
     DBError(#[from] TypedStoreError),
     #[error(transparent)]
     JsonExtractorRejection(#[from] JsonRejection),
+
+    #[error("Retries exhausted while getting balance. try again.")]
+    #[strum(props(retriable = "true"))]
+    RetryExhausted(String),
 }
 
 impl Serialize for ErrorType {
@@ -89,6 +94,16 @@ impl Serialize for ErrorType {
     }
 }
 
+trait CustomProperties {
+    fn retriable(&self) -> bool;
+}
+
+impl CustomProperties for Error {
+    fn retriable(&self) -> bool {
+        matches!(self.get_str("retriable"), Some("true"))
+    }
+}
+
 impl ErrorType {
     fn json(&self) -> Value {
         let retriable = false;
@@ -96,10 +111,11 @@ impl ErrorType {
         let error_code = ErrorType::iter().position(|e| &e == self).unwrap();
         let message = format!("{self}").replace('-', " ");
         let message = message[0..1].to_uppercase() + &message[1..];
+
         json![{
             "code": error_code,
             "message": message,
-            "retriable":retriable,
+            "retriable": retriable,
         }]
     }
 }
@@ -114,6 +130,7 @@ impl Serialize for Error {
         // Safe to unwrap, we know ErrorType must be an object.
         let error = json.as_object_mut().unwrap();
         error.insert("details".into(), json!({ "error": format!("{self}") }));
+        error.insert("retriable".into(), json!(self.retriable()));
         error.serialize(serializer)
     }
 }

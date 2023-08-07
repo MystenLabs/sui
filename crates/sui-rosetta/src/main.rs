@@ -143,7 +143,7 @@ impl RosettaServerCommand {
                 let sui_client = wait_for_sui_client(full_node_url).await;
                 let rosetta_path = data_path.join("rosetta_db");
                 info!("Rosetta db path : {rosetta_path:?}");
-                let rosetta = RosettaOnlineServer::new(env, sui_client, &rosetta_path);
+                let rosetta = RosettaOnlineServer::new(env, sui_client);
                 rosetta.serve(addr).await??;
             }
 
@@ -175,7 +175,7 @@ impl RosettaServerCommand {
 
                 let rosetta_path = data_path.join("rosetta_db");
                 info!("Rosetta db path : {rosetta_path:?}");
-                let rosetta = RosettaOnlineServer::new(env, sui_client, &rosetta_path);
+                let rosetta = RosettaOnlineServer::new(env, sui_client);
                 rosetta.serve(addr).await??;
             }
         };

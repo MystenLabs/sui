@@ -9,7 +9,7 @@ use std::{fmt, fmt::Display};
 use thiserror::Error;
 
 #[non_exhaustive]
-#[derive(Error, Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
+#[derive(Error, Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone, Ord, PartialOrd)]
 pub enum TypedStoreError {
     #[error("rocksdb error: {0}")]
     RocksDBError(String),

@@ -6,7 +6,17 @@ use proptest::collection;
 use proptest::prelude::*;
 
 #[test]
-fn temp_test() {
+fn serde_pubkey() {
+    let skp = SuiKeyPair::Ed25519(get_key_pair().1);
+    let mut bytes = Vec::new();
+    bytes.extend_from_slice(&[skp.public().flag()]);
+    bytes.extend_from_slice(skp.public().as_ref());
+    let ser = serde_json::to_string(&skp.public()).unwrap();
+    assert_eq!(ser, format!("\"{}\"", Base64::encode(&bytes)));
+}
+
+#[test]
+fn serde_round_trip_authority_quorum_sign_info() {
     let info = AuthorityQuorumSignInfo::<true> {
         epoch: 0,
         signature: Default::default(),

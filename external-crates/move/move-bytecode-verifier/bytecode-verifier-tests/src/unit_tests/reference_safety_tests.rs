@@ -8,6 +8,7 @@ use move_binary_format::file_format::{
     IdentifierIndex, ModuleHandleIndex, Signature, SignatureIndex, SignatureToken,
     Visibility::Public,
 };
+use move_bytecode_verifier::meter::BoundMeter;
 use move_core_types::{identifier::Identifier, vm_status::StatusCode};
 
 #[test]
@@ -121,10 +122,13 @@ fn test_bicliques() {
         code.push(Bytecode::Ret);
     }
 
+    let config = production_config();
+    let mut meter = BoundMeter::new(&config);
     let result = move_bytecode_verifier::verify_module_with_config_for_test(
         "test_bicliques",
-        &production_config(),
+        &config,
         &m,
+        &mut meter,
     );
     assert_eq!(
         result.unwrap_err().major_status(),
@@ -240,13 +244,16 @@ fn test_merge_state_large_graph() {
         code.push(Bytecode::Ret);
     }
 
-    let res = move_bytecode_verifier::verify_module_with_config_for_test(
+    let config = production_config();
+    let mut meter = BoundMeter::new(&config);
+    let result = move_bytecode_verifier::verify_module_with_config_for_test(
         "test_merge_state_large_graph",
-        &production_config(),
+        &config,
         &m,
+        &mut meter,
     );
     assert_eq!(
-        res.unwrap_err().major_status(),
+        result.unwrap_err().major_status(),
         StatusCode::CONSTRAINT_NOT_SATISFIED
     );
 }
@@ -328,13 +335,16 @@ fn test_merge_state() {
         code.push(Bytecode::Ret);
     }
 
-    let res = move_bytecode_verifier::verify_module_with_config_for_test(
+    let config = production_config();
+    let mut meter = BoundMeter::new(&config);
+    let result = move_bytecode_verifier::verify_module_with_config_for_test(
         "test_merge_state",
-        &production_config(),
+        &config,
         &m,
+        &mut meter,
     );
     assert_eq!(
-        res.unwrap_err().major_status(),
+        result.unwrap_err().major_status(),
         StatusCode::CONSTRAINT_NOT_SATISFIED
     );
 }
@@ -410,10 +420,13 @@ fn test_copyloc_pop() {
         code.push(Bytecode::Ret);
     }
 
+    let config = production_config();
+    let mut meter = BoundMeter::new(&config);
     let result = move_bytecode_verifier::verify_module_with_config_for_test(
         "test_copyloc_pop",
-        &production_config(),
+        &config,
         &m,
+        &mut meter,
     );
     assert_eq!(
         result.unwrap_err().major_status(),

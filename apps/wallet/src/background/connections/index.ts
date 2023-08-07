@@ -19,6 +19,8 @@ import type {
     WalletStatusChangePayload,
 } from '_payloads/wallet-status-change';
 
+const appOrigin = new URL(Browser.runtime.getURL('')).origin;
+
 export class Connections {
     #connections: (Connection | KeepAliveConnection)[] = [];
 
@@ -31,6 +33,11 @@ export class Connections {
                         connection = new ContentScriptConnection(port);
                         break;
                     case UiConnection.CHANNEL:
+                        if (port.sender?.origin !== appOrigin) {
+                            throw new Error(
+                                `[Connections] UI connections are not allowed for origin ${port.sender?.origin}`
+                            );
+                        }
                         connection = new UiConnection(port);
                         break;
                     case KEEP_ALIVE_BG_PORT_NAME:

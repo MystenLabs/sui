@@ -23,9 +23,10 @@ export function useDeriveLedgerAccounts(
     const { numAccountsToDerive, ...useQueryOptions } = options;
     const { suiLedgerClient } = useSuiLedgerClient();
 
-    return useQuery(
-        ['derive-ledger-accounts'],
-        () => {
+    return useQuery({
+        // eslint-disable-next-line @tanstack/query/exhaustive-deps
+        queryKey: ['derive-ledger-accounts'],
+        queryFn: () => {
             if (!suiLedgerClient) {
                 throw new Error(
                     "The Sui application isn't open on a connected Ledger device"
@@ -36,15 +37,9 @@ export function useDeriveLedgerAccounts(
                 numAccountsToDerive
             );
         },
-        {
-            ...useQueryOptions,
-            // NOTE: Unfortunately for security purposes, there's no way to uniquely identify a
-            // Ledger device without making a request to the Sui application and returning some
-            // unique identifier (or a public key which should guarantee uniqueness). Since we
-            // can't provide a unique query key, we'll disable caching entirely.
-            cacheTime: 0,
-        }
-    );
+        ...useQueryOptions,
+        cacheTime: 0,
+    });
 }
 
 async function deriveAccountsFromLedger(

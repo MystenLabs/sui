@@ -20,13 +20,12 @@ use sui_core::{
 };
 use sui_node::SuiNodeHandle;
 
+use sui_adapter::type_layout_resolver::TypeLayoutResolver;
+use sui_core::authority::AuthorityState;
 use sui_types::effects::{CertifiedTransactionEffects, TransactionEffects, TransactionEffectsAPI};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair},
-    messages::{
-        Argument, Command, ObjectArg, ProgrammableTransaction, TransactionData, VerifiedTransaction,
-    },
     object::{Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::ObjectStore,
@@ -34,8 +33,11 @@ use sui_types::{
         sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary},
         SuiSystemStateTrait,
     },
+    transaction::{
+        Argument, Command, ObjectArg, ProgrammableTransaction, TransactionData, VerifiedTransaction,
+    },
     utils::to_sender_signed_transaction,
-    SUI_SYSTEM_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_SYSTEM_PACKAGE_ID,
 };
 use test_utils::authority::spawn_test_authorities;
 use test_utils::authority::test_authority_configs_with_objects;
@@ -246,6 +248,9 @@ impl StressTestRunner {
         println!("CREATED:");
         self.nodes[0].with(|node| {
             let state = node.state();
+            let epoch_store = state.load_epoch_store_one_call_per_task();
+            let move_vm = epoch_store.move_vm();
+            let mut layout_resolver = TypeLayoutResolver::new(move_vm, state.database.as_ref());
             for (obj_ref, _) in &effects.created {
                 let object_opt = state
                     .database
@@ -254,7 +259,7 @@ impl StressTestRunner {
                 let Some(object) = object_opt else { continue };
                 let struct_tag = object.struct_tag().unwrap();
                 let total_sui =
-                    object.get_total_sui(&state.database).unwrap() - object.storage_rebate;
+                    object.get_total_sui(&mut layout_resolver).unwrap() - object.storage_rebate;
                 println!(">> {struct_tag} TOTAL_SUI: {total_sui}");
             }
 
@@ -267,7 +272,7 @@ impl StressTestRunner {
                     .unwrap();
                 let struct_tag = object.struct_tag().unwrap();
                 let total_sui =
-                    object.get_total_sui(&state.database).unwrap() - object.storage_rebate;
+                    object.get_total_sui(&mut layout_resolver).unwrap() - object.storage_rebate;
                 println!(">> {struct_tag} TOTAL_SUI: {total_sui}");
             }
 
@@ -280,7 +285,7 @@ impl StressTestRunner {
                     .unwrap();
                 let struct_tag = object.struct_tag().unwrap();
                 let total_sui =
-                    object.get_total_sui(&state.database).unwrap() - object.storage_rebate;
+                    object.get_total_sui(&mut layout_resolver).unwrap() - object.storage_rebate;
                 println!(">> {struct_tag} TOTAL_SUI: {total_sui}");
             }
         })
@@ -288,6 +293,10 @@ impl StressTestRunner {
 
     pub async fn db(&self) -> Arc<AuthorityStore> {
         self.nodes[0].with(|node| node.state().db())
+    }
+
+    pub async fn state(&self) -> Arc<AuthorityState> {
+        self.nodes[0].with(|node| node.state())
     }
 
     pub async fn change_epoch(&mut self) {
@@ -380,18 +389,12 @@ mod add_stake {
         async fn run(&mut self, runner: &mut StressTestRunner) -> Result<TransactionEffects> {
             let pt = {
                 let mut builder = ProgrammableTransactionBuilder::new();
-                builder
-                    .obj(ObjectArg::SharedObject {
-                        id: SUI_SYSTEM_STATE_OBJECT_ID,
-                        initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                        mutable: true,
-                    })
-                    .unwrap();
+                builder.obj(ObjectArg::SUI_SYSTEM_MUT).unwrap();
                 builder.pure(self.staked_with).unwrap();
                 let coin = StressTestRunner::split_off(&mut builder, self.stake_amount);
                 move_call! {
                     builder,
-                    (SUI_SYSTEM_OBJECT_ID)::sui_system::request_add_stake(Argument::Input(0), coin, Argument::Input(1))
+                    (SUI_SYSTEM_PACKAGE_ID)::sui_system::request_add_stake(Argument::Input(0), coin, Argument::Input(1))
                 };
                 builder.finish()
             };
@@ -411,8 +414,13 @@ mod add_stake {
                 .get_created_object_of_type_name(effects, "StakedSui")
                 .await
                 .unwrap();
+            let store = runner.db().await;
+            let state = runner.state().await;
+            let epoch_store = state.load_epoch_store_one_call_per_task();
+            let move_vm = epoch_store.move_vm();
+            let mut layout_resolver = TypeLayoutResolver::new(move_vm, store.as_ref());
             let staked_amount =
-                object.get_total_sui(&runner.db().await).unwrap() - object.storage_rebate;
+                object.get_total_sui(&mut layout_resolver).unwrap() - object.storage_rebate;
             assert_eq!(staked_amount, self.stake_amount);
             assert_eq!(object.owner.get_owner_address().unwrap(), self.sender);
             runner.display_effects(effects);

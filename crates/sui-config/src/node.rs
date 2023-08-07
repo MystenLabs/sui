@@ -24,7 +24,6 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::NetworkKeyPair;
-use sui_types::crypto::NetworkPublicKey;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair};
 use sui_types::multiaddr::Multiaddr;
@@ -33,7 +32,7 @@ use sui_types::multiaddr::Multiaddr;
 pub const DEFAULT_GRPC_CONCURRENCY_LIMIT: usize = 20000000000;
 
 /// Default gas price of 100 Mist
-pub const DEFAULT_VALIDATOR_GAS_PRICE: u64 = 1000;
+pub const DEFAULT_VALIDATOR_GAS_PRICE: u64 = sui_types::transaction::DEFAULT_VALIDATOR_GAS_PRICE;
 
 /// Default commission rate of 2%
 pub const DEFAULT_COMMISSION_RATE: u64 = 200;
@@ -114,7 +113,13 @@ pub struct NodeConfig {
     pub expensive_safety_check_config: ExpensiveSafetyCheckConfig,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub name_service_resolver_object_id: Option<ObjectID>,
+    pub name_service_package_address: Option<SuiAddress>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name_service_registry_id: Option<ObjectID>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name_service_reverse_registry_id: Option<ObjectID>,
 
     #[serde(default)]
     pub transaction_deny_config: TransactionDenyConfig,
@@ -419,6 +424,11 @@ pub struct AuthorityStorePruningConfig {
     /// pruner deletion method. If set to `true`, range deletion is utilized (recommended).
     /// Use `false` for point deletes.
     pub use_range_deletion: bool,
+    /// enables periodic background compaction for old SST files whose last modified time is
+    /// older than `periodic_compaction_threshold_days` days.
+    /// That ensures that all sst files eventually go through the compaction process
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub periodic_compaction_threshold_days: Option<usize>,
 }
 
 impl Default for AuthorityStorePruningConfig {
@@ -434,6 +444,7 @@ impl Default for AuthorityStorePruningConfig {
             max_checkpoints_in_batch: 10,
             max_transactions_in_batch: 1000,
             use_range_deletion: true,
+            periodic_compaction_threshold_days: None,
         }
     }
 }
@@ -451,6 +462,7 @@ impl AuthorityStorePruningConfig {
             max_checkpoints_in_batch: 10,
             max_transactions_in_batch: 1000,
             use_range_deletion: true,
+            periodic_compaction_threshold_days: None,
         }
     }
     pub fn fullnode_config() -> Self {
@@ -465,6 +477,7 @@ impl AuthorityStorePruningConfig {
             max_checkpoints_in_batch: 10,
             max_transactions_in_batch: 1000,
             use_range_deletion: true,
+            periodic_compaction_threshold_days: None,
         }
     }
 }
@@ -491,74 +504,6 @@ pub struct DBCheckpointConfig {
     pub perform_index_db_checkpoints_at_epoch_end: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prune_and_compact_before_upload: Option<bool>,
-}
-
-/// Publicly known information about a validator
-/// TODO read most of this from on-chain
-#[serde_as]
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub struct ValidatorInfo {
-    pub name: String,
-    pub account_address: SuiAddress,
-    pub protocol_key: AuthorityPublicKeyBytes,
-    pub worker_key: NetworkPublicKey,
-    pub network_key: NetworkPublicKey,
-    pub gas_price: u64,
-    pub commission_rate: u64,
-    pub network_address: Multiaddr,
-    pub p2p_address: Multiaddr,
-    pub narwhal_primary_address: Multiaddr,
-    pub narwhal_worker_address: Multiaddr,
-    pub description: String,
-    pub image_url: String,
-    pub project_url: String,
-}
-
-impl ValidatorInfo {
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn sui_address(&self) -> SuiAddress {
-        self.account_address
-    }
-
-    pub fn protocol_key(&self) -> AuthorityPublicKeyBytes {
-        self.protocol_key
-    }
-
-    pub fn worker_key(&self) -> &NetworkPublicKey {
-        &self.worker_key
-    }
-
-    pub fn network_key(&self) -> &NetworkPublicKey {
-        &self.network_key
-    }
-
-    pub fn gas_price(&self) -> u64 {
-        self.gas_price
-    }
-
-    pub fn commission_rate(&self) -> u64 {
-        self.commission_rate
-    }
-
-    pub fn network_address(&self) -> &Multiaddr {
-        &self.network_address
-    }
-
-    pub fn narwhal_primary_address(&self) -> &Multiaddr {
-        &self.narwhal_primary_address
-    }
-
-    pub fn narwhal_worker_address(&self) -> &Multiaddr {
-        &self.narwhal_worker_address
-    }
-
-    pub fn p2p_address(&self) -> &Multiaddr {
-        &self.p2p_address
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq)]
@@ -761,56 +706,13 @@ mod tests {
     use crate::NodeConfig;
 
     #[test]
-    fn serialize_genesis_config_from_file() {
+    fn serialize_genesis_from_file() {
         let g = Genesis::new_from_file("path/to/file");
 
         let s = serde_yaml::to_string(&g).unwrap();
         assert_eq!("---\ngenesis-file-location: path/to/file\n", s);
         let loaded_genesis: Genesis = serde_yaml::from_str(&s).unwrap();
         assert_eq!(g, loaded_genesis);
-    }
-
-    #[test]
-    fn serialize_genesis_config_in_place() {
-        let dir = tempfile::TempDir::new().unwrap();
-        let network_config = crate::builder::ConfigBuilder::new(&dir).build();
-        let genesis = network_config.genesis;
-
-        let g = Genesis::new(genesis);
-
-        let mut s = serde_yaml::to_string(&g).unwrap();
-        let loaded_genesis: Genesis = serde_yaml::from_str(&s).unwrap();
-        loaded_genesis
-            .genesis()
-            .unwrap()
-            .checkpoint_contents()
-            .digest(); // cache digest before comparing.
-        assert_eq!(g, loaded_genesis);
-
-        // If both in-place and file location are provided, prefer the in-place variant
-        s.push_str("\ngenesis-file-location: path/to/file");
-        let loaded_genesis: Genesis = serde_yaml::from_str(&s).unwrap();
-        loaded_genesis
-            .genesis()
-            .unwrap()
-            .checkpoint_contents()
-            .digest(); // cache digest before comparing.
-        assert_eq!(g, loaded_genesis);
-    }
-
-    #[test]
-    fn load_genesis_config_from_file() {
-        let file = tempfile::NamedTempFile::new().unwrap();
-        let genesis_config = Genesis::new_from_file(file.path());
-
-        let dir = tempfile::TempDir::new().unwrap();
-        let network_config = crate::builder::ConfigBuilder::new(&dir).build();
-        let genesis = network_config.genesis;
-        genesis.save(file.path()).unwrap();
-
-        let loaded_genesis = genesis_config.genesis().unwrap();
-        loaded_genesis.checkpoint_contents().digest(); // cache digest before comparing.
-        assert_eq!(&genesis, loaded_genesis);
     }
 
     #[test]

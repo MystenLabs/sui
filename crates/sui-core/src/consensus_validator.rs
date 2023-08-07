@@ -164,9 +164,10 @@ mod tests {
         let mut objects = test_gas_objects();
         objects.push(Object::shared_for_testing());
 
-        let network_config = sui_config::builder::ConfigBuilder::new_with_temp_dir()
-            .with_objects(objects.clone())
-            .build();
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .with_objects(objects.clone())
+                .build();
 
         let state = TestAuthorityBuilder::new()
             .with_network_config(&network_config)

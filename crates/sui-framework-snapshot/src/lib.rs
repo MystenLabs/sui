@@ -7,7 +7,7 @@ use std::{fs, io::Read, path::PathBuf};
 use sui_framework::SystemPackage;
 use sui_types::base_types::ObjectID;
 
-pub type SnapshotManifest = BTreeMap<String, BTreeMap<u64, SingleSnapshot>>;
+pub type SnapshotManifest = BTreeMap<u64, SingleSnapshot>;
 
 #[derive(Serialize, Deserialize)]
 pub struct SingleSnapshot {
@@ -25,21 +25,13 @@ pub fn load_bytecode_snapshot_manifest() -> SnapshotManifest {
         .expect("Could not deserialize SnapshotManifest")
 }
 
-pub fn update_bytecode_snapshot_manifest(
-    network: &str,
-    git_revision: String,
-    version: u64,
-    files: Vec<ObjectID>,
-) {
+pub fn update_bytecode_snapshot_manifest(git_revision: &str, version: u64, files: Vec<ObjectID>) {
     let mut snapshot = load_bytecode_snapshot_manifest();
 
-    let entry = snapshot
-        .entry(network.to_owned())
-        .or_insert_with(BTreeMap::new);
-    entry.insert(
+    snapshot.insert(
         version,
         SingleSnapshot {
-            git_revision,
+            git_revision: git_revision.to_string(),
             package_ids: files,
         },
     );
@@ -49,21 +41,14 @@ pub fn update_bytecode_snapshot_manifest(
     fs::write(manifest_path(), json).expect("Could not update manifest file");
 }
 
-pub fn load_bytecode_snapshot(
-    network: &str,
-    protocol_version: u64,
-) -> anyhow::Result<Vec<SystemPackage>> {
+pub fn load_bytecode_snapshot(protocol_version: u64) -> anyhow::Result<Vec<SystemPackage>> {
     let mut snapshot_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    snapshot_path.extend([
-        "bytecode_snapshot",
-        network,
-        protocol_version.to_string().as_str(),
-    ]);
-    let snapshot_objects: anyhow::Result<Vec<_>> = std::fs::read_dir(&snapshot_path)?
+    snapshot_path.extend(["bytecode_snapshot", protocol_version.to_string().as_str()]);
+    let snapshot_objects: anyhow::Result<Vec<_>> = fs::read_dir(&snapshot_path)?
         .flatten()
         .map(|entry| {
             let file_name = entry.file_name().to_str().unwrap().to_string();
-            let mut file = std::fs::File::open(snapshot_path.clone().join(file_name))?;
+            let mut file = fs::File::open(snapshot_path.clone().join(file_name))?;
             let mut buffer = Vec::new();
             file.read_to_end(&mut buffer)?;
             let package: SystemPackage = bcs::from_bytes(&buffer)?;
@@ -74,7 +59,5 @@ pub fn load_bytecode_snapshot(
 }
 
 fn manifest_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("bytecode_snapshot")
-        .join("manifest.json")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("manifest.json")
 }

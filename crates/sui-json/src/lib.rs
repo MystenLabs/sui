@@ -273,13 +273,10 @@ impl SuiJsonValue {
             // For ascii and utf8 strings
             (
                 JsonValue::String(s),
-                MoveTypeLayout::Struct(MoveStructLayout::WithTypes { type_, fields }),
-            ) if is_move_string_type(type_) => Self::handle_inner_struct_layout(
-                &fields.iter().map(|l| l.layout.clone()).collect::<Vec<_>>(),
-                val,
-                ty,
-                s,
-            )?,
+                MoveTypeLayout::Struct(MoveStructLayout::WithTypes { type_, fields: _ }),
+            ) if is_move_string_type(type_) => {
+                MoveValue::Vector(s.as_bytes().iter().copied().map(MoveValue::U8).collect())
+            }
             // For ID
             (
                 JsonValue::String(s),

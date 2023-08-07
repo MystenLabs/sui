@@ -3,23 +3,22 @@
 
 use insta::assert_json_snapshot;
 use std::{collections::BTreeMap, path::PathBuf};
-use sui_config::NetworkConfig;
 use sui_core::test_utils::make_transfer_object_transaction;
 use sui_core::test_utils::make_transfer_sui_transaction;
+use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::base_types::SuiAddress;
 use sui_types::coin::PAY_JOIN_FUNC_NAME;
 use sui_types::coin::PAY_MODULE_NAME;
 use sui_types::coin::PAY_SPLIT_VEC_FUNC_NAME;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
-use sui_types::messages::VerifiedTransaction;
 use sui_types::object::{generate_test_gas_objects, Object};
-use sui_types::SUI_FRAMEWORK_OBJECT_ID;
+use sui_types::transaction::VerifiedTransaction;
+use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::{
     gas::GasCostSummary,
-    messages::{CallArg, ObjectArg},
+    transaction::{CallArg, ObjectArg},
 };
 use test_utils::authority::spawn_test_authorities;
-use test_utils::transaction::make_publish_package;
 use test_utils::{
     authority::test_authority_configs_with_objects,
     transaction::{
@@ -88,7 +87,7 @@ async fn split_n_tx(n: u64, coin: &Object, gas: &Object, gas_price: u64) -> Veri
     let (sender, keypair) = deterministic_random_account_key();
     TestTransactionBuilder::new(sender, gas.compute_object_reference(), gas_price)
         .move_call(
-            SUI_FRAMEWORK_OBJECT_ID,
+            SUI_FRAMEWORK_PACKAGE_ID,
             PAY_MODULE_NAME.as_str(),
             PAY_SPLIT_VEC_FUNC_NAME.as_str(),
             vec![
@@ -119,11 +118,13 @@ async fn create_txes(
     //
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("dummy_modules_publish");
-    let publish_tx = make_publish_package(
+    let publish_tx = TestTransactionBuilder::new(
+        sender,
         gas_objects.pop().unwrap().compute_object_reference(),
-        package_path,
         gas_price,
-    );
+    )
+    .publish(package_path)
+    .build_and_sign(keypair);
     ret.insert(CommonTransactionCosts::Publish, publish_tx);
 
     //
@@ -180,7 +181,7 @@ async fn create_txes(
         gas_price,
     )
     .move_call(
-        SUI_FRAMEWORK_OBJECT_ID,
+        SUI_FRAMEWORK_PACKAGE_ID,
         PAY_MODULE_NAME.as_str(),
         PAY_JOIN_FUNC_NAME.as_str(),
         vec![

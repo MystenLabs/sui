@@ -4,13 +4,14 @@
 
 use crate::support::dummy_procedure_module;
 use move_binary_format::file_format::Bytecode;
+use move_bytecode_verifier::meter::DummyMeter;
 use move_bytecode_verifier::{CodeUnitVerifier, VerifierConfig};
 use move_core_types::vm_status::StatusCode;
 
 #[test]
 fn invalid_fallthrough_br_true() {
     let module = dummy_procedure_module(vec![Bytecode::LdFalse, Bytecode::BrTrue(1)]);
-    let result = CodeUnitVerifier::verify_module(&Default::default(), &module);
+    let result = CodeUnitVerifier::verify_module(&Default::default(), &module, &mut DummyMeter);
     assert_eq!(
         result.unwrap_err().major_status(),
         StatusCode::INVALID_FALL_THROUGH
@@ -20,7 +21,7 @@ fn invalid_fallthrough_br_true() {
 #[test]
 fn invalid_fallthrough_br_false() {
     let module = dummy_procedure_module(vec![Bytecode::LdTrue, Bytecode::BrFalse(1)]);
-    let result = CodeUnitVerifier::verify_module(&Default::default(), &module);
+    let result = CodeUnitVerifier::verify_module(&Default::default(), &module, &mut DummyMeter);
     assert_eq!(
         result.unwrap_err().major_status(),
         StatusCode::INVALID_FALL_THROUGH
@@ -31,7 +32,7 @@ fn invalid_fallthrough_br_false() {
 #[test]
 fn invalid_fallthrough_non_branch() {
     let module = dummy_procedure_module(vec![Bytecode::LdTrue, Bytecode::Pop]);
-    let result = CodeUnitVerifier::verify_module(&Default::default(), &module);
+    let result = CodeUnitVerifier::verify_module(&Default::default(), &module, &mut DummyMeter);
     assert_eq!(
         result.unwrap_err().major_status(),
         StatusCode::INVALID_FALL_THROUGH
@@ -41,21 +42,21 @@ fn invalid_fallthrough_non_branch() {
 #[test]
 fn valid_fallthrough_branch() {
     let module = dummy_procedure_module(vec![Bytecode::Branch(0)]);
-    let result = CodeUnitVerifier::verify_module(&Default::default(), &module);
+    let result = CodeUnitVerifier::verify_module(&Default::default(), &module, &mut DummyMeter);
     assert!(result.is_ok());
 }
 
 #[test]
 fn valid_fallthrough_ret() {
     let module = dummy_procedure_module(vec![Bytecode::Ret]);
-    let result = CodeUnitVerifier::verify_module(&Default::default(), &module);
+    let result = CodeUnitVerifier::verify_module(&Default::default(), &module, &mut DummyMeter);
     assert!(result.is_ok());
 }
 
 #[test]
 fn valid_fallthrough_abort() {
     let module = dummy_procedure_module(vec![Bytecode::LdU64(7), Bytecode::Abort]);
-    let result = CodeUnitVerifier::verify_module(&Default::default(), &module);
+    let result = CodeUnitVerifier::verify_module(&Default::default(), &module, &mut DummyMeter);
     assert!(result.is_ok());
 }
 
@@ -68,7 +69,8 @@ fn test_max_number_of_bytecode() {
     nops.push(Bytecode::Ret);
     let module = dummy_procedure_module(nops);
 
-    let result = CodeUnitVerifier::verify_module(&VerifierConfig::unbounded(), &module);
+    let result =
+        CodeUnitVerifier::verify_module(&VerifierConfig::unbounded(), &module, &mut DummyMeter);
     assert!(result.is_ok());
 }
 
@@ -86,6 +88,7 @@ fn test_max_basic_blocks() {
             ..Default::default()
         },
         &module,
+        &mut DummyMeter,
     );
     assert_eq!(
         result.unwrap_err().major_status(),

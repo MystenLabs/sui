@@ -112,9 +112,9 @@ export function useOnrampProviders() {
         localStorage.getItem(PREFERRED_ONRAMP_PROVIDER_KEY)
     );
 
-    const { data } = useQuery(
-        ['onramp', 'get-providers'],
-        async () => {
+    const { data } = useQuery({
+        queryKey: ['onramp', 'get-providers'],
+        queryFn: async () => {
             const supportedProviders = await Promise.all(
                 ONRAMP_PROVIDER.map(async (provider) => {
                     const supported = await provider.checkSupported();
@@ -126,32 +126,30 @@ export function useOnrampProviders() {
             // Instead, we use a selector to get the actual provider instances from the keys.
             return supportedProviders.filter(Boolean) as string[];
         },
-        {
-            enabled: onrampEnabled,
-            select(providerKeys) {
-                const providers = providerKeys
-                    .map((key) =>
-                        ONRAMP_PROVIDER.find((provider) => provider.key === key)
-                    )
-                    .filter(Boolean) as OnrampProvider[];
+        enabled: onrampEnabled,
+        select(providerKeys) {
+            const providers = providerKeys
+                .map((key) =>
+                    ONRAMP_PROVIDER.find((provider) => provider.key === key)
+                )
+                .filter(Boolean) as OnrampProvider[];
 
-                if (!preferredProviderKey) {
-                    return providers;
-                }
+            if (!preferredProviderKey) {
+                return providers;
+            }
 
-                const preferredProvider = providers.find(
-                    ({ key }) => key === preferredProviderKey
-                );
-                const nonPreferredProviders = providers.filter(
-                    ({ key }) => key !== preferredProviderKey
-                );
+            const preferredProvider = providers.find(
+                ({ key }) => key === preferredProviderKey
+            );
+            const nonPreferredProviders = providers.filter(
+                ({ key }) => key !== preferredProviderKey
+            );
 
-                return [preferredProvider, ...nonPreferredProviders].filter(
-                    Boolean
-                ) as OnrampProvider[];
-            },
-        }
-    );
+            return [preferredProvider, ...nonPreferredProviders].filter(
+                Boolean
+            ) as OnrampProvider[];
+        },
+    });
 
     return {
         providers: data,

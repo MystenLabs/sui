@@ -1,0 +1,9 @@
+---
+0: Number
+1: Bool
+2: Address
+3: Vector
+4: String
+5: UID
+6: Struct
+7: Option

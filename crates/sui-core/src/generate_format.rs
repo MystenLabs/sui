@@ -21,11 +21,11 @@ use sui_types::messages_grpc::ObjectInfoRequestKind;
 use sui_types::{
     base_types::MoveObjectType_,
     crypto::Signer,
-    messages::TransactionExpiration,
     messages_checkpoint::{
         CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSummary,
         FullCheckpointContents,
     },
+    transaction::TransactionExpiration,
 };
 use sui_types::{
     base_types::{
@@ -35,11 +35,11 @@ use sui_types::{
         get_key_pair, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
         AuthorityPublicKeyBytes, AuthoritySignature, KeypairTraits, Signature, SuiKeyPair,
     },
-    messages::{Argument, CallArg, Command, ObjectArg, TransactionKind},
     multisig::{MultiSig, MultiSigPublicKey},
     object::{Data, Owner},
     signature::GenericSignature,
     storage::DeleteKind,
+    transaction::{Argument, CallArg, Command, ObjectArg, TransactionKind},
 };
 use typed_store::rocks::TypedStoreError;
 
@@ -193,7 +193,7 @@ fn main() {
         }
         Action::Test => {
             let reference = std::fs::read_to_string(FILE_PATH).unwrap();
-            let content = serde_yaml::to_string(&registry).unwrap() + "\n";
+            let content: String = serde_yaml::to_string(&registry).unwrap() + "\n";
             assert_str_eq!(&reference, &content);
         }
     }

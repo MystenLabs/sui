@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::net::SocketAddr;
-use std::path::Path;
 use std::sync::Arc;
 
 use axum::routing::post;
@@ -39,8 +38,8 @@ pub struct RosettaOnlineServer {
 }
 
 impl RosettaOnlineServer {
-    pub fn new(env: SuiEnv, client: SuiClient, data_path: &Path) -> Self {
-        let blocks = Arc::new(CheckpointBlockProvider::spawn(client.clone(), data_path));
+    pub fn new(env: SuiEnv, client: SuiClient) -> Self {
+        let blocks = Arc::new(CheckpointBlockProvider::new(client.clone()));
         Self {
             env,
             context: OnlineServerContext::new(client, blocks),

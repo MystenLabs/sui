@@ -95,7 +95,8 @@ export default {
                 xs: '0px 1px 2px rgba(16, 24, 40, 0.05)',
                 DEFAULT:
                     '0px 5px 30px rgba(86, 104, 115, 0.2), 0px 0px 0px 1px rgba(160, 182, 195, 0.08)',
-                glow: '0 0 10px 10px rgba(255, 255, 255, 1)',
+                glow: '0 0px 6px 4px rgba(213,247,238,1)',
+                drop: '0px 0px 10px rgba(111, 188, 240, 0.2)',
             },
             fontSize: {
                 // Text sizes:
@@ -158,6 +159,9 @@ export default {
             },
             width: {
                 31.5: '7.5rem',
+            },
+            minWidth: {
+                transactionColumn: '31.875rem',
             },
             transitionTimingFunction: {
                 'ease-in-out-cubic': 'cubic-bezier(0.65, 0, 0.35, 1)',

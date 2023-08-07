@@ -22,9 +22,9 @@ export function useGetValidatorsEvents({ limit, order }: GetValidatorsEvent) {
     const rpc = useRpcClient();
     // Since we are getting events based on the number of validators, we need to make sure that the limit
     // is not null and cache by the limit number of validators can change from network to network
-    return useQuery(
-        ['validatorEvents', limit, order],
-        async () => {
+    return useQuery({
+        queryKey: ['validatorEvents', limit, order],
+        queryFn: async () => {
             if (!limit) {
                 // Do some validation at the runtime level for some extra type-safety
                 // https://tkdodo.eu/blog/react-query-and-type-script#type-safety-with-the-enabled-option
@@ -60,6 +60,6 @@ export function useGetValidatorsEvents({ limit, order }: GetValidatorsEvent) {
             });
             return validatorEventsResponse.data;
         },
-        { enabled: !!limit }
-    );
+        enabled: !!limit,
+    });
 }

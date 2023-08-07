@@ -6,12 +6,12 @@ import { hasPublicTransfer, formatAddress } from '@mysten/sui.js';
 import cl from 'classnames';
 import { Navigate, useSearchParams } from 'react-router-dom';
 
-import { LabelValueItem } from './LabelValueItem';
-import { LabelValuesContainer } from './LabelValuesContainer';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import { Button } from '_app/shared/ButtonUI';
 import { Link } from '_app/shared/Link';
 import { Collapse } from '_app/shared/collapse';
+import { LabelValueItem } from '_components/LabelValueItem';
+import { LabelValuesContainer } from '_components/LabelValuesContainer';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Loading from '_components/loading';
 import { NFTDisplayCard } from '_components/nft-display';

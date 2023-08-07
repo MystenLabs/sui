@@ -14,7 +14,7 @@ blockchains with vastly different data and execution models.
 
 The documentation for the original Move language is available in the [Move GitHub](https://github.com/move-language/move) repository and includes a [tutorial](https://github.com/move-language/move/blob/main/language/documentation/tutorial/README.md) and a [book](https://github.com/move-language/move/blob/main/language/documentation/book/src/SUMMARY.md) describing language features in detail. These are invaluable resources to deepen your understanding of the Move language but not strict prerequisites to following the Sui tutorial. Further, Sui Move differs in some ways from Move, which is explored here.
 
-You can use Sui Move to define, create, and manage programmable [Sui objects](../objects.md) representing user-level assets. Sui's object system is implemented by adding new functionality to Move while also imposing additional restrictions, creating a dialect of Move (a.k.a. *Sui Move*) that makes certain parts of the original Move documentation not applicable to smart contract development in Sui. Consequently, it's best to follow this tutorial and the relevant Move documentation links within.
+You can use Sui Move to define, create, and manage programmable [Sui objects](../../learn/objects.md) representing user-level assets. Sui's object system is implemented by adding new functionality to Move while also imposing additional restrictions, creating a dialect of Move (a.k.a. *Sui Move*) that makes certain parts of the original Move documentation not applicable to smart contract development in Sui. Consequently, it's best to follow this tutorial and the relevant Move documentation links within.
 
 Before looking at the Move code included with Sui, let's talk briefly about Move code organization, which applies both to code included with
 Sui and the custom code developers write.
@@ -38,7 +38,7 @@ my_move_package
 
 See [Package Layout and Manifest Syntax](https://github.com/move-language/move/blob/main/language/documentation/book/src/packages.md#package-layout-and-manifest-syntax) for more information on package layout.
 
-It's now time to look at some Sui Move code. You can either keep reading for an introductory description of the main Sui Move language constructs or you can jump straight into the code by [writing a simple Sui Move package](write-package.md), and checking out additional code [examples](../../explore/examples.md).
+It's now time to look at some Sui Move code. You can either keep reading for an introductory description of the main Sui Move language constructs or you can jump straight into the code by [writing a simple Sui Move package](../move/write-package.md), and checking out additional code examples in [Sui by Example](https://examples.sui.io).
 
 ## First look at Move source code
 

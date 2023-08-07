@@ -28,8 +28,8 @@ Quick reference on best practices for Sui Network developers.
 
 ### Testing
 
-- Use [`sui::test_scenario`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/test/test_scenario.move)` to mimic multi-transaction, multi-sender test scenarios
-- Use the [`sui::test_utils`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/test/test_utils.move#L5)` module for better test error messages via `assert_eq`, debug printing via `print`, and test-only destruction via `destroy`.
+- Use [`sui::test_scenario`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/test/test_scenario.move) to mimic multi-transaction, multi-sender test scenarios.
+- Use the [`sui::test_utils`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/test/test_utils.move#L5) module for better test error messages via `assert_eq`, debug printing via `print`, and test-only destruction via `destroy`.
 - Use `sui move test --coverage` to compute code coverage information for your tests, and `sui move coverage source --module <name>` to see uncovered lines highlighted in red. Push coverage all the way to 100% if feasible.
 
 # Apps

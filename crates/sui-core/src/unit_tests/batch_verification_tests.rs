@@ -12,10 +12,10 @@ use sui_macros::sim_test;
 use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair};
 use sui_types::gas::GasCostSummary;
-use sui_types::messages::CertifiedTransaction;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSummary, SignedCheckpointSummary,
 };
+use sui_types::transaction::CertifiedTransaction;
 
 // TODO consolidate with `gen_certs` in batch_verification_bench.rs
 fn gen_certs(

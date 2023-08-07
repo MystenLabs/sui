@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useOnScreen, useGetOwnedObjects } from '@mysten/core';
-import { getObjectDisplay, type SuiObjectData } from '@mysten/sui.js';
+import { useOnScreen } from '@mysten/core';
 import { useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -12,37 +11,24 @@ import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import LoadingSpinner from '_components/loading/LoadingIndicator';
 import { NFTDisplayCard } from '_components/nft-display';
+import { useGetNFTs } from '_src/ui/app/hooks/useGetNFTs';
 import PageTitle from '_src/ui/app/shared/PageTitle';
-
-const MAX_FETCH_LIMIT = 50;
 
 function NftsPage() {
     const accountAddress = useActiveAddress();
     const {
-        data,
-        isLoading,
-        error,
-        isError,
-        isFetchingNextPage,
+        data: nfts,
         hasNextPage,
-        fetchNextPage,
         isInitialLoading,
-    } = useGetOwnedObjects(
-        accountAddress,
-        {
-            MatchNone: [{ StructType: '0x2::coin::Coin' }],
-        },
-        MAX_FETCH_LIMIT
-    );
+        isFetchingNextPage,
+        error,
+        isLoading,
+        fetchNextPage,
+        isError,
+    } = useGetNFTs(accountAddress);
     const observerElem = useRef<HTMLDivElement | null>(null);
     const { isIntersecting } = useOnScreen(observerElem);
     const isSpinnerVisible = isFetchingNextPage && hasNextPage;
-
-    const nfts =
-        data?.pages
-            .flatMap((page) => page.data)
-            .filter((resp) => !!getObjectDisplay(resp).data)
-            .map(({ data }) => data as SuiObjectData) || [];
 
     useEffect(() => {
         if (isIntersecting && hasNextPage && !isFetchingNextPage) {

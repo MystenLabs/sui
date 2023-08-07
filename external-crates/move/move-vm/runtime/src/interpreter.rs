@@ -117,6 +117,23 @@ impl Interpreter {
             }
             let link_context = data_store.link_context();
             let resolver = function.get_resolver(link_context, loader);
+
+            if interpreter.paranoid_type_checks {
+                for ty in function.parameter_types() {
+                    let type_ = if ty_args.is_empty() {
+                        ty.clone()
+                    } else {
+                        resolver
+                            .subst(ty, &ty_args)
+                            .map_err(|e| e.finish(Location::Undefined))?
+                    };
+                    interpreter
+                        .operand_stack
+                        .push_ty(type_)
+                        .map_err(|e| e.finish(Location::Undefined))?;
+                }
+            }
+
             let return_values = interpreter
                 .call_native_return_values(
                     &resolver,

@@ -36,7 +36,7 @@ export function QredoConnectButton() {
         try {
           await qredoConnectWallet.features["qredo:connect"]?.qredoConnect({
             service: "qredo-testing",
-            apiUrl: "https://example.com/",
+            apiUrl: "http://localhost:8080/",
             token: "aToken",
           });
         } catch (e) {

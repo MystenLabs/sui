@@ -107,34 +107,4 @@ module sui::transfer {
         ensures [abstract] global<object::Ownership>(object::id(obj).bytes).owner == recipient;
         ensures [abstract] global<object::Ownership>(object::id(obj).bytes).status == prover::OWNED;
     }
-
-    // Cost calibration functions
-    #[test_only]
-    public fun calibrate_freeze_object<T: key>(obj: T) {
-        freeze_object_impl(obj);
-    }
-    #[test_only]
-    public fun calibrate_freeze_object_nop<T: key + drop>(obj: T) {
-        let _ = obj;
-    }
-
-    #[test_only]
-    public fun calibrate_share_object<T: key>(obj: T) {
-        share_object_impl(obj);
-    }
-    #[test_only]
-    public fun calibrate_share_object_nop<T: key + drop>(obj: T) {
-        let _ = obj;
-    }
-
-    #[test_only]
-    public fun calibrate_transfer_impl<T: key>(obj: T, recipient: address) {
-        transfer_impl(obj, recipient);
-    }
-    #[test_only]
-    public fun calibrate_transfer_impl_nop<T: key + drop>(obj: T, recipient: address) {
-        let _ = obj;
-        let _ = recipient;
-    }
-
 }

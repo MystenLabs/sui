@@ -14,24 +14,23 @@ const API_ENV_TO_EXPLORER_ENV: Record<API_ENV, string | undefined> = {
     [API_ENV.customRPC]: '',
 };
 
+const EXPLORER_LINK = 'https://suiexplorer.com/';
+
 //TODO - this is a temporary solution, we should have a better way to get the explorer url
 function getExplorerUrl(
     path: string,
     apiEnv: API_ENV = DEFAULT_API_ENV,
     customRPC: string
 ) {
-    const base =
-        apiEnv === API_ENV.local
-            ? 'http://localhost:3000/'
-            : 'https://explorer.sui.io/';
-
     const explorerEnv =
         apiEnv === 'customRPC' ? customRPC : API_ENV_TO_EXPLORER_ENV[apiEnv];
 
-    const url = new URL(path, base);
+    const url = new URL(path, EXPLORER_LINK);
     const searchParams = new URLSearchParams(url.search);
-    if (explorerEnv) searchParams.set('network', explorerEnv);
-
+    if (explorerEnv) {
+        searchParams.set('network', explorerEnv);
+        url.search = searchParams.toString();
+    }
     return url.href;
 }
 

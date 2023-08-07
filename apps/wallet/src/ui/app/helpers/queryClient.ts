@@ -30,7 +30,7 @@ export const queryClient = new QueryClient({
 function createIDBPersister(idbValidKey: IDBValidKey) {
     return {
         persistClient: async (client: PersistedClient) => {
-            set(idbValidKey, client);
+            await set(idbValidKey, client);
         },
         restoreClient: async () => {
             return await get<PersistedClient>(idbValidKey);

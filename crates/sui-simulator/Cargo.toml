@@ -10,7 +10,8 @@ edition = "2021"
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 move-package.workspace = true
 
-sui-adapter = { path = "../sui-adapter" }
+sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
+
 sui-framework = { path = "../sui-framework" }
 sui-move-build = { path = "../sui-move-build" }
 sui-types = { path = "../sui-types" }
@@ -25,4 +26,4 @@ tower = "0.4.13"
 lru = "0.10"
 
 [target.'cfg(msim)'.dependencies]
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "e9011f96b84615b63cd8b5835e606a2fc218a1bd", package = "msim" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "48ed7409b8b8cc413fae4d9d9638a849282f81c7", package = "msim" }

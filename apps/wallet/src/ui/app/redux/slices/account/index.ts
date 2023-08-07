@@ -65,6 +65,7 @@ const sortOrderByAccountType = [
     AccountType.DERIVED,
     AccountType.IMPORTED,
     AccountType.LEDGER,
+    AccountType.QREDO,
 ];
 
 const accountsAdapter = createEntityAdapter<SerializedAccount>({

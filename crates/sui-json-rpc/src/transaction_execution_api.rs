@@ -3,7 +3,6 @@
 
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use async_trait::async_trait;
 use fastcrypto::encoding::Base64;
 use fastcrypto::traits::ToFromBytes;
@@ -22,19 +21,21 @@ use sui_json_rpc_types::{
 use sui_open_rpc::Module;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::messages::{Transaction, TransactionData, TransactionDataAPI, TransactionKind};
 use sui_types::quorum_driver_types::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
 };
 use sui_types::signature::GenericSignature;
 use sui_types::sui_serde::BigInt;
+use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI, TransactionKind};
+use tracing::instrument;
 
 use crate::api::JsonRpcMetrics;
 use crate::api::WriteApiServer;
-use crate::error::Error;
+use crate::error::{Error, SuiRpcInputError};
 use crate::read_api::get_transaction_data_and_digest;
 use crate::{
-    get_balance_changes_from_effect, get_object_changes, ObjectProviderCache, SuiRpcModule,
+    get_balance_changes_from_effect, get_object_changes, with_tracing, ObjectProviderCache,
+    SuiRpcModule,
 };
 
 pub struct TransactionExecutionApi {
@@ -67,11 +68,9 @@ impl TransactionExecutionApi {
 
         let request_type = match (request_type, opts.require_local_execution()) {
             (Some(ExecuteTransactionRequestType::WaitForEffectsCert), true) => {
-                return Err(anyhow!(
-                    "`request_type` must set to `None` or `WaitForLocalExecution`\
-                         if effects is required in the response"
-                )
-                .into());
+                return Err(Error::SuiRpcInputError(
+                    SuiRpcInputError::InvalidExecuteTransactionRequestType,
+                ));
             }
             (t, _) => t.unwrap_or_else(|| opts.default_execution_request_type()),
         };
@@ -108,7 +107,8 @@ impl TransactionExecutionApi {
                 request_type,
             }
         ))
-        .await??;
+        .await?
+        .map_err(Error::from)?;
         drop(orch_timer);
 
         let _post_orch_timer = self.metrics.post_orchestrator_latency_ms.start_timer();
@@ -208,6 +208,7 @@ impl TransactionExecutionApi {
 
 #[async_trait]
 impl WriteApiServer for TransactionExecutionApi {
+    #[instrument(skip(self))]
     async fn execute_transaction_block(
         &self,
         tx_bytes: Base64,
@@ -215,11 +216,14 @@ impl WriteApiServer for TransactionExecutionApi {
         opts: Option<SuiTransactionBlockResponseOptions>,
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> RpcResult<SuiTransactionBlockResponse> {
-        Ok(self
-            .execute_transaction_block(tx_bytes, signatures, opts, request_type)
-            .await?)
+        with_tracing!(async move {
+            Ok(self
+                .execute_transaction_block(tx_bytes, signatures, opts, request_type)
+                .await?)
+        })
     }
 
+    #[instrument(skip(self))]
     async fn dev_inspect_transaction_block(
         &self,
         sender_address: SuiAddress,
@@ -227,19 +231,23 @@ impl WriteApiServer for TransactionExecutionApi {
         gas_price: Option<BigInt<u64>>,
         _epoch: Option<BigInt<u64>>,
     ) -> RpcResult<DevInspectResults> {
-        let tx_kind: TransactionKind =
-            bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
-        Ok(self
-            .state
-            .dev_inspect_transaction_block(sender_address, tx_kind, gas_price.map(|i| *i))
-            .await?)
+        with_tracing!(async move {
+            let tx_kind: TransactionKind =
+                bcs::from_bytes(&tx_bytes.to_vec().map_err(Error::from)?).map_err(Error::from)?;
+            Ok(self
+                .state
+                .dev_inspect_transaction_block(sender_address, tx_kind, gas_price.map(|i| *i))
+                .await
+                .map_err(Error::from)?)
+        })
     }
 
+    #[instrument(skip(self))]
     async fn dry_run_transaction_block(
         &self,
         tx_bytes: Base64,
     ) -> RpcResult<DryRunTransactionBlockResponse> {
-        Ok(self.dry_run_transaction_block(tx_bytes).await?)
+        with_tracing!(async move { Ok(self.dry_run_transaction_block(tx_bytes).await?) })
     }
 }
 

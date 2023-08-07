@@ -8,7 +8,6 @@ use sui_types::committee::Committee;
 use sui_types::committee::EpochId;
 use sui_types::digests::{TransactionEffectsDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::messages::VerifiedTransaction;
 use sui_types::messages_checkpoint::CheckpointContentsDigest;
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -18,6 +17,7 @@ use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::messages_checkpoint::VerifiedCheckpointContents;
 use sui_types::storage::ReadStore;
 use sui_types::storage::WriteStore;
+use sui_types::transaction::VerifiedTransaction;
 use typed_store::Map;
 
 use crate::authority::AuthorityStore;

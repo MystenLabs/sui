@@ -356,6 +356,8 @@ ExecutionFailureStatus:
           - max_size: U64
     29:
       CertificateDenied: UNIT
+    30:
+      SuiMoveVerificationTimedout: UNIT
 ExecutionStatus:
   ENUM:
     0:

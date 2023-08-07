@@ -19,7 +19,7 @@ use sui_types::object::Owner;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     crypto::get_key_pair,
-    messages::VerifiedTransaction,
+    transaction::VerifiedTransaction,
 };
 use tracing::{debug, error};
 

@@ -38,11 +38,15 @@ export function formatBalance(
     return formatAmount(bn);
 }
 
+const ELLIPSIS = '\u{2026}';
+const SYMBOL_TRUNCATE_LENGTH = 5;
+const NAME_TRUNCATE_LENGTH = 10;
+
 export function useCoinMetadata(coinType?: string | null) {
     const rpc = useRpcClient();
-    return useQuery(
-        ['coin-metadata', coinType],
-        async () => {
+    return useQuery({
+        queryKey: ['coin-metadata', coinType],
+        queryFn: async () => {
             if (!coinType) {
                 throw new Error(
                     'Fetching coin metadata should be disabled when coin type is disabled.'
@@ -65,17 +69,27 @@ export function useCoinMetadata(coinType?: string | null) {
 
             return rpc.getCoinMetadata({ coinType });
         },
-        {
-            // This is currently expected to fail for non-SUI tokens, so disable retries:
-            retry: false,
-            enabled: !!coinType,
-            // Never consider this data to be stale:
-            staleTime: Infinity,
-            // Keep this data in the cache for 24 hours.
-            // We allow this to be GC'd after a very long time to avoid unbounded cache growth.
-            cacheTime: 24 * 60 * 60 * 1000,
-        }
-    );
+        select(data) {
+            if (!data) return null;
+
+            return {
+                ...data,
+                symbol:
+                    data.symbol.length > SYMBOL_TRUNCATE_LENGTH
+                        ? data.symbol.slice(0, SYMBOL_TRUNCATE_LENGTH) +
+                          ELLIPSIS
+                        : data.symbol,
+                name:
+                    data.name.length > NAME_TRUNCATE_LENGTH
+                        ? data.name.slice(0, NAME_TRUNCATE_LENGTH) + ELLIPSIS
+                        : data.name,
+            };
+        },
+        retry: false,
+        enabled: !!coinType,
+        staleTime: Infinity,
+        cacheTime: 24 * 60 * 60 * 1000,
+    });
 }
 
 // TODO #1: This handles undefined values to make it easier to integrate with

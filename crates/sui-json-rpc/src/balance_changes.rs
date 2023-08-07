@@ -19,9 +19,9 @@ use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::SuiError;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas_coin::GAS;
-use sui_types::messages::InputObjectKind;
 use sui_types::object::{Object, Owner};
 use sui_types::storage::WriteKind;
+use sui_types::transaction::InputObjectKind;
 
 pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,

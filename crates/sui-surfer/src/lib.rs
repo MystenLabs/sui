@@ -8,7 +8,7 @@ use rand::{Rng, SeedableRng};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
+use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use surf_strategy::SurfStrategy;
 use test_utils::network::TestClusterBuilder;
 use tokio::sync::watch;

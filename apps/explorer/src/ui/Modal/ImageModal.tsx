@@ -26,7 +26,7 @@ export function ImageModal({
 }: ImageModalProps) {
     return (
         <Modal open={open} onClose={onClose}>
-            <div className="flex flex-col gap-5 overflow-auto">
+            <div className="flex flex-col gap-5">
                 <Image alt={alt} src={src} rounded="none" />
                 <Heading variant="heading2/semibold" color="sui-light" truncate>
                     {title}

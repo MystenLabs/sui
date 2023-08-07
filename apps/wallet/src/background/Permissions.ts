@@ -16,6 +16,7 @@ import Browser from 'webextension-polyfill';
 
 import Tabs from './Tabs';
 import { Window } from './Window';
+import { type Account } from './keyring/Account';
 import {
     ALL_PERMISSION_TYPES,
     isValidPermissionTypes,
@@ -273,6 +274,29 @@ class Permissions {
                 accounts: remainingAccounts,
             });
         }
+    }
+
+    public async ensurePermissionAccountsUpdated(accounts: Account[]) {
+        const allPermissions = await this.getPermissions();
+        const availableAccountsIndex = accounts.reduce<Record<string, boolean>>(
+            (acc, { address }) => {
+                acc[address] = true;
+                return acc;
+            },
+            {}
+        );
+        Object.entries(allPermissions).forEach(
+            async ([origin, { accounts, allowed }]) => {
+                if (allowed) {
+                    const accountsToDisconnect = accounts.filter(
+                        (anAddress) => !availableAccountsIndex[anAddress]
+                    );
+                    if (accountsToDisconnect.length) {
+                        await this.delete(origin, accountsToDisconnect);
+                    }
+                }
+            }
+        );
     }
 
     public on = this.#events.on;

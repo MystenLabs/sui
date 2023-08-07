@@ -14,15 +14,13 @@ export function useGetDynamicFieldObject(
     name: DynamicFieldName
 ) {
     const rpc = useRpcClient();
-    return useQuery(
-        ['dynamic-fields-object', parentId, name],
-        () =>
+    return useQuery({
+        queryKey: ['dynamic-fields-object', parentId, name],
+        queryFn: () =>
             rpc.getDynamicFieldObject({
                 parentId,
                 name,
             }),
-        {
-            enabled: !!parentId && !!name,
-        }
-    );
+        enabled: !!parentId && !!name,
+    });
 }

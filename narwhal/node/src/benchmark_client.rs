@@ -70,7 +70,6 @@ async fn main() -> Result<(), eyre::Report> {
     let nodes = matches
         .values_of("nodes")
         .unwrap_or_default()
-        .into_iter()
         .map(|x| x.parse::<Url>())
         .collect::<Result<Vec<_>, _>>()
         .with_context(|| format!("Invalid url format {target_str}"))?;

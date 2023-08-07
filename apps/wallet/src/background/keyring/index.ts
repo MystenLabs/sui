@@ -5,11 +5,17 @@ import { Ed25519Keypair, fromB64 } from '@mysten/sui.js';
 import mitt from 'mitt';
 import { throttle } from 'throttle-debounce';
 
+import { getAllQredoConnections } from '../qredo/storage';
 import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
-import { type Account, isImportedOrDerivedAccount } from './Account';
+import {
+    type Account,
+    isImportedOrDerivedAccount,
+    isQredoAccount,
+} from './Account';
 import { DerivedAccount } from './DerivedAccount';
 import { ImportedAccount } from './ImportedAccount';
 import { LedgerAccount, type SerializedLedgerAccount } from './LedgerAccount';
+import { QredoAccount } from './QredoAccount';
 import { VaultStorage } from './VaultStorage';
 import { createMessage } from '_messages';
 import { isKeyringPayload } from '_payloads/keyring';
@@ -20,6 +26,7 @@ import {
     AUTO_LOCK_TIMER_MIN_MINUTES,
     AUTO_LOCK_TIMER_STORAGE_KEY,
 } from '_src/shared/constants';
+import { type Wallet } from '_src/shared/qredo-api';
 
 import type { UiConnection } from '../connections/UiConnection';
 import type { SuiAddress, ExportedKeypair } from '@mysten/sui.js';
@@ -219,6 +226,43 @@ export class Keyring {
             this.notifyAccountsChanged();
         }
         return added;
+    }
+
+    public async storeQredoConnection(
+        qredoID: string,
+        refreshToken: string,
+        password: string,
+        newAccounts: Wallet[]
+    ) {
+        if (this.isLocked) {
+            throw new Error('Wallet is locked');
+        }
+        await VaultStorage.storeQredoToken(qredoID, refreshToken, password);
+        this.#accountsMap.forEach((anAccount) => {
+            if (
+                isQredoAccount(anAccount) &&
+                anAccount.qredoConnectionID === qredoID
+            ) {
+                this.#accountsMap.delete(anAccount.address);
+            }
+        });
+        newAccounts.forEach(({ address, labels, walletID }) => {
+            const newAccount = new QredoAccount({
+                address,
+                qredoConnectionID: qredoID,
+                qredoWalletID: walletID,
+                labels,
+            });
+            this.#accountsMap.set(newAccount.address, newAccount);
+        });
+        this.notifyAccountsChanged();
+    }
+
+    public getQredoRefreshToken(qredoID: string) {
+        if (this.isLocked) {
+            throw new Error('Wallet is locked');
+        }
+        return VaultStorage.getQredoToken(qredoID);
     }
 
     public async handleUiMessage(msg: Message, uiConnection: UiConnection) {
@@ -445,7 +489,6 @@ export class Keyring {
                 this.#mainDerivedAccount = account.address;
             }
         }
-
         const savedLedgerAccounts = await this.getSavedLedgerAccounts();
         for (const savedLedgerAccount of savedLedgerAccounts) {
             this.#accountsMap.set(
@@ -456,7 +499,19 @@ export class Keyring {
                 })
             );
         }
-
+        for (const aQredoConnection of await getAllQredoConnections()) {
+            aQredoConnection.accounts.forEach(
+                ({ address, labels, walletID }) => {
+                    const account = new QredoAccount({
+                        address,
+                        qredoConnectionID: aQredoConnection.id,
+                        labels,
+                        qredoWalletID: walletID,
+                    });
+                    this.#accountsMap.set(account.address, account);
+                }
+            );
+        }
         VaultStorage.getImportedKeys()?.forEach((anImportedKey) => {
             const account = new ImportedAccount({
                 keypair: anImportedKey,

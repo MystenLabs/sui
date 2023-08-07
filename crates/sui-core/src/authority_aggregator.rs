@@ -16,10 +16,10 @@ use mysten_metrics::{monitored_future, spawn_monitored_task, GaugeGuard};
 use mysten_network::config::Config;
 use std::convert::AsRef;
 use sui_config::genesis::Genesis;
-use sui_config::NetworkConfig;
 use sui_network::{
     default_mysten_network_config, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC,
 };
+use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignInfo};
 use sui_types::error::UserInputError;
 use sui_types::fp_ensure;
@@ -31,7 +31,7 @@ use sui_types::{
     base_types::*,
     committee::{Committee, ProtocolVersion},
     error::{SuiError, SuiResult},
-    messages::*,
+    transaction::*,
 };
 use thiserror::Error;
 use tracing::{debug, error, info, trace, warn, Instrument};
@@ -357,6 +357,13 @@ impl ProcessTransactionResult {
             Self::Executed(..) => panic!("Wrong type"),
         }
     }
+
+    pub fn into_effects_for_testing(self) -> VerifiedCertifiedTransactionEffects {
+        match self {
+            Self::Certified(..) => panic!("Wrong type"),
+            Self::Executed(effects, ..) => effects,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -584,8 +591,8 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
                 if authority_name.is_err() {
                     return None;
                 }
-                let human_readble_name = s.name;
-                Some((authority_name.unwrap(), human_readble_name))
+                let human_readable_name = s.name;
+                Some((authority_name.unwrap(), human_readable_name))
             })
             .collect();
         Self::new_from_committee(

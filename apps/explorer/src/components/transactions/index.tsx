@@ -32,9 +32,9 @@ export function Transactions({
 
     const pagination = usePaginationStack();
 
-    const transactionQuery = useQuery(
-        ['transactions', { limit, cursor: pagination.cursor }],
-        async () =>
+    const transactionQuery = useQuery({
+        queryKey: ['transactions', { limit, cursor: pagination.cursor }],
+        queryFn: async () =>
             rpc.queryTransactionBlocks({
                 order: 'descending',
                 cursor: pagination.cursor,
@@ -45,15 +45,11 @@ export function Transactions({
                     showInput: true,
                 },
             }),
-        {
-            keepPreviousData: true,
-            // Disable refetching if not on the first page:
-            // refetchInterval: pagination.cursor ? undefined : refetchInterval,
-            retry: false,
-            staleTime: Infinity,
-            cacheTime: 24 * 60 * 60 * 1000,
-        }
-    );
+        keepPreviousData: true,
+        retry: false,
+        staleTime: Infinity,
+        cacheTime: 24 * 60 * 60 * 1000,
+    });
 
     const recentTx = useMemo(
         () =>

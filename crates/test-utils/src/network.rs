@@ -3,6 +3,7 @@
 
 use futures::future::join_all;
 use std::num::NonZeroUsize;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -11,16 +12,15 @@ use jsonrpsee::ws_client::WsClient;
 use jsonrpsee::ws_client::WsClientBuilder;
 use prometheus::Registry;
 use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
-use tokio::time::timeout;
+use tokio::time::{timeout, Instant};
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::info;
 
 use mysten_metrics::RegistryService;
-use sui_config::builder::{ProtocolVersionsConfig, SupportedProtocolVersionsCallback};
-use sui_config::genesis_config::{AccountConfig, GenesisConfig};
+
 use sui_config::node::DBCheckpointConfig;
-use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
-use sui_config::{FullnodeConfigBuilder, NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
+use sui_config::{sui_cluster_test_config_dir, Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
+use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_json_rpc_types::{SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNode;
@@ -31,15 +31,20 @@ use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_swarm::memory::{Swarm, SwarmBuilder};
+use sui_swarm_config::genesis_config::{AccountConfig, GenesisConfig};
+use sui_swarm_config::network_config::NetworkConfig;
+use sui_swarm_config::network_config_builder::{
+    FullnodeConfigBuilder, ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
+};
 use sui_types::base_types::{AuthorityName, ObjectID, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
-use sui_types::messages::VerifiedTransaction;
 use sui_types::object::Object;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::transaction::VerifiedTransaction;
 
 const NUM_VALIDAOTR: usize = 4;
 
@@ -110,7 +115,7 @@ impl TestCluster {
     }
 
     pub fn fullnode_config_builder(&self) -> FullnodeConfigBuilder {
-        self.swarm.config().fullnode_config_builder()
+        FullnodeConfigBuilder::new(self.swarm.config())
     }
 
     /// Convenience method to start a new fullnode in the test cluster.
@@ -199,6 +204,64 @@ impl TestCluster {
         })
         .await
         .expect("Timed out waiting for cluster to target epoch")
+    }
+
+    /// Ask 2f+1 validators to close epoch actively, and wait for the entire network to reach the next
+    /// epoch. This requires waiting for both the fullnode and all validators to reach the next epoch.
+    pub async fn trigger_reconfiguration(&self) {
+        info!("Starting reconfiguration");
+        let start = Instant::now();
+
+        // Close epoch on 2f+1 validators.
+        let cur_committee = self
+            .fullnode_handle
+            .sui_node
+            .state()
+            .clone_committee_for_testing();
+        let mut cur_stake = 0;
+        for handle in self.swarm.validator_node_handles() {
+            handle
+                .with_async(|node| async {
+                    node.close_epoch_for_testing().await.unwrap();
+                    cur_stake += cur_committee.weight(&node.state().name);
+                })
+                .await;
+            if cur_stake >= cur_committee.quorum_threshold() {
+                break;
+            }
+        }
+        info!("close_epoch complete after {:?}", start.elapsed());
+
+        self.wait_for_epoch(Some(cur_committee.epoch + 1)).await;
+        self.wait_for_epoch_all_validators(cur_committee.epoch + 1)
+            .await;
+
+        info!("reconfiguration complete after {:?}", start.elapsed());
+    }
+
+    pub async fn wait_for_epoch_all_validators(&self, target_epoch: EpochId) {
+        let handles = self.swarm.validator_node_handles();
+        let tasks: Vec<_> = handles.iter()
+            .map(|handle| {
+                handle.with_async(|node| async {
+                    let mut retries = 0;
+                    loop {
+                        if node.state().epoch_store_for_testing().epoch() == target_epoch {
+                            break;
+                        }
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                        retries += 1;
+                        if retries % 5 == 0 {
+                            tracing::warn!(validator=?node.state().name.concise(), "Waiting for {:?} seconds for epoch change", retries);
+                        }
+                    }
+                })
+            })
+            .collect();
+
+        timeout(Duration::from_secs(40), join_all(tasks))
+            .await
+            .expect("timed out waiting for reconfiguration to complete");
     }
 
     /// Upgrade the network protocol version, by restarting every validator with a new
@@ -442,22 +505,37 @@ impl TestClusterBuilder {
     }
 
     pub async fn build(self) -> anyhow::Result<TestCluster> {
-        let cluster = self.start_test_network_with_customized_ports().await?;
+        let cluster = self.start_test_network_with_customized_ports(None).await?;
+        Ok(cluster)
+    }
+
+    pub async fn build_with_network_config(
+        self,
+        config: Option<PathBuf>,
+    ) -> anyhow::Result<TestCluster> {
+        let cluster = self
+            .start_test_network_with_customized_ports(config)
+            .await?;
         Ok(cluster)
     }
 
     async fn start_test_network_with_customized_ports(
         mut self,
+        config: Option<PathBuf>,
     ) -> Result<TestCluster, anyhow::Error> {
-        let swarm = self.start_swarm().await?;
+        let swarm = if let Some(config) = config {
+            info!("Building swarm from previous network config");
+            self.start_swarm_with_network_config(config).await?
+        } else {
+            self.start_swarm().await?
+        };
+
         let working_dir = swarm.dir();
 
         let mut wallet_conf: SuiClientConfig =
             PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG))?;
 
-        let fullnode_config = swarm
-            .config()
-            .fullnode_config_builder()
+        let fullnode_config = FullnodeConfigBuilder::new(swarm.config())
             .with_supported_protocol_versions_config(
                 self.fullnode_supported_protocol_versions_config
                     .clone()
@@ -493,6 +571,62 @@ impl TestClusterBuilder {
             wallet,
             fullnode_handle,
         })
+    }
+
+    /// Start a swarm from a network config and set up WalletConfig
+    async fn start_swarm_with_network_config(
+        &mut self,
+        network_config_path: std::path::PathBuf,
+    ) -> Result<Swarm, anyhow::Error> {
+        let mut builder: SwarmBuilder = Swarm::builder()
+            .committee_size(
+                NonZeroUsize::new(self.num_validators.unwrap_or(NUM_VALIDAOTR)).unwrap(),
+            )
+            .with_objects(self.additional_objects.clone())
+            .with_db_checkpoint_config(self.db_checkpoint_config_validators.clone())
+            .with_supported_protocol_versions_config(
+                self.validator_supported_protocol_versions_config.clone(),
+            );
+
+        if let Some(genesis_config) = self.genesis_config.take() {
+            builder = builder.with_genesis_config(genesis_config);
+        }
+
+        // Load the config of the Sui authority.
+        let network_config: NetworkConfig =
+            PersistedConfig::read(&network_config_path).map_err(|err| {
+                err.context(format!(
+                    "Cannot open Sui network config file at {:?}",
+                    network_config_path
+                ))
+            })?;
+        let mut swarm = builder.from_network_config(sui_cluster_test_config_dir()?, network_config);
+        swarm.launch().await?;
+
+        let dir = swarm.dir();
+
+        // This uses the sui config directory provided and stores the wallet path in the SUI_CLUSTER_CONFIG_DIR
+        let network_path = dir.join(SUI_NETWORK_CONFIG);
+        let wallet_path = dir.join(SUI_CLIENT_CONFIG);
+        let keystore_path = dir.join(SUI_KEYSTORE_FILENAME);
+        swarm.config().save(network_path)?;
+
+        // We don't need to add keystore since we have local keystore for this.
+        // Add a key from the keystore for wallet.
+        let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+        let active_address = keystore.addresses().first().cloned();
+
+        // Create wallet config with stated authorities port
+        SuiClientConfig {
+            keystore: Keystore::from(FileBasedKeystore::new(&keystore_path)?),
+            envs: Default::default(),
+            active_address,
+            active_env: Default::default(),
+        }
+        .save(wallet_path)?;
+
+        // Return network handle
+        Ok(swarm)
     }
 
     /// Start a Swarm and set up WalletConfig
@@ -581,6 +715,7 @@ pub async fn start_fullnode_from_config(
     })
 }
 
+// TODO: Merge the following functions with the ones inside TestCluster.
 pub async fn wait_for_node_transition_to_epoch(node: &SuiNodeHandle, expected_epoch: EpochId) {
     node.with_async(|node| async move {
         let mut rx = node.subscribe_to_epoch_change();

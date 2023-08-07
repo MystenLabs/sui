@@ -25,6 +25,10 @@ import { setActiveOrigin, changeActiveNetwork } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
 import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
+import {
+    isQredoConnectPayload,
+    type QredoConnectPayload,
+} from '_src/shared/messaging/messages/payloads/QredoConnect';
 
 import type { SuiAddress, SuiTransactionBlockResponse } from '@mysten/sui.js';
 import type { Message } from '_messages';
@@ -359,6 +363,85 @@ export class BackgroundClient {
                     type: 'keyring',
                     method: 'importPrivateKey',
                     args: { password, keyPair },
+                })
+            ).pipe(take(1))
+        );
+    }
+
+    public fetchPendingQredoConnectRequest(requestID: string) {
+        return lastValueFrom(
+            this.sendMessage(
+                createMessage<QredoConnectPayload<'getPendingRequest'>>({
+                    type: 'qredo-connect',
+                    method: 'getPendingRequest',
+                    args: { requestID },
+                })
+            ).pipe(
+                take(1),
+                map(({ payload }) => {
+                    if (
+                        isQredoConnectPayload(
+                            payload,
+                            'getPendingRequestResponse'
+                        )
+                    ) {
+                        return payload.args.request;
+                    }
+                    throw new Error(
+                        'Error unknown response for fetch pending qredo requests message'
+                    );
+                })
+            )
+        );
+    }
+
+    public getQredoConnectionInfo(qredoID: string, refreshAccessToken = false) {
+        return lastValueFrom(
+            this.sendMessage(
+                createMessage<QredoConnectPayload<'getQredoInfo'>>({
+                    type: 'qredo-connect',
+                    method: 'getQredoInfo',
+                    args: { qredoID, refreshAccessToken },
+                })
+            ).pipe(
+                take(1),
+                map(({ payload }) => {
+                    if (
+                        isQredoConnectPayload(payload, 'getQredoInfoResponse')
+                    ) {
+                        return payload.args;
+                    }
+                    throw new Error(
+                        'Error unknown response for get qredo info message'
+                    );
+                })
+            )
+        );
+    }
+
+    public acceptQredoConnection(
+        args: QredoConnectPayload<'acceptQredoConnection'>['args']
+    ) {
+        return lastValueFrom(
+            this.sendMessage(
+                createMessage<QredoConnectPayload<'acceptQredoConnection'>>({
+                    type: 'qredo-connect',
+                    method: 'acceptQredoConnection',
+                    args,
+                })
+            ).pipe(take(1))
+        );
+    }
+
+    public rejectQredoConnection(
+        args: QredoConnectPayload<'rejectQredoConnection'>['args']
+    ) {
+        return lastValueFrom(
+            this.sendMessage(
+                createMessage<QredoConnectPayload<'rejectQredoConnection'>>({
+                    type: 'qredo-connect',
+                    method: 'rejectQredoConnection',
+                    args,
                 })
             ).pipe(take(1))
         );

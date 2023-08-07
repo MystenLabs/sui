@@ -14,9 +14,10 @@ export function useTransactionData(
     transaction?: TransactionBlock | null
 ) {
     const rpc = useRpcClient();
-    return useQuery(
-        ['transaction-data', transaction?.serialize()],
-        async () => {
+    return useQuery({
+        // eslint-disable-next-line @tanstack/query/exhaustive-deps
+        queryKey: ['transaction-data', transaction?.serialize()],
+        queryFn: async () => {
             const clonedTransaction = new TransactionBlock(transaction!);
             if (sender) {
                 clonedTransaction.setSenderIfNotSet(sender);
@@ -25,10 +26,8 @@ export function useTransactionData(
             await clonedTransaction!.build({ provider: rpc });
             return clonedTransaction!.blockData;
         },
-        {
-            enabled: !!transaction,
-        }
-    );
+        enabled: !!transaction,
+    });
 }
 
 export function useTransactionGasBudget(

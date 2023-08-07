@@ -619,6 +619,10 @@ pub enum StatusCode {
     TOO_MANY_VECTOR_ELEMENTS = 1128,
     IDENTIFIER_TOO_LONG = 1129,
 
+    // Bytecode verifier determined code to complex
+    // or took too long to run based on metering policies
+    PROGRAM_TOO_COMPLEX = 1130,
+
     // These are errors that the VM might raise if a violation of internal
     // invariants takes place.
     // Invariant Violation Errors: 2000-2999

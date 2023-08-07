@@ -10,7 +10,6 @@ edition = "2021"
 anemo.workspace = true
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 bcs = "0.1.4"
-camino = "1.1.1"
 csv = "1.2.1"
 dirs = "4.0.0"
 fastcrypto.workspace = true
@@ -27,10 +26,7 @@ prometheus = "0.13.3"
 
 narwhal-config = { path = "../../narwhal/config" }
 shared-crypto = { path = "../shared-crypto" }
-sui-adapter = { path = "../sui-adapter" }
-sui-framework = { path = "../sui-framework" }
 sui-keys = { path = "../sui-keys" }
-sui-move-natives = { path = "../sui-move-natives" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-storage = { path = "../sui-storage" }
 sui-types = { path = "../sui-types" }

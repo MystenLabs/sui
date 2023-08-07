@@ -8,6 +8,7 @@ import { TxTimeType } from '../tx-time/TxTimeType';
 
 import { CheckpointSequenceLink, EpochLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
+import { getEpochStorageFundFlow } from '~/utils/getStorageFundFlow';
 
 // Generate table data from the epochs data
 export const genTableDataFromEpochsData = (results: EpochPage) => ({
@@ -46,7 +47,11 @@ export const genTableDataFromEpochsData = (results: EpochPage) => ({
         ),
         storageNetInflow: (
             <TxTableCol>
-                <SuiAmount amount={epoch.endOfEpochInfo?.storageCharge} />
+                <SuiAmount
+                    amount={
+                        getEpochStorageFundFlow(epoch.endOfEpochInfo).netInflow
+                    }
+                />
             </TxTableCol>
         ),
         time: (

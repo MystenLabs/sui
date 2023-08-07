@@ -21,6 +21,7 @@ export type StoredData = string | { v: 1 | 2; data: string };
 export type V2DecryptedDataType = {
     entropy: string;
     importedKeypairs: ExportedKeypair[];
+    qredoTokens?: Record<string, string>;
 };
 
 /**
@@ -30,6 +31,7 @@ export type V2DecryptedDataType = {
 export class Vault {
     public readonly entropy: Uint8Array;
     public readonly importedKeypairs: Keypair[];
+    public readonly qredoTokens: Map<string, string> = new Map();
 
     public static async from(
         password: string,
@@ -38,6 +40,7 @@ export class Vault {
     ) {
         let entropy: Uint8Array | null = null;
         let keypairs: Keypair[] = [];
+        let qredoTokens = new Map<string, string>();
         if (typeof data === 'string') {
             entropy = mnemonicToEntropy(
                 Buffer.from(await decrypt<string>(password, data)).toString(
@@ -47,10 +50,16 @@ export class Vault {
         } else if (data.v === 1) {
             entropy = toEntropy(await decrypt<string>(password, data.data));
         } else if (data.v === 2) {
-            const { entropy: entropySerialized, importedKeypairs } =
-                await decrypt<V2DecryptedDataType>(password, data.data);
+            const {
+                entropy: entropySerialized,
+                importedKeypairs,
+                qredoTokens: storedTokens,
+            } = await decrypt<V2DecryptedDataType>(password, data.data);
             entropy = toEntropy(entropySerialized);
             keypairs = importedKeypairs.map(fromExportedKeypair);
+            if (storedTokens) {
+                qredoTokens = new Map(Object.entries(storedTokens));
+            }
         } else {
             throw new Error(
                 "Unknown data, provided data can't be used to create a Vault"
@@ -59,7 +68,7 @@ export class Vault {
         if (!validateEntropy(entropy)) {
             throw new Error("Can't restore Vault, entropy is invalid.");
         }
-        const vault = new Vault(entropy, keypairs);
+        const vault = new Vault(entropy, keypairs, qredoTokens);
         const doMigrate =
             typeof data === 'string' || data.v !== LATEST_VAULT_VERSION;
         if (doMigrate && typeof onMigrateCallback === 'function') {
@@ -68,9 +77,14 @@ export class Vault {
         return vault;
     }
 
-    constructor(entropy: Uint8Array, importedKeypairs: Keypair[] = []) {
+    constructor(
+        entropy: Uint8Array,
+        importedKeypairs: Keypair[] = [],
+        qredoTokens: Map<string, string> = new Map()
+    ) {
         this.entropy = entropy;
         this.importedKeypairs = importedKeypairs;
+        this.qredoTokens = qredoTokens;
     }
 
     public async encrypt(password: string) {
@@ -79,6 +93,7 @@ export class Vault {
             importedKeypairs: this.importedKeypairs.map((aKeypair) =>
                 aKeypair.export()
             ),
+            qredoTokens: Object.fromEntries(this.qredoTokens.entries()),
         };
         return {
             v: LATEST_VAULT_VERSION,

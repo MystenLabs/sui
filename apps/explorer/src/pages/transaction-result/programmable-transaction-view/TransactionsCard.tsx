@@ -30,7 +30,9 @@ export function TransactionsCard({ transactions }: TransactionsCardProps) {
                 title={type}
                 defaultOpen={defaultOpen}
             >
-                <Transaction key={index} type={type} data={data} />
+                <div data-testid="transactions-card-content">
+                    <Transaction key={index} type={type} data={data} />
+                </div>
             </TransactionBlockCardSection>
         );
     });

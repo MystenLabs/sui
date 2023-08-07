@@ -18,14 +18,11 @@ export function useGetCoinBalance(
         20_000
     );
 
-    return useQuery(
-        ['coin-balance', address, coinType],
-        () => rpc.getBalance({ owner: address!, coinType }),
-        {
-            enabled: !!address && !!coinType,
-            refetchInterval,
-            // NOTE: We lower the stale time here so that balances are more often refetched on page load.
-            staleTime: 5_000,
-        }
-    );
+    return useQuery({
+        queryKey: ['coin-balance', address, coinType],
+        queryFn: () => rpc.getBalance({ owner: address!, coinType }),
+        enabled: !!address && !!coinType,
+        refetchInterval,
+        staleTime: 5_000,
+    });
 }

@@ -153,6 +153,10 @@ impl<'a, 'b> NativeContext<'a, 'b> {
         self.resolver.loader().type_to_type_tag(ty)
     }
 
+    pub fn type_to_runtime_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
+        self.resolver.loader().type_to_runtime_type_tag(ty)
+    }
+
     pub fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<Option<MoveTypeLayout>> {
         match self.resolver.type_to_type_layout(ty) {
             Ok(ty_layout) => Ok(Some(ty_layout)),

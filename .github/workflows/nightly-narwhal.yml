@@ -34,7 +34,6 @@ jobs:
     runs-on: ubuntu-ghcloud
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
       - uses: taiki-e/install-action@nextest
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
@@ -60,7 +59,7 @@ jobs:
       - uses: technote-space/workflow-conclusion-action@v3
 
       - name: Post to slack
-        uses: slackapi/slack-github-action@v1.23.0
+        uses: slackapi/slack-github-action@v1.24.0
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure

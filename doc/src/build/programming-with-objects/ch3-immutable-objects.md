@@ -80,7 +80,7 @@ test_scenario::next_tx(scenario, sender1);
 
 This test submits a transaction as `sender1`, which tries to create an immutable object.
 
-The `can_take_owned<ColorObject>` function no longer returns `true`, because the object is no longer owned. To take this object:
+The `has_most_recent_for_sender<ColorObject>` function no longer returns `true`, because the object is no longer owned. To take this object:
 
 ```rust
 // Any sender can work.
@@ -88,10 +88,12 @@ let sender2 = @0x2;
 test_scenario::next_tx(scenario, sender2);
 {
     let object = test_scenario::take_immutable<ColorObject>(scenario);
-    let (red, green, blue) = color_object::get_color(object);
+    let (red, green, blue) = color_object::get_color(&object);
     assert!(red == 255 && green == 0 && blue == 255, 0);
     test_scenario::return_immutable(object);
 };
+
+test_scenario::end(scenario_val);
 ```
 
 To show that this object is indeed not owned by anyone, start the next transaction with `sender2`. Note that it used `take_immutable` and succeeded. This means that any sender can take an immutable object. To return the object, call a new function: `return_immutable`.

@@ -15,7 +15,7 @@ use pprof::criterion::{Output, PProfProfiler};
 use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc};
 use storage::NodeStorage;
-use test_utils::{make_consensus_store, make_optimal_certificates, temp_dir, CommitteeFixture};
+use test_utils::{make_optimal_certificates, temp_dir, CommitteeFixture};
 use tokio::time::Instant;
 use types::{Certificate, Round};
 

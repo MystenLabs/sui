@@ -23,6 +23,7 @@ parking_lot = "0.12.1"
 bcs = "0.1.4"
 prometheus = "0.13.3"
 itertools = "0.10.5"
+url = "2.3.1"
 
 sui-simulator = { path = "../sui-simulator" }
 sui-types = { path = "../sui-types" }

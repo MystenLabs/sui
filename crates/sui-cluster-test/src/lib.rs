@@ -26,7 +26,7 @@ use sui_sdk::SuiClient;
 use sui_types::gas_coin::GasCoin;
 use sui_types::{
     base_types::SuiAddress,
-    messages::{Transaction, TransactionData, VerifiedTransaction},
+    transaction::{Transaction, TransactionData, VerifiedTransaction},
 };
 use test_case::{
     coin_index_test::CoinIndexTest, coin_merge_split_test::CoinMergeSplitTest,

@@ -10,7 +10,7 @@ use proptest::collection::vec;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 
 use sui_types::digests::ObjectDigest;
-use sui_types::messages::{
+use sui_types::transaction::{
     GasData, TransactionData, TransactionDataV1, TransactionExpiration, TransactionKind,
 };
 

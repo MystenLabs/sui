@@ -7,14 +7,14 @@ use move_core_types::{identifier::Identifier, language_storage::TypeTag};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
     crypto::AccountKeyPair,
-    messages::{CallArg, TransactionData, TransactionDataAPI, VerifiedTransaction},
     object::Owner,
+    transaction::{CallArg, TransactionData, TransactionDataAPI, VerifiedTransaction},
     utils::to_sender_signed_transaction,
 };
 
 use crate::ProgrammableTransactionBuilder;
 use crate::{convert_move_call_args, workloads::Gas, BenchMoveCallArg, ExecutionEffects};
-use sui_types::messages::Command;
+use sui_types::transaction::Command;
 
 /// A Sui account and all of the objects it owns
 #[derive(Debug)]

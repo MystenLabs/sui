@@ -18,12 +18,17 @@ use serde_with::serde_as;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::{Display, Formatter, Write};
+use sui_macros::EnumVariantOrder;
 use tracing::warn;
 
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::sui_serde::SuiStructTag;
 
 pub type SuiMoveTypeParameterIndex = u16;
+
+#[cfg(test)]
+#[path = "unit_tests/sui_move_tests.rs"]
+mod sui_move_tests;
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub enum SuiMoveAbility {
@@ -116,6 +121,14 @@ pub struct SuiMoveNormalizedModule {
     pub friends: Vec<SuiMoveModuleId>,
     pub structs: BTreeMap<String, SuiMoveNormalizedStruct>,
     pub exposed_functions: BTreeMap<String, SuiMoveNormalizedFunction>,
+}
+
+impl PartialEq for SuiMoveNormalizedModule {
+    fn eq(&self, other: &Self) -> bool {
+        self.file_format_version == other.file_format_version
+            && self.address == other.address
+            && self.name == other.name
+    }
 }
 
 impl From<NormalizedModule> for SuiMoveNormalizedModule {
@@ -284,7 +297,7 @@ pub enum MoveFunctionArgType {
 }
 
 #[serde_as]
-#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq, EnumVariantOrder)]
 #[serde(untagged, rename = "MoveValue")]
 pub enum SuiMoveValue {
     // u64 and u128 are converted to String to avoid overflow
@@ -385,7 +398,7 @@ fn to_bytearray(value: &[MoveValue]) -> Option<Vec<u8>> {
 }
 
 #[serde_as]
-#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq, EnumVariantOrder)]
 #[serde(untagged, rename = "MoveStruct")]
 pub enum SuiMoveStruct {
     Runtime(Vec<SuiMoveValue>),

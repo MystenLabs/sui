@@ -5,6 +5,7 @@
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_handler::SequencedConsensusTransaction;
 use fastcrypto::hash::MultisetHash;
+use fastcrypto::traits::KeyPair;
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use sui_move_build::{BuildConfig, CompiledPackage};
@@ -14,8 +15,8 @@ use sui_types::move_package::UpgradePolicy;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
-    crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits},
-    messages::VerifiedTransaction,
+    crypto::{AccountKeyPair, AuthorityKeyPair},
+    transaction::VerifiedTransaction,
 };
 
 use super::test_authority_builder::TestAuthorityBuilder;
@@ -159,7 +160,7 @@ pub async fn init_state_with_objects<I: IntoIterator<Item = Object>>(
     objects: I,
 ) -> Arc<AuthorityState> {
     let dir = tempfile::TempDir::new().unwrap();
-    let network_config = sui_config::builder::ConfigBuilder::new(&dir).build();
+    let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir).build();
     let genesis = network_config.genesis;
     let keypair = network_config.validator_configs[0]
         .protocol_key_pair()
@@ -184,6 +185,24 @@ pub async fn init_state_with_object_id(
     object: ObjectID,
 ) -> Arc<AuthorityState> {
     init_state_with_ids(std::iter::once((address, object))).await
+}
+
+pub async fn init_state_with_ids_and_expensive_checks<
+    I: IntoIterator<Item = (SuiAddress, ObjectID)>,
+>(
+    objects: I,
+    config: ExpensiveSafetyCheckConfig,
+) -> Arc<AuthorityState> {
+    let state = TestAuthorityBuilder::new()
+        .with_expensive_safety_checks(config)
+        .build()
+        .await;
+    for (address, object_id) in objects {
+        let obj = Object::with_id_owner_for_testing(object_id, address);
+        // TODO: Make this part of genesis initialization instead of explicit insert.
+        state.insert_genesis_object(obj).await;
+    }
+    state
 }
 
 pub fn init_transfer_transaction(

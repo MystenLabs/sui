@@ -7,9 +7,9 @@ import { useQuery } from '@tanstack/react-query';
 
 export function useGetAllBalances(address?: SuiAddress | null) {
     const rpc = useRpcClient();
-    return useQuery(
-        ['get-all-balances', address],
-        async () => await rpc.getAllBalances({ owner: address! }),
-        { enabled: !!address }
-    );
+    return useQuery({
+        queryKey: ['get-all-balances', address],
+        queryFn: async () => await rpc.getAllBalances({ owner: address! }),
+        enabled: !!address,
+    });
 }

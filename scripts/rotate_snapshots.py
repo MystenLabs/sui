@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Script to be used for deleteing old snapshots on a host. Given a root dir,
+Script to be used for deleting old snapshots on a host. Given a root dir,
 for example, /opt/sui, it assumes snapshots are staged in /opt/sui/snapshots,
 and all symlinks to said snapshots are contained under /opt/sui/instances. It will delete all snapshots that are not
 referenced, except for the newest. If there is only onle snaopshot on the host,

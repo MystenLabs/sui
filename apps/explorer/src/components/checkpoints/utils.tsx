@@ -6,7 +6,7 @@ import { type CheckpointPage } from '@mysten/sui.js/src/types/checkpoints';
 import { TxTableCol } from '../transactions/TxCardUtils';
 import { TxTimeType } from '../tx-time/TxTimeType';
 
-import { CheckpointLink } from '~/ui/InternalLink';
+import { CheckpointLink, CheckpointSequenceLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
 
 // Generate table data from the checkpoints data
@@ -24,9 +24,7 @@ export const genTableDataFromCheckpointsData = (data: CheckpointPage) => ({
         ),
         sequenceNumber: (
             <TxTableCol>
-                <Text variant="bodySmall/medium" color="steel-darker">
-                    {checkpoint.sequenceNumber}
-                </Text>
+                <CheckpointSequenceLink sequence={checkpoint.sequenceNumber} />
             </TxTableCol>
         ),
         transactionBlockCount: (

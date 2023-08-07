@@ -341,7 +341,7 @@ but multiple per package (!).
 <pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_claim">claim</a>&lt;OTW: drop&gt;(otw: OTW, ctx: &<b>mut</b> TxContext): <a href="package.md#0x2_package_Publisher">Publisher</a> {
     <b>assert</b>!(<a href="types.md#0x2_types_is_one_time_witness">types::is_one_time_witness</a>(&otw), <a href="package.md#0x2_package_ENotOneTimeWitness">ENotOneTimeWitness</a>);
 
-    <b>let</b> type = <a href="_get">type_name::get</a>&lt;OTW&gt;();
+    <b>let</b> type = <a href="_get_with_original_ids">type_name::get_with_original_ids</a>&lt;OTW&gt;();
 
     <a href="package.md#0x2_package_Publisher">Publisher</a> {
         id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
@@ -426,7 +426,7 @@ Check whether type belongs to the same package as the publisher object.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_from_package">from_package</a>&lt;T&gt;(self: &<a href="package.md#0x2_package_Publisher">Publisher</a>): bool {
-    <b>let</b> type = <a href="_get">type_name::get</a>&lt;T&gt;();
+    <b>let</b> type = <a href="_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;();
 
     (<a href="_get_address">type_name::get_address</a>(&type) == self.<a href="package.md#0x2_package">package</a>)
 }
@@ -453,7 +453,7 @@ Check whether a type belongs to the same module as the publisher object.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_from_module">from_module</a>&lt;T&gt;(self: &<a href="package.md#0x2_package_Publisher">Publisher</a>): bool {
-    <b>let</b> type = <a href="_get">type_name::get</a>&lt;T&gt;();
+    <b>let</b> type = <a href="_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;();
 
     (<a href="_get_address">type_name::get_address</a>(&type) == self.<a href="package.md#0x2_package">package</a>)
         && (<a href="_get_module">type_name::get_module</a>(&type) == self.module_name)

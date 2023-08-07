@@ -30,6 +30,7 @@ typed-store.workspace = true
 typed-store-derive.workspace = true
 tempfile = "3.3.0"
 fastcrypto.workspace = true
+sui-swarm-config = { path = "../sui-swarm-config" }
 sui-types = { path = "../sui-types" }
 sui-sdk = { path = "../sui-sdk" }
 sui-node = { path = "../sui-node" }

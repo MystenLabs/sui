@@ -2,8 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module.exports = {
-    plugins: ['header'],
-    extends: ['react-app', 'prettier'],
+    plugins: ['header', '@tanstack/query'],
+    extends: [
+        'react-app',
+        'prettier',
+        'plugin:@tanstack/eslint-plugin-query/recommended',
+    ],
     rules: {
         'no-implicit-coercion': [
             2,
