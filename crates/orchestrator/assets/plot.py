@@ -68,6 +68,21 @@ def aggregate_p_latency(measurement, p=50, i=-1):
 
     return sum(latency) / len(latency) if latency else 0
 
+def p_latency_data(data, p=50):
+    count = float(data['count'])
+    buckets = [(float(l), c) for l, c in data['buckets'].items()]
+    buckets.sort(key=lambda x: x[0])
+
+    if not buckets:
+        return float(0)
+
+    for l, c in buckets:
+        if c >= count * p / 100:
+            return l
+        
+    return buckets[-1][0]
+
+
 
 class PlotType(Enum):
     L_GRAPH = 1
@@ -218,7 +233,7 @@ class Plotter:
         ax = plt.gca()
         ax.xaxis.set_major_formatter(default_major_formatter)
         ax.yaxis.set_major_formatter(default_major_formatter)
-        if plot_type in [PlotType.L_GRAPH, PlotType.INSPECT_LATENCY]:
+        if plot_type in [PlotType.L_GRAPH, PlotType.INSPECT_LATENCY, PlotType.DURATION_LATENCY]:
             ax.yaxis.set_major_formatter(sec_major_formatter)
 
         for x in ['pdf', 'png']:
@@ -326,7 +341,7 @@ class Plotter:
 
         self._plot(plot_data, PlotType.SCALABILITY)
 
-    def plot_inspect(self, file):
+    def plot_inspect(self, file, p50=False):
         with open(file, 'r') as f:
             try:
                 measurement = json.loads(f.read())
@@ -342,11 +357,14 @@ class Plotter:
                 total = float(d['sum']['secs'])
 
                 tps = (count / duration) if duration != 0 else 0
-                avg_latency = total / count if count != 0 else 0
+                if p50:
+                    latency = p_latency_data(d, 50)
+                else:
+                    latency = total / count if count != 0 else 0
 
                 x_values += [duration]
                 y_tps_values += [tps]
-                y_lat_values += [avg_latency]
+                y_lat_values += [latency]
                 e_values += [0]
 
             if x_values:
@@ -358,7 +376,7 @@ class Plotter:
         self._plot(plot_tps_data, PlotType.INSPECT_TPS)
         self._plot(plot_lat_data, PlotType.INSPECT_LATENCY)
 
-    def plot_duration(self, file, precision):
+    def plot_duration(self, file, precision, p50=False):
         with open(file, 'r') as f:
             try:
                 measurement = json.loads(f.read())
@@ -379,12 +397,15 @@ class Plotter:
                 total = float(d['sum']['secs'])
 
                 tps = (count / duration) if duration != 0 else 0
-                avg_latency = total / count if count != 0 else 0
+                if p50:
+                    latency = p_latency_data(d, 50)
+                else:
+                    latency = total / count if count != 0 else 0
 
-                if duration < total_duration:
-                    i = int(duration / precision)
+                i = int(duration / precision)
+                if i < length:
                     all_y_tps_values[i] += [tps]
-                    all_y_lat_values[i] += [avg_latency]
+                    all_y_lat_values[i] += [latency]
 
             aggregate_y_tps_values, aggregate_y_lat_values = [], []
             for x in all_y_tps_values:
@@ -453,6 +474,10 @@ if __name__ == "__main__":
         '--precision', type=float, default=30.0,
         help='The granularity of the duration when aggregating results'
     )
+    parser.add_argument(
+        '--p50', action='store_true',
+        help='Plot duration using p50 rather than average latency'
+    )
     args = parser.parse_args()
 
     for r in args.shared_objects_ratio:
@@ -465,5 +490,5 @@ if __name__ == "__main__":
         plotter.plot_scalability(args.max_latencies)
 
     if args.inspect is not None:
-        plotter.plot_inspect(args.inspect)
-        plotter.plot_duration(args.inspect, args.precision)
+        plotter.plot_inspect(args.inspect, args.p50)
+        plotter.plot_duration(args.inspect, args.precision, args.p50)
