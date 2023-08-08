@@ -1235,6 +1235,18 @@ impl PgIndexerStore {
         object_deletion_latency: Histogram,
         object_commit_chunk_counter: IntCounter,
     ) -> Result<(), IndexerError> {
+        let mutated_objects: Vec<Object> = tx_object_changes
+            .iter()
+            .flat_map(|changes| changes.changed_objects.iter().cloned())
+            .collect();
+        let deleted_changes = tx_object_changes
+            .iter()
+            .flat_map(|changes| changes.deleted_objects.iter().cloned())
+            .collect::<Vec<_>>();
+        let deleted_objects: Vec<Object> = deleted_changes
+            .iter()
+            .map(|deleted_object| deleted_object.clone().into())
+            .collect();
         transactional_blocking!(&self.blocking_cp, |conn| {
             persist_object_mutations(
                 conn,
