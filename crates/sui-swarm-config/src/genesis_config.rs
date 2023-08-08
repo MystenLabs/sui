@@ -287,7 +287,7 @@ impl GenesisConfig {
     /// The gas amount for each genesis gas object.
     const BENCHMARK_GAS_AMOUNT: u64 = 50_000_000_000_000_000;
     /// Trigger epoch change every hour minutes.
-    const BENCHMARK_EPOCH_DURATION_MS: u64 = 60 * 60 * 1000;
+    const BENCHMARK_EPOCH_DURATION_MS: u64 = 10 * 60 * 1000;
 
     pub fn for_local_testing() -> Self {
         Self::custom_genesis(
