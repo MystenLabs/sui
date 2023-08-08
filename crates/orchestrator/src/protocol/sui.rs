@@ -125,23 +125,23 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
         I: IntoIterator<Item = Instance>,
     {
         let working_dir = self.working_dir.clone();
+        let network_addresses = Self::resolve_network_addresses(instances);
 
-        let instances: Vec<_> = instances.into_iter().collect();
-        let listen_addresses = Self::make_listen_addresses(&instances);
-
-        instances
+        network_addresses
             .into_iter()
             .enumerate()
-            .map(|(i, instance)| {
-                let validator_config = sui_config::validator_config_file(i);
-                let config_path: PathBuf =
-                    [&working_dir, &validator_config.into()].iter().collect();
-                let path = config_path.display();
-                let address = listen_addresses[i].clone();
+            .map(|(i, (instance, network_address))| {
+                let validator_config =
+                    sui_config::validator_config_file(network_address.clone(), i);
+                let config_path: PathBuf = working_dir.join(validator_config);
 
                 let run = [
                     "cargo run --release --bin sui-node --",
-                    &format!("--config-path {path} --listen-address {address}"),
+                    &format!(
+                        "--config-path {} --listen-address {}",
+                        config_path.display(),
+                        network_address.zero_ip_multi_address()
+                    ),
                 ]
                 .join(" ");
                 let command = ["source $HOME/.cargo/env", &run].join(" && ");
@@ -221,15 +221,19 @@ impl SuiProtocol {
         }
     }
 
-    /// Convert the ip of the validators' network addresses to 0.0.0.0.
-    pub fn make_listen_addresses(instances: &[Instance]) -> Vec<Multiaddr> {
+    /// Creates the network addresses in multi address format for the instances. It returns the
+    /// Instance and the corresponding address.
+    pub fn resolve_network_addresses(
+        instances: impl IntoIterator<Item = Instance>,
+    ) -> Vec<(Instance, Multiaddr)> {
+        let instances: Vec<Instance> = instances.into_iter().collect();
         let ips: Vec<_> = instances.iter().map(|x| x.main_ip.to_string()).collect();
         let genesis_config = GenesisConfig::new_for_benchmarks(&ips);
         let mut addresses = Vec::new();
         if let Some(validator_configs) = genesis_config.validator_config_info.as_ref() {
-            for validator_info in validator_configs {
+            for (i, validator_info) in validator_configs.iter().enumerate() {
                 let address = &validator_info.network_address;
-                addresses.push(address.zero_ip_multi_address());
+                addresses.push((instances[i].clone(), address.clone()));
             }
         }
         addresses
