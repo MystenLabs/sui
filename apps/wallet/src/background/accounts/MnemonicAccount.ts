@@ -91,17 +91,11 @@ export class MnemonicAccount
 	}
 
 	get derivationPath() {
-		if (!this.cachedData) {
-			this.cachedData = this.getStoredData();
-		}
-		return this.cachedData.then(({ derivationPath }) => derivationPath);
+		return this.getCachedData().then(({ derivationPath }) => derivationPath);
 	}
 
 	get sourceID() {
-		if (!this.cachedData) {
-			this.cachedData = this.getStoredData();
-		}
-		return this.cachedData.then(({ sourceID }) => sourceID);
+		return this.getCachedData().then(({ sourceID }) => sourceID);
 	}
 
 	async #getKeyPair() {

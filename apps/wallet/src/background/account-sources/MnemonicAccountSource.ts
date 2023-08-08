@@ -25,8 +25,7 @@ import {
 } from '_shared/utils/bip39';
 import { decrypt, encrypt } from '_src/shared/cryptography/keystore';
 
-type DataDecryptedV0 = {
-	version: 0;
+type DataDecrypted = {
 	entropyHex: string;
 	mnemonicSeedHex: string;
 };
@@ -44,7 +43,7 @@ interface MnemonicAccountSourceSerializedUI extends AccountSourceSerializedUI {
 
 export class MnemonicAccountSource extends AccountSource<
 	MnemonicAccountSourceSerialized,
-	DataDecryptedV0
+	DataDecrypted
 > {
 	static async createNew({
 		password,
@@ -55,10 +54,9 @@ export class MnemonicAccountSource extends AccountSource<
 	}) {
 		const entropy = entropyInput || getRandomEntropy();
 		if (!validateEntropy(entropy)) {
-			throw new Error("Can't create Passphrase Account Source, invalid entropy");
+			throw new Error("Can't create Mnemonic account source, invalid entropy");
 		}
-		const decryptedData: DataDecryptedV0 = {
-			version: 0,
+		const decryptedData: DataDecrypted = {
 			entropyHex: entropyToSerialized(entropy),
 			mnemonicSeedHex: mnemonicToSeedHex(entropyToMnemonic(entropy)),
 		};
@@ -98,9 +96,9 @@ export class MnemonicAccountSource extends AccountSource<
 	}
 
 	async unlock(password: string) {
-		await this.setEphemeralValue(
-			await decrypt(password, (await this.getStoredData()).encryptedData),
-		);
+		const { encryptedData } = await this.getStoredData();
+		const decryptedData = await decrypt<DataDecrypted>(password, encryptedData);
+		await this.setEphemeralValue(decryptedData);
 		accountSourcesEvents.emit('accountSourceStatusUpdated', { accountSourceID: this.id });
 	}
 
@@ -125,7 +123,7 @@ export class MnemonicAccountSource extends AccountSource<
 	async deriveKeyPair(derivationPath: string) {
 		const data = await this.getEphemeralValue();
 		if (!data) {
-			throw new Error('Locked');
+			throw new Error(`Mnemonic account source ${this.id} is locked`);
 		}
 		return Ed25519Keypair.deriveKeypairFromSeed(data.mnemonicSeedHex, derivationPath);
 	}

@@ -79,17 +79,11 @@ export class QredoAccount
 	}
 
 	get sourceID() {
-		if (!this.cachedData) {
-			this.cachedData = this.getStoredData();
-		}
-		return this.cachedData.then(({ sourceID }) => sourceID);
+		return this.getCachedData().then(({ sourceID }) => sourceID);
 	}
 
 	get walletID() {
-		if (!this.cachedData) {
-			this.cachedData = this.getStoredData();
-		}
-		return this.cachedData.then(({ walletID }) => walletID);
+		return this.getCachedData().then(({ walletID }) => walletID);
 	}
 
 	async #getQredoSource() {

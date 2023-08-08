@@ -15,18 +15,3 @@ export default function initSentry() {
 		}),
 	);
 }
-
-// expand this breadcrumb
-type Breadcrumbs = {
-	type: 'debug';
-	category: string;
-	message: string;
-};
-
-export function addSentryBreadcrumb(breadcrumbs: Breadcrumbs) {
-	Sentry.addBreadcrumb(breadcrumbs);
-}
-
-export function reportSentryError(error: Error) {
-	Sentry.captureException(error);
-}

@@ -13,8 +13,7 @@ import { decrypt, encrypt } from '_src/shared/cryptography/keystore';
 import { fromExportedKeypair } from '_src/shared/utils/from-exported-keypair';
 
 type SessionStorageData = { keyPair: ExportedKeypair };
-type EncryptedDataV0 = { keyPair: ExportedKeypair };
-type EncryptedData = EncryptedDataV0;
+type EncryptedData = { keyPair: ExportedKeypair };
 
 export interface ImportedAccountSerialized extends SerializedAccount {
 	type: 'imported';
@@ -45,7 +44,7 @@ export class ImportedAccount
 		password: string;
 	}): Promise<Omit<ImportedAccountSerialized, 'id'>> {
 		const keyPair = fromExportedKeypair(inputs.keyPair);
-		const dataToEncrypt: EncryptedDataV0 = {
+		const dataToEncrypt: EncryptedData = {
 			keyPair: inputs.keyPair,
 		};
 		return {

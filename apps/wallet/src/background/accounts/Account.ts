@@ -25,7 +25,7 @@ export abstract class Account<
 	readonly id: string;
 	readonly type: AccountType;
 	// optimization to avoid accessing storage for properties that don't change
-	protected cachedData: Promise<T> | null = null;
+	private cachedData: Promise<T> | null = null;
 
 	constructor({ id, type, cachedData }: { id: string; type: AccountType; cachedData?: T }) {
 		this.id = id;
@@ -43,17 +43,18 @@ export abstract class Account<
 	abstract toUISerialized(): Promise<SerializedUIAccount>;
 
 	get address() {
-		if (!this.cachedData) {
-			this.cachedData = this.getStoredData();
-		}
-		return this.cachedData.then(({ address }) => address);
+		return this.getCachedData().then(({ address }) => address);
 	}
 
 	get lastUnlockedOn() {
+		return this.getCachedData().then(({ lastUnlockedOn }) => lastUnlockedOn);
+	}
+
+	protected getCachedData() {
 		if (!this.cachedData) {
 			this.cachedData = this.getStoredData();
 		}
-		return this.cachedData.then(({ lastUnlockedOn }) => lastUnlockedOn);
+		return this.cachedData;
 	}
 
 	protected async getStoredData() {

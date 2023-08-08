@@ -14,8 +14,7 @@ import { makeUniqueKey } from '../storage-utils';
 import { decrypt, encrypt } from '_src/shared/cryptography/keystore';
 import { QredoAPI } from '_src/shared/qredo-api';
 
-type DataDecryptedV0 = {
-	version: 0;
+type DataDecrypted = {
 	refreshToken: string;
 };
 
@@ -52,8 +51,7 @@ export class QredoAccountSource extends AccountSource<QredoAccountSourceSerializ
 		service: string;
 		refreshToken: string;
 	}) {
-		const decryptedData: DataDecryptedV0 = {
-			version: 0,
+		const decryptedData: DataDecrypted = {
 			refreshToken,
 		};
 		const dataSerialized: QredoAccountSourceSerialized = {
@@ -116,7 +114,7 @@ export class QredoAccountSource extends AccountSource<QredoAccountSourceSerializ
 
 	async unlock(password: string) {
 		const { encrypted } = await this.getStoredData();
-		const { refreshToken } = await decrypt<DataDecryptedV0>(password, encrypted);
+		const { refreshToken } = await decrypt<DataDecrypted>(password, encrypted);
 		await this.setEphemeralValue({
 			refreshToken,
 			accessToken: await this.#createAccessToken(refreshToken),
