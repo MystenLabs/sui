@@ -77,4 +77,4 @@ jobs:
         if: ${{ steps.lychee.outputs.exit_code == 0 }}
         uses: peter-evans/close-issue@v3
         with:
-          issue-number: ${{ steps.last_issue.outputs.issue_number }}
+          issue-number: ${{ steps.last_issue.outputs.issue-number }}
