@@ -11,6 +11,7 @@ import { toB64 } from '@mysten/sui.js/utils';
 import mitt from 'mitt';
 
 import { WalletSigner } from './WalletSigner';
+import { type QredoSerializedUiAccount } from '_src/background/accounts/QredoAccount';
 import { type SerializedQredoAccount } from '_src/background/keyring/QredoAccount';
 import { API_ENV, networkNames } from '_src/shared/api-env';
 import {
@@ -33,14 +34,14 @@ export const API_ENV_TO_QREDO_NETWORK: Partial<Record<API_ENV, NetworkType>> = {
 	[API_ENV.devNet]: 'devnet',
 };
 export class QredoSigner extends WalletSigner {
-	#qredoAccount: SerializedQredoAccount;
+	#qredoAccount: SerializedQredoAccount | QredoSerializedUiAccount;
 	#qredoAPI: QredoAPI;
 	#network: NetworkType | null;
 	#apiEnv: API_ENV;
 
 	constructor(
 		client: SuiClient,
-		account: SerializedQredoAccount,
+		account: SerializedQredoAccount | QredoSerializedUiAccount,
 		qredoAPI: QredoAPI,
 		apiEnv: API_ENV,
 	) {
