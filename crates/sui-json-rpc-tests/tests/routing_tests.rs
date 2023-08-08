@@ -9,7 +9,7 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::RpcModule;
-use jsonrpsee_proc_macros::rpc;
+use jsonrpsee::proc_macros::rpc;
 use prometheus::Registry;
 use std::env;
 use sui_config::local_ip_utils;
