@@ -10,7 +10,6 @@ edition = "2021"
 arc-swap.workspace = true
 fastcrypto.workspace = true
 jsonrpsee.workspace = true
-jsonrpsee-proc-macros.workspace = true
 hyper.workspace = true
 itertools.workspace = true
 linked-hash-map.workspace = true
