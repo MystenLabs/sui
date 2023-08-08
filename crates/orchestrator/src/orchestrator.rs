@@ -606,7 +606,7 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P,
             }
 
             // Deploy the validators.
-            let monitor = self.run_nodes(&parameters).await?;
+            self.run_nodes(&parameters).await?;
 
             // Deploy the load generators.
             self.run_clients(&parameters).await?;
@@ -615,7 +615,7 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P,
             let aggregator = self.run(&parameters).await?;
             aggregator.display_summary();
             generator.register_result(aggregator);
-            drop(monitor);
+            //drop(monitor);
 
             // Kill the nodes and clients (without deleting the log files).
             self.cleanup(false).await?;
