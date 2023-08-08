@@ -9,7 +9,7 @@ import { OpenRpcMethod, OpenRpcSpec } from './open-rpc';
 /** @ts-ignore */
 import prettierConfig from '../../../prettier.config.js';
 
-const hookTemplate = /* typescript */ `
+const header = `
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -21,10 +21,14 @@ const hookTemplate = /* typescript */ `
  * This file is generated from:
  * /crates/sui-open-rpc/spec/openrpc.json
  */
+`.trim();
+
+const hookTemplate = /* typescript */ `
+${header}
 
 import type { $_METHOD_TYPE_NAME_Params } from '@mysten/sui.js/client';
-import type { UseSuiClientQueryOptions } from './useSuiClientQuery.js';
-import { useSuiClientQuery } from './useSuiClientQuery.js';
+import type { UseSuiClientQueryOptions } from '../useSuiClientQuery.js';
+import { useSuiClientQuery } from '../useSuiClientQuery.js';
 
 export function $_HOOK_NAME_(
 	$_PARAMS_ARG_,
@@ -49,7 +53,7 @@ const openRpcSpec: OpenRpcSpec = JSON.parse(
 );
 
 export async function generateHooks() {
-	await Promise.all(
+	const hooks = await Promise.all(
 		openRpcSpec.methods
 			.filter((method) => {
 				return (
@@ -61,6 +65,14 @@ export async function generateHooks() {
 				);
 			})
 			.map(generateHook),
+	);
+
+	await fs.writeFile(
+		path.resolve(dappKitRoot, './src/hooks/rpc/index.ts'),
+		await format(`${header}\n\n${hooks.map((hook) => `export * from './${hook}.js'`).join('\n')}`, {
+			parser: 'typescript',
+			...prettierConfig,
+		}),
 	);
 }
 
@@ -84,10 +96,12 @@ async function generateHook(method: OpenRpcMethod) {
 		);
 
 	await fs.writeFile(
-		path.resolve(dappKitRoot, `./src/hooks/${hookName}.ts`),
+		path.resolve(dappKitRoot, `./src/hooks/rpc/${hookName}.ts`),
 		await format(source, {
 			parser: 'typescript',
 			...prettierConfig,
 		}),
 	);
+
+	return hookName;
 }
