@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import {
 	LockUnlocked16 as UnlockedLockIcon,
 	Spinner16 as SpinnerIcon,
@@ -17,7 +16,6 @@ import {
 } from '../../components/ledger/LedgerAccountList';
 import { useDeriveLedgerAccounts } from '../../components/ledger/useDeriveLedgerAccounts';
 import { useImportLedgerAccountsMutation } from '../../components/ledger/useImportLedgerAccountsMutation';
-import { useNextMenuUrl } from '../../components/menu/hooks';
 import Overlay from '../../components/overlay';
 import { getSuiApplicationErrorMessage } from '../../helpers/errorMessages';
 import { useAccounts } from '../../hooks/useAccounts';
@@ -39,10 +37,8 @@ export function ImportLedgerAccountsPage({
 	// TODO: remove, this is temporary for testing new accounts
 	password?: string;
 }) {
-	const accountMenuUrl = useNextMenuUrl(true, `/accounts`);
-	const shouldUseNewRedirectUrls = useFeatureIsOn('enoki-social-sign-in');
-	const closeRedirectUrl = shouldUseNewRedirectUrls ? '/accounts/add-account' : accountMenuUrl;
-	const successRedirectUrl = shouldUseNewRedirectUrls ? '/tokens' : accountMenuUrl;
+	const closeRedirectUrl = '/accounts/add-account';
+	const successRedirectUrl = '/tokens';
 	const navigate = useNavigate();
 
 	const existingAccounts = useAccounts();
