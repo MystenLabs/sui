@@ -286,6 +286,8 @@ impl GenesisConfig {
     pub const BENCHMARKS_PORT_OFFSET: u16 = 2000;
     /// The gas amount for each genesis gas object.
     const BENCHMARK_GAS_AMOUNT: u64 = 50_000_000_000_000_000;
+    /// Trigger epoch change every 10 minutes.
+    const BENCHMARK_EPOCH_DURATION_MS: u64 = 600_000;
 
     pub fn for_local_testing() -> Self {
         Self::custom_genesis(
@@ -369,6 +371,7 @@ impl GenesisConfig {
         // genesis; it is thus important they have the same parameters.
         let parameters = GenesisCeremonyParameters {
             chain_start_timestamp_ms: 0,
+            epoch_duration_ms: Self::BENCHMARK_EPOCH_DURATION_MS,
             ..GenesisCeremonyParameters::new()
         };
 
