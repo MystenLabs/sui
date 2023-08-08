@@ -73,7 +73,7 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
 							setShowPasswordDialog(false);
 						}}
 						continueLabel="Confirm"
-						onBackClicked
+						showBackButton
 					/>
 				</CardLayout>
 			) : (

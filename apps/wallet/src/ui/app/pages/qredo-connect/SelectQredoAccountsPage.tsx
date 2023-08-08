@@ -50,6 +50,7 @@ export function SelectQredoAccountsPage() {
 						title="Import Accounts"
 						continueLabel="Import"
 						onBackClicked={() => setShowPassword(false)}
+						showBackButton
 						onPasswordVerified={async (password) => {
 							await backgroundService.acceptQredoConnection({
 								qredoID: id,

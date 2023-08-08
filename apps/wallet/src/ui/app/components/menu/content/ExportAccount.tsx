@@ -58,7 +58,7 @@ export function ExportAccount() {
 			}}
 			background
 			spacing
-			onBackClicked
+			showBackButton
 		/>
 	);
 }

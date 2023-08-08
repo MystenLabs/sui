@@ -32,7 +32,7 @@ export function RecoveryPassphrase() {
 						setMnemonic(mnemonic);
 						setPasswordConfirmed(true);
 					}}
-					onBackClicked
+					showBackButton
 				/>
 			</div>
 		);

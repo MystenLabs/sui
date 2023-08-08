@@ -25,7 +25,8 @@ export type PasswordExportDialogProps = {
 	continueLabel?: string;
 	showArrowIcon?: boolean;
 	onPasswordVerified: (password: string) => Promise<void> | void;
-	onBackClicked?: (() => void) | boolean;
+	onBackClicked?: () => void;
+	showBackButton?: boolean;
 	spacing?: boolean;
 	background?: boolean;
 };
@@ -37,7 +38,8 @@ export function PasswordInputDialog({
 	spacing = false,
 	background = false,
 	onPasswordVerified,
-	onBackClicked = false,
+	onBackClicked,
+	showBackButton = false,
 }: PasswordExportDialogProps) {
 	const navigate = useNavigate();
 	const backgroundService = useBackgroundClient();
@@ -83,7 +85,7 @@ export function PasswordInputDialog({
 						</div>
 					</div>
 					<div className="flex flex-nowrap gap-3.75 self-stretch">
-						{onBackClicked ? (
+						{showBackButton ? (
 							<Button
 								text="Back"
 								color="heroDark"

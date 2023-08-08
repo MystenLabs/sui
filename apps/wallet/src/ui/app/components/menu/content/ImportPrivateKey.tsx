@@ -56,6 +56,7 @@ export function ImportPrivateKey() {
 				title="Import Account"
 				continueLabel="Import"
 				onBackClicked={() => setShowPasswordDialog(false)}
+				showBackButton
 				onPasswordVerified={async (password) => {
 					await importMutation.mutateAsync(password);
 				}}
