@@ -33,7 +33,7 @@ pub struct NetworkClient {
 struct Inner {
     primary_peer_id: PeerId,
     primary_network: Option<Network>,
-    worker_network: BTreeMap<PeerId, Network>,
+    worker_network: BTreeMap<u32, Network>,
     worker_to_primary_handler: Option<Arc<dyn WorkerToPrimary>>,
     primary_to_worker_handler: BTreeMap<PeerId, Arc<dyn PrimaryToWorker>>,
     shutdown: bool,
@@ -74,10 +74,10 @@ impl NetworkClient {
         inner.primary_network = Some(network);
     }
 
-    pub fn set_worker_network(&self, peer_id: PeerId, network: Network) {
+    pub fn set_worker_network(&self, worker_id: u32, network: Network) {
         let mut inner = self.inner.write();
-        if inner.worker_network.insert(peer_id, network).is_some() {
-            error!("Worker {} network is already set", peer_id);
+        if inner.worker_network.insert(worker_id, network).is_some() {
+            error!("Worker {} network is already set", worker_id);
         }
     }
 
@@ -97,14 +97,14 @@ impl NetworkClient {
         Err(anemo::rpc::Status::internal("Primary has not started"))
     }
 
-    pub async fn get_worker_network(&self, peer_id: PeerId) -> Result<Network, anemo::rpc::Status> {
+    pub async fn get_worker_network(&self, worker_id: u32) -> Result<Network, anemo::rpc::Status> {
         for _ in 0..Self::GET_CLIENT_RETRIES {
             {
                 let inner = self.inner.read();
                 if inner.shutdown {
                     return Err(anemo::rpc::Status::internal("This node has shutdown"));
                 }
-                if let Some(network) = inner.worker_network.get(&peer_id) {
+                if let Some(network) = inner.worker_network.get(&worker_id) {
                     return Ok(network.clone());
                 }
             }
@@ -112,7 +112,7 @@ impl NetworkClient {
         }
         Err(anemo::rpc::Status::internal(format!(
             "The worker {} has not started",
-            peer_id
+            worker_id
         )))
     }
 

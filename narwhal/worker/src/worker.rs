@@ -283,7 +283,7 @@ impl Worker {
                 }
             }
         }
-        client.set_worker_network(worker_peer_id, network.clone());
+        client.set_worker_network(id, network.clone());
 
         info!("Worker {} listening to worker messages on {}", id, address);
 

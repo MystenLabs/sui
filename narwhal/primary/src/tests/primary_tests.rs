@@ -7,9 +7,8 @@ use crate::{
     synchronizer::Synchronizer,
     NUM_SHUTDOWN_RECEIVERS,
 };
-use config::{utils::get_available_port, Authority, AuthorityIdentifier, Committee, Parameters};
+use config::{AuthorityIdentifier, Committee, Parameters};
 use consensus::consensus::{ConsensusRound, LeaderSchedule, LeaderSwapTable};
-use crypto::{KeyPair, NetworkKeyPair};
 use fastcrypto::{
     encoding::{Encoding, Hex},
     hash::Hash,
@@ -17,10 +16,8 @@ use fastcrypto::{
     traits::KeyPair as _,
 };
 use itertools::Itertools;
-use mysten_network::Multiaddr;
-use network::{client::NetworkClient, PrimaryToPrimaryRpc};
+use network::client::NetworkClient;
 use prometheus::Registry;
-use rand::thread_rng;
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
     num::NonZeroUsize,
@@ -35,7 +32,6 @@ use types::{
     MockPrimaryToWorker, PreSubscribedBroadcastSender, PrimaryToPrimary, RequestVoteRequest,
 };
 use worker::{metrics::initialise_metrics, TrivialTransactionValidator, Worker};
-
 
 #[tokio::test]
 async fn test_get_network_peers_from_admin_server() {

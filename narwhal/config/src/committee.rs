@@ -64,28 +64,6 @@ impl Authority {
         }
     }
 
-    // Allows creating Authority in tests.
-    pub fn new_for_test(
-        protocol_key: PublicKey,
-        stake: Stake,
-        primary_address: Multiaddr,
-        network_key: NetworkPublicKey,
-        hostname: String,
-    ) -> Self {
-        let protocol_key_bytes = PublicKeyBytes::from(&protocol_key);
-
-        Self {
-            id: Default::default(),
-            protocol_key,
-            protocol_key_bytes,
-            stake,
-            primary_address,
-            network_key,
-            hostname,
-            initialised: true,
-        }
-    }
-
     fn initialise(&mut self, id: AuthorityIdentifier) {
         self.id = id;
         self.initialised = true;
