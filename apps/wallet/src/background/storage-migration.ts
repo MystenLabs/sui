@@ -8,16 +8,18 @@ import {
 	makeDerivationPath,
 } from './account-sources/MnemonicAccountSource';
 import { QredoAccountSource } from './account-sources/QredoAccountSource';
-import { addNewAccounts } from './accounts';
+import { accountSourcesEvents } from './account-sources/events';
+import { type SerializedAccount } from './accounts/Account';
 import { ImportedAccount } from './accounts/ImportedAccount';
 import { LedgerAccount } from './accounts/LedgerAccount';
 import { MnemonicAccount } from './accounts/MnemonicAccount';
 import { type QredoSerializedAccount } from './accounts/QredoAccount';
+import { accountsEvents } from './accounts/events';
 import { backupDB, getDB } from './db';
 import { STORAGE_LAST_ACCOUNT_INDEX_KEY, getSavedLedgerAccounts } from './keyring';
 import { VaultStorage } from './keyring/VaultStorage';
 import { getAllQredoConnections } from './qredo/storage';
-import { getFromLocalStorage, setToLocalStorage } from './storage-utils';
+import { getFromLocalStorage, makeUniqueKey, setToLocalStorage } from './storage-utils';
 import { NEW_ACCOUNTS_ENABLED } from '_src/shared/constants';
 
 export type Status = 'required' | 'inProgress' | 'ready';
@@ -99,7 +101,7 @@ async function makeQredoAccounts(password: string) {
 		const aQredoSource = await QredoAccountSource.createNew({
 			password,
 			apiUrl: aQredoConnection.apiUrl,
-			organization: aQredoConnection.origin,
+			organization: aQredoConnection.organization,
 			origin: aQredoConnection.origin,
 			service: aQredoConnection.service,
 			refreshToken,
@@ -117,6 +119,13 @@ async function makeQredoAccounts(password: string) {
 	return { qredoSources, qredoAccounts };
 }
 
+function withID<T extends Omit<SerializedAccount, 'id'>>(anAccount: T) {
+	return {
+		...anAccount,
+		id: makeUniqueKey(),
+	};
+}
+
 export async function doMigration(password: string) {
 	await VaultStorage.unlock(password);
 	const currentStatus = await getStatus();
@@ -129,18 +138,20 @@ export async function doMigration(password: string) {
 			const ledgerAccounts = await makeLedgerAccounts(password);
 			const { qredoAccounts, qredoSources } = await makeQredoAccounts(password);
 			await db.transaction('rw', db.accounts, db.accountSources, async () => {
-				await MnemonicAccountSource.save(mnemonicSource, { skipBackup: true });
-				await addNewAccounts(mnemonicAccounts, { skipBackup: true });
-				await addNewAccounts(importedAccounts, { skipBackup: true });
-				await addNewAccounts(ledgerAccounts, { skipBackup: true });
+				await MnemonicAccountSource.save(mnemonicSource, { skipBackup: true, skipEventEmit: true });
+				await db.accounts.bulkPut(mnemonicAccounts.map(withID));
+				await db.accounts.bulkPut(importedAccounts.map(withID));
+				await db.accounts.bulkPut(ledgerAccounts.map(withID));
 				for (const aQredoSource of qredoSources) {
-					await QredoAccountSource.save(aQredoSource, { skipBackup: true });
+					await QredoAccountSource.save(aQredoSource, { skipBackup: true, skipEventEmit: true });
 				}
-				await addNewAccounts(qredoAccounts, { skipBackup: true });
+				await db.accounts.bulkPut(qredoAccounts.map(withID));
 				await Dexie.waitFor(setToLocalStorage(migrationDoneStorageKey, true));
 			});
 			statusCache = 'ready';
 			backupDB();
+			accountSourcesEvents.emit('accountSourcesChanged');
+			accountsEvents.emit('accountsChanged');
 		} catch (e) {
 			statusCache = 'required';
 			throw e;

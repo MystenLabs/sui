@@ -90,13 +90,18 @@ export class QredoAccountSource extends AccountSource<QredoAccountSourceSerializ
 
 	static async save(
 		serialized: QredoAccountSourceSerialized,
-		{ skipBackup = false }: { skipBackup?: boolean } = {},
+		{
+			skipBackup = false,
+			skipEventEmit = false,
+		}: { skipBackup?: boolean; skipEventEmit?: boolean } = {},
 	) {
 		await (await Dexie.waitFor(getDB())).accountSources.put(serialized);
 		if (!skipBackup) {
 			await backupDB();
 		}
-		accountSourcesEvents.emit('accountSourcesChanged');
+		if (!skipEventEmit) {
+			accountSourcesEvents.emit('accountSourcesChanged');
+		}
 		return new QredoAccountSource(serialized.id);
 	}
 

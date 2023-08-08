@@ -93,7 +93,7 @@ async function deleteQredoAccounts<T extends SerializedAccount>(accounts: Omit<T
 	if (!newAccountsQredoSourceIDs.size) {
 		return 0;
 	}
-	return (await getDB()).accounts
+	return (await Dexie.waitFor(getDB())).accounts
 		.where('sourceID')
 		.anyOf(Array.from(newAccountsQredoSourceIDs.values()))
 		.filter(
@@ -106,11 +106,8 @@ async function deleteQredoAccounts<T extends SerializedAccount>(accounts: Omit<T
 		.delete();
 }
 
-export async function addNewAccounts<T extends SerializedAccount>(
-	accounts: Omit<T, 'id'>[],
-	{ skipBackup = false }: { skipBackup?: boolean } = {},
-) {
-	const db = await Dexie.waitFor(getDB());
+export async function addNewAccounts<T extends SerializedAccount>(accounts: Omit<T, 'id'>[]) {
+	const db = await getDB();
 	const accountsCreated = await db.transaction('rw', db.accounts, async () => {
 		// delete all existing qredo accounts that have the same sourceID (come from the same connection)
 		// and not in the new accounts list
@@ -124,13 +121,13 @@ export async function addNewAccounts<T extends SerializedAccount>(
 					anAccountToAdd.type === 'qredo' &&
 					anExistingAccount instanceof QredoAccount &&
 					'sourceID' in anAccountToAdd &&
-					anAccountToAdd.sourceID === (await anExistingAccount.sourceID)
+					anAccountToAdd.sourceID === (await Dexie.waitFor(anExistingAccount.sourceID))
 				) {
 					id = anExistingAccount.id;
 					continue;
 				}
 				if (
-					(await anExistingAccount.address) === anAccountToAdd.address &&
+					(await Dexie.waitFor(anExistingAccount.address)) === anAccountToAdd.address &&
 					anExistingAccount.type === anAccountToAdd.type
 				) {
 					// allow importing accounts that have the same address but are of different type
@@ -141,7 +138,7 @@ export async function addNewAccounts<T extends SerializedAccount>(
 			}
 			id = id || makeUniqueKey();
 			await db.accounts.put({ ...anAccountToAdd, id });
-			const accountInstance = await getAccountByID(id);
+			const accountInstance = await Dexie.waitFor(getAccountByID(id));
 			if (!accountInstance) {
 				throw new Error(`Something went wrong account with id ${id} not found`);
 			}
@@ -149,9 +146,7 @@ export async function addNewAccounts<T extends SerializedAccount>(
 		}
 		return accountInstances;
 	});
-	if (!skipBackup) {
-		await backupDB();
-	}
+	await backupDB();
 	accountsEvents.emit('accountsChanged');
 	return accountsCreated;
 }
