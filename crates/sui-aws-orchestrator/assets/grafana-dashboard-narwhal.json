@@ -222,7 +222,7 @@
             "uid": "${Environment}"
           },
           "editorMode": "code",
-          "expr": "sum by(host) (rate(current_round{job=~\"$validator\", network=\"$network\"}[5m]))",
+          "expr": "sum by(job) (rate(current_round{job=~\"$validator\", network=\"$network\"}[5m]))",
           "hide": false,
           "legendFormat": "__auto",
           "range": true,
@@ -692,7 +692,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum by(host) (last_committed_round{job=~\"$validator\",network=\"$network\"})",
+          "expr": "sum by(job) (last_committed_round{job=~\"$validator\",network=\"$network\"})",
           "format": "time_series",
           "hide": true,
           "instant": false,
@@ -877,7 +877,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum by (host) (rate(certificates_created{network=~\"$network\", job=~\"$validator\"}[5m]))",
+          "expr": "sum by (job) (rate(certificates_created{network=~\"$network\", job=~\"$validator\"}[5m]))",
           "format": "time_series",
           "instant": false,
           "legendFormat": "__auto",
@@ -957,7 +957,7 @@
             "uid": "${Environment}"
           },
           "editorMode": "code",
-          "expr": " sum by(host) (primary_network_peer_connected{job=~\"$validator\", network=\"$network\", type=\"other_primary\"})",
+          "expr": " sum by(job) (primary_network_peer_connected{job=~\"$validator\", network=\"$network\", type=\"other_primary\"})",
           "interval": "2m",
           "legendFormat": "__auto",
           "range": true,
@@ -5935,7 +5935,7 @@
       "type": "timeseries"
     }
   ],
-  "refresh": "",
+  "refresh": false,
   "revision": 1,
   "schemaVersion": 38,
   "style": "dark",
@@ -5993,10 +5993,10 @@
         "current": {
           "selected": true,
           "text": [
-            "node-0"
+            "All"
           ],
           "value": [
-            "node-0"
+            "$__all"
           ]
         },
         "datasource": {
@@ -6030,6 +6030,6 @@
   "timezone": "",
   "title": "Sui Validators - Narwhal",
   "uid": "SpRJIxL4z",
-  "version": 5,
+  "version": 7,
   "weekStart": ""
 }
