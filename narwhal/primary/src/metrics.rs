@@ -328,6 +328,7 @@ pub struct PrimaryMetrics {
     pub header_max_parent_wait_ms: IntCounter,
     /// Counts when the GC loop in synchronizer times out waiting for consensus commit.
     pub synchronizer_gc_timeout: IntCounter,
+    pub proposal_counter_booster_diff: Histogram,
 }
 
 impl PrimaryMetrics {
@@ -511,6 +512,12 @@ impl PrimaryMetrics {
             synchronizer_gc_timeout: register_int_counter_with_registry!(
                 "synchronizer_gc_timeout",
                 "Counts when the GC loop in synchronizer times out waiting for consensus commit.",
+                registry
+            ).unwrap(),
+            proposal_counter_booster_diff: register_histogram_with_registry!(
+                "proposal_counter_booster_diff",
+                "Diff time for counter the even round booster",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             ).unwrap(),
         }

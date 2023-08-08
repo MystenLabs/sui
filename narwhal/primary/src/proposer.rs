@@ -75,7 +75,7 @@ pub struct Proposer {
     /// The current round of the dag.
     round: Round,
     /// Last time the round has been updated
-    last_round_timestamp: Option<TimestampMs>,
+    last_round_timestamp: Option<(Round, TimestampMs)>,
     /// Signals a new narwhal round
     tx_narwhal_round_updates: watch::Sender<Round>,
     /// Holds the certificates' ids waiting to be included in the next header.
@@ -325,7 +325,11 @@ impl Proposer {
         }
     }
 
-    fn min_delay(&self) -> Duration {
+    fn min_delay(
+        &self,
+        current_time: TimestampMs,
+        last_proposal_timestamp: Option<(Round, TimestampMs)>,
+    ) -> Duration {
         // TODO: consider even out the boost provided by the even/odd rounds so we avoid perpetually
         // boosting the nodes and affect the scores.
         // If this node is going to be the leader of the next round and there are more than
@@ -340,6 +344,42 @@ impl Proposer {
             return Duration::ZERO;
         }
 
+        // If this node was the leader of currently proposed round, we want to apply some counter delay
+        // forces so we stop them from getting a perpetual boosting.
+        // Since the leader is immediately proposing by the time they receive a quorum of parents from the previous round,
+        // all we want to do is measure the time it took for this quorum of parents to get formed from
+        // the time the node proposed for the previous round. Then we'll use that to calculate the theoretical
+        // remainder of time if the leader was supposed to wait for the full min delay timeout.
+        if self.committee.size() > 1
+            && self.round % 2 == 0
+            && self.leader_schedule.leader(self.round).id() == self.authority_id
+        {
+            if let Some((round, ts)) = last_proposal_timestamp {
+                // we only take the timestamp into account if the earlier timestamp is of the previous round.
+                if self.round - round == 1 {
+                    let diff = Duration::from_millis(ts - current_time);
+                    let delay = self.min_header_delay + (self.min_header_delay - diff);
+
+                    debug!(
+                        "Setting min_delay to: {delay:?}, with diff: {diff:?} for round {}",
+                        self.round
+                    );
+
+                    self.metrics
+                        .proposal_counter_booster_diff
+                        .observe(diff.as_secs_f64());
+
+                    return delay.min(self.max_header_delay);
+                } else {
+                    debug!(
+                        "Skipping diff calculation for round {} as last timestamp is from {:?}",
+                        self.round, last_proposal_timestamp
+                    );
+                }
+            }
+        }
+
+        /*
         // Give a boost on the odd rounds to a node by using the whole committee here, not just the
         // nodes of the leader_schedule. By doing this we keep the proposal rate as high as possible
         // which leads to higher round rate and also acting as a score booster to the less strong nodes
@@ -350,6 +390,8 @@ impl Proposer {
         {
             return Duration::ZERO;
         }
+        */
+
         self.min_header_delay
     }
 
@@ -469,7 +511,8 @@ impl Proposer {
 
                 // Update the metrics
                 self.metrics.current_round.set(self.round as i64);
-                let current_timestamp = now();
+                debug!("Dag moved to round {}", self.round);
+
                 let reason = if max_delay_timed_out {
                     "max_timeout"
                 } else if enough_digests {
@@ -477,14 +520,6 @@ impl Proposer {
                 } else {
                     "min_timeout"
                 };
-                if let Some(t) = &self.last_round_timestamp {
-                    self.metrics
-                        .proposal_latency
-                        .with_label_values(&[reason])
-                        .observe(Duration::from_millis(current_timestamp - t).as_secs_f64());
-                }
-                self.last_round_timestamp = Some(current_timestamp);
-                debug!("Dag moved to round {}", self.round);
 
                 // Make a new header.
                 match self.make_header().await {
@@ -507,12 +542,22 @@ impl Proposer {
 
                 // Reschedule the timer.
                 let timer_start = Instant::now();
+                let current_timestamp = now();
                 max_delay_timer
                     .as_mut()
                     .reset(timer_start + self.max_delay());
-                min_delay_timer
-                    .as_mut()
-                    .reset(timer_start + self.min_delay());
+                min_delay_timer.as_mut().reset(
+                    timer_start + self.min_delay(current_timestamp, self.last_round_timestamp),
+                );
+
+                // Update metrics and timestamps
+                if let Some((_round, t)) = &self.last_round_timestamp {
+                    self.metrics
+                        .proposal_latency
+                        .with_label_values(&[reason])
+                        .observe(Duration::from_millis(current_timestamp - t).as_secs_f64());
+                }
+                self.last_round_timestamp = Some((self.round, current_timestamp));
 
                 // Recheck condition and reset time out flags.
                 continue;
@@ -663,7 +708,7 @@ impl Proposer {
                             // As the schedule can change after an odd round proposal - when the new schedule algorithm is
                             // enabled - make sure that the timer is reset correctly for the round leader. No harm doing
                             // this here as well.
-                            if self.min_delay() == Duration::ZERO {
+                            if self.min_delay(now(), None) == Duration::ZERO {
                                 min_delay_timer
                                 .as_mut()
                                 .reset(Instant::now());
