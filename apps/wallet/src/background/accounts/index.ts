@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64 } from '@mysten/sui.js/utils';
+import Dexie from 'dexie';
 import { isSigningAccount, type SerializedAccount } from './Account';
 import { ImportedAccount } from './ImportedAccount';
 import { LedgerAccount } from './LedgerAccount';
@@ -92,7 +93,7 @@ async function deleteQredoAccounts<T extends SerializedAccount>(accounts: Omit<T
 	if (!newAccountsQredoSourceIDs.size) {
 		return 0;
 	}
-	return (await getDB()).accounts
+	return (await Dexie.waitFor(getDB())).accounts
 		.where('sourceID')
 		.anyOf(Array.from(newAccountsQredoSourceIDs.values()))
 		.filter(
@@ -120,13 +121,13 @@ export async function addNewAccounts<T extends SerializedAccount>(accounts: Omit
 					anAccountToAdd.type === 'qredo' &&
 					anExistingAccount instanceof QredoAccount &&
 					'sourceID' in anAccountToAdd &&
-					anAccountToAdd.sourceID === (await anExistingAccount.sourceID)
+					anAccountToAdd.sourceID === (await Dexie.waitFor(anExistingAccount.sourceID))
 				) {
 					id = anExistingAccount.id;
 					continue;
 				}
 				if (
-					(await anExistingAccount.address) === anAccountToAdd.address &&
+					(await Dexie.waitFor(anExistingAccount.address)) === anAccountToAdd.address &&
 					anExistingAccount.type === anAccountToAdd.type
 				) {
 					// allow importing accounts that have the same address but are of different type
@@ -137,7 +138,7 @@ export async function addNewAccounts<T extends SerializedAccount>(accounts: Omit
 			}
 			id = id || makeUniqueKey();
 			await db.accounts.put({ ...anAccountToAdd, id });
-			const accountInstance = await getAccountByID(id);
+			const accountInstance = await Dexie.waitFor(getAccountByID(id));
 			if (!accountInstance) {
 				throw new Error(`Something went wrong account with id ${id} not found`);
 			}

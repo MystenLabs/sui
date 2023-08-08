@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import Dexie from 'dexie';
 import { getAccountSources } from '.';
 import {
 	AccountSource,
@@ -80,14 +81,28 @@ export class QredoAccountSource extends AccountSource<QredoAccountSourceSerializ
 				throw new Error('Qredo account source already exists');
 			}
 		}
-		await (await getDB()).accountSources.put(dataSerialized);
-		await backupDB();
-		accountSourcesEvents.emit('accountSourcesChanged');
-		return new QredoAccountSource(dataSerialized.id);
+		return dataSerialized;
 	}
 
 	static isOfType(serialized: AccountSourceSerialized): serialized is QredoAccountSourceSerialized {
 		return serialized.type === 'qredo';
+	}
+
+	static async save(
+		serialized: QredoAccountSourceSerialized,
+		{
+			skipBackup = false,
+			skipEventEmit = false,
+		}: { skipBackup?: boolean; skipEventEmit?: boolean } = {},
+	) {
+		await (await Dexie.waitFor(getDB())).accountSources.put(serialized);
+		if (!skipBackup) {
+			await backupDB();
+		}
+		if (!skipEventEmit) {
+			accountSourcesEvents.emit('accountSourcesChanged');
+		}
+		return new QredoAccountSource(serialized.id);
 	}
 
 	async toUISerialized(): Promise<QredoAccountSourceSerializedUI> {

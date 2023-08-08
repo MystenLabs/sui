@@ -6,6 +6,7 @@ import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { sha256 } from '@noble/hashes/sha256';
 
 import { bytesToHex } from '@noble/hashes/utils';
+import Dexie from 'dexie';
 import { getAccountSources } from '.';
 import {
 	AccountSource,
@@ -39,6 +40,15 @@ interface MnemonicAccountSourceSerialized extends AccountSourceSerialized {
 
 interface MnemonicAccountSourceSerializedUI extends AccountSourceSerializedUI {
 	type: 'mnemonic';
+}
+
+export function makeDerivationPath(index: number) {
+	// currently returns only Ed25519 path
+	return `m/44'/784'/${index}'/0'/0'`;
+}
+
+export function deriveKeypairFromSeed(mnemonicSeedHex: string, derivationPath: string) {
+	return Ed25519Keypair.deriveKeypairFromSeed(mnemonicSeedHex, derivationPath);
 }
 
 export class MnemonicAccountSource extends AccountSource<
@@ -75,16 +85,30 @@ export class MnemonicAccountSource extends AccountSource<
 				throw new Error('Mnemonic account source already exists');
 			}
 		}
-		await (await getDB()).accountSources.put(dataSerialized);
-		await backupDB();
-		accountSourcesEvents.emit('accountSourcesChanged');
-		return new MnemonicAccountSource(dataSerialized.id);
+		return dataSerialized;
 	}
 
 	static isOfType(
 		serialized: AccountSourceSerialized,
 	): serialized is MnemonicAccountSourceSerialized {
 		return serialized.type === 'mnemonic';
+	}
+
+	static async save(
+		serialized: MnemonicAccountSourceSerialized,
+		{
+			skipBackup = false,
+			skipEventEmit = false,
+		}: { skipBackup?: boolean; skipEventEmit?: boolean } = {},
+	) {
+		await (await Dexie.waitFor(getDB())).accountSources.put(serialized);
+		if (!skipBackup) {
+			await backupDB();
+		}
+		if (!skipEventEmit) {
+			accountSourcesEvents.emit('accountSourcesChanged');
+		}
+		return new MnemonicAccountSource(serialized.id);
 	}
 
 	constructor(id: string) {
@@ -107,17 +131,15 @@ export class MnemonicAccountSource extends AccountSource<
 		accountSourcesEvents.emit('accountSourceStatusUpdated', { accountSourceID: this.id });
 	}
 
-	async deriveAccount(): Promise<Omit<MnemonicSerializedAccount, 'id'>> {
-		const derivationPath = await this.getAvailableDerivationPath();
+	async deriveAccount({ derivationPathIndex }: { derivationPathIndex?: number } = {}): Promise<
+		Omit<MnemonicSerializedAccount, 'id'>
+	> {
+		const derivationPath =
+			typeof derivationPathIndex !== 'undefined'
+				? makeDerivationPath(derivationPathIndex)
+				: await this.getAvailableDerivationPath();
 		const keyPair = await this.deriveKeyPair(derivationPath);
-		return {
-			type: 'mnemonic-derived',
-			sourceID: this.id,
-			address: keyPair.getPublicKey().toSuiAddress(),
-			derivationPath,
-			publicKey: keyPair.getPublicKey().toBase64(),
-			lastUnlockedOn: null,
-		};
+		return MnemonicAccount.createNew({ keyPair, derivationPath, sourceID: this.id });
 	}
 
 	async deriveKeyPair(derivationPath: string) {
@@ -125,7 +147,7 @@ export class MnemonicAccountSource extends AccountSource<
 		if (!data) {
 			throw new Error(`Mnemonic account source ${this.id} is locked`);
 		}
-		return Ed25519Keypair.deriveKeypairFromSeed(data.mnemonicSeedHex, derivationPath);
+		return deriveKeypairFromSeed(data.mnemonicSeedHex, derivationPath);
 	}
 
 	async toUISerialized(): Promise<MnemonicAccountSourceSerializedUI> {
@@ -141,11 +163,6 @@ export class MnemonicAccountSource extends AccountSource<
 		return this.getStoredData().then(({ sourceHash }) => sourceHash);
 	}
 
-	private makeDerivationPath(index: number) {
-		// currently returns only Ed25519 path
-		return `m/44'/784'/${index}'/0'/0'`;
-	}
-
 	private async getAvailableDerivationPath() {
 		const derivationPathMap: Record<string, boolean> = {};
 		for (const anAccount of await getAllAccounts({ sourceID: this.id })) {
@@ -157,7 +174,7 @@ export class MnemonicAccountSource extends AccountSource<
 		let derivationPath = '';
 		let temp;
 		do {
-			temp = this.makeDerivationPath(index++);
+			temp = makeDerivationPath(index++);
 			if (!derivationPathMap[temp]) {
 				derivationPath = temp;
 			}

@@ -87,6 +87,10 @@ class VaultStorageClass {
 		return this.#vault?.entropy || null;
 	}
 
+	public get mnemonicSeedHex() {
+		return this.#vault?.mnemonicSeedHex || null;
+	}
+
 	public getMnemonicSeedHex() {
 		return this.#vault?.mnemonicSeedHex || null;
 	}
