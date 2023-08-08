@@ -232,14 +232,16 @@ export async function acceptQredoConnection({
 		// make sure we replace an existing connection when it's the same
 		let qredoAccountSource = await getQredoAccountSource(connectionIdentity);
 		if (!qredoAccountSource) {
-			qredoAccountSource = await QredoAccountSource.createNew({
-				password,
-				apiUrl,
-				origin,
-				organization,
-				refreshToken: pendingRequest.token,
-				service,
-			});
+			qredoAccountSource = await QredoAccountSource.save(
+				await QredoAccountSource.createNew({
+					password,
+					apiUrl,
+					origin,
+					organization,
+					refreshToken: pendingRequest.token,
+					service,
+				}),
+			);
 		}
 		if (!(await qredoAccountSource.isLocked())) {
 			// credentials are kept in session storage, force renewal

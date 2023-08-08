@@ -6,6 +6,8 @@ import { useEffect } from 'react';
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 
 import { useInitialPageView } from './hooks/useInitialPageView';
+import { useStorageMigrationStatus } from './hooks/useStorageMigrationStatus';
+import { StorageMigrationPage } from './pages/StorageMigrationPage';
 import { ProtectAccountPage } from './pages/accounts/ProtectAccountPage';
 import { AccountsDev } from './pages/accounts-dev';
 import { TokensV2 } from './pages/enoki-onboarding/TokensV2';
@@ -72,6 +74,13 @@ const App = () => {
 
 	useInitialPageView();
 
+	const storageMigration = useStorageMigrationStatus();
+	if (storageMigration.isLoading || !storageMigration?.data) {
+		return null;
+	}
+	if (storageMigration.data !== 'ready') {
+		return <StorageMigrationPage />;
+	}
 	return (
 		<Routes>
 			{/* this is used only for making dev work on refactoring accounts easier - TODO: remove when work is done ----> */}

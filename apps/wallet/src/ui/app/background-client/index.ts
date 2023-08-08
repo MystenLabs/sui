@@ -537,6 +537,38 @@ export class BackgroundClient {
 		);
 	}
 
+	public getStorageMigrationStatus() {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'getStorageMigrationStatus'>>({
+					method: 'getStorageMigrationStatus',
+					type: 'method-payload',
+					args: null,
+				}),
+			).pipe(
+				take(1),
+				map(({ payload }) => {
+					if (!isMethodPayload(payload, 'storageMigrationStatus')) {
+						throw new Error('Unknown response');
+					}
+					return payload.args.status;
+				}),
+			),
+		);
+	}
+
+	public doStorageMigration(inputs: MethodPayload<'doStorageMigration'>['args']) {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'doStorageMigration'>>({
+					type: 'method-payload',
+					method: 'doStorageMigration',
+					args: inputs,
+				}),
+			).pipe(take(1)),
+		);
+	}
+
 	private setupAppStatusUpdateInterval() {
 		setInterval(() => {
 			this.sendAppStatus();

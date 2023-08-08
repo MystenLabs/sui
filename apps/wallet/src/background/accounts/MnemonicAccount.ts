@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ExportedKeypair } from '@mysten/sui.js/cryptography';
+import { type Keypair, type ExportedKeypair } from '@mysten/sui.js/cryptography';
 import {
 	Account,
 	type SerializedAccount,
@@ -43,6 +43,25 @@ export class MnemonicAccount
 
 	static isOfType(serialized: SerializedAccount): serialized is MnemonicSerializedAccount {
 		return serialized.type === 'mnemonic-derived';
+	}
+
+	static createNew({
+		keyPair,
+		derivationPath,
+		sourceID,
+	}: {
+		keyPair: Keypair;
+		derivationPath: string;
+		sourceID: string;
+	}): Omit<MnemonicSerializedAccount, 'id'> {
+		return {
+			type: 'mnemonic-derived',
+			sourceID,
+			address: keyPair.getPublicKey().toSuiAddress(),
+			derivationPath,
+			publicKey: keyPair.getPublicKey().toBase64(),
+			lastUnlockedOn: null,
+		};
 	}
 
 	constructor({ id, cachedData }: { id: string; cachedData?: MnemonicSerializedAccount }) {

@@ -42,16 +42,24 @@ import type { ErrorPayload } from '_payloads';
 import type { KeyringPayload } from '_payloads/keyring';
 
 /** The key for the extension's storage, that holds the index of the last derived account (zero based) */
-const STORAGE_LAST_ACCOUNT_INDEX_KEY = 'last_account_index';
+export const STORAGE_LAST_ACCOUNT_INDEX_KEY = 'last_account_index';
 const STORAGE_ACTIVE_ACCOUNT = 'active_account';
 
-const STORAGE_IMPORTED_LEDGER_ACCOUNTS = 'imported_ledger_accounts';
+export const STORAGE_IMPORTED_LEDGER_ACCOUNTS = 'imported_ledger_accounts';
 
 type KeyringEvents = {
 	lockedStatusUpdate: boolean;
 	accountsChanged: Account[];
 	activeAccountChanged: string;
 };
+
+export async function getSavedLedgerAccounts() {
+	const ledgerAccounts = await getFromLocalStorage<SerializedLedgerAccount[]>(
+		STORAGE_IMPORTED_LEDGER_ACCOUNTS,
+		[],
+	);
+	return ledgerAccounts || [];
+}
 
 // exported to make testing easier the default export should be used
 export class Keyring {
@@ -440,7 +448,7 @@ export class Keyring {
 					}
 				}
 				if (Object.keys(ledgerUpdates).length) {
-					const allStoredLedgerAccounts = await this.getSavedLedgerAccounts();
+					const allStoredLedgerAccounts = await getSavedLedgerAccounts();
 					for (let anAccount of allStoredLedgerAccounts) {
 						if (!anAccount.publicKey && ledgerUpdates[anAccount.address]) {
 							anAccount.publicKey = ledgerUpdates[anAccount.address];
@@ -503,7 +511,7 @@ export class Keyring {
 				this.#mainDerivedAccount = account.address;
 			}
 		}
-		const savedLedgerAccounts = await this.getSavedLedgerAccounts();
+		const savedLedgerAccounts = await getSavedLedgerAccounts();
 		for (const savedLedgerAccount of savedLedgerAccounts) {
 			this.#accountsMap.set(
 				savedLedgerAccount.address,
@@ -560,14 +568,6 @@ export class Keyring {
 
 	private storeActiveAccount(address: string) {
 		return setToLocalStorage(STORAGE_ACTIVE_ACCOUNT, address);
-	}
-
-	private async getSavedLedgerAccounts() {
-		const ledgerAccounts = await getFromLocalStorage<SerializedLedgerAccount[]>(
-			STORAGE_IMPORTED_LEDGER_ACCOUNTS,
-			[],
-		);
-		return ledgerAccounts || [];
 	}
 
 	private storeLedgerAccounts(ledgerAccounts: SerializedLedgerAccount[]) {

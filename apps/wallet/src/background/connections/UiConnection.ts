@@ -16,6 +16,7 @@ import {
 	getUIQredoPendingRequest,
 	rejectQredoConnection,
 } from '../qredo';
+import { doMigration, getStatus } from '../storage-migration';
 import { createMessage } from '_messages';
 import { type ErrorPayload, isBasePayload } from '_payloads';
 import { isSetNetworkPayload, type SetNetworkPayload } from '_payloads/network';
@@ -203,6 +204,22 @@ export class UiConnection extends Connection {
 				return;
 			} else if (await accountsHandleUIMessage(msg, this)) {
 				return;
+			} else if (isMethodPayload(payload, 'getStorageMigrationStatus')) {
+				this.send(
+					createMessage<MethodPayload<'storageMigrationStatus'>>(
+						{
+							method: 'storageMigrationStatus',
+							type: 'method-payload',
+							args: {
+								status: await getStatus(),
+							},
+						},
+						id,
+					),
+				);
+			} else if (isMethodPayload(payload, 'doStorageMigration')) {
+				await doMigration(payload.args.password);
+				this.send(createMessage({ type: 'done' }, id));
 			} else {
 				throw new Error(
 					`Unhandled message ${msg.id}. (${JSON.stringify(
