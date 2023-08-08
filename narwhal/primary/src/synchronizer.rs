@@ -310,7 +310,6 @@ impl Synchronizer {
         tx_new_certificates: Sender<Certificate>,
         tx_parents: Sender<(Vec<Certificate>, Round, Epoch)>,
         rx_consensus_round_updates: watch::Receiver<ConsensusRound>,
-        rx_synchronizer_network: oneshot::Receiver<Network>,
         metrics: Arc<PrimaryMetrics>,
         primary_channel_metrics: &PrimaryChannelMetrics,
     ) -> Self {
@@ -341,7 +340,7 @@ impl Synchronizer {
             gc_round: AtomicU64::new(gc_round),
             highest_processed_round: AtomicU64::new(highest_processed_round),
             highest_received_round: AtomicU64::new(0),
-            client,
+            client: client.clone(),
             certificate_store,
             payload_store,
             tx_certificate_fetcher,
@@ -501,8 +500,8 @@ impl Synchronizer {
         let inner_senders = inner.clone();
         spawn_logged_monitored_task!(
             async move {
-                let Ok(network) = rx_synchronizer_network.await else {
-                    error!("Failed to receive Network!");
+                let Ok(network) = client.get_primary_network().await else {
+                    error!("Failed to get primary Network!");
                     return;
                 };
                 let mut senders = inner_senders.certificate_senders.lock();
