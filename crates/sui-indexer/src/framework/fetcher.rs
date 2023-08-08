@@ -11,7 +11,6 @@ pub struct CheckpointFetcher {
     last_downloaded_checkpoint: Option<CheckpointSequenceNumber>,
     highest_known_checkpoint: CheckpointSequenceNumber,
     sender: mysten_metrics::metered_channel::Sender<CheckpointData>,
-    //TODO add a checkpoint cache
 }
 
 impl CheckpointFetcher {
@@ -73,10 +72,7 @@ impl CheckpointFetcher {
         }
 
         let mut checkpoint_stream = checkpoint_range
-            .map(|next| {
-                let client = &self.client;
-                async move { client.get_full_checkpoint(next).await }
-            })
+            .map(|next| self.client.get_full_checkpoint(next))
             .pipe(futures::stream::iter)
             .buffered(Self::CHECKPOINT_DOWNLOAD_CONCURRENCY);
 
