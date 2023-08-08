@@ -46,3 +46,8 @@ export function isLedgerAccount(account: Account): account is LedgerAccount {
 export function isQredoAccount(account: Account): account is QredoAccount {
 	return account.type === AccountType.QREDO;
 }
+export function isSerializedQredoAccount(
+	account: SerializedAccount,
+): account is SerializedQredoAccount {
+	return account.type === AccountType.QREDO;
+}

@@ -7,6 +7,7 @@ import { SuiClient, SuiHTTPTransport } from '@mysten/sui.js/client';
 import { type WalletSigner } from './WalletSigner';
 import { BackgroundServiceSigner } from './background-client/BackgroundServiceSigner';
 import { queryClient } from './helpers/queryClient';
+import { type SerializedUIAccount } from '_src/background/accounts/Account';
 import { AccountType, type SerializedAccount } from '_src/background/keyring/Account';
 import { API_ENV } from '_src/shared/api-env';
 
@@ -90,44 +91,47 @@ export default class ApiProvider {
 	}
 
 	public getSignerInstance(
-		account: SerializedAccount,
+		// TODO: Remove SerializedAccount
+		account: SerializedAccount | SerializedUIAccount,
 		backgroundClient: BackgroundClient,
 	): SignerWithProvider {
 		if (!this._apiFullNodeProvider) {
 			this.setNewJsonRpcProvider();
 		}
-
-		switch (account.type) {
-			case AccountType.DERIVED:
-			case AccountType.IMPORTED:
-				return this.getBackgroundSignerInstance(account.address, backgroundClient);
-			case AccountType.LEDGER:
-				// Ideally, Ledger transactions would be signed in the background
-				// and exist as an asynchronous keypair; however, this isn't possible
-				// because you can't connect to a Ledger device from the background
-				// script. Similarly, the signer instance can't be retrieved from
-				// here because ApiProvider is a global and results in very buggy
-				// behavior due to the reactive nature of managing Ledger connections
-				// and displaying relevant UI updates. Refactoring ApiProvider to
-				// not be a global instance would help out here, but that is also
-				// a non-trivial task because we need access to ApiProvider in the
-				// background script as well.
-				throw new Error("Signing with Ledger via ApiProvider isn't supported");
-			default:
-				throw new Error('Encountered unknown account type');
+		if (
+			[AccountType.DERIVED, AccountType.IMPORTED, 'mnemonic-derived', 'imported'].includes(
+				account.type,
+			)
+		) {
+			return this.getBackgroundSignerInstance(account, backgroundClient);
 		}
+		if ([AccountType.LEDGER, 'ledger'].includes(account.type)) {
+			// Ideally, Ledger transactions would be signed in the background
+			// and exist as an asynchronous keypair; however, this isn't possible
+			// because you can't connect to a Ledger device from the background
+			// script. Similarly, the signer instance can't be retrieved from
+			// here because ApiProvider is a global and results in very buggy
+			// behavior due to the reactive nature of managing Ledger connections
+			// and displaying relevant UI updates. Refactoring ApiProvider to
+			// not be a global instance would help out here, but that is also
+			// a non-trivial task because we need access to ApiProvider in the
+			// background script as well.
+			throw new Error("Signing with Ledger via ApiProvider isn't supported");
+		}
+		throw new Error('Encountered unknown account type');
 	}
 
 	public getBackgroundSignerInstance(
-		address: string,
+		account: SerializedAccount | SerializedUIAccount,
 		backgroundClient: BackgroundClient,
 	): WalletSigner {
-		if (!this._signerByAddress.has(address)) {
+		const key = 'id' in account ? account.id : account.address;
+		if (!this._signerByAddress.has(key)) {
 			this._signerByAddress.set(
-				address,
-				new BackgroundServiceSigner(address, backgroundClient, this._apiFullNodeProvider!),
+				key,
+				new BackgroundServiceSigner(account, backgroundClient, this._apiFullNodeProvider!),
 			);
 		}
-		return this._signerByAddress.get(address)!;
+		return this._signerByAddress.get(key)!;
 	}
 }

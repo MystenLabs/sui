@@ -8,14 +8,23 @@ import Alarms, { CLEAN_UP_ALARM_NAME, LOCK_ALARM_NAME } from './Alarms';
 import NetworkEnv from './NetworkEnv';
 import Permissions from './Permissions';
 import Transactions from './Transactions';
+import { accountSourcesEvents } from './account-sources/events';
+import { getAllAccounts } from './accounts';
+import { accountsEvents } from './accounts/events';
 import { Connections } from './connections';
 import Keyring from './keyring';
 import { deleteAccountsPublicInfo, getStoredAccountsPublicInfo } from './keyring/accounts';
 import * as Qredo from './qredo';
+import { initSentry } from './sentry';
 import { isSessionStorageSupported } from './storage-utils';
 import { openInNewTab } from '_shared/utils';
 import { MSG_CONNECT } from '_src/content-script/keep-bg-alive';
-import { setAttributes } from '_src/shared/experimentation/features';
+import { growthbook, setAttributes } from '_src/shared/experimentation/features';
+
+growthbook.loadFeatures().catch(() => {
+	// silence the error
+});
+initSentry();
 
 Browser.runtime.onInstalled.addListener(async ({ reason, previousVersion }) => {
 	// Skip automatically opening the onboarding in end-to-end tests.
@@ -93,6 +102,24 @@ Keyring.on('accountsChanged', async (accounts) => {
 		toKeep: accounts.map(({ address }) => address),
 	});
 	await Permissions.ensurePermissionAccountsUpdated(accounts);
+});
+
+accountsEvents.on('accountsChanged', async () => {
+	connections.notifyUI({ event: 'storedEntitiesUpdated', type: 'accounts' });
+	await Permissions.ensurePermissionAccountsUpdated(
+		await Promise.all(
+			(await getAllAccounts()).map(async (anAccount) => ({ address: await anAccount.address })),
+		),
+	);
+});
+accountsEvents.on('accountStatusChanged', () => {
+	connections.notifyUI({ event: 'storedEntitiesUpdated', type: 'accounts' });
+});
+accountSourcesEvents.on('accountSourceStatusUpdated', () => {
+	connections.notifyUI({ event: 'storedEntitiesUpdated', type: 'accountSources' });
+});
+accountSourcesEvents.on('accountSourcesChanged', () => {
+	connections.notifyUI({ event: 'storedEntitiesUpdated', type: 'accountSources' });
 });
 
 Browser.alarms.onAlarm.addListener((alarm) => {
