@@ -79,7 +79,7 @@ pub struct SourceInfo {
     pub source: Option<String>,
 }
 
-#[derive(Eq, PartialEq, Clone, Default, Deserialize, Debug, Ord, PartialOrd)]
+#[derive(Eq, PartialEq, Clone, Default, Serialize, Deserialize, Debug, Ord, PartialOrd)]
 #[serde(rename_all = "lowercase")]
 pub enum Network {
     #[default]
@@ -344,15 +344,26 @@ pub struct AppState {
 }
 
 pub fn serve(app_state: AppState) -> anyhow::Result<Server<AddrIncoming, IntoMakeService<Router>>> {
+    let mut source_map = BTreeMap::new();
+    for (k, v) in &app_state.sources {
+        let mut source_path_map = BTreeMap::new();
+        for (a, b) in v {
+            source_path_map.insert(a, b.path.clone());
+        }
+        source_map.insert(k, source_path_map);
+    }
+
     let app = Router::new()
-        .route("/api", get(api_route).with_state(Arc::new(app_state)))
+        .route("/api", get(api_route))
+        .route("/api/list", get(list_route))
         .layer(
             ServiceBuilder::new().layer(
                 tower_http::cors::CorsLayer::new()
                     .allow_methods([Method::GET])
                     .allow_origin(tower_http::cors::Any),
             ),
-        );
+        )
+        .with_state(Arc::new(app_state));
     let listener = TcpListener::bind(host_port())?;
     Ok(Server::from_tcp(listener)?.serve(app.into_make_service()))
 }
@@ -452,4 +463,27 @@ async fn api_route(
             .into_response(),
         )
     }
+}
+
+async fn list_route(
+    headers: HeaderMap,
+    State(app_state): State<Arc<AppState>>,
+) -> impl IntoResponse {
+    // TODO: check header.
+    let mut network_map = BTreeMap::new();
+    for (k, v) in &app_state.sources {
+        let mut address_map: BTreeMap<AccountAddress, BTreeMap<Symbol, PathBuf>> = BTreeMap::new();
+        for ((addr, symbol), source_info) in v {
+            if let Some(existing) = address_map.get_mut(&addr) {
+                existing.insert(*symbol, source_info.path.clone());
+            } else {
+                let mut source_map = BTreeMap::new();
+                source_map.insert(*symbol, source_info.path.clone());
+                address_map.insert(*addr, source_map);
+            };
+        }
+        network_map.insert(k, address_map);
+    }
+    info!("{:#?}", network_map);
+    (StatusCode::OK, headers, Json(network_map).into_response())
 }
