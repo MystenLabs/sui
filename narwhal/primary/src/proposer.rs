@@ -357,7 +357,7 @@ impl Proposer {
             if let Some((round, ts)) = last_proposal_timestamp {
                 // we only take the timestamp into account if the earlier timestamp is of the previous round.
                 if self.round - round == 1 {
-                    let diff = Duration::from_millis(ts - current_time);
+                    let diff = Duration::from_millis(current_time - ts);
                     let delay = self.min_header_delay + (self.min_header_delay - diff);
 
                     debug!(
