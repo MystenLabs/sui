@@ -931,6 +931,15 @@ impl TransactionKind {
             _ => [].iter(),
         }
     }
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::ChangeEpoch(_) => "ChangeEpoch",
+            Self::Genesis(_) => "Genesis",
+            Self::ConsensusCommitPrologue(_) => "ConsensusCommitPrologue",
+            Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
+        }
+    }
 }
 
 impl Display for TransactionKind {

@@ -8,7 +8,6 @@ use std::{collections::HashMap, time::Duration};
 
 use anyhow::{anyhow, Result};
 use axum::{extract::Extension, http::StatusCode, routing::get, Router};
-use backoff::ExponentialBackoff;
 use clap::Parser;
 use diesel::pg::PgConnection;
 use diesel::r2d2::ConnectionManager;
@@ -25,7 +24,6 @@ use apis::{
     WriteApi,
 };
 use errors::IndexerError;
-use handlers::checkpoint_handler::CheckpointHandler;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
 use processors::processor_orchestrator::ProcessorOrchestrator;
 use store::IndexerStore;
@@ -33,12 +31,13 @@ use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, ServerType, CLIENT_SDK_TY
 use sui_sdk::{SuiClient, SuiClientBuilder};
 
 use crate::apis::MoveUtilsApi;
+use crate::framework::fetcher::CheckpointFetcher;
+use crate::handlers::checkpoint_handler::new_handlers;
 
 pub mod apis;
 pub mod errors;
-pub mod fetcher;
+pub mod framework;
 mod handlers;
-pub mod interface;
 pub mod metrics;
 pub mod models;
 pub mod processors;
@@ -90,8 +89,6 @@ pub struct IndexerConfig {
     pub db_name: Option<String>,
     #[clap(long)]
     pub rpc_client_url: String,
-    #[clap(long)]
-    pub rest_client_url: String,
     #[clap(long, default_value = "0.0.0.0", global = true)]
     pub client_metric_host: String,
     #[clap(long, default_value = "9184", global = true)]
@@ -156,7 +153,6 @@ impl Default for IndexerConfig {
             db_port: None,
             db_name: None,
             rpc_client_url: "http://127.0.0.1:9000".to_string(),
-            rest_client_url: "http://127.0.0.1:9001".to_string(),
             client_metric_host: "0.0.0.0".to_string(),
             client_metric_port: 9184,
             rpc_server_url: "0.0.0.0".to_string(),
@@ -171,6 +167,8 @@ impl Default for IndexerConfig {
 }
 
 pub struct Indexer;
+
+const DOWNLOAD_QUEUE_SIZE: usize = 1000;
 
 impl Indexer {
     pub async fn start<S: IndexerStore + Sync + Send + Clone + 'static>(
@@ -198,16 +196,45 @@ impl Indexer {
             let mut processor_orchestrator = ProcessorOrchestrator::new(store.clone(), registry);
             spawn_monitored_task!(processor_orchestrator.run_forever());
 
-            backoff::future::retry(ExponentialBackoff::default(), || async {
-                let metrics_clone = metrics.clone();
-                let http_client = get_http_client(config.rpc_client_url.as_str())?;
-                let cp = CheckpointHandler::new(store.clone(), http_client, metrics_clone, config);
-                cp.spawn()
-                    .await
-                    .expect("Indexer main should not run into errors.");
-                Ok(())
-            })
-            .await
+            // -1 will be returned when checkpoints table is empty.
+            let last_seq_from_db = store
+                .get_latest_tx_checkpoint_sequence_number()
+                .await
+                .expect("Failed to get latest tx checkpoint sequence number from DB");
+            let (downloaded_checkpoint_data_sender, downloaded_checkpoint_data_receiver) =
+                mysten_metrics::metered_channel::channel(
+                    DOWNLOAD_QUEUE_SIZE,
+                    &mysten_metrics::get_metrics()
+                        .unwrap()
+                        .channels
+                        .with_label_values(&["checkpoint_tx_downloading"]),
+                );
+
+            // experimental rest api route is found at `/rest` on the same interface as the jsonrpc
+            // service
+            let rest_api_url = format!("{}/rest", config.rpc_client_url);
+            let fetcher = CheckpointFetcher::new(
+                sui_rest_api::Client::new(&rest_api_url),
+                if last_seq_from_db < 0 {
+                    None
+                } else {
+                    Some(last_seq_from_db as u64)
+                },
+                downloaded_checkpoint_data_sender,
+            );
+            spawn_monitored_task!(fetcher.run());
+
+            let (checkpoint_handler, object_handler) = new_handlers(store, metrics, config);
+
+            crate::framework::runner::run(
+                mysten_metrics::metered_channel::ReceiverStream::new(
+                    downloaded_checkpoint_data_receiver,
+                ),
+                vec![Box::new(checkpoint_handler), Box::new(object_handler)],
+            )
+            .await;
+
+            Ok(())
         } else {
             Ok(())
         }
