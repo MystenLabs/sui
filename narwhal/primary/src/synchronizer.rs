@@ -159,7 +159,12 @@ impl Inner {
             let existence = self
                 .certificate_store
                 .multi_contains(certificate.header().ancestor_digests().iter())?;
-            for (ancestor, exists) in certificate.header().ancestors().iter().zip(existence.iter()) {
+            for (ancestor, exists) in certificate
+                .header()
+                .ancestors()
+                .iter()
+                .zip(existence.iter())
+            {
                 if !*exists {
                     panic!("Ancestor {ancestor:?} not found for {certificate:?}!")
                 }

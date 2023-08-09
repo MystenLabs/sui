@@ -11,22 +11,17 @@ use futures::StreamExt;
 use mysten_metrics::metered_channel::Receiver;
 use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use network::anemo_ext::NetworkExt;
-use parking_lot::Mutex;
-use std::collections::VecDeque;
 use std::time::Duration;
 use std::{collections::BTreeSet, sync::Arc};
 use storage::{CertificateStore, HeaderStore};
 use sui_macros::fail_point_async;
-use tokio::{
-    sync::oneshot,
-    task::{JoinHandle, JoinSet},
-};
+use tokio::task::{JoinHandle, JoinSet};
 use tracing::{debug, enabled, error, info, instrument, warn};
 use types::{
     ensure,
     error::{DagError, DagResult},
     Certificate, CertificateDigest, ConditionalBroadcastReceiver, Header, HeaderAPI,
-    PrimaryToPrimaryClient, RequestVoteRequest, Round, Vote, VoteAPI,
+    PrimaryToPrimaryClient, RequestVoteRequest, Vote, VoteAPI,
 };
 
 #[cfg(test)]
@@ -53,8 +48,6 @@ pub struct Certifier {
     rx_shutdown: ConditionalBroadcastReceiver,
     /// Receives our newly created headers from the `Proposer`.
     rx_headers: Receiver<Header>,
-    /// Used to cancel vote requests for proposing header that are no longer needed.
-    cancel_proposing_headers: Arc<Mutex<VecDeque<(Round, oneshot::Sender<()>)>>>,
     /// Handle to propose_header task. Our target is to have only one task running always, thus
     /// we cancel the previously running before we spawn the next one. However, we don't wait for
     /// the previous to finish to spawn the new one, so we might temporarily have more that one
@@ -90,7 +83,6 @@ impl Certifier {
                     signature_service,
                     rx_shutdown,
                     rx_headers,
-                    cancel_proposing_headers: Default::default(),
                     propose_header_tasks: JoinSet::new(),
                     network: primary_network,
                     metrics,
@@ -161,7 +153,7 @@ impl Certifier {
                 parents: Vec::new(),
                 ancestors,
             })
-            .with_timeout(Duration::from_secs(30));
+            .with_timeout(Duration::from_secs(10));
             match client.request_vote(request).await {
                 Ok(response) => {
                     let response = response.into_body();
@@ -245,8 +237,6 @@ impl Certifier {
         metrics: Arc<PrimaryMetrics>,
         network: anemo::Network,
         header: Header,
-        cancel_proposing_headers: Arc<Mutex<VecDeque<(Round, oneshot::Sender<()>)>>>,
-        mut cancel: oneshot::Receiver<()>,
     ) -> DagResult<Certificate> {
         if header.epoch() != committee.epoch() {
             debug!(
@@ -289,24 +279,12 @@ impl Certifier {
             if certificate.is_some() {
                 break;
             }
-            tokio::select! {
-                result = &mut requests.next() => {
-                    match result {
-                        Some(Ok(vote)) => {
-                            certificate = votes_aggregator.append(
-                                vote,
-                                &committee,
-                                &header,
-                            )?;
-                        },
-                        Some(Err(e)) => debug!("failed to get vote for header {header:?}: {e:?}"),
-                        None => break,
-                    }
-                },
-                _ = &mut cancel => {
-                    debug!("canceling Header proposal {header} for round {}", header.round());
-                    return Err(DagError::Canceled)
-                },
+            match requests.next().await {
+                Some(Ok(vote)) => {
+                    certificate = votes_aggregator.append(vote, &committee, &header)?;
+                }
+                Some(Err(e)) => debug!("failed to get vote for header {header:?}: {e:?}"),
+                None => break,
             }
         }
 
@@ -333,15 +311,6 @@ impl Certifier {
             DagError::CouldNotFormCertificate(header.digest())
         })?;
         debug!("Assembled {certificate:?}");
-
-        let mut cancel_proposing_headers = cancel_proposing_headers.lock();
-        while let Some(&(round, _)) = cancel_proposing_headers.front() {
-            if round > header.round() {
-                break;
-            }
-            let (_round, sender) = cancel_proposing_headers.pop_front().unwrap();
-            let _ = sender.send(());
-        }
 
         Ok(certificate)
     }
@@ -374,25 +343,12 @@ impl Certifier {
                 // We also receive here our new headers created by the `Proposer`.
                 // TODO: move logic into Proposer.
                 Some(header) = self.rx_headers.recv() => {
-                    let (tx_cancel, rx_cancel) = oneshot::channel();
-                    {
-                        let mut cancel_proposing_headers = self.cancel_proposing_headers.lock();
-                        cancel_proposing_headers.push_back((header.round(), tx_cancel));
-
-                        const MAX_PROPOSING_HEADERS: usize = 3;
-                        while cancel_proposing_headers.len() > MAX_PROPOSING_HEADERS {
-                            let (_round, sender) = cancel_proposing_headers.pop_front().unwrap();
-                            let _ = sender.send(());
-                        }
-                    }
-
                     let name = self.authority_id;
                     let committee = self.committee.clone();
                     let certificate_store = self.certificate_store.clone();
                     let signature_service = self.signature_service.clone();
                     let metrics = self.metrics.clone();
                     let network = self.network.clone();
-                    let cancel_proposing_headers = self.cancel_proposing_headers.clone();
                     fail_point_async!("narwhal-delay");
                     self.propose_header_tasks.spawn(monitored_future!(Self::propose_header(
                         name,
@@ -402,8 +358,6 @@ impl Certifier {
                         metrics,
                         network,
                         header,
-                        cancel_proposing_headers,
-                        rx_cancel,
                     )));
                     Ok(())
                 },
