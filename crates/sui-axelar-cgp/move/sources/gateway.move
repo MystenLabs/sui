@@ -5,28 +5,28 @@
 ///
 /// This code is based on the following:
 ///
-/// - When message is sent to Sui, it targets an object and not a module;
+/// - When call approvals is sent to Sui, it targets an object and not a module;
 /// - To support cross-chain messaging, a Channel object has to be created;
 /// - Channel can be either owned or shared but not frozen;
 /// - Module developer on the Sui side will have to implement a system to support messaging;
-/// - Checks for uniqueness of messages should be done through `Channel`s to avoid big data storage;
+/// - Checks for uniqueness of approvals should be done through `Channel`s to avoid big data storage;
 ///
-/// I. Sending messages
+/// I. Sending call approvals
 ///
-/// A message is sent through the `send` function, a Channel is supplied to determine the source -> ID.
+/// A approval is sent through the `send` function, a Channel is supplied to determine the source -> ID.
 /// Event is then emitted and Axelar network can operate
 ///
-/// II. Receiving messages
+/// II. Receiving call approvals
 ///
-/// Message bytes and signatures are passed into `create` function to generate a Message object.
+/// Approval bytes and signatures are passed into `create` function to generate a CallApproval object.
 ///  - Signatures are checked against the known set of validators.
-///  - Message bytes are parsed to determine: source, destination_chain, payload and target_id
+///  - CallApproval bytes are parsed to determine: source, destination_chain, payload and target_id
 ///  - `target_id` points to a `Channel` object
 ///
-/// Once created, `Message` needs to be consumed. And the only way to do it is by calling
-/// `consume_message` function and pass a correct `Channel` instance alongside the `Message`.
-///  - Message is checked for uniqueness (for this channel)
-///  - Message is checked to match the `Channel`.id
+/// Once created, `CallApproval` needs to be consumed. And the only way to do it is by calling
+/// `consume_call_approval` function and pass a correct `Channel` instance alongside the `CallApproval`.
+///  - CallApproval is checked for uniqueness (for this channel)
+///  - CallApproval is checked to match the `Channel`.id
 ///
 module axelar::gateway {
     use std::vector;
@@ -34,7 +34,7 @@ module axelar::gateway {
     use axelar::axelar;
     use axelar::axelar::{Axelar, validate_proof};
     use axelar::messaging;
-    use axelar::messaging::Message;
+    use axelar::messaging::CallApproval;
     use axelar::utils::to_sui_signed;
     use sui::bcs;
 
@@ -43,44 +43,44 @@ module axelar::gateway {
     #[test_only]
     use sui::vec_map;
 
-    /// For when message signatures failed verification.
+    /// For when approval signatures failed verification.
     const ESignatureInvalid: u64 = 1;
 
     /// For when number of commands does not match number of command ids.
     const EInvalidCommands: u64 = 4;
 
-    /// For when message chainId is not SUI.
+    /// For when approval chainId is not SUI.
     const EInvalidChain: u64 = 3;
 
     // These are currently supported
     const SELECTOR_APPROVE_CONTRACT_CALL: vector<u8> = b"approveContractCall";
     const SELECTOR_TRANSFER_OPERATORSHIP: vector<u8> = b"transferOperatorship";
 
-    /// The main entrypoint for the external message processing.
-    /// Parses data and attaches messages to the Axelar object to be
+    /// The main entrypoint for the external approval processing.
+    /// Parses data and attaches call approvals to the Axelar object to be
     /// later picked up and consumed by their corresponding Channel.
-    public fun process_messages(
+    public fun process_call_approvals(
         axelar: &mut Axelar,
         input: vector<u8>
     ) {
-        let messages = validate_and_create_messages(axelar, input);
-        let (i, len) = (0, vector::length(&messages));
+        let call_approvals = validate_call_approvals(axelar, input);
+        let (i, len) = (0, vector::length(&call_approvals));
 
         while (i < len) {
-            axelar::add_message(axelar, vector::pop_back(&mut messages));
+            axelar::add_call_approval(axelar, vector::pop_back(&mut call_approvals));
             i = i + 1;
         };
-        vector::destroy_empty(messages);
+        vector::destroy_empty(call_approvals);
     }
 
     /// Processes the data and the signatures generating a vector of
-    /// `Message` objects.
+    /// `CallApproval` objects.
     ///
-    /// Aborts with multiple error codes, ignores messages which are not
+    /// Aborts with multiple error codes, ignores call approval which are not
     /// supported by the current implementation of the protocol.
     ///
     /// Input data must be serialized with BCS (see specification here: https://github.com/diem/bcs).
-    fun validate_and_create_messages(validators: &mut Axelar, input: vector<u8>): vector<Message> {
+    fun validate_call_approvals(validators: &mut Axelar, input: vector<u8>): vector<CallApproval> {
         let bytes = bcs::new(input);
         // Split input into:
         // data: vector<u8> (BCS bytes)
@@ -109,7 +109,7 @@ module axelar::gateway {
 
         assert!(chain_id == 1, EInvalidChain);
 
-        let (i, commands_len, messages) = (0, vector::length(&commands), vector::empty());
+        let (i, commands_len, approvals) = (0, vector::length(&commands), vector::empty());
 
         // make sure number of commands passed matches command IDs
         assert!(vector::length(&command_ids) == commands_len, EInvalidCommands);
@@ -122,11 +122,11 @@ module axelar::gateway {
             let payload = *vector::borrow(&params, i);
             i = i + 1;
 
-            // Build a `Message` object from the `params[i]`. BCS serializes data
+            // Build a `CallApproval` object from the `params[i]`. BCS serializes data
             // in order, so field reads have to be done carefully and in order!
             if (cmd_selector == &SELECTOR_APPROVE_CONTRACT_CALL) {
                 let payload = bcs::new(payload);
-                vector::push_back(&mut messages, messaging::create(
+                vector::push_back(&mut approvals, messaging::create(
                     msg_id,
                     bcs::peel_vec_u8(&mut payload),
                     bcs::peel_vec_u8(&mut payload),
@@ -145,15 +145,15 @@ module axelar::gateway {
                 continue
             };
         };
-        messages
+        approvals
     }
 
 
     #[test_only]
-    /// Test message for the `test_execute` test.
+    /// Test call approval for the `test_execute` test.
     /// Generated via the `presets` script.
-    const MESSAGE: vector<u8> = x"af0101000000000000000209726f6775655f6f6e650a6178656c61725f74776f0213617070726f7665436f6e747261637443616c6c13617070726f7665436f6e747261637443616c6c02310345544803307830000000000000000000000000000000000000000000000000000000000000040000000005000000000034064158454c415203307831000000000000000000000000000000000000000000000000000000000000040000000005000000000087010121037286a4f1177bea06c8e15cf6ec3df0b7747a01ac2329ca2999dfd74eff59902801640000000000000000000000000000000a0000000000000000000000000000000141dcfc40d95cc89a9c8a0973c3dae95806c5daa5aefe072caafd5541844d62fabf2dc580a8663df7adb846f1ef7d553a13174399e4c4cb55c42bdf7fa8f02c8fa10000";
-    const TRANSFER_OPERATORSHIP_MESSAGE: vector<u8> = x"6f01000000000000000109726f6775655f6f6e6501147472616e736665724f70657261746f727368697001440121037286a4f1177bea06c8e15cf6ec3df0b7747a01ac2329ca2999dfd74eff59902801c80000000000000000000000000000001400000000000000000000000000000087010121037286a4f1177bea06c8e15cf6ec3df0b7747a01ac2329ca2999dfd74eff59902801640000000000000000000000000000000a00000000000000000000000000000001414b88c29db7550c18fac63470891ddd8460e7d44d8d27bf1528758de03515c2a4327b07bc582732b80b7aa8d15964a4878ce203430661ce3d096afaea791189860000";
+    const CALL_APPROVAL: vector<u8> = x"af0101000000000000000209726f6775655f6f6e650a6178656c61725f74776f0213617070726f7665436f6e747261637443616c6c13617070726f7665436f6e747261637443616c6c02310345544803307830000000000000000000000000000000000000000000000000000000000000040000000005000000000034064158454c415203307831000000000000000000000000000000000000000000000000000000000000040000000005000000000087010121037286a4f1177bea06c8e15cf6ec3df0b7747a01ac2329ca2999dfd74eff59902801640000000000000000000000000000000a0000000000000000000000000000000141dcfc40d95cc89a9c8a0973c3dae95806c5daa5aefe072caafd5541844d62fabf2dc580a8663df7adb846f1ef7d553a13174399e4c4cb55c42bdf7fa8f02c8fa10000";
+    const TRANSFER_OPERATORSHIP_APPROVAL: vector<u8> = x"6f01000000000000000109726f6775655f6f6e6501147472616e736665724f70657261746f727368697001440121037286a4f1177bea06c8e15cf6ec3df0b7747a01ac2329ca2999dfd74eff59902801c80000000000000000000000000000001400000000000000000000000000000087010121037286a4f1177bea06c8e15cf6ec3df0b7747a01ac2329ca2999dfd74eff59902801640000000000000000000000000000000a00000000000000000000000000000001414b88c29db7550c18fac63470891ddd8460e7d44d8d27bf1528758de03515c2a4327b07bc582732b80b7aa8d15964a4878ce203430661ce3d096afaea791189860000";
 
     #[test]
     /// Tests execution with a set of validators.
@@ -179,9 +179,9 @@ module axelar::gateway {
             ctx(&mut test)
         );
 
-        let messages = validate_and_create_messages(&mut axelar, MESSAGE);
+        let call_approvals = validate_call_approvals(&mut axelar, CALL_APPROVAL);
         axelar::delete(axelar);
-        messaging::delete(messages);
+        messaging::delete(call_approvals);
         ts::end(test);
     }
 
@@ -207,12 +207,12 @@ module axelar::gateway {
             ctx(&mut test)
         );
 
-        let messages = validate_and_create_messages(&mut axelar, TRANSFER_OPERATORSHIP_MESSAGE);
+        let call_approvals = validate_call_approvals(&mut axelar, TRANSFER_OPERATORSHIP_APPROVAL);
 
         assert!(axelar::epoch(&axelar) == 2, 0);
 
         axelar::delete(axelar);
-        messaging::delete(messages);
+        messaging::delete(call_approvals);
         ts::end(test);
     }
 }
@@ -221,7 +221,7 @@ module axelar::axelar {
     use std::vector;
 
     use axelar::messaging;
-    use axelar::messaging::Message;
+    use axelar::messaging::CallApproval;
     use axelar::utils::{normalize_signature, operators_hash};
     use sui::bcs;
     use sui::dynamic_field as df;
@@ -244,14 +244,14 @@ module axelar::axelar {
     /// For when operators have changed, and proof is no longer valid.
     const EInvalidOperators: u64 = 2;
     const EDuplicateOperators: u64 = 3;
-    /// For when number of signatures for the message is below the threshold.
+    /// For when number of signatures for the call approvals is below the threshold.
     const ELowSignaturesWeight: u64 = 4;
 
     /// Used for a check in `validate_proof` function.
     const OLD_KEY_RETENTION: u64 = 16;
 
     /// An object holding the state of the Axelar bridge.
-    /// The central piece in managing Message creation and signature verification.
+    /// The central piece in managing call approval creation and signature verification.
     struct Axelar has key {
         // Auth Weighted
         id: UID,
@@ -264,7 +264,7 @@ module axelar::axelar {
     /// threshold is not reached.
     public fun validate_proof(
         validators: &Axelar,
-        message_hash: vector<u8>,
+        approval_hash: vector<u8>,
         proof: vector<u8>
     ): bool {
         // Turn everything into bcs bytes and split data.
@@ -292,7 +292,7 @@ module axelar::axelar {
             let signature = *vector::borrow(&signatures, i);
             normalize_signature(&mut signature);
 
-            let signed_by: vector<u8> = ecdsa::secp256k1_ecrecover(&signature, &message_hash, 0);
+            let signed_by: vector<u8> = ecdsa::secp256k1_ecrecover(&signature, &approval_hash, 0);
             while (operator_index < operators_length && &signed_by != vector::borrow(&operators, operator_index)) {
                 operator_index = operator_index + 1;
             };
@@ -399,14 +399,14 @@ module axelar::axelar {
         assert!(pub_key == SIGNER, 0);
     }
 
-    public fun add_message(axelar: &mut Axelar, msg: Message) {
-        let (msg_id, stored_message) = messaging::to_stored_message(msg);
+    public fun add_call_approval(axelar: &mut Axelar, msg: CallApproval) {
+        let (msg_id, stored_message) = messaging::to_stored_approval(msg);
         df::add(&mut axelar.id, msg_id, stored_message);
     }
 
-    public fun remove_message(axelar: &mut Axelar, msg_id: vector<u8>): Message {
+    public fun remove_call_approval(axelar: &mut Axelar, msg_id: vector<u8>): CallApproval {
         let stored_message = df::remove(&mut axelar.id, msg_id);
-        messaging::from_stored_message(msg_id, stored_message)
+        messaging::from_stored_approval(msg_id, stored_message)
     }
 
     public fun epoch(axelar: &Axelar): u64 {
