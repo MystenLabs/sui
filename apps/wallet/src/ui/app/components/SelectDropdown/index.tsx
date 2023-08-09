@@ -45,11 +45,12 @@ export function SelectDropdown({
 						align="end"
 					>
 						<Select.Viewport className="bg-white p-2 border border-solid border-gray-45 rounded-md shadow-md">
-							{dropdownOptions?.map((option) => {
+							{dropdownOptions?.map((option, index) => {
 								return (
 									<Select.Item
 										value={option}
 										className="flex items-center hover:border-none hover:outline-none hover:cursor-pointer w-full hover:bg-hero-darkest hover:bg-opacity-5 p-2 rounded-sm"
+										key={index}
 									>
 										<Select.ItemText>
 											<Text variant="body" weight="semibold" color="steel">
