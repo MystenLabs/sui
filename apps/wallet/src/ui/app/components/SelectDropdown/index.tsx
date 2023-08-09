@@ -40,7 +40,7 @@ export function SelectDropdown({
 				</Select.Trigger>
 				<Select.Portal>
 					<Select.Content
-						className="z-10 min-w-[100px] bg-transparent"
+						className="z-10 min-w-[112px] bg-transparent"
 						position="popper"
 						side="bottom"
 						sideOffset={offset}
