@@ -23,7 +23,7 @@ export function SelectDropdown({
 	ariaLabel,
 }: SelectDropdownProps) {
 	return (
-		<div className="z-5 h-full">
+		<div className="h-full">
 			<Select.Root onValueChange={onValueChange} value={value}>
 				<Select.Trigger
 					className="flex items-center border border-solid border-gray-45 shadow-sm rounded-2lg bg-white px-4 py-2 gap-1.5 focus:outline-none h-full"
