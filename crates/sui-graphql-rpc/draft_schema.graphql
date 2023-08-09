@@ -191,6 +191,7 @@ input CheckpointID {
   sequenceNumber: Int
 }
 
+# TODO: Do we want to support querying by effects digest at all?
 # Find a transaction block either by its transaction digest, or its
 # effects digest (can't be both, can't be neither).
 input TransactionBlockID {
