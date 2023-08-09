@@ -245,12 +245,23 @@ mod tests {
     use super::*;
     use expect_test::expect;
     use jsonrpsee::types::ErrorObjectOwned;
+    use sui_types::base_types::AuthorityName;
+    use sui_types::base_types::ObjectID;
     use sui_types::base_types::ObjectRef;
-    use sui_types::base_types::{random_object_ref, AuthorityName};
+    use sui_types::base_types::SequenceNumber;
     use sui_types::committee::StakeUnit;
     use sui_types::crypto::AuthorityPublicKey;
     use sui_types::crypto::AuthorityPublicKeyBytes;
+    use sui_types::digests::ObjectDigest;
     use sui_types::digests::TransactionDigest;
+
+    fn test_object_ref() -> ObjectRef {
+        (
+            ObjectID::ZERO,
+            SequenceNumber::from_u64(0),
+            ObjectDigest::new([0; 32]),
+        )
+    }
 
     mod match_quorum_driver_error_tests {
         use super::*;
@@ -312,7 +323,7 @@ mod tests {
                 (Vec<(AuthorityName, ObjectRef)>, StakeUnit),
             > = BTreeMap::new();
             let tx_digest = TransactionDigest::default();
-            let object_ref = random_object_ref();
+            let object_ref = test_object_ref();
             let stake_unit: StakeUnit = 10;
             let authority_name = AuthorityPublicKeyBytes([0; AuthorityPublicKey::LENGTH]);
             conflicting_txes.insert(tx_digest, (vec![(authority_name, object_ref)], stake_unit));
@@ -331,7 +342,7 @@ mod tests {
             let expected_message = expect!["Failed to sign transaction by a quorum of validators because of locked objects. Retried a conflicting transaction Some(TransactionDigest(11111111111111111111111111111111)), success: Some(true)"];
             expected_message.assert_eq(error_object.message());
             let expected_data = expect![[
-                r#"{"11111111111111111111111111111111":[["0xaa70ee80a04a7add4f2b32554a387f4e74ed8eb2aab73856a1b683866f9ac14f",0,"11111111111111111111111111111111"]]}"#
+                r#"{"11111111111111111111111111111111":[["0x0000000000000000000000000000000000000000000000000000000000000000",0,"11111111111111111111111111111111"]]}"#
             ]];
             let actual_data = error_object.data().unwrap().to_string();
             expected_data.assert_eq(&actual_data);
@@ -354,7 +365,7 @@ mod tests {
                     (
                         SuiError::UserInputError {
                             error: UserInputError::ObjectVersionUnavailableForConsumption {
-                                provided_obj_ref: random_object_ref(),
+                                provided_obj_ref: test_object_ref(),
                                 current_version: 10.into(),
                             },
                         },
@@ -370,7 +381,7 @@ mod tests {
             let expected_code = expect!["-32002"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message =
-                expect!["Transaction execution failed due to issues with transaction inputs, please review the errors and try again: Balance of gas object 10 is lower than the needed amount: 100., Object (0x8a8e7eac0eb815ac3988a08af327bc9bcac51b3641a91951d8d8d51d778398f7, SequenceNumber(0), o#11111111111111111111111111111111) is not available for consumption, its current version: SequenceNumber(10).."];
+                expect!["Transaction execution failed due to issues with transaction inputs, please review the errors and try again: Balance of gas object 10 is lower than the needed amount: 100., Object (0x0000000000000000000000000000000000000000000000000000000000000000, SequenceNumber(0), o#11111111111111111111111111111111) is not available for consumption, its current version: SequenceNumber(10).."];
             expected_message.assert_eq(error_object.message());
         }
 
@@ -381,7 +392,7 @@ mod tests {
                     (
                         SuiError::UserInputError {
                             error: UserInputError::ObjectNotFound {
-                                object_id: random_object_ref().0,
+                                object_id: test_object_ref().0,
                                 version: None,
                             },
                         },
