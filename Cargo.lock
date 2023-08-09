@@ -10305,6 +10305,7 @@ name = "sui-graphql-rpc"
 version = "1.8.0"
 dependencies = [
  "async-graphql",
+ "workspace-hack",
 ]
 
 [[package]]
