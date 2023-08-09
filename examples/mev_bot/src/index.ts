@@ -85,10 +85,10 @@ bcs.registerStructType("PoolCreated", {
     // We don't need other fields for the mev bot
 });
 
-// create a client connected to Sui
+// Create a client connected to the Sui network
 const client = new SuiClient({url: "https://rpc.mainnet.sui.io:443"});
 
-// Retrieve all deepbook pools using the PoolCreated events
+// Retrieve all DeepBook pools using the PoolCreated events
 let allPools = await retrieveAllPools();
 
 // Retrieve all expired orders from each pool
@@ -100,11 +100,12 @@ for (let pool of allPools) {
 }
 let allExpiredOrders = (await Promise.all(allExpiredOrdersPromises)).flat();
 
-// Create a transaction to clean up all expired orders and get the estimated rebate using devInspectTransactionBlock
+// Create a transaction to clean up all expired orders and get the estimated storage fee rebate using devInspectTransactionBlock
 let {rebate, tx} = await createCleanUpTransaction(allExpiredOrders);
 
 console.log(`Total estimated storage fee rebate: ${rebate / 1e9} SUI`);
-// Todo : sign and execute the transaction
+
+// Implementer Todo : sign and execute the transaction
 
 async function retrieveAllPools() {
     let page = await client.queryEvents({query: {MoveEventType: "0xdee9::clob_v2::PoolCreated"}});
@@ -149,7 +150,7 @@ async function retrieveExpiredOrders(poolId: string) {
                                     }
                                 }
                             } else {
-                                // object could be deleted during query, ignore
+                                // An object could be deleted during query, ignore
                             }
                         })
                     }))
@@ -157,7 +158,7 @@ async function retrieveExpiredOrders(poolId: string) {
 
             let orderIdsPromises = [];
             for (let tickLevel of tickLevels.filter((tickLevel) => tickLevel !== undefined)) {
-                // restrict concurrent requests to avoid rate limit on public full node
+                // Restrict concurrent requests to avoid a rate limit issue on a public Full node
                 orderIdsPromises.push(limit(() => getAllDFPages(tickLevel.open_orders.id)
                     .then((data) => data.map((node) => node.objectId)))
                 );
@@ -204,7 +205,7 @@ async function createCleanUpTransaction(poolOrders: { pool: any, expiredOrders: 
     return {rebate, tx};
 }
 
-// helper functions to retrieve all pages of dynamic fields
+// Helper functions to retrieve all pages of dynamic fields
 async function getAllDFPages(parentId: string) {
     let page = await client.getDynamicFields({
         parentId: parentId
@@ -237,7 +238,7 @@ async function getOrders(ids: string[]) {
                         }
                     }
                 } else {
-                    // object could be deleted during query, ignore
+                    // An object could be deleted during query, ignore
                 }
             })
         }))
@@ -245,7 +246,7 @@ async function getOrders(ids: string[]) {
     return result.filter((order) => order !== undefined);
 }
 
-// helper function to split an array into chunks
+// Helper function to split an array into chunks
 function chunks(data: any[], size: number) {
     return Array.from(
         new Array(Math.ceil(data.length / size)),
