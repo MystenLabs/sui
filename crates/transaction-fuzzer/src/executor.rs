@@ -26,13 +26,10 @@ fn build_test_modules(test_dir: &str) -> (Vec<u8>, Vec<Vec<u8>>) {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["data", test_dir]);
     let with_unpublished_deps = false;
-    let hash_modules = true;
     let config = BuildConfig::new_for_testing();
     let package = config.build(path).unwrap();
     (
-        package
-            .get_package_digest(with_unpublished_deps, hash_modules)
-            .to_vec(),
+        package.get_package_digest(with_unpublished_deps).to_vec(),
         package.get_package_bytes(with_unpublished_deps),
     )
 }

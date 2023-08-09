@@ -10,7 +10,7 @@
 /// Use cases:
 /// - Defining a floor price for all trades of type T.
 /// - Prevent trading of locked items with low amounts (e.g. by using purchase_cap).
-/// 
+///
 module kiosk::floor_price_rule {
     use sui::transfer_policy::{
         Self as policy,
@@ -34,7 +34,7 @@ module kiosk::floor_price_rule {
 
     /// Creator action: Add the Floor Price Rule for the `T`.
     /// Pass in the `TransferPolicy`, `TransferPolicyCap` and `floor_price`.
-    public fun add<T: key + store>(
+    public fun add<T>(
         policy: &mut TransferPolicy<T>,
         cap: &TransferPolicyCap<T>,
         floor_price: u64
@@ -43,14 +43,14 @@ module kiosk::floor_price_rule {
     }
 
     /// Buyer action: Prove that the amount is higher or equal to the floor_price.
-    public fun prove<T: key + store>(
+    public fun prove<T>(
         policy: &mut TransferPolicy<T>,
         request: &mut TransferRequest<T>
     ) {
         let config: &Config = policy::get_rule(Rule {}, policy);
 
         assert!(policy::paid(request) >= config.floor_price, EPriceTooSmall);
-        
+
         policy::add_receipt(Rule {}, request)
     }
 }

@@ -4,9 +4,15 @@
 import type { SuiClient } from '@mysten/sui.js/client';
 import { createContext, useContext } from 'react';
 
-export const SuiClientContext = createContext<SuiClient | undefined>(undefined);
+export const SuiClientContext = createContext<
+	| {
+			client: SuiClient;
+			queryKey: (key: unknown[]) => unknown[];
+	  }
+	| undefined
+>(undefined);
 
-export function useSuiClient() {
+export function useSuiClientContext() {
 	const suiClient = useContext(SuiClientContext);
 
 	if (!suiClient) {
@@ -16,4 +22,8 @@ export function useSuiClient() {
 	}
 
 	return suiClient;
+}
+
+export function useSuiClient() {
+	return useSuiClientContext().client;
 }

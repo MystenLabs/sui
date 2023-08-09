@@ -31,7 +31,7 @@ module kiosk::witness_rule {
 
     /// Creator action: adds the Rule.
     /// Requires a "Proof" witness confirmation on every transfer.
-    public fun add<T: key + store, Proof: drop>(
+    public fun add<T, Proof: drop>(
         policy: &mut TransferPolicy<T>,
         cap: &TransferPolicyCap<T>
     ) {
@@ -40,7 +40,7 @@ module kiosk::witness_rule {
 
     /// Buyer action: follow the policy.
     /// Present the required "Proof" instance to get a receipt.
-    public fun prove<T: key + store, Proof: drop>(
+    public fun prove<T, Proof: drop>(
         _proof: Proof,
         policy: &TransferPolicy<T>,
         request: &mut TransferRequest<T>

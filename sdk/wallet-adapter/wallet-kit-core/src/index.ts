@@ -11,6 +11,7 @@ import { localStorageAdapter, StorageAdapter } from './storage';
 import {
 	SuiSignAndExecuteTransactionBlockInput,
 	SuiSignMessageInput,
+	SuiSignPersonalMessageInput,
 	SuiSignTransactionBlockInput,
 	WalletAccount,
 } from '@mysten/wallet-standard';
@@ -56,9 +57,13 @@ export interface WalletKitCore {
 	connect(walletName: string): Promise<void>;
 	selectAccount(account: WalletAccount): void;
 	disconnect(): Promise<void>;
+	/** @deprecated Use `signPersonalMessage` instead. */
 	signMessage(
 		messageInput: OptionalProperties<SuiSignMessageInput, 'account'>,
-	): ReturnType<WalletAdapter['signMessage']>;
+	): ReturnType<Exclude<WalletAdapter['signMessage'], undefined>>;
+	signPersonalMessage(
+		messageInput: OptionalProperties<SuiSignPersonalMessageInput, 'account'>,
+	): ReturnType<WalletAdapter['signPersonalMessage']>;
 	signTransactionBlock: (
 		transactionInput: OptionalProperties<SuiSignTransactionBlockInput, 'chain' | 'account'>,
 	) => ReturnType<WalletAdapter['signTransactionBlock']>;
@@ -280,12 +285,32 @@ export function createWalletKitCore({
 			disconnected();
 		},
 
+		/** @deprecated Use `signPersonalMessage` instead. */
 		signMessage(messageInput) {
 			if (!internalState.currentWallet || !internalState.currentAccount) {
 				throw new Error('No wallet is currently connected, cannot call `signMessage`.');
 			}
 
+			if (!internalState.currentWallet.signMessage) {
+				throw new Error('Wallet does not support deprecated `signMessage` method.');
+			}
+
 			return internalState.currentWallet.signMessage({
+				...messageInput,
+				account: messageInput.account ?? internalState.currentAccount,
+			});
+		},
+
+		signPersonalMessage(messageInput) {
+			if (!internalState.currentWallet || !internalState.currentAccount) {
+				throw new Error('No wallet is currently connected, cannot call `signPersonalMessage`.');
+			}
+
+			if (!internalState.currentWallet.signPersonalMessage) {
+				throw new Error('Wallet does not support the new `signPersonalMessage` method.');
+			}
+
+			return internalState.currentWallet.signPersonalMessage({
 				...messageInput,
 				account: messageInput.account ?? internalState.currentAccount,
 			});

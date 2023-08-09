@@ -1,0 +1,12 @@
+{
+    "testbed_id": "${USER}-sui-1",
+    "cloud_provider": "aws",
+    "token_file": "/Users/${USER}/.aws/credentials",
+    "ssh_private_key_file": "/Users/${USER}/.ssh/aws",
+    "regions": ["us-east-1", "us-west-2"],
+    "specs": "m5d.8xlarge",
+    "repository": {
+        "url": "https://github.com/mystenlabs/sui.git",
+        "commit": "leader-propose-counter-boost"
+    }
+}
