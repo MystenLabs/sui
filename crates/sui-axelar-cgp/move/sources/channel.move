@@ -3,7 +3,7 @@
 
 module axelar::channel {
     use axelar::axelar;
-    use axelar::axelar::Axelar;
+    use axelar::axelar::AxelarValidators;
     use axelar::messaging;
     use axelar::messaging::CallApproval;
     use sui::bcs;
@@ -119,7 +119,7 @@ module axelar::channel {
     /// For Capability-locking, a mutable reference to the `Channel.data` field is
     /// returned; plus the hot potato message object.
     public fun validate_call_approval<T: store>(
-        axelar: &mut Axelar,
+        axelar: &mut AxelarValidators,
         t: &mut Channel<T>,
         msg_id: vector<u8>,
     ): (&mut T, CallApproval) {

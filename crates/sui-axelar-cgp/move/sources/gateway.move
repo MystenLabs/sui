@@ -32,7 +32,7 @@ module axelar::gateway {
     use std::vector;
 
     use axelar::axelar;
-    use axelar::axelar::{Axelar, validate_proof};
+    use axelar::axelar::{AxelarValidators, validate_proof};
     use axelar::messaging;
     use axelar::messaging::CallApproval;
     use axelar::utils::to_sui_signed;
@@ -59,11 +59,11 @@ module axelar::gateway {
     /// The main entrypoint for the external approval processing.
     /// Parses data and attaches call approvals to the Axelar object to be
     /// later picked up and consumed by their corresponding Channel.
-    public fun process_call_approvals(
-        axelar: &mut Axelar,
+    public fun process_commands(
+        axelar: &mut AxelarValidators,
         input: vector<u8>
     ) {
-        let call_approvals = validate_call_approvals(axelar, input);
+        let call_approvals = validate_commands(axelar, input);
         let (i, len) = (0, vector::length(&call_approvals));
 
         while (i < len) {
@@ -80,7 +80,7 @@ module axelar::gateway {
     /// supported by the current implementation of the protocol.
     ///
     /// Input data must be serialized with BCS (see specification here: https://github.com/diem/bcs).
-    fun validate_call_approvals(validators: &mut Axelar, input: vector<u8>): vector<CallApproval> {
+    fun validate_commands(validators: &mut AxelarValidators, input: vector<u8>): vector<CallApproval> {
         let bytes = bcs::new(input);
         // Split input into:
         // data: vector<u8> (BCS bytes)
@@ -178,7 +178,7 @@ module axelar::gateway {
             ctx(&mut test)
         );
 
-        let call_approvals = validate_call_approvals(&mut axelar, CALL_APPROVAL);
+        let call_approvals = validate_commands(&mut axelar, CALL_APPROVAL);
         axelar::delete(axelar);
         messaging::delete(call_approvals);
         ts::end(test);
@@ -206,7 +206,7 @@ module axelar::gateway {
             ctx(&mut test)
         );
 
-        let call_approvals = validate_call_approvals(&mut axelar, TRANSFER_OPERATORSHIP_APPROVAL);
+        let call_approvals = validate_commands(&mut axelar, TRANSFER_OPERATORSHIP_APPROVAL);
 
         assert!(axelar::epoch(&axelar) == 2, 0);
 
@@ -251,7 +251,7 @@ module axelar::axelar {
 
     /// An object holding the state of the Axelar bridge.
     /// The central piece in managing call approval creation and signature verification.
-    struct Axelar has key {
+    struct AxelarValidators has key {
         // Auth Weighted
         id: UID,
         epoch: u64,
@@ -262,7 +262,7 @@ module axelar::axelar {
     /// Does proof validation, fails when proof is invalid or if weight
     /// threshold is not reached.
     public fun validate_proof(
-        validators: &Axelar,
+        validators: &AxelarValidators,
         approval_hash: vector<u8>,
         proof: vector<u8>
     ): bool {
@@ -306,7 +306,7 @@ module axelar::axelar {
         abort ELowSignaturesWeight
     }
 
-    public(friend) fun transfer_operatorship(axelar: &mut Axelar, payload: vector<u8>) {
+    public(friend) fun transfer_operatorship(axelar: &mut AxelarValidators, payload: vector<u8>) {
         let bcs = bcs::new(payload);
         let new_operators = bcs::peel_vec_vec_u8(&mut bcs);
         let new_weights = bcs::peel_vec_u128(&mut bcs);
@@ -347,8 +347,8 @@ module axelar::axelar {
     }
 
     #[test_only]
-    public fun new(epoch: u64, epoch_for_hash: VecMap<vector<u8>, u64>, ctx: &mut TxContext): Axelar {
-        Axelar {
+    public fun new(epoch: u64, epoch_for_hash: VecMap<vector<u8>, u64>, ctx: &mut TxContext): AxelarValidators {
+        AxelarValidators {
             id: object::new(ctx),
             epoch_for_hash,
             epoch,
@@ -356,9 +356,9 @@ module axelar::axelar {
     }
 
     #[test_only]
-    public fun delete(self: Axelar) {
+    public fun delete(self: AxelarValidators) {
         // validator cleanup
-        let Axelar { id, epoch: _, epoch_for_hash: _ } = self;
+        let AxelarValidators { id, epoch: _, epoch_for_hash: _ } = self;
         object::delete(id);
     }
 
@@ -398,17 +398,17 @@ module axelar::axelar {
         assert!(pub_key == SIGNER, 0);
     }
 
-    public fun add_call_approval(axelar: &mut Axelar, msg: CallApproval) {
+    public fun add_call_approval(axelar: &mut AxelarValidators, msg: CallApproval) {
         let (msg_id, stored_message) = messaging::to_stored_approval(msg);
         df::add(&mut axelar.id, msg_id, stored_message);
     }
 
-    public fun remove_call_approval(axelar: &mut Axelar, msg_id: vector<u8>): CallApproval {
+    public fun remove_call_approval(axelar: &mut AxelarValidators, msg_id: vector<u8>): CallApproval {
         let stored_message = df::remove(&mut axelar.id, msg_id);
         messaging::from_stored_approval(msg_id, stored_message)
     }
 
-    public fun epoch(axelar: &Axelar): u64 {
+    public fun epoch(axelar: &AxelarValidators): u64 {
         axelar.epoch
     }
 }
