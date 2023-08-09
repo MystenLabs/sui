@@ -4,53 +4,52 @@
 import { useResolveSuiNSName } from '@mysten/core';
 import { formatAddress } from '@mysten/sui.js/utils';
 
-import { type ReactNode, useState } from 'react';
+import { type ReactNode } from 'react';
 import { AccountItem } from './AccountItem';
 import { LockUnlockButton } from './LockUnlockButton';
 import { useActiveAddress } from '../../hooks';
 import { useAccounts } from '../../hooks/useAccounts';
+import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 
 type AccountListItemProps = {
 	address: string;
 	icon?: ReactNode;
-	handleLockAccount?: () => void;
-	handleUnlockAccount?: () => void;
 	editable?: boolean;
+	isLocked?: boolean;
+	selected?: boolean;
 };
 
-export function AccountListItem({
-	address,
-	icon,
-	handleLockAccount,
-	handleUnlockAccount,
-}: AccountListItemProps) {
+export function AccountListItem({ address, icon, selected, isLocked }: AccountListItemProps) {
 	const activeAddress = useActiveAddress();
-	const { data: domainName } = useResolveSuiNSName(address);
-	// todo: remove this when we implement account locking / unlocking
-	const [locked, setLocked] = useState(false);
 	const { data: accounts } = useAccounts();
 	const account = accounts?.find((account) => account.address === address);
+	const { data: domainName } = useResolveSuiNSName(address);
+	const { unlockAccountSourceOrAccount, lockAccountSourceOrAccount } = useBackgroundClient();
+
+	if (!account) return null;
+
 	return (
 		<AccountItem
 			icon={icon}
-			name={account?.nickname || domainName || formatAddress(address)}
+			name={account.nickname || domainName || formatAddress(address)}
 			selected={address === activeAddress}
 			after={
 				<div className="ml-auto">
 					<div className="flex items-center justify-center">
 						<LockUnlockButton
-							isLocked={locked}
+							isLocked={account.isLocked}
 							onClick={() => {
-								// todo: this state will be managed elsewhere
-								if (locked) handleUnlockAccount?.();
-								if (!locked) handleLockAccount?.();
-								setLocked((prev) => !prev);
+								if (isLocked) {
+									unlockAccountSourceOrAccount({ id: account.id });
+								} else {
+									lockAccountSourceOrAccount({ id: account.id });
+								}
 							}}
 						/>
 					</div>
 				</div>
 			}
-			address={address!}
+			address={address}
 		/>
 	);
 }

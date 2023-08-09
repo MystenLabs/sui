@@ -266,7 +266,9 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 				>
 					<AccountsList />
 					<div className="flex flex-col w-full">
-						<PortfolioName name={domainName ?? formatAddress(activeAccountAddress)} />
+						<PortfolioName
+							name={activeAccount.nickname ?? domainName ?? formatAddress(activeAccountAddress)}
+						/>
 						{isAccountLocked ? null : (
 							<>
 								<div
