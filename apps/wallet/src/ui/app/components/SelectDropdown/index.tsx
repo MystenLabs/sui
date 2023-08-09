@@ -7,7 +7,7 @@ import { Text } from '_app/shared/text';
 
 export interface SelectDropdownProps {
 	placeholder?: string;
-	dropdownOptions?: string[];
+	options?: string[];
 	onValueChange?: (value: string) => void;
 	value?: string;
 	offset?: number;
@@ -16,7 +16,7 @@ export interface SelectDropdownProps {
 
 export function SelectDropdown({
 	placeholder,
-	dropdownOptions,
+	options,
 	onValueChange,
 	value,
 	offset,
@@ -47,7 +47,7 @@ export function SelectDropdown({
 						align="end"
 					>
 						<Select.Viewport className="bg-white p-2 border border-solid border-gray-45 rounded-md shadow-md">
-							{dropdownOptions?.map((option, index) => {
+							{options?.map((option, index) => {
 								return (
 									<Select.Item
 										value={option}
