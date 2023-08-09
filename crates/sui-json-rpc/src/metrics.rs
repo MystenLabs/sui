@@ -221,7 +221,9 @@ impl Logger for MetricsLogger {
             .observe(req_latency_secs);
 
         if let Some(code) = error_code {
-            if code == jsonrpsee::types::error::CALL_EXECUTION_FAILED_CODE {
+            if code == jsonrpsee::types::error::CALL_EXECUTION_FAILED_CODE
+                || code == jsonrpsee::types::error::INTERNAL_ERROR_CODE
+            {
                 self.metrics
                     .server_errors_by_route
                     .with_label_values(&[method_name])
