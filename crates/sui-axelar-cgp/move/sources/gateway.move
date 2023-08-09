@@ -131,8 +131,7 @@ module axelar::gateway {
                     bcs::peel_vec_u8(&mut payload),
                     bcs::peel_vec_u8(&mut payload),
                     bcs::peel_address(&mut payload),
-                    bcs::peel_vec_u8(&mut payload),
-                    bcs::into_remainder_bytes(payload)
+                    bcs::peel_vec_u8(&mut payload)
                 ));
                 continue
             } else if (cmd_selector == &SELECTOR_TRANSFER_OPERATORSHIP) {

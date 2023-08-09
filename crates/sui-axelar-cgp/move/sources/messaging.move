@@ -24,8 +24,6 @@ module axelar::messaging {
         source_address: String,
         /// Hash of the full payload (including source_* fields).
         payload_hash: vector<u8>,
-        /// The rest of the payload to be used by the application.
-        payload: vector<u8>,
     }
 
     struct StoredCallApproval has store {
@@ -38,8 +36,6 @@ module axelar::messaging {
         source_address: String,
         /// Hash of the full payload (including source_* fields).
         payload_hash: vector<u8>,
-        /// The rest of the payload to be used by the application.
-        payload: vector<u8>,
     }
 
     public fun create(
@@ -47,15 +43,14 @@ module axelar::messaging {
         source_chain: vector<u8>,
         source_address: vector<u8>,
         target_id: address,
-        payload_hash: vector<u8>,
-        payload: vector<u8>): CallApproval {
+        payload_hash: vector<u8>
+    ): CallApproval {
         CallApproval {
             cmd_id,
             source_chain: string::utf8(source_chain),
             source_address: string::utf8(source_address),
             target_id,
             payload_hash,
-            payload,
         }
     }
 
@@ -65,7 +60,6 @@ module axelar::messaging {
             source_chain,
             source_address,
             payload_hash,
-            payload,
         } = msg;
 
         CallApproval {
@@ -74,7 +68,6 @@ module axelar::messaging {
             source_address,
             target_id,
             payload_hash,
-            payload,
         }
     }
 
@@ -85,7 +78,6 @@ module axelar::messaging {
             source_chain,
             source_address,
             payload_hash,
-            payload,
         } = approval;
 
         (cmd_id, StoredCallApproval {
@@ -93,20 +85,18 @@ module axelar::messaging {
             source_chain,
             source_address,
             payload_hash,
-            payload,
         })
     }
 
-    public fun consume_call_approval(approval: CallApproval): (String, String, vector<u8>, vector<u8>) {
+    public fun consume_call_approval(approval: CallApproval): (String, String, vector<u8>) {
         let CallApproval {
             cmd_id : _,
             target_id : _,
             source_chain,
             source_address,
             payload_hash,
-            payload,
         } = approval;
-        (source_chain, source_address, payload_hash, payload)
+        (source_chain, source_address, payload_hash)
     }
 
     public fun target_id(msg: &CallApproval): address {
@@ -123,7 +113,6 @@ module axelar::messaging {
                 source_chain: _,
                 source_address: _,
                 payload_hash: _,
-                payload: _
             } = vector::pop_back(&mut approvals);
         };
         vector::destroy_empty(approvals);
