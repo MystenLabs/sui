@@ -2458,8 +2458,9 @@ fn persist_object_mutations(
         .execute(conn)
         .map_err(|e| {
             IndexerError::PostgresWriteError(format!(
-                "Failed writing mutated objects to PostgresDB with error: {:?}",
-                e
+                "Failed writing mutated objects to PostgresDB with error: {:?}. Item length: {}",
+                e,
+                mutated_objects.len(),
             ))
         })?;
     object_mutation_guard.stop_and_record();
@@ -2489,8 +2490,10 @@ fn persist_object_deletions(
             .execute(conn)
             .map_err(|e| {
                 IndexerError::PostgresWriteError(format!(
-                    "Failed writing deleted objects to PostgresDB with error: {:?}",
-                    e
+                    "Failed writing deleted objects to PostgresDB with error: {:?}. Chunk length: {}, total length: {}",
+                    e,
+                    deleted_object_change_chunk.len(),
+                    deleted_objects.len(),
                 ))
             })?;
         object_commit_chunk_counter.inc();
