@@ -38,13 +38,9 @@ indexmap.workspace = true
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 node = { path = "../node", package = "narwhal-node" }
 
-[target.'cfg(unix)'.dev-dependencies]
-pprof.workspace = true
-
 [features]
 default = ["rand"]
 benchmark = []
-pprof = []
 
 [lib]
 bench = false
@@ -52,4 +48,4 @@ bench = false
 [[bench]]
 name = "process_certificates"
 harness = false
-required-features = ["benchmark", "pprof"]
+required-features = ["benchmark"]
