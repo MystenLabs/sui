@@ -27,7 +27,7 @@ use tracing::{debug, error};
 /// Value of each address's "primary coin" in mist. The first transaction gives
 /// each address a coin worth PRIMARY_COIN_VALUE, and all subsequent transfers
 /// send TRANSFER_AMOUNT coins each time
-const PRIMARY_COIN_VALUE: u64 = 100 * MIST_PER_SUI;
+const PRIMARY_COIN_VALUE: u64 = 10 * MIST_PER_SUI;
 
 /// Number of mist sent to each address on each batch transfer
 const BATCH_TRANSFER_AMOUNT: u64 = 1;

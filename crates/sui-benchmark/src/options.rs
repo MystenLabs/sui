@@ -54,6 +54,8 @@ pub struct Opts {
     /// use a LocalValidatorAggregatorProxy.
     #[clap(long, action = clap::ArgAction::Set, default_value = "false", global = true)]
     pub use_fullnode_for_execution: bool,
+    #[clap(long, action = clap::ArgAction::Set, default_value = "false", global = true)]
+    pub use_fullnode_for_gas_fetch: bool,
     /// Default workload is 100% transfer object
     #[clap(subcommand)]
     pub run_spec: RunSpec,

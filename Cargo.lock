@@ -14101,6 +14101,7 @@ dependencies = [
  "bin-version",
  "clap",
  "http 1.3.1",
+ "rand 0.8.5",
  "reqwest 0.12.9",
  "serde",
  "serde_json",
