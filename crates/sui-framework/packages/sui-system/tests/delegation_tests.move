@@ -6,10 +6,11 @@ module sui_system::stake_tests {
     use sui::coin;
     use sui::test_scenario;
     use sui_system::sui_system::{Self, SuiSystemState};
-    use sui_system::staking_pool::{Self, StakedSui};
+    use sui_system::staking_pool::{Self, StakedSui, PoolTokenExchangeRate};
     use sui::test_utils::assert_eq;
     use sui_system::validator_set;
     use sui::test_utils;
+    use sui::table::{Self, Table};
     use std::vector;
 
     use sui_system::governance_test_utils::{
@@ -507,6 +508,37 @@ module sui_system::stake_tests {
         assert_eq(total_sui_balance(STAKER_ADDR_1, scenario), 100 * MIST_PER_SUI);
 
         test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_staking_pool_exchange_rate_getter() {
+        set_up_sui_system_state();
+        let scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+        stake_with(@0x42, @0x2, 100, scenario); // stakes 100 SUI with 0x2
+        test_scenario::next_tx(scenario, @0x42);
+        let staked_sui = test_scenario::take_from_address<StakedSui>(scenario, @0x42);
+        let pool_id = staking_pool::pool_id(&staked_sui);
+        test_scenario::return_to_address(@0x42, staked_sui);
+        advance_epoch(scenario); // advances epoch to effectuate the stake
+        // Each staking pool gets 10 SUI of rewards.
+        advance_epoch_with_reward_amounts(0, 20, scenario);
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        let rates = sui_system::pool_exchange_rates(&mut system_state, &pool_id);
+        assert_eq(table::length(rates), 3);
+        assert_exchange_rate_eq(rates, 0, 0, 0);     // no tokens at epoch 0
+        assert_exchange_rate_eq(rates, 1, 200, 200); // 200 SUI of self + delegate stake at epoch 1
+        assert_exchange_rate_eq(rates, 2, 210, 200); // 10 SUI of rewards at epoch 2
+        test_scenario::return_shared(system_state);
+        test_scenario::end(scenario_val);
+    }
+
+    fun assert_exchange_rate_eq(
+        rates: &Table<u64, PoolTokenExchangeRate>, epoch: u64, sui_amount: u64, pool_token_amount: u64
+    ) {
+        let rate = table::borrow(rates, epoch);
+        assert_eq(staking_pool::sui_amount(rate), sui_amount * MIST_PER_SUI);
+        assert_eq(staking_pool::pool_token_amount(rate), pool_token_amount * MIST_PER_SUI);
     }
 
     fun set_up_sui_system_state() {

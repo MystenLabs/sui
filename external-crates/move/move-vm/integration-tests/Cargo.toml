@@ -21,18 +21,15 @@ move-core-types = {path = "../../move-core/types" }
 move-binary-format = { path = "../../move-binary-format" }
 move-bytecode-verifier = { path = "../../move-bytecode-verifier" }
 move-compiler = { path = "../../move-compiler" }
+move-vm-config = { path = "../config" }
 move-vm-runtime = { path = "../runtime" }
+move-vm-profiler = { path = "../profiler" }
 move-vm-types = { path = "../types" }
 move-vm-test-utils = { path = "../test-utils" }
 move-stdlib = { path = "../../move-stdlib" }
-move-table-extension = { path = "../../extensions/move-table-extension", optional = true }
 
 [features]
 default = []
-table-extension = [
-    "move-table-extension",
-    "move-vm-test-utils/table-extension"
-]
 
 [[bin]]
 name = "instantiation"

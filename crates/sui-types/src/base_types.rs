@@ -26,6 +26,7 @@ use crate::governance::STAKED_SUI_STRUCT_NAME;
 use crate::governance::STAKING_POOL_MODULE_NAME;
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::multisig::MultiSigPublicKey;
+use crate::multisig_legacy::MultiSigPublicKeyLegacy;
 use crate::object::{Object, Owner};
 use crate::parse_sui_struct_tag;
 use crate::signature::GenericSignature;
@@ -33,6 +34,7 @@ use crate::sui_serde::Readable;
 use crate::sui_serde::{to_sui_struct_tag_string, HexAccountAddress};
 use crate::transaction::Transaction;
 use crate::transaction::VerifiedTransaction;
+use crate::zk_login_authenticator::ZkLoginAuthenticator;
 use crate::MOVE_STDLIB_ADDRESS;
 use crate::SUI_CLOCK_OBJECT_ID;
 use crate::SUI_FRAMEWORK_ADDRESS;
@@ -42,6 +44,7 @@ use fastcrypto::encoding::decode_bytes_hex;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::AllowedRng;
+use fastcrypto_zkp::bn254::zk_login::big_int_str_to_bytes;
 use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::file_format::SignatureToken;
 use move_bytecode_utils::resolve_struct;
@@ -63,6 +66,7 @@ use std::fmt;
 use std::str::FromStr;
 
 #[cfg(test)]
+#[cfg(feature = "test-utils")]
 #[path = "unit_tests/base_types_tests.rs"]
 mod base_types_tests;
 
@@ -561,6 +565,25 @@ impl From<&PublicKey> for SuiAddress {
     }
 }
 
+impl From<&MultiSigPublicKeyLegacy> for SuiAddress {
+    /// Derive a SuiAddress from [struct MultiSigPublicKey]. A MultiSig address
+    /// is defined as the 32-byte Blake2b hash of serializing the flag, the
+    /// threshold, concatenation of all n flag, public keys and
+    /// its weight. `flag_MultiSig || threshold || flag_1 || pk_1 || weight_1
+    /// || ... || flag_n || pk_n || weight_n`.
+    fn from(multisig_pk: &MultiSigPublicKeyLegacy) -> Self {
+        let mut hasher = DefaultHash::default();
+        hasher.update([SignatureScheme::MultiSig.flag()]);
+        hasher.update(multisig_pk.threshold().to_le_bytes());
+        multisig_pk.pubkeys().iter().for_each(|(pk, w)| {
+            hasher.update([pk.flag()]);
+            hasher.update(pk.as_ref());
+            hasher.update(w.to_le_bytes());
+        });
+        SuiAddress(hasher.finalize().digest)
+    }
+}
+
 impl From<&MultiSigPublicKey> for SuiAddress {
     /// Derive a SuiAddress from [struct MultiSigPublicKey]. A MultiSig address
     /// is defined as the 32-byte Blake2b hash of serializing the flag, the
@@ -576,6 +599,20 @@ impl From<&MultiSigPublicKey> for SuiAddress {
             hasher.update(pk.as_ref());
             hasher.update(w.to_le_bytes());
         });
+        SuiAddress(hasher.finalize().digest)
+    }
+}
+
+/// Sui address for [struct ZkLoginAuthenticator] is defined as the black2b hash of
+/// [zklogin_flag || bcs bytes of AddressParams || address seed in bytes] where
+/// AddressParams contains iss and key_claim_name.
+impl From<&ZkLoginAuthenticator> for SuiAddress {
+    fn from(authenticator: &ZkLoginAuthenticator) -> Self {
+        let mut hasher = DefaultHash::default();
+        hasher.update([SignatureScheme::ZkLoginAuthenticator.flag()]);
+        // unwrap is safe here
+        hasher.update(bcs::to_bytes(&authenticator.get_address_params()).unwrap());
+        hasher.update(big_int_str_to_bytes(authenticator.get_address_seed()));
         SuiAddress(hasher.finalize().digest)
     }
 }
@@ -596,6 +633,8 @@ impl TryFrom<&GenericSignature> for SuiAddress {
                 SuiAddress::from(&pub_key)
             }
             GenericSignature::MultiSig(ms) => ms.get_pk().into(),
+            GenericSignature::MultiSigLegacy(ms) => ms.get_pk().into(),
+            GenericSignature::ZkLoginAuthenticator(zklogin) => zklogin.into(),
         })
     }
 }
@@ -612,7 +651,7 @@ impl fmt::Debug for SuiAddress {
     }
 }
 
-#[cfg(feature = "test-utils")]
+#[cfg(any(test, feature = "test-utils"))]
 /// Generate a fake SuiAddress with repeated one byte.
 pub fn dbg_addr(name: u8) -> SuiAddress {
     let addr = [name; SUI_ADDRESS_LENGTH];

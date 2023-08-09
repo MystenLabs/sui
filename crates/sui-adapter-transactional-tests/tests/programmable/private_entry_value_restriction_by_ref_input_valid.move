@@ -37,7 +37,7 @@ module test::m1 {
 //> test::m1::priv(Input(0));
 //> test::m1::priv(Input(0));
 
-//# programmable --sender A --inputs @A  --gas-budget 100000000000000
+//# programmable --sender A --inputs @A  --gas-budget 10000000000
 //> 0: test::m1::v();
 //> 1: SplitCoins(Gas, [Result(0)]);
 //> test::m1::coin(Gas);

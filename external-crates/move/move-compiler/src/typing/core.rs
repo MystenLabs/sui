@@ -15,6 +15,7 @@ use crate::{
     FullyCompiledProgram,
 };
 use move_ir_types::location::*;
+use move_symbol_pool::Symbol;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 //**************************************************************************************************
@@ -56,6 +57,8 @@ pub struct ModuleInfo {
     pub constants: UniqueMap<ConstantName, ConstantInfo>,
 }
 
+pub struct ProgramInfo(UniqueMap<ModuleIdent, ModuleInfo>);
+
 pub struct LoopInfo(LoopInfo_);
 
 enum LoopInfo_ {
@@ -65,7 +68,7 @@ enum LoopInfo_ {
 }
 
 pub struct Context<'env> {
-    pub modules: UniqueMap<ModuleIdent, ModuleInfo>,
+    pub modules: ProgramInfo,
     pub env: &'env mut CompilationEnv,
 
     pub current_module: Option<ModuleIdent>,
@@ -78,6 +81,55 @@ pub struct Context<'env> {
     pub constraints: Constraints,
 
     loop_info: LoopInfo,
+
+    /// collects all called functions in the current module
+    pub called_fns: BTreeSet<Symbol>,
+}
+
+impl ProgramInfo {
+    fn module(&self, m: &ModuleIdent) -> &ModuleInfo {
+        self.0.get(m).expect("ICE should have failed in naming")
+    }
+
+    fn struct_definition(&self, m: &ModuleIdent, n: &StructName) -> &StructDefinition {
+        let minfo = self.module(m);
+        minfo
+            .structs
+            .get(n)
+            .expect("ICE should have failed in naming")
+    }
+
+    pub fn struct_declared_abilities(&self, m: &ModuleIdent, n: &StructName) -> &AbilitySet {
+        &self.struct_definition(m, n).abilities
+    }
+
+    pub fn struct_declared_loc(&self, m: &ModuleIdent, n: &StructName) -> Loc {
+        let minfo = self.module(m);
+        *minfo
+            .structs
+            .get_loc(n)
+            .expect("ICE should have failed in naming")
+    }
+
+    pub fn struct_type_parameters(
+        &self,
+        m: &ModuleIdent,
+        n: &StructName,
+    ) -> &Vec<StructTypeParameter> {
+        &self.struct_definition(m, n).type_parameters
+    }
+
+    pub fn function_info(&self, m: &ModuleIdent, n: &FunctionName) -> &FunctionInfo {
+        self.module(m)
+            .functions
+            .get(n)
+            .expect("ICE should have failed in naming")
+    }
+
+    pub fn constant_info(&mut self, m: &ModuleIdent, n: &ConstantName) -> &ConstantInfo {
+        let constants = &self.module(m).constants;
+        constants.get(n).expect("ICE should have failed in naming")
+    }
 }
 
 impl<'env> Context<'env> {
@@ -117,6 +169,7 @@ impl<'env> Context<'env> {
             (mident, minfo)
         }))
         .unwrap();
+
         Context {
             subst: Subst::empty(),
             current_module: None,
@@ -126,8 +179,9 @@ impl<'env> Context<'env> {
             constraints: vec![],
             locals: UniqueMap::new(),
             loop_info: LoopInfo(LoopInfo_::NotInLoop),
-            modules,
+            modules: ProgramInfo(modules),
             env,
+            called_fns: BTreeSet::new(),
         }
     }
 
@@ -241,40 +295,27 @@ impl<'env> Context<'env> {
     }
 
     fn module_info(&self, m: &ModuleIdent) -> &ModuleInfo {
-        self.modules
-            .get(m)
-            .expect("ICE should have failed in naming")
+        self.modules.module(m)
     }
 
     fn struct_definition(&self, m: &ModuleIdent, n: &StructName) -> &StructDefinition {
-        let minfo = self.module_info(m);
-        minfo
-            .structs
-            .get(n)
-            .expect("ICE should have failed in naming")
+        self.modules.struct_definition(m, n)
     }
 
     pub fn struct_declared_abilities(&self, m: &ModuleIdent, n: &StructName) -> &AbilitySet {
-        &self.struct_definition(m, n).abilities
+        self.modules.struct_declared_abilities(m, n)
     }
 
     pub fn struct_declared_loc(&self, m: &ModuleIdent, n: &StructName) -> Loc {
-        let minfo = self.module_info(m);
-        *minfo
-            .structs
-            .get_loc(n)
-            .expect("ICE should have failed in naming")
+        self.modules.struct_declared_loc(m, n)
     }
 
     pub fn struct_tparams(&self, m: &ModuleIdent, n: &StructName) -> &Vec<StructTypeParameter> {
-        &self.struct_definition(m, n).type_parameters
+        self.modules.struct_type_parameters(m, n)
     }
 
     fn function_info(&self, m: &ModuleIdent, n: &FunctionName) -> &FunctionInfo {
-        self.module_info(m)
-            .functions
-            .get(n)
-            .expect("ICE should have failed in naming")
+        self.modules.function_info(m, n)
     }
 
     fn constant_info(&mut self, m_opt: &Option<ModuleIdent>, n: &ConstantName) -> &ConstantInfo {
@@ -460,7 +501,7 @@ fn error_format_impl_(b_: &Type_, subst: &Subst, nested: bool) -> String {
 // Type utils
 //**************************************************************************************************
 
-pub fn infer_abilities(context: &Context, subst: &Subst, ty: Type) -> AbilitySet {
+pub fn infer_abilities(context: &ProgramInfo, subst: &Subst, ty: Type) -> AbilitySet {
     use Type_ as T;
     let loc = ty.loc;
     match unfold_type(subst, ty).value {
@@ -477,7 +518,7 @@ pub fn infer_abilities(context: &Context, subst: &Subst, ty: Type) -> AbilitySet
                     let declared_abilities = context.struct_declared_abilities(m, n).clone();
                     let non_phantom_ty_args = ty_args
                         .into_iter()
-                        .zip(context.struct_tparams(m, n))
+                        .zip(context.struct_type_parameters(m, n))
                         .filter(|(_, param)| !param.is_phantom)
                         .map(|(arg, _)| arg)
                         .collect::<Vec<_>>();
@@ -847,7 +888,7 @@ fn solve_ability_constraint(
     constraints: AbilitySet,
 ) {
     let ty = unfold_type(&context.subst, ty);
-    let ty_abilities = infer_abilities(context, &context.subst, ty.clone());
+    let ty_abilities = infer_abilities(&context.modules, &context.subst, ty.clone());
 
     let (declared_loc_opt, declared_abilities, ty_args) = debug_abilities_info(context, &ty);
     for constraint in constraints {
@@ -860,7 +901,7 @@ fn solve_ability_constraint(
             None => format!("'{}' constraint not satisifed", constraint),
         };
         let mut diag = diag!(AbilitySafety::Constraint, (loc, constraint_msg));
-        ability_not_satisified_tips(
+        ability_not_satisfied_tips(
             &context.subst,
             &mut diag,
             constraint.value,
@@ -868,7 +909,7 @@ fn solve_ability_constraint(
             declared_loc_opt,
             &declared_abilities,
             ty_args.iter().map(|ty_arg| {
-                let abilities = infer_abilities(context, &context.subst, ty_arg.clone());
+                let abilities = infer_abilities(&context.modules, &context.subst, ty_arg.clone());
                 (ty_arg, abilities)
             }),
         );
@@ -884,7 +925,7 @@ fn solve_ability_constraint(
     }
 }
 
-pub fn ability_not_satisified_tips<'a>(
+pub fn ability_not_satisfied_tips<'a>(
     subst: &Subst,
     diag: &mut Diagnostic,
     constraint: Ability_,

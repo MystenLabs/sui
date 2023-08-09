@@ -22,7 +22,9 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: nightly
+          # Upgrade below after the workspace upgrades to Rust 1.72 or later.
+          # https://substrate.stackexchange.com/a/9069
+          toolchain: nightly-2023-06-15
           override: true
 
       - name: Generate documentation
@@ -31,7 +33,7 @@ jobs:
           RUSTDOCFLAGS: "--enable-index-page -Zunstable-options"
         with:
           command: doc
-          args: --workspace --no-deps
+          args: --workspace --exclude "sui-benchmark" --no-deps
 
       - name: Deploy documentation
         uses: peaceiris/actions-gh-pages@373f7f263a76c20808c831209c920827a82a2847 # pin@v3
@@ -39,4 +41,4 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
           publish_dir: ./target/doc
-          destination_dir: crates
+          force_orphan: true

@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 11;
+const MAX_PROTOCOL_VERSION: u64 = 20;
 
 // Record history of protocol version allocations here:
 //
@@ -36,7 +36,34 @@ const MAX_PROTOCOL_VERSION: u64 = 11;
 // Version 10:increase bytecode verifier `max_verifier_meter_ticks_per_function` and
 //            `max_meter_ticks_per_module` limits each from 6_000_000 to 16_000_000. sui-system
 //            framework changes.
-// Version 11: Introduce `std::type_name::get_with_original_ids` to the system frameworks.
+// Version 11: Introduce `std::type_name::get_with_original_ids` to the system frameworks. Bound max depth of values within the VM.
+// Version 12: Changes to deepbook in framework to add API for querying marketplace.
+//             Change NW Batch to use versioned metadata field.
+//             Changes to sui-system package to add PTB-friendly unstake function, and minor cleanup.
+// Version 13: System package change deprecating `0xdee9::clob` and `0xdee9::custodian`, replaced by
+//             `0xdee9::clob_v2` and `0xdee9::custodian_v2`.
+// Version 14: Introduce a config variable to allow charging of computation to be either
+//             bucket base or rounding up. The presence of `gas_rounding_step` (or `None`)
+//             decides whether rounding is applied or not.
+// Version 15: Add reordering of user transactions by gas price after consensus.
+//             Add `sui::table_vec::drop` to the framework via a system package upgrade.
+// Version 16: Enabled simplified_unwrap_then_delete feature flag, which allows the execution engine
+//             to no longer consult the object store when generating unwrapped_then_deleted in the
+//             effects; this also allows us to stop including wrapped tombstones in accumulator.
+//             Add self-matching prevention for deepbook.
+// Version 17: Enable upgraded multisig support.
+// Version 18: Introduce execution layer versioning, preserve all existing behaviour in v0.
+//             Gas minimum charges moved to be a multiplier over the reference gas price. In this
+//             protocol version the multiplier is the same as the lowest bucket of computation
+//             such that the minimum transaction cost is the same as the minimum computation
+//             bucket.
+//             Add a feature flag to indicate the changes semantics of `base_tx_cost_fixed`.
+// Version 19: Changes to sui-system package to enable liquid staking.
+//             Add limit for total size of events.
+//             Increase limit for number of events emitted to 1024.
+// Version 20: Enabling the flag `narwhal_new_leader_election_schedule` for the new narwhal leader
+//             schedule algorithm for enhanced fault tolerance and sets the bad node stake threshold
+//             value. Both values are set for all the environments except mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -126,6 +153,19 @@ impl SupportedProtocolVersions {
     }
 }
 
+#[derive(Clone, Serialize, Debug, PartialEq, Copy)]
+pub enum Chain {
+    Mainnet,
+    Testnet,
+    Unknown,
+}
+
+impl Default for Chain {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
 pub struct Error(pub String);
 
 /// Records on/off feature flags that may vary at each protocol version.
@@ -154,9 +194,12 @@ struct FeatureFlags {
     // f low scoring authorities, but it will simply flag as low scoring only up to f authorities.
     #[serde(skip_serializing_if = "is_false")]
     scoring_decision_with_validity_cutoff: bool,
-    // Re-order end of epoch messages to the end of the commit
+
+    // DEPRECATED: this was an ephemeral feature flag only used by consensus handler, which has now
+    // been deployed everywhere.
     #[serde(skip_serializing_if = "is_false")]
     consensus_order_end_of_epoch_last: bool,
+
     // Disallow adding abilities to types during package upgrades.
     #[serde(skip_serializing_if = "is_false")]
     disallow_adding_abilities_on_upgrade: bool,
@@ -179,10 +222,56 @@ struct FeatureFlags {
     // If true, checks no extra bytes in a compiled module
     #[serde(skip_serializing_if = "is_false")]
     no_extraneous_module_bytes: bool,
+    // If true, then use the versioned metadata format in narwhal entities.
+    #[serde(skip_serializing_if = "is_false")]
+    narwhal_versioned_metadata: bool,
+
+    // Enable zklogin auth
+    #[serde(skip_serializing_if = "is_false")]
+    zklogin_auth: bool,
+    // How we order transactions coming out of consensus before sending to execution.
+    #[serde(skip_serializing_if = "ConsensusTransactionOrdering::is_none")]
+    consensus_transaction_ordering: ConsensusTransactionOrdering,
+
+    // Previously, the unwrapped_then_deleted field in TransactionEffects makes a distinction between
+    // whether an object has existed in the store previously (i.e. whether there is a tombstone).
+    // Such dependency makes effects generation inefficient, and requires us to include wrapped
+    // tombstone in state root hash.
+    // To prepare for effects V2, with this flag set to true, we simplify the definition of
+    // unwrapped_then_deleted to always include unwrapped then deleted objects,
+    // regardless of their previous state in the store.
+    #[serde(skip_serializing_if = "is_false")]
+    simplified_unwrap_then_delete: bool,
+    // Enable upgraded multisig support
+    #[serde(skip_serializing_if = "is_false")]
+    upgraded_multisig_supported: bool,
+    // If true minimum txn charge is a multiplier of the gas price
+    #[serde(skip_serializing_if = "is_false")]
+    txn_base_cost_as_multiplier: bool,
+
+    // If true, then the new algorithm for the leader election schedule will be used
+    #[serde(skip_serializing_if = "is_false")]
+    narwhal_new_leader_election_schedule: bool,
 }
 
 fn is_false(b: &bool) -> bool {
     !b
+}
+
+/// Ordering mechanism for transactions in one Narwhal consensus output.
+#[derive(Default, Copy, Clone, Serialize, Debug)]
+pub enum ConsensusTransactionOrdering {
+    /// No ordering. Transactions are processed in the order they appear in the consensus output.
+    #[default]
+    None,
+    /// Order transactions by gas price, highest first.
+    ByGasPrice,
+}
+
+impl ConsensusTransactionOrdering {
+    pub fn is_none(&self) -> bool {
+        matches!(self, ConsensusTransactionOrdering::None)
+    }
 }
 
 /// Constants that change the behavior of the protocol.
@@ -198,19 +287,24 @@ fn is_false(b: &bool) -> bool {
 /// - Initialize the field to `None` in prior protocol versions.
 /// - Initialize the field to `Some(val)` for your new protocol version.
 /// - Add a public getter that simply unwraps the field.
-/// - A public getter of the form `field(&self) -> field_type` will be automatically generated for you.
+/// - Two public getters of the form `field(&self) -> field_type`
+///     and `field_as_option(&self) -> Option<field_type>` will be automatically generated for you.
 /// Example for a field: `new_constant: Option<u64>`
 /// ```rust,ignore
 ///      pub fn new_constant(&self) -> u64 {
 ///         self.new_constant.expect(Self::CONSTANT_ERR_MSG)
 ///     }
+///      pub fn new_constant_as_option(&self) -> Option<u64> {
+///         self.new_constant.expect(Self::CONSTANT_ERR_MSG)
+///     }
 /// ```
-/// This way, if the constant is accessed in a protocol version in which it is not defined, the
-/// validator will crash. (Crashing is necessary because this type of error would almost always
-/// result in forking if not prevented here).
-///
+/// With `pub fn new_constant(&self) -> u64`, if the constant is accessed in a protocol version
+/// in which it is not defined, the validator will crash. (Crashing is necessary because
+/// this type of error would almost always result in forking if not prevented here).
+/// If you don't want the validator to crash, you can use the
+/// `pub fn new_constant_as_option(&self) -> Option<u64>` getter, which will
+/// return `None` if the field is not defined at that version.
 /// - If you want a customized getter, you can add a method in the impl.
-///     For example see `max_size_written_objects_as_option`
 #[skip_serializing_none]
 #[derive(Clone, Serialize, Debug, ProtocolConfigGetters)]
 pub struct ProtocolConfig {
@@ -220,8 +314,6 @@ pub struct ProtocolConfig {
 
     // ==== Transaction input limits ====
     /// Maximum serialized size of a transaction (in bytes).
-    // NOTE: This value should be kept in sync with the corresponding value in
-    // sdk/typescript/src/builder/TransactionData.ts
     max_tx_size_bytes: Option<u64>,
 
     /// Maximum number of input objects to a transaction. Enforced by the transaction input checker
@@ -280,6 +372,9 @@ pub struct ProtocolConfig {
     /// The max computation bucket for gas. This is the max that can be charged for computation.
     max_gas_computation_bucket: Option<u64>,
 
+    // Define the value used to round up computation gas charges
+    gas_rounding_step: Option<u64>,
+
     /// Maximum number of nested loops. Enforced by the Move bytecode verifier.
     max_loop_depth: Option<u64>,
 
@@ -337,11 +432,17 @@ pub struct ProtocolConfig {
     /// Maximum size of a Move user event. Enforced by the VM during execution.
     max_event_emit_size: Option<u64>,
 
+    /// Maximum size of a Move user event. Enforced by the VM during execution.
+    max_event_emit_size_total: Option<u64>,
+
     /// Maximum length of a vector in Move. Enforced by the VM during execution, and for constants, by the verifier.
     max_move_vector_len: Option<u64>,
 
     /// Maximum length of an `Identifier` in Move. Enforced by the bytecode verifier at signing.
     max_move_identifier_len: Option<u64>,
+
+    /// Maximum depth of a Move value within the VM.
+    max_move_value_depth: Option<u64>,
 
     /// Maximum number of back edges in Move function. Enforced by the bytecode verifier at signing.
     max_back_edges_per_function: Option<u64>,
@@ -370,7 +471,6 @@ pub struct ProtocolConfig {
     object_runtime_max_num_store_entries_system_tx: Option<u64>,
 
     // === Execution gas costs ====
-    // note: Option<per-instruction and native function gas costs live in the sui-cost-tables crate
     /// Base cost for any Sui transaction
     base_tx_cost_fixed: Option<u64>,
 
@@ -617,6 +717,14 @@ pub struct ProtocolConfig {
     scoring_decision_mad_divisor: Option<f64>,
     // The cutoff value for the MED outlier detection
     scoring_decision_cutoff_value: Option<f64>,
+
+    /// === Execution Version ===
+    execution_version: Option<u64>,
+
+    // Dictates the threshold (percentage of stake) that is used to calculate the "bad" nodes to be
+    // swapped when creating the consensus schedule. The values should be of the range [0 - 33]. Anything
+    // above 33 (f) will not be allowed.
+    consensus_bad_nodes_stake_threshold: Option<u64>,
 }
 
 // feature flags
@@ -668,6 +776,10 @@ impl ProtocolConfig {
         self.feature_flags.scoring_decision_with_validity_cutoff
     }
 
+    pub fn narwhal_versioned_metadata(&self) -> bool {
+        self.feature_flags.narwhal_versioned_metadata
+    }
+
     pub fn consensus_order_end_of_epoch_last(&self) -> bool {
         self.feature_flags.consensus_order_end_of_epoch_last
     }
@@ -702,26 +814,29 @@ impl ProtocolConfig {
     pub fn no_extraneous_module_bytes(&self) -> bool {
         self.feature_flags.no_extraneous_module_bytes
     }
-}
 
-// Special getters
-impl ProtocolConfig {
-    /// We don't want to use the default getter which unwraps and could panic.
-    /// Instead we want to be able to selectively fetch this value
-    pub fn max_size_written_objects_as_option(&self) -> Option<u64> {
-        self.max_size_written_objects
+    pub fn zklogin_auth(&self) -> bool {
+        self.feature_flags.zklogin_auth
     }
 
-    /// We don't want to use the default getter which unwraps and could panic.
-    /// Instead we want to be able to selectively fetch this value
-    pub fn max_size_written_objects_system_tx_as_option(&self) -> Option<u64> {
-        self.max_size_written_objects_system_tx
+    pub fn consensus_transaction_ordering(&self) -> ConsensusTransactionOrdering {
+        self.feature_flags.consensus_transaction_ordering
     }
 
-    /// We don't want to use the default getter which unwraps and could panic.
-    /// Instead we want to be able to selectively fetch this value
-    pub fn max_move_identifier_len_as_option(&self) -> Option<u64> {
-        self.max_move_identifier_len
+    pub fn simplified_unwrap_then_delete(&self) -> bool {
+        self.feature_flags.simplified_unwrap_then_delete
+    }
+
+    pub fn supports_upgraded_multisig(&self) -> bool {
+        self.feature_flags.upgraded_multisig_supported
+    }
+
+    pub fn txn_base_cost_as_multiplier(&self) -> bool {
+        self.feature_flags.txn_base_cost_as_multiplier
+    }
+
+    pub fn narwhal_new_leader_election_schedule(&self) -> bool {
+        self.feature_flags.narwhal_new_leader_election_schedule
     }
 }
 
@@ -737,12 +852,12 @@ thread_local! {
 // Instantiations for each protocol version.
 impl ProtocolConfig {
     /// Get the value ProtocolConfig that are in effect during the given protocol version.
-    pub fn get_for_version(version: ProtocolVersion) -> Self {
+    pub fn get_for_version(version: ProtocolVersion, chain: Chain) -> Self {
         // ProtocolVersion can be deserialized so we need to check it here as well.
         assert!(version.0 >= ProtocolVersion::MIN.0, "{:?}", version);
         assert!(version.0 <= ProtocolVersion::MAX_ALLOWED.0, "{:?}", version);
 
-        let mut ret = Self::get_for_version_impl(version);
+        let mut ret = Self::get_for_version_impl(version, chain);
         ret.version = version;
 
         CONFIG_OVERRIDE.with(|ovr| {
@@ -759,9 +874,9 @@ impl ProtocolConfig {
 
     /// Get the value ProtocolConfig that are in effect during the given protocol version.
     /// Or none if the version is not supported.
-    pub fn get_for_version_if_supported(version: ProtocolVersion) -> Option<Self> {
+    pub fn get_for_version_if_supported(version: ProtocolVersion, chain: Chain) -> Option<Self> {
         if version.0 >= ProtocolVersion::MIN.0 && version.0 <= ProtocolVersion::MAX_ALLOWED.0 {
-            let mut ret = Self::get_for_version_impl(version);
+            let mut ret = Self::get_for_version_impl(version, chain);
             ret.version = version;
             Some(ret)
         } else {
@@ -795,24 +910,32 @@ impl ProtocolConfig {
         if Self::load_poison_get_for_min_version() {
             panic!("get_for_min_version called on validator");
         }
-        ProtocolConfig::get_for_version(ProtocolVersion::MIN)
+        ProtocolConfig::get_for_version(ProtocolVersion::MIN, Chain::Unknown)
     }
 
+    /// CAREFUL! - You probably want to use `get_for_version` instead.
+    ///
     /// Convenience to get the constants at the current maximum supported version.
-    /// Mainly used by genesis.
-    pub fn get_for_max_version() -> Self {
+    /// Mainly used by genesis. Note well that this function uses the max version
+    /// supported locally by the node, which is not necessarily the current version
+    /// of the network. ALSO, this function disregards chain specific config (by
+    /// using Chain::Unknown), thereby potentially returning a protocol config that
+    /// is incorrect for some feature flags. Definitely safe for testing and for
+    /// protocol version 11 and prior.
+    #[allow(non_snake_case)]
+    pub fn get_for_max_version_UNSAFE() -> Self {
         if Self::load_poison_get_for_min_version() {
-            panic!("get_for_max_version called on validator");
+            panic!("get_for_max_version_UNSAFE called on validator");
         }
-        ProtocolConfig::get_for_version(ProtocolVersion::MAX)
+        ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown)
     }
 
-    fn get_for_version_impl(version: ProtocolVersion) -> Self {
+    fn get_for_version_impl(version: ProtocolVersion, chain: Chain) -> Self {
         #[cfg(msim)]
         {
             // populate the fake simulator version # with a different base tx cost.
             if version == ProtocolVersion::MAX_ALLOWED {
-                let mut config = Self::get_for_version_impl(version - 1);
+                let mut config = Self::get_for_version_impl(version - 1, Chain::Unknown);
                 config.base_tx_cost_fixed = Some(config.base_tx_cost_fixed() + 1000);
                 return config;
             }
@@ -1070,17 +1193,25 @@ impl ProtocolConfig {
 
                 // Limits the length of a Move identifier
                 max_move_identifier_len: None,
+                max_move_value_depth: None,
 
+                gas_rounding_step: None,
+
+                execution_version: None,
+
+                max_event_emit_size_total: None,
+
+                consensus_bad_nodes_stake_threshold: None
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
             2 => {
-                let mut cfg = Self::get_for_version_impl(version - 1);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.advance_epoch_start_time_in_safe_mode = true;
                 cfg
             }
             3 => {
-                let mut cfg = Self::get_for_version_impl(version - 1);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 // changes for gas model
                 cfg.gas_model_version = Some(2);
                 // max gas budget is in MIST and an absolute value 50SUI
@@ -1097,8 +1228,12 @@ impl ProtocolConfig {
                 cfg.feature_flags.package_upgrades = true;
                 cfg
             }
+            // This is the first protocol version currently possible.
+            // Mainnet starts with version 4. Previous versions are pre mainnet and have
+            // all been wiped out.
+            // Every other chain is after version 4.
             4 => {
-                let mut cfg = Self::get_for_version_impl(version - 1);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 // Change reward slashing rate to 100%.
                 cfg.reward_slashing_rate = Some(10000);
                 // protect old and new lookup for object version
@@ -1106,7 +1241,7 @@ impl ProtocolConfig {
                 cfg
             }
             5 => {
-                let mut cfg = Self::get_for_version_impl(version - 1);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.missing_type_is_compatibility_error = true;
                 cfg.gas_model_version = Some(4);
                 cfg.feature_flags.scoring_decision_with_validity_cutoff = true;
@@ -1115,14 +1250,14 @@ impl ProtocolConfig {
                 cfg
             }
             6 => {
-                let mut cfg = Self::get_for_version_impl(version - 1);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.gas_model_version = Some(5);
                 cfg.buffer_stake_for_protocol_upgrade_bps = Some(5000);
                 cfg.feature_flags.consensus_order_end_of_epoch_last = true;
                 cfg
             }
             7 => {
-                let mut cfg = Self::get_for_version_impl(version - 1);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.disallow_adding_abilities_on_upgrade = true;
                 cfg.feature_flags
                     .disable_invariant_violation_check_in_swap_loc = true;
@@ -1131,13 +1266,13 @@ impl ProtocolConfig {
                 cfg
             }
             8 => {
-                let mut cfg = Self::get_for_version_impl(version - 1);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags
                     .disallow_change_struct_type_params_on_upgrade = true;
                 cfg
             }
             9 => {
-                let mut cfg = Self::get_for_version_impl(version - 1);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 // Limits the length of a Move identifier
                 cfg.max_move_identifier_len = Some(128);
                 cfg.feature_flags.no_extraneous_module_bytes = true;
@@ -1146,12 +1281,89 @@ impl ProtocolConfig {
                 cfg
             }
             10 => {
-                let mut cfg = Self::get_for_version_impl(version - 1);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.max_verifier_meter_ticks_per_function = Some(16_000_000);
                 cfg.max_meter_ticks_per_module = Some(16_000_000);
                 cfg
             }
-            11 => Self::get_for_version_impl(version - 1),
+            11 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.max_move_value_depth = Some(128);
+                cfg
+            }
+            12 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.feature_flags.narwhal_versioned_metadata = true;
+                if chain != Chain::Mainnet {
+                    cfg.feature_flags.commit_root_state_digest = true;
+                }
+
+                if chain != Chain::Mainnet && chain != Chain::Testnet {
+                    cfg.feature_flags.zklogin_auth = true;
+                }
+                cfg
+            }
+            13 => Self::get_for_version_impl(version - 1, chain),
+            14 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.gas_rounding_step = Some(1_000);
+                cfg.gas_model_version = Some(6);
+                cfg
+            }
+            15 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.feature_flags.consensus_transaction_ordering =
+                    ConsensusTransactionOrdering::ByGasPrice;
+                cfg
+            }
+            16 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.feature_flags.simplified_unwrap_then_delete = true;
+                cfg
+            }
+            17 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.feature_flags.upgraded_multisig_supported = true;
+                cfg
+            }
+            18 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.execution_version = Some(1);
+                // Following flags are implied by this execution version.  Once support for earlier
+                // protocol versions is dropped, these flags can be removed:
+                // cfg.feature_flags.package_upgrades = true;
+                // cfg.feature_flags.disallow_adding_abilities_on_upgrade = true;
+                // cfg.feature_flags.disallow_change_struct_type_params_on_upgrade = true;
+                // cfg.feature_flags.loaded_child_objects_fixed = true;
+                // cfg.feature_flags.ban_entry_init = true;
+                // cfg.feature_flags.pack_digest_hash_modules = true;
+                cfg.feature_flags.txn_base_cost_as_multiplier = true;
+                // this is a multiplier of the gas price
+                cfg.base_tx_cost_fixed = Some(1_000);
+                cfg
+            }
+            19 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.max_num_event_emit = Some(1024);
+                // We maintain the same total size limit for events, but increase the number of
+                // events that can be emitted.
+                cfg.max_event_emit_size_total = Some(
+                    256 /* former event count limit */ * 250 * 1024, /* size limit per event */
+                );
+                cfg
+            }
+            20 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.feature_flags.commit_root_state_digest = true;
+
+                if chain != Chain::Mainnet {
+                    cfg.feature_flags.narwhal_new_leader_election_schedule = true;
+                    cfg.consensus_bad_nodes_stake_threshold = Some(20);
+                }
+
+                cfg
+            }
+
             // Use this template when making changes:
             //
             //     // modify an existing constant.
@@ -1200,6 +1412,34 @@ impl ProtocolConfig {
     pub fn set_advance_to_highest_supported_protocol_version_for_testing(&mut self, val: bool) {
         self.feature_flags
             .advance_to_highest_supported_protocol_version = val
+    }
+    pub fn set_commit_root_state_digest_supported(&mut self, val: bool) {
+        self.feature_flags.commit_root_state_digest = val
+    }
+    pub fn set_zklogin_auth(&mut self, val: bool) {
+        self.feature_flags.zklogin_auth = val
+    }
+
+    pub fn set_max_tx_gas_for_testing(&mut self, max_tx_gas: u64) {
+        self.max_tx_gas = Some(max_tx_gas)
+    }
+
+    pub fn set_execution_version_for_testing(&mut self, version: u64) {
+        self.execution_version = Some(version)
+    }
+    pub fn set_upgraded_multisig_for_testing(&mut self, val: bool) {
+        self.feature_flags.upgraded_multisig_supported = val
+    }
+    #[cfg(msim)]
+    pub fn set_simplified_unwrap_then_delete(&mut self, val: bool) {
+        self.feature_flags.simplified_unwrap_then_delete = val
+    }
+    pub fn set_narwhal_new_leader_election_schedule(&mut self, val: bool) {
+        self.feature_flags.narwhal_new_leader_election_schedule = val;
+    }
+
+    pub fn set_consensus_bad_nodes_stake_threshold(&mut self, val: u64) {
+        self.consensus_bad_nodes_stake_threshold = Some(val);
     }
 }
 
@@ -1303,18 +1543,38 @@ mod test {
         println!("! IMPORTANT: never update snapshots from this test. only add new versions! !");
         println!("!                                                                          !");
         println!("============================================================================\n");
-        for i in MIN_PROTOCOL_VERSION..=MAX_PROTOCOL_VERSION {
-            let cur = ProtocolVersion::new(i);
-            assert_yaml_snapshot!(
-                format!("version_{}", cur.as_u64()),
-                ProtocolConfig::get_for_version(cur)
-            );
+        for chain_id in &[Chain::Unknown, Chain::Mainnet, Chain::Testnet] {
+            // make Chain::Unknown snapshots compatible with pre-chain-id snapshots so that we
+            // don't break the release-time compatibility tests. Once Chain Id configs have been
+            // released everywhere, we can remove this and only test Mainnet and Testnet
+            let chain_str = match chain_id {
+                Chain::Unknown => "".to_string(),
+                _ => format!("{:?}_", chain_id),
+            };
+            for i in MIN_PROTOCOL_VERSION..=MAX_PROTOCOL_VERSION {
+                let cur = ProtocolVersion::new(i);
+                assert_yaml_snapshot!(
+                    format!("{}version_{}", chain_str, cur.as_u64()),
+                    ProtocolConfig::get_for_version(cur, *chain_id)
+                );
+            }
         }
     }
 
     #[test]
+    fn test_getters() {
+        let prot: ProtocolConfig =
+            ProtocolConfig::get_for_version(ProtocolVersion::new(1), Chain::Unknown);
+        assert_eq!(
+            prot.max_arguments(),
+            prot.max_arguments_as_option().unwrap()
+        );
+    }
+
+    #[test]
     fn lookup_by_string_test() {
-        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
+        let prot: ProtocolConfig =
+            ProtocolConfig::get_for_version(ProtocolVersion::new(1), Chain::Unknown);
         // Does not exist
         assert!(prot.lookup_attr("some random string".to_string()).is_none());
 
@@ -1329,13 +1589,15 @@ mod test {
             .is_none());
 
         // But we did in version 9
-        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(9));
+        let prot: ProtocolConfig =
+            ProtocolConfig::get_for_version(ProtocolVersion::new(9), Chain::Unknown);
         assert!(
             prot.lookup_attr("max_move_identifier_len".to_string())
                 == Some(ProtocolConfigValue::u64(prot.max_move_identifier_len()))
         );
 
-        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
+        let prot: ProtocolConfig =
+            ProtocolConfig::get_for_version(ProtocolVersion::new(1), Chain::Unknown);
         // We didnt have this in version 1
         assert!(prot
             .attr_map()
@@ -1349,7 +1611,8 @@ mod test {
         );
 
         // Check feature flags
-        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
+        let prot: ProtocolConfig =
+            ProtocolConfig::get_for_version(ProtocolVersion::new(1), Chain::Unknown);
         // Does not exist
         assert!(prot
             .feature_flags
@@ -1374,7 +1637,8 @@ mod test {
                 .unwrap()
                 == &false
         );
-        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(4));
+        let prot: ProtocolConfig =
+            ProtocolConfig::get_for_version(ProtocolVersion::new(4), Chain::Unknown);
         // Was true from v3 and up
         assert!(
             prot.feature_flags

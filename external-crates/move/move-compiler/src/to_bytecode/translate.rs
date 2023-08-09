@@ -95,9 +95,7 @@ fn extract_decls(
                 // TODO filter out fake natives
                 // These cannot be filtered out due to lacking prover support for the operations
                 // .filter(|(_, fdef)| {
-                //     // TODO full evm support for vector bytecode instructions
-                //     cfg!(feature = "evm-backend")
-                //         || !fdef
+                //            !fdef
                 //             .attributes
                 //             .contains_key_(&fake_natives::FAKE_NATIVE_ATTR)
                 // })
@@ -142,6 +140,7 @@ pub fn program(
     }
     for (key, s) in gscripts {
         let G::Script {
+            warning_filter: _warning_filter,
             package_name,
             attributes: _attributes,
             loc: _loc,
@@ -182,6 +181,7 @@ fn module(
 ) -> Option<AnnotatedCompiledUnit> {
     let mut context = Context::new(compilation_env, Some(&ident));
     let G::ModuleDefinition {
+        warning_filter: _warning_filter,
         package_name: _package_name,
         attributes: _attributes,
         is_source_module: _is_source_module,
@@ -483,6 +483,7 @@ fn struct_def(
     sdef: H::StructDefinition,
 ) -> IR::StructDefinition {
     let H::StructDefinition {
+        warning_filter: _warning_filter,
         index: _index,
         attributes: _attributes,
         abilities: abs,
@@ -518,7 +519,7 @@ fn struct_fields(
         HF::Defined(field_vec) if field_vec.is_empty() => {
             // empty fields are not allowed in the bytecode, add a dummy field
             let fake_field = vec![(
-                Field(sp(loc, "dummy_field".into())),
+                Field(sp(loc, symbol!("dummy_field"))),
                 H::BaseType_::bool(loc),
             )];
             struct_fields(context, loc, HF::Defined(fake_field))
@@ -584,9 +585,7 @@ fn functions(
         // TODO filter out fake natives
         // These cannot be filtered out due to lacking prover support for the operations
         // .filter(|(_, fdef)| {
-        //     // TODO full evm support for vector bytecode instructions
-        //     cfg!(feature = "evm-backend")
-        //         || !fdef
+        //            !fdef
         //             .attributes
         //             .contains_key_(&fake_natives::FAKE_NATIVE_ATTR)
         // })
@@ -606,6 +605,7 @@ fn function(
     fdef: G::Function,
 ) -> ((IR::FunctionName, IR::Function), CollectedInfo) {
     let G::Function {
+        warning_filter: _warning_filter,
         index: _index,
         attributes,
         visibility: v,
@@ -626,7 +626,7 @@ fn function(
         G::FunctionBody_::Defined {
             locals,
             start,
-            loop_heads,
+            block_info,
             blocks,
         } => {
             let (locals, code) = function_body(
@@ -634,7 +634,7 @@ fn function(
                 &f,
                 parameters.clone(),
                 locals,
-                loop_heads,
+                block_info,
                 start,
                 blocks,
             );
@@ -732,7 +732,7 @@ fn function_body(
     f: &FunctionName,
     parameters: Vec<(Var, H::SingleType)>,
     mut locals_map: UniqueMap<Var, H::SingleType>,
-    loop_heads: BTreeSet<H::Label>,
+    block_info: BTreeMap<H::Label, G::BlockInfo>,
     start: H::Label,
     blocks_map: H::BasicBlocks,
 ) -> (Vec<(IR::Var, IR::Type)>, IR::BytecodeBlocks) {
@@ -766,7 +766,11 @@ fn function_body(
         bytecode_blocks.push((label(lbl), code));
     }
 
-    let loop_heads = loop_heads.into_iter().map(label).collect();
+    let loop_heads = block_info
+        .into_iter()
+        .filter(|(_lbl, info)| matches!(info, G::BlockInfo::LoopHead(_)))
+        .map(|(lbl, _)| label(lbl))
+        .collect();
     optimize::code(f, &loop_heads, &mut locals, &mut bytecode_blocks);
 
     (locals, bytecode_blocks)
@@ -1177,10 +1181,7 @@ fn module_call(
 ) {
     use IR::Bytecode_ as B;
     match fake_natives::resolve_builtin(&mident, &fname) {
-        // TODO full evm support for vector bytecode instructions
-        Some(mk_bytecode) if !cfg!(feature = "evm-backend") => {
-            code.push(sp(loc, mk_bytecode(base_types(context, tys))))
-        }
+        Some(mk_bytecode) => code.push(sp(loc, mk_bytecode(base_types(context, tys)))),
         _ => {
             let (m, n) = context.qualified_function_name(&mident, fname);
             code.push(sp(loc, B::Call(m, n, base_types(context, tys))))

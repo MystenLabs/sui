@@ -3,6 +3,8 @@ warning[W09002]: unused variable
   │
 5 │         let (x, x);
   │              ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/typing/declare_duplicate_binding.move:5:17
@@ -17,6 +19,8 @@ warning[W09002]: unused variable
   │
 6 │         let (f, R{f}, f);
   │              ^ Unused local variable 'f'. Consider removing or prefixing with an underscore: '_f'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/typing/declare_duplicate_binding.move:6:19
@@ -31,6 +35,8 @@ warning[W09002]: unused variable
   │
 6 │         let (f, R{f}, f);
   │                   ^ Unused local variable 'f'. Consider removing or prefixing with an underscore: '_f'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/typing/declare_duplicate_binding.move:6:23

@@ -4,13 +4,9 @@
 
 use crate::authority_client::AuthorityAPI;
 use crate::epoch::committee_store::CommitteeStore;
-use fastcrypto::encoding::Encoding;
 use mysten_metrics::histogram::{Histogram, HistogramVec};
 use prometheus::core::GenericCounter;
-use prometheus::{
-    register_int_counter_vec_with_registry, register_int_counter_with_registry, IntCounter,
-    IntCounterVec, Registry,
-};
+use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
 use std::collections::HashSet;
 use std::sync::Arc;
 use sui_types::crypto::AuthorityPublicKeyBytes;
@@ -20,9 +16,9 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::messages_grpc::{
     HandleCertificateResponse, HandleCertificateResponseV2, ObjectInfoRequest, ObjectInfoResponse,
-    PlainTransactionInfoResponse, SystemStateRequest, TransactionInfoRequest, TransactionStatus,
-    VerifiedObjectInfoResponse,
+    SystemStateRequest, TransactionInfoRequest, TransactionStatus, VerifiedObjectInfoResponse,
 };
+use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 use sui_types::{
@@ -30,7 +26,7 @@ use sui_types::{
     transaction::*,
 };
 use tap::TapFallible;
-use tracing::{debug, error, warn};
+use tracing::{debug, error};
 
 macro_rules! check_error {
     ($address:expr, $cond:expr, $msg:expr) => {
@@ -49,7 +45,6 @@ pub struct SafeClientMetricsBase {
     total_requests_by_address_method: IntCounterVec,
     total_responses_by_address_method: IntCounterVec,
     latency: HistogramVec,
-    potentially_temporarily_invalid_signatures: IntCounter,
 }
 
 impl SafeClientMetricsBase {
@@ -75,12 +70,6 @@ impl SafeClientMetricsBase {
                 &["address", "method"],
                 registry,
             ),
-            potentially_temporarily_invalid_signatures: register_int_counter_with_registry!(
-                "safe_client_potentially_temporarily_invalid_signatures",
-                "Number of PotentiallyTemporarilyInvalidSignature errors",
-                registry,
-            )
-            .unwrap(),
         }
     }
 }
@@ -96,7 +85,6 @@ pub struct SafeClientMetrics {
     handle_certificate_latency: Histogram,
     handle_obj_info_latency: Histogram,
     handle_tx_info_latency: Histogram,
-    potentially_temporarily_invalid_signatures: IntCounter,
 }
 
 impl SafeClientMetrics {
@@ -129,9 +117,6 @@ impl SafeClientMetrics {
         let handle_tx_info_latency = metrics_base
             .latency
             .with_label_values(&[&validator_address, "handle_transaction_info_request"]);
-        let potentially_temporarily_invalid_signatures = metrics_base
-            .potentially_temporarily_invalid_signatures
-            .clone();
 
         Self {
             total_requests_handle_transaction_info_request,
@@ -142,7 +127,6 @@ impl SafeClientMetrics {
             handle_certificate_latency,
             handle_obj_info_latency,
             handle_tx_info_latency,
-            potentially_temporarily_invalid_signatures,
         }
     }
 
@@ -240,7 +224,7 @@ impl<C: Clone> SafeClient<C> {
     fn check_transaction_info(
         &self,
         digest: &TransactionDigest,
-        transaction: VerifiedTransaction,
+        transaction: Transaction,
         status: TransactionStatus,
     ) -> SuiResult<PlainTransactionInfoResponse> {
         fp_ensure!(
@@ -254,7 +238,7 @@ impl<C: Clone> SafeClient<C> {
             TransactionStatus::Signed(signed) => {
                 self.get_committee(&signed.epoch)?;
                 Ok(PlainTransactionInfoResponse::Signed(
-                    SignedTransaction::new_from_data_and_sig(transaction.into_message(), signed),
+                    SignedTransaction::new_from_data_and_sig(transaction.into_data(), signed),
                 ))
             }
             TransactionStatus::Executed(cert_opt, effects, events) => {
@@ -263,34 +247,10 @@ impl<C: Clone> SafeClient<C> {
                     Some(cert) => {
                         let committee = self.get_committee(&cert.epoch)?;
                         let ct = CertifiedTransaction::new_from_data_and_sig(
-                            transaction.into_message(),
+                            transaction.into_data(),
                             cert,
                         );
-                        ct.verify_signature(&committee)
-                            .tap_err(|e| {
-                                // TODO: We show the below messages for debugging purposes re. incident #267. When this is fixed, we should remove them again.
-                                warn!(?digest, ?ct, "Received invalid tx cert: {}", e);
-                                let ct_bytes = fastcrypto::encoding::Base64::encode(
-                                    bcs::to_bytes(&ct).unwrap(),
-                                );
-                                warn!(
-                                    ?digest,
-                                    ?ct_bytes,
-                                    "Received invalid tx cert (serialized): {}",
-                                    e
-                                );
-                            })
-                            .map_err(|e| match e {
-                                // TODO: Remove as well once incident #267 is resolved.
-                                SuiError::InvalidSignature { error } => {
-                                    self.metrics
-                                        .potentially_temporarily_invalid_signatures
-                                        .inc();
-                                    SuiError::PotentiallyTemporarilyInvalidSignature { error }
-                                }
-                                _ => e,
-                            })?;
-                        let ct = VerifiedCertificate::new_from_verified(ct);
+                        ct.verify_committee_sigs_only(&committee)?;
                         Ok(PlainTransactionInfoResponse::ExecutedWithCert(
                             ct,
                             signed_effects,
@@ -341,13 +301,13 @@ where
     /// Initiate a new transfer to a Sui or Primary account.
     pub async fn handle_transaction(
         &self,
-        transaction: VerifiedTransaction,
+        transaction: Transaction,
     ) -> Result<PlainTransactionInfoResponse, SuiError> {
         let _timer = self.metrics.handle_transaction_latency.start_timer();
         let digest = *transaction.digest();
         let response = self
             .authority_client
-            .handle_transaction(transaction.clone().into_inner())
+            .handle_transaction(transaction.clone())
             .await?;
         let response = check_error!(
             self.address,
@@ -383,8 +343,9 @@ where
         // For now, validators only pass back input shared object.
         let fastpath_input_objects = if !response.fastpath_input_objects.is_empty() {
             let input_shared_objects = signed_effects
-                .shared_objects()
-                .iter()
+                .input_shared_objects()
+                .into_iter()
+                .map(|(obj_ref, _kind)| obj_ref)
                 .collect::<HashSet<_>>();
             for object in &response.fastpath_input_objects {
                 let obj_ref = object.compute_object_reference();
@@ -490,17 +451,14 @@ where
             .handle_transaction_info_request(request.clone())
             .await?;
 
-        let transaction_info = Transaction::new(transaction_info.transaction)
-            .verify()
-            .and_then(|verified_tx| {
-                self.check_transaction_info(
-                    &request.transaction_digest,
-                    verified_tx,
-                    transaction_info.status,
-                )
-            }).tap_err(|err| {
-                error!(?err, authority=?self.address, "Client error in handle_transaction_info_request");
-            })?;
+        let transaction = Transaction::new(transaction_info.transaction);
+        let transaction_info = self.check_transaction_info(
+            &request.transaction_digest,
+            transaction,
+            transaction_info.status,
+        ).tap_err(|err| {
+            error!(?err, authority=?self.address, "Client error in handle_transaction_info_request");
+        })?;
         self.metrics
             .total_ok_responses_handle_transaction_info_request
             .inc();

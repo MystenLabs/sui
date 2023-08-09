@@ -3,6 +3,8 @@ name = "name"
 version = "0.1.2"
 license = "license"
 authors = ["some author"]
+edition = "legacy"
+flavor = "global-storage"
 
 [addresses]
 std = "_"

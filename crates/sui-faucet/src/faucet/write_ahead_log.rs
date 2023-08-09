@@ -10,6 +10,7 @@ use typed_store::rocks::{DBMap, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::Map;
 
+use tracing::info;
 use typed_store_derive::DBMapUtils;
 use uuid::Uuid;
 
@@ -28,9 +29,11 @@ pub struct WriteAheadLog {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Entry {
     pub uuid: uuid::Bytes,
+    // TODO (jian): remove recipient
     pub recipient: SuiAddress,
     pub tx: TransactionData,
     pub retry_count: u64,
+    pub in_flight: bool,
 }
 
 impl WriteAheadLog {
@@ -68,6 +71,7 @@ impl WriteAheadLog {
                 recipient,
                 tx,
                 retry_count: 0,
+                in_flight: true,
             },
         )
     }
@@ -100,6 +104,27 @@ impl WriteAheadLog {
         if let Some(mut entry) = self.log.get(&coin)? {
             entry.retry_count += 1;
             self.log.insert(&coin, &entry)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn set_in_flight(
+        &mut self,
+        coin: ObjectID,
+        bool: bool,
+    ) -> Result<(), TypedStoreError> {
+        if let Some(mut entry) = self.log.get(&coin)? {
+            entry.in_flight = bool;
+            self.log.insert(&coin, &entry)?;
+        } else {
+            info!(
+                ?coin,
+                "Attempted to set inflight a coin that was not in the WAL."
+            );
+
+            return Err(TypedStoreError::RocksDBError(format!(
+                "Coin object {coin:?} not found in WAL."
+            )));
         }
         Ok(())
     }

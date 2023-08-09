@@ -1,34 +1,34 @@
 {
-  "name": "sui-wallet-adapter-demo",
-  "private": true,
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build"
-  },
-  "dependencies": {
-    "@mysten/sui.js": "workspace:*",
-    "@mysten/wallet-kit": "workspace:*",
-    "@types/node": "^18.15.11",
-    "@types/react": "^18.0.35",
-    "@types/react-dom": "^18.0.11",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "typescript": "^5.0.4"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^3.1.0",
-    "vite": "^4.2.1"
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
-  }
+	"name": "sui-wallet-adapter-demo",
+	"private": true,
+	"scripts": {
+		"dev": "vite",
+		"build": "vite build"
+	},
+	"dependencies": {
+		"@mysten/sui.js": "workspace:*",
+		"@mysten/wallet-kit": "workspace:*",
+		"@types/node": "^20.4.2",
+		"@types/react": "^18.2.15",
+		"@types/react-dom": "^18.2.7",
+		"react": "^18.2.0",
+		"react-dom": "^18.2.0",
+		"typescript": "^5.1.6"
+	},
+	"devDependencies": {
+		"@vitejs/plugin-react": "^4.0.3",
+		"vite": "^4.4.4"
+	},
+	"browserslist": {
+		"production": [
+			">0.2%",
+			"not dead",
+			"not op_mini all"
+		],
+		"development": [
+			"last 1 chrome version",
+			"last 1 firefox version",
+			"last 1 safari version"
+		]
+	}
 }

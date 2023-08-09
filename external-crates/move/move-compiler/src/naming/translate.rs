@@ -18,7 +18,7 @@ use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::fake_natives;
+use super::{ast::TParamID, fake_natives};
 
 //**************************************************************************************************
 // Context
@@ -53,6 +53,11 @@ struct Context<'env> {
     local_scopes: Vec<BTreeMap<Symbol, u16>>,
     local_count: BTreeMap<Symbol, u16>,
     used_locals: BTreeSet<N::Var_>,
+    /// Type parameters used in a function (they have to be cleared after processing each function).
+    used_fun_tparams: BTreeSet<TParamID>,
+    /// Indicates if the compiler is currently translating a function (set to true before starting
+    /// to translate a function and to false after translation is over).
+    translating_fun: bool,
 }
 
 impl<'env> Context<'env> {
@@ -123,6 +128,8 @@ impl<'env> Context<'env> {
             local_scopes: vec![],
             local_count: BTreeMap::new(),
             used_locals: BTreeSet::new(),
+            used_fun_tparams: BTreeSet::new(),
+            translating_fun: false,
         }
     }
 
@@ -407,6 +414,7 @@ fn module(
 ) -> N::ModuleDefinition {
     context.current_module = Some(ident);
     let E::ModuleDefinition {
+        warning_filter,
         package_name,
         attributes,
         loc: _loc,
@@ -420,6 +428,7 @@ fn module(
         constants: econstants,
         specs: _specs,
     } = mdef;
+    context.env.add_warning_filter_scope(warning_filter.clone());
     let friends = efriends.filter_map(|mident, f| friend(context, mident, f));
     let unscoped = context.save_unscoped();
     let structs = estructs.map(|name, s| {
@@ -435,7 +444,9 @@ fn module(
         constant(context, name, c)
     });
     context.restore_unscoped(unscoped);
+    context.env.pop_warning_filter_scope();
     N::ModuleDefinition {
+        warning_filter,
         package_name,
         attributes,
         is_source_module,
@@ -459,6 +470,7 @@ fn scripts(
 
 fn script(context: &mut Context, escript: E::Script) -> N::Script {
     let E::Script {
+        warning_filter,
         package_name,
         attributes,
         loc,
@@ -469,6 +481,7 @@ fn script(context: &mut Context, escript: E::Script) -> N::Script {
         function: efunction,
         specs: _specs,
     } = escript;
+    context.env.add_warning_filter_scope(warning_filter.clone());
     let outer_unscoped = context.save_unscoped();
     for (loc, s, _) in &econstants {
         context.bind_constant(*s, loc)
@@ -481,7 +494,9 @@ fn script(context: &mut Context, escript: E::Script) -> N::Script {
     context.restore_unscoped(inner_unscoped);
     let function = function(context, None, function_name, efunction);
     context.restore_unscoped(outer_unscoped);
+    context.env.pop_warning_filter_scope();
     N::Script {
+        warning_filter,
         package_name,
         attributes,
         loc,
@@ -534,6 +549,7 @@ fn function(
     ef: E::Function,
 ) -> N::Function {
     let E::Function {
+        warning_filter,
         index,
         attributes,
         loc: _,
@@ -547,12 +563,30 @@ fn function(
     assert!(context.local_scopes.is_empty());
     assert!(context.local_count.is_empty());
     assert!(context.used_locals.is_empty());
+    assert!(context.used_fun_tparams.is_empty());
+    assert!(!context.translating_fun);
+    context.env.add_warning_filter_scope(warning_filter.clone());
     context.local_scopes = vec![BTreeMap::new()];
     context.local_count = BTreeMap::new();
+    context.translating_fun = true;
     let signature = function_signature(context, signature);
     let acquires = function_acquires(context, acquires);
     let body = function_body(context, body);
+
+    if !matches!(body.value, N::FunctionBody_::Native) {
+        for tparam in &signature.type_parameters {
+            if !context.used_fun_tparams.contains(&tparam.id) {
+                let sp!(loc, n) = tparam.user_specified_name;
+                let msg = format!("Unused type parameter '{}'.", n);
+                context
+                    .env
+                    .add_diag(diag!(UnusedItem::FunTypeParam, (loc, msg)))
+            }
+        }
+    }
+
     let mut f = N::Function {
+        warning_filter,
         index,
         attributes,
         visibility,
@@ -567,6 +601,9 @@ fn function(
     context.local_scopes = vec![];
     context.local_count = BTreeMap::new();
     context.used_locals = BTreeSet::new();
+    context.used_fun_tparams = BTreeSet::new();
+    context.env.pop_warning_filter_scope();
+    context.translating_fun = false;
     f
 }
 
@@ -716,6 +753,7 @@ fn struct_def(
     sdef: E::StructDefinition,
 ) -> N::StructDefinition {
     let E::StructDefinition {
+        warning_filter,
         index,
         attributes,
         loc: _loc,
@@ -723,9 +761,12 @@ fn struct_def(
         type_parameters,
         fields,
     } = sdef;
+    context.env.add_warning_filter_scope(warning_filter.clone());
     let type_parameters = struct_type_parameters(context, type_parameters);
     let fields = struct_fields(context, fields);
+    context.env.pop_warning_filter_scope();
     N::StructDefinition {
+        warning_filter,
         index,
         attributes,
         abilities,
@@ -749,6 +790,7 @@ fn struct_fields(context: &mut Context, efields: E::StructFields) -> N::StructFi
 
 fn constant(context: &mut Context, _name: ConstantName, econstant: E::Constant) -> N::Constant {
     let E::Constant {
+        warning_filter,
         index,
         attributes,
         loc,
@@ -758,13 +800,16 @@ fn constant(context: &mut Context, _name: ConstantName, econstant: E::Constant) 
     assert!(context.local_scopes.is_empty());
     assert!(context.local_count.is_empty());
     assert!(context.used_locals.is_empty());
+    context.env.add_warning_filter_scope(warning_filter.clone());
     context.local_scopes = vec![BTreeMap::new()];
     let signature = type_(context, esignature);
     let value = exp_(context, evalue);
     context.local_scopes = vec![];
     context.local_count = BTreeMap::new();
     context.used_locals = BTreeSet::new();
+    context.env.pop_warning_filter_scope();
     N::Constant {
+        warning_filter,
         index,
         attributes,
         loc,
@@ -868,6 +913,9 @@ fn type_(context: &mut Context, sp!(loc, ety_): E::Type) -> N::Type {
                     ));
                     NT::UnresolvedError
                 } else {
+                    if context.translating_fun {
+                        context.used_fun_tparams.insert(tp.id);
+                    }
                     NT::Param(tp)
                 }
             }

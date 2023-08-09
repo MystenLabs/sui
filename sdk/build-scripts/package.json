@@ -1,0 +1,30 @@
+{
+	"name": "@mysten/build-scripts",
+	"private": true,
+	"author": "Mysten Labs <build@mystenlabs.com>",
+	"description": "Build scripts for @mysten packages",
+	"version": "0.0.0",
+	"license": "Apache-2.0",
+	"engines": {
+		"node": ">=16"
+	},
+	"bin": {
+		"build-package": "./src/build-package.ts"
+	},
+	"scripts": {
+		"prettier:check": "prettier -c --ignore-unknown .",
+		"prettier:fix": "prettier -w --ignore-unknown .",
+		"eslint:check": "eslint --max-warnings=0 .",
+		"eslint:fix": "pnpm run eslint:check --fix",
+		"lint": "pnpm run eslint:check && pnpm run prettier:check",
+		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
+		"build": "tsc --build"
+	},
+	"devDependencies": {
+		"esbuild": "^0.18.14",
+		"typescript": "^5.1.6"
+	},
+	"dependencies": {
+		"@types/node": "^20.4.2"
+	}
+}

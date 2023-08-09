@@ -102,11 +102,11 @@ impl FaucetClient for RemoteFaucetClient {
 
 /// A local faucet that holds some coins since genesis
 pub struct LocalFaucetClient {
-    simple_faucet: SimpleFaucet,
+    simple_faucet: Arc<SimpleFaucet>,
 }
 
 impl LocalFaucetClient {
-    fn new(simple_faucet: SimpleFaucet) -> Self {
+    fn new(simple_faucet: Arc<SimpleFaucet>) -> Self {
         info!("Use local faucet");
         Self { simple_faucet }
     }

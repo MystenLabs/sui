@@ -22,16 +22,6 @@ use sui_types::base_types::SuiAddress;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::sui_serde::BigInt;
 
-// TODO(gegaowp): temp. disable fast-path
-// use crate::handlers::checkpoint_handler::{
-//     fetch_changed_objects, get_deleted_db_objects, get_object_changes, to_changed_db_objects,
-// };
-// use crate::models::transactions::Transaction;
-// use crate::store::{IndexerStore, TransactionObjectChanges};
-// use crate::types::{
-//         FastPathTransactionBlockResponse, SuiTransactionBlockResponseWithOptions,
-//         TemporaryTransactionBlockResponseStore,
-//     };
 use crate::store::IndexerStore;
 use crate::types::SuiTransactionBlockResponseWithOptions;
 
@@ -68,28 +58,6 @@ where
             .fullnode
             .execute_transaction_block(tx_bytes, signatures, Some(fast_path_options), request_type)
             .await?;
-
-        // TODO(gegaowp): turn off DB commits on fast-path for now
-        // let fast_path_resp: FastPathTransactionBlockResponse =
-        //     sui_transaction_response.clone().try_into()?;
-        // let effects = &fast_path_resp.effects;
-        // let epoch = effects.executed_epoch();
-
-        // let object_changes = get_object_changes(effects);
-        // let changed_objects = fetch_changed_objects(self.fullnode.clone(), object_changes).await?;
-        // let changed_db_objects =
-        //     to_changed_db_objects(changed_objects, epoch, /* checkpoint */ None);
-        // let deleted_db_objects = get_deleted_db_objects(effects, epoch, /* checkpoint */ None);
-        // let tx_object_changes = TransactionObjectChanges {
-        //     changed_objects: changed_db_objects,
-        //     deleted_objects: deleted_db_objects,
-        // };
-
-        // let transaction_store: TemporaryTransactionBlockResponseStore = fast_path_resp.into();
-        // let transaction: Transaction = transaction_store.try_into()?;
-        // self.state
-        //     .persist_fast_path(transaction, tx_object_changes)
-        //     .await?;
 
         Ok(SuiTransactionBlockResponseWithOptions {
             response: sui_transaction_response,

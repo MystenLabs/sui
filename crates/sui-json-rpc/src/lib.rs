@@ -7,13 +7,16 @@ use std::str::FromStr;
 
 use hyper::header::HeaderName;
 use hyper::header::HeaderValue;
+use hyper::Body;
 use hyper::Method;
+use hyper::Request;
 use jsonrpsee::server::{AllowHosts, ServerBuilder};
 use jsonrpsee::RpcModule;
 use prometheus::Registry;
 use tap::TapFallible;
 use tokio::runtime::Handle;
 use tower_http::cors::{AllowOrigin, CorsLayer};
+use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
 
 pub use balance_changes::*;
@@ -50,13 +53,6 @@ pub const APP_NAME_HEADER: &str = "app-name";
 
 pub const MAX_REQUEST_SIZE: u32 = 2 << 30;
 
-#[cfg(test)]
-#[path = "unit_tests/rpc_server_tests.rs"]
-mod rpc_server_test;
-#[cfg(test)]
-#[path = "unit_tests/transaction_tests.rs"]
-mod transaction_tests;
-
 pub struct JsonRpcServerBuilder {
     module: RpcModule<()>,
     rpc_doc: Project,
@@ -74,6 +70,11 @@ pub fn sui_rpc_doc(version: &str) -> Project {
         "Apache-2.0",
         "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE",
     )
+}
+
+pub enum ServerType {
+    WebSocket,
+    Http,
 }
 
 impl JsonRpcServerBuilder {
@@ -94,6 +95,7 @@ impl JsonRpcServerBuilder {
         mut self,
         listen_address: SocketAddr,
         custom_runtime: Option<Handle>,
+        server_type: Option<ServerType>,
     ) -> Result<ServerHandle, Error> {
         let acl = match env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
             Ok(value) => {
@@ -153,6 +155,23 @@ impl JsonRpcServerBuilder {
         let routing_layer = RoutingLayer::new(routing, disable_routing);
 
         let middleware = tower::ServiceBuilder::new()
+            .layer(
+                TraceLayer::new_for_http()
+                    .make_span_with(|request: &Request<Body>| {
+                        let request_id = request
+                            .headers()
+                            .get("x-req-id")
+                            .and_then(|v| v.to_str().ok())
+                            .map(tracing::field::display);
+
+                        tracing::info_span!("json-rpc-request", "x-req-id" = request_id)
+                    })
+                    .on_request(())
+                    .on_response(())
+                    .on_body_chunk(())
+                    .on_eos(())
+                    .on_failure(()),
+            )
             .layer(cors)
             .layer(routing_layer);
 
@@ -166,6 +185,17 @@ impl JsonRpcServerBuilder {
 
         if let Some(custom_runtime) = custom_runtime {
             builder = builder.custom_tokio_runtime(custom_runtime);
+        }
+
+        if let Some(server_type) = server_type {
+            match server_type {
+                ServerType::WebSocket => {
+                    builder = builder.ws_only();
+                }
+                ServerType::Http => {
+                    builder = builder.http_only();
+                }
+            }
         }
 
         let server = builder.build(listen_address).await?;

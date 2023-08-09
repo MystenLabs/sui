@@ -55,7 +55,12 @@ impl ModelBuilder {
                 let dep_source_paths = pkg
                     .get_sources(&self.resolution_graph.build_options)
                     .unwrap();
-                Some(Ok((*nm, dep_source_paths, &pkg.resolved_table)))
+                Some(Ok((
+                    *nm,
+                    dep_source_paths,
+                    &pkg.resolved_table,
+                    pkg.compiler_config(&self.resolution_graph.build_options),
+                )))
             })
             .collect::<Result<Vec<_>>>()?;
 
@@ -85,14 +90,14 @@ impl ModelBuilder {
                         paths.into_iter().partition(|t| t.contains(filter));
                     if !true_targets.is_empty() {
                         new_targets.push(PackagePaths {
-                            name,
+                            name: name.clone(),
                             paths: true_targets,
                             named_address_map: named_address_map.clone(),
                         })
                     }
                     if !false_targets.is_empty() {
                         new_deps.push(PackagePaths {
-                            name,
+                            name: name.clone(),
                             paths: false_targets,
                             named_address_map,
                         })
@@ -103,6 +108,6 @@ impl ModelBuilder {
             None => (all_targets, all_deps),
         };
 
-        run_model_builder_with_options(all_targets, all_deps, ModelBuilderOptions::default())
+        run_model_builder_with_options(all_targets, all_deps, ModelBuilderOptions::default(), None)
     }
 }

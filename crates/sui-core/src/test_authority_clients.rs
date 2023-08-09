@@ -24,7 +24,7 @@ use sui_types::{
     crypto::AuthorityKeyPair,
     error::SuiError,
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
-    transaction::{CertifiedTransaction, Transaction},
+    transaction::{CertifiedTransaction, Transaction, VerifiedTransaction},
 };
 
 #[derive(Clone, Copy, Default)]
@@ -56,9 +56,12 @@ impl AuthorityAPI for LocalAuthorityClient {
         if self.fault_config.fail_before_handle_transaction {
             return Err(SuiError::from("Mock error before handle_transaction"));
         }
-        let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let state = self.state.clone();
-        let transaction = transaction.verify()?;
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        let transaction = epoch_store
+            .signature_verifier
+            .verify_tx(transaction.data())
+            .map(|_| VerifiedTransaction::new_from_verified(transaction))?;
         let result = state.handle_transaction(&epoch_store, transaction).await;
         if self.fault_config.fail_after_handle_transaction {
             return Err(SuiError::GenericAuthorityError {
@@ -141,6 +144,9 @@ impl LocalAuthorityClient {
         }
     }
 
+    // One difference between this implementation and actual certificate execution, is that
+    // this assumes shared object locks have already been acquired and tries to execute shared
+    // object transactions as well as owned object transactions.
     async fn handle_certificate(
         state: Arc<AuthorityState>,
         certificate: CertifiedTransaction,
@@ -155,15 +161,23 @@ impl LocalAuthorityClient {
         // from previous epochs.
         let tx_digest = *certificate.digest();
         let epoch_store = state.epoch_store_for_testing();
-        let signed_effects =
-            match state.get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store) {
-                Ok(Some(effects)) => effects,
-                _ => {
-                    let certificate = certificate.verify(epoch_store.committee())?;
-                    state.try_execute_for_test(&certificate).await?.0
-                }
+        let signed_effects = match state
+            .get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store)
+        {
+            Ok(Some(effects)) => effects,
+            _ => {
+                let certificate = epoch_store
+                    .signature_verifier
+                    .verify_cert(certificate)
+                    .await?;
+                //let certificate = certificate.verify(epoch_store.committee())?;
+                state
+                    .enqueue_certificates_for_execution(vec![certificate.clone()], &epoch_store)?;
+                let effects = state.notify_read_effects(&certificate).await?;
+                state.sign_effects(effects, &epoch_store)?
             }
-            .into_inner();
+        }
+        .into_inner();
 
         let events = if let Some(digest) = signed_effects.events_digest() {
             state.get_transaction_events(digest)?
@@ -279,6 +293,9 @@ impl AuthorityAPI for MockAuthorityApi {
 #[derive(Clone)]
 pub struct HandleTransactionTestAuthorityClient {
     pub tx_info_resp_to_return: SuiResult<HandleTransactionResponse>,
+    // If set, sleep for this duration before responding to a request.
+    // This is useful in testing a timeout scenario.
+    pub sleep_duration_before_responding: Option<Duration>,
 }
 
 #[async_trait]
@@ -287,6 +304,9 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         &self,
         _transaction: Transaction,
     ) -> Result<HandleTransactionResponse, SuiError> {
+        if let Some(duration) = self.sleep_duration_before_responding {
+            tokio::time::sleep(duration).await;
+        }
         self.tx_info_resp_to_return.clone()
     }
 
@@ -337,6 +357,7 @@ impl HandleTransactionTestAuthorityClient {
     pub fn new() -> Self {
         Self {
             tx_info_resp_to_return: Err(SuiError::Unknown("".to_string())),
+            sleep_duration_before_responding: None,
         }
     }
 
@@ -350,6 +371,10 @@ impl HandleTransactionTestAuthorityClient {
 
     pub fn reset_tx_info_response(&mut self) {
         self.tx_info_resp_to_return = Err(SuiError::Unknown("".to_string()));
+    }
+
+    pub fn set_sleep_duration_before_responding(&mut self, duration: Duration) {
+        self.sleep_duration_before_responding = Some(duration);
     }
 }
 

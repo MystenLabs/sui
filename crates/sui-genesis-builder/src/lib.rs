@@ -7,19 +7,18 @@ use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::KeyPair;
 use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
-use move_vm_runtime::move_vm::MoveVM;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
-use sui_adapter::{adapter, execution_mode, programmable_transactions};
 use sui_config::genesis::{
     Genesis, GenesisCeremonyParameters, GenesisChainParameters, TokenDistributionSchedule,
     UnsignedGenesis,
 };
+use sui_execution::{self, Executor};
 use sui_framework::BuiltInFramework;
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::base_types::{
     ExecutionDigests, ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxContext,
 };
@@ -30,7 +29,7 @@ use sui_types::crypto::{
 };
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::epoch_data::EpochData;
-use sui_types::gas::SuiGasStatus;
+use sui_types::gas::GasCharger;
 use sui_types::gas_coin::GasCoin;
 use sui_types::governance::StakedSui;
 use sui_types::in_memory_storage::InMemoryStorage;
@@ -607,7 +606,7 @@ impl Builder {
 
         // Write parameters
         let parameters_file = path.join(GENESIS_BUILDER_PARAMETERS_FILE);
-        fs::write(parameters_file, serde_yaml::to_vec(&self.parameters)?)?;
+        fs::write(parameters_file, serde_yaml::to_string(&self.parameters)?)?;
 
         if let Some(token_distribution_schedule) = &self.token_distribution_schedule {
             token_distribution_schedule.to_csv(fs::File::create(
@@ -629,7 +628,7 @@ impl Builder {
         fs::create_dir_all(&committee_dir)?;
 
         for (_pubkey, validator) in self.validators {
-            let validator_info_bytes = serde_yaml::to_vec(&validator)?;
+            let validator_info_bytes = serde_yaml::to_string(&validator)?;
             fs::write(
                 committee_dir.join(validator.info.name()),
                 validator_info_bytes,
@@ -720,7 +719,13 @@ fn build_unsigned_genesis_data(
         metrics.clone(),
     );
 
-    let protocol_config = ProtocolConfig::get_for_version(parameters.protocol_version);
+    // We have a circular dependency here. Protocol config depends on chain ID, which
+    // depends on genesis checkpoint (digest), which depends on genesis transaction, which
+    // depends on protocol config.
+    // However since we know there are no chain specific protocol config options in genesis,
+    // we use Chain::Unknown here.
+    let protocol_config =
+        ProtocolConfig::get_for_version(parameters.protocol_version, Chain::Unknown);
 
     let (genesis_transaction, genesis_effects, genesis_events, objects) =
         create_genesis_transaction(objects, &protocol_config, metrics, &epoch_data);
@@ -800,48 +805,42 @@ fn create_genesis_transaction(
             .into_inner()
     };
 
+    let genesis_digest = *genesis_transaction.digest();
     // execute txn to effects
     let (effects, events, objects) = {
-        let mut store = sui_types::in_memory_storage::InMemoryStorage::new(Vec::new());
         let temporary_store = TemporaryStore::new(
-            &mut store,
+            InMemoryStorage::new(Vec::new()),
             InputObjects::new(vec![]),
-            *genesis_transaction.digest(),
+            genesis_digest,
             protocol_config,
         );
 
-        let native_functions = sui_move_natives::all_natives(/* silent */ true);
-        let enable_move_vm_paranoid_checks = false;
-        let move_vm = std::sync::Arc::new(
-            adapter::new_move_vm(
-                native_functions,
-                protocol_config,
-                enable_move_vm_paranoid_checks,
-            )
-            .expect("We defined natives to not fail here"),
-        );
+        let silent = true;
+        let paranoid_checks = false;
+        let executor = sui_execution::executor(protocol_config, paranoid_checks, silent)
+            .expect("Creating an executor should not fail here");
 
+        let expensive_checks = false;
+        let certificate_deny_set = HashSet::new();
+        let shared_object_refs = vec![];
         let transaction_data = &genesis_transaction.data().intent_message().value;
-        let (kind, signer, gas) = transaction_data.execution_parts();
-        let (inner_temp_store, effects, _execution_error) =
-            sui_adapter::execution_engine::execute_transaction_to_effects::<
-                execution_mode::Normal,
-                _,
-            >(
-                vec![],
-                temporary_store,
-                kind,
-                signer,
-                &gas,
-                *genesis_transaction.digest(),
-                Default::default(),
-                &move_vm,
-                SuiGasStatus::new_unmetered(protocol_config),
-                epoch_data,
+        let (kind, signer, _) = transaction_data.execution_parts();
+        let transaction_dependencies = BTreeSet::new();
+        let (inner_temp_store, effects, _execution_error) = executor
+            .execute_transaction_to_effects(
                 protocol_config,
                 metrics,
-                false, // enable_expensive_checks
-                &HashSet::new(),
+                expensive_checks,
+                &certificate_deny_set,
+                &epoch_data.epoch_id(),
+                epoch_data.epoch_start_timestamp(),
+                temporary_store,
+                shared_object_refs,
+                &mut GasCharger::new_unmetered(genesis_digest),
+                kind,
+                signer,
+                genesis_digest,
+                transaction_dependencies,
             );
         assert!(inner_temp_store.objects.is_empty());
         assert!(inner_temp_store.mutable_inputs.is_empty());
@@ -870,23 +869,24 @@ fn create_genesis_objects(
     metrics: Arc<LimitsMetrics>,
 ) -> Vec<Object> {
     let mut store = InMemoryStorage::new(Vec::new());
-    let protocol_config =
-        ProtocolConfig::get_for_version(ProtocolVersion::new(parameters.protocol_version));
+    // We don't know the chain ID here since we haven't yet created the genesis checkpoint.
+    // However since we know there are no chain specific protool config options in genesis,
+    // we use Chain::Unknown here.
+    let protocol_config = ProtocolConfig::get_for_version(
+        ProtocolVersion::new(parameters.protocol_version),
+        Chain::Unknown,
+    );
 
-    let native_functions = sui_move_natives::all_natives(/* silent */ true);
+    let silent = true;
     // paranoid checks are a last line of defense for malicious code, no need to run them in genesis
-    let enable_move_vm_paranoid_checks = false;
-    let move_vm = adapter::new_move_vm(
-        native_functions.clone(),
-        &protocol_config,
-        enable_move_vm_paranoid_checks,
-    )
-    .expect("We defined natives to not fail here");
+    let paranoid_checks = false;
+    let executor = sui_execution::executor(&protocol_config, paranoid_checks, silent)
+        .expect("Creating an executor should not fail here");
 
     for system_package in BuiltInFramework::iter_system_packages() {
         process_package(
             &mut store,
-            &move_vm,
+            executor.as_ref(),
             genesis_ctx,
             &system_package.modules(),
             system_package.dependencies().to_vec(),
@@ -896,13 +896,16 @@ fn create_genesis_objects(
         .unwrap();
     }
 
-    for object in input_objects {
-        store.insert_object(object.to_owned());
+    {
+        let store = Arc::get_mut(&mut store).expect("only one reference to store");
+        for object in input_objects {
+            store.insert_object(object.to_owned());
+        }
     }
 
     generate_genesis_system_object(
         &mut store,
-        &move_vm,
+        executor.as_ref(),
         validators,
         genesis_ctx,
         parameters,
@@ -911,12 +914,13 @@ fn create_genesis_objects(
     )
     .unwrap();
 
+    let store = Arc::try_unwrap(store).expect("only one reference to store");
     store.into_inner().into_values().collect()
 }
 
 fn process_package(
-    store: &mut InMemoryStorage,
-    vm: &MoveVM,
+    store: &mut Arc<InMemoryStorage>,
+    executor: &dyn Executor,
     ctx: &mut TxContext,
     modules: &[CompiledModule],
     dependencies: Vec<ObjectID>,
@@ -955,13 +959,13 @@ fn process_package(
         })
         .collect();
 
+    let genesis_digest = ctx.digest();
     let mut temporary_store = TemporaryStore::new(
-        &*store,
+        store.clone(),
         InputObjects::new(loaded_dependencies),
-        ctx.digest(),
+        genesis_digest,
         protocol_config,
     );
-    let mut gas_status = SuiGasStatus::new_unmetered(protocol_config);
     let module_bytes = modules
         .iter()
         .map(|m| {
@@ -976,14 +980,12 @@ fn process_package(
         builder.command(Command::Publish(module_bytes, dependencies));
         builder.finish()
     };
-    programmable_transactions::execution::execute::<_, execution_mode::Genesis>(
+    executor.update_genesis_state(
         protocol_config,
         metrics,
-        vm,
         &mut temporary_store,
         ctx,
-        &mut gas_status,
-        None,
+        &mut GasCharger::new_unmetered(genesis_digest),
         pt,
     )?;
 
@@ -991,14 +993,15 @@ fn process_package(
         written, deleted, ..
     } = temporary_store.into_inner();
 
+    let store = Arc::get_mut(store).expect("only one reference to store");
     store.finish(written, deleted);
 
     Ok(())
 }
 
 pub fn generate_genesis_system_object(
-    store: &mut InMemoryStorage,
-    move_vm: &MoveVM,
+    store: &mut Arc<InMemoryStorage>,
+    executor: &dyn Executor,
     genesis_validators: &[GenesisValidatorMetadata],
     genesis_ctx: &mut TxContext,
     genesis_chain_parameters: &GenesisChainParameters,
@@ -1006,11 +1009,15 @@ pub fn generate_genesis_system_object(
     metrics: Arc<LimitsMetrics>,
 ) -> anyhow::Result<()> {
     let genesis_digest = genesis_ctx.digest();
-    let protocol_config = ProtocolConfig::get_for_version(ProtocolVersion::new(
-        genesis_chain_parameters.protocol_version,
-    ));
+    // We don't know the chain ID here since we haven't yet created the genesis checkpoint.
+    // However since we know there are no chain specific protocol config options in genesis,
+    // we use Chain::Unknown here.
+    let protocol_config = ProtocolConfig::get_for_version(
+        ProtocolVersion::new(genesis_chain_parameters.protocol_version),
+        sui_protocol_config::Chain::Unknown,
+    );
     let mut temporary_store = TemporaryStore::new(
-        &*store,
+        store.clone(),
         InputObjects::new(vec![]),
         genesis_digest,
         &protocol_config,
@@ -1067,14 +1074,13 @@ pub fn generate_genesis_system_object(
         );
         builder.finish()
     };
-    programmable_transactions::execution::execute::<_, execution_mode::Genesis>(
+
+    executor.update_genesis_state(
         &protocol_config,
         metrics,
-        move_vm,
         &mut temporary_store,
         genesis_ctx,
-        &mut SuiGasStatus::new_unmetered(&protocol_config),
-        None,
+        &mut GasCharger::new_unmetered(genesis_digest),
         pt,
     )?;
 
@@ -1082,6 +1088,7 @@ pub fn generate_genesis_system_object(
         written, deleted, ..
     } = temporary_store.into_inner();
 
+    let store = Arc::get_mut(store).expect("only one reference to store");
     store.finish(written, deleted);
 
     Ok(())
@@ -1093,9 +1100,9 @@ mod test {
     use crate::Builder;
     use fastcrypto::traits::KeyPair;
     use sui_config::genesis::*;
+    use sui_config::local_ip_utils;
     use sui_config::node::DEFAULT_COMMISSION_RATE;
     use sui_config::node::DEFAULT_VALIDATOR_GAS_PRICE;
-    use sui_config::utils;
     use sui_types::base_types::SuiAddress;
     use sui_types::crypto::{
         generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
@@ -1136,10 +1143,10 @@ mod test {
             network_key: network_key.public().clone(),
             gas_price: DEFAULT_VALIDATOR_GAS_PRICE,
             commission_rate: DEFAULT_COMMISSION_RATE,
-            network_address: utils::new_tcp_network_address(),
-            p2p_address: utils::new_udp_network_address(),
-            narwhal_primary_address: utils::new_udp_network_address(),
-            narwhal_worker_address: utils::new_udp_network_address(),
+            network_address: local_ip_utils::new_local_tcp_address_for_testing(),
+            p2p_address: local_ip_utils::new_local_udp_address_for_testing(),
+            narwhal_primary_address: local_ip_utils::new_local_udp_address_for_testing(),
+            narwhal_worker_address: local_ip_utils::new_local_udp_address_for_testing(),
             description: String::new(),
             image_url: String::new(),
             project_url: String::new(),

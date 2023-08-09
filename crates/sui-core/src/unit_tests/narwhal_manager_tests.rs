@@ -9,14 +9,15 @@ use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
 use narwhal_config::{Epoch, WorkerCache};
 use narwhal_executor::ExecutionState;
+use narwhal_test_utils::latest_protocol_version;
 use narwhal_types::{BatchAPI, ConsensusOutput, TransactionProto, TransactionsClient};
 use narwhal_worker::TrivialTransactionValidator;
 use prometheus::Registry;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use test_utils::authority::test_and_configure_authority_configs;
 use tokio::sync::broadcast;
 use tokio::time::{interval, sleep};
 
@@ -28,7 +29,7 @@ struct NoOpExecutionState {
 #[async_trait::async_trait]
 impl ExecutionState for NoOpExecutionState {
     async fn handle_consensus_output(&self, consensus_output: ConsensusOutput) {
-        for (_, batches) in consensus_output.batches {
+        for batches in consensus_output.batches {
             for batch in batches {
                 for transaction in batch.transactions().iter() {
                     assert_eq!(
@@ -87,7 +88,9 @@ async fn send_transactions(
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_narwhal_manager() {
-    let configs = test_and_configure_authority_configs(1);
+    let configs = ConfigBuilder::new_with_temp_dir()
+        .committee_size(1.try_into().unwrap())
+        .build();
     let mut narwhal_managers = Vec::new();
     let mut shutdown_senders = Vec::new();
 
@@ -132,6 +135,7 @@ async fn test_narwhal_manager() {
         narwhal_manager
             .start(
                 narwhal_committee.clone(),
+                latest_protocol_version(),
                 worker_cache.clone(),
                 Arc::new(execution_state.clone()),
                 TrivialTransactionValidator::default(),
@@ -193,6 +197,7 @@ async fn test_narwhal_manager() {
         narwhal_manager
             .start(
                 narwhal_committee.clone(),
+                latest_protocol_version(),
                 worker_cache.clone(),
                 Arc::new(execution_state.clone()),
                 TrivialTransactionValidator::default(),

@@ -8,12 +8,12 @@ import configCommon from './webpack.config.common';
 import type { Configuration } from 'webpack';
 
 const configProd: Configuration = {
-    mode: 'production',
-    devtool: 'source-map',
+	mode: 'production',
+	devtool: 'source-map',
 };
 
 async function getConfig() {
-    return merge(await configCommon(), configProd);
+	return merge(await configCommon(), configProd);
 }
 
 export default getConfig;

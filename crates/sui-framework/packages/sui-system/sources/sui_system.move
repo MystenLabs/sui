@@ -41,22 +41,23 @@
 module sui_system::sui_system {
     use sui::balance::Balance;
 
-    use sui::coin::Coin;
+    use sui::coin::{Self, Coin};
     use sui::object::UID;
     use sui_system::staking_pool::StakedSui;
     use sui::sui::SUI;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
+    use sui::object::ID;
+    use sui::table::Table;
     use sui_system::validator::Validator;
     use sui_system::validator_cap::UnverifiedValidatorOperationCap;
     use sui_system::sui_system_state_inner::{Self, SystemParameters, SuiSystemStateInnerV2};
     use sui_system::stake_subsidy::StakeSubsidy;
+    use sui_system::staking_pool::PoolTokenExchangeRate;
     use std::option;
     use sui::dynamic_field;
 
     #[test_only] use sui::balance;
-    #[test_only] use sui::object::ID;
-    #[test_only] use sui::table::Table;
     #[test_only] use sui_system::validator_set::ValidatorSet;
     #[test_only] use sui_system::validator_set;
     #[test_only] use sui::vec_set::VecSet;
@@ -239,6 +240,17 @@ module sui_system::sui_system {
         validator_address: address,
         ctx: &mut TxContext,
     ) {
+        let staked_sui = request_add_stake_non_entry(wrapper, stake, validator_address, ctx);
+        transfer::public_transfer(staked_sui, tx_context::sender(ctx));
+    }
+
+    /// The non-entry version of `request_add_stake`, which returns the staked SUI instead of transferring it to the sender.
+    public fun request_add_stake_non_entry(
+        wrapper: &mut SuiSystemState,
+        stake: Coin<SUI>,
+        validator_address: address,
+        ctx: &mut TxContext,
+    ): StakedSui {
         let self = load_system_state_mut(wrapper);
         sui_system_state_inner::request_add_stake(self, stake, validator_address, ctx)
     }
@@ -252,15 +264,26 @@ module sui_system::sui_system {
         ctx: &mut TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
-        sui_system_state_inner::request_add_stake_mul_coin(self, stakes, stake_amount, validator_address, ctx)
+        let staked_sui = sui_system_state_inner::request_add_stake_mul_coin(self, stakes, stake_amount, validator_address, ctx);
+        transfer::public_transfer(staked_sui, tx_context::sender(ctx));
     }
 
-    /// Withdraw some portion of a stake from a validator's staking pool.
+    /// Withdraw stake from a validator's staking pool.
     public entry fun request_withdraw_stake(
         wrapper: &mut SuiSystemState,
         staked_sui: StakedSui,
         ctx: &mut TxContext,
     ) {
+        let withdrawn_stake = request_withdraw_stake_non_entry(wrapper, staked_sui, ctx);
+        transfer::public_transfer(coin::from_balance(withdrawn_stake, ctx), tx_context::sender(ctx));
+    }
+
+    /// Non-entry version of `request_withdraw_stake` that returns the withdrawn SUI instead of transferring it to the sender.
+    public fun request_withdraw_stake_non_entry(
+        wrapper: &mut SuiSystemState,
+        staked_sui: StakedSui,
+        ctx: &mut TxContext,
+    ) : Balance<SUI> {
         let self = load_system_state_mut(wrapper);
         sui_system_state_inner::request_withdraw_stake(self, staked_sui, ctx)
     }
@@ -493,6 +516,21 @@ module sui_system::sui_system {
     ) {
         let self = load_system_state_mut(self);
         sui_system_state_inner::update_candidate_validator_network_pubkey(self, network_pubkey, ctx)
+    }
+
+    /// Getter of the pool token exchange rate of a staking pool. Works for both active and inactive pools.
+    public fun pool_exchange_rates(
+        wrapper: &mut SuiSystemState,
+        pool_id: &ID
+    ): &Table<u64, PoolTokenExchangeRate>  {
+        let self = load_system_state_mut(wrapper);
+        sui_system_state_inner::pool_exchange_rates(self, pool_id)
+    }
+
+    /// Getter returning addresses of the currently active validators.
+    public fun active_validator_addresses(wrapper: &mut SuiSystemState): vector<address> {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::active_validator_addresses(self)
     }
 
     /// This function should be called at the end of an epoch, and advances the system to the next epoch.

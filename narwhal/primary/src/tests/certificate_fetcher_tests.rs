@@ -3,6 +3,7 @@
 use crate::primary::NUM_SHUTDOWN_RECEIVERS;
 use crate::{
     certificate_fetcher::CertificateFetcher, metrics::PrimaryMetrics, synchronizer::Synchronizer,
+    PrimaryChannelMetrics,
 };
 use anemo::async_trait;
 use anyhow::Result;
@@ -19,7 +20,7 @@ use storage::NodeStorage;
 use tokio::sync::oneshot;
 
 use consensus::consensus::ConsensusRound;
-use test_utils::{temp_dir, CommitteeFixture};
+use test_utils::{latest_protocol_version, temp_dir, CommitteeFixture};
 use tokio::{
     sync::{
         mpsc::{self, error::TryRecvError, Receiver, Sender},
@@ -29,8 +30,7 @@ use tokio::{
 };
 use types::{
     BatchDigest, Certificate, CertificateAPI, CertificateDigest, FetchCertificatesRequest,
-    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header, HeaderAPI,
-    HeaderDigest, Metadata, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
+    FetchCertificatesResponse, Header, HeaderAPI, HeaderDigest, Metadata,
     PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
     RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse,
 };
@@ -51,18 +51,14 @@ impl PrimaryToPrimary for NetworkProxy {
             request
         );
     }
+
     async fn request_vote(
         &self,
         _request: anemo::Request<RequestVoteRequest>,
     ) -> Result<anemo::Response<RequestVoteResponse>, anemo::rpc::Status> {
         unimplemented!()
     }
-    async fn get_certificates(
-        &self,
-        _request: anemo::Request<GetCertificatesRequest>,
-    ) -> Result<anemo::Response<GetCertificatesResponse>, anemo::rpc::Status> {
-        unimplemented!()
-    }
+
     async fn fetch_certificates(
         &self,
         request: anemo::Request<FetchCertificatesRequest>,
@@ -74,13 +70,6 @@ impl PrimaryToPrimary for NetworkProxy {
         Ok(anemo::Response::new(
             self.response.lock().await.recv().await.unwrap(),
         ))
-    }
-
-    async fn get_payload_availability(
-        &self,
-        _request: anemo::Request<PayloadAvailabilityRequest>,
-    ) -> Result<anemo::Response<PayloadAvailabilityResponse>, anemo::rpc::Status> {
-        unimplemented!()
     }
 }
 
@@ -146,6 +135,7 @@ async fn fetch_certificates_basic() {
     let id = primary.id();
     let fake_primary = fixture.authorities().nth(1).unwrap();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let gc_depth: Round = 50;
 
     // kept empty
@@ -183,8 +173,8 @@ async fn fetch_certificates_basic() {
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
         rx_synchronizer_network,
-        None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
 
     let fake_primary_addr = fake_primary.address().to_anemo_address().unwrap();
@@ -236,7 +226,7 @@ async fn fetch_certificates_basic() {
             .into_iter()
             .map(|header| fixture.certificate(&header).digest())
             .collect();
-        (_, current_round) = fixture.headers_round(i, &parents);
+        (_, current_round) = fixture.headers_round(i, &parents, &latest_protocol_version());
         headers.extend(current_round.clone());
     }
 

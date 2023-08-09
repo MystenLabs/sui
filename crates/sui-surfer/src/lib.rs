@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use surf_strategy::SurfStrategy;
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 use tokio::sync::watch;
 use tracing::info;
 
@@ -23,7 +23,7 @@ mod surfer_state;
 mod surfer_task;
 
 const VALIDATOR_COUNT: usize = 7;
-const EPOCH_DURATION_MS: u64 = 120000;
+const EPOCH_DURATION_MS: u64 = 15000;
 
 const ACCOUNT_NUM: usize = 20;
 const GAS_OBJECT_COUNT: usize = 3;
@@ -44,8 +44,7 @@ pub async fn run<S: SurfStrategy + Default>(
                 ACCOUNT_NUM
             ])
             .build()
-            .await
-            .unwrap(),
+            .await,
     );
     info!(
         "Started cluster with {} validators and epoch duration of {:?}ms",

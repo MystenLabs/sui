@@ -33,6 +33,7 @@ module fungible_tokens::basket {
     /// Needed to deposit a 1:1 ratio of SUI and MANAGED for minting, but deposited a different ratio
     const EBadDepositRatio: u64 = 0;
 
+    #[allow(unused_function)]
     fun init(witness: BASKET, ctx: &mut TxContext) {
         // Get a treasury cap for the coin put it in the reserve
         let total_supply = balance::create_supply<BASKET>(witness);

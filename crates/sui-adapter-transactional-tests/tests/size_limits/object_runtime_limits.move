@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 
-//# init --addresses a=0x0 --accounts A
+//# init --addresses a=0x0 --accounts A --max-gas 100000000000000
 
 //# publish
 module a::m {
@@ -27,10 +27,10 @@ module a::m {
     }
 }
 
-//# run a::m::add_n_items --sender A --args 100 --gas-budget 1000000000000
+//# run a::m::add_n_items --sender A --args 100 --gas-budget 1000000000000 --summarize
 
-//# run a::m::add_n_items --sender A --args 1000 --gas-budget 1000000000000
+//# run a::m::add_n_items --sender A --args 1000 --gas-budget 1000000000000 --summarize
 
 //# run a::m::add_n_items --sender A --args 1025 --gas-budget 1000000000000
 
-//# run a::m::add_n_items --sender A --args 1025 --uncharged
+//# run a::m::add_n_items --sender A --args 1025 --gas-budget 100000000000000

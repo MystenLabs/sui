@@ -29,6 +29,7 @@ use sui_keys::keypair_file::{
     read_authority_keypair_from_file, read_network_keypair_from_file,
     write_authority_keypair_to_file, write_keypair_to_file,
 };
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::crypto::{get_key_pair_from_rng, AuthorityKeyPair, SuiKeyPair};
 use telemetry_subscribers::TelemetryGuards;
 use tokio::sync::mpsc::channel;
@@ -43,7 +44,7 @@ use worker::TrivialTransactionValidator;
 async fn main() -> Result<(), eyre::Report> {
     let matches = App::new(crate_name!())
         .version(crate_version!())
-        .about("A research implementation of Narwhal and Tusk.")
+        .about("A production implementation of Narwhal and Bullshark.")
         .args_from_usage("-v... 'Sets the level of verbosity'")
         .subcommand(
             SubCommand::with_name("generate_keys")
@@ -70,10 +71,7 @@ async fn main() -> Result<(), eyre::Report> {
                 .args_from_usage("--workers=<FILE> 'The file containing worker information'")
                 .args_from_usage("--parameters=[FILE] 'The file containing the node parameters'")
                 .args_from_usage("--store=<PATH> 'The path where to create the data store'")
-                .subcommand(SubCommand::with_name("primary")
-                    .about("Run a single primary")
-                    .args_from_usage("-d, --consensus-disabled 'Provide this flag to run a primary node without Tusk'")
-                )
+                .subcommand(SubCommand::with_name("primary").about("Run a single primary"))
                 .subcommand(
                     SubCommand::with_name("worker")
                         .about("Run a single worker")
@@ -279,18 +277,15 @@ async fn run(
     // Check whether to run a primary, a worker, or an entire authority.
     let (primary, worker) = match matches.subcommand() {
         // Spawn the primary and consensus core.
-        ("primary", Some(sub_matches)) => {
-            let primary = PrimaryNode::new(
-                parameters.clone(),
-                !sub_matches.is_present("consensus-disabled"),
-                registry_service,
-            );
+        ("primary", _) => {
+            let primary = PrimaryNode::new(parameters.clone(), registry_service);
 
             primary
                 .start(
                     primary_keypair,
                     primary_network_keypair,
                     committee,
+                    ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown),
                     worker_cache,
                     client.clone(),
                     &store,
@@ -309,7 +304,12 @@ async fn run(
                 .parse::<WorkerId>()
                 .context("The worker id must be a positive integer")?;
 
-            let worker = WorkerNode::new(id, parameters.clone(), registry_service);
+            let worker = WorkerNode::new(
+                id,
+                ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown),
+                parameters.clone(),
+                registry_service,
+            );
 
             worker
                 .start(

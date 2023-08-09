@@ -9,6 +9,7 @@ use diesel::{PgConnection, RunQueryDsl};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use jsonrpsee::http_client::HttpClient;
 use sui_types::digests::ObjectDigest;
+use sui_types::effects::ObjectRemoveKind;
 use tracing::info;
 
 use sui_json_rpc::api::ReadApiClient;
@@ -23,7 +24,7 @@ use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GAS;
 use sui_types::object::Owner;
-use sui_types::storage::{DeleteKind, WriteKind};
+use sui_types::storage::WriteKind;
 
 use crate::errors::IndexerError;
 use crate::types::CheckpointTransactionBlockResponse;
@@ -155,9 +156,9 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
 pub async fn get_object_changes<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,
     sender: SuiAddress,
-    modified_at_versions: &[(ObjectID, SequenceNumber)],
+    modified_at_versions: Vec<(ObjectID, SequenceNumber)>,
     all_changed_objects: Vec<(&OwnedObjectRef, WriteKind)>,
-    all_deleted: Vec<(&SuiObjectRef, DeleteKind)>,
+    all_deleted: Vec<(&SuiObjectRef, ObjectRemoveKind)>,
 ) -> Result<Vec<ObjectChange>, E> {
     let all_changed: Vec<(ObjectRef, Owner, WriteKind)> = all_changed_objects
         .into_iter()
@@ -174,11 +175,11 @@ pub async fn get_object_changes<P: ObjectProvider<Error = E>, E>(
         })
         .collect();
     let all_changed_objects = all_changed
-        .iter()
-        .map(|(obj_ref, owner, write_kind)| (obj_ref, owner, *write_kind))
+        .into_iter()
+        .map(|(obj_ref, owner, write_kind)| (obj_ref, owner, write_kind))
         .collect();
 
-    let all_deleted: Vec<(ObjectRef, DeleteKind)> = all_deleted
+    let all_deleted: Vec<_> = all_deleted
         .into_iter()
         .map(|(obj_ref, delete_kind)| {
             (
@@ -187,17 +188,13 @@ pub async fn get_object_changes<P: ObjectProvider<Error = E>, E>(
             )
         })
         .collect();
-    let all_deleted_objects = all_deleted
-        .iter()
-        .map(|(obj_ref, delete_kind)| (obj_ref, *delete_kind))
-        .collect();
 
     sui_json_rpc::get_object_changes(
         object_provider,
         sender,
         modified_at_versions,
         all_changed_objects,
-        all_deleted_objects,
+        all_deleted,
     )
     .await
 }

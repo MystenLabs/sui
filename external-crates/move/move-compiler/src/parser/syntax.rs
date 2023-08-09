@@ -8,7 +8,7 @@
 
 use move_command_line_common::files::FileHash;
 use move_ir_types::location::*;
-use move_symbol_pool::Symbol;
+use move_symbol_pool::{symbol, Symbol};
 
 use crate::{
     diag,
@@ -1642,7 +1642,7 @@ fn parse_quant_binding(context: &mut Context) -> Result<Spanned<(Bind, Exp)>, Bo
         // Built `domain<ty>()` expression.
         context.tokens.advance()?;
         let ty = parse_type(context)?;
-        make_builtin_call(ty.loc, Symbol::from("$spec_domain"), Some(vec![ty]), vec![])
+        make_builtin_call(ty.loc, symbol!("$spec_domain"), Some(vec![ty]), vec![])
     } else {
         // This is a quantifier over a value, like a vector or a range.
         consume_identifier(context.tokens, "in")?;
@@ -2188,7 +2188,7 @@ fn parse_address_block(
         return Err(Box::new(diag!(Syntax::UnexpectedToken, (loc, msg))));
     }
     let addr_name = parse_identifier(context)?;
-    if addr_name.value.as_str() != "address" {
+    if addr_name.value != symbol!("address") {
         let msg = format!("{}. Got '{}'", UNEXPECTED_TOKEN, addr_name.value);
         return Err(Box::new(diag!(
             Syntax::UnexpectedToken,
@@ -3133,7 +3133,7 @@ fn parse_spec_property(context: &mut Context) -> Result<PragmaProperty, Box<Diag
     let name = match consume_optional_token_with_loc(context.tokens, Tok::Friend)? {
         // special treatment for `pragma friend = ...` as friend is a keyword
         // TODO: this might violate the assumption that a keyword can never be a name.
-        Some(loc) => Name::new(loc, Symbol::from("friend")),
+        Some(loc) => Name::new(loc, symbol!("friend")),
         None => parse_identifier(context)?,
     };
     let value = if context.tokens.peek() == Tok::Equal {

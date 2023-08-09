@@ -7,22 +7,23 @@ edition = "2021"
 publish = false
 
 [dependencies]
-match_opt = "0.1.2"
-serde = { version = "1.0.144", features = ["derive"] }
-serde_json = "1.0.88"
-thiserror = "1.0.35"
-tracing = "0.1.36"
+match_opt.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
 
 fastcrypto.workspace = true
 mysten-util-mem.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 mysten-network.workspace = true
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
-rand = "0.8.5"
+sui-protocol-config.workspace = true
+rand.workspace = true
 
 [dev-dependencies]
-insta = { version = "1.21.1", features = ["json"] }
-rand = "0.8.5"
-tempfile = "3.3.0"
+insta.workspace = true
+rand.workspace = true
+tempfile.workspace = true
 
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }

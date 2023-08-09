@@ -81,12 +81,12 @@ gas summary: computation_cost: 1000000, storage_cost: 3663200,  storage_rebate: 
 task 16 'view-object'. lines 105-105:
 Owner: Shared
 Version: 10
-Contents: Test_DepDepV1::DepDepM1::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(15,0)}}, v: 0u64}
+Contents: Test_DepDepV1::DepDepM1::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(15,0)}}, v: 7u64}
 
 task 17 'view-object'. lines 107-112:
 Owner: Shared
 Version: 10
-Contents: Test_DepDepV1::DepDepM1::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(15,1)}}, v: 7u64}
+Contents: Test_DepDepV1::DepDepM1::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(15,1)}}, v: 0u64}
 
 task 18 'upgrade'. lines 114-120:
 Error: Transaction Effects Status: Publish/Upgrade Error, Missing dependency. A dependency of a published or upgraded package has not been assigned an on-chain address.

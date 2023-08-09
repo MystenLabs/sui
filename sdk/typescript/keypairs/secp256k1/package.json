@@ -1,0 +1,5 @@
+{
+	"private": true,
+	"import": "../../dist/esm/keypairs/secp256k1/index.js",
+	"main": "../../dist/cjs/keypairs/secp256k1/index.js"
+}

@@ -63,6 +63,7 @@ module capy::capy_item {
         name: String,
     }
 
+    #[allow(unused_function)]
     /// Create a `ItemStore` and a `StoreOwnerCap` for this store.
     fun init(ctx: &mut TxContext) {
         transfer::share_object(ItemStore {

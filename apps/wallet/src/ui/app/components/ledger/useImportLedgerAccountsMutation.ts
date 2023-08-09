@@ -8,20 +8,20 @@ import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAcco
 import { type Message } from '_src/shared/messaging/messages';
 
 type UseImportLedgerAccountsMutationOptions = Pick<
-    UseMutationOptions<Message, unknown, SerializedLedgerAccount[], unknown>,
-    'onSuccess' | 'onError'
+	UseMutationOptions<Message, unknown, SerializedLedgerAccount[], unknown>,
+	'onSuccess' | 'onError'
 >;
 
 export function useImportLedgerAccountsMutation({
-    onSuccess,
-    onError,
+	onSuccess,
+	onError,
 }: UseImportLedgerAccountsMutationOptions) {
-    const backgroundClient = useBackgroundClient();
-    return useMutation({
-        mutationFn: (ledgerAccounts: SerializedLedgerAccount[]) => {
-            return backgroundClient.importLedgerAccounts(ledgerAccounts);
-        },
-        onSuccess,
-        onError,
-    });
+	const backgroundClient = useBackgroundClient();
+	return useMutation({
+		mutationFn: (ledgerAccounts: SerializedLedgerAccount[]) => {
+			return backgroundClient.importLedgerAccounts(ledgerAccounts);
+		},
+		onSuccess,
+		onError,
+	});
 }

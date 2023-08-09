@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.2.0"
+    "version": "1.8.0"
   },
   "methods": [
     {
@@ -491,6 +491,33 @@
                 }
               ]
             }
+          }
+        }
+      ]
+    },
+    {
+      "name": "sui_getChainIdentifier",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Return the first four bytes of the chain's genesis checkpoint digest.",
+      "params": [],
+      "result": {
+        "name": "String",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "examples": [
+        {
+          "name": "Gets the identifier for the chain receiving the POST.",
+          "params": [],
+          "result": {
+            "name": "Result",
+            "value": "4c78adac"
           }
         }
       ]
@@ -1320,7 +1347,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "11",
+              "maxSupportedProtocolVersion": "20",
               "protocolVersion": "6",
               "featureFlags": {
                 "advance_epoch_start_time_in_safe_mode": true,
@@ -1333,10 +1360,16 @@
                 "disallow_change_struct_type_params_on_upgrade": false,
                 "loaded_child_objects_fixed": true,
                 "missing_type_is_compatibility_error": true,
+                "narwhal_new_leader_election_schedule": false,
+                "narwhal_versioned_metadata": false,
                 "no_extraneous_module_bytes": false,
                 "package_digest_hash_module": false,
                 "package_upgrades": true,
-                "scoring_decision_with_validity_cutoff": true
+                "scoring_decision_with_validity_cutoff": true,
+                "simplified_unwrap_then_delete": false,
+                "txn_base_cost_as_multiplier": false,
+                "upgraded_multisig_supported": false,
+                "zklogin_auth": false
               },
               "attributes": {
                 "address_from_bytes_cost_base": {
@@ -1375,6 +1408,7 @@
                 "buffer_stake_for_protocol_upgrade_bps": {
                   "u64": "5000"
                 },
+                "consensus_bad_nodes_stake_threshold": null,
                 "crypto_invalid_arguments_cost": {
                   "u64": "100"
                 },
@@ -1537,9 +1571,11 @@
                 "event_emit_value_size_derivation_cost_per_byte": {
                   "u64": "2"
                 },
+                "execution_version": null,
                 "gas_model_version": {
                   "u64": "5"
                 },
+                "gas_rounding_step": null,
                 "groth16_prepare_verifying_key_bls12381_cost_base": {
                   "u64": "52"
                 },
@@ -1609,6 +1645,7 @@
                 "max_event_emit_size": {
                   "u64": "256000"
                 },
+                "max_event_emit_size_total": null,
                 "max_fields_in_struct": {
                   "u64": "32"
                 },
@@ -1649,6 +1686,7 @@
                 "max_move_package_size": {
                   "u64": "102400"
                 },
+                "max_move_value_depth": null,
                 "max_move_vector_len": {
                   "u64": "262144"
                 },
@@ -1827,7 +1865,7 @@
           "name": "Read API"
         }
       ],
-      "description": "Return the total number of transactions known to the server.",
+      "description": "Return the total number of transaction blocks known to the server.",
       "params": [],
       "result": {
         "name": "BigInt<u64>",
@@ -2765,7 +2803,94 @@
             "$ref": "#/components/schemas/ObjectRead"
           }
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Gets Past Object data for a vector of objects.",
+          "params": [
+            {
+              "name": "past_objects",
+              "value": [
+                {
+                  "objectId": "0x7d0cd09d3cc1679290f1df2803b32b76ba0395dbb635e3fb7390f04e6567f739",
+                  "version": "4"
+                },
+                {
+                  "objectId": "0xb01f2f3f227a90090e6777f19aa10fd9e64e29dd4e8da119481d1a7c3c050dc5",
+                  "version": "12"
+                }
+              ]
+            },
+            {
+              "name": "options",
+              "value": {
+                "showType": true,
+                "showOwner": true,
+                "showPreviousTransaction": true,
+                "showDisplay": false,
+                "showContent": true,
+                "showBcs": false,
+                "showStorageRebate": true
+              }
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": [
+              {
+                "status": "VersionFound",
+                "details": {
+                  "objectId": "0x7d0cd09d3cc1679290f1df2803b32b76ba0395dbb635e3fb7390f04e6567f739",
+                  "version": "4",
+                  "digest": "J66shUHEGAe7eHtiw1bz5rvvjZcwpvnUTMEkxThxR3Kg",
+                  "type": "0x2::coin::Coin<0x2::sui::SUI>",
+                  "owner": {
+                    "AddressOwner": "0x5056aa3325512c8af40b9f5fd7065c83ded900657eac70a7979c2541646fa449"
+                  },
+                  "previousTransaction": "GcteyqtLYTc7Fig8CKtspCafwf6muuDgMtDUA1jrYKae",
+                  "storageRebate": "100",
+                  "content": {
+                    "dataType": "moveObject",
+                    "type": "0x2::coin::Coin<0x2::sui::SUI>",
+                    "hasPublicTransfer": true,
+                    "fields": {
+                      "balance": "10000",
+                      "id": {
+                        "id": "0x7d0cd09d3cc1679290f1df2803b32b76ba0395dbb635e3fb7390f04e6567f739"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "status": "VersionFound",
+                "details": {
+                  "objectId": "0xb01f2f3f227a90090e6777f19aa10fd9e64e29dd4e8da119481d1a7c3c050dc5",
+                  "version": "12",
+                  "digest": "2HJk4eT4Jmekwf1nNeokfibZnuaUmMFS1JYcPJdw6eB9",
+                  "type": "0x2::coin::Coin<0x2::sui::SUI>",
+                  "owner": {
+                    "AddressOwner": "0xc65dfd6586b7d295a16b97bd4318995d4a920239e4c5d856bdbf1944a063a3ef"
+                  },
+                  "previousTransaction": "F34PCnEHm5GAP5ksDKPSdRMKz49JiqrvLUTZsiojqJS2",
+                  "storageRebate": "100",
+                  "content": {
+                    "dataType": "moveObject",
+                    "type": "0x2::coin::Coin<0x2::sui::SUI>",
+                    "hasPublicTransfer": true,
+                    "fields": {
+                      "balance": "20000",
+                      "id": {
+                        "id": "0x7d0cd09d3cc1679290f1df2803b32b76ba0395dbb635e3fb7390f04e6567f739"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "suix_getAllBalances",
@@ -3586,7 +3711,49 @@
             "$ref": "#/components/schemas/DelegatedStake"
           }
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Returns the staking information for the address the request provides.",
+          "params": [
+            {
+              "name": "owner",
+              "value": "0xb5387b29a731d26d98108d7abc4902107d7d6a8e0f8fea6fda5488462e58724c"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "validatorAddress": "0x034462b6064a08845e2ae2942fe7c4ee816d754eb2eed23e6c6bb32c89fe1f21",
+              "stakingPool": "0xab588374445e72e0402aea014b295610579963ee67e81398729f87d81d62f399",
+              "stakes": [
+                {
+                  "stakedSuiId": "0xc041b0f8d0938923ea7e3917608ee62df4376710024f81dd33ab6833482ee803",
+                  "stakeRequestEpoch": "62",
+                  "stakeActiveEpoch": "63",
+                  "principal": "200000000000",
+                  "status": "Active",
+                  "estimatedReward": "520000000"
+                },
+                {
+                  "stakedSuiId": "0x4e779a48e6ef635c7f856df4905022458bfbd22bbb46f892c42d9ec0ae4de93e",
+                  "stakeRequestEpoch": "142",
+                  "stakeActiveEpoch": "143",
+                  "principal": "200000000000",
+                  "status": "Pending"
+                },
+                {
+                  "stakedSuiId": "0x02c75973a51c17180798237326a58694a2cf5cd6fa76ed1d18f05f15e3507525",
+                  "stakeRequestEpoch": "244",
+                  "stakeActiveEpoch": "245",
+                  "principal": "200000000000",
+                  "status": "Unstaked"
+                }
+              ]
+            }
+          }
+        }
+      ]
     },
     {
       "name": "suix_getStakesByIds",
@@ -3617,7 +3784,45 @@
             "$ref": "#/components/schemas/DelegatedStake"
           }
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Returns the staking information for the address the request provides.",
+          "params": [
+            {
+              "name": "staked_sui_ids",
+              "value": [
+                "0x2ddec4fb83621d55952d9172fcfcb72feae238b3186a7bb26a1ab2c982a0a9b4",
+                "0x82aa70f5a010fffc60f20194ef0f597474e8ceaf9ee4582d3a233101e322a22c"
+              ]
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "validatorAddress": "0xb2a5bea2e681ea5af4e59bd1abb0bb4fcb2747866ff92885a3c21a7703f56472",
+              "stakingPool": "0x1c198308aa0c71b771ada6b96c16fc9c0fa754b3c61936f77fcfdaa213c2f7b4",
+              "stakes": [
+                {
+                  "stakedSuiId": "0x2ddec4fb83621d55952d9172fcfcb72feae238b3186a7bb26a1ab2c982a0a9b4",
+                  "stakeRequestEpoch": "62",
+                  "stakeActiveEpoch": "63",
+                  "principal": "200000000000",
+                  "status": "Active",
+                  "estimatedReward": "520000000"
+                },
+                {
+                  "stakedSuiId": "0x82aa70f5a010fffc60f20194ef0f597474e8ceaf9ee4582d3a233101e322a22c",
+                  "stakeRequestEpoch": "244",
+                  "stakeActiveEpoch": "245",
+                  "principal": "200000000000",
+                  "status": "Unstaked"
+                }
+              ]
+            }
+          }
+        }
+      ]
     },
     {
       "name": "suix_getTotalSupply",
@@ -3716,7 +3921,7 @@
       "params": [
         {
           "name": "query",
-          "description": "the event query criteria.",
+          "description": "The event query criteria. See [Event filter](https://docs.sui.io/build/event_api#event-filters) documentation for examples.",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/EventFilter"
@@ -3966,7 +4171,22 @@
         "schema": {
           "$ref": "#/components/schemas/SuiAddress"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Returns the resolved address for the name the request provides.",
+          "params": [
+            {
+              "name": "name",
+              "value": "example.sui"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": "0xfb1b51ef9f3ed66000c0e45697dbee0954790a7b5c15ad7354f23b968be8bb06"
+          }
+        }
+      ]
     },
     {
       "name": "suix_resolveNameServiceNames",
@@ -4006,7 +4226,36 @@
         "schema": {
           "$ref": "#/components/schemas/Page_for_String_and_ObjectID"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Returns the SuiNS name for the address the request provides. Currently, the API returns only the first name in cases where there are multiple. Future support will use the cursor ID and limit values in the request to control pagination of the response for addresses with multiple names.",
+          "params": [
+            {
+              "name": "address",
+              "value": "0x70f2d83f980fe0996a92d351d6749a0a0b47998aaf3d11da24c49e014d4ccb1d"
+            },
+            {
+              "name": "cursor",
+              "value": "0x03d47b901cb7b3177a791cd29bb5304037fea6ced287081357950315a8842c38"
+            },
+            {
+              "name": "limit",
+              "value": 3
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "data": [
+                "example.sui"
+              ],
+              "nextCursor": "0x03d47b901cb7b3177a791cd29bb5304037fea6ced287081357950315a8842c38",
+              "hasNextPage": false
+            }
+          }
+        }
+      ]
     },
     {
       "name": "suix_subscribeEvent",
@@ -4025,7 +4274,7 @@
       "params": [
         {
           "name": "filter",
-          "description": "the filter criteria of the event stream, see the [Sui docs](https://docs.sui.io/build/pubsub#event-filters) for detailed examples.",
+          "description": "The filter criteria of the event stream. See [Event filter](https://docs.sui.io/build/event_api#event-filters) documentation for examples.",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/EventFilter"
@@ -4895,6 +5144,73 @@
             "$ref": "#/components/schemas/Base64"
           }
         ]
+      },
+      "AuxInputs": {
+        "description": "A parsed result of all aux inputs.",
+        "type": "object",
+        "required": [
+          "addr_seed",
+          "eph_public_key",
+          "jwt_sha2_hash",
+          "jwt_signature",
+          "key_claim_name",
+          "masked_content",
+          "max_epoch",
+          "num_sha2_blocks",
+          "payload_len",
+          "payload_start_index"
+        ],
+        "properties": {
+          "addr_seed": {
+            "type": "string"
+          },
+          "eph_public_key": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "jwt_sha2_hash": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "jwt_signature": {
+            "type": "string"
+          },
+          "key_claim_name": {
+            "type": "string"
+          },
+          "masked_content": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "max_epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "num_sha2_blocks": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0.0
+          },
+          "payload_len": {
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0.0
+          },
+          "payload_start_index": {
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0.0
+          }
+        }
       },
       "Balance": {
         "type": "object",
@@ -5982,11 +6298,35 @@
           {
             "type": "object",
             "required": [
+              "MultiSigLegacy"
+            ],
+            "properties": {
+              "MultiSigLegacy": {
+                "$ref": "#/components/schemas/MultiSigLegacy"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
               "Signature"
             ],
             "properties": {
               "Signature": {
                 "$ref": "#/components/schemas/Signature"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "ZkLoginAuthenticator"
+            ],
+            "properties": {
+              "ZkLoginAuthenticator": {
+                "$ref": "#/components/schemas/ZkLoginAuthenticator"
               }
             },
             "additionalProperties": false
@@ -6255,11 +6595,9 @@
         "properties": {
           "bitmap": {
             "description": "A bitmap that indicates the position of which public key the signature should be authenticated with.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/Base64"
-              }
-            ]
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0.0
           },
           "multisig_pk": {
             "description": "The public key encoded with each public key with its signature scheme used along with the corresponding weight.",
@@ -6278,8 +6616,77 @@
           }
         }
       },
+      "MultiSigLegacy": {
+        "description": "Deprecated, use [struct MultiSig] instead. The struct that contains signatures and public keys necessary for authenticating a MultiSigLegacy.",
+        "type": "object",
+        "required": [
+          "bitmap",
+          "multisig_pk",
+          "sigs"
+        ],
+        "properties": {
+          "bitmap": {
+            "description": "A bitmap that indicates the position of which public key the signature should be authenticated with.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Base64"
+              }
+            ]
+          },
+          "multisig_pk": {
+            "description": "The public key encoded with each public key with its signature scheme used along with the corresponding weight.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MultiSigPublicKeyLegacy"
+              }
+            ]
+          },
+          "sigs": {
+            "description": "The plain signature encoded with signature scheme.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompressedSignature"
+            }
+          }
+        }
+      },
       "MultiSigPublicKey": {
         "description": "The struct that contains the public key used for authenticating a MultiSig.",
+        "type": "object",
+        "required": [
+          "pk_map",
+          "threshold"
+        ],
+        "properties": {
+          "pk_map": {
+            "description": "A list of public key and its corresponding weight.",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/components/schemas/PublicKey"
+                },
+                {
+                  "type": "integer",
+                  "format": "uint8",
+                  "minimum": 0.0
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
+            }
+          },
+          "threshold": {
+            "description": "If the total weight of the public keys corresponding to verified signatures is larger than threshold, the MultiSig is verified.",
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0.0
+          }
+        }
+      },
+      "MultiSigPublicKeyLegacy": {
+        "description": "Deprecated, use [struct MultiSigPublicKey] instead. The struct that contains the public key used for authenticating a MultiSig.",
         "type": "object",
         "required": [
           "pk_map",
@@ -7350,6 +7757,21 @@
       },
       "ProtocolVersion": {
         "$ref": "#/components/schemas/BigInt_for_uint64"
+      },
+      "PublicInputs": {
+        "description": "The public inputs containing an array of string that is the all inputs hash.",
+        "type": "object",
+        "required": [
+          "inputs"
+        ],
+        "properties": {
+          "inputs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
       },
       "PublicKey": {
         "oneOf": [
@@ -9871,6 +10293,27 @@
             "additionalProperties": false
           },
           {
+            "description": "Query txs that have a given address as sender or recipient.",
+            "type": "object",
+            "required": [
+              "FromOrToAddress"
+            ],
+            "properties": {
+              "FromOrToAddress": {
+                "type": "object",
+                "required": [
+                  "addr"
+                ],
+                "properties": {
+                  "addr": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
             "description": "Query by transaction kind",
             "type": "object",
             "required": [
@@ -9879,6 +10322,22 @@
             "properties": {
               "TransactionKind": {
                 "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Query transactions of any given kind in the input.",
+            "type": "object",
+            "required": [
+              "TransactionKindIn"
+            ],
+            "properties": {
+              "TransactionKindIn": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               }
             },
             "additionalProperties": false
@@ -9980,6 +10439,66 @@
           },
           "epoch": {
             "$ref": "#/components/schemas/BigInt_for_uint64"
+          }
+        }
+      },
+      "ZkLoginAuthenticator": {
+        "description": "An zk login authenticator with all the necessary fields.",
+        "type": "object",
+        "required": [
+          "aux_inputs",
+          "proof",
+          "public_inputs",
+          "user_signature"
+        ],
+        "properties": {
+          "aux_inputs": {
+            "$ref": "#/components/schemas/AuxInputs"
+          },
+          "proof": {
+            "$ref": "#/components/schemas/ZkLoginProof"
+          },
+          "public_inputs": {
+            "$ref": "#/components/schemas/PublicInputs"
+          },
+          "user_signature": {
+            "$ref": "#/components/schemas/Signature"
+          }
+        }
+      },
+      "ZkLoginProof": {
+        "description": "The zk login proof.",
+        "type": "object",
+        "required": [
+          "pi_a",
+          "pi_b",
+          "pi_c",
+          "protocol"
+        ],
+        "properties": {
+          "pi_a": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pi_b": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "pi_c": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "protocol": {
+            "type": "string"
           }
         }
       }

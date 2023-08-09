@@ -1,0 +1,47 @@
+{
+	"name": "@mysten/kiosk",
+	"author": "Mysten Labs <build@mystenlabs.com>",
+	"description": "Sui Kiosk library",
+	"version": "0.4.1",
+	"license": "Apache-2.0",
+	"main": "./dist/index.js",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist",
+		"src",
+		"CHANGELOG.md"
+	],
+	"engines": {
+		"node": ">=16"
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"source": "./src/index.ts",
+			"import": "./dist/index.mjs",
+			"require": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"build": "pnpm build:types && pnpm build:tsup",
+		"build:tsup": "tsup ./src/index.ts --format esm,cjs --sourcemap",
+		"build:types": "tsc --build",
+		"test": "echo \"Error: no test specified\"",
+		"pre-commit": "pnpm prettier:fix && pnpm lint && pnpm build",
+		"prepublishOnly": "pnpm build",
+		"prettier:check": "prettier -c --ignore-unknown .",
+		"prettier:fix": "prettier -w --ignore-unknown .",
+		"eslint:check": "eslint --max-warnings=0 .",
+		"eslint:fix": "pnpm run eslint:check --fix",
+		"lint": "pnpm run eslint:check && pnpm run prettier:check",
+		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
+	},
+	"dependencies": {
+		"@mysten/sui.js": "workspace:*"
+	},
+	"devDependencies": {
+		"tsup": "^7.1.0",
+		"typescript": "^5.1.6"
+	}
+}

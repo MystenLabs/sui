@@ -5,9 +5,11 @@ use std::fmt;
 
 use crate::sui_serde::Readable;
 use fastcrypto::encoding::{Base58, Encoding};
+use once_cell::sync::OnceCell;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, Bytes};
+use sui_protocol_config::Chain;
 
 /// A representation of a 32 byte digest
 #[serde_as]
@@ -43,6 +45,18 @@ impl Digest {
 
     pub const fn into_inner(self) -> [u8; 32] {
         self.0
+    }
+
+    pub fn next_lexicographical(&self) -> Option<Self> {
+        let mut next_digest = *self;
+        let pos = next_digest.0.iter().rposition(|&byte| byte != 255)?;
+        next_digest.0[pos] += 1;
+        next_digest
+            .0
+            .iter_mut()
+            .skip(pos + 1)
+            .for_each(|byte| *byte = 0);
+        Some(next_digest)
     }
 }
 
@@ -111,6 +125,70 @@ impl fmt::UpperHex for Digest {
     }
 }
 
+/// Representation of a network's identifier by the genesis checkpoint's digest
+#[derive(
+    Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+)]
+pub struct ChainIdentifier(CheckpointDigest);
+
+pub static MAINNET_CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
+pub static TESTNET_CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
+
+impl ChainIdentifier {
+    pub fn chain(&self) -> Chain {
+        let mainnet_id = get_mainnet_chain_identifier();
+        let testnet_id = get_testnet_chain_identifier();
+
+        match self {
+            id if *id == mainnet_id => Chain::Mainnet,
+            id if *id == testnet_id => Chain::Testnet,
+            _ => Chain::Unknown,
+        }
+    }
+}
+
+pub fn get_mainnet_chain_identifier() -> ChainIdentifier {
+    let digest = MAINNET_CHAIN_IDENTIFIER.get_or_init(|| {
+        let digest = CheckpointDigest::new(
+            Base58::decode("4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S")
+                .expect("mainnet genesis checkpoint digest literal is invalid")
+                .try_into()
+                .expect("Mainnet genesis checkpoint digest literal has incorrect length"),
+        );
+        ChainIdentifier::from(digest)
+    });
+    *digest
+}
+
+pub fn get_testnet_chain_identifier() -> ChainIdentifier {
+    let digest = TESTNET_CHAIN_IDENTIFIER.get_or_init(|| {
+        let digest = CheckpointDigest::new(
+            Base58::decode("69WiPg3DAQiwdxfncX6wYQ2siKwAe6L9BZthQea3JNMD")
+                .expect("testnet genesis checkpoint digest literal is invalid")
+                .try_into()
+                .expect("Testnet genesis checkpoint digest literal has incorrect length"),
+        );
+        ChainIdentifier::from(digest)
+    });
+    *digest
+}
+
+impl fmt::Display for ChainIdentifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for byte in self.0 .0 .0[0..4].iter() {
+            write!(f, "{:02x}", byte)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl From<CheckpointDigest> for ChainIdentifier {
+    fn from(digest: CheckpointDigest) -> Self {
+        Self(digest)
+    }
+}
+
 /// Representation of a Checkpoint's digest
 #[derive(
     Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
@@ -140,6 +218,10 @@ impl CheckpointDigest {
 
     pub fn base58_encode(&self) -> String {
         Base58::encode(self.0)
+    }
+
+    pub fn next_lexicographical(&self) -> Option<Self> {
+        self.0.next_lexicographical().map(Self)
     }
 }
 
@@ -228,6 +310,10 @@ impl CheckpointContentsDigest {
     pub fn base58_encode(&self) -> String {
         Base58::encode(self.0)
     }
+
+    pub fn next_lexicographical(&self) -> Option<Self> {
+        self.0.next_lexicographical().map(Self)
+    }
 }
 
 impl AsRef<[u8]> for CheckpointContentsDigest {
@@ -265,6 +351,16 @@ impl fmt::Debug for CheckpointContentsDigest {
         f.debug_tuple("CheckpointContentsDigest")
             .field(&self.0)
             .finish()
+    }
+}
+
+impl std::str::FromStr for CheckpointContentsDigest {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut result = [0; 32];
+        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        Ok(CheckpointContentsDigest::new(result))
     }
 }
 
@@ -360,6 +456,10 @@ impl TransactionDigest {
 
     pub fn base58_encode(&self) -> String {
         Base58::encode(self.0)
+    }
+
+    pub fn next_lexicographical(&self) -> Option<Self> {
+        self.0.next_lexicographical().map(Self)
     }
 }
 
@@ -461,6 +561,10 @@ impl TransactionEffectsDigest {
     pub fn base58_encode(&self) -> String {
         Base58::encode(self.0)
     }
+
+    pub fn next_lexicographical(&self) -> Option<Self> {
+        self.0.next_lexicographical().map(Self)
+    }
 }
 
 impl AsRef<[u8]> for TransactionEffectsDigest {
@@ -527,6 +631,14 @@ impl TransactionEventsDigest {
     pub fn random() -> Self {
         Self(Digest::random())
     }
+
+    pub fn next_lexicographical(&self) -> Option<Self> {
+        self.0.next_lexicographical().map(Self)
+    }
+
+    pub fn into_inner(self) -> [u8; 32] {
+        self.0.into_inner()
+    }
 }
 
 impl fmt::Debug for TransactionEventsDigest {
@@ -534,6 +646,28 @@ impl fmt::Debug for TransactionEventsDigest {
         f.debug_tuple("TransactionEventsDigest")
             .field(&self.0)
             .finish()
+    }
+}
+
+impl AsRef<[u8]> for TransactionEventsDigest {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
+impl AsRef<[u8; 32]> for TransactionEventsDigest {
+    fn as_ref(&self) -> &[u8; 32] {
+        self.0.as_ref()
+    }
+}
+
+impl std::str::FromStr for TransactionEventsDigest {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut result = [0; 32];
+        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        Ok(Self::new(result))
     }
 }
 

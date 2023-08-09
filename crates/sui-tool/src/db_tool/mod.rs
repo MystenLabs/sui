@@ -3,16 +3,20 @@
 
 use self::db_dump::{dump_table, duplicate_objects_summary, list_tables, table_summary, StoreName};
 use self::index_search::{search_index, SearchRange};
-use crate::db_tool::db_dump::{compact, print_table_metadata};
-use anyhow::bail;
+use crate::db_tool::db_dump::{compact, print_table_metadata, prune_checkpoints, prune_objects};
+use anyhow::{anyhow, bail};
 use clap::Parser;
+use narwhal_storage::NodeStorage;
 use std::path::{Path, PathBuf};
+use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::checkpoints::CheckpointStore;
 use sui_types::base_types::{EpochId, ObjectID, SequenceNumber};
-use sui_types::digests::TransactionDigest;
+use sui_types::digests::{CheckpointContentsDigest, TransactionDigest};
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::storage::ObjectKey;
+use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use typed_store::rocks::MetricConf;
 pub mod db_dump;
 mod index_search;
@@ -27,12 +31,18 @@ pub enum DbToolCommand {
     TableSummary(Options),
     DuplicatesSummary,
     ListDBMetadata(Options),
+    PrintLastConsensusIndex,
+    PrintConsensusCommit(PrintConsensusCommitOptions),
     PrintTransaction(PrintTransactionOptions),
+    PrintCheckpoint(PrintCheckpointOptions),
+    PrintCheckpointContent(PrintCheckpointContentOptions),
     RemoveObjectLock(RemoveObjectLockOptions),
     RemoveTransaction(RemoveTransactionOptions),
     ResetDB,
     RewindCheckpointExecution(RewindCheckpointExecutionOptions),
     Compact,
+    PruneObjects,
+    PruneCheckpoints,
 }
 
 #[derive(Parser)]
@@ -83,9 +93,33 @@ pub struct Options {
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
+pub struct PrintConsensusCommitOptions {
+    #[clap(long, help = "Sequence number of the consensus commit")]
+    seqnum: u64,
+}
+
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
 pub struct PrintTransactionOptions {
     #[clap(long, help = "The transaction digest to print")]
     digest: TransactionDigest,
+}
+
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
+pub struct PrintCheckpointOptions {
+    #[clap(long, help = "The checkpoint digest to print")]
+    digest: CheckpointDigest,
+}
+
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
+pub struct PrintCheckpointContentOptions {
+    #[clap(
+        long,
+        help = "The checkpoint content digest (NOT the checkpoint digest)"
+    )]
+    digest: CheckpointContentsDigest,
 }
 
 #[derive(Parser)]
@@ -96,6 +130,11 @@ pub struct RemoveTransactionOptions {
 
     #[clap(long)]
     confirm: bool,
+
+    /// The epoch to use when loading AuthorityEpochTables.
+    /// Defaults to the current epoch.
+    #[clap(long = "epoch", short = 'e')]
+    epoch: Option<EpochId>,
 }
 
 #[derive(Parser)]
@@ -121,7 +160,7 @@ pub struct RewindCheckpointExecutionOptions {
     checkpoint_sequence_number: u64,
 }
 
-pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::Result<()> {
+pub async fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::Result<()> {
     match cmd {
         DbToolCommand::ListTables => print_db_all_tables(db_path),
         DbToolCommand::Dump(d) => print_all_entries(
@@ -139,7 +178,11 @@ pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::
         DbToolCommand::ListDBMetadata(d) => {
             print_table_metadata(d.store_name, d.epoch, db_path, &d.table_name)
         }
+        DbToolCommand::PrintLastConsensusIndex => print_last_consensus_index(&db_path),
+        DbToolCommand::PrintConsensusCommit(d) => print_consensus_commit(&db_path, d),
         DbToolCommand::PrintTransaction(d) => print_transaction(&db_path, d),
+        DbToolCommand::PrintCheckpoint(d) => print_checkpoint(&db_path, d),
+        DbToolCommand::PrintCheckpointContent(d) => print_checkpoint_content(&db_path, d),
         DbToolCommand::ResetDB => reset_db_to_genesis(&db_path),
         DbToolCommand::RemoveObjectLock(d) => remove_object_lock(&db_path, d),
         DbToolCommand::RemoveTransaction(d) => remove_transaction(&db_path, d),
@@ -147,6 +190,8 @@ pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::
             rewind_checkpoint_execution(&db_path, d.epoch, d.checkpoint_sequence_number)
         }
         DbToolCommand::Compact => compact(db_path),
+        DbToolCommand::PruneObjects => prune_objects(db_path).await,
+        DbToolCommand::PruneCheckpoints => prune_checkpoints(db_path).await,
         DbToolCommand::IndexSearchKeyRange(rg) => {
             let res = search_index(
                 db_path,
@@ -189,6 +234,30 @@ pub fn print_db_duplicates_summary(db_path: PathBuf) -> anyhow::Result<()> {
     Ok(())
 }
 
+pub fn print_last_consensus_index(path: &Path) -> anyhow::Result<()> {
+    let epoch_tables = AuthorityEpochTables::open_tables_read_write(
+        path.to_path_buf(),
+        MetricConf::default(),
+        None,
+        None,
+    );
+    let last_index = epoch_tables.get_last_consensus_index()?;
+    println!("Last consensus index is {:?}", last_index);
+    Ok(())
+}
+
+pub fn print_consensus_commit(path: &Path, opt: PrintConsensusCommitOptions) -> anyhow::Result<()> {
+    let consensus_db = NodeStorage::reopen(path, None);
+    let consensus_commit = consensus_db
+        .consensus_store
+        .read_consensus_commit(&opt.seqnum)?;
+    match consensus_commit {
+        Some(commit) => println!("Consensus commit at {} is {:?}", opt.seqnum, commit),
+        None => println!("Consensus commit at {} is not found!", opt.seqnum),
+    }
+    Ok(())
+}
+
 pub fn print_transaction(path: &Path, opt: PrintTransactionOptions) -> anyhow::Result<()> {
     let perpetual_db = AuthorityPerpetualTables::open(&path.join("store"), None);
     if let Some((epoch, checkpoint_seq_num)) =
@@ -209,6 +278,39 @@ pub fn print_transaction(path: &Path, opt: PrintTransactionOptions) -> anyhow::R
     Ok(())
 }
 
+pub fn print_checkpoint(path: &Path, opt: PrintCheckpointOptions) -> anyhow::Result<()> {
+    let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
+    let checkpoint = checkpoint_store
+        .get_checkpoint_by_digest(&opt.digest)?
+        .ok_or(anyhow!(
+            "Checkpoint digest {:?} not found in checkpoint store",
+            opt.digest
+        ))?;
+    println!("Checkpoint: {:?}", checkpoint);
+    drop(checkpoint_store);
+    print_checkpoint_content(
+        path,
+        PrintCheckpointContentOptions {
+            digest: checkpoint.content_digest,
+        },
+    )
+}
+
+pub fn print_checkpoint_content(
+    path: &Path,
+    opt: PrintCheckpointContentOptions,
+) -> anyhow::Result<()> {
+    let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
+    let contents = checkpoint_store
+        .get_checkpoint_contents(&opt.digest)?
+        .ok_or(anyhow!(
+            "Checkpoint content digest {:?} not found in checkpoint store",
+            opt.digest
+        ))?;
+    println!("Checkpoint content: {:?}", contents);
+    Ok(())
+}
+
 /// Force removes a transaction and its outputs, if no other dependent transaction has executed yet.
 /// Usually this should be paired with rewind_checkpoint_execution() to re-execute the removed
 /// transaction, to repair corrupted database.
@@ -216,6 +318,12 @@ pub fn print_transaction(path: &Path, opt: PrintTransactionOptions) -> anyhow::R
 /// Add --confirm to actually remove the transaction.
 pub fn remove_transaction(path: &Path, opt: RemoveTransactionOptions) -> anyhow::Result<()> {
     let perpetual_db = AuthorityPerpetualTables::open(&path.join("store"), None);
+    let epoch = if let Some(epoch) = opt.epoch {
+        epoch
+    } else {
+        get_sui_system_state(&perpetual_db)?.epoch()
+    };
+    let epoch_store = AuthorityEpochTables::open(epoch, &path.join("store"), None);
     let Some(_transaction) = perpetual_db.get_transaction(&opt.digest)? else {
         bail!("Transaction {:?} not found and cannot be re-executed!", opt.digest);
     };
@@ -224,7 +332,7 @@ pub fn remove_transaction(path: &Path, opt: RemoveTransactionOptions) -> anyhow:
     };
     let mut objects_to_remove = vec![];
     for mutated_obj in effects.modified_at_versions() {
-        let new_objs = perpetual_db.get_newer_object_keys(mutated_obj)?;
+        let new_objs = perpetual_db.get_newer_object_keys(&mutated_obj)?;
         if new_objs.len() > 1 {
             bail!(
                 "Dependents of transaction {:?} have already executed! Mutated object: {:?}, new objects: {:?}",
@@ -256,6 +364,7 @@ pub fn remove_transaction(path: &Path, opt: RemoveTransactionOptions) -> anyhow:
         println!("Proceeding to remove transaction {:?} in 5s ..", opt.digest);
         std::thread::sleep(std::time::Duration::from_secs(5));
         perpetual_db.remove_executed_effects_and_outputs_subtle(&opt.digest, &objects_to_remove)?;
+        epoch_store.remove_executed_tx_subtle(&opt.digest)?;
         println!("Done!");
     }
     Ok(())
@@ -310,7 +419,6 @@ pub fn reset_db_to_genesis(path: &Path) -> anyhow::Result<()> {
     //   num-epochs-to-retain: 18446744073709551615
     //   max-checkpoints-in-batch: 10
     //   max-transactions-in-batch: 1000
-    //   use-range-deletion: true
     let perpetual_db = AuthorityPerpetualTables::open_tables_read_write(
         path.join("store").join("perpetual"),
         MetricConf::default(),
@@ -326,6 +434,15 @@ pub fn reset_db_to_genesis(path: &Path) -> anyhow::Result<()> {
         None,
     );
     checkpoint_db.reset_db_for_execution_since_genesis()?;
+
+    let epoch_db = AuthorityEpochTables::open_tables_read_write(
+        path.join("store"),
+        MetricConf::default(),
+        None,
+        None,
+    );
+    epoch_db.reset_db_for_execution_since_genesis()?;
+
     Ok(())
 }
 

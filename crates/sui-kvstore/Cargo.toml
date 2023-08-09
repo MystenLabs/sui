@@ -1,0 +1,28 @@
+[package]
+name = "sui-kvstore"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+aws-config.workspace = true
+aws-sdk-dynamodb.workspace = true
+aws-sdk-s3.workspace = true
+async-trait.workspace = true
+base64-url.workspace = true
+tokio = { workspace = true, features = ["full"] }
+anyhow = { workspace = true, features = ["backtrace"] }
+prometheus.workspace = true
+serde.workspace = true
+strum.workspace = true
+strum_macros.workspace = true
+bcs.workspace = true
+tracing.workspace = true
+mysten-metrics.workspace = true
+sui-core.workspace = true
+sui-types.workspace = true
+sui-config.workspace = true
+sui-storage.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

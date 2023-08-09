@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use prometheus::{
-    default_registry, register_histogram_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
+    default_registry, register_histogram_vec_with_registry, register_histogram_with_registry,
+    register_int_counter_with_registry, register_int_gauge_with_registry, Histogram, HistogramVec,
+    IntCounter, IntGauge, Registry,
 };
 
 // buckets defined in seconds
@@ -34,6 +35,9 @@ pub struct ExecutorMetrics {
     /// Latency between the time when the batch has been
     /// created and when it has been fetched for execution
     pub batch_execution_latency: Histogram,
+    /// This is similar to batch_execution_latency but without the latency of
+    /// fetching batches from remote workers.
+    pub batch_execution_local_latency: HistogramVec,
     /// The number of batches per committed subdag to be fetched
     pub committed_subdag_batch_count: Histogram,
     /// Latency for time taken to fetch all batches for committed subdag
@@ -86,6 +90,13 @@ impl ExecutorMetrics {
             batch_execution_latency: register_histogram_with_registry!(
                 "batch_execution_latency",
                 "Latency between the time when the batch has been created and when it has been fetched for execution",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
+            batch_execution_local_latency: register_histogram_vec_with_registry!(
+                "batch_execution_local_latency",
+                "This is similar to batch_execution_latency but without the latency of fetching batches from remote workers.",
+                &["source"],
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             ).unwrap(),

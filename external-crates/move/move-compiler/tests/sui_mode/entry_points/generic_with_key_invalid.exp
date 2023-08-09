@@ -1,0 +1,18 @@
+error[Sui E02002]: invalid 'entry' function signature
+  ┌─ tests/sui_mode/entry_points/generic_with_key_invalid.move:6:31
+  │
+6 │     public entry fun t<T:key>(_: option::Option<T>) {
+  │            -----              ^  ----------------- 'entry' parameters must be primitives (by-value), vectors of primitives, objects (by-reference or by-value), or vectors of objects
+  │            │                  │   
+  │            │                  Invalid 'entry' parameter type for parameter '_'
+  │            't' was declared 'entry' here
+
+error[Sui E02002]: invalid 'entry' function signature
+   ┌─ tests/sui_mode/entry_points/generic_with_key_invalid.move:10:32
+   │
+10 │     public entry fun t2<T:key>(_: vector<option::Option<T>>) {
+   │            -----               ^  ------------------------- 'entry' parameters must be primitives (by-value), vectors of primitives, objects (by-reference or by-value), or vectors of objects
+   │            │                   │   
+   │            │                   Invalid 'entry' parameter type for parameter '_'
+   │            't2' was declared 'entry' here
+

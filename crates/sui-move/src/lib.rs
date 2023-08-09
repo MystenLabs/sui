@@ -69,7 +69,7 @@ pub fn execute_move_command(
                 report_storage_on_error: c.test.report_storage_on_error,
                 check_stackless_vm: c.test.check_stackless_vm,
                 verbose: c.test.verbose_mode,
-
+                ignore_compile_warnings: c.test.ignore_compile_warnings,
                 ..UnitTestingConfig::default_with_bound(None)
             };
             let result = c.execute(package_path, build_config, unit_test_config)?;

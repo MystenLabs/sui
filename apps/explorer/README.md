@@ -68,10 +68,10 @@ Run linting check but also try to fix any issues.
 
 Currently the Explorer supports
 
--   Landing page with latest transactions
--   Transaction details page
--   Object details page
--   Address page with owned objects
--   Search for transactions, addresses, and Objects by ID
+- Landing page with latest transactions
+- Transaction details page
+- Object details page
+- Address page with owned objects
+- Search for transactions, addresses, and Objects by ID
 
 See [Experiment with Sui DevNet](https://docs.sui.io/build/devnet) for use.

@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use crate::bank::BenchmarkBank;
 use crate::options::Opts;
 use crate::util::get_ed25519_keypair_from_keystore;
@@ -11,14 +12,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
-use sui_config::utils;
+use sui_swarm_config::genesis_config::AccountConfig;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
-use sui_types::object::generate_max_test_gas_objects_with_owner;
+use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
 use sui_types::object::Owner;
-use test_utils::authority::test_and_configure_authority_configs_with_objects;
-use test_utils::authority::{spawn_fullnode, spawn_test_authorities};
+use test_cluster::TestClusterBuilder;
 use tokio::runtime::Builder;
 use tokio::sync::{oneshot, Barrier};
 use tokio::time::sleep;
@@ -51,7 +51,6 @@ impl Env {
                     barrier,
                     registry,
                     opts.committee_size as usize,
-                    opts.server_metric_port,
                     opts.num_server_threads,
                 )
                 .await
@@ -77,48 +76,17 @@ impl Env {
         barrier: Arc<Barrier>,
         registry: &Registry,
         committee_size: usize,
-        server_metric_port: u16,
         num_server_threads: u64,
     ) -> Result<BenchmarkSetup> {
         info!("Running benchmark setup in local mode..");
-        let (address, keypair): (SuiAddress, AccountKeyPair) = deterministic_random_account_key();
-        let generated_gas = generate_max_test_gas_objects_with_owner(1, address);
-        let (mut network_config, generated_gas) =
-            test_and_configure_authority_configs_with_objects(committee_size, generated_gas);
-        let mut metric_port = server_metric_port;
-        for node_config in network_config.validator_configs.iter_mut() {
-            // Benchmark setup allocates very large gas objects, which will lead to overflow if we attempt
-            // to calculate the amount of SUI in the network. Hence we disable SUI conservation checks
-            // even when we are running in debug mode.
-            node_config
-                .expensive_safety_check_config
-                .force_disable_epoch_sui_conservation_check();
-            let parameters = &mut node_config
-                .consensus_config
-                .as_mut()
-                .context("Missing consensus config")?
-                .narwhal_config;
-            parameters.batch_size = 12800;
-            node_config.metrics_address = format!("127.0.0.1:{}", metric_port)
-                .parse()
-                .context("Failed to parse metric address")?;
-            metric_port += 1;
-        }
-        let config = Arc::new(network_config);
-        // bring up servers ..
-        let primary_gas = generated_gas
-            .get(0)
-            .context("No gas found at index 0")?
-            .clone();
-        // Make the client runtime wait until we are done creating genesis objects
-        let cloned_config = config.clone();
-        let fullnode_ip = format!("{}", utils::get_local_ip_for_tests());
-        let fullnode_rpc_port = utils::get_available_port(&fullnode_ip);
-        let fullnode_barrier = Arc::new(Barrier::new(2));
-        let fullnode_barrier_clone = fullnode_barrier.clone();
+        let (primary_gas_owner, keypair): (SuiAddress, AccountKeyPair) =
+            deterministic_random_account_key();
+        let keypair = Arc::new(keypair);
+
         // spawn a thread to spin up sui nodes on the multi-threaded server runtime.
         // running forever
-        let (sender, recv) = tokio::sync::oneshot::channel::<()>();
+        let (shutdown_sender, shutdown_recv) = tokio::sync::oneshot::channel::<()>();
+        let (genesis_sender, genesis_recv) = tokio::sync::oneshot::channel();
         let join_handle = std::thread::spawn(move || {
             // create server runtime
             let server_runtime = Builder::new_multi_thread()
@@ -128,28 +96,46 @@ impl Env {
                 .build()
                 .unwrap();
             server_runtime.block_on(async move {
-                // Setup the network
-                let _validators: Vec<_> = spawn_test_authorities(&cloned_config).await;
-                let _fullnode = spawn_fullnode(&cloned_config, Some(fullnode_rpc_port)).await;
-                fullnode_barrier_clone.wait().await;
+                let cluster = TestClusterBuilder::new()
+                    .with_accounts(vec![AccountConfig {
+                        address: Some(primary_gas_owner),
+                        // We can't use TOTAL_SUPPLY_MIST because we need to account for validator stakes in genesis allocation.
+                        gas_amounts: vec![TOTAL_SUPPLY_MIST / 2],
+                    }])
+                    .with_num_validators(committee_size)
+                    .build()
+                    .await;
+                let genesis = cluster.swarm.config().genesis.clone();
+                for v in cluster.swarm.config().validator_configs() {
+                    eprintln!(
+                        "Metric address for validator {}: {}",
+                        v.protocol_public_key().concise(),
+                        v.metrics_address
+                    );
+                }
+                let primary_gas = cluster
+                    .wallet
+                    .get_one_gas_object_owned_by_address(primary_gas_owner)
+                    .await
+                    .unwrap()
+                    .unwrap();
+                // Send genesis and primary gas object to the main thread.
+                genesis_sender.send((genesis, primary_gas)).unwrap();
                 barrier.wait().await;
-                recv.await.expect("Unable to wait for terminate signal");
+                shutdown_recv
+                    .await
+                    .expect("Unable to wait for terminate signal");
             });
         });
-        // Let fullnode be created.
+        // Wait for the embedded reconfig observer.
         sleep(Duration::from_secs(5)).await;
-        let fullnode_rpc_url = format!("http://{fullnode_ip}:{fullnode_rpc_port}");
-        info!("Fullnode rpc url: {fullnode_rpc_url}");
-        fullnode_barrier.wait().await;
-        let proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
-            LocalValidatorAggregatorProxy::from_genesis(&config.genesis, registry, None).await,
-        );
-        let keypair = Arc::new(keypair);
-        let primary_gas = (primary_gas.compute_object_reference(), address, keypair);
+        let (genesis, primary_gas) = genesis_recv.await.unwrap();
+        let proxy: Arc<dyn ValidatorProxy + Send + Sync> =
+            Arc::new(LocalValidatorAggregatorProxy::from_genesis(&genesis, registry, None).await);
         Ok(BenchmarkSetup {
             server_handle: join_handle,
-            shutdown_notifier: sender,
-            bank: BenchmarkBank::new(proxy.clone(), primary_gas),
+            shutdown_notifier: shutdown_sender,
+            bank: BenchmarkBank::new(proxy.clone(), (primary_gas, primary_gas_owner, keypair)),
             proxies: vec![proxy],
         })
     }

@@ -6,8 +6,8 @@ use fastcrypto::traits::KeyPair;
 use crate::{
     base_types::{dbg_addr, ObjectID},
     crypto::{
-        AccountKeyPair, AuthorityKeyPair, AuthoritySignature, Signature, SuiAuthoritySignature,
-        SuiSignature,
+        AccountKeyPair, AuthorityKeyPair, AuthoritySignature, Signature, SignatureScheme,
+        SuiAuthoritySignature, SuiSignature,
     },
     object::Object,
     transaction::{Transaction, TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER},
@@ -48,7 +48,11 @@ fn test_personal_message_intent() {
 
     // Let's ensure we can sign and verify intents.
     let s = Signature::new_secure(&IntentMessage::new(intent1, p_message), &sec1);
-    let verification = s.verify_secure(&IntentMessage::new(intent2, p_message_2), addr1);
+    let verification = s.verify_secure(
+        &IntentMessage::new(intent2, p_message_2),
+        addr1,
+        SignatureScheme::ED25519,
+    );
     assert!(verification.is_ok())
 }
 
@@ -76,7 +80,7 @@ fn test_authority_signature_intent() {
     );
     let tx = Transaction::from_data(data, Intent::sui_transaction(), vec![signature]);
     let tx1 = tx.clone();
-    assert!(tx.verify().is_ok());
+    assert!(tx.verify(&Default::default()).is_ok());
 
     // Create an intent with signed data.
     let intent_bcs = bcs::to_bytes(tx1.intent_message()).unwrap();

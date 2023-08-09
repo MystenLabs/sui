@@ -7,10 +7,6 @@ use sui::sui_commands::SuiCommand;
 use sui_types::exit_main;
 use tracing::debug;
 
-#[cfg(test)]
-#[path = "unit_tests/cli_tests.rs"]
-mod cli_tests;
-
 const GIT_REVISION: &str = {
     if let Some(revision) = option_env!("GIT_REVISION") {
         revision

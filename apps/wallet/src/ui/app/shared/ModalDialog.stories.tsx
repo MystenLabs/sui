@@ -8,38 +8,35 @@ import { Button } from './ButtonUI';
 import { ModalDialog } from './ModalDialog';
 
 export default {
-    component: ModalDialog,
-    decorators: [
-        (Story, ctx) => {
-            const [isOpen, setIsOpen] = useState(false);
-            return (
-                <>
-                    <Button
-                        onClick={() => setIsOpen(true)}
-                        text="Show dialog"
-                    />
-                    <Story
-                        args={{
-                            ...ctx.args,
-                            isOpen,
-                            onClose: () => setIsOpen(false),
-                        }}
-                    />
-                </>
-            );
-        },
-    ],
+	component: ModalDialog,
+	decorators: [
+		(Story, ctx) => {
+			const [isOpen, setIsOpen] = useState(false);
+			return (
+				<>
+					<Button onClick={() => setIsOpen(true)} text="Show dialog" />
+					<Story
+						args={{
+							...ctx.args,
+							isOpen,
+							onClose: () => setIsOpen(false),
+						}}
+					/>
+				</>
+			);
+		},
+	],
 } as Meta<typeof ModalDialog>;
 
 export const Default: StoryObj<typeof ModalDialog> = {
-    render: (props) => (
-        <>
-            <ModalDialog {...props} />
-        </>
-    ),
-    args: {
-        title: 'Test Modal Dialog',
-        body: 'Hello this is a modal',
-        footer: 'Test footer content',
-    },
+	render: (props) => (
+		<>
+			<ModalDialog {...props} />
+		</>
+	),
+	args: {
+		title: 'Test Modal Dialog',
+		body: 'Hello this is a modal',
+		footer: 'Test footer content',
+	},
 };

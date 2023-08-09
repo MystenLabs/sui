@@ -8,19 +8,20 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-better_any = "0.1.1"
-bcs = "0.1.4"
-linked-hash-map = "0.5.6"
-smallvec = "1.9.0"
+better_any.workspace = true
+bcs.workspace = true
+linked-hash-map.workspace = true
+smallvec.workspace = true
 
 fastcrypto-zkp.workspace = true
 fastcrypto.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
-move-stdlib.workspace = true
-move-vm-runtime.workspace = true
 move-vm-types.workspace = true
 
-sui-protocol-config = { path = "../../../crates/sui-protocol-config" }
-sui-types = { path = "../../../crates/sui-types" }
+move-stdlib = { path = "../../../external-crates/move/move-stdlib" }
+move-vm-runtime = { path = "../../../external-crates/move/move-vm/runtime" }
+
+sui-protocol-config.workspace = true
+sui-types.workspace = true
 workspace-hack = { version = "0.1", path = "../../../crates/workspace-hack" }

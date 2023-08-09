@@ -7,7 +7,6 @@ use clap::Parser;
 use pretty_assertions::assert_str_eq;
 use std::fs::File;
 use std::io::Write;
-use sui_core::SUI_CORE_VERSION;
 //temporarily remove api ref content for indexer methods
 //use sui_json_rpc::api::ExtendedApiOpenRpc;
 use sui_json_rpc::api::IndexerApiOpenRpc;
@@ -41,11 +40,14 @@ struct Options {
 
 const FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/spec/openrpc.json",);
 
+// TODO: This currently always use workspace version, which is not ideal.
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 #[tokio::main]
 async fn main() {
     let options = Options::parse();
 
-    let mut open_rpc = sui_rpc_doc(SUI_CORE_VERSION);
+    let mut open_rpc = sui_rpc_doc(VERSION);
     open_rpc.add_module(ReadApi::rpc_doc_module());
     open_rpc.add_module(CoinReadApi::rpc_doc_module());
     open_rpc.add_module(IndexerApiOpenRpc::module_doc());

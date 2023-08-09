@@ -12,9 +12,7 @@ pub mod consensus;
 #[cfg(test)]
 #[path = "tests/consensus_utils.rs"]
 pub mod consensus_utils;
-pub mod dag;
 pub mod metrics;
-pub mod tusk;
 pub mod utils;
 
 pub use crate::consensus::Consensus;
@@ -63,4 +61,8 @@ pub enum Outcome {
 
     // Processed Certificate triggered a commit.
     Commit,
+
+    // When the schedule has changed during a commit, then this is return with everything that has
+    // been committed so far.
+    ScheduleChanged,
 }

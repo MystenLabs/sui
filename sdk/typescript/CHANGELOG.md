@@ -1,5 +1,195 @@
 # @mysten/sui.js
 
+## 0.39.0
+
+### Minor Changes
+
+- 47ea5ec7c: Update keypair signature methods to return bytes as a base64 encoded string for better compatability
+
+## 0.38.0
+
+### Minor Changes
+
+- 67e581a5a: Added FromOrToAddress Transaction Filter
+- cce6ffbcc: Add toSuiPublicKey method for retrieving the Sui representation of a raw public key
+- 0f06d593a: Added a MultiSigPublicKey class for verifying multisig signatures
+- 09f4ed3fc: update signMessage to correctly wrap PersonalMessages before signing
+- 6d41059c7: Deprecate imports from the root path which can be imported from a modular export
+- cc6441f46: The Sui TS SDK has been broken up into a set of modular exports, and all exports from the root of
+  the package have been deprecated. The following export paths have been added:
+
+  - `@mysten/sui.js/client` - A client for interacting with Sui RPC nodes.
+  - `@mysten/sui.js/bcs` - A BCS builder with pre-defined types for Sui.
+  - `@mysten/sui.js/transaction` - Utilities for building and interacting with transactions.
+  - `@mysten/sui.js/keypairs/*` - Modular exports for specific KeyPair implementations.
+  - `@mysten/sui.js/verify` - Methods for verifying transactions and messages.
+  - `@mysten/sui.js/cryptography` - Shared types and classes for cryptography.
+  - `@mysten/sui.js/multisig` - Utilities for working with multisig signatures.
+  - `@mysten/sui.js/utils` - Utilities for formatting and parsing various Sui types.
+  - `@mysten/sui.js/faucet`- Methods for requesting sui from a faucet.
+
+  As part of this refactor we are deprecating a number of existing APIs:
+
+  - `JsonRPCProvider` - This Provider pattern is being replaced by a new `SuiClient`
+  - `SignerWithProver` and `RawSigner` - The Concept of Signers is being removed from the SDK. Signing
+    in verifying has been moved to the KeyPair classes, and the `signAndExecuteTransactionBlock`
+    method has been moved to the new `SuiClient`.
+  - The `superstruct` type definitions for types used by JsonRPCProvider are being replaced with
+    generated types exported from `@mysten/sui.js/client`. The new type definitions are pure
+    typescript types and can't be used for runtime validation. By generating these as types, it will
+    be easier to keep them in sync with the RPC definitions and avoid discrepancies between the type
+    definitions in the SDK and the data returned by RPC methods.
+  - A large number of "getters" are being deprecated. These getters were intended to reduce friction
+    caused by rapid iteration in the RPC layer leading up to the mainnet launch. Now that mainnet has
+    been launched the RPC API should be more stable, and many of these helpers can be replaced by
+    simply accessing the nested properties in the returned data directly.
+
+  The current release should be mostly backwards compatible, and all existing exports will continue to
+  be available in this release (with deprecation warnings). With the large number of deprecations
+  there may be functionality that should be moved into the new modular version of the SDK. If you find
+  there are features that were deprecated without a suitable replacement, we have created a
+  [Github Discussion thread](https://github.com/MystenLabs/sui/discussions/13150) to track those
+  use-cases.
+
+  #### Migrating imports
+
+  To migrate imports, you should be able to hover over the deprecated import in the editor of you
+  choice, this should provide either the deprecation message letting you know where to import the
+  replacement from, or a like "The declaration was marked as deprecated here." with a link to the
+  deprecation comment which will tell you how to update your import
+
+  #### Migrating JsonRpcProvider
+
+  The new SuiClient should mostly work as a drop in replacement for the `JsonRpcProvider` provider.
+  Setting up a `SuiClient` is slightly different, but once constructed should work just like a
+  provider.
+
+  ```diff
+  - import { JsonRpcProvider, devnetConnection } from '@mysten/sui.js';
+  + import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+
+  - const provider = new JsonRpcProvider(localnetConnection);
+  + const client = new SuiClient({ url: getFullnodeUrl('localnet')});
+  ```
+
+  #### Signing TransactionBlocks
+
+  Signing and sending transaction blocks has change slightly with the deprecation of the `Signer`
+  pattern:
+
+  ```diff
+  - import {
+  -    Ed25519Keypair,
+  -    JsonRpcProvider,
+  -    RawSigner,
+  -    TransactionBlock,
+  -    localnetConnection,
+  - } from '@mysten/sui.js';
+  + import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+  + import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+  + import { TransactionBlock } from '@mysten/sui.js/transactions';
+
+    const keypair = new Ed25519Keypair()
+  - const provider = new JsonRpcProvider(localnetConnection);
+  - const signer = new RawSigner(keyPair, provider);
+  + const client = new SuiClient({ url: getFullnodeUrl('localnet')});
+
+  - const result = await signer.signAndExecuteTransactionBlock({
+  + const result = await client.signAndExecuteTransactionBlock({
+  +   signer: keypair,
+      transactionBlock: tx,
+      options: { ... }
+    })
+  ```
+
+  #### Migrating faucet requests
+
+  The ability to request Sui from a faucet was not added to `SuiClient`, instead you will need to use
+  a method `@mysten/sui.js/faucet` to make these requests
+
+  ```diff
+  - import { JsonRpcProvider, devnetConnection } from '@mysten/sui.js';
+  - const provider = new JsonRpcProvider(devnetConnection);
+  + import { requestSuiFromFaucetV0, getFaucetHost } from '@mysten/sui.js/faucet';
+
+  - await provider.requestSuiFromFaucet(
+  -  '<YOUR SUI ADDRESS>'
+  - );
+  + await requestSuiFromFaucetV0({
+  +   host: getFaucetHost('devnet'),
+  +   recipient: '<YOUR SUI ADDRESS>',
+  +});
+  ```
+
+- 001148443: Introduce new `@mysten/sui.js/faucet` export, which should be used for all faucet interactions. This deprecates the previous `requestSuiFromFaucet` APIs that existed on the `JsonRpcProvider` and `Signer` classes.
+
+### Patch Changes
+
+- ad46f9f2f: add getAllEpochAddressMetrics method to rpc-provider
+- 34242be56: Add new `isTransactionBlock` method, and deprecate the previous `TransactionBlock.is` method
+- 4e2a150a1: websocket client memory leak fix in reconnect logics
+- 83d0fb734: Deprecate type aliases for strings.
+
+## 0.37.1
+
+### Patch Changes
+
+- 34cc7d610: Fix unhandled rejections thrown by waitForTransaction
+
+## 0.37.0
+
+### Minor Changes
+
+- 93794f9f2: Update build to avoid bundling for better modularity
+- a17d3678a: Add keypair exports to allow modular imports for various keypair types
+
+### Patch Changes
+
+- 36f2edff3: Use splitGenericParamaters util from bcs
+- 75d1a190d: Fix bug that prevented deserializing transaction blocks with a set expiration
+- c3a4ec57c: Add explicit dependency on events package
+- 2f37537d5: Update `SuiEventFilter` structure for `TimeRange` query.
+- 00484bcc3: add method to create Ed25519Keypair from a mnemonic seed
+- Updated dependencies [36f2edff3]
+  - @mysten/bcs@0.7.3
+
+## 0.36.0
+
+### Minor Changes
+
+- 3ea9adb71a: Add multisig support
+- 1cfb1c9da3: The `TransactionBlock` builder now uses the protocol config from the chain when constructing and validating transactions, instead of using hard-coded limits. If you wish to perform signing offline (without a provider), you can either define a `protocolConfig` option when building a transaction, or explicitly set `limits`, which will be used instead of the protocol config.
+- fb3bb9118a: Remove logging of RPCValidation errors when typescript types do not match RPC response types
+
+### Patch Changes
+
+- 1cfb1c9da3: Added `getProtocolConfig()` method to the provider.
+- Updated dependencies [ca5c72815d]
+- Updated dependencies [fdb569464e]
+  - @mysten/bcs@0.7.2
+
+## 0.35.1
+
+### Patch Changes
+
+- 09d77325a9: Add new SuiNS Toolkit package.
+
+## 0.35.0
+
+### Minor Changes
+
+- 470c27af50: Added network address metrics
+- 671faefe3c: Add `getChainIdentifier` method
+- 9ce7e051b4: Update internal client to use `@open-rpc/client-js` instead of `jayson` and `rpc-websockets`. This results in a more consistent experience and better error messaging.
+
+### Patch Changes
+
+- 4ea96d909a: the event BCS data is a base64 string
+- bcbb178c44: Fixes BCS definition so it matches the RPC one
+- 03828224c9: Previously, effects had an unwrapped_then_deleted field on ts-sdk. This is an issue since jsonrpc returns the field as unwrappedThenDeleted. Update the transaction type definition to use camelcase.
+- 9ce7e051b4: Add `subscribeTransaction` method.
+- bb50698551: Fixes BCS type definition in the type layout
+
 ## 0.34.1
 
 ### Patch Changes
@@ -175,7 +365,7 @@
 
 ### Minor Changes
 
-- a67cc044b: Transaction signatures are now serialized into a single string, and all APIs that previously took the public key, signature, and scheme now just take the single serialized signature string. To help make parsing this easier, there are new `toSerializedSignature` and `fromSerializedSignature` methods exposed as well.
+- a67cc044b: Transaction signatures are now serialized into a single string, and all APIs that previously took the public key, signature, and scheme now just take the single serialized signature string. To help make parsing this easier, there are new `toSerializedSignature` and `toParsedSignaturePubkeyPair` methods exposed as well.
 - a67cc044b: The RawSigner now provides a `signTransaction` function, which can be used to sign a transaction without submitting it to the network.
 - a67cc044b: The RawSigner now provides a `signMessage` function that can be used to sign personal messages. The SDK also now exports a `verifyMessage` function that can be used to easily verify a message signed with `signMessage`.
 

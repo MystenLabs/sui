@@ -113,6 +113,22 @@ where
     S: std::ops::Deref<Target = T>,
     T: AccumulatorReadStore,
 {
+    if protocol_config.simplified_unwrap_then_delete() {
+        accumulate_effects_v2(store, effects)
+    } else {
+        accumulate_effects_v1(store, effects, protocol_config)
+    }
+}
+
+fn accumulate_effects_v1<T, S>(
+    store: S,
+    effects: Vec<TransactionEffects>,
+    protocol_config: &ProtocolConfig,
+) -> Accumulator
+where
+    S: std::ops::Deref<Target = T>,
+    T: AccumulatorReadStore,
+{
     let mut acc = Accumulator::default();
 
     // process insertions to the set
@@ -120,11 +136,9 @@ where
         effects
             .iter()
             .flat_map(|fx| {
-                fx.created()
-                    .iter()
-                    .map(|(oref, _)| oref.2)
-                    .chain(fx.unwrapped().iter().map(|(oref, _)| oref.2))
-                    .chain(fx.mutated().iter().map(|(oref, _)| oref.2))
+                fx.all_changed_objects()
+                    .into_iter()
+                    .map(|(oref, _, _)| oref.2)
             })
             .collect::<Vec<ObjectDigest>>(),
     );
@@ -151,12 +165,12 @@ where
         .iter()
         .flat_map(|fx| {
             fx.unwrapped()
-                .iter()
+                .into_iter()
                 .map(|(oref, _owner)| (*fx.transaction_digest(), oref.0, oref.1))
         })
         .chain(effects.iter().flat_map(|fx| {
             fx.unwrapped_then_deleted()
-                .iter()
+                .into_iter()
                 .map(|oref| (*fx.transaction_digest(), oref.0, oref.1))
         }))
         .collect::<Vec<(TransactionDigest, ObjectID, SequenceNumber)>>();
@@ -177,8 +191,8 @@ where
         .iter()
         .flat_map(|fx| {
             fx.modified_at_versions()
-                .iter()
-                .map(|(id, seq_num)| (*fx.transaction_digest(), *id, *seq_num))
+                .into_iter()
+                .map(|(id, seq_num)| (*fx.transaction_digest(), id, seq_num))
         })
         .filter_map(|(tx_digest, id, seq_num)| {
             // unwrapped tx
@@ -199,8 +213,8 @@ where
         .zip(modified_at_version_keys)
         .map(|(obj, key)| {
             obj.unwrap_or_else(|| panic!("Object for key {:?} from modified_at_versions effects does not exist in objects table", key))
-            .compute_object_reference()
-            .2
+                .compute_object_reference()
+                .2
         })
         .collect();
     acc.remove_all(modified_at_digests);
@@ -236,6 +250,51 @@ where
             .map(|wrapped| bcs::to_bytes(wrapped).unwrap().to_vec())
             .collect::<Vec<Vec<u8>>>(),
     );
+
+    acc
+}
+
+fn accumulate_effects_v2<T, S>(store: S, effects: Vec<TransactionEffects>) -> Accumulator
+where
+    S: std::ops::Deref<Target = T>,
+    T: AccumulatorReadStore,
+{
+    let mut acc = Accumulator::default();
+
+    // process insertions to the set
+    acc.insert_all(
+        effects
+            .iter()
+            .flat_map(|fx| {
+                fx.all_changed_objects()
+                    .into_iter()
+                    .map(|(oref, _, _)| oref.2)
+            })
+            .collect::<Vec<ObjectDigest>>(),
+    );
+
+    // Collect keys from modified_at_versions to remove from the accumulator.
+    let modified_at_version_keys: Vec<_> = effects
+        .iter()
+        .flat_map(|fx| {
+            fx.modified_at_versions()
+                .into_iter()
+                .map(|(id, version)| ObjectKey(id, version))
+        })
+        .collect();
+
+    let modified_at_digests: Vec<_> = store
+        .multi_get_object_by_key(&modified_at_version_keys.clone())
+        .expect("Failed to get modified_at_versions object from object table")
+        .into_iter()
+        .zip(modified_at_version_keys)
+        .map(|(obj, key)| {
+            obj.unwrap_or_else(|| panic!("Object for key {:?} from modified_at_versions effects does not exist in objects table", key))
+                .compute_object_reference()
+                .2
+        })
+        .collect();
+    acc.remove_all(modified_at_digests);
 
     acc
 }
@@ -303,7 +362,7 @@ impl StateAccumulator {
             .authority_store
             .perpetual_tables
             .root_state_hash_by_epoch
-            .iter()
+            .unbounded_iter()
             .skip_to_last()
             .next()
             .map(|(epoch, (highest, hash))| {
@@ -363,10 +422,13 @@ impl StateAccumulator {
         Ok(root_state_hash)
     }
 
-    /// Returns the result of accumulatng the live object set, without side effects
-    pub fn accumulate_live_object_set(&self) -> Accumulator {
+    /// Returns the result of accumulating the live object set, without side effects
+    pub fn accumulate_live_object_set(&self, include_wrapped_tombstone: bool) -> Accumulator {
         let mut acc = Accumulator::default();
-        for live_object in self.authority_store.iter_live_object_set() {
+        for live_object in self
+            .authority_store
+            .iter_live_object_set(include_wrapped_tombstone)
+        {
             match live_object {
                 LiveObject::Normal(object) => {
                     acc.insert(object.compute_object_reference().2);
@@ -382,8 +444,11 @@ impl StateAccumulator {
         acc
     }
 
-    pub fn digest_live_object_set(&self) -> ECMHLiveObjectSetDigest {
-        let acc = self.accumulate_live_object_set();
+    pub fn digest_live_object_set(
+        &self,
+        include_wrapped_tombstone: bool,
+    ) -> ECMHLiveObjectSetDigest {
+        let acc = self.accumulate_live_object_set(include_wrapped_tombstone);
         acc.digest().into()
     }
 

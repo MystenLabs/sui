@@ -9,5 +9,5 @@ publish = false
 [dependencies]
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 tokio.workspace = true
-futures = "0.3.23"
-parking_lot = "0.12.1"
+futures.workspace = true
+parking_lot.workspace = true

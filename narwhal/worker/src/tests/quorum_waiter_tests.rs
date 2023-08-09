@@ -1,9 +1,14 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use super::*;
+use crate::metrics::WorkerMetrics;
 use crate::NUM_SHUTDOWN_RECEIVERS;
-use test_utils::{batch, test_network, CommitteeFixture, WorkerToWorkerMockServer};
+use prometheus::Registry;
+use test_utils::{
+    batch, latest_protocol_version, test_network, CommitteeFixture, WorkerToWorkerMockServer,
+};
 use types::PreSubscribedBroadcastSender;
 
 #[tokio::test]
@@ -16,6 +21,7 @@ async fn wait_for_quorum() {
     let myself = fixture.authorities().next().unwrap().worker(0);
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+    let node_metrics = Arc::new(WorkerMetrics::new(&Registry::new()));
 
     // setup network
     let network = test_network(myself.keypair(), &myself.info().worker_address);
@@ -28,10 +34,11 @@ async fn wait_for_quorum() {
         tx_shutdown.subscribe(),
         rx_quorum_waiter,
         network.clone(),
+        node_metrics,
     );
 
     // Make a batch.
-    let batch = batch();
+    let batch = batch(&latest_protocol_version());
     let message = WorkerBatchMessage {
         batch: batch.clone(),
     };
@@ -73,6 +80,7 @@ async fn pipeline_for_quorum() {
     let myself = fixture.authorities().next().unwrap().worker(0);
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+    let node_metrics = Arc::new(WorkerMetrics::new(&Registry::new()));
 
     // setup network
     let network = test_network(myself.keypair(), &myself.info().worker_address);
@@ -85,10 +93,11 @@ async fn pipeline_for_quorum() {
         tx_shutdown.subscribe(),
         rx_quorum_waiter,
         network.clone(),
+        node_metrics,
     );
 
     // Make a batch.
-    let batch = batch();
+    let batch = batch(&latest_protocol_version());
     let message = WorkerBatchMessage {
         batch: batch.clone(),
     };

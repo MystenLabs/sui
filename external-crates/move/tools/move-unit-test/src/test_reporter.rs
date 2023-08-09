@@ -47,10 +47,6 @@ pub enum FailureReason {
     },
     // Property checking failed
     Property(String),
-
-    // Failed to compile Move code into EVM bytecode.
-    #[cfg(feature = "evm-backend")]
-    MoveToEVMError(String),
 }
 
 #[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
@@ -137,11 +133,6 @@ impl FailureReason {
     pub fn property(details: String) -> Self {
         FailureReason::Property(details)
     }
-
-    #[cfg(feature = "evm-backend")]
-    pub fn move_to_evm_error(diagnostics: String) -> Self {
-        FailureReason::MoveToEVMError(diagnostics)
-    }
 }
 
 impl TestFailure {
@@ -225,14 +216,6 @@ impl TestFailure {
                 )
             }
             FailureReason::Property(message) => message.clone(),
-
-            #[cfg(feature = "evm-backend")]
-            FailureReason::MoveToEVMError(diagnostics) => {
-                format!(
-                    "Failed to compile Move code into EVM bytecode.\n\n{}",
-                    diagnostics
-                )
-            }
         };
 
         match &self.storage_state {

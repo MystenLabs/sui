@@ -8,11 +8,12 @@ edition = "2021"
 
 [dependencies]
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-serde = { version = "1.0.144", features = ["derive"] }
-tracing = "0.1.36"
-serde_with = "2.1.0"
-sui-protocol-config-macros = { path = "../sui-protocol-config-macros" }
-schemars = { version = "0.8.10", features = ["either"] }
+serde.workspace = true
+tracing.workspace = true
+serde_with.workspace = true
+sui-protocol-config-macros.workspace = true
+schemars.workspace = true
+insta.workspace = true
 
 [dev-dependencies]
-insta = { version = "1.21.1", features = ["redactions", "yaml"] }
+insta.workspace = true

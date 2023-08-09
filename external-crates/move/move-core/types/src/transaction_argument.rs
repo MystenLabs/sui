@@ -4,10 +4,12 @@
 
 use crate::{account_address::AccountAddress, u256, value::MoveValue};
 use anyhow::{anyhow, Error, Result};
+use move_proc_macros::test_variant_order;
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt};
 
 #[derive(Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[test_variant_order(src/unit_tests/staged_enum_variant_order/transaction_argument.yaml)]
 pub enum TransactionArgument {
     U8(u8),
     U64(u64),

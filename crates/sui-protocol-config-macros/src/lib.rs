@@ -15,7 +15,10 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields, Type};
 ///     pub fn new_constant(&self) -> u64 {
 ///         self.new_constant.expect(Self::CONSTANT_ERR_MSG)
 ///     }
-///
+///     /// Returns the value of the field if exists at the given version, otherise None.
+///     pub fn new_constant_as_option(&self) -> Option<u64> {
+///         self.new_constant
+///     }
 ///     // We auto derive an enum such that the variants are all the types of the fields
 ///     pub enum ProtocolConfigValue {
 ///        u32(u32),
@@ -76,10 +79,18 @@ pub fn getters_macro(input: TokenStream) -> TokenStream {
                             panic!("Expected angle bracketed arguments.");
                         };
 
+                        let as_option_name = format!("{field_name}_as_option");
+                        let as_option_name: proc_macro2::TokenStream =
+                        as_option_name.parse().unwrap();
+
                         let getter = quote! {
                             // Derive the getter
                             pub fn #field_name(&self) -> #inner_type {
                                 self.#field_name.expect(Self::CONSTANT_ERR_MSG)
+                            }
+
+                            pub fn #as_option_name(&self) -> #field_type {
+                                self.#field_name
                             }
                         };
 
@@ -111,8 +122,7 @@ pub fn getters_macro(input: TokenStream) -> TokenStream {
         _ => panic!("Only structs supported."),
     };
     let (getters, (value_lookup, field_names_str)): (Vec<_>, (Vec<_>, Vec<_>)) = tokens.unzip();
-    let inner_types1 = Vec::from_iter(seen_types);
-    let inner_types2: Vec<_> = inner_types1.clone();
+    let inner_types = Vec::from_iter(seen_types);
     let output = quote! {
         // For each getter, expand it out into a function in the impl block
         impl #struct_name {
@@ -147,7 +157,7 @@ pub fn getters_macro(input: TokenStream) -> TokenStream {
         #[allow(non_camel_case_types)]
         #[derive(Clone, Serialize, Debug, PartialEq, Deserialize, schemars::JsonSchema)]
         pub enum ProtocolConfigValue {
-            #(#inner_types1(#inner_types1),)*
+            #(#inner_types(#inner_types),)*
         }
 
         impl std::fmt::Display for ProtocolConfigValue {
@@ -156,7 +166,7 @@ pub fn getters_macro(input: TokenStream) -> TokenStream {
                 let mut writer = String::new();
                 match self {
                     #(
-                        ProtocolConfigValue::#inner_types2(x) => {
+                        ProtocolConfigValue::#inner_types(x) => {
                             write!(writer, "{}", x)?;
                         }
                     )*

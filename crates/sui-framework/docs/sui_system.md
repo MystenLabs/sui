@@ -53,8 +53,10 @@ the SuiSystemStateInner version, or vice versa.
 -  [Function `request_set_commission_rate`](#0x3_sui_system_request_set_commission_rate)
 -  [Function `set_candidate_validator_commission_rate`](#0x3_sui_system_set_candidate_validator_commission_rate)
 -  [Function `request_add_stake`](#0x3_sui_system_request_add_stake)
+-  [Function `request_add_stake_non_entry`](#0x3_sui_system_request_add_stake_non_entry)
 -  [Function `request_add_stake_mul_coin`](#0x3_sui_system_request_add_stake_mul_coin)
 -  [Function `request_withdraw_stake`](#0x3_sui_system_request_withdraw_stake)
+-  [Function `request_withdraw_stake_non_entry`](#0x3_sui_system_request_withdraw_stake_non_entry)
 -  [Function `report_validator`](#0x3_sui_system_report_validator)
 -  [Function `undo_report_validator`](#0x3_sui_system_undo_report_validator)
 -  [Function `rotate_operation_cap`](#0x3_sui_system_rotate_operation_cap)
@@ -76,6 +78,8 @@ the SuiSystemStateInner version, or vice versa.
 -  [Function `update_candidate_validator_worker_pubkey`](#0x3_sui_system_update_candidate_validator_worker_pubkey)
 -  [Function `update_validator_next_epoch_network_pubkey`](#0x3_sui_system_update_validator_next_epoch_network_pubkey)
 -  [Function `update_candidate_validator_network_pubkey`](#0x3_sui_system_update_candidate_validator_network_pubkey)
+-  [Function `pool_exchange_rates`](#0x3_sui_system_pool_exchange_rates)
+-  [Function `active_validator_addresses`](#0x3_sui_system_active_validator_addresses)
 -  [Function `advance_epoch`](#0x3_sui_system_advance_epoch)
 -  [Function `load_system_state`](#0x3_sui_system_load_system_state)
 -  [Function `load_system_state_mut`](#0x3_sui_system_load_system_state_mut)
@@ -88,6 +92,7 @@ the SuiSystemStateInner version, or vice versa.
 <b>use</b> <a href="../../../.././build/Sui/docs/dynamic_field.md#0x2_dynamic_field">0x2::dynamic_field</a>;
 <b>use</b> <a href="../../../.././build/Sui/docs/object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="../../../.././build/Sui/docs/sui.md#0x2_sui">0x2::sui</a>;
+<b>use</b> <a href="../../../.././build/Sui/docs/table.md#0x2_table">0x2::table</a>;
 <b>use</b> <a href="../../../.././build/Sui/docs/transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="stake_subsidy.md#0x3_stake_subsidy">0x3::stake_subsidy</a>;
@@ -509,6 +514,37 @@ Add stake to a validator's staking pool.
     validator_address: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ) {
+    <b>let</b> staked_sui = <a href="sui_system.md#0x3_sui_system_request_add_stake_non_entry">request_add_stake_non_entry</a>(wrapper, stake, validator_address, ctx);
+    <a href="../../../.././build/Sui/docs/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(staked_sui, <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx));
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_sui_system_request_add_stake_non_entry"></a>
+
+## Function `request_add_stake_non_entry`
+
+The non-entry version of <code>request_add_stake</code>, which returns the staked SUI instead of transferring it to the sender.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x3_sui_system_request_add_stake_non_entry">request_add_stake_non_entry</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, stake: <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="../../../.././build/Sui/docs/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, validator_address: <b>address</b>, ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="staking_pool.md#0x3_staking_pool_StakedSui">staking_pool::StakedSui</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x3_sui_system_request_add_stake_non_entry">request_add_stake_non_entry</a>(
+    wrapper: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>,
+    stake: Coin&lt;SUI&gt;,
+    validator_address: <b>address</b>,
+    ctx: &<b>mut</b> TxContext,
+): StakedSui {
     <b>let</b> self = <a href="sui_system.md#0x3_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
     <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_request_add_stake">sui_system_state_inner::request_add_stake</a>(self, stake, validator_address, ctx)
 }
@@ -542,7 +578,8 @@ Add stake to a validator's staking pool using multiple coins.
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> self = <a href="sui_system.md#0x3_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
-    <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_request_add_stake_mul_coin">sui_system_state_inner::request_add_stake_mul_coin</a>(self, stakes, stake_amount, validator_address, ctx)
+    <b>let</b> staked_sui = <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_request_add_stake_mul_coin">sui_system_state_inner::request_add_stake_mul_coin</a>(self, stakes, stake_amount, validator_address, ctx);
+    <a href="../../../.././build/Sui/docs/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(staked_sui, <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx));
 }
 </code></pre>
 
@@ -554,7 +591,7 @@ Add stake to a validator's staking pool using multiple coins.
 
 ## Function `request_withdraw_stake`
 
-Withdraw some portion of a stake from a validator's staking pool.
+Withdraw stake from a validator's staking pool.
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x3_sui_system_request_withdraw_stake">request_withdraw_stake</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, staked_sui: <a href="staking_pool.md#0x3_staking_pool_StakedSui">staking_pool::StakedSui</a>, ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -571,6 +608,36 @@ Withdraw some portion of a stake from a validator's staking pool.
     staked_sui: StakedSui,
     ctx: &<b>mut</b> TxContext,
 ) {
+    <b>let</b> withdrawn_stake = <a href="sui_system.md#0x3_sui_system_request_withdraw_stake_non_entry">request_withdraw_stake_non_entry</a>(wrapper, staked_sui, ctx);
+    <a href="../../../.././build/Sui/docs/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="../../../.././build/Sui/docs/coin.md#0x2_coin_from_balance">coin::from_balance</a>(withdrawn_stake, ctx), <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx));
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_sui_system_request_withdraw_stake_non_entry"></a>
+
+## Function `request_withdraw_stake_non_entry`
+
+Non-entry version of <code>request_withdraw_stake</code> that returns the withdrawn SUI instead of transferring it to the sender.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x3_sui_system_request_withdraw_stake_non_entry">request_withdraw_stake_non_entry</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, staked_sui: <a href="staking_pool.md#0x3_staking_pool_StakedSui">staking_pool::StakedSui</a>, ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../../../.././build/Sui/docs/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x3_sui_system_request_withdraw_stake_non_entry">request_withdraw_stake_non_entry</a>(
+    wrapper: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>,
+    staked_sui: StakedSui,
+    ctx: &<b>mut</b> TxContext,
+) : Balance&lt;SUI&gt; {
     <b>let</b> self = <a href="sui_system.md#0x3_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
     <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_request_withdraw_stake">sui_system_state_inner::request_withdraw_stake</a>(self, staked_sui, ctx)
 }
@@ -1220,6 +1287,61 @@ Update candidate validator's public key of network key.
 ) {
     <b>let</b> self = <a href="sui_system.md#0x3_sui_system_load_system_state_mut">load_system_state_mut</a>(self);
     <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_update_candidate_validator_network_pubkey">sui_system_state_inner::update_candidate_validator_network_pubkey</a>(self, network_pubkey, ctx)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_sui_system_pool_exchange_rates"></a>
+
+## Function `pool_exchange_rates`
+
+Getter of the pool token exchange rate of a staking pool. Works for both active and inactive pools.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x3_sui_system_pool_exchange_rates">pool_exchange_rates</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, pool_id: &<a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a>): &<a href="../../../.././build/Sui/docs/table.md#0x2_table_Table">table::Table</a>&lt;u64, <a href="staking_pool.md#0x3_staking_pool_PoolTokenExchangeRate">staking_pool::PoolTokenExchangeRate</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x3_sui_system_pool_exchange_rates">pool_exchange_rates</a>(
+    wrapper: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>,
+    pool_id: &ID
+): &Table&lt;u64, PoolTokenExchangeRate&gt;  {
+    <b>let</b> self = <a href="sui_system.md#0x3_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
+    <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_pool_exchange_rates">sui_system_state_inner::pool_exchange_rates</a>(self, pool_id)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_sui_system_active_validator_addresses"></a>
+
+## Function `active_validator_addresses`
+
+Getter returning addresses of the currently active validators.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x3_sui_system_active_validator_addresses">active_validator_addresses</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): <a href="">vector</a>&lt;<b>address</b>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x3_sui_system_active_validator_addresses">active_validator_addresses</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>): <a href="">vector</a>&lt;<b>address</b>&gt; {
+    <b>let</b> self = <a href="sui_system.md#0x3_sui_system_load_system_state">load_system_state</a>(wrapper);
+    <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_active_validator_addresses">sui_system_state_inner::active_validator_addresses</a>(self)
 }
 </code></pre>
 

@@ -8,15 +8,16 @@ edition = "2021"
 
 [dependencies]
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-tracing = "0.1"
-scopeguard = "1"
-prometheus = "0.13"
-once_cell = "1"
-tap = "1.0"
+tracing.workspace = true
+scopeguard.workspace = true
+prometheus.workspace = true
+once_cell.workspace = true
+tap.workspace = true
 tokio.workspace = true
-dashmap = "5.4.0"
-uuid = { version = "1.1.2", features = ["v4", "fast-rng"]}
-parking_lot = "0.12.1"
-futures = "0.3.23"
+dashmap.workspace = true
+uuid.workspace = true
+parking_lot.workspace = true
+futures.workspace = true
+async-trait.workspace = true
 
-prometheus-closure-metric = { path = "../prometheus-closure-metric" }
+prometheus-closure-metric.workspace = true

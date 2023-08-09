@@ -29,7 +29,7 @@ Version: 3
 Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 10u64}}
 
 task 6 'run'. lines 20-20:
-Error: Transaction was not signed by the correct sender: Object 0x7fdd5020ef4c65e74770efcaa8c43b30e39c91f1885c497a20e1eafabf9a17d6 is owned by account address 0xd31b7b5068b139941cedc52b036f55c894fd394a170e2ba34245a324f1d16c8b, but given owner/signer address is 0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e
+Error: Error checking transaction input objects: IncorrectUserSignature { error: "Object 0x16497d6ad2ad4c226bedea1c03921a110bad4769f30ae0e80b3e208d41c90ddd is owned by account address 0xd31b7b5068b139941cedc52b036f55c894fd394a170e2ba34245a324f1d16c8b, but given owner/signer address is 0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e" }
 
 task 7 'view-object'. lines 22-22:
 Owner: Account Address ( B )

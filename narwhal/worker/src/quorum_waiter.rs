@@ -3,15 +3,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::batch_maker::MAX_PARALLEL_BATCH;
+use crate::metrics::WorkerMetrics;
 use config::{Authority, Committee, Stake, WorkerCache, WorkerId};
 use fastcrypto::hash::Hash;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
+use mysten_metrics::metered_channel::Receiver;
 use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use network::{CancelOnDropHandler, ReliableNetwork};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::{task::JoinHandle, time::timeout};
 use tracing::{trace, warn};
-use types::{metered_channel::Receiver, Batch, ConditionalBroadcastReceiver, WorkerBatchMessage};
+use types::{Batch, ConditionalBroadcastReceiver, WorkerBatchMessage};
 
 #[cfg(test)]
 #[path = "tests/quorum_waiter_tests.rs"]
@@ -33,6 +36,8 @@ pub struct QuorumWaiter {
     rx_quorum_waiter: Receiver<(Batch, tokio::sync::oneshot::Sender<()>)>,
     /// A network sender to broadcast the batches to the other workers.
     network: anemo::Network,
+    /// Record metrics for quorum waiter.
+    metrics: Arc<WorkerMetrics>,
 }
 
 impl QuorumWaiter {
@@ -46,6 +51,7 @@ impl QuorumWaiter {
         rx_shutdown: ConditionalBroadcastReceiver,
         rx_quorum_waiter: Receiver<(Batch, tokio::sync::oneshot::Sender<()>)>,
         network: anemo::Network,
+        metrics: Arc<WorkerMetrics>,
     ) -> JoinHandle<()> {
         spawn_logged_monitored_task!(
             async move {
@@ -57,6 +63,7 @@ impl QuorumWaiter {
                     rx_shutdown,
                     rx_quorum_waiter,
                     network,
+                    metrics,
                 }
                 .run()
                 .await;
@@ -97,6 +104,7 @@ impl QuorumWaiter {
                     let (primary_names, worker_names): (Vec<_>, _) = workers.into_iter().unzip();
                     let message  = WorkerBatchMessage{batch: batch.clone()};
                     let handlers = self.network.broadcast(worker_names, &message);
+                    let timer = self.metrics.batch_broadcast_quorum_latency.start_timer();
 
                     // Collect all the handlers to receive acknowledgements.
                     let mut wait_for_quorum: FuturesUnordered<_> = primary_names
@@ -115,6 +123,8 @@ impl QuorumWaiter {
                     let mut total_stake = self.authority.stake();
 
                     pipeline.push(async move {
+                        // Keep the timer until a quorum is reached.
+                        let _timer = timer;
                         // A future that sends to 2/3 stake then returns. Also prints a warning
                         // if we terminate before we have managed to get to the full 2/3 stake.
                         let mut opt_channel = Some(channel);

@@ -185,12 +185,14 @@ module nfts::marketplaceTests {
     const SELLER: address = @0x00A;
     const BUYER: address = @0x00B;
 
+    #[allow(unused_function)]
     /// Create a shared [`Marketplace`].
     fun create_marketplace(scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, ADMIN);
         marketplace::create<SUI>(test_scenario::ctx(scenario));
     }
 
+    #[allow(unused_function)]
     /// Mint SUI and send it to BUYER.
     fun mint_some_coin(scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, ADMIN);
@@ -198,6 +200,7 @@ module nfts::marketplaceTests {
         transfer::public_transfer(coin, BUYER);
     }
 
+    #[allow(unused_function)]
     /// Mint Kitty NFT and send it to SELLER.
     fun mint_kitty(scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, ADMIN);
@@ -339,6 +342,7 @@ module nfts::marketplaceTests {
     //     };
     // }
 
+    #[allow(unused_function)]
     fun burn_kitty(kitty: Kitty): u8 {
         let Kitty{ id, kitty_id } = kitty;
         object::delete(id);

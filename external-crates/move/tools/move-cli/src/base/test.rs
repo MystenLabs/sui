@@ -76,12 +76,6 @@ pub struct Test {
     /// Collect coverage information for later use with the various `move coverage` subcommands
     #[clap(long = "coverage")]
     pub compute_coverage: bool,
-
-    /// Use the EVM-based execution backend.
-    /// Does not work with --stackless.
-    #[cfg(feature = "evm-backend")]
-    #[structopt(long = "evm")]
-    pub evm: bool,
 }
 
 impl Test {
@@ -104,8 +98,6 @@ impl Test {
             check_stackless_vm,
             verbose_mode,
             compute_coverage,
-            #[cfg(feature = "evm-backend")]
-            evm,
         } = self;
         let unit_test_config = UnitTestingConfig {
             gas_limit,
@@ -117,8 +109,6 @@ impl Test {
             check_stackless_vm,
             verbose: verbose_mode,
             ignore_compile_warnings,
-            #[cfg(feature = "evm-backend")]
-            evm,
 
             ..UnitTestingConfig::default_with_bound(None)
         };
@@ -129,6 +119,7 @@ impl Test {
             natives,
             cost_table,
             compute_coverage,
+            &mut std::io::stdout(),
             &mut std::io::stdout(),
         )?;
 
@@ -147,14 +138,15 @@ pub enum UnitTestResult {
     Failure,
 }
 
-pub fn run_move_unit_tests<W: Write + Send>(
+pub fn run_move_unit_tests<CW: Write + Send, TW: Write + Send>(
     pkg_path: &Path,
     mut build_config: move_package::BuildConfig,
     mut unit_test_config: UnitTestingConfig,
     natives: Vec<NativeFunctionRecord>,
     cost_table: Option<CostTable>,
     compute_coverage: bool,
-    writer: &mut W,
+    compiler_writer: &mut CW,
+    test_writer: &mut TW,
 ) -> Result<UnitTestResult> {
     let mut test_plan = None;
     build_config.test_mode = true;
@@ -199,7 +191,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
     // Move package system, to first grab the compilation env, construct the test plan from it, and
     // then save it, before resuming the rest of the compilation and returning the results and
     // control back to the Move package system.
-    build_plan.compile_with_driver(writer, |compiler| {
+    build_plan.compile_with_driver(compiler_writer, |compiler| {
         let (files, comments_and_compiler_res) = compiler.run::<PASS_CFGIR>().unwrap();
         let (_, compiler) =
             diagnostics::unwrap_or_report_diagnostics(&files, comments_and_compiler_res);
@@ -250,7 +242,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
     // Run the tests. If any of the tests fail, then we don't produce a coverage report, so cleanup
     // the trace files.
     if !unit_test_config
-        .run_and_report_unit_tests(test_plan, Some(natives), cost_table, writer)
+        .run_and_report_unit_tests(test_plan, Some(natives), cost_table, test_writer)
         .unwrap()
         .1
     {

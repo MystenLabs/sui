@@ -11,6 +11,7 @@ If your changes are not user-facing and not a breaking change, you can skip the 
 
 ### Type of Change (Check all that apply)
 
+- [ ] protocol change
 - [ ] user-visible impact
 - [ ] breaking change for a client SDKs
 - [ ] breaking change for FNs (FN binary must upgrade)

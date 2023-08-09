@@ -1,0 +1,25 @@
+[package]
+name = "sui-metric-checker"
+version = "0.0.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+backoff.workspace = true
+base64.workspace = true
+chrono.workspace = true
+clap = { version = "4.3.0", features = ["derive"] }
+humantime.workspace = true
+once_cell.workspace = true
+prometheus-http-query.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_yaml = "0.9.21"
+strum_macros.workspace = true
+telemetry-subscribers.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

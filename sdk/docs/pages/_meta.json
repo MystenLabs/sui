@@ -1,0 +1,9 @@
+{
+	"index": "Sui Typescript SDK Quick Start",
+	"install": "Install",
+	"hello-sui": "Hello, Sui",
+	"faucet": "Faucet",
+	"sui-client": "SuiClient",
+	"transaction-building": "Transaction Building",
+	"cryptography": "Cryptography"
+}

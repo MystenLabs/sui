@@ -56,9 +56,7 @@ async fn _split_coins_equally(
         .keystore
         .sign_secure(&active_address, &tx_data, Intent::sui_transaction())
         .unwrap();
-    let tx = Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature])
-        .verify()
-        .unwrap();
+    let tx = Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature]);
     let resp = client
         .quorum_driver_api()
         .execute_transaction_block(
@@ -77,6 +75,7 @@ async fn _merge_coins(gas_coin: &str, mut wallet: WalletContext) -> Result<(), a
         .active_address()
         .map_err(|err| FaucetError::Wallet(err.to_string()))?;
     let client = wallet.get_client().await?;
+    // Pick a gas coin here that isn't in use by the faucet otherwise there will be some contention.
     let small_coins = wallet
         .gas_objects(active_address)
         .await
@@ -111,9 +110,7 @@ async fn _merge_coins(gas_coin: &str, mut wallet: WalletContext) -> Result<(), a
             .keystore
             .sign_secure(&active_address, &tx_data, Intent::sui_transaction())
             .unwrap();
-        let tx = Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature])
-            .verify()
-            .unwrap();
+        let tx = Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature]);
         client
             .quorum_driver_api()
             .execute_transaction_block(

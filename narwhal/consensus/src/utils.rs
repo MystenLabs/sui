@@ -1,62 +1,10 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::consensus::{ConsensusState, Dag};
-use config::Committee;
+use crate::consensus::ConsensusState;
 use std::collections::HashSet;
 use tracing::debug;
-use types::{Certificate, CertificateAPI, CertificateDigest, HeaderAPI, Round};
-
-/// Order the past leaders that we didn't already commit.
-pub fn order_leaders<'a, LeaderElector>(
-    committee: &Committee,
-    leader: &Certificate,
-    state: &'a ConsensusState,
-    get_leader: LeaderElector,
-) -> Vec<Certificate>
-where
-    LeaderElector: Fn(&Committee, Round, &'a Dag) -> Option<&'a (CertificateDigest, Certificate)>,
-{
-    let mut to_commit = vec![leader.clone()];
-    let mut leader = leader;
-    assert_eq!(leader.round() % 2, 0);
-    for r in (state.last_round.committed_round + 2..=leader.round() - 2)
-        .rev()
-        .step_by(2)
-    {
-        // Get the certificate proposed by the previous leader.
-        let (_, prev_leader) = match get_leader(committee, r, &state.dag) {
-            Some(x) => x,
-            None => continue,
-        };
-
-        // Check whether there is a path between the last two leaders.
-        if linked(leader, prev_leader, &state.dag) {
-            to_commit.push(prev_leader.clone());
-            leader = prev_leader;
-        }
-    }
-    to_commit
-}
-
-/// Checks if there is a path between two leaders.
-fn linked(leader: &Certificate, prev_leader: &Certificate, dag: &Dag) -> bool {
-    let mut parents = vec![leader];
-    for r in (prev_leader.round()..leader.round()).rev() {
-        parents = dag
-            .get(&r)
-            .expect("We should have the whole history by now")
-            .values()
-            .filter(|(digest, _)| {
-                parents
-                    .iter()
-                    .any(|x| x.header().parents().contains(digest))
-            })
-            .map(|(_, certificate)| certificate)
-            .collect();
-    }
-    parents.contains(&prev_leader)
-}
+use types::{Certificate, CertificateAPI, HeaderAPI, Round};
 
 /// Flatten the dag referenced by the input certificate. This is a classic depth-first search (pre-order):
 /// <https://en.wikipedia.org/wiki/Tree_traversal#Pre-order>

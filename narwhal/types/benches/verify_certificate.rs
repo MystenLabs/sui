@@ -7,7 +7,7 @@ use criterion::{
 use fastcrypto::hash::Hash;
 use narwhal_types::Certificate;
 use std::collections::BTreeSet;
-use test_utils::{make_optimal_certificates, CommitteeFixture};
+use test_utils::{latest_protocol_version, make_optimal_certificates, CommitteeFixture};
 
 pub fn verify_certificates(c: &mut Criterion) {
     let mut bench_group = c.benchmark_group("verify_certificate");
@@ -26,8 +26,13 @@ pub fn verify_certificates(c: &mut Criterion) {
             .iter()
             .map(|x| x.digest())
             .collect::<BTreeSet<_>>();
-        let (certificates, _next_parents) =
-            make_optimal_certificates(&committee, 1..=1, &genesis, &ids);
+        let (certificates, _next_parents) = make_optimal_certificates(
+            &committee,
+            &latest_protocol_version(),
+            1..=1,
+            &genesis,
+            &ids,
+        );
         let certificate = certificates.front().unwrap().clone();
 
         let data_size: usize = bcs::to_bytes(&certificate).unwrap().len();

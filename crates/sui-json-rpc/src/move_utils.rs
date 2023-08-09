@@ -3,7 +3,6 @@
 
 use crate::api::MoveUtilsServer;
 use crate::error::{Error, SuiRpcInputError};
-use crate::read_api::{get_move_module, get_move_modules_by_package};
 use crate::{with_tracing, SuiRpcModule};
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
@@ -26,7 +25,8 @@ use sui_open_rpc::Module;
 use sui_types::base_types::ObjectID;
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead};
-use tracing::instrument;
+use tap::TapFallible;
+use tracing::{error, instrument, warn};
 
 #[cfg_attr(test, automock)]
 #[async_trait]
@@ -68,14 +68,51 @@ impl MoveUtilsInternalTrait for MoveUtilsInternal {
         package: ObjectID,
         module_name: String,
     ) -> Result<NormalizedModule, Error> {
-        get_move_module(self.get_state(), package, module_name).await
+        let normalized = self.get_move_modules_by_package(package).await?;
+        Ok(match normalized.get(&module_name) {
+            Some(module) => Ok(module.clone()),
+            None => Err(SuiRpcInputError::GenericNotFound(format!(
+                "No module found with module name {}",
+                module_name
+            ))),
+        }?)
     }
 
     async fn get_move_modules_by_package(
         &self,
         package: ObjectID,
     ) -> Result<BTreeMap<String, NormalizedModule>, Error> {
-        get_move_modules_by_package(self.get_state(), package).await
+        let object_read = self.get_state().get_object_read(&package).tap_err(|_| {
+            warn!("Failed to call get_move_modules_by_package for package: {package:?}");
+        })?;
+
+        match object_read {
+            ObjectRead::Exists(_obj_ref, object, _layout) => {
+                match object.data {
+                    Data::Package(p) => {
+                        // we are on the read path - it's OK to use VERSION_MAX of the supported Move
+                        // binary format
+                        normalize_modules(
+                        p.serialized_module_map().values(),
+                        /* max_binary_format_version */ VERSION_MAX,
+                        /* no_extraneous_module_bytes */ false,
+                    )
+                    .map_err(|e| {
+                        error!("Failed to call get_move_modules_by_package for package: {package:?}");
+                        Error::from(e)
+                    })
+                    }
+                    _ => Err(SuiRpcInputError::GenericInvalid(format!(
+                        "Object is not a package with ID {}",
+                        package
+                    )))?,
+                }
+            }
+            _ => Err(SuiRpcInputError::GenericNotFound(format!(
+                "Package object does not exist with ID {}",
+                package
+            )))?,
+        }
     }
 
     fn get_object_read(&self, package: ObjectID) -> Result<ObjectRead, Error> {
@@ -146,15 +183,15 @@ impl MoveUtilsServer for MoveUtils {
         with_tracing!(async move {
             let module = self.internal.get_move_module(package, module_name).await?;
             let structs = module.structs;
-            let identifier = Identifier::new(struct_name.as_str()).map_err(|e| {
-                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!("{e}")))
-            })?;
-            Ok(match structs.get(&identifier) {
+            let identifier = Identifier::new(struct_name.as_str())
+                .map_err(|e| SuiRpcInputError::GenericInvalid(format!("{e}")))?;
+            match structs.get(&identifier) {
                 Some(struct_) => Ok(struct_.clone().into()),
-                None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
-                    format!("No struct was found with struct name {}", struct_name),
-                ))),
-            }?)
+                None => Err(SuiRpcInputError::GenericNotFound(format!(
+                    "No struct was found with struct name {}",
+                    struct_name
+                )))?,
+            }
         })
     }
 
@@ -168,15 +205,15 @@ impl MoveUtilsServer for MoveUtils {
         with_tracing!(async move {
             let module = self.internal.get_move_module(package, module_name).await?;
             let functions = module.functions;
-            let identifier = Identifier::new(function_name.as_str()).map_err(|e| {
-                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!("{e}")))
-            })?;
-            Ok(match functions.get(&identifier) {
+            let identifier = Identifier::new(function_name.as_str())
+                .map_err(|e| SuiRpcInputError::GenericInvalid(format!("{e}")))?;
+            match functions.get(&identifier) {
                 Some(function) => Ok(function.clone().into()),
-                None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
-                    format!("No function was found with function name {}", function_name),
-                ))),
-            }?)
+                None => Err(SuiRpcInputError::GenericNotFound(format!(
+                    "No function was found with function name {}",
+                    function_name
+                )))?,
+            }
         })
     }
 
@@ -202,23 +239,24 @@ impl MoveUtilsServer for MoveUtils {
                         )
                         .map_err(Error::from)
                     }
-                    _ => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(
-                        format!("Object is not a package with ID {}", package),
-                    ))),
+                    _ => Err(SuiRpcInputError::GenericInvalid(format!(
+                        "Object is not a package with ID {}",
+                        package
+                    )))?,
                 },
-                _ => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
-                    format!("Package object does not exist with ID {}", package),
-                ))),
+                _ => Err(SuiRpcInputError::GenericNotFound(format!(
+                    "Package object does not exist with ID {}",
+                    package
+                )))?,
             }?;
 
-            let identifier = Identifier::new(function.as_str()).map_err(|e| {
-                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!("{e}")))
-            })?;
+            let identifier = Identifier::new(function.as_str())
+                .map_err(|e| SuiRpcInputError::GenericInvalid(format!("{e}")))?;
             let parameters = normalized
                 .get(&module)
                 .and_then(|m| m.functions.get(&identifier).map(|f| f.parameters.clone()));
 
-            Ok(match parameters {
+            match parameters {
                 Some(parameters) => Ok(parameters
                     .iter()
                     .map(|p| match p {
@@ -237,10 +275,11 @@ impl MoveUtilsServer for MoveUtils {
                         _ => MoveFunctionArgType::Pure,
                     })
                     .collect::<Vec<MoveFunctionArgType>>()),
-                None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
-                    format!("No parameters found for function {}", function),
-                ))),
-            }?)
+                None => Err(SuiRpcInputError::GenericNotFound(format!(
+                    "No parameters found for function {}",
+                    function
+                )))?,
+            }
         })
     }
 }

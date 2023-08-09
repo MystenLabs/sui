@@ -4,7 +4,10 @@
 
 use crate::{
     diag,
-    diagnostics::Diagnostic,
+    diagnostics::{
+        codes::{CategoryID, WarningFilter},
+        Diagnostic, WarningFilters,
+    },
     expansion::{
         aliases::{AliasMap, AliasSet},
         ast::{self as E, Address, Fields, ModuleIdent, ModuleIdent_, SpecId},
@@ -400,6 +403,11 @@ fn module_(
         members,
     } = mdef;
     let attributes = flatten_attributes(context, AttributePosition::Module, attributes);
+    let mut warning_filter = warning_filter(context, &attributes);
+    let config = context.env.package_config(package_name);
+    warning_filter.union(&config.warning_filter);
+
+    context.env.add_warning_filter_scope(warning_filter.clone());
     assert!(context.address.is_none());
     assert!(address.is_none());
     set_sender_address(context, &name, module_address);
@@ -465,7 +473,9 @@ fn module_(
         constants,
         functions,
         specs,
+        warning_filter,
     };
+    context.env.pop_warning_filter_scope();
     (current_module, def)
 }
 
@@ -491,6 +501,11 @@ fn script_(context: &mut Context, package_name: Option<Symbol>, pscript: P::Scri
     } = pscript;
 
     let attributes = flatten_attributes(context, AttributePosition::Script, attributes);
+    let mut warning_filter = warning_filter(context, &attributes);
+    let config = context.env.package_config(package_name);
+    warning_filter.union(&config.warning_filter);
+
+    context.env.add_warning_filter_scope(warning_filter.clone());
     let new_scope = uses(context, puses);
     let old_aliases = context.aliases.add_and_shadow_all(new_scope);
     assert!(
@@ -535,8 +550,9 @@ fn script_(context: &mut Context, package_name: Option<Symbol>, pscript: P::Scri
     }
     let specs = specs(context, pspecs);
     context.set_to_outer_scope(old_aliases);
-
+    context.env.pop_warning_filter_scope();
     E::Script {
+        warning_filter,
         package_name,
         attributes,
         loc,
@@ -706,6 +722,70 @@ fn attribute_value(
             PV::ModuleAccess(ma) => EV::ModuleAccess(name_access_chain(context, Access::Type, ma)?),
         },
     ))
+}
+
+fn warning_filter(
+    context: &mut Context,
+    attributes: &UniqueMap<E::AttributeName, E::Attribute>,
+) -> WarningFilters {
+    use crate::diagnostics::codes::Category;
+    use known_attributes::DiagnosticAttribute;
+    let mut warning_filters = WarningFilters::new();
+    let filter_attribute_names = context.env.filter_attributes().clone();
+    for allow in filter_attribute_names {
+        let Some(attr) = attributes.get_(&allow) else {
+            continue;
+        };
+        let inners = match &attr.value {
+            E::Attribute_::Parameterized(_, inner) if !inner.is_empty() => inner,
+            _ => {
+                let msg = format!(
+                    "Expected list of warnings, e.g. '{}({})'",
+                    DiagnosticAttribute::ALLOW,
+                    WarningFilter::Category(
+                        CategoryID::new(Category::UnusedItem as u8, None),
+                        Some(FILTER_UNUSED)
+                    )
+                    .to_str()
+                    .unwrap(),
+                );
+                context
+                    .env
+                    .add_diag(diag!(Attributes::InvalidValue, (attr.loc, msg)));
+                continue;
+            }
+        };
+        for (inner_attr_loc, _, inner_attr) in inners {
+            let sp!(_, name_) = match inner_attr.value {
+                E::Attribute_::Name(n) => n,
+                E::Attribute_::Assigned(n, _) | E::Attribute_::Parameterized(n, _) => {
+                    let msg = format!(
+                        "Expected a stand alone warning filter identifier, e.g. '{}({})'",
+                        DiagnosticAttribute::ALLOW,
+                        n
+                    );
+                    context
+                        .env
+                        .add_diag(diag!(Attributes::InvalidValue, (inner_attr_loc, msg)));
+                    n
+                }
+            };
+            let filters = context
+                .env
+                .filter_from_str(name_.to_string(), allow.clone());
+            if filters.is_empty() {
+                let msg = format!("Unknown warning filter '{name_}'");
+                context
+                    .env
+                    .add_diag(diag!(Attributes::InvalidValue, (attr.loc, msg)));
+                continue;
+            };
+            for f in filters {
+                warning_filters.add(f);
+            }
+        }
+    }
+    warning_filters
 }
 
 //**************************************************************************************************
@@ -1056,6 +1136,8 @@ fn struct_def_(
         fields: pfields,
     } = pstruct;
     let attributes = flatten_attributes(context, AttributePosition::Struct, attributes);
+    let warning_filter = warning_filter(context, &attributes);
+    context.env.add_warning_filter_scope(warning_filter.clone());
     let type_parameters = struct_type_parameters(context, pty_params);
     let old_aliases = context
         .aliases
@@ -1063,6 +1145,7 @@ fn struct_def_(
     let abilities = ability_set(context, "modifier", abilities_vec);
     let fields = struct_fields(context, &name, pfields);
     let sdef = E::StructDefinition {
+        warning_filter,
         index,
         attributes,
         loc,
@@ -1071,6 +1154,7 @@ fn struct_def_(
         fields,
     };
     context.set_to_outer_scope(old_aliases);
+    context.env.pop_warning_filter_scope();
     (name, sdef)
 }
 
@@ -1173,16 +1257,20 @@ fn constant_(
         value: pvalue,
     } = pconstant;
     let attributes = flatten_attributes(context, AttributePosition::Constant, pattributes);
+    let warning_filter = warning_filter(context, &attributes);
+    context.env.add_warning_filter_scope(warning_filter.clone());
     let signature = type_(context, psignature);
     let value = exp_(context, pvalue);
     let _specs = context.extract_exp_specs();
     let constant = E::Constant {
+        warning_filter,
         index,
         attributes,
         loc,
         signature,
         value,
     };
+    context.env.pop_warning_filter_scope();
     (name, constant)
 }
 
@@ -1218,6 +1306,8 @@ fn function_(
     } = pfunction;
     assert!(context.exp_specs.is_empty());
     let attributes = flatten_attributes(context, AttributePosition::Function, pattributes);
+    let warning_filter = warning_filter(context, &attributes);
+    context.env.add_warning_filter_scope(warning_filter.clone());
     let visibility = visibility(context, pvisibility);
     let (old_aliases, signature) = function_signature(context, psignature);
     let acquires = acquires
@@ -1227,6 +1317,7 @@ fn function_(
     let body = function_body(context, pbody);
     let specs = context.extract_exp_specs();
     let fdef = E::Function {
+        warning_filter,
         index,
         attributes,
         loc,
@@ -1238,6 +1329,7 @@ fn function_(
         specs,
     };
     context.set_to_outer_scope(old_aliases);
+    context.env.pop_warning_filter_scope();
     (name, fdef)
 }
 

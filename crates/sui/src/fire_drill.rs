@@ -18,9 +18,8 @@ use fastcrypto::traits::{KeyPair, ToFromBytes};
 use move_core_types::ident_str;
 use shared_crypto::intent::Intent;
 use std::path::{Path, PathBuf};
-use sui_config::node::KeyPairWithPath;
-use sui_config::utils;
-use sui_config::{node::AuthorityKeyPairWithPath, Config, NodeConfig, PersistedConfig};
+use sui_config::node::{AuthorityKeyPairWithPath, KeyPairWithPath};
+use sui_config::{local_ip_utils, Config, NodeConfig, PersistedConfig};
 use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockResponseOptions};
 use sui_keys::keypair_file::read_keypair_from_file;
 use sui_sdk::{rpc_types::SuiTransactionBlockEffectsAPI, SuiClient, SuiClientBuilder};
@@ -166,7 +165,8 @@ async fn update_next_epoch_metadata(
     let http = new_network_address.pop().unwrap();
     // pop out tcp
     new_network_address.pop().unwrap();
-    let new_port = utils::get_available_port("127.0.0.1");
+    let localhost = local_ip_utils::localhost_for_testing();
+    let new_port = local_ip_utils::get_available_port(&localhost);
     new_network_address.push(Protocol::Tcp(new_port));
     new_network_address.push(http);
     info!("New network address: {:?}", new_network_address);
@@ -177,7 +177,7 @@ async fn update_next_epoch_metadata(
     info!("Current P2P external address: {:?}", new_external_address);
     // pop out udp
     new_external_address.pop().unwrap();
-    let new_port = utils::get_available_port("127.0.0.1");
+    let new_port = local_ip_utils::get_available_port(&localhost);
     new_external_address.push(Protocol::Udp(new_port));
     info!("New P2P external address: {:?}", new_external_address);
     new_config.p2p_config.external_address = Some(new_external_address.clone());
@@ -194,7 +194,7 @@ async fn update_next_epoch_metadata(
     info!("Current primary address: {:?}", new_primary_addresses);
     // pop out udp
     new_primary_addresses.pop().unwrap();
-    let new_port = utils::get_available_port("127.0.0.1");
+    let new_port = local_ip_utils::get_available_port(&localhost);
     new_primary_addresses.push(Protocol::Udp(new_port));
     info!("New primary address: {:?}", new_primary_addresses);
 
@@ -211,7 +211,7 @@ async fn update_next_epoch_metadata(
     info!("Current worker address: {:?}", new_worker_addresses);
     // pop out udp
     new_worker_addresses.pop().unwrap();
-    let new_port = utils::get_available_port("127.0.0.1");
+    let new_port = local_ip_utils::get_available_port(&localhost);
     new_worker_addresses.push(Protocol::Udp(new_port));
     info!("New worker address:: {:?}", new_worker_addresses);
 
@@ -338,8 +338,7 @@ async fn execute_tx(
     action: &str,
 ) -> anyhow::Result<()> {
     let tx =
-        Transaction::from_data_and_signer(tx_data, Intent::sui_transaction(), vec![account_key])
-            .verify()?;
+        Transaction::from_data_and_signer(tx_data, Intent::sui_transaction(), vec![account_key]);
     info!("Executing {:?}", tx.digest());
     let tx_digest = *tx.digest();
     let resp = sui_client

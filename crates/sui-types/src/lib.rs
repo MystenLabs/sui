@@ -39,6 +39,8 @@ pub mod dynamic_field;
 pub mod effects;
 pub mod event;
 pub mod executable_transaction;
+pub mod execution;
+pub mod execution_mode;
 pub mod execution_status;
 pub mod gas;
 pub mod gas_coin;
@@ -46,14 +48,15 @@ pub mod gas_model;
 pub mod governance;
 pub mod id;
 pub mod in_memory_storage;
-pub mod layout_resolver;
 pub mod message_envelope;
 pub mod messages_checkpoint;
 pub mod messages_consensus;
 pub mod messages_grpc;
+pub mod messages_safe_client;
 pub mod metrics;
 pub mod move_package;
 pub mod multisig;
+pub mod multisig_legacy;
 pub mod object;
 pub mod programmable_transaction_builder;
 pub mod quorum_driver_types;
@@ -63,11 +66,14 @@ pub mod sui_serde;
 pub mod sui_system_state;
 pub mod temporary_store;
 pub mod transaction;
+pub mod type_resolver;
 pub mod versioned;
+pub mod zk_login_authenticator;
+pub mod zk_login_util;
 
 pub mod epoch_data;
 
-#[cfg(feature = "test-utils")]
+#[cfg(any(test, feature = "test-utils"))]
 #[path = "./unit_tests/utils.rs"]
 pub mod utils;
 

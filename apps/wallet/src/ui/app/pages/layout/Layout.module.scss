@@ -3,15 +3,15 @@
 @use '_values/colors';
 
 .container {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-flow: column nowrap;
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-flow: column nowrap;
 
-    @include v.set(v.$sizing-nav-height-placeholder, val.$sizing-nav-height);
+	@include v.set(v.$sizing-nav-height-placeholder, val.$sizing-nav-height);
 
-    &.nav-hidden {
-        @include v.set(v.$sizing-nav-height-placeholder, 0);
-    }
+	&.nav-hidden {
+		@include v.set(v.$sizing-nav-height-placeholder, 0);
+	}
 }

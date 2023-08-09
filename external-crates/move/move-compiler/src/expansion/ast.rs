@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    diagnostics::WarningFilters,
     parser::ast::{
         self as P, Ability, Ability_, BinOp, ConstantName, Field, FunctionName, ModuleName,
         QuantKind, SpecApplyPattern, StructName, UnaryOp, Var, ENTRY_MODIFIER,
@@ -66,6 +67,16 @@ pub enum AttributeName_ {
     Unknown(Symbol),
     Known(KnownAttribute),
 }
+
+impl AttributeName_ {
+    pub fn name(&self) -> Symbol {
+        match self {
+            Self::Unknown(s) => *s,
+            Self::Known(a) => a.name().into(),
+        }
+    }
+}
+
 pub type AttributeName = Spanned<AttributeName_>;
 
 pub type Attributes = UniqueMap<AttributeName, Attribute>;
@@ -76,6 +87,7 @@ pub type Attributes = UniqueMap<AttributeName, Attribute>;
 
 #[derive(Debug, Clone)]
 pub struct Script {
+    pub warning_filter: WarningFilters,
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
@@ -106,6 +118,7 @@ pub type ModuleIdent = Spanned<ModuleIdent_>;
 
 #[derive(Debug, Clone)]
 pub struct ModuleDefinition {
+    pub warning_filter: WarningFilters,
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
@@ -154,6 +167,7 @@ pub struct StructTypeParameter {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructDefinition {
+    pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
@@ -199,6 +213,7 @@ pub struct SpecId(usize);
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Function {
+    pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
@@ -217,6 +232,7 @@ pub struct Function {
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Constant {
+    pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
@@ -574,11 +590,28 @@ impl Address {
             Self::NamedUnassigned(_) => NumericalAddress::DEFAULT_ERROR_ADDRESS,
         }
     }
+
+    pub fn is(&self, address: impl AsRef<str>) -> bool {
+        match self {
+            Self::Numerical(Some(n), _) | Self::NamedUnassigned(n) => {
+                n.value.as_str() == address.as_ref()
+            }
+            Self::Numerical(None, _) => false,
+        }
+    }
 }
 
 impl ModuleIdent_ {
     pub fn new(address: Address, module: ModuleName) -> Self {
         Self { address, module }
+    }
+
+    pub fn is(&self, address: impl AsRef<str>, module: impl AsRef<str>) -> bool {
+        let Self {
+            address: a,
+            module: m,
+        } = self;
+        a.is(address) && m == module.as_ref()
     }
 }
 
@@ -918,7 +951,9 @@ impl AstDebug for Script {
             function_name,
             function,
             specs,
+            warning_filter,
         } = self;
+        warning_filter.ast_debug(w);
         if let Some(n) = package_name {
             w.writeln(&format!("{}", n))
         }
@@ -958,7 +993,9 @@ impl AstDebug for ModuleDefinition {
             functions,
             constants,
             specs,
+            warning_filter,
         } = self;
+        warning_filter.ast_debug(w);
         if let Some(n) = package_name {
             w.writeln(&format!("{}", n))
         }
@@ -1021,11 +1058,11 @@ impl AstDebug for (StructName, &StructDefinition) {
                 abilities,
                 type_parameters,
                 fields,
+                warning_filter,
             },
         ) = self;
-
+        warning_filter.ast_debug(w);
         attributes.ast_debug(w);
-
         if let StructFields::Native(_) = fields {
             w.write("native ");
         }
@@ -1246,8 +1283,10 @@ impl AstDebug for (FunctionName, &Function) {
                 acquires,
                 body,
                 specs: _specs,
+                warning_filter,
             },
         ) = self;
+        warning_filter.ast_debug(w);
         attributes.ast_debug(w);
         visibility.ast_debug(w);
         if entry.is_some() {
@@ -1299,6 +1338,7 @@ impl AstDebug for (ConstantName, &Constant) {
         let (
             name,
             Constant {
+                warning_filter,
                 index,
                 attributes,
                 loc: _loc,
@@ -1306,6 +1346,7 @@ impl AstDebug for (ConstantName, &Constant) {
                 value,
             },
         ) = self;
+        warning_filter.ast_debug(w);
         attributes.ast_debug(w);
         w.write(&format!("const#{index} {}:", name));
         signature.ast_debug(w);

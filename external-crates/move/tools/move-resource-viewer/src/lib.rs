@@ -22,6 +22,7 @@ use move_core_types::{
     value::{MoveStruct, MoveTypeLayout, MoveValue},
     vm_status::VMStatus,
 };
+use move_proc_macros::test_variant_order;
 use serde::ser::{SerializeMap, SerializeSeq};
 use std::{
     convert::{TryFrom, TryInto},
@@ -45,6 +46,7 @@ pub struct AnnotatedMoveStruct {
 /// the long run, we would like to transform this struct to a Json value so that we can have a cross
 /// platform interpretation of the on chain data.
 #[derive(Clone, Debug)]
+#[test_variant_order(src/unit_tests/staged_enum_variant_order/annotated_move_value.yaml)]
 pub enum AnnotatedMoveValue {
     U8(u8),
     U64(u64),

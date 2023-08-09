@@ -26,6 +26,7 @@ module std::event {
         guid: GUIDWrapper,
     }
 
+    #[allow(unused_field)]
     /// Deprecated. Only kept around so Diem clients know how to deserialize existing EventHandleGenerator's
     struct EventHandleGenerator has key {
         // A monotonically increasing counter

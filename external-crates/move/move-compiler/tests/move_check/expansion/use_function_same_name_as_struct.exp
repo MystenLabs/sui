@@ -3,6 +3,8 @@ warning[W09001]: unused alias
   │
 9 │     use 0x2::X::u;
   │                 ^ Unused 'use' of alias 'u'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E02010]: invalid name
    ┌─ tests/move_check/expansion/use_function_same_name_as_struct.move:10:12
@@ -23,4 +25,6 @@ warning[W09001]: unused alias
    │
 15 │     use 0x2::X::u as Bar;
    │                      ^^^ Unused 'use' of alias 'Bar'. Consider removing it
+   │
+   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

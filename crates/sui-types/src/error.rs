@@ -6,6 +6,7 @@ use crate::{
     base_types::*,
     committee::{Committee, EpochId, StakeUnit},
     digests::CheckpointContentsDigest,
+    execution_status::CommandArgumentError,
     messages_checkpoint::CheckpointSequenceNumber,
     object::Owner,
 };
@@ -73,7 +74,7 @@ macro_rules! invariant_violation {
 
 #[macro_export]
 macro_rules! assert_invariant {
-    ($cond:expr, $($args:expr),*) => {{
+    ($cond:expr, $($args:expr),* $(,)?) => {{
         if !$cond {
             invariant_violation!($($args),*)
         }
@@ -367,7 +368,7 @@ pub enum SuiError {
     ModuleVerificationFailure { error: String },
     #[error("Failed to deserialize the Move module, reason: {error:?}.")]
     ModuleDeserializationFailure { error: String },
-    #[error("Failed to publish the Move module(s), reason: {error:?}.")]
+    #[error("Failed to publish the Move module(s), reason: {error}")]
     ModulePublishFailure { error: String },
     #[error("Failed to build Move modules: {error}.")]
     ModuleBuildFailure { error: String },
@@ -444,8 +445,8 @@ pub enum SuiError {
     #[error("Authority Error: {error:?}")]
     GenericAuthorityError { error: String },
 
-    #[error("Failed to dispatch event: {error:?}")]
-    EventFailedToDispatch { error: String },
+    #[error("Failed to dispatch subscription: {error:?}")]
+    FailedToDispatchSubscription { error: String },
 
     #[error("Failed to serialize Owner: {error:?}")]
     OwnerFailedToSerialize { error: String },
@@ -553,6 +554,9 @@ pub enum SuiError {
 
     #[error("Failed to perform file operation: {0}")]
     FileIOError(String),
+
+    #[error("Failed to get JWK")]
+    JWKRetrievalError,
 }
 
 #[repr(u64)]
@@ -577,6 +581,7 @@ pub enum VMMemoryLimitExceededSubStatusCode {
     TRANSFER_ID_COUNT_LIMIT_EXCEEDED = 4,
     OBJECT_RUNTIME_CACHE_LIMIT_EXCEEDED = 5,
     OBJECT_RUNTIME_STORE_LIMIT_EXCEEDED = 6,
+    TOTAL_EVENT_SIZE_LIMIT_EXCEEDED = 7,
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;
@@ -825,4 +830,11 @@ impl From<ExecutionErrorKind> for ExecutionError {
     fn from(kind: ExecutionErrorKind) -> Self {
         Self::from_kind(kind)
     }
+}
+
+pub fn command_argument_error(e: CommandArgumentError, arg_idx: usize) -> ExecutionError {
+    ExecutionError::from_kind(ExecutionErrorKind::command_argument_error(
+        e,
+        arg_idx as u16,
+    ))
 }

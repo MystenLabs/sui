@@ -6,9 +6,10 @@ mod eliminate_locals;
 mod inline_blocks;
 mod simplify_jumps;
 
-use crate::{cfgir::cfg::BlockCFG, hlir::ast::*, shared::unique_map::UniqueMap};
+use crate::{cfgir::cfg::MutForwardCFG, hlir::ast::*, shared::unique_map::UniqueMap};
 
-pub type Optimization = fn(&FunctionSignature, &UniqueMap<Var, SingleType>, &mut BlockCFG) -> bool;
+pub type Optimization =
+    fn(&FunctionSignature, &UniqueMap<Var, SingleType>, &mut MutForwardCFG) -> bool;
 
 const OPTIMIZATIONS: &[Optimization] = &[
     eliminate_locals::optimize,
@@ -20,7 +21,7 @@ const OPTIMIZATIONS: &[Optimization] = &[
 pub fn optimize(
     signature: &FunctionSignature,
     locals: &UniqueMap<Var, SingleType>,
-    cfg: &mut BlockCFG,
+    cfg: &mut MutForwardCFG,
 ) {
     let mut count = 0;
     for optimization in OPTIMIZATIONS.iter().cycle() {

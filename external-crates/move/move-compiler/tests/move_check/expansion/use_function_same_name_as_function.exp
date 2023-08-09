@@ -20,4 +20,6 @@ warning[W09001]: unused alias
    │
 17 │     use 0x2::X::u as bar;
    │                      ^^^ Unused 'use' of alias 'bar'. Consider removing it
+   │
+   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

@@ -33,18 +33,6 @@ def local(ctx, debug=True):
         'sync_retry_nodes': 3,  # number of nodes
         'batch_size': 500_000,  # bytes
         'max_batch_delay': '200ms',  # ms,
-        'block_synchronizer': {
-            'range_synchronize_timeout': '30_000ms',
-            'certificates_synchronize_timeout': '2_000ms',
-            'payload_synchronize_timeout': '2_000ms',
-            'payload_availability_timeout': '2_000ms',
-            'handler_certificate_deliver_timeout': '2_000ms'
-        },
-        "consensus_api_grpc": {
-            "socket_addr": "/ip4/127.0.0.1/tcp/0/http",
-            "get_collections_timeout": "5_000ms",
-            "remove_collections_timeout": "5_000ms"
-        },
         'max_concurrent_requests': 500_000,
         'prometheus_metrics': {
             "socket_addr": "/ip4/127.0.0.1/tcp/0/http"
@@ -82,18 +70,6 @@ def smoke(ctx, debug=True, release=False):
         'sync_retry_nodes': 3,  # number of nodes
         'batch_size': 500_000,  # bytes
         'max_batch_delay': '200ms',  # ms,
-        'block_synchronizer': {
-            'range_synchronize_timeout': '30_000ms',
-            'certificates_synchronize_timeout': '2_000ms',
-            'payload_synchronize_timeout': '2_000ms',
-            'payload_availability_timeout': '2_000ms',
-            'handler_certificate_deliver_timeout': '2_000ms'
-        },
-        "consensus_api_grpc": {
-            "socket_addr": "/ip4/127.0.0.1/tcp/0/http",
-            "get_collections_timeout": "5_000ms",
-            "remove_collections_timeout": "5_000ms"
-        },
         'max_concurrent_requests': 500_000,
         'prometheus_metrics': {
             "socket_addr": "/ip4/127.0.0.1/tcp/0/http"
@@ -132,18 +108,6 @@ def failpoints(ctx, debug=True):
         'sync_retry_nodes': 3,  # number of nodes
         'batch_size': 500_000,  # bytes
         'max_batch_delay': '200ms',  # ms,
-        'block_synchronizer': {
-            'range_synchronize_timeout': '30_000ms',
-            'certificates_synchronize_timeout': '2_000ms',
-            'payload_synchronize_timeout': '2_000ms',
-            'payload_availability_timeout': '2_000ms',
-            'handler_certificate_deliver_timeout': '2_000ms'
-        },
-        "consensus_api_grpc": {
-            "socket_addr": "/ip4/127.0.0.1/tcp/0/http",
-            "get_collections_timeout": "5_000ms",
-            "remove_collections_timeout": "5_000ms"
-        },
         'max_concurrent_requests': 500_000,
         'prometheus_metrics': {
             "socket_addr": "/ip4/127.0.0.1/tcp/0/http"
@@ -175,19 +139,6 @@ def demo(ctx, debug=True):
     }
     node_params = {
         "batch_size": 500000,
-        "block_synchronizer": {
-            'range_synchronize_timeout': '30_000ms',
-            "certificates_synchronize_timeout": "2_000ms",
-            "handler_certificate_deliver_timeout": "2_000ms",
-            "payload_availability_timeout": "2_000ms",
-            "payload_synchronize_timeout": "2_000ms"
-        },
-        "consensus_api_grpc": {
-            "get_collections_timeout": "5_000ms",
-            "remove_collections_timeout": "5_000ms",
-            # Use a random available local port.
-            "socket_addr": "/ip4/0.0.0.0/tcp/0/http"
-        },
         "gc_depth": 50,  # rounds
         'header_num_of_batches_threshold': 32,
         "max_header_num_of_batches": 1000,
@@ -306,18 +257,6 @@ def remote(ctx, debug=False):
         'sync_retry_nodes': 3,  # number of nodes
         'batch_size': 500_000,  # bytes
         'max_batch_delay': '200ms',  # ms,
-        'block_synchronizer': {
-            'range_synchronize_timeout': '30_000ms',
-            'certificates_synchronize_timeout': '2_000ms',
-            'payload_synchronize_timeout': '2_000ms',
-            'payload_availability_timeout': '2_000ms',
-            'handler_certificate_deliver_timeout': '2_000ms'
-        },
-        "consensus_api_grpc": {
-            "socket_addr": "/ip4/127.0.0.1/tcp/0/http",
-            "get_collections_timeout": "5_000ms",
-            "remove_collections_timeout": "5_000ms"
-        },
         'max_concurrent_requests': 500_000,
         'prometheus_metrics': {
             "socket_addr": "/ip4/0.0.0.0/tcp/0/http"

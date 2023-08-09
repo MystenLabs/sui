@@ -13,25 +13,37 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
     80.0, 100.0, 200.0,
 ];
 
+const DB_COMMIT_LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 2.0, 3.0,
+    5.0, 10.0, 20.0, 40.0, 60.0, 80.0, 100.0, 200.0,
+];
+
 #[derive(Clone)]
 pub struct IndexerMetrics {
     pub total_checkpoint_received: IntCounter,
-    pub total_checkpoint_committed: IntCounter,
+    pub total_tx_checkpoint_committed: IntCounter,
     pub total_object_checkpoint_committed: IntCounter,
     pub total_transaction_committed: IntCounter,
     pub total_object_change_committed: IntCounter,
+    pub total_transaction_chunk_committed: IntCounter,
+    pub total_object_change_chunk_committed: IntCounter,
     pub total_epoch_committed: IntCounter,
     pub latest_fullnode_checkpoint_sequence_number: IntGauge,
-    pub latest_indexer_checkpoint_sequence_number: IntGauge,
+    pub latest_tx_checkpoint_sequence_number: IntGauge,
     pub latest_indexer_object_checkpoint_sequence_number: IntGauge,
     // checkpoint E2E latency is:
     // fullnode_download_latency + checkpoint_index_latency + db_commit_latency
+    pub fullnode_checkpoint_data_download_latency: Histogram,
     pub fullnode_checkpoint_wait_and_download_latency: Histogram,
-    pub fullnode_checkpoint_download_latency: Histogram,
     pub fullnode_transaction_download_latency: Histogram,
     pub fullnode_object_download_latency: Histogram,
     pub checkpoint_index_latency: Histogram,
+    pub checkpoint_objects_index_latency: Histogram,
     pub checkpoint_db_commit_latency: Histogram,
+    // average latency of committing 1000 transactions.
+    // 1000 is not necessarily the batch size, it's to roughly map average tx commit latency to [0.1, 1] seconds,
+    // which is well covered by DB_COMMIT_LATENCY_SEC_BUCKETS.
+    pub thousand_transaction_avg_db_commit_latency: Histogram,
     pub object_db_commit_latency: Histogram,
     pub object_mutation_db_commit_latency: Histogram,
     pub object_deletion_db_commit_latency: Histogram,
@@ -60,6 +72,9 @@ pub struct IndexerMetrics {
     pub get_dynamic_fields_latency: Histogram,
     pub get_dynamic_field_object_latency: Histogram,
     pub get_protocol_config_latency: Histogram,
+    // indexer state metrics
+    pub db_conn_pool_size: IntGauge,
+    pub idle_db_conn: IntGauge,
 }
 
 impl IndexerMetrics {
@@ -71,7 +86,7 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
-            total_checkpoint_committed: register_int_counter_with_registry!(
+            total_tx_checkpoint_committed: register_int_counter_with_registry!(
                 "total_checkpoint_committed",
                 "Total number of checkpoint committed",
                 registry,
@@ -95,6 +110,18 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            total_transaction_chunk_committed: register_int_counter_with_registry!(
+                "total_transaction_chunk_commited",
+                "Total number of transaction chunk committed",
+                registry,
+            )
+            .unwrap(),
+            total_object_change_chunk_committed: register_int_counter_with_registry!(
+                "total_object_change_chunk_committed",
+                "Total number of object change chunk committed",
+                registry,
+            )
+            .unwrap(),
             total_epoch_committed: register_int_counter_with_registry!(
                 "total_epoch_committed",
                 "Total number of epoch committed",
@@ -107,7 +134,7 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
-            latest_indexer_checkpoint_sequence_number: register_int_gauge_with_registry!(
+            latest_tx_checkpoint_sequence_number: register_int_gauge_with_registry!(
                 "latest_indexer_checkpoint_sequence_number",
                 "Latest checkpoint sequence number from the Indexer",
                 registry,
@@ -119,6 +146,13 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            fullnode_checkpoint_data_download_latency: register_histogram_with_registry!(
+                "fullnode_checkpoint_data_download_latency",
+                "Time spent in downloading checkpoint and transation for a new checkpoint from the Full Node",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
             fullnode_checkpoint_wait_and_download_latency: register_histogram_with_registry!(
                 "fullnode_checkpoint_wait_and_download_latency",
                 "Time spent in waiting for a new checkpoint from the Full Node",
@@ -126,13 +160,7 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
-            fullnode_checkpoint_download_latency: register_histogram_with_registry!(
-                "fullnode_checkpoint_download_latency",
-                "Time spent in waiting for a new checkpoint from the Full Node",
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
+
             fullnode_transaction_download_latency: register_histogram_with_registry!(
                 "fullnode_transaction_download_latency",
                 "Time spent in waiting for a new transaction from the Full Node",
@@ -154,38 +182,52 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            checkpoint_objects_index_latency: register_histogram_with_registry!(
+                "checkpoint_object_index_latency",
+                "Time spent in indexing a checkpoint objects",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
             checkpoint_db_commit_latency: register_histogram_with_registry!(
                 "checkpoint_db_commit_latency",
                 "Time spent commiting a checkpoint to the db",
-                LATENCY_SEC_BUCKETS.to_vec(),
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            thousand_transaction_avg_db_commit_latency: register_histogram_with_registry!(
+                "transaction_db_commit_latency",
+                "Average time spent commiting 1000 transactions to the db",
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             object_db_commit_latency: register_histogram_with_registry!(
                 "object_db_commit_latency",
                 "Time spent commiting a object to the db",
-                LATENCY_SEC_BUCKETS.to_vec(),
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             object_mutation_db_commit_latency: register_histogram_with_registry!(
                 "object_mutation_db_commit_latency",
                 "Time spent commiting a object mutation to the db",
-                LATENCY_SEC_BUCKETS.to_vec(),
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             object_deletion_db_commit_latency: register_histogram_with_registry!(
                 "object_deletion_db_commit_latency",
                 "Time spent commiting a object deletion to the db",
-                LATENCY_SEC_BUCKETS.to_vec(),
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             epoch_db_commit_latency: register_histogram_with_registry!(
                 "epoch_db_commit_latency",
                 "Time spent commiting a epoch to the db",
-                LATENCY_SEC_BUCKETS.to_vec(),
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -329,6 +371,16 @@ impl IndexerMetrics {
                 registry
             )
             .unwrap(),
+            db_conn_pool_size: register_int_gauge_with_registry!(
+                "db_conn_pool_size",
+                "Size of the database connection pool",
+                registry
+            ).unwrap(),
+            idle_db_conn: register_int_gauge_with_registry!(
+                "idle_db_conn",
+                "Number of idle database connections",
+                registry
+            ).unwrap(),
         }
     }
 }

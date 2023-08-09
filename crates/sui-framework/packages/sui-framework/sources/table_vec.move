@@ -74,4 +74,11 @@ module sui::table_vec {
         table::destroy_empty(contents);
     }
 
+    /// Drop a possibly non-empty TableVec `t`.
+    /// Usable only if the value type `Element` has the `drop` ability
+    public fun drop<Element: drop + store>(t: TableVec<Element>) {
+        let TableVec { contents } = t;
+        table::drop(contents)
+    }
+
 }

@@ -7,42 +7,43 @@ authors = ["Mysten Labs <build@mystenlabs.com>"]
 publish = false
 
 [dependencies]
-async-trait = "0.1.61"
-bcs = "0.1.4"
-bincode = "1.3.3"
-bytes = "1.3.0"
+async-trait.workspace = true
+bcs.workspace = true
+bincode.workspace = true
+bytes.workspace = true
 config = { path = "../config", package = "narwhal-config" }
 consensus = { path = "../consensus", package = "narwhal-consensus" }
 fastcrypto.workspace = true
-futures = "0.3.24"
+futures.workspace = true
 primary = { path = "../primary", package = "narwhal-primary" }
-serde = { version = "1.0.144", features = ["derive"] }
-thiserror = "1.0.35"
+serde.workspace = true
+thiserror.workspace = true
 tokio = { workspace = true, features = ["sync"] }
-tonic = "0.8.2"
-tracing = "0.1.36"
-itertools = "0.10.5"
-prometheus = "0.13.3"
+tonic.workspace = true
+tracing.workspace = true
+itertools.workspace = true
+prometheus.workspace = true
 storage = { path = "../storage", package = "narwhal-storage" }
+sui-protocol-config.workspace = true
 
 types = { path = "../types", package = "narwhal-types" }
 network = { path = "../network", package = "narwhal-network" }
 crypto = { path = "../crypto", package = "narwhal-crypto" }
-anyhow = "1.0.65"
-rand = "0.8.5"
-mockall = "0.11.2"
+anyhow.workspace = true
+rand.workspace = true
+mockall.workspace = true
 
-mysten-metrics = { path = "../../crates/mysten-metrics" }
+mysten-metrics.workspace = true
 store = { path = "../../crates/typed-store", package = "typed-store" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 anemo.workspace = true
 
 [dev-dependencies]
-indexmap = { version = "1.9.2", features = ["serde"] }
-tempfile = "3.3.0"
+indexmap.workspace = true
+tempfile.workspace = true
 primary = { path = "../primary", package = "narwhal-primary" }
 node = { path = "../node", package = "narwhal-node" }
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 types = { path = "../types", package = "narwhal-types" }
-telemetry-subscribers = { path = "../../crates/telemetry-subscribers"}
+telemetry-subscribers.workspace = true

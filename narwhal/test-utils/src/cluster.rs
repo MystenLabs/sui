@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{temp_dir, CommitteeFixture};
+use crate::{latest_protocol_version, temp_dir, CommitteeFixture};
 use config::{AuthorityIdentifier, Committee, Parameters, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::SerializedTransaction;
@@ -22,7 +22,7 @@ use tokio::{
 };
 use tonic::transport::Channel;
 use tracing::info;
-use types::{ConfigurationClient, ProposerClient, TransactionsClient};
+use types::TransactionsClient;
 use worker::TrivialTransactionValidator;
 
 #[cfg(test)]
@@ -46,12 +46,7 @@ impl Cluster {
     ///
     /// Fields passed in via Parameters will be used, expect specified ports which have to be
     /// different for each instance. If None, the default Parameters will be used.
-    ///
-    /// When the `internal_consensus_enabled` is true then the standard internal
-    /// consensus engine will be enabled. If false, then the internal consensus will
-    /// be disabled and the gRPC server will be enabled to manage the Collections & the
-    /// DAG externally.
-    pub fn new(parameters: Option<Parameters>, internal_consensus_enabled: bool) -> Self {
+    pub fn new(parameters: Option<Parameters>) -> Self {
         let fixture = CommitteeFixture::builder().randomize_ports(true).build();
         let committee = fixture.committee();
         let worker_cache = fixture.worker_cache();
@@ -73,7 +68,6 @@ impl Cluster {
                 params.with_available_ports(),
                 committee.clone(),
                 worker_cache.clone(),
-                internal_consensus_enabled,
             );
             nodes.insert(id, authority);
         }
@@ -280,11 +274,10 @@ pub struct PrimaryNodeDetails {
     pub tx_transaction_confirmation: Sender<SerializedTransaction>,
     node: PrimaryNode,
     store_path: PathBuf,
-    parameters: Parameters,
+    _parameters: Parameters,
     committee: Committee,
     worker_cache: WorkerCache,
     handlers: Rc<RefCell<Vec<JoinHandle<()>>>>,
-    internal_consensus_enabled: bool,
 }
 
 impl PrimaryNodeDetails {
@@ -296,32 +289,26 @@ impl PrimaryNodeDetails {
         parameters: Parameters,
         committee: Committee,
         worker_cache: WorkerCache,
-        internal_consensus_enabled: bool,
     ) -> Self {
         // used just to initialise the struct value
         let (tx, _) = tokio::sync::broadcast::channel(1);
 
         let registry_service = RegistryService::new(Registry::new());
 
-        let node = PrimaryNode::new(
-            parameters.clone(),
-            internal_consensus_enabled,
-            registry_service,
-        );
+        let node = PrimaryNode::new(parameters.clone(), registry_service);
 
         Self {
             id,
             name,
             key_pair: Arc::new(key_pair),
             network_key_pair: Arc::new(network_key_pair),
-            store_path: temp_dir(),
             tx_transaction_confirmation: tx,
+            node,
+            store_path: temp_dir(),
+            _parameters: parameters,
             committee,
             worker_cache,
             handlers: Rc::new(RefCell::new(Vec::new())),
-            internal_consensus_enabled,
-            node,
-            parameters,
         }
     }
 
@@ -364,6 +351,7 @@ impl PrimaryNodeDetails {
                 self.key_pair.copy(),
                 self.network_key_pair.copy(),
                 self.committee.clone(),
+                latest_protocol_version(),
                 self.worker_cache.clone(),
                 client,
                 &primary_store,
@@ -429,7 +417,7 @@ impl WorkerNodeDetails {
         worker_cache: WorkerCache,
     ) -> Self {
         let registry_service = RegistryService::new(Registry::new());
-        let node = WorkerNode::new(id, parameters, registry_service);
+        let node = WorkerNode::new(id, latest_protocol_version(), parameters, registry_service);
 
         Self {
             id,
@@ -534,7 +522,6 @@ impl AuthorityDetails {
         parameters: Parameters,
         committee: Committee,
         worker_cache: WorkerCache,
-        internal_consensus_enabled: bool,
     ) -> Self {
         // Create network client.
         let client = NetworkClient::new_from_keypair(&network_key_pair);
@@ -549,7 +536,6 @@ impl AuthorityDetails {
             parameters.clone(),
             committee.clone(),
             worker_cache.clone(),
-            internal_consensus_enabled,
         );
 
         // Create all the workers - even if we don't intend to start them all. Those
@@ -742,28 +728,6 @@ impl AuthorityDetails {
         workers
     }
 
-    /// Creates a new proposer client that connects to the corresponding client.
-    /// This should be available only if the internal consensus is disabled. If
-    /// the internal consensus is enabled then a panic will be thrown instead.
-    pub async fn new_proposer_client(&self) -> ProposerClient<Channel> {
-        let internal = self.internal.read().await;
-
-        if internal.primary.internal_consensus_enabled {
-            panic!("External consensus is disabled, won't create a proposer client");
-        }
-
-        let config = mysten_network::config::Config {
-            connect_timeout: Some(Duration::from_secs(10)),
-            request_timeout: Some(Duration::from_secs(10)),
-            ..Default::default()
-        };
-        let channel = config
-            .connect_lazy(&internal.primary.parameters.consensus_api_grpc.socket_addr)
-            .unwrap();
-
-        ProposerClient::new(channel)
-    }
-
     /// This method returns a new client to send transactions to the dictated
     /// worker identified by the `worker_id`. If the worker_id is not found then
     /// a panic is raised.
@@ -785,24 +749,6 @@ impl AuthorityDetails {
             .unwrap();
 
         TransactionsClient::new(channel)
-    }
-
-    /// Creates a new configuration client that connects to the corresponding client.
-    /// This should be available only if the internal consensus is disabled. If
-    /// the internal consensus is enabled then a panic will be thrown instead.
-    pub async fn new_configuration_client(&self) -> ConfigurationClient<Channel> {
-        let internal = self.internal.read().await;
-
-        if internal.primary.internal_consensus_enabled {
-            panic!("External consensus is disabled, won't create a configuration client");
-        }
-
-        let config = mysten_network::config::Config::new();
-        let channel = config
-            .connect_lazy(&internal.primary.parameters.consensus_api_grpc.socket_addr)
-            .unwrap();
-
-        ConfigurationClient::new(channel)
     }
 
     /// This method will return true either when the primary or any of

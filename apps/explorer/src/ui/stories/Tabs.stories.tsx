@@ -3,39 +3,30 @@
 
 import { type Meta, type StoryObj } from '@storybook/react';
 
-import {
-    TabGroup,
-    TabList,
-    Tab,
-    TabPanels,
-    TabPanel,
-    type TabGroupProps,
-} from '../Tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../Tabs';
 
 export default {
-    component: TabGroup,
+	component: Tabs,
 } as Meta;
 
-export const Default: StoryObj<TabGroupProps> = {
-    render: (props) => (
-        <TabGroup {...props}>
-            <TabList>
-                <Tab>Tab 1</Tab>
-                <Tab>Tab 2</Tab>
-                <Tab>Tab 3</Tab>
-            </TabList>
-            <TabPanels>
-                <TabPanel>Tab Panel 1</TabPanel>
-                <TabPanel>Tab Panel 2</TabPanel>
-                <TabPanel>Tab Panel 3</TabPanel>
-            </TabPanels>
-        </TabGroup>
-    ),
+export const Default: StoryObj<typeof Tabs> = {
+	render: (props) => (
+		<Tabs defaultValue="1" {...props}>
+			<TabsList>
+				<TabsTrigger value="1">Tab 1</TabsTrigger>
+				<TabsTrigger value="2">Tab 2</TabsTrigger>
+				<TabsTrigger value="3">Tab 3</TabsTrigger>
+			</TabsList>
+			<TabsContent value="1">Tab Panel 1</TabsContent>
+			<TabsContent value="2">Tab Panel 2</TabsContent>
+			<TabsContent value="3">Tab Panel 3</TabsContent>
+		</Tabs>
+	),
 };
 
-export const Large: StoryObj<TabGroupProps> = {
-    ...Default,
-    args: {
-        size: 'lg',
-    },
+export const Large: StoryObj = {
+	...Default,
+	args: {
+		size: 'lg',
+	},
 };

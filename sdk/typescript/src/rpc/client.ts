@@ -1,136 +1,54 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import RpcClient from 'jayson/lib/client/browser/index.js';
-import {
-  any,
-  is,
-  literal,
-  object,
-  optional,
-  string,
-  Struct,
-  validate,
-} from 'superstruct';
-import { PACKAGE_VERSION, TARGETED_RPC_VERSION } from '../version';
-import { RequestParamsLike } from 'jayson';
-import { RPCError, RPCValidationError } from '../utils/errors';
+import { RequestManager, HTTPTransport, Client } from '@open-rpc/client-js';
+import type { Struct } from 'superstruct';
+import { validate } from 'superstruct';
+import { PACKAGE_VERSION, TARGETED_RPC_VERSION } from '../version.js';
+import { RPCValidationError } from './errors.js';
 
 /**
  * An object defining headers to be passed to the RPC server
  */
 export type HttpHeaders = { [header: string]: string };
 
-/**
- * @internal
- */
-export type RpcParams = {
-  method: string;
-  args: Array<any>;
-};
-
-export const ValidResponse = object({
-  jsonrpc: literal('2.0'),
-  id: string(),
-  result: any(),
-});
-
-export const ErrorResponse = object({
-  jsonrpc: literal('2.0'),
-  id: string(),
-  error: object({
-    code: any(),
-    message: string(),
-    data: optional(any()),
-  }),
-});
-
 export class JsonRpcClient {
-  private rpcClient: RpcClient;
+	private rpcClient: Client;
 
-  constructor(url: string, httpHeaders?: HttpHeaders) {
-    this.rpcClient = new RpcClient(
-      async (
-        request: any,
-        callback: (arg0: Error | null, arg1?: string | undefined) => void,
-      ) => {
-        const options = {
-          method: 'POST',
-          body: request,
-          headers: {
-            'Content-Type': 'application/json',
-            'Client-Sdk-Type': 'typescript',
-            'Client-Sdk-Version': PACKAGE_VERSION,
-            'Client-Target-Api-Version': TARGETED_RPC_VERSION,
-            ...httpHeaders,
-          },
-        };
+	constructor(url: string, httpHeaders?: HttpHeaders) {
+		const transport = new HTTPTransport(url, {
+			headers: {
+				'Content-Type': 'application/json',
+				'Client-Sdk-Type': 'typescript',
+				'Client-Sdk-Version': PACKAGE_VERSION,
+				'Client-Target-Api-Version': TARGETED_RPC_VERSION,
+				...httpHeaders,
+			},
+		});
 
-        try {
-          let res: Response = await fetch(url, options);
-          const result = await res.text();
-          if (res.ok) {
-            callback(null, result);
-          } else {
-            const isHtml = res.headers.get('content-type') === 'text/html';
-            callback(
-              new Error(
-                `${res.status} ${res.statusText}${isHtml ? '' : `: ${result}`}`,
-              ),
-            );
-          }
-        } catch (err) {
-          callback(err as Error);
-        }
-      },
-      {},
-    );
-  }
+		this.rpcClient = new Client(new RequestManager([transport]));
+	}
 
-  async requestWithType<T>(
-    method: string,
-    args: RequestParamsLike,
-    struct: Struct<T>,
-  ): Promise<T> {
-    const req = { method, args };
+	async requestWithType<T>(method: string, args: any[], struct: Struct<T>): Promise<T> {
+		const req = { method, args };
 
-    const response = await this.request(method, args);
-    if (is(response, ErrorResponse)) {
-      throw new RPCError({
-        req,
-        code: response.error.code,
-        data: response.error.data,
-        cause: new Error(response.error.message),
-      });
-    } else if (is(response, ValidResponse)) {
-      const [err] = validate(response.result, struct);
+		const response = await this.request(method, args);
 
-      if (err) {
-        console.warn(
-          new RPCValidationError({
-            req,
-            result: response.result,
-            cause: err,
-          }),
-        );
-        return response.result;
-      }
+		if (process.env.NODE_ENV === 'test') {
+			const [err] = validate(response, struct);
+			if (err) {
+				throw new RPCValidationError({
+					req,
+					result: response,
+					cause: err,
+				});
+			}
+		}
 
-      return response.result;
-    }
-    // Unexpected response:
-    throw new RPCError({ req, data: response });
-  }
+		return response;
+	}
 
-  async request(method: string, args: RequestParamsLike): Promise<any> {
-    return new Promise((resolve, reject) => {
-      this.rpcClient.request(method, args, (err: any, response: any) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve(response);
-      });
-    });
-  }
+	async request(method: string, params: any[]): Promise<any> {
+		return await this.rpcClient.request({ method, params });
+	}
 }

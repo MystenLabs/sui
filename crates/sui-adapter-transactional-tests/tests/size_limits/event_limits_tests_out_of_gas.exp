@@ -1,0 +1,22 @@
+processed 6 tasks
+
+task 1 'publish'. lines 8-68:
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7934400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 69-71:
+Error: Transaction Effects Status: Move Primitive Runtime Error. Location: sui::event::emit (function index 0) at offset 0. Arithmetic error, stack overflow, max value depth, etc.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: sui, name: Identifier("event") }, function: 0, instruction: 0, function_name: Some("emit") }))), source: Some(VMError { major_status: MEMORY_LIMIT_EXCEEDED, sub_status: Some(0), message: Some("Emitting more than 1024 events is not allowed"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("event") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 0)] }), command: Some(0) } }
+
+task 3 'run'. lines 72-74:
+Error: Transaction Effects Status: Move Primitive Runtime Error. Location: sui::event::emit (function index 0) at offset 0. Arithmetic error, stack overflow, max value depth, etc.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: sui, name: Identifier("event") }, function: 0, instruction: 0, function_name: Some("emit") }))), source: Some(VMError { major_status: MEMORY_LIMIT_EXCEEDED, sub_status: Some(0), message: Some("Emitting more than 1024 events is not allowed"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("event") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 0)] }), command: Some(0) } }
+
+task 4 'run'. lines 75-77:
+Error: Transaction Effects Status: Insufficient Gas.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientGas, source: Some(VMError { major_status: OUT_OF_GAS, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: Test, name: Identifier("M1") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 27)] }), command: Some(0) } }
+
+task 5 'run'. lines 78-78:
+Error: Transaction Effects Status: Insufficient Gas.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientGas, source: Some(VMError { major_status: OUT_OF_GAS, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: Test, name: Identifier("M1") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 31)] }), command: Some(0) } }

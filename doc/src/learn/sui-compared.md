@@ -34,7 +34,7 @@ But the process of submitting a transaction is a bit more involved. That little 
 
  1. Sender broadcasts a transaction to all Sui validators.
  1. Sui validators send individual votes on this transaction to the sender.
- 1. Each vote has a certain weight since each validator has weight based upon the rules of [Proof of Stake](https://en.wikipedia.org/wiki/Proof_of_work).
+ 1. Each vote has a certain weight since each validator has weight based upon the rules of [Proof of Stake](https://en.wikipedia.org/wiki/Proof_of_stake).
  1. Sender collects a Byzantine-resistant-majority of these votes into a *certificate* and broadcasts it to all Sui validators. 
  1. The validators execute the transaction and sign the results. When the client receives a Byzantine-resistant-majority of the results *finality* is reached, i.e., assurance the transaction will not be dropped (revoked).
  1. Optionally, the sender assembles the votes to a certificate detailing the effects of the transaction.
@@ -58,7 +58,7 @@ Unlike most existing blockchain systems (and as the reader may have guessed from
 
 [Narwhal and Bullshark](architecture/consensus.md) represent the latest variant of decades of work on multi-proposer, high-throughput consensus algorithms that reaches throughputs more than 130,000 transactions per second on a WAN, with production cryptography, permanent storage, and a scaled-out primary-worker architecture.
 
-The [Narwhal mempool](https://github.com/MystenLabs/narwhal) offers a high-throughput data availability engine and a scaled architecture, splitting the disk I/O and networking requirements across several workers. And Bullshark is a zero-message overhead consensus algorithm, leveraging graph traversals.
+The [Narwhal mempool](https://github.com/MystenLabs/sui/tree/main/narwhal) offers a high-throughput data availability engine and a scaled architecture, splitting the disk I/O and networking requirements across several workers. And Bullshark is a zero-message overhead consensus algorithm, leveraging graph traversals.
 
 ## Where Sui excels
 
@@ -126,4 +126,4 @@ Sui uses the state commitment that arrives upon epoch change. Sui requires a sin
 
 In summary, Sui offers many performance and usability gains at the cost of some complexity in less simple use cases. Direct sender transactions excel in Sui. And complex smart contracts may benefit from shared objects where more than one user can mutate those objects (following smart contract specific rules). In this case, Sui totally orders all transactions involving shared objects using a [consensus](architecture/consensus.md) protocol.
 
-Sui uses a novel peer-reviewed consensus protocol based on [Narwhal and Bullshark](https://github.com/MystenLabs/narwhal), which provides a DAG-based mempool and efficient Byzantine Fault Tolerant (BFT) consensus. This is state-of-the-art in terms of both performance and robustness.
+Sui uses a novel peer-reviewed consensus protocol based on [Narwhal and Bullshark](https://github.com/MystenLabs/sui/tree/main/narwhal), which provides a DAG-based mempool and efficient Byzantine Fault Tolerant (BFT) consensus. This is state-of-the-art in terms of both performance and robustness.

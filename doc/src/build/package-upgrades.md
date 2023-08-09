@@ -239,7 +239,6 @@ To upgrade a package, your package must satisfy the following requirements:
 * Your changes must be layout-compatible with the previous version. 
     * Existing `public` function signatures and struct layouts must remain the same.
     * You can add new structs and functions.
-    * You can add abilities to existing structs.
     * You can remove generic type constraints from existing functions (public or otherwise).
     * You can change function implementations.
     * You can change non-`public` function signatures, including `friend` and `entry` function signatures.

@@ -1,0 +1,22 @@
+{
+  "name": "kiosk-cli",
+  "version": "1.0.4",
+  "main": "index.js",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "cli": "node index.js"
+  },
+  "keywords": [],
+  "prettier": {
+    "printWidth": 100,
+    "semi": true,
+    "singleQuote": true,
+    "trailingComma": "all"
+  },
+  "dependencies": {
+    "@mysten/kiosk": "workspace:*",
+    "@mysten/sui.js": "workspace:*",
+    "commander": "^11.0.0"
+  }
+}

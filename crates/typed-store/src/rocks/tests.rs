@@ -84,6 +84,36 @@ async fn test_contains_key(#[values(true, false)] is_transactional: bool) {
 
 #[rstest]
 #[tokio::test]
+async fn test_multi_contain(#[values(true, false)] is_transactional: bool) {
+    let db = open_map(temp_dir(), None, is_transactional);
+
+    db.insert(&123, &"123".to_string())
+        .expect("Failed to insert");
+    db.insert(&456, &"456".to_string())
+        .expect("Failed to insert");
+    db.insert(&789, &"789".to_string())
+        .expect("Failed to insert");
+
+    let result = db
+        .multi_contains_keys([123, 456])
+        .expect("Failed to check multi keys existence");
+
+    assert_eq!(result.len(), 2);
+    assert!(result[0]);
+    assert!(result[1]);
+
+    let result = db
+        .multi_contains_keys([123, 987, 789])
+        .expect("Failed to check multi keys existence");
+
+    assert_eq!(result.len(), 3);
+    assert!(result[0]);
+    assert!(!result[1]);
+    assert!(result[2]);
+}
+
+#[rstest]
+#[tokio::test]
 async fn test_get(#[values(true, false)] is_transactional: bool) {
     let db = open_map(temp_dir(), None, is_transactional);
 
@@ -487,7 +517,7 @@ async fn test_delete_range() {
         MetricConf::default(),
         None,
         None,
-        &ReadWriteOptions::default(),
+        &ReadWriteOptions::default().set_ignore_range_deletions(false),
     )
     .expect("Failed to open storage");
 
@@ -526,7 +556,7 @@ async fn test_clear() {
     )
     .expect("Failed to open storage");
     // Test clear of empty map
-    let _ = db.clear();
+    let _ = db.unsafe_clear();
 
     let keys_vals = (0..101).map(|i| (i, i.to_string()));
     let mut insert_batch = db.batch();
@@ -538,15 +568,15 @@ async fn test_clear() {
 
     // Check we have multiple entries
     assert!(db.safe_iter().count() > 1);
-    let _ = db.clear();
+    let _ = db.unsafe_clear();
     assert_eq!(db.safe_iter().count(), 0);
     // Clear again to ensure safety when clearing empty map
-    let _ = db.clear();
+    let _ = db.unsafe_clear();
     assert_eq!(db.safe_iter().count(), 0);
     // Clear with one item
     let _ = db.insert(&1, &"e".to_string());
     assert_eq!(db.safe_iter().count(), 1);
-    let _ = db.clear();
+    let _ = db.unsafe_clear();
     assert_eq!(db.safe_iter().count(), 0);
 }
 
@@ -711,7 +741,7 @@ async fn test_is_empty() {
 
     // Test empty map is truly empty
     assert!(db.is_empty());
-    let _ = db.clear();
+    let _ = db.unsafe_clear();
     assert!(db.is_empty());
 
     let keys_vals = (0..101).map(|i| (i, i.to_string()));
@@ -727,7 +757,7 @@ async fn test_is_empty() {
     assert!(!db.is_empty());
 
     // Clear again to ensure empty works after clearing
-    let _ = db.clear();
+    let _ = db.unsafe_clear();
     assert_eq!(db.safe_iter().count(), 0);
     assert!(db.is_empty());
 }

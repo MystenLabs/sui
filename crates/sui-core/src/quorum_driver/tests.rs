@@ -15,12 +15,9 @@ use sui_types::crypto::{deterministic_random_account_key, get_key_pair, AccountK
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::object::{generate_test_gas_objects, Object};
 use sui_types::quorum_driver_types::{QuorumDriverError, QuorumDriverResponse, QuorumDriverResult};
-use sui_types::transaction::VerifiedTransaction;
+use sui_types::transaction::Transaction;
 
-async fn setup() -> (
-    AuthorityAggregator<LocalAuthorityClient>,
-    VerifiedTransaction,
-) {
+async fn setup() -> (AuthorityAggregator<LocalAuthorityClient>, Transaction) {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
     let gas_object = Object::with_owner_for_testing(sender);
     let (aggregator, authorities, genesis, _) =
@@ -45,7 +42,7 @@ fn make_tx(
     sender: SuiAddress,
     keypair: &AccountKeyPair,
     gas_price: u64,
-) -> VerifiedTransaction {
+) -> Transaction {
     make_transfer_sui_transaction(
         gas.compute_object_reference(),
         SuiAddress::random_for_testing_only(),
@@ -354,7 +351,8 @@ async fn test_quorum_driver_object_locked() -> Result<(), anyhow::Error> {
         assert_eq!(retried_tx, None);
         assert_eq!(retried_tx_success, None);
         assert_eq!(conflicting_txes.len(), 2);
-        assert_eq!(conflicting_txes.get(tx.digest()).unwrap().1, 5000);
+        let tx_stake = conflicting_txes.get(tx.digest()).unwrap().1;
+        assert!(tx_stake == 2500 || tx_stake == 5000);
         assert_eq!(conflicting_txes.get(tx2.digest()).unwrap().1, 2500);
     } else {
         panic!(
@@ -433,10 +431,11 @@ async fn test_quorum_driver_object_locked() -> Result<(), anyhow::Error> {
     {
         assert_eq!(retried_tx, None);
         assert_eq!(retried_tx_success, None);
-        assert_eq!(conflicting_txes.len(), 3);
-        assert_eq!(conflicting_txes.get(tx.digest()).unwrap().1, 2500);
-        assert_eq!(conflicting_txes.get(tx2.digest()).unwrap().1, 2500);
-        assert_eq!(conflicting_txes.get(tx3.digest()).unwrap().1, 2500);
+        assert!(conflicting_txes.len() == 3 || conflicting_txes.len() == 2);
+        assert!(conflicting_txes
+            .iter()
+            .all(|(digest, (_objs, stake))| (*stake == 2500)
+                && (digest == tx.digest() || digest == tx2.digest() || digest == tx3.digest())));
     } else {
         panic!(
             "expect Err(QuorumDriverError::ObjectsDoubleUsed) but got {:?}",

@@ -1,0 +1,132 @@
+# Network Interactions with SuiClient
+
+The Sui TypeScript SDK provides a `SuiClient` class to connect to a network's JSON-RPC server. Use
+`SuiClient` for all JSON-RPC operations.
+
+## Connecting to a Sui network
+
+To establish a connection to a network, import `SuiClient` from `@mysten/sui.js/client` and pass the
+relevant URL to the `url` parameter. The following example establishes a connection to Testnet and
+requests SUI from that network's faucet.
+
+```typescript
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+
+// use getFullnodeUrl to define Devnet RPC location
+const rpcUrl = getFullnodeUrl('devnet');
+
+// create a client connected to devnet
+const client = new SuiClient({ url: rpcUrl });
+
+// get coins owned by an address
+// replace <OWNER_ADDRESS> with actual address in the form of 0x123...
+await client.getCoins({
+	owner: '<OWNER_ADDRESS>',
+});
+```
+
+The `getFullnodeUrl` helper in the previous code provides the URL for the specified network, useful
+during development. In a production application, however, you should use the
+[Mainnet RPC address](../index#network-locations). The function supports the following values:
+
+- `localnet`
+- `devnet`
+- `testnet`
+- `mainnet`
+
+For local development, you can run `cargo run --bin sui-test-validator` to spin up a local network
+with a local validator, a Full node, and a faucet server. Refer to
+[the Local Network guide](https://docs.sui.io/build/sui-local-network) for more information.
+
+## Manually calling unsupported RPC methods
+
+You can use `SuiClient` to call any RPC method the node you're connectiong to exposes. Most RPC
+methods are built into `SuiClient`, but you can use `call` to leverage any methods available in the
+RPC.
+
+```typescript
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+
+const client = new SuiClient({ url: getFullnodeUrl('devnet') });
+
+// asynchronously call suix_getCommitteeInfo
+const committeeInfo = await client.call('suix_getCommitteeInfo', []);
+```
+
+For a full list of available RPC methods, see the
+[RPC documentation](https://docs.sui.io/sui-jsonrpc).
+
+## Subscribing to events with SuiClient
+
+In addition to calling RPC methods, you can use `SuiClient` to subscribe to network events:
+
+```typescript
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+
+const client = new SuiClient({
+	url: getFullnodeUrl('testnet'),
+});
+
+// naming the function unsubscribe may seem counterintuitive here, but you call it later to unsubscribe from the event
+const unsubscribe = await client.subscribeEvent({
+	filter: {
+		Sender: '<SENDER_ADDRESS>',
+	},
+	onMessage(event) {
+		// handle subscription notification message here. This function is called once per subscription message.
+	},
+});
+
+// later, to unsubscribe
+await unsubscribe();
+```
+
+## Subscribing to transactions with SuiClient
+
+Similar to subscribing to events, the `SuiClient` also supports subscribing to transactions:
+
+```typescript
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+
+const client = new SuiClient({
+	url: getFullnodeUrl('testnet'),
+});
+
+const unsubscribe = await client.subscribeTransaction({
+	filter: {
+		FromAddress: '<SUI_ADDRESS>',
+	},
+	onMessage(event) {
+		// This function is called once per transaction.
+	},
+});
+
+// later, to unsubscribe:
+await unsubscribe();
+```
+
+## Customizing the transport
+
+The `SuiClient` uses a `Transport` class to manage connections to the RPC node. The default
+`SuiHTTPTransport` makes both JSON RPC requests, as well as websocket requests for subscriptions.
+You can construct a custom transport instance if you need to pass any custom options, such as
+headers or timeout values.
+
+```typescript
+import { SuiClient, SuiHTTPTransport, getFullnodeUrl } from '@mysten/sui.js/client';
+
+const client = new SuiClient({
+	transport: new SuiHTTPTransport({
+		url: 'https://my-custom-node.com/rpc',
+		websocket: {
+			reconnectTimeout: 1000,
+			url: 'https://my-custom-node.com/websockets',
+		},
+		rpc: {
+			headers: {
+				'x-custom-header': 'custom value',
+			},
+		},
+	}),
+});
+```

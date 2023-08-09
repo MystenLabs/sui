@@ -8,23 +8,20 @@ This tutorial provides a brief explanation of the Sui Move language, and include
 
 ## About Sui Move
 
-Sui Move is an open source language for writing safe smart contracts. It was originally developed at Facebook to power the [Diem](https://github.com/diem/diem) blockchain. However, Sui Move was designed as a platform-agnostic language to enable common libraries, tooling, and developer communities across
-blockchains with vastly different data and execution models.
+Sui Move is an open source language for writing safe smart contracts. It is Sui's dialect of Move, which was originally developed at Facebook to power the [Diem](https://github.com/diem/diem) blockchain.
+
+Sui Move can define, create, and manage programmable [Sui objects](../../learn/objects.md) representing user-level assets. Sui's object system is implemented by adding new functionality while also imposing additional restrictions to the original Move. This is one of the major differences in the *Sui Move* dialect that makes certain parts of the original Move documentation not applicable to smart contract development in Sui. Consequently, it's best to follow this tutorial and the relevant Move documentation links within.
+
+The documentation for the original Move language is available at the [Move GitHub](https://github.com/move-language/move) repository which includes a [tutorial](https://github.com/move-language/move/blob/main/language/documentation/tutorial/README.md) and a [book](https://github.com/move-language/move/blob/main/language/documentation/book/src/SUMMARY.md) describing language features in detail. These are invaluable resources to deepen your understanding of the Move language but not strict prerequisites to following this tutorial.
+
+Before looking at examples of Sui Move, let's talk briefly about code organization.
 
 
-The documentation for the original Move language is available in the [Move GitHub](https://github.com/move-language/move) repository and includes a [tutorial](https://github.com/move-language/move/blob/main/language/documentation/tutorial/README.md) and a [book](https://github.com/move-language/move/blob/main/language/documentation/book/src/SUMMARY.md) describing language features in detail. These are invaluable resources to deepen your understanding of the Move language but not strict prerequisites to following the Sui tutorial. Further, Sui Move differs in some ways from Move, which is explored here.
+## Sui Move code organization
 
-You can use Sui Move to define, create, and manage programmable [Sui objects](../../learn/objects.md) representing user-level assets. Sui's object system is implemented by adding new functionality to Move while also imposing additional restrictions, creating a dialect of Move (a.k.a. *Sui Move*) that makes certain parts of the original Move documentation not applicable to smart contract development in Sui. Consequently, it's best to follow this tutorial and the relevant Move documentation links within.
-
-Before looking at the Move code included with Sui, let's talk briefly about Move code organization, which applies both to code included with
-Sui and the custom code developers write.
-
-
-## Move code organization
-
-The main unit of Move code organization (and distribution) is a _package_. A package consists of a set of _modules_ defined in separate
+Sui Move shares the same code organization concepts as Move. The main unit of Move code organization (and distribution) is a _package_. A package consists of a set of _modules_ defined in separate
 files with the `.move` extension. These files include Move functions and type definitions. A package must include the `Move.toml` manifest file
-describing package configuration, such as package metadata and package dependencies. See [Move.toml](manifest.md) for more information about package manifest files in Sui Move. Packages also include an auto-generated `Move.lock` file. The `Move.lock` file is similar in format to the package manifest, but is not meant for users to edit directly. See [Move.lock](lock-file.md) for more information about the lock file in Sui Move. 
+describing package configuration, such as package name, metadata and dependencies. See [Move.toml](manifest.md) for more information about package manifest files in Sui Move. Packages also include an auto-generated `Move.lock` file. The `Move.lock` file is similar in format to the package manifest, but is not meant for users to edit directly. See [Move.lock](lock-file.md) for more information about the lock file in Sui Move.
 
 The minimal package source directory structure looks as follows and contains the manifest file, the lock file, and the `sources` subdirectory where one or more module files are located:
 
@@ -38,11 +35,11 @@ my_move_package
 
 See [Package Layout and Manifest Syntax](https://github.com/move-language/move/blob/main/language/documentation/book/src/packages.md#package-layout-and-manifest-syntax) for more information on package layout.
 
-It's now time to look at some Sui Move code. You can either keep reading for an introductory description of the main Sui Move language constructs or you can jump straight into the code by [writing a simple Sui Move package](../move/write-package.md), and checking out additional code examples in [Sui by Example](https://examples.sui.io).
+It's now time to look at some Sui Move code. You can either keep reading for an introductory description of the main Sui Move language constructs or you can jump straight into the code by [writing a simple Sui Move package](../move/write-package.md). Also you can check out additional code examples in [Sui by Example](https://examples.sui.io).
 
 ## First look at Move source code
 
-The Sui platform includes the Sui Framework, which includes the core on-chain libraries that Sui Move developers  need to bootstrap Sui operations. In particular, Sui supports multiple user-defined coin types, which are custom assets the Sui Move language defines. Sui Framework code contains the `Coin` module supporting creation and management of custom coins. The `Coin` module is located in the [coin.move](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/coin.move) file. As you might expect, the manifest file describing how to build the package containing the `Coin` module is located in the corresponding
+The Sui platform includes the Sui Framework, which includes the core on-chain libraries that Sui Move developers need to bootstrap Sui operations. For example, Sui supports user-defined coin types, which are custom assets. Sui Framework contains the `Coin` module supporting creation and management of custom coins. The `Coin` module is located in the [coin.move](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/coin.move) file. As you might expect, the manifest file describing how to build the package containing the `Coin` module is located in the corresponding
 [Move.toml](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/Move.toml) file.
 
 Let's see how module definition appears in the `Coin` module file:
@@ -61,7 +58,7 @@ When you define a module, specify the module name (`coin`) preceded by the name 
 
 For example, if you have a published package "P", you cannot publish an entirely different package also named "P". At the same time you can have module "P1::M1", "P2::M1", and "P1::M2" but not another, say, "P1::M1" in the system at the same time.
 
-While you can't name different packages the same, you can upgrade a package on chain with updated code using the same package name.  
+While you can't name different packages the same, you can upgrade a package on chain with updated code using the same package name.
 
 In addition to having a presence at the source code level, as discussed in [Sui Move code organization](#move-code-organization), a
 package in Sui is also a Sui object and must have a unique numeric ID in addition to a unique name, which is assigned in the manifest file:
@@ -86,7 +83,7 @@ Sui Move's struct type is similar to struct types defined in other programming l
 
 You can read more about Move [primitive types](https://github.com/move-language/move/blob/main/language/documentation/book/src/SUMMARY.md#primitive-types) and [structs](https://github.com/move-language/move/blob/main/language/documentation/book/src/structs-and-resources.md) in the Move book.
 
-For a Sui Move struct type to define a Sui object type, such as `Coin`, its first field must be `id: UID`, which is a
+For a Sui Move struct type to define a Sui object type, such as `Coin`, its first field must be `id: UID`. `UID` is a
 struct type defined in the [object module](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/object.move). The Move struct type must also have the `key` ability, which allows Sui's global storage to persist the object. Abilities of a Move struct are listed after the `has` keyword in the struct definition, and their existence (or lack thereof) helps the compiler enforce various properties on a definition or on instances of a given struct.
 
 You can read more about struct [abilities](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md) in the Move book.

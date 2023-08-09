@@ -7,42 +7,42 @@ import { type Meta, type StoryObj } from '@storybook/react';
 import { ButtonConnectedTo } from './ButtonConnectedTo';
 
 export default {
-    component: ButtonConnectedTo,
+	component: ButtonConnectedTo,
 } as Meta<typeof ButtonConnectedTo>;
 
 export const Default: StoryObj<typeof ButtonConnectedTo> = {
-    args: {
-        text: 'Button',
-    },
+	args: {
+		text: 'Button',
+	},
 };
 
 export const LightGrey: StoryObj<typeof ButtonConnectedTo> = {
-    args: {
-        text: 'Button',
-        bgOnHover: 'grey',
-    },
+	args: {
+		text: 'Button',
+		bgOnHover: 'grey',
+	},
 };
 
 export const Disabled: StoryObj<typeof ButtonConnectedTo> = {
-    args: {
-        text: 'Button',
-        bgOnHover: 'grey',
-        disabled: true,
-    },
+	args: {
+		text: 'Button',
+		bgOnHover: 'grey',
+		disabled: true,
+	},
 };
 
 export const LongText: StoryObj<typeof ButtonConnectedTo> = {
-    render: (props) => {
-        return (
-            <div className="w-28">
-                <ButtonConnectedTo {...props} />
-            </div>
-        );
-    },
-    args: {
-        text: 'Button with very long text',
-        bgOnHover: 'grey',
-        iconBefore: <StakeAdd16 />,
-        iconAfter: <StakeAdd16 />,
-    },
+	render: (props) => {
+		return (
+			<div className="w-28">
+				<ButtonConnectedTo {...props} />
+			</div>
+		);
+	},
+	args: {
+		text: 'Button with very long text',
+		bgOnHover: 'grey',
+		iconBefore: <StakeAdd16 />,
+		iconAfter: <StakeAdd16 />,
+	},
 };

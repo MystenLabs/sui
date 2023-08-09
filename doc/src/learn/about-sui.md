@@ -18,7 +18,7 @@ Sui is backed by a number of state-of-the-art [peer-reviewed works](../contribut
 
 A transaction in Sui is a change to the blockchain. This may be a *simple transaction* affecting only single-owner, single-address objects, such as minting an NFT or transferring an NFT or a different token. These *simple transactions* may bypass the consensus protocol in Sui.
 
-More *complex transactions* affecting objects that are shared or owned by multiple addresses, such as asset management and other DeFi use cases, go through the [Narwhal and Bullshark](https://github.com/MystenLabs/narwhal) DAG-based mempool and efficient Byzantine Fault Tolerant (BFT) consensus.
+More *complex transactions* affecting objects that are shared or owned by multiple addresses, such as asset management and other DeFi use cases, go through the [Narwhal and Bullshark](https://github.com/MystenLabs/sui/tree/main/narwhal) DAG-based mempool and efficient Byzantine Fault Tolerant (BFT) consensus.
 
 ## Parallel agreement - a breakthrough in system design
 

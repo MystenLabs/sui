@@ -1,0 +1,50 @@
+{
+	"name": "@mysten/deepbook",
+	"author": "Mysten Labs <build@mystenlabs.com>",
+	"description": "Sui Deepbook SDK",
+	"version": "0.3.1",
+	"license": "Apache-2.0",
+	"files": [
+		"dist",
+		"src",
+		"CHANGELOG.md"
+	],
+	"engines": {
+		"node": ">=16"
+	},
+	"main": "./dist/index.js",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"source": "./src/index.ts",
+			"import": "./dist/index.mjs",
+			"require": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
+		"build": "pnpm build:types && pnpm build:tsup",
+		"build:tsup": "tsup ./src/index.ts --format esm,cjs --sourcemap",
+		"build:types": "tsc --build",
+		"prepublishOnly": "pnpm build",
+		"dev": "ts-node src/deepbook_sdk.ts",
+		"bfs": "ts-node src/bfs.ts",
+		"prettier:check": "prettier -c --ignore-unknown .",
+		"prettier:fix": "prettier -w --ignore-unknown .",
+		"eslint:check": "eslint --max-warnings=0 .",
+		"eslint:fix": "pnpm run eslint:check --fix",
+		"lint": "pnpm run eslint:check && pnpm run prettier:check",
+		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
+	},
+	"dependencies": {
+		"@mysten/sui.js": "workspace:*"
+	},
+	"devDependencies": {
+		"@types/node": "^20.4.2",
+		"ts-node": "^10.9.1",
+		"tsup": "^7.1.0",
+		"typescript": "^5.1.6"
+	}
+}

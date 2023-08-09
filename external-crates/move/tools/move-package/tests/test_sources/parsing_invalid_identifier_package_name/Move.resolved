@@ -23,9 +23,10 @@ ResolvedGraph {
             "ELIDED_FOR_TEST",
         ),
         additional_named_addresses: {},
-        architecture: None,
         fetch_deps_only: false,
         skip_fetch_latest_git_deps: false,
+        default_flavor: None,
+        default_edition: None,
     },
     package_table: {
         "®´∑œ": Package {
@@ -39,6 +40,8 @@ ResolvedGraph {
                     ),
                     authors: [],
                     license: None,
+                    edition: None,
+                    flavor: None,
                     custom_properties: {},
                 },
                 addresses: None,

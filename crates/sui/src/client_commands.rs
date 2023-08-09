@@ -24,7 +24,7 @@ use prettytable::{row, table};
 use prometheus::Registry;
 use serde::Serialize;
 use serde_json::{json, Value};
-use sui_adapter::adapter::{default_verifier_config, run_metered_move_bytecode_verifier_impl};
+use sui_adapter::adapter::{default_verifier_config, run_metered_move_bytecode_verifier};
 use sui_move::build::resolve_lock_file_path;
 use sui_protocol_config::ProtocolConfig;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
@@ -83,8 +83,8 @@ macro_rules! serialize_or_execute {
             if $serialize_signed {
                 SuiClientCommandResult::SerializedSignedTransaction(sender_signed_data)
             } else {
-                let transaction = Transaction::new(sender_signed_data).verify()?;
-                let response = $context.execute_transaction_block(transaction).await?;
+                let transaction = Transaction::new(sender_signed_data);
+                let response = $context.execute_transaction_may_fail(transaction).await?;
                 let effects = response.effects.as_ref().ok_or_else(|| {
                     anyhow!("Effects from SuiTransactionBlockResult should not be empty")
                 })?;
@@ -199,9 +199,13 @@ pub enum SuiClientCommands {
         /// (SenderSignedData) using base64 encoding, and print out the string.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
+
+        /// If `true`, enable linters
+        #[clap(long, global = true)]
+        lint: bool,
     },
 
-    /// Run the bytecode verifer on the package
+    /// Run the bytecode verifier on the package
     #[clap(name = "verify-bytecode-meter")]
     VerifyBytecodeMeter {
         /// Path to directory containing a Move package
@@ -269,6 +273,10 @@ pub enum SuiClientCommands {
         /// (SenderSignedData) using base64 encoding, and print out the string.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
+
+        /// If `true`, enable linters
+        #[clap(long, global = true)]
+        lint: bool,
     },
 
     /// Verify local Move packages against on-chain packages, and optionally their dependencies.
@@ -613,6 +621,10 @@ pub enum SuiClientCommands {
         #[clap(long)]
         signatures: Vec<String>,
     },
+
+    /// Query the chain identifier from the rpc endpoint.
+    #[clap(name = "chain-identifier")]
+    ChainIdentifier,
 }
 
 impl SuiClientCommands {
@@ -632,6 +644,7 @@ impl SuiClientCommands {
                 legacy_digest,
                 serialize_unsigned_transaction,
                 serialize_signed_transaction,
+                lint,
             } => {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
@@ -644,6 +657,7 @@ impl SuiClientCommands {
                         package_path,
                         with_unpublished_dependencies,
                         skip_dependency_verification,
+                        lint,
                     )
                     .await?;
 
@@ -717,6 +731,7 @@ impl SuiClientCommands {
                 with_unpublished_dependencies,
                 serialize_unsigned_transaction,
                 serialize_signed_transaction,
+                lint,
             } => {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
@@ -728,6 +743,7 @@ impl SuiClientCommands {
                     package_path,
                     with_unpublished_dependencies,
                     skip_dependency_verification,
+                    lint,
                 )
                 .await?;
 
@@ -754,7 +770,7 @@ impl SuiClientCommands {
                 package_path,
                 build_config,
             } => {
-                let protocol_config = ProtocolConfig::get_for_max_version();
+                let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
                 let registry = &Registry::new();
                 let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
 
@@ -771,9 +787,8 @@ impl SuiClientCommands {
                 metered_verifier_config.max_per_mod_meter_units = None;
                 let mut meter = SuiVerifierMeter::new(&metered_verifier_config);
                 println!("Running bytecode verifier for {} modules", modules.len());
-                run_metered_move_bytecode_verifier_impl(
+                run_metered_move_bytecode_verifier(
                     &modules,
-                    &protocol_config,
                     &metered_verifier_config,
                     &mut meter,
                     &bytecode_verifier_metrics,
@@ -1069,6 +1084,15 @@ impl SuiClientCommands {
                     .collect();
                 SuiClientCommandResult::Gas(coins)
             }
+            SuiClientCommands::ChainIdentifier => {
+                let ci = context
+                    .get_client()
+                    .await?
+                    .read_api()
+                    .get_chain_identifier()
+                    .await?;
+                SuiClientCommandResult::ChainIdentifier(ci)
+            }
             SuiClientCommands::SplitCoin {
                 coin_id,
                 amounts,
@@ -1173,11 +1197,10 @@ impl SuiClientCommands {
                         .map_err(|e| anyhow!(e))?,
                     );
                 }
-                let verified =
-                    Transaction::from_generic_sig_data(data, Intent::sui_transaction(), sigs)
-                        .verify()?;
+                let transaction =
+                    Transaction::from_generic_sig_data(data, Intent::sui_transaction(), sigs);
 
-                let response = context.execute_transaction_block(verified).await?;
+                let response = context.execute_transaction_may_fail(transaction).await?;
                 SuiClientCommandResult::ExecuteSignedTx(response)
             }
             SuiClientCommands::NewEnv { alias, rpc, ws } => {
@@ -1220,6 +1243,7 @@ impl SuiClientCommands {
                     config: build_config,
                     run_bytecode_verifier: true,
                     print_diags_to_stderr: true,
+                    lint: false,
                 }
                 .build(package_path)?;
 
@@ -1259,12 +1283,14 @@ fn compile_package_simple(
         config: resolve_lock_file_path(build_config, Some(package_path.clone()))?,
         run_bytecode_verifier: false,
         print_diags_to_stderr: false,
+        lint: false,
     };
     let resolution_graph = config.resolution_graph(&package_path)?;
 
     Ok(build_from_resolution_graph(
         package_path,
         resolution_graph,
+        false,
         false,
         false,
     )?)
@@ -1276,6 +1302,7 @@ async fn compile_package(
     package_path: PathBuf,
     with_unpublished_dependencies: bool,
     skip_dependency_verification: bool,
+    lint: bool,
 ) -> Result<
     (
         PackageDependencies,
@@ -1283,7 +1310,7 @@ async fn compile_package(
         CompiledPackage,
         Result<ObjectID, PublishedAtError>,
     ),
-    anemo::Error,
+    anyhow::Error,
 > {
     let config = resolve_lock_file_path(build_config, Some(package_path.clone()))?;
     let run_bytecode_verifier = true;
@@ -1292,6 +1319,7 @@ async fn compile_package(
         config,
         run_bytecode_verifier,
         print_diags_to_stderr,
+        lint,
     };
     let resolution_graph = config.resolution_graph(&package_path)?;
     let (package_id, dependencies) = gather_published_ids(&resolution_graph);
@@ -1304,13 +1332,14 @@ async fn compile_package(
         resolution_graph,
         run_bytecode_verifier,
         print_diags_to_stderr,
+        lint,
     )?;
     if !compiled_package.is_system_package() {
         if let Some(already_published) = compiled_package.published_root_module() {
             return Err(SuiError::ModulePublishFailure {
                 error: format!(
                     "Modules must all have 0x0 as their addresses. \
-                           Violated by module {:?}",
+                     Violated by module {:?}",
                     already_published.self_id(),
                 ),
             }
@@ -1322,15 +1351,30 @@ async fn compile_package(
     }
     let compiled_modules = compiled_package.get_package_bytes(with_unpublished_dependencies);
     if !skip_dependency_verification {
-        BytecodeSourceVerifier::new(client.read_api())
-            .verify_package_deps(&compiled_package)
-            .await?;
-        eprintln!(
-            "{}",
-            "Successfully verified dependencies on-chain against source."
-                .bold()
-                .green(),
-        );
+        let verifier = BytecodeSourceVerifier::new(client.read_api());
+        if let Err(e) = verifier.verify_package_deps(&compiled_package).await {
+            return Err(SuiError::ModulePublishFailure {
+                error: format!(
+                    "[warning] {e}\n\
+                     \n\
+                     This may indicate that the on-chain version(s) of your package's dependencies \
+                     may behave differently than the source version(s) your package was built \
+                     against.\n\
+                     \n\
+                     Fix this by rebuilding your packages with source versions matching on-chain \
+                     versions of dependencies, or ignore this warning by re-running with the \
+                     --skip-dependency-verification flag."
+                ),
+            }
+            .into());
+        } else {
+            eprintln!(
+                "{}",
+                "Successfully verified dependencies on-chain against source."
+                    .bold()
+                    .green(),
+            );
+        }
     } else {
         eprintln!("{}", "Skipping dependency verification".bold().yellow());
     }
@@ -1501,6 +1545,9 @@ impl Display for SuiClientCommandResult {
                     writeln!(writer, " {0: ^66} | {1: ^11}", gas.id(), gas.value())?;
                 }
             }
+            SuiClientCommandResult::ChainIdentifier(ci) => {
+                writeln!(writer, "{}", ci)?;
+            }
             SuiClientCommandResult::SplitCoin(response) => {
                 write!(writer, "{}", write_transaction_response(response)?)?;
             }
@@ -1589,6 +1636,10 @@ async fn construct_move_call_transaction(
         .map(|value| SuiJsonValue::new(convert_number_to_string(value.to_json_value())))
         .collect::<Result<_, _>>()?;
 
+    let type_args = type_args
+        .into_iter()
+        .map(|arg| arg.try_into())
+        .collect::<Result<Vec<_>, _>>()?;
     let gas_owner = context.try_get_object_owner(&gas).await?;
     let sender = gas_owner.unwrap_or(context.active_address()?);
 
@@ -1596,17 +1647,7 @@ async fn construct_move_call_transaction(
     client
         .transaction_builder()
         .move_call(
-            sender,
-            package,
-            module,
-            function,
-            type_args
-                .into_iter()
-                .map(|arg| arg.try_into())
-                .collect::<Result<Vec<_>, _>>()?,
-            args,
-            gas,
-            gas_budget,
+            sender, package, module, function, type_args, args, gas, gas_budget,
         )
         .await
 }
@@ -1746,6 +1787,7 @@ pub enum SuiClientCommandResult {
     SyncClientState,
     NewAddress((SuiAddress, String, SignatureScheme)),
     Gas(Vec<GasCoin>),
+    ChainIdentifier(String),
     SplitCoin(SuiTransactionBlockResponse),
     MergeCoin(SuiTransactionBlockResponse),
     Switch(SwitchResponse),

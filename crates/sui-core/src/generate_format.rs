@@ -80,8 +80,12 @@ fn get_registry() -> Result<Registry> {
     let kp3: SuiKeyPair =
         SuiKeyPair::Secp256r1(get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1);
 
-    let multisig_pk =
-        MultiSigPublicKey::new(vec![kp1.public(), kp2.public()], vec![1, 1], 2).unwrap();
+    let multisig_pk = MultiSigPublicKey::new(
+        vec![kp1.public(), kp2.public(), kp3.public()],
+        vec![1, 1, 1],
+        2,
+    )
+    .unwrap();
 
     let msg = IntentMessage::new(
         Intent::sui_transaction(),
@@ -94,7 +98,8 @@ fn get_registry() -> Result<Registry> {
     let sig2 = Signature::new_secure(&msg, &kp2);
     let sig3 = Signature::new_secure(&msg, &kp3);
 
-    let multi_sig = MultiSig::combine(vec![sig1.clone(), sig2.clone()], multisig_pk).unwrap();
+    let multi_sig =
+        MultiSig::combine(vec![sig1.clone(), sig2.clone(), sig3.clone()], multisig_pk).unwrap();
     tracer.trace_value(&mut samples, &multi_sig)?;
 
     let generic_sig_multi = GenericSignature::MultiSig(multi_sig);

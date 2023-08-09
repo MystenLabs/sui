@@ -65,6 +65,6 @@ module test::m {
 
 //# run test::m::mint --sender A
 
-//# transfer-object 7,2 --sender A --recipient B
+//# transfer-object 7,1 --sender A --recipient B
 
-//# view-object 7,2
+//# view-object 7,1

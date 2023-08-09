@@ -13,7 +13,8 @@ use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, HeaderV1Builder,
-    Metadata, WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerSynchronizeMessage,
+    MetadataV1, VersionedMetadata, WorkerOthersBatchMessage, WorkerOwnBatchMessage,
+    WorkerSynchronizeMessage,
 };
 
 #[allow(clippy::mutable_key_type)]
@@ -54,6 +55,7 @@ fn get_registry() -> Result<Registry> {
             1,
             primary_address,
             network_key.public().clone(),
+            i.to_string(),
         );
     }
 
@@ -110,10 +112,13 @@ fn get_registry() -> Result<Registry> {
     );
     tracer.trace_value(&mut samples, &worker_index)?;
 
-    let our_batch = WorkerOurBatchMessage {
+    let own_batch = WorkerOwnBatchMessage {
         digest: BatchDigest([0u8; 32]),
         worker_id: 0,
-        metadata: Metadata { created_at: 0 },
+        metadata: VersionedMetadata::V1(MetadataV1 {
+            created_at: 0,
+            received_at: None,
+        }),
     };
     let others_batch = WorkerOthersBatchMessage {
         digest: BatchDigest([0u8; 32]),
@@ -125,7 +130,7 @@ fn get_registry() -> Result<Registry> {
         is_certified: true,
     };
 
-    tracer.trace_value(&mut samples, &our_batch)?;
+    tracer.trace_value(&mut samples, &own_batch)?;
     tracer.trace_value(&mut samples, &others_batch)?;
     tracer.trace_value(&mut samples, &sync)?;
 

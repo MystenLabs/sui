@@ -35,6 +35,7 @@ use sui_types::transaction::TransactionData;
 use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
 use tempfile::TempDir;
 use tokio::test;
+
 const TEST_MNEMONIC: &str = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
 
 #[test]
@@ -195,6 +196,58 @@ async fn test_load_keystore_err() {
 }
 
 #[test]
+async fn test_private_keys_ed25519() -> Result<(), anyhow::Error> {
+    // private key, base64, address
+    const TEST_CASES: &[(&str, &str, &str)] = &[
+        (
+            "0x9dd9ae36ee51b912a0364c58c1f21333bcdad2d91911aa127226c512be285102",
+            "AJ3ZrjbuUbkSoDZMWMHyEzO82tLZGRGqEnImxRK+KFEC",
+            "0x90f3e6d73b5730f16974f4df1d3441394ebae62186baf83608599f226455afa7",
+        ),
+        (
+            "0xeea84be738c59f56ee94dae8fd5a68082d4579ed38548d6ec4017da6c5619bf3",
+            "AO6oS+c4xZ9W7pTa6P1aaAgtRXntOFSNbsQBfabFYZvz",
+            "0xfd233cd9a5dd7e577f16fa523427c75fbc382af1583c39fdf1c6747d2ed807a3",
+        ),
+        (
+            "0x91e8808c489ee0cc99c2edf79e63be6a144f8f600c7411bc2e806f7255710674",
+            "AJHogIxInuDMmcLt955jvmoUT49gDHQRvC6Ab3JVcQZ0",
+            "0x81aaefa4a883e72e8b6ccd3bec307e25fe3d79b14e43b778695c55dcec42f4f0",
+        ),
+    ];
+    // assert correctness
+    for (private_key, base64, address) in TEST_CASES {
+        let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
+        KeyToolCommand::Import {
+            input_string: private_key.to_string(),
+            key_scheme: SignatureScheme::ED25519,
+            derivation_path: None,
+        }
+        .execute(&mut keystore)
+        .await?;
+        let kp = SuiKeyPair::decode_base64(base64).unwrap();
+        let addr = SuiAddress::from_str(address).unwrap();
+        assert_eq!(SuiAddress::from(&kp.public()), addr);
+        assert!(keystore.addresses().contains(&addr));
+    }
+
+    // assert failure when private key is malformed
+    for (private_key, _, _) in TEST_CASES {
+        let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
+        let output = KeyToolCommand::Import {
+            input_string: private_key[..25].to_string(),
+            key_scheme: SignatureScheme::ED25519,
+            derivation_path: None,
+        }
+        .execute(&mut keystore)
+        .await;
+        assert!(output.is_err());
+    }
+
+    Ok(())
+}
+
+#[test]
 async fn test_mnemonics_ed25519() -> Result<(), anyhow::Error> {
     // Test case matches with /mysten/sui/sdk/typescript/test/unit/cryptography/ed25519-keypair.test.ts
     const TEST_CASES: [[&str; 3]; 3] = [["film crazy soon outside stand loop subway crumble thrive popular green nuclear struggle pistol arm wife phrase warfare march wheat nephew ask sunny firm", "AN0JMHpDum3BhrVwnkylH0/HGRHBQ/fO/8+MYOawO8j6", "a2d14fad60c56049ecf75246a481934691214ce413e6a8ae2fe6834c173a6133"],
@@ -204,7 +257,7 @@ async fn test_mnemonics_ed25519() -> Result<(), anyhow::Error> {
     for t in TEST_CASES {
         let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
         KeyToolCommand::Import {
-            mnemonic_phrase: t[0].to_string(),
+            input_string: t[0].to_string(),
             key_scheme: SignatureScheme::ED25519,
             derivation_path: None,
         }
@@ -228,7 +281,7 @@ async fn test_mnemonics_secp256k1() -> Result<(), anyhow::Error> {
     for t in TEST_CASES {
         let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
         KeyToolCommand::Import {
-            mnemonic_phrase: t[0].to_string(),
+            input_string: t[0].to_string(),
             key_scheme: SignatureScheme::Secp256k1,
             derivation_path: None,
         }
@@ -243,10 +296,51 @@ async fn test_mnemonics_secp256k1() -> Result<(), anyhow::Error> {
 }
 
 #[test]
+async fn test_mnemonics_secp256r1() -> Result<(), anyhow::Error> {
+    // Test case matches with /mysten/sui/sdk/typescript/test/unit/cryptography/secp256r1-keypair.test.ts
+    const TEST_CASES: [[&str; 3]; 3] = [
+        [
+            "act wing dilemma glory episode region allow mad tourist humble muffin oblige",
+            "AiWmZXUcFpUF75H082F2RVJAABS5kcrvb8o09IPH9yUw",
+            "0x4a822457f1970468d38dae8e63fb60eefdaa497d74d781f581ea2d137ec36f3a",
+        ],
+        [
+            "flag rebel cabbage captain minimum purpose long already valley horn enrich salt",
+            "AjaB6aLp4fQabx4NglfGz2Bf01TGKArV80NEOnqDwqNN",
+            "0xcd43ecb9dd32249ff5748f5e4d51855b01c9b1b8bbe7f8638bb8ab4cb463b920",
+        ],
+        [
+            "area renew bar language pudding trial small host remind supreme cabbage era",
+            "AtSIEzVpJv+bJH3XptEq63vsuK+te1KRSY7JsiuJfcdK",
+            "0x0d9047b7e7b698cc09c955ea97b0c68c2be7fb3aebeb59edcc84b1fb87e0f28e",
+        ],
+    ];
+
+    for t in TEST_CASES {
+        let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
+        KeyToolCommand::Import {
+            input_string: t[0].to_string(),
+            key_scheme: SignatureScheme::Secp256r1,
+            derivation_path: None,
+        }
+        .execute(&mut keystore)
+        .await?;
+
+        let kp = SuiKeyPair::decode_base64(t[1]).unwrap();
+        println!("{:?}", kp.public().encode_base64());
+        let addr = SuiAddress::from_str(t[2]).unwrap();
+        assert_eq!(SuiAddress::from(&kp.public()), addr);
+        assert!(keystore.addresses().contains(&addr));
+    }
+
+    Ok(())
+}
+
+#[test]
 async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
     let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: TEST_MNEMONIC.to_string(),
+        input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/44'/1'/0'/0/0".parse().unwrap()),
     }
@@ -255,7 +349,7 @@ async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
     .is_err());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: TEST_MNEMONIC.to_string(),
+        input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/0'/784'/0'/0/0".parse().unwrap()),
     }
@@ -264,7 +358,7 @@ async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
     .is_err());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: TEST_MNEMONIC.to_string(),
+        input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/54'/784'/0'/0/0".parse().unwrap()),
     }
@@ -273,7 +367,7 @@ async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
     .is_err());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: TEST_MNEMONIC.to_string(),
+        input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::Secp256k1,
         derivation_path: Some("m/54'/784'/0'/0'/0'".parse().unwrap()),
     }
@@ -282,7 +376,7 @@ async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
     .is_err());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: TEST_MNEMONIC.to_string(),
+        input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::Secp256k1,
         derivation_path: Some("m/44'/784'/0'/0/0".parse().unwrap()),
     }
@@ -297,7 +391,7 @@ async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
 async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
     let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: TEST_MNEMONIC.to_string(),
+        input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/44'/784'/0'/0'/0'".parse().unwrap()),
     }
@@ -306,7 +400,7 @@ async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
     .is_ok());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: TEST_MNEMONIC.to_string(),
+        input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/44'/784'/0'/0'/1'".parse().unwrap()),
     }
@@ -315,7 +409,7 @@ async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
     .is_ok());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: TEST_MNEMONIC.to_string(),
+        input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/44'/784'/1'/0'/1'".parse().unwrap()),
     }
@@ -324,7 +418,7 @@ async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
     .is_ok());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: TEST_MNEMONIC.to_string(),
+        input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::Secp256k1,
         derivation_path: Some("m/54'/784'/0'/0/1".parse().unwrap()),
     }
@@ -333,7 +427,7 @@ async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
     .is_ok());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: TEST_MNEMONIC.to_string(),
+        input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::Secp256k1,
         derivation_path: Some("m/54'/784'/1'/0/1".parse().unwrap()),
     }

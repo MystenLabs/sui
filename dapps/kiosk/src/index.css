@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.tab-title {
+	@apply !px-0 py-2 mr-5 flex-shrink-0 !ring-transparent rounded-none border-t-0 border-l-0 border-r-0 
+  outline-transparent !shadow-none border-transparent hover:!border-primary border-b-2 ui-selected:border-primary  
+  ui-not-selected:bg-transparent;
+}

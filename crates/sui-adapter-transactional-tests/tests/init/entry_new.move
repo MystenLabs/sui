@@ -12,4 +12,5 @@ module test::m {
     }
 }
 
+// TODO double check this error
 //# run test::m::init

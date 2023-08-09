@@ -11,6 +11,7 @@ use sui_json_rpc_types::{
 };
 use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_sdk::wallet_context::WalletContext;
+use sui_test_transaction_builder::{make_publish_transaction, make_publish_transaction_with_deps};
 use sui_types::base_types::ObjectID;
 use sui_types::move_package::UpgradePolicy;
 use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_PUBLISH;
@@ -18,13 +19,13 @@ use sui_types::{
     base_types::{ObjectRef, SuiAddress, TransactionDigest},
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 use crate::{BytecodeSourceVerifier, SourceMode};
 
 #[tokio::test]
 async fn successful_verification() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
     let b_ref = {
@@ -84,7 +85,7 @@ async fn successful_verification() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn successful_verification_unpublished_deps() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
     let fixtures = tempfile::tempdir()?;
 
@@ -110,7 +111,7 @@ async fn successful_verification_unpublished_deps() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn successful_verification_module_ordering() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
     // This package contains a module that refers to itself, and also to the sui framework.  Its
@@ -147,7 +148,7 @@ async fn successful_verification_module_ordering() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn successful_verification_upgrades() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
     let (b_v1, b_cap) = {
@@ -187,7 +188,7 @@ async fn successful_verification_upgrades() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn fail_verification_bad_address() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
     let b_ref = {
@@ -221,7 +222,7 @@ async fn fail_verification_bad_address() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn fail_to_verify_unpublished_root() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
     let b_pkg = {
@@ -249,7 +250,7 @@ async fn fail_to_verify_unpublished_root() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn rpc_call_failed_during_verify() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
     let b_ref = {
@@ -301,7 +302,7 @@ async fn rpc_call_failed_during_verify() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn package_not_found() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
     let mut stable_addrs = HashMap::new();
 
@@ -358,7 +359,7 @@ async fn package_not_found() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn dependency_is_an_object() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
     let a_pkg = {
@@ -385,7 +386,7 @@ async fn dependency_is_an_object() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn module_not_found_on_chain() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
     let b_ref = {
@@ -416,7 +417,7 @@ async fn module_not_found_on_chain() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn module_not_found_locally() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
     let mut stable_addrs = HashMap::new();
 
@@ -451,7 +452,7 @@ async fn module_not_found_locally() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn module_bytecode_mismatch() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
     let mut stable_addrs = HashMap::new();
 
@@ -511,7 +512,7 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn multiple_failures() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
     let mut stable_addrs = HashMap::new();
 
@@ -580,8 +581,8 @@ fn sanitize_id(mut message: String, m: &HashMap<SuiAddress, &str>) -> String {
 
 /// Compile and publish package at absolute path `package` to chain.
 async fn publish_package(context: &WalletContext, package: PathBuf) -> (ObjectRef, ObjectRef) {
-    let txn = context.make_publish_transaction(package).await;
-    let response = context.execute_transaction_block(txn).await.unwrap();
+    let txn = make_publish_transaction(context, package).await;
+    let response = context.execute_transaction_must_succeed(txn).await;
     let package = get_new_package_obj_from_response(&response).unwrap();
     let cap = get_new_package_upgrade_cap_from_response(&response).unwrap();
     (package, cap)
@@ -617,8 +618,8 @@ async fn upgrade_package(
 /// Compile and publish package at absolute path `package` to chain, along with its unpublished
 /// dependencies.
 async fn publish_package_and_deps(context: &WalletContext, package: PathBuf) -> ObjectRef {
-    let txn = context.make_publish_transaction_with_deps(package).await;
-    let response = context.execute_transaction_block(txn).await.unwrap();
+    let txn = make_publish_transaction_with_deps(context, package).await;
+    let response = context.execute_transaction_must_succeed(txn).await;
     get_new_package_obj_from_response(&response).unwrap()
 }
 
@@ -712,10 +713,7 @@ pub async fn upgrade_package_with_wallet(
         context.sign_transaction(&data)
     };
 
-    let resp = context
-        .execute_transaction_block(transaction)
-        .await
-        .unwrap();
+    let resp = context.execute_transaction_must_succeed(transaction).await;
 
     (
         get_new_package_obj_from_response(&resp).unwrap(),

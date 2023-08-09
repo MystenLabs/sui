@@ -7,54 +7,53 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-rand = "0.8.4"
-anyhow = { version = "1.0.64", features = ["backtrace"] }
-async-trait = "0.1.61"
+rand.workspace = true
+anyhow.workspace = true
+async-trait.workspace = true
 axum.workspace = true
-clap = { version = "3.2.17", features = ["derive"] }
-thiserror = "1.0.34"
+clap.workspace = true
+thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
-tracing = "0.1.36"
-serde = { version = "1.0.144", features = ["derive"] }
-tower = { version = "0.4.12", features = ["util", "timeout", "load-shed", "limit"] }
-tower-http = { version = "0.3.4", features = ["cors"] }
-tonic = "0.8"
-http = { version = "0.2.8" }
-futures = "0.3.23"
-uuid = {version = "1.1.2", features = [ "v4", "fast-rng"]}
-prometheus = "0.13.3"
-scopeguard = "1.1"
-tap = "1.0"
-dirs = "4.0.0"
-dashmap = "5.4.0"
-itertools = "0.10.4"
+tracing.workspace = true
+serde.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+tonic.workspace = true
+http.workspace = true
+futures.workspace = true
+uuid.workspace = true
+prometheus.workspace = true
+scopeguard.workspace = true
+tap.workspace = true
+dirs.workspace = true
+dashmap.workspace = true
+itertools.workspace = true
 
-eyre = "0.6.8"
-rocksdb = "0.20.1"
-tempfile = "3.3.0"
-shellexpand = "3.0.0"
+eyre.workspace = true
+rocksdb.workspace = true
+tempfile.workspace = true
+shellexpand.workspace = true
 
-sui = { path = "../sui" }
-sui-node = { path = "../sui-node" }
-sui-json-rpc-types= { path = "../sui-json-rpc-types" }
-sui-types = { path = "../sui-types", features = ["test-utils"]}
-sui-config = { path = "../sui-config" }
-sui-keys = { path = "../sui-keys" }
-sui-sdk = { path = "../sui-sdk" }
-sui-json-rpc = { path = "../sui-json-rpc"}
-mysten-metrics = { path = "../../crates/mysten-metrics" }
+sui.workspace = true
+sui-node.workspace = true
+sui-json-rpc-types.workspace = true
+sui-types = { workspace = true, features = ["test-utils"]}
+sui-config.workspace = true
+sui-keys.workspace = true
+sui-sdk.workspace = true
+sui-json-rpc.workspace = true
+mysten-metrics.workspace = true
 telemetry-subscribers.workspace = true
 typed-store.workspace = true
 typed-store-derive.workspace = true
-shared-crypto = { path = "../shared-crypto" }
-
+shared-crypto.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-serde_json = "1.0.95"
-strum = "0.24.1"
-strum_macros = "0.24.3"
+serde_json.workspace = true
+strum.workspace = true
+strum_macros.workspace = true
 
 [dev-dependencies]
-test-utils = { path = "../test-utils" }
+test-cluster.workspace = true
 
 
 [[bin]]

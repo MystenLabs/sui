@@ -7,16 +7,11 @@ members = [
     "documentation/examples/diem-framework/crates/crypto",
     "documentation/examples/diem-framework/crates/crypto-derive",
     "documentation/examples/diem-framework/crates/natives",
-    "evm/exec-utils",
-    "evm/extract-ethereum-abi",
-    "evm/move-ethereum-abi",
-    "evm/move-to-yul",
-    "extensions/async/move-async-vm",
-    "extensions/move-table-extension",
     "move-analyzer",
     "move-binary-format",
     "move-binary-format/serializer-tests",
     "move-borrow-graph",
+    "move-abstract-stack",
     "move-bytecode-verifier",
     "move-bytecode-verifier/bytecode-verifier-tests",
     "move-bytecode-verifier/fuzz",
@@ -48,15 +43,19 @@ members = [
     "move-prover/tools/spec-flatten",
     "move-stdlib",
     "move-symbol-pool",
+    "move-vm/config",
     "move-vm/integration-tests",
     "move-vm/paranoid-tests",
     "move-vm/runtime",
+    "move-vm/profiler",
     "move-vm/test-utils",
     "move-vm/transactional-tests",
     "move-vm/types",
     "testing-infra/module-generation",
     "testing-infra/test-generation",
     "testing-infra/transactional-test-runner",
+    "testing-infra/enum-compat-util",
+    "testing-infra/move-proc-macros",
     "tools/move-bytecode-utils",
     "tools/move-bytecode-viewer",
     "tools/move-cli",
@@ -77,8 +76,6 @@ members = [
 #
 # For more, see the "Conditional compilation for tests" section in documentation/coding_guidelines.md.
 default-members = [
-    "evm/extract-ethereum-abi",
-    "evm/move-to-yul",
     "move-analyzer",
     "move-ir-compiler",
     "move-prover",
@@ -103,6 +100,11 @@ debug = true
 
 [profile.dev]
 debug = true
+
+[profile.test.package.move-vm-integration-tests]
+# opt-level 2 for move-compiler reduces the size of some of its
+# (recursive) stack frames by up to 10x, avoiding stack overflows.
+opt-level = 3
 
 # use release settings to reduce memory pressure in the linking step in CI
 [profile.ci]

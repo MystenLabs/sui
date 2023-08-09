@@ -1,6 +1,7 @@
 /crates/sui-types/src/crypto.rs @joyqvq @kchalkias @benr-ml
 /crates/sui-types/src/base_types.rs @joyqvq
 /crates/sui-keys/ @joyqvq @patrickkuo
+/crates/sui-protocol-config @mystenmark
 
 *.md @randall-Mysten @ronny-mysten
 # Omit auto-generated changelogs and changesets from docs review:
@@ -16,10 +17,12 @@ CHANGELOG.md
 # Notify Narwhal changes to interested folks.
 /narwhal/crypto/ @joyqvq @kchalkias
 /narwhal/executor/ @asonnino @akichidis @laura-makdah
-/narwhal/examples/ @arun-koshy
 /narwhal/network/ @bmwill
 /narwhal/storage/ @akichidis
-/narwhal/primary/src/block_synchronizer/ @akichidis
-/narwhal/primary/src/block_waiter.rs @akichidis
 
 /crates/sui-core/src/consensus_adapter.rs @laura-makdah
+
+apps/ @MystenLabs/fe-and-apps
+sdk/ @MystenLabs/sdk-reviewers
+sdk/kiosk @MystenLabs/kiosk-sdk-reviewers
+sdk/wallet-adapter @MystenLabs/wallet-kit-reviewers

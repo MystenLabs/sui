@@ -7,47 +7,49 @@ edition = "2021"
 publish = false
 
 [dependencies]
-arc-swap = "1.5.1"
-async-trait = "0.1.61"
-byteorder = "1.4.3"
-bytes = "1.3.0"
-futures = "0.3.24"
-governor = "0.5.1"
-rand = { version = "0.8.5", features = ["small_rng"] }
-tap = "1.0.1"
-thiserror = "1.0.35"
+arc-swap.workspace = true
+async-trait.workspace = true
+byteorder.workspace = true
+bytes.workspace = true
+futures.workspace = true
+governor.workspace = true
+rand = { workspace = true, features = ["small_rng"] }
+tap.workspace = true
+thiserror.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "macros"] }
-tonic = "0.8.2"
-tower = "0.4.13"
-tracing = "0.1.36"
-itertools = "0.10.5"
+tonic.workspace = true
+tower.workspace = true
+tracing.workspace = true
+itertools.workspace = true
 
 config = { path = "../config", package = "narwhal-config" }
 fastcrypto.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 network = { path = "../network", package = "narwhal-network" }
 types = { path = "../types", package = "narwhal-types" }
-prometheus = "0.13.3"
+prometheus.workspace = true
 store = { path = "../../crates/typed-store", package = "typed-store" }
 mysten-network = { path = "../../crates/mysten-network"}
 mysten-metrics = { path = "../../crates/mysten-metrics" }
+sui-protocol-config = { path = "../../crates/sui-protocol-config" }
+consensus = { path = "../consensus", package = "narwhal-consensus" }
 
 anemo.workspace = true
 anemo-tower.workspace = true
-anyhow = "1.0.65"
+anyhow.workspace = true
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
-eyre = "0.6.8"
+eyre.workspace = true
 
 [dev-dependencies]
-arc-swap = { version = "1.5.1", features = ["serde"] }
-rand = "0.8.5"
-tempfile = "3.3.0"
+arc-swap.workspace = true
+rand.workspace = true
+tempfile.workspace = true
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
-reqwest = { version = "0.11.13", default_features= false, features = ["json", "rustls-tls"] }
+reqwest.workspace = true
 node = { path = "../node", package = "narwhal-node" }
 consensus = { path = "../consensus", package = "narwhal-consensus" }
 primary = { path = "../primary", package = "narwhal-primary" }
-telemetry-subscribers = { path = "../../crates/telemetry-subscribers"}
+telemetry-subscribers.workspace = true
 storage = { path = "../storage", package = "narwhal-storage" }
 
 [features]

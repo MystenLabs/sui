@@ -1,19 +1,19 @@
 {
-    "compilerOptions": {
-        "target": "ES2020",
-        "module": "ES2015",
-        "moduleResolution": "node",
-        "lib": ["ESNext", "dom"],
-        "rootDir": "src",
-        "outDir": "dist",
-        "declaration": true,
-        "emitDeclarationOnly": true,
-        "strict": true,
-        "esModuleInterop": true,
-        "skipLibCheck": true,
-        "forceConsistentCasingInFileNames": true,
-        "composite": true,
-        "sourceMap": true
-    },
-    "include": ["src"]
+	"compilerOptions": {
+		"target": "ES2020",
+		"module": "ES2015",
+		"moduleResolution": "node",
+		"lib": ["ESNext", "dom"],
+		"rootDir": "src",
+		"outDir": "dist",
+		"declaration": true,
+		"emitDeclarationOnly": true,
+		"strict": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
+		"composite": true,
+		"sourceMap": true
+	},
+	"include": ["src"]
 }

@@ -10,6 +10,9 @@ outputs:
   isMove:
     description: True when changes happened to the Move code
     value: "${{ steps.diff.outputs.isMove }}"
+  isReleaseNotesEligible:
+    description: True when changes happened in Release Notes eligible paths 
+    value: "${{ steps.diff.outputs.isReleaseNotesEligible }}"    
 
 runs:
   using: composite
@@ -24,9 +27,11 @@ runs:
           - 'crates/**'
           - 'external-crates/**'
           - 'narwhal/**'
+          - 'sui-execution/**'
           - '.github/workflows/bench.yml'
           - '.github/workflows/codecov.yml'
           - '.github/workflows/rust.yml'
+          - '.github/workflows/external.yml'
         isDoc:
           - 'doc/**'
           - '*.md'
@@ -38,3 +43,13 @@ runs:
           - 'crates/sui_move/**'
           - 'Cargo.toml'
           - 'sui_programmability/**'
+        isReleaseNotesEligible:
+          - 'crates/**'
+          - 'dashboards/**'
+          - 'doc/**'
+          - 'docker/**'
+          - 'external-crates/**'
+          - 'kiosk/**'
+          - 'narwhal/**'
+          - 'nre/**'
+          - 'sui-execution/**'

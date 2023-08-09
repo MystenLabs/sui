@@ -49,7 +49,7 @@ async fn test_pay_sui_failure_insufficient_gas_balance_one_input_coin() {
         vec![100, 100],
         sender,
         sender_key,
-        2200,
+        2200000,
     )
     .await;
 
@@ -57,7 +57,7 @@ async fn test_pay_sui_failure_insufficient_gas_balance_one_input_coin() {
         UserInputError::try_from(res.txn_result.unwrap_err()).unwrap(),
         UserInputError::GasBalanceTooLow {
             gas_balance: 2000,
-            needed_gas_amount: 2200,
+            needed_gas_amount: 2200000,
         }
     );
 }
@@ -65,7 +65,7 @@ async fn test_pay_sui_failure_insufficient_gas_balance_one_input_coin() {
 #[tokio::test]
 async fn test_pay_sui_failure_insufficient_total_balance_one_input_coin() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 2600);
+    let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 500100);
     let recipient1 = dbg_addr(1);
     let recipient2 = dbg_addr(2);
 
@@ -75,7 +75,7 @@ async fn test_pay_sui_failure_insufficient_total_balance_one_input_coin() {
         vec![100, 100],
         sender,
         sender_key,
-        2500,
+        500000,
     )
     .await;
 
@@ -102,7 +102,7 @@ async fn test_pay_sui_failure_insufficient_gas_balance_multiple_input_coins() {
         vec![100, 100],
         sender,
         sender_key,
-        2000,
+        2000000,
     )
     .await;
 
@@ -110,7 +110,7 @@ async fn test_pay_sui_failure_insufficient_gas_balance_multiple_input_coins() {
         UserInputError::try_from(res.txn_result.unwrap_err()).unwrap(),
         UserInputError::GasBalanceTooLow {
             gas_balance: 1500,
-            needed_gas_amount: 2000,
+            needed_gas_amount: 2000000,
         }
     );
 }
@@ -118,8 +118,8 @@ async fn test_pay_sui_failure_insufficient_gas_balance_multiple_input_coins() {
 #[tokio::test]
 async fn test_pay_sui_failure_insufficient_total_balance_multiple_input_coins() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 14000);
-    let coin2 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 13000);
+    let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 204000);
+    let coin2 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 303000);
     let recipient1 = dbg_addr(1);
     let recipient2 = dbg_addr(2);
 
@@ -129,7 +129,7 @@ async fn test_pay_sui_failure_insufficient_total_balance_multiple_input_coins() 
         vec![4000, 4000],
         sender,
         sender_key,
-        20000,
+        500000,
     )
     .await;
     assert_eq!(
@@ -294,13 +294,13 @@ async fn test_pay_all_sui_failure_insufficient_gas_one_input_coin() {
     let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 1800);
     let recipient = dbg_addr(2);
 
-    let res = execute_pay_all_sui(vec![&coin1], recipient, sender, sender_key, 2000).await;
+    let res = execute_pay_all_sui(vec![&coin1], recipient, sender, sender_key, 2000000).await;
 
     assert_eq!(
         UserInputError::try_from(res.txn_result.unwrap_err()).unwrap(),
         UserInputError::GasBalanceTooLow {
             gas_balance: 1800,
-            needed_gas_amount: 2000,
+            needed_gas_amount: 2000000,
         }
     );
 }
@@ -311,13 +311,14 @@ async fn test_pay_all_sui_failure_insufficient_gas_budget_multiple_input_coins()
     let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 1000);
     let coin2 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 1000);
     let recipient = dbg_addr(2);
-    let res = execute_pay_all_sui(vec![&coin1, &coin2], recipient, sender, sender_key, 2500).await;
+    let res =
+        execute_pay_all_sui(vec![&coin1, &coin2], recipient, sender, sender_key, 2500000).await;
 
     assert_eq!(
         UserInputError::try_from(res.txn_result.unwrap_err()).unwrap(),
         UserInputError::GasBalanceTooLow {
             gas_balance: 2000,
-            needed_gas_amount: 2500,
+            needed_gas_amount: 2500000,
         }
     );
 }

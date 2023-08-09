@@ -22,8 +22,10 @@ smallvec = "1.6.1"
 
 move-bytecode-verifier = { path = "../../move-bytecode-verifier" }
 move-core-types = { path = "../../move-core/types" }
+move-vm-config = { path = "../config" }
 move-vm-types = { path = "../types" }
 move-binary-format = { path = "../../move-binary-format" }
+move-vm-profiler = { path = "../profiler" }
 
 [dev-dependencies]
 anyhow = "1.0.52"
@@ -39,5 +41,4 @@ failpoints = ["fail/failpoints"]
 # Enable tracing and debugging also for release builds. By default, it is only enabled for debug builds.
 debugging = []
 testing = []
-stacktrace = []
 lazy_natives = []

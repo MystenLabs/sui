@@ -19,6 +19,8 @@ use thiserror::Error;
 use tokio::time::Duration;
 use tracing::error;
 
+use crate::config::ReplayableNetworkConfigSet;
+
 // TODO: make these configurable
 pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
 pub(crate) const RPC_TIMEOUT_ERR_NUM_RETRIES: u32 = 2;
@@ -48,6 +50,11 @@ pub struct OnChainTransactionInfo {
     pub protocol_config: ProtocolConfig,
     pub epoch_start_timestamp: u64,
     pub reference_gas_price: u64,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct DiagInfo {
+    pub loaded_child_objects: Vec<(ObjectID, VersionNumber)>,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -156,6 +163,21 @@ pub enum ReplayEngineError {
 
     #[error("Unsupported epoch in replay engine: {epoch}")]
     EpochNotSupported { epoch: u64 },
+
+    #[error("Unable to open yaml cfg file at {}: {}", path, err)]
+    UnableToOpenYamlFile { path: String, err: String },
+
+    #[error("Unable to write yaml file at {}: {}", path, err)]
+    UnableToWriteYamlFile { path: String, err: String },
+
+    #[error("Unable to convert string {} to URL {}", url, err)]
+    InvalidUrl { url: String, err: String },
+
+    #[error(
+        "Unable to execute transaction with existing network configs {:#?}",
+        cfgs
+    )]
+    UnableToExecuteWithNetworkConfigs { cfgs: ReplayableNetworkConfigSet },
 }
 
 impl From<SuiObjectResponseError> for ReplayEngineError {
@@ -235,11 +257,11 @@ pub enum ExecutionStoreEvent {
     ResourceResolverGetResource {
         address: AccountAddress,
         typ: StructTag,
-        result: Result<Option<Vec<u8>>, ReplayEngineError>,
+        result: SuiResult<Option<Vec<u8>>>,
     },
     ModuleResolverGetModule {
         module_id: ModuleId,
-        result: Result<Option<Vec<u8>>, ReplayEngineError>,
+        result: SuiResult<Option<Vec<u8>>>,
     },
     ObjectStoreGetObject {
         object_id: ObjectID,
@@ -252,6 +274,6 @@ pub enum ExecutionStoreEvent {
     },
     GetModuleGetModuleByModuleId {
         id: ModuleId,
-        result: Result<Option<CompiledModule>, ReplayEngineError>,
+        result: SuiResult<Option<CompiledModule>>,
     },
 }

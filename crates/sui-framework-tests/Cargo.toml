@@ -8,8 +8,17 @@ license = "Apache-2.0"
 publish = false
 
 [dev-dependencies]
-sui-move = { path = "../sui-move", features = ["unit_test"] }
-sui-move-build = { path = "../sui-move-build" }
+prometheus.workspace = true
+
+sui-framework.workspace = true
+sui-move = { workspace = true, features = ["unit_test"] }
+sui-move-build.workspace = true
+sui-protocol-config.workspace = true
+sui-types.workspace = true
+
+move-bytecode-verifier = { path = "../../external-crates/move/move-bytecode-verifier" }
+sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
+sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }
 
 move-cli.workspace = true
 move-package.workspace = true

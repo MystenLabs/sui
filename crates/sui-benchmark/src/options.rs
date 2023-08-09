@@ -10,7 +10,7 @@ use crate::drivers::Interval;
 #[derive(Parser)]
 #[clap(name = "Stress Testing Framework")]
 pub struct Opts {
-    /// Si&ze of the Sui committee.
+    /// Size of the Sui committee.
     #[clap(long, default_value = "4", global = true)]
     pub committee_size: u64,
     /// Num of accounts to use for transfer objects
@@ -71,8 +71,6 @@ pub struct Opts {
     /// Default workload is 100% transfer object
     #[clap(subcommand)]
     pub run_spec: RunSpec,
-    #[clap(long, default_value = "9091", global = true)]
-    pub server_metric_port: u16,
     #[clap(long, default_value = "127.0.0.1", global = true)]
     pub client_metric_host: String,
     #[clap(long, default_value = "8081", global = true)]
@@ -161,6 +159,10 @@ pub enum RunSpec {
         // total_shared_counters = max(1, qps * (1.0 - hotness/100.0))
         #[clap(long, default_value = "50")]
         shared_counter_hotness_factor: u32,
+        // Maximum gas price increment over the RGP for shared counter transactions.
+        // The actual increment for each transaction is chosen at random a value between 0 and this value.
+        #[clap(long, default_value = "0")]
+        shared_counter_max_tip: u64,
         // batch size use for batch payment workload
         #[clap(long, default_value = "15")]
         batch_payment_size: u32,

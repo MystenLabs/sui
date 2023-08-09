@@ -11,10 +11,11 @@ use move_core_types::u256::U256;
 use move_core_types::value::{MoveStruct, MoveValue};
 use move_symbol_pool::Symbol;
 use move_transactional_test_runner::tasks::SyntaxChoice;
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::{SequenceNumber, SuiAddress};
 use sui_types::move_package::UpgradePolicy;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::storage::ObjectStore;
 use sui_types::transaction::{Argument, CallArg, ObjectArg};
 
 use crate::test_adapter::{FakeID, SuiTestAdapter};
@@ -27,13 +28,8 @@ pub struct SuiRunArgs {
     pub sender: Option<String>,
     #[clap(long = "gas-price")]
     pub gas_price: Option<u64>,
-    /// If set, this will override the protocol version
-    /// specified elsewhere (e.g., in init). Use with
-    /// caution!
-    #[clap(long = "protocol-version")]
-    pub protocol_version: Option<u64>,
-    #[clap(long = "uncharged")]
-    pub uncharged: bool,
+    #[clap(long = "summarize")]
+    pub summarize: bool,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -54,8 +50,10 @@ pub struct SuiPublishArgs {
 pub struct SuiInitArgs {
     #[clap(long = "accounts", multiple_values(true), multiple_occurrences(false))]
     pub accounts: Option<Vec<String>>,
-    #[clap(long = "protocol_version")]
+    #[clap(long = "protocol-version")]
     pub protocol_version: Option<u64>,
+    #[clap(long = "max-gas")]
+    pub max_gas: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -90,6 +88,8 @@ pub struct ProgrammableTransactionCommand {
     pub gas_budget: Option<u64>,
     #[clap(long = "gas-price")]
     pub gas_price: Option<u64>,
+    #[clap(long = "dev-inspect")]
+    pub dev_inspect: bool,
     #[clap(
         long = "inputs",
         parse(try_from_str = ParsedValue::parse),
@@ -161,14 +161,14 @@ pub enum SuiSubcommand {
 
 #[derive(Debug)]
 pub enum SuiExtraValueArgs {
-    Object(FakeID),
+    Object(FakeID, Option<SequenceNumber>),
     Digest(String),
 }
 
 pub enum SuiValue {
     MoveValue(MoveValue),
-    Object(FakeID),
-    ObjVec(Vec<FakeID>),
+    Object(FakeID, Option<SequenceNumber>),
+    ObjVec(Vec<(FakeID, Option<SequenceNumber>)>),
     Digest(String),
 }
 
@@ -196,7 +196,15 @@ impl SuiExtraValueArgs {
             FakeID::Known(address.into())
         };
         parser.advance(ValueToken::RParen)?;
-        Ok(SuiExtraValueArgs::Object(fake_id))
+        let version = if let Some(ValueToken::AtSign) = parser.peek_tok() {
+            parser.advance(ValueToken::AtSign)?;
+            let v_str = parser.advance(ValueToken::Number)?;
+            let (v, _) = parse_u64(v_str)?;
+            Some(SequenceNumber::from_u64(v))
+        } else {
+            None
+        };
+        Ok(SuiExtraValueArgs::Object(fake_id, version))
     }
 
     fn parse_digest_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
@@ -215,29 +223,38 @@ impl SuiValue {
     fn assert_move_value(self) -> MoveValue {
         match self {
             SuiValue::MoveValue(v) => v,
-            SuiValue::Object(_) => panic!("unexpected nested Sui object in args"),
+            SuiValue::Object(_, _) => panic!("unexpected nested Sui object in args"),
             SuiValue::ObjVec(_) => panic!("unexpected nested Sui object vector in args"),
             SuiValue::Digest(_) => panic!("unexpected nested Sui package digest in args"),
         }
     }
 
-    fn assert_object(self) -> FakeID {
+    fn assert_object(self) -> (FakeID, Option<SequenceNumber>) {
         match self {
             SuiValue::MoveValue(_) => panic!("unexpected nested non-object value in args"),
-            SuiValue::Object(v) => v,
+            SuiValue::Object(id, version) => (id, version),
             SuiValue::ObjVec(_) => panic!("unexpected nested Sui object vector in args"),
             SuiValue::Digest(_) => panic!("unexpected nested Sui package digest in args"),
         }
     }
 
-    fn object_arg(fake_id: FakeID, test_adapter: &SuiTestAdapter) -> anyhow::Result<ObjectArg> {
+    fn object_arg(
+        fake_id: FakeID,
+        version: Option<SequenceNumber>,
+        test_adapter: &SuiTestAdapter,
+    ) -> anyhow::Result<ObjectArg> {
         let id = match test_adapter.fake_to_real_object_id(fake_id) {
             Some(id) => id,
             None => bail!("INVALID TEST. Unknown object, object({})", fake_id),
         };
-        let obj = match test_adapter.storage.get_object(&id) {
-            Some(obj) => obj,
-            None => bail!("INVALID TEST. Could not load object argument {}", id),
+        let obj_res = if let Some(v) = version {
+            test_adapter.validator.database.get_object_by_key(&id, v)
+        } else {
+            test_adapter.validator.database.get_object(&id)
+        };
+        let obj = match obj_res {
+            Ok(Some(obj)) => obj,
+            Err(_) | Ok(None) => bail!("INVALID TEST. Could not load object argument {}", id),
         };
         match obj.owner {
             Owner::Shared {
@@ -256,7 +273,9 @@ impl SuiValue {
 
     pub(crate) fn into_call_arg(self, test_adapter: &SuiTestAdapter) -> anyhow::Result<CallArg> {
         Ok(match self {
-            SuiValue::Object(fake_id) => CallArg::Object(Self::object_arg(fake_id, test_adapter)?),
+            SuiValue::Object(fake_id, version) => {
+                CallArg::Object(Self::object_arg(fake_id, version, test_adapter)?)
+            }
             SuiValue::MoveValue(v) => CallArg::Pure(v.simple_serialize().unwrap()),
             SuiValue::ObjVec(_) => bail!("obj vec is not supported as an input"),
             SuiValue::Digest(pkg) => {
@@ -277,7 +296,7 @@ impl SuiValue {
         match self {
             SuiValue::ObjVec(vec) => builder.make_obj_vec(
                 vec.iter()
-                    .map(|fake_id| Self::object_arg(*fake_id, test_adapter))
+                    .map(|(fake_id, version)| Self::object_arg(*fake_id, *version, test_adapter))
                     .collect::<Result<Vec<ObjectArg>, _>>()?,
             ),
             value => {
@@ -306,7 +325,7 @@ impl ParsableValue for SuiExtraValueArgs {
     }
 
     fn concrete_vector(elems: Vec<Self::ConcreteValue>) -> anyhow::Result<Self::ConcreteValue> {
-        if !elems.is_empty() && matches!(elems[0], SuiValue::Object(_)) {
+        if !elems.is_empty() && matches!(elems[0], SuiValue::Object(_, _)) {
             Ok(SuiValue::ObjVec(
                 elems.into_iter().map(SuiValue::assert_object).collect(),
             ))
@@ -338,7 +357,7 @@ impl ParsableValue for SuiExtraValueArgs {
         _mapping: &impl Fn(&str) -> Option<move_core_types::account_address::AccountAddress>,
     ) -> anyhow::Result<Self::ConcreteValue> {
         match self {
-            SuiExtraValueArgs::Object(id) => Ok(SuiValue::Object(id)),
+            SuiExtraValueArgs::Object(id, version) => Ok(SuiValue::Object(id, version)),
             SuiExtraValueArgs::Digest(pkg) => Ok(SuiValue::Digest(pkg)),
         }
     }

@@ -38,10 +38,10 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 8 'transfer-object'. lines 68-68:
-mutated: object(0,0), object(7,2)
+mutated: object(0,0), object(7,1)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
 
 task 9 'view-object'. lines 70-70:
 Owner: Account Address ( B )
 Version: 6
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(7,2)}}}
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(7,1)}}}

@@ -3,16 +3,10 @@
 
 import { type UIQredoPendingRequest } from '_src/background/qredo/types';
 
-export function isUntrustedQredoConnect({
-    apiUrl,
-    origin,
-}: UIQredoPendingRequest) {
-    try {
-        return (
-            new URL(origin).protocol !== 'https:' ||
-            new URL(apiUrl).protocol !== 'https:'
-        );
-    } catch (e) {
-        return false;
-    }
+export function isUntrustedQredoConnect({ apiUrl, origin }: UIQredoPendingRequest) {
+	try {
+		return new URL(origin).protocol !== 'https:' || new URL(apiUrl).protocol !== 'https:';
+	} catch (e) {
+		return false;
+	}
 }

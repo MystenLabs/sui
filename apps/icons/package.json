@@ -1,20 +1,26 @@
 {
-  "name": "@mysten/icons",
-  "main": "src/index.ts",
-  "private": true,
-  "sideEffects": false,
-  "scripts": {
-    "clean:src": "rimraf src/**",
-    "clean:svgs": "rimraf svgs/**",
-    "clean:all": "pnpm clean:src && pnpm clean:svgs",
-    "generate": "node scripts/preprocess.mjs && svgr --config-file svgrrc.config.js svgs"
-  },
-  "devDependencies": {
-    "@svgr/cli": "^7.0.0",
-    "@svgr/core": "^7.0.0",
-    "@types/react": "^18.0.35",
-    "react": "^18.2.0",
-    "rimraf": "^5.0.0",
-    "typescript": "^5.0.4"
-  }
+	"name": "@mysten/icons",
+	"main": "src/index.ts",
+	"private": true,
+	"sideEffects": false,
+	"scripts": {
+		"clean:src": "rimraf src/**",
+		"clean:svgs": "rimraf svgs/**",
+		"clean:all": "pnpm clean:src && pnpm clean:svgs",
+		"generate": "node scripts/preprocess.mjs && svgr --config-file svgrrc.config.js svgs",
+		"prettier:check": "prettier -c --ignore-unknown .",
+		"prettier:fix": "prettier -w --ignore-unknown .",
+		"eslint:check": "eslint --max-warnings=0 .",
+		"eslint:fix": "pnpm run eslint:check --fix",
+		"lint": "pnpm run eslint:check && pnpm run prettier:check",
+		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
+	},
+	"devDependencies": {
+		"@svgr/cli": "^7.0.0",
+		"@svgr/core": "^7.0.0",
+		"@types/react": "^18.2.15",
+		"react": "^18.2.0",
+		"rimraf": "^5.0.1",
+		"typescript": "^5.1.6"
+	}
 }

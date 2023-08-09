@@ -4,6 +4,7 @@ module 0x2::A {
         f2: u64,
     }
 
+    #[allow(unused_function)]
     fun foo(s: &S): u64 {
         s.f2
     }

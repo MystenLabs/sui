@@ -270,7 +270,7 @@ async fn test_upgrade_package_happy_path() {
         .get_package(&runner.package.0)
         .unwrap()
         .unwrap();
-    let config = ProtocolConfig::get_for_max_version();
+    let config = ProtocolConfig::get_for_max_version_UNSAFE();
     let normalized_modules = package
         .normalize(
             config.move_binary_format_version(),

@@ -1,37 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetObject, useGetOriginByteKioskContents } from '@mysten/core';
-import {
-    is,
-    SuiObjectData,
-    getObjectOwner,
-    type SuiAddress,
-} from '@mysten/sui.js';
+import { useGetKioskContents, useGetObject } from '@mysten/core';
 import { useMemo } from 'react';
 
-export function useOwnedNFT(
-    nftObjectId: string | null,
-    address: SuiAddress | null
-) {
-    const data = useGetObject(nftObjectId);
-    const { data: kioskContents } = useGetOriginByteKioskContents(address);
-    const { data: objectData } = data;
-    const objectDetails = useMemo(() => {
-        if (!objectData || !is(objectData.data, SuiObjectData) || !address)
-            return null;
-        const ownedKioskObjectIds =
-            kioskContents?.map(({ data }) => data?.objectId) || [];
-        const objectOwner = getObjectOwner(objectData);
-        const isOwner =
-            ownedKioskObjectIds.includes(objectData.data.objectId) ||
-            (objectOwner &&
-                objectOwner !== 'Immutable' &&
-                'AddressOwner' in objectOwner &&
-                objectOwner.AddressOwner === address)
-                ? objectData.data
-                : null;
-        return isOwner;
-    }, [address, objectData, kioskContents]);
-    return { ...data, data: objectDetails };
+export function useOwnedNFT(nftObjectId: string | null, address: string | null) {
+	const data = useGetObject(nftObjectId);
+	const { data: kioskData, isFetching: areKioskContentsLoading } = useGetKioskContents(address);
+	const { data: objectData, isLoading } = data;
+
+	const objectDetails = useMemo(() => {
+		if (!objectData || !objectData.data || !address) return null;
+		const ownedKioskObjectIds = kioskData?.list.map(({ data }) => data?.objectId) || [];
+		const objectOwner = objectData.data.owner;
+		const data =
+			ownedKioskObjectIds.includes(objectData.data.objectId) ||
+			(objectOwner &&
+				objectOwner !== 'Immutable' &&
+				'AddressOwner' in objectOwner &&
+				objectOwner.AddressOwner === address)
+				? objectData.data
+				: null;
+		return data;
+	}, [address, objectData, kioskData]);
+
+	return { ...data, isLoading: isLoading || areKioskContentsLoading, data: objectDetails };
 }

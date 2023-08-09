@@ -16,7 +16,7 @@ use sui_json_rpc_types::{
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber};
-use sui_types::digests::TransactionDigest;
+use sui_types::digests::{ChainIdentifier, TransactionDigest};
 use sui_types::sui_serde::BigInt;
 
 use crate::errors::IndexerError;
@@ -116,7 +116,7 @@ impl<S: IndexerStore> ReadApi<S> {
 
     async fn get_latest_checkpoint_sequence_number_internal(&self) -> Result<u64, IndexerError> {
         self.state
-            .get_latest_checkpoint_sequence_number()
+            .get_latest_tx_checkpoint_sequence_number()
             .await
             .map(|n| n as u64)
     }
@@ -366,6 +366,15 @@ where
         let protocol_config_resp = self.fullnode.get_protocol_config(version).await;
         protocol_config_guard.stop_and_record();
         protocol_config_resp
+    }
+
+    async fn get_chain_identifier(&self) -> RpcResult<String> {
+        let ci = self
+            .state
+            .get_checkpoint(CheckpointId::SequenceNumber(0))
+            .await?
+            .digest;
+        Ok(ChainIdentifier::from(ci).to_string())
     }
 }
 

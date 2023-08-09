@@ -17,6 +17,8 @@ fail = "0.4.0"
 move-borrow-graph = { path = "../move-borrow-graph" }
 move-binary-format = { path = "../move-binary-format" }
 move-core-types = { path = "../move-core/types" }
+move-vm-config = { path = "../move-vm/config" }
+move-abstract-stack = { path = "../move-abstract-stack" }
 
 [dev-dependencies]
 hex-literal = "0.3.4"

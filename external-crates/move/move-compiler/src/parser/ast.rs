@@ -33,6 +33,12 @@ macro_rules! new_name {
             }
         }
 
+        impl PartialEq<str> for $n {
+            fn eq(&self, s: &str) -> bool {
+                self.0.value.as_str() == s
+            }
+        }
+
         impl Identifier for $n {
             fn value(&self) -> Symbol {
                 self.0.value
@@ -743,7 +749,7 @@ impl ModuleName {
 
 impl Var {
     pub fn is_underscore(&self) -> bool {
-        self.0.value.as_str() == "_"
+        self.0.value == symbol!("_")
     }
 
     pub fn starts_with_underscore(&self) -> bool {

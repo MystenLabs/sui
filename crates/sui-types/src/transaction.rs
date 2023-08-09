@@ -10,12 +10,14 @@ use crate::crypto::{
     ToFromBytes,
 };
 use crate::digests::{CertificateDigest, SenderSignedDataDigest};
-use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
+use crate::message_envelope::{
+    AuthenticatedMessage, Envelope, Message, TrustedEnvelope, VerifiedEnvelope,
+};
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::messages_consensus::ConsensusCommitPrologue;
 use crate::object::{MoveObject, Object, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use crate::signature::{AuthenticatorTrait, GenericSignature};
+use crate::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
 use crate::{
     SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID,
     SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
@@ -57,6 +59,7 @@ pub const DEFAULT_VALIDATOR_GAS_PRICE: u64 = 1000;
 const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 0] = [];
 
 #[cfg(test)]
+#[cfg(feature = "test-utils")]
 #[path = "unit_tests/messages_tests.rs"]
 mod messages_tests;
 
@@ -1682,6 +1685,16 @@ impl SenderSignedData {
         &self.inner().tx_signatures
     }
 
+    pub fn has_zklogin_sig(&self) -> bool {
+        self.tx_signatures().iter().any(|sig| sig.is_zklogin())
+    }
+
+    pub fn has_upgraded_multisig(&self) -> bool {
+        self.tx_signatures()
+            .iter()
+            .any(|sig| sig.is_upgraded_multisig())
+    }
+
     #[cfg(test)]
     pub fn intent_message_mut_for_testing(&mut self) -> &mut IntentMessage<TransactionData> {
         &mut self.inner_mut().intent_message
@@ -1717,10 +1730,18 @@ impl VersionedProtocolMessage for SenderSignedData {
         // SuiError::WrongMessageVersion
         for sig in &self.inner().tx_signatures {
             match sig {
-                GenericSignature::MultiSig(_) | GenericSignature::Signature(_) => (),
+                GenericSignature::MultiSig(_) => {
+                    if !protocol_config.supports_upgraded_multisig() {
+                        return Err(SuiError::UnsupportedFeatureError {
+                            error: "multisig format not enabled on this network".to_string(),
+                        });
+                    }
+                }
+                GenericSignature::Signature(_)
+                | GenericSignature::MultiSigLegacy(_)
+                | GenericSignature::ZkLoginAuthenticator(_) => (),
             }
         }
-
         Ok(())
     }
 }
@@ -1733,7 +1754,17 @@ impl Message for SenderSignedData {
         TransactionDigest::new(default_hash(&self.intent_message().value))
     }
 
-    fn verify(&self, _sig_epoch: Option<EpochId>) -> SuiResult {
+    fn verify_epoch(&self, epoch: EpochId) -> SuiResult {
+        for sig in &self.inner().tx_signatures {
+            sig.verify_user_authenticator_epoch(epoch)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl AuthenticatedMessage for SenderSignedData {
+    fn verify_message_signature(&self, verify_params: &VerifyParams) -> SuiResult {
         fp_ensure!(
             self.0.len() == 1,
             SuiError::UserInputError {
@@ -1768,7 +1799,7 @@ impl Message for SenderSignedData {
 
         // Verify all present signatures.
         for (signer, signature) in present_sigs {
-            signature.verify_secure_generic(self.intent_message(), signer)?;
+            signature.verify_claims(self.intent_message(), signer, verify_params)?;
         }
         Ok(())
     }
@@ -1956,6 +1987,10 @@ impl CertifiedTransaction {
         bcs::serialize_into(&mut digest, self).expect("serialization should not fail");
         let hash = digest.finalize();
         CertificateDigest::new(hash.into())
+    }
+
+    pub fn gas_price(&self) -> u64 {
+        self.data().transaction_data().gas_price()
     }
 }
 

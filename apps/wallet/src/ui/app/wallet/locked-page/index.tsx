@@ -24,91 +24,66 @@ import st from './LockedPage.module.scss';
 
 let passValidation = Yup.string().ensure();
 if (!devQuickUnlockEnabled) {
-    passValidation = passValidation.required('Required');
+	passValidation = passValidation.required('Required');
 }
 const validation = Yup.object({
-    password: passValidation,
+	password: passValidation,
 });
 
 // this is only for dev do not use in prod
 async function devLoadPassFromStorage(): Promise<string | null> {
-    return (await Browser.storage.local.get({ '**dev**': { pass: null } }))[
-        '**dev**'
-    ]['pass'];
+	return (await Browser.storage.local.get({ '**dev**': { pass: null } }))['**dev**']['pass'];
 }
 
 export default function LockedPage() {
-    const initGuardLoading = useInitializedGuard(true);
-    const lockedGuardLoading = useLockedGuard(true);
-    const guardsLoading = initGuardLoading || lockedGuardLoading;
-    const dispatch = useAppDispatch();
-    return (
-        <Loading loading={guardsLoading}>
-            <PageLayout>
-                <PageMainLayout className={st.main}>
-                    <CardLayout
-                        icon="sui"
-                        headerCaption="Hello There"
-                        title="Welcome Back"
-                    >
-                        <Formik
-                            initialValues={{ password: '' }}
-                            validationSchema={validation}
-                            validateOnMount={true}
-                            onSubmit={async (
-                                { password },
-                                { setFieldError }
-                            ) => {
-                                if (devQuickUnlockEnabled && password === '') {
-                                    password =
-                                        (await devLoadPassFromStorage()) || '';
-                                }
-                                try {
-                                    await dispatch(
-                                        unlockWallet({ password })
-                                    ).unwrap();
-                                } catch (e) {
-                                    setFieldError(
-                                        'password',
-                                        (e as Error).message ||
-                                            'Incorrect password'
-                                    );
-                                }
-                            }}
-                        >
-                            {({ touched, errors, isSubmitting, isValid }) => (
-                                <Form className={st.form}>
-                                    <FieldLabel txt="Enter Password">
-                                        <PasswordInputField
-                                            name="password"
-                                            disabled={isSubmitting}
-                                            autoFocus
-                                        />
-                                        {touched.password && errors.password ? (
-                                            <Alert>{errors.password}</Alert>
-                                        ) : null}
-                                    </FieldLabel>
-                                    <div className={st.fill} />
-                                    <Button
-                                        type="submit"
-                                        disabled={isSubmitting || !isValid}
-                                        variant="primary"
-                                        size="tall"
-                                        before={<LockUnlocked16 />}
-                                        text="Unlock Wallet"
-                                    />
-                                    <Link
-                                        to="/forgot-password"
-                                        className={st.forgotLink}
-                                    >
-                                        Forgot password?
-                                    </Link>
-                                </Form>
-                            )}
-                        </Formik>
-                    </CardLayout>
-                </PageMainLayout>
-            </PageLayout>
-        </Loading>
-    );
+	const initGuardLoading = useInitializedGuard(true);
+	const lockedGuardLoading = useLockedGuard(true);
+	const guardsLoading = initGuardLoading || lockedGuardLoading;
+	const dispatch = useAppDispatch();
+	return (
+		<Loading loading={guardsLoading}>
+			<PageLayout>
+				<PageMainLayout className={st.main}>
+					<CardLayout icon="sui" headerCaption="Hello There" title="Welcome Back">
+						<Formik
+							initialValues={{ password: '' }}
+							validationSchema={validation}
+							validateOnMount={true}
+							onSubmit={async ({ password }, { setFieldError }) => {
+								if (devQuickUnlockEnabled && password === '') {
+									password = (await devLoadPassFromStorage()) || '';
+								}
+								try {
+									await dispatch(unlockWallet({ password })).unwrap();
+								} catch (e) {
+									setFieldError('password', (e as Error).message || 'Incorrect password');
+								}
+							}}
+						>
+							{({ touched, errors, isSubmitting, isValid }) => (
+								<Form className={st.form}>
+									<FieldLabel txt="Enter Password">
+										<PasswordInputField name="password" disabled={isSubmitting} autoFocus />
+										{touched.password && errors.password ? <Alert>{errors.password}</Alert> : null}
+									</FieldLabel>
+									<div className={st.fill} />
+									<Button
+										type="submit"
+										disabled={isSubmitting || !isValid}
+										variant="primary"
+										size="tall"
+										before={<LockUnlocked16 />}
+										text="Unlock Wallet"
+									/>
+									<Link to="/forgot-password" className={st.forgotLink}>
+										Forgot password?
+									</Link>
+								</Form>
+							)}
+						</Formik>
+					</CardLayout>
+				</PageMainLayout>
+			</PageLayout>
+		</Loading>
+	);
 }

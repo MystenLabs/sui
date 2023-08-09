@@ -11,7 +11,6 @@ pub(crate) mod merge_spec_modules;
 pub(crate) mod syntax;
 
 use crate::{
-    attr_derivation,
     diagnostics::{codes::Severity, Diagnostics, FilesSourceText},
     parser::{self, ast::PackageDefinition, syntax::parse_file_string},
     shared::{CompilationEnv, IndexedPackagePath, NamedAddressMaps},
@@ -106,16 +105,6 @@ pub(crate) fn parse_program(
     let env_result = compilation_env.check_diags_at_or_above_severity(Severity::BlockingError);
     if let Err(env_diags) = env_result {
         diags.extend(env_diags)
-    }
-
-    // Run attribute expansion on all source definitions, passing in the matching named address map.
-    for PackageDefinition {
-        named_address_map: idx,
-        def,
-        ..
-    } in source_definitions.iter_mut()
-    {
-        attr_derivation::derive_from_attributes(compilation_env, named_address_maps.get(*idx), def);
     }
 
     let res = if diags.is_empty() {

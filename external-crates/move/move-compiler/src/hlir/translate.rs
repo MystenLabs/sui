@@ -6,7 +6,7 @@ use crate::{
     diag,
     expansion::ast::{self as E, AbilitySet, Fields, ModuleIdent},
     hlir::ast::{self as H, Block, MoveOpAnnotation},
-    naming::ast::{self as N},
+    naming::ast as N,
     parser::ast::{BinOp_, ConstantName, Field, FunctionName, StructName},
     shared::{unique_map::UniqueMap, *},
     typing::ast as T,
@@ -16,7 +16,7 @@ use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     convert::TryInto,
 };
 
@@ -84,6 +84,8 @@ struct Context<'env> {
     function_locals: UniqueMap<H::Var, H::SingleType>,
     signature: Option<H::FunctionSignature>,
     tmp_counter: usize,
+    /// collects all struct fields used in the current module
+    pub used_fields: BTreeMap<Symbol, BTreeSet<Symbol>>,
 }
 
 impl<'env> Context<'env> {
@@ -128,6 +130,7 @@ impl<'env> Context<'env> {
             function_locals: UniqueMap::new(),
             signature: None,
             tmp_counter: 0,
+            used_fields: BTreeMap::new(),
         }
     }
 
@@ -209,6 +212,7 @@ fn module(
     mdef: T::ModuleDefinition,
 ) -> (ModuleIdent, H::ModuleDefinition) {
     let T::ModuleDefinition {
+        warning_filter,
         package_name,
         attributes,
         is_source_module,
@@ -218,14 +222,19 @@ fn module(
         functions: tfunctions,
         constants: tconstants,
     } = mdef;
-
+    context.env.add_warning_filter_scope(warning_filter.clone());
     let structs = tstructs.map(|name, s| struct_def(context, name, s));
 
     let constants = tconstants.map(|name, c| constant(context, name, c));
     let functions = tfunctions.map(|name, f| function(context, name, f));
+
+    gen_unused_warnings(context, is_source_module, &structs);
+
+    context.env.pop_warning_filter_scope();
     (
         module_ident,
         H::ModuleDefinition {
+            warning_filter,
             package_name,
             attributes,
             is_source_module,
@@ -250,6 +259,7 @@ fn scripts(
 
 fn script(context: &mut Context, tscript: T::Script) -> H::Script {
     let T::Script {
+        warning_filter,
         package_name,
         attributes,
         loc,
@@ -257,9 +267,12 @@ fn script(context: &mut Context, tscript: T::Script) -> H::Script {
         function_name,
         function: tfunction,
     } = tscript;
+    context.env.add_warning_filter_scope(warning_filter.clone());
     let constants = tconstants.map(|name, c| constant(context, name, c));
     let function = function(context, function_name, tfunction);
+    context.env.pop_warning_filter_scope();
     H::Script {
+        warning_filter,
         package_name,
         attributes,
         loc,
@@ -277,6 +290,7 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
     assert!(context.has_empty_locals());
     assert!(context.tmp_counter == 0);
     let T::Function {
+        warning_filter,
         index,
         attributes,
         visibility,
@@ -285,9 +299,12 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
         acquires,
         body,
     } = f;
+    context.env.add_warning_filter_scope(warning_filter.clone());
     let signature = function_signature(context, signature);
     let body = function_body(context, &signature, body);
+    context.env.pop_warning_filter_scope();
     H::Function {
+        warning_filter,
         index,
         attributes,
         visibility,
@@ -373,12 +390,14 @@ fn function_body_defined(
 
 fn constant(context: &mut Context, _name: ConstantName, cdef: T::Constant) -> H::Constant {
     let T::Constant {
+        warning_filter,
         index,
         attributes,
         loc,
         signature: tsignature,
         value: tvalue,
     } = cdef;
+    context.env.add_warning_filter_scope(warning_filter.clone());
     let signature = base_type(context, tsignature);
     let eloc = tvalue.exp.loc;
     let tseq = {
@@ -392,7 +411,9 @@ fn constant(context: &mut Context, _name: ConstantName, cdef: T::Constant) -> H:
         return_type: H::Type_::base(signature.clone()),
     };
     let (locals, body) = function_body_defined(context, &function_signature, eloc, tseq);
+    context.env.pop_warning_filter_scope();
     H::Constant {
+        warning_filter,
         index,
         attributes,
         loc,
@@ -411,14 +432,18 @@ fn struct_def(
     sdef: N::StructDefinition,
 ) -> H::StructDefinition {
     let N::StructDefinition {
+        warning_filter,
         index,
         attributes,
         abilities,
         type_parameters,
         fields,
     } = sdef;
+    context.env.add_warning_filter_scope(warning_filter.clone());
     let fields = struct_fields(context, fields);
+    context.env.pop_warning_filter_scope();
     H::StructDefinition {
+        warning_filter,
         index,
         attributes,
         abilities,
@@ -713,6 +738,13 @@ fn assign(
             L::Var(translate_var(v), Box::new(single_type(context, *st)))
         }
         A::Unpack(m, s, tbs, tfields) => {
+            // all fields of an unpacked struct type are used
+            context
+                .used_fields
+                .entry(s.value())
+                .or_insert_with(BTreeSet::new)
+                .extend(tfields.iter().map(|(_, s, _)| *s));
+
             let bs = base_types(context, tbs);
 
             let mut fields = vec![];
@@ -726,6 +758,13 @@ fn assign(
             L::Unpack(s, bs, fields)
         }
         A::BorrowUnpack(mut_, m, s, _tss, tfields) => {
+            // all fields of an unpacked struct type are used
+            context
+                .used_fields
+                .entry(s.value())
+                .or_insert_with(BTreeSet::new)
+                .extend(tfields.iter().map(|(_, s, _)| *s));
+
             let tmp = context.new_temp(loc, rvalue_ty.clone());
             let copy_tmp = || {
                 let copy_tmp_ = E::Copy {
@@ -1233,6 +1272,13 @@ fn exp_impl(
         }
 
         TE::Pack(m, s, tbs, tfields) => {
+            // all fields of a packed struct type are used
+            context
+                .used_fields
+                .entry(s.value())
+                .or_insert_with(BTreeSet::new)
+                .extend(tfields.iter().map(|(_, s, _)| *s));
+
             let bs = base_types(context, tbs);
 
             let decl_fields = context.fields(&m, &s);
@@ -1341,6 +1387,13 @@ fn exp_impl(
         }
         TE::Borrow(mut_, te, f) => {
             let e = exp(context, result, None, *te);
+            if let Some(struct_name) = struct_name(&e.ty) {
+                context
+                    .used_fields
+                    .entry(struct_name.value())
+                    .or_insert_with(BTreeSet::new)
+                    .insert(f.value());
+            }
             HE::Borrow(mut_, e, f)
         }
         TE::TempBorrow(mut_, te) => {
@@ -1391,6 +1444,23 @@ fn exp_impl(
         TE::IfElse(..) | TE::BinopExp(..) => unreachable!(),
     };
     H::exp(ty, sp(eloc, res))
+}
+
+fn struct_name(sp!(_, t): &H::Type) -> Option<StructName> {
+    let H::Type_::Single(st) = t else {
+        return None;
+    };
+    let bt = match &st.value {
+        H::SingleType_::Base(bt) => bt,
+        H::SingleType_::Ref(_, bt) => bt,
+    };
+    let H::BaseType_::Apply(_, tname ,_ ) = &bt.value else {
+        return None;
+    };
+    if let H::TypeName_::ModuleType(_, struct_name) = tname.value {
+        return Some(struct_name);
+    }
+    None
 }
 
 fn exp_evaluation_order(
@@ -1936,5 +2006,42 @@ fn check_trailing_unit_statement(context: &mut Context, sp!(_, s_): &mut H::Stat
             check_trailing_unit(context, block)
         }
         S::Loop { block, .. } => check_trailing_unit(context, block),
+    }
+}
+
+/// Generates warnings for unused struct fields.
+fn gen_unused_warnings(
+    context: &mut Context,
+    is_source_module: bool,
+    structs: &UniqueMap<StructName, H::StructDefinition>,
+) {
+    if !is_source_module {
+        // generate warnings only for modules compiled in this pass rather than for all modules
+        // including pre-compiled libraries for which we do not have source code available and
+        // cannot be analyzed in this pass
+        return;
+    }
+
+    for (_, sname, sdef) in structs {
+        context
+            .env
+            .add_warning_filter_scope(sdef.warning_filter.clone());
+
+        if let H::StructFields::Defined(fields) = &sdef.fields {
+            for (f, _) in fields {
+                if !context
+                    .used_fields
+                    .get(sname)
+                    .is_some_and(|names| names.contains(&f.value()))
+                {
+                    let msg = format!("The '{}' field of the '{sname}' type is unused", f.value());
+                    context
+                        .env
+                        .add_diag(diag!(UnusedItem::StructField, (f.loc(), msg)));
+                }
+            }
+        }
+
+        context.env.pop_warning_filter_scope();
     }
 }

@@ -14,6 +14,9 @@ use move_core_types::{
 use num_bigint::BigUint;
 use std::{collections::BTreeMap, fmt::Display, iter::Peekable, num::ParseIntError};
 
+const MAX_TYPE_DEPTH: u64 = 128;
+const MAX_TYPE_NODE_COUNT: u64 = 256;
+
 pub trait Token: Display + Copy + Eq {
     fn is_whitespace(&self) -> bool;
     fn next_token(s: &str) -> Result<Option<(Self, usize)>>;
@@ -28,6 +31,7 @@ pub trait Token: Display + Copy + Eq {
 }
 
 pub struct Parser<'a, Tok: Token, I: Iterator<Item = (Tok, &'a str)>> {
+    count: u64,
     it: Peekable<I>,
 }
 
@@ -79,6 +83,7 @@ fn parse<'a, Tok: Token, R>(
 impl<'a, Tok: Token, I: Iterator<Item = (Tok, &'a str)>> Parser<'a, Tok, I> {
     pub fn new<T: IntoIterator<Item = (Tok, &'a str), IntoIter = I>>(v: T) -> Self {
         Self {
+            count: 0,
             it: v.into_iter().peekable(),
         }
     }
@@ -132,6 +137,15 @@ impl<'a, Tok: Token, I: Iterator<Item = (Tok, &'a str)>> Parser<'a, Tok, I> {
 
 impl<'a, I: Iterator<Item = (TypeToken, &'a str)>> Parser<'a, TypeToken, I> {
     pub fn parse_type(&mut self) -> Result<ParsedType> {
+        self.parse_type_impl(0)
+    }
+
+    fn parse_type_impl(&mut self, depth: u64) -> Result<ParsedType> {
+        self.count += 1;
+
+        if depth > MAX_TYPE_DEPTH || self.count > MAX_TYPE_NODE_COUNT {
+            bail!("Type exceeds maximum nesting depth or node count")
+        }
         let (tok, contents) = self.advance_any()?;
         Ok(match (tok, contents) {
             (TypeToken::Ident, "u8") => ParsedType::U8,
@@ -145,7 +159,7 @@ impl<'a, I: Iterator<Item = (TypeToken, &'a str)>> Parser<'a, TypeToken, I> {
             (TypeToken::Ident, "signer") => ParsedType::Signer,
             (TypeToken::Ident, "vector") => {
                 self.advance(TypeToken::Lt)?;
-                let ty = self.parse_type()?;
+                let ty = self.parse_type_impl(depth + 1)?;
                 self.advance(TypeToken::Gt)?;
                 ParsedType::Vector(Box::new(ty))
             }
@@ -164,7 +178,7 @@ impl<'a, I: Iterator<Item = (TypeToken, &'a str)>> Parser<'a, TypeToken, I> {
                     Some(TypeToken::Lt) => {
                         self.advance(TypeToken::Lt)?;
                         let type_args = self.parse_list(
-                            |parser| parser.parse_type(),
+                            |parser| parser.parse_type_impl(depth + 1),
                             TypeToken::Comma,
                             TypeToken::Gt,
                             true,

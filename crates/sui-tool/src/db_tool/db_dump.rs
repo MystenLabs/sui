@@ -4,19 +4,27 @@
 use anyhow::{anyhow, Ok};
 use clap::{Parser, ValueEnum};
 use comfy_table::{Cell, ContentArrangement, Row, Table};
+use prometheus::Registry;
 use rocksdb::MultiThreaded;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::str;
 use std::sync::Arc;
 use strum_macros::EnumString;
+use sui_archival::reader::ArchiveReaderBalancer;
+use sui_config::node::AuthorityStorePruningConfig;
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
-use sui_core::authority::authority_store_pruner::AuthorityStorePruner;
+use sui_core::authority::authority_store_pruner::{
+    AuthorityStorePruner, AuthorityStorePruningMetrics,
+};
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::authority_store_types::{StoreData, StoreObject};
+use sui_core::checkpoints::CheckpointStore;
 use sui_core::epoch::committee_store::CommitteeStoreTables;
+use sui_storage::mutex_table::RwLockTable;
 use sui_storage::IndexStoreTables;
 use sui_types::base_types::{EpochId, ObjectID};
+use tracing::info;
 use typed_store::rocks::{default_db_options, MetricConf};
 use typed_store::traits::{Map, TableSummary};
 
@@ -149,7 +157,7 @@ pub fn print_table_metadata(
 
 pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usize) {
     let perpetual_tables = AuthorityPerpetualTables::open_readonly(&db_path);
-    let iter = perpetual_tables.objects.iter();
+    let iter = perpetual_tables.objects.unbounded_iter();
     let mut total_count = 0;
     let mut duplicate_count = 0;
     let mut total_bytes = 0;
@@ -181,6 +189,71 @@ pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usiz
 pub fn compact(db_path: PathBuf) -> anyhow::Result<()> {
     let perpetual = Arc::new(AuthorityPerpetualTables::open(&db_path, None));
     AuthorityStorePruner::compact(&perpetual)?;
+    Ok(())
+}
+
+pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
+    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
+    let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
+        db_path.join("checkpoints"),
+        MetricConf::default(),
+        None,
+        None,
+    ));
+    let highest_pruned_checkpoint = checkpoint_store.get_highest_pruned_checkpoint_seq_number()?;
+    let latest_checkpoint = checkpoint_store.get_highest_executed_checkpoint()?;
+    info!(
+        "Latest executed checkpoint sequence num: {}",
+        latest_checkpoint.map(|x| x.sequence_number).unwrap_or(0)
+    );
+    info!("Highest pruned checkpoint: {}", highest_pruned_checkpoint);
+    let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
+    let lock_table = Arc::new(RwLockTable::new(1));
+    info!("Pruning setup for db at path: {:?}", db_path.display());
+    let pruning_config = AuthorityStorePruningConfig {
+        num_epochs_to_retain: 0,
+        ..Default::default()
+    };
+    info!("Starting object pruning");
+    AuthorityStorePruner::prune_objects_for_eligible_epochs(
+        &perpetual_db,
+        &checkpoint_store,
+        &lock_table,
+        pruning_config,
+        metrics,
+        usize::MAX,
+    )
+    .await?;
+    Ok(())
+}
+
+pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
+    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
+    let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
+        db_path.join("checkpoints"),
+        MetricConf::default(),
+        None,
+        None,
+    ));
+    let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
+    let lock_table = Arc::new(RwLockTable::new(1));
+    info!("Pruning setup for db at path: {:?}", db_path.display());
+    let pruning_config = AuthorityStorePruningConfig {
+        num_epochs_to_retain_for_checkpoints: Some(1),
+        ..Default::default()
+    };
+    info!("Starting txns and effects pruning");
+    let archive_readers = ArchiveReaderBalancer::default();
+    AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
+        &perpetual_db,
+        &checkpoint_store,
+        &lock_table,
+        pruning_config,
+        metrics,
+        usize::MAX,
+        archive_readers,
+    )
+    .await?;
     Ok(())
 }
 

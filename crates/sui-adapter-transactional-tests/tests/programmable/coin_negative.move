@@ -29,5 +29,5 @@ module test::fake {
 //# programmable --sender A --inputs object(2,0) 2
 //> SplitCoins(Input(0), [Input(1)]);
 
-//# programmable --sender A --inputs 18446744073709551615  --gas-budget 100000000000000
+//# programmable --sender A --inputs 18446744073709551615  --gas-budget 10000000000
 //> SplitCoins(Gas, [Input(0)])

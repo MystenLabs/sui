@@ -1,0 +1,25 @@
+[[packages]]
+source = "Repository"
+[packages.values]
+repository = "https://github.com/mystenlabs/sui"
+branch = "framework/mainnet"
+network = "mainnet"
+paths = [
+    "crates/sui-framework/packages/deepbook",
+    "crates/sui-framework/packages/move-stdlib",
+    "crates/sui-framework/packages/sui-framework",
+    "crates/sui-framework/packages/sui-system",
+]
+
+[[packages]]
+source = "Repository"
+[packages.values]
+repository = "https://github.com/mystenlabs/sui"
+branch = "framework/testnet"
+network = "testnet"
+paths = [
+    "crates/sui-framework/packages/deepbook",
+    "crates/sui-framework/packages/move-stdlib",
+    "crates/sui-framework/packages/sui-framework",
+    "crates/sui-framework/packages/sui-system",
+]

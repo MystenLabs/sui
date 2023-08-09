@@ -2,513 +2,366 @@
 title: Sui Events API
 ---
 
-Sui [Full nodes](fullnode.md) support publish / subscribe using [JSON-RPC](json-rpc.md) notifications via the WebSocket API. You can use this service with Sui client to filter and subscribe to a real-time event stream generated from Move or from the Sui network.
+Sui [Full nodes](fullnode.md) support publish / subscribe using [JSON-RPC](json-rpc.md) notifications via the WebSocket
+API. You can use this service with Sui client to filter and subscribe to a real-time event stream generated from Move or
+from the Sui network.
 
-The client provides an [event filter](#event-filters) to limit the scope of events. Sui returns a notification with the event data and subscription ID for each event that matches the filter.
-
-# Event types
-
-A Sui node emits the following types of events:
- * [Move event](#move-event)
- * [Publish event](#publish-event)
- * [Transfer object event](#transfer-object-event)
- * [Delete object event](#delete-object-event)
- * [New object event](#new-object-event)
- * [Epoch change event](#epoch-change-event)
+The client provides an [event filter](#event-filters) to limit the scope of events. Sui returns a notification with the
+event data and subscription ID for each event that matches the filter.
 
 ## Move event
 
-Move calls emit Move events. You can [define custom events](https://examples.sui.io/basics/events.html) in Move contracts.
+Move calls emit Move events. You can [define custom events](https://examples.sui.io/basics/events.html) in Move
+contracts.
 
 ### Attributes
 
 Move event attributes:
- * `packageId`
- * `transactionModule`
- * `sender`
- * `type`
- * `fields`
- * `bcs`  
+
+* `packageId`
+* `transactionModule`
+* `sender`
+* `type`
+* `parsedJson`
+* `bcs`
 
 ### Example Move event
 
 ```json
 {
-  "moveEvent": {
-    "packageId": "<PACKAGE-ID>",
-    "transactionModule": "nft",
-    "sender": "0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106",
-    "type": "<PACKAGE-ID>::nft::MintNFTEvent",
-    "fields": {
-      "creator": "0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106",
-      "name": "NFT",
-      "object_id": "0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5"
-    },
-    "bcs": "SXkTpH3AAoqF8kxw2CWZG3HGAAFwYT9PF64TY/en5yUdqrXFsG9owQtFeGFtcGxlIE5GVA=="
-  }
+  "id": {
+    "txDigest": "7GV246XCe71e7ssFVV17k2GvcPypQ5ES2DBLtucW8r3b",
+    "eventSeq": "0"
+  },
+  "packageId": "<PACKAGE-ID>",
+  "transactionModule": "devnet_nft",
+  "sender": "0xce1bf7db5ad6b04bfc305c049f08b80d5ccdc5d6d65d2ded13e95516d1e9fa22",
+  "type": "<PACKAGE-ID>::devnet_nft::MintNFTEvent",
+  "parsedJson": {
+    "creator": "0xce1bf7db5ad6b04bfc305c049f08b80d5ccdc5d6d65d2ded13e95516d1e9fa22",
+    "name": "test2",
+    "object_id": "0x07d16da80bd9b9859c5aa2b8656f8f4189cf57291439de61be13d0c75b0802c8"
+  },
+  "bcs": "Lvj1v5oebk4YsieXhwMBKP1m1vjwuLQgYry9ZAYnWB2hYEdikvji7aSs2xQideVwqj6mrXsLuKk5jY2FJWC2X4VTW49PwRT",
+  "timestampMs": "1685959791871"
 }
 ```
 
-## Publish event
+## Sui event query filter
 
-Publish events occur when you publish a package to the network.
+You can use the `EventFilter` object to query a Sui node and retrieve events that match query criteria.
 
-### Attributes
-
-Publish event attributes:
- * `sender`
- * `packageId`
-
-### Example publish event
-
-```json
-{
-  "publish": {
-    "sender": "0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106",
-    "packageId": "0x5f01a29887a1d95e5b548b616da63b0ce07d816e89ef7b9a382177b4422bbaa2"
-  }
-}
-```
-
-## Transfer object event
-
-Transfer object events occur when you transfer an object from one address to another.
-
-### Attributes
-
-Transfer event attributes:
- * `packageId`
- * `transactionModule`
- * `sender`
- * `recipient`
- * `objectId`
- * `version`
- * `type`
-
-### Example transfer object event
-
-```json
-{
-  "transferObject": {
-    "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
-    "transactionModule": "native",
-    "sender": "0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106",
-    "recipient": {
-      "AddressOwner": "0xa3c00467938b392a12355397bdd3d319cea5c9b8f4fc9c51b46b8e15a807f030"
-    },
-    "objectId": "0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5",
-    "version": 1,
-    "type": "Coin"
-  }
-}
-```
-
-## Delete object event
-
-Delete object events occur when you delete an object.
-
-### Attributes
-
- * `packageId`
- * `transactionModule`
- * `sender`
- * `objectId`  
-
-### Example delete object event
-
-```json
-{
-  "deleteObject": {
-    "packageId": "0x5f01a29887a1d95e5b548b616da63b0ce07d816e89ef7b9a382177b4422bbaa2",
-    "transactionModule": "discount_coupon",
-    "sender": "0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106",
-    "objectId": "0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5"
-  }
-}
-```
-
-## New object event
-
-New object events occur when you create an object on the network.
-
-### Attributes
-
-New object event attributes:
- * `packageId`
- * `transactionModule`
- * `sender`
- * `recipient`
- * `objectId`
-
-### Example new object event
-
-```json
-{
-  "newObject": {
-    "packageId": "<PACKAGE-ID>",
-    "transactionModule": "nft",
-    "sender": "0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106",
-    "recipient": {
-      "AddressOwner": "0xa3c00467938b392a12355397bdd3d319cea5c9b8f4fc9c51b46b8e15a807f030"
-    },
-    "objectId": "0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5"
-  }
-}
-```
-
-## Epoch change event
-
-Epoch change events occur when an epoch ends and a new epoch starts.
-
-### Attributes
-
-None, Epoch change events do not have any attributes. The event includes an Epoch ID associated with the `epochChange`.
-
-### Example epoch change event
-
-```json
-{
-  "epochChange": 20
-}
-```
-
-## Checkpoint event
-
-A checkpoint event occurs for each checkpoint.
-
-### Attributes
-
-None, Checkpoint events do not have any attributes. The event includes the Checkpoint sequence number associated with the checkpoint.
-
-### Example checkpoint event
-
-```json
-{
-  "checkpoint": 10
-}
-```
-
-## Sui event query criteria
-
-You can use the `EventQuery` criteria object to query a Sui node and retrieve events that match query criteria.
-
-| Query | Description | JSON-RPC Parameter Example |
-| ----- | ----------- | -------------------------- |
-| All   | All events  |  {"All"} |
-| Transaction | Events emitted from the specified transaction. |       {"Transaction":"DGUe2TXiJdN3FI6MH1FwghYbiHw+NKu8Nh579zdFtUk="} |
-| MoveModule | Events emitted from the specified Move module  | {"MoveModule":{"package":"<PACKAGE-ID>", "module":"nft"}} |
-| MoveEvent | Move struct name of the event |                {"MoveEvent":"<PACKAGE-ID>::nft::MintNFTEvent"} |
-| EventType | Type of event described in [Events](#event-types) section | {"EventType": "NewObject"} |
-| Sender | Query by sender address |           {"Sender":"0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106"} |
-| Recipient | Query by recipient | {"Recipient":{"AddressOwner":"0xa3c00467938b392a12355397bdd3d319cea5c9b8f4fc9c51b46b8e15a807f030"}} |
-| Object | Return events associated with the given object |           {"Object":"0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5"} |
-| TimeRange | Return events emitted in [start_time, end_time] interval | {"TimeRange":{"startTime":1669039504014, "endTime":1669039604014}} |
+| Query       | Description                                               | JSON-RPC Parameter Example                                                                          |
+|-------------|-----------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
+| All         | All events                                                | {"All"}                                                                                             |
+| Transaction | Events emitted from the specified transaction.            | {"Transaction":"DGUe2TXiJdN3FI6MH1FwghYbiHw+NKu8Nh579zdFtUk="}                                      |
+| MoveModule  | Events emitted from the specified Move module             | {"MoveModule":{"package":"<PACKAGE-ID>", "module":"nft"}}                                           |
+| MoveEvent   | Move struct name of the event                             | {"MoveEvent":"<PACKAGE-ID>::nft::MintNFTEvent"}                                                     |
+| EventType   | Type of event described in [Events](#event-types) section | {"EventType": "NewObject"}                                                                          |
+| Sender      | Query by sender address                                   | {"Sender":"0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106"}                     |
+| Object      | Return events associated with the given object            | {"Object":"0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5"}                     |
+| TimeRange   | Return events emitted in [start_time, end_time] interval  | {"TimeRange":{"startTime":1669039504014, "endTime":1669039604014}}                                  |
 
 ## Pagination
 
-The Event Query API provides cursor-based pagination to make it easier to work with large result sets. You can provide a `cursor` parameter in paginated query to indicate the starting position of the query. The query returns the number of results specified by `limit`, and returns the `next_cursor` value when there are additional results. The maximum `limit` is 1000 per query.
+The Event Query API provides cursor-based pagination to make it easier to work with large result sets. You can provide
+a `cursor` parameter in paginated query to indicate the starting position of the query. The query returns the number of
+results specified by `limit`, and returns the `next_cursor` value when there are additional results. The maximum `limit`
+is 1000 per query.
 
 The following examples demonstrate how to create queries that use pagination for the results.
 
 ### 1. Get all events an nft module emits, in descending time order
 
 **Request**
+
 ```shell
-curl --location --request POST '127.0.0.1:9000' \
+curl --location 'http://0.0.0.0:9000' \
 --header 'Content-Type: application/json' \
---data-raw '{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "sui_getEvents",
-  "params": [
-    {"MoveModule":{"package":"<PACKAGE-ID>", "module":"nft"}},
-    null,
-    null,
-    true
-  ]
+--data '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "suix_queryEvents",
+    "params": {
+        "query": {
+            "MoveModule":{"package":"<PACKAGE-ID>", "module":"devnet_nft"}
+        },
+        "descending_order": true
+    }
 }'
 ```
 
 **Response**
+
 ```json
 {
-    "jsonrpc": "2.0",
-    "result": {
-        "data": [
-            {
-                "timestamp": 1666699837426,
-                "txDigest": "cZXsToU6r0Uia6HIAwvr1eMlGsrg6b9+2oYZAskJ0wc=",
-                "id": {
-                    "txSeq": 1001,
-                    "eventSeq": 1,
-                },
-                "event": {
-                    "moveEvent": {
-                        "packageId": "<PACKAGE-ID>",
-                        "transactionModule": "nft",
-                        "sender": "0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106",
-                        "type": "<PACKAGE-ID>::nft::MintNFTEvent",
-                        "fields": {
-                            "creator": "0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106",
-                            "name": "NFT",
-                            "object_id": "0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5"
-                        },
-                        "bcs": "LugLSi0gM2XfvWipCorZoNyhkVX+1JBtcbilg//9jpVnYCe2u4HXzwtFeGFtcGxlIE5GVA=="
-                    }
-                }
-            },
-            {
-                "timestamp": 1666699837426,
-                "txDigest": "cZXsToU6r0Uia6HIAwvr1eMlGsrg6b9+2oYZAskJ0wc=",
-                "id": {
-                    "txSeq": 1001,
-                    "eventSeq": 0,
-                },
-                "event": {
-                    "newObject": {
-                        "packageId": "<PACKAGE-ID>",
-                        "transactionModule": "nft",
-                        "sender": "0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106",
-                        "recipient": {
-                            "AddressOwner": "0xa3c00467938b392a12355397bdd3d319cea5c9b8f4fc9c51b46b8e15a807f030"
-                        },
-                        "objectId": "0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5"
-                    }
-                }
-            },
-            {
-                "timestamp": 1666698739180,
-                "txDigest": "WF2V6FM6y/kpAgRqzsQmR/osy4pmTgVVbE6qvSJxWh4=",
-                "id": {
-                    "txSeq": 998,
-                    "eventSeq": 1,
-                },
-                "event": {
-                    "moveEvent": {
-                        "packageId": "<PACKAGE-ID>",
-                        "transactionModule": "nft",
-                        "sender": "0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106",
-                        "type": "<PACKAGE-ID>::nft::MintNFTEvent",
-                        "fields": {
-                            "creator": "0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106",
-                            "name": "NFT",
-                            "object_id": "0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5"
-                        },
-                        "bcs": "1WV89qyrqVjFsB7AUW9PDax3x9L+1JBtcbilg//9jpVnYCe2u4HXzwtFeGFtcGxlIE5GVA=="
-                    }
-                }
-            },
-            {
-                "timestamp": 1666698739180,
-                "txDigest": "WF2V6FM6y/kpAgRqzsQmR/osy4pmTgVVbE6qvSJxWh4=",
-                "id": {
-                    "txSeq": 998,
-                    "eventSeq": 0,
-                },
-                "event": {
-                    "newObject": {
-                        "packageId": "<PACKAGE-ID>",
-                        "transactionModule": "nft",
-                        "sender": "0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106",
-                        "recipient": {
-                            "AddressOwner": "0xa3c00467938b392a12355397bdd3d319cea5c9b8f4fc9c51b46b8e15a807f030"
-                        },
-                        "objectId": "0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5"
-                    }
-                }
-            }
-        ],
-        "nextCursor": null
+  "jsonrpc": "2.0",
+  "result": {
+    "data": [
+      {
+        "id": {
+          "txDigest": "ENmjG42TE4GyqYb1fGNwJe7oxBbbXWCdNfRiQhCNLBJQ",
+          "eventSeq": "0"
+        },
+        "packageId": "<PACKAGE-ID>",
+        "transactionModule": "devnet_nft",
+        "sender": "0xce1bf7db5ad6b04bfc305c049f08b80d5ccdc5d6d65d2ded13e95516d1e9fa22",
+        "type": "<PACKAGE-ID>::devnet_nft::MintNFTEvent",
+        "parsedJson": {
+          "creator": "0xce1bf7db5ad6b04bfc305c049f08b80d5ccdc5d6d65d2ded13e95516d1e9fa22",
+          "name": "test3",
+          "object_id": "0xe9d44ad5eaaba6367f09ebe21a72876a6d6cb471275a3e10411a69d17d30008a"
+        },
+        "bcs": "BGyKDxdW5TcHksJ9nJac9pWJyTZvUmAoiDtezxe7VjfEZQVDfoXv9cAvSCXgPmUY7bpmcu11ue9xijCstUUUmgdZtp4SG7L6",
+        "timestampMs": "1685959930934"
+      },
+      {
+        "id": {
+          "txDigest": "7GV246XCe71e7ssFVV17k2GvcPypQ5ES2DBLtucW8r3b",
+          "eventSeq": "0"
+        },
+        "packageId": "<PACKAGE-ID>",
+        "transactionModule": "devnet_nft",
+        "sender": "0xce1bf7db5ad6b04bfc305c049f08b80d5ccdc5d6d65d2ded13e95516d1e9fa22",
+        "type": "<PACKAGE-ID>::devnet_nft::MintNFTEvent",
+        "parsedJson": {
+          "creator": "0xce1bf7db5ad6b04bfc305c049f08b80d5ccdc5d6d65d2ded13e95516d1e9fa22",
+          "name": "test2",
+          "object_id": "0x07d16da80bd9b9859c5aa2b8656f8f4189cf57291439de61be13d0c75b0802c8"
+        },
+        "bcs": "Lvj1v5oebk4YsieXhwMBKP1m1vjwuLQgYry9ZAYnWB2hYEdikvji7aSs2xQideVwqj6mrXsLuKk5jY2FJWC2X4VTW49PwRT",
+        "timestampMs": "1685959791871"
+      },
+      {
+        "id": {
+          "txDigest": "DiPyYRqS7VXYDpGWWy8P7bx1Kmd1TioD4PtZVj9RvWsT",
+          "eventSeq": "0"
+        },
+        "packageId": "<PACKAGE-ID>",
+        "transactionModule": "devnet_nft",
+        "sender": "0xce1bf7db5ad6b04bfc305c049f08b80d5ccdc5d6d65d2ded13e95516d1e9fa22",
+        "type": "<PACKAGE-ID>::devnet_nft::MintNFTEvent",
+        "parsedJson": {
+          "creator": "0xce1bf7db5ad6b04bfc305c049f08b80d5ccdc5d6d65d2ded13e95516d1e9fa22",
+          "name": "test",
+          "object_id": "0x433a4bb160563d0931074e5b643840576f84e4ccfaedbda4f0461a7a40da70f7"
+        },
+        "bcs": "fpbcEYmKNE7cYi44U217hRRKTHsSMwJYvVHx8rGMSJmd2GxmVhwUcc8UimrWEvfyboAocsNX5FMtR8brUnRCPzaDgXk3pF",
+        "timestampMs": "1685959781654"
+      }
+    ],
+    "nextCursor": {
+      "txDigest": "DiPyYRqS7VXYDpGWWy8P7bx1Kmd1TioD4PtZVj9RvWsT",
+      "eventSeq": "0"
     },
-    "id": 1
+    "hasNextPage": false
+  },
+  "id": 1
 }
 ```
 
 ### 2. Get all MintNFTEvent events
 
 **Request**
+
 ```shell
-curl --location --request POST '127.0.0.1:9000' \
+curl --location 'http://0.0.0.0:9000' \
 --header 'Content-Type: application/json' \
---data-raw '{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "sui_getEvents",
-  "params": [
-    {"MoveEvent":"<PACKAGE-ID>::nft::MintNFTEvent"},
-    null,
-    null,
-    "Ascending"
-  ]
+--data '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "suix_queryEvents",
+    "params": {
+        "query": {
+            "MoveEventType": "<PACKAGE-ID>::devnet_nft::MintNFTEvent"
+        }
+    }
 }'
 ```
 
 **Response**
+
 ```json
 {
-    "jsonrpc": "2.0",
-    "result": {
-        "data": [
-            {
-                "timestamp": 1666699837426,
-                "txDigest": "cZXsToU6r0Uia6HIAwvr1eMlGsrg6b9+2oYZAskJ0wc=",
-                "id": {
-                    "txSeq": 1001,
-                    "eventSeq": 1,
-                },
-                "event": {
-                    "moveEvent": {
-                        "packageId": "<PACKAGE-ID>",
-                        "transactionModule": "nft",
-                        "sender": "0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106",
-                        "type": "<PACKAGE-ID>::nft::MintNFTEvent",
-                        "fields": {
-                            "creator": "0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106",
-                            "name": "NFT",
-                            "object_id": "0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5"
-                        },
-                        "bcs": "LugLSi0gM2XfvWipCorZoNyhkVX+1JBtcbilg//9jpVnYCe2u4HXzwtFeGFtcGxlIE5GVA=="
-                    }
-                }
-            },
-            {
-                "timestamp": 1666698739180,
-                "txDigest": "WF2V6FM6y/kpAgRqzsQmR/osy4pmTgVVbE6qvSJxWh4=",
-                "id": {
-                    "txSeq": 998,
-                    "eventSeq": 1,
-                },
-                "event": {
-                    "moveEvent": {
-                        "packageId": "<PACKAGE-ID>",
-                        "transactionModule": "nft",
-                        "sender": "0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106",
-                        "type": "<PACKAGE-ID>::nft::MintNFTEvent",
-                        "fields": {
-                            "creator": "0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106",
-                            "name": "NFT",
-                            "object_id": "0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5"
-                        },
-                        "bcs": "1WV89qyrqVjFsB7AUW9PDax3x9L+1JBtcbilg//9jpVnYCe2u4HXzwtFeGFtcGxlIE5GVA=="
-                    }
-                }
-            }
-        ],
-        "nextCursor": null
+  "jsonrpc": "2.0",
+  "result": {
+    "data": [
+      {
+        "id": {
+          "txDigest": "DiPyYRqS7VXYDpGWWy8P7bx1Kmd1TioD4PtZVj9RvWsT",
+          "eventSeq": "0"
+        },
+        "packageId": "<PACKAGE-ID>",
+        "transactionModule": "devnet_nft",
+        "sender": "0xce1bf7db5ad6b04bfc305c049f08b80d5ccdc5d6d65d2ded13e95516d1e9fa22",
+        "type": "<PACKAGE-ID>::devnet_nft::MintNFTEvent",
+        "parsedJson": {
+          "creator": "0xce1bf7db5ad6b04bfc305c049f08b80d5ccdc5d6d65d2ded13e95516d1e9fa22",
+          "name": "test",
+          "object_id": "0x433a4bb160563d0931074e5b643840576f84e4ccfaedbda4f0461a7a40da70f7"
+        },
+        "bcs": "fpbcEYmKNE7cYi44U217hRRKTHsSMwJYvVHx8rGMSJmd2GxmVhwUcc8UimrWEvfyboAocsNX5FMtR8brUnRCPzaDgXk3pF",
+        "timestampMs": "1685959781654"
+      },
+      {
+        "id": {
+          "txDigest": "7GV246XCe71e7ssFVV17k2GvcPypQ5ES2DBLtucW8r3b",
+          "eventSeq": "0"
+        },
+        "packageId": "<PACKAGE-ID>",
+        "transactionModule": "devnet_nft",
+        "sender": "0xce1bf7db5ad6b04bfc305c049f08b80d5ccdc5d6d65d2ded13e95516d1e9fa22",
+        "type": "<PACKAGE-ID>::devnet_nft::MintNFTEvent",
+        "parsedJson": {
+          "creator": "0xce1bf7db5ad6b04bfc305c049f08b80d5ccdc5d6d65d2ded13e95516d1e9fa22",
+          "name": "test2",
+          "object_id": "0x07d16da80bd9b9859c5aa2b8656f8f4189cf57291439de61be13d0c75b0802c8"
+        },
+        "bcs": "Lvj1v5oebk4YsieXhwMBKP1m1vjwuLQgYry9ZAYnWB2hYEdikvji7aSs2xQideVwqj6mrXsLuKk5jY2FJWC2X4VTW49PwRT",
+        "timestampMs": "1685959791871"
+      },
+      {
+        "id": {
+          "txDigest": "ENmjG42TE4GyqYb1fGNwJe7oxBbbXWCdNfRiQhCNLBJQ",
+          "eventSeq": "0"
+        },
+        "packageId": "<PACKAGE-ID>",
+        "transactionModule": "devnet_nft",
+        "sender": "0xce1bf7db5ad6b04bfc305c049f08b80d5ccdc5d6d65d2ded13e95516d1e9fa22",
+        "type": "<PACKAGE-ID>::devnet_nft::MintNFTEvent",
+        "parsedJson": {
+          "creator": "0xce1bf7db5ad6b04bfc305c049f08b80d5ccdc5d6d65d2ded13e95516d1e9fa22",
+          "name": "test3",
+          "object_id": "0xe9d44ad5eaaba6367f09ebe21a72876a6d6cb471275a3e10411a69d17d30008a"
+        },
+        "bcs": "BGyKDxdW5TcHksJ9nJac9pWJyTZvUmAoiDtezxe7VjfEZQVDfoXv9cAvSCXgPmUY7bpmcu11ue9xijCstUUUmgdZtp4SG7L6",
+        "timestampMs": "1685959930934"
+      }
+    ],
+    "nextCursor": {
+      "txDigest": "ENmjG42TE4GyqYb1fGNwJe7oxBbbXWCdNfRiQhCNLBJQ",
+      "eventSeq": "0"
     },
-    "id": 1
+    "hasNextPage": false
+  },
+  "id": 1
 }
 ```
+
 ### 3. Get all events and return 2 items per page in descending time order
 
 **Request**
+
 ```shell
-curl --location --request POST '127.0.0.1:9000' \
+curl --location 'http://0.0.0.0:9000' \
 --header 'Content-Type: application/json' \
---data-raw '{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "sui_getEvents",
-  "params": [
-    "All",
-    null,
-    2,
-    "Ascending"
-  ]
+--data '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "suix_queryEvents",
+    "params": {
+        "query": {
+            "All": []
+        },
+        "limit": 2,
+        "descending_order": true
+    }
 }'
 ```
 
 **Response**
+
 ```json
 {
-    "jsonrpc": "2.0",
-    "result": {
-        "data": [
-            {
-                "timestamp": 1666698739180,
-                "txDigest": "WF2V6FM6y/kpAgRqzsQmR/osy4pmTgVVbE6qvSJxWh4=",
-                "id": {
-                    "txSeq": 998,
-                    "eventSeq": 0,
-                },
-                "event": {
-                    "newObject": {
-                        "packageId": "<PACKAGE-ID>",
-                        "transactionModule": "nft",
-                        "sender": "0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106",
-                        "recipient": {
-                            "AddressOwner": "0xa3c00467938b392a12355397bdd3d319cea5c9b8f4fc9c51b46b8e15a807f030"
-                        },
-                        "objectId": "0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5"
-                    }
-                }
-            },
-            {
-                "timestamp": 1666698739180,
-                "txDigest": "WF2V6FM6y/kpAgRqzsQmR/osy4pmTgVVbE6qvSJxWh4=",
-                "id": {
-                    "txSeq": 998,
-                    "eventSeq": 1,
-                },
-                "event": {
-                    "moveEvent": {
-                        "packageId": "<PACKAGE-ID>",
-                        "transactionModule": "nft",
-                        "sender": "0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106",
-                        "type": "<PACKAGE-ID>::nft::MintNFTEvent",
-                        "fields": {
-                            "creator": "0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106",
-                            "name": "NFT",
-                            "object_id": "0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5"
-                        },
-                        "bcs": "1WV89qyrqVjFsB7AUW9PDax3x9L+1JBtcbilg//9jpVnYCe2u4HXzwtFeGFtcGxlIE5GVA=="
-                    }
-                }
-            }
-        ],
-        "nextCursor": 3
+  "jsonrpc": "2.0",
+  "result": {
+    "data": [
+      {
+        "id": {
+          "txDigest": "ENmjG42TE4GyqYb1fGNwJe7oxBbbXWCdNfRiQhCNLBJQ",
+          "eventSeq": "0"
+        },
+        "packageId": "<PACKAGE-ID>",
+        "transactionModule": "devnet_nft",
+        "sender": "0xce1bf7db5ad6b04bfc305c049f08b80d5ccdc5d6d65d2ded13e95516d1e9fa22",
+        "type": "<PACKAGE-ID>::devnet_nft::MintNFTEvent",
+        "parsedJson": {
+          "creator": "0xce1bf7db5ad6b04bfc305c049f08b80d5ccdc5d6d65d2ded13e95516d1e9fa22",
+          "name": "test3",
+          "object_id": "0xe9d44ad5eaaba6367f09ebe21a72876a6d6cb471275a3e10411a69d17d30008a"
+        },
+        "bcs": "BGyKDxdW5TcHksJ9nJac9pWJyTZvUmAoiDtezxe7VjfEZQVDfoXv9cAvSCXgPmUY7bpmcu11ue9xijCstUUUmgdZtp4SG7L6",
+        "timestampMs": "1685959930934"
+      },
+      {
+        "id": {
+          "txDigest": "7GV246XCe71e7ssFVV17k2GvcPypQ5ES2DBLtucW8r3b",
+          "eventSeq": "0"
+        },
+        "packageId": "<PACKAGE-ID>",
+        "transactionModule": "devnet_nft",
+        "sender": "0xce1bf7db5ad6b04bfc305c049f08b80d5ccdc5d6d65d2ded13e95516d1e9fa22",
+        "type": "<PACKAGE-ID>::devnet_nft::MintNFTEvent",
+        "parsedJson": {
+          "creator": "0xce1bf7db5ad6b04bfc305c049f08b80d5ccdc5d6d65d2ded13e95516d1e9fa22",
+          "name": "test2",
+          "object_id": "0x07d16da80bd9b9859c5aa2b8656f8f4189cf57291439de61be13d0c75b0802c8"
+        },
+        "bcs": "Lvj1v5oebk4YsieXhwMBKP1m1vjwuLQgYry9ZAYnWB2hYEdikvji7aSs2xQideVwqj6mrXsLuKk5jY2FJWC2X4VTW49PwRT",
+        "timestampMs": "1685959791871"
+      }
+    ],
+    "nextCursor": {
+      "txDigest": "7GV246XCe71e7ssFVV17k2GvcPypQ5ES2DBLtucW8r3b",
+      "eventSeq": "0"
     },
-    "id": 1
+    "hasNextPage": true
+  },
+  "id": 1
 }
 ```
 
 ## Subscribe to Sui events
 
-When you subscribe to the events described in the preceding sections, you can apply event filters to match the events you want to filter.
+When you subscribe to the events described in the preceding sections, you can apply event filters to match the events
+you want to filter.
 
 ## Event filters
 
-You can use `EventFilter` to filter the events included in your subscription to the event stream. `EventFilter` supports filtering on one attribute or a combination of attributes.
+You can use `EventFilter` to filter the events included in your subscription to the event stream. `EventFilter` supports
+filtering on one attribute or a combination of attributes.
 
 ### List of attributes that support filters
 
-| Filter | Description | Applicable to Event Type | JSON-RPC Parameter Example |
-| ------ | ----------- | ------------------------ | -------------------------- |
-| Package | Move package ID | MoveEvent<br/>Publish<br/>TransferObject<br/>DeleteObject<br/>NewObject | `{"Package":"<PACKAGE-ID>"}` |
-| Module | Move module name | MoveEvent<br/>TransferObject<br/>DeleteObject<br/>NewObject | `{"Module":"nft"}` |
-| MoveEventType  | Move event type defined in the move code | MoveEvent | `{"MoveEventType":"<PACKAGE-ID>::nft::MintNFTEvent"}`|
-| MoveEventField | Filter using the data fields in the move event object | MoveEvent | `{"MoveEventField":{ "path":"/name", "value":"NFT"}}` |
-| SenderAddress | Address that started the transaction | MoveEvent<br/>Publish<br/>TransferObject<br/>DeleteObject<br/>NewObject | `{"SenderAddress": "0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106"}` |
-| EventType | Type of event described in the [Events](#type-of-events) section | MoveEvent<br/>Publish<br/>TransferObject<br/>DeleteObject<br/>NewObject<br/>EpochChange<br/>Checkpoint | `{"EventType":"Publish"}` |
-| ObjectId | Object ID | TransferObject<br/>DeleteObject<br/>NewObject |    `{"ObjectId":"0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5"}` |
+| Filter          | Description                                           | JSON-RPC Parameter Example                                                                   |
+|-----------------|-------------------------------------------------------|----------------------------------------------------------------------------------------------|
+| Package         | Move package ID                                       | `{"Package":"<PACKAGE-ID>"}`                                                                 |
+| MoveModule      | Move module where the event was emitted               | `{"MoveModule": {"package": "<PACKAGE-ID>", "module": "nft"}}`                               |
+| MoveEventType   | Move event type defined in the move code              | `{"MoveEventType":"<PACKAGE-ID>::nft::MintNFTEvent"}`                                        |
+| MoveEventModule | Move event module defined in the move code            | `{"MoveEventModule": {"package": "<PACKAGE-ID>", "module": "nft", "event": "MintNFTEvent"}}` |
+| MoveEventField  | Filter using the data fields in the move event object | `{"MoveEventField":{ "path":"/name", "value":"NFT"}}`                                        |
+| SenderAddress   | Address that started the transaction                  | `{"SenderAddress": "0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106"}`    |
+| Sender          | Sender address                                        | `{"Sender":"0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106"}`            |
+| Transaction     | Transaction hash                                      | `{"Transaction":"ENmjG42TE4GyqYb1fGNwJe7oxBbbXWCdNfRiQhCNLBJQ"}`                             |
+| TimeRange       | Time range in millisecond                             | `{"TimeRange": {"start_time": "1685959791871", "end_time": "1685959791871"}}`                |
 
 ### Combining filters
 
 Sui provides a few operators for combining filters:
 
-| Operator | Description | JSON-RPC Parameter Example |
-|----------| ----------- | -------------------------- |
-| And | Combine two filters; behaves the same as boolean And operator | `{"And":[{"Package":"<PACKAGE-ID>"}, {"Module":"nft"}]}` |
-| Or | Combine two filters; behaves the same as boolean Or operator | `{"Or":[{"Package":"<PACKAGE-ID>"}, {"Package":"0x1"}]}` |
-| All | Combine a list of filters; returns true if all filters match the event | `{"All":[{"EventType":"MoveEvent"}, {"Package":"<PACKAGE-ID>"}, {"Module":"nft"}]}` |
-| Any | Combine a list of filters; returns true if any filter matches the event | `{"Any":[{"EventType":"MoveEvent"}, {"EventType":"TransferObject"}, {"EventType":"DeleteObject"}]}` |
+| Operator | Description                                                             | JSON-RPC Parameter Example                                                                           |
+|----------|-------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
+| And      | Combine two filters; behaves the same as boolean And operator           | `{"And":[{"Package":"<PACKAGE-ID>"}, {"MoveModule": {"package": "<PACKAGE-ID>", "module": "nft"}}]}` |
+| Or       | Combine two filters; behaves the same as boolean Or operator            | `{"Or":[{"Package":"<PACKAGE-ID>"}, {"Package":"0x1"}]}`                                             |
+| All      | Combine a list of filters; returns true if all filters match the event  | `{"All":[{"Package":"<PACKAGE-ID>"}, {"MoveModule": {"package": "<PACKAGE-ID>", "module": "nft"}}]}` |
+| Any      | Combine a list of filters; returns true if any filter matches the event | `{"Any":[{"Package":"<PACKAGE-ID>"}, {"Package":"0x1"}]}`                                            |
 
 ### Example using a combined filter
 
-The following example demonstrates how to subscribe to Move events (`MoveEvent`) that a `<PACKAGE-ID>::nft` package emits:
+The following example demonstrates how to subscribe to events that a `<PACKAGE-ID>::nft` package emits:
 
 ```shell
->> {"jsonrpc":"2.0", "id": 1, "method": "sui_subscribeEvent", "params": [{"All":[{"EventType":"MoveEvent"}, {"Package":"<PACKAGE-MODULE-ID>"}, {"Module":"nft"}]}]}
+>> {"jsonrpc":"2.0", "id": 1, "method": "sui_subscribeEvent", "params": [{"All":[{"Package":"<PACKAGE-MODULE-ID>"}, {"MoveModule": {"package": "<PACKAGE-ID>", "module": "nft"}}]}]}
 << {"jsonrpc":"2.0","result":3121662727959200,"id":1}
 ```
 

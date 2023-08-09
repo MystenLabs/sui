@@ -1,0 +1,20 @@
+## Sponsored Transaction Blocks
+
+The transaction block builder can support sponsored transaction blocks by using the
+`onlyTransactionKind` flag when building the transaction block.
+
+```tsx
+const txb = new TransactionBlock();
+
+// ... add some transactions...
+
+const kindBytes = await txb.build({ provider, onlyTransactionKind: true });
+
+// construct a sponsored transaction from the kind bytes
+const sponsoredTxb = TransactionBlock.fromKind(kindBytes);
+
+// you can now set the sponsored transaction data that is required
+sponsoredTxb.setSender(sender);
+sponsoredTxb.setGasOwner(sponsor);
+sponsoredTxb.setGasPayment(sponsorCoins);
+```

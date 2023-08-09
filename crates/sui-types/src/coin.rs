@@ -151,8 +151,8 @@ pub struct TreasuryCap {
 impl TreasuryCap {
     /// Create a TreasuryCap from BCS bytes
     pub fn from_bcs_bytes(content: &[u8]) -> Result<Self, SuiError> {
-        bcs::from_bytes(content).map_err(|err| SuiError::TypeError {
-            error: format!("Unable to deserialize TreasuryCap object: {:?}", err),
+        bcs::from_bytes(content).map_err(|err| SuiError::ObjectDeserializationError {
+            error: format!("Unable to deserialize TreasuryCap object: {}", err),
         })
     }
 
@@ -166,8 +166,8 @@ impl TreasuryCap {
     }
 }
 
-pub fn transfer_coin<S>(
-    temporary_store: &mut TemporaryStore<S>,
+pub fn transfer_coin(
+    temporary_store: &mut TemporaryStore<'_>,
     coin: &Coin,
     recipient: SuiAddress,
     coin_type: MoveObjectType,
@@ -207,8 +207,8 @@ impl CoinMetadata {
 
     /// Create a coin from BCS bytes
     pub fn from_bcs_bytes(content: &[u8]) -> Result<Self, SuiError> {
-        bcs::from_bytes(content).map_err(|err| SuiError::TypeError {
-            error: format!("Unable to deserialize CoinMetadata object: {:?}", err),
+        bcs::from_bytes(content).map_err(|err| SuiError::ObjectDeserializationError {
+            error: format!("Unable to deserialize CoinMetadata object: {}", err),
         })
     }
 

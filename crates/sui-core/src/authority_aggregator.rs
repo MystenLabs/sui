@@ -7,7 +7,6 @@ use crate::authority_client::{
     AuthorityAPI, NetworkAuthorityClient,
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
-use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::ToFromBytes;
 use futures::Future;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
@@ -50,9 +49,9 @@ use sui_types::effects::{
     VerifiedCertifiedTransactionEffects,
 };
 use sui_types::messages_grpc::{
-    HandleCertificateResponseV2, ObjectInfoRequest, PlainTransactionInfoResponse,
-    TransactionInfoRequest,
+    HandleCertificateResponseV2, ObjectInfoRequest, TransactionInfoRequest,
 };
+use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use tap::TapFallible;
 use tokio::time::{sleep, timeout};
 
@@ -281,6 +280,7 @@ pub fn group_errors(errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>) -> G
         .collect()
 }
 
+#[derive(Debug)]
 struct ProcessTransactionState {
     // The list of signatures gathered at any point
     tx_signatures: StakeAggregator<AuthoritySignInfo, true>,
@@ -300,9 +300,13 @@ struct ProcessTransactionState {
     // 1) >= 2f+1 signatures
     // 2) >= f+1 non-retryable errors
     // 3) >= 2f+1 object not found errors
-    // Note: For conflicting transactions we wait till we receive all responses to make
-    // a determination on whether to retry or not.
+    // Note: For conflicting transactions we collect as many responses as possible
+    // before we know for sure no tx can reach quorum. Namely, stake of the most
+    // promising tx + retryable stake < 2f+1.
     retryable: bool,
+
+    conflicting_tx_total_stake: StakeUnit,
+    most_staked_conflicting_tx_stake: StakeUnit,
 }
 
 impl ProcessTransactionState {
@@ -320,11 +324,30 @@ impl ProcessTransactionState {
             .map(|(digest, (validators, stake))| (*digest, validators, *stake))
     }
 
-    pub fn conflicting_tx_digests_total_stake(&self) -> StakeUnit {
-        self.conflicting_tx_digests
-            .iter()
-            .map(|(_, (_, stake))| *stake)
-            .sum()
+    pub fn record_conflicting_transaction_if_any(
+        &mut self,
+        validator_name: AuthorityName,
+        weight: StakeUnit,
+        err: &SuiError,
+    ) -> bool {
+        if let SuiError::ObjectLockConflict {
+            obj_ref,
+            pending_transaction: transaction,
+        } = err
+        {
+            let (lock_records, total_stake) = self
+                .conflicting_tx_digests
+                .entry(*transaction)
+                .or_insert((Vec::new(), 0));
+            lock_records.push((validator_name, *obj_ref));
+            *total_stake += weight;
+            self.conflicting_tx_total_stake += weight;
+            if *total_stake > self.most_staked_conflicting_tx_stake {
+                self.most_staked_conflicting_tx_stake = *total_stake;
+            }
+            return true;
+        }
+        false
     }
 }
 
@@ -346,12 +369,12 @@ struct ProcessCertificateState {
 
 #[derive(Debug)]
 pub enum ProcessTransactionResult {
-    Certified(VerifiedCertificate),
+    Certified(CertifiedTransaction),
     Executed(VerifiedCertifiedTransactionEffects, TransactionEvents),
 }
 
 impl ProcessTransactionResult {
-    pub fn into_cert_for_testing(self) -> VerifiedCertificate {
+    pub fn into_cert_for_testing(self) -> CertifiedTransaction {
         match self {
             Self::Certified(cert) => cert,
             Self::Executed(..) => panic!("Wrong type"),
@@ -1089,7 +1112,7 @@ where
     /// Submits the transaction to a quorum of validators to make a certificate.
     pub async fn process_transaction(
         &self,
-        transaction: VerifiedTransaction,
+        transaction: Transaction,
     ) -> Result<ProcessTransactionResult, AggregatorProcessTransactionError> {
         // Now broadcast the transaction to all authorities.
         let tx_digest = transaction.digest();
@@ -1111,6 +1134,8 @@ where
             overloaded_stake: 0,
             retryable: true,
             conflicting_tx_digests: Default::default(),
+            conflicting_tx_total_stake: 0,
+            most_staked_conflicting_tx_stake: 0,
         };
 
         let transaction_ref = &transaction;
@@ -1137,19 +1162,9 @@ where
                         ) {
                             Ok(Some(result)) => {
                                 self.record_process_transaction_metrics(tx_digest, &state);
-                                ReduceOutput::Success(result)
+                                return ReduceOutput::Success(result);
                             }
-                            Ok(None) => {
-                                // When the result is none, it is possible that the
-                                // non_retryable_stake had been incremented due to
-                                // failed individual signature verification.
-                                if state.non_retryable_stake >= validity_threshold {
-                                    state.retryable = false;
-                                    ReduceOutput::Failed(state)
-                                } else {
-                                    ReduceOutput::Continue(state)
-                                }
-                            },
+                            Ok(None) => {},
                             Err(err) => {
                                 let concise_name = name.concise();
                                 debug!(?tx_digest, name=?concise_name, weight, "Error processing transaction from validator: {:?}", err);
@@ -1177,23 +1192,42 @@ where
                                     // and notify the user.
                                     state.overloaded_stake += weight;
                                 }
-                                else if !retryable && !self.record_conflicting_transaction_if_any(&mut state, name, weight, &err) {
-                                    // Error is neither retryable or a potentially retryable conflicting transaction.
+                                else if !retryable && !state.record_conflicting_transaction_if_any(name, weight, &err) {
+                                    // We don't count conflicting transactions as non-retryable errors here
+                                    // because its handling is a bit different.
                                     state.non_retryable_stake += weight;
                                 }
                                 state.errors.push((err, vec![name], weight));
 
-                                if state.non_retryable_stake >= validity_threshold
-                                    || state.object_or_package_not_found_stake >= quorum_threshold
-                                    || state.overloaded_stake >= quorum_threshold {
-                                    // We have hit an exit condition, f+1 non-retryable err or 2f+1 object not found or overload,
-                                    // so we no longer consider the transaction state as retryable.
-                                    state.retryable = false;
-                                    ReduceOutput::Failed(state)
-                                } else {
-                                    ReduceOutput::Continue(state)
-                                }
                             }
+                        };
+
+                        let retryable_stake = self.get_retryable_stake(&state);
+                        let good_stake = std::cmp::max(state.tx_signatures.total_votes(), state.effects_map.total_votes());
+                        let stake_of_most_promising_tx = std::cmp::max(good_stake, state.most_staked_conflicting_tx_stake);
+                        if stake_of_most_promising_tx + retryable_stake < quorum_threshold {
+                            debug!(
+                                tx_digest = ?tx_digest,
+                                good_stake,
+                                most_staked_conflicting_tx_stake =? state.most_staked_conflicting_tx_stake,
+                                retryable_stake,
+                                "No chance for any tx to get quorum, exiting. Confliting_txes: {:?}",
+                                state.conflicting_tx_digests
+                            );
+                            // If there is no chance for any tx to get quorum, exit.
+                            state.retryable = false;
+                            return ReduceOutput::Failed(state);
+                        }
+
+                        if state.non_retryable_stake >= validity_threshold
+                            || state.object_or_package_not_found_stake >= quorum_threshold
+                            || state.overloaded_stake >= quorum_threshold {
+                            // We have hit an exit condition, f+1 non-retryable err or 2f+1 object not found or overload,
+                            // so we no longer consider the transaction state as retryable.
+                            state.retryable = false;
+                            ReduceOutput::Failed(state)
+                        } else {
+                            ReduceOutput::Continue(state)
                         }
                     })
                 },
@@ -1240,12 +1274,8 @@ where
             };
         }
 
-        if !state.retryable {
-            return AggregatorProcessTransactionError::FatalTransaction {
-                errors: group_errors(state.errors),
-            };
-        }
-
+        // Handle possible conflicts first as `FatalConflictingTransaction` is
+        // more meaningful than `FatalTransaction`.
         if let Some((most_staked_conflicting_tx, validators, most_staked_conflicting_tx_stake)) =
             state.conflicting_tx_digest_with_most_stake()
         {
@@ -1281,15 +1311,21 @@ where
                 .total_client_double_spend_attempts_detected
                 .inc();
 
-            AggregatorProcessTransactionError::FatalConflictingTransaction {
+            return AggregatorProcessTransactionError::FatalConflictingTransaction {
                 errors: group_errors(state.errors),
                 conflicting_tx_digests: state.conflicting_tx_digests,
-            }
-        } else {
-            // No conflicting transaction, the system is not overloaded and transaction state is still retryable.
-            AggregatorProcessTransactionError::RetryableTransaction {
+            };
+        }
+
+        if !state.retryable {
+            return AggregatorProcessTransactionError::FatalTransaction {
                 errors: group_errors(state.errors),
-            }
+            };
+        }
+
+        // No conflicting transaction, the system is not overloaded and transaction state is still retryable.
+        AggregatorProcessTransactionError::RetryableTransaction {
+            errors: group_errors(state.errors),
         }
     }
 
@@ -1344,29 +1380,6 @@ where
         }
     }
 
-    fn record_conflicting_transaction_if_any(
-        &self,
-        state: &mut ProcessTransactionState,
-        name: AuthorityName,
-        weight: StakeUnit,
-        err: &SuiError,
-    ) -> bool {
-        if let SuiError::ObjectLockConflict {
-            obj_ref,
-            pending_transaction,
-        } = err
-        {
-            let (lock_records, total_stake) = state
-                .conflicting_tx_digests
-                .entry(*pending_transaction)
-                .or_insert((Vec::new(), 0));
-            lock_records.push((name, *obj_ref));
-            *total_stake += weight;
-            return true;
-        }
-        false
-    }
-
     fn handle_transaction_response_with_signed(
         &self,
         state: &mut ProcessTransactionState,
@@ -1396,9 +1409,8 @@ where
                 let ct_bytes = bcs::to_bytes(&ct).expect("to_bytes should never fail");
                 let ct_digest = ct.digest();
                 debug!(?ct, ?ct_bytes, ?ct_digest, "Collected tx certificate");
-                Ok(Some(ProcessTransactionResult::Certified(
-                    ct.verify(&self.committee)?,
-                )))
+                ct.verify_committee_sigs_only(&self.committee)?;
+                Ok(Some(ProcessTransactionResult::Certified(ct)))
             }
         }
     }
@@ -1406,7 +1418,7 @@ where
     fn handle_transaction_response_with_executed(
         &self,
         state: &mut ProcessTransactionState,
-        certificate: Option<VerifiedCertificate>,
+        certificate: Option<CertifiedTransaction>,
         plain_tx_effects: SignedTransactionEffects,
         events: TransactionEvents,
     ) -> SuiResult<Option<ProcessTransactionResult>> {
@@ -1507,7 +1519,7 @@ where
 
     fn get_retryable_stake(&self, state: &ProcessTransactionState) -> StakeUnit {
         self.committee.total_votes()
-            - state.conflicting_tx_digests_total_stake()
+            - state.conflicting_tx_total_stake
             - state.non_retryable_stake
             - state.effects_map.total_votes()
             - state.tx_signatures.total_votes()
@@ -1540,20 +1552,12 @@ where
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
 
-        info!(
+        debug!(
             ?tx_digest,
             quorum_threshold = threshold,
             validity_threshold = validity,
             ?timeout_after_quorum,
-            ?cert_ref,
             "Broadcasting certificate to authorities"
-        );
-        // TODO: We show the below messages for debugging purposes re. incident #267. When this is fixed, we should remove them again.
-        let cert_bytes = fastcrypto::encoding::Base64::encode(bcs::to_bytes(&cert_ref).unwrap());
-        info!(
-            ?tx_digest,
-            ?cert_bytes,
-            "Broadcasting certificate (serialized) to authorities"
         );
         let committee: Arc<Committee> = self.committee.clone();
         let authority_clients = self.authority_clients.clone();
@@ -1568,7 +1572,7 @@ where
                 Box::pin(async move {
                     let _guard = GaugeGuard::acquire(&metrics_clone.inflight_certificate_requests);
                     client
-                        .handle_certificate_v2(cert_ref.clone())
+                        .handle_certificate_v2(cert_ref)
                         .instrument(
                             tracing::trace_span!("handle_certificate", authority =? name.concise()),
                         )
@@ -1774,7 +1778,7 @@ where
 
     pub async fn execute_transaction_block(
         &self,
-        transaction: &VerifiedTransaction,
+        transaction: &Transaction,
     ) -> Result<VerifiedCertifiedTransactionEffects, anyhow::Error> {
         let tx_guard = GaugeGuard::acquire(&self.metrics.inflight_transactions);
         let result = self
@@ -1792,7 +1796,7 @@ where
 
         let _cert_guard = GaugeGuard::acquire(&self.metrics.inflight_certificates);
         let response = self
-            .process_certificate(cert.clone().into())
+            .process_certificate(cert.clone())
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
 

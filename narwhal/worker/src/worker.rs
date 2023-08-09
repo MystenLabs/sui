@@ -20,6 +20,7 @@ use anemo_tower::{
 use anemo_tower::{rate_limit, set_header::SetResponseHeaderLayer};
 use config::{Authority, AuthorityIdentifier, Committee, Parameters, WorkerCache, WorkerId};
 use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey};
+use mysten_metrics::metered_channel::channel_with_total;
 use mysten_metrics::spawn_logged_monitored_task;
 use mysten_network::{multiaddr::Protocol, Multiaddr};
 use network::client::NetworkClient;
@@ -30,13 +31,14 @@ use std::collections::HashMap;
 use std::time::Duration;
 use std::{net::Ipv4Addr, sync::Arc, thread::sleep};
 use store::rocks::DBMap;
+use sui_protocol_config::ProtocolConfig;
 use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
 use tracing::{error, info};
 use types::{
-    metered_channel::channel_with_total, Batch, BatchDigest, ConditionalBroadcastReceiver,
-    PreSubscribedBroadcastSender, PrimaryToWorkerServer, WorkerToWorkerServer,
+    Batch, BatchDigest, ConditionalBroadcastReceiver, PreSubscribedBroadcastSender,
+    PrimaryToWorkerServer, WorkerToWorkerServer,
 };
 
 #[cfg(test)]
@@ -60,6 +62,8 @@ pub struct Worker {
     committee: Committee,
     /// The worker information cache.
     worker_cache: WorkerCache,
+    // The protocol configuration.
+    protocol_config: ProtocolConfig,
     /// The configuration parameters
     parameters: Parameters,
     /// The persistent storage.
@@ -73,6 +77,7 @@ impl Worker {
         id: WorkerId,
         committee: Committee,
         worker_cache: WorkerCache,
+        protocol_config: ProtocolConfig,
         parameters: Parameters,
         validator: impl TransactionValidator,
         client: NetworkClient,
@@ -90,7 +95,8 @@ impl Worker {
             keypair,
             id,
             committee: committee.clone(),
-            worker_cache,
+            worker_cache: worker_cache.clone(),
+            protocol_config: protocol_config.clone(),
             parameters: parameters.clone(),
             store,
         };
@@ -105,6 +111,7 @@ impl Worker {
         let mut shutdown_receivers = tx_shutdown.subscribe_n(NUM_SHUTDOWN_RECEIVERS);
 
         let mut worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
+            protocol_config: protocol_config.clone(),
             id: worker.id,
             client: client.clone(),
             store: worker.store.clone(),
@@ -119,13 +126,13 @@ impl Worker {
                 ),
             ));
         }
-        if let Some(limit) = parameters.anemo.request_batch_rate_limit {
-            worker_service = worker_service.add_layer_for_request_batch(InboundRequestLayer::new(
-                rate_limit::RateLimitLayer::new(
+        if let Some(limit) = parameters.anemo.request_batches_rate_limit {
+            worker_service = worker_service.add_layer_for_request_batches(
+                InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
                     governor::Quota::per_second(limit),
                     rate_limit::WaitMode::Block,
-                ),
-            ));
+                )),
+            );
         }
 
         // Legacy RPC interface, only used by delete_batches() for external consensus.
@@ -133,10 +140,11 @@ impl Worker {
             authority_id: worker.authority.id(),
             id: worker.id,
             committee: worker.committee.clone(),
+            protocol_config: protocol_config.clone(),
             worker_cache: worker.worker_cache.clone(),
             store: worker.store.clone(),
-            request_batch_timeout: worker.parameters.sync_retry_delay,
-            request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
+            request_batches_timeout: worker.parameters.sync_retry_delay,
+            request_batches_retry_nodes: worker.parameters.sync_retry_nodes,
             network: None,
             batch_fetcher: None,
             validator: validator.clone(),
@@ -167,8 +175,15 @@ impl Worker {
                 epoch_string.clone(),
             )));
 
+        let worker_peer_ids = worker_cache
+            .all_workers()
+            .into_iter()
+            .map(|(worker_name, _)| PeerId(worker_name.0.to_bytes()));
         let routes = anemo::Router::new()
             .add_rpc_service(worker_service)
+            .route_layer(RequireAuthorizationLayer::new(AllowedPeers::new(
+                worker_peer_ids,
+            )))
             .route_layer(RequireAuthorizationLayer::new(AllowedEpoch::new(
                 epoch_string.clone(),
             )))
@@ -219,14 +234,17 @@ impl Worker {
             quic_config.receive_window = Some(200 << 20);
             quic_config.send_window = Some(200 << 20);
             quic_config.crypto_buffer_size = Some(1 << 20);
+            quic_config.socket_receive_buffer_size = Some(20 << 20);
+            quic_config.socket_send_buffer_size = Some(20 << 20);
+            quic_config.allow_failed_socket_buffer_size_setting = true;
             quic_config.max_idle_timeout_ms = Some(30_000);
             // Enable keep alives every 5s
             quic_config.keep_alive_interval_ms = Some(5_000);
             let mut config = anemo::Config::default();
             config.quic = Some(quic_config);
-            // Set the max_frame_size to be 2 GB to work around the issue of there being too many
+            // Set the max_frame_size to be 1 GB to work around the issue of there being too many
             // delegation events in the epoch change txn.
-            config.max_frame_size = Some(2 << 30);
+            config.max_frame_size = Some(1 << 30);
             // Set a default timeout of 300s for all RPC requests
             config.inbound_request_timeout_ms = Some(300_000);
             config.outbound_request_timeout_ms = Some(300_000);
@@ -274,6 +292,7 @@ impl Worker {
             network.clone(),
             worker.store.clone(),
             node_metrics.clone(),
+            protocol_config.clone(),
         );
         client.set_primary_to_worker_local_handler(
             worker_peer_id,
@@ -281,10 +300,11 @@ impl Worker {
                 authority_id: worker.authority.id(),
                 id: worker.id,
                 committee: worker.committee.clone(),
+                protocol_config,
                 worker_cache: worker.worker_cache.clone(),
                 store: worker.store.clone(),
-                request_batch_timeout: worker.parameters.sync_retry_delay,
-                request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
+                request_batches_timeout: worker.parameters.sync_retry_delay,
+                request_batches_retry_nodes: worker.parameters.sync_retry_nodes,
                 network: Some(network.clone()),
                 batch_fetcher: Some(batch_fetcher),
                 validator: validator.clone(),
@@ -480,9 +500,10 @@ impl Worker {
             shutdown_receivers.pop().unwrap(),
             rx_batch_maker,
             tx_quorum_waiter,
-            node_metrics,
+            node_metrics.clone(),
             client,
             self.store.clone(),
+            self.protocol_config.clone(),
         );
 
         // The `QuorumWaiter` waits for 2f authorities to acknowledge reception of the batch. It then forwards
@@ -495,6 +516,7 @@ impl Worker {
             shutdown_receivers.pop().unwrap(),
             rx_quorum_waiter,
             network,
+            node_metrics,
         );
 
         info!(

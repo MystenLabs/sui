@@ -1,48 +1,45 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    Tab,
-    TabGroup,
-    TabList,
-    type TabGroupProps,
-    type TabListProps,
-} from './Tabs';
+// TODO: This component really shouldn't use the `Tabs` component, it should just use radix,
+// and should define it's own styles since the concerns here are pretty different.
+
+import { type ComponentProps } from 'react';
+
+import { TabsList, Tabs, TabsTrigger } from './Tabs';
 
 export interface FilterListProps<T extends string = string> {
-    options: readonly T[];
-    value: T;
-    disabled?: boolean;
-    size?: TabGroupProps['size'];
-    lessSpacing?: TabListProps['lessSpacing'];
-    onChange(value: T): void;
+	options: readonly T[];
+	value: T;
+	disabled?: boolean;
+	size?: ComponentProps<typeof Tabs>['size'];
+	lessSpacing?: boolean;
+	onChange(value: T): void;
 }
 
 export function FilterList<T extends string>({
-    options,
-    value,
-    disabled = false,
-    size,
-    lessSpacing,
-    onChange,
+	options,
+	value,
+	disabled = false,
+	size,
+	lessSpacing,
+	onChange,
 }: FilterListProps<T>) {
-    const selectedIndex = options.indexOf(value);
-    return (
-        <TabGroup
-            size={size}
-            selectedIndex={selectedIndex}
-            onChange={(index) => {
-                onChange(options[index]);
-            }}
-        >
-            <TabList disableBottomBorder lessSpacing={lessSpacing}>
-                {options.map((option) => (
-                    //@ts-expect-error disabled
-                    <Tab disabled={disabled} key={option}>
-                        {option}
-                    </Tab>
-                ))}
-            </TabList>
-        </TabGroup>
-    );
+	return (
+		<Tabs
+			size={size}
+			value={value}
+			onValueChange={(value) => {
+				onChange(value as T);
+			}}
+		>
+			<TabsList disableBottomBorder gap={lessSpacing ? 3 : 6}>
+				{options.map((option) => (
+					<TabsTrigger disabled={disabled} key={option} value={option}>
+						{option}
+					</TabsTrigger>
+				))}
+			</TabsList>
+		</Tabs>
+	);
 }

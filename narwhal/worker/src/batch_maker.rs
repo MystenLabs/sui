@@ -2,28 +2,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
+use crate::metrics::WorkerMetrics;
 use config::WorkerId;
 use fastcrypto::hash::Hash;
+use futures::future::BoxFuture;
 use futures::stream::FuturesUnordered;
-use futures::{Future, StreamExt};
+use futures::StreamExt;
+use mysten_metrics::metered_channel::{Receiver, Sender};
 use mysten_metrics::{monitored_scope, spawn_logged_monitored_task};
 use network::{client::NetworkClient, WorkerToPrimaryClient};
+use std::sync::Arc;
 use store::{rocks::DBMap, Map};
+use sui_protocol_config::ProtocolConfig;
 use tokio::{
     task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
 use tracing::{error, warn};
 use types::{
-    error::DagError,
-    metered_channel::{Receiver, Sender},
-    now, Batch, BatchAPI, BatchDigest, ConditionalBroadcastReceiver, Transaction, TxResponse,
-    WorkerOurBatchMessage,
+    error::DagError, now, Batch, BatchAPI, BatchDigest, ConditionalBroadcastReceiver, MetadataAPI,
+    Transaction, TxResponse, WorkerOwnBatchMessage,
 };
-
-use crate::metrics::WorkerMetrics;
 
 #[cfg(feature = "trace_transaction")]
 use byteorder::{BigEndian, ReadBytesExt};
@@ -60,6 +59,7 @@ pub struct BatchMaker {
     client: NetworkClient,
     /// The batch store to store our own batches.
     store: DBMap<BatchDigest, Batch>,
+    protocol_config: ProtocolConfig,
 }
 
 impl BatchMaker {
@@ -74,6 +74,7 @@ impl BatchMaker {
         node_metrics: Arc<WorkerMetrics>,
         client: NetworkClient,
         store: DBMap<BatchDigest, Batch>,
+        protocol_config: ProtocolConfig,
     ) -> JoinHandle<()> {
         spawn_logged_monitored_task!(
             async move {
@@ -88,6 +89,7 @@ impl BatchMaker {
                     node_metrics,
                     client,
                     store,
+                    protocol_config,
                 }
                 .run()
                 .await;
@@ -101,7 +103,7 @@ impl BatchMaker {
         let timer = sleep(self.max_batch_delay);
         tokio::pin!(timer);
 
-        let mut current_batch = Batch::default();
+        let mut current_batch = Batch::new(vec![], &self.protocol_config);
         let mut current_responses = Vec::new();
         let mut current_batch_size = 0;
 
@@ -124,7 +126,7 @@ impl BatchMaker {
                         }
                         self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
 
-                        current_batch = Batch::default();
+                        current_batch = Batch::new(vec![], &self.protocol_config);
                         current_responses = Vec::new();
                         current_batch_size = 0;
 
@@ -145,7 +147,7 @@ impl BatchMaker {
                         }
                         self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
 
-                        current_batch = Batch::default();
+                        current_batch = Batch::new(vec![], &self.protocol_config);
                         current_responses = Vec::new();
                         current_batch_size = 0;
                     }
@@ -169,13 +171,13 @@ impl BatchMaker {
     }
 
     /// Seal and broadcast the current batch.
-    async fn seal(
+    async fn seal<'a>(
         &self,
         timeout: bool,
         mut batch: Batch,
         size: usize,
         responses: Vec<TxResponse>,
-    ) -> Option<impl Future<Output = ()>> {
+    ) -> Option<BoxFuture<'a, ()>> {
         #[cfg(feature = "benchmark")]
         {
             let digest = batch.digest();
@@ -268,10 +270,10 @@ impl BatchMaker {
 
         // The batch has been sealed so we can officially set its creation time
         // for latency calculations.
-        batch.metadata_mut().created_at = now();
-        let metadata = batch.metadata().clone();
+        batch.versioned_metadata_mut().set_created_at(now());
+        let metadata = batch.versioned_metadata().clone();
 
-        Some(async move {
+        Some(Box::pin(async move {
             // Now save it to disk
             let digest = batch.digest();
 
@@ -289,12 +291,12 @@ impl BatchMaker {
             let _ = done_sending.await;
 
             // Send the batch to the primary.
-            let message = WorkerOurBatchMessage {
+            let message = WorkerOwnBatchMessage {
                 digest,
                 worker_id,
                 metadata,
             };
-            if let Err(e) = client.report_our_batch(message).await {
+            if let Err(e) = client.report_own_batch(message).await {
                 warn!("Failed to report our batch: {}", e);
                 // Drop all response handers to signal error, since we
                 // cannot ensure the primary has actually signaled the
@@ -308,6 +310,6 @@ impl BatchMaker {
             for response in responses {
                 let _ = response.send(digest);
             }
-        })
+        }))
     }
 }

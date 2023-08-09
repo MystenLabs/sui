@@ -39,4 +39,6 @@ warning[W09002]: unused variable
    │
 23 │         let vector;
    │             ^^^^^^ Unused local variable 'vector'. Consider removing or prefixing with an underscore: '_vector'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

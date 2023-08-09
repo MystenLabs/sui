@@ -6,6 +6,7 @@ use criterion::{
 use fastcrypto::hash::Hash;
 use narwhal_types as types;
 use rand::Rng;
+use test_utils::latest_protocol_version;
 use types::Batch;
 
 pub fn batch_digest(c: &mut Criterion) {
@@ -20,7 +21,10 @@ pub fn batch_digest(c: &mut Criterion) {
                 .map(|_| rand::thread_rng().gen())
                 .collect::<Vec<u8>>()
         };
-        let batch = Batch::new((0..size).map(|_| tx_gen()).collect::<Vec<_>>());
+        let batch = Batch::new(
+            (0..size).map(|_| tx_gen()).collect::<Vec<_>>(),
+            &latest_protocol_version(),
+        );
         digest_group.throughput(Throughput::Bytes(512 * size as u64));
         digest_group.bench_with_input(BenchmarkId::new("batch digest", size), &batch, |b, i| {
             b.iter(|| i.digest())

@@ -3,12 +3,11 @@
 
 use crate::{
     certificate_fetcher::CertificateFetcherCommand, common::create_db_stores,
-    metrics::PrimaryMetrics, synchronizer::Synchronizer, NUM_SHUTDOWN_RECEIVERS,
+    metrics::PrimaryMetrics, synchronizer::Synchronizer, PrimaryChannelMetrics,
 };
 use config::Committee;
 use consensus::consensus::ConsensusRound;
 use consensus::utils::gc_round;
-use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use fastcrypto::{hash::Hash, traits::KeyPair};
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
@@ -20,12 +19,12 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use test_utils::{make_optimal_signed_certificates, mock_signed_certificate, CommitteeFixture};
-use tokio::sync::{oneshot, watch};
-use types::{
-    error::DagError, Certificate, CertificateAPI, Header, HeaderAPI, PreSubscribedBroadcastSender,
-    Round,
+use test_utils::{
+    latest_protocol_version, make_optimal_signed_certificates, mock_signed_certificate,
+    CommitteeFixture,
 };
+use tokio::sync::{oneshot, watch};
+use types::{error::DagError, Certificate, CertificateAPI, Header, HeaderAPI, Round};
 
 #[tokio::test]
 async fn accept_certificates() {
@@ -36,6 +35,7 @@ async fn accept_certificates() {
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let authority_id = primary.id();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -62,8 +62,8 @@ async fn accept_certificates() {
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
         rx_synchronizer_network,
-        None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
 
     let own_address = committee
@@ -90,13 +90,6 @@ async fn accept_certificates() {
     }
 
     // Ensure the Synchronizer sends the parents of the certificates to the proposer.
-    //
-    // The first messages are the Synchronizer letting us know about the round of parent certificates
-    for _i in 0..3 {
-        let received = rx_parents.recv().await.unwrap();
-        assert_eq!(received, (vec![], 0, 0));
-    }
-    // the next message actually contains the parents
     let received = rx_parents.recv().await.unwrap();
     assert_eq!(received, (certificates.clone(), 1, 0));
 
@@ -134,6 +127,8 @@ async fn accept_suspended_certificates() {
         .build();
     let worker_cache = fixture.worker_cache();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
+
     let primary = fixture.authorities().next().unwrap();
     let authority_id = primary.id();
     let client = NetworkClient::new_from_keypair(&primary.network_keypair());
@@ -159,8 +154,8 @@ async fn accept_suspended_certificates() {
         tx_parents,
         rx_consensus_round_updates.clone(),
         rx_synchronizer_network,
-        None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
 
     // Make fake certificates.
@@ -173,8 +168,13 @@ async fn accept_suspended_certificates() {
         .authorities()
         .map(|a| (a.id(), a.keypair().copy()))
         .collect();
-    let (certificates, next_parents) =
-        make_optimal_signed_certificates(1..=5, &genesis, &committee, keys.as_slice());
+    let (certificates, next_parents) = make_optimal_signed_certificates(
+        1..=5,
+        &genesis,
+        &committee,
+        &latest_protocol_version(),
+        keys.as_slice(),
+    );
     let certificates = certificates.into_iter().collect_vec();
 
     // Try to aceept certificates from round 2 to 5. All of them should be suspended.
@@ -216,6 +216,7 @@ async fn accept_suspended_certificates() {
         2000,
         next_parents,
         &committee,
+        &latest_protocol_version(),
     );
     // The certificate should not be accepted or suspended.
     match synchronizer.try_accept_certificate(cert.clone()).await {
@@ -235,6 +236,7 @@ async fn synchronizer_recover_basic() {
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.id();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
 
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(3);
@@ -260,8 +262,8 @@ async fn synchronizer_recover_basic() {
         tx_parents,
         rx_consensus_round_updates.clone(),
         rx_synchronizer_network,
-        None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
 
     let own_address = committee
@@ -310,8 +312,8 @@ async fn synchronizer_recover_basic() {
         tx_parents,
         rx_consensus_round_updates.clone(),
         rx_synchronizer_network,
-        None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
     let _ = tx_synchronizer_network.send(network.clone());
 
@@ -354,6 +356,7 @@ async fn synchronizer_recover_partial_certs() {
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.id();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
 
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(3);
@@ -379,8 +382,8 @@ async fn synchronizer_recover_partial_certs() {
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
         rx_synchronizer_network,
-        None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
 
     let own_address = committee
@@ -431,8 +434,8 @@ async fn synchronizer_recover_partial_certs() {
         tx_parents,
         rx_consensus_round_updates.clone(),
         rx_synchronizer_network,
-        None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
     let _ = tx_synchronizer_network.send(network.clone());
 
@@ -441,11 +444,6 @@ async fn synchronizer_recover_partial_certs() {
         synchronizer.try_accept_certificate(cert).await.unwrap();
     }
     tokio::time::sleep(Duration::from_secs(5)).await;
-
-    for _ in 0..2 {
-        let received = rx_parents.recv().await.unwrap();
-        assert_eq!(received, (vec![], 0, 0));
-    }
 
     // the recovery flow sends message that contains the parents
     let received = rx_parents.recv().await.unwrap();
@@ -467,6 +465,7 @@ async fn synchronizer_recover_previous_round() {
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.id();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
 
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(6);
@@ -492,8 +491,8 @@ async fn synchronizer_recover_previous_round() {
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
         rx_synchronizer_network,
-        None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
 
     let own_address = committee
@@ -508,7 +507,7 @@ async fn synchronizer_recover_previous_round() {
         .unwrap();
     let _ = tx_synchronizer_network.send(network.clone());
 
-    // Send 3 certificates from round 1, and 2 certificates from round 2 to Synchronizer.
+    // Create 3 certificates per round.
     let genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
@@ -519,8 +518,14 @@ async fn synchronizer_recover_previous_round() {
         .map(|a| (a.id(), a.keypair().copy()))
         .take(3)
         .collect::<Vec<_>>();
-    let (all_certificates, _next_parents) =
-        make_optimal_signed_certificates(1..=2, &genesis, &committee, &keys);
+    let (all_certificates, _next_parents) = make_optimal_signed_certificates(
+        1..=2,
+        &genesis,
+        &committee,
+        &latest_protocol_version(),
+        &keys,
+    );
+    // Send 3 certificates from round 1, and 2 certificates from round 2 to Synchronizer.
     let all_certificates: Vec<_> = all_certificates.into_iter().collect();
     let round_1_certificates = all_certificates[0..3].to_vec();
     let round_2_certificates = all_certificates[3..5].to_vec();
@@ -558,8 +563,8 @@ async fn synchronizer_recover_previous_round() {
         tx_parents,
         rx_consensus_round_updates.clone(),
         rx_synchronizer_network,
-        None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
     let _ = tx_synchronizer_network.send(network.clone());
 
@@ -575,86 +580,6 @@ async fn synchronizer_recover_previous_round() {
 }
 
 #[tokio::test]
-async fn deliver_certificate_using_dag() {
-    let fixture = CommitteeFixture::builder().build();
-    let primary = fixture.authorities().next().unwrap();
-    let client = NetworkClient::new_from_keypair(&primary.network_keypair());
-    let name = primary.id();
-    let committee = fixture.committee();
-    let worker_cache = fixture.worker_cache();
-    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
-
-    let (_, certificates_store, payload_store) = create_db_stores();
-    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
-    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
-    let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
-    let (_tx_consensus, rx_consensus) = test_utils::test_channel!(1);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
-        watch::channel(ConsensusRound::default());
-    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
-    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
-
-    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let dag = Arc::new(
-        Dag::new(
-            &committee,
-            rx_consensus,
-            consensus_metrics,
-            tx_shutdown.subscribe(),
-        )
-        .1,
-    );
-
-    let synchronizer = Synchronizer::new(
-        name,
-        fixture.committee(),
-        worker_cache.clone(),
-        /* gc_depth */ 50,
-        client,
-        certificates_store,
-        payload_store,
-        tx_certificate_fetcher,
-        tx_new_certificates,
-        tx_parents,
-        rx_consensus_round_updates.clone(),
-        rx_synchronizer_network,
-        Some(dag.clone()),
-        metrics.clone(),
-    );
-
-    // create some certificates in a complete DAG form
-    let genesis_certs = Certificate::genesis(&committee);
-    let genesis = genesis_certs
-        .iter()
-        .map(|x| x.digest())
-        .collect::<BTreeSet<_>>();
-
-    let keys = fixture
-        .authorities()
-        .map(|a| (a.id(), a.keypair().copy()))
-        .take(3)
-        .collect::<Vec<_>>();
-    let (mut certificates, _next_parents) =
-        make_optimal_signed_certificates(1..=4, &genesis, &committee, &keys);
-
-    // insert the certificates in the DAG
-    for certificate in certificates.clone() {
-        dag.insert(certificate).await.unwrap();
-    }
-
-    // take the last one (top) and test for parents
-    let test_certificate = certificates.pop_back().unwrap();
-
-    // ensure that the certificate parents are found
-    let parents_available = synchronizer
-        .get_missing_parents(&test_certificate)
-        .await
-        .unwrap()
-        .is_empty();
-    assert!(parents_available);
-}
-
-#[tokio::test]
 async fn deliver_certificate_using_store() {
     let fixture = CommitteeFixture::builder().build();
     let primary = fixture.authorities().next().unwrap();
@@ -663,6 +588,7 @@ async fn deliver_certificate_using_store() {
     let committee = fixture.committee();
     let worker_cache = fixture.worker_cache();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
 
     let (_, certificates_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -685,8 +611,8 @@ async fn deliver_certificate_using_store() {
         tx_parents,
         rx_consensus_round_updates.clone(),
         rx_synchronizer_network,
-        None,
         metrics.clone(),
+        &primary_channel_metrics,
     );
 
     // create some certificates in a complete DAG form
@@ -701,8 +627,13 @@ async fn deliver_certificate_using_store() {
         .map(|a| (a.id(), a.keypair().copy()))
         .take(3)
         .collect::<Vec<_>>();
-    let (mut certificates, _next_parents) =
-        make_optimal_signed_certificates(1..=4, &genesis, &committee, &keys);
+    let (mut certificates, _next_parents) = make_optimal_signed_certificates(
+        1..=4,
+        &genesis,
+        &committee,
+        &latest_protocol_version(),
+        &keys,
+    );
 
     // insert the certificates in the DAG
     for certificate in certificates.clone() {
@@ -730,6 +661,7 @@ async fn deliver_certificate_not_found_parents() {
     let committee = fixture.committee();
     let worker_cache = fixture.worker_cache();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
 
     let (_, certificates_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, mut rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -752,8 +684,8 @@ async fn deliver_certificate_not_found_parents() {
         tx_parents,
         rx_consensus_round_updates.clone(),
         rx_synchronizer_network,
-        None,
         metrics.clone(),
+        &primary_channel_metrics,
     );
 
     // create some certificates in a complete DAG form
@@ -768,8 +700,13 @@ async fn deliver_certificate_not_found_parents() {
         .map(|a| (a.id(), a.keypair().copy()))
         .take(3)
         .collect::<Vec<_>>();
-    let (mut certificates, _next_parents) =
-        make_optimal_signed_certificates(1..=4, &genesis, &committee, &keys);
+    let (mut certificates, _next_parents) = make_optimal_signed_certificates(
+        1..=4,
+        &genesis,
+        &committee,
+        &latest_protocol_version(),
+        &keys,
+    );
 
     // take the last one (top) and test for parents
     let test_certificate = certificates.pop_back().unwrap();
@@ -816,6 +753,7 @@ async fn sync_batches_drops_old() {
     let (tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(1, 0));
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
 
     let synchronizer = Arc::new(Synchronizer::new(
         primary.id(),
@@ -830,8 +768,8 @@ async fn sync_batches_drops_old() {
         tx_parents,
         rx_consensus_round_updates.clone(),
         rx_synchronizer_network,
-        None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
 
     let mut certificates = HashMap::new();
@@ -839,7 +777,11 @@ async fn sync_batches_drops_old() {
         let header = Header::V1(
             author
                 .header_builder(&fixture.committee())
-                .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
+                .with_payload_batch(
+                    test_utils::fixture_batch_with_transactions(10, &latest_protocol_version()),
+                    0,
+                    0,
+                )
                 .build()
                 .unwrap(),
         );
@@ -858,7 +800,11 @@ async fn sync_batches_drops_old() {
             .header_builder(&fixture.committee())
             .round(2)
             .parents(certificates.keys().cloned().collect())
-            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
+            .with_payload_batch(
+                test_utils::fixture_batch_with_transactions(10, &latest_protocol_version()),
+                1,
+                0,
+            )
             .build()
             .unwrap(),
     );
@@ -895,6 +841,7 @@ async fn gc_suspended_certificates() {
     let (tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(1, 0));
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
 
     let synchronizer = Arc::new(Synchronizer::new(
         primary.id(),
@@ -909,8 +856,8 @@ async fn gc_suspended_certificates() {
         tx_parents,
         rx_consensus_round_updates.clone(),
         rx_synchronizer_network,
-        None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
 
     // Make fake certificates.
@@ -923,8 +870,13 @@ async fn gc_suspended_certificates() {
         .authorities()
         .map(|a| (a.id(), a.keypair().copy()))
         .collect();
-    let (certificates, _next_parents) =
-        make_optimal_signed_certificates(1..=5, &genesis, &committee, keys.as_slice());
+    let (certificates, _next_parents) = make_optimal_signed_certificates(
+        1..=5,
+        &genesis,
+        &committee,
+        &latest_protocol_version(),
+        keys.as_slice(),
+    );
     let certificates = certificates.into_iter().collect_vec();
 
     // Try to aceept certificates from round 2 and above. All of them should be suspended.

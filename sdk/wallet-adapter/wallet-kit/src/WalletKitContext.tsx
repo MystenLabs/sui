@@ -2,119 +2,113 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-  createContext,
-  ReactNode,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useSyncExternalStore,
-} from "react";
+	createContext,
+	ReactNode,
+	useContext,
+	useEffect,
+	useMemo,
+	useRef,
+	useSyncExternalStore,
+} from 'react';
 import {
-  createWalletKitCore,
-  WalletKitCore,
-  WalletKitCoreOptions,
-  WalletKitCoreState,
-} from "@mysten/wallet-kit-core";
-import { WalletStandardAdapterProvider } from "@mysten/wallet-adapter-wallet-standard";
-import { UnsafeBurnerWalletAdapter } from "@mysten/wallet-adapter-unsafe-burner";
+	createWalletKitCore,
+	WalletKitCore,
+	WalletKitCoreOptions,
+	WalletKitCoreState,
+} from '@mysten/wallet-kit-core';
+import { WalletStandardAdapterProvider } from '@mysten/wallet-adapter-wallet-standard';
+import { UnsafeBurnerWalletAdapter } from '@mysten/wallet-adapter-unsafe-burner';
 
 export const WalletKitContext = createContext<WalletKitCore | null>(null);
 
 interface WalletKitProviderProps extends Partial<WalletKitCoreOptions> {
-  /** Enable the development-only unsafe burner wallet, which is can be useful for testing. */
-  enableUnsafeBurner?: boolean;
-  children: ReactNode;
-  disableAutoConnect?: boolean;
-  // Define the wallet standard features that you will use. This will filter the list of wallets
-  // displayed to the user.
-  features?: string[];
+	/** Enable the development-only unsafe burner wallet, which is can be useful for testing. */
+	enableUnsafeBurner?: boolean;
+	children: ReactNode;
+	disableAutoConnect?: boolean;
+	// Define the wallet standard features that you will use. This will filter the list of wallets
+	// displayed to the user.
+	features?: string[];
 }
 
 export function WalletKitProvider({
-  adapters: configuredAdapters,
-  preferredWallets,
-  children,
-  enableUnsafeBurner,
-  storageAdapter,
-  storageKey,
-  disableAutoConnect,
-  features,
+	adapters: configuredAdapters,
+	preferredWallets,
+	children,
+	enableUnsafeBurner,
+	storageAdapter,
+	storageKey,
+	disableAutoConnect,
+	features,
 }: WalletKitProviderProps) {
-  const adapters = useMemo(
-    () =>
-      configuredAdapters ?? [
-        new WalletStandardAdapterProvider({ features }),
-        ...(enableUnsafeBurner ? [new UnsafeBurnerWalletAdapter()] : []),
-      ],
-    [configuredAdapters]
-  );
+	const adapters = useMemo(
+		() =>
+			configuredAdapters ?? [
+				new WalletStandardAdapterProvider({ features }),
+				...(enableUnsafeBurner ? [new UnsafeBurnerWalletAdapter()] : []),
+			],
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[configuredAdapters],
+	);
 
-  const walletKitRef = useRef<WalletKitCore | null>(null);
-  if (!walletKitRef.current) {
-    walletKitRef.current = createWalletKitCore({
-      adapters,
-      preferredWallets,
-      storageAdapter,
-      storageKey,
-    });
-  }
+	const walletKitRef = useRef<WalletKitCore | null>(null);
+	if (!walletKitRef.current) {
+		walletKitRef.current = createWalletKitCore({
+			adapters,
+			preferredWallets,
+			storageAdapter,
+			storageKey,
+		});
+	}
 
-  // Automatically trigger the autoconnect logic when we mount, and whenever wallets change:
-  const { wallets } = useSyncExternalStore(
-    walletKitRef.current.subscribe,
-    walletKitRef.current.getState,
-    walletKitRef.current.getState
-  );
-  useEffect(() => {
-    if (!disableAutoConnect) {
-      walletKitRef.current?.autoconnect();
-    }
-  }, [wallets]);
+	// Automatically trigger the autoconnect logic when we mount, and whenever wallets change:
+	const { wallets } = useSyncExternalStore(
+		walletKitRef.current.subscribe,
+		walletKitRef.current.getState,
+		walletKitRef.current.getState,
+	);
+	useEffect(() => {
+		if (!disableAutoConnect) {
+			walletKitRef.current?.autoconnect();
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [wallets]);
 
-  return (
-    <WalletKitContext.Provider value={walletKitRef.current}>
-      {children}
-    </WalletKitContext.Provider>
-  );
+	return (
+		<WalletKitContext.Provider value={walletKitRef.current}>{children}</WalletKitContext.Provider>
+	);
 }
 
 type UseWalletKit = WalletKitCoreState &
-  Pick<
-    WalletKitCore,
-    | "connect"
-    | "disconnect"
-    | "selectAccount"
-    | "signMessage"
-    | "signTransactionBlock"
-    | "signAndExecuteTransactionBlock"
-  >;
+	Pick<
+		WalletKitCore,
+		| 'connect'
+		| 'disconnect'
+		| 'selectAccount'
+		| 'signMessage'
+		| 'signTransactionBlock'
+		| 'signAndExecuteTransactionBlock'
+	>;
 
 export function useWalletKit(): UseWalletKit {
-  const walletKit = useContext(WalletKitContext);
+	const walletKit = useContext(WalletKitContext);
 
-  if (!walletKit) {
-    throw new Error(
-      "You must call `useWalletKit` within the of the `WalletKitProvider`."
-    );
-  }
+	if (!walletKit) {
+		throw new Error('You must call `useWalletKit` within the of the `WalletKitProvider`.');
+	}
 
-  const state = useSyncExternalStore(
-    walletKit.subscribe,
-    walletKit.getState,
-    walletKit.getState
-  );
+	const state = useSyncExternalStore(walletKit.subscribe, walletKit.getState, walletKit.getState);
 
-  return useMemo(
-    () => ({
-      connect: walletKit.connect,
-      disconnect: walletKit.disconnect,
-      signMessage: walletKit.signMessage,
-      signTransactionBlock: walletKit.signTransactionBlock,
-      signAndExecuteTransactionBlock: walletKit.signAndExecuteTransactionBlock,
-      selectAccount: walletKit.selectAccount,
-      ...state,
-    }),
-    [walletKit, state]
-  );
+	return useMemo(
+		() => ({
+			connect: walletKit.connect,
+			disconnect: walletKit.disconnect,
+			signMessage: walletKit.signMessage,
+			signTransactionBlock: walletKit.signTransactionBlock,
+			signAndExecuteTransactionBlock: walletKit.signAndExecuteTransactionBlock,
+			selectAccount: walletKit.selectAccount,
+			...state,
+		}),
+		[walletKit, state],
+	);
 }

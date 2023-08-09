@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use parking_lot::Mutex;
 use std::sync::Arc;
 
 use sui_types::base_types::TransactionDigest;
@@ -29,6 +30,9 @@ pub struct RocksDbStore {
     authority_store: Arc<AuthorityStore>,
     committee_store: Arc<CommitteeStore>,
     checkpoint_store: Arc<CheckpointStore>,
+    // in memory checkpoint watermark sequence numbers
+    highest_verified_checkpoint: Arc<Mutex<Option<u64>>>,
+    highest_synced_checkpoint: Arc<Mutex<Option<u64>>>,
 }
 
 impl RocksDbStore {
@@ -41,6 +45,8 @@ impl RocksDbStore {
             authority_store,
             committee_store,
             checkpoint_store,
+            highest_verified_checkpoint: Arc::new(Mutex::new(None)),
+            highest_synced_checkpoint: Arc::new(Mutex::new(None)),
         }
     }
 }
@@ -81,6 +87,12 @@ impl ReadStore for RocksDbStore {
             })
     }
 
+    fn get_lowest_available_checkpoint(&self) -> Result<CheckpointSequenceNumber, Self::Error> {
+        self.checkpoint_store
+            .get_highest_pruned_checkpoint_seq_number()
+            .map(|seq| seq + 1)
+    }
+
     fn get_full_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
@@ -107,6 +119,10 @@ impl ReadStore for RocksDbStore {
         }
 
         // Otherwise gather it from the individual components.
+        // Note we can't insert the constructed contents into `full_checkpoint_content`,
+        // because it needs to be inserted along with `checkpoint_sequence_by_contents_digest`
+        // and `checkpoint_content`. However at this point it's likely we don't know the
+        // corresponding sequence number yet.
         self.checkpoint_store
             .get_checkpoint_contents(digest)?
             .map(|contents| FullCheckpointContents::from_checkpoint_contents(&self, contents))
@@ -141,7 +157,7 @@ impl ReadStore for RocksDbStore {
 }
 
 impl WriteStore for RocksDbStore {
-    fn insert_checkpoint(&self, checkpoint: VerifiedCheckpoint) -> Result<(), Self::Error> {
+    fn insert_checkpoint(&self, checkpoint: &VerifiedCheckpoint) -> Result<(), Self::Error> {
         if let Some(EndOfEpochData {
             next_epoch_committee,
             ..
@@ -159,8 +175,28 @@ impl WriteStore for RocksDbStore {
         &self,
         checkpoint: &VerifiedCheckpoint,
     ) -> Result<(), Self::Error> {
+        let mut locked = self.highest_synced_checkpoint.lock();
+        if locked.is_some() && locked.unwrap() >= checkpoint.sequence_number {
+            return Ok(());
+        }
         self.checkpoint_store
-            .update_highest_synced_checkpoint(checkpoint)
+            .update_highest_synced_checkpoint(checkpoint)?;
+        *locked = Some(checkpoint.sequence_number);
+        Ok(())
+    }
+
+    fn update_highest_verified_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), Self::Error> {
+        let mut locked = self.highest_verified_checkpoint.lock();
+        if locked.is_some() && locked.unwrap() >= checkpoint.sequence_number {
+            return Ok(());
+        }
+        self.checkpoint_store
+            .update_highest_verified_checkpoint(checkpoint)?;
+        *locked = Some(checkpoint.sequence_number);
+        Ok(())
     }
 
     fn insert_checkpoint_contents(

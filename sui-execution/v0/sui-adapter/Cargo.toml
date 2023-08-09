@@ -1,0 +1,37 @@
+[package]
+name = "sui-adapter-v0"
+version = "0.1.0"
+authors = ["Mysten Labs <eng@mystenlabs.com>"]
+description = "Adapter and accompanying CLI for local sui development"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true, features = ["backtrace"] }
+bcs.workspace = true
+leb128.workspace = true
+once_cell.workspace = true
+tracing.workspace = true
+serde.workspace = true
+
+move-binary-format.workspace = true
+move-bytecode-utils.workspace = true
+move-core-types.workspace = true
+move-vm-config.workspace = true
+move-vm-profiler.workspace = true
+move-vm-types.workspace = true
+
+move-bytecode-verifier = { path = "../../../external-crates/move-execution/v0/move-bytecode-verifier", package = "move-bytecode-verifier-v0" }
+move-vm-runtime = { path = "../../../external-crates/move-execution/v0/move-vm/runtime", package = "move-vm-runtime-v0" }
+sui-move-natives = { path = "../sui-move-natives", package = "sui-move-natives-v0" }
+sui-verifier = { path = "../sui-verifier", package = "sui-verifier-v0" }
+
+mysten-metrics.workspace = true
+sui-macros.workspace = true
+sui-protocol-config.workspace = true
+sui-types.workspace = true
+workspace-hack = { version = "0.1", path = "../../../crates/workspace-hack" }
+
+[dev-dependencies]
+move-package.workspace = true

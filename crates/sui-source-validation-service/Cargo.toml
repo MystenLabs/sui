@@ -1,0 +1,48 @@
+[package]
+name = "sui-source-validation-service"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+path = "src/main.rs"
+name = "sui-source-validation-service"
+
+[dependencies]
+anyhow = { version = "1.0.64", features = ["backtrace"] }
+clap = { version = "3.2.17", features = ["derive"] }
+hyper = "0.14"
+tempfile = "3.3.0"
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+toml = { version = "0.7.4", features = ["preserve_order"] }
+tracing = "0.1.36"
+serde = { version = "1.0.144", features = ["derive"] }
+serde_json = "1.0.88"
+url = "2.3.1"
+
+sui-move.workspace = true
+sui-move-build.workspace = true
+sui-sdk.workspace = true
+sui-source-validation.workspace = true
+
+axum.workspace = true
+move-package.workspace = true
+move-compiler.workspace = true
+move-core-types.workspace = true
+move-symbol-pool.workspace = true
+telemetry-subscribers.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+expect-test = "1.4.0"
+fs_extra = "1.3.0"
+reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"] }
+
+test-cluster.workspace = true

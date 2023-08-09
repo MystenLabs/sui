@@ -7,16 +7,16 @@ authors = ["Mysten Labs <build@mystenlabs.com>"]
 publish = false
 
 [dependencies]
-fdlimit = "0.2"
-indexmap = { version = "1.9.2", features = ["serde"] }
-itertools = "0.10.5"
-prometheus = "0.13.3"
-rand = "0.8.5"
-tempfile = "3.3.0"
+fdlimit.workspace = true
+indexmap.workspace = true
+itertools.workspace = true
+prometheus.workspace = true
+rand.workspace = true
+tempfile.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "macros"] }
-tonic = "0.8.2"
-tracing = "0.1.36"
-once_cell = "1.16"
+tonic.workspace = true
+tracing.workspace = true
+once_cell.workspace = true
 
 config = { path = "../config", package = "narwhal-config" }
 fastcrypto.workspace = true
@@ -28,10 +28,11 @@ primary = { path = "../primary", package = "narwhal-primary" }
 types = { path = "../types", package = "narwhal-types" }
 worker = { path = "../worker", package = "narwhal-worker" }
 storage = { path = "../storage", package = "narwhal-storage" }
-mysten-metrics = { path = "../../crates/mysten-metrics" }
+mysten-metrics.workspace = true
 store = { path = "../../crates/typed-store", package = "typed-store" }
-telemetry-subscribers = { path = "../../crates/telemetry-subscribers", package = "telemetry-subscribers" }
+telemetry-subscribers.workspace = true
 mysten-network.workspace = true
+sui-protocol-config.workspace = true
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 anemo.workspace = true

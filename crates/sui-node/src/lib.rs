@@ -20,8 +20,11 @@ use arc_swap::ArcSwap;
 use futures::TryFutureExt;
 use mysten_common::sync::async_once_cell::AsyncOnceCell;
 use prometheus::Registry;
+use sui_core::authority::CHAIN_IDENTIFIER;
 use sui_core::consensus_adapter::LazyNarwhalClient;
 use sui_json_rpc::api::JsonRpcMetrics;
+use sui_types::digests::ChainIdentifier;
+use sui_types::message_envelope::get_google_jwk_bytes;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
 use tokio::runtime::Handle;
@@ -30,7 +33,7 @@ use tokio::sync::oneshot;
 use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 use tracing::{error_span, info, Instrument};
 
 use checkpoint_executor::CheckpointExecutor;
@@ -39,6 +42,8 @@ use mysten_metrics::{spawn_monitored_task, RegistryService};
 use mysten_network::server::ServerBuilder;
 use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
+use sui_archival::reader::ArchiveReaderBalancer;
+use sui_archival::writer::ArchiveWriter;
 use sui_config::node::DBCheckpointConfig;
 use sui_config::node_config_metrics::NodeConfigMetrics;
 use sui_config::{ConsensusConfig, NodeConfig};
@@ -81,14 +86,22 @@ use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
+use sui_kvstore::writer::setup_key_value_store_uploader;
 use sui_macros::fail_point_async;
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::discovery::TrustedPeerChangeEvent;
 use sui_network::state_sync;
-use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
-use sui_storage::IndexStore;
-use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
+use sui_protocol_config::{Chain, ProtocolConfig, SupportedProtocolVersions};
+use sui_snapshot::uploader::StateSnapshotUploader;
+use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
+use sui_storage::{
+    http_key_value_store::HttpKVStore,
+    key_value_store::{FallbackTransactionKVStore, TransactionKeyValueStore},
+    key_value_store_metrics::KeyValueStoreMetrics,
+};
+use sui_storage::{FileCompression, IndexStore, StorageFormat};
+use sui_types::base_types::{AuthorityName, EpochId};
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
 use sui_types::error::{SuiError, SuiResult};
@@ -97,6 +110,7 @@ use sui_types::quorum_driver_types::QuorumDriverEffectsQueueResult;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::zk_login_util::{parse_jwks, OAuthProviderContent};
 use typed_store::rocks::default_db_options;
 use typed_store::DBMetrics;
 
@@ -117,6 +131,13 @@ pub struct ValidatorComponents {
     checkpoint_service_exit: watch::Sender<()>,
     checkpoint_metrics: Arc<CheckpointMetrics>,
     sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
+}
+
+#[cfg(msim)]
+struct SimState {
+    sim_node: sui_simulator::runtime::NodeHandle,
+    sim_safe_mode_expected: AtomicBool,
+    _leak_detector: sui_simulator::NodeLeakDetector,
 }
 
 pub struct SuiNode {
@@ -142,10 +163,12 @@ pub struct SuiNode {
     _db_checkpoint_handle: Option<oneshot::Sender<()>>,
 
     #[cfg(msim)]
-    sim_node: sui_simulator::runtime::NodeHandle,
+    sim_state: SimState,
 
-    #[cfg(msim)]
-    sim_safe_mode_expected: AtomicBool,
+    _state_archive_handle: Option<broadcast::Sender<()>>,
+
+    _state_snapshot_uploader_handle: Option<oneshot::Sender<()>>,
+    _kv_store_uploader_handle: Option<oneshot::Sender<()>>,
 }
 
 impl fmt::Debug for SuiNode {
@@ -173,6 +196,67 @@ impl SuiNode {
         Ok(node_one_cell.get().await)
     }
 
+    fn start_jwk_updater(epoch_store: Arc<AuthorityPerEpochStore>) {
+        let epoch = epoch_store.epoch();
+        tokio::task::spawn(
+            async move {
+                info!("Starting JWK updater task");
+                loop {
+                    let epoch_store_ = epoch_store.clone();
+                    let fetch_and_sleep = async move {
+                        // Update the JWK value in the authority server
+                        info!("fetching new JWKs");
+                        match Self::fetch_jwk().await {
+                            Err(e) => {
+                                warn!("Error when fetching JWK {:?}", e);
+                                // Retry in 30 seconds
+                                tokio::time::sleep(Duration::from_secs(30)).await;
+                            }
+                            Ok(keys) => {
+                                for (_, v) in keys {
+                                    epoch_store_.insert_oauth_jwk(&v);
+                                }
+
+                                // Sleep for 1 hour
+                                tokio::time::sleep(Duration::from_secs(3600)).await;
+                            }
+                        }
+                    };
+
+                    tokio::select! {
+                        _ = fetch_and_sleep => {}
+                        _ = epoch_store.wait_epoch_terminated() => {
+                            break;
+                        }
+                    }
+                }
+                info!("JWK updater task terminated");
+            }
+            .instrument(error_span!("jwk_updater_task", epoch)),
+        );
+    }
+
+    #[cfg(not(msim))]
+    async fn fetch_jwk() -> SuiResult<Vec<(String, OAuthProviderContent)>> {
+        let client = reqwest::Client::new();
+        let response = client
+            .get("https://www.googleapis.com/oauth2/v2/certs")
+            .send()
+            .await
+            .map_err(|_| SuiError::JWKRetrievalError)?;
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|_| SuiError::JWKRetrievalError)?;
+
+        parse_jwks(&bytes)
+    }
+
+    #[cfg(msim)]
+    async fn fetch_jwk() -> SuiResult<Vec<(String, OAuthProviderContent)>> {
+        parse_jwks(sui_types::zk_login_util::DEFAULT_JWK_BYTES)
+    }
+
     pub async fn start_async(
         config: &NodeConfig,
         registry_service: RegistryService,
@@ -180,7 +264,6 @@ impl SuiNode {
         custom_rpc_runtime: Option<Handle>,
     ) -> Result<()> {
         NodeConfigMetrics::new(&registry_service.default_registry()).record_metrics(config);
-
         let mut config = config.clone();
         if config.supported_protocol_versions.is_none() {
             info!(
@@ -253,7 +336,12 @@ impl SuiNode {
             cache_metrics,
             signature_verifier_metrics,
             &config.expensive_safety_check_config,
+            ChainIdentifier::from(*genesis.checkpoint().digest()),
         );
+
+        if epoch_store.protocol_config().zklogin_auth() {
+            Self::start_jwk_updater(epoch_store.clone());
+        }
 
         // the database is empty at genesis time
         if is_genesis {
@@ -262,7 +350,7 @@ impl SuiNode {
             // an epoch and the SUI conservation check will fail. This also initialize
             // the expected_network_sui_amount table.
             store
-                .expensive_check_sui_conservation(epoch_store.move_vm())
+                .expensive_check_sui_conservation(&epoch_store)
                 .expect("SUI conservation check cannot fail at genesis");
         }
 
@@ -302,14 +390,22 @@ impl SuiNode {
             None
         };
 
+        let chain_identifier = ChainIdentifier::from(*genesis.checkpoint().digest());
+        // It's ok if the value is already set due to data races.
+        let _ = CHAIN_IDENTIFIER.set(chain_identifier);
+
         // Create network
         // TODO only configure validators as seed/preferred peers for validators and not for
         // fullnodes once we've had a chance to re-work fullnode configuration generation.
+        let archive_readers =
+            ArchiveReaderBalancer::new(config.archive_reader_config(), &prometheus_registry)?;
         let (trusted_peer_change_tx, trusted_peer_change_rx) = watch::channel(Default::default());
         let (p2p_network, discovery_handle, state_sync_handle) = Self::create_p2p_network(
             &config,
-            state_sync_store,
+            state_sync_store.clone(),
+            chain_identifier,
             trusted_peer_change_rx,
+            archive_readers.clone(),
             &prometheus_registry,
         )?;
         // We must explicitly send this instead of relying on the initial value to trigger
@@ -321,36 +417,27 @@ impl SuiNode {
         )
         .expect("Initial trusted peers must be set");
 
-        let db_checkpoint_config = if config.db_checkpoint_config.checkpoint_path.is_none() {
-            DBCheckpointConfig {
-                checkpoint_path: Some(config.db_checkpoint_path()),
-                ..config.db_checkpoint_config.clone()
-            }
-        } else {
-            config.db_checkpoint_config.clone()
-        };
+        // Start uploading transactions/events to remote key value store
+        let kv_store_uploader_handle = setup_key_value_store_uploader(
+            state_sync_store.clone(),
+            &config.transaction_kv_store_write_config,
+            &prometheus_registry,
+        )
+        .await?;
 
-        let db_checkpoint_handle = match db_checkpoint_config
-            .checkpoint_path
-            .as_ref()
-            .zip(db_checkpoint_config.object_store_config.as_ref())
-        {
-            Some((path, object_store_config)) => {
-                let handler = DBCheckpointHandler::new(
-                    path,
-                    object_store_config,
-                    60,
-                    db_checkpoint_config
-                        .prune_and_compact_before_upload
-                        .unwrap_or(true),
-                    config.indirect_objects_threshold,
-                    config.authority_store_pruning_config,
-                    &prometheus_registry,
-                )?;
-                Some(handler.start())
-            }
-            None => None,
-        };
+        // Start archiving local state to remote store
+        let state_archive_handle =
+            Self::start_state_archival(&config, &prometheus_registry, state_sync_store).await?;
+
+        // Start uploading state snapshot to remote store
+        let state_snapshot_handle = Self::start_state_snapshot(&config, &prometheus_registry)?;
+
+        // Start uploading db checkpoints to remote store
+        let (db_checkpoint_config, db_checkpoint_handle) = Self::start_db_checkpoint(
+            &config,
+            &prometheus_registry,
+            state_snapshot_handle.is_some(),
+        )?;
 
         let state = AuthorityState::new(
             config.protocol_public_key(),
@@ -370,6 +457,7 @@ impl SuiNode {
             config.certificate_deny_config.clone(),
             config.indirect_objects_threshold,
             config.state_debug_dump_config.clone(),
+            archive_readers,
         )
         .await;
         // ensure genesis txn was executed
@@ -390,6 +478,16 @@ impl SuiNode {
                 .unwrap();
         }
 
+        if config
+            .expensive_safety_check_config
+            .enable_secondary_index_checks()
+        {
+            if let Some(indexes) = state.indexes.clone() {
+                sui_core::verify_indexes::verify_indexes(state.database.clone(), indexes)
+                    .expect("secondary indexes are inconsistent");
+            }
+        }
+
         let (end_of_epoch_channel, end_of_epoch_receiver) =
             broadcast::channel(config.end_of_epoch_broadcast_channel_capacity);
 
@@ -400,8 +498,7 @@ impl SuiNode {
                     end_of_epoch_receiver,
                     &config.db_path(),
                     &prometheus_registry,
-                )
-                .await?,
+                )?,
             ))
         } else {
             None
@@ -485,10 +582,17 @@ impl SuiNode {
             trusted_peer_change_tx,
 
             _db_checkpoint_handle: db_checkpoint_handle,
+
             #[cfg(msim)]
-            sim_node: sui_simulator::runtime::NodeHandle::current(),
-            #[cfg(msim)]
-            sim_safe_mode_expected: AtomicBool::new(false),
+            sim_state: SimState {
+                sim_node: sui_simulator::runtime::NodeHandle::current(),
+                sim_safe_mode_expected: AtomicBool::new(false),
+                _leak_detector: sui_simulator::NodeLeakDetector::new(),
+            },
+
+            _state_archive_handle: state_archive_handle,
+            _state_snapshot_uploader_handle: state_snapshot_handle,
+            _kv_store_uploader_handle: kv_store_uploader_handle,
         };
 
         info!("SuiNode started!");
@@ -509,7 +613,8 @@ impl SuiNode {
     #[cfg(msim)]
     pub fn set_safe_mode_expected(&self, new_value: bool) {
         info!("Setting safe mode expected to {}", new_value);
-        self.sim_safe_mode_expected
+        self.sim_state
+            .sim_safe_mode_expected
             .store(new_value, Ordering::Relaxed);
     }
 
@@ -555,24 +660,101 @@ impl SuiNode {
         self.close_epoch(&epoch_store).await
     }
 
-    pub fn is_transaction_executed_in_checkpoint(
-        &self,
-        digest: &TransactionDigest,
-    ) -> SuiResult<bool> {
-        self.state
-            .database
-            .is_transaction_executed_in_checkpoint(digest)
+    async fn start_state_archival(
+        config: &NodeConfig,
+        prometheus_registry: &Registry,
+        state_sync_store: RocksDbStore,
+    ) -> Result<Option<tokio::sync::broadcast::Sender<()>>> {
+        if let Some(remote_store_config) = &config.state_archive_write_config.object_store_config {
+            let local_store_config = ObjectStoreConfig {
+                object_store: Some(ObjectStoreType::File),
+                directory: Some(config.archive_path()),
+                ..Default::default()
+            };
+            let archive_writer = ArchiveWriter::new(
+                local_store_config,
+                remote_store_config.clone(),
+                FileCompression::Zstd,
+                StorageFormat::Blob,
+                Duration::from_secs(600),
+                256 * 1024 * 1024,
+                prometheus_registry,
+            )
+            .await?;
+            Ok(Some(archive_writer.start(state_sync_store).await?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn start_state_snapshot(
+        config: &NodeConfig,
+        prometheus_registry: &Registry,
+    ) -> Result<Option<oneshot::Sender<()>>> {
+        if let Some(remote_store_config) = &config.state_snapshot_write_config.object_store_config {
+            let snapshot_uploader = StateSnapshotUploader::new(
+                &config.db_checkpoint_path(),
+                &config.snapshot_path(),
+                remote_store_config.clone(),
+                60,
+                prometheus_registry,
+            )?;
+            Ok(Some(snapshot_uploader.start()))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn start_db_checkpoint(
+        config: &NodeConfig,
+        prometheus_registry: &Registry,
+        state_snapshot_enabled: bool,
+    ) -> Result<(DBCheckpointConfig, Option<oneshot::Sender<()>>)> {
+        let db_checkpoint_config = if config.db_checkpoint_config.checkpoint_path.is_none() {
+            DBCheckpointConfig {
+                checkpoint_path: Some(config.db_checkpoint_path()),
+                ..config.db_checkpoint_config.clone()
+            }
+        } else {
+            config.db_checkpoint_config.clone()
+        };
+
+        match db_checkpoint_config
+            .checkpoint_path
+            .as_ref()
+            .zip(db_checkpoint_config.object_store_config.as_ref())
+        {
+            Some((path, object_store_config)) => {
+                let handler = DBCheckpointHandler::new(
+                    path,
+                    object_store_config,
+                    60,
+                    db_checkpoint_config
+                        .prune_and_compact_before_upload
+                        .unwrap_or(true),
+                    config.indirect_objects_threshold,
+                    config.authority_store_pruning_config,
+                    prometheus_registry,
+                    state_snapshot_enabled,
+                )?;
+                Ok((db_checkpoint_config, Some(handler.start())))
+            }
+            None => Ok((db_checkpoint_config, None)),
+        }
     }
 
     pub fn create_p2p_network(
         config: &NodeConfig,
         state_sync_store: RocksDbStore,
+        chain_identifier: ChainIdentifier,
         trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>,
+        archive_readers: ArchiveReaderBalancer,
         prometheus_registry: &Registry,
     ) -> Result<(Network, discovery::Handle, state_sync::Handle)> {
         let (state_sync, state_sync_server) = state_sync::Builder::new()
             .config(config.p2p_config.state_sync.clone().unwrap_or_default())
             .store(state_sync_store)
+            .archive_readers(archive_readers)
             .with_metrics(prometheus_registry)
             .build();
 
@@ -615,17 +797,34 @@ impl SuiNode {
                 .into_inner();
 
             let mut anemo_config = config.p2p_config.anemo_config.clone().unwrap_or_default();
-            // Set the max_frame_size to be 2 GB to work around the issue of there being too many
+            // Set the max_frame_size to be 1 GB to work around the issue of there being too many
             // staking events in the epoch change txn.
-            anemo_config.max_frame_size = Some(2 << 30);
+            anemo_config.max_frame_size = Some(1 << 30);
 
+            // Set a higher default value for socket send/receive buffers if not already
+            // configured.
+            let mut quic_config = anemo_config.quic.unwrap_or_default();
+            if quic_config.socket_send_buffer_size.is_none() {
+                quic_config.socket_send_buffer_size = Some(20 << 20);
+            }
+            if quic_config.socket_receive_buffer_size.is_none() {
+                quic_config.socket_receive_buffer_size = Some(20 << 20);
+            }
+            quic_config.allow_failed_socket_buffer_size_setting = true;
+            anemo_config.quic = Some(quic_config);
+
+            let server_name = format!("sui-{}", chain_identifier);
             let network = Network::bind(config.p2p_config.listen_address)
-                .server_name("sui")
+                .server_name(&server_name)
                 .private_key(config.network_key_pair().copy().private().0.to_bytes())
                 .config(anemo_config)
                 .outbound_request_layer(outbound_layer)
                 .start(service)?;
-            info!("P2p network started on {}", network.local_addr());
+            info!(
+                server_name = server_name,
+                "P2p network started on {}",
+                network.local_addr()
+            );
 
             network
         };
@@ -755,10 +954,12 @@ impl SuiNode {
         narwhal_manager
             .start(
                 new_epoch_start_state.get_narwhal_committee(),
+                epoch_store.protocol_config().clone(),
                 worker_cache,
                 consensus_handler,
                 SuiTxValidator::new(
                     epoch_store,
+                    checkpoint_service.clone(),
                     state.transaction_manager().clone(),
                     sui_tx_validator_metrics.clone(),
                 ),
@@ -931,6 +1132,13 @@ impl SuiNode {
         self.transaction_orchestrator.clone()
     }
 
+    pub fn get_google_jwk_bytes(&self) -> Result<Vec<u8>, SuiError> {
+        Ok(get_google_jwk_bytes()
+            .read()
+            .map_err(|_| SuiError::JWKRetrievalError)?
+            .to_vec())
+    }
+
     pub fn subscribe_to_transaction_orchestrator_effects(
         &self,
     ) -> Result<tokio::sync::broadcast::Receiver<QuorumDriverEffectsQueueResult>> {
@@ -990,7 +1198,11 @@ impl SuiNode {
                 .expect("Read Sui System State object cannot fail");
 
             #[cfg(msim)]
-            if !self.sim_safe_mode_expected.load(Ordering::Relaxed) {
+            if !self
+                .sim_state
+                .sim_safe_mode_expected
+                .load(Ordering::Relaxed)
+            {
                 debug_assert!(!latest_system_state.safe_mode());
             }
 
@@ -1128,6 +1340,22 @@ impl SuiNode {
                 }
             };
             *self.validator_components.lock().await = new_validator_components;
+
+            #[cfg(msim)]
+            if !matches!(
+                self.config
+                    .authority_store_pruning_config
+                    .num_epochs_to_retain_for_checkpoints(),
+                None | Some(u64::MAX) | Some(0)
+            ) {
+                self.state
+                .prune_checkpoints_for_eligible_epochs(
+                    self.config.clone(),
+                    sui_core::authority::authority_store_pruner::AuthorityStorePruningMetrics::new_for_test(),
+                )
+                .await?;
+            }
+
             info!("Reconfiguration finished");
         }
     }
@@ -1168,7 +1396,18 @@ impl SuiNode {
             cur_epoch_store.epoch_start_config().flags(),
             new_epoch_store.epoch_start_config().flags(),
         );
+
+        Self::start_jwk_updater(new_epoch_store.clone());
         new_epoch_store
+    }
+
+    #[cfg(msim)]
+    pub fn get_sim_node_id(&self) -> sui_simulator::task::NodeId {
+        self.sim_state.sim_node.id()
+    }
+
+    pub fn get_config(&self) -> &NodeConfig {
+        &self.config
     }
 }
 
@@ -1190,6 +1429,48 @@ fn send_trusted_peer_change(
         })
 }
 
+fn build_kv_store(
+    state: &Arc<AuthorityState>,
+    config: &NodeConfig,
+    registry: &Registry,
+) -> Result<Arc<TransactionKeyValueStore>> {
+    let metrics = KeyValueStoreMetrics::new(registry);
+    let db_store = TransactionKeyValueStore::new("rocksdb", metrics.clone(), state.clone());
+
+    let base_url = &config.transaction_kv_store_read_config.base_url;
+
+    if base_url.is_empty() {
+        info!("no http kv store url provided, using local db only");
+        return Ok(Arc::new(db_store));
+    }
+
+    let base_url: url::Url = base_url.parse().tap_err(|e| {
+        error!(
+            "failed to parse config.transaction_kv_store_config.base_url ({:?}) as url: {}",
+            base_url, e
+        )
+    })?;
+
+    let network_str = match state.get_chain_identifier().map(|c| c.chain()) {
+        Some(Chain::Mainnet) => "/mainnet",
+        Some(Chain::Testnet) => "/testnet",
+        _ => {
+            info!("using local db only for kv store for unknown chain");
+            return Ok(Arc::new(db_store));
+        }
+    };
+
+    let base_url = base_url.join(network_str)?.to_string();
+    let http_store = HttpKVStore::new_kv(&base_url, metrics.clone())?;
+    info!("using local key-value store with fallback to http key-value store");
+    Ok(Arc::new(FallbackTransactionKVStore::new_kv(
+        db_store,
+        http_store,
+        metrics,
+        "json_rpc_fallback",
+    )))
+}
+
 pub async fn build_server(
     state: Arc<AuthorityState>,
     transaction_orchestrator: &Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
@@ -1203,9 +1484,20 @@ pub async fn build_server(
     }
 
     let mut server = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
+
+    let kv_store = build_kv_store(&state, config, prometheus_registry)?;
+
     let metrics = Arc::new(JsonRpcMetrics::new(prometheus_registry));
-    server.register_module(ReadApi::new(state.clone(), metrics.clone()))?;
-    server.register_module(CoinReadApi::new(state.clone(), metrics.clone()))?;
+    server.register_module(ReadApi::new(
+        state.clone(),
+        kv_store.clone(),
+        metrics.clone(),
+    ))?;
+    server.register_module(CoinReadApi::new(
+        state.clone(),
+        kv_store.clone(),
+        metrics.clone(),
+    ))?;
     server.register_module(TransactionBuilderApi::new(state.clone()))?;
     server.register_module(GovernanceReadApi::new(state.clone(), metrics.clone()))?;
 
@@ -1219,16 +1511,18 @@ pub async fn build_server(
 
     server.register_module(IndexerApi::new(
         state.clone(),
-        ReadApi::new(state.clone(), metrics.clone()),
+        ReadApi::new(state.clone(), kv_store.clone(), metrics.clone()),
+        kv_store,
         config.name_service_package_address,
         config.name_service_registry_id,
         config.name_service_reverse_registry_id,
         metrics.clone(),
+        config.indexer_max_subscriptions,
     ))?;
     server.register_module(MoveUtils::new(state.clone()))?;
 
     let rpc_server_handle = server
-        .start(config.json_rpc_address, custom_runtime)
+        .start(config.json_rpc_address, custom_runtime, None)
         .await?;
 
     Ok(Some(rpc_server_handle))

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    diagnostics::WarningFilters,
     expansion::ast::{Attributes, Friend, ModuleIdent, Visibility},
     hlir::ast::{
         BaseType, Command, Command_, FunctionSignature, Label, SingleType, StructDefinition, Var,
@@ -13,7 +14,7 @@ use crate::{
 use move_core_types::value::MoveValue;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, VecDeque};
 
 // HLIR + Unstructured Control Flow + CFG
 
@@ -33,6 +34,7 @@ pub struct Program {
 
 #[derive(Debug, Clone)]
 pub struct Script {
+    pub warning_filter: WarningFilters,
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
@@ -48,6 +50,7 @@ pub struct Script {
 
 #[derive(Debug, Clone)]
 pub struct ModuleDefinition {
+    pub warning_filter: WarningFilters,
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
@@ -66,6 +69,7 @@ pub struct ModuleDefinition {
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Constant {
+    pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
@@ -78,20 +82,21 @@ pub struct Constant {
 // Functions
 //**************************************************************************************************
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum FunctionBody_ {
     Native,
     Defined {
         locals: UniqueMap<Var, SingleType>,
         start: Label,
-        loop_heads: BTreeSet<Label>,
+        block_info: BTreeMap<Label, BlockInfo>,
         blocks: BasicBlocks,
     },
 }
 pub type FunctionBody = Spanned<FunctionBody_>;
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Function {
+    pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
@@ -110,7 +115,7 @@ pub type BasicBlocks = BTreeMap<Label, BasicBlock>;
 
 pub type BasicBlock = VecDeque<Command>;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum LoopEnd {
     // If the generated loop end block was not used
     Unused,
@@ -118,13 +123,13 @@ pub enum LoopEnd {
     Target(Label),
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub struct LoopInfo {
     pub is_loop_stmt: bool,
     pub loop_end: LoopEnd,
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum BlockInfo {
     LoopHead(LoopInfo),
     Other,
@@ -208,6 +213,7 @@ impl AstDebug for Program {
 impl AstDebug for Script {
     fn ast_debug(&self, w: &mut AstWriter) {
         let Script {
+            warning_filter,
             package_name,
             attributes,
             loc: _loc,
@@ -215,6 +221,7 @@ impl AstDebug for Script {
             function_name,
             function,
         } = self;
+        warning_filter.ast_debug(w);
         if let Some(n) = package_name {
             w.writeln(&format!("{}", n))
         }
@@ -230,6 +237,7 @@ impl AstDebug for Script {
 impl AstDebug for ModuleDefinition {
     fn ast_debug(&self, w: &mut AstWriter) {
         let ModuleDefinition {
+            warning_filter,
             package_name,
             attributes,
             is_source_module,
@@ -239,6 +247,7 @@ impl AstDebug for ModuleDefinition {
             constants,
             functions,
         } = self;
+        warning_filter.ast_debug(w);
         if let Some(n) = package_name {
             w.writeln(&format!("{}", n))
         }
@@ -273,6 +282,7 @@ impl AstDebug for (ConstantName, &Constant) {
         let (
             name,
             Constant {
+                warning_filter,
                 index,
                 attributes,
                 loc: _loc,
@@ -280,6 +290,7 @@ impl AstDebug for (ConstantName, &Constant) {
                 value,
             },
         ) = self;
+        warning_filter.ast_debug(w);
         attributes.ast_debug(w);
         w.write(&format!("const#{index} {name}:"));
         signature.ast_debug(w);
@@ -320,6 +331,7 @@ impl AstDebug for (FunctionName, &Function) {
         let (
             name,
             Function {
+                warning_filter,
                 index,
                 attributes,
                 visibility,
@@ -329,6 +341,7 @@ impl AstDebug for (FunctionName, &Function) {
                 body,
             },
         ) = self;
+        warning_filter.ast_debug(w);
         attributes.ast_debug(w);
         visibility.ast_debug(w);
         if entry.is_some() {
@@ -348,7 +361,7 @@ impl AstDebug for (FunctionName, &Function) {
             FunctionBody_::Defined {
                 locals,
                 start,
-                loop_heads,
+                block_info,
                 blocks,
             } => w.block(|w| {
                 w.write("locals:");
@@ -360,10 +373,11 @@ impl AstDebug for (FunctionName, &Function) {
                     })
                 });
                 w.new_line();
-                w.writeln("loop heads:");
+                w.writeln("block info:");
                 w.indent(4, |w| {
-                    for loop_head in loop_heads {
-                        w.writeln(&format!("{}", loop_head))
+                    for (lbl, info) in block_info {
+                        w.writeln(&format!("{lbl}: "));
+                        info.ast_debug(w);
                     }
                 });
                 w.writeln(&format!("start={}", start.0));
@@ -389,5 +403,38 @@ impl AstDebug for (&Label, &BasicBlock) {
     fn ast_debug(&self, w: &mut AstWriter) {
         w.write(&format!("label {}:", (self.0).0));
         w.indent(4, |w| w.semicolon(self.1, |w, cmd| cmd.ast_debug(w)))
+    }
+}
+
+impl AstDebug for BlockInfo {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        match self {
+            BlockInfo::LoopHead(i) => i.ast_debug(w),
+            BlockInfo::Other => w.write("non-loop head"),
+        }
+    }
+}
+
+impl AstDebug for LoopInfo {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let Self {
+            is_loop_stmt,
+            loop_end,
+        } = self;
+        w.write(&format!(
+            "{{ is_loop_stmt: {}, end: ",
+            if *is_loop_stmt { "true" } else { "false" }
+        ));
+        loop_end.ast_debug(w);
+        w.write(" }}")
+    }
+}
+
+impl AstDebug for LoopEnd {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        match self {
+            LoopEnd::Unused => w.write("unused end"),
+            LoopEnd::Target(lbl) => w.write(&format!("{lbl}")),
+        }
     }
 }

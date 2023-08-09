@@ -5,7 +5,7 @@
 use crate::{
     cfgir::{
         ast::remap_labels,
-        cfg::{BlockCFG, CFG},
+        cfg::{MutForwardCFG, CFG},
     },
     hlir::ast::{BasicBlocks, Command_, FunctionSignature, Label, SingleType, Var},
     shared::unique_map::UniqueMap,
@@ -16,7 +16,7 @@ use std::collections::{BTreeMap, BTreeSet};
 pub fn optimize(
     _signature: &FunctionSignature,
     _locals: &UniqueMap<Var, SingleType>,
-    cfg: &mut BlockCFG,
+    cfg: &mut MutForwardCFG,
 ) -> bool {
     let changed = optimize_(cfg.start_block(), cfg.blocks_mut());
     if changed {

@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 use storage::NodeStorage;
+use sui_protocol_config::ProtocolConfig;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::{info, instrument};
@@ -25,6 +26,7 @@ use worker::{TransactionValidator, Worker, NUM_SHUTDOWN_RECEIVERS};
 pub struct WorkerNodeInner {
     // The worker's id
     id: WorkerId,
+    protocol_config: ProtocolConfig,
     // The configuration parameters.
     parameters: Parameters,
     // A prometheus RegistryService to use for the metrics
@@ -96,6 +98,7 @@ impl WorkerNodeInner {
             self.id,
             committee.clone(),
             worker_cache.clone(),
+            self.protocol_config.clone(),
             self.parameters.clone(),
             tx_validator.clone(),
             client.clone(),
@@ -182,11 +185,13 @@ pub struct WorkerNode {
 impl WorkerNode {
     pub fn new(
         id: WorkerId,
+        protocol_config: ProtocolConfig,
         parameters: Parameters,
         registry_service: RegistryService,
     ) -> WorkerNode {
         let inner = WorkerNodeInner {
             id,
+            protocol_config,
             parameters,
             registry_service,
             registry: None,
@@ -279,6 +284,7 @@ impl WorkerNodes {
         ids_and_keypairs: Vec<(WorkerId, NetworkKeyPair)>,
         // The committee information.
         committee: Committee,
+        protocol_config: ProtocolConfig,
         // The worker information cache.
         worker_cache: WorkerCache,
         // Client for communications.
@@ -310,6 +316,7 @@ impl WorkerNodes {
         for (worker_id, key_pair) in ids_and_keypairs {
             let worker = WorkerNode::new(
                 worker_id,
+                protocol_config.clone(),
                 self.parameters.clone(),
                 self.registry_service.clone(),
             );

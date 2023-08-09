@@ -5,9 +5,9 @@ import { useRpcClient } from '../api/RpcClientContext';
 import { useQuery } from '@tanstack/react-query';
 
 export function useGetReferenceGasPrice() {
-    const rpc = useRpcClient();
-    return useQuery({
-        queryKey: ['current-epoch', 'gas-price'],
-        queryFn: () => rpc.getReferenceGasPrice(),
-    });
+	const rpc = useRpcClient();
+	return useQuery({
+		queryKey: ['current-epoch', 'gas-price'],
+		queryFn: () => rpc.getReferenceGasPrice(),
+	});
 }

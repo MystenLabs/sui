@@ -1,0 +1,204 @@
+---
+source: crates/sui-e2e-tests/tests/snapshot_tests.rs
+expression: "run_one(cmds, context).await?"
+---
+[
+  "sui client objects {ME}",
+  [
+    {
+      "data": {
+        "objectId": "0x1f06d54bea8de188480b8b7fa04738b74f8de4a304c009ed7546ee1668caa42a",
+        "version": "1",
+        "digest": "3s2ZQ3BLCqb5Q52s7bvSJ1FUK8whocJCPW6bjUfTx4pQ",
+        "type": "0x2::coin::Coin<0x2::sui::SUI>",
+        "owner": {
+          "AddressOwner": "0x27b7eae6e24b7175c296a26292d6fbc0ec96f036d42270617a6ca8e0c4310b59"
+        },
+        "previousTransaction": "HNX5jhha6LU7ckUi9DrD6F599Vus7VdZqi8oQKva6JDX",
+        "storageRebate": "0",
+        "content": {
+          "dataType": "moveObject",
+          "type": "0x2::coin::Coin<0x2::sui::SUI>",
+          "hasPublicTransfer": true,
+          "fields": {
+            "balance": "30000000000000000",
+            "id": {
+              "id": "0x1f06d54bea8de188480b8b7fa04738b74f8de4a304c009ed7546ee1668caa42a"
+            }
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "objectId": "0x4c5b07bf473981857914de322ba555242af597d856ecaef054b2a4537155a7b7",
+        "version": "1",
+        "digest": "5cpa4GwCUfeW6JsbNWQdd77bH5wYHsK8GKrqgiwC1rdF",
+        "type": "0x2::coin::Coin<0x2::sui::SUI>",
+        "owner": {
+          "AddressOwner": "0x27b7eae6e24b7175c296a26292d6fbc0ec96f036d42270617a6ca8e0c4310b59"
+        },
+        "previousTransaction": "HNX5jhha6LU7ckUi9DrD6F599Vus7VdZqi8oQKva6JDX",
+        "storageRebate": "0",
+        "content": {
+          "dataType": "moveObject",
+          "type": "0x2::coin::Coin<0x2::sui::SUI>",
+          "hasPublicTransfer": true,
+          "fields": {
+            "balance": "30000000000000000",
+            "id": {
+              "id": "0x4c5b07bf473981857914de322ba555242af597d856ecaef054b2a4537155a7b7"
+            }
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "objectId": "0x8e6170e371897b90def1a115e87f7f2f8edb6532812572e9096ed234ddfb09c2",
+        "version": "1",
+        "digest": "AUFXcsqx8sdHo9TTHgP6Rqaz6Nqnmn3Mcq1DAsqFnaFr",
+        "type": "0x2::coin::Coin<0x2::sui::SUI>",
+        "owner": {
+          "AddressOwner": "0x27b7eae6e24b7175c296a26292d6fbc0ec96f036d42270617a6ca8e0c4310b59"
+        },
+        "previousTransaction": "HNX5jhha6LU7ckUi9DrD6F599Vus7VdZqi8oQKva6JDX",
+        "storageRebate": "0",
+        "content": {
+          "dataType": "moveObject",
+          "type": "0x2::coin::Coin<0x2::sui::SUI>",
+          "hasPublicTransfer": true,
+          "fields": {
+            "balance": "30000000000000000",
+            "id": {
+              "id": "0x8e6170e371897b90def1a115e87f7f2f8edb6532812572e9096ed234ddfb09c2"
+            }
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "objectId": "0xc90f8c38315f01cc0b3b360d6dc6ca396ebcc30b1824e8b8b7e007d810f547f9",
+        "version": "1",
+        "digest": "DatScUS9tv29UuXTqBM3Z9z2qNySzPv6LQzEVjk1MhKU",
+        "type": "0x2::coin::Coin<0x2::sui::SUI>",
+        "owner": {
+          "AddressOwner": "0x27b7eae6e24b7175c296a26292d6fbc0ec96f036d42270617a6ca8e0c4310b59"
+        },
+        "previousTransaction": "HNX5jhha6LU7ckUi9DrD6F599Vus7VdZqi8oQKva6JDX",
+        "storageRebate": "0",
+        "content": {
+          "dataType": "moveObject",
+          "type": "0x2::coin::Coin<0x2::sui::SUI>",
+          "hasPublicTransfer": true,
+          "fields": {
+            "balance": "30000000000000000",
+            "id": {
+              "id": "0xc90f8c38315f01cc0b3b360d6dc6ca396ebcc30b1824e8b8b7e007d810f547f9"
+            }
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "objectId": "0xebef54337dbec7ff13ff1e2c9080a2e6cc5d57d002254bed93198c0dda7bb5c1",
+        "version": "1",
+        "digest": "Gt6Da5BqyvCCjF2t5qzkE1RvwXk8UJzrWG334akGSdex",
+        "type": "0x2::coin::Coin<0x2::sui::SUI>",
+        "owner": {
+          "AddressOwner": "0x27b7eae6e24b7175c296a26292d6fbc0ec96f036d42270617a6ca8e0c4310b59"
+        },
+        "previousTransaction": "HNX5jhha6LU7ckUi9DrD6F599Vus7VdZqi8oQKva6JDX",
+        "storageRebate": "0",
+        "content": {
+          "dataType": "moveObject",
+          "type": "0x2::coin::Coin<0x2::sui::SUI>",
+          "hasPublicTransfer": true,
+          "fields": {
+            "balance": "30000000000000000",
+            "id": {
+              "id": "0xebef54337dbec7ff13ff1e2c9080a2e6cc5d57d002254bed93198c0dda7bb5c1"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "sui client objects 0x0000000000000000000000000000000000000000000000000000000000000000",
+  [],
+  "sui client object 0x5",
+  [
+    {
+      "data": {
+        "objectId": "0x0000000000000000000000000000000000000000000000000000000000000005",
+        "version": "1",
+        "digest": "MmKCAHwfU7DrwgAf7LE6C7DEF7xHq8tPxfntbHu9AeS",
+        "type": "0x3::sui_system::SuiSystemState",
+        "owner": {
+          "Shared": {
+            "initial_shared_version": {
+              "$serde_json::private::Number": "1"
+            }
+          }
+        },
+        "previousTransaction": "HNX5jhha6LU7ckUi9DrD6F599Vus7VdZqi8oQKva6JDX",
+        "storageRebate": "0",
+        "content": {
+          "dataType": "moveObject",
+          "type": "0x3::sui_system::SuiSystemState",
+          "hasPublicTransfer": false,
+          "fields": {
+            "id": {
+              "id": "0x0000000000000000000000000000000000000000000000000000000000000005"
+            },
+            "version": "1"
+          }
+        }
+      }
+    }
+  ],
+  "sui client object 0x5 --bcs",
+  [
+    {
+      "data": {
+        "objectId": "0x0000000000000000000000000000000000000000000000000000000000000005",
+        "version": "1",
+        "digest": "MmKCAHwfU7DrwgAf7LE6C7DEF7xHq8tPxfntbHu9AeS",
+        "type": "0x3::sui_system::SuiSystemState",
+        "owner": {
+          "Shared": {
+            "initial_shared_version": {
+              "$serde_json::private::Number": "1"
+            }
+          }
+        },
+        "previousTransaction": "HNX5jhha6LU7ckUi9DrD6F599Vus7VdZqi8oQKva6JDX",
+        "storageRebate": "0",
+        "bcs": {
+          "dataType": "moveObject",
+          "type": "0x3::sui_system::SuiSystemState",
+          "hasPublicTransfer": false,
+          "version": {
+            "$serde_json::private::Number": "1"
+          },
+          "bcsBytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUBAAAAAAAAAA=="
+        }
+      }
+    }
+  ],
+  "sui client object 0x0000000000000000000000000000000000000000000000000000000000000000",
+  [
+    {
+      "error": {
+        "code": "notExists",
+        "object_id": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    }
+  ],
+  "sui client tx-block Duwr9uSk9ZvNdEa8oDHunx345i6oyrp3e78MYHVAbYdv",
+  "RPC call failed: ErrorObject { code: InvalidParams, message: \"Could not find the referenced transaction [TransactionDigest(Duwr9uSk9ZvNdEa8oDHunx345i6oyrp3e78MYHVAbYdv)].\", data: None }",
+  "sui client tx-block EgMTHQygMi6SRsBqrPHAEKZCNrpShXurCp9rcb9qbSg8",
+  "RPC call failed: ErrorObject { code: InvalidParams, message: \"Could not find the referenced transaction [TransactionDigest(EgMTHQygMi6SRsBqrPHAEKZCNrpShXurCp9rcb9qbSg8)].\", data: None }"
+]

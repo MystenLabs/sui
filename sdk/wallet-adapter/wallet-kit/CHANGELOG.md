@@ -1,5 +1,125 @@
 # @mysten/wallet-kit
 
+## 0.5.1
+
+### Patch Changes
+
+- Updated dependencies [47ea5ec7c]
+  - @mysten/sui.js@0.39.0
+  - @mysten/wallet-adapter-base@0.8.1
+  - @mysten/wallet-adapter-unsafe-burner@0.9.1
+  - @mysten/wallet-adapter-wallet-standard@0.7.14
+  - @mysten/wallet-kit-core@0.4.14
+  - @mysten/wallet-standard@0.5.14
+
+## 0.5.0
+
+### Minor Changes
+
+- 6d41059c7: Update to use modular imports from @mysten/sui.js
+
+  Some methods now accept a `SuiClient` imported from `@mysten/sui.js/client` rather than a `JsonRpcProvider`
+
+### Patch Changes
+
+- Updated dependencies [ad46f9f2f]
+- Updated dependencies [67e581a5a]
+- Updated dependencies [cc6441f46]
+- Updated dependencies [34242be56]
+- Updated dependencies [4e2a150a1]
+- Updated dependencies [cce6ffbcc]
+- Updated dependencies [0f06d593a]
+- Updated dependencies [83d0fb734]
+- Updated dependencies [09f4ed3fc]
+- Updated dependencies [6d41059c7]
+- Updated dependencies [6d41059c7]
+- Updated dependencies [cc6441f46]
+- Updated dependencies [001148443]
+  - @mysten/sui.js@0.38.0
+  - @mysten/wallet-adapter-base@0.8.0
+  - @mysten/wallet-adapter-unsafe-burner@0.9.0
+  - @mysten/wallet-adapter-wallet-standard@0.7.13
+  - @mysten/wallet-kit-core@0.4.13
+  - @mysten/wallet-standard@0.5.13
+
+## 0.4.12
+
+### Patch Changes
+
+- Updated dependencies [34cc7d610]
+  - @mysten/sui.js@0.37.1
+  - @mysten/wallet-adapter-base@0.7.12
+  - @mysten/wallet-adapter-unsafe-burner@0.8.12
+  - @mysten/wallet-adapter-wallet-standard@0.7.12
+  - @mysten/wallet-kit-core@0.4.12
+  - @mysten/wallet-standard@0.5.12
+
+## 0.4.11
+
+### Patch Changes
+
+- Updated dependencies [36f2edff3]
+- Updated dependencies [75d1a190d]
+- Updated dependencies [93794f9f2]
+- Updated dependencies [c3a4ec57c]
+- Updated dependencies [a17d3678a]
+- Updated dependencies [2f37537d5]
+- Updated dependencies [00484bcc3]
+  - @mysten/sui.js@0.37.0
+  - @mysten/wallet-adapter-base@0.7.11
+  - @mysten/wallet-adapter-unsafe-burner@0.8.11
+  - @mysten/wallet-adapter-wallet-standard@0.7.11
+  - @mysten/wallet-kit-core@0.4.11
+  - @mysten/wallet-standard@0.5.11
+
+## 0.4.10
+
+### Patch Changes
+
+- Updated dependencies [3ea9adb71a]
+- Updated dependencies [1cfb1c9da3]
+- Updated dependencies [1cfb1c9da3]
+- Updated dependencies [fb3bb9118a]
+  - @mysten/sui.js@0.36.0
+  - @mysten/wallet-adapter-base@0.7.10
+  - @mysten/wallet-adapter-unsafe-burner@0.8.10
+  - @mysten/wallet-adapter-wallet-standard@0.7.10
+  - @mysten/wallet-kit-core@0.4.10
+  - @mysten/wallet-standard@0.5.10
+
+## 0.4.9
+
+### Patch Changes
+
+- Updated dependencies [09d77325a9]
+  - @mysten/sui.js@0.35.1
+  - @mysten/wallet-adapter-base@0.7.9
+  - @mysten/wallet-adapter-unsafe-burner@0.8.9
+  - @mysten/wallet-adapter-wallet-standard@0.7.9
+  - @mysten/wallet-kit-core@0.4.9
+  - @mysten/wallet-standard@0.5.9
+
+## 0.4.8
+
+### Patch Changes
+
+- 519d1a9d8d: fix key prop warning for accounts list dropdown
+- Updated dependencies [4ea96d909a]
+- Updated dependencies [bcbb178c44]
+- Updated dependencies [470c27af50]
+- Updated dependencies [83c7328d9b]
+- Updated dependencies [03828224c9]
+- Updated dependencies [671faefe3c]
+- Updated dependencies [9ce7e051b4]
+- Updated dependencies [9ce7e051b4]
+- Updated dependencies [bb50698551]
+  - @mysten/sui.js@0.35.0
+  - @mysten/wallet-kit-core@0.4.8
+  - @mysten/wallet-adapter-base@0.7.8
+  - @mysten/wallet-adapter-unsafe-burner@0.8.8
+  - @mysten/wallet-adapter-wallet-standard@0.7.8
+  - @mysten/wallet-standard@0.5.8
+
 ## 0.4.7
 
 ### Patch Changes
