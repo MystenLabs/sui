@@ -71,11 +71,10 @@ export function ProtectAccountForm({
 			<div className="flex flex-col gap-4">
 				<CheckboxField name="enabledAutolock" label="Auto-lock after I am inactive for" />
 				<div className="flex items-start justify-between gap-2">
-					{/* <NumberField type="number" {...register('autoLockTimer')} /> */}
 					<TextField type="number" label="" {...register('autoLockTimer')} />
 					<SelectDropdown
 						options={lockIntervals}
-						placeholder={'Hour'}
+						placeholder="Hour"
 						offset={-41}
 						onValueChange={(selectedValue: IntervalTypes) =>
 							setValue('autoLockInterval', selectedValue)
