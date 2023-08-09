@@ -193,13 +193,6 @@ input TransactionBlockID {
 }
 
 input ObjectFilter {
-  # one of these
-  any: [ObjectFilter]
-  all: [ObjectFilter]
-  not: ObjectFilter
-
-  # (x)or any of these
-
   # Cascading (type requires module requires package)
   package: SuiAddress
   module: String
@@ -211,12 +204,6 @@ input ObjectFilter {
 }
 
 input EventFilter {
-  # one of these
-  any: [EventFilter]
-  all: [EventFilter]
-  not: EventFilter
-
-  # (x)or any of these
   sender: SuiAddress
   transactionDigest: String
 
@@ -241,13 +228,6 @@ input EventField {
 }
 
 input TransactionBlockFilter {
-  # one of these
-  any: [TransactionBlockFilter]
-  all: [TransactionBlockFilter]
-  not: TransactionBlockFilter
-
-  # (x)or any of these
-
   # Cascading (function requires module requires package)
   package: SuiAddress
   module: String
@@ -354,7 +334,6 @@ type Object implements Owner {
   digest: String!
   owner: AmbiguousOwner
 
-  previousVersion: Int
   previousTransactionBlock: TransactionBlock
   storageRebate: BigInt
 
