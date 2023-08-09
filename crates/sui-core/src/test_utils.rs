@@ -228,7 +228,7 @@ pub fn make_transfer_object_transaction(
         FullObjectRef::from_fastpath_ref(object_ref),
         sender,
         gas_object,
-        gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER * 10,
+        3000000,
         gas_price,
     );
     to_sender_signed_transaction(data, keypair)
