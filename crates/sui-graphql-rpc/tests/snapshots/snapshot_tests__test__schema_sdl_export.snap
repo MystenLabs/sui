@@ -2,14 +2,95 @@
 source: crates/sui-graphql-rpc/tests/snapshot_tests.rs
 expression: sdl
 ---
+type Address implements Owner {
+	location: SuiAddress!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	balance(type: String): Balance!
+	balanceConnection(first: Int, after: String, last: Int, before: String): ObjectConnection
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	defaultNameServiceName: String
+	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+}
+
+type AmbiguousOwner implements Owner {
+	location: SuiAddress!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	balance(type: String): Balance!
+	balanceConnection(first: Int, after: String, last: Int, before: String): ObjectConnection
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	defaultNameServiceName: String
+	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+}
+
+type Balance {
+	id: ID!
+}
+
+
+type CoinConnection {
+	id: ID!
+}
 
 
 
+
+type NameServiceConnection {
+	id: ID!
+}
+
+type Object implements Owner {
+	location: SuiAddress!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	balance(type: String): Balance!
+	balanceConnection(first: Int, after: String, last: Int, before: String): ObjectConnection
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	defaultNameServiceName: String
+	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+}
+
+type ObjectConnection {
+	id: ID!
+}
+
+input ObjectFilter {
+	package: SuiAddress!
+	module: String!
+	ty: String!
+	owner: SuiAddress!
+	objectId: SuiAddress!
+	version: Int!
+}
+
+interface Owner {
+	location: SuiAddress!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	balance(type: String): Balance!
+	balanceConnection(first: Int, after: String, last: Int, before: String): ObjectConnection
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	defaultNameServiceName: String
+	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+}
 
 type Query {
 	chainIdentifier: String!
+	owner(address: SuiAddress!): Owner
+	object(address: SuiAddress!, version: Int): Object
+	address(address: SuiAddress!): Address
 }
 
+type StakeConnection {
+	id: ID!
+}
+
+
+"""
+Representation of Sui Addresses
+"""
+scalar SuiAddress
 
 schema {
 	query: Query
