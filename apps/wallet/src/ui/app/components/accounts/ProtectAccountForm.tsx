@@ -69,7 +69,7 @@ export function ProtectAccountForm({
 				<div className="flex items-center justify-between gap-2">
 					<NumberField type="number" {...register('autoLockTimer')} />
 					<SelectDropdown
-						dropdownOptions={lockIntervals}
+						options={lockIntervals}
 						placeholder={'Hour'}
 						offset={-41}
 						onValueChange={(selectedValue: string) => setValue('autoLockInterval', selectedValue)} // Use setValue

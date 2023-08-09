@@ -102,7 +102,7 @@ const App = () => {
 				</>
 			) : null}
 
-			<Route path="/accounts" element={<HomePage />}>
+			<Route path="/*" element={<HomePage />}>
 				<Route path="tokens/*" element={<TokensPage />} />
 				<Route path="nfts/*" element={<AssetsPage />} />
 				<Route path="apps/*" element={<AppsPage />} />
@@ -124,7 +124,7 @@ const App = () => {
 			<Route path="/account">
 				<Route path="forgot-password" element={<ForgotPasswordPageV2 />} />
 			</Route>
-			<Route path="/*" element={<AccountsPage />}>
+			<Route path="/accounts" element={<AccountsPage />}>
 				<Route path="add-account" element={<AddAccountPage />} />
 				<Route path="protect-account" element={<ProtectAccountPage />} />
 				<Route path="import-ledger-accounts" element={<ImportLedgerAccountsPage />} />
