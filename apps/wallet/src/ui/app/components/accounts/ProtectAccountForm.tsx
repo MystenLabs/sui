@@ -11,13 +11,19 @@ import { TextField } from '../../shared/forms/TextField';
 import ExternalLink from '../external-link';
 import { Button } from '_app/shared/ButtonUI';
 import { ToS_LINK } from '_src/shared/constants';
+import { NumberField } from '../../shared/forms/NumberField';
+import { SelectDropdown } from '../SelectDropdown';
 
 const formSchema = z.object({
 	password: z.string().nonempty('Required'),
 	confirmedPassword: z.string().nonempty('Required'),
 	acceptedTos: z.literal<boolean>(true),
 	enabledAutolock: z.boolean(),
+	autoLockTimer: z.string(),
+	autoLockInterval: z.string(),
 });
+
+const lockIntervals = ['Hour', 'Minute', 'Second'];
 
 type FormValues = z.infer<typeof formSchema>;
 
@@ -40,14 +46,16 @@ export function ProtectAccountForm({
 			confirmedPassword: '',
 			acceptedTos: false,
 			enabledAutolock: true,
+			autoLockTimer: '1',
+			autoLockInterval: 'Hour',
 		},
 	});
 	const {
 		register,
+		setValue,
 		formState: { isSubmitting, isValid },
 	} = form;
 	const navigate = useNavigate();
-
 	return (
 		<Form className="flex flex-col gap-6 h-full" form={form} onSubmit={onSubmit}>
 			<TextField type="password" label="Create Account Password" {...register('password')} />
@@ -58,7 +66,16 @@ export function ProtectAccountForm({
 			/>
 			<div className="flex flex-col gap-4">
 				<CheckboxField name="enabledAutolock" label="Auto-lock after I am inactive for" />
-				{/* TODO: Abhi is working on designs for the auto-lock input, we'll add this when it's ready */}
+				<div className="flex items-center justify-between gap-2">
+					<NumberField type="number" {...register('autoLockTimer')} />
+					<SelectDropdown
+						dropdownOptions={lockIntervals}
+						placeholder={'Hour'}
+						offset={-41}
+						onValueChange={(selectedValue: string) => setValue('autoLockInterval', selectedValue)} // Use setValue
+						value={form.watch('autoLockInterval')}
+					/>
+				</div>
 			</div>
 			<div className="flex flex-col gap-5 mt-auto">
 				<CheckboxField
