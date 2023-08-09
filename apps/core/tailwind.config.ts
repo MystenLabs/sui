@@ -109,6 +109,7 @@ export default {
 					'0px 0px 0px 1px rgba(160, 182, 195, 0.08), 0px 5px 30px 0px rgba(86, 104, 115, 0.20)',
 				cardSoft: '1px 2px 8px 2px rgba(21, 82, 123, 0.05)',
 				panel: '0px 2px 7px 0px rgba(160, 182, 195, 0.32)',
+				dropdownContent: '0px 1px 2px 0px rgba(21, 82, 123, 0.08)',
 			},
 			fontSize: {
 				// Text sizes:
