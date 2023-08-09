@@ -134,7 +134,9 @@ impl From<Error> for RpcError {
 
                     let mut new_map: BTreeMap<TransactionDigest, Vec<ObjectRef>> = BTreeMap::new();
 
-                    for (digest, (pairs, _)) in conflicting_txes {
+                    let new_map = conflicting_txes.into_iter()
+                        .map(|(digest, (pairs, _))| (digest, pairs.into_iter().map(|_, obj_ref| obj_ref).collect()))
+                        .collect::<BTreeMap<_, Vec<_>>>();
                         let mut new_vec = Vec::new();
 
                         for (_authority, obj_ref) in pairs {
