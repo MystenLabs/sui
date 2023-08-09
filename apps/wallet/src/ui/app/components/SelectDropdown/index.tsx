@@ -11,6 +11,7 @@ export interface SelectDropdownProps {
 	onValueChange?: (value: string) => void;
 	value?: string;
 	offset?: number;
+	ariaLabel?: string;
 }
 
 export function SelectDropdown({
@@ -19,13 +20,14 @@ export function SelectDropdown({
 	onValueChange,
 	value,
 	offset,
+	ariaLabel,
 }: SelectDropdownProps) {
 	return (
 		<div className="z-5 h-full">
 			<Select.Root onValueChange={onValueChange} value={value}>
 				<Select.Trigger
 					className="flex items-center border border-solid border-gray-45 shadow-sm rounded-2lg bg-white px-4 py-2 gap-1.5 focus:outline-none h-full"
-					aria-label="Food"
+					aria-label={ariaLabel}
 				>
 					<Select.Value>
 						<Text variant="body" weight="semibold" color="steel">
