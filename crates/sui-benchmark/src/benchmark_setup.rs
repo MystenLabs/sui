@@ -65,6 +65,7 @@ impl Env {
                     opts.genesis_blob_path.as_str(),
                     opts.use_fullnode_for_reconfig,
                     opts.use_fullnode_for_execution,
+                    opts.use_fullnode_for_gas_fetch,
                     opts.fullnode_rpc_addresses.clone(),
                 )
                 .await
@@ -150,6 +151,7 @@ impl Env {
         genesis_blob_path: &str,
         use_fullnode_for_reconfig: bool,
         use_fullnode_for_execution: bool,
+        use_fullnode_for_gas_fetch: bool,
         fullnode_rpc_address: Vec<String>,
     ) -> Result<BenchmarkSetup> {
         info!("Running benchmark setup in remote mode ..");
@@ -169,16 +171,20 @@ impl Env {
 
         let fullnode_rpc_urls = fullnode_rpc_address.clone();
         info!("List of fullnode rpc urls: {:?}", fullnode_rpc_urls);
-        let proxies: Vec<Arc<dyn ValidatorProxy + Send + Sync>> = if use_fullnode_for_execution {
+
+        let mut fullnodes: Vec<Arc<dyn ValidatorProxy + Send + Sync>> = vec![];
+        if use_fullnode_for_execution || use_fullnode_for_gas_fetch {
             if fullnode_rpc_urls.is_empty() {
                 bail!("fullnode-rpc-url is required when use-fullnode-for-execution is true");
             }
-            let mut fullnodes: Vec<Arc<dyn ValidatorProxy + Send + Sync>> = vec![];
             for fullnode_rpc_url in fullnode_rpc_urls.iter() {
                 info!("Using FullNodeProxy: {:?}", fullnode_rpc_url);
                 fullnodes.push(Arc::new(FullNodeProxy::from_url(fullnode_rpc_url).await?));
             }
-            fullnodes
+        }
+
+        let proxies: Vec<Arc<dyn ValidatorProxy + Send + Sync>> = if use_fullnode_for_execution {
+            fullnodes.clone()
         } else {
             info!("Using LocalValidatorAggregatorProxy");
             let reconfig_fullnode_rpc_url = if use_fullnode_for_reconfig {
@@ -217,9 +223,12 @@ impl Env {
                 ))
             })?;
 
-        let current_gas = if use_fullnode_for_execution {
+        let current_gas = if use_fullnode_for_execution || use_fullnode_for_gas_fetch {
+            let fullnode_proxy = fullnodes
+                .choose(&mut rand::thread_rng())
+                .context("Failed to get fullnode proxy")?;
             // Go through fullnode to get the current gas object.
-            let mut gas_objects = proxy
+            let mut gas_objects = fullnode_proxy
                 .get_owned_objects(primary_gas_owner_addr.into())
                 .await?;
             gas_objects.sort_by_key(|&(gas, _)| std::cmp::Reverse(gas));
