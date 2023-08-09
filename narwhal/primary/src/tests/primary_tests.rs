@@ -569,8 +569,8 @@ async fn test_request_vote_accept_missing_parents() {
     let _ = tx_narwhal_round_updates.send(1);
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header,
-        parents: round_2_missing.clone(),
-        ancestors: Vec::new(),
+        parents: Vec::new(),
+        ancestors: round_2_missing.clone(),
     });
     assert!(request
         .extensions_mut()

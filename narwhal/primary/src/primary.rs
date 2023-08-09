@@ -459,7 +459,6 @@ impl Primary {
             parameters.max_header_num_of_batches,
             parameters.max_header_delay,
             parameters.min_header_delay,
-            None,
             tx_shutdown.subscribe(),
             rx_parents,
             rx_our_digests,
