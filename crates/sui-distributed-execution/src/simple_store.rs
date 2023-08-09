@@ -1,10 +1,12 @@
-use std::collections::HashMap;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, VersionNumber},
+    base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},
     error::{SuiError, SuiResult},
-    object::Object,
-    storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync, get_module_by_id},
+    object::{Object, Owner},
+    storage::{
+        get_module_by_id, BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync,
+    },
 };
 
 use anyhow::Result;
@@ -13,7 +15,6 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 
 use super::storage::*;
-
 
 pub struct MemoryBackedStore {
     pub objects: RefCell<HashMap<ObjectID, (ObjectRef, Object)>>,
@@ -41,7 +42,8 @@ impl ObjectStore for MemoryBackedStore {
         object_id: &ObjectID,
         version: VersionNumber,
     ) -> Result<Option<Object>, SuiError> {
-        Ok(self.objects
+        Ok(self
+            .objects
             .borrow()
             .get(object_id)
             .and_then(|obj| {
@@ -80,8 +82,32 @@ impl BackingPackageStore for MemoryBackedStore {
 }
 
 impl ChildObjectResolver for MemoryBackedStore {
-    fn read_child_object(&self, _parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
-        Ok(self.objects.borrow().get(child).map(|v| v.1.clone()))
+    fn read_child_object(
+        &self,
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> SuiResult<Option<Object>> {
+        // Ok(self.objects.borrow().get(child).map(|v| v.1.clone()))
+        let child_object = match self.objects.borrow().get(child).map(|v| v.1.clone()) {
+            None => return Ok(None),
+            Some(obj) => obj,
+        };
+        let parent = *parent;
+        if child_object.owner != Owner::ObjectOwner(parent.into()) {
+            return Err(SuiError::InvalidChildObjectAccess {
+                object: *child,
+                given_parent: parent,
+                actual_owner: child_object.owner,
+            });
+        }
+        if child_object.version() > child_version_upper_bound {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "TODO InMemoryStorage::read_child_object does not yet support bounded reads"
+                    .to_owned(),
+            });
+        }
+        Ok(Some(child_object))
     }
 }
 
@@ -96,7 +122,8 @@ impl ObjectStore for &MemoryBackedStore {
         version: VersionNumber,
     ) -> Result<Option<Object>, SuiError> {
         Ok(self
-            .objects.borrow()
+            .objects
+            .borrow()
             .get(object_id)
             .and_then(|obj| {
                 if obj.1.version() == version {

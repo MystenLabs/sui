@@ -2,7 +2,11 @@ use core::panic;
 use std::collections::{HashSet, HashMap, VecDeque};
 use std::sync::Arc;
 
-use sui_adapter::{adapter, execution_engine, execution_mode, adapter::MoveVM};
+use sui_adapter_latest::{adapter, execution_engine};
+use move_vm_runtime::move_vm::MoveVM;
+use sui_types::error::SuiError;
+use sui_types::execution_mode;
+use move_binary_format::CompiledModule;
 use sui_config::genesis::Genesis;
 use sui_core::transaction_input_checker::get_gas_status_no_epoch_store_experimental;
 use sui_protocol_config::ProtocolConfig;
@@ -10,13 +14,13 @@ use sui_types::storage::{BackingPackageStore, ParentSync, ChildObjectResolver, O
 use sui_types::base_types::ObjectID;
 use sui_types::epoch_data::EpochData;
 use sui_types::message_envelope::Message;
-use sui_types::messages::{InputObjectKind, InputObjects, TransactionDataAPI, VerifiedTransaction};
+use sui_types::transaction::{InputObjectKind, InputObjects, TransactionDataAPI, VerifiedTransaction};
 use sui_types::metrics::LimitsMetrics;
 use sui_types::temporary_store::{TemporaryStore, InnerTemporaryStore};
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use sui_types::digests::{ObjectDigest, TransactionDigest};
 use sui_types::effects::TransactionEffects;
-use sui_types::gas::SuiGasStatus;
+use sui_types::gas::{SuiGasStatus, GasCharger};
 use sui_move_natives;
 use move_bytecode_utils::module_cache::GetModule;
 use tokio::sync::mpsc;
@@ -132,7 +136,7 @@ pub struct ExecutionWorkerState
         + BackingPackageStore 
         + ParentSync 
         + ChildObjectResolver 
-        + GetModule
+        + GetModule<Error = SuiError, Item = CompiledModule>
         + Send
         + Sync
         + 'static> 
@@ -140,7 +144,7 @@ pub struct ExecutionWorkerState
     pub memory_store: Arc<S>,
 }
 
-impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + ChildObjectResolver + GetModule + Send + Sync + 'static> 
+impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + ChildObjectResolver + GetModule<Error = SuiError, Item = CompiledModule> + Send + Sync + 'static> 
     ExecutionWorkerState<S> {
     pub fn new(new_store: S) -> Self {
         Self {
@@ -275,6 +279,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
         let gas_status = Self::get_gas_status(tx, &input_objects, protocol_config, reference_gas_price).await;
         let shared_object_refs = input_objects.filter_shared_objects();
         let transaction_dependencies = input_objects.transaction_dependencies();
+        let mut gas_charger = GasCharger::new(*tx.digest(), gas, gas_status, &protocol_config);
 
         let temporary_store = TemporaryStore::new(
             self.memory_store.clone(),
@@ -284,18 +289,18 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
         );
 
         let (inner_temp_store, effects, _execution_error) =
-            execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
+            execution_engine::execute_transaction_to_effects::<execution_mode::Normal>(
                 shared_object_refs,
                 temporary_store,
                 kind,
                 signer,
-                &gas,
+                &mut gas_charger,
                 *tx.digest(),
                 transaction_dependencies,
-                move_vm,
-                gas_status,
-                epoch_data,
-                protocol_config,
+                &move_vm,
+                &epoch_data.epoch_id(),
+                epoch_data.epoch_start_timestamp(),
+                &protocol_config,
                 metrics.clone(),
                 false,
                 &HashSet::new(),
@@ -326,6 +331,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
         let gas_status = Self::get_gas_status(&tx, &input_objects, &protocol_config, reference_gas_price).await;
         let shared_object_refs = input_objects.filter_shared_objects();
         let transaction_dependencies = input_objects.transaction_dependencies();
+        let mut gas_charger = GasCharger::new(*tx.digest(), gas, gas_status, &protocol_config);
 
         let temporary_store = TemporaryStore::new(
             memory_store.clone(),
@@ -335,17 +341,17 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
         );
     
         let (inner_temp_store, tx_effects, _execution_error) =
-            execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
+            execution_engine::execute_transaction_to_effects::<execution_mode::Normal>(
                 shared_object_refs,
                 temporary_store,
                 kind,
                 signer,
-                &gas,
+                &mut gas_charger,
                 *tx.digest(),
                 transaction_dependencies,
                 &move_vm,
-                gas_status,
-                &epoch_data,
+                &epoch_data.epoch_id(),
+                epoch_data.epoch_start_timestamp(),
                 &protocol_config,
                 metrics.clone(),
                 false,

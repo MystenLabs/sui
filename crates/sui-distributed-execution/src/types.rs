@@ -5,10 +5,10 @@ use std::net::IpAddr;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::ObjectID,
-    epoch_data::EpochData,
-    messages::{InputObjectKind, VerifiedTransaction, TransactionKind, TransactionDataAPI},
-    sui_system_state::epoch_start_sui_system_state::EpochStartSystemState,
     effects::TransactionEffects,
+    epoch_data::EpochData,
+    sui_system_state::epoch_start_sui_system_state::EpochStartSystemState,
+    transaction::{InputObjectKind, TransactionDataAPI, TransactionKind, VerifiedTransaction},
 };
 
 pub type UniqueId = u16;
@@ -48,7 +48,12 @@ pub struct NetworkMessage<M: Debug + Message> {
 // TODO: Maybe serialize directly to bytes, rather than String and then to bytes
 impl<M: Debug + Message> NetworkMessage<M> {
     pub fn serialize(&self) -> String {
-        format!("{}\t{}\t{}\t\n", self.src, self.dst, self.payload.serialize())
+        format!(
+            "{}\t{}\t{}\t\n",
+            self.src,
+            self.dst,
+            self.payload.serialize()
+        )
     }
 
     pub fn deserialize(string: String) -> Self {
@@ -62,16 +67,25 @@ impl<M: Debug + Message> NetworkMessage<M> {
 
 #[derive(Debug)]
 pub enum SailfishMessage {
-    EpochStart{conf: ProtocolConfig, data: EpochData, ref_gas_price: u64},
-    EpochEnd{new_epoch_start_state: EpochStartSystemState},
-    Transaction{tx: VerifiedTransaction, tx_effects: TransactionEffects, checkpoint_seq: u64}
+    EpochStart {
+        conf: ProtocolConfig,
+        data: EpochData,
+        ref_gas_price: u64,
+    },
+    EpochEnd {
+        new_epoch_start_state: EpochStartSystemState,
+    },
+    Transaction {
+        tx: VerifiedTransaction,
+        tx_effects: TransactionEffects,
+        checkpoint_seq: u64,
+    },
 }
-
 
 #[derive(Debug, Clone)]
 pub struct Transaction {
     pub tx: VerifiedTransaction,
-    pub ground_truth_effects: TransactionEffects,  // full effects of tx, as ground truth exec result
+    pub ground_truth_effects: TransactionEffects, // full effects of tx, as ground truth exec result
     pub checkpoint_seq: u64,
 }
 
@@ -84,7 +98,7 @@ impl Transaction {
     }
 
     /// Returns the read set of a transction
-    /// Specifically, this is the set of input objects to the transaction. It excludes 
+    /// Specifically, this is the set of input objects to the transaction. It excludes
     /// child objects that are determined at runtime, but includes all owned objects inputs
     /// that must have their version numbers bumped.
     pub fn get_read_set(&self) -> HashSet<ObjectID> {
@@ -92,50 +106,59 @@ impl Transaction {
         let input_object_kinds = tx_data
             .input_objects()
             .expect("Cannot get input object kinds");
-    
+
         let mut read_set = HashSet::new();
         for kind in &input_object_kinds {
             match kind {
                 InputObjectKind::MovePackage(id)
                 | InputObjectKind::SharedMoveObject { id, .. }
-                | InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => {
-                    read_set.insert(*id)
-                }
+                | InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => read_set.insert(*id),
             };
         }
         return read_set;
     }
 
-    /// TODO: This makes use of ground_truth_effects, which is illegal; it is not something that is 
+    /// TODO: This makes use of ground_truth_effects, which is illegal; it is not something that is
     /// known a-priori before execution
     /// Returns the write set of a transction
     pub fn get_write_set(&self) -> HashSet<ObjectID> {
-
         let mut write_set: HashSet<ObjectID> = HashSet::new();
 
         let TransactionEffects::V1(tx_effects) = &self.ground_truth_effects;
 
-        let created: Vec<ObjectID> = tx_effects.created.clone()
+        let created: Vec<ObjectID> = tx_effects
+            .created
+            .clone()
             .into_iter()
             .map(|(object_ref, _)| object_ref.0)
             .collect();
-        let mutated: Vec<ObjectID> = tx_effects.mutated.clone()
+        let mutated: Vec<ObjectID> = tx_effects
+            .mutated
+            .clone()
             .into_iter()
             .map(|(object_ref, _)| object_ref.0)
             .collect();
-        let unwrapped: Vec<ObjectID> = tx_effects.unwrapped.clone()
+        let unwrapped: Vec<ObjectID> = tx_effects
+            .unwrapped
+            .clone()
             .into_iter()
             .map(|(object_ref, _)| object_ref.0)
             .collect();
-        let deleted: Vec<ObjectID> = tx_effects.deleted.clone()
+        let deleted: Vec<ObjectID> = tx_effects
+            .deleted
+            .clone()
             .into_iter()
             .map(|object_ref| object_ref.0)
             .collect();
-        let unwrapped_then_deleted: Vec<ObjectID> = tx_effects.unwrapped_then_deleted.clone()
+        let unwrapped_then_deleted: Vec<ObjectID> = tx_effects
+            .unwrapped_then_deleted
+            .clone()
             .into_iter()
             .map(|object_ref| object_ref.0)
             .collect();
-        let wrapped: Vec<ObjectID> = tx_effects.wrapped.clone()
+        let wrapped: Vec<ObjectID> = tx_effects
+            .wrapped
+            .clone()
             .into_iter()
             .map(|object_ref| object_ref.0)
             .collect();
@@ -160,5 +183,5 @@ impl Transaction {
 
 pub struct TransactionWithResults {
     pub full_tx: Transaction,
-    pub tx_effects: TransactionEffects,            // determined after execution
+    pub tx_effects: TransactionEffects, // determined after execution
 }

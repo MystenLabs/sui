@@ -1,18 +1,13 @@
 use clap::*;
+use std::cmp;
 use std::path::PathBuf;
 use std::time::Instant;
-use std::cmp;
 use sui_config::{Config, NodeConfig};
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
-use sui_distributed_execution::{
-    seqn_worker,
-    exec_worker,
-    simple_store::MemoryBackedStore,
-};
+use sui_distributed_execution::{exec_worker, seqn_worker, simple_store::MemoryBackedStore};
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::{
-    epoch_start_sui_system_state::EpochStartSystemStateTrait,
-    get_sui_system_state,
+    epoch_start_sui_system_state::EpochStartSystemStateTrait, get_sui_system_state,
     SuiSystemStateTrait,
 };
 
@@ -67,7 +62,7 @@ async fn main() {
     }
 
     if let Some(watermark) = args.execute {
-        let store = MemoryBackedStore::new();  // use the simple store
+        let store = MemoryBackedStore::new(); // use the simple store
         let mut ew_state = exec_worker::ExecutionWorkerState::new(store);
         ew_state.init_store(genesis);
 
@@ -111,7 +106,11 @@ async fn main() {
                     .expect("Transaction effects exist")
                     .expect("Transaction effects exist");
 
-                let full_tx = Transaction{tx, ground_truth_effects, checkpoint_seq};
+                let full_tx = Transaction {
+                    tx,
+                    ground_truth_effects,
+                    checkpoint_seq,
+                };
                 ew_state
                     .execute_tx(
                         &full_tx,
@@ -153,6 +152,7 @@ async fn main() {
                     epoch_start_configuration,
                     sw_state.store.clone(),
                     &config.expensive_safety_check_config,
+                    sw_state.epoch_store.get_chain_identifier(),
                 );
                 println!("New epoch store has epoch {}", sw_state.epoch_store.epoch());
                 protocol_config = sw_state.epoch_store.protocol_config();

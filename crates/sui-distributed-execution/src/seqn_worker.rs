@@ -1,10 +1,13 @@
-use std::sync::Arc;
 use std::cmp;
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Instant;
 
-use sui_config::{Config, NodeConfig};
 use prometheus::Registry;
+use sui_archival::reader::ArchiveReaderBalancer;
+use sui_config::{Config, NodeConfig};
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::authority::AuthorityStore;
 use sui_core::checkpoints::CheckpointStore;
@@ -14,11 +17,12 @@ use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::storage::RocksDbStore;
 use sui_node::metrics;
+use sui_types::digests::ChainIdentifier;
 use sui_types::metrics::LimitsMetrics;
-use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
-use sui_types::messages::{TransactionDataAPI, TransactionKind};
-use tokio::sync::{watch, mpsc};
+use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::transaction::{TransactionDataAPI, TransactionKind};
+use tokio::sync::{mpsc, watch};
 use tokio::time::Duration;
 use typed_store::rocks::default_db_options;
 
@@ -54,9 +58,12 @@ impl SequenceWorkerState {
             None,
         ));
         let perpetual_options = default_db_options().optimize_db_for_write_throughput(4);
-        let store = AuthorityStore::open(
+        let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
             &config.db_path().join("store"),
             Some(perpetual_options.options),
+        ));
+        let store = AuthorityStore::open(
+            perpetual_tables,
             genesis,
             &committee_store,
             config.indirect_objects_threshold,
@@ -97,6 +104,7 @@ impl SequenceWorkerState {
             cache_metrics,
             signature_verifier_metrics,
             &config.expensive_safety_check_config,
+            ChainIdentifier::from(*genesis.checkpoint().digest()),
         );
         checkpoint_store.insert_genesis_checkpoint(
             genesis.checkpoint(),
@@ -130,9 +138,12 @@ impl SequenceWorkerState {
             None,
         ));
         let perpetual_options = default_db_options().optimize_db_for_write_throughput(4);
-        let store = AuthorityStore::open(
+        let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
             &config.db_path().join("store"),
             Some(perpetual_options.options),
+        ));
+        let store = AuthorityStore::open(
+            perpetual_tables,
             genesis,
             &committee_store,
             config.indirect_objects_threshold,
@@ -173,6 +184,7 @@ impl SequenceWorkerState {
             cache_metrics,
             signature_verifier_metrics,
             &config.expensive_safety_check_config,
+            ChainIdentifier::from(*genesis.checkpoint().digest()),
         );
         checkpoint_store.insert_genesis_checkpoint(
             genesis.checkpoint(),
@@ -206,6 +218,13 @@ impl SequenceWorkerState {
             watermark, highest_synced_checkpoint_seq
         );
         if watermark > highest_synced_checkpoint_seq {
+            let genesis = config.genesis().expect("Could not load genesis");
+            let chain_identifier = ChainIdentifier::from(*genesis.checkpoint().digest());
+            let archive_readers = ArchiveReaderBalancer::new(
+                config.archive_reader_config(),
+                &self.prometheus_registry,
+            )
+            .expect("Can't construct archive reader");
             // we have already downloaded all the checkpoints up to the watermark -> nothing to do
             let state_sync_store = RocksDbStore::new(
                 self.store.clone(),
@@ -218,7 +237,9 @@ impl SequenceWorkerState {
                 sui_node::SuiNode::create_p2p_network(
                     &config,
                     state_sync_store,
+                    chain_identifier,
                     trusted_peer_change_rx,
+                    archive_readers.clone(),
                     &self.prometheus_registry,
                 )
                 .expect("could not create p2p network");
@@ -262,10 +283,11 @@ impl SequenceWorkerState {
     }
 
     // Main loop
-    pub async fn run(&mut self, 
+    pub async fn run(
+        &mut self,
         sw_sender: mpsc::Sender<SailfishMessage>,
         mut ew_receiver: mpsc::Receiver<SailfishMessage>,
-    ){
+    ) {
         let genesis = Arc::new(self.config.genesis().expect("Could not load genesis"));
         let genesis_seq = genesis.checkpoint().into_summary_and_sequence().0;
 
@@ -283,16 +305,20 @@ impl SequenceWorkerState {
             self.handle_download(watermark, &self.config).await;
         }
 
+        // init stats and timer for per-epoch TPS computation
+        let mut num_tx: usize = 0;
+        let mut now = Instant::now();
+
         // Epoch Start
         sw_sender
-            .send(SailfishMessage::EpochStart{
+            .send(SailfishMessage::EpochStart {
                 conf: protocol_config.clone(),
                 data: epoch_start_config.epoch_data(),
                 ref_gas_price: reference_gas_price,
             })
             .await
             .expect("Sending doesn't work");
-        
+
         if let Some(watermark) = self.execute {
             for checkpoint_seq in genesis_seq..cmp::min(watermark, highest_synced_seq) {
                 let checkpoint_summary = self
@@ -312,13 +338,7 @@ impl SequenceWorkerState {
                     .expect("Contents must exist")
                     .expect("Contents must exist");
 
-                // if contents.size() > 1 {
-                //     println!(
-                //         "Checkpoint {} has {} transactions",
-                //         checkpoint_seq,
-                //         contents.size()
-                //     );
-                // }
+                num_tx += contents.size();
 
                 for tx_digest in contents.iter() {
                     let tx = self
@@ -334,11 +354,13 @@ impl SequenceWorkerState {
                         .expect("Transaction effects exist");
 
                     sw_sender
-                        .send(SailfishMessage::Transaction{
+                        .send(SailfishMessage::Transaction {
                             tx: tx.clone(),
                             tx_effects: tx_effects.clone(),
                             checkpoint_seq,
-                        }).await.expect("sending failed");
+                        })
+                        .await
+                        .expect("sending failed");
 
                     if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
                         // wait for epoch end message from execution worker
@@ -376,13 +398,25 @@ impl SequenceWorkerState {
                             epoch_start_configuration,
                             self.store.clone(),
                             &self.config.expensive_safety_check_config,
+                            self.epoch_store.get_chain_identifier(),
                         );
                         println!("SW new epoch store has epoch {}", self.epoch_store.epoch());
                         let protocol_config = self.epoch_store.protocol_config();
                         let epoch_start_config = self.epoch_store.epoch_start_config();
                         let reference_gas_price = self.epoch_store.reference_gas_price();
+
+                        // print TPS just before starting new epoch
+                        let elapsed = now.elapsed();
+                        println!(
+                            "TPS this epoch: {}",
+                            1000.0 * num_tx as f64 / elapsed.as_millis() as f64
+                        );
+                        now = Instant::now();
+                        num_tx = 0;
+
+                        // send EpochStart message to start next epoch
                         sw_sender
-                            .send(SailfishMessage::EpochStart{
+                            .send(SailfishMessage::EpochStart {
                                 conf: protocol_config.clone(),
                                 data: epoch_start_config.epoch_data(),
                                 ref_gas_price: reference_gas_price,

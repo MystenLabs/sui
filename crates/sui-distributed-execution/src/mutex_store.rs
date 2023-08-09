@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, VersionNumber},
+    base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},
     error::{SuiError, SuiResult},
-    object::Object,
-    storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync, get_module_by_id},
+    object::{Object, Owner},
+    storage::{
+        get_module_by_id, BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync,
+    },
 };
 
 use anyhow::Result;
@@ -29,10 +31,12 @@ impl MutexedMemoryBackedStore {
 
 impl ObjectStore for MutexedMemoryBackedStore {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        Ok(self.objects
+        Ok(self
+            .objects
             .lock()
             .unwrap()
-            .get(object_id).map(|v| v.1.clone()))
+            .get(object_id)
+            .map(|v| v.1.clone()))
     }
 
     fn get_object_by_key(
@@ -40,7 +44,8 @@ impl ObjectStore for MutexedMemoryBackedStore {
         object_id: &ObjectID,
         version: VersionNumber,
     ) -> Result<Option<Object>, SuiError> {
-        Ok(self.objects
+        Ok(self
+            .objects
             .lock()
             .unwrap()
             .get(object_id)
@@ -57,55 +62,77 @@ impl ObjectStore for MutexedMemoryBackedStore {
 
 impl WritableObjectStore for MutexedMemoryBackedStore {
     fn insert(&self, k: ObjectID, v: (ObjectRef, Object)) -> Option<(ObjectRef, Object)> {
-        self.objects
-            .lock()
-            .unwrap()
-            .insert(k, v)
+        self.objects.lock().unwrap().insert(k, v)
     }
 
     fn remove(&self, k: ObjectID) -> Option<(ObjectRef, Object)> {
-        self.objects
-            .lock()
-            .unwrap()
-            .remove(&k)
+        self.objects.lock().unwrap().remove(&k)
     }
 }
 
 impl ParentSync for MutexedMemoryBackedStore {
     fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
         // println!("Parent: {:?}", object_id);
-        Ok(self.objects
-            .lock()
-            .unwrap()
-            .get(&object_id).map(|v| v.0))
+        Ok(self.objects.lock().unwrap().get(&object_id).map(|v| v.0))
     }
 }
 
 impl BackingPackageStore for MutexedMemoryBackedStore {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         // println!("Package: {:?}", package_id);
-        Ok(self.objects
+        Ok(self
+            .objects
             .lock()
             .unwrap()
-            .get(package_id).map(|v| v.1.clone()))
+            .get(package_id)
+            .map(|v| v.1.clone()))
     }
 }
 
 impl ChildObjectResolver for MutexedMemoryBackedStore {
-    fn read_child_object(&self, _parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
-        Ok(self.objects
-            .lock()
-            .unwrap()
-            .get(child).map(|v| v.1.clone()))
+    // fn read_child_object(&self, _parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
+    //     Ok(self.objects
+    //         .lock()
+    //         .unwrap()
+    //         .get(child).map(|v| v.1.clone()))
+    // }
+
+    fn read_child_object(
+        &self,
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> SuiResult<Option<Object>> {
+        let child_object = match self.objects.lock().unwrap().get(child).map(|v| v.1.clone()) {
+            None => return Ok(None),
+            Some(obj) => obj,
+        };
+        let parent = *parent;
+        if child_object.owner != Owner::ObjectOwner(parent.into()) {
+            return Err(SuiError::InvalidChildObjectAccess {
+                object: *child,
+                given_parent: parent,
+                actual_owner: child_object.owner,
+            });
+        }
+        if child_object.version() > child_version_upper_bound {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "TODO InMemoryStorage::read_child_object does not yet support bounded reads"
+                    .to_owned(),
+            });
+        }
+        Ok(Some(child_object))
     }
 }
 
 impl ObjectStore for &MutexedMemoryBackedStore {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        Ok(self.objects
+        Ok(self
+            .objects
             .lock()
             .unwrap()
-            .get(object_id).map(|v| v.1.clone()))
+            .get(object_id)
+            .map(|v| v.1.clone()))
     }
 
     fn get_object_by_key(

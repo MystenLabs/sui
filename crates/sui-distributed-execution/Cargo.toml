@@ -19,17 +19,17 @@ serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 async-trait = "0.1.71"
 
-
-sui-adapter = { path = "../sui-adapter" }
 sui-config = { path = "../sui-config" }
-sui-move-natives = { path = "../sui-move-natives" }
 sui-types = { path = "../sui-types" }
 sui-core = { path = "../sui-core" }
 sui-node = { path = "../sui-node" }
 sui-protocol-config = { path = "../sui-protocol-config" }
-
+sui-adapter-latest = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
+sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
+move-vm-runtime = { path = "../../external-crates/move/move-vm/runtime" }
 
 typed-store.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
 move-bytecode-utils.workspace = true
+sui-archival.workspace = true
