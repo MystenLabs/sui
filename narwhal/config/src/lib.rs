@@ -198,11 +198,11 @@ impl Parameters {
     }
 
     fn default_max_header_delay() -> Duration {
-        Duration::from_secs(1)
+        Duration::from_secs_f64(0.1)
     }
 
     fn default_min_header_delay() -> Duration {
-        Duration::from_secs_f64(0.5)
+        Duration::from_secs_f64(0.05)
     }
 
     fn default_gc_depth() -> u64 {

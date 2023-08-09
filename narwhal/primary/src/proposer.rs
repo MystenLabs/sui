@@ -429,41 +429,12 @@ impl Proposer {
         self.last_leader.is_some()
     }
 
-    /// Check whether if this validator is the leader of the round, or if we have
-    /// (i) f+1 votes for the leader, (ii) 2f+1 nodes not voting for the leader,
-    /// (iii) there is no leader to vote for.
-    fn enough_votes(&self) -> bool {
-        if self.leader_schedule.leader(self.round + 1).id() == self.authority_id {
-            return true;
-        }
-
-        let leader = match &self.last_leader {
-            Some(x) => x.digest(),
-            None => return true,
-        };
-
-        let mut votes_for_leader = 0;
-        let mut no_votes = 0;
-        for certificate in &self.last_parents {
-            let stake = self.committee.stake_by_id(certificate.origin());
-            if certificate.header().parents().contains(&leader) {
-                votes_for_leader += stake;
-            } else {
-                no_votes += stake;
-            }
-        }
-
-        let mut enough_votes = votes_for_leader >= self.committee.validity_threshold();
-        enough_votes |= no_votes >= self.committee.quorum_threshold();
-        enough_votes
-    }
-
     /// Whether we can advance the DAG or need to wait for the leader/more votes.
     /// Note that if we timeout, we ignore this check and advance anyway.
     fn ready(&mut self) -> bool {
         match self.round % 2 {
             0 => self.update_leader(),
-            _ => self.enough_votes(),
+            _ => true,
         }
     }
 
