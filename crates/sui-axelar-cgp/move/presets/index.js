@@ -57,8 +57,6 @@ bcs.registerStructType("GenericMessage", {
     source_address: "string",
     target_id: "address",
     payload_hash: "vector<u8>",
-
-    payload: "vector<u8>",
 });
 
 const ZERO_ADDR = "0x".padEnd(62, "0");
@@ -74,7 +72,6 @@ const message = bcs
                     source_address: "0x0",
                     payload_hash: [0, 0, 0, 0],
                     target_id: ZERO_ADDR, // using address here for simlicity...
-                    payload: [0, 0, 0, 0, 0],
                 })
                 .toBytes(),
             bcs
@@ -83,7 +80,6 @@ const message = bcs
                     source_address: "0x1",
                     payload_hash: [0, 0, 0, 0],
                     target_id: ZERO_ADDR, // ...
-                    payload: [0, 0, 0, 0, 0],
                 })
                 .toBytes(),
         ],
