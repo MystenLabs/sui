@@ -55,7 +55,6 @@ fn main() {
     let module_cache = Arc::new(SyncModuleCache::new(IndexerModuleResolver::new(blocking_cp.expect("REASON").clone())));
 
     for target_id in start_id..=max_id {
-        println!("{}", target_id);
 
         let event = events
             .find(target_id)
@@ -65,6 +64,7 @@ fn main() {
 
         match event {
             Ok(Some(event)) => {
+                println!("-----------\n");
                 println!("event id = {}", event.id);
                 println!("event sequence = {:#?}", event.event_sequence);
                 println!("sender = {:#?}", event.sender);
@@ -73,7 +73,6 @@ fn main() {
                 println!("type = {:#?}", event.event_type);
                 let text = String::from_utf8_lossy(&event.event_bcs);
                 println!("bcs in text = {:#?}", text);
-                println!("-----------\n");
 
                 // JSON parsing starts here
                 let type_ = parse_sui_struct_tag(&event.event_type);
@@ -106,10 +105,7 @@ fn main() {
 
                         match move_object {
                             Ok(m) => {
-                                //dbg!(m);
                                 let parsed_json = SuiMoveStruct::from(m).to_json_value();
-                                //dbg!(parsed_json);
-                                println!("json = {:#?}", parsed_json);
                                 let final_result = serde_json::to_string_pretty(&parsed_json).unwrap();
                                 println!("final = {}", final_result);
                             }|
