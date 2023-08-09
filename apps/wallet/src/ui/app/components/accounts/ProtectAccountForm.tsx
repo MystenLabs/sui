@@ -7,23 +7,27 @@ import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { CheckboxField } from '../../shared/forms/CheckboxField';
 import { Form } from '../../shared/forms/Form';
-import { NumberField } from '../../shared/forms/NumberField';
+// import { NumberField } from '../../shared/forms/NumberField';
 import { TextField } from '../../shared/forms/TextField';
 import { SelectDropdown } from '../SelectDropdown';
 import ExternalLink from '../external-link';
 import { Button } from '_app/shared/ButtonUI';
 import { ToS_LINK } from '_src/shared/constants';
 
+const lockIntervals = ['Hour', 'Minute', 'Second'];
+type IntervalTypes = 'Hour' | 'Minute' | 'Second';
+
 const formSchema = z.object({
 	password: z.string().nonempty('Required'),
 	confirmedPassword: z.string().nonempty('Required'),
 	acceptedTos: z.literal<boolean>(true),
 	enabledAutolock: z.boolean(),
-	autoLockTimer: z.string(),
-	autoLockInterval: z.string(),
+	autoLockTimer: z.preprocess(
+		(a) => parseInt(z.string().parse(a), 10),
+		z.number().gte(0, 'Must be greater than 0'),
+	),
+	autoLockInterval: z.enum(['Hour', 'Minute', 'Second']),
 });
-
-const lockIntervals = ['Hour', 'Minute', 'Second'];
 
 type FormValues = z.infer<typeof formSchema>;
 
@@ -46,7 +50,7 @@ export function ProtectAccountForm({
 			confirmedPassword: '',
 			acceptedTos: false,
 			enabledAutolock: true,
-			autoLockTimer: '1',
+			autoLockTimer: 1,
 			autoLockInterval: 'Hour',
 		},
 	});
@@ -66,13 +70,16 @@ export function ProtectAccountForm({
 			/>
 			<div className="flex flex-col gap-4">
 				<CheckboxField name="enabledAutolock" label="Auto-lock after I am inactive for" />
-				<div className="flex items-center justify-between gap-2">
-					<NumberField type="number" {...register('autoLockTimer')} />
+				<div className="flex items-start justify-between gap-2">
+					{/* <NumberField type="number" {...register('autoLockTimer')} /> */}
+					<TextField type="number" label="" {...register('autoLockTimer')} />
 					<SelectDropdown
 						options={lockIntervals}
 						placeholder={'Hour'}
 						offset={-41}
-						onValueChange={(selectedValue: string) => setValue('autoLockInterval', selectedValue)}
+						onValueChange={(selectedValue: IntervalTypes) =>
+							setValue('autoLockInterval', selectedValue)
+						}
 						value={form.watch('autoLockInterval')}
 					/>
 				</div>
