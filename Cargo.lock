@@ -2878,9 +2878,16 @@ dependencies = [
 name = "data-transform"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "diesel",
  "dotenvy",
  "fastcrypto",
+ "move-bytecode-utils",
+ "move-core-types",
+ "serde",
+ "serde_json",
+ "sui-indexer",
+ "sui-json-rpc-types",
  "sui-types",
 ]
 

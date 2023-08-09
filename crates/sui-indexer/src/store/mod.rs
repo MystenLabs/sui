@@ -5,7 +5,7 @@ pub use indexer_store::*;
 pub use pg_indexer_store::PgIndexerStore;
 
 mod indexer_store;
-mod module_resolver;
+pub mod module_resolver;
 mod pg_indexer_store;
 mod query;
 
