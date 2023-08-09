@@ -327,10 +327,11 @@ module axelar::axelar {
         };
         assert!(!(new_threshold == 0 || total_weight < new_threshold), EInvalidThreshold);
 
-        // TODO: Can we assume that the new operators hash won't collide with the old ones?
         let new_operators_hash = operators_hash(&new_operators, &new_weights, new_threshold);
-
-        assert!(!vec_map::contains(&axelar.epoch_for_hash, &new_operators_hash), EDuplicateOperators);
+        // Remove old epoch for the operators if it exists
+        if (vec_map::contains(&axelar.epoch_for_hash, &new_operators_hash)){
+            vec_map::remove(&mut axelar.epoch_for_hash, &new_operators_hash);
+        };
 
         let epoch = axelar.epoch + 1;
         axelar.epoch = epoch;
@@ -343,7 +344,6 @@ module axelar::axelar {
                 vec_map::remove_entry_by_idx(&mut axelar.epoch_for_hash, 0);
             };
         };
-
         vec_map::insert(&mut axelar.epoch_for_hash, new_operators_hash, epoch);
     }
 
