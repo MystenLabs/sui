@@ -325,11 +325,7 @@ impl Proposer {
         }
     }
 
-    fn min_delay(
-        &self,
-        current_time: TimestampMs,
-        last_proposal_timestamp: Option<(Round, TimestampMs)>,
-    ) -> Duration {
+    fn min_delay(&self, current_time: TimestampMs, last_parents: Vec<Certificate>) -> Duration {
         // TODO: consider even out the boost provided by the even/odd rounds so we avoid perpetually
         // boosting the nodes and affect the scores.
         // If this node is going to be the leader of the next round and there are more than
@@ -354,28 +350,31 @@ impl Proposer {
             && self.round % 2 == 0
             && self.leader_schedule.leader(self.round).id() == self.authority_id
         {
-            if let Some((round, ts)) = last_proposal_timestamp {
+            // calculate the round start (propose) of previous round by taking the max header (if not our proposal exists) creation time
+            let last_proposal_timestamp: Option<TimestampMs> = if let Some(c) = last_parents
+                .iter()
+                .find(|c| c.origin() == self.authority_id)
+            {
+                Some(*c.header().created_at())
+            } else {
+                last_parents.iter().map(|c| *c.header().created_at()).max()
+            };
+
+            if let Some(ts) = last_proposal_timestamp {
                 // we only take the timestamp into account if the earlier timestamp is of the previous round.
-                if self.round - round == 1 {
-                    let diff = Duration::from_millis(current_time - ts);
-                    let delay = (2 * self.min_header_delay).saturating_sub(diff);
+                let diff = Duration::from_millis(current_time - ts);
+                let delay = (2 * self.min_header_delay).saturating_sub(diff);
 
-                    debug!(
-                        "Setting min_delay to: {delay:?}, with diff: {diff:?} for round {}",
-                        self.round
-                    );
+                debug!(
+                    "Setting min_delay to: {delay:?}, with diff: {diff:?} for round {}",
+                    self.round
+                );
 
-                    self.metrics
-                        .proposal_counter_booster_diff
-                        .observe(diff.as_secs_f64());
+                self.metrics
+                    .proposal_counter_booster_diff
+                    .observe(diff.as_secs_f64());
 
-                    return delay.min(self.max_header_delay);
-                } else {
-                    debug!(
-                        "Skipping diff calculation for round {} as last timestamp is from {:?}",
-                        self.round, last_proposal_timestamp
-                    );
-                }
+                return delay.min(self.max_header_delay);
             }
         }
 
@@ -521,6 +520,9 @@ impl Proposer {
                     "min_timeout"
                 };
 
+                // Snapshot the parents
+                let last_parents = self.last_parents.clone();
+
                 // Make a new header.
                 match self.make_header().await {
                     Err(e @ DagError::ShuttingDown) => debug!("{e}"),
@@ -546,9 +548,9 @@ impl Proposer {
                 max_delay_timer
                     .as_mut()
                     .reset(timer_start + self.max_delay());
-                min_delay_timer.as_mut().reset(
-                    timer_start + self.min_delay(current_timestamp, self.last_round_timestamp),
-                );
+                min_delay_timer
+                    .as_mut()
+                    .reset(timer_start + self.min_delay(current_timestamp, last_parents));
 
                 // Update metrics and timestamps
                 if let Some((_round, t)) = &self.last_round_timestamp {
@@ -708,7 +710,7 @@ impl Proposer {
                             // As the schedule can change after an odd round proposal - when the new schedule algorithm is
                             // enabled - make sure that the timer is reset correctly for the round leader. No harm doing
                             // this here as well.
-                            if self.min_delay(now(), None) == Duration::ZERO {
+                            if self.min_delay(now(), vec![]) == Duration::ZERO {
                                 min_delay_timer
                                 .as_mut()
                                 .reset(Instant::now());
