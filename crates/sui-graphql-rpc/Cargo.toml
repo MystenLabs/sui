@@ -9,7 +9,11 @@ edition = "2021"
 
 [dependencies]
 async-graphql.workspace = true
+clap.workspace = true
 serde.workspace = true
 move-core-types.workspace = true
 
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+insta.workspace = true
