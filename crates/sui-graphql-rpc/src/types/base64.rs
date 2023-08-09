@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::*;
-use move_core_types::u256::U256;
 
 struct Base64(String);
 
