@@ -1,10 +1,16 @@
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-# Open Questions
-# --------------
-# - Encoding RPC errors
-
+# GraphQL Schema Draft
+# --------------------
+#
+# This is a draft design of the schema used by the second iteration of
+# the RPC service.  Note that some elements may not be complete, and
+# others may exist in this schema but may not appear in the production
+# design initially, or ever.
+#
+# The source of truth for the actual schema is accessed by querying
+# the GraphQL server for its `__schema`.
 
 schema {
   query: Query
