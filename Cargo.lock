@@ -13698,6 +13698,7 @@ dependencies = [
  "once_cell",
  "parking_lot 0.12.1",
  "prometheus",
+ "rand 0.8.5",
  "reqwest 0.12.9",
  "scopeguard",
  "serde",
