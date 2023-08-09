@@ -295,6 +295,7 @@ pub trait IndexerStore {
         current_checkpoint: i64,
         current_timestamp_ms: i64,
     ) -> Result<f64, IndexerError>;
+    async fn get_estimated_row_count(&self, table_name: &str) -> Result<i64, IndexerError>;
 }
 
 #[derive(Clone, Debug)]

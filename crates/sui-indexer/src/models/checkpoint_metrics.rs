@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use diesel::prelude::*;
-use diesel::sql_types::Float8;
+use diesel::sql_types::{Float8, Int8};
 
 use crate::schema::checkpoint_metrics;
 
@@ -13,6 +13,9 @@ pub struct CheckpointMetrics {
     pub epoch: i64,
     pub real_time_tps: f64,
     pub peak_tps_30d: f64,
+    pub total_addresses: i64,
+    pub total_objects: i64,
+    pub total_packages: i64,
     pub rolling_total_transactions: i64,
     pub rolling_total_transaction_blocks: i64,
     pub rolling_total_successful_transactions: i64,
@@ -27,6 +30,9 @@ impl Default for CheckpointMetrics {
             epoch: 0,
             real_time_tps: 0.0,
             peak_tps_30d: 0.0,
+            total_addresses: 0,
+            total_objects: 0,
+            total_packages: 0,
             rolling_total_transactions: 0,
             rolling_total_transaction_blocks: 0,
             rolling_total_successful_transactions: 0,
@@ -39,4 +45,10 @@ impl Default for CheckpointMetrics {
 pub struct Tps {
     #[diesel(sql_type = Float8)]
     pub tps: f64,
+}
+
+#[derive(Debug, QueryableByName)]
+pub struct EstimatedRowCount {
+    #[diesel(sql_type = Int8)]
+    pub cnt: i64,
 }

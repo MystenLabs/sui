@@ -45,7 +45,7 @@ use sui_types::transaction::SenderSignedData;
 use crate::errors::{Context, IndexerError};
 use crate::metrics::IndexerMetrics;
 use crate::models::addresses::{ActiveAddress, Address, AddressStats, DBAddressStats};
-use crate::models::checkpoint_metrics::{CheckpointMetrics, Tps};
+use crate::models::checkpoint_metrics::{CheckpointMetrics, EstimatedRowCount, Tps};
 use crate::models::checkpoints::Checkpoint;
 use crate::models::epoch::DBEpochInfo;
 use crate::models::events::Event;
@@ -83,6 +83,9 @@ FROM pg_inherits
 WHERE parent.relkind = 'p'
 GROUP BY table_name;
 "#;
+const ADDRESSES_TABLE_NAME: &str = "addresses";
+const OBJECTS_TABLE_NAME: &str = "objects";
+const PACKAGES_TABLE_NAME: &str = "packages";
 
 #[derive(QueryableByName, Debug, Clone)]
 struct TempDigestTable {
@@ -1744,12 +1747,18 @@ impl PgIndexerStore {
                 )
             },
         );
+        let total_addresses = self.get_estimated_row_count(ADDRESSES_TABLE_NAME)?;
+        let total_objects = self.get_estimated_row_count(OBJECTS_TABLE_NAME)?;
+        let total_packages = self.get_estimated_row_count(PACKAGES_TABLE_NAME)?;
 
         Ok(CheckpointMetrics {
             checkpoint: current_checkpoint,
             epoch: last_cp.epoch,
             real_time_tps,
             peak_tps_30d,
+            total_addresses,
+            total_objects,
+            total_packages,
             rolling_total_transactions: last_checkpoint_metrics.rolling_total_transactions
                 + rolling_tx_delta,
             rolling_total_transaction_blocks: last_checkpoint_metrics
@@ -1866,6 +1875,21 @@ impl PgIndexerStore {
             ))
             .context("Failed calculating peak TPS in 30 days from PostgresDB")?;
         Ok(peak_tps_30d.tps)
+    }
+
+    fn get_estimated_row_count(&self, table_name: &str) -> Result<i64, IndexerError> {
+        let query = format!(
+            "SELECT n_live_tup as cnt FROM pg_stat_user_tables
+            WHERE schemaname = 'public' AND relname = '{}';",
+            table_name,
+        );
+        let estimated_count: EstimatedRowCount =
+            read_only_blocking!(&self.blocking_cp, |conn| diesel::RunQueryDsl::get_result(
+                diesel::sql_query(query),
+                conn
+            ))
+            .context("Failed getting estimated row count from PostgresDB")?;
+        Ok(estimated_count.cnt)
     }
 
     async fn spawn_blocking<F, R>(&self, f: F) -> Result<R, IndexerError>
@@ -2440,6 +2464,12 @@ impl IndexerStore for PgIndexerStore {
             this.calculate_peak_tps_30d(current_checkpoint, current_timestamp_ms)
         })
         .await
+    }
+
+    async fn get_estimated_row_count(&self, table_name: &str) -> Result<i64, IndexerError> {
+        let name = table_name.to_owned();
+        self.spawn_blocking(move |this| this.get_estimated_row_count(&name))
+            .await
     }
 }
 
