@@ -11,13 +11,12 @@ use std::collections::{BTreeMap, VecDeque};
 use std::{cmp::Ordering, sync::Arc};
 use storage::{CertificateStore, ProposerStore};
 use sui_protocol_config::ProtocolConfig;
-use tokio::time::{sleep_until, Instant};
+use tokio::time::{sleep, sleep_until, Duration, Instant};
 use tokio::{
     sync::{oneshot, watch},
     task::JoinHandle,
-    time::{sleep, Duration},
 };
-use tracing::{debug, enabled, error, info, trace};
+use tracing::{debug, enabled, error, info, trace, warn};
 use types::{
     error::{DagError, DagResult},
     BatchDigest, Certificate, CertificateAPI, Header, HeaderAPI, Round, TimestampMs,
@@ -40,8 +39,6 @@ pub struct OurDigestMessage {
 #[path = "tests/proposer_tests.rs"]
 pub mod proposer_tests;
 
-const DEFAULT_HEADER_RESEND_TIMEOUT: Duration = Duration::from_secs(60);
-
 /// The proposer creates new headers and send them to the core for broadcasting and further processing.
 pub struct Proposer {
     /// The id of this primary.
@@ -59,10 +56,6 @@ pub struct Proposer {
     max_header_delay: Duration,
     /// The minimum delay between generating headers.
     min_header_delay: Duration,
-    /// The delay to wait until resending the last proposed header if proposer
-    /// hasn't proposed anything new since then. If None is provided then the
-    /// default value will be used instead.
-    header_resend_timeout: Option<Duration>,
 
     /// Receiver for shutdown.
     rx_shutdown: ConditionalBroadcastReceiver,
@@ -127,7 +120,6 @@ impl Proposer {
         max_header_num_of_batches: usize,
         max_header_delay: Duration,
         min_header_delay: Duration,
-        header_resend_timeout: Option<Duration>,
         rx_shutdown: ConditionalBroadcastReceiver,
         rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
         rx_our_digests: Receiver<OurDigestMessage>,
@@ -149,7 +141,6 @@ impl Proposer {
                     max_header_num_of_batches,
                     max_header_delay,
                     min_header_delay,
-                    header_resend_timeout,
 
                     rx_shutdown,
                     rx_parents,
@@ -485,18 +476,14 @@ impl Proposer {
         let max_delay_timer = sleep_until(timer_start + self.max_header_delay);
         let min_delay_timer = sleep_until(timer_start + self.min_header_delay);
 
-        let header_resend_timeout = self
-            .header_resend_timeout
-            .unwrap_or(DEFAULT_HEADER_RESEND_TIMEOUT);
-        let mut header_repeat_timer = Box::pin(sleep(header_resend_timeout));
         let mut opt_latest_header = None;
 
         tokio::pin!(max_delay_timer);
         tokio::pin!(min_delay_timer);
 
         info!(
-            "Proposer on node {} has started successfully with header resend timeout {:?}.",
-            self.authority_id, header_resend_timeout
+            "Proposer on node {} has started successfully.",
+            self.authority_id,
         );
         loop {
             // Check if we can propose a new header. We propose a new header when we have a quorum of parents
@@ -511,7 +498,8 @@ impl Proposer {
             let min_delay_timed_out = min_delay_timer.is_elapsed();
             let should_create_header = (max_delay_timed_out
                 || ((enough_digests || min_delay_timed_out) && advance))
-                && enough_parents;
+                && enough_parents
+                && opt_latest_header.is_none();
 
             debug!(
                 "Proposer loop starts: round={} enough_parents={} enough_digests={} advance={} max_delay_timed_out={} min_delay_timed_out={} should_create_header={}", 
@@ -559,7 +547,6 @@ impl Proposer {
                     Ok((header, digests)) => {
                         // Save the header
                         opt_latest_header = Some(header);
-                        header_repeat_timer = Box::pin(sleep(header_resend_timeout));
 
                         self.metrics
                             .num_of_batch_digests_in_header
@@ -584,27 +571,28 @@ impl Proposer {
                 continue;
             }
 
+            let notify_certificate = async {
+                match &opt_latest_header {
+                    Some(header) => {
+                        let result = self
+                            .certificate_store
+                            .notify_read(CertificateDigest(header.digest().0))
+                            .await;
+                        match result {
+                            Ok(_) => true,
+                            Err(e) => {
+                                warn!("Failed to notify read for certificate: {e}");
+                                false
+                            }
+                        }
+                    }
+                    None => false,
+                }
+            };
+
             debug!("Proposer waiting for update: round={}", self.round);
 
             tokio::select! {
-
-                () = &mut header_repeat_timer => {
-                    debug!("Proposer header_repeat_timer, round={}", self.round);
-
-                    // If the round has not advanced within header_resend_timeout then try to
-                    // re-process our own header.
-                    if let Some(header) = &opt_latest_header {
-                        debug!("resend header {:?}", header);
-
-                        if let Err(err) = self.tx_headers.send(header.clone()).await.map_err(|_| DagError::ShuttingDown) {
-                            error!("failed to resend header {:?} : {:?}", header, err);
-                        }
-
-                        // we want to reset the timer only when there is already a previous header
-                        // created.
-                        header_repeat_timer = Box::pin(sleep(header_resend_timeout));
-                    }
-                }
 
                 Some((commit_round, commit_headers)) = self.rx_committed_own_headers.recv() => {
                     debug!("Proposer committed own header, round={}", self.round);
@@ -785,6 +773,14 @@ impl Proposer {
                 Some(message) = self.rx_system_messages.recv() => {
                     debug!("Proposer received system message, round={}", self.round);
                     self.system_messages.push(message);
+                }
+
+                result = notify_certificate, if opt_latest_header.is_some() => {
+                    if result {
+                        opt_latest_header = None;
+                    } else {
+                        sleep(Duration::from_millis(100)).await;
+                    }
                 }
 
                 // Check whether any timer expired.

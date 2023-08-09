@@ -45,7 +45,6 @@ async fn propose_empty() {
         /* max_header_num_of_batches */ 100,
         /* max_header_delay */ Duration::from_millis(20),
         /* min_header_delay */ Duration::from_millis(20),
-        None,
         tx_shutdown.subscribe(),
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
@@ -71,7 +70,6 @@ async fn propose_payload_and_repropose_after_n_seconds() {
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let name = primary.id();
-    let header_resend_delay = Duration::from_secs(3);
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_parents, rx_parents) = test_utils::test_channel!(1);
@@ -101,7 +99,6 @@ async fn propose_payload_and_repropose_after_n_seconds() {
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
         /* min_header_delay */
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
-        Some(header_resend_delay),
         tx_shutdown.subscribe(),
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
@@ -230,7 +227,6 @@ async fn equivocation_protection() {
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
         /* min_header_delay */
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
-        None,
         tx_shutdown.subscribe(),
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
@@ -309,7 +305,6 @@ async fn equivocation_protection() {
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
         /* min_header_delay */
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
-        None,
         tx_shutdown.subscribe(),
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,

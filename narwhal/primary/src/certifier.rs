@@ -16,10 +16,7 @@ use std::{collections::BTreeSet, sync::Arc};
 use storage::CertificateStore;
 use sui_macros::fail_point_async;
 use sui_protocol_config::ProtocolConfig;
-use tokio::{
-    sync::oneshot,
-    task::{JoinHandle, JoinSet},
-};
+use tokio::task::{JoinHandle, JoinSet};
 use tracing::{debug, enabled, error, info, instrument, warn};
 use types::{
     ensure,
@@ -53,9 +50,6 @@ pub struct Certifier {
     rx_shutdown: ConditionalBroadcastReceiver,
     /// Receives our newly created headers from the `Proposer`.
     rx_headers: Receiver<Header>,
-    /// Used to cancel vote requests for a previously-proposed header that is being replaced
-    /// before a certificate could be formed.
-    cancel_proposed_header: Option<oneshot::Sender<()>>,
     /// Handle to propose_header task. Our target is to have only one task running always, thus
     /// we cancel the previously running before we spawn the next one. However, we don't wait for
     /// the previous to finish to spawn the new one, so we might temporarily have more that one
@@ -93,7 +87,6 @@ impl Certifier {
                     signature_service,
                     rx_shutdown,
                     rx_headers,
-                    cancel_proposed_header: None,
                     propose_header_tasks: JoinSet::new(),
                     network: primary_network,
                     metrics,
@@ -164,7 +157,7 @@ impl Certifier {
                 parents: Vec::new(),
                 ancestors,
             })
-            .with_timeout(Duration::from_secs(30));
+            .with_timeout(Duration::from_secs(10));
             match client.request_vote(request).await {
                 Ok(response) => {
                     let response = response.into_body();
@@ -249,7 +242,6 @@ impl Certifier {
         metrics: Arc<PrimaryMetrics>,
         network: anemo::Network,
         header: Header,
-        mut cancel: oneshot::Receiver<()>,
     ) -> DagResult<Certificate> {
         if header.epoch() != committee.epoch() {
             debug!(
@@ -292,24 +284,12 @@ impl Certifier {
             if certificate.is_some() {
                 break;
             }
-            tokio::select! {
-                result = &mut requests.next() => {
-                    match result {
-                        Some(Ok(vote)) => {
-                            certificate = votes_aggregator.append(
-                                vote,
-                                &committee,
-                                &header,
-                            )?;
-                        },
-                        Some(Err(e)) => debug!("failed to get vote for header {header:?}: {e:?}"),
-                        None => break,
-                    }
-                },
-                _ = &mut cancel => {
-                    debug!("canceling Header proposal {header} for round {}", header.round());
-                    return Err(DagError::Canceled)
-                },
+            match requests.next().await {
+                Some(Ok(vote)) => {
+                    certificate = votes_aggregator.append(vote, &committee, &header)?;
+                }
+                Some(Err(e)) => debug!("failed to get vote for header {header:?}: {e:?}"),
+                None => break,
             }
         }
 
@@ -368,12 +348,6 @@ impl Certifier {
                 // We also receive here our new headers created by the `Proposer`.
                 // TODO: move logic into Proposer.
                 Some(header) = self.rx_headers.recv() => {
-                    let (tx_cancel, rx_cancel) = oneshot::channel();
-                    if let Some(cancel) = self.cancel_proposed_header {
-                        let _ = cancel.send(());
-                    }
-                    self.cancel_proposed_header = Some(tx_cancel);
-
                     let name = self.authority_id;
                     let committee = self.committee.clone();
                     let certificate_store = self.certificate_store.clone();
@@ -391,7 +365,6 @@ impl Certifier {
                         metrics,
                         network,
                         header,
-                        rx_cancel,
                     )));
                     Ok(())
                 },
