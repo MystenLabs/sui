@@ -10302,9 +10302,11 @@ dependencies = [
 
 [[package]]
 name = "sui-graphql-rpc"
-version = "1.8.0"
+version = "0.0.0"
 dependencies = [
  "async-graphql",
+ "move-core-types",
+ "serde",
  "workspace-hack",
 ]
 
