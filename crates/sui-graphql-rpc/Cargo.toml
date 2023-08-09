@@ -1,6 +1,6 @@
 [package]
 name = "sui-graphql-rpc"
-version.workspace = true
+version = "0.0.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -9,4 +9,7 @@ edition = "2021"
 
 [dependencies]
 async-graphql.workspace = true
+serde.workspace = true
+move-core-types.workspace = true
+
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
