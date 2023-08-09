@@ -358,7 +358,7 @@ impl Proposer {
                 // we only take the timestamp into account if the earlier timestamp is of the previous round.
                 if self.round - round == 1 {
                     let diff = Duration::from_millis(current_time - ts);
-                    let delay = self.min_header_delay + (self.min_header_delay - diff);
+                    let delay = (2 * self.min_header_delay).saturating_sub(diff);
 
                     debug!(
                         "Setting min_delay to: {delay:?}, with diff: {diff:?} for round {}",
