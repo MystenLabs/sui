@@ -301,7 +301,7 @@ once_cell = "1.18.0"
 ouroboros = "0.15.5"
 parking_lot = "0.12.1"
 pkcs8 = { version = "0.9.0", features = ["std"] }
-pprof = { version = "0.11.0", features = ["cpp", "frame-pointer", "criterion", "flamegraph"] }
+pprof = { version = "0.11.0", features = ["cpp", "frame-pointer"] }
 pretty_assertions = "1.3.0"
 prettytable-rs = "0.10.0"
 proc-macro2 = "1.0.47"
