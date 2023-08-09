@@ -72,7 +72,7 @@ export function ProtectAccountForm({
 						options={lockIntervals}
 						placeholder={'Hour'}
 						offset={-41}
-						onValueChange={(selectedValue: string) => setValue('autoLockInterval', selectedValue)} // Use setValue
+						onValueChange={(selectedValue: string) => setValue('autoLockInterval', selectedValue)}
 						value={form.watch('autoLockInterval')}
 					/>
 				</div>
