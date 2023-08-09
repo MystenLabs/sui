@@ -1,0 +1,17 @@
+---
+source: crates/sui-graphql-rpc/tests/snapshot_tests.rs
+expression: sdl
+---
+
+
+
+
+type Query {
+	chainIdentifier: String!
+}
+
+
+schema {
+	query: Query
+}
+
