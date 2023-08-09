@@ -10,6 +10,7 @@ export interface SelectDropdownProps {
 	dropdownOptions?: string[];
 	onValueChange?: (value: string) => void;
 	value?: string;
+	offset?: number;
 }
 
 export function SelectDropdown({
@@ -17,12 +18,13 @@ export function SelectDropdown({
 	dropdownOptions,
 	onValueChange,
 	value,
+	offset,
 }: SelectDropdownProps) {
 	return (
-		<div className="z-5">
+		<div className="z-5 h-full">
 			<Select.Root onValueChange={onValueChange} value={value}>
 				<Select.Trigger
-					className="flex items-center border border-solid border-gray-45 shadow-md rounded-md bg-transparent px-4 py-2 gap-1.5 focus:outline-none"
+					className="flex items-center border border-solid border-gray-45 shadow-sm rounded-2lg bg-white px-4 py-2 gap-1.5 focus:outline-none h-full"
 					aria-label="Food"
 				>
 					<Select.Value>
@@ -39,7 +41,7 @@ export function SelectDropdown({
 						className="z-10 min-w-[100px] bg-transparent"
 						position="popper"
 						side="bottom"
-						sideOffset={-35}
+						sideOffset={offset}
 						align="end"
 					>
 						<Select.Viewport className="bg-white p-2 border border-solid border-gray-45 rounded-md shadow-md">
