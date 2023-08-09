@@ -10305,6 +10305,8 @@ name = "sui-graphql-rpc"
 version = "0.0.0"
 dependencies = [
  "async-graphql",
+ "clap 3.2.23",
+ "insta",
  "move-core-types",
  "serde",
  "workspace-hack",
