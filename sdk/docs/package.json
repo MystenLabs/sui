@@ -1,6 +1,7 @@
 {
 	"name": "@mysten/sdk-docs",
 	"version": "1.0.0",
+	"private": true,
 	"description": "Docs for @mysten npm packages",
 	"main": "index.js",
 	"scripts": {
