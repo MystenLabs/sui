@@ -5,7 +5,7 @@ module axelar::channel {
     use axelar::axelar;
     use axelar::axelar::Axelar;
     use axelar::messaging;
-    use axelar::messaging::Message;
+    use axelar::messaging::CallApproval;
     use sui::bcs;
     use sui::object;
     use sui::object::UID;
@@ -54,7 +54,7 @@ module axelar::channel {
         /// Messages processed by this object. To make system less
         /// centralized, and spread the storage + io costs across multiple
         /// destinations, we can track every `Channel`'s messages.
-        messages: VecSet<vector<u8>>,
+        call_approvals: VecSet<vector<u8>>,
         /// Additional field to optionally use as metadata for the Channel
         /// object improving identification and uniqueness of data.
         /// Can store any struct that has `store` ability (including other
@@ -63,7 +63,7 @@ module axelar::channel {
     }
 
     /// Emitted when a new message is sent from the SUI network.
-    struct OutboundMessage has copy, drop {
+    struct ContractCall has copy, drop {
         source: vector<u8>,
         destination: vector<u8>,
         destination_address: vector<u8>,
@@ -77,7 +77,7 @@ module axelar::channel {
     public fun create_channel<T: store>(t: T, ctx: &mut TxContext): Channel<T> {
         Channel {
             id: object::new(ctx),
-            messages: vec_set::empty(),
+            call_approvals: vec_set::empty(),
             data: t
         }
     }
@@ -85,7 +85,7 @@ module axelar::channel {
     /// Destroy a `Channel<T>` releasing the T. Not constrained and can be performed
     /// by any party as long as they own a Channel.
     public fun destroy_channel<T: store>(self: Channel<T>): T {
-        let Channel { id, messages: _, data } = self;
+        let Channel { id, call_approvals: _, data } = self;
         object::delete(id);
         data
     }
@@ -95,13 +95,13 @@ module axelar::channel {
     ///
     /// Event data is collected from the Channel (eg ID of the source and
     /// source_chain is a constant).
-    public fun send_message<T: store>(
+    public fun call_contract<T: store>(
         t: &mut Channel<T>,
         destination: vector<u8>,
         destination_address: vector<u8>,
         payload: vector<u8>
     ) {
-        sui::event::emit(OutboundMessage {
+        sui::event::emit(ContractCall {
             source: bcs::to_bytes(&t.id),
             destination,
             destination_address,
@@ -118,13 +118,13 @@ module axelar::channel {
     ///
     /// For Capability-locking, a mutable reference to the `Channel.data` field is
     /// returned; plus the hot potato message object.
-    public fun retrieve_message<T: store>(
+    public fun validate_call_approval<T: store>(
         axelar: &mut Axelar,
         t: &mut Channel<T>,
         msg_id: vector<u8>,
-    ): (&mut T, Message) {
-        let message = axelar::remove_message(axelar, msg_id);
-        assert!(!vec_set::contains(&t.messages, &msg_id), EDuplicateMessage);
+    ): (&mut T, CallApproval) {
+        let message = axelar::remove_call_approval(axelar, msg_id);
+        assert!(!vec_set::contains(&t.call_approvals, &msg_id), EDuplicateMessage);
         assert!(messaging::target_id(&message) == object::uid_to_address(&t.id), EWrongDestination);
         (&mut t.data, message)
     }
