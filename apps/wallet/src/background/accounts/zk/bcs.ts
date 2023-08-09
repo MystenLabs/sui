@@ -16,20 +16,18 @@ bcs.registerStructType('ZkClaim', {
 });
 
 bcs.registerStructType('ZkSignature', {
-	proof_points: {
-		pi_a: [BCS.VECTOR, BCS.STRING],
-		pi_b: [BCS.VECTOR, [BCS.VECTOR, BCS.STRING]],
-		pi_c: [BCS.VECTOR, BCS.STRING],
-		// TODO:
-		// protocol: BCS.STRING,
-		// curve: BCS.STRING,
+	inputs: {
+		proof_points: {
+			pi_a: [BCS.VECTOR, BCS.STRING],
+			pi_b: [BCS.VECTOR, [BCS.VECTOR, BCS.STRING]],
+			pi_c: [BCS.VECTOR, BCS.STRING],
+		},
+		address_seed: BCS.STRING,
+		claims: [BCS.VECTOR, 'ZkClaim'],
+		header_base64: BCS.STRING,
 	},
-	address_seed: BCS.STRING,
-	claims: [BCS.VECTOR, 'ZkClaim'],
-	header_base64: BCS.STRING,
-	eph_public_key: [BCS.VECTOR, BCS.U8],
-	max_epoch: BCS.STRING,
-	tx_sign: [BCS.VECTOR, BCS.U8],
+	max_epoch: BCS.U64,
+	user_signature: [BCS.VECTOR, BCS.U8],
 });
 
 export { bcs } from '@mysten/sui.js/bcs';

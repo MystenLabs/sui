@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Popover } from '@headlessui/react';
+import { useFormatCoin, useGetCoinBalance } from '@mysten/core';
+import { TransactionBlock } from '@mysten/sui.js/builder';
 import { type ExportedKeypair } from '@mysten/sui.js/cryptography';
+import { SUI_TYPE_ARG } from '@mysten/sui.js/framework';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { toB64 } from '@mysten/sui.js/utils';
 import { hexToBytes } from '@noble/hashes/utils';
@@ -24,6 +27,8 @@ import { ImportLedgerAccountsPage } from '../../pages/accounts/ImportLedgerAccou
 import { Button } from '../../shared/ButtonUI';
 import { ModalDialog } from '../../shared/ModalDialog';
 import { Card } from '../../shared/card';
+import { FAUCET_HOSTS } from '../../shared/faucet/FaucetRequestButton';
+import { useFaucetMutation } from '../../shared/faucet/useFaucetMutation';
 import { Heading } from '../../shared/heading';
 import { Text } from '../../shared/text';
 import { type AccountSourceSerializedUI } from '_src/background/account-sources/AccountSource';
@@ -313,11 +318,37 @@ function Account({ account }: { account: SerializedUIAccount }) {
 			toast.success(JSON.stringify(result, null, 2));
 		},
 	});
+	const signAndExecute = useMutation({
+		mutationKey: ['accounts v2 sign'],
+		mutationFn: () => {
+			if (account.isLocked) {
+				throw new Error('Account is locked');
+			}
+			if (!signer) {
+				throw new Error('Signer not found');
+			}
+			const transactionBlock = new TransactionBlock();
+			const [coin] = transactionBlock.splitCoins(transactionBlock.gas, [transactionBlock.pure(1)]);
+			transactionBlock.transferObjects([coin], transactionBlock.pure(account.address));
+			return signer.signAndExecuteTransactionBlock({ transactionBlock }, clientIdentifier);
+		},
+		onSuccess: (result) => {
+			toast.success(JSON.stringify(result, null, 2));
+		},
+	});
+	const { data: coinBalance } = useGetCoinBalance(SUI_TYPE_ARG, account.address, 5000);
+	const [formattedSuiBalance] = useFormatCoin(coinBalance?.totalBalance, coinBalance?.coinType);
+
+	const network = useAppSelector(({ app }) => app.apiEnv);
+	const faucetMutation = useFaucetMutation({
+		host: network in FAUCET_HOSTS ? FAUCET_HOSTS[network as keyof typeof FAUCET_HOSTS] : null,
+		address: account.address,
+	});
 	return (
 		<>
 			{notificationModal}
 			<Card
-				header={account.address}
+				header={`${account.address} (${formattedSuiBalance} SUI)`}
 				key={account.address}
 				footer={
 					account.isLocked ? (
@@ -345,11 +376,28 @@ function Account({ account }: { account: SerializedUIAccount }) {
 								loading={sign.isLoading}
 								disabled={lock.isLoading || unlock.isLoading}
 							/>
+							<Button
+								text="Sign & Execute"
+								onClick={() => {
+									signAndExecute.mutate();
+								}}
+								loading={signAndExecute.isLoading}
+								disabled={lock.isLoading || unlock.isLoading}
+							/>
 						</div>
 					)
 				}
 			>
-				<pre>{JSON.stringify(account, null, 2)}</pre>
+				<div className="flex flex-col gap-3 items-start">
+					<div>
+						<Button
+							text="Faucet Request"
+							onClick={() => faucetMutation.mutate()}
+							loading={faucetMutation.isLoading}
+						/>
+					</div>
+					<pre>{JSON.stringify(account, null, 2)}</pre>
+				</div>
 			</Card>
 		</>
 	);

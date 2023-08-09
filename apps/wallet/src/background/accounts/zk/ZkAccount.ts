@@ -8,6 +8,7 @@ import {
 	toSerializedSignature,
 } from '@mysten/sui.js/cryptography';
 import { fromB64, toB64 } from '@mysten/sui.js/utils';
+import { blake2b } from '@noble/hashes/blake2b';
 import { toBigIntBE } from 'bigint-buffer';
 import { decodeJwt } from 'jose';
 import { bcs } from './bcs';
@@ -206,6 +207,7 @@ export class ZkAccount
 	}
 
 	async signData(data: Uint8Array): Promise<SerializedSignature> {
+		const digest = blake2b(data, { dkLen: 32 });
 		if (await this.isLocked()) {
 			// check is locked to handle cases of different network, current epoch higher than max epoch etc.
 			throw new Error('Account is locked');
@@ -218,7 +220,7 @@ export class ZkAccount
 		const { ephemeralKeyPair, proofs, maxEpoch } = credentials;
 		const keyPair = fromExportedKeypair(ephemeralKeyPair);
 		const userSignature = toSerializedSignature({
-			signature: await keyPair.sign(data),
+			signature: await keyPair.sign(digest),
 			signatureScheme: keyPair.getKeyScheme(),
 			publicKey: keyPair.getPublicKey(),
 		});
@@ -226,13 +228,9 @@ export class ZkAccount
 			.ser(
 				'ZkSignature',
 				{
-					proof_points: proofs.proof_points,
-					address_seed: proofs.address_seed,
-					claims: proofs.claims,
-					header_base64: proofs.header_base64,
-					eph_public_key: keyPair.getPublicKey().toRawBytes(),
-					max_epoch: String(maxEpoch),
-					tx_sign: fromB64(userSignature),
+					inputs: proofs,
+					max_epoch: maxEpoch,
+					user_signature: fromB64(userSignature),
 				},
 				{ maxSize: 2048 },
 			)

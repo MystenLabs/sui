@@ -288,12 +288,8 @@ type ProofPoints = {
 	pi_a: string[];
 	pi_b: string[][];
 	pi_c: string[];
-	// TODO: seems protocol & curve is missing from the actual response
-	protocol: string;
-	curve: string;
 };
 export type PartialZkSignature = {
-	// TODO: is proof_points the expected field name?
 	proof_points: ProofPoints;
 	address_seed: string;
 	claims: Claim[];
