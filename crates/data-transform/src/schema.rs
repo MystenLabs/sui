@@ -14,3 +14,10 @@ diesel::table! {
         event_bcs -> Bytea,
     }
 }
+
+diesel::table! {
+    events_json (id) {
+        id -> Int8,
+        event_json -> Varchar,
+    }
+}

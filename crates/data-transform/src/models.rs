@@ -1,4 +1,5 @@
 use diesel::prelude::*;
+use crate::schema::events_json;
 
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = crate::schema::events)]
@@ -14,4 +15,11 @@ pub struct Event {
     pub event_type: String,
     pub event_time_ms: Option<i64>,
     pub event_bcs: Vec<u8>,
+}
+
+#[derive(Queryable, Insertable, Debug, Clone, Default)]
+#[diesel(table_name = events_json)]
+pub struct EventsJson {
+    pub id: i64,
+    pub event_json: String,
 }

@@ -2889,6 +2889,7 @@ dependencies = [
  "sui-indexer",
  "sui-json-rpc-types",
  "sui-types",
+ "tracing",
 ]
 
 [[package]]

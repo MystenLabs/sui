@@ -29,6 +29,7 @@ use serde::Serialize;
 
 use std::process::{Command, Stdio};
 use std::io::{self, Read};
+use tracing::{debug, info};
 
 const LATEST_MODULE_QUERY: &str = "SELECT (t2.module).data
 FROM (SELECT UNNEST(data) AS module
@@ -44,17 +45,17 @@ fn main() {
     }
 
     use self::schema::events::dsl::*;
+    use self::schema::events_json::dsl::*;
 
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let connection = &mut establish_connection();
 
     let start_id = 1;
-    let max_id = 5;
 
     let blocking_cp = new_pg_connection_pool(&database_url).map_err(|e| anyhow!("Unable to connect to Postgres, is it running? {e}"));
     let module_cache = Arc::new(SyncModuleCache::new(IndexerModuleResolver::new(blocking_cp.expect("REASON").clone())));
 
-    for target_id in start_id..=max_id {
+    for target_id in start_id.. {
 
         let event = events
             .find(target_id)
@@ -66,22 +67,22 @@ fn main() {
             Ok(Some(event)) => {
                 println!("-----------\n");
                 println!("event id = {}", event.id);
-                println!("event sequence = {:#?}", event.event_sequence);
-                println!("sender = {:#?}", event.sender);
-                println!("package = {:#?}", event.package);
-                println!("module = {:#?}", event.module);
-                println!("type = {:#?}", event.event_type);
+                debug!("event sequence = {:#?}", event.event_sequence);
+                debug!("sender = {:#?}", event.sender);
+                debug!("package = {:#?}", event.package);
+                debug!("module = {:#?}", event.module);
+                debug!("type = {:#?}", event.event_type);
                 let text = String::from_utf8_lossy(&event.event_bcs);
-                println!("bcs in text = {:#?}", text);
+                debug!("bcs in text = {:#?}", text);
 
                 // JSON parsing starts here
                 let type_ = parse_sui_struct_tag(&event.event_type);
 
-                let package_id = event.package.to_string();
-                println!("package id= {:#?}", package_id);
+                //let package_id = event.package.to_string();
+                //println!("package id= {:#?}", package_id);
 
-                let module_name = event.module.to_string();
-                println!("module name= {:#?}", module_name);
+                //let module_name = event.module.to_string();
+                //println!("module name= {:#?}", module_name);
 
                 /*
                 let result = diesel::sql_query(LATEST_MODULE_QUERY)
@@ -107,7 +108,15 @@ fn main() {
                             Ok(m) => {
                                 let parsed_json = SuiMoveStruct::from(m).to_json_value();
                                 let final_result = serde_json::to_string_pretty(&parsed_json).unwrap();
-                                println!("final = {}", final_result);
+                                debug!("event json = {}", final_result);
+
+                                let new_event_json = EventsJson { id: event.id, event_json: final_result };
+
+                                let inserted_event_json = diesel::insert_into(events_json)
+                                    .values(&new_event_json)
+                                    .execute(connection)
+                                    .expect("Error saving new events json");
+
                             }|
                             Err(e) => {
                                 println!("error: {}", e);
