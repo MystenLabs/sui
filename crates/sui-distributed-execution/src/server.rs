@@ -169,9 +169,11 @@ impl<M: Debug + Message + Send + 'static> NetworkManager<M> {
         {
             let mut w_receiver_table = receiver_table.write().unwrap();
             for (&id, _) in &self.addr_table {
-                // Channel from Network Manager to link handler
+                // Channel from Network Manager to link handler, inserted into 
+                // routing_table and receiver_table.
+                // Each handle_connection task then grabs its corresponding receiver from receiver_table,
+                // after establishing the id of its remote peer.
                 let (out_sender, out_receiver) = mpsc::channel::<NetworkMessage<M>>(100);
-                
                 routing_table.insert(id, out_sender);
                 w_receiver_table.insert(id, out_receiver);
             }
