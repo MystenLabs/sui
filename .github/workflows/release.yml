@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 45
     strategy:
       matrix:
-        os: [macos-ghcloud]
+        os: [macos-13-xl]
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
@@ -82,11 +82,11 @@ jobs:
           cargo build --release
 
       - name: Rename binaries for Ubuntu and MacOS
-        if: ${{ env.sui_tag != 'main' && (matrix.os == 'ubuntu-ghcloud' || matrix.os == 'macos-ghcloud') }}
+        if: ${{ env.sui_tag != 'main' && (matrix.os == 'ubuntu-ghcloud' || matrix.os == 'macos-13-xl') }}
         shell: bash
         run: |
           export arch=$(uname -m)
-          export system_os=$(echo "ubuntu-ghcloud" | sed s/"-ghcloud"//)
+          export system_os=$(echo "ubuntu-ghcloud" | cut -d- -f1)
           export os_type="$(system_os)-${arch}"
           echo "os_type=${os_type}" >> $GITHUB_ENV
           mv ./target/release/sui ./target/release/sui-${os_type}
