@@ -10,7 +10,9 @@ use std::{
 
 use move_package::{
     resolution::{
-        dependency_graph::{DependencyGraph, DependencyGraphBuilder, DependencyMode},
+        dependency_graph::{
+            DependencyGraph, DependencyGraphBuilder, DependencyGraphInfo, DependencyMode,
+        },
         lock_file::LockFile,
     },
     source_package::{
@@ -210,7 +212,7 @@ fn merge_simple() {
 
     let dep_graphs = BTreeMap::from([(
         Symbol::from("A"),
-        (inner, DependencyMode::Always, false, false),
+        DependencyGraphInfo::new(inner, DependencyMode::Always, false, false),
     )]);
     let dependencies = &BTreeMap::from([(
         Symbol::from("A"),
@@ -256,7 +258,7 @@ fn merge_into_root() {
 
     let dep_graphs = BTreeMap::from([(
         Symbol::from("A"),
-        (inner, DependencyMode::Always, false, false),
+        DependencyGraphInfo::new(inner, DependencyMode::Always, false, false),
     )]);
     let dependencies = &BTreeMap::from([(
         Symbol::from("A"),
@@ -303,7 +305,7 @@ fn merge_detached() {
 
     let dep_graphs = BTreeMap::from([(
         Symbol::from("OtherDep"),
-        (inner, DependencyMode::Always, false, false),
+        DependencyGraphInfo::new(inner, DependencyMode::Always, false, false),
     )]);
     let Err(err) = outer.merge(
         dep_graphs,
@@ -337,7 +339,7 @@ fn merge_after_calculating_always_deps() {
 
     let dep_graphs = BTreeMap::from([(
         Symbol::from("A"),
-        (inner, DependencyMode::Always, false, false),
+        DependencyGraphInfo::new(inner, DependencyMode::Always, false, false),
     )]);
     let Err(err) = outer.merge(
         dep_graphs,
@@ -385,11 +387,11 @@ fn merge_overlapping() {
     let dep_graphs = BTreeMap::from([
         (
             Symbol::from("B"),
-            (inner1, DependencyMode::Always, false, false),
+            DependencyGraphInfo::new(inner1, DependencyMode::Always, false, false),
         ),
         (
             Symbol::from("C"),
-            (inner2, DependencyMode::Always, false, false),
+            DependencyGraphInfo::new(inner2, DependencyMode::Always, false, false),
         ),
     ]);
     let dependencies = &BTreeMap::from([
@@ -454,11 +456,11 @@ fn merge_overlapping_different_deps() {
     let dep_graphs = BTreeMap::from([
         (
             Symbol::from("B"),
-            (inner1, DependencyMode::Always, false, false),
+            DependencyGraphInfo::new(inner1, DependencyMode::Always, false, false),
         ),
         (
             Symbol::from("C"),
-            (inner2, DependencyMode::Always, false, false),
+            DependencyGraphInfo::new(inner2, DependencyMode::Always, false, false),
         ),
     ]);
     let dependencies = &BTreeMap::from([
