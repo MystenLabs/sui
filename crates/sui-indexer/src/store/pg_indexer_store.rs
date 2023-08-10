@@ -2451,17 +2451,22 @@ fn persist_object_mutations(
 ) -> Result<(), IndexerError> {
     let mutated_objects = filter_latest_objects(mutated_objects);
     let object_mutation_guard = object_mutation_latency.start_timer();
-    // bulk insert/update via UNNEST trick to bypass the 65535 parameters limit
-    // ref: https://klotzandrew.com/blog/postgres-passing-65535-parameter-limit
-    let insert_update_query = compose_object_bulk_insert_update_query(&mutated_objects);
-    diesel::sql_query(insert_update_query)
-        .execute(conn)
-        .map_err(|e| {
-            IndexerError::PostgresWriteError(format!(
-                "Failed writing mutated objects to PostgresDB with error: {:?}",
-                e
-            ))
-        })?;
+    for mutated_object_change_chunk in mutated_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
+        // bulk insert/update via UNNEST trick to bypass the 65535 parameters limit
+        // ref: https://klotzandrew.com/blog/postgres-passing-65535-parameter-limit
+        let insert_update_query =
+            compose_object_bulk_insert_update_query(mutated_object_change_chunk);
+        diesel::sql_query(insert_update_query)
+            .execute(conn)
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed writing mutated objects to PostgresDB with error: {:?}. Chunk length: {}, total length: {}",
+                    e,
+                    mutated_object_change_chunk.len(),
+                    mutated_objects.len(),
+                ))
+            })?;
+    }
     object_mutation_guard.stop_and_record();
     object_commit_chunk_counter.inc();
     Ok(())
@@ -2489,8 +2494,10 @@ fn persist_object_deletions(
             .execute(conn)
             .map_err(|e| {
                 IndexerError::PostgresWriteError(format!(
-                    "Failed writing deleted objects to PostgresDB with error: {:?}",
-                    e
+                    "Failed writing deleted objects to PostgresDB with error: {:?}. Chunk length: {}, total length: {}",
+                    e,
+                    deleted_object_change_chunk.len(),
+                    deleted_objects.len(),
                 ))
             })?;
         object_commit_chunk_counter.inc();
