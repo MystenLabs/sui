@@ -84,7 +84,11 @@ export function parseSerializedSignature(serializedSignature: SerializedSignatur
 			bytes,
 		};
 	}
-	// TODO: what about zk?
+
+	if (signatureScheme === 'Zk') {
+		throw new Error('Unable to parse a zk signature. (not implemented yet)');
+	}
+
 	if (!(signatureScheme in SIGNATURE_SCHEME_TO_SIZE)) {
 		throw new Error('Unsupported signature scheme');
 	}

@@ -242,7 +242,6 @@ export async function zkLogin({
 	params.append('nonce', nonce);
 	// This can be used for logins after the user has already connected a google account
 	// and we need to make sure that the user logged in with the correct account
-	// TODO: test this
 	if (loginHint) {
 		params.append('login_hint', loginHint);
 	}
@@ -264,6 +263,7 @@ export async function zkLogin({
 	return jwt;
 }
 
+// TODO: update when we have the final production url
 const pinRegistryUrl = 'https://enoki-server-7e33d356b89c.herokuapp.com';
 
 export async function fetchPin(jwt: string): Promise<{ id: string; pin: string }> {
@@ -296,7 +296,7 @@ export type PartialZkSignature = {
 	header_base64: string;
 };
 
-// TODO: update when we have the final url (and a https one)
+// TODO: update when we have the final production url (and a https one)
 const zkProofsServerUrl = 'http://185.209.177.123:8000';
 
 export async function createPartialZKSignature({

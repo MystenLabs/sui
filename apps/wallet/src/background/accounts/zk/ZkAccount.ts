@@ -65,8 +65,11 @@ export interface ZkAccountSerialized extends SerializedAccount {
 	claims: string;
 }
 
-export interface ZkAccountSerializedUI extends SerializedUIAccount, JwtSerializedClaims {
+export interface ZkAccountSerializedUI extends SerializedUIAccount {
 	type: 'zk';
+	email: string;
+	picture: string | null;
+	fullName: string | null;
 }
 
 export function isZkAccountSerializedUI(
@@ -99,7 +102,8 @@ export class ZkAccount
 		) {
 			throw new Error('Missing jwt data');
 		}
-		// TODO: verify this can be an array and if so is it fine like this?
+		// based on jose typings aud can be an array
+		// we expect it to be string so here just doing a join if necessary
 		const aud = Array.isArray(decodedJWT.aud) ? decodedJWT.aud.join(' ') : decodedJWT.aud;
 		const claims: JwtSerializedClaims = {
 			email: decodedJWT.email,

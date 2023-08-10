@@ -44,9 +44,9 @@ export function toParsedSignaturePubkeyPair(
 			throw new Error('legacy multisig viewing unsupported');
 		}
 	}
+
 	if (signatureScheme === 'Zk') {
-		// TODO
-		throw new Error('Zk not ready yet');
+		throw new Error('Unable to parse a zk signature. (not implemented yet)');
 	}
 
 	const SIGNATURE_SCHEME_TO_PUBLIC_KEY = {
