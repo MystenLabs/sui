@@ -124,6 +124,7 @@ pub trait AbstractInterpreter: TransferFunctions {
                                 // of the loop, instead of the normal next block
                                 if cfg.is_back_edge(block_label, *next_block_id) {
                                     next_block_candidate = Some(*next_block_id);
+                                    break;
                                 }
                                 // Pre has changed, the post condition is now unknown for the block
                                 next_block_invariant.post = BlockPostcondition::Unprocessed
