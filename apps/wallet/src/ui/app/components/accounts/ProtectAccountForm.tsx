@@ -7,14 +7,13 @@ import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { CheckboxField } from '../../shared/forms/CheckboxField';
 import { Form } from '../../shared/forms/Form';
+import { SelectField } from '../../shared/forms/Select';
 import { TextField } from '../../shared/forms/TextField';
-import { SelectDropdown } from '../SelectDropdown';
 import ExternalLink from '../external-link';
 import { Button } from '_app/shared/ButtonUI';
 import { ToS_LINK } from '_src/shared/constants';
 
-const lockIntervals = ['Hour', 'Minute', 'Second'];
-type IntervalTypes = 'Hour' | 'Minute' | 'Second';
+const LOCK_INTERVALS = ['Hour', 'Minute', 'Second'];
 
 const formSchema = z.object({
 	password: z.string().nonempty('Required'),
@@ -55,7 +54,6 @@ export function ProtectAccountForm({
 	});
 	const {
 		register,
-		setValue,
 		formState: { isSubmitting, isValid },
 	} = form;
 	const navigate = useNavigate();
@@ -70,16 +68,8 @@ export function ProtectAccountForm({
 			<div className="flex flex-col gap-4">
 				<CheckboxField name="enabledAutolock" label="Auto-lock after I am inactive for" />
 				<div className="flex items-start justify-between gap-2">
-					<TextField type="number" label="" {...register('autoLockTimer')} />
-					<SelectDropdown
-						options={lockIntervals}
-						placeholder="Hour"
-						offset={-41}
-						onValueChange={(selectedValue: IntervalTypes) =>
-							setValue('autoLockInterval', selectedValue)
-						}
-						value={form.watch('autoLockInterval')}
-					/>
+					<TextField type="number" {...register('autoLockTimer')} />
+					<SelectField name="autoLockInterval" options={LOCK_INTERVALS} />
 				</div>
 			</div>
 			<div className="flex flex-col gap-5 mt-auto">
