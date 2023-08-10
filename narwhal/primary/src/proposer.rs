@@ -8,6 +8,7 @@ use fastcrypto::hash::Hash as _;
 use mysten_metrics::metered_channel::{Receiver, Sender};
 use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::{BTreeMap, VecDeque};
+use std::ops::Sub;
 use std::{cmp::Ordering, sync::Arc};
 use storage::ProposerStore;
 use tokio::time::{sleep_until, Instant};
@@ -705,7 +706,7 @@ impl Proposer {
                         Ordering::Equal => {
                             // The core gives us the parents the first time they are enough to form a quorum.
                             // Then it keeps giving us all the extra parents.
-                            self.last_parents.extend(parents);
+                            self.last_parents.extend(parents.clone());
 
                             // As the schedule can change after an odd round proposal - when the new schedule algorithm is
                             // enabled - make sure that the timer is reset correctly for the round leader. No harm doing
@@ -714,6 +715,22 @@ impl Proposer {
                                 min_delay_timer
                                 .as_mut()
                                 .reset(Instant::now());
+                            } else {
+                                // Try to correct the proposal timeout based on the last proposed round's avg proposed header time.
+                                // If we detect that our remaining timeout value is greater than the calculated proposal remaining time,
+                                // then we reset to the one calculated from the proposal to align with the others.
+                                let avg_previous_proposal_timestamp_ms: TimestampMs = parents.iter().map(|c| *c.header().created_at()).sum::<TimestampMs>() / parents.len() as u64;
+                                let remaining_until_timeout: Duration = min_delay_timer.deadline().sub(Instant::now());
+
+                                let remaining_calculated_from_proposal = self.min_header_delay.saturating_sub(Duration::from_millis(now().saturating_sub(avg_previous_proposal_timestamp_ms)));
+
+                                if (remaining_calculated_from_proposal + Duration::from_millis(50)) < remaining_until_timeout {
+                                    min_delay_timer
+                                    .as_mut()
+                                    .reset(Instant::now() + remaining_calculated_from_proposal);
+
+                                    debug!("Resetting min_delay to {remaining_calculated_from_proposal:?} vs {remaining_until_timeout:?}");
+                                }
                             }
                         }
                     }
