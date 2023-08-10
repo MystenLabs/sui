@@ -2472,11 +2472,16 @@ fn persist_object_mutations(
         diesel::sql_query(insert_update_query)
             .execute(conn)
             .map_err(|e| {
+                let objects = mutated_object_change_chunk
+                    .iter()
+                    .map(|o| (o.object_id.clone(), o.version))
+                    .collect::<Vec<_>>();
                 IndexerError::PostgresWriteError(format!(
-                    "Failed writing mutated objects to PostgresDB with error: {:?}. Chunk length: {}, total length: {}",
+                    "Failed writing mutated objects to PostgresDB with error: {:?}. Chunk length: {}, total length: {}. Objects: {:?}",
                     e,
                     mutated_object_change_chunk.len(),
                     mutated_objects.len(),
+                    objects,
                 ))
             })?;
     }
@@ -2506,11 +2511,16 @@ fn persist_object_deletions(
             ))
             .execute(conn)
             .map_err(|e| {
+                let objects = deleted_object_change_chunk
+                    .iter()
+                    .map(|o| (o.object_id.clone(), o.version))
+                    .collect::<Vec<_>>();
                 IndexerError::PostgresWriteError(format!(
-                    "Failed writing deleted objects to PostgresDB with error: {:?}. Chunk length: {}, total length: {}",
+                    "Failed writing deleted objects to PostgresDB with error: {:?}. Chunk length: {}, total length: {}. Objects: {:?}",
                     e,
                     deleted_object_change_chunk.len(),
                     deleted_objects.len(),
+                    objects,
                 ))
             })?;
         object_commit_chunk_counter.inc();
