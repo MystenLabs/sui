@@ -656,13 +656,10 @@ impl TestClusterBuilder {
         self
     }
 
-    pub fn with_enable_snapshot_writer(mut self) -> Self {
-        // TODO: this is the path to the snapshot within the "remote"
-        // store. Do we need to define this for testing purposes?
-        let temp_dir = tempfile::tempdir().unwrap().into_path().join("test");
+    pub fn with_enable_snapshot_writer(mut self, remote_path: PathBuf) -> Self {
         let object_store_config = ObjectStoreConfig {
             object_store: Some(ObjectStoreType::File),
-            directory: Some(temp_dir),
+            directory: Some(remote_path),
             ..Default::default()
         };
         self.state_snapshot_write_config = StateSnapshotConfig {
@@ -672,13 +669,10 @@ impl TestClusterBuilder {
         self
     }
 
-    pub fn with_enable_archive_writer(mut self) -> Self {
-        // TODO: this is the path to the snapshot within the "remote"
-        // store. Do we need to define this for testing purposes?
-        let temp_dir = tempfile::tempdir().unwrap().into_path().join("test");
+    pub fn with_enable_archive_writer(mut self, remote_path: PathBuf) -> Self {
         let object_store_config = ObjectStoreConfig {
             object_store: Some(ObjectStoreType::File),
-            directory: Some(temp_dir),
+            directory: Some(remote_path),
             ..Default::default()
         };
         self.state_archive_write_config = StateArchiveConfig {

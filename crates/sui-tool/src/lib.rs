@@ -36,7 +36,7 @@ use sui_core::authority::AuthorityStore;
 use sui_core::checkpoints::CheckpointStore;
 use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::storage::RocksDbStore;
-use sui_snapshot::restorer::{SnapshotRestoreConfig, SnapshotRestorer};
+use sui_snapshot::restorer::SnapshotRestorer;
 use sui_storage::hard_link;
 use sui_storage::object_store::ObjectStoreConfig;
 use sui_types::messages_grpc::{
@@ -621,14 +621,17 @@ pub async fn restore_from_db_checkpoint(
 }
 
 pub async fn restore_from_formal_snapshot(
-    path: PathBuf,
-    snapshot_restore_config: SnapshotRestoreConfig,
+    snapshot_object_store_config: ObjectStoreConfig,
     archive_object_store_config: ObjectStoreConfig,
+    epoch: EpochId,
+    parent_db_path: PathBuf,
+    local_store_dir: PathBuf,
     genesis: Genesis,
-    concurrency: usize,
+    concurrency: Option<NonZeroUsize>,
+    disable_verification: Option<bool>,
 ) -> anyhow::Result<()> {
     // first ensure that target db is empty
-    if !AuthorityPerpetualTables::open(&path.join("store").join("perpetual"), None)
+    if !AuthorityPerpetualTables::open(&parent_db_path.join("store").join("perpetual"), None)
         .database_is_empty()
         .expect("Database read should not fail at init.")
     {
@@ -638,12 +641,12 @@ pub async fn restore_from_formal_snapshot(
     let genesis_committee = genesis.committee()?;
 
     let perpetual_staging = Arc::new(AuthorityPerpetualTables::open(
-        &path.join("store_staging").join("perpetual"),
+        &parent_db_path.join("store_staging").join("perpetual"),
         None,
     ));
 
     let committee_store = Arc::new(CommitteeStore::new(
-        path.join("epochs"),
+        parent_db_path.join("epochs"),
         &genesis_committee,
         None,
     ));
@@ -659,7 +662,7 @@ pub async fn restore_from_formal_snapshot(
     .await?;
 
     let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
-        path.join("checkpoints"),
+        parent_db_path.join("checkpoints"),
         MetricConf::default(),
         None,
         None,
@@ -679,24 +682,39 @@ pub async fn restore_from_formal_snapshot(
 
     let archive_reader_config = ArchiveReaderConfig {
         remote_store_config: archive_object_store_config,
-        download_concurrency: NonZeroUsize::new(concurrency).unwrap(),
         use_for_pruning_watermark: false,
+        download_concurrency: concurrency.unwrap_or(NonZeroUsize::new(3).unwrap()),
     };
     let metrics = ArchiveReaderMetrics::new(&Registry::default());
     let archive_reader = Arc::new(ArchiveReader::new(archive_reader_config, &metrics)?);
     archive_reader.sync_manifest_once().await?;
 
-    let restorer =
-        SnapshotRestorer::new(snapshot_restore_config, archive_reader, path.clone()).await?;
+    let restorer = SnapshotRestorer::new(
+        archive_reader,
+        parent_db_path.clone(),
+        epoch,
+        snapshot_object_store_config,
+        local_store_dir,
+        concurrency,
+    )
+    .await?;
     info!("Restoring from snapshot");
+
     restorer
-        .run(state_sync_store.clone(), perpetual_staging)
+        .run(
+            state_sync_store.clone(),
+            perpetual_staging,
+            disable_verification.unwrap_or(false),
+        )
         .await
         .expect("Snapshot restoration failed");
 
     // Hardlink staging tables to perpetual store path so that on restart, the
     // data will be available in the expected authority store directory.
-    Ok(hard_link(path.join("store_staging"), path.join("store"))?)
+    Ok(hard_link(
+        parent_db_path.join("store_staging"),
+        parent_db_path.join("store"),
+    )?)
 }
 
 pub async fn verify_archive(

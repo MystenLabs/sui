@@ -8,7 +8,7 @@ use crate::{
     verify_archive_by_checksum, ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
 };
 use anyhow::Result;
-use std::path::PathBuf;
+use std::{num::NonZeroUsize, path::PathBuf};
 use sui_config::genesis::Genesis;
 use sui_core::authority_client::AuthorityAPI;
 use sui_replay::{execute_replay_command, ReplayToolCommand};
@@ -19,7 +19,6 @@ use clap::*;
 use fastcrypto::encoding::Encoding;
 use sui_config::Config;
 use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
-use sui_snapshot::restorer::SnapshotRestoreConfig;
 use sui_storage::object_store::ObjectStoreConfig;
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
@@ -33,6 +32,7 @@ pub enum Verbosity {
     Verbose,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Parser)]
 #[clap(
     name = "sui-tool",
@@ -119,19 +119,25 @@ pub enum ToolCommand {
         cmd: Option<DbToolCommand>,
     },
 
-    /// Tool to sync the node from archive store
-    #[clap(name = "sync-from-archive")]
+    /// Tool to restore the node from formal snapshot
+    #[clap(name = "restore-from-snapshot")]
     SnapshotRestore {
-        #[clap(long = "genesis")]
-        genesis: PathBuf,
-        #[clap(long = "db-path")]
-        db_path: PathBuf,
         #[clap(flatten)]
-        snapshot_restore_config: SnapshotRestoreConfig,
+        snapshot_object_store_config: ObjectStoreConfig,
         #[clap(flatten)]
         archive_object_store_config: ObjectStoreConfig,
+        #[clap(long = "epoch")]
+        epoch: EpochId,
+        #[clap(long = "db-path")]
+        db_path: PathBuf,
+        #[clap(long = "local-store-dir")]
+        local_store_dir: PathBuf,
+        #[clap(long = "genesis")]
+        genesis: PathBuf,
         #[clap(default_value_t = 5)]
         download_concurrency: usize,
+        #[clap(long = "disable-verify", default_value = "false")]
+        disable_verify: bool,
     },
 
     /// Tool to sync the node from archive store
@@ -413,22 +419,25 @@ impl ToolCommand {
                     .await?;
             }
             ToolCommand::SnapshotRestore {
-                genesis,
-                db_path,
-                // TODO(william) may need to disambiguate field names within
-                // these two configs, as they may have collisions when
-                // flattened
-                snapshot_restore_config,
+                snapshot_object_store_config,
                 archive_object_store_config,
+                epoch,
+                db_path,
+                local_store_dir,
+                genesis,
                 download_concurrency,
+                disable_verify,
             } => {
                 let genesis = Genesis::load(genesis).unwrap();
                 restore_from_formal_snapshot(
-                    db_path,
-                    snapshot_restore_config,
+                    snapshot_object_store_config,
                     archive_object_store_config,
+                    epoch,
+                    db_path,
+                    local_store_dir,
                     genesis,
-                    download_concurrency,
+                    Some(NonZeroUsize::new(download_concurrency).expect("invalid concurrency")),
+                    Some(disable_verify),
                 )
                 .await?;
             }

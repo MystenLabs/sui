@@ -9,6 +9,7 @@ use move_core_types::parser::parse_struct_tag;
 use move_core_types::value::MoveStructLayout;
 use rand::rngs::OsRng;
 use serde_json::json;
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_core::authority::EffectsNotifyRead;
@@ -21,10 +22,9 @@ use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_node::SuiNodeHandle;
 use sui_sdk::wallet_context::WalletContext;
-use sui_snapshot::restorer::SnapshotRestoreConfig;
 use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
-use sui_storage::object_store::ObjectStoreConfig;
+use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use sui_test_transaction_builder::{
     batch_make_transfer_transactions, create_devnet_nft, delete_devnet_nft, increment_counter,
     publish_basics_package, publish_basics_package_and_make_counter, publish_nfts_package,
@@ -50,6 +50,7 @@ use sui_types::transaction::{
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };
+use tempfile::tempdir;
 use test_cluster::TestClusterBuilder;
 use tokio::sync::Mutex;
 use tokio::time::timeout;
@@ -1218,20 +1219,20 @@ async fn test_full_node_bootstrap_from_db_snapshot() -> Result<(), anyhow::Error
 #[sim_test]
 async fn test_full_node_bootstrap_from_formal_snapshot() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
+    let snapshot_dir = tempfile::tempdir()
+        .unwrap()
+        .into_path()
+        .join("snapshot_store");
+    let archive_dir = tempfile::tempdir()
+        .unwrap()
+        .into_path()
+        .join("archive_store");
     let mut test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10_000)
-        .with_enable_snapshot_writer()
-        .with_enable_archive_writer()
+        .with_enable_snapshot_writer(snapshot_dir.clone())
+        .with_enable_archive_writer(archive_dir)
         .build()
         .await;
-    let archive_path = test_cluster
-        .fullnode_handle
-        .sui_node
-        .with(|node| node.archive_path());
-    let snapshot_path = test_cluster
-        .fullnode_handle
-        .sui_node
-        .with(|node| node.snapshot_path());
     let config = test_cluster
         .fullnode_config_builder()
         .build(&mut OsRng, test_cluster.swarm.config());
@@ -1244,7 +1245,7 @@ async fn test_full_node_bootstrap_from_formal_snapshot() -> Result<(), anyhow::E
     // epoch change from epoch 1 to epoch 2 at which point during reconfiguration we will write
     // the formal snapshot for epoch 1
     loop {
-        if snapshot_path.join("epoch_1").exists() {
+        if snapshot_dir.join("epoch_1").exists() {
             break;
         }
         sleep(Duration::from_millis(500)).await;
@@ -1255,17 +1256,31 @@ async fn test_full_node_bootstrap_from_formal_snapshot() -> Result<(), anyhow::E
         // now it to just sleep for a reasonable amount of time.
     }
 
+    let local = tempdir()?.into_path().join("local_dir");
+    let snapshot_remote = tempdir()?.into_path().join("snapshot_remote_dir");
+    let archive_remote = tempdir()?.into_path().join("archive_remote_dir");
+
+    let snapshot_object_store_config = ObjectStoreConfig {
+        object_store: Some(ObjectStoreType::File),
+        directory: Some(snapshot_remote),
+        ..Default::default()
+    };
+    let archive_object_store_config = ObjectStoreConfig {
+        object_store: Some(ObjectStoreType::File),
+        directory: Some(archive_remote),
+        ..Default::default()
+    };
+
     // Spin up a new full node restored from the snapshot taken at the end of epoch 1
     restore_from_formal_snapshot(
-        snapshot_path.join("epoch_1"),
-        SnapshotRestoreConfig {
-            // TODO
-            db_path: config.db_path().to_path_buf(),
-            ..Default::default()
-        },
-        ObjectStoreConfig {},
+        snapshot_object_store_config,
+        archive_object_store_config,
+        1,
+        config.db_path(),
+        local,
         config.genesis().unwrap().clone(),
-        3,
+        NonZeroUsize::new(3),
+        None,
     )
     .await?;
     let node = test_cluster

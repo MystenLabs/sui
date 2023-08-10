@@ -3,10 +3,9 @@
 
 use crate::reader::StateSnapshotReaderV1;
 use anyhow::Result;
-use clap::*;
 use fastcrypto::hash::MultisetHash;
 use futures::future::AbortHandle;
-use serde::{Deserialize, Serialize};
+use mysten_metrics::spawn_monitored_task;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -22,60 +21,40 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use tracing::{info, warn};
 
-#[derive(Default, Debug, Clone, Deserialize, Serialize, Args)]
-#[serde(rename_all = "kebab-case")]
-pub struct SnapshotRestoreConfig {
-    // Config for remote object store containing snapshot
-    #[clap(flatten)]
-    pub remote_store_config: ObjectStoreConfig,
-    // Config for local object store to restore snapshot to
-    #[clap(long)]
-    pub local_store_dir: PathBuf,
-    // Specifies the epoch corresponding to the target snapshot
-    #[clap(long)]
-    pub epoch: EpochId,
-    //
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[clap(long)]
-    pub download_concurrency: Option<NonZeroUsize>,
-    // If enabled, will restore from the target snapshot without performing
-    // validation. Should be avoided by default
-    #[serde(default)]
-    #[clap(long, default_value_t = false)]
-    pub disable_verify: bool,
-}
-
 pub struct SnapshotRestorer {
-    config: SnapshotRestoreConfig,
     snapshot_reader: Arc<StateSnapshotReaderV1>,
     archive_reader: Arc<ArchiveReader>,
     parent_db_path: PathBuf,
+    epoch: EpochId,
 }
 
 impl SnapshotRestorer {
     pub async fn new(
-        config: SnapshotRestoreConfig,
         archive_reader: Arc<ArchiveReader>,
         parent_db_path: PathBuf,
+        epoch: EpochId,
+        snapshot_remote_store_config: ObjectStoreConfig,
+        local_store_dir: PathBuf,
+        download_concurrency: Option<NonZeroUsize>,
     ) -> Result<Self> {
         let snapshot_reader = StateSnapshotReaderV1::new(
-            config.epoch,
-            &config.remote_store_config,
+            epoch,
+            &snapshot_remote_store_config,
             &ObjectStoreConfig {
                 object_store: Some(ObjectStoreType::File),
-                directory: Some(config.local_store_dir.clone()),
+                directory: Some(local_store_dir),
                 ..Default::default()
             },
             usize::MAX,
-            config.download_concurrency,
+            download_concurrency,
         )
         .await?;
 
         Ok(Self {
-            config,
             snapshot_reader: Arc::new(snapshot_reader),
             archive_reader,
             parent_db_path,
+            epoch,
         })
     }
 
@@ -83,48 +62,56 @@ impl SnapshotRestorer {
         &self,
         state_sync_store: S,
         perpetual_db: Arc<AuthorityPerpetualTables>,
+        disable_verify: bool,
     ) -> Result<()>
     where
-        S: WriteStore + Clone + Send + Sync,
+        S: WriteStore + Clone + Send + Sync + 'static,
         <S as ReadStore>::Error: std::error::Error + Send + Sync + 'static,
     {
-        let epoch = self.config.epoch;
+        let epoch = self.epoch;
         let manifest = self.archive_reader.acquire_manifest_guard().await;
         let remote_object_store = self.archive_reader.remote_object_store();
+        let cloned_state_sync_store = state_sync_store.clone();
+        let cloned_manifest = manifest.clone();
+        let cloned_remote_object_store = remote_object_store.clone();
+        let concurrency = self.archive_reader.concurrency();
 
-        // let store_ref = Arc::new(state_sync_store);
-
-        // let checkpoint_sync_handle = spawn_monitored_task!(async move {
-
-        // });
-        load_summaries_upto(
-            epoch.saturating_add(1),
-            state_sync_store.clone(),
-            manifest,
-            self.archive_reader.concurrency(),
-            remote_object_store,
-        )
-        .await
-        .expect("Failed to load summaries");
+        let checkpoint_sync_handle = spawn_monitored_task!(async move {
+            load_summaries_upto(
+                epoch.saturating_add(1),
+                cloned_state_sync_store,
+                cloned_manifest,
+                concurrency,
+                cloned_remote_object_store,
+            )
+            .await
+            .expect("Failed to load summaries");
+        });
 
         let (sha3_digests, accumulator, all_files) = self.snapshot_reader.get_checksums()?;
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
+        let cloned_snapshot_reader = self.snapshot_reader.clone();
+        let cloned_perpetual_db = perpetual_db.clone();
 
-        // let read_handle = spawn_monitored_task!(async move {
-
-        // });
-        self.snapshot_reader
-            .read(&perpetual_db, sha3_digests, all_files, abort_registration)
-            .await
-            .map_err(|e| anyhow::anyhow!("{:?}", e.to_string()))
-            .unwrap_or_else(|e| panic!("Failed to read snapshot from remote store: {:?}", e));
+        let read_handle = spawn_monitored_task!(async move {
+            cloned_snapshot_reader
+                .read(
+                    &cloned_perpetual_db,
+                    sha3_digests,
+                    all_files,
+                    abort_registration,
+                )
+                .await
+                .map_err(|e| anyhow::anyhow!("{:?}", e.to_string()))
+                .unwrap_or_else(|e| panic!("Failed to read snapshot from remote store: {:?}", e));
+        });
 
         // Upon successful exit of this task, we should have all checkpoint summaries
         // from genesis to the restore epoch, as well as the end of epoch checkpoint
         // mapping populated.
-        // checkpoint_sync_handle.await?;
+        checkpoint_sync_handle.await?;
 
-        if self.config.disable_verify {
+        if disable_verify {
             warn!("Skipping formal snapshot verification! This is not recommended for production/non-emergency use.");
         } else {
             let checkpoint_summary = state_sync_store
@@ -157,7 +144,7 @@ impl SnapshotRestorer {
             }
             info!("Formal snapshot verification passed for epoch {}", epoch);
         }
-        // read_handle.await?;
+        read_handle.await?;
 
         self.setup_db_state(accumulator, perpetual_db, state_sync_store)
             .await
@@ -175,13 +162,15 @@ impl SnapshotRestorer {
         S: WriteStore + Clone + Send,
         <S as ReadStore>::Error: std::error::Error + Send + Sync + 'static,
     {
-        let epoch = self.config.epoch;
+        let epoch = self.epoch;
         let last_checkpoint = state_sync_store
             .get_epoch_last_checkpoint(epoch)?
-            .expect(&format!(
-                "Expected last checkpoint for epoch {} to exist after summary sync",
-                epoch,
-            ));
+            .unwrap_or_else(|| {
+                panic!(
+                    "Expected last checkpoint for epoch {} to exist after summary sync",
+                    epoch
+                )
+            });
 
         // Note that we do not update the highest verified checkpoint here, incase
         // we ran ahead during summary sync.
