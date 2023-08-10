@@ -59,7 +59,12 @@ export function ProtectAccountForm({
 	const navigate = useNavigate();
 	return (
 		<Form className="flex flex-col gap-6 h-full" form={form} onSubmit={onSubmit}>
-			<TextField type="password" label="Create Account Password" {...register('password')} />
+			<TextField
+				autoFocus
+				type="password"
+				label="Create Account Password"
+				{...register('password')}
+			/>
 			<TextField
 				type="password"
 				label="Confirm Account Password"

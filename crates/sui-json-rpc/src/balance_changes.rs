@@ -3,20 +3,16 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Neg;
-use std::sync::Arc;
 
 use async_trait::async_trait;
 use move_core_types::language_storage::TypeTag;
-use mysten_metrics::spawn_monitored_task;
 use tokio::sync::RwLock;
 
-use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::BalanceChange;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::coin::Coin;
 use sui_types::digests::ObjectDigest;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
-use sui_types::error::SuiError;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas_coin::GAS;
 use sui_types::object::{Object, Owner};
@@ -169,31 +165,6 @@ pub trait ObjectProvider {
         id: &ObjectID,
         version: &SequenceNumber,
     ) -> Result<Option<Object>, Self::Error>;
-}
-
-#[async_trait]
-impl ObjectProvider for Arc<AuthorityState> {
-    type Error = SuiError;
-    async fn get_object(
-        &self,
-        id: &ObjectID,
-        version: &SequenceNumber,
-    ) -> Result<Object, Self::Error> {
-        Ok(self.get_past_object_read(id, *version)?.into_object()?)
-    }
-
-    async fn find_object_lt_or_eq_version(
-        &self,
-        id: &ObjectID,
-        version: &SequenceNumber,
-    ) -> Result<Option<Object>, Self::Error> {
-        let database = self.database.clone();
-        let id = *id;
-        let version = *version;
-        spawn_monitored_task!(async move { database.find_object_lt_or_eq_version(id, version) })
-            .await
-            .map_err(|e| SuiError::GenericStorageError(e.to_string()))
-    }
 }
 
 pub struct ObjectProviderCache<P> {

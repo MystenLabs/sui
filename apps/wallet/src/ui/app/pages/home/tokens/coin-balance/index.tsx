@@ -35,14 +35,13 @@ export function CoinBalance({ amount: walletBalance, type }: CoinProps) {
 		<div className="flex flex-col gap-1 items-center justify-center">
 			<div className="flex items-center justify-center gap-2">
 				<CoinIcon fill="suiPrimary2023" coinType={type} size="sm" />
-				<Heading leading="none" variant="heading1" color="gray-90">
+				<Heading leading="none" variant="heading1" weight="bold" color="gray-90">
 					{formatted}
 				</Heading>
-				<div className="self-start mt-0.5">
-					<Heading variant="heading6" weight="medium" color="steel">
-						{symbol}
-					</Heading>
-				</div>
+
+				<Heading variant="heading6" weight="medium" color="steel">
+					{symbol}
+				</Heading>
 			</div>
 			<div>
 				{walletBalanceInUsd ? (

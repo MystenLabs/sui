@@ -297,7 +297,7 @@ impl AuthorityStorePruner {
         } else {
             latest_archived_checkpoint
         };
-        info!("Max eligible checkpoint {}", max_eligible_checkpoint);
+        debug!("Max eligible checkpoint {}", max_eligible_checkpoint);
         Self::prune_for_eligible_epochs(
             perpetual_db,
             checkpoint_store,

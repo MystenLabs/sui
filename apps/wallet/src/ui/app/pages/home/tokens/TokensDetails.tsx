@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { useAppsBackend, useGetCoinBalance, useGetAllBalances } from '@mysten/core';
+import {
+	useAppsBackend,
+	useGetCoinBalance,
+	useGetAllBalances,
+	useResolveSuiNSName,
+} from '@mysten/core';
 import {
 	Info12,
 	WalletActionBuy24,
@@ -14,10 +19,11 @@ import {
 
 import { type CoinBalance as CoinBalanceType } from '@mysten/sui.js/client';
 import { Coin } from '@mysten/sui.js/framework';
-import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { SUI_TYPE_ARG, formatAddress } from '@mysten/sui.js/utils';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
+import { PortfolioName } from './PortfolioName';
 import { TokenIconLink } from './TokenIconLink';
 import { TokenLink } from './TokenLink';
 import { TokenList } from './TokenList';
@@ -35,7 +41,7 @@ import { useAppSelector, useCoinsReFetchingConfig } from '_hooks';
 import { ampli } from '_src/shared/analytics/ampli';
 import { API_ENV } from '_src/shared/api-env';
 import { FEATURES } from '_src/shared/experimentation/features';
-import { AccountSelector } from '_src/ui/app/components/AccountSelector';
+import { AccountsList } from '_src/ui/app/components/accounts/AccountsList';
 import { usePinnedCoinTypes } from '_src/ui/app/hooks/usePinnedCoinTypes';
 import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
 import PageTitle from '_src/ui/app/shared/PageTitle';
@@ -164,6 +170,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	const [interstitialDismissed, setInterstitialDismissed] = useState<boolean>(false);
 	const activeCoinType = coinType || SUI_TYPE_ARG;
 	const accountAddress = useActiveAddress();
+	const { data: domainName } = useResolveSuiNSName(accountAddress);
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
 	const {
 		data: coinBalance,
@@ -238,71 +245,73 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 				{coinType && <PageTitle title={coinSymbol} back="/tokens" />}
 
 				<div
-					className="flex flex-col h-full flex-1 flex-grow items-center overflow-y-auto"
+					className="flex flex-col h-full flex-1 flex-grow items-center overflow-y-auto gap-8"
 					data-testid="coin-page"
 				>
-					<div className="max-w-full">{!coinType && <AccountSelector />}</div>
-
-					<div
-						data-testid="coin-balance"
-						className="bg-sui/10 rounded-2xl py-5 px-4 flex flex-col w-full gap-3 items-center mt-4"
-					>
-						{accountHasSui ? (
-							<CoinBalance amount={BigInt(tokenBalance)} type={activeCoinType} />
-						) : (
-							<div className="flex flex-col gap-5">
-								<div className="flex flex-col flex-nowrap justify-center items-center text-center px-2.5">
-									<SvgSuiTokensStack className="h-14 w-14 text-steel" />
-									<div className="flex flex-col gap-2 justify-center">
-										<Text variant="pBodySmall" color="gray-80" weight="normal">
-											To conduct transactions on the Sui network, you need SUI in your wallet.
-										</Text>
+					<AccountsList />
+					<div className="flex flex-col">
+						<PortfolioName name={domainName ?? formatAddress(accountAddress!)} />
+						<div
+							data-testid="coin-balance"
+							className="bg-sui/10 rounded-2xl py-5 px-4 flex flex-col w-full gap-3 items-center mt-4"
+						>
+							{accountHasSui ? (
+								<CoinBalance amount={BigInt(tokenBalance)} type={activeCoinType} />
+							) : (
+								<div className="flex flex-col gap-5">
+									<div className="flex flex-col flex-nowrap justify-center items-center text-center px-2.5">
+										<SvgSuiTokensStack className="h-14 w-14 text-steel" />
+										<div className="flex flex-col gap-2 justify-center">
+											<Text variant="pBodySmall" color="gray-80" weight="normal">
+												To conduct transactions on the Sui network, you need SUI in your wallet.
+											</Text>
+										</div>
 									</div>
+									<FaucetRequestButton />
 								</div>
-								<FaucetRequestButton />
-							</div>
-						)}
-						{isError ? (
-							<Alert>
-								<div>
-									<strong>Error updating balance</strong>
-								</div>
-							</Alert>
-						) : null}
-						<div className="grid grid-cols-3 gap-3 w-full">
-							<LargeButton
-								center
-								to="/onramp"
-								disabled={(coinType && coinType !== SUI_TYPE_ARG) || !providers?.length}
-								top={<WalletActionBuy24 />}
-							>
-								Buy
-							</LargeButton>
-
-							<LargeButton
-								center
-								data-testid="send-coin-button"
-								to={`/send${
-									coinBalance?.coinType
-										? `?${new URLSearchParams({
-												type: coinBalance.coinType,
-										  }).toString()}`
-										: ''
-								}`}
-								disabled={!tokenBalance}
-								top={<WalletActionSend24 />}
-							>
-								Send
-							</LargeButton>
-
-							<LargeButton center to="/" disabled top={<Swap16 />}>
-								Swap
-							</LargeButton>
-						</div>
-						<div className="w-full">
-							{activeCoinType === SUI_TYPE_ARG && accountAddress ? (
-								<TokenIconLink disabled={!tokenBalance} accountAddress={accountAddress} />
+							)}
+							{isError ? (
+								<Alert>
+									<div>
+										<strong>Error updating balance</strong>
+									</div>
+								</Alert>
 							) : null}
+							<div className="grid grid-cols-3 gap-3 w-full">
+								<LargeButton
+									center
+									to="/onramp"
+									disabled={(coinType && coinType !== SUI_TYPE_ARG) || !providers?.length}
+									top={<WalletActionBuy24 />}
+								>
+									Buy
+								</LargeButton>
+
+								<LargeButton
+									center
+									data-testid="send-coin-button"
+									to={`/send${
+										coinBalance?.coinType
+											? `?${new URLSearchParams({
+													type: coinBalance.coinType,
+											  }).toString()}`
+											: ''
+									}`}
+									disabled={!tokenBalance}
+									top={<WalletActionSend24 />}
+								>
+									Send
+								</LargeButton>
+
+								<LargeButton center to="/" disabled top={<Swap16 />}>
+									Swap
+								</LargeButton>
+							</div>
+							<div className="w-full">
+								{activeCoinType === SUI_TYPE_ARG && accountAddress ? (
+									<TokenIconLink disabled={!tokenBalance} accountAddress={accountAddress} />
+								) : null}
+							</div>
 						</div>
 					</div>
 
