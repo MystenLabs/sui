@@ -180,7 +180,7 @@ scalar DateTime
 # `TransactionData` in a dry-run.
 input TransactionMetadata {
   sender: SuiAddress
-  gasPrice: U64
+  gasPrice: BigInt
   gasObjects: [SuiAddress!]
 }
 
@@ -315,7 +315,7 @@ interface Owner {
 
 # Returned by Object.owner, where we can't disambiguate between
 # Address and Object.
-type AmbiguousOwner implements Owner {}
+type AmbiguousOwner implements Owner
 
 type Address implements Owner {
   transactionBlockConnection(
@@ -617,7 +617,7 @@ type ProgrammableTransactionBlock {
   transactions: [ProgrammableTransaction]
 }
 
-union TransactionInput = MovePackage | MoveObject | ShareInput
+union TransactionInput = MovePackage | MoveObject | SharedInput
 
 type SharedInput {
   id: SuiAddress
@@ -627,7 +627,7 @@ type SharedInput {
 
 union TransactionArgument = GasCoin | Input | Result
 
-type GasCoin {}
+type GasCoin
 type Input   { ix: Int }
 type Result  { cmd: Int, ix: Int }
 
@@ -678,7 +678,7 @@ type MakeMoveVecTransaction {
 
 # Omitting for brevity -- there's a lot of structure here, but it's
 # not very "connected" (i.e. no edges to other types).
-type TransactionSignature {}
+type TransactionSignature
 
 type TransactionBlockEffects {
   digest: String!
@@ -982,7 +982,7 @@ type OpenMoveType {
   type: OpenMoveTypeBody
 }
 
-union OpenMoveTypeBody = MoveTypeApplicatioon | MoveTypeParameter
+union OpenMoveTypeBody = MoveTypeApplication | MoveTypeParameter
 
 type MoveTypeApplication {
   name: MoveTypeName!
@@ -994,8 +994,8 @@ type MoveTypeParameter {
 }
 
 # Metrics (omitted for brevity)
-type NetworkMetrics {}
-type MoveCallMetrics {}
+type NetworkMetrics
+type MoveCallMetrics
 type AddressMetrics {
   id: ID!
 }
@@ -1167,8 +1167,8 @@ type NameServiceNameEdge {
   node: String!  # is this correct?
 }
 
-# AddressMetricConnection
-type AddressMetricConnection {
+# AddressMetricsConnection
+type AddressMetricsConnection {
   edges: [AddressMetricEdge!]!
   pageInfo: PageInfo!
 }
