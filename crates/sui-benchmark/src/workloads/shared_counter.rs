@@ -5,10 +5,7 @@ use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
 use crate::util::publish_basics_package;
 use crate::workloads::payload::Payload;
-use crate::workloads::workload::{
-    Workload, WorkloadBuilder, ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING,
-    STORAGE_COST_PER_COUNTER,
-};
+use crate::workloads::workload::{Workload, WorkloadBuilder};
 use crate::workloads::GasCoinConfig;
 use crate::workloads::{Gas, WorkloadBuilderInfo, WorkloadParams};
 use crate::{ExecutionEffects, ValidatorProxy};
@@ -19,6 +16,7 @@ use rand::Rng;
 use std::sync::Arc;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::crypto::get_key_pair;
+use sui_types::gas_coin::MIST_PER_SUI;
 use sui_types::{
     base_types::{ObjectDigest, ObjectID, SequenceNumber},
     transaction::Transaction,
@@ -79,7 +77,7 @@ pub struct SharedCounterWorkloadBuilder {
     num_counters: u64,
     num_payloads: u64,
     max_tip_amount: u64,
-    rgp: u64,
+    _rgp: u64,
 }
 
 impl SharedCounterWorkloadBuilder {
@@ -119,7 +117,7 @@ impl SharedCounterWorkloadBuilder {
                     num_counters: num_shared_counters,
                     num_payloads: max_ops,
                     max_tip_amount: shared_counter_max_tip_amount,
-                    rgp: reference_gas_price,
+                    _rgp: reference_gas_price,
                 },
             ));
             let builder_info = WorkloadBuilderInfo {
@@ -135,11 +133,10 @@ impl SharedCounterWorkloadBuilder {
 impl WorkloadBuilder<dyn Payload> for SharedCounterWorkloadBuilder {
     async fn generate_coin_config_for_init(&self) -> Vec<GasCoinConfig> {
         let mut configs = vec![];
-
         // Gas coin for publishing package
         let (address, keypair) = get_key_pair();
         configs.push(GasCoinConfig {
-            amount: MAX_GAS_FOR_TESTING,
+            amount: 5000000000,
             address,
             keypair: Arc::new(keypair),
         });
@@ -148,7 +145,7 @@ impl WorkloadBuilder<dyn Payload> for SharedCounterWorkloadBuilder {
         for _i in 0..self.num_counters {
             let (address, keypair) = get_key_pair();
             configs.push(GasCoinConfig {
-                amount: MAX_GAS_FOR_TESTING,
+                amount: 5000000000,
                 address,
                 keypair: Arc::new(keypair),
             });
@@ -157,9 +154,7 @@ impl WorkloadBuilder<dyn Payload> for SharedCounterWorkloadBuilder {
     }
     async fn generate_coin_config_for_payloads(&self) -> Vec<GasCoinConfig> {
         let mut configs = vec![];
-        let amount = MAX_GAS_IN_UNIT * (self.rgp + self.max_tip_amount)
-            + ESTIMATED_COMPUTATION_COST
-            + STORAGE_COST_PER_COUNTER * self.num_counters;
+        let amount = 30 * MIST_PER_SUI;
         // Gas coins for running workload
         for _i in 0..self.num_payloads {
             let (address, keypair) = get_key_pair();

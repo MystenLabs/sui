@@ -11,13 +11,12 @@ use std::sync::Arc;
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
+use crate::workloads::workload::Workload;
 use crate::workloads::workload::WorkloadBuilder;
-use crate::workloads::workload::{
-    Workload, ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COIN,
-};
 use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams};
 use crate::{ExecutionEffects, ValidatorProxy};
 use sui_core::test_utils::make_transfer_object_transaction;
+use sui_types::gas_coin::MIST_PER_SUI;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair},
@@ -141,9 +140,7 @@ impl WorkloadBuilder<dyn Payload> for TransferObjectWorkloadBuilder {
         let mut address_map = HashMap::new();
         // Have to include not just the coins that are going to be created and sent
         // but the coin being used as gas as well.
-        let amount = MAX_GAS_FOR_TESTING
-            + ESTIMATED_COMPUTATION_COST
-            + STORAGE_COST_PER_COIN * (self.num_transfer_accounts + 1);
+        let amount = 10 * MIST_PER_SUI;
         // gas for payloads
         let mut payload_configs = vec![];
         for _i in 0..self.num_transfer_accounts {
