@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { CheckboxField } from '../../shared/forms/CheckboxField';
 import { Form } from '../../shared/forms/Form';
-import { SelectField } from '../../shared/forms/Select';
+import { SelectField } from '../../shared/forms/SelectField';
 import { TextField } from '../../shared/forms/TextField';
 import ExternalLink from '../external-link';
 import { Button } from '_app/shared/ButtonUI';
