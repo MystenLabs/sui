@@ -20,6 +20,7 @@ use fastcrypto::traits::ToFromBytes;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::identifier::Identifier;
 use prometheus::{Histogram, IntCounter};
+use tap::TapFallible;
 use tracing::info;
 
 use sui_json_rpc_types::{
@@ -1494,18 +1495,30 @@ impl PgIndexerStore {
                         epochs::leftover_storage_fund_inflow
                             .eq(excluded(epochs::leftover_storage_fund_inflow)),
                     ))
-                    .execute(conn)?;
+                    .execute(conn)
+                    .tap_err(|e| {
+                        tracing::error!(
+                            epoch = last_epoch.epoch,
+                            "Failed to persist epoch data: {:?}. Error: {}",
+                            last_epoch,
+                            e
+                        )
+                    })?;
                 info!("Persisted epoch {}", last_epoch.epoch);
             }
             diesel::insert_into(system_states::table)
                 .values(&data.system_state)
                 .on_conflict_do_nothing()
-                .execute(conn)?;
+                .execute(conn)
+                .tap_err(|e| {
+                    tracing::error!("Failed to persist system state data. Error: {}", e)
+                })?;
 
             diesel::insert_into(validators::table)
                 .values(&data.validators)
                 .on_conflict_do_nothing()
                 .execute(conn)
+                .tap_err(|e| tracing::error!("Failed to persist validator data. Error: {}", e))
         })?;
         info!("Persisting initial state of epoch {}", data.new_epoch.epoch);
         transactional_blocking!(&self.blocking_cp, |conn| {
