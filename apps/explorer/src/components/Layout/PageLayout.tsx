@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useAppsBackend } from '@mysten/core';
+import { useAppsBackend, useElementHeight } from '@mysten/core';
 import { LoadingIndicator } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { type ReactNode } from 'react';
+import { type ReactNode, useRef } from 'react';
 
 import Footer from '../footer/Footer';
 import Header from '../header/Header';
@@ -17,16 +17,18 @@ export type PageLayoutProps = {
 	gradient?: {
 		content: ReactNode;
 		size: 'lg' | 'md';
-		type?: 'success' | 'error';
 	};
+	isError?: boolean;
 	content: ReactNode;
-	error?: string;
 	loading?: boolean;
 };
 
-export function PageLayout({ gradient, content, loading }: PageLayoutProps) {
+const DEFAULT_HEADER_HEIGHT = 68;
+
+export function PageLayout({ gradient, content, loading, isError }: PageLayoutProps) {
 	const [network] = useNetworkContext();
 	const { request } = useAppsBackend();
+
 	const { data } = useQuery({
 		queryKey: ['apps-backend', 'monitor-network'],
 		queryFn: () =>
@@ -39,36 +41,50 @@ export function PageLayout({ gradient, content, loading }: PageLayoutProps) {
 		enabled: network === Network.MAINNET,
 	});
 	const isGradientVisible = !!gradient;
-	const isError = gradient?.type === 'error';
+	const renderNetworkDegradeBanner = network === Network.MAINNET && data?.degraded;
+	const headerRef = useRef<HTMLElement | null>(null);
+	const headerHeight = useElementHeight(headerRef, DEFAULT_HEADER_HEIGHT);
 
 	return (
-		<div
-			className={clsx(
-				'w-full',
-				isGradientVisible && isError && 'bg-gradients-failure-start',
-				isGradientVisible && !isError && 'bg-gradients-graph-cards-start',
+		<div className="relative min-h-screen w-full">
+			<section ref={headerRef} className="fixed top-0 z-20 flex w-full flex-col">
+				{renderNetworkDegradeBanner && (
+					<Banner rounded="none" align="center" variant="warning" fullWidth>
+						<div className="break-normal">
+							The explorer is running slower than usual. We&rsquo;re working to fix the issue and
+							appreciate your patience.
+						</div>
+					</Banner>
+				)}
+				<Header />
+			</section>
+			{loading && (
+				<div className="absolute left-1/2 right-0 top-1/2 flex -translate-x-1/2 -translate-y-1/2 transform justify-center">
+					<LoadingIndicator variant="lg" />
+				</div>
 			)}
-		>
-			<Header />
-			<main className="relative z-10 min-h-screen bg-offwhite">
+			<main
+				className="relative z-10 bg-offwhite"
+				style={
+					!isGradientVisible
+						? {
+								paddingTop: `${headerHeight}px`,
+						  }
+						: {}
+				}
+			>
 				{isGradientVisible ? (
 					<section
+						style={{
+							paddingTop: `${headerHeight}px`,
+						}}
 						className={clsx(
 							'group/gradientContent',
-							isGradientVisible && isError && 'bg-gradients-failure',
-							isGradientVisible && !isError && 'bg-gradients-graph-cards',
+							loading && 'bg-gradients-graph-cards',
+							isError && 'bg-gradients-failure',
+							!isError && 'bg-gradients-graph-cards',
 						)}
 					>
-						{network === Network.MAINNET && data?.degraded && (
-							<div className={clsx(isGradientVisible && 'bg-gradients-graph-cards-bg')}>
-								<div className="mx-auto max-w-[1440px] px-4 pt-3 lg:px-6 xl:px-10">
-									<Banner variant="warning" border fullWidth>
-										We&rsquo;re sorry that the explorer is running slower than usual. We&rsquo;re
-										working to fix the issue and appreciate your patience.
-									</Banner>
-								</div>
-							</div>
-						)}
 						<div
 							className={clsx(
 								'mx-auto max-w-[1440px] py-8 lg:px-6 xl:px-10',
@@ -80,11 +96,7 @@ export function PageLayout({ gradient, content, loading }: PageLayoutProps) {
 						</div>
 					</section>
 				) : null}
-				{loading ? (
-					<div className="absolute left-1/2 right-0 top-1/2 flex -translate-x-1/2 -translate-y-1/2 transform justify-center">
-						<LoadingIndicator variant="lg" />
-					</div>
-				) : (
+				{!loading && (
 					<section className="mx-auto max-w-[1440px] p-5 sm:py-8 md:p-10">{content}</section>
 				)}
 			</main>
@@ -92,5 +104,3 @@ export function PageLayout({ gradient, content, loading }: PageLayoutProps) {
 		</div>
 	);
 }
-
-//mx-auto max-w-[1440px] px-5 py-8 md:p-10

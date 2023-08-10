@@ -362,7 +362,8 @@ impl CompiledPackage {
         ids.into_iter().collect()
     }
 
-    pub fn get_package_digest(&self, with_unpublished_deps: bool, hash_modules: bool) -> [u8; 32] {
+    pub fn get_package_digest(&self, with_unpublished_deps: bool) -> [u8; 32] {
+        let hash_modules = true;
         MovePackage::compute_digest_for_modules_and_deps(
             &self.get_package_bytes(with_unpublished_deps),
             self.dependency_ids.published.values(),

@@ -45,7 +45,10 @@ export function TransactionSummary({
 							<BalanceChanges changes={summary?.balanceChanges} />
 							<ObjectChanges changes={summary?.objectSummary} />
 							{showGasSummary && <GasSummary gasSummary={summary?.gas} />}
-							<ExplorerLinkCard digest={summary?.digest} timestamp={summary?.timestamp} />
+							<ExplorerLinkCard
+								digest={summary?.digest}
+								timestamp={summary?.timestamp ?? undefined}
+							/>
 						</div>
 					</div>
 				</div>

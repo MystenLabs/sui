@@ -10,6 +10,7 @@
 
 import { autoUpdate, flip, FloatingPortal, offset, shift, useFloating } from '@floating-ui/react';
 import { Popover } from '@headlessui/react';
+import { useZodForm } from '@mysten/core';
 import { Text } from '@mysten/ui';
 import clsx from 'clsx';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -20,7 +21,6 @@ import { NavItem } from './NavItem';
 import { ReactComponent as CheckIcon } from '../icons/check_16x16.svg';
 import { ReactComponent as ChevronDownIcon } from '../icons/chevron_down.svg';
 import { ReactComponent as MenuIcon } from '../icons/menu.svg';
-import { useZodForm } from '~/hooks/useZodForm';
 
 import type { ComponentProps, ReactNode } from 'react';
 

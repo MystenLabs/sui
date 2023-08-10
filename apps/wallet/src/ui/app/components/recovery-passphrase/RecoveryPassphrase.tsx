@@ -6,11 +6,11 @@ import { useState } from 'react';
 import { HideShowDisplayBox } from '_components/HideShowDisplayBox';
 import Alert from '_components/alert';
 import { MenuLayout } from '_components/menu/content/MenuLayout';
-import { PasswordInputDialog } from '_components/menu/content/PasswordInputDialog';
 import { useNextMenuUrl } from '_components/menu/hooks';
 import { useAppDispatch } from '_hooks';
 import { loadEntropyFromKeyring } from '_redux/slices/account';
 import { entropyToMnemonic, toEntropy } from '_shared/utils/bip39';
+import { PasswordInputDialog } from '_src/ui/app/components/PasswordInputDialog';
 
 export function RecoveryPassphrase() {
 	const [passwordConfirmed, setPasswordConfirmed] = useState(false);
@@ -32,6 +32,7 @@ export function RecoveryPassphrase() {
 						setMnemonic(mnemonic);
 						setPasswordConfirmed(true);
 					}}
+					showBackButton
 				/>
 			</div>
 		);

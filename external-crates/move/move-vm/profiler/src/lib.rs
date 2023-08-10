@@ -139,18 +139,18 @@ impl GasProfiler {
         frame_display_name: String,
         metadata: String,
     ) -> u64 {
-        *self
-            .shared
-            .frame_table
-            .entry(frame_name.clone())
-            .or_insert({
+        match self.shared.frame_table.get(frame_name.as_str()) {
+            Some(idx) => *idx as u64,
+            None => {
                 let val = self.shared.frames.len() as u64;
                 self.shared.frames.push(FrameName {
                     name: frame_display_name,
                     file: metadata,
                 });
-                val as usize
-            }) as u64
+                self.shared.frame_table.insert(frame_name, val as usize);
+                val
+            }
+        }
     }
 
     pub fn open_frame(&mut self, frame_name: String, metadata: String, gas_start: u64) {

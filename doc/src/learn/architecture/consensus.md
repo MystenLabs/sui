@@ -6,7 +6,7 @@ This is a brief introduction to [Narwhal](https://github.com/MystenLabs/sui/tree
 
 The names highlight that the components split the responsibilities of:
  * ensuring the availability of data submitted to consensus = [Narwhal](https://arxiv.org/abs/2105.11827)
- * agreeing on a specific ordering of this data = [Bullshark](https://arxiv.org/abs/2209.05633)
+ * agreeing on a specific ordering of this data = [Bullshark](https://dl.acm.org/doi/abs/10.1145/3548606.3559361)
 
 The Sui Consensus Engine represents the latest variant of decades of work on multi-proposer, high-throughput consensus algorithms that reach throughputs of more than 125,000 transactions per second with a two-second latency for a deployment of 50 parties, with production cryptography, permanent storage, and a scaled-out primary-worker architecture.
 
@@ -81,9 +81,9 @@ To conduct a fresh deployment of Sui Consensus Engine, follow the instructions a
 
 ## Further reading
 
-Narwhal and Tusk (Danezis et al. 2021) is a consensus system leveraging directed acyclic graphs (DAG). DAG-based consensus has been developed over the last 30 years, and some of the history is summarized in (Wang & al. 2020). The closest theoretical ancestor of Narwhal & Tusk is DAG-Rider (Keidar & al. 2021).
+Narwhal and Tusk (Danezis et al. 2021) is a consensus system leveraging directed acyclic graphs (DAG). DAG-based consensus has been developed over the last 30 years, and some of the history is summarized in (Wang & al. 2020). The theoretical ancestor of Narwhal & Tusk is DAG-Rider (Keidar & al. 2021).
 
-Narwhal & Tusk are developed in the [asynchronous model](https://decentralizedthoughts.github.io/2019-06-01-2019-5-31-models/). A partially synchronous variant of Narwhal and Tusk, called Bullshark, is presented in (Giridharan 2022).
+Narwhal & Tusk are developed in the [asynchronous model](https://decentralizedthoughts.github.io/2019-06-01-2019-5-31-models/). A partially synchronous variant of Narwhal and Tusk is called Bullshark (Spiegelman et al. 2022).
 
 Narwhal and Tusk started [as a research prototype](https://github.com/facebookresearch/narwhal) at Facebook Novi.
 
@@ -98,7 +98,7 @@ A simplified version of Bullshark that is used in Sui today.
 ### Bibliography
 
  * Danezis, G., Kogias, E. K., Sonnino, A., & Spiegelman, A. (2021). Narwhal and Tusk: A DAG-based Mempool and Efficient BFT Consensus. ArXiv:2105.11827 [Cs]. http://arxiv.org/abs/2105.11827
- * Giridharan, N., Kokoris-Kogias, L., Sonnino, A., & Spiegelman, A. (2022). Bullshark: DAG BFT Protocols Made Practical. ArXiv:2201.05677 [Cs]. http://arxiv.org/abs/2201.05677
+ * Spiegelman, A., Giridharan, N., Sonnino, A., & Kokoris-Kogias, L. (2022). Bullshark: DAG BFT Protocols Made Practical. ArXiv:2201.05677 [Cs]. https://dl.acm.org/doi/abs/10.1145/3548606.3559361
  * Spiegelman, A., Giridharan, N., Sonnino, A., & Kokoris-Kogias, L. (2022). Bullshark: The Partially Synchronous Version. ArXiv:2209.05633 [Cs]. https://arxiv.org/abs/2209.05633
  * Keidar, I., Kokoris-Kogias, E., Naor, O., & Spiegelman, A. (2021). All You Need is DAG. ArXiv:2102.08325 [Cs]. http://arxiv.org/abs/2102.08325
  * Wang, Q., Yu, J., Chen, S., & Xiang, Y. (2020). SoK: Diving into DAG-based Blockchain Systems. ArXiv:2012.06128 [Cs]. http://arxiv.org/abs/2012.06128

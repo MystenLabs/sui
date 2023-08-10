@@ -894,7 +894,6 @@ module deepbook::clob_v2 {
                             filled_base_quantity,
                         ),
                     );
-
                     emit_order_filled<BaseAsset, QuoteAsset>(
                         *object::uid_as_inner(&pool.id),
                         client_order_id,
@@ -1305,7 +1304,11 @@ module deepbook::clob_v2 {
             owner
         );
         if (is_bid) {
-            let balance_locked = clob_math::mul(order.quantity, order.price);
+            let (is_round_down, balance_locked) = clob_math::unsafe_mul_round(order.quantity, order.price);
+            // make sure when we cancel we unlock the extra bit so we can fully unlock the amount for our users
+            if (is_round_down) {
+                balance_locked = balance_locked + 1;
+            };
             custodian::unlock_balance(&mut pool.quote_custodian, owner, balance_locked);
         } else {
             custodian::unlock_balance(&mut pool.base_custodian, owner, order.quantity);
@@ -1435,7 +1438,11 @@ module deepbook::clob_v2 {
                 owner
             );
             if (is_bid) {
-                let balance_locked = clob_math::mul(order.quantity, order.price);
+                let (is_round_down, balance_locked) = clob_math::unsafe_mul_round(order.quantity, order.price);
+                // make sure when we cancel we unlock the extra bit so we can fully unlock the amount for our users
+                if (is_round_down) {
+                    balance_locked = balance_locked + 1;
+                };
                 custodian::unlock_balance(&mut pool.quote_custodian, owner, balance_locked);
             } else {
                 custodian::unlock_balance(&mut pool.base_custodian, owner, order.quantity);
@@ -2604,5 +2611,42 @@ module deepbook::clob_v2 {
             );
         };
         test_scenario::end(test);
+    }
+
+    // Ensure that the custodian's locked balance matches the sum of all values for a given account
+    // Assumption: custodian has only placed orders in the given pool--if they have orders in other pools, the locked balance will be too small
+    #[test_only]
+    public fun check_balance_invariants_for_account<BaseAsset, QuoteAsset>(
+        account_cap: &AccountCap,
+        quote_custodian: &Custodian<QuoteAsset>,
+        base_custodian: &Custodian<BaseAsset>, 
+        pool: &Pool<BaseAsset, QuoteAsset>
+    ) {
+        let account_cap_user = custodian::account_owner(account_cap);
+        let quote_account_locked_balance = custodian::account_locked_balance<QuoteAsset>(quote_custodian, account_cap_user);
+        let base_account_locked_balance = custodian::account_locked_balance<BaseAsset>(base_custodian, account_cap_user);
+        let usr_open_order_ids = table::borrow(&pool.usr_open_orders, account_cap_user);
+
+        let quote_asset_amount = 0;
+        let base_asset_amount = 0;
+        let curr = linked_table::front(usr_open_order_ids);
+
+        while (option::is_some(curr)) {
+            let order_id = *option::borrow(curr);
+            let order = get_order_status<BaseAsset, QuoteAsset>(pool, order_id, account_cap);
+            let (is_round_down, total_balance) = clob_math::unsafe_mul_round(order.price, order.quantity);
+            if (is_round_down) {
+                total_balance = total_balance + 1;
+            };
+            if (order.is_bid) {
+                quote_asset_amount = quote_asset_amount + total_balance;
+            } else {
+                // For base swaps we actually only need the order quantity
+                base_asset_amount = base_asset_amount + order.quantity;
+            };
+            curr = linked_table::next(usr_open_order_ids, order_id);
+        };
+        assert!(quote_asset_amount == quote_account_locked_balance, 0);
+        assert!(base_asset_amount == base_account_locked_balance, 0);
     }
 }

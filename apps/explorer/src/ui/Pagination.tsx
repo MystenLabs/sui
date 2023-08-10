@@ -13,6 +13,10 @@ export interface PaginationProps {
 	onNext(): void;
 }
 
+interface CursorPaginationProps extends PaginationProps {
+	currentPage: number;
+}
+
 export interface PaginationResponse<Cursor = string> {
 	nextCursor: Cursor | null;
 	hasNextPage: boolean;
@@ -45,7 +49,8 @@ export function useCursorPagination<T>(query: UseInfiniteQueryResult<T>) {
 				!query.isFetchingNextPage &&
 				(currentPage < (query.data?.pages.length ?? 0) - 1 || !!query.hasNextPage),
 			hasPrev: currentPage !== 0,
-		} satisfies PaginationProps,
+			currentPage,
+		} satisfies CursorPaginationProps,
 	};
 }
 

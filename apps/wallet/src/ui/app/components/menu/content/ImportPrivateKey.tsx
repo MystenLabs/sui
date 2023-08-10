@@ -13,17 +13,17 @@ import { useNavigate } from 'react-router-dom';
 import { object } from 'yup';
 
 import { MenuLayout } from './MenuLayout';
-import { PasswordInputDialog } from './PasswordInputDialog';
+import { PasswordInputDialog } from '../../PasswordInputDialog';
 import Alert from '../../alert';
 import { useNextMenuUrl } from '../hooks';
 import { ampli } from '_src/shared/analytics/ampli';
-import { privateKeyValidation } from '_src/ui/app/helpers/validation/privateKeyValidation';
+import { deprecatedPrivateKeyValidation } from '_src/ui/app/helpers/validation/privateKeyValidation';
 import { useBackgroundClient } from '_src/ui/app/hooks/useBackgroundClient';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import FieldLabel from '_src/ui/app/shared/field-label';
 
 const validation = object({
-	privateKey: privateKeyValidation,
+	privateKey: deprecatedPrivateKeyValidation,
 });
 
 export function ImportPrivateKey() {
@@ -56,6 +56,7 @@ export function ImportPrivateKey() {
 				title="Import Account"
 				continueLabel="Import"
 				onBackClicked={() => setShowPasswordDialog(false)}
+				showBackButton
 				onPasswordVerified={async (password) => {
 					await importMutation.mutateAsync(password);
 				}}

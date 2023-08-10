@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::AuthorityName;
-use tracing::{info, warn};
+use tracing::debug;
 
 /// Updates list of authorities that are deemed to have low reputation scores by consensus
 /// these may be lagging behind the network, byzantine, or not reliably participating for any reason.
@@ -49,8 +49,20 @@ pub fn update_low_scoring_authorities(
     metrics: &Arc<AuthorityMetrics>,
     protocol_config: &ProtocolConfig,
 ) {
-    if protocol_config.scoring_decision_with_validity_cutoff() {
-        update_low_scoring_authorities_with_no_disable_mechanism(
+    // The new scoring mechanism will get enabled at the same time when the new leader election schedule
+    // is enabled as well. Before that there isn't much of a gain doing so.
+    if protocol_config.narwhal_new_leader_election_schedule() {
+        update_low_scoring_authorities_v2(
+            low_scoring_authorities,
+            committee,
+            reputation_scores,
+            authority_names_to_hostnames,
+            metrics,
+            protocol_config,
+        );
+    } else {
+        // TODO remove after the last version upgrade
+        update_low_scoring_authorities_v1(
             low_scoring_authorities,
             committee,
             reputation_scores,
@@ -59,125 +71,77 @@ pub fn update_low_scoring_authorities(
             protocol_config.scoring_decision_mad_divisor(),
             protocol_config.scoring_decision_cutoff_value(),
         );
-    } else {
-        // TODO remove this after the protocol version upgrade to 5
-        static MAD_DIVISOR: f64 = 1.2;
-        static CUTOFF_VALUE: f64 = 3.0;
-
-        update_low_scoring_authorities_with_previous_disable_mechanism(
-            low_scoring_authorities,
-            committee,
-            reputation_scores,
-            authority_names_to_hostnames,
-            metrics,
-            MAD_DIVISOR,
-            CUTOFF_VALUE,
-        );
     }
 }
 
-// TODO: remove after validators have upgraded to protocol version 5.
-fn update_low_scoring_authorities_with_previous_disable_mechanism(
+/// This version is flagging as low scoring authorities all the validators that have the lowest scores
+/// up to the defined protocol_config.consensus_bad_nodes_stake_threshold. This is done to align the
+/// submission side with the Narwhal leader election schedule. Practically we don't want to submit
+/// transactions for sequencing to validators that have low scores and are not part of the leader
+/// schedule since the chances of getting them sequenced are lower.
+fn update_low_scoring_authorities_v2(
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     committee: &Committee,
     reputation_scores: ReputationScores,
     authority_names_to_hostnames: HashMap<AuthorityName, String>,
     metrics: &Arc<AuthorityMetrics>,
-    mad_divisor: f64,
-    cut_off_value: f64,
+    protocol_config: &ProtocolConfig,
 ) {
+    assert!((0..=33).contains(&protocol_config.consensus_bad_nodes_stake_threshold()), "The bad_nodes_stake_threshold should be in range [0 - 33], out of bounds parameter detected {}", protocol_config.consensus_bad_nodes_stake_threshold());
+
     if !reputation_scores.final_of_schedule {
         return;
     }
 
-    // Convert the narwhal authority ids to the corresponding AuthorityName in SUI
-    // Also capture the stake so can calculate later is strong quorum is reached for the non-low scoring authorities.
-    let scores_per_authority: HashMap<AuthorityName, (u64, Stake)> = reputation_scores
-        .scores_per_authority
-        .into_iter()
+    // We order the authorities by score ascending order in the exact same way as the reputation
+    // scores do - so we keep complete alignment between implementations
+    let scores_per_authority_order_asc: Vec<(AuthorityName, u64, Stake)> = reputation_scores
+        .authorities_by_score_desc()
+        .iter()
+        .rev() // we reverse so we get them in asc order
         .map(|(authority_id, score)| {
-            let authority = committee.authority(&authority_id).unwrap();
+            let authority = committee.authority(authority_id).unwrap();
             let name: AuthorityName = authority.protocol_key().into();
 
-            // report the scores
-            if let Some(hostname) = authority_names_to_hostnames.get(&name) {
-                info!("authority {} has score {}", hostname, score);
-
-                metrics
-                    .consensus_handler_scores
-                    .with_label_values(&[&format!("{:?}", hostname)])
-                    .set(score as i64);
-            }
-
-            (name, (score, authority.stake()))
+            (name, *score, authority.stake())
         })
         .collect();
 
     let mut final_low_scoring_map = HashMap::new();
+    let mut total_stake = 0;
+    for (authority_name, score, stake) in scores_per_authority_order_asc {
+        total_stake += stake;
 
-    let mut score_list = vec![];
-    let mut nonzero_scores = vec![];
-    for (score, _stake) in scores_per_authority.values() {
-        score_list.push(*score as f64);
-        if score != &0_u64 {
-            nonzero_scores.push(*score as f64);
-        }
-    }
-
-    let median_value = median(&nonzero_scores);
-    let mut deviations = vec![];
-    let mut abs_deviations = vec![];
-    for (i, _) in score_list.clone().iter().enumerate() {
-        deviations.push(score_list[i] - median_value);
-        if score_list[i] != 0.0 {
-            abs_deviations.push((score_list[i] - median_value).abs());
-        }
-    }
-
-    // adjusted median absolute deviation
-    let mad = median(&abs_deviations) / mad_divisor;
-    let mut low_scoring = vec![];
-    let mut rest = vec![];
-    for (i, (a, (score, stake))) in scores_per_authority.iter().enumerate() {
-        let temp = deviations[i] / mad;
-        if temp < -cut_off_value {
-            low_scoring.push((a, *score));
+        let included = if total_stake
+            <= (protocol_config.consensus_bad_nodes_stake_threshold() * committee.total_stake())
+                / 100 as Stake
+        {
+            final_low_scoring_map.insert(authority_name, score);
+            true
         } else {
-            rest.push((a, *stake));
+            false
+        };
+
+        if let Some(hostname) = authority_names_to_hostnames.get(&authority_name) {
+            debug!(
+                "authority {} has score {}, is low scoring: {}",
+                hostname, score, included
+            );
+
+            metrics
+                .consensus_handler_scores
+                .with_label_values(&[&format!("{:?}", hostname)])
+                .set(score as i64);
         }
     }
-
-    // report new scores
-    let len_low_scoring = low_scoring.len();
+    // Report the actual flagged final low scoring authorities
     metrics
         .consensus_handler_num_low_scoring_authorities
-        .set(len_low_scoring as i64);
-
-    info!("{:?} low scoring authorities calculated", len_low_scoring);
-
-    for (authority, score) in low_scoring {
-        final_low_scoring_map.insert(*authority, score);
-        if let Some(hostname) = authority_names_to_hostnames.get(authority) {
-            info!("low scoring authority {} has score {}", hostname, score);
-        }
-    }
-
-    // make sure the rest have at least quorum
-    let remaining_stake = rest.into_iter().map(|(_, stake)| stake).sum::<Stake>();
-    let quorum_threshold = committee.quorum_threshold();
-    if remaining_stake < quorum_threshold {
-        warn!(
-            "too many low reputation-scoring authorities, temporarily disabling scoring mechanism"
-        );
-
-        low_scoring_authorities.swap(Arc::new(HashMap::new()));
-        return;
-    }
-
+        .set(final_low_scoring_map.len() as i64);
     low_scoring_authorities.swap(Arc::new(final_low_scoring_map));
 }
 
-fn update_low_scoring_authorities_with_no_disable_mechanism(
+fn update_low_scoring_authorities_v1(
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     committee: &Committee,
     reputation_scores: ReputationScores,
@@ -201,7 +165,7 @@ fn update_low_scoring_authorities_with_no_disable_mechanism(
 
             // report the scores
             if let Some(hostname) = authority_names_to_hostnames.get(&name) {
-                info!("authority {} has score {}", hostname, score);
+                debug!("authority {} has score {}", hostname, score);
 
                 metrics
                     .consensus_handler_scores
@@ -249,7 +213,7 @@ fn update_low_scoring_authorities_with_no_disable_mechanism(
 
     // report new scores
     let len_low_scoring = low_scoring.len();
-    info!("{:?} low scoring authorities calculated", len_low_scoring);
+    debug!("{:?} low scoring authorities calculated", len_low_scoring);
 
     // Do not disable the scoring mechanism when more than f validators are excluded. Just keep
     // marking low scoring authorities up to f.
@@ -272,7 +236,7 @@ fn update_low_scoring_authorities_with_no_disable_mechanism(
             false
         };
         if let Some(hostname) = authority_names_to_hostnames.get(authority) {
-            info!(
+            debug!(
                 "low scoring authority {} has score {}, included: {}",
                 hostname, score, included
             );
@@ -307,16 +271,92 @@ mod tests {
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
     use sui_types::crypto::NetworkPublicKey;
 
-    fn protocol_v4() -> ProtocolConfig {
-        // There are no chain specific protocol config options at this version
-        // so the chain is irrelevant
-        ProtocolConfig::get_for_version(ProtocolVersion::new(4), Chain::Unknown)
-    }
-
     fn protocol_v5() -> ProtocolConfig {
         // There are no chain specific protocol config options at this version
         // so the chain is irrelevant
         ProtocolConfig::get_for_version(ProtocolVersion::new(5), Chain::Unknown)
+    }
+
+    #[test]
+    pub fn test_update_low_scoring_authorities_v2() {
+        // GIVEN
+        let peer_id_map = HashMap::new();
+
+        // Total stake is 8 for this committee and every authority has equal stake = 1
+        let committee = generate_committee(8);
+
+        let mut authorities = committee.authorities();
+        let a1 = authorities.next().unwrap();
+        let a2 = authorities.next().unwrap();
+        let a3 = authorities.next().unwrap();
+        let a4 = authorities.next().unwrap();
+        let a5 = authorities.next().unwrap();
+        let a6 = authorities.next().unwrap();
+        let a7 = authorities.next().unwrap();
+        let a8 = authorities.next().unwrap();
+
+        let low_scoring = Arc::new(ArcSwap::from_pointee(HashMap::new()));
+        let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
+
+        // there is a low outlier in the non zero scores, exclude it as well as down nodes
+        let mut scores = HashMap::new();
+        scores.insert(a1.id(), 350_u64);
+        scores.insert(a2.id(), 390_u64);
+        scores.insert(a3.id(), 50_u64);
+        scores.insert(a4.id(), 50_u64);
+        scores.insert(a5.id(), 0_u64); // down node
+        scores.insert(a6.id(), 300_u64);
+        scores.insert(a7.id(), 340_u64);
+        scores.insert(a8.id(), 310_u64);
+        let reputation_scores = ReputationScores {
+            scores_per_authority: scores,
+            final_of_schedule: true,
+        };
+
+        let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        protocol_config.set_narwhal_new_leader_election_schedule(true);
+
+        // WHEN
+        protocol_config.set_consensus_bad_nodes_stake_threshold(33); // 33 * 8 / 100 = 2 maximum stake that will considered low scoring
+
+        update_low_scoring_authorities(
+            low_scoring.clone(),
+            &committee,
+            reputation_scores.clone(),
+            peer_id_map.clone(),
+            &metrics,
+            &protocol_config,
+        );
+
+        // THEN
+        assert_eq!(low_scoring.load().len(), 2);
+        println!("low scoring {:?}", low_scoring.load());
+        assert_eq!(
+            *low_scoring.load().get(&a3.protocol_key().into()).unwrap(), // Since a3 & a4 have equal scores, we resolve the decision with a3.id < a4.id
+            50
+        );
+        assert_eq!(
+            *low_scoring.load().get(&a5.protocol_key().into()).unwrap(),
+            0
+        );
+
+        // WHEN setting the threshold to lower
+        protocol_config.set_consensus_bad_nodes_stake_threshold(20); // 20 * 8 / 100 = 1 maximum
+        update_low_scoring_authorities(
+            low_scoring.clone(),
+            &committee,
+            reputation_scores,
+            peer_id_map,
+            &metrics,
+            &protocol_config,
+        );
+
+        // THEN
+        assert_eq!(low_scoring.load().len(), 1);
+        assert_eq!(
+            *low_scoring.load().get(&a5.protocol_key().into()).unwrap(),
+            0
+        );
     }
 
     #[test]
@@ -332,7 +372,7 @@ mod tests {
 
         let mut inner = HashMap::new();
         inner.insert(a1.protocol_key().into(), 50);
-        let reputation_scores_1 = ReputationScores {
+        let reputation_scores = ReputationScores {
             scores_per_authority: Default::default(),
             final_of_schedule: false,
         };
@@ -340,69 +380,6 @@ mod tests {
         let peer_id_map = HashMap::new();
 
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
-
-        // when final of schedule is false, calling update_low_scoring_authorities will not change the
-        // low_scoring_authorities map
-        update_low_scoring_authorities(
-            low_scoring.clone(),
-            &committee,
-            reputation_scores_1,
-            peer_id_map.clone(),
-            &metrics,
-            &protocol_v4(),
-        );
-
-        assert_eq!(
-            *low_scoring.load().get(&a1.protocol_key().into()).unwrap(),
-            50_u64
-        );
-        assert_eq!(low_scoring.load().len(), 1);
-
-        // there is a clear low outlier in the scores, exclude it
-        let mut scores = HashMap::new();
-        scores.insert(a1.id(), 607_u64);
-        scores.insert(a2.id(), 611_u64);
-        scores.insert(a3.id(), 607_u64);
-        scores.insert(a4.id(), 455_u64);
-        let reputation_scores = ReputationScores {
-            scores_per_authority: scores,
-            final_of_schedule: true,
-        };
-
-        update_low_scoring_authorities(
-            low_scoring.clone(),
-            &committee,
-            reputation_scores,
-            peer_id_map.clone(),
-            &metrics,
-            &protocol_v4(),
-        );
-        assert_eq!(
-            *low_scoring.load().get(&a4.protocol_key().into()).unwrap(),
-            455_u64
-        );
-        assert_eq!(low_scoring.load().len(), 1);
-
-        // one authority has score which is a bit lower, but should not be excluded
-        let mut scores = HashMap::new();
-        scores.insert(a1.id(), 607_u64);
-        scores.insert(a2.id(), 751_u64);
-        scores.insert(a3.id(), 707_u64);
-        scores.insert(a4.id(), 650_u64);
-        let reputation_scores = ReputationScores {
-            scores_per_authority: scores,
-            final_of_schedule: true,
-        };
-
-        update_low_scoring_authorities(
-            low_scoring.clone(),
-            &committee,
-            reputation_scores.clone(),
-            peer_id_map.clone(),
-            &metrics,
-            &protocol_v4(),
-        );
-        assert_eq!(low_scoring.load().len(), 0);
 
         // When with protocol 5
         update_low_scoring_authorities(
@@ -426,17 +403,6 @@ mod tests {
             final_of_schedule: true,
         };
 
-        update_low_scoring_authorities(
-            low_scoring.clone(),
-            &committee,
-            reputation_scores.clone(),
-            peer_id_map.clone(),
-            &metrics,
-            &protocol_v4(),
-        );
-
-        assert_eq!(low_scoring.load().len(), 0);
-
         // when with protocol 5
         update_low_scoring_authorities(
             low_scoring.clone(),
@@ -459,16 +425,6 @@ mod tests {
             scores_per_authority: scores,
             final_of_schedule: true,
         };
-
-        update_low_scoring_authorities(
-            low_scoring.clone(),
-            &committee,
-            reputation_scores.clone(),
-            peer_id_map.clone(),
-            &metrics,
-            &protocol_v4(),
-        );
-        assert_eq!(low_scoring.load().len(), 0);
 
         // When protocol v5
         update_low_scoring_authorities(
@@ -505,17 +461,6 @@ mod tests {
             final_of_schedule: true,
         };
 
-        update_low_scoring_authorities(
-            low_scoring.clone(),
-            &committee,
-            reputation_scores.clone(),
-            peer_id_map.clone(),
-            &metrics,
-            &protocol_v4(),
-        );
-
-        assert_eq!(low_scoring.load().len(), 0);
-
         // When protocol v5
         update_low_scoring_authorities(
             low_scoring.clone(),
@@ -534,22 +479,6 @@ mod tests {
             scores_per_authority: scores,
             final_of_schedule: true,
         };
-        update_low_scoring_authorities(
-            low_scoring.clone(),
-            &committee,
-            reputation_scores.clone(),
-            peer_id_map.clone(),
-            &metrics,
-            &protocol_v4(),
-        );
-
-        assert_eq!(
-            *low_scoring
-                .load()
-                .get(&authorities[final_idx].protocol_key().into())
-                .unwrap(),
-            40_u64
-        );
 
         // When protocol 5
         update_low_scoring_authorities(
@@ -558,7 +487,7 @@ mod tests {
             reputation_scores,
             peer_id_map,
             &metrics,
-            &protocol_v4(),
+            &protocol_v5(),
         );
 
         assert_eq!(
@@ -568,7 +497,7 @@ mod tests {
                 .unwrap(),
             40_u64
         );
-        assert_eq!(low_scoring.load().len(), 1);
+        assert_eq!(low_scoring.load().len(), 11);
     }
 
     #[test]
@@ -608,24 +537,6 @@ mod tests {
             final_of_schedule: true,
         };
 
-        update_low_scoring_authorities(
-            low_scoring.clone(),
-            &committee,
-            reputation_scores.clone(),
-            HashMap::new(),
-            &metrics,
-            &protocol_v4(),
-        );
-        assert_eq!(
-            *low_scoring.load().get(&a4.protocol_key().into()).unwrap(),
-            50_u64
-        );
-        assert_eq!(
-            *low_scoring.load().get(&a5.protocol_key().into()).unwrap(),
-            0_u64
-        );
-        assert_eq!(low_scoring.load().len(), 2);
-
         // When protocol v5
         update_low_scoring_authorities(
             low_scoring.clone(),
@@ -633,7 +544,7 @@ mod tests {
             reputation_scores,
             HashMap::new(),
             &metrics,
-            &protocol_v4(),
+            &protocol_v5(),
         );
         assert_eq!(
             *low_scoring.load().get(&a4.protocol_key().into()).unwrap(),
@@ -683,16 +594,6 @@ mod tests {
             scores_per_authority: scores,
             final_of_schedule: true,
         };
-
-        update_low_scoring_authorities(
-            low_scoring.clone(),
-            &committee,
-            reputation_scores.clone(),
-            HashMap::new(),
-            &metrics,
-            &protocol_v4(),
-        );
-        assert_eq!(low_scoring.load().len(), 0);
 
         // When protocol v5
         update_low_scoring_authorities(
@@ -766,16 +667,6 @@ mod tests {
         };
 
         let peer_id_map = HashMap::new();
-        update_low_scoring_authorities(
-            low_scoring.clone(),
-            &committee,
-            reputation_scores.clone(),
-            peer_id_map.clone(),
-            &metrics,
-            &protocol_v4(),
-        );
-
-        assert_eq!(low_scoring.load().len(), 3);
 
         // When protocol v5
         update_low_scoring_authorities(

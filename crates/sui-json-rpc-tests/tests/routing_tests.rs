@@ -23,7 +23,7 @@ async fn test_rpc_backward_compatibility() {
     builder.register_module(TestApiModule).unwrap();
 
     let address = local_ip_utils::new_local_tcp_socket_for_testing();
-    let _handle = builder.start(address, None).await.unwrap();
+    let _handle = builder.start(address, None, None).await.unwrap();
     let url = format!("http://0.0.0.0:{}", address.port());
 
     // Test with un-versioned client
@@ -102,7 +102,7 @@ async fn test_disable_routing() {
     builder.register_module(TestApiModule).unwrap();
 
     let address = local_ip_utils::new_local_tcp_socket_for_testing();
-    let _handle = builder.start(address, None).await.unwrap();
+    let _handle = builder.start(address, None, None).await.unwrap();
     let url = format!("http://0.0.0.0:{}", address.port());
 
     // try to access old method directly should fail

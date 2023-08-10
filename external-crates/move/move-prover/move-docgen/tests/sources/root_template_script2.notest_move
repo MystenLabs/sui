@@ -1,4 +1,5 @@
 script {
+#[allow(unused_type_parameter)]
 /// This script does also abort.
 fun other<T>(_account: signer) {
     abort 2

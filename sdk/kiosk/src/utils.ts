@@ -85,13 +85,13 @@ export function extractKioskData(
 				case 'kiosk::Listing':
 					acc.listingIds.push(val.objectId);
 					listings.push({
-						objectId: val.name.value.id,
+						objectId: (val.name.value as { id: string }).id,
 						listingId: val.objectId,
-						isExclusive: val.name.value.is_exclusive,
+						isExclusive: (val.name.value as { is_exclusive: boolean }).is_exclusive,
 					});
 					break;
 				case 'kiosk::Lock':
-					lockedItemIds?.push(val.name.value.id);
+					lockedItemIds?.push((val.name.value as { id: string }).id);
 					break;
 			}
 			return acc;
@@ -128,7 +128,7 @@ export function attachListingsAndPrices(
 
 			if (!data) return acc;
 
-			acc[item.objectId].price = data.value;
+			acc[item.objectId].price = (data as { value: string }).value;
 			return acc;
 		},
 		{},
@@ -197,4 +197,16 @@ export async function getAllDynamicFields(
 	}
 
 	return data;
+}
+
+/**
+ * Converts a number to basis points.
+ * Supports up to 2 decimal points.
+ * E.g 9.95 -> 995
+ * @param percentage A percentage amount in the range [0, 100] including decimals.
+ */
+export function percentageToBasisPoints(percentage: number) {
+	if (percentage < 0 || percentage > 100)
+		throw new Error('Percentage needs to be in the [0,100] range.');
+	return Math.ceil(percentage * 100);
 }

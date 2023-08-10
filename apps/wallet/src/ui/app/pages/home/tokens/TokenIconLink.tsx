@@ -7,31 +7,36 @@ import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { useMemo } from 'react';
 
 import { LargeButton } from '_app/shared/LargeButton';
-import { DelegatedAPY } from '_app/shared/delegated-apy';
 import { useGetDelegatedStake } from '_app/staking/useGetDelegatedStake';
 import { ampli } from '_src/shared/analytics/ampli';
+import { Text } from '_src/ui/app/shared/text';
 
-export function TokenIconLink({ accountAddress }: { accountAddress: string }) {
+export function TokenIconLink({
+	accountAddress,
+	disabled,
+}: {
+	accountAddress: string;
+	disabled: boolean;
+}) {
 	const { data: delegatedStake, isLoading } = useGetDelegatedStake(accountAddress);
 
 	// Total active stake for all delegations
 	const totalActivePendingStake = useMemo(() => {
 		if (!delegatedStake) return 0n;
-
 		return delegatedStake.reduce(
 			(acc, curr) => curr.stakes.reduce((total, { principal }) => total + BigInt(principal), acc),
-
 			0n,
 		);
 	}, [delegatedStake]);
-
-	const stakedValidators = delegatedStake?.map(({ validatorAddress }) => validatorAddress) || [];
 
 	const [formatted, symbol, queryResult] = useFormatCoin(totalActivePendingStake, SUI_TYPE_ARG);
 
 	return (
 		<LargeButton
 			to="/stake"
+			spacing="sm"
+			center={!totalActivePendingStake}
+			disabled={disabled}
 			onClick={() => {
 				ampli.clickedStakeSui({
 					isCurrentlyStaking: totalActivePendingStake > 0,
@@ -40,15 +45,16 @@ export function TokenIconLink({ accountAddress }: { accountAddress: string }) {
 			}}
 			loading={isLoading || queryResult.isLoading}
 			before={<WalletActionStake24 />}
-			center
-			after={totalActivePendingStake ? <DelegatedAPY stakedValidators={stakedValidators} /> : null}
 		>
-			<div className="flex flex-col gap-1.25">
-				<div>{totalActivePendingStake ? 'Currently Staked' : 'Stake and Earn SUI'}</div>
+			<div className="flex flex-col">
+				<Text variant="pBody" weight="semibold">
+					{totalActivePendingStake ? 'Currently Staked' : 'Stake and Earn SUI'}
+				</Text>
+
 				{!!totalActivePendingStake && (
-					<div>
+					<Text variant="pBody" weight="semibold">
 						{formatted} {symbol}
-					</div>
+					</Text>
 				)}
 			</div>
 		</LargeButton>

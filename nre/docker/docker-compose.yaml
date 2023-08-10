@@ -24,7 +24,7 @@ services:
       - /opt/sui/db:/opt/sui/db:rw
     command:
       [
-        "/usr/local/bin/sui-node",
+        "/opt/sui/bin/sui-node",
         "--config-path",
         "/opt/sui/config/validator.yaml",
       ]

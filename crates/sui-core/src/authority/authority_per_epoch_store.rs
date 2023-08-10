@@ -672,6 +672,13 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
+    pub fn effects_signatures_exists<'a>(
+        &self,
+        digests: impl IntoIterator<Item = &'a TransactionDigest>,
+    ) -> Result<Vec<bool>, TypedStoreError> {
+        self.tables.effects_signatures.multi_contains_keys(digests)
+    }
+
     pub fn get_effects_signature(
         &self,
         tx_digest: &TransactionDigest,
@@ -1069,6 +1076,32 @@ impl AuthorityPerEpochStore {
             return Ok(());
         }
         registration.await;
+        Ok(())
+    }
+
+    pub fn check_consensus_messages_processed<'a>(
+        &self,
+        keys: impl Iterator<Item = &'a SequencedConsensusTransactionKey>,
+    ) -> SuiResult<Vec<bool>> {
+        Ok(self
+            .tables
+            .consensus_message_processed
+            .multi_contains_keys(keys)?)
+    }
+
+    pub async fn consensus_messages_processed_notify(
+        &self,
+        keys: Vec<SequencedConsensusTransactionKey>,
+    ) -> Result<(), SuiError> {
+        let registrations = self.consensus_notify_read.register_all(keys.clone());
+
+        let unprocessed_keys_registrations = registrations
+            .into_iter()
+            .zip(self.check_consensus_messages_processed(keys.iter())?)
+            .filter(|(_, processed)| !processed)
+            .map(|(registration, _)| registration);
+
+        join_all(unprocessed_keys_registrations).await;
         Ok(())
     }
 
@@ -1999,13 +2032,13 @@ impl AuthorityPerEpochStore {
             .map(|s| s.summary))
     }
 
-    pub fn builder_included_transaction_in_checkpoint(
+    pub fn builder_included_transactions_in_checkpoint<'a>(
         &self,
-        digest: &TransactionDigest,
-    ) -> Result<bool, TypedStoreError> {
+        digests: impl Iterator<Item = &'a TransactionDigest>,
+    ) -> Result<Vec<bool>, TypedStoreError> {
         self.tables
             .builder_digest_to_checkpoint
-            .contains_key(digest)
+            .multi_contains_keys(digests)
     }
 
     pub fn get_pending_checkpoint_signatures_iter(

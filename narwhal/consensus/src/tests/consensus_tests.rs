@@ -6,23 +6,24 @@
 use config::AuthorityIdentifier;
 use fastcrypto::hash::Hash;
 use prometheus::Registry;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
-use storage::NodeStorage;
+use storage::{ConsensusStore, NodeStorage};
+use sui_protocol_config::ProtocolConfig;
 use telemetry_subscribers::TelemetryGuards;
-use test_utils::{latest_protocol_version, mock_certificate};
+use test_utils::{get_protocol_config, latest_protocol_version, mock_certificate};
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::sync::watch;
 
 use crate::bullshark::Bullshark;
 use crate::consensus::{ConsensusRound, Dag, LeaderSchedule, LeaderSwapTable};
-use crate::consensus_utils::NUM_SUB_DAGS_PER_SCHEDULE;
 use crate::metrics::ConsensusMetrics;
 use crate::Consensus;
 use crate::NUM_SHUTDOWN_RECEIVERS;
 use types::{
-    Certificate, CertificateAPI, HeaderAPI, PreSubscribedBroadcastSender, ReputationScores, Round,
+    Certificate, CertificateAPI, CommittedSubDag, HeaderAPI, PreSubscribedBroadcastSender,
+    ReputationScores, Round,
 };
 
 /// This test is trying to compare the output of the Consensus algorithm when:
@@ -39,7 +40,20 @@ use types::{
 async fn test_consensus_recovery_with_bullshark() {
     let _guard = setup_tracing();
 
+    // TODO: remove once the new leader schedule has been enabled.
+    // Run with default config settings where the new leader schedule is disabled
+    let config: ProtocolConfig = get_protocol_config(19);
+    test_consensus_recovery_with_bullshark_with_config(config).await;
+
+    // Run with the new leader election schedule enabled
+    let mut config: ProtocolConfig = latest_protocol_version();
+    config.set_consensus_bad_nodes_stake_threshold(33);
+    test_consensus_recovery_with_bullshark_with_config(config).await;
+}
+
+async fn test_consensus_recovery_with_bullshark_with_config(config: ProtocolConfig) {
     // GIVEN
+    let num_sub_dags_per_schedule = 3;
     let storage = NodeStorage::reopen(temp_dir(), None);
 
     let consensus_store = storage.consensus_store;
@@ -55,13 +69,8 @@ async fn test_consensus_recovery_with_bullshark() {
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let (certificates, _next_parents) = test_utils::make_optimal_certificates(
-        &committee,
-        &latest_protocol_version(),
-        1..=7,
-        &genesis,
-        &ids,
-    );
+    let (certificates, _next_parents) =
+        test_utils::make_optimal_certificates(&committee, &config, 1..=7, &genesis, &ids);
 
     // AND Spawn the consensus engine.
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(100);
@@ -74,13 +83,14 @@ async fn test_consensus_recovery_with_bullshark() {
 
     let gc_depth = 50;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let leader_schedule = LeaderSchedule::new(committee.clone(), LeaderSwapTable::default());
+    let leader_schedule =
+        LeaderSchedule::from_store(committee.clone(), consensus_store.clone(), config.clone());
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
-        latest_protocol_version(),
+        config.clone(),
         metrics.clone(),
-        NUM_SUB_DAGS_PER_SCHEDULE,
+        num_sub_dags_per_schedule,
         leader_schedule.clone(),
     );
 
@@ -172,13 +182,15 @@ async fn test_consensus_recovery_with_bullshark() {
     let consensus_store = storage.consensus_store;
     let certificate_store = storage.certificate_store;
 
+    let leader_schedule =
+        LeaderSchedule::from_store(committee.clone(), consensus_store.clone(), config.clone());
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
-        latest_protocol_version(),
+        config.clone(),
         metrics.clone(),
-        NUM_SUB_DAGS_PER_SCHEDULE,
-        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
+        num_sub_dags_per_schedule,
+        leader_schedule,
     );
 
     let consensus_handle = Consensus::spawn(
@@ -246,9 +258,9 @@ async fn test_consensus_recovery_with_bullshark() {
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
-        latest_protocol_version(),
+        config.clone(),
         metrics.clone(),
-        NUM_SUB_DAGS_PER_SCHEDULE,
+        num_sub_dags_per_schedule,
         LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
@@ -313,7 +325,7 @@ async fn test_consensus_recovery_with_bullshark() {
         score_with_crash
             .scores_per_authority
             .into_iter()
-            .filter(|(_, score)| *score == 2)
+            .filter(|(_, score)| *score == 1)
             .count(),
         4
     );
@@ -324,6 +336,8 @@ async fn test_leader_swap_table() {
     // GIVEN
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
+    let mut protocol_config: ProtocolConfig = latest_protocol_version();
+    protocol_config.set_consensus_bad_nodes_stake_threshold(33);
 
     // the authority ids
     let authority_ids: Vec<AuthorityIdentifier> = fixture.authorities().map(|a| a.id()).collect();
@@ -335,7 +349,12 @@ async fn test_leader_swap_table() {
         scores.add_score(*id, score as u64);
     }
 
-    let table = LeaderSwapTable::new(&committee, 2, &scores);
+    let table = LeaderSwapTable::new(
+        &committee,
+        2,
+        &scores,
+        protocol_config.consensus_bad_nodes_stake_threshold(),
+    );
 
     // Only one bad authority should be calculated since all have equal stake
     assert_eq!(table.bad_nodes.len(), 1);
@@ -370,7 +389,12 @@ async fn test_leader_swap_table() {
     }
 
     // We expect the first 3 authorities (f) to be amongst the bad nodes
-    let table = LeaderSwapTable::new(&committee, 2, &scores);
+    let table = LeaderSwapTable::new(
+        &committee,
+        2,
+        &scores,
+        protocol_config.consensus_bad_nodes_stake_threshold(),
+    );
 
     assert_eq!(table.bad_nodes.len(), 3);
     assert!(table.bad_nodes.contains_key(&authority_ids[0]));
@@ -395,6 +419,8 @@ async fn test_leader_schedule() {
     // GIVEN
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
+    let mut protocol_config: ProtocolConfig = latest_protocol_version();
+    protocol_config.set_consensus_bad_nodes_stake_threshold(33);
 
     // the authority ids
     let authority_ids: Vec<AuthorityIdentifier> = fixture.authorities().map(|a| a.id()).collect();
@@ -416,7 +442,12 @@ async fn test_leader_schedule() {
     }
 
     // Update the schedule
-    let table = LeaderSwapTable::new(&committee, 2, &scores);
+    let table = LeaderSwapTable::new(
+        &committee,
+        2,
+        &scores,
+        protocol_config.consensus_bad_nodes_stake_threshold(),
+    );
     schedule.update_leader_swap_table(table.clone());
 
     // Now call the leader for round 2 again. It should be swapped with another node
@@ -452,6 +483,55 @@ async fn test_leader_schedule() {
     let (leader_authority, leader_certificate_result) = schedule.leader_certificate(2, &dag);
     assert_eq!(leader_authority.id(), swapped_leader);
     assert_eq!(certificate, leader_certificate_result.unwrap().clone());
+}
+
+#[tokio::test]
+async fn test_leader_schedule_from_store() {
+    // GIVEN
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    let authority_ids: Vec<AuthorityIdentifier> = fixture.authorities().map(|a| a.id()).collect();
+    let store = Arc::new(ConsensusStore::new_for_tests());
+
+    // Create a leader schedule with a default swap table, so no authority will be swapped and find the leader at
+    // position 2. We expect the leader of round 2 to be the authority of position 0 , since round robin is used
+    // in tests.
+    let schedule = LeaderSchedule::new(committee.clone(), LeaderSwapTable::default());
+    let leader_2 = schedule.leader(2);
+    assert_eq!(leader_2.id(), authority_ids[0]);
+
+    // AND we add some a commit with a final score where the validator 0 is expected to be the lowest score one.
+    let mut scores = ReputationScores::new(&committee);
+    scores.final_of_schedule = true;
+    for (score, id) in fixture.authorities().map(|a| a.id()).enumerate() {
+        scores.add_score(id, score as u64);
+    }
+
+    let sub_dag = CommittedSubDag::new(vec![], Certificate::default(), 0, scores, None);
+
+    store
+        .write_consensus_state(&HashMap::new(), &sub_dag)
+        .unwrap();
+
+    // WHEN flag is disabled for the new schedule algorithm
+    let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+    let schedule = LeaderSchedule::from_store(committee.clone(), store.clone(), protocol_config);
+
+    // THEN the default should be returned. In this case we detect since good/bad nodes will be empty
+    assert!(schedule.leader_swap_table.read().good_nodes.is_empty());
+    assert!(schedule.leader_swap_table.read().bad_nodes.is_empty());
+
+    // WHEN flag is enabled for the new schedule algorithm
+    let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+    protocol_config.set_narwhal_new_leader_election_schedule(true);
+    protocol_config.set_consensus_bad_nodes_stake_threshold(33);
+    let schedule = LeaderSchedule::from_store(committee, store, protocol_config);
+
+    // THEN the stored schedule should be returned and eventually the low score leader should be
+    // swapped with a high score one.
+    let new_leader_2 = schedule.leader(2);
+
+    assert_ne!(leader_2.id(), new_leader_2.id());
 }
 
 fn setup_tracing() -> TelemetryGuards {

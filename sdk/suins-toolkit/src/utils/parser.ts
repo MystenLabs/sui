@@ -7,7 +7,7 @@ import { normalizeSuiAddress } from '@mysten/sui.js/utils';
 export const camelCase = (string: string) => string.replace(/(_\w)/g, (g) => g[1].toUpperCase());
 
 export const parseObjectDataResponse = (response: SuiObjectResponse | undefined) =>
-    ((response?.data as SuiObjectData)?.content as SuiMoveObject)?.fields;
+    ((response?.data as SuiObjectData)?.content as SuiMoveObject)?.fields as Record<string, any>;
 
 export const parseRegistryResponse = (response: SuiObjectResponse | undefined): any => {
     const fields = parseObjectDataResponse(response)?.value?.fields || {};

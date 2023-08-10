@@ -143,6 +143,24 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub indexer_max_subscriptions: Option<usize>,
+
+    #[serde(default = "default_transaction_kv_store_config")]
+    pub transaction_kv_store_read_config: TransactionKeyValueStoreReadConfig,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction_kv_store_write_config: Option<TransactionKeyValueStoreWriteConfig>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct TransactionKeyValueStoreReadConfig {
+    pub base_url: String,
+}
+
+fn default_transaction_kv_store_config() -> TransactionKeyValueStoreReadConfig {
+    TransactionKeyValueStoreReadConfig {
+        base_url: "https://transactions.sui.io/".to_string(),
+    }
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
@@ -609,6 +627,17 @@ pub struct StateArchiveConfig {
 pub struct StateSnapshotConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub object_store_config: Option<ObjectStoreConfig>,
+    pub concurrency: usize,
+}
+
+#[derive(Default, Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct TransactionKeyValueStoreWriteConfig {
+    pub aws_access_key_id: String,
+    pub aws_secret_access_key: String,
+    pub aws_region: String,
+    pub table_name: String,
+    pub bucket_name: String,
     pub concurrency: usize,
 }
 

@@ -27,6 +27,6 @@ e.g.
 
 ## System Information
 
-* OS: <specify OS version> 
+* OS: <specify OS version>
 * Compiler: <specify compiler version>
 ```

@@ -39,6 +39,7 @@ export default {
 				DEFAULT: '#6fbcf0',
 				bright: '#2A38EB',
 				light: '#E1F3FF',
+				primaryBlue2023: '#4CA3FF',
 				lightest: '#F1F8FD',
 				dark: '#1F6493',
 			},
@@ -107,6 +108,8 @@ export default {
 				mistyEdge:
 					'0px 0px 0px 1px rgba(160, 182, 195, 0.08), 0px 5px 30px 0px rgba(86, 104, 115, 0.20)',
 				cardSoft: '1px 2px 8px 2px rgba(21, 82, 123, 0.05)',
+				panel: '0px 2px 7px 0px rgba(160, 182, 195, 0.32)',
+				dropdownContent: '0px 1px 2px 0px rgba(21, 82, 123, 0.08)',
 			},
 			fontSize: {
 				// Text sizes:
@@ -161,19 +164,30 @@ export default {
 				verticalListShort: '13.0625rem',
 				verticalListLong: '35.6875rem',
 				600: '37.5rem',
+				header: '68px',
 			},
 			height: {
-				header: '68px',
 				31.5: '7.5rem',
+				120: '30rem',
+				coinsAndAssetsContainer: '31.25rem',
+			},
+			maxHeight: {
+				coinsAndAssetsContainer: '31.25rem',
 			},
 			width: {
 				31.5: '7.5rem',
 				walletLogo: '4.813rem',
 			},
+			maxWidth: {
+				80: '20rem',
+			},
 			minWidth: {
 				10: '2.5rem',
 				18: '4.5rem',
+				50: '12.5rem',
 				transactionColumn: '31.875rem',
+				ownObjectContainer: '13.125rem',
+				ownObjectContainerMobile: '9.375rem',
 			},
 			transitionTimingFunction: {
 				'ease-in-out-cubic': 'cubic-bezier(0.65, 0, 0.35, 1)',
@@ -194,6 +208,7 @@ export default {
 			},
 			borderRadius: {
 				'2lg': '0.625rem',
+				full: '16px',
 			},
 		},
 	},

@@ -6,11 +6,17 @@ import { BehaviorSubject, filter, switchMap, takeUntil } from 'rxjs';
 import { Connection } from './Connection';
 import NetworkEnv from '../NetworkEnv';
 import {
+	getAllSerializedUIAccountSources,
+	accountSourcesHandleUIMessage,
+} from '../account-sources';
+import { accountsHandleUIMessage, getAllSerializedUIAccounts } from '../accounts';
+import {
 	acceptQredoConnection,
 	getUIQredoInfo,
 	getUIQredoPendingRequest,
 	rejectQredoConnection,
 } from '../qredo';
+import { doMigration, getStatus } from '../storage-migration';
 import { createMessage } from '_messages';
 import { type ErrorPayload, isBasePayload } from '_payloads';
 import { isSetNetworkPayload, type SetNetworkPayload } from '_payloads/network';
@@ -23,6 +29,11 @@ import Tabs from '_src/background/Tabs';
 import Transactions from '_src/background/Transactions';
 import Keyring from '_src/background/keyring';
 import { growthbook } from '_src/shared/experimentation/features';
+import {
+	type MethodPayload,
+	isMethodPayload,
+	type UIAccessibleEntityType,
+} from '_src/shared/messaging/messages/payloads/MethodPayload';
 import {
 	type QredoConnectPayload,
 	isQredoConnectPayload,
@@ -76,6 +87,18 @@ export class UiConnection extends Connection {
 				},
 				replyForId,
 			),
+		);
+	}
+
+	public async notifyEntitiesUpdated(entitiesType: UIAccessibleEntityType) {
+		this.send(
+			createMessage<MethodPayload<'entitiesUpdated'>>({
+				type: 'method-payload',
+				method: 'entitiesUpdated',
+				args: {
+					type: entitiesType,
+				},
+			}),
 		);
 	}
 
@@ -148,7 +171,7 @@ export class UiConnection extends Connection {
 							method: 'getQredoInfoResponse',
 							args: {
 								qredoInfo: await getUIQredoInfo(
-									payload.args.filter,
+									payload.args.qredoID,
 									payload.args.refreshAccessToken,
 								),
 							},
@@ -162,6 +185,47 @@ export class UiConnection extends Connection {
 			} else if (isQredoConnectPayload(payload, 'rejectQredoConnection')) {
 				await rejectQredoConnection(payload.args);
 				this.send(createMessage({ type: 'done' }, id));
+			} else if (isMethodPayload(payload, 'getStoredEntities')) {
+				const entities = await this.getUISerializedEntities(payload.args.type);
+				this.send(
+					createMessage<MethodPayload<'storedEntitiesResponse'>>(
+						{
+							method: 'storedEntitiesResponse',
+							type: 'method-payload',
+							args: {
+								type: payload.args.type,
+								entities,
+							},
+						},
+						msg.id,
+					),
+				);
+			} else if (await accountSourcesHandleUIMessage(msg, this)) {
+				return;
+			} else if (await accountsHandleUIMessage(msg, this)) {
+				return;
+			} else if (isMethodPayload(payload, 'getStorageMigrationStatus')) {
+				this.send(
+					createMessage<MethodPayload<'storageMigrationStatus'>>(
+						{
+							method: 'storageMigrationStatus',
+							type: 'method-payload',
+							args: {
+								status: await getStatus(),
+							},
+						},
+						id,
+					),
+				);
+			} else if (isMethodPayload(payload, 'doStorageMigration')) {
+				await doMigration(payload.args.password);
+				this.send(createMessage({ type: 'done' }, id));
+			} else {
+				throw new Error(
+					`Unhandled message ${msg.id}. (${JSON.stringify(
+						'error' in payload ? `${payload.code}-${payload.message}` : payload.type,
+					)})`,
+				);
 			}
 		} catch (e) {
 			this.send(
@@ -199,5 +263,19 @@ export class UiConnection extends Connection {
 				requestID,
 			),
 		);
+	}
+
+	private getUISerializedEntities(type: UIAccessibleEntityType) {
+		switch (type) {
+			case 'accounts': {
+				return getAllSerializedUIAccounts();
+			}
+			case 'accountSources': {
+				return getAllSerializedUIAccountSources();
+			}
+			default: {
+				throw new Error(`Unknown entity type ${type}`);
+			}
+		}
 	}
 }

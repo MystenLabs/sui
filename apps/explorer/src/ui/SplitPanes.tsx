@@ -51,9 +51,9 @@ function ResizeHandle({
 		>
 			<div
 				className={clsx(
-					'relative border border-gray-45 group-hover/container:border-hero',
+					'relative bg-gray-45 group-hover/container:bg-hero',
 					isHorizontal ? 'h-full w-px' : 'h-px',
-					noHoverHidden && !isCollapsed && 'border-transparent',
+					noHoverHidden && !isCollapsed && 'bg-transparent',
 				)}
 			>
 				{collapsibleButton && (
@@ -74,7 +74,7 @@ function ResizeHandle({
 					>
 						<ChevronButton
 							className={clsx(
-								'h-4 w-4 text-gray-45 group-hover/button:!text-white group-hover/container:text-hero',
+								'h-4 w-4 text-gray-45 group-hover/button:!text-white group-hover/container:text-hero-dark',
 								isCollapsed && 'rotate-180',
 							)}
 						/>

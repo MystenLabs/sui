@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 19;
+const MAX_PROTOCOL_VERSION: u64 = 20;
 
 // Record history of protocol version allocations here:
 //
@@ -61,6 +61,9 @@ const MAX_PROTOCOL_VERSION: u64 = 19;
 // Version 19: Changes to sui-system package to enable liquid staking.
 //             Add limit for total size of events.
 //             Increase limit for number of events emitted to 1024.
+// Version 20: Enabling the flag `narwhal_new_leader_election_schedule` for the new narwhal leader
+//             schedule algorithm for enhanced fault tolerance and sets the bad node stake threshold
+//             value. Both values are set for all the environments except mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -717,6 +720,11 @@ pub struct ProtocolConfig {
 
     /// === Execution Version ===
     execution_version: Option<u64>,
+
+    // Dictates the threshold (percentage of stake) that is used to calculate the "bad" nodes to be
+    // swapped when creating the consensus schedule. The values should be of the range [0 - 33]. Anything
+    // above 33 (f) will not be allowed.
+    consensus_bad_nodes_stake_threshold: Option<u64>,
 }
 
 // feature flags
@@ -1192,6 +1200,8 @@ impl ProtocolConfig {
                 execution_version: None,
 
                 max_event_emit_size_total: None,
+
+                consensus_bad_nodes_stake_threshold: None
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
@@ -1345,6 +1355,12 @@ impl ProtocolConfig {
             20 => {
                 let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.commit_root_state_digest = true;
+
+                if chain != Chain::Mainnet {
+                    cfg.feature_flags.narwhal_new_leader_election_schedule = true;
+                    cfg.consensus_bad_nodes_stake_threshold = Some(20);
+                }
+
                 cfg
             }
 
@@ -1397,12 +1413,20 @@ impl ProtocolConfig {
     pub fn set_zklogin_auth(&mut self, val: bool) {
         self.feature_flags.zklogin_auth = val
     }
+
     pub fn set_upgraded_multisig_for_testing(&mut self, val: bool) {
         self.feature_flags.upgraded_multisig_supported = val
     }
     #[cfg(msim)]
     pub fn set_simplified_unwrap_then_delete(&mut self, val: bool) {
         self.feature_flags.simplified_unwrap_then_delete = val
+    }
+    pub fn set_narwhal_new_leader_election_schedule(&mut self, val: bool) {
+        self.feature_flags.narwhal_new_leader_election_schedule = val;
+    }
+
+    pub fn set_consensus_bad_nodes_stake_threshold(&mut self, val: u64) {
+        self.consensus_bad_nodes_stake_threshold = Some(val);
     }
 }
 

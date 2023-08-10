@@ -95,6 +95,9 @@ pub enum SuiCommand {
     KeyTool {
         #[clap(long)]
         keystore_path: Option<PathBuf>,
+        ///Return command outputs in json format
+        #[clap(long, global = true)]
+        json: bool,
         /// Subcommands.
         #[clap(subcommand)]
         cmd: KeyToolCommand,
@@ -258,11 +261,16 @@ impl SuiCommand {
                 .await
             }
             SuiCommand::GenesisCeremony(cmd) => run(cmd),
-            SuiCommand::KeyTool { keystore_path, cmd } => {
+            SuiCommand::KeyTool {
+                keystore_path,
+                json,
+                cmd,
+            } => {
                 let keystore_path =
                     keystore_path.unwrap_or(sui_config_dir()?.join(SUI_KEYSTORE_FILENAME));
                 let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
-                cmd.execute(&mut keystore).await
+                cmd.execute(&mut keystore).await?.print(!json);
+                Ok(())
             }
             SuiCommand::Console { config } => {
                 let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));

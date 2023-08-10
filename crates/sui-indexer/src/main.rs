@@ -45,6 +45,26 @@ async fn main() -> Result<(), IndexerError> {
         );
         e
     })?;
+
+    let report_cp = blocking_cp.clone();
+    let report_metrics = indexer_metrics.clone();
+    tokio::spawn(async move {
+        loop {
+            let cp_state = report_cp.state();
+            info!(
+                "DB connection pool size: {}, with idle conn: {}.",
+                cp_state.connections, cp_state.idle_connections
+            );
+            report_metrics
+                .db_conn_pool_size
+                .set(cp_state.connections as i64);
+            report_metrics
+                .idle_db_conn
+                .set(cp_state.idle_connections as i64);
+            tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+        }
+    });
+
     if indexer_config.reset_db {
         let mut conn = get_pg_pool_connection(&blocking_cp).map_err(|e| {
             error!(

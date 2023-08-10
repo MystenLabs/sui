@@ -49,7 +49,7 @@ export function ImageIcon({ src, label, alt = label, fallback, ...styleProps }: 
 				<img
 					src={src}
 					alt={alt}
-					className="flex h-full w-full items-center justify-center object-contain"
+					className="flex h-full w-full items-center justify-center object-cover"
 					onError={() => setError(true)}
 				/>
 			)}

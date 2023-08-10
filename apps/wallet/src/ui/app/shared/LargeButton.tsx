@@ -11,8 +11,8 @@ function Decorator({ disabled, children }: { disabled?: boolean; children: React
 	return (
 		<div
 			className={clsx(
-				'text-heading2 bg-transparent text-center',
-				disabled ? 'text-gray-60' : 'text-hero-dark group-hover:text-hero',
+				'text-heading2 bg-transparent text-center flex justify-center',
+				disabled ? 'text-steel' : 'text-hero-dark group-hover:text-hero',
 			)}
 		>
 			{children}
@@ -26,13 +26,24 @@ interface LargeButtonProps extends ButtonOrLinkProps {
 	before?: ReactNode;
 	after?: ReactNode;
 	top?: ReactNode;
+	spacing?: string;
 	center?: boolean;
 	disabled?: boolean;
 }
 
 export const LargeButton = forwardRef(
 	(
-		{ top, before, after, center, loading, disabled, children, ...otherProps }: LargeButtonProps,
+		{
+			top,
+			before,
+			after,
+			center,
+			spacing,
+			loading,
+			disabled,
+			children,
+			...otherProps
+		}: LargeButtonProps,
 		ref: Ref<HTMLAnchorElement | HTMLButtonElement>,
 	) => {
 		return (
@@ -40,12 +51,15 @@ export const LargeButton = forwardRef(
 				ref={ref}
 				{...otherProps}
 				className={clsx(
-					'group border border-solid border-transparent flex rounded-2xl items-center w-full p-3.75 justify-between no-underline',
-					disabled ? 'bg-gray-40' : 'bg-sui/10 hover:shadow-drop hover:border-sui/10',
+					'group border border-solid border-transparent flex rounded-xl items-center py-2 px-8 justify-between no-underline',
+					disabled
+						? 'bg-hero/5 pointer-events-none'
+						: 'bg-sui/10 hover:shadow-drop hover:border-sui/10',
+					spacing === 'sm' && '!p-3',
 				)}
 			>
 				{loading && (
-					<div className="p-2 w-full flex items-center h-full">
+					<div className="p-2 w-full flex justify-center items-center h-full">
 						<LoadingIndicator />
 					</div>
 				)}
@@ -56,8 +70,8 @@ export const LargeButton = forwardRef(
 							{top && <Decorator disabled={disabled}>{top}</Decorator>}
 							<div
 								className={clsx(
-									'text-body font-semibold',
-									disabled ? 'text-gray-60' : 'text-hero-dark group-hover:text-hero',
+									'text-bodySmall font-semibold',
+									disabled ? 'text-steel' : 'text-hero-dark group-hover:text-hero',
 								)}
 							>
 								{children}

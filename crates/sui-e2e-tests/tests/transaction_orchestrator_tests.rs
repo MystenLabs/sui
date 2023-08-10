@@ -2,11 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::Registry;
+use std::sync::Arc;
 use std::time::Duration;
 use sui_core::authority::EffectsNotifyRead;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_macros::sim_test;
+use sui_storage::key_value_store::TransactionKeyValueStore;
+use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_test_transaction_builder::{
     batch_make_transfer_transactions, make_transfer_sui_transaction,
 };
@@ -79,9 +82,16 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let (_, _, executed_locally) = *result;
     assert!(executed_locally);
 
+    let metrics = KeyValueStoreMetrics::new_for_tests();
+    let kv_store = Arc::new(TransactionKeyValueStore::new(
+        "rocksdb",
+        metrics,
+        handle.state(),
+    ));
+
     assert!(handle
         .state()
-        .get_executed_transaction_and_effects(digest)
+        .get_executed_transaction_and_effects(digest, kv_store)
         .await
         .is_ok());
 

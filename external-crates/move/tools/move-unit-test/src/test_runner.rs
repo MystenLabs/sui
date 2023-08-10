@@ -385,7 +385,7 @@ impl SharedTestingConfig {
                 vec![],
                 ModelBuilderOptions::default(),
                 Flags::testing(),
-                Some(WarningFilters::unused_function_warnings_filter()),
+                Some(WarningFilters::unused_warnings_filter_for_test()),
             )
             .unwrap_or_else(|e| panic!("Unable to build stackless bytecode: {}", e));
 

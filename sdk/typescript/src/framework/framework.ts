@@ -128,7 +128,7 @@ export class Coin {
 		return BigInt(balance);
 	}
 
-	private static getType(data: ObjectData): string | undefined {
+	private static getType(data: ObjectData): string | null | undefined {
 		if (isObjectDataFull(data)) {
 			return getObjectType(data);
 		}

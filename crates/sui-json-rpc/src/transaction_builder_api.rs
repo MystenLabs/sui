@@ -23,6 +23,7 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::sui_serde::BigInt;
 
 use crate::api::TransactionBuilderServer;
+use crate::authority_state::StateRead;
 use crate::SuiRpcModule;
 
 pub struct TransactionBuilderApi(TransactionBuilder);
@@ -34,7 +35,7 @@ impl TransactionBuilderApi {
     }
 }
 
-pub struct AuthorityStateDataReader(Arc<AuthorityState>);
+pub struct AuthorityStateDataReader(Arc<dyn StateRead>);
 
 impl AuthorityStateDataReader {
     pub fn new(state: Arc<AuthorityState>) -> Self {
@@ -52,12 +53,11 @@ impl DataReader for AuthorityStateDataReader {
         Ok(self
             .0
             // DataReader is used internally, don't need a limit
-            .get_owner_objects_iterator(
+            .get_owner_objects(
                 address,
                 None,
                 Some(SuiObjectDataFilter::StructType(object_type)),
-            )?
-            .collect())
+            )?)
     }
 
     async fn get_object_with_options(

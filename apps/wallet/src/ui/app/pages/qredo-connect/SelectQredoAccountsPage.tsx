@@ -9,12 +9,13 @@ import { useParams, useLocation, Navigate, useNavigate } from 'react-router-dom'
 import { SelectQredoAccountsSummaryCard } from './components/SelectQredoAccountsSummaryCard';
 import { useQredoUIPendingRequest } from './hooks';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
-import { useQredoInfo } from '../../hooks/useQredoInfo';
 import { Button } from '../../shared/ButtonUI';
-import { PasswordInputDialog } from '_components/menu/content/PasswordInputDialog';
+import { testPassNewAccounts } from '../accounts-dev';
 import Overlay from '_components/overlay';
 import { ampli } from '_src/shared/analytics/ampli';
+import { NEW_ACCOUNTS_ENABLED } from '_src/shared/constants';
 import { type Wallet } from '_src/shared/qredo-api';
+import { PasswordInputDialog } from '_src/ui/app/components/PasswordInputDialog';
 
 export function SelectQredoAccountsPage() {
 	const { id } = useParams();
@@ -27,25 +28,7 @@ export function SelectQredoAccountsPage() {
 	// do not call the api if user has not clicked continue in Qredo Connect Info page
 	const fetchAccountsEnabled =
 		!isQredoRequestLoading && (!qredoPendingRequest || qredoRequestReviewed);
-	const { data: qredoInfoData } = useQredoInfo(
-		qredoPendingRequest
-			? {
-					identity: {
-						apiUrl: qredoPendingRequest.apiUrl,
-						organization: qredoPendingRequest.organization,
-						origin: qredoPendingRequest.origin,
-						service: qredoPendingRequest.service,
-					},
-			  }
-			: null,
-	);
 	const [selectedAccounts, setSelectedAccounts] = useState<Wallet[]>([]);
-	useEffect(() => {
-		const accounts = qredoInfoData?.qredoInfo?.accounts;
-		if (accounts?.length) {
-			setSelectedAccounts((value) => Array.from(new Set([...value, ...accounts])));
-		}
-	}, [qredoInfoData?.qredoInfo?.accounts]);
 	const [showPassword, setShowPassword] = useState(false);
 	const shouldCloseWindow = (!isQredoRequestLoading && !qredoPendingRequest) || !id;
 	useEffect(() => {
@@ -67,6 +50,7 @@ export function SelectQredoAccountsPage() {
 						title="Import Accounts"
 						continueLabel="Import"
 						onBackClicked={() => setShowPassword(false)}
+						showBackButton
 						onPasswordVerified={async (password) => {
 							await backgroundService.acceptQredoConnection({
 								qredoID: id,
@@ -109,8 +93,18 @@ export function SelectQredoAccountsPage() {
 								text="Continue"
 								after={<ArrowRight16 />}
 								disabled={!selectedAccounts?.length}
-								onClick={() => {
-									setShowPassword(true);
+								onClick={async () => {
+									if (NEW_ACCOUNTS_ENABLED) {
+										await backgroundService.acceptQredoConnection({
+											qredoID: id,
+											accounts: selectedAccounts,
+											password: testPassNewAccounts,
+										});
+										toast.success(`Qredo account${selectedAccounts.length > 1 ? 's' : ''} added`);
+										window.close();
+									} else {
+										setShowPassword(true);
+									}
 								}}
 							/>
 						</div>

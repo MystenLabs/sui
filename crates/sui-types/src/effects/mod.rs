@@ -15,7 +15,7 @@ use crate::message_envelope::{
     Envelope, Message, TrustedEnvelope, UnauthenticatedMessage, VerifiedEnvelope,
 };
 use crate::object::Owner;
-use crate::storage::{DeleteKind, WriteKind};
+use crate::storage::WriteKind;
 use crate::transaction::{Transaction, TransactionDataAPI, VersionedProtocolMessage};
 pub use effects_v1::TransactionEffectsV1;
 use enum_dispatch::enum_dispatch;
@@ -100,6 +100,11 @@ impl Default for TransactionEffects {
     }
 }
 
+pub enum ObjectRemoveKind {
+    Delete,
+    Wrap,
+}
+
 impl TransactionEffects {
     /// Creates a TransactionEffects message from the results of execution, choosing the correct
     /// format for the current protocol version.
@@ -173,6 +178,65 @@ impl TransactionEffects {
 
         fixed_sizes + approx_change_entry_size + deps_size
     }
+
+    /// Return an iterator that iterates through all changed objects, including mutated,
+    /// created and unwrapped objects. In other words, all objects that still exist
+    /// in the object state after this transaction.
+    /// It doesn't include deleted/wrapped objects.
+    pub fn all_changed_objects(&self) -> Vec<(ObjectRef, Owner, WriteKind)> {
+        self.mutated()
+            .into_iter()
+            .map(|(r, o)| (r, o, WriteKind::Mutate))
+            .chain(
+                self.created()
+                    .into_iter()
+                    .map(|(r, o)| (r, o, WriteKind::Create)),
+            )
+            .chain(
+                self.unwrapped()
+                    .into_iter()
+                    .map(|(r, o)| (r, o, WriteKind::Unwrap)),
+            )
+            .collect()
+    }
+
+    /// Return all objects that existed in the state prior to the transaction
+    /// but no longer exist in the state after the transaction.
+    /// It includes deleted and wrapped objects, but does not include unwrapped_then_deleted objects.
+    pub fn all_removed_objects(&self) -> Vec<(ObjectRef, ObjectRemoveKind)> {
+        self.deleted()
+            .iter()
+            .map(|obj_ref| (*obj_ref, ObjectRemoveKind::Delete))
+            .chain(
+                self.wrapped()
+                    .iter()
+                    .map(|obj_ref| (*obj_ref, ObjectRemoveKind::Wrap)),
+            )
+            .collect()
+    }
+
+    /// Return an iterator of mutated objects, but excluding the gas object.
+    pub fn mutated_excluding_gas(&self) -> Vec<(ObjectRef, Owner)> {
+        self.mutated()
+            .into_iter()
+            .filter(|o| o != &self.gas_object())
+            .collect()
+    }
+
+    pub fn summary_for_debug(&self) -> TransactionEffectsDebugSummary {
+        TransactionEffectsDebugSummary {
+            bcs_size: bcs::serialized_size(self).unwrap(),
+            status: self.status().clone(),
+            gas_used: self.gas_cost_summary().clone(),
+            transaction_digest: *self.transaction_digest(),
+            created_object_count: self.created().len(),
+            mutated_object_count: self.mutated().len(),
+            unwrapped_object_count: self.unwrapped().len(),
+            deleted_object_count: self.deleted().len(),
+            wrapped_object_count: self.wrapped().len(),
+            dependency_count: self.dependencies().len(),
+        }
+    }
 }
 
 // testing helpers.
@@ -222,19 +286,10 @@ pub trait TransactionEffectsAPI {
     fn gas_object(&self) -> (ObjectRef, Owner);
     fn events_digest(&self) -> Option<&TransactionEventsDigest>;
     fn dependencies(&self) -> &[TransactionDigest];
-    // All changed objects include created, mutated and unwrapped objects,
-    // they do NOT include wrapped and deleted.
-    fn all_changed_objects(&self) -> Vec<(ObjectRef, Owner, WriteKind)>;
-
-    fn all_deleted(&self) -> Vec<(ObjectRef, DeleteKind)>;
 
     fn transaction_digest(&self) -> &TransactionDigest;
 
-    fn mutated_excluding_gas(&self) -> Vec<(ObjectRef, Owner)>;
-
     fn gas_cost_summary(&self) -> &GasCostSummary;
-
-    fn summary_for_debug(&self) -> TransactionEffectsDebugSummary;
 
     // All of these should be #[cfg(test)], but they are used by tests in other crates, and
     // dependencies don't get built with cfg(test) set as far as I can tell.

@@ -21,6 +21,8 @@ use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_node::SuiNodeHandle;
 use sui_sdk::wallet_context::WalletContext;
+use sui_storage::key_value_store::TransactionKeyValueStore;
+use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_test_transaction_builder::{
     batch_make_transfer_transactions, create_devnet_nft, delete_devnet_nft, increment_counter,
     publish_basics_package, publish_basics_package_and_make_counter, publish_nfts_package,
@@ -204,46 +206,55 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
     .await;
     let digest = response.digest;
 
-    let txes = node.state().get_transactions(
-        Some(TransactionFilter::MoveFunction {
-            package: package_ref.0,
-            module: Some("counter".to_string()),
-            function: Some("increment".to_string()),
-        }),
-        None,
-        None,
-        false,
-    )?;
+    let txes = node
+        .state()
+        .get_transactions_for_tests(
+            Some(TransactionFilter::MoveFunction {
+                package: package_ref.0,
+                module: Some("counter".to_string()),
+                function: Some("increment".to_string()),
+            }),
+            None,
+            None,
+            false,
+        )
+        .await?;
 
     assert_eq!(txes.len(), 1);
     assert_eq!(txes[0], digest);
 
-    let txes = node.state().get_transactions(
-        Some(TransactionFilter::MoveFunction {
-            package: package_ref.0,
-            module: None,
-            function: None,
-        }),
-        None,
-        None,
-        false,
-    )?;
+    let txes = node
+        .state()
+        .get_transactions_for_tests(
+            Some(TransactionFilter::MoveFunction {
+                package: package_ref.0,
+                module: None,
+                function: None,
+            }),
+            None,
+            None,
+            false,
+        )
+        .await?;
 
     // 2 transactions in the package i.e create and increment counter
     assert_eq!(txes.len(), 2);
     assert_eq!(txes[1], digest);
 
     eprint!("start...");
-    let txes = node.state().get_transactions(
-        Some(TransactionFilter::MoveFunction {
-            package: package_ref.0,
-            module: Some("counter".to_string()),
-            function: None,
-        }),
-        None,
-        None,
-        false,
-    )?;
+    let txes = node
+        .state()
+        .get_transactions_for_tests(
+            Some(TransactionFilter::MoveFunction {
+                package: package_ref.0,
+                module: Some("counter".to_string()),
+                function: None,
+            }),
+            None,
+            None,
+            false,
+        )
+        .await?;
 
     // 2 transactions in the package i.e publish and increment
     assert_eq!(txes.len(), 2);
@@ -264,61 +275,79 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
 
     let (transferred_object, sender, receiver, digest, _) = transfer_coin(context).await?;
 
-    let txes = node.state().get_transactions(
-        Some(TransactionFilter::InputObject(transferred_object)),
-        None,
-        None,
-        false,
-    )?;
+    let txes = node
+        .state()
+        .get_transactions_for_tests(
+            Some(TransactionFilter::InputObject(transferred_object)),
+            None,
+            None,
+            false,
+        )
+        .await?;
 
     assert_eq!(txes.len(), 1);
     assert_eq!(txes[0], digest);
 
-    let txes = node.state().get_transactions(
-        Some(TransactionFilter::ChangedObject(transferred_object)),
-        None,
-        None,
-        false,
-    )?;
+    let txes = node
+        .state()
+        .get_transactions_for_tests(
+            Some(TransactionFilter::ChangedObject(transferred_object)),
+            None,
+            None,
+            false,
+        )
+        .await?;
     assert_eq!(txes.len(), 2);
     assert_eq!(txes[1], digest);
 
-    let txes = node.state().get_transactions(
-        Some(TransactionFilter::FromAddress(sender)),
-        None,
-        None,
-        false,
-    )?;
+    let txes = node
+        .state()
+        .get_transactions_for_tests(
+            Some(TransactionFilter::FromAddress(sender)),
+            None,
+            None,
+            false,
+        )
+        .await?;
     assert_eq!(txes.len(), 1);
     assert_eq!(txes[0], digest);
 
-    let txes = node.state().get_transactions(
-        Some(TransactionFilter::ToAddress(receiver)),
-        None,
-        None,
-        false,
-    )?;
+    let txes = node
+        .state()
+        .get_transactions_for_tests(
+            Some(TransactionFilter::ToAddress(receiver)),
+            None,
+            None,
+            false,
+        )
+        .await?;
     assert_eq!(txes.len(), 2);
     assert_eq!(txes[1], digest);
 
     // Note that this is also considered a tx to the sender, because it mutated
     // one or more of the sender's objects.
-    let txes = node.state().get_transactions(
-        Some(TransactionFilter::ToAddress(sender)),
-        None,
-        None,
-        false,
-    )?;
+    let txes = node
+        .state()
+        .get_transactions_for_tests(
+            Some(TransactionFilter::ToAddress(sender)),
+            None,
+            None,
+            false,
+        )
+        .await?;
     assert_eq!(txes.len(), 2);
     assert_eq!(txes[1], digest);
 
     // No transactions have originated from the receiver
-    let txes = node.state().get_transactions(
-        Some(TransactionFilter::FromAddress(receiver)),
-        None,
-        None,
-        false,
-    )?;
+    let txes = node
+        .state()
+        .get_transactions_for_tests(
+            Some(TransactionFilter::FromAddress(receiver)),
+            None,
+            None,
+            false,
+        )
+        .await?;
     assert_eq!(txes.len(), 0);
 
     // This is a poor substitute for the post processing taking some time
@@ -705,12 +734,13 @@ async fn test_full_node_event_read_api_ok() {
 
     let txes = node
         .state()
-        .get_transactions(
+        .get_transactions_for_tests(
             Some(TransactionFilter::InputObject(transferred_object)),
             None,
             None,
             false,
         )
+        .await
         .unwrap();
 
     if gas_id_1 == transferred_object {
@@ -776,6 +806,12 @@ async fn test_full_node_event_query_by_module_ok() {
 async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
+    let metrics = KeyValueStoreMetrics::new_for_tests();
+    let kv_store = Arc::new(TransactionKeyValueStore::new(
+        "rocksdb",
+        metrics,
+        fullnode.state(),
+    ));
 
     let context = &mut test_cluster.wallet;
     let transaction_orchestrator = fullnode.with(|node| {
@@ -821,7 +857,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     assert!(is_executed_locally);
     assert_eq!(events.digest(), txn_events.digest());
     // verify that the node has sequenced and executed the txn
-    fullnode.state().get_executed_transaction_and_effects(digest).await
+    fullnode.state().get_executed_transaction_and_effects(digest, kv_store.clone()).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForLocalExecution: {:?}", digest, e));
 
     // Test WaitForEffectsCert
@@ -855,7 +891,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         .notify_read_executed_effects(vec![digest])
         .await
         .unwrap();
-    fullnode.state().get_executed_transaction_and_effects(digest).await
+    fullnode.state().get_executed_transaction_and_effects(digest, kv_store).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForEffectsCert: {:?}", digest, e));
 
     Ok(())

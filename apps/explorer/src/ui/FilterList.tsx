@@ -13,7 +13,7 @@ export interface FilterListProps<T extends string = string> {
 	value: T;
 	disabled?: boolean;
 	size?: ComponentProps<typeof Tabs>['size'];
-	lessSpacing?: ComponentProps<typeof TabsList>['lessSpacing'];
+	lessSpacing?: boolean;
 	onChange(value: T): void;
 }
 
@@ -33,7 +33,7 @@ export function FilterList<T extends string>({
 				onChange(value as T);
 			}}
 		>
-			<TabsList disableBottomBorder lessSpacing={lessSpacing}>
+			<TabsList disableBottomBorder gap={lessSpacing ? 3 : 6}>
 				{options.map((option) => (
 					<TabsTrigger disabled={disabled} key={option} value={option}>
 						{option}

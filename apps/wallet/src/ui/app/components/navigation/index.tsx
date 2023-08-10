@@ -37,7 +37,7 @@ function Navigation({ className }: NavigationProps) {
 					<Tokens32 className="w-8 h-8" />
 					<span className={st.title}>Coins</span>
 				</NavLink>
-				<NavLink to="./nfts" className={makeLinkCls} title="NFTs">
+				<NavLink to="./nfts" className={makeLinkCls} title="Assets">
 					<Nft132 className="w-8 h-8" />
 					<span className={st.title}>Assets</span>
 				</NavLink>

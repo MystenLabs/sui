@@ -1,5 +1,41 @@
 # @mysten/wallet-standard
 
+## 0.6.0
+
+### Minor Changes
+
+- 8281e3d25: Deprecate `signMessage` method, and introduce the new `signPersonalMessage` method.
+
+### Patch Changes
+
+- Updated dependencies [a503cad34]
+- Updated dependencies [8281e3d25]
+  - @mysten/sui.js@0.40.0
+
+## 0.5.14
+
+### Patch Changes
+
+- Updated dependencies [47ea5ec7c]
+  - @mysten/sui.js@0.39.0
+
+## 0.5.13
+
+### Patch Changes
+
+- Updated dependencies [ad46f9f2f]
+- Updated dependencies [67e581a5a]
+- Updated dependencies [34242be56]
+- Updated dependencies [4e2a150a1]
+- Updated dependencies [cce6ffbcc]
+- Updated dependencies [0f06d593a]
+- Updated dependencies [83d0fb734]
+- Updated dependencies [09f4ed3fc]
+- Updated dependencies [6d41059c7]
+- Updated dependencies [cc6441f46]
+- Updated dependencies [001148443]
+  - @mysten/sui.js@0.38.0
+
 ## 0.5.12
 
 ### Patch Changes

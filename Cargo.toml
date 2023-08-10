@@ -88,12 +88,14 @@ members = [
     "crates/sui-framework-snapshot",
     "crates/sui-framework-tests",
     "crates/sui-genesis-builder",
+    "crates/sui-graphql-rpc",
     "crates/sui-indexer",
     "crates/sui-json",
     "crates/sui-json-rpc",
     "crates/sui-json-rpc-tests",
     "crates/sui-json-rpc-types",
     "crates/sui-keys",
+    "crates/sui-kvstore",
     "crates/sui-macros",
     "crates/sui-metric-checker",
     "crates/sui-move",
@@ -159,7 +161,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates.
-version = "1.7.0"
+version = "1.8.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -200,8 +202,12 @@ opt-level = 1
 anyhow = "1.0.71"
 arc-swap = { version = "1.5.1", features = ["serde"] }
 assert_cmd = "2.0.6"
+async-graphql = "5.0.10"
 async-recursion = "1.0.4"
 async-trait = "0.1.61"
+aws-config = "0.55.3"
+aws-sdk-dynamodb = "0.28.0"
+aws-sdk-s3 = "0.28.0"
 axum = { version = "0.6.6", default-features = false, features = ["headers", "tokio", "http1", "http2", "json", "matched-path", "original-uri", "form", "query"] }
 axum-extra = "0.4.2"
 axum-server = { version = "0.4.4", default-features = false, features = ["tls-rustls"] }
@@ -235,7 +241,7 @@ derivative = "2.2.0"
 derive-syn-parse = "0.1.5"
 derive_builder = "0.12.0"
 derive_more = "0.99.17"
-diesel = { version = "2.0.3", features = ["chrono", "postgres", "r2d2", "serde_json", "64-column-tables"] }
+diesel = { version = "2.1.0", features = ["chrono", "postgres", "r2d2", "serde_json", "64-column-tables"] }
 diesel-derive-enum = { version = "2.0.1", features = ["postgres"] }
 diesel_migrations = { version = "2.0.0" }
 dirs = "4.0.0"
@@ -273,6 +279,7 @@ itertools = "0.10.5"
 jemalloc-ctl = "^0.5"
 jsonrpsee = { git="https://github.com/wlmyng/jsonrpsee.git", rev= "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = ["full", "http-client", "jsonrpsee-core"] }
 jsonrpsee-proc-macros = {git="https://github.com/wlmyng/jsonrpsee.git", rev= "b1b300784795f6a64d0fcdf8f03081a9bc38bde8"}
+json_to_table = { git = "https://github.com/zhiburt/tabled/", rev = "e449317a1c02eb6b29e409ad6617e5d9eb7b3bd4"}
 leb128 = "0.2.5"
 linked-hash-map = "0.5.6"
 lru = "0.10"
@@ -351,6 +358,7 @@ syn = { version = "1.0.104", features = ["full", "derive", "extra-traits"] }
 # syn = { version = "2", features = ["full", "fold", "extra-traits"] }
 synstructure = "0.12"
 sysinfo = "0.27.5"
+tabled = { version = "0.12" }
 tap = "1.0.1"
 tempfile = "3.3.0"
 test-fuzz = "3.0.4"
@@ -443,6 +451,7 @@ sui-json = { path = "crates/sui-json" }
 sui-json-rpc = { path = "crates/sui-json-rpc" }
 sui-json-rpc-types = { path = "crates/sui-json-rpc-types" }
 sui-keys = { path = "crates/sui-keys" }
+sui-kvstore = { path = "crates/sui-kvstore" }
 sui-macros = { path = "crates/sui-macros" }
 sui-metric-checker = { path = "crates/sui-metric-checker" }
 sui-move = { path = "crates/sui-move" }

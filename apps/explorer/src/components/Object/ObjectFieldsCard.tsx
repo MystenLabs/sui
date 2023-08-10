@@ -24,7 +24,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
 	const [activeFieldName, setActiveFieldName] = useState('');
 	const objectType =
 		data?.data?.type ?? data?.data?.content?.dataType === 'package'
-			? 'package'
+			? data.data.type
 			: data?.data?.content?.type;
 
 	// Get the packageId, moduleName, functionName from the objectType
@@ -62,7 +62,9 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
 	}
 
 	const fieldsData =
-		data.data?.content?.dataType === 'moveObject' ? data.data?.content?.fields : null;
+		data.data?.content?.dataType === 'moveObject'
+			? (data.data?.content?.fields as Record<string, string | number | object>)
+			: null;
 
 	const filteredFieldNames =
 		query === ''
