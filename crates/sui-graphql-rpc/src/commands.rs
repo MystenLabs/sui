@@ -13,4 +13,5 @@ use clap::*;
 )]
 pub enum Command {
     GenerateSchema,
+    StartServer,
 }
