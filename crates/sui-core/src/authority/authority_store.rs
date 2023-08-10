@@ -866,7 +866,7 @@ impl AuthorityStore {
         Ok(())
     }
 
-    pub async fn bulk_insert_live_objects(
+    pub fn bulk_insert_live_objects(
         perpetual_db: &AuthorityPerpetualTables,
         live_objects: impl Iterator<Item = LiveObject>,
         indirect_objects_threshold: usize,

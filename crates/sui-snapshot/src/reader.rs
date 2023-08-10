@@ -6,16 +6,15 @@ use crate::{
     OBJECT_ID_BYTES, OBJECT_REF_BYTES, REFERENCE_FILE_MAGIC, SEQUENCE_NUM_BYTES, SHA3_BYTES,
 };
 use anyhow::{anyhow, Context, Result};
-use backoff::future::retry;
 use byteorder::{BigEndian, ReadBytesExt};
 use bytes::{Buf, Bytes};
 use fastcrypto::hash::{HashFunction, Sha3_256};
 use futures::future::{AbortRegistration, Abortable};
-use futures::StreamExt;
+use futures::{StreamExt, TryStreamExt};
 use integer_encoding::VarIntReader;
 use object_store::path::Path;
 use object_store::DynObjectStore;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::fs::File;
 use std::io::{BufReader, Read, Seek, SeekFrom};
@@ -142,6 +141,8 @@ impl StateSnapshotReaderV1 {
         // doesn't match but we still need to ensure that objects match references exactly.
         let sha3_digests: Arc<Mutex<DigestByBucketAndPartition>> =
             Arc::new(Mutex::new(BTreeMap::new()));
+        let mut all_files: HashSet<(u32, u32)> = HashSet::new();
+
         for bucket in self.buckets()?.iter() {
             let mut sha3_digests = sha3_digests.lock().await;
             let ref_iter = self.ref_iter(*bucket)?;
@@ -156,6 +157,7 @@ impl StateSnapshotReaderV1 {
                         .or_insert(BTreeMap::new())
                         .entry(part_num.try_into().unwrap())
                         .or_insert(hasher.finalize().digest);
+                    all_files.insert((*bucket, part_num.try_into().unwrap()));
                     hasher = Sha3_256::default();
                     current_part_num = part_num;
                 }
@@ -167,86 +169,76 @@ impl StateSnapshotReaderV1 {
                     .or_insert(BTreeMap::new())
                     .entry(current_part_num.try_into().unwrap())
                     .or_insert(hasher.finalize().digest);
+                all_files.insert((*bucket, current_part_num.try_into().unwrap()));
             }
         }
+
         let input_files: Vec<_> = self
             .object_files
             .iter()
             .flat_map(|(bucket, parts)| {
-                let vec: Vec<_> = parts.iter().map(|entry| (bucket, entry)).collect();
+                let vec: Vec<_> = parts
+                    .iter()
+                    .map(|entry| {
+                        all_files.remove(&(*bucket, *entry.0));
+                        (bucket, entry)
+                    })
+                    .collect();
                 vec
             })
             .collect();
+        all_files.is_empty().then_some(()).ok_or(anyhow!(
+            "Number of partitions in ref file does not match with number of part files"
+        ))?;
         let epoch_dir = self.epoch_dir();
         let remote_object_store = self.remote_object_store.clone();
         let indirect_objects_threshold = self.indirect_objects_threshold;
         let download_concurrency = self.concurrency;
-        let sha3_digests_cloned = sha3_digests.clone();
-        if let Err(e) = Abortable::new(
+        Abortable::new(
             async move {
-                let results: Vec<Result<(), anyhow::Error>> =
-                    futures::stream::iter(input_files.iter())
-                        .map(|(bucket, (part_num, file_metadata))| {
-                            let backoff = backoff::ExponentialBackoff::default();
-                            let epoch_dir = epoch_dir.clone();
-                            let file_path = file_metadata.file_path(&epoch_dir);
-                            let remote_object_store = remote_object_store.clone();
-                            let sha3_digests = sha3_digests_cloned.clone();
-                            async move {
-                                let bytes = retry(backoff, || async {
-                                    remote_object_store
-                                        .get(&file_path)
-                                        .await
-                                        .map_err(|e| anyhow!("Failed to download file: {e}"))
-                                        .map_err(backoff::Error::transient)
-                                })
-                                .await?
+                futures::stream::iter(input_files.iter())
+                    .map(|(bucket, (part_num, file_metadata))| {
+                        let epoch_dir = epoch_dir.clone();
+                        let file_path = file_metadata.file_path(&epoch_dir);
+                        let remote_object_store = remote_object_store.clone();
+                        let sha3_digests_cloned = sha3_digests.clone();
+                        async move {
+                            let bytes = remote_object_store
+                                .get(&file_path)
+                                .await
+                                .map_err(|e| anyhow!("Failed to download file: {e}"))?
                                 .bytes()
                                 .await?;
-                                let obj_iter =
-                                    LiveObjectIter::new(&(*file_metadata).clone(), bytes)?;
-                                let expected_sha3_digest = {
-                                    let mut sha3_digests = sha3_digests.lock().await;
-                                    let bucket_map =
-                                        sha3_digests.get_mut(bucket).context("Missing bucket")?;
-                                    let sha3_digest =
-                                        bucket_map.remove(part_num).context("Missing part")?;
-                                    if bucket_map.is_empty() {
-                                        sha3_digests.remove(bucket).context("Missing bucket")?;
-                                    }
-                                    sha3_digest
-                                };
+                            let sha3_digest = sha3_digests_cloned.lock().await;
+                            let bucket_map = sha3_digest.get(bucket).context("Missing bucket")?;
+                            let sha3_digest = bucket_map.get(part_num).context("Missing part")?;
+                            Ok::<(Bytes, FileMetadata, [u8; 32]), anyhow::Error>((
+                                bytes,
+                                (*file_metadata).clone(),
+                                *sha3_digest,
+                            ))
+                        }
+                    })
+                    .boxed()
+                    .buffer_unordered(download_concurrency)
+                    .try_for_each(|(bytes, file_metadata, sha3_digest)| {
+                        let result: Result<(), anyhow::Error> =
+                            LiveObjectIter::new(&file_metadata, bytes).and_then(|obj_iter| {
                                 AuthorityStore::bulk_insert_live_objects(
                                     perpetual_db,
                                     obj_iter,
                                     indirect_objects_threshold,
-                                    &expected_sha3_digest,
-                                )
-                                .await?;
+                                    &sha3_digest,
+                                )?;
                                 Ok::<(), anyhow::Error>(())
-                            }
-                        })
-                        .boxed()
-                        .buffer_unordered(download_concurrency)
-                        .collect()
-                        .await;
-                results
-                    .into_iter()
-                    .collect::<Result<Vec<()>, anyhow::Error>>()
+                            });
+                        futures::future::ready(result)
+                    })
+                    .await
             },
             abort_registration,
         )
         .await?
-        {
-            Err(anyhow!("Failed to read objects: {e}"))
-        } else {
-            let sha3_digests = sha3_digests.lock().await;
-            if !sha3_digests.is_empty() {
-                Err(anyhow!("Object refs did not match objects"))
-            } else {
-                Ok(())
-            }
-        }
     }
 
     pub fn ref_iter(&mut self, bucket_num: u32) -> Result<ObjectRefIter> {
