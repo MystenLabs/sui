@@ -408,7 +408,8 @@ impl SequenceWorkerState {
                         // print TPS just before starting new epoch
                         let elapsed = now.elapsed();
                         println!(
-                            "TPS this epoch: {}",
+                            "#epoch TPS:{},{}",
+                            next_epoch - 1,
                             1000.0 * num_tx as f64 / elapsed.as_millis() as f64
                         );
                         now = Instant::now();
