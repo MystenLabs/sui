@@ -96,6 +96,17 @@ impl From<Error> for RpcError {
                 }
                 _ => RpcError::Call(CallError::Failed(sui_error.into())),
             },
+            Error::StateReadError(err) => match err {
+                StateReadError::Client(_) => RpcError::Call(CallError::InvalidParams(err.into())),
+                _ => {
+                    let error_object = ErrorObject::owned(
+                        jsonrpsee::types::error::INTERNAL_ERROR_CODE,
+                        err.to_string(),
+                        None::<()>,
+                    );
+                    RpcError::Call(CallError::Custom(error_object))
+                }
+            },
             Error::QuorumDriverError(err) => match err {
                 QuorumDriverError::InvalidUserSignature(err) => {
                     let inner_error_str = match err {
