@@ -4,10 +4,7 @@
 
 use crate::{
     diag,
-    diagnostics::{
-        codes::{CategoryID, WarningFilter},
-        Diagnostic, WarningFilters,
-    },
+    diagnostics::{codes::WarningFilter, Diagnostic, WarningFilters},
     expansion::{
         aliases::{AliasMap, AliasSet},
         ast::{self as E, Address, Fields, ModuleIdent, ModuleIdent_, SpecId},
@@ -40,8 +37,12 @@ struct Context<'env, 'map> {
     address: Option<Address>,
     aliases: AliasMap,
     is_source_definition: bool,
+    current_package: Option<Symbol>,
     in_spec_context: bool,
     exp_specs: BTreeMap<SpecId, E::SpecBlock>,
+    // Cached warning filters for all available prefixes. Used by non-source defs
+    // and dependency packages
+    all_filter_alls: WarningFilters,
     env: &'env mut CompilationEnv,
 }
 impl<'env, 'map> Context<'env, 'map> {
@@ -49,6 +50,12 @@ impl<'env, 'map> Context<'env, 'map> {
         compilation_env: &'env mut CompilationEnv,
         module_members: UniqueMap<ModuleIdent, ModuleMembers>,
     ) -> Self {
+        let mut all_filter_alls = WarningFilters::new();
+        for allow in compilation_env.filter_attributes() {
+            for f in compilation_env.filter_from_str(FILTER_ALL, allow.clone()) {
+                all_filter_alls.add(f);
+            }
+        }
         Self {
             module_members,
             env: compilation_env,
@@ -56,8 +63,10 @@ impl<'env, 'map> Context<'env, 'map> {
             address: None,
             aliases: AliasMap::new(),
             is_source_definition: false,
+            current_package: None,
             in_spec_context: false,
             exp_specs: BTreeMap::new(),
+            all_filter_alls,
         }
     }
 
@@ -148,6 +157,7 @@ pub fn program(
         def,
     } in source_definitions
     {
+        context.current_package = package;
         context.named_address_mapping = Some(named_address_maps.get(named_address_map));
         definition(
             &mut context,
@@ -165,6 +175,7 @@ pub fn program(
         def,
     } in lib_definitions
     {
+        context.current_package = package;
         context.named_address_mapping = Some(named_address_maps.get(named_address_map));
         definition(
             &mut context,
@@ -174,6 +185,7 @@ pub fn program(
             def,
         )
     }
+    context.current_package = None;
 
     for (mident, module) in lib_module_map {
         if let Err((mident, old_loc)) = source_module_map.add(mident, module) {
@@ -403,7 +415,7 @@ fn module_(
         members,
     } = mdef;
     let attributes = flatten_attributes(context, AttributePosition::Module, attributes);
-    let mut warning_filter = warning_filter(context, &attributes);
+    let mut warning_filter = module_warning_filter(context, &attributes);
     let config = context.env.package_config(package_name);
     warning_filter.union(&config.warning_filter);
 
@@ -724,6 +736,27 @@ fn attribute_value(
     ))
 }
 
+/// Like warning_filter, but it will filter _all_ warnings for non-source definitions (or for any
+/// dependency packages)
+fn module_warning_filter(
+    context: &mut Context,
+    attributes: &UniqueMap<E::AttributeName, E::Attribute>,
+) -> WarningFilters {
+    let filters = warning_filter(context, attributes);
+    let is_dep = !context.is_source_definition
+        || context
+            .env
+            .package_config(context.current_package)
+            .is_dependency;
+    if is_dep {
+        // For dependencies (non source defs or package deps), we check the filters for errors
+        // but then throw them away and actually ignore _all_ warnings
+        context.all_filter_alls.clone()
+    } else {
+        filters
+    }
+}
+
 fn warning_filter(
     context: &mut Context,
     attributes: &UniqueMap<E::AttributeName, E::Attribute>,
@@ -742,10 +775,11 @@ fn warning_filter(
                 let msg = format!(
                     "Expected list of warnings, e.g. '{}({})'",
                     DiagnosticAttribute::ALLOW,
-                    WarningFilter::Category(
-                        CategoryID::new(Category::UnusedItem as u8, None),
-                        Some(FILTER_UNUSED)
-                    )
+                    WarningFilter::Category {
+                        prefix: None,
+                        category: Category::UnusedItem as u8,
+                        name: Some(FILTER_UNUSED)
+                    }
                     .to_str()
                     .unwrap(),
                 );
@@ -770,9 +804,7 @@ fn warning_filter(
                     n
                 }
             };
-            let filters = context
-                .env
-                .filter_from_str(name_.to_string(), allow.clone());
+            let filters = context.env.filter_from_str(name_, allow.clone());
             if filters.is_empty() {
                 let msg = format!("Unknown warning filter '{name_}'");
                 context
