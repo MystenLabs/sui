@@ -9,8 +9,11 @@ edition = "2021"
 
 [dependencies]
 async-graphql.workspace = true
+async-graphql-axum = { version = "5.0.10" }
+axum.workspace = true
 clap.workspace = true
 serde.workspace = true
+tokio.workspace = true
 move-core-types.workspace = true
 
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

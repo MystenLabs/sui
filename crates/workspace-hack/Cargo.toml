@@ -60,6 +60,7 @@ asn1-rs = { version = "0.5", features = ["datetime"] }
 assert_cmd = { version = "2", default-features = false }
 async-compression = { version = "0.3", features = ["brotli", "gzip", "tokio", "zlib"] }
 async-graphql = { version = "5" }
+async-graphql-axum = { version = "5", default-features = false }
 async-graphql-parser = { version = "5", default-features = false }
 async-graphql-value = { version = "5", default-features = false }
 async-lock = { version = "2", default-features = false }
@@ -89,7 +90,7 @@ aws-smithy-query = { version = "0.55", default-features = false }
 aws-smithy-types = { version = "0.55", default-features = false }
 aws-smithy-xml = { version = "0.55", default-features = false }
 aws-types = { version = "0.55", default-features = false }
-axum = { version = "0.6", default-features = false, features = ["form", "headers", "http1", "http2", "json", "matched-path", "original-uri", "query", "ws"] }
+axum = { version = "0.6", features = ["headers", "http2", "ws"] }
 axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
 axum-server = { version = "0.4", default-features = false, features = ["tls-rustls"] }
@@ -779,6 +780,7 @@ asn1-rs-impl = { version = "0.1", default-features = false }
 assert_cmd = { version = "2", default-features = false }
 async-compression = { version = "0.3", features = ["brotli", "gzip", "tokio", "zlib"] }
 async-graphql = { version = "5" }
+async-graphql-axum = { version = "5", default-features = false }
 async-graphql-derive = { version = "5", default-features = false }
 async-graphql-parser = { version = "5", default-features = false }
 async-graphql-value = { version = "5", default-features = false }
@@ -813,7 +815,7 @@ aws-smithy-query = { version = "0.55", default-features = false }
 aws-smithy-types = { version = "0.55", default-features = false }
 aws-smithy-xml = { version = "0.55", default-features = false }
 aws-types = { version = "0.55", default-features = false }
-axum = { version = "0.6", default-features = false, features = ["form", "headers", "http1", "http2", "json", "matched-path", "original-uri", "query", "ws"] }
+axum = { version = "0.6", features = ["headers", "http2", "ws"] }
 axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
 axum-server = { version = "0.4", default-features = false, features = ["tls-rustls"] }

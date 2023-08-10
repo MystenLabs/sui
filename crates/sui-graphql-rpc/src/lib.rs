@@ -5,7 +5,8 @@ use async_graphql::*;
 use types::owner::Owner;
 
 pub mod commands;
-pub(crate) mod types;
+pub mod server;
+pub mod types;
 
 use crate::types::query::Query;
 
