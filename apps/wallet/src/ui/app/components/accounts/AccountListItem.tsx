@@ -3,7 +3,7 @@
 
 import { useResolveSuiNSName } from '@mysten/core';
 import { formatAddress } from '@mysten/sui.js/utils';
-import * as ToggleGroup from '@radix-ui/react-toggle-group';
+
 import { type ReactNode, useState } from 'react';
 import { AccountItem } from './AccountItem';
 import { LockUnlockButton } from './LockUnlockButton';
@@ -14,6 +14,7 @@ type AccountListItemProps = {
 	icon?: ReactNode;
 	handleLockAccount?: () => void;
 	handleUnlockAccount?: () => void;
+	editable?: boolean;
 };
 
 export function AccountListItem({
@@ -26,14 +27,13 @@ export function AccountListItem({
 	const { data: domainName } = useResolveSuiNSName(address);
 	// todo: remove this when we implement account locking / unlocking
 	const [locked, setLocked] = useState(false);
-
 	return (
-		<ToggleGroup.Item asChild value={address}>
-			<AccountItem
-				icon={icon}
-				name={domainName ?? formatAddress(address)}
-				selected={address === activeAddress}
-				after={
+		<AccountItem
+			icon={icon}
+			name={domainName ?? formatAddress(address)}
+			selected={address === activeAddress}
+			after={
+				<div className="ml-auto">
 					<div className="flex items-center justify-center">
 						<LockUnlockButton
 							isLocked={locked}
@@ -45,9 +45,9 @@ export function AccountListItem({
 							}}
 						/>
 					</div>
-				}
-				address={address!}
-			/>
-		</ToggleGroup.Item>
+				</div>
+			}
+			address={address!}
+		/>
 	);
 }

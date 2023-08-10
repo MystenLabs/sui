@@ -50,15 +50,20 @@ export function ProtectAccountForm({
 
 	return (
 		<Form className="flex flex-col gap-6 h-full" form={form} onSubmit={onSubmit}>
-			<TextField type="password" label="Create Account Password" {...register('password')} />
+			<TextField
+				autoFocus
+				type="password"
+				label="Create Account Password"
+				{...register('password')}
+			/>
 			<TextField
 				type="password"
 				label="Confirm Account Password"
 				{...register('confirmedPassword')}
 			/>
 			<div className="flex flex-col gap-4">
-				<CheckboxField name="enabledAutolock" label="Auto-lock after I am inactive for" />
 				{/* TODO: Abhi is working on designs for the auto-lock input, we'll add this when it's ready */}
+				{/* <CheckboxField name="enabledAutolock" label="Auto-lock after I am inactive for" /> */}
 			</div>
 			<div className="flex flex-col gap-5 mt-auto">
 				<CheckboxField

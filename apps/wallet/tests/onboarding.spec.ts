@@ -24,6 +24,7 @@ test('import wallet', async ({ page, extensionUrl }) => {
 	await page.getByRole('link', { name: /Open Sui Wallet/ }).click();
 	await page.getByTestId('bullshark-dismiss').click();
 	await page.getByRole('navigation').getByRole('link', { name: 'Coins' }).click();
-
-	await expect(page.getByText(keypair.getPublicKey().toSuiAddress().slice(0, 6))).toBeVisible();
+	await expect(
+		page.getByText(keypair.getPublicKey().toSuiAddress().slice(0, 6)).first(),
+	).toBeVisible();
 });
