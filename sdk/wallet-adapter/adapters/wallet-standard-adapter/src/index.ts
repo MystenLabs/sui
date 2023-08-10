@@ -3,8 +3,8 @@
 
 import { WalletAdapterProvider } from '@mysten/wallet-adapter-base';
 import {
-	isStandardWalletAdapterCompatibleWallet,
-	StandardWalletAdapterWallet,
+	isWalletWithSuiFeatures,
+	WalletWithSuiFeatures,
 	Wallets,
 	getWallets,
 } from '@mysten/wallet-standard';
@@ -18,13 +18,13 @@ type Events = {
 export { StandardWalletAdapter };
 
 // These are the default features that the adapter will check for:
-export const DEFAULT_FEATURES: (keyof StandardWalletAdapterWallet['features'])[] = [
+export const DEFAULT_FEATURES: (keyof WalletWithSuiFeatures['features'])[] = [
 	'sui:signAndExecuteTransactionBlock',
 ];
 
 export class WalletStandardAdapterProvider implements WalletAdapterProvider {
 	#wallets: Wallets;
-	#adapters: Map<StandardWalletAdapterWallet, StandardWalletAdapter>;
+	#adapters: Map<WalletWithSuiFeatures, StandardWalletAdapter>;
 	#events: Emitter<Events>;
 	#features: string[];
 
@@ -47,8 +47,8 @@ export class WalletStandardAdapterProvider implements WalletAdapterProvider {
 		const filtered = this.#wallets
 			.get()
 			.filter((wallet) =>
-				isStandardWalletAdapterCompatibleWallet(wallet, this.#features),
-			) as StandardWalletAdapterWallet[];
+				isWalletWithSuiFeatures(wallet, this.#features),
+			) as WalletWithSuiFeatures[];
 
 		filtered.forEach((wallet) => {
 			if (!this.#adapters.has(wallet)) {

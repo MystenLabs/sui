@@ -36,7 +36,6 @@
 	},
 	"dependencies": {
 		"@mysten/sui.js": "workspace:*",
-		"@mysten/wallet-adapter-base": "workspace:*",
 		"@mysten/wallet-standard": "workspace:*"
 	},
 	"devDependencies": {

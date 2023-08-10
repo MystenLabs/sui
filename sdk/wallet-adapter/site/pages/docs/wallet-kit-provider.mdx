@@ -20,7 +20,6 @@ The `WalletKitProvider` creates an instance of Sui Wallet Kit Core internally, a
 
 All props are optional.
 
-- `adapters` - A list of wallet adapters that are used to provide wallets that are available to connect to. The default value is a list of all officially-supported wallet adapters. For more details, see [Wallet Adapters](../advanced/wallet-adapters).
 - `preferredWallets` - A list of wallets that are sorted to the top of the wallet list, if they are available to connect to. By default, wallets are sorted by the order they are loaded in.
 - `storageAdapter = localStorageAdapter` - Configures how the most recently connected to wallet is stored. Defaults to using `localStorage`.
 - `storageKey = "wallet-kit:last-wallet"` - The key to use to store the most recently connected wallet.

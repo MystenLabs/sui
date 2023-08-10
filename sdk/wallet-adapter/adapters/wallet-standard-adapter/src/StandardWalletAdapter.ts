@@ -3,14 +3,14 @@
 
 import { WalletAdapter, WalletAdapterEvents } from '@mysten/wallet-adapter-base';
 import {
-	StandardWalletAdapterWallet,
+	WalletWithSuiFeatures,
 	SuiSignAndExecuteTransactionBlockVersion,
 	SuiSignTransactionBlockVersion,
 } from '@mysten/wallet-standard';
 import mitt from 'mitt';
 
 export interface StandardWalletAdapterConfig {
-	wallet: StandardWalletAdapterWallet;
+	wallet: WalletWithSuiFeatures;
 }
 
 type WalletAdapterEventsMap = {
@@ -32,7 +32,7 @@ export class StandardWalletAdapter implements WalletAdapter {
 	connecting = false;
 
 	readonly #events = mitt<WalletAdapterEventsMap>();
-	#wallet: StandardWalletAdapterWallet;
+	#wallet: WalletWithSuiFeatures;
 	#walletEventUnsubscribe: (() => void) | null = null;
 
 	constructor({ wallet }: StandardWalletAdapterConfig) {

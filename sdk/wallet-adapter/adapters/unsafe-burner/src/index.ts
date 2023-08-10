@@ -91,7 +91,7 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
 	async connect() {
 		this.connecting = true;
 		try {
-			requestSuiFromFaucetV0({
+			await requestSuiFromFaucetV0({
 				host: this.#faucetUrl ?? getFaucetHost('localnet'),
 				recipient: this.#keypair.getPublicKey().toSuiAddress(),
 			});
