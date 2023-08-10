@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering};
-use sui_protocol_config_macros::{ProtocolConfigFeatureFlagsGetters, ProtocolConfigGetters};
+use sui_protocol_config_macros::{ProtocolConfigAccessors, ProtocolConfigFeatureFlagsGetters};
 use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
@@ -306,7 +306,7 @@ impl ConsensusTransactionOrdering {
 /// return `None` if the field is not defined at that version.
 /// - If you want a customized getter, you can add a method in the impl.
 #[skip_serializing_none]
-#[derive(Clone, Serialize, Debug, ProtocolConfigGetters)]
+#[derive(Clone, Serialize, Debug, ProtocolConfigAccessors)]
 pub struct ProtocolConfig {
     pub version: ProtocolVersion,
 
@@ -1400,12 +1400,6 @@ impl ProtocolConfig {
 
 // Setters for tests
 impl ProtocolConfig {
-    pub fn set_max_function_definitions_for_testing(&mut self, m: u64) {
-        self.max_function_definitions = Some(m)
-    }
-    pub fn set_buffer_stake_for_protocol_upgrade_bps_for_testing(&mut self, b: u64) {
-        self.buffer_stake_for_protocol_upgrade_bps = Some(b)
-    }
     pub fn set_package_upgrades_for_testing(&mut self, val: bool) {
         self.feature_flags.package_upgrades = val
     }
@@ -1420,13 +1414,6 @@ impl ProtocolConfig {
         self.feature_flags.zklogin_auth = val
     }
 
-    pub fn set_max_tx_gas_for_testing(&mut self, max_tx_gas: u64) {
-        self.max_tx_gas = Some(max_tx_gas)
-    }
-
-    pub fn set_execution_version_for_testing(&mut self, version: u64) {
-        self.execution_version = Some(version)
-    }
     pub fn set_upgraded_multisig_for_testing(&mut self, val: bool) {
         self.feature_flags.upgraded_multisig_supported = val
     }
@@ -1569,6 +1556,23 @@ mod test {
             prot.max_arguments(),
             prot.max_arguments_as_option().unwrap()
         );
+    }
+
+    #[test]
+    fn test_setters() {
+        let mut prot: ProtocolConfig =
+            ProtocolConfig::get_for_version(ProtocolVersion::new(1), Chain::Unknown);
+        prot.set_max_arguments_for_testing(123);
+        assert_eq!(prot.max_arguments(), 123);
+
+        prot.set_max_arguments_from_str_for_testing("321".to_string());
+        assert_eq!(prot.max_arguments(), 321);
+
+        prot.disable_max_arguments_for_testing();
+        assert_eq!(prot.max_arguments_as_option(), None);
+
+        prot.set_attr_for_testing("max_arguments".to_string(), "456".to_string());
+        assert_eq!(prot.max_arguments(), 456);
     }
 
     #[test]
