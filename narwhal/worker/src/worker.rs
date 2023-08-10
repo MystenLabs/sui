@@ -257,7 +257,6 @@ impl Worker {
 
         let network;
         let mut retries_left = 90;
-
         loop {
             let network_result = anemo::Network::bind(addr.clone())
                 .server_name("narwhal")
@@ -284,6 +283,7 @@ impl Worker {
                 }
             }
         }
+        client.set_worker_network(id, network.clone());
 
         info!("Worker {} listening to worker messages on {}", id, address);
 

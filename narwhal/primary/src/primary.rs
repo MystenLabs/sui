@@ -164,7 +164,6 @@ impl Primary {
             .replace_registered_new_certificates_metric(registry, Box::new(new_certificates_gauge));
 
         let (tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
-        let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
         let synchronizer = Arc::new(Synchronizer::new(
             authority.id(),
@@ -178,7 +177,6 @@ impl Primary {
             tx_new_certificates,
             tx_parents,
             rx_consensus_round_updates.clone(),
-            rx_synchronizer_network,
             node_metrics.clone(),
             &primary_channel_metrics,
         ));
@@ -360,9 +358,7 @@ impl Primary {
                 }
             }
         }
-        if tx_synchronizer_network.send(network.clone()).is_err() {
-            panic!("Failed to send Network to Synchronizer!");
-        }
+        client.set_primary_network(network.clone());
 
         info!("Primary {} listening on {}", authority.id(), address);
 

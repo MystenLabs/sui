@@ -74,7 +74,7 @@ pub trait WorkerToPrimaryClient {
 pub trait WorkerRpc {
     async fn request_batches(
         &self,
-        peer: NetworkPublicKey,
+        peer: &NetworkPublicKey,
         request: impl anemo::types::request::IntoRequest<RequestBatchesRequest> + Send,
     ) -> Result<RequestBatchesResponse>;
 }

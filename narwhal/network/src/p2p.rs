@@ -99,7 +99,7 @@ impl ReliableNetwork<WorkerBatchMessage> for anemo::Network {
 impl WorkerRpc for anemo::Network {
     async fn request_batches(
         &self,
-        peer: NetworkPublicKey,
+        peer: &NetworkPublicKey,
         request: impl anemo::types::request::IntoRequest<RequestBatchesRequest> + Send,
     ) -> Result<RequestBatchesResponse> {
         let peer_id = PeerId(peer.0.to_bytes());

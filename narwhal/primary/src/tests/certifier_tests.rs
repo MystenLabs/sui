@@ -41,7 +41,6 @@ async fn propose_header() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(0, 0));
-    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
     let (header_store, certificate_store, payload_store) = create_db_stores();
 
     // Create a fake header.
@@ -113,7 +112,6 @@ async fn propose_header() {
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
-        rx_synchronizer_network,
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -159,7 +157,6 @@ async fn propose_header_failure() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::default());
-    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
     let (header_store, certificate_store, payload_store) = create_db_stores();
 
     // Create a fake header.
@@ -214,7 +211,6 @@ async fn propose_header_failure() {
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
-        rx_synchronizer_network,
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -281,7 +277,6 @@ async fn run_vote_aggregator_with_param(
     let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(0, 0));
-    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
     let (header_store, certificate_store, payload_store) = create_db_stores();
 
     // Create a fake header.
@@ -348,7 +343,6 @@ async fn run_vote_aggregator_with_param(
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
-        rx_synchronizer_network,
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -402,7 +396,6 @@ async fn shutdown_core() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(0, 0));
-    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     // Create test stores.
     let (header_store, certificate_store, payload_store) = create_db_stores();
@@ -420,7 +413,6 @@ async fn shutdown_core() {
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
-        rx_synchronizer_network,
         metrics.clone(),
         &primary_channel_metrics,
     ));
