@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { act, render, screen } from '@testing-library/react';
+import { render } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { screen } from '@testing-library/dom';
 import { SuiClientProvider } from '../../src/components/SuiClientProvider.js';
 import { useSuiClient, useSuiClientContext } from 'dapp-kit/src/index.js';
 import { SuiClient } from '@mysten/sui.js/client';
@@ -14,7 +16,7 @@ describe('SuiClientProvider', () => {
 				<div>Test</div>
 			</SuiClientProvider>,
 		);
-		expect(screen.getByText('Test').textContent).toEqual('Test');
+		expect(screen.getByText('Test')).toBeInTheDocument();
 	});
 
 	it('provides a SuiClient instance to its children', () => {
@@ -46,10 +48,10 @@ describe('SuiClientProvider', () => {
 			</SuiClientProvider>,
 		);
 
-		expect(screen.getByText('Test').textContent).toEqual('Test');
+		expect(screen.getByText('Test')).toBeInTheDocument();
 	});
 
-	test('can create sui clients with custom options', () => {
+	test('can create sui clients with custom options', async () => {
 		function NetworkSelector() {
 			const ctx = useSuiClientContext();
 
@@ -57,7 +59,7 @@ describe('SuiClientProvider', () => {
 				<div>
 					{Object.keys(ctx.networks).map((network) => (
 						<button key={network} onClick={() => ctx.selectNetwork(network)}>
-							select {network}
+							{`select ${network}`}
 						</button>
 					))}
 				</div>
@@ -83,20 +85,20 @@ describe('SuiClientProvider', () => {
 						return new SuiClient(config);
 					}}
 				>
-					<div>{selectedNetwork}</div>
+					<div>{`selected network: ${selectedNetwork}`}</div>
 					<NetworkSelector />
 				</SuiClientProvider>
 			);
 		}
 
-		const { container } = render(<CustomConfigProvider />);
+		const user = userEvent.setup();
 
-		expect(container.firstChild?.textContent).toEqual('a');
+		render(<CustomConfigProvider />);
 
-		act(() => {
-			const button = screen.getByText('select b');
-			button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-		});
-		expect(container.firstChild?.textContent).toEqual('b');
+		expect(screen.getByText('selected network: a')).toBeInTheDocument();
+
+		await user.click(screen.getByText('select b'));
+
+		expect(screen.getByText('selected network: b')).toBeInTheDocument();
 	});
 });

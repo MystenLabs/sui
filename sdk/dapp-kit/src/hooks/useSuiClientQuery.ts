@@ -52,8 +52,7 @@ export function useSuiClientQuery<T extends keyof Methods>(
 
 	return useQuery({
 		...options,
-		// eslint-disable-next-line @tanstack/query/exhaustive-deps
-		queryKey: suiContext.queryKey(queryKey ?? [method, params]),
+		queryKey: [suiContext.selectedNetwork, method, params],
 		enabled,
 		queryFn: async () => {
 			return await suiContext.client[method](params as never);

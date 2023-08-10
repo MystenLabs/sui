@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { SuiClient, getFullnodeUrl, isSuiClient } from '@mysten/sui.js/client';
 import type { SuiClientOptions } from '@mysten/sui.js/client';
 import { createContext, useMemo, useState } from 'react';
 
@@ -10,46 +10,43 @@ type NetworkConfigs<T extends NetworkConfig = NetworkConfig> = Record<string, T>
 
 export interface SuiClientProviderContext {
 	client: SuiClient;
-	queryKey: (key: unknown[]) => unknown[];
 	networks: NetworkConfigs;
+	selectedNetwork: string;
 	selectNetwork: (network: string) => void;
 }
 
-export const SuiClientContext = createContext<SuiClientProviderContext | undefined>(undefined);
+export const SuiClientContext = createContext<SuiClientProviderContext | null>(null);
 
 export interface SuiClientProviderProps<T extends NetworkConfigs> {
 	networks?: T;
 	createClient?: (name: keyof T, config: T[keyof T]) => SuiClient;
-	defaultNetwork?: keyof T;
+	defaultNetwork?: keyof T & string;
 	children: React.ReactNode;
 }
 
+const DEFAULT_NETWORKS = {
+	devnet: { url: getFullnodeUrl('devnet') },
+};
+
+const DEFAULT_CREATE_CLIENT = function createClient(
+	_name: string,
+	config: NetworkConfig | SuiClient,
+) {
+	if (isSuiClient(config)) {
+		return config;
+	}
+
+	return new SuiClient(config);
+};
+
 export function SuiClientProvider<T extends NetworkConfigs>(props: SuiClientProviderProps<T>) {
-	const networks = useMemo(
-		() =>
-			props.networks ??
-			({
-				devnet: { url: getFullnodeUrl('devnet') },
-			} as unknown as T),
-		[props.networks],
+	const networks = props.networks ?? (DEFAULT_NETWORKS as never);
+	const createClient =
+		(props.createClient as typeof DEFAULT_CREATE_CLIENT) ?? DEFAULT_CREATE_CLIENT;
+
+	const [selectedNetwork, setSelectedNetwork] = useState<keyof T & string>(
+		props.defaultNetwork ?? (Object.keys(networks)[0] as keyof T & string),
 	);
-	const [selectedNetwork, setSelectedNetwork] = useState<keyof T>(
-		props.defaultNetwork ?? Object.keys(networks)[0],
-	);
-
-	const createClient = useMemo(() => {
-		if (props.createClient) {
-			return props.createClient;
-		}
-
-		return (_name: keyof T, config: T[keyof T]) => {
-			if (config instanceof SuiClient) {
-				return config;
-			}
-
-			return new SuiClient(config);
-		};
-	}, [props.createClient]);
 
 	const [client, setClient] = useState<SuiClient>(() => {
 		return createClient(selectedNetwork, networks[selectedNetwork]);
@@ -58,9 +55,9 @@ export function SuiClientProvider<T extends NetworkConfigs>(props: SuiClientProv
 	const ctx = useMemo((): SuiClientProviderContext => {
 		return {
 			client,
-			queryKey: (key: unknown[]) => [selectedNetwork, ...key],
 			networks,
-			selectNetwork: (network: keyof T) => {
+			selectedNetwork,
+			selectNetwork: (network) => {
 				if (network !== selectedNetwork) {
 					setSelectedNetwork(network);
 					setClient(createClient(network, networks[network]));
