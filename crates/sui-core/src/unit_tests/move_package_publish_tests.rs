@@ -210,6 +210,7 @@ async fn test_generate_lock_file() {
 
         [move]
         version = 0
+        manifest_digest = "1401DE1C3C3FF6D20EB27741A0A7B5D61E34836CB6C90ECC2F2DE97C47B4D0F9"
 
         dependencies = [
           { name = "Examples" },

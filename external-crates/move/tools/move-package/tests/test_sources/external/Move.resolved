@@ -11,12 +11,12 @@ ResolvedGraph {
             ],
             "A": [
                 (
-                    "ADep",
-                    Outgoing,
-                ),
-                (
                     "Root",
                     Incoming,
+                ),
+                (
+                    "ADep",
+                    Outgoing,
                 ),
             ],
             "ADep": [
@@ -35,7 +35,6 @@ ResolvedGraph {
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
-                overridden_path: false,
             },
             "ADep": Package {
                 kind: Local(
@@ -45,7 +44,6 @@ ResolvedGraph {
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
-                overridden_path: false,
             },
         },
         always_deps: {
@@ -53,6 +51,10 @@ ResolvedGraph {
             "ADep",
             "Root",
         },
+        manifest_digest: Some(
+            "0ABB58AD694B4D8B2FDA8F544B570B7BB6CFA84038FCCC4EA87236568A056D62",
+        ),
+        deps_digest: None,
     },
     build_options: BuildConfig {
         dev_mode: true,

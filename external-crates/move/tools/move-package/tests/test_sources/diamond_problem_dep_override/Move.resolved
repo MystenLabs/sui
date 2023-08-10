@@ -5,10 +5,6 @@ ResolvedGraph {
         package_graph: {
             "Root": [
                 (
-                    "C",
-                    Outgoing,
-                ),
-                (
                     "A",
                     Outgoing,
                 ),
@@ -16,25 +12,29 @@ ResolvedGraph {
                     "B",
                     Outgoing,
                 ),
+                (
+                    "C",
+                    Outgoing,
+                ),
             ],
-            "C": [
+            "A": [
                 (
                     "Root",
                     Incoming,
                 ),
                 (
+                    "C",
+                    Outgoing,
+                ),
+            ],
+            "C": [
+                (
                     "A",
                     Incoming,
                 ),
                 (
                     "B",
                     Incoming,
-                ),
-            ],
-            "A": [
-                (
-                    "C",
-                    Outgoing,
                 ),
                 (
                     "Root",
@@ -43,12 +43,12 @@ ResolvedGraph {
             ],
             "B": [
                 (
-                    "C",
-                    Outgoing,
-                ),
-                (
                     "Root",
                     Incoming,
+                ),
+                (
+                    "C",
+                    Outgoing,
                 ),
             ],
         },
@@ -59,7 +59,6 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
-                overridden_path: true,
             },
             "B": Package {
                 kind: Local(
@@ -67,7 +66,6 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
-                overridden_path: true,
             },
             "C": Package {
                 kind: Local(
@@ -81,7 +79,6 @@ ResolvedGraph {
                     ),
                 ),
                 resolver: None,
-                overridden_path: false,
             },
         },
         always_deps: {
@@ -90,6 +87,10 @@ ResolvedGraph {
             "C",
             "Root",
         },
+        manifest_digest: Some(
+            "FF5591B04075491B4A3E1F8758714AD147D4C1611F9DB9F4C4D6F9FD4D521DA9",
+        ),
+        deps_digest: None,
     },
     build_options: BuildConfig {
         dev_mode: true,

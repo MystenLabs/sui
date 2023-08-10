@@ -5,22 +5,32 @@ ResolvedGraph {
         package_graph: {
             "Root": [
                 (
-                    "B",
+                    "A",
                     Outgoing,
                 ),
                 (
-                    "A",
+                    "B",
+                    Outgoing,
+                ),
+            ],
+            "A": [
+                (
+                    "Root",
+                    Incoming,
+                ),
+                (
+                    "ADep",
                     Outgoing,
                 ),
             ],
             "B": [
                 (
-                    "ADep",
-                    Outgoing,
-                ),
-                (
                     "Root",
                     Incoming,
+                ),
+                (
+                    "ADep",
+                    Outgoing,
                 ),
             ],
             "ADep": [
@@ -30,16 +40,6 @@ ResolvedGraph {
                 ),
                 (
                     "A",
-                    Incoming,
-                ),
-            ],
-            "A": [
-                (
-                    "ADep",
-                    Outgoing,
-                ),
-                (
-                    "Root",
                     Incoming,
                 ),
             ],
@@ -53,15 +53,15 @@ ResolvedGraph {
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
-                overridden_path: false,
             },
             "ADep": Package {
                 kind: Local(
                     "deps_only/ADep",
                 ),
                 version: None,
-                resolver: None,
-                overridden_path: false,
+                resolver: Some(
+                    "../resolvers/successful.sh",
+                ),
             },
             "B": Package {
                 kind: Local(
@@ -69,7 +69,6 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
-                overridden_path: false,
             },
         },
         always_deps: {
@@ -78,6 +77,10 @@ ResolvedGraph {
             "B",
             "Root",
         },
+        manifest_digest: Some(
+            "040CD4930E480375D9C8607C2C075023ADA58D206AC7A6353641155B2C634E18",
+        ),
+        deps_digest: None,
     },
     build_options: BuildConfig {
         dev_mode: true,

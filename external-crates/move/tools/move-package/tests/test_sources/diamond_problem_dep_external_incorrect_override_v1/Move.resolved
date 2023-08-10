@@ -1,1 +1,5 @@
-Failed to resolve dependencies for package 'Root': Adding dependencies from ../../../resolvers/successful.sh for dependency 'A' in 'C': Incorrect override of ADep in B (an override should dominate all uses of the overridden package)
+When resolving dependencies for package Root, conflicting dependencies found:
+At B -> A
+	ADep = { local = "deps_only/ADep", version = "1.0.0" }
+At C -> A
+	ADep = { local = "deps_only/ADep" }

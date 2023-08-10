@@ -5,6 +5,10 @@ ResolvedGraph {
         package_graph: {
             "Root": [
                 (
+                    "A",
+                    Outgoing,
+                ),
+                (
                     "ADep",
                     Outgoing,
                 ),
@@ -12,8 +16,14 @@ ResolvedGraph {
                     "B",
                     Outgoing,
                 ),
+            ],
+            "A": [
                 (
-                    "A",
+                    "Root",
+                    Incoming,
+                ),
+                (
+                    "ADep",
                     Outgoing,
                 ),
             ],
@@ -33,22 +43,12 @@ ResolvedGraph {
             ],
             "B": [
                 (
-                    "ADep",
-                    Outgoing,
-                ),
-                (
                     "Root",
                     Incoming,
                 ),
-            ],
-            "A": [
                 (
                     "ADep",
                     Outgoing,
-                ),
-                (
-                    "Root",
-                    Incoming,
                 ),
             ],
         },
@@ -61,7 +61,6 @@ ResolvedGraph {
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
-                overridden_path: false,
             },
             "ADep": Package {
                 kind: Local(
@@ -75,7 +74,6 @@ ResolvedGraph {
                     ),
                 ),
                 resolver: None,
-                overridden_path: false,
             },
             "B": Package {
                 kind: Local(
@@ -83,7 +81,6 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
-                overridden_path: true,
             },
         },
         always_deps: {
@@ -92,6 +89,10 @@ ResolvedGraph {
             "B",
             "Root",
         },
+        manifest_digest: Some(
+            "CA54ADC8F29B445D5695695C3D9B59EC57B1D2702EFBDDEBAD849A19C46EA857",
+        ),
+        deps_digest: None,
     },
     build_options: BuildConfig {
         dev_mode: true,

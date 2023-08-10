@@ -15,27 +15,27 @@ ResolvedGraph {
             ],
             "A": [
                 (
+                    "Root",
+                    Incoming,
+                ),
+                (
                     "ADep",
                     Outgoing,
                 ),
+            ],
+            "B": [
                 (
                     "Root",
                     Incoming,
+                ),
+                (
+                    "BDep",
+                    Outgoing,
                 ),
             ],
             "ADep": [
                 (
                     "A",
-                    Incoming,
-                ),
-            ],
-            "B": [
-                (
-                    "BDep",
-                    Outgoing,
-                ),
-                (
-                    "Root",
                     Incoming,
                 ),
             ],
@@ -55,7 +55,6 @@ ResolvedGraph {
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
-                overridden_path: false,
             },
             "ADep": Package {
                 kind: Local(
@@ -65,7 +64,6 @@ ResolvedGraph {
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
-                overridden_path: false,
             },
             "B": Package {
                 kind: Local(
@@ -75,7 +73,6 @@ ResolvedGraph {
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
-                overridden_path: false,
             },
             "BDep": Package {
                 kind: Local(
@@ -85,7 +82,6 @@ ResolvedGraph {
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
-                overridden_path: false,
             },
         },
         always_deps: {
@@ -93,6 +89,10 @@ ResolvedGraph {
             "ADep",
             "Root",
         },
+        manifest_digest: Some(
+            "64CF52DCF661C2F1581935BC7AEA0424EE20B10997D1F183779443C8679727F1",
+        ),
+        deps_digest: None,
     },
     build_options: BuildConfig {
         dev_mode: true,
