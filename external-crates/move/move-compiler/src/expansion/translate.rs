@@ -751,7 +751,7 @@ fn module_warning_filter(
     if is_dep {
         // For dependencies (non source defs or package deps), we check the filters for errors
         // but then throw them away and actually ignore _all_ warnings
-        context.all_filters.clone()
+        context.all_filter_alls.clone()
     } else {
         filters
     }

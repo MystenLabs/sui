@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_compiler::{
-    diagnostics::codes::{DiagnosticsID, WarningFilter},
-    expansion::ast as E,
-};
+use move_compiler::{diagnostics::codes::WarningFilter, expansion::ast as E};
 use move_ir_types::location::Loc;
 
 pub mod coin_field;
@@ -50,36 +47,28 @@ pub fn known_filters() -> (E::AttributeName_, Vec<WarningFilter>) {
         E::AttributeName_::Unknown(ALLOW_ATTR_NAME.into()),
         vec![
             WarningFilter::All(Some(LINT_WARNING_PREFIX)),
-            WarningFilter::Code(
-                DiagnosticsID::new(
-                    LinterDiagCategory::ShareOwned as u8,
-                    LINTER_DEFAULT_DIAG_CODE,
-                    Some(LINT_WARNING_PREFIX),
-                ),
+            WarningFilter::code(
+                Some(LINT_WARNING_PREFIX),
+                LinterDiagCategory::ShareOwned as u8,
+                LINTER_DEFAULT_DIAG_CODE,
                 Some(SHARE_OWNED_FILTER_NAME),
             ),
-            WarningFilter::Code(
-                DiagnosticsID::new(
-                    LinterDiagCategory::SelfTransfer as u8,
-                    LINTER_DEFAULT_DIAG_CODE,
-                    Some(LINT_WARNING_PREFIX),
-                ),
+            WarningFilter::code(
+                Some(LINT_WARNING_PREFIX),
+                LinterDiagCategory::SelfTransfer as u8,
+                LINTER_DEFAULT_DIAG_CODE,
                 Some(SELF_TRANSFER_FILTER_NAME),
             ),
-            WarningFilter::Code(
-                DiagnosticsID::new(
-                    LinterDiagCategory::CustomStateChange as u8,
-                    LINTER_DEFAULT_DIAG_CODE,
-                    Some(LINT_WARNING_PREFIX),
-                ),
+            WarningFilter::code(
+                Some(LINT_WARNING_PREFIX),
+                LinterDiagCategory::CustomStateChange as u8,
+                LINTER_DEFAULT_DIAG_CODE,
                 Some(CUSTOM_STATE_CHANGE_FILTER_NAME),
             ),
-            WarningFilter::Code(
-                DiagnosticsID::new(
-                    LinterDiagCategory::CoinField as u8,
-                    LINTER_DEFAULT_DIAG_CODE,
-                    Some(LINT_WARNING_PREFIX),
-                ),
+            WarningFilter::code(
+                Some(LINT_WARNING_PREFIX),
+                LinterDiagCategory::CoinField as u8,
+                LINTER_DEFAULT_DIAG_CODE,
                 Some(COIN_FIELD_FILTER_NAME),
             ),
         ],

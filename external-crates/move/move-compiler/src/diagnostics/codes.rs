@@ -324,6 +324,32 @@ impl WarningFilter {
             Self::Category { name, .. } | Self::Code { name, .. } => name,
         }
     }
+
+    pub fn code(
+        prefix: ExternalPrefix,
+        category: u8,
+        code: u8,
+        name: Option<WellKnownFilterName>,
+    ) -> Self {
+        Self::Code {
+            prefix,
+            category,
+            code,
+            name,
+        }
+    }
+
+    pub fn category(
+        prefix: ExternalPrefix,
+        category: u8,
+        name: Option<WellKnownFilterName>,
+    ) -> Self {
+        Self::Category {
+            prefix,
+            category,
+            name,
+        }
+    }
 }
 
 //**************************************************************************************************
