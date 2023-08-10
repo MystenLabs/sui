@@ -10,6 +10,7 @@ import Logo from '_components/logo';
 import { useInitializedGuard } from '_hooks';
 import PageLayout from '_pages/layout';
 import { ampli } from '_src/shared/analytics/ampli';
+import WelcomeSplash from '_src/ui/assets/images/WelcomeSplash.svg';
 
 export function WelcomePage() {
 	const checkingInitialized = useInitializedGuard(false);
@@ -30,8 +31,8 @@ export function WelcomePage() {
 							</Text>
 						</div>
 					</div>
-					<div className="w-full h-full bg-gray-50 mt-10">
-						TODO: Replace me with a splash image!
+					<div className="w-full h-full mt-10">
+						<WelcomeSplash role="img" />
 					</div>
 					<div className="flex flex-col gap-4 mt-7.5 w-full items-center">
 						<Text variant="pBody" color="steel-dark" weight="medium">
