@@ -31,6 +31,7 @@ export type PasswordExportDialogProps = {
 	background?: boolean;
 };
 
+/** @deprecated - use UnlockAccountModal instead **/
 export function PasswordInputDialog({
 	title,
 	continueLabel = 'Continue',

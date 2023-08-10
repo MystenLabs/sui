@@ -8,7 +8,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 
 import { ImageIcon } from '_app/shared/image-icon';
 
-const imageStyle = cva(['rounded-full flex rounded-full'], {
+const imageStyle = cva(['rounded-full flex'], {
 	variants: {
 		size: {
 			sm: 'w-6 h-6',

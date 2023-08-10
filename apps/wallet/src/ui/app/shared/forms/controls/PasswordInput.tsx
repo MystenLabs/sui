@@ -24,6 +24,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
 					ref={forwardedRef}
 				/>
 				<ButtonOrLink
+					tabIndex={-1}
 					className="flex appearance-none bg-transparent border-none cursor-pointer absolute right-3 text-gray-60 peer-focus:text-steel"
 					onClick={() => setPasswordShown((prevState) => !prevState)}
 				>

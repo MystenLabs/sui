@@ -4,15 +4,17 @@
 import { ChevronDown12, ChevronRight12 } from '@mysten/icons';
 
 import * as CollapsiblePrimitive from '@radix-ui/react-collapsible';
+import cn from 'classnames';
 import { useState, type ReactNode } from 'react';
 
-type CollapsibleProps = {
+interface CollapsibleProps {
 	title: string;
 	defaultOpen?: boolean;
 	children: ReactNode | ReactNode[];
-};
+	shade?: 'lighter' | 'darker';
+}
 
-export function Collapsible({ title, children, defaultOpen }: CollapsibleProps) {
+export function Collapsible({ title, children, defaultOpen, shade = 'lighter' }: CollapsibleProps) {
 	const [open, setOpen] = useState(defaultOpen ?? false);
 	return (
 		<CollapsiblePrimitive.Root
@@ -21,11 +23,26 @@ export function Collapsible({ title, children, defaultOpen }: CollapsibleProps) 
 			onOpenChange={setOpen}
 		>
 			<CollapsiblePrimitive.Trigger className="flex items-center gap-2 w-full bg-transparent border-none p-0 cursor-pointer group">
-				<div className="text-captionSmall font-semibold uppercase text-steel group-hover:text-hero">
+				<div
+					className={cn('text-captionSmall font-semibold uppercase group-hover:text-hero', {
+						'text-steel': shade === 'lighter',
+						'text-steel-darker': shade === 'darker',
+					})}
+				>
 					{title}
 				</div>
-				<div className="h-px bg-steel group-hover:bg-hero flex-1" />
-				<div className="text-steel group-hover:text-hero inline-flex">
+				<div
+					className={cn('h-px group-hover:bg-hero flex-1', {
+						'bg-steel': shade === 'darker',
+						'bg-gray-45 group-hover:bg-steel': shade === 'lighter',
+					})}
+				/>
+				<div
+					className={cn('group-hover:text-hero inline-flex', {
+						'text-steel': shade === 'darker',
+						'text-gray-45': shade === 'lighter',
+					})}
+				>
 					{open ? <ChevronDown12 /> : <ChevronRight12 />}
 				</div>
 			</CollapsiblePrimitive.Trigger>
