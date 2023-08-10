@@ -722,7 +722,7 @@ impl Proposer {
                                 let avg_previous_proposal_timestamp_ms: TimestampMs = parents.iter().map(|c| *c.header().created_at()).sum::<TimestampMs>() / parents.len() as u64;
                                 let remaining_until_timeout: Duration = min_delay_timer.deadline().sub(Instant::now());
 
-                                let remaining_calculated_from_proposal = Duration::from_millis(now() - avg_previous_proposal_timestamp_ms);
+                                let remaining_calculated_from_proposal = self.min_header_delay.saturating_sub(Duration::from_millis(now().saturating_sub(avg_previous_proposal_timestamp_ms)));
 
                                 if (remaining_calculated_from_proposal + Duration::from_millis(50)) < remaining_until_timeout {
                                     min_delay_timer
