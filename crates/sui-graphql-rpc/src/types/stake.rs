@@ -19,7 +19,7 @@ impl Stake {
 #[allow(unused_variables)]
 #[Object]
 impl StakeConnection {
-    async fn id(&self) -> ID {
+    async fn unimplemented(&self) -> bool {
         unimplemented!()
     }
 }

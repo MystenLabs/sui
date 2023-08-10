@@ -19,7 +19,7 @@ impl Coin {
 #[allow(unused_variables)]
 #[Object]
 impl CoinConnection {
-    async fn id(&self) -> ID {
+    async fn unimplemented(&self) -> bool {
         unimplemented!()
     }
 }
