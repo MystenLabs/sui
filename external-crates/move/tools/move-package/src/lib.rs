@@ -87,6 +87,11 @@ pub struct BuildConfig {
     /// Default edition for move compilation, if not specified in the package's config
     #[clap(long = "default-move-edition", global = true)]
     pub default_edition: Option<Edition>,
+
+    /// If set, dependency packages are treated as root packages. Notably, this will remove
+    /// warning suppression in dependency packages.
+    #[clap(long = "dependencies-are-root", global = true)]
+    pub deps_as_root: bool,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]
