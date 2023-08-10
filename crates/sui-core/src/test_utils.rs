@@ -219,12 +219,7 @@ pub fn make_transfer_object_transaction(
     gas_price: u64,
 ) -> Transaction {
     let data = TransactionData::new_transfer(
-        recipient,
-        object_ref,
-        sender,
-        gas_object,
-        gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER * 10,
-        gas_price,
+        recipient, object_ref, sender, gas_object, 3000000, gas_price,
     );
     to_sender_signed_transaction(data, keypair)
 }
