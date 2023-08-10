@@ -87,8 +87,7 @@ jobs:
         run: |
           export arch=$(uname -m)
           export system_os=$(echo "ubuntu-ghcloud" | cut -d- -f1)
-          export os_type="$(system_os)-${arch})
-          echo "os_type=${os_type}" >> $GITHUB_ENV
+          echo "os_type=${system_os}-${arch}" >> $GITHUB_ENV
           mv ./target/release/sui ./target/release/sui-${os_type}
           mv ./target/release/sui-node ./target/release/sui-node-${os_type}
           mv ./target/release/sui-tool ./target/release/sui-tool-${os_type}
