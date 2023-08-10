@@ -4,8 +4,11 @@
 use async_graphql::*;
 
 use super::{
-    balance::Balance, coin::CoinConnection, name_service::NameServiceConnection,
-    stake::StakeConnection, sui_address::SuiAddress,
+    balance::{Balance, BalanceConnection},
+    coin::CoinConnection,
+    name_service::NameServiceConnection,
+    stake::StakeConnection,
+    sui_address::SuiAddress,
 };
 
 pub(crate) struct Object;
@@ -13,19 +16,21 @@ pub(crate) struct ObjectConnection;
 
 #[derive(InputObject)]
 pub(crate) struct ObjectFilter {
-    package: SuiAddress,
-    module: String,
-    ty: String,
+    package: Option<SuiAddress>,
+    module: Option<String>,
+    ty: Option<String>,
 
-    owner: SuiAddress,
-    object_id: SuiAddress,
-    version: u64,
+    owner: Option<SuiAddress>,
+    object_id: Option<SuiAddress>,
+    version: Option<u64>,
 }
 
 #[allow(unreachable_code)]
 #[allow(unused_variables)]
 #[Object]
 impl Object {
+    // =========== Owner interface methods =============
+
     pub async fn location(&self) -> SuiAddress {
         unimplemented!()
     }
@@ -51,7 +56,7 @@ impl Object {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<ObjectConnection> {
+    ) -> Option<BalanceConnection> {
         unimplemented!()
     }
 
@@ -95,7 +100,7 @@ impl Object {
 #[allow(unused_variables)]
 #[Object]
 impl ObjectConnection {
-    async fn id(&self) -> ID {
+    async fn unimplemented(&self) -> bool {
         unimplemented!()
     }
 }

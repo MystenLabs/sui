@@ -3,23 +3,13 @@
 
 use async_graphql::*;
 
-pub(crate) struct NameService;
 pub(crate) struct NameServiceConnection;
 
 #[allow(unreachable_code)]
 #[allow(unused_variables)]
 #[Object]
-impl NameService {
-    async fn id(&self) -> ID {
-        unimplemented!()
-    }
-}
-
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
-#[Object]
 impl NameServiceConnection {
-    async fn id(&self) -> ID {
+    async fn unimplemented(&self) -> bool {
         unimplemented!()
     }
 }
