@@ -30,7 +30,7 @@ use super::address::Address;
     ),
     field(
         name = "balance_connection",
-        type = "Option<ObjectConnection>",
+        type = "Option<BalanceConnection>",
         arg(name = "first", type = "Option<u64>"),
         arg(name = "after", type = "Option<String>"),
         arg(name = "last", type = "Option<u64>"),
@@ -100,7 +100,7 @@ impl AmbiguousOwner {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<ObjectConnection> {
+    ) -> Option<BalanceConnection> {
         unimplemented!()
     }
 

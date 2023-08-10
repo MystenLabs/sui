@@ -3,21 +3,29 @@ source: crates/sui-graphql-rpc/tests/snapshot_tests.rs
 expression: sdl
 ---
 type Address implements Owner {
+	transactionBlockConnection(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter): TransactionBlockConnection
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	balance(type: String): Balance!
-	balanceConnection(first: Int, after: String, last: Int, before: String): ObjectConnection
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
 	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
 }
 
+enum AddressTransactionBlockRelationship {
+	SIGN
+	SENT
+	RECV
+	PAID
+}
+
 type AmbiguousOwner implements Owner {
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	balance(type: String): Balance!
-	balanceConnection(first: Int, after: String, last: Int, before: String): ObjectConnection
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
@@ -28,23 +36,27 @@ type Balance {
 	id: ID!
 }
 
+type BalanceConnection {
+	unimplemented: Boolean!
+}
+
 
 type CoinConnection {
-	id: ID!
+	unimplemented: Boolean!
 }
 
 
 
 
 type NameServiceConnection {
-	id: ID!
+	unimplemented: Boolean!
 }
 
 type Object implements Owner {
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	balance(type: String): Balance!
-	balanceConnection(first: Int, after: String, last: Int, before: String): ObjectConnection
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
@@ -52,23 +64,23 @@ type Object implements Owner {
 }
 
 type ObjectConnection {
-	id: ID!
+	unimplemented: Boolean!
 }
 
 input ObjectFilter {
-	package: SuiAddress!
-	module: String!
-	ty: String!
-	owner: SuiAddress!
-	objectId: SuiAddress!
-	version: Int!
+	package: SuiAddress
+	module: String
+	ty: String
+	owner: SuiAddress
+	objectId: SuiAddress
+	version: Int
 }
 
 interface Owner {
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	balance(type: String): Balance!
-	balanceConnection(first: Int, after: String, last: Int, before: String): ObjectConnection
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
@@ -83,7 +95,7 @@ type Query {
 }
 
 type StakeConnection {
-	id: ID!
+	unimplemented: Boolean!
 }
 
 
@@ -91,6 +103,31 @@ type StakeConnection {
 Representation of Sui Addresses
 """
 scalar SuiAddress
+
+type TransactionBlockConnection {
+	unimplemented: Boolean!
+}
+
+input TransactionBlockFilter {
+	package: SuiAddress
+	module: String
+	function: String
+	kind: TransactionBlockKindInput
+	checkpoint: Int
+	signAddress: SuiAddress
+	sentAddress: SuiAddress
+	recvAddress: SuiAddress
+	paidAddress: SuiAddress
+	inputObject: SuiAddress
+	changedObject: SuiAddress
+}
+
+enum TransactionBlockKindInput {
+	CONSENSUS_COMMIT_PROLOGUE
+	GENESIS
+	CHANGE_EPOCH
+	PROGRAMMABLE
+}
 
 schema {
 	query: Query

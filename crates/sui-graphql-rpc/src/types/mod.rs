@@ -13,3 +13,4 @@ pub(crate) mod owner;
 pub(crate) mod query;
 pub(crate) mod stake;
 pub(crate) mod sui_address;
+pub(crate) mod transaction_block;

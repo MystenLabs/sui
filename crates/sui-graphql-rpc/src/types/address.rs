@@ -4,20 +4,43 @@
 use async_graphql::*;
 
 use super::{
-    balance::Balance,
+    balance::{Balance, BalanceConnection},
     coin::CoinConnection,
     name_service::NameServiceConnection,
     object::{ObjectConnection, ObjectFilter},
     stake::StakeConnection,
     sui_address::SuiAddress,
+    transaction_block::{TransactionBlockConnection, TransactionBlockFilter},
 };
 
 pub(crate) struct Address;
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub(crate) enum AddressTransactionBlockRelationship {
+    Sign, // Transactions this address has signed
+    Sent, // Transactions that transferred objects from this address
+    Recv, // Transactions that received objects into this address
+    Paid, // Transactions that were paid for by this address
+}
 
 #[allow(unreachable_code)]
 #[allow(unused_variables)]
 #[Object]
 impl Address {
+    async fn transaction_block_connection(
+        &self,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        relation: Option<AddressTransactionBlockRelationship>,
+        filter: Option<TransactionBlockFilter>,
+    ) -> Option<TransactionBlockConnection> {
+        unimplemented!()
+    }
+
+    // =========== Owner interface methods =============
+
     pub async fn location(&self) -> SuiAddress {
         unimplemented!()
     }
@@ -43,7 +66,7 @@ impl Address {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<ObjectConnection> {
+    ) -> Option<BalanceConnection> {
         unimplemented!()
     }
 

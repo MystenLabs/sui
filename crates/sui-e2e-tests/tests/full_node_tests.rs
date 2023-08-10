@@ -624,8 +624,8 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
     // Start a new fullnode that is not on the write path
     let fullnode = test_cluster.spawn_new_fullnode().await;
 
+    let ws_client = fullnode.ws_client().await;
     let node = fullnode.sui_node;
-    let ws_client = fullnode.ws_client;
 
     let context = &mut test_cluster.wallet;
     let package_id = publish_nfts_package(context).await.0;

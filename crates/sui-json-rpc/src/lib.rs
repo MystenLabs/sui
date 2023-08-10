@@ -10,14 +10,12 @@ use hyper::header::HeaderValue;
 use hyper::Body;
 use hyper::Method;
 use hyper::Request;
-use jsonrpsee::server::{AllowHosts, ServerBuilder};
 use jsonrpsee::RpcModule;
 use prometheus::Registry;
-use tap::TapFallible;
 use tokio::runtime::Handle;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
-use tracing::{info, warn};
+use tracing::info;
 
 pub use balance_changes::*;
 pub use object_changes::*;
@@ -25,10 +23,11 @@ use sui_open_rpc::{Module, Project};
 
 use crate::error::Error;
 use crate::metrics::MetricsLogger;
-use crate::routing_layer::RoutingLayer;
+use crate::routing_layer::RpcRouter;
 
 pub mod api;
 pub mod authority_state;
+pub mod axum_router;
 mod balance_changes;
 pub mod coin_api;
 pub mod error;
@@ -92,12 +91,7 @@ impl JsonRpcServerBuilder {
         Ok(self.module.merge(module.rpc())?)
     }
 
-    pub async fn start(
-        mut self,
-        listen_address: SocketAddr,
-        custom_runtime: Option<Handle>,
-        server_type: Option<ServerType>,
-    ) -> Result<ServerHandle, Error> {
+    fn cors() -> Result<CorsLayer, Error> {
         let acl = match env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
             Ok(value) => {
                 let allow_hosts = value
@@ -122,23 +116,37 @@ impl JsonRpcServerBuilder {
                 HeaderName::from_static(CLIENT_TARGET_API_VERSION_HEADER),
                 HeaderName::from_static(APP_NAME_HEADER),
             ]);
+        Ok(cors)
+    }
 
-        let routing = self.rpc_doc.method_routing.clone();
+    fn trace_layer() -> TraceLayer<
+        tower_http::classify::SharedClassifier<tower_http::classify::ServerErrorsAsFailures>,
+        impl tower_http::trace::MakeSpan<hyper::Body> + Clone,
+        (),
+        (),
+        (),
+        (),
+        (),
+    > {
+        TraceLayer::new_for_http()
+            .make_span_with(|request: &Request<Body>| {
+                let request_id = request
+                    .headers()
+                    .get("x-req-id")
+                    .and_then(|v| v.to_str().ok())
+                    .map(tracing::field::display);
 
-        self.module
-            .register_method("rpc.discover", move |_, _| Ok(self.rpc_doc.clone()))?;
-        let methods_names = self.module.method_names().collect::<Vec<_>>();
-
-        let max_connection = env::var("RPC_MAX_CONNECTION")
-            .ok()
-            .and_then(|o| {
-                u32::from_str(&o)
-                    .tap_err(|e| warn!("Cannot parse RPC_MAX_CONNECTION to u32: {e}"))
-                    .ok()
+                tracing::info_span!("json-rpc-request", "x-req-id" = request_id)
             })
-            .unwrap_or(u32::MAX);
+            .on_request(())
+            .on_response(())
+            .on_body_chunk(())
+            .on_eos(())
+            .on_failure(())
+    }
 
-        let metrics_logger = MetricsLogger::new(&self.registry, &methods_names);
+    pub fn to_router(&self, server_type: Option<ServerType>) -> Result<axum::Router, Error> {
+        let routing = self.rpc_doc.method_routing.clone();
 
         let disable_routing = env::var("DISABLE_BACKWARD_COMPATIBILITY")
             .ok()
@@ -152,73 +160,92 @@ impl JsonRpcServerBuilder {
                 "enabled"
             }
         );
-        // We need to use the routing layer to block access to the old methods when routing is disabled.
-        let routing_layer = RoutingLayer::new(routing, disable_routing);
+        let rpc_router = RpcRouter::new(routing, disable_routing);
+
+        let rpc_docs = self.rpc_doc.clone();
+        let mut module = self.module.clone();
+        module.register_method("rpc.discover", move |_, _| Ok(rpc_docs.clone()))?;
+        let methods_names = module.method_names().collect::<Vec<_>>();
+
+        let metrics_logger = MetricsLogger::new(&self.registry, &methods_names);
 
         let middleware = tower::ServiceBuilder::new()
-            .layer(
-                TraceLayer::new_for_http()
-                    .make_span_with(|request: &Request<Body>| {
-                        let request_id = request
-                            .headers()
-                            .get("x-req-id")
-                            .and_then(|v| v.to_str().ok())
-                            .map(tracing::field::display);
+            .layer(Self::trace_layer())
+            .layer(Self::cors()?);
 
-                        tracing::info_span!("json-rpc-request", "x-req-id" = request_id)
-                    })
-                    .on_request(())
-                    .on_response(())
-                    .on_body_chunk(())
-                    .on_eos(())
-                    .on_failure(()),
-            )
-            .layer(cors)
-            .layer(routing_layer);
+        let service =
+            crate::axum_router::JsonRpcService::new(module.into(), rpc_router, metrics_logger);
 
-        let mut builder = ServerBuilder::default()
-            .batch_requests_supported(false)
-            .max_response_body_size(MAX_REQUEST_SIZE)
-            .max_connections(max_connection)
-            .set_host_filtering(AllowHosts::Any)
-            .set_middleware(middleware)
-            .set_logger(metrics_logger);
+        let mut router = axum::Router::new();
 
-        if let Some(custom_runtime) = custom_runtime {
-            builder = builder.custom_tokio_runtime(custom_runtime);
-        }
-
-        if let Some(server_type) = server_type {
-            match server_type {
-                ServerType::WebSocket => {
-                    builder = builder.ws_only();
-                }
-                ServerType::Http => {
-                    builder = builder.http_only();
-                }
+        match server_type {
+            Some(ServerType::WebSocket) => {
+                router = router.route(
+                    "/",
+                    axum::routing::get(crate::axum_router::ws::ws_json_rpc_upgrade),
+                );
+            }
+            Some(ServerType::Http) => {
+                router = router.route(
+                    "/",
+                    axum::routing::post(crate::axum_router::json_rpc_handler),
+                );
+            }
+            None => {
+                router = router
+                    .route(
+                        "/",
+                        axum::routing::post(crate::axum_router::json_rpc_handler),
+                    )
+                    .route(
+                        "/",
+                        axum::routing::get(crate::axum_router::ws::ws_json_rpc_upgrade),
+                    );
             }
         }
 
-        let server = builder.build(listen_address).await?;
+        let app = router.with_state(service).layer(middleware);
 
-        let addr = server.local_addr()?;
+        info!("Available JSON-RPC methods : {:?}", methods_names);
+
+        Ok(app)
+    }
+
+    pub async fn start(
+        self,
+        listen_address: SocketAddr,
+        _custom_runtime: Option<Handle>,
+        server_type: Option<ServerType>,
+    ) -> Result<ServerHandle, Error> {
+        let app = self.to_router(server_type)?;
+
+        let server = axum::Server::bind(&listen_address).serve(app.into_make_service());
+
+        let addr = server.local_addr();
+        let handle = tokio::spawn(async move { server.await.unwrap() });
+
         let handle = ServerHandle {
-            handle: server.start(self.module)?,
+            handle: ServerHandleInner::Axum(handle),
         };
         info!(local_addr =? addr, "Sui JSON-RPC server listening on {addr}");
-        info!("Available JSON-RPC methods : {:?}", methods_names);
         Ok(handle)
     }
 }
 
 pub struct ServerHandle {
-    handle: jsonrpsee::server::ServerHandle,
+    handle: ServerHandleInner,
 }
 
 impl ServerHandle {
     pub async fn stopped(self) {
-        self.handle.stopped().await
+        match self.handle {
+            ServerHandleInner::Axum(handle) => handle.await.unwrap(),
+        }
     }
+}
+
+enum ServerHandleInner {
+    Axum(tokio::task::JoinHandle<()>),
 }
 
 pub trait SuiRpcModule

@@ -14,6 +14,9 @@ CHANGELOG.md
 # When native functions change, so we can evaluate cost impact
 /crates/sui-framework/src/natives/ @oxade
 
+# GraphQL RPC working group
+/crates/sui-graphql-rpc/ @oxade @amnn @wlmyng @bmwill @longbowlu @mystenmark @gegaowp @Jordan-mysten @laura-makdah @stefan-mysten
+
 # Notify Narwhal changes to interested folks.
 /narwhal/crypto/ @joyqvq @kchalkias
 /narwhal/executor/ @asonnino @akichidis @laura-makdah
