@@ -7,17 +7,21 @@ use move_symbol_pool::Symbol;
 use crate::{
     diag,
     editions::Flavor,
-    expansion::ast::{AbilitySet, Fields, ModuleIdent, Visibility},
+    expansion::ast::{AbilitySet, AttributeName_, Fields, ModuleIdent, Visibility},
     naming::ast::{
         self as N, BuiltinTypeName_, FunctionSignature, TParam, Type, TypeName_, Type_, Var,
     },
     parser::ast::{Ability_, FunctionName, StructName},
-    shared::{CompilationEnv, Identifier},
+    shared::{
+        known_attributes::{KnownAttribute, TestingAttribute},
+        CompilationEnv, Identifier,
+    },
     sui_mode::{
         ASCII_MODULE_NAME, ASCII_TYPE_NAME, CLOCK_MODULE_NAME, CLOCK_TYPE_NAME,
         ENTRY_FUN_SIGNATURE_DIAG, ID_TYPE_NAME, INIT_CALL_DIAG, INIT_FUN_DIAG, OBJECT_MODULE_NAME,
         OPTION_MODULE_NAME, OPTION_TYPE_NAME, OTW_DECL_DIAG, OTW_USAGE_DIAG, SCRIPT_DIAG,
-        STD_ADDR_NAME, SUI_ADDR_NAME, UTF_MODULE_NAME, UTF_TYPE_NAME,
+        STD_ADDR_NAME, SUI_ADDR_NAME, SUI_MODULE_NAME, TX_CONTEXT_MODULE_NAME,
+        TX_CONTEXT_TYPE_NAME, UTF_MODULE_NAME, UTF_TYPE_NAME,
     },
     typing::{
         ast as T,
@@ -25,8 +29,6 @@ use crate::{
         visitor::TypingVisitor,
     },
 };
-
-use super::{TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME};
 
 //**************************************************************************************************
 // Visitor
@@ -118,6 +120,12 @@ fn module(
     }
 
     let mut context = Context::new(env, info, mident);
+    context.in_test = mdef.attributes.iter().any(|(_, attr_, _)| {
+        matches!(
+            attr_,
+            AttributeName_::Known(KnownAttribute::Testing(TestingAttribute::TestOnly))
+        )
+    });
     if let Some(sdef) = mdef.structs.get_(&context.upper_module) {
         let valid_fields = if let N::StructFields::Defined(fields) = &sdef.fields {
             invalid_otw_field_loc(fields).is_none()
@@ -152,9 +160,20 @@ fn function(context: &mut Context, name: FunctionName, fdef: &T::Function) {
         body,
         warning_filter: _,
         index: _,
-        attributes: _,
+        attributes,
         entry,
     } = fdef;
+    let prev_in_test = context.in_test;
+    if attributes.iter().any(|(_, attr_, _)| {
+        matches!(
+            attr_,
+            AttributeName_::Known(KnownAttribute::Testing(
+                TestingAttribute::Test | TestingAttribute::TestOnly
+            ))
+        )
+    }) {
+        context.in_test = true;
+    }
     if name.0.value == symbol!("init") {
         init_visibility(context, name, *visibility, *entry);
     }
@@ -164,6 +183,7 @@ fn function(context: &mut Context, name: FunctionName, fdef: &T::Function) {
     if let sp!(_, T::FunctionBody_::Defined(seq)) = body {
         sequence(context, seq)
     }
+    context.in_test = prev_in_test;
 }
 
 //**************************************************************************************************
@@ -755,7 +775,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
                 arguments,
                 ..
             } = &**mcall;
-            if name.value() == symbol!("init") {
+            if !context.in_test && name.value() == symbol!("init") {
                 let msg = format!(
                     "Invalid call to '{}::{}'. \
                     Module initializers cannot be called directly",
@@ -803,6 +823,10 @@ fn exp(context: &mut Context, e: &T::Exp) {
 
         T::UnannotatedExp_::Pack(m, s, _, fields) => {
             if !context.in_test
+                && !context
+                    .current_module
+                    .value
+                    .is(SUI_ADDR_NAME, SUI_MODULE_NAME)
                 && context.one_time_witness.as_ref().is_some_and(|otw| {
                     otw.as_ref()
                         .is_ok_and(|o| m == &context.current_module && o == s)
