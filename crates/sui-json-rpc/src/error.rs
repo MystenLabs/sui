@@ -160,20 +160,19 @@ impl From<Error> for RpcError {
                         })
                         .collect();
 
-                    let (error_code, error_msg) = if new_errors.is_empty() {
-                        (
-                            TRANSIENT_ERROR_CODE,
-                            "Transaction execution failed due to transient errors, please try again.".to_string(),
-                        )
-                    } else {
-                        let error_list = new_errors.join(", ");
-                        (
-                            TRANSACTION_EXECUTION_CLIENT_ERROR_CODE,
-                            format!("Transaction execution failed due to issues with transaction inputs, please review the errors and try again: {}.", error_list),
-                        )
-                    };
+                    assert!(
+                        !new_errors.is_empty(),
+                        "NonRecoverableTransactionError should have at least one non-retryable error"
+                    );
 
-                    let error_object = ErrorObject::owned(error_code, error_msg, None::<()>);
+                    let error_list = new_errors.join(", ");
+                    let error_msg = format!("Transaction execution failed due to issues with transaction inputs, please review the errors and try again: {}.", error_list);
+
+                    let error_object = ErrorObject::owned(
+                        TRANSACTION_EXECUTION_CLIENT_ERROR_CODE,
+                        error_msg,
+                        None::<()>,
+                    );
                     RpcError::Call(CallError::Custom(error_object))
                 }
                 QuorumDriverError::QuorumDriverInternalError(_) => {
@@ -386,6 +385,9 @@ mod tests {
         }
 
         #[test]
+        #[should_panic(
+            expected = "NonRecoverableTransactionError should have at least one non-retryable error"
+        )]
         fn test_non_recoverable_transaction_error_with_transient_errors() {
             let quorum_driver_error = QuorumDriverError::NonRecoverableTransactionError {
                 errors: vec![
