@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use either::Either;
+use fastcrypto_zkp::bn254::zk_login::OAuthProviderContent;
 use futures::pin_mut;
 use im::hashmap::HashMap as ImHashMap;
 use itertools::izip;
@@ -275,17 +276,15 @@ impl SignatureVerifier {
         });
     }
 
-    /// Insert a JWK into the verifier state. Returns true if the kid of the JWK has not already
+    /// Insert a JWK into the verifier state based on provider. Returns true if the kid of the JWK has not already
     /// been inserted.
-    pub(crate) fn insert_oauth_jwk(&self, content: &OAuthProviderContent) -> bool {
+    pub(crate) fn insert_oauth_jwk(&self, content: &OAuthProviderContent, iss: String) -> bool {
         let mut oauth_provider_jwk = self.oauth_provider_jwk.write();
-
-        if oauth_provider_jwk.contains_key(content.kid()) {
+        if oauth_provider_jwk.contains_key(&(content.kid().to_string(), iss.clone())) {
             return false;
         }
-
         let kid = content.kid().to_string();
-        oauth_provider_jwk.insert(kid, content.clone());
+        oauth_provider_jwk.insert((kid, iss), content.clone());
         true
     }
 

@@ -205,22 +205,30 @@ impl SuiNode {
                     let epoch_store_ = epoch_store.clone();
                     let fetch_and_sleep = async move {
                         // Update the JWK value in the authority server
-                        info!("fetching new JWKs");
-                        match Self::fetch_jwk().await {
-                            Err(e) => {
-                                warn!("Error when fetching JWK {:?}", e);
-                                // Retry in 30 seconds
-                                tokio::time::sleep(Duration::from_secs(30)).await;
-                            }
-                            Ok(keys) => {
-                                for (_, v) in keys {
-                                    epoch_store_.insert_oauth_jwk(&v);
+                        for provider in [
+                            OAuthProvider::Google,
+                            OAuthProvider::Twitch,
+                            OAuthProvider::Facebook,
+                        ] {
+                            info!("fetching new JWKs for provider {:?}", provider);
+                            match Self::fetch_oauth_jwk(provider.clone()).await {
+                                Err(e) => {
+                                    warn!(
+                                        "Error when fetching JWK with provider {:?} {:?}",
+                                        provider, e
+                                    );
+                                    // Retry in 30 seconds
+                                    tokio::time::sleep(Duration::from_secs(30)).await;
                                 }
-
-                                // Sleep for 1 hour
-                                tokio::time::sleep(Duration::from_secs(3600)).await;
+                                Ok(keys) => {
+                                    for ((_kid, iss), v) in keys {
+                                        epoch_store_.insert_oauth_jwk(&v, iss);
+                                    }
+                                }
                             }
                         }
+                        // Sleep for 1 hour
+                        tokio::time::sleep(Duration::from_secs(3600)).await;
                     };
 
                     tokio::select! {
@@ -237,10 +245,10 @@ impl SuiNode {
     }
 
     #[cfg(not(msim))]
-    async fn fetch_jwk() -> SuiResult<Vec<(String, OAuthProviderContent)>> {
+    async fn fetch_jwk(provider: OAuthProvider) -> SuiResult<Vec<((String, String), OAuthProviderContent)>> {
         let client = reqwest::Client::new();
         let response = client
-            .get("https://www.googleapis.com/oauth2/v2/certs")
+            .get(provider.get_config().1)
             .send()
             .await
             .map_err(|_| SuiError::JWKRetrievalError)?;
@@ -253,7 +261,7 @@ impl SuiNode {
     }
 
     #[cfg(msim)]
-    async fn fetch_jwk() -> SuiResult<Vec<(String, OAuthProviderContent)>> {
+    async fn fetch_jwk(provider: OAuthProvider) -> SuiResult<Vec<(String, OAuthProviderContent)>> {
         parse_jwks(sui_types::zk_login_util::DEFAULT_JWK_BYTES)
     }
 
