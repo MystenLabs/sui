@@ -33,16 +33,23 @@ use super::types::*;
 
 const MANAGER_CHANNEL_SIZE:usize = 1024;
 
+enum QueueCell {
+    Read(HashSet<TransactionDigest>),
+    Write(TransactionDigest),
+}
 
-// TODO: For concurrent reads
-// pub struct QueueCell {
-//     read_only: bool,
-//     txns: HashSet<TransactionDigest>,
-// }
+impl QueueCell {
+    fn contains(&self, txid: &TransactionDigest) -> bool {
+        match self {
+            QueueCell::Read(txs) => txs.contains(txid),
+            QueueCell::Write(tx) => tx == txid,
+        }
+    }
+}
 
 pub struct QueuesManager {
     tx_store: HashMap<TransactionDigest, Transaction>,
-    obj_queues: HashMap<ObjectID, VecDeque<TransactionDigest>>,
+    obj_queues: HashMap<ObjectID, VecDeque<QueueCell>>,
     wait_table: HashMap<TransactionDigest, HashSet<ObjectID>>,
     ready: mpsc::Sender<Transaction>,
 }
@@ -58,35 +65,48 @@ impl QueuesManager {
 
     /// Enqueues a transaction on the manager
     async fn queue_tx(&mut self, full_tx: Transaction) {
-       
 		// Store tx
         let txid = *full_tx.tx.digest();
 		self.tx_store.insert(txid, full_tx.clone());
 
-        // Get the read set
-        // let read_set = full_tx.get
-        
-
-        // Get RW set
-        let rw_set = full_tx.get_read_write_set();
+        // Get read and write sets
+        let r_set = full_tx.get_read_set();
+        let w_set = full_tx.get_write_set();
         
         // Add tx to object queues
-        for obj in rw_set.iter() {
+        for &obj in w_set.iter() {
+            let cell = QueueCell::Write(txid);
+            self.obj_queues.entry(obj).or_default().push_back(cell);
+        }
+
+        for obj in r_set.iter() {
+            if w_set.contains(obj) {
+                continue;
+            }
             if let Some(q) = self.obj_queues.get_mut(obj) {
-                q.push_back(txid);
+                match q.back_mut() {
+                    // Limiting the number of reads per `QueueCell`
+                    // prevents managing queues from becoming too expensive.
+                    // Ideally, to still allow using the systems resources,
+                    // this limit should be on the order of #threadsPerEW * #EWs.
+                    Some(QueueCell::Read(txs)) if txs.len() < 64 => {
+                        txs.insert(txid);
+                    },
+                    // if queue is empty or tail has write or tail has at least 64 reads
+                    _ => q.push_back(QueueCell::Read([txid].into())),
+                }
             } else {
-                self.obj_queues.insert(*obj, [txid].into());
+                let cell = QueueCell::Read([txid].into());
+                self.obj_queues.insert(*obj, [cell].into());
             }
         }
 
         // Update the wait table
-        self.wait_table.insert(txid, HashSet::from_iter(rw_set.clone()));
-        for obj in rw_set.iter() {
+        self.wait_table.insert(txid, HashSet::new());
+        for obj in r_set.union(&w_set) {
             let queue = self.obj_queues.get(obj).unwrap();
-            if let Some(&head) = queue.front() {
-                if head == txid {
-                    self.wait_table.get_mut(&txid).unwrap().remove(obj);
-                }
+            if !queue.is_empty() && !queue.front().unwrap().contains(&txid) {
+                self.wait_table.get_mut(&txid).unwrap().insert(*obj);
             }
 		}
 
@@ -99,25 +119,44 @@ impl QueuesManager {
 
     /// Cleans up after a completed transaction
 	async fn clean_up(&mut self, completed_tx: &Transaction) {
-
         // Get digest and RW set
         let txid = completed_tx.tx.digest();
 		
 		// Remove tx from obj_queues
 		for obj in completed_tx.get_read_write_set().iter() {
             let queue = self.obj_queues.get_mut(obj).unwrap();
-            assert!(*queue.front().unwrap() == *txid);  // sanity check
-            queue.pop_front();
+            assert!(queue.front().unwrap().contains(txid));  // sanity check
+            let unblocked = match queue.front_mut().unwrap() {
+                QueueCell::Read(txs) if txs.len() > 1 => {
+                    txs.remove(&txid);
+                    false
+                },
+                _ => {
+                    queue.pop_front();
+                    true
+                },
+            };
+
+            if !unblocked {
+                continue;
+            }
 			
 			// Update wait_table; advance wait status of txs waiting on obj
-            if let Some(next_txid) = queue.front() {
-                self.wait_table.get_mut(next_txid).unwrap().remove(obj);
+            if let Some(cell) = queue.front() {
+                let next_txs = match cell {
+                    QueueCell::Read(txs) => txs.clone(),
+                    QueueCell::Write(tx) => [*tx].into(),
+                };
 
-                // Check if next_txid ready
-                if self.wait_table.get_mut(next_txid).unwrap().is_empty() {
-                    self.wait_table.remove(next_txid);
-                    let next_tx = self.tx_store.get(next_txid).unwrap();
-                    self.ready.send(next_tx.clone()).await.expect("send failed");
+                for next_txid in next_txs {
+                    self.wait_table.get_mut(&next_txid).unwrap().remove(obj);
+
+                    // Check if next_txid ready
+                    if self.wait_table.get_mut(&next_txid).unwrap().is_empty() {
+                        self.wait_table.remove(&next_txid);
+                        let next_tx = self.tx_store.get(&next_txid).unwrap();
+                        self.ready.send(next_tx.clone()).await.expect("send failed");
+                    }
                 }
             }
 		}
@@ -198,8 +237,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
         input_objects: &InputObjects,
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
-    ) -> SuiGasStatus
-    {
+    ) -> SuiGasStatus {
         let tx_data = tx.data().transaction_data();
 
         let input_object_data = 
@@ -322,8 +360,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
         epoch_data: EpochData,
         protocol_config: ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
-    ) -> TransactionWithResults
-    {
+    ) -> TransactionWithResults {
         let tx = &full_tx.tx;
         let tx_data = tx.data().transaction_data();
         let (kind, signer, gas) = tx_data.execution_parts();
@@ -420,7 +457,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
         exec_watermark: u64,
         mut sw_receiver: mpsc::Receiver<SailfishMessage>,
         ew_sender: mpsc::Sender<SailfishMessage>,
-    ){
+    ) {
         // Initialize channels
         let (manager_sender, mut manager_receiver) = mpsc::channel(MANAGER_CHANNEL_SIZE);
         let mut manager = QueuesManager::new(manager_sender);
