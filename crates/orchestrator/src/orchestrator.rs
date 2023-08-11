@@ -258,6 +258,8 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P,
             "echo \"source $HOME/.cargo/env\" | tee -a ~/.bashrc",
             "source $HOME/.cargo/env",
             "rustup default stable",
+            // A bug with rust toolchain may prevent us from finding the right toolchain.
+            "(rustup toolchain uninstall stable || true)",
             // Create the working directory.
             &format!("mkdir -p {working_dir}"),
             // Clone the repo.
