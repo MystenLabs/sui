@@ -6,6 +6,7 @@ import { isBasePayload } from './BasePayload';
 import { type AccountSourceSerializedUI } from '_src/background/account-sources/AccountSource';
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
 
+import { type ZkProvider } from '_src/background/accounts/zk/providers';
 import { type Status } from '_src/background/storage-migration';
 import type { Payload } from './Payload';
 
@@ -23,7 +24,7 @@ type MethodPayloads = {
 	};
 	accountSourceCreationResponse: { accountSource: AccountSourceSerializedUI };
 	lockAccountSourceOrAccount: { id: string };
-	unlockAccountSourceOrAccount: { id: string } & { password: string };
+	unlockAccountSourceOrAccount: { id: string; password?: string };
 	createAccounts:
 		| { type: 'mnemonic-derived'; sourceID: string }
 		| { type: 'imported'; keyPair: ExportedKeypair; password: string }
@@ -31,6 +32,10 @@ type MethodPayloads = {
 				type: 'ledger';
 				accounts: { publicKey: string; derivationPath: string; address: string }[];
 				password: string;
+		  }
+		| {
+				type: 'zk';
+				provider: ZkProvider;
 		  };
 	accountsCreatedResponse: { accounts: SerializedUIAccount[] };
 	signData: { data: string; id: string };

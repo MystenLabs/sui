@@ -16,7 +16,7 @@ import {
 } from '../session-ephemeral-values';
 import { type Serializable } from '_src/shared/cryptography/keystore';
 
-export type AccountType = 'mnemonic-derived' | 'imported' | 'ledger' | 'qredo';
+export type AccountType = 'mnemonic-derived' | 'imported' | 'ledger' | 'qredo' | 'zk';
 
 export abstract class Account<
 	T extends SerializedAccount = SerializedAccount,

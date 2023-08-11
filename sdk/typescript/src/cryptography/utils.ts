@@ -45,6 +45,10 @@ export function toParsedSignaturePubkeyPair(
 		}
 	}
 
+	if (signatureScheme === 'Zk') {
+		throw new Error('Unable to parse a zk signature. (not implemented yet)');
+	}
+
 	const SIGNATURE_SCHEME_TO_PUBLIC_KEY = {
 		ED25519: Ed25519PublicKey,
 		Secp256k1: Secp256k1PublicKey,

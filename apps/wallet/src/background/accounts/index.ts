@@ -3,12 +3,13 @@
 
 import { fromB64 } from '@mysten/sui.js/utils';
 import Dexie from 'dexie';
-import { isSigningAccount, type SerializedAccount } from './Account';
+import { isPasswordUnLockable, isSigningAccount, type SerializedAccount } from './Account';
 import { ImportedAccount } from './ImportedAccount';
 import { LedgerAccount } from './LedgerAccount';
 import { MnemonicAccount } from './MnemonicAccount';
 import { QredoAccount } from './QredoAccount';
 import { accountsEvents } from './events';
+import { ZkAccount } from './zk/ZkAccount';
 import { getAccountSourceByID } from '../account-sources';
 import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
 import { type UiConnection } from '../connections/UiConnection';
@@ -32,6 +33,9 @@ function toAccount(account: SerializedAccount) {
 	}
 	if (QredoAccount.isOfType(account)) {
 		return new QredoAccount({ id: account.id, cachedData: account });
+	}
+	if (ZkAccount.isOfType(account)) {
+		return new ZkAccount({ id: account.id, cachedData: account });
 	}
 	throw new Error(`Unknown account of type ${account.type}`);
 }
@@ -165,7 +169,14 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 		const { id, password } = payload.args;
 		const account = await getAccountByID(id);
 		if (account) {
-			await account.passwordUnlock(password);
+			if (isPasswordUnLockable(account)) {
+				if (!password) {
+					throw new Error('Missing password to unlock the account');
+				}
+				await account.passwordUnlock(password);
+			} else {
+				await account.unlock();
+			}
 			await uiConnection.send(createMessage({ type: 'done' }, msg.id));
 			return true;
 		}
@@ -211,6 +222,8 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 			for (const aLedgerAccount of accounts) {
 				newSerializedAccounts.push(await LedgerAccount.createNew({ ...aLedgerAccount, password }));
 			}
+		} else if (type === 'zk') {
+			newSerializedAccounts.push(await ZkAccount.createNew(payload.args));
 		} else {
 			throw new Error(`Unknown accounts type to create ${type}`);
 		}

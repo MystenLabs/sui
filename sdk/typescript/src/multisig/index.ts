@@ -12,5 +12,9 @@ export function publicKeyFromSuiBytes(publicKey: string | Uint8Array) {
 
 	const signatureScheme = SIGNATURE_FLAG_TO_SCHEME[bytes[0] as SignatureFlag];
 
+	if (signatureScheme === 'Zk') {
+		throw new Error('Zk signature is not supported yet');
+	}
+
 	return publicKeyFromRawBytes(signatureScheme, bytes.slice(1));
 }

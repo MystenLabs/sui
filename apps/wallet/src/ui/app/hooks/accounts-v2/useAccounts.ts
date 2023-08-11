@@ -14,7 +14,7 @@ export function useAccounts() {
 		queryFn: () => backgroundClient.getStoredEntities<SerializedUIAccount>('accounts'),
 		cacheTime: 30 * 1000,
 		staleTime: 15 * 1000,
-		refetchInterval: 5 * 1000,
+		refetchInterval: 30 * 1000,
 		meta: { skipPersistedCache: true },
 	});
 }
