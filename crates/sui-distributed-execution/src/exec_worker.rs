@@ -60,14 +60,14 @@ impl QueuesManager {
             tx_store: HashMap::new(), 
             obj_queues: HashMap::new(),
             wait_table: HashMap::new(),
-            ready: manager_sender}
+            ready: manager_sender,
+        }
     }
 
     /// Enqueues a transaction on the manager
     async fn queue_tx(&mut self, full_tx: Transaction) {
 		// Store tx
         let txid = *full_tx.tx.digest();
-		self.tx_store.insert(txid, full_tx.clone());
 
         // Get read and write sets
         let r_set = full_tx.get_read_set();
@@ -114,7 +114,9 @@ impl QueuesManager {
         if self.wait_table.get_mut(&txid).unwrap().is_empty() {
 			self.wait_table.remove(&txid);
             self.ready.send(full_tx).await.expect("send failed");
-		}
+        } else {
+            self.tx_store.insert(txid, full_tx);
+        }
 	}
 
     /// Cleans up after a completed transaction
@@ -154,13 +156,12 @@ impl QueuesManager {
                     // Check if next_txid ready
                     if self.wait_table.get_mut(&next_txid).unwrap().is_empty() {
                         self.wait_table.remove(&next_txid);
-                        let next_tx = self.tx_store.get(&next_txid).unwrap();
-                        self.ready.send(next_tx.clone()).await.expect("send failed");
+                        let next_tx = self.tx_store.remove(&next_txid).unwrap();
+                        self.ready.send(next_tx).await.expect("send failed");
                     }
                 }
             }
 		}
-        self.tx_store.remove(&txid);
     }
 }
 
@@ -439,7 +440,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
             .expect("Read Sui System State object cannot fail");
         let new_epoch_start_state = latest_state.into_epoch_start_state();
         ew_sender
-            .send(SailfishMessage::EpochEnd{
+            .send(SailfishMessage::EpochEnd {
                 new_epoch_start_state,
             }).await
             .expect("Sending doesn't work");
