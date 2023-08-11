@@ -378,7 +378,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
             &protocol_config,
         );
     
-        let (inner_temp_store, tx_effects, _execution_error) =
+        let (inner_temp_store, _tx_effects, _execution_error) =
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal>(
                 shared_object_refs,
                 temporary_store,
@@ -398,10 +398,17 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
 
         Self::write_updates_to_store(memory_store, inner_temp_store);
         
+        #[cfg(not(debug_assertions))]
         return TransactionWithResults {
             full_tx,
-            tx_effects,
-        }
+            tx_effects: None,
+        };
+
+        #[cfg(debug_assertions)]
+        return TransactionWithResults {
+            full_tx,
+            tx_effects: Some(_tx_effects),
+        };
     }
 
 
@@ -498,8 +505,11 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                     }
 
                     // 1. Critical check: are the effects the same?
-                    let tx_effects = &tx_with_results.tx_effects;
-                    debug_assert!(Self::check_effects_match(full_tx, tx_effects));
+                    #[cfg(debug_assertions)]
+                    {
+                        let tx_effects = &tx_with_results.tx_effects.unwrap();
+                        debug_assert!(Self::check_effects_match(full_tx, tx_effects));
+                    }
 
                     // 2. Update object queues
                     manager.clean_up(&full_tx).await;

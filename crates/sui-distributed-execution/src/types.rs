@@ -168,5 +168,5 @@ impl Transaction {
 
 pub struct TransactionWithResults {
     pub full_tx: Transaction,
-    pub tx_effects: TransactionEffects, // determined after execution
+    pub tx_effects: Option<TransactionEffects>, // determined after execution
 }
