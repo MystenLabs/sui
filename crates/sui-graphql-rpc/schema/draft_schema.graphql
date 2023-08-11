@@ -269,7 +269,7 @@ type AvailableRange {
   last: Checkpoint
 }
 
-interface Owner {
+interface ObjectOwner {
   location: SuiAddress!
 
   objectConnection(
@@ -315,9 +315,12 @@ interface Owner {
 
 # Returned by Object.owner, where we can't disambiguate between
 # Address and Object.
-type AmbiguousOwner implements Owner
+type Owner implements ObjectOwner {
+  asAddress: Address
+  asObject: Object
+}
 
-type Address implements Owner {
+type Address implements ObjectOwner {
   transactionBlockConnection(
     first: Int,
     after: String,
@@ -335,11 +338,18 @@ enum AddressTransactionBlockRelationship {
   PAID # Transactions that were paid for by this address
 }
 
-type Object implements Owner {
+enum ObjectKind {
+  OWNED
+  SHARED
+  IMMUTABLE
+}
+
+type Object implements ObjectOwner {
   id: ID!
   version: Int!
   digest: String!
-  owner: AmbiguousOwner
+  owner: Owner
+  kind: ObjectKind
 
   previousTransactionBlock: TransactionBlock
   storageRebate: BigInt
