@@ -55,7 +55,7 @@ module axelar::channel {
         /// Messages processed by this object for the current axelar epoch. To make system less
         /// centralized, and spread the storage + io costs across multiple
         /// destinations, we can track every `Channel`'s messages.
-        processed_call_approvals: VecSet<vector<u8>>,
+        processed_call_approvals: VecSet<address>,
         /// epoch of the last processed approval.
         last_processed_approval_epoch: u64,
         /// Additional field to optionally use as metadata for the Channel
@@ -125,7 +125,7 @@ module axelar::channel {
     public fun take_approved_call<T: store>(
         axelar: &mut AxelarValidators,
         t: &mut Channel<T>,
-        cmd_id: vector<u8>,
+        cmd_id: address,
         payload: vector<u8>
     ): (&mut T, ApprovedCall) {
         let approved_call = validators::take_approved_call(axelar, cmd_id, payload);

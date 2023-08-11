@@ -39,7 +39,7 @@ bcs.registerStructType("Proof", {
 // internals of the message
 bcs.registerStructType("AxelarMessage", {
     chain_id: "u64",
-    command_ids: "vector<string>",
+    command_ids: "vector<address>",
     commands: "vector<string>",
     params: "vector<vector<u8>>",
 });
@@ -63,7 +63,7 @@ const ZERO_ADDR = "0x".padEnd(62, "0");
 const message = bcs
     .ser("AxelarMessage", {
         chain_id: 1,
-        command_ids: ["rogue_one", "axelar_two"],
+        command_ids: ["0x0000000000000000000000000000000000000000000000000000000000000001", "0x0000000000000000000000000000000000000000000000000000000000000002"],
         commands: ["approveContractCall", "approveContractCall"],
         params: [
             bcs
@@ -118,7 +118,7 @@ console.log(secp256k1.ecdsaVerify(signature, hashed, pubKey));
     const message = bcs
         .ser("AxelarMessage", {
             chain_id: 1,
-            command_ids: ["rogue_one"],
+            command_ids: ["0x0000000000000000000000000000000000000000000000000000000000000001"],
             commands: ["transferOperatorship"],
             params: [
                 bcs

@@ -8,7 +8,7 @@ module axelar::approved_call {
 
     struct ApprovedCall {
         /// ID of the call approval, guaranteed to be unique by Axelar.
-        cmd_id: vector<u8>,
+        cmd_id: address,
         /// The target Channel's UID.
         target_id: address,
         /// Name of the chain where this approval came from.
@@ -23,7 +23,7 @@ module axelar::approved_call {
     }
 
     public(friend) fun create(
-        cmd_id: vector<u8>,
+        cmd_id: address,
         source_chain: String,
         source_address: String,
         target_id: address,
@@ -40,7 +40,7 @@ module axelar::approved_call {
         }
     }
 
-    public fun cmd_id(msg: &ApprovedCall): vector<u8> {
+    public fun cmd_id(msg: &ApprovedCall): address {
         msg.cmd_id
     }
 

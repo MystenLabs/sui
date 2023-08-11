@@ -152,7 +152,7 @@ module axelar::validators {
 
     public(friend) fun add_approval(
         axelar: &mut AxelarValidators,
-        cmd_id: vector<u8>,
+        cmd_id: address,
         source_chain: String,
         source_address: String,
         target_id: address,
@@ -168,7 +168,7 @@ module axelar::validators {
 
     public(friend) fun take_approved_call(
         axelar: &mut AxelarValidators,
-        cmd_id: vector<u8>,
+        cmd_id: address,
         payload: vector<u8>
     ): ApprovedCall {
         let Approval {
@@ -176,7 +176,7 @@ module axelar::validators {
             source_chain,
             source_address,
             payload_hash,
-        } = df::remove<vector<u8>, Approval>(&mut axelar.id, cmd_id);
+        } = df::remove<address, Approval>(&mut axelar.id, cmd_id);
 
         assert!(hash::keccak256(&payload) == payload_hash, EPayloadHashMismatch);
 
