@@ -10,6 +10,7 @@ use sui_types::base_types::ObjectID;
 use move_core_types::language_storage::ModuleId;
 use anyhow::anyhow;
 use std::sync::Arc;
+use std::process::exit;
 
 use sui_types::object::MoveObject;
 use sui_types::object::ObjectFormatOptions;
@@ -50,7 +51,9 @@ fn main() {
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let connection = &mut establish_connection();
 
-    let start_id = 1;
+    //let start_id = 1;
+    //let start_id = 465778286;
+    let start_id = 743159312;
 
     let blocking_cp = new_pg_connection_pool(&database_url).map_err(|e| anyhow!("Unable to connect to Postgres, is it running? {e}"));
     let module_cache = Arc::new(SyncModuleCache::new(IndexerModuleResolver::new(blocking_cp.expect("REASON").clone())));
@@ -69,29 +72,22 @@ fn main() {
                 println!("event id = {}", event.id);
                 debug!("event sequence = {:#?}", event.event_sequence);
                 debug!("sender = {:#?}", event.sender);
-                debug!("package = {:#?}", event.package);
+                println!("package = {:#?}", event.package);
                 debug!("module = {:#?}", event.module);
                 debug!("type = {:#?}", event.event_type);
                 let text = String::from_utf8_lossy(&event.event_bcs);
                 debug!("bcs in text = {:#?}", text);
 
+                if event.package == "0x72f9c76421170b5a797432ba9e1b3b2e2b7cf6faa26eb955396c773af2479e1e" {
+                    println!("8192 event, skipping...");
+                    continue;
+                }
+
+                println!("Non 8192 event!");
+
                 // JSON parsing starts here
                 let type_ = parse_sui_struct_tag(&event.event_type);
-
-                //let package_id = event.package.to_string();
-                //println!("package id= {:#?}", package_id);
-
-                //let module_name = event.module.to_string();
-                //println!("module name= {:#?}", module_name);
-
-                /*
-                let result = diesel::sql_query(LATEST_MODULE_QUERY)
-                    .bind::<diesel::sql_types::Text, _>(package_id)
-                    .bind::<diesel::sql_types::Text, _>(module_name)
-                    .get_result::<ModuleBytes>(connection);
-
-                println!("{:?}", result);
-                */
+                println!("type = {:#?}", type_);
 
                 let layout = MoveObject::get_layout_from_struct_tag(
                     type_.expect("REASON").clone(),
@@ -119,14 +115,14 @@ fn main() {
 
                             }|
                             Err(e) => {
-                                println!("error: {}", e);
+                                println!("error in deserialize:{}", e);
                                 continue;
                             }
                         }
                     }
                     Err(err) => {
-                        println!("error: {}", err);
-                        continue;
+                        println!("error in get_layout {}", err);
+                        exit(0);
                     }
                 }
             }
