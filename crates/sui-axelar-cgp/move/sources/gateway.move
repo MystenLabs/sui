@@ -31,8 +31,8 @@
 module axelar::gateway {
     use std::vector;
 
-    use axelar::axelar;
-    use axelar::axelar::{AxelarValidators, validate_proof};
+    use axelar::validators;
+    use axelar::validators::{AxelarValidators, validate_proof};
     use axelar::messaging;
     use axelar::messaging::CallApproval;
     use axelar::utils::to_sui_signed;
@@ -67,7 +67,7 @@ module axelar::gateway {
         let (i, len) = (0, vector::length(&call_approvals));
 
         while (i < len) {
-            axelar::add_call_approval(axelar, vector::pop_back(&mut call_approvals));
+            validators::add_call_approval(axelar, vector::pop_back(&mut call_approvals));
             i = i + 1;
         };
         vector::destroy_empty(call_approvals);
@@ -139,7 +139,7 @@ module axelar::gateway {
                     continue
                 };
                 allow_operatorship_transfer = false;
-                axelar::transfer_operatorship(validators, payload)
+                validators::transfer_operatorship(validators, payload)
             } else {
                 continue
             };
@@ -172,14 +172,14 @@ module axelar::gateway {
         let test = ts::begin(@0x0);
 
         // create validators for testing
-        let axelar = axelar::new(
+        let axelar = validators::new(
             epoch,
             epoch_for_hash,
             ctx(&mut test)
         );
 
         let call_approvals = validate_commands(&mut axelar, CALL_APPROVAL);
-        axelar::delete(axelar);
+        validators::delete(axelar);
         messaging::delete(call_approvals);
         ts::end(test);
     }
@@ -200,7 +200,7 @@ module axelar::gateway {
         let test = ts::begin(@0x0);
 
         // create validators for testing
-        let axelar = axelar::new(
+        let axelar = validators::new(
             epoch,
             epoch_for_hash,
             ctx(&mut test)
@@ -208,15 +208,15 @@ module axelar::gateway {
 
         let call_approvals = validate_commands(&mut axelar, TRANSFER_OPERATORSHIP_APPROVAL);
 
-        assert!(axelar::epoch(&axelar) == 2, 0);
+        assert!(validators::epoch(&axelar) == 2, 0);
 
-        axelar::delete(axelar);
+        validators::delete(axelar);
         messaging::delete(call_approvals);
         ts::end(test);
     }
 }
 
-module axelar::axelar {
+module axelar::validators {
     use std::vector;
 
     use axelar::messaging;
