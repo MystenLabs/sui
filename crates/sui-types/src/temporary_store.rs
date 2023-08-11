@@ -322,7 +322,7 @@ impl<'backing> TemporaryStore<'backing> {
                 .map(|(id, metadata)| (id, metadata.version))
                 .collect(),
             no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),
-            runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.read().clone(),
+            runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
         }
     }
 
