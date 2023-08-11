@@ -46,7 +46,6 @@ import SiteConnectPage from './pages/site-connect';
 import WelcomePage from './pages/welcome';
 import { AppType } from './redux/slices/app/AppType';
 import { Staking } from './staking/home';
-import LockedPage from './wallet/locked-page';
 
 import { useAppDispatch, useAppSelector } from '_hooks';
 
@@ -85,8 +84,6 @@ const App = () => {
 	return (
 		<Routes>
 			<Route path="/welcome" element={<WelcomePage />} />
-
-			<Route path="locked" element={<LockedPage />} />
 			<Route path="forgot-password" element={<ForgotPasswordPage />} />
 			<Route path="restricted" element={<RestrictedPage />} />
 

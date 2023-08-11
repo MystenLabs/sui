@@ -17,7 +17,7 @@ export function useLockedGuard(requiredLockedStatus: boolean) {
 		}),
 	);
 	const loading = isInitialized === null || isLocked === null;
-	const guardAct = !loading && isInitialized && requiredLockedStatus !== isLocked;
+	const guardAct = !loading && isInitialized && requiredLockedStatus !== isLocked && false;
 	const nextUrl = searchParams.get('url') || '/';
 	useEffect(() => {
 		if (guardAct) {
