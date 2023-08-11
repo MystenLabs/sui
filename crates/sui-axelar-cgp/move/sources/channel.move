@@ -2,16 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module axelar::channel {
-    use axelar::messaging;
-    use axelar::messaging::CallApproval;
-    use axelar::validators;
-    use axelar::validators::AxelarValidators;
     use sui::bcs;
     use sui::object;
     use sui::object::UID;
     use sui::tx_context::TxContext;
     use sui::vec_set;
     use sui::vec_set::VecSet;
+
+    use axelar::approved_call;
+    use axelar::approved_call::ApprovedCall;
+    use axelar::validators;
+    use axelar::validators::AxelarValidators;
 
     /// Generic target for the messaging system.
     ///
@@ -121,13 +122,13 @@ module axelar::channel {
     ///
     /// For Capability-locking, a mutable reference to the `Channel.data` field is
     /// returned; plus the hot potato message object.
-    public fun retrieve_call_approval<T: store>(
+    public fun take_approved_call<T: store>(
         axelar: &mut AxelarValidators,
         t: &mut Channel<T>,
         cmd_id: vector<u8>,
-    ): (&mut T, CallApproval) {
-        let message = validators::remove_call_approval(axelar, cmd_id);
-
+        payload: vector<u8>
+    ): (&mut T, ApprovedCall) {
+        let approved_call = validators::take_approved_call(axelar, cmd_id, payload);
         let current_epoch = validators::epoch(axelar);
 
         if (t.last_processed_approval_epoch != current_epoch) {
@@ -136,9 +137,9 @@ module axelar::channel {
         };
 
         assert!(!vec_set::contains(&t.processed_call_approvals, &cmd_id), EDuplicateMessage);
-        assert!(messaging::target_id(&message) == object::uid_to_address(&t.id), EWrongDestination);
+        assert!(approved_call::target_id(&approved_call) == object::uid_to_address(&t.id), EWrongDestination);
 
         vec_set::insert(&mut t.processed_call_approvals, cmd_id);
-        (&mut t.data, message)
+        (&mut t.data, approved_call)
     }
 }
