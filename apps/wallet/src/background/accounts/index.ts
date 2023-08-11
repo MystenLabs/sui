@@ -78,8 +78,8 @@ export async function changeActiveAccount(accountID: string) {
 		if (!newSelectedAccount) {
 			throw new Error(`Failed, account with id ${accountID} not found`);
 		}
-		await db.accounts.where({ selected: true }).modify({ selected: false });
-		await db.accounts.where({ id: accountID }).modify({ selected: true });
+		await db.accounts.where('id').notEqual(accountID).modify({ selected: false });
+		await db.accounts.update(accountID, { selected: true });
 		accountsEvents.emit('activeAccountChanged', { accountID });
 	});
 }
@@ -152,6 +152,11 @@ export async function addNewAccounts<T extends SerializedAccount>(accounts: Omit
 				throw new Error(`Something went wrong account with id ${id} not found`);
 			}
 			accountInstances.push(accountInstance);
+		}
+		const selectedAccount = await db.accounts.filter(({ selected }) => selected).first();
+		if (!selectedAccount && accountInstances.length) {
+			const firstAccount = accountInstances[0];
+			await db.accounts.update(firstAccount.id, { selected: true });
 		}
 		return accountInstances;
 	});
