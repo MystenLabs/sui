@@ -36,6 +36,7 @@ use tracing::instrument;
 
 use crate::api::JsonRpcMetrics;
 use crate::api::WriteApiServer;
+use crate::authority_state::StateRead;
 use crate::error::{Error, SuiRpcInputError};
 use crate::{
     get_balance_changes_from_effect, get_object_changes, with_tracing, ObjectProviderCache,
@@ -43,7 +44,7 @@ use crate::{
 };
 
 pub struct TransactionExecutionApi {
-    state: Arc<AuthorityState>,
+    state: Arc<dyn StateRead>,
     transaction_orchestrator: Arc<TransactiondOrchestrator<NetworkAuthorityClient>>,
     metrics: Arc<JsonRpcMetrics>,
 }
@@ -186,7 +187,7 @@ impl TransactionExecutionApi {
                     sender,
                     effects.effects.modified_at_versions(),
                     effects.effects.all_changed_objects(),
-                    effects.effects.all_deleted(),
+                    effects.effects.all_removed_objects(),
                 )
                 .await?,
             )
@@ -251,7 +252,7 @@ impl TransactionExecutionApi {
             sender,
             transaction_effects.modified_at_versions(),
             transaction_effects.all_changed_objects(),
-            transaction_effects.all_deleted(),
+            transaction_effects.all_removed_objects(),
         )
         .await?;
 

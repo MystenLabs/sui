@@ -198,3 +198,15 @@ export async function getAllDynamicFields(
 
 	return data;
 }
+
+/**
+ * Converts a number to basis points.
+ * Supports up to 2 decimal points.
+ * E.g 9.95 -> 995
+ * @param percentage A percentage amount in the range [0, 100] including decimals.
+ */
+export function percentageToBasisPoints(percentage: number) {
+	if (percentage < 0 || percentage > 100)
+		throw new Error('Percentage needs to be in the [0,100] range.');
+	return Math.ceil(percentage * 100);
+}

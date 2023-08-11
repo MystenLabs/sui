@@ -13,7 +13,7 @@ use fastcrypto::{
     encoding::{Encoding, Hex},
     hash::Hash,
     signature_service::SignatureService,
-    traits::KeyPair,
+    traits::KeyPair as _,
 };
 use itertools::Itertools;
 use network::client::NetworkClient;
@@ -26,11 +26,7 @@ use std::{
 };
 use storage::{NodeStorage, VoteDigestStore};
 use test_utils::{make_optimal_signed_certificates, temp_dir, CommitteeFixture};
-use tokio::{
-    sync::{oneshot, watch},
-    time::timeout,
-};
-
+use tokio::{sync::watch, time::timeout};
 use types::{
     now, Certificate, CertificateAPI, FetchCertificatesRequest, Header, HeaderAPI,
     MockPrimaryToWorker, PreSubscribedBroadcastSender, PrimaryToPrimary, RequestVoteRequest,
@@ -38,8 +34,7 @@ use types::{
 use worker::{metrics::initialise_metrics, TrivialTransactionValidator, Worker};
 
 #[tokio::test]
-async fn get_network_peers_from_admin_server() {
-    // telemetry_subscribers::init_for_testing();
+async fn test_get_network_peers_from_admin_server() {
     let primary_1_parameters = Parameters {
         batch_size: 200, // Two transactions.
         ..Parameters::default()
@@ -291,7 +286,6 @@ async fn test_request_vote_has_missing_parents() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(1, 0));
     let (tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
-    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
         target_id,
@@ -305,7 +299,6 @@ async fn test_request_vote_has_missing_parents() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates,
-        rx_synchronizer_network,
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -461,7 +454,6 @@ async fn test_request_vote_accept_missing_parents() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(1, 0));
     let (tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
-    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
         target_id,
@@ -475,7 +467,6 @@ async fn test_request_vote_accept_missing_parents() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates,
-        rx_synchronizer_network,
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -619,7 +610,6 @@ async fn test_request_vote_missing_batches() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(1, 0));
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
-    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
         authority_id,
@@ -633,7 +623,6 @@ async fn test_request_vote_missing_batches() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates,
-        rx_synchronizer_network,
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -767,7 +756,6 @@ async fn test_request_vote_already_voted() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(1, 0));
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
-    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
         id,
@@ -781,7 +769,6 @@ async fn test_request_vote_already_voted() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates,
-        rx_synchronizer_network,
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -958,7 +945,6 @@ async fn test_fetch_certificates_handler() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::default());
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
-    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
         id,
@@ -972,7 +958,6 @@ async fn test_fetch_certificates_handler() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
-        rx_synchronizer_network,
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -1132,7 +1117,6 @@ async fn test_request_vote_created_at_in_future() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(1, 0));
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
-    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
         id,
@@ -1146,7 +1130,6 @@ async fn test_request_vote_created_at_in_future() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates,
-        rx_synchronizer_network,
         metrics.clone(),
         &primary_channel_metrics,
     ));

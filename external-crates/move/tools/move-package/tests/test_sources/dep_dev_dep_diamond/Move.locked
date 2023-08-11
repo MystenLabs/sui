@@ -2,6 +2,7 @@
 
 [move]
 version = 0
+manifest_digest = "3FFCC3493EF75DBA3C6232A841BC1FB786BCAFE6B3B799AF601C6EDCA342340C"
 
 dependencies = [
   { name = "A" },

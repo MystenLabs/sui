@@ -5,23 +5,30 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use futures::stream::{self, StreamExt};
 use hyper::client::HttpConnector;
+use hyper::header::{HeaderValue, CONTENT_LENGTH};
 use hyper::Client;
 use hyper::Uri;
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_types::{
+    digests::{
+        CheckpointContentsDigest, CheckpointDigest, TransactionDigest, TransactionEventsDigest,
+    },
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
     error::{SuiError, SuiResult},
-    message_envelope::Message,
+    messages_checkpoint::{
+        CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
+    },
     transaction::Transaction,
 };
 use tap::TapFallible;
 use tracing::{error, info, trace, warn};
 use url::Url;
 
-use crate::key_value_store::{Key, TransactionKeyValueStore, Value};
+use crate::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
+use crate::key_value_store_metrics::KeyValueStoreMetrics;
 
 pub struct HttpKVStore {
     base_url: Url,
@@ -30,6 +37,17 @@ pub struct HttpKVStore {
 
 pub fn encode_digest<T: AsRef<[u8]>>(digest: &T) -> String {
     base64_url::encode(digest)
+}
+
+// for non-digest keys, we need a tag to make sure we don't have collisions
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub enum TaggedKey {
+    CheckpointSequenceNumber(CheckpointSequenceNumber),
+}
+
+pub fn encoded_tagged_key(key: &TaggedKey) -> String {
+    let bytes = bcs::to_bytes(key).expect("failed to serialize key");
+    base64_url::encode(&bytes)
 }
 
 trait IntoSuiResult<T> {
@@ -45,22 +63,54 @@ where
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Key {
+    Tx(TransactionDigest),
+    Fx(TransactionDigest),
+    Events(TransactionEventsDigest),
+    CheckpointContents(CheckpointSequenceNumber),
+    CheckpointSummary(CheckpointSequenceNumber),
+    CheckpointContentsByDigest(CheckpointContentsDigest),
+    CheckpointSummaryByDigest(CheckpointDigest),
+}
+
+#[derive(Clone, Debug)]
+enum Value {
+    Tx(Box<Transaction>),
+    Fx(Box<TransactionEffects>),
+    Events(Box<TransactionEvents>),
+    CheckpointContents(Box<CheckpointContents>),
+    CheckpointSummary(Box<CertifiedCheckpointSummary>),
+}
+
 fn key_to_path_elements(key: &Key) -> SuiResult<(String, &'static str)> {
     match key {
         Key::Tx(digest) => Ok((encode_digest(digest), "tx")),
-        Key::Fx(digest) => Err(SuiError::UnsupportedFeatureError {
-            error: format!(
-                "fetching fx by fx digest not supported (digest: {:?})",
-                digest
-            ),
-        }),
-        Key::Events(digest) => Ok((encode_digest(digest), "events")),
-        Key::FxByTxDigest(digest) => Ok((encode_digest(digest), "fx")),
+        Key::Fx(digest) => Ok((encode_digest(digest), "fx")),
+        Key::Events(digest) => Ok((encode_digest(digest), "ev")),
+        Key::CheckpointContents(seq) => Ok((
+            encoded_tagged_key(&TaggedKey::CheckpointSequenceNumber(*seq)),
+            "cc",
+        )),
+        Key::CheckpointSummary(seq) => Ok((
+            encoded_tagged_key(&TaggedKey::CheckpointSequenceNumber(*seq)),
+            "cs",
+        )),
+        Key::CheckpointContentsByDigest(digest) => Ok((encode_digest(digest), "cc")),
+        Key::CheckpointSummaryByDigest(digest) => Ok((encode_digest(digest), "cs")),
     }
 }
 
 impl HttpKVStore {
-    pub fn new(base_url: Uri) -> SuiResult<Self> {
+    pub fn new_kv(
+        base_url: &str,
+        metrics: Arc<KeyValueStoreMetrics>,
+    ) -> SuiResult<TransactionKeyValueStore> {
+        let inner = Arc::new(Self::new(base_url)?);
+        Ok(TransactionKeyValueStore::new("http", metrics, inner))
+    }
+
+    pub fn new(base_url: &str) -> SuiResult<Self> {
         info!("creating HttpKVStore with base_url: {}", base_url);
         let http = HttpsConnectorBuilder::new()
             .with_native_roots()
@@ -71,7 +121,14 @@ impl HttpKVStore {
         let client = Client::builder()
             .http2_only(true)
             .build::<_, hyper::Body>(http);
-        let base_url = Url::parse(&base_url.to_string()).into_sui_result()?;
+
+        let base_url = if base_url.ends_with('/') {
+            base_url.to_string()
+        } else {
+            format!("{}/", base_url)
+        };
+
+        let base_url = Url::parse(&base_url).into_sui_result()?;
 
         Ok(Self {
             base_url,
@@ -88,7 +145,7 @@ impl HttpKVStore {
         Uri::from_str(joined.as_str()).into_sui_result()
     }
 
-    async fn multi_fetch(&self, uris: &[Key]) -> Vec<SuiResult<Bytes>> {
+    async fn multi_fetch(&self, uris: Vec<Key>) -> Vec<SuiResult<Option<Bytes>>> {
         let uris_vec = uris.to_vec();
         let fetches = stream::iter(
             uris_vec
@@ -99,23 +156,33 @@ impl HttpKVStore {
         fetches.buffered(uris.len()).collect::<Vec<_>>().await
     }
 
-    async fn fetch(&self, key: Key) -> SuiResult<Bytes> {
+    async fn fetch(&self, key: Key) -> SuiResult<Option<Bytes>> {
         let uri = self.get_url(&key)?;
         trace!("fetching uri: {}", uri);
         let resp = self.client.get(uri.clone()).await.into_sui_result()?;
         trace!(
-            "got response for uri: {}, len: {}",
+            "got response {} for uri: {}, len: {:?}",
             uri,
-            resp.headers().len()
+            resp.status(),
+            resp.headers()
+                .get(CONTENT_LENGTH)
+                .unwrap_or(&HeaderValue::from_static("0"))
         );
-        hyper::body::to_bytes(resp.into_body())
-            .await
-            .into_sui_result()
+        // return None if 400
+        if resp.status().is_success() {
+            hyper::body::to_bytes(resp.into_body())
+                .await
+                .map(Some)
+                .into_sui_result()
+        } else {
+            Ok(None)
+        }
     }
 }
 
-fn deser<T>(key: &Key, bytes: &[u8]) -> Option<T>
+fn deser<K, T>(key: &K, bytes: &[u8]) -> Option<T>
 where
+    K: std::fmt::Debug,
     T: for<'de> Deserialize<'de>,
 {
     bcs::from_bytes(bytes)
@@ -123,88 +190,220 @@ where
         .ok()
 }
 
+fn map_fetch<'a, K>(fetch: (&'a SuiResult<Option<Bytes>>, &'a K)) -> Option<(&'a Bytes, &'a K)>
+where
+    K: std::fmt::Debug,
+{
+    let (fetch, key) = fetch;
+    match fetch {
+        Ok(Some(bytes)) => Some((bytes, key)),
+        Ok(None) => None,
+        Err(err) => {
+            warn!("Error fetching key: {:?}, error: {:?}", key, err);
+            None
+        }
+    }
+}
+
+fn multi_split_slice<'a, T>(slice: &'a [T], lengths: &'a [usize]) -> Vec<&'a [T]> {
+    let mut start = 0;
+    lengths
+        .iter()
+        .map(|length| {
+            let end = start + length;
+            let result = &slice[start..end];
+            start = end;
+            result
+        })
+        .collect()
+}
+
+fn deser_check_digest<T, D: std::fmt::Debug>(
+    digest: &D,
+    bytes: &Bytes,
+    get_expected_digest: impl FnOnce(&T) -> D,
+) -> Option<T>
+where
+    D: std::fmt::Debug + PartialEq,
+    T: for<'de> Deserialize<'de>,
+{
+    deser(digest, bytes).and_then(|o: T| {
+        let expected_digest = get_expected_digest(&o);
+        if expected_digest == *digest {
+            Some(o)
+        } else {
+            error!(
+                "Digest mismatch - expected: {:?}, got: {:?}",
+                digest, expected_digest,
+            );
+            None
+        }
+    })
+}
+
 #[async_trait]
-impl TransactionKeyValueStore for HttpKVStore {
-    async fn multi_get(&self, keys: &[Key]) -> SuiResult<Vec<Option<Value>>> {
+impl TransactionKeyValueStoreTrait for HttpKVStore {
+    async fn multi_get(
+        &self,
+        transactions: &[TransactionDigest],
+        effects: &[TransactionDigest],
+        events: &[TransactionEventsDigest],
+    ) -> SuiResult<(
+        Vec<Option<Transaction>>,
+        Vec<Option<TransactionEffects>>,
+        Vec<Option<TransactionEvents>>,
+    )> {
+        let num_txns = transactions.len();
+        let num_effects = effects.len();
+        let num_events = events.len();
+
+        let keys = transactions
+            .iter()
+            .map(|tx| Key::Tx(*tx))
+            .chain(effects.iter().map(|fx| Key::Fx(*fx)))
+            .chain(events.iter().map(|events| Key::Events(*events)))
+            .collect::<Vec<_>>();
+
+        let fetches = self.multi_fetch(keys).await;
+        let txn_slice = fetches[..num_txns].to_vec();
+        let fx_slice = fetches[num_txns..num_txns + num_effects].to_vec();
+        let events_slice = fetches[num_txns + num_effects..].to_vec();
+
+        let txn_results = txn_slice
+            .iter()
+            .take(num_txns)
+            .zip(transactions.iter())
+            .map(map_fetch)
+            .map(|maybe_bytes| {
+                maybe_bytes.and_then(|(bytes, digest)| {
+                    deser_check_digest(digest, bytes, |tx: &Transaction| *tx.digest())
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let fx_results = fx_slice
+            .iter()
+            .take(num_effects)
+            .zip(effects.iter())
+            .map(map_fetch)
+            .map(|maybe_bytes| {
+                maybe_bytes.and_then(|(bytes, digest)| {
+                    deser_check_digest(digest, bytes, |fx: &TransactionEffects| {
+                        *fx.transaction_digest()
+                    })
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let events_results = events_slice
+            .iter()
+            .take(num_events)
+            .zip(events.iter())
+            .map(map_fetch)
+            .map(|maybe_bytes| {
+                maybe_bytes.and_then(|(bytes, digest)| {
+                    deser_check_digest(digest, bytes, |events: &TransactionEvents| events.digest())
+                })
+            })
+            .collect::<Vec<_>>();
+
+        Ok((txn_results, fx_results, events_results))
+    }
+
+    async fn multi_get_checkpoints(
+        &self,
+        checkpoint_summaries: &[CheckpointSequenceNumber],
+        checkpoint_contents: &[CheckpointSequenceNumber],
+        checkpoint_summaries_by_digest: &[CheckpointDigest],
+        checkpoint_contents_by_digest: &[CheckpointContentsDigest],
+    ) -> SuiResult<(
+        Vec<Option<CertifiedCheckpointSummary>>,
+        Vec<Option<CheckpointContents>>,
+        Vec<Option<CertifiedCheckpointSummary>>,
+        Vec<Option<CheckpointContents>>,
+    )> {
+        let keys = checkpoint_summaries
+            .iter()
+            .map(|cp| Key::CheckpointSummary(*cp))
+            .chain(
+                checkpoint_contents
+                    .iter()
+                    .map(|cp| Key::CheckpointContents(*cp)),
+            )
+            .chain(
+                checkpoint_summaries_by_digest
+                    .iter()
+                    .map(|cp| Key::CheckpointSummaryByDigest(*cp)),
+            )
+            .chain(
+                checkpoint_contents_by_digest
+                    .iter()
+                    .map(|cp| Key::CheckpointContentsByDigest(*cp)),
+            )
+            .collect::<Vec<_>>();
+
+        let summaries_len = checkpoint_summaries.len();
+        let contents_len = checkpoint_contents.len();
+        let summaries_by_digest_len = checkpoint_summaries_by_digest.len();
+        let contents_by_digest_len = checkpoint_contents_by_digest.len();
+
         let fetches = self.multi_fetch(keys).await;
 
-        let values: Vec<_> = fetches
-            .into_iter()
-            .zip(keys.iter())
-            .map(|(fetch, key)| match fetch {
-                Ok(bytes) => Some((bytes, key)),
-                Err(err) => {
-                    warn!("Error fetching key: {:?}, error: {:?}", key, err);
-                    None
-                }
-            })
-            .map(|maybe_bytes| match maybe_bytes {
-                Some((bytes, key)) => match key {
-                    Key::Tx(digest) => {
-                        let tx = deser(key, &bytes).and_then(|tx: Transaction| {
-                            if tx.digest() == digest {
-                                Some(tx)
-                            } else {
-                                error!(
-                                    "Digest mismatch for tx, expected: {:?}, got: {:?}",
-                                    digest,
-                                    tx.digest()
-                                );
-                                None
-                            }
-                        })?;
-                        Some(Value::Tx(Box::new(tx)))
-                    }
-                    Key::Fx(digest) => {
-                        let fx = deser(key, &bytes).and_then(|fx: TransactionEffects| {
-                            if fx.digest() == *digest {
-                                Some(fx)
-                            } else {
-                                error!(
-                                    "Digest mismatch for fx, expected: {:?}, got: {:?}",
-                                    digest,
-                                    fx.digest()
-                                );
-                                None
-                            }
-                        })?;
-                        Some(Value::Fx(Box::new(fx)))
-                    }
-                    Key::Events(digest) => {
-                        let events = deser(key, &bytes).and_then(|events: TransactionEvents| {
-                            if events.digest() == *digest {
-                                Some(events)
-                            } else {
-                                error!(
-                                    "Digest mismatch for events, expected: {:?}, got: {:?}",
-                                    digest,
-                                    events.digest()
-                                );
-                                None
-                            }
-                        })?;
-                        Some(Value::Events(Box::new(events)))
-                    }
-                    Key::FxByTxDigest(digest) => {
-                        let fx = deser(key, &bytes).and_then(|fx: TransactionEffects| {
-                            let tx_digest = fx.transaction_digest();
-                            if tx_digest == digest {
-                                Some(fx)
-                            } else {
-                                error!(
-                                    "expected TransactionEffects for tx: {:?}, got: {:?}",
-                                    digest, tx_digest
-                                );
-                                None
-                            }
-                        })?;
-                        Some(Value::Fx(Box::new(fx)))
-                    }
-                },
-                None => None,
-            })
-            .collect();
+        let input_slices = [
+            summaries_len,
+            contents_len,
+            summaries_by_digest_len,
+            contents_by_digest_len,
+        ];
 
-        Ok(values)
+        let result_slices = multi_split_slice(&fetches, &input_slices);
+
+        let summaries_results = result_slices[0]
+            .iter()
+            .zip(checkpoint_summaries.iter())
+            .map(map_fetch)
+            .map(|maybe_bytes| {
+                maybe_bytes
+                    .and_then(|(bytes, seq)| deser::<_, CertifiedCheckpointSummary>(seq, bytes))
+            })
+            .collect::<Vec<_>>();
+
+        let contents_results = result_slices[1]
+            .iter()
+            .zip(checkpoint_contents.iter())
+            .map(map_fetch)
+            .map(|maybe_bytes| {
+                maybe_bytes.and_then(|(bytes, seq)| deser::<_, CheckpointContents>(seq, bytes))
+            })
+            .collect::<Vec<_>>();
+
+        let summaries_by_digest_results = result_slices[2]
+            .iter()
+            .zip(checkpoint_summaries_by_digest.iter())
+            .map(map_fetch)
+            .map(|maybe_bytes| {
+                maybe_bytes.and_then(|(bytes, digest)| {
+                    deser_check_digest(digest, bytes, |s: &CertifiedCheckpointSummary| *s.digest())
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let contents_by_digest_results = result_slices[3]
+            .iter()
+            .zip(checkpoint_contents_by_digest.iter())
+            .map(map_fetch)
+            .map(|maybe_bytes| {
+                maybe_bytes.and_then(|(bytes, digest)| {
+                    deser_check_digest(digest, bytes, |c: &CheckpointContents| *c.digest())
+                })
+            })
+            .collect::<Vec<_>>();
+
+        Ok((
+            summaries_results,
+            contents_results,
+            summaries_by_digest_results,
+            contents_by_digest_results,
+        ))
     }
 }

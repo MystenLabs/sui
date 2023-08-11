@@ -13,6 +13,14 @@ interface TopPackagesTableProps {
 	isLoading: boolean;
 }
 
+function TxnCountHeader() {
+	return (
+		<div className="w-full text-right">
+			<Text variant="bodySmall/medium">Transactions</Text>
+		</div>
+	);
+}
+
 export function TopPackagesTable({ data, isLoading }: TopPackagesTableProps) {
 	const tableData = useMemo(
 		() => ({
@@ -22,7 +30,11 @@ export function TopPackagesTable({ data, isLoading }: TopPackagesTableProps) {
 				),
 				function: <Text variant="bodySmall/medium">{item.function}</Text>,
 				package: <ObjectLink objectId={item.package} />,
-				count: <Text variant="bodySmall/medium">{count}</Text>,
+				count: (
+					<div className="text-right">
+						<Text variant="body/medium">{Number(count).toLocaleString()}</Text>
+					</div>
+				),
 			})),
 			columns: [
 				{
@@ -38,7 +50,7 @@ export function TopPackagesTable({ data, isLoading }: TopPackagesTableProps) {
 					accessorKey: 'function',
 				},
 				{
-					header: 'Transactions',
+					header: TxnCountHeader,
 					accessorKey: 'count',
 				},
 			],

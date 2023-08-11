@@ -5,13 +5,10 @@ use crate::base_types::{
     random_object_ref, EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
 use crate::digests::TransactionEventsDigest;
-use crate::effects::{
-    InputSharedObjectKind, TransactionEffectsAPI, TransactionEffectsDebugSummary,
-};
+use crate::effects::{InputSharedObjectKind, TransactionEffectsAPI};
 use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
 use crate::object::Owner;
-use crate::storage::{DeleteKind, WriteKind};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter, Write};
@@ -115,73 +112,12 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
         self.executed_epoch
     }
 
-    /// Return an iterator that iterates through all changed objects, including mutated,
-    /// created and unwrapped objects. In other words, all objects that still exist
-    /// in the object state after this transaction.
-    /// It doesn't include deleted/wrapped objects.
-    fn all_changed_objects(&self) -> Vec<(ObjectRef, Owner, WriteKind)> {
-        self.mutated
-            .iter()
-            .map(|(r, o)| (*r, *o, WriteKind::Mutate))
-            .chain(
-                self.created
-                    .iter()
-                    .map(|(r, o)| (*r, *o, WriteKind::Create)),
-            )
-            .chain(
-                self.unwrapped
-                    .iter()
-                    .map(|(r, o)| (*r, *o, WriteKind::Unwrap)),
-            )
-            .collect()
-    }
-
-    /// Return an iterator that iterates through all deleted objects, including deleted,
-    /// unwrapped_then_deleted, and wrapped objects. In other words, all objects that
-    /// do not exist in the object state after this transaction.
-    fn all_deleted(&self) -> Vec<(ObjectRef, DeleteKind)> {
-        self.deleted
-            .iter()
-            .map(|r| (*r, DeleteKind::Normal))
-            .chain(
-                self.unwrapped_then_deleted
-                    .iter()
-                    .map(|r| (*r, DeleteKind::UnwrapThenDelete)),
-            )
-            .chain(self.wrapped.iter().map(|r| (*r, DeleteKind::Wrap)))
-            .collect()
-    }
-
-    /// Return an iterator of mutated objects, but excluding the gas object.
-    fn mutated_excluding_gas(&self) -> Vec<(ObjectRef, Owner)> {
-        self.mutated
-            .clone()
-            .into_iter()
-            .filter(|o| o != &self.gas_object)
-            .collect()
-    }
-
     fn transaction_digest(&self) -> &TransactionDigest {
         &self.transaction_digest
     }
 
     fn gas_cost_summary(&self) -> &GasCostSummary {
         &self.gas_used
-    }
-
-    fn summary_for_debug(&self) -> TransactionEffectsDebugSummary {
-        TransactionEffectsDebugSummary {
-            bcs_size: bcs::serialized_size(self).unwrap(),
-            status: self.status.clone(),
-            gas_used: self.gas_used.clone(),
-            transaction_digest: self.transaction_digest,
-            created_object_count: self.created.len(),
-            mutated_object_count: self.mutated.len(),
-            unwrapped_object_count: self.unwrapped.len(),
-            deleted_object_count: self.deleted.len(),
-            wrapped_object_count: self.wrapped.len(),
-            dependency_count: self.dependencies.len(),
-        }
     }
 
     fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus {

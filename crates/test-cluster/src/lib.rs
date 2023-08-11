@@ -57,7 +57,6 @@ pub struct FullNodeHandle {
     pub sui_client: SuiClient,
     pub rpc_client: HttpClient,
     pub rpc_url: String,
-    pub ws_client: WsClient,
     pub ws_url: String,
 }
 
@@ -67,21 +66,22 @@ impl FullNodeHandle {
         let rpc_client = HttpClientBuilder::default().build(&rpc_url).unwrap();
 
         let ws_url = format!("ws://{}", json_rpc_address);
-        let ws_client = WsClientBuilder::default().build(&ws_url).await.unwrap();
-        let sui_client = SuiClientBuilder::default()
-            .ws_url(&ws_url)
-            .build(&rpc_url)
-            .await
-            .unwrap();
+        let sui_client = SuiClientBuilder::default().build(&rpc_url).await.unwrap();
 
         Self {
             sui_node,
             sui_client,
             rpc_client,
             rpc_url,
-            ws_client,
             ws_url,
         }
+    }
+
+    pub async fn ws_client(&self) -> WsClient {
+        WsClientBuilder::default()
+            .build(&self.ws_url)
+            .await
+            .unwrap()
     }
 }
 

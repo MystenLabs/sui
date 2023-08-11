@@ -8,13 +8,14 @@ import { KeepAliveConnection } from './KeepAliveConnection';
 import { UiConnection } from './UiConnection';
 import { createMessage } from '_messages';
 import { KEEP_ALIVE_BG_PORT_NAME } from '_src/content-script/keep-bg-alive';
+import { type UIAccessibleEntityType } from '_src/shared/messaging/messages/payloads/MethodPayload';
 import { type QredoConnectPayload } from '_src/shared/messaging/messages/payloads/QredoConnect';
 
 import type { Connection } from './Connection';
-import type { NetworkEnvType } from '../NetworkEnv';
 import type { SetNetworkPayload } from '_payloads/network';
 import type { Permission } from '_payloads/permissions';
 import type { WalletStatusChange, WalletStatusChangePayload } from '_payloads/wallet-status-change';
+import type { NetworkEnvType } from '_src/shared/api-env';
 
 const appOrigin = new URL(Browser.runtime.getURL('')).origin;
 
@@ -113,7 +114,8 @@ export class Connections {
 	public notifyUI(
 		notification:
 			| { event: 'networkChanged'; network: NetworkEnvType }
-			| { event: 'lockStatusUpdate'; isLocked: boolean },
+			| { event: 'lockStatusUpdate'; isLocked: boolean }
+			| { event: 'storedEntitiesUpdated'; type: UIAccessibleEntityType },
 	) {
 		for (const aConnection of this.#connections) {
 			if (aConnection instanceof UiConnection) {
@@ -128,6 +130,9 @@ export class Connections {
 						break;
 					case 'lockStatusUpdate':
 						aConnection.sendLockedStatusUpdate(notification.isLocked);
+						break;
+					case 'storedEntitiesUpdated':
+						aConnection.notifyEntitiesUpdated(notification.type);
 						break;
 				}
 			}

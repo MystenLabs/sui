@@ -18,10 +18,11 @@ export default function OwnedObject({ obj }: OwnedObjectTypes) {
 
 	return (
 		<ObjectDetails
+			noTypeRender
 			variant="small"
 			id={obj.data?.objectId}
 			type={trimStdLibPrefix(parseObjectType(obj))}
-			name={displayMeta?.name ?? displayMeta?.description}
+			name={displayMeta?.name ?? displayMeta?.description ?? '--'}
 			image={displayMeta?.image_url}
 			video={video}
 		/>

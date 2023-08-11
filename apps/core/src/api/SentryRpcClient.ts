@@ -4,6 +4,8 @@
 import { SuiHTTPTransport } from '@mysten/sui.js/client';
 import * as Sentry from '@sentry/react';
 
+const IGNORED_METHODS = ['suix_resolveNameServiceNames', 'suix_resolveNameServiceAddresses'];
+
 export class SentryHttpTransport extends SuiHTTPTransport {
 	#url: string;
 	constructor(url: string) {
@@ -36,6 +38,10 @@ export class SentryHttpTransport extends SuiHTTPTransport {
 	}
 
 	override async request<T>(input: { method: string; params: unknown[] }) {
+		if (IGNORED_METHODS.includes(input.method)) {
+			return super.request<T>(input);
+		}
+
 		return this.#withRequest(input, () => super.request<T>(input));
 	}
 }

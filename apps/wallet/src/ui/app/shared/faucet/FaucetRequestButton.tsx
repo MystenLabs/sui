@@ -17,7 +17,7 @@ export type FaucetRequestButtonProps = {
 	size?: ButtonProps['size'];
 };
 
-const FAUCET_HOSTS = {
+export const FAUCET_HOSTS = {
 	[API_ENV.local]: getFaucetHost('localnet'),
 	[API_ENV.devNet]: getFaucetHost('devnet'),
 	[API_ENV.testNet]: getFaucetHost('testnet'),

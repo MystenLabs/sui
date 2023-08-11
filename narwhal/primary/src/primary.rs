@@ -164,7 +164,6 @@ impl Primary {
             .replace_registered_new_certificates_metric(registry, Box::new(new_certificates_gauge));
 
         let (tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
-        let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
         let synchronizer = Arc::new(Synchronizer::new(
             authority.id(),
@@ -178,7 +177,6 @@ impl Primary {
             tx_new_certificates,
             tx_parents,
             rx_consensus_round_updates.clone(),
-            rx_synchronizer_network,
             node_metrics.clone(),
             &primary_channel_metrics,
         ));
@@ -318,9 +316,9 @@ impl Primary {
             quic_config.keep_alive_interval_ms = Some(5_000);
             let mut config = anemo::Config::default();
             config.quic = Some(quic_config);
-            // Set the max_frame_size to be 2 GB to work around the issue of there being too many
+            // Set the max_frame_size to be 1 GB to work around the issue of there being too many
             // delegation events in the epoch change txn.
-            config.max_frame_size = Some(2 << 30);
+            config.max_frame_size = Some(1 << 30);
             // Set a default timeout of 300s for all RPC requests
             config.inbound_request_timeout_ms = Some(300_000);
             config.outbound_request_timeout_ms = Some(300_000);
@@ -360,9 +358,7 @@ impl Primary {
                 }
             }
         }
-        if tx_synchronizer_network.send(network.clone()).is_err() {
-            panic!("Failed to send Network to Synchronizer!");
-        }
+        client.set_primary_network(network.clone());
 
         info!("Primary {} listening on {}", authority.id(), address);
 

@@ -55,8 +55,9 @@ use sui_types::{
 use sui_verifier::verifier as sui_bytecode_verifier;
 
 use crate::linters::{
-    coin_field::CoinFieldVisitor, custom_state_change::CustomStateChangeVerifier, known_filters,
-    self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier,
+    coin_field::CoinFieldVisitor, custom_state_change::CustomStateChangeVerifier,
+    freeze_wrapped::FreezeWrappedVisitor, known_filters, self_transfer::SelfTransferVerifier,
+    share_owned::ShareOwnedVerifier,
 };
 
 #[cfg(test)]
@@ -141,6 +142,7 @@ impl BuildConfig {
                     SelfTransferVerifier.visitor(),
                     CustomStateChangeVerifier.visitor(),
                     CoinFieldVisitor.visitor(),
+                    FreezeWrappedVisitor::default().visitor(),
                 ];
                 let (filter_attr_name, filters) = known_filters();
                 compiler
@@ -362,7 +364,8 @@ impl CompiledPackage {
         ids.into_iter().collect()
     }
 
-    pub fn get_package_digest(&self, with_unpublished_deps: bool, hash_modules: bool) -> [u8; 32] {
+    pub fn get_package_digest(&self, with_unpublished_deps: bool) -> [u8; 32] {
+        let hash_modules = true;
         MovePackage::compute_digest_for_modules_and_deps(
             &self.get_package_bytes(with_unpublished_deps),
             self.dependency_ids.published.values(),

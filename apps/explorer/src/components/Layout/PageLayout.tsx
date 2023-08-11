@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useAppsBackend } from '@mysten/core';
+import { useAppsBackend, useElementHeight } from '@mysten/core';
 import { LoadingIndicator } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { type ReactNode } from 'react';
+import { type ReactNode, useRef } from 'react';
 
 import Footer from '../footer/Footer';
 import Header from '../header/Header';
@@ -21,18 +21,14 @@ export type PageLayoutProps = {
 	isError?: boolean;
 	content: ReactNode;
 	loading?: boolean;
-	backgroundGradient?: boolean;
 };
 
-export function PageLayout({
-	gradient,
-	content,
-	loading,
-	isError,
-	backgroundGradient,
-}: PageLayoutProps) {
+const DEFAULT_HEADER_HEIGHT = 68;
+
+export function PageLayout({ gradient, content, loading, isError }: PageLayoutProps) {
 	const [network] = useNetworkContext();
 	const { request } = useAppsBackend();
+
 	const { data } = useQuery({
 		queryKey: ['apps-backend', 'monitor-network'],
 		queryFn: () =>
@@ -45,24 +41,43 @@ export function PageLayout({
 		enabled: network === Network.MAINNET,
 	});
 	const isGradientVisible = !!gradient;
+	const renderNetworkDegradeBanner = network === Network.MAINNET && data?.degraded;
+	const headerRef = useRef<HTMLElement | null>(null);
+	const headerHeight = useElementHeight(headerRef, DEFAULT_HEADER_HEIGHT);
 
 	return (
-		<div
-			className={clsx(
-				'relative min-h-screen w-full',
-				isGradientVisible && backgroundGradient && isError && 'bg-gradients-failure-start',
-				isGradientVisible && backgroundGradient && !isError && 'bg-gradients-graph-cards-start',
-			)}
-		>
-			<Header />
+		<div className="relative min-h-screen w-full">
+			<section ref={headerRef} className="fixed top-0 z-20 flex w-full flex-col">
+				{renderNetworkDegradeBanner && (
+					<Banner rounded="none" align="center" variant="warning" fullWidth>
+						<div className="break-normal">
+							The explorer is running slower than usual. We&rsquo;re working to fix the issue and
+							appreciate your patience.
+						</div>
+					</Banner>
+				)}
+				<Header />
+			</section>
 			{loading && (
 				<div className="absolute left-1/2 right-0 top-1/2 flex -translate-x-1/2 -translate-y-1/2 transform justify-center">
 					<LoadingIndicator variant="lg" />
 				</div>
 			)}
-			<main className="relative z-10 bg-offwhite">
+			<main
+				className="relative z-10 bg-offwhite"
+				style={
+					!isGradientVisible
+						? {
+								paddingTop: `${headerHeight}px`,
+						  }
+						: {}
+				}
+			>
 				{isGradientVisible ? (
 					<section
+						style={{
+							paddingTop: `${headerHeight}px`,
+						}}
 						className={clsx(
 							'group/gradientContent',
 							loading && 'bg-gradients-graph-cards',
@@ -70,16 +85,6 @@ export function PageLayout({
 							!isError && 'bg-gradients-graph-cards',
 						)}
 					>
-						{network === Network.MAINNET && data?.degraded && (
-							<div className={clsx(isGradientVisible && 'bg-gradients-graph-cards-bg')}>
-								<div className="mx-auto max-w-[1440px] px-4 pt-3 lg:px-6 xl:px-10">
-									<Banner variant="warning" border fullWidth>
-										We&rsquo;re sorry that the explorer is running slower than usual. We&rsquo;re
-										working to fix the issue and appreciate your patience.
-									</Banner>
-								</div>
-							</div>
-						)}
 						<div
 							className={clsx(
 								'mx-auto max-w-[1440px] py-8 lg:px-6 xl:px-10',

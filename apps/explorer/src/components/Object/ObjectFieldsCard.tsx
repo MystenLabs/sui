@@ -24,7 +24,7 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
 	const [activeFieldName, setActiveFieldName] = useState('');
 	const objectType =
 		data?.data?.type ?? data?.data?.content?.dataType === 'package'
-			? 'package'
+			? data.data.type
 			: data?.data?.content?.type;
 
 	// Get the packageId, moduleName, functionName from the objectType

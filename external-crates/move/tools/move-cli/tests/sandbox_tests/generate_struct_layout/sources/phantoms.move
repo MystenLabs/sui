@@ -1,3 +1,4 @@
+#[allow(unused_field)]
 module 0x1::phantoms {
     struct A<phantom T> {}
 

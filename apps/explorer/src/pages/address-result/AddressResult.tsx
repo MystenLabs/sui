@@ -2,39 +2,77 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { isSuiNSName, useResolveSuiNSAddress, useResolveSuiNSName } from '@mysten/core';
-import { Heading, LoadingIndicator } from '@mysten/ui';
+import { Domain32 } from '@mysten/icons';
+import { LoadingIndicator } from '@mysten/ui';
 import { useParams } from 'react-router-dom';
 
-import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
-import { TransactionsForAddress } from '../../components/transactions/TransactionsForAddress';
 import { PageLayout } from '~/components/Layout/PageLayout';
 import { OwnedCoins } from '~/components/OwnedCoins';
 import { OwnedObjects } from '~/components/OwnedObjects';
+import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
+import { TransactionsForAddress } from '~/components/transactions/TransactionsForAddress';
+import { useBreakpoint } from '~/hooks/useBreakpoint';
+import { Divider } from '~/ui/Divider';
 import { PageHeader } from '~/ui/PageHeader';
+import { SplitPanes } from '~/ui/SplitPanes';
+import { TabHeader } from '~/ui/Tabs';
+
+function AddressResultPageHeader({ address, loading }: { address: string; loading?: boolean }) {
+	const { data: domainName, isFetching } = useResolveSuiNSName(address);
+
+	return (
+		<PageHeader
+			loading={loading || isFetching}
+			type="Address"
+			title={address}
+			subtitle={domainName}
+			before={<Domain32 className="h-6 w-6 text-steel-darker sm:h-10 sm:w-10" />}
+		/>
+	);
+}
+
+function SuiNSAddressResultPageHeader({ name }: { name: string }) {
+	const { data: address, isFetching } = useResolveSuiNSAddress(name);
+
+	return <AddressResultPageHeader address={address ?? name} loading={isFetching} />;
+}
 
 function AddressResult({ address }: { address: string }) {
-	const { data: domainName } = useResolveSuiNSName(address);
+	const isMediumOrAbove = useBreakpoint('md');
+
+	const leftPane = {
+		panel: (
+			<div className="flex-1 overflow-hidden md:pr-7">
+				<OwnedCoins id={address} />
+			</div>
+		),
+		minSize: 30,
+	};
+
+	const rightPane = {
+		panel: <OwnedObjects id={address} />,
+		minSize: 30,
+	};
 
 	return (
 		<div className="space-y-12">
-			<PageHeader type="Address" title={address} subtitle={domainName} />
 			<div>
-				<div className="border-b border-gray-45 pb-5 md:mt-12">
-					<Heading color="gray-90" variant="heading4/semibold">
-						Owned Objects
-					</Heading>
-				</div>
-				<ErrorBoundary>
-					<div className="flex flex-col gap-10 md:flex-row">
-						<div className="flex-1 overflow-hidden">
-							<OwnedCoins id={address} />
-						</div>
-						<div className="hidden w-px bg-gray-45 md:block" />
-						<div className="flex-1 overflow-hidden">
-							<OwnedObjects id={address} />
-						</div>
-					</div>
-				</ErrorBoundary>
+				<TabHeader title="Owned Objects" noGap>
+					<ErrorBoundary>
+						{isMediumOrAbove ? (
+							<SplitPanes splitPanels={[leftPane, rightPane]} direction="horizontal" />
+						) : (
+							<>
+								{leftPane.panel}
+								<div className="my-8">
+									<Divider />
+								</div>
+								{rightPane.panel}
+							</>
+						)}
+						<Divider />
+					</ErrorBoundary>
+				</TabHeader>
 			</div>
 
 			<div>
@@ -61,11 +99,19 @@ function SuiNSAddressResult({ name }: { name: string }) {
 
 export default function AddressResultPage() {
 	const { id } = useParams();
+	const isSuiNSAddress = isSuiNSName(id!);
+
 	return (
 		<PageLayout
-			content={
-				isSuiNSName(id!) ? <SuiNSAddressResult name={id!} /> : <AddressResult address={id!} />
-			}
+			gradient={{
+				size: 'md',
+				content: isSuiNSAddress ? (
+					<SuiNSAddressResultPageHeader name={id!} />
+				) : (
+					<AddressResultPageHeader address={id!} />
+				),
+			}}
+			content={isSuiNSAddress ? <SuiNSAddressResult name={id!} /> : <AddressResult address={id!} />}
 		/>
 	);
 }

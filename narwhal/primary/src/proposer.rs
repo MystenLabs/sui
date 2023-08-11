@@ -237,14 +237,14 @@ impl Proposer {
         .await;
 
         let leader_and_support = if this_round % 2 == 0 {
-            let authority = self.committee.leader(this_round);
+            let authority = self.leader_schedule.leader(this_round);
             if self.authority_id == authority.id() {
                 "even_round_is_leader"
             } else {
                 "even_round_not_leader"
             }
         } else {
-            let authority = self.committee.leader(this_round - 1);
+            let authority = self.leader_schedule.leader(this_round - 1);
             if parents.iter().any(|c| c.origin() == authority.id()) {
                 "odd_round_gives_support"
             } else {
@@ -314,8 +314,11 @@ impl Proposer {
 
     fn max_delay(&self) -> Duration {
         // If this node is going to be the leader of the next round, we set a lower max
-        // timeout value to increase its chance of being included in the dag.
-        if self.committee.leader(self.round + 1).id() == self.authority_id {
+        // timeout value to increase its chance of being included in the dag. As leaders are elected
+        // on even rounds only we apply the reduced max delay only for those ones.
+        if (self.round + 1) % 2 == 0
+            && self.leader_schedule.leader(self.round + 1).id() == self.authority_id
+        {
             self.max_header_delay / 2
         } else {
             self.max_header_delay
@@ -323,16 +326,31 @@ impl Proposer {
     }
 
     fn min_delay(&self) -> Duration {
+        // TODO: consider even out the boost provided by the even/odd rounds so we avoid perpetually
+        // boosting the nodes and affect the scores.
         // If this node is going to be the leader of the next round and there are more than
         // 1 primary in the committee, we use a lower min delay value to increase the chance
-        // of committing the leader.
+        // of committing the leader. Pay attention that we use here the leader_schedule to figure out
+        // the next leader.
+        let next_round = self.round + 1;
         if self.committee.size() > 1
-            && self.committee.leader(self.round + 1).id() == self.authority_id
+            && next_round % 2 == 0
+            && self.leader_schedule.leader(next_round).id() == self.authority_id
         {
-            Duration::ZERO
-        } else {
-            self.min_header_delay
+            return Duration::ZERO;
         }
+
+        // Give a boost on the odd rounds to a node by using the whole committee here, not just the
+        // nodes of the leader_schedule. By doing this we keep the proposal rate as high as possible
+        // which leads to higher round rate and also acting as a score booster to the less strong nodes
+        // as well.
+        if self.committee.size() > 1
+            && next_round % 2 != 0
+            && self.committee.leader(next_round).id() == self.authority_id
+        {
+            return Duration::ZERO;
+        }
+        self.min_header_delay
     }
 
     /// Update the last leader certificate.
@@ -640,7 +658,16 @@ impl Proposer {
                         Ordering::Equal => {
                             // The core gives us the parents the first time they are enough to form a quorum.
                             // Then it keeps giving us all the extra parents.
-                            self.last_parents.extend(parents)
+                            self.last_parents.extend(parents);
+
+                            // As the schedule can change after an odd round proposal - when the new schedule algorithm is
+                            // enabled - make sure that the timer is reset correctly for the round leader. No harm doing
+                            // this here as well.
+                            if self.min_delay() == Duration::ZERO {
+                                min_delay_timer
+                                .as_mut()
+                                .reset(Instant::now());
+                            }
                         }
                     }
 

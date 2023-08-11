@@ -23,7 +23,7 @@ use test_utils::{
     latest_protocol_version, make_optimal_signed_certificates, mock_signed_certificate,
     CommitteeFixture,
 };
-use tokio::sync::{oneshot, watch};
+use tokio::sync::watch;
 use types::{error::DagError, Certificate, CertificateAPI, Header, HeaderAPI, Round};
 
 #[tokio::test]
@@ -43,7 +43,6 @@ async fn accept_certificates() {
     let (tx_parents, mut rx_parents) = test_utils::test_channel!(4);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::default());
-    let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     // Create test stores.
     let (_, certificate_store, payload_store) = create_db_stores();
@@ -54,14 +53,13 @@ async fn accept_certificates() {
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
-        client,
+        client.clone(),
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
-        rx_synchronizer_network,
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -76,7 +74,7 @@ async fn accept_certificates() {
         .private_key(network_key)
         .start(anemo::Router::new())
         .unwrap();
-    let _ = tx_synchronizer_network.send(network.clone());
+    client.set_primary_network(network.clone());
 
     // Send 3 certificates to the Synchronizer.
     let certificates: Vec<_> = fixture
@@ -139,7 +137,6 @@ async fn accept_suspended_certificates() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(1, 0));
-    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
         authority_id,
@@ -153,7 +150,6 @@ async fn accept_suspended_certificates() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
-        rx_synchronizer_network,
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -243,7 +239,6 @@ async fn synchronizer_recover_basic() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(4);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::default());
-    let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     // Create test stores.
     let (_, certificate_store, payload_store) = create_db_stores();
@@ -261,7 +256,6 @@ async fn synchronizer_recover_basic() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
-        rx_synchronizer_network,
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -276,7 +270,7 @@ async fn synchronizer_recover_basic() {
         .private_key(network_key)
         .start(anemo::Router::new())
         .unwrap();
-    let _ = tx_synchronizer_network.send(network.clone());
+    client.set_primary_network(network.clone());
 
     // Send 3 certificates to Synchronizer.
     let certificates: Vec<_> = fixture
@@ -297,25 +291,23 @@ async fn synchronizer_recover_basic() {
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(3);
     let (tx_parents, mut rx_parents) = test_utils::test_channel!(4);
-    let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let _synchronizer = Arc::new(Synchronizer::new(
         name,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
-        client,
+        client.clone(),
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
-        rx_synchronizer_network,
         metrics.clone(),
         &primary_channel_metrics,
     ));
-    let _ = tx_synchronizer_network.send(network.clone());
+    client.set_primary_network(network.clone());
 
     // Ensure the Synchronizer sends the parent certificates to the proposer.
 
@@ -363,7 +355,6 @@ async fn synchronizer_recover_partial_certs() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(4);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::default());
-    let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     // Create test stores.
     let (_, certificate_store, payload_store) = create_db_stores();
@@ -381,7 +372,6 @@ async fn synchronizer_recover_partial_certs() {
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
-        rx_synchronizer_network,
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -396,7 +386,7 @@ async fn synchronizer_recover_partial_certs() {
         .private_key(network_key)
         .start(anemo::Router::new())
         .unwrap();
-    let _ = tx_synchronizer_network.send(network.clone());
+    client.set_primary_network(network.clone());
 
     // Send 1 certificate.
     let certificates: Vec<Certificate> = fixture
@@ -419,25 +409,23 @@ async fn synchronizer_recover_partial_certs() {
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(3);
     let (tx_parents, mut rx_parents) = test_utils::test_channel!(4);
-    let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
         name,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
-        client,
+        client.clone(),
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
-        rx_synchronizer_network,
         metrics.clone(),
         &primary_channel_metrics,
     ));
-    let _ = tx_synchronizer_network.send(network.clone());
+    client.set_primary_network(network.clone());
 
     // Send remaining 2f certs.
     for cert in certificates.clone().into_iter().take(2) {
@@ -472,7 +460,6 @@ async fn synchronizer_recover_previous_round() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(10);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::default());
-    let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     // Create test stores.
     let (_, certificate_store, payload_store) = create_db_stores();
@@ -490,7 +477,6 @@ async fn synchronizer_recover_previous_round() {
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
-        rx_synchronizer_network,
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -505,7 +491,7 @@ async fn synchronizer_recover_previous_round() {
         .private_key(network_key)
         .start(anemo::Router::new())
         .unwrap();
-    let _ = tx_synchronizer_network.send(network.clone());
+    client.set_primary_network(network.clone());
 
     // Create 3 certificates per round.
     let genesis_certs = Certificate::genesis(&committee);
@@ -548,25 +534,23 @@ async fn synchronizer_recover_previous_round() {
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(6);
     let (tx_parents, mut rx_parents) = test_utils::test_channel!(10);
-    let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let _synchronizer = Arc::new(Synchronizer::new(
         name,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
-        client,
+        client.clone(),
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
-        rx_synchronizer_network,
         metrics.clone(),
         &primary_channel_metrics,
     ));
-    let _ = tx_synchronizer_network.send(network.clone());
+    client.set_primary_network(network.clone());
 
     // the recovery flow sends message that contains the parents for the last round for which we
     // have a quorum of certificates, in this case is round 1.
@@ -596,7 +580,6 @@ async fn deliver_certificate_using_store() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::default());
-    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Synchronizer::new(
         name,
@@ -610,7 +593,6 @@ async fn deliver_certificate_using_store() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
-        rx_synchronizer_network,
         metrics.clone(),
         &primary_channel_metrics,
     );
@@ -669,7 +651,6 @@ async fn deliver_certificate_not_found_parents() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::default());
-    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Synchronizer::new(
         name,
@@ -683,7 +664,6 @@ async fn deliver_certificate_not_found_parents() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
-        rx_synchronizer_network,
         metrics.clone(),
         &primary_channel_metrics,
     );
@@ -752,7 +732,6 @@ async fn sync_batches_drops_old() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(1, 0));
-    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
     let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
 
     let synchronizer = Arc::new(Synchronizer::new(
@@ -767,7 +746,6 @@ async fn sync_batches_drops_old() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
-        rx_synchronizer_network,
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -840,7 +818,6 @@ async fn gc_suspended_certificates() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(1, 0));
-    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
     let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
 
     let synchronizer = Arc::new(Synchronizer::new(
@@ -855,7 +832,6 @@ async fn gc_suspended_certificates() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
-        rx_synchronizer_network,
         metrics.clone(),
         &primary_channel_metrics,
     ));

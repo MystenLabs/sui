@@ -1,0 +1,135 @@
+---
+source: crates/sui-graphql-rpc/tests/snapshot_tests.rs
+expression: sdl
+---
+type Address implements Owner {
+	transactionBlockConnection(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter): TransactionBlockConnection
+	location: SuiAddress!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	balance(type: String): Balance!
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	defaultNameServiceName: String
+	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+}
+
+enum AddressTransactionBlockRelationship {
+	SIGN
+	SENT
+	RECV
+	PAID
+}
+
+type AmbiguousOwner implements Owner {
+	location: SuiAddress!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	balance(type: String): Balance!
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	defaultNameServiceName: String
+	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+}
+
+type Balance {
+	id: ID!
+}
+
+type BalanceConnection {
+	unimplemented: Boolean!
+}
+
+
+type CoinConnection {
+	unimplemented: Boolean!
+}
+
+
+
+
+type NameServiceConnection {
+	unimplemented: Boolean!
+}
+
+type Object implements Owner {
+	location: SuiAddress!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	balance(type: String): Balance!
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	defaultNameServiceName: String
+	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+}
+
+type ObjectConnection {
+	unimplemented: Boolean!
+}
+
+input ObjectFilter {
+	package: SuiAddress
+	module: String
+	ty: String
+	owner: SuiAddress
+	objectId: SuiAddress
+	version: Int
+}
+
+interface Owner {
+	location: SuiAddress!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	balance(type: String): Balance!
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	defaultNameServiceName: String
+	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+}
+
+type Query {
+	chainIdentifier: String!
+	owner(address: SuiAddress!): Owner
+	object(address: SuiAddress!, version: Int): Object
+	address(address: SuiAddress!): Address
+}
+
+type StakeConnection {
+	unimplemented: Boolean!
+}
+
+
+"""
+Representation of Sui Addresses
+"""
+scalar SuiAddress
+
+type TransactionBlockConnection {
+	unimplemented: Boolean!
+}
+
+input TransactionBlockFilter {
+	package: SuiAddress
+	module: String
+	function: String
+	kind: TransactionBlockKindInput
+	checkpoint: Int
+	signAddress: SuiAddress
+	sentAddress: SuiAddress
+	recvAddress: SuiAddress
+	paidAddress: SuiAddress
+	inputObject: SuiAddress
+	changedObject: SuiAddress
+}
+
+enum TransactionBlockKindInput {
+	CONSENSUS_COMMIT_PROLOGUE
+	GENESIS
+	CHANGE_EPOCH
+	PROGRAMMABLE
+}
+
+schema {
+	query: Query
+}
+

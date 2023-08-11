@@ -333,7 +333,7 @@ impl RequestBatchesNetwork for RequestBatchesNetworkImpl {
     ) -> anyhow::Result<RequestBatchesResponse> {
         let request =
             anemo::Request::new(RequestBatchesRequest { batch_digests }).with_timeout(timeout);
-        self.network.request_batches(worker, request).await
+        self.network.request_batches(&worker, request).await
     }
 }
 

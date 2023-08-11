@@ -11,7 +11,9 @@ module bar::b {
 }
 
 module bar::c {
+    #[allow(unused_field)]
     struct B { x: u64 }
+    #[allow(unused_field)]
     struct A { b: vector<B> }
 
     public fun g(): u64 {

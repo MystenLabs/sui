@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import * as TabsPrimitive from '@radix-ui/react-tabs';
-import { cva } from 'class-variance-authority';
+import { cva, type VariantProps } from 'class-variance-authority';
 import clsx from 'clsx';
 import {
 	type ComponentPropsWithoutRef,
@@ -39,6 +39,27 @@ const tabStyles = cva(
 		},
 	},
 );
+const tabListStyles = cva(['flex items-center border-gray-45'], {
+	variants: {
+		fullWidth: {
+			true: 'flex-1',
+		},
+		disableBottomBorder: {
+			true: '',
+			false: 'border-b',
+		},
+		gap: {
+			3: 'gap-3',
+			6: 'gap-4 sm:gap-6',
+		},
+	},
+	defaultVariants: {
+		gap: 6,
+		disableBottomBorder: false,
+	},
+});
+
+type TabListStylesProps = VariantProps<typeof tabListStyles>;
 
 const Tabs = forwardRef<
 	ElementRef<typeof TabsPrimitive.Root>,
@@ -51,20 +72,11 @@ const Tabs = forwardRef<
 
 const TabsList = forwardRef<
 	ElementRef<typeof TabsPrimitive.List>,
-	ComponentPropsWithoutRef<typeof TabsPrimitive.List> & {
-		fullWidth?: boolean;
-		disableBottomBorder?: boolean;
-		lessSpacing?: boolean;
-	}
->(({ fullWidth, disableBottomBorder, lessSpacing, ...props }, ref) => (
+	ComponentPropsWithoutRef<typeof TabsPrimitive.List> & TabListStylesProps
+>(({ fullWidth, disableBottomBorder, gap, ...props }, ref) => (
 	<TabsPrimitive.List
 		ref={ref}
-		className={clsx(
-			'flex items-center border-gray-45',
-			lessSpacing ? 'gap-3' : 'gap-6',
-			fullWidth && 'flex-1',
-			!disableBottomBorder && 'border-b',
-		)}
+		className={tabListStyles({ fullWidth, disableBottomBorder, gap })}
 		{...props}
 	/>
 ));

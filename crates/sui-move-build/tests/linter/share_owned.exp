@@ -1,10 +1,10 @@
 warning[Lint W00001]: possible owned object share
-   ┌─ tests/linter/share_owned.move:14:9
+   ┌─ tests/linter/share_owned.move:15:9
    │
-12 │     public entry fun arg_object(o: Obj) {
+13 │     public entry fun arg_object(o: Obj) {
    │                                 - A potentially owned object coming from here
-13 │         let arg = o;
-14 │         transfer::public_share_object(arg);
+14 │         let arg = o;
+15 │         transfer::public_share_object(arg);
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    │         │                             │
    │         │                             Creating a fresh object and sharing it within the same function will ensure this does not abort.
@@ -12,12 +12,20 @@ warning[Lint W00001]: possible owned object share
    │
    = This warning can be suppressed with '#[lint_allow(share_owned)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W00001]: possible owned object share
-   ┌─ tests/linter/share_owned.move:35:9
+warning[W09009]: unused struct field
+   ┌─ tests/linter/share_owned.move:25:9
    │
-34 │         let Wrapper { id, i: _, o } = w;
+25 │         id: UID
+   │         ^^ The 'id' field of the 'Obj' type is unused
+   │
+   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00001]: possible owned object share
+   ┌─ tests/linter/share_owned.move:36:9
+   │
+35 │         let Wrapper { id, i: _, o } = w;
    │                                 - A potentially owned object coming from here
-35 │         transfer::public_share_object(o);
+36 │         transfer::public_share_object(o);
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    │         │                             │
    │         │                             Creating a fresh object and sharing it within the same function will ensure this does not abort.
@@ -26,17 +34,17 @@ warning[Lint W00001]: possible owned object share
    = This warning can be suppressed with '#[lint_allow(share_owned)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09008]: unused function
-   ┌─ tests/linter/share_owned.move:48:9
+   ┌─ tests/linter/share_owned.move:49:9
    │
-48 │     fun private_fun_should_not_be_suppressed() {}
+49 │     fun private_fun_should_not_be_suppressed() {}
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ The non-'public', non-'entry' function 'private_fun_should_not_be_suppressed' is never called. Consider removing it.
    │
    = This warning can be suppressed with '#[allow(unused_function)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09008]: unused function
-   ┌─ tests/linter/share_owned.move:52:9
+   ┌─ tests/linter/share_owned.move:53:9
    │
-52 │     fun another_private_fun_should_not_be_suppressed() {}
+53 │     fun another_private_fun_should_not_be_suppressed() {}
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ The non-'public', non-'entry' function 'another_private_fun_should_not_be_suppressed' is never called. Consider removing it.
    │
    = This warning can be suppressed with '#[allow(unused_function)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

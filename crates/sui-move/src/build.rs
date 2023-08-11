@@ -19,9 +19,6 @@ pub struct Build {
     /// when dumping bytecode as base64)
     #[clap(long, global = true)]
     pub with_unpublished_dependencies: bool,
-    /// Use the legacy digest calculation algorithm
-    #[clap(long)]
-    legacy_digest: bool,
     /// Whether we are printing in base64.
     #[clap(long, global = true)]
     pub dump_bytecode_as_base64: bool,
@@ -49,7 +46,6 @@ impl Build {
             rerooted_path,
             build_config,
             self.with_unpublished_dependencies,
-            self.legacy_digest,
             self.dump_bytecode_as_base64,
             self.generate_struct_layouts,
             self.lint,
@@ -60,7 +56,6 @@ impl Build {
         rerooted_path: PathBuf,
         config: MoveBuildConfig,
         with_unpublished_deps: bool,
-        legacy_digest: bool,
         dump_bytecode_as_base64: bool,
         generate_struct_layouts: bool,
         lint: bool,
@@ -84,7 +79,7 @@ impl Build {
                 json!({
                     "modules": pkg.get_package_base64(with_unpublished_deps),
                     "dependencies": json!(package_dependencies),
-                    "digest": pkg.get_package_digest(with_unpublished_deps, !legacy_digest),
+                    "digest": pkg.get_package_digest(with_unpublished_deps),
                 })
             )
         }

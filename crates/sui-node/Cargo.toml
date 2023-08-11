@@ -24,6 +24,7 @@ serde.workspace = true
 snap.workspace = true
 git-version.workspace = true
 const-str.workspace = true
+url.workspace = true
 
 sui-archival.workspace = true
 sui-tls.workspace = true
@@ -37,6 +38,7 @@ sui-protocol-config.workspace = true
 sui-snapshot.workspace = true
 sui-telemetry.workspace = true
 sui-types.workspace = true
+sui-kvstore.workspace = true
 mysten-metrics.workspace = true
 mysten-common.workspace = true
 narwhal-network.workspace = true

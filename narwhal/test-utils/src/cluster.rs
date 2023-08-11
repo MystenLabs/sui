@@ -502,7 +502,7 @@ pub struct AuthorityDetails {
     pub id: usize,
     pub name: AuthorityIdentifier,
     pub public_key: PublicKey,
-    client: NetworkClient,
+    pub client: NetworkClient,
     internal: Arc<RwLock<AuthorityDetailsInternal>>,
 }
 
@@ -681,7 +681,7 @@ impl AuthorityDetails {
     }
 
     /// Returns the current primary node running as a clone. If the primary
-    ///node stops and starts again and it's needed by the user then this
+    /// node stops and starts again and it's needed by the user then this
     /// method should be called again to get the latest one.
     pub async fn primary(&self) -> PrimaryNodeDetails {
         let internal = self.internal.read().await;

@@ -28,6 +28,7 @@ serde_with.workspace = true
 serde_yaml.workspace = true
 shellexpand.workspace = true
 tempfile.workspace = true
+http.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true

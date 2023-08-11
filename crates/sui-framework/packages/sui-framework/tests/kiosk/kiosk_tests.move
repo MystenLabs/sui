@@ -316,7 +316,7 @@ module sui::kiosk_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = sui::kiosk::EExtensionsDisabled)]
+    #[expected_failure(abort_code = sui::kiosk::EUidAccessNotAllowed)]
     fun test_disallow_extensions_uid_mut() {
         let ctx = &mut test::ctx();
         let (kiosk, owner_cap) = test::get_kiosk(ctx);
@@ -328,14 +328,13 @@ module sui::kiosk_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = sui::kiosk::EExtensionsDisabled)]
-    fun test_disallow_extensions_uid() {
+    fun test_disallow_extensions_uid_available() {
         let ctx = &mut test::ctx();
         let (kiosk, owner_cap) = test::get_kiosk(ctx);
 
         kiosk::set_allow_extensions(&mut kiosk, &owner_cap, false);
         let _ = kiosk::uid(&kiosk);
 
-        abort 1337
+        test::return_kiosk(kiosk, owner_cap, ctx);
     }
 }

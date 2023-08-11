@@ -8,9 +8,15 @@ import { build } from 'esbuild';
 import { execSync } from 'child_process';
 
 interface PackageJSON {
-	name: string;
+	name?: string;
+	type?: 'module' | 'commonjs';
 	exports?: Record<string, string | Record<string, string>>;
 	files?: string[];
+	types?: string;
+	import?: string;
+	main?: string;
+	private?: boolean;
+	sideEffects?: boolean;
 }
 
 const ignorePatterns = [/\.test.ts$/];
@@ -24,8 +30,8 @@ async function buildPackage() {
 	const allFiles = await findAllFiles(path.join(process.cwd(), 'src'));
 	const packageJson = await readPackageJson();
 	await clean();
-	await buildCJS(allFiles);
-	await buildESM(allFiles);
+	await buildCJS(allFiles, packageJson);
+	await buildESM(allFiles, packageJson);
 	await buildImportDirectories(packageJson);
 }
 
@@ -47,7 +53,7 @@ async function clean() {
 	await createEmptyDir(path.join(process.cwd(), 'dist'));
 }
 
-async function buildCJS(entryPoints: string[]) {
+async function buildCJS(entryPoints: string[], { sideEffects }: PackageJSON) {
 	await build({
 		format: 'cjs',
 		logLevel: 'error',
@@ -57,20 +63,23 @@ async function buildCJS(entryPoints: string[]) {
 		sourcemap: true,
 	});
 	await buildTypes('tsconfig.json');
+
+	const pkg: PackageJSON = {
+		private: true,
+		type: 'commonjs',
+	};
+
+	if (sideEffects === false) {
+		pkg.sideEffects = false;
+	}
+
 	await fs.writeFile(
-		path.join(process.cwd(), 'dist/package.json'),
-		JSON.stringify(
-			{
-				private: true,
-				type: 'commonjs',
-			},
-			null,
-			2,
-		),
+		path.join(process.cwd(), 'dist/cjs/package.json'),
+		JSON.stringify(pkg, null, 2),
 	);
 }
 
-async function buildESM(entryPoints: string[]) {
+async function buildESM(entryPoints: string[], { sideEffects }: PackageJSON) {
 	await build({
 		format: 'esm',
 		logLevel: 'error',
@@ -80,16 +89,19 @@ async function buildESM(entryPoints: string[]) {
 		sourcemap: true,
 	});
 	await buildTypes('tsconfig.esm.json');
+
+	const pkg: PackageJSON = {
+		private: true,
+		type: 'module',
+	};
+
+	if (sideEffects === false) {
+		pkg.sideEffects = false;
+	}
+
 	await fs.writeFile(
 		path.join(process.cwd(), 'dist/esm/package.json'),
-		JSON.stringify(
-			{
-				private: true,
-				type: 'module',
-			},
-			null,
-			2,
-		),
+		JSON.stringify(pkg, null, 2),
 	);
 }
 
@@ -100,7 +112,7 @@ async function buildTypes(config: string) {
 	});
 }
 
-async function buildImportDirectories({ exports }: PackageJSON) {
+async function buildImportDirectories({ exports, sideEffects }: PackageJSON) {
 	if (!exports) {
 		return;
 	}
@@ -122,25 +134,26 @@ async function buildImportDirectories({ exports }: PackageJSON) {
 		}
 
 		await createEmptyDir(exportDir);
+
+		const pkg: PackageJSON = {
+			private: true,
+			types:
+				exportMap.types && path.relative(exportDir, path.resolve(process.cwd(), exportMap.types)),
+			import:
+				exportMap.import && path.relative(exportDir, path.resolve(process.cwd(), exportMap.import)),
+			main: path.relative(
+				exportDir,
+				path.resolve(process.cwd(), exportMap.require ?? exportMap.default),
+			),
+		};
+
+		if (sideEffects === false) {
+			pkg.sideEffects = false;
+		}
+
 		await fs.writeFile(
 			path.join(exportDir, 'package.json'),
-			`${JSON.stringify(
-				{
-					private: true,
-					types:
-						exportMap.types &&
-						path.relative(exportDir, path.resolve(process.cwd(), exportMap.types)),
-					import:
-						exportMap.import &&
-						path.relative(exportDir, path.resolve(process.cwd(), exportMap.import)),
-					main: path.relative(
-						exportDir,
-						path.resolve(process.cwd(), exportMap.require ?? exportMap.default),
-					),
-				},
-				null,
-				'\t',
-			)}\n`,
+			`${JSON.stringify(pkg, null, '\t')}\n`,
 		);
 	}
 
