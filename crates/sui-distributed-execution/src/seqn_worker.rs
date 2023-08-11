@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use once_cell::sync::OnceCell;
 use prometheus::Registry;
 use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::{Config, NodeConfig};
@@ -353,12 +354,19 @@ impl SequenceWorkerState {
                         .expect("Transaction effects exist")
                         .expect("Transaction effects exist");
 
+                    let _ = tx.digest();
+                    let full_tx = Transaction {
+                        tx: tx.clone(),
+                        ground_truth_effects: tx_effects.clone(),
+                        checkpoint_seq,
+                        r_set: OnceCell::default(),
+                        w_set: OnceCell::default(),
+                    };
+                    let _ = full_tx.get_read_set();
+                    let _ = full_tx.get_write_set();
+
                     sw_sender
-                        .send(SailfishMessage::Transaction {
-                            tx: tx.clone(),
-                            tx_effects: tx_effects.clone(),
-                            checkpoint_seq,
-                        })
+                        .send(SailfishMessage::Transaction(full_tx))
                         .await
                         .expect("sending failed");
 

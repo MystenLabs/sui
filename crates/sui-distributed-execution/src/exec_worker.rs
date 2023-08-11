@@ -395,7 +395,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                 &HashSet::new(),
             );
 
-        Self::write_updates_to_store(memory_store, inner_temp_store.clone());
+        Self::write_updates_to_store(memory_store, inner_temp_store);
         
         return TransactionWithResults {
             full_tx,
@@ -533,12 +533,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                 },
                 Some(msg) = sw_receiver.recv() => {
                     // New tx from sequencer; enqueue to manager
-                    if let SailfishMessage::Transaction{
-                        tx, 
-                        tx_effects, 
-                        checkpoint_seq,
-                    } = msg {
-                        let full_tx = Transaction{tx, ground_truth_effects: tx_effects, checkpoint_seq};
+                    if let SailfishMessage::Transaction(full_tx) = msg {
                         if full_tx.is_epoch_change() {
                             // don't queue to manager, but store to epoch_change_tx
                             epoch_change_tx = Some(full_tx);

@@ -10170,6 +10170,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-core-types",
  "move-vm-runtime",
+ "once_cell",
  "prometheus",
  "serde",
  "serde_json",
