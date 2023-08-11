@@ -3,9 +3,16 @@
 
 use async_graphql::*;
 
-use super::sui_address::SuiAddress;
+use super::{address::Address, base64::Base64, sui_address::SuiAddress};
 
-pub(crate) struct TransactionBlock;
+#[derive(SimpleObject, Clone, Eq, PartialEq)]
+
+pub(crate) struct TransactionBlock {
+    pub digest: String,
+    pub sender: Option<Address>,
+    pub bcs: Option<Base64>,
+}
+
 pub(crate) struct TransactionBlockConnection;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
@@ -32,15 +39,6 @@ pub(crate) struct TransactionBlockFilter {
 
     input_object: Option<SuiAddress>,
     changed_object: Option<SuiAddress>,
-}
-
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
-#[Object]
-impl TransactionBlock {
-    async fn id(&self) -> ID {
-        unimplemented!()
-    }
 }
 
 #[allow(unreachable_code)]

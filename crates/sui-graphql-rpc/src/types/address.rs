@@ -3,6 +3,8 @@
 
 use async_graphql::*;
 
+use crate::server::data_provider::fetch_balance;
+
 use super::{
     balance::{Balance, BalanceConnection},
     coin::CoinConnection,
@@ -13,7 +15,10 @@ use super::{
     transaction_block::{TransactionBlockConnection, TransactionBlockFilter},
 };
 
-pub(crate) struct Address;
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Address {
+    pub address: SuiAddress,
+}
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum AddressTransactionBlockRelationship {
@@ -42,7 +47,7 @@ impl Address {
     // =========== Owner interface methods =============
 
     pub async fn location(&self) -> SuiAddress {
-        unimplemented!()
+        self.address.clone()
     }
 
     pub async fn object_connection(
@@ -56,8 +61,13 @@ impl Address {
         unimplemented!()
     }
 
-    pub async fn balance(&self, type_: Option<String>) -> Balance {
-        unimplemented!()
+    pub async fn balance(&self, ctx: &Context<'_>, type_: Option<String>) -> Result<Balance> {
+        fetch_balance(
+            ctx.data_unchecked::<sui_sdk::SuiClient>(),
+            &self.address,
+            type_,
+        )
+        .await
     }
 
     pub async fn balance_connection(

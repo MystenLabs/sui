@@ -33,12 +33,20 @@ type AmbiguousOwner implements Owner {
 }
 
 type Balance {
-	id: ID!
+	coinObjectCount: Int!
+	totalBalance: BigInt!
 }
 
 type BalanceConnection {
 	unimplemented: Boolean!
 }
+
+"""
+TODO: implement Base64 scalar type
+"""
+scalar Base64
+
+scalar BigInt
 
 
 type CoinConnection {
@@ -53,6 +61,11 @@ type NameServiceConnection {
 }
 
 type Object implements Owner {
+	version: Int!
+	digest: String!
+	storageRebate: Int
+	bcs: Base64
+	previousTransactionBlock: TransactionBlock
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	balance(type: String): Balance!
@@ -99,10 +112,13 @@ type StakeConnection {
 }
 
 
-"""
-Representation of Sui Addresses
-"""
 scalar SuiAddress
+
+type TransactionBlock {
+	digest: String!
+	sender: Address
+	bcs: Base64
+}
 
 type TransactionBlockConnection {
 	unimplemented: Boolean!

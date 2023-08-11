@@ -1,19 +1,38 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
 use async_graphql::*;
-use move_core_types::u256::U256;
 
-struct BigInt(U256);
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct BigInt(String);
 
-/// TODO: implement BigInt scalar type using u256
 #[Scalar]
 impl ScalarType for BigInt {
-    fn parse(_value: Value) -> InputValueResult<Self> {
-        unimplemented!()
+    fn parse(value: Value) -> InputValueResult<Self> {
+        match value {
+            Value::String(s) => {
+                // check that all are digits
+                if s.chars().all(|c| c.is_ascii_digit()) {
+                    Ok(BigInt(s))
+                } else {
+                    Err(InputValueError::custom("Invalid BigInt"))
+                }
+            }
+            _ => Err(InputValueError::custom("Invalid BigInt")),
+        }
     }
 
     fn to_value(&self) -> Value {
-        unimplemented!()
+        Value::String(self.0.clone())
+    }
+}
+
+impl FromStr for BigInt {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(BigInt(s.to_string()))
     }
 }
