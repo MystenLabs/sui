@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { useAppsBackend, useElementHeight } from '@mysten/core';
 import { LoadingIndicator } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -28,6 +29,7 @@ const DEFAULT_HEADER_HEIGHT = 68;
 export function PageLayout({ gradient, content, loading, isError }: PageLayoutProps) {
 	const [network] = useNetworkContext();
 	const { request } = useAppsBackend();
+	const outageOverride = useFeatureIsOn('network-outage-override');
 
 	const { data } = useQuery({
 		queryKey: ['apps-backend', 'monitor-network'],
@@ -41,7 +43,8 @@ export function PageLayout({ gradient, content, loading, isError }: PageLayoutPr
 		enabled: network === Network.MAINNET,
 	});
 	const isGradientVisible = !!gradient;
-	const renderNetworkDegradeBanner = network === Network.MAINNET && data?.degraded;
+	const renderNetworkDegradeBanner =
+		outageOverride || (network === Network.MAINNET && data?.degraded);
 	const headerRef = useRef<HTMLElement | null>(null);
 	const headerHeight = useElementHeight(headerRef, DEFAULT_HEADER_HEIGHT);
 
