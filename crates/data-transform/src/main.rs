@@ -2,21 +2,15 @@ use data_transform::*;
 use diesel::prelude::*;
 use diesel::RunQueryDsl;
 use diesel::QueryableByName;
-use diesel::sql_query;
-use diesel::sql_types::Text;
-use diesel::sql_types::Integer;
 use diesel::pg::sql_types::Bytea;
-use sui_types::base_types::ObjectID;
-use move_core_types::language_storage::ModuleId;
 use anyhow::anyhow;
 use std::sync::Arc;
 use std::process::exit;
 
 use sui_types::object::MoveObject;
 use sui_types::object::ObjectFormatOptions;
-use move_bytecode_utils::module_cache::GetModule;
 use move_bytecode_utils::module_cache::SyncModuleCache;
-use move_core_types::value::{MoveFieldLayout, MoveStruct, MoveStructLayout, MoveTypeLayout};
+use move_core_types::value::MoveStruct;
 
 use sui_indexer::{get_pg_pool_connection, new_pg_connection_pool, Indexer, IndexerConfig};
 use self::models::*;
@@ -25,17 +19,9 @@ use sui_indexer::store::module_resolver::IndexerModuleResolver;
 use sui_indexer::errors::IndexerError;
 
 use sui_types::parse_sui_struct_tag;
-use sui_json_rpc_types::{SuiEvent, SuiMoveStruct};
-use serde::Serialize;
+use sui_json_rpc_types::SuiMoveStruct;
 
-use std::process::{Command, Stdio};
-use std::io::{self, Read};
-use tracing::{debug, info};
-
-const LATEST_MODULE_QUERY: &str = "SELECT (t2.module).data
-FROM (SELECT UNNEST(data) AS module
-            FROM (SELECT data FROM packages WHERE package_id = $1 ORDER BY version DESC FETCH FIRST 1 ROW ONLY) t1) t2
-WHERE (module).name = $2;";
+use tracing::debug;
 
 fn main() {
     #[derive(QueryableByName)]
@@ -52,8 +38,8 @@ fn main() {
     let connection = &mut establish_connection();
 
     //let start_id = 1;
-    //let start_id = 465778286;
-    let start_id = 743159312;
+    let start_id = 465778286;
+    //let start_id = 743159312;
 
     let blocking_cp = new_pg_connection_pool(&database_url).map_err(|e| anyhow!("Unable to connect to Postgres, is it running? {e}"));
     let module_cache = Arc::new(SyncModuleCache::new(IndexerModuleResolver::new(blocking_cp.expect("REASON").clone())));
@@ -85,6 +71,26 @@ fn main() {
 
                 println!("Non 8192 event!");
 
+                // check for the previous record in events_json
+                let eventj = events_json
+                    .find(target_id)
+                    .select(EventsJson::as_select())
+                    .first(connection)
+                    .optional();
+
+                match eventj {
+                    Ok(Some(_eventj)) => {
+                        println!("Aklready processed {}, skipping...", target_id);
+                        continue;
+                    }
+                    Ok(None) => {
+                        println!("Unable to find event_json {}", target_id);
+                    }
+                    Err(_) => {
+                        println!("An error occured while fetching event_json {}", target_id);
+                    }
+                }
+
                 // JSON parsing starts here
                 let type_ = parse_sui_struct_tag(&event.event_type);
                 println!("type = {:#?}", type_);
@@ -108,15 +114,17 @@ fn main() {
 
                                 let new_event_json = EventsJson { id: event.id, event_json: final_result };
 
-                                let inserted_event_json = diesel::insert_into(events_json)
+                                let _inserted_event_json = diesel::insert_into(events_json)
                                     .values(&new_event_json)
                                     .execute(connection)
                                     .expect("Error saving new events json");
 
+                                println!("Inserted new event_json id: {}", event.id);
+
                             }|
                             Err(e) => {
                                 println!("error in deserialize:{}", e);
-                                continue;
+                                exit(0);
                             }
                         }
                     }
@@ -128,11 +136,11 @@ fn main() {
             }
             Ok(None) => {
                 println!("Unable to find event {}", target_id);
-                continue;
+                exit(0);
             }
             Err(_) => {
                 println!("An error occured while fetching event {}", target_id);
-                continue;
+                exit(0);
             }
         }
     }

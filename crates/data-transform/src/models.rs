@@ -17,7 +17,7 @@ pub struct Event {
     pub event_bcs: Vec<u8>,
 }
 
-#[derive(Queryable, Insertable, Debug, Clone, Default)]
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Default)]
 #[diesel(table_name = events_json)]
 pub struct EventsJson {
     pub id: i64,
