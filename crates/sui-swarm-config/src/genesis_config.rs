@@ -362,7 +362,7 @@ impl GenesisConfig {
                     address: Some(gas_address),
                     // Generate one genesis gas object per validator (this seems a good rule of thumb to produce
                     // enough gas objects for most types of benchmarks).
-                    gas_amounts: vec![Self::BENCHMARK_GAS_AMOUNT; 15],
+                    gas_amounts: vec![Self::BENCHMARK_GAS_AMOUNT; 1],
                 }
             })
             .collect();
