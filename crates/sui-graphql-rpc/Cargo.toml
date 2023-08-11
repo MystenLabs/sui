@@ -12,9 +12,17 @@ async-graphql.workspace = true
 async-graphql-axum = { version = "5.0.10" }
 axum.workspace = true
 clap.workspace = true
+fastcrypto = { workspace = true, features = ["copy_key"] }
+hex.workspace = true
 serde.workspace = true
 tokio.workspace = true
 move-core-types.workspace = true
+
+# Used for dummy data
+bcs.workspace = true
+sui-sdk.workspace = true
+sui-json-rpc.workspace = true
+sui-json-rpc-types.workspace = true
 
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

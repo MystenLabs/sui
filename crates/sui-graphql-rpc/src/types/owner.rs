@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::server::data_provider::fetch_balance;
 use crate::types::balance::*;
 use crate::types::coin::*;
 use crate::types::name_service::*;
@@ -69,14 +70,16 @@ pub(crate) enum Owner {
     Object(Object),
 }
 
-pub(crate) struct AmbiguousOwner;
+pub(crate) struct AmbiguousOwner {
+    pub address: SuiAddress,
+}
 
 #[allow(unreachable_code)]
 #[allow(unused_variables)]
 #[Object]
 impl AmbiguousOwner {
-    pub async fn location(&self) -> SuiAddress {
-        unimplemented!()
+    pub async fn location(&self, ctx: &Context<'_>) -> SuiAddress {
+        self.address.clone()
     }
 
     pub async fn object_connection(
@@ -90,8 +93,13 @@ impl AmbiguousOwner {
         unimplemented!()
     }
 
-    pub async fn balance(&self, type_: Option<String>) -> Balance {
-        unimplemented!()
+    pub async fn balance(&self, ctx: &Context<'_>, type_: Option<String>) -> Result<Balance> {
+        fetch_balance(
+            ctx.data_unchecked::<sui_sdk::SuiClient>(),
+            &self.address,
+            type_,
+        )
+        .await
     }
 
     pub async fn balance_connection(

@@ -3,17 +3,15 @@
 
 use async_graphql::*;
 
-pub(crate) struct Balance;
-pub(crate) struct BalanceConnection;
+use super::big_int::BigInt;
 
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
-#[Object]
-impl Balance {
-    async fn id(&self) -> ID {
-        unimplemented!()
-    }
+#[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
+pub(crate) struct Balance {
+    // pub(crate) coin_type: MoveType,
+    pub(crate) coin_object_count: u64,
+    pub(crate) total_balance: BigInt,
 }
+pub(crate) struct BalanceConnection;
 
 #[allow(unreachable_code)]
 #[allow(unused_variables)]
