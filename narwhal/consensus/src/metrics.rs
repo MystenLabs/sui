@@ -52,6 +52,8 @@ pub struct ConsensusMetrics {
     pub leader_commits: IntCounterVec,
     /// number of bad nodes in the committee
     pub num_of_bad_nodes: IntGauge,
+
+    pub num_of_committed_certificates_per_authority: IntCounterVec,
 }
 
 impl ConsensusMetrics {
@@ -118,6 +120,12 @@ impl ConsensusMetrics {
             num_of_bad_nodes: register_int_gauge_with_registry!(
                 "num_of_bad_nodes",
                 "The number of bad nodes in the new leader schedule",
+                registry
+            ).unwrap(),
+            num_of_committed_certificates_per_authority: register_int_counter_vec_with_registry!(
+               "num_of_committed_certificates_per_authority",
+                "Count the number of committed certificates per authority",
+                &["authority"],
                 registry
             ).unwrap(),
         }

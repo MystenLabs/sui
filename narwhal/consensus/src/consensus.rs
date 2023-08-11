@@ -730,6 +730,16 @@ impl Consensus {
                         // expected by primary.
                         let leader_commit_round = committed_certificates.iter().map(|c| c.round()).max().unwrap();
 
+                        for certificate in &committed_certificates {
+                            let authority: &Authority = self.committee.authority_safe(&certificate.origin());
+
+                            self
+                            .metrics
+                            .num_of_committed_certificates_per_authority
+                            .with_label_values(&["authority", authority.hostname()])
+                            .inc();
+                        }
+
                         self.tx_committed_certificates
                         .send((leader_commit_round, committed_certificates))
                         .await

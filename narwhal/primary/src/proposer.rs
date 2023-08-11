@@ -348,8 +348,10 @@ impl Proposer {
         // the time the node proposed for the previous round. Then we'll use that to calculate the theoretical
         // remainder of time if the leader was supposed to wait for the full min delay timeout.
         if self.committee.size() > 1
-            && self.round % 2 == 0
-            && self.leader_schedule.leader(self.round).id() == self.authority_id
+            && ((self.round % 2 == 0
+                && self.leader_schedule.leader(self.round).id() == self.authority_id)
+                || (next_round % 2 != 0
+                    && self.committee.leader(next_round).id() == self.authority_id))
         {
             // calculate the round start (propose) of previous round by taking the max header (if not our proposal exists) creation time
             let last_proposal_timestamp: Option<TimestampMs> = if let Some(c) = last_parents
@@ -378,19 +380,6 @@ impl Proposer {
                 return delay.min(self.max_header_delay);
             }
         }
-
-        /*
-        // Give a boost on the odd rounds to a node by using the whole committee here, not just the
-        // nodes of the leader_schedule. By doing this we keep the proposal rate as high as possible
-        // which leads to higher round rate and also acting as a score booster to the less strong nodes
-        // as well.
-        if self.committee.size() > 1
-            && next_round % 2 != 0
-            && self.committee.leader(next_round).id() == self.authority_id
-        {
-            return Duration::ZERO;
-        }
-        */
 
         self.min_header_delay
     }
