@@ -27,8 +27,7 @@ const GIT_REVISION: &str = {
 };
 const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
 
-const DEFAULT_CHANNEL_SIZE:usize = 1024;
-
+const DEFAULT_CHANNEL_SIZE: usize = 1024;
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -47,7 +46,7 @@ struct Args {
     execute: u64,
 }
 
-#[tokio::main(flavor = "multi_thread", worker_threads = 4)]
+#[tokio::main]
 async fn main() {
     let args = Args::parse();
 
