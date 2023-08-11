@@ -85,8 +85,7 @@ jobs:
         if: ${{ env.sui_tag != 'main' && matrix.os == 'macos-latest-xl' }}
         shell: bash
         run: |
-          rustup target add x86_64-apple-darwin
-          cargo build --release --target x86_64-apple-darwin
+          cargo build --release
 
       - name: Rename binaries for ${{ matrix.os }}
         if: ${{ env.sui_tag != 'main' && (matrix.os == 'ubuntu-ghcloud' || matrix.os == 'macos-latest-xl') }}
