@@ -62,7 +62,7 @@ const CreatePage = () => {
 						</div>
 						<Button
 							type="submit"
-							disabled={!isValid || isSubmitting}
+							disabled={!isValid || isSubmitting || true}
 							size="tall"
 							text="Create Wallet"
 							loading={isSubmitting}

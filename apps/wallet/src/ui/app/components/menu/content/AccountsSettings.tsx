@@ -38,8 +38,15 @@ export function AccountsSettings() {
 					text="Create New Account"
 					loading={createAccountMutation.isLoading}
 					onClick={() => createAccountMutation.mutate()}
+					disabled
 				/>
-				<Button variant="outline" size="tall" text="Import Private Key" to={importPrivateKeyUrl} />
+				<Button
+					variant="outline"
+					size="tall"
+					text="Import Private Key"
+					to={importPrivateKeyUrl}
+					disabled
+				/>
 				<Button
 					variant="outline"
 					size="tall"
@@ -57,6 +64,7 @@ export function AccountsSettings() {
 							navigate(connectLedgerModalUrl);
 						}
 					}}
+					disabled
 				/>
 				<Outlet />
 			</div>

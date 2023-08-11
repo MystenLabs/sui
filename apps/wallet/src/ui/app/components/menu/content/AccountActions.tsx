@@ -42,17 +42,19 @@ export function AccountActions({ account }: AccountActionsProps) {
 	} else if (isMnemonicSerializedUiAccount(account)) {
 		actionContent = (
 			<div className="flex flex-col gap-2 w-full">
-				{/* <Button
+				<Button
 					variant="secondary"
 					text="Export Private Key"
 					to={exportAccountUrl}
 					color="heroDark"
-				/> */}
+					disabled
+				/>
 				<Button
 					variant="secondary"
 					text="Export Passphrase"
 					to={recoveryPassphraseUrl}
 					color="heroDark"
+					disabled
 				/>
 			</div>
 		);

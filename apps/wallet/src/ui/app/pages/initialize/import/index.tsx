@@ -26,11 +26,11 @@ export type ImportPageProps = {
 	mode?: 'import' | 'forgot';
 };
 export function ImportPage({ mode = 'import' }: ImportPageProps) {
-	const [data, setData] = useState<ImportValuesType>(initialValues);
-	const [step, setStep] = useState(0);
+	const [data, _setData] = useState<ImportValuesType>(initialValues);
+	const [step, _setStep] = useState(0);
 	const dispatch = useAppDispatch();
 	const navigate = useNavigate();
-	const onHandleSubmit = useCallback(
+	const _onHandleSubmit = useCallback(
 		async ({ mnemonic, password }: ImportValuesType) => {
 			try {
 				if (mode === 'forgot') {
@@ -70,16 +70,17 @@ export function ImportPage({ mode = 'import' }: ImportPageProps) {
 			{StepForm ? (
 				<div className="mt-7.5 flex flex-col flex-nowrap items-stretch flex-1 flex-grow w-full">
 					<StepForm
-						next={async (data, stepIncrement) => {
-							const nextStep = step + stepIncrement;
-							if (nextStep >= totalSteps) {
-								await onHandleSubmit(data);
-							}
-							setData(data);
-							if (nextStep < 0) {
-								return;
-							}
-							setStep(nextStep);
+						next={async (_data, _stepIncrement) => {
+							// disable for now
+							// const nextStep = step + stepIncrement;
+							// if (nextStep >= totalSteps) {
+							// 	await onHandleSubmit(data);
+							// }
+							// setData(data);
+							// if (nextStep < 0) {
+							// 	return;
+							// }
+							// setStep(nextStep);
 						}}
 						data={data}
 						mode={mode}

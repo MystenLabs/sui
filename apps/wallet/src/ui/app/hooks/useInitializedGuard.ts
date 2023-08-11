@@ -4,8 +4,8 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { useRestrictedGuard } from './useRestrictedGuard';
 import { useAccounts } from './accounts-v2/useAccounts';
+import { useRestrictedGuard } from './useRestrictedGuard';
 
 export default function useInitializedGuard(initializedRequired: boolean) {
 	const restricted = useRestrictedGuard();

@@ -117,13 +117,14 @@ function MenuList() {
 							}
 						}}
 						text="Lock Wallet"
+						disabled
 					/>
 					<Button
 						variant="outline"
 						text="Logout"
 						size="narrow"
 						loading={logoutInProgress}
-						disabled={isLogoutDialogOpen}
+						disabled={isLogoutDialogOpen || true}
 						onClick={async () => {
 							setIsLogoutDialogOpen(true);
 						}}
