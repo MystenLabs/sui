@@ -75,12 +75,10 @@ pub fn known_filters() -> (E::AttributeName_, Vec<WarningFilter>) {
                 LINTER_DEFAULT_DIAG_CODE,
                 Some(COIN_FIELD_FILTER_NAME),
             ),
-            WarningFilter::Code(
-                DiagnosticsID::new(
-                    LinterDiagCategory::FreezeWrapped as u8,
-                    LINTER_DEFAULT_DIAG_CODE,
-                    Some(LINT_WARNING_PREFIX),
-                ),
+            WarningFilter::code(
+                Some(LINT_WARNING_PREFIX),
+                LinterDiagCategory::FreezeWrapped as u8,
+                LINTER_DEFAULT_DIAG_CODE,
                 Some(FREEZE_WRAPPED_FILTER_NAME),
             ),
         ],
