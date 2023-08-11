@@ -345,7 +345,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
             );
 
         // Critical check: are the effects the same?
-        Self::check_effects_match(&full_tx, &effects);
+        debug_assert!(Self::check_effects_match(&full_tx, &effects));
 
         // And now we mutate the store.
         Self::write_updates_to_store(self.memory_store.clone(), inner_temp_store);
@@ -498,7 +498,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
 
                     // 1. Critical check: are the effects the same?
                     let tx_effects = &tx_with_results.tx_effects;
-                    Self::check_effects_match(full_tx, tx_effects);
+                    debug_assert!(Self::check_effects_match(full_tx, tx_effects));
 
                     // 2. Update object queues
                     manager.clean_up(&full_tx).await;
