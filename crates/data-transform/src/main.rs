@@ -80,7 +80,7 @@ fn main() {
 
                 match eventj {
                     Ok(Some(_eventj)) => {
-                        println!("Aklready processed {}, skipping...", target_id);
+                        println!("Already processed {}, skipping...", target_id);
                         continue;
                     }
                     Ok(None) => {
@@ -130,7 +130,7 @@ fn main() {
                     }
                     Err(err) => {
                         println!("error in get_layout {}", err);
-                        exit(0);
+                        continue;
                     }
                 }
             }
