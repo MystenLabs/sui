@@ -335,8 +335,10 @@ impl Proposer {
         // the next leader.
         let next_round = self.round + 1;
         if self.committee.size() > 1
-            && next_round % 2 == 0
-            && self.leader_schedule.leader(next_round).id() == self.authority_id
+            && ((next_round % 2 == 0
+                && self.leader_schedule.leader(next_round).id() == self.authority_id)
+                || (next_round % 2 != 0
+                    && self.committee.leader(next_round).id() == self.authority_id))
         {
             return Duration::ZERO;
         }
@@ -350,8 +352,8 @@ impl Proposer {
         if self.committee.size() > 1
             && ((self.round % 2 == 0
                 && self.leader_schedule.leader(self.round).id() == self.authority_id)
-                || (next_round % 2 != 0
-                    && self.committee.leader(next_round).id() == self.authority_id))
+                || (self.round % 2 != 0
+                    && self.committee.leader(self.round).id() == self.authority_id))
         {
             // calculate the round start (propose) of previous round by taking the max header (if not our proposal exists) creation time
             let last_proposal_timestamp: Option<TimestampMs> = if let Some(c) = last_parents
