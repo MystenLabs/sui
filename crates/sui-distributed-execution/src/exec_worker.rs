@@ -273,7 +273,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                     let old_object = memory_store
                             .get_object(&obj_del.0)
                             .unwrap().unwrap();
-                        memory_store.insert(obj_del.0, (wrap_tombstone, old_object)); // insert the old object with a wrapped tombstone
+                    memory_store.insert(obj_del.0, (wrap_tombstone, old_object)); // insert the old object with a wrapped tombstone
                 }
                 _ => {
                     memory_store.remove(obj_del.0);

@@ -1182,12 +1182,12 @@ impl<'backing> BackingPackageStore for TemporaryStore<'backing> {
         } else {
             self.store.get_package_object(package_id).map(|obj| {
                 // Track object but leave unchanged
-                if let Some(v) = obj.clone() {
+                /*if let Some(v) = obj.clone() {
                     // TODO: Can this lock ever block execution?
                     self.runtime_packages_loaded_from_db
                         .write()
                         .insert(*package_id, v);
-                }
+                }*/
                 obj
             })
         }
