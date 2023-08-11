@@ -41,10 +41,8 @@ mod checked {
         },
         coin::Coin,
         error::{command_argument_error, ExecutionError, ExecutionErrorKind},
-        event::Event,
         execution::{
-            CommandKind, ExecutionResults, ExecutionState, ObjectContents, ObjectValue,
-            RawValueType, Value,
+            CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
         },
         id::{RESOLVED_SUI_ID, UID},
         metrics::LimitsMetrics,
@@ -109,21 +107,7 @@ mod checked {
         let finished = context.finish::<Mode>();
         // Save loaded objects for debug. We dont want to lose the info
         state_view.save_loaded_child_objects(loaded_child_objects);
-
-        let ExecutionResults {
-            object_changes,
-            user_events,
-        } = finished?;
-        state_view.apply_object_changes(object_changes);
-        for (module_id, tag, contents) in user_events {
-            state_view.log_event(Event::new(
-                module_id.address(),
-                module_id.name(),
-                tx_context.sender(),
-                tag,
-                contents,
-            ))
-        }
+        state_view.record_execution_results(finished?);
         Ok(mode_results)
     }
 

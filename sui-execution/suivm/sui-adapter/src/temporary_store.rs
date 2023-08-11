@@ -13,7 +13,7 @@ use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::execution::LoadedChildObjectMetadata;
+use sui_types::execution::{ExecutionResults, LoadedChildObjectMetadata};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::storage::{BackingStore, DeleteKindWithOldVersion};
@@ -724,7 +724,10 @@ impl<'backing> TemporaryStore<'backing> {
                             old_obj.storage_rebate
                         } else {
                             // not a lot we can do safely and under this condition everything is broken
-                            panic!("Looking up storage rebate of mutated object should not fail");
+                            panic!(
+                                "Looking up storage rebate of mutated object {:?} should not fail",
+                                (object_id, expected_version)
+                            );
                         }
                     }
                 }
@@ -982,16 +985,46 @@ impl<'backing> Storage for TemporaryStore<'backing> {
         self.events.clear();
     }
 
-    fn log_event(&mut self, event: Event) {
-        TemporaryStore::log_event(self, event)
-    }
-
     fn read_object(&self, id: &ObjectID) -> Option<&Object> {
         TemporaryStore::read_object(self, id)
     }
 
-    fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>) {
-        TemporaryStore::apply_object_changes(self, changes)
+    /// Take execution results v2, and translate it back to be compatible with effects v1.
+    fn record_execution_results(&mut self, results: ExecutionResults) {
+        let ExecutionResults::V2(results) = results else {
+            panic!("ExecutionResults::V2 expected in sui-execution v1 and above");
+        };
+        let mut object_changes = BTreeMap::new();
+        for (id, object) in results.written_objects {
+            let write_kind = if results.created_object_ids.contains(&id) {
+                WriteKind::Create
+            } else if results.objects_modified_at.contains_key(&id) {
+                WriteKind::Mutate
+            } else {
+                WriteKind::Unwrap
+            };
+            object_changes.insert(id, ObjectChange::Write(object, write_kind));
+        }
+
+        for id in results.deleted_object_ids {
+            let delete_kind: DeleteKindWithOldVersion =
+                if let Some((version, _)) = results.objects_modified_at.get(&id) {
+                    DeleteKindWithOldVersion::Normal(*version)
+                } else {
+                    DeleteKindWithOldVersion::UnwrapThenDelete
+                };
+            object_changes.insert(id, ObjectChange::Delete(delete_kind));
+        }
+        for (id, (version, _)) in results.objects_modified_at {
+            object_changes.entry(id).or_insert(ObjectChange::Delete(
+                DeleteKindWithOldVersion::Wrap(version),
+            ));
+        }
+        self.apply_object_changes(object_changes);
+
+        for event in results.user_events {
+            self.events.push(event);
+        }
     }
 
     fn save_loaded_child_objects(
