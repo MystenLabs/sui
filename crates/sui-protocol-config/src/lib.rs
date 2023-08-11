@@ -1358,7 +1358,7 @@ impl ProtocolConfig {
 
                 if chain != Chain::Mainnet {
                     cfg.feature_flags.narwhal_new_leader_election_schedule = true;
-                    cfg.consensus_bad_nodes_stake_threshold = Some(20);
+                    cfg.consensus_bad_nodes_stake_threshold = Some(33);
                 }
 
                 cfg
