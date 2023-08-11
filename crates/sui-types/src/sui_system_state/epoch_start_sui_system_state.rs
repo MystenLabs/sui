@@ -37,7 +37,7 @@ pub trait EpochStartSystemStateTrait {
 /// and fill them with None for older versions. When we absolutely must delete fields, we could
 /// also add new db tables to store the new version. This is OK because we only store one copy of
 /// this as part of EpochStartConfiguration for the most recent epoch in the db.
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 #[enum_dispatch(EpochStartSystemStateTrait)]
 pub enum EpochStartSystemState {
     V1(EpochStartSystemStateV1),
@@ -69,7 +69,7 @@ impl EpochStartSystemState {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct EpochStartSystemStateV1 {
     epoch: EpochId,
     protocol_version: u64,
@@ -227,7 +227,7 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct EpochStartValidatorInfoV1 {
     pub sui_address: SuiAddress,
     pub protocol_pubkey: narwhal_crypto::PublicKey,

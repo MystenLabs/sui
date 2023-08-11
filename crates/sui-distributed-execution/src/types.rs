@@ -67,7 +67,7 @@ impl<M: Debug + Message> NetworkMessage<M> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum SailfishMessage {
     EpochStart {
         conf: ProtocolConfig,
