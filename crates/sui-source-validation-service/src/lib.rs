@@ -344,15 +344,6 @@ pub struct AppState {
 }
 
 pub fn serve(app_state: AppState) -> anyhow::Result<Server<AddrIncoming, IntoMakeService<Router>>> {
-    let mut source_map = BTreeMap::new();
-    for (k, v) in &app_state.sources {
-        let mut source_path_map = BTreeMap::new();
-        for (a, b) in v {
-            source_path_map.insert(a, b.path.clone());
-        }
-        source_map.insert(k, source_path_map);
-    }
-
     let app = Router::new()
         .route("/api", get(api_route))
         .route("/api/list", get(list_route))
@@ -474,7 +465,7 @@ async fn list_route(
     for (k, v) in &app_state.sources {
         let mut address_map: BTreeMap<AccountAddress, BTreeMap<Symbol, PathBuf>> = BTreeMap::new();
         for ((addr, symbol), source_info) in v {
-            if let Some(existing) = address_map.get_mut(&addr) {
+            if let Some(existing) = address_map.get_mut(addr) {
                 existing.insert(*symbol, source_info.path.clone());
             } else {
                 let mut source_map = BTreeMap::new();
