@@ -27,13 +27,14 @@ use sui_types::{
     id::UID,
     metrics::LimitsMetrics,
     object::{MoveObject, Owner},
-    storage::{ChildObjectResolver, DeleteKind, WriteKind},
+    storage::ChildObjectResolver,
     SUI_CLOCK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
 pub(crate) mod object_store;
 
 use object_store::ChildObjectStore;
+use sui_types::base_types::ObjectDigest;
 
 use self::object_store::{ChildObjectEffect, ObjectResult};
 
@@ -62,12 +63,19 @@ pub(crate) struct TestInventories {
     pub(crate) taken: BTreeMap<ObjectID, Owner>,
 }
 
+#[derive(Default)]
+pub struct LoadedChildObject {
+    pub loaded_version_digest: Option<(SequenceNumber, ObjectDigest)>,
+    pub is_modified: bool,
+}
+
 pub struct RuntimeResults {
-    pub writes: LinkedHashMap<ObjectID, (WriteKind, Owner, Type, Value)>,
-    pub deletions: LinkedHashMap<ObjectID, DeleteKind>,
+    pub writes: LinkedHashMap<ObjectID, (Owner, Type, Value)>,
     pub user_events: Vec<(Type, StructTag, Value)>,
-    // loaded child objects and their versions
-    pub loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
+    // modified child objects and their loaded version/digest.
+    pub modified_child_objects: BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>,
+    pub created_object_ids: Set<ObjectID>,
+    pub deleted_object_ids: Set<ObjectID>,
 }
 
 #[derive(Default)]
@@ -259,10 +267,6 @@ impl<'a> ObjectRuntime<'a> {
         Ok(())
     }
 
-    pub fn new_ids(&self) -> &Set<ObjectID> {
-        &self.state.new_ids
-    }
-
     pub fn transfer(
         &mut self,
         owner: Owner,
@@ -382,18 +386,10 @@ impl<'a> ObjectRuntime<'a> {
         std::mem::take(&mut self.state)
     }
 
-    pub fn finish(
-        mut self,
-        by_value_inputs: BTreeSet<ObjectID>,
-        external_transfers: BTreeSet<ObjectID>,
-    ) -> Result<RuntimeResults, ExecutionError> {
-        let (loaded_child_objects, child_effects) = self.child_object_store.take_effects();
-        self.state.finish(
-            by_value_inputs,
-            external_transfers,
-            loaded_child_objects,
-            child_effects,
-        )
+    pub fn finish(mut self) -> Result<RuntimeResults, ExecutionError> {
+        let loaded_child_objects = self.loaded_child_objects();
+        let child_effects = self.child_object_store.take_effects();
+        self.state.finish(loaded_child_objects, child_effects)
     }
 
     pub(crate) fn all_active_child_objects(
@@ -442,26 +438,28 @@ impl ObjectRuntimeState {
     /// - Passes through user events
     pub(crate) fn finish(
         mut self,
-        by_value_inputs: BTreeSet<ObjectID>,
-        external_transfers: BTreeSet<ObjectID>,
-        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
+        loaded_child_objects: BTreeMap<ObjectID, LoadedChildObjectMetadata>,
         child_object_effects: BTreeMap<ObjectID, ChildObjectEffect>,
     ) -> Result<RuntimeResults, ExecutionError> {
-        let mut wrapped_children = BTreeSet::new();
+        let mut modified_child_objects = BTreeMap::new();
         for (child, child_object_effect) in child_object_effects {
             let ChildObjectEffect {
                 owner: parent,
-                loaded_version,
                 ty,
                 effect,
             } = child_object_effect;
+
+            let loaded_child = loaded_child_objects.get(&child);
+            if let Some(metadata) = loaded_child {
+                modified_child_objects.insert(child, (metadata.version, metadata.digest));
+            }
 
             match effect {
                 // was modified, so mark it as mutated and transferred
                 Op::Modify(v) => {
                     debug_assert!(!self.transfers.contains_key(&child));
                     debug_assert!(!self.new_ids.contains_key(&child));
-                    debug_assert!(loaded_version.is_some());
+                    debug_assert!(loaded_child.is_some());
                     self.transfers
                         .insert(child, (Owner::ObjectOwner(parent.into()), ty, v));
                 }
@@ -471,27 +469,22 @@ impl ObjectRuntimeState {
                     self.transfers
                         .insert(child, (Owner::ObjectOwner(parent.into()), ty, v));
                 }
-                // was transferred so not actually deleted
-                Op::Delete if self.transfers.contains_key(&child) => {
-                    debug_assert!(!self.deleted_ids.contains_key(&child));
-                }
-                // ID was deleted too was deleted so mark as deleted
-                Op::Delete if self.deleted_ids.contains_key(&child) => {
-                    debug_assert!(!self.transfers.contains_key(&child));
-                    debug_assert!(!self.new_ids.contains_key(&child));
-                }
-                // was new so the object is transient and does not need to be marked as deleted
-                Op::Delete if self.new_ids.contains_key(&child) => {}
-                // child was transferred externally to the runtime
-                Op::Delete if external_transfers.contains(&child) => {}
-                // otherwise it must have been wrapped
+
                 Op::Delete => {
-                    wrapped_children.insert(child);
+                    // was transferred so not actually deleted
+                    if self.transfers.contains_key(&child) {
+                        debug_assert!(!self.deleted_ids.contains_key(&child));
+                    }
+                    // ID was deleted too was deleted so mark as deleted
+                    if self.deleted_ids.contains_key(&child) {
+                        debug_assert!(!self.transfers.contains_key(&child));
+                        debug_assert!(!self.new_ids.contains_key(&child));
+                    }
                 }
             }
         }
         let ObjectRuntimeState {
-            input_objects,
+            input_objects: _,
             new_ids,
             deleted_ids,
             transfers,
@@ -501,62 +494,22 @@ impl ObjectRuntimeState {
         // Check new owners from transfers, reports an error on cycles.
         // TODO can we have cycles in the new system?
         check_circular_ownership(transfers.iter().map(|(id, (owner, _, _))| (*id, *owner)))?;
-        // determine write kinds
-        let writes: LinkedHashMap<_, _> = transfers
+        let written_objects: LinkedHashMap<_, _> = transfers
             .into_iter()
             .map(|(id, (owner, type_, value))| {
-                let write_kind =
-                    if input_objects.contains_key(&id) || loaded_child_objects.contains_key(&id) {
-                        debug_assert!(!new_ids.contains_key(&id));
-                        WriteKind::Mutate
-                    } else if id == SUI_SYSTEM_STATE_OBJECT_ID || new_ids.contains_key(&id) {
-                        // SUI_SYSTEM_STATE_OBJECT_ID is only transferred during genesis
-                        // TODO find a way to insert this in the new_ids during genesis transactions
-                        WriteKind::Create
-                    } else {
-                        WriteKind::Unwrap
-                    };
-                (id, (write_kind, owner, type_, value))
+                if let Some(metadata) = loaded_child_objects.get(&id) {
+                    modified_child_objects.insert(id, (metadata.version, metadata.digest));
+                }
+                (id, (owner, type_, value))
             })
             .collect();
-        // determine delete kinds
-        let mut deletions: LinkedHashMap<_, _> = deleted_ids
-            .into_iter()
-            .map(|(id, ())| {
-                debug_assert!(!new_ids.contains_key(&id));
-                let delete_kind =
-                    if input_objects.contains_key(&id) || loaded_child_objects.contains_key(&id) {
-                        DeleteKind::Normal
-                    } else {
-                        DeleteKind::UnwrapThenDelete
-                    };
-                (id, delete_kind)
-            })
-            .collect();
-        // remaining by value objects must be wrapped
-        let remaining_by_value_objects = by_value_inputs
-            .into_iter()
-            .filter(|id| {
-                !writes.contains_key(id)
-                    && !deletions.contains_key(id)
-                    && !external_transfers.contains(id)
-            })
-            .collect::<Vec<_>>();
-        for id in remaining_by_value_objects {
-            deletions.insert(id, DeleteKind::Wrap);
-        }
-        // children that weren't deleted or transferred must be wrapped
-        for id in wrapped_children {
-            deletions.insert(id, DeleteKind::Wrap);
-        }
 
-        debug_assert!(writes.keys().all(|id| !deletions.contains_key(id)));
-        debug_assert!(deletions.keys().all(|id| !writes.contains_key(id)));
         Ok(RuntimeResults {
-            writes,
-            deletions,
+            writes: written_objects,
             user_events,
-            loaded_child_objects,
+            modified_child_objects,
+            created_object_ids: new_ids,
+            deleted_object_ids: deleted_ids,
         })
     }
 

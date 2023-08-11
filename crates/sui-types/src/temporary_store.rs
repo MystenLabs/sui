@@ -3,7 +3,7 @@
 
 use crate::committee::EpochId;
 use crate::effects::{TransactionEffects, TransactionEvents};
-use crate::execution::LoadedChildObjectMetadata;
+use crate::execution::{ExecutionResultsV2, LoadedChildObjectMetadata};
 use crate::execution_status::ExecutionStatus;
 use crate::storage::{DeleteKindWithOldVersion, ObjectStore};
 use crate::sui_system_state::{
@@ -577,6 +577,7 @@ impl<'backing> TemporaryStore<'backing> {
             }
         }
     }
+
     pub fn save_loaded_child_objects(
         &mut self,
         loaded_child_objects: BTreeMap<ObjectID, LoadedChildObjectMetadata>,
@@ -1165,6 +1166,41 @@ impl<'backing> Storage for TemporaryStore<'backing> {
 
     fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>) {
         TemporaryStore::apply_object_changes(self, changes)
+    }
+
+    /// Take execution results v2, and translate it back to be compatible with effects v1.
+    fn record_execution_results_v2(&mut self, results: ExecutionResultsV2) {
+        let mut object_changes = BTreeMap::new();
+        for (id, object) in results.written_objects {
+            let write_kind = if results.created_object_ids.contains(&id) {
+                WriteKind::Create
+            } else if results.objects_modified_at.contains_key(&id) {
+                WriteKind::Mutate
+            } else {
+                WriteKind::Unwrap
+            };
+            object_changes.insert(id, ObjectChange::Write(object, write_kind));
+        }
+
+        for id in results.deleted_object_ids {
+            let delete_kind: DeleteKindWithOldVersion =
+                if let Some((version, _)) = results.objects_modified_at.get(&id) {
+                    DeleteKindWithOldVersion::Normal(*version)
+                } else {
+                    DeleteKindWithOldVersion::UnwrapThenDelete
+                };
+            object_changes.insert(id, ObjectChange::Delete(delete_kind));
+        }
+        for (id, (version, _)) in results.objects_modified_at {
+            object_changes.entry(id).or_insert(ObjectChange::Delete(
+                DeleteKindWithOldVersion::Wrap(version),
+            ));
+        }
+        self.apply_object_changes(object_changes);
+
+        for event in results.user_events {
+            self.events.push(event);
+        }
     }
 
     fn save_loaded_child_objects(
