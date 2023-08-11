@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 45
     strategy:
       matrix:
-        os: [macos-latest-xl]
+        os: [windows-ghcloud, ubuntu-ghcloud, macos-latest-xl]
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
