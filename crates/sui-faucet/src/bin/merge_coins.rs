@@ -29,7 +29,7 @@ async fn main() -> Result<(), anyhow::Error> {
     // let coins_before = get_owned_objects(wallet).await?;
 
     // println!("{:?}", coins);
-    let transfer_balance = 2000000000000000;
+    let transfer_balance = 5000000000000000;
     //1878225937500000
 
     // get the total balance of the coins owned by the faucet
@@ -46,8 +46,16 @@ async fn main() -> Result<(), anyhow::Error> {
     // coins_vec.shuffle(&mut rng); // Shuffle the elements randomly
 
     // let random_10_elements: Vec<_> = coins_vec.iter().take(10).cloned().collect();
-    transfer_sui(wallet, recipient, transfer_balance).await?;
+    let mut success_count = 0;
+    for _ in 0..3 {
+        let wallet = create_wallet_context(60).await?;
+        let result = transfer_sui(wallet, recipient, transfer_balance).await;
+        if result.is_ok() {
+            success_count += 1;
+        }
+    }
 
+    println!("Success count: {} attempt count 3", success_count);
     // let wallet = create_wallet_context(60).await?;
     // let coins_after = get_owned_objects(wallet).await?;
 
@@ -145,7 +153,7 @@ async fn transfer_sui(
         .map(|q| GasCoin::try_from(&q.1).unwrap())
         // Everything greater than 1M sui
         .filter(|coin| coin.0.balance.value() > 1000000000000000)
-        .take(3)
+        .take(5)
         .collect::<Vec<GasCoin>>();
 
     let tx_data = client
@@ -177,7 +185,9 @@ async fn transfer_sui(
         )
         .await;
 
-    println!("{:?}", resp);
+    if resp.is_ok() {
+        println!("Transfered {} to {}", amount, recipient);
+    }
     resp?;
     Ok(())
 }

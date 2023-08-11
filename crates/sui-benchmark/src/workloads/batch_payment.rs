@@ -27,7 +27,7 @@ use tracing::{debug, error};
 /// Value of each address's "primary coin" in mist. The first transaction gives
 /// each address a coin worth PRIMARY_COIN_VALUE, and all subsequent transfers
 /// send TRANSFER_AMOUNT coins each time
-const PRIMARY_COIN_VALUE: u64 = 2 * MIST_PER_SUI;
+const PRIMARY_COIN_VALUE: u64 = 10 * MIST_PER_SUI;
 
 /// Number of mist sent to each address on each batch transfer
 const BATCH_TRANSFER_AMOUNT: u64 = 1;
@@ -170,7 +170,9 @@ impl WorkloadBuilder<dyn Payload> for BatchPaymentWorkloadBuilder {
     async fn generate_coin_config_for_payloads(&self) -> Vec<GasCoinConfig> {
         // Have to include not just the coins that are going to be created and sent
         // but the coin being used as gas as well.
-        let amount = (PRIMARY_COIN_VALUE * (self.batch_size + 1) as u64) + 362 * MIST_PER_SUI;
+        let amount = (PRIMARY_COIN_VALUE * (self.batch_size + 1) as u64)
+            + ESTIMATED_COMPUTATION_COST
+            + (STORAGE_COST_PER_COIN * self.batch_size as u64);
         debug!(
             "Creating gas coins for batch payload {} coin(s) of balance {amount}",
             self.num_payloads
