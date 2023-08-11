@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module axelar::channel {
-    use axelar::axelar;
-    use axelar::axelar::AxelarValidators;
     use axelar::messaging;
     use axelar::messaging::CallApproval;
+    use axelar::validators;
+    use axelar::validators::AxelarValidators;
     use sui::bcs;
     use sui::object;
     use sui::object::UID;
@@ -51,10 +51,12 @@ module axelar::channel {
         /// Unique ID of the target object which allows message targeting
         /// by comparing against `id_bytes`.
         id: UID,
-        /// Messages processed by this object. To make system less
+        /// Messages processed by this object for the current axelar epoch. To make system less
         /// centralized, and spread the storage + io costs across multiple
         /// destinations, we can track every `Channel`'s messages.
-        call_approvals: VecSet<vector<u8>>,
+        processed_call_approvals: VecSet<vector<u8>>,
+        /// epoch of the last processed approval.
+        last_processed_approval_epoch: u64,
         /// Additional field to optionally use as metadata for the Channel
         /// object improving identification and uniqueness of data.
         /// Can store any struct that has `store` ability (including other
@@ -77,7 +79,8 @@ module axelar::channel {
     public fun create_channel<T: store>(t: T, ctx: &mut TxContext): Channel<T> {
         Channel {
             id: object::new(ctx),
-            call_approvals: vec_set::empty(),
+            processed_call_approvals: vec_set::empty(),
+            last_processed_approval_epoch: 0,
             data: t
         }
     }
@@ -85,7 +88,7 @@ module axelar::channel {
     /// Destroy a `Channel<T>` releasing the T. Not constrained and can be performed
     /// by any party as long as they own a Channel.
     public fun destroy_channel<T: store>(self: Channel<T>): T {
-        let Channel { id, call_approvals: _, data } = self;
+        let Channel { id, processed_call_approvals: _, last_processed_approval_epoch: _, data } = self;
         object::delete(id);
         data
     }
@@ -118,14 +121,24 @@ module axelar::channel {
     ///
     /// For Capability-locking, a mutable reference to the `Channel.data` field is
     /// returned; plus the hot potato message object.
-    public fun validate_call_approval<T: store>(
+    public fun retrieve_call_approval<T: store>(
         axelar: &mut AxelarValidators,
         t: &mut Channel<T>,
-        msg_id: vector<u8>,
+        cmd_id: vector<u8>,
     ): (&mut T, CallApproval) {
-        let message = axelar::remove_call_approval(axelar, msg_id);
-        assert!(!vec_set::contains(&t.call_approvals, &msg_id), EDuplicateMessage);
+        let message = validators::remove_call_approval(axelar, cmd_id);
+
+        let current_epoch = validators::epoch(axelar);
+
+        if (t.last_processed_approval_epoch != current_epoch) {
+            t.processed_call_approvals = vec_set::empty();
+            t.last_processed_approval_epoch = current_epoch;
+        };
+
+        assert!(!vec_set::contains(&t.processed_call_approvals, &cmd_id), EDuplicateMessage);
         assert!(messaging::target_id(&message) == object::uid_to_address(&t.id), EWrongDestination);
+
+        vec_set::insert(&mut t.processed_call_approvals, cmd_id);
         (&mut t.data, message)
     }
 }
