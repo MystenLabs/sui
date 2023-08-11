@@ -4,8 +4,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useBackgroundClient } from '../useBackgroundClient';
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
-
-export const accountsQueryKey = ['background', 'client', 'accounts'] as const;
+import { accountsQueryKey } from './constants';
 
 export function useAccounts() {
 	const backgroundClient = useBackgroundClient();

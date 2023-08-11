@@ -12,7 +12,7 @@ import { lastValueFrom, map, take } from 'rxjs';
 import { growthbook } from '../experimentation/feature-gating';
 import { queryClient } from '../helpers/queryClient';
 import { accountSourcesQueryKey } from '../hooks/accounts-v2/useAccountSources';
-import { accountsQueryKey } from '../hooks/accounts-v2/useAccounts';
+import { accountsQueryKey } from '../hooks/accounts-v2/constants';
 import { createMessage } from '_messages';
 import { PortStream } from '_messaging/PortStream';
 import { type BasePayload } from '_payloads';
