@@ -277,13 +277,13 @@ export class BackgroundClient {
 		);
 	}
 
-	public selectAccount(address: string) {
+	public selectAccount(accountID: string) {
 		return lastValueFrom(
 			this.sendMessage(
-				createMessage<KeyringPayload<'switchAccount'>>({
-					type: 'keyring',
+				createMessage<MethodPayload<'switchAccount'>>({
+					type: 'method-payload',
 					method: 'switchAccount',
-					args: { address },
+					args: { accountID },
 				}),
 			).pipe(take(1)),
 		);

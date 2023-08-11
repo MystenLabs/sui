@@ -254,6 +254,7 @@ export async function acceptQredoConnection({
 				type: 'qredo',
 				sourceID: qredoAccountSource.id,
 				lastUnlockedOn: null,
+				selected: false,
 			});
 		}
 		await addNewAccounts(newQredoAccounts);
