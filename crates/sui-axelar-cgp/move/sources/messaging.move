@@ -5,8 +5,6 @@ module axelar::messaging {
     use std::string;
     use std::string::String;
 
-    #[test_only]
-    use std::vector;
 
     /// CallApproval struct which can consumed only by a `Channel` object.
     /// Does not require additional generic field to operate as linking
@@ -102,6 +100,8 @@ module axelar::messaging {
     public fun target_id(msg: &CallApproval): address {
         msg.target_id
     }
+
+    #[test_only] use std::vector;
 
     #[test_only]
     /// Handy method for burning `vector<CallApproval>` returned by the `execute` function.

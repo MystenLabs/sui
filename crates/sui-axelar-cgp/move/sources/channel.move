@@ -2,16 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module axelar::channel {
-    use axelar::messaging;
-    use axelar::messaging::CallApproval;
-    use axelar::validators;
-    use axelar::validators::AxelarValidators;
     use sui::bcs;
     use sui::object;
     use sui::object::UID;
     use sui::tx_context::TxContext;
     use sui::vec_set;
     use sui::vec_set::VecSet;
+
+    use axelar::messaging::{Self, CallApproval};
+    use axelar::validators::{Self, AxelarValidators};
 
     /// Generic target for the messaging system.
     ///
