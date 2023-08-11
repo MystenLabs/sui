@@ -736,7 +736,7 @@ impl Consensus {
                             self
                             .metrics
                             .num_of_committed_certificates_per_authority
-                            .with_label_values(&["authority", authority.hostname()])
+                            .with_label_values(&[authority.hostname()])
                             .inc();
                         }
 
