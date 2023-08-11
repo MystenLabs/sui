@@ -13,7 +13,7 @@ use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::execution::LoadedChildObjectMetadata;
+use sui_types::execution::{ExecutionResults, LoadedChildObjectMetadata};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::storage::{BackingStore, DeleteKindWithOldVersion};
@@ -454,6 +454,7 @@ impl<'backing> TemporaryStore<'backing> {
             }
         }
     }
+
     pub fn save_loaded_child_objects(
         &mut self,
         loaded_child_objects: BTreeMap<ObjectID, LoadedChildObjectMetadata>,
@@ -977,21 +978,21 @@ impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
 
 impl<'backing> Storage for TemporaryStore<'backing> {
     fn reset(&mut self) {
-        self.written.clear();
-        self.deleted.clear();
-        self.events.clear();
-    }
-
-    fn log_event(&mut self, event: Event) {
-        TemporaryStore::log_event(self, event)
+        TemporaryStore::drop_writes(self);
     }
 
     fn read_object(&self, id: &ObjectID) -> Option<&Object> {
         TemporaryStore::read_object(self, id)
     }
 
-    fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>) {
-        TemporaryStore::apply_object_changes(self, changes)
+    fn record_execution_results(&mut self, results: ExecutionResults) {
+        let ExecutionResults::V1(results) = results else {
+            panic!("ExecutionResults::V1 expected in sui-execution v0");
+        };
+        TemporaryStore::apply_object_changes(self, results.object_changes);
+        for event in results.user_events {
+            TemporaryStore::log_event(self, event);
+        }
     }
 
     fn save_loaded_child_objects(
