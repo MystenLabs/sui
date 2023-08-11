@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 45
     strategy:
       matrix:
-        os: [windows-ghcloud, ubuntu-ghcloud]
+        os: [windows-ghcloud, ubuntu-ghcloud, macos-latest-xl]
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
@@ -81,13 +81,14 @@ jobs:
         run: |
           cargo build --release
 
-      - name: Rename binaries for Ubuntu
-        if: ${{ env.sui_tag != 'main' && matrix.os == 'ubuntu-ghcloud' }}
+      - name: Rename binaries for ${{ matrix.os }}
+        if: ${{ env.sui_tag != 'main' && (matrix.os == 'ubuntu-ghcloud' || matrix.os == 'macos-latest-xl') }}
         shell: bash
         run: |
           export arch=$(uname -m)
-          export os_type="ubuntu-${arch}"
-          echo "os_type=${os_type}" >> $GITHUB_ENV
+          export system_os=$(echo ${{ matrix.os }} | cut -d- -f1)
+          export os_type="${system_os}-${arch}"
+          echo "os_type=${system_os}-${arch}" >> $GITHUB_ENV
           mv ./target/release/sui ./target/release/sui-${os_type}
           mv ./target/release/sui-node ./target/release/sui-node-${os_type}
           mv ./target/release/sui-tool ./target/release/sui-tool-${os_type}
@@ -116,6 +117,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: sui-binaries-${{ matrix.os }}
+          if-no-files-found: error
           path: |
             ./target/release/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
 
