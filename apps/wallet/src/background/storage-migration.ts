@@ -20,7 +20,6 @@ import { STORAGE_LAST_ACCOUNT_INDEX_KEY, getSavedLedgerAccounts } from './keyrin
 import { VaultStorage } from './keyring/VaultStorage';
 import { getAllQredoConnections } from './qredo/storage';
 import { getFromLocalStorage, makeUniqueKey, setToLocalStorage } from './storage-utils';
-import { NEW_ACCOUNTS_ENABLED } from '_src/shared/constants';
 
 export type Status = 'required' | 'inProgress' | 'ready';
 
@@ -36,9 +35,6 @@ let statusCache: Status | null = null;
 export async function getStatus() {
 	if (statusCache) {
 		return statusCache;
-	}
-	if (!NEW_ACCOUNTS_ENABLED) {
-		return (statusCache = 'ready');
 	}
 	const vaultInitialized = await VaultStorage.isWalletInitialized();
 	if (!vaultInitialized) {
@@ -110,6 +106,7 @@ async function makeQredoAccounts(password: string) {
 			origin: aQredoConnection.origin,
 			service: aQredoConnection.service,
 			refreshToken,
+			originFavIcon: aQredoConnection.originFavIcon || '',
 		});
 		qredoSources.push(aQredoSource);
 		for (const aWallet of aQredoConnection.accounts) {

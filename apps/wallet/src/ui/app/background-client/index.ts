@@ -29,7 +29,6 @@ import { setTransactionRequests } from '_redux/slices/transaction-requests';
 import { type MnemonicSerializedUiAccount } from '_src/background/accounts/MnemonicAccount';
 import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
 import { type AccountsPublicInfoUpdates } from '_src/background/keyring/accounts';
-import { NEW_ACCOUNTS_ENABLED } from '_src/shared/constants';
 import {
 	type MethodPayload,
 	isMethodPayload,
@@ -240,25 +239,16 @@ export class BackgroundClient {
 	public signData(addressOrID: string, data: Uint8Array): Promise<SerializedSignature> {
 		return lastValueFrom(
 			this.sendMessage(
-				NEW_ACCOUNTS_ENABLED
-					? createMessage<MethodPayload<'signData'>>({
-							type: 'method-payload',
-							method: 'signData',
-							args: { data: toB64(data), id: addressOrID },
-					  })
-					: createMessage<KeyringPayload<'signData'>>({
-							type: 'keyring',
-							method: 'signData',
-							args: { data: toB64(data), address: addressOrID },
-					  }),
+				createMessage<MethodPayload<'signData'>>({
+					type: 'method-payload',
+					method: 'signData',
+					args: { data: toB64(data), id: addressOrID },
+				}),
 			).pipe(
 				take(1),
 				map(({ payload }) => {
-					if (NEW_ACCOUNTS_ENABLED && isMethodPayload(payload, 'signDataResponse')) {
+					if (isMethodPayload(payload, 'signDataResponse')) {
 						return payload.args.signature;
-					}
-					if (isKeyringPayload(payload, 'signData') && payload.return) {
-						return payload.return;
 					}
 					throw new Error('Error unknown response for signData message');
 				}),

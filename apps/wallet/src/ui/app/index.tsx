@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useEffect } from 'react';
-import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { useInitialPageView } from './hooks/useInitialPageView';
 
@@ -51,7 +51,6 @@ import LockedPage from './wallet/locked-page';
 import { useAppDispatch, useAppSelector } from '_hooks';
 
 import { setNavVisibility } from '_redux/slices/app';
-import { NEW_ACCOUNTS_ENABLED } from '_src/shared/constants';
 
 const HIDDEN_MENU_PATHS = [
 	'/nft-details',
@@ -128,33 +127,16 @@ const App = () => {
 			<Route path="/account">
 				<Route path="forgot-password" element={<ForgotPasswordPage />} />
 			</Route>
-
-			{NEW_ACCOUNTS_ENABLED ? (
-				<>
-					<Route path="/accounts-dev" element={<AccountsDev />} />
-					<Route
-						path="/dapp/"
-						element={
-							<>
-								<div className="p-3 flex bg-white rounded-lg flex-col w-80">
-									<Outlet />
-								</div>
-								<div id="overlay-portal-container"></div>
-							</>
-						}
-					>
-						<Route path="/dapp/qredo-connect/:requestID" element={<QredoConnectInfoPage />} />
-						<Route path="/dapp/qredo-connect/:id/select" element={<SelectQredoAccountsPage />} />
-					</Route>
-				</>
-			) : null}
-
 			<Route path="/dapp/*" element={<HomePage disableNavigation />}>
 				<Route path="connect/:requestID" element={<SiteConnectPage />} />
 				<Route path="approve/:requestID" element={<ApprovalRequestPage />} />
 				<Route path="qredo-connect/:requestID" element={<QredoConnectInfoPage />} />
 				<Route path="qredo-connect/:id/select" element={<SelectQredoAccountsPage />} />
 			</Route>
+
+			{process.env.NODE_ENV === 'development' ? (
+				<Route path="/accounts-dev" element={<AccountsDev />} />
+			) : null}
 		</Routes>
 	);
 };

@@ -7,7 +7,7 @@ import { CheckFill16, SocialGoogle24 } from '@mysten/icons';
 import * as ToggleGroup from '@radix-ui/react-toggle-group';
 import cn from 'classnames';
 import { AccountItem } from './AccountItem';
-import { SerializedUIAccount } from '_src/background/accounts/Account';
+import { type SerializedUIAccount } from '_src/background/accounts/Account';
 
 type AccountMultiSelectItemProps = {
 	account: SerializedUIAccount;
