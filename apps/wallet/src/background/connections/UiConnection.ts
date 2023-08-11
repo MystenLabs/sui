@@ -81,7 +81,8 @@ export class UiConnection extends Connection {
 					return: {
 						isLocked,
 						accounts: (await Keyring.getAccounts())?.map((anAccount) => anAccount.toJSON()) || [],
-						activeAddress: (await Keyring.getActiveAccount())?.address || null,
+						activeAddress: null,
+						// TODO:
 						isInitialized: await Keyring.isWalletInitialized(),
 					},
 				},

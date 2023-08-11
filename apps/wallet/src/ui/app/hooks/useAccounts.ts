@@ -6,6 +6,9 @@ import { useMemo } from 'react';
 import useAppSelector from './useAppSelector';
 import { accountsAdapterSelectors } from '../redux/slices/account';
 
+/**
+ * @deprecated use accounts-v2/useAccounts
+ */
 export function useAccounts(addressesFilters?: string[]) {
 	const accounts = useAppSelector(accountsAdapterSelectors.selectAll);
 	return useMemo(() => {

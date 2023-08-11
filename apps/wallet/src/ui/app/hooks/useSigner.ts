@@ -12,6 +12,9 @@ import { useSuiLedgerClient } from '../components/ledger/SuiLedgerClientProvider
 import { thunkExtras } from '_redux/store/thunk-extras';
 import { AccountType } from '_src/background/keyring/Account';
 
+/**
+ * @deprecated use accounts-v2/useSigner
+ */
 export function useSigner(address?: string): WalletSigner | null {
 	const activeAccount = useActiveAccount();
 	const existingAccounts = useAccounts();

@@ -31,7 +31,6 @@ import SvgSuiTokensStack from './TokensStackIcon';
 import { CoinBalance } from './coin-balance';
 import BullsharkQuestsNotification from '../bullshark-quests-notification';
 import { useOnrampProviders } from '../onramp/useOnrampProviders';
-import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import { LargeButton } from '_app/shared/LargeButton';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
@@ -42,6 +41,7 @@ import { ampli } from '_src/shared/analytics/ampli';
 import { API_ENV } from '_src/shared/api-env';
 import { FEATURES } from '_src/shared/experimentation/features';
 import { AccountsList } from '_src/ui/app/components/accounts/AccountsList';
+import { useActiveAccount } from '_src/ui/app/hooks/accounts-v2/useActiveAccount';
 import { usePinnedCoinTypes } from '_src/ui/app/hooks/usePinnedCoinTypes';
 import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
 import PageTitle from '_src/ui/app/shared/PageTitle';
@@ -169,15 +169,15 @@ function MyTokens({
 function TokenDetails({ coinType }: TokenDetailsProps) {
 	const [interstitialDismissed, setInterstitialDismissed] = useState<boolean>(false);
 	const activeCoinType = coinType || SUI_TYPE_ARG;
-	const accountAddress = useActiveAddress();
-	const { data: domainName } = useResolveSuiNSName(accountAddress);
+	const activeAccount = useActiveAccount();
+	const { data: domainName } = useResolveSuiNSName(activeAccount?.address);
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
 	const {
 		data: coinBalance,
 		isError,
 		isLoading,
 		isFetched,
-	} = useGetCoinBalance(activeCoinType, accountAddress, refetchInterval, staleTime);
+	} = useGetCoinBalance(activeCoinType, activeAccount?.address, refetchInterval, staleTime);
 	const { apiEnv } = useAppSelector((state) => state.app);
 	const { request } = useAppsBackend();
 	const { data } = useQuery({
@@ -196,7 +196,12 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 		data: coinBalances,
 		isLoading: coinBalancesLoading,
 		isFetched: coinBalancesFetched,
-	} = useGetAllBalances(accountAddress, staleTime, refetchInterval, filterAndSortTokenBalances);
+	} = useGetAllBalances(
+		activeAccount?.address,
+		staleTime,
+		refetchInterval,
+		filterAndSortTokenBalances,
+	);
 
 	const BullsharkInterstitialEnabled = useFeature<boolean>(
 		FEATURES.BULLSHARK_QUESTS_INTERSTITIAL,
@@ -224,9 +229,10 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 			/>
 		);
 	}
-
 	const accountHasSui = coinBalances?.some(({ coinType }) => coinType === SUI_TYPE_ARG);
-
+	if (!activeAccount) {
+		return null;
+	}
 	return (
 		<>
 			{apiEnv === API_ENV.mainnet && data?.degraded && (
@@ -250,7 +256,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 				>
 					<AccountsList />
 					<div className="flex flex-col">
-						<PortfolioName name={domainName ?? formatAddress(accountAddress!)} />
+						<PortfolioName name={domainName ?? formatAddress(activeAccount?.address)} />
 						<div
 							data-testid="coin-balance"
 							className="bg-sui/10 rounded-2xl py-5 px-4 flex flex-col w-full gap-3 items-center mt-4"
@@ -308,8 +314,8 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 								</LargeButton>
 							</div>
 							<div className="w-full">
-								{activeCoinType === SUI_TYPE_ARG && accountAddress ? (
-									<TokenIconLink disabled={!tokenBalance} accountAddress={accountAddress} />
+								{activeCoinType === SUI_TYPE_ARG ? (
+									<TokenIconLink disabled={!tokenBalance} accountAddress={activeAccount.address} />
 								) : null}
 							</div>
 						</div>

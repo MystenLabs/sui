@@ -11,19 +11,21 @@ import { useNextMenuUrl } from '_components/menu/hooks';
 import { AppType } from '_redux/slices/app/AppType';
 import { ampli } from '_src/shared/analytics/ampli';
 import { useAppSelector } from '_src/ui/app/hooks';
-import { useAccounts } from '_src/ui/app/hooks/useAccounts';
+import { useAccounts } from '_src/ui/app/hooks/accounts-v2/useAccounts';
 import { useDeriveNextAccountMutation } from '_src/ui/app/hooks/useDeriveNextAccountMutation';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 
 export function AccountsSettings() {
 	const backUrl = useNextMenuUrl(true, '/');
 	const importPrivateKeyUrl = useNextMenuUrl(true, '/import-private-key');
-	const accounts = useAccounts();
+	const { data: accounts } = useAccounts();
 	const createAccountMutation = useDeriveNextAccountMutation();
 	const navigate = useNavigate();
 	const appType = useAppSelector((state) => state.app.appType);
 	const connectLedgerModalUrl = useNextMenuUrl(true, '/accounts/connect-ledger-modal');
-
+	if (!accounts) {
+		return null;
+	}
 	return (
 		<MenuLayout title="Accounts" back={backUrl}>
 			<div className="flex flex-col gap-3">
