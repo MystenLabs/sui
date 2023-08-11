@@ -76,22 +76,25 @@ jobs:
           echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV          
 
       - name: cargo build (release) for ${{ matrix.os }} platform
-        if: ${{ env.sui_tag != 'main' && (matrix.os == 'ubuntu-ghcloud' || matrix.os == 'windows-ghcloud') }}
+        if: ${{ env.sui_tag != 'main' }}
         shell: bash
         run: |
-          cargo build --release
-
-      - name: cargo build (release) for ${{ matrix.os }} platform
-        if: ${{ env.sui_tag != 'main' && matrix.os == 'macos-latest-xl' }}
-        shell: bash
-        run: |
-          cargo build --release
+          cargo build --release          
 
       - name: Rename binaries for ${{ matrix.os }}
         if: ${{ env.sui_tag != 'main' && (matrix.os == 'ubuntu-ghcloud' || matrix.os == 'macos-latest-xl') }}
         shell: bash
         run: |
-          ls -al ./target/release
+          export arch=$(uname -m)
+          export system_os=$(echo ${{ matrix.os }} | cut -d- -f1)
+          echo "os_type=${system_os}-${arch}" >> $GITHUB_ENV
+          mv ./target/release/sui ./target/release/sui-${os_type}
+          mv ./target/release/sui-node ./target/release/sui-node-${os_type}
+          mv ./target/release/sui-tool ./target/release/sui-tool-${os_type}
+          mv ./target/release/sui-faucet ./target/release/sui-faucet-${os_type}
+          mv ./target/release/sui-test-validator ./target/release/sui-test-validator-${os_type}
+          mv ./target/release/sui-indexer ./target/release/sui-indexer-${os_type}
+          tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui*-${os_type}*
 
       - name: Rename binaries for Windows
         if: ${{ env.sui_tag != 'main' && matrix.os == 'windows-ghcloud' }}
