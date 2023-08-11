@@ -155,7 +155,7 @@ impl<'backing> TemporaryStore<'backing> {
             max_binary_format_version: self.protocol_config.move_binary_format_version(),
             loaded_runtime_objects: self.loaded_child_objects,
             no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),
-            runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.read().clone(),
+            runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
         }
     }
 
