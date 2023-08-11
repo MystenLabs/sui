@@ -92,7 +92,7 @@ jobs:
         if: ${{ env.sui_tag != 'main' && (matrix.os == 'ubuntu-ghcloud' || matrix.os == 'macos-latest-xl') }}
         shell: bash
         run: |
-          ls -al ./target/release/sui
+          ls -al ./target/release
 
       - name: Rename binaries for Windows
         if: ${{ env.sui_tag != 'main' && matrix.os == 'windows-ghcloud' }}
