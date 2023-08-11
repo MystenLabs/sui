@@ -108,6 +108,7 @@ ResolvedGraph {
         skip_fetch_latest_git_deps: false,
         default_flavor: None,
         default_edition: None,
+        deps_as_root: false,
     },
     package_table: {
         "A": Package {

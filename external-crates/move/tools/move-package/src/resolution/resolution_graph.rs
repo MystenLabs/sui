@@ -441,8 +441,13 @@ impl Package {
             .collect())
     }
 
-    pub(crate) fn compiler_config(&self, config: &BuildConfig) -> PackageConfig {
+    pub(crate) fn compiler_config(
+        &self,
+        is_dependency: bool,
+        config: &BuildConfig,
+    ) -> PackageConfig {
         PackageConfig {
+            is_dependency,
             flavor: self
                 .source_package
                 .package
@@ -455,7 +460,7 @@ impl Package {
                 .edition
                 .or(config.default_edition)
                 .unwrap_or_default(),
-            warning_filter: WarningFilters::Empty,
+            warning_filter: WarningFilters::new(),
         }
     }
 }

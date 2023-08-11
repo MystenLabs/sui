@@ -6,9 +6,7 @@ use crate::{
     cfgir::visitor::{AbsIntVisitorObj, AbstractInterpreterVisitor},
     command_line as cli,
     diagnostics::{
-        codes::{
-            Category, CategoryID, Declarations, DiagnosticsID, Severity, UnusedItem, WarningFilter,
-        },
+        codes::{Category, Declarations, DiagnosticsID, Severity, UnusedItem, WarningFilter},
         Diagnostic, Diagnostics, WarningFilters,
     },
     editions::{Edition, Flavor},
@@ -204,8 +202,8 @@ pub struct KnownFilterInfo {
 }
 
 impl KnownFilterInfo {
-    pub fn new(n: &str, attribute_name: E::AttributeName_) -> Self {
-        let name = Symbol::from(n);
+    pub fn new(n: impl Into<Symbol>, attribute_name: E::AttributeName_) -> Self {
+        let name = n.into();
         KnownFilterInfo {
             name,
             attribute_name,
@@ -236,10 +234,12 @@ macro_rules! known_code_filter {
     ($name:ident, $category:ident::$code:ident, $attr_name:ident) => {
         (
             KnownFilterInfo::new($name, $attr_name),
-            BTreeSet::from([WarningFilter::Code(
-                DiagnosticsID::new(Category::$category as u8, $category::$code as u8, None),
-                Some($name),
-            )]),
+            BTreeSet::from([WarningFilter::Code {
+                prefix: None,
+                category: Category::$category as u8,
+                code: $category::$code as u8,
+                name: Some($name),
+            }]),
         )
     };
 }
@@ -267,10 +267,11 @@ impl CompilationEnv {
             ),
             (
                 KnownFilterInfo::new(FILTER_UNUSED, filter_attr_name),
-                BTreeSet::from([WarningFilter::Category(
-                    CategoryID::new(Category::UnusedItem as u8, None),
-                    Some(FILTER_UNUSED),
-                )]),
+                BTreeSet::from([WarningFilter::Category {
+                    prefix: None,
+                    category: Category::UnusedItem as u8,
+                    name: Some(FILTER_UNUSED),
+                }]),
             ),
             known_code_filter!(
                 FILTER_MISSING_PHANTOM,
@@ -311,22 +312,18 @@ impl CompilationEnv {
             (
                 KnownFilterInfo::new(FILTER_UNUSED_TYPE_PARAMETER, filter_attr_name),
                 BTreeSet::from([
-                    WarningFilter::Code(
-                        DiagnosticsID::new(
-                            Category::UnusedItem as u8,
-                            UnusedItem::StructTypeParam as u8,
-                            None,
-                        ),
-                        Some(FILTER_UNUSED_TYPE_PARAMETER),
-                    ),
-                    WarningFilter::Code(
-                        DiagnosticsID::new(
-                            Category::UnusedItem as u8,
-                            UnusedItem::FunTypeParam as u8,
-                            None,
-                        ),
-                        Some(FILTER_UNUSED_TYPE_PARAMETER),
-                    ),
+                    WarningFilter::Code {
+                        prefix: None,
+                        category: Category::UnusedItem as u8,
+                        code: UnusedItem::StructTypeParam as u8,
+                        name: Some(FILTER_UNUSED_TYPE_PARAMETER),
+                    },
+                    WarningFilter::Code {
+                        prefix: None,
+                        category: Category::UnusedItem as u8,
+                        code: UnusedItem::FunTypeParam as u8,
+                        name: Some(FILTER_UNUSED_TYPE_PARAMETER),
+                    },
                 ]),
             ),
             known_code_filter!(FILTER_DEAD_CODE, UnusedItem::DeadCode, filter_attr_name),
@@ -336,8 +333,14 @@ impl CompilationEnv {
             .iter()
             .flat_map(|(known_filter_info, filters)| {
                 filters.iter().filter_map(|v| {
-                    if let WarningFilter::Code(diag_id, _) = v {
-                        Some((*diag_id, known_filter_info.clone()))
+                    if let WarningFilter::Code {
+                        prefix,
+                        category,
+                        code,
+                        ..
+                    } = v
+                    {
+                        Some(((*prefix, *category, *code), known_filter_info.clone()))
                     } else {
                         None
                     }
@@ -451,11 +454,11 @@ impl CompilationEnv {
 
     pub fn filter_from_str(
         &self,
-        name: String,
+        name: impl Into<Symbol>,
         attribute_name: E::AttributeName_,
     ) -> BTreeSet<WarningFilter> {
         self.known_filters
-            .get(&KnownFilterInfo::new(name.as_str(), attribute_name))
+            .get(&KnownFilterInfo::new(name, attribute_name))
             .cloned()
             .unwrap_or_else(BTreeSet::new)
     }
@@ -478,7 +481,7 @@ impl CompilationEnv {
                         .or_insert_with(BTreeSet::new)
                         .insert(filter);
                 }
-                WarningFilter::Category(_, name) => {
+                WarningFilter::Category { name, .. } => {
                     let Some(n) = name else {
                         anyhow::bail!("A known Category warning filter must have a name specified");
                     };
@@ -487,7 +490,12 @@ impl CompilationEnv {
                         .or_insert_with(BTreeSet::new)
                         .insert(filter);
                 }
-                WarningFilter::Code(diag_id, name) => {
+                WarningFilter::Code {
+                    prefix,
+                    category,
+                    code,
+                    name,
+                } => {
                     let Some(n) = name else {
                         anyhow::bail!("A known Code warning filter must have a name specified");
                     };
@@ -496,7 +504,8 @@ impl CompilationEnv {
                         .entry(known_filter_info.clone())
                         .or_insert_with(BTreeSet::new)
                         .insert(filter);
-                    self.known_filter_names.insert(diag_id, known_filter_info);
+                    self.known_filter_names
+                        .insert((prefix, category, code), known_filter_info);
                 }
             }
         }
@@ -666,6 +675,7 @@ impl Flags {
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct PackageConfig {
+    pub is_dependency: bool,
     pub warning_filter: WarningFilters,
     pub flavor: Flavor,
     pub edition: Edition,
@@ -674,7 +684,8 @@ pub struct PackageConfig {
 impl Default for PackageConfig {
     fn default() -> Self {
         Self {
-            warning_filter: WarningFilters::Empty,
+            is_dependency: false,
+            warning_filter: WarningFilters::new(),
             flavor: Flavor::default(),
             edition: Edition::default(),
         }
