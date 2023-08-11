@@ -31,12 +31,14 @@ export function registerUnsafeBurnerWallet(
 	const wallets = getWallets();
 
 	if (wallets.get().find((wallet) => wallet.name === WALLET_NAME)) {
-		console.warn('registerUnsafeBurnerWallet: Unsafe Burner Wallet already registered');
+		console.warn(
+			'registerUnsafeBurnerWallet: Unsafe Burner Wallet already registered, skipping duplicate registration',
+		);
 		return;
 	}
 
 	console.warn(
-		'Your application is currently using the `UnsafeBurnerWalletAdapter`. Make sure that this adapter is not included in production.',
+		'Your application is currently using the unsafe burner wallet. Make sure that this wallet is disabled in production.',
 	);
 
 	const keypair = new Ed25519Keypair();

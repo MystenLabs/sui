@@ -17,9 +17,6 @@
 		"rootDir": ".",
 		"paths": {
 			"@mysten/wallet-standard": ["../wallet-standard/src"],
-			"@mysten/wallet-adapter-base": ["../adapters/base-adapter/src"],
-			"@mysten/wallet-adapter-unsafe-burner": ["../adapters/unsafe-burner/src"],
-			"@mysten/wallet-adapter-wallet-standard": ["../adapters/wallet-standard-adapter/src"],
 			"@mysten/wallet-kit-core": ["../wallet-kit-core/src"],
 			"@mysten/wallet-kit": ["../wallet-kit/src"],
 			"@mysten/sui.js/transactions": ["../../typescript/src/builder/export.ts"],
