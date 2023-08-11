@@ -1,7 +1,9 @@
 use clap::*;
 use std::cmp;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Instant;
+use sui_adapter_latest::adapter;
 use sui_config::{Config, NodeConfig};
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_distributed_execution::{exec_worker, seqn_worker, simple_store::MemoryBackedStore};
@@ -67,7 +69,12 @@ async fn main() {
         ew_state.init_store(genesis);
 
         let mut protocol_config = sw_state.epoch_store.protocol_config();
-        let mut move_vm = sw_state.epoch_store.move_vm();
+        let native_functions = sui_move_natives::all_natives(/* silent */ true);
+        let mut move_vm = Arc::new(
+            adapter::new_move_vm(native_functions, &protocol_config, false)
+                .expect("We defined natives to not fail here"),
+        );
+        // let mut move_vm = sw_state.epoch_store.move_vm();
         let mut epoch_start_config = sw_state.epoch_store.epoch_start_config();
         let mut reference_gas_price = sw_state.epoch_store.reference_gas_price();
 
@@ -156,7 +163,12 @@ async fn main() {
                 );
                 println!("New epoch store has epoch {}", sw_state.epoch_store.epoch());
                 protocol_config = sw_state.epoch_store.protocol_config();
-                move_vm = sw_state.epoch_store.move_vm();
+                let native_functions = sui_move_natives::all_natives(/* silent */ true);
+                move_vm = Arc::new(
+                    adapter::new_move_vm(native_functions, &protocol_config, false)
+                        .expect("We defined natives to not fail here"),
+                );
+
                 epoch_start_config = sw_state.epoch_store.epoch_start_config();
                 reference_gas_price = sw_state.epoch_store.reference_gas_price();
             }
