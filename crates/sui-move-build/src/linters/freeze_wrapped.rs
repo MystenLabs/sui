@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! This analysis flags freezing instances of structs containing, transitively or not, other structs
-//! with the key ability.
+//! This analysis flags freezing instances of structs containing (transitively or not) other structs
+//! with the key ability. In other words flags freezing of structs whose fields (directly or not)
+//! wrap objects.
 
 use std::collections::BTreeMap;
 
@@ -23,7 +24,7 @@ use super::{
     PUBLIC_FREEZE_FUN, SUI_PKG_NAME, TRANSFER_MOD_NAME,
 };
 
-const FREEZE_KEY_DIAG: DiagnosticInfo = custom(
+const FREEZE_WRAPPING_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
     LinterDiagCategory::FreezeWrapped as u8,
@@ -36,24 +37,71 @@ const FREEZE_FUNCTIONS: &[(&str, &str, &str)] = &[
     (SUI_PKG_NAME, TRANSFER_MOD_NAME, FREEZE_FUN),
 ];
 
+/// Information about a field.
 #[derive(Debug, Clone)]
-struct KeyFieldInfo {
+struct FieldInfo {
+    /// Name of the field
     fname: Symbol,
-    /// Type of the field that directly or indirectly wraps an object.
+    /// Location of the field type
     ftype_loc: Loc,
+    /// Abilities of the field type
+    abilities: Option<E::AbilitySet>,
+}
+
+impl FieldInfo {
+    fn new(fname: Symbol, ftype_loc: Loc, abilities: Option<E::AbilitySet>) -> Self {
+        Self {
+            fname,
+            ftype_loc,
+            abilities,
+        }
+    }
+}
+
+/// Information about a field that wraps other objects.
+#[derive(Debug, Clone)]
+struct WrappingFieldInfo {
+    finfo: FieldInfo,
     /// Location of the type of the wrapped object.
     wrapped_type_loc: Loc,
     /// Is the wrapping direct or indirect
     direct: bool,
 }
 
-/// Structs (per-module) that have fields with the key ability
-type KeyFields = BTreeMap<E::ModuleIdent, BTreeMap<P::StructName, Option<KeyFieldInfo>>>;
+impl WrappingFieldInfo {
+    fn new(fname: Symbol, ftype_loc: Loc, wrapped_type_loc: Loc, direct: bool) -> Self {
+        let finfo = FieldInfo::new(fname, ftype_loc, None);
+        Self {
+            finfo,
+            wrapped_type_loc,
+            direct,
+        }
+    }
+
+    fn fname(&self) -> Symbol {
+        self.finfo.fname
+    }
+
+    fn ftype_loc(&self) -> Loc {
+        self.finfo.ftype_loc
+    }
+
+    fn wrapped_type_loc(&self) -> Loc {
+        self.wrapped_type_loc
+    }
+
+    fn direct(&self) -> bool {
+        self.direct
+    }
+}
+
+/// Structs (per-module) that have fields wrapping other objects.
+type WrappingFields = BTreeMap<E::ModuleIdent, BTreeMap<P::StructName, Option<WrappingFieldInfo>>>;
 
 #[derive(Default)]
 pub struct FreezeWrappedVisitor {
-    /// Memoizes information about struct fields with key ability as they are discovered
-    key_fields: KeyFields,
+    /// Memoizes information about struct fields wrapping other objects as they are discovered
+    wrapping_fields: WrappingFields,
 }
 
 impl TypingVisitor for FreezeWrappedVisitor {
@@ -121,57 +169,19 @@ impl FreezeWrappedVisitor {
                         // struct with a given name not found
                         return;
                     };
-                    // see if info about fields of a give struct was already found
-                    let (key_field_info, info_inserted) = self.get_key_field(&mident, &sname);
-                    if let Some(info) = key_field_info {
+                    if let Some(wrapping_field_info) = self.find_wrapping_field_loc(
+                        modules, mident, sname, /* outer_field_info */ None,
+                        /* field_depth  */ 0,
+                    ) {
                         add_diag(
                             env,
                             fun.arguments.exp.loc,
                             sname.value(),
-                            info.fname,
-                            info.ftype_loc,
-                            info.wrapped_type_loc,
-                            info.direct,
+                            wrapping_field_info.fname(),
+                            wrapping_field_info.ftype_loc(),
+                            wrapping_field_info.wrapped_type_loc(),
+                            wrapping_field_info.direct(),
                         );
-                    }
-                    if info_inserted {
-                        // did not find fields in the past - makes no sense to keep looking
-                        return;
-                    }
-
-                    let Some((sfields, _)) = self.struct_fields(&sname, &mident, modules) else {
-                        // fields for a given struct could not be located
-                        return;
-                    };
-
-                    let info_found = sfields.iter().any(|(_, fname, (_, ftype))| {
-                        let res = self.contains_key(ftype, modules, /* field_depth */ 0);
-                        if let Some((wrapped_tloc, direct)) = res {
-                            // field containing wrapped objects found
-                            self.insert_key_field(
-                                mident,
-                                sname,
-                                *fname,
-                                ftype.loc,
-                                wrapped_tloc,
-                                direct,
-                            );
-                            add_diag(
-                                env,
-                                fun.arguments.exp.loc,
-                                sname.value(),
-                                *fname,
-                                ftype.loc,
-                                wrapped_tloc,
-                                direct,
-                            );
-                            return true;
-                        }
-                        false
-                    });
-                    if !info_found {
-                        // no field containing wrapped objects was found in a given struct
-                        self.insert_no_key_field(mident, sname);
                     }
                 }
             }
@@ -258,21 +268,24 @@ impl FreezeWrappedVisitor {
         None
     }
 
-    fn contains_key(
+    /// Checks if a given field (identified by ftype and fname) wraps other objects and, if so,
+    /// returns its location and information on whether wrapping is direct or indirect.
+    fn wraps_object(
         &mut self,
-        t: &N::Type,
+        ftype: &N::Type,
+        fname: Symbol,
         modules: &UniqueMap<E::ModuleIdent, T::ModuleDefinition>,
         field_depth: usize,
     ) -> Option<(Loc, /* direct wrapping */ bool)> {
         use N::Type_ as T;
-        let Some(bt) = base_type(t) else{
-        return None;
-    };
+        let Some(bt) = base_type(ftype) else{
+            return None;
+        };
         let sp!(_, bt) = bt;
         match bt {
             T::Param(p) => {
                 if p.abilities.has_ability_(P::Ability_::Key) {
-                    return Some((p.user_specified_name.loc, field_depth == 0));
+                    return Some((p.user_specified_name.loc, field_depth == 1));
                 }
                 None
             }
@@ -280,44 +293,17 @@ impl FreezeWrappedVisitor {
                 if let N::TypeName_::ModuleType(mident, sname) = tname.value {
                     // don't have to check all variants of H::TypeName_ as only H::TypeName_::ModuleType
                     // can be a struct or have abilities
-                    let (key_field_info, info_inserted) = self.get_key_field(&mident, &sname);
-                    if let Some(info) = key_field_info {
-                        return Some((info.wrapped_type_loc, field_depth == 0));
-                    }
-                    if info_inserted {
-                        // did not find fields in the past - makes no sense to keep looking
-                        return None;
-                    }
-
-                    if let Some((sfields, sloc)) = self.struct_fields(&sname, &mident, modules) {
-                        // we could take out the ability set check out of the if condition but it should
-                        // not matter as only struct can have abilities defined on them and having it
-                        // here allows us to return the location of the struct type (rather than the
-                        // location of struct name)
-                        if let Some(ability_set) = abilities {
-                            if ability_set.has_ability_(P::Ability_::Key) {
-                                return Some((sloc, field_depth == 0));
-                            }
-                        }
-                        let info = sfields.iter().find_map(|(_, fname, (_, ftype))| {
-                            let res = self.contains_key(ftype, modules, field_depth + 1);
-                            if let Some((wrapped_tloc, direct)) = res {
-                                self.insert_key_field(
-                                    mident,
-                                    sname,
-                                    *fname,
-                                    ftype.loc,
-                                    wrapped_tloc,
-                                    direct,
-                                );
-                            }
-                            res
-                        });
-                        if info.is_none() {
-                            // no field containing wrapped objects was found in a given struct
-                            self.insert_no_key_field(mident, sname);
-                        }
-                        return info;
+                    if let Some(wrapping_field_info) = self.find_wrapping_field_loc(
+                        modules,
+                        mident,
+                        sname,
+                        Some(FieldInfo::new(fname, ftype.loc, abilities.clone())),
+                        field_depth,
+                    ) {
+                        return Some((
+                            wrapping_field_info.wrapped_type_loc,
+                            wrapping_field_info.direct,
+                        ));
                     }
                 }
                 None
@@ -326,8 +312,74 @@ impl FreezeWrappedVisitor {
         }
     }
 
-    /// Inserts information about a field with key ability to KeyFields.
-    fn insert_key_field(
+    /// Find if a field (if any) of a given struct identified by mident and sname that is wrapping
+    /// other objects, and return its location. In case this function is called recursively (we also
+    /// track recursion depth) to find "inner" fields wrapping objects, the "outer" field
+    /// information is included as well.
+    fn find_wrapping_field_loc(
+        &mut self,
+        modules: &UniqueMap<E::ModuleIdent, T::ModuleDefinition>,
+        mident: E::ModuleIdent,
+        sname: P::StructName,
+        outer_field_info: Option<FieldInfo>,
+        field_depth: usize,
+    ) -> Option<WrappingFieldInfo> {
+        let (wrapping_field_info, info_inserted) = self.get_wrapping_field(&mident, &sname);
+        if wrapping_field_info.is_some() {
+            // found memoized field wrapping an object
+            return wrapping_field_info;
+        }
+        if info_inserted {
+            // did not find fields wrapping object in the past - makes no sense to keep looking
+            return None;
+        }
+        let Some((sfields, sloc)) = self.struct_fields(&sname, &mident, modules) else {
+            return None;
+        };
+
+        // In this function we may be either looking at the top level struct (to find whether it has
+        // fields wrapping object) or for a nested struct representing a type of one of the outer
+        // fields (to find whether it is a wrapped object or its fields have wrapped object). In the
+        // latter case (that's when struct_abilities is Some) we need to check if the struct itself
+        // is an object.
+        if let Some(outer_info) = outer_field_info {
+            if let Some(ability_set) = outer_info.abilities {
+                if ability_set.has_ability_(P::Ability_::Key) {
+                    return Some(WrappingFieldInfo::new(
+                        outer_info.fname,
+                        outer_info.ftype_loc,
+                        sloc,
+                        field_depth == 1,
+                    ));
+                }
+            }
+        }
+
+        let wrapping_field_info = sfields.iter().find_map(|(_, fname, (_, ftype))| {
+            let res = self.wraps_object(ftype, *fname, modules, field_depth + 1);
+            if let Some((wrapped_tloc, direct)) = res {
+                // a field wrapping an object found - memoize it
+                return Some(self.insert_wrapping_field(
+                    mident,
+                    sname,
+                    *fname,
+                    ftype.loc,
+                    wrapped_tloc,
+                    direct,
+                ));
+            }
+            None
+        });
+
+        if wrapping_field_info.is_none() {
+            // no field containing wrapped objects was found in a given struct
+            self.insert_no_wrapping_field(mident, sname);
+        }
+        wrapping_field_info
+    }
+
+    /// Memoizes information about a field wrapping other objects in WrappingFields.
+    fn insert_wrapping_field(
         &mut self,
         mident: E::ModuleIdent,
         sname: P::StructName,
@@ -335,47 +387,44 @@ impl FreezeWrappedVisitor {
         ftype_loc: Loc,
         wrapped_type_loc: Loc,
         direct: bool,
-    ) {
-        self.key_fields
+    ) -> WrappingFieldInfo {
+        let wrapping_field_info =
+            WrappingFieldInfo::new(fname, ftype_loc, wrapped_type_loc, direct);
+        self.wrapping_fields
             .entry(mident)
             .or_insert_with(BTreeMap::new)
-            .insert(
-                sname,
-                Some(KeyFieldInfo {
-                    fname,
-                    ftype_loc,
-                    wrapped_type_loc,
-                    direct,
-                }),
-            );
+            .insert(sname, Some(wrapping_field_info.clone()));
+        wrapping_field_info
     }
 
-    /// Inserts information about lack of fields with key ability in a give struct to KeyFields.
-    fn insert_no_key_field(&mut self, mident: E::ModuleIdent, sname: P::StructName) {
-        self.key_fields
+    /// Memoizes information about lack of fields wrapping other object in a given struct in
+    /// WrappingFields.
+    fn insert_no_wrapping_field(&mut self, mident: E::ModuleIdent, sname: P::StructName) {
+        self.wrapping_fields
             .entry(mident)
             .or_insert_with(BTreeMap::new)
             .insert(sname, None);
     }
 
-    /// Returns information about whether a field of a given struct has a key ability:
-    /// - (Some(KeyFieldInfo), true) if info was inserted and there is such a field
-    /// - (None, true)               if info was inserted and there is no such a field
-    /// - (None, false)              if info was not inserted previously
-    fn get_key_field(
+    /// Returns information about whether there exists a memoized field of a given struct wrapping
+    /// other objects:
+    /// - (Some(WrappingfieldInfo), true) if info was inserted and there is such a field
+    /// - (None, true)                    if info was inserted and there is no such a field
+    /// - (None, false)                   if info was not inserted previously
+    fn get_wrapping_field(
         &self,
         mident: &E::ModuleIdent,
         sname: &P::StructName,
-    ) -> (Option<KeyFieldInfo>, bool) {
+    ) -> (Option<WrappingFieldInfo>, bool) {
         let mut info_inserted = false;
-        let Some(structs) = self.key_fields.get(mident) else {
+        let Some(structs) = self.wrapping_fields.get(mident) else {
             return (None, info_inserted);
         };
-        let Some(key_field_info) = structs.get(sname) else {
+        let Some(wrapping_field_info) = structs.get(sname) else {
             return (None, info_inserted);
         };
         info_inserted = true;
-        (key_field_info.clone(), info_inserted)
+        (wrapping_field_info.clone(), info_inserted)
     }
 }
 
@@ -397,7 +446,7 @@ fn add_diag(
         if !direct { "indirectly contains" } else { "is" }
     );
     let mut d = diag!(
-        FREEZE_KEY_DIAG,
+        FREEZE_WRAPPING_DIAG,
         (freeze_arg_loc, msg),
         (frozen_field_tloc, uid_msg)
     );

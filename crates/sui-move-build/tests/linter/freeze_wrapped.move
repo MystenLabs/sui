@@ -59,5 +59,4 @@ module 0x42::test {
     public fun freeze_indirect_gen<T: key + store>(w: IndirectGenWrapper<T>) {
         transfer::public_freeze_object(w);
     }
-
 }
