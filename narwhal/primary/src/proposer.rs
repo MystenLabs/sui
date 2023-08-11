@@ -39,6 +39,7 @@ pub struct OurDigestMessage {
 pub mod proposer_tests;
 
 const DEFAULT_HEADER_RESEND_TIMEOUT: Duration = Duration::from_secs(60);
+const MIN_TIMEOUT_DRIFT: Duration = Duration::from_millis(50);
 
 /// The proposer creates new headers and send them to the core for broadcasting and further processing.
 pub struct Proposer {
@@ -699,29 +700,10 @@ impl Proposer {
                             // Then it keeps giving us all the extra parents.
                             self.last_parents.extend(parents.clone());
 
-                            // As the schedule can change after an odd round proposal - when the new schedule algorithm is
-                            // enabled - make sure that the timer is reset correctly for the round leader. No harm doing
-                            // this here as well.
-                            if self.min_delay(now(), vec![]) == Duration::ZERO {
+                            if let Some(d) = self.reset_min_delay_timeout(&parents, min_delay_timer.deadline()) {
                                 min_delay_timer
                                 .as_mut()
-                                .reset(Instant::now());
-                            } else {
-                                // Try to correct the proposal timeout based on the last proposed round's avg proposed header time.
-                                // If we detect that our remaining timeout value is greater than the calculated proposal remaining time,
-                                // then we reset to the one calculated from the proposal to align with the others.
-                                let avg_previous_proposal_timestamp_ms: TimestampMs = parents.iter().map(|c| *c.header().created_at()).sum::<TimestampMs>() / parents.len() as u64;
-                                let remaining_until_timeout: Duration = min_delay_timer.deadline().sub(Instant::now());
-
-                                let remaining_calculated_from_proposal = self.min_header_delay.saturating_sub(Duration::from_millis(now().saturating_sub(avg_previous_proposal_timestamp_ms)));
-
-                                if (remaining_calculated_from_proposal + Duration::from_millis(50)) < remaining_until_timeout {
-                                    min_delay_timer
-                                    .as_mut()
-                                    .reset(Instant::now() + remaining_calculated_from_proposal);
-
-                                    debug!("Resetting min_delay to {remaining_calculated_from_proposal:?} vs {remaining_until_timeout:?}");
-                                }
+                                .reset(d);
                             }
                         }
                     }
@@ -787,5 +769,46 @@ impl Proposer {
                 .num_of_pending_batches_in_proposer
                 .set(self.digests.len() as i64);
         }
+    }
+
+    fn reset_min_delay_timeout(
+        &self,
+        parents: &[Certificate],
+        min_delay_timer_deadline: Instant,
+    ) -> Option<Instant> {
+        // As the schedule can change after an odd round proposal - when the new schedule algorithm is
+        // enabled - make sure that the timer is reset correctly for the round leader. No harm doing
+        // this here as well.
+        if self.min_delay(now(), vec![]) == Duration::ZERO {
+            return Some(Instant::now());
+        }
+
+        // If this validator is not boosted either on an even or odd round, then we try to make sure
+        // that its timer is still aligned compared to the rest of the chain.
+        // Try to correct the proposal timeout based on the last proposed round's avg proposed header time.
+        // If we detect that our remaining timeout value is greater than the calculated proposal remaining time,
+        // then we reset to the one calculated from the proposal to align with the others.
+        let last_round_start_ts: TimestampMs = parents
+            .iter()
+            .map(|c| *c.header().created_at())
+            .sum::<TimestampMs>()
+            / parents.len() as u64;
+        let remaining_until_timeout: Duration = min_delay_timer_deadline.sub(Instant::now());
+
+        let remaining_until_time_based_on_network = self.min_header_delay.saturating_sub(
+            Duration::from_millis(now().saturating_sub(last_round_start_ts)),
+        );
+
+        // We add some threshold so we don't always calibrate based on the network timeout, but only
+        // if this node has somehow drifted a lot.
+        if ((remaining_until_time_based_on_network + MIN_TIMEOUT_DRIFT) < remaining_until_timeout)
+            || (remaining_until_timeout
+                < (remaining_until_time_based_on_network - MIN_TIMEOUT_DRIFT))
+        {
+            debug!("Resetting min_delay to {remaining_until_time_based_on_network:?} vs {remaining_until_timeout:?}");
+
+            return Some(Instant::now() + remaining_until_time_based_on_network);
+        }
+        None
     }
 }
