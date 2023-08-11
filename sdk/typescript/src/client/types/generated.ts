@@ -1185,7 +1185,7 @@ export interface SuiValidatorSummary {
 export interface CoinSupply {
 	value: string;
 }
-export interface TransactionBlock {
+export interface SuiTransactionBlock {
 	data: TransactionBlockData;
 	txSignatures: string[];
 }
@@ -1306,7 +1306,7 @@ export interface SuiTransactionBlockResponse {
 	rawTransaction?: string;
 	timestampMs?: string | null;
 	/** Transaction input data */
-	transaction?: TransactionBlock | null;
+	transaction?: SuiTransactionBlock | null;
 }
 export interface SuiTransactionBlockResponseOptions {
 	/** Whether to show balance_changes. Default to be False */
