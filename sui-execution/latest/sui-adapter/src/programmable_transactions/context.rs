@@ -7,7 +7,7 @@ pub use checked::*;
 mod checked {
     use std::{
         collections::{BTreeMap, BTreeSet, HashMap},
-        sync::Arc,
+        sync::{Arc, RwLock},
     };
 
     use crate::adapter::{missing_unwrapped_msg, new_native_extensions};
@@ -27,6 +27,7 @@ mod checked {
     #[cfg(debug_assertions)]
     use move_vm_types::gas::GasMeter;
     use move_vm_types::loaded_data::runtime_types::Type;
+    use once_cell::sync::Lazy;
     use sui_move_natives::object_runtime::{
         self, get_all_uids, max_event_error, ObjectRuntime, RuntimeResults,
     };
@@ -59,6 +60,8 @@ mod checked {
     };
 
     use crate::programmable_transactions::linkage_view::{LinkageView, SavedLinkage};
+
+    pub static LOOKUP_TABLE: Lazy<RwLock<HashMap<StructTag, Type>>> = Lazy::new(|| RwLock::new(HashMap::new()));
 
     /// Maintains all runtime state specific to programmable transactions
     pub struct ExecutionContext<'vm, 'state, 'a> {
@@ -1032,6 +1035,9 @@ mod checked {
 
             TypeTag::Vector(inner) => Type::Vector(Box::new(load_type(session, inner)?)),
             TypeTag::Struct(struct_tag) => {
+                if let Some(loaded_type) = LOOKUP_TABLE.read().unwrap().get(struct_tag) {
+                    return Ok(loaded_type.clone());
+                }
                 let StructTag {
                     address,
                     module,
@@ -1063,7 +1069,10 @@ mod checked {
                 }
 
                 if type_params.is_empty() {
-                    Type::Struct(idx)
+                    let loaded_type = Type::Struct(idx);
+                    LOOKUP_TABLE.write().unwrap()
+                            .insert(*struct_tag.clone(), loaded_type.clone());
+                    loaded_type
                 } else {
                     let loaded_type_params = type_params
                         .iter()
@@ -1078,7 +1087,10 @@ mod checked {
                         }
                     }
 
-                    Type::StructInstantiation(idx, loaded_type_params)
+                    let loaded_type = Type::StructInstantiation(idx, loaded_type_params);
+                    LOOKUP_TABLE.write().unwrap()
+                            .insert(*struct_tag.clone(), loaded_type.clone());
+                    loaded_type
                 }
             }
         })

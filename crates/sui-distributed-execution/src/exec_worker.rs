@@ -2,7 +2,7 @@ use core::panic;
 use std::collections::{HashSet, HashMap, VecDeque};
 use std::sync::Arc;
 
-use sui_adapter_latest::{adapter, execution_engine};
+use sui_adapter_latest::{adapter, execution_engine, programmable_transactions};
 use move_vm_runtime::move_vm::MoveVM;
 use sui_types::error::SuiError;
 use sui_types::execution_mode;
@@ -572,6 +572,8 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                 println!("EW END OF EPOCH at checkpoint {}", full_tx.checkpoint_seq);
                 (move_vm, protocol_config, epoch_data, reference_gas_price) = 
                     self.process_epoch_change(&ew_sender, &mut sw_receiver).await;
+
+                programmable_transactions::context::LOOKUP_TABLE.write().unwrap().clear();
 
                 epoch_change_tx = None;  // reset for next epoch
             }
