@@ -6,6 +6,7 @@ use move_ir_types::location::Loc;
 
 pub mod coin_field;
 pub mod custom_state_change;
+pub mod freeze_wrapped;
 pub mod self_transfer;
 pub mod share_owned;
 
@@ -17,6 +18,7 @@ pub const PUBLIC_TRANSFER_FUN: &str = "public_transfer";
 pub const SHARE_FUN: &str = "share_object";
 pub const PUBLIC_SHARE_FUN: &str = "public_share_object";
 pub const FREEZE_FUN: &str = "freeze_object";
+pub const PUBLIC_FREEZE_FUN: &str = "public_freeze_object";
 
 pub const COIN_MOD_NAME: &str = "coin";
 pub const COIN_STRUCT_NAME: &str = "Coin";
@@ -28,6 +30,7 @@ pub const SHARE_OWNED_FILTER_NAME: &str = "share_owned";
 pub const SELF_TRANSFER_FILTER_NAME: &str = "self_transfer";
 pub const CUSTOM_STATE_CHANGE_FILTER_NAME: &str = "custom_state_change";
 pub const COIN_FIELD_FILTER_NAME: &str = "coin_field";
+pub const FREEZE_WRAPPED_FILTER_NAME: &str = "freeze_wrapped";
 
 pub const INVALID_LOC: Loc = Loc::invalid();
 
@@ -36,6 +39,7 @@ pub enum LinterDiagCategory {
     SelfTransfer,
     CustomStateChange,
     CoinField,
+    FreezeWrapped,
 }
 
 /// A default code for each linter category (as long as only one code per category is used, no other
@@ -70,6 +74,12 @@ pub fn known_filters() -> (E::AttributeName_, Vec<WarningFilter>) {
                 LinterDiagCategory::CoinField as u8,
                 LINTER_DEFAULT_DIAG_CODE,
                 Some(COIN_FIELD_FILTER_NAME),
+            ),
+            WarningFilter::code(
+                Some(LINT_WARNING_PREFIX),
+                LinterDiagCategory::FreezeWrapped as u8,
+                LINTER_DEFAULT_DIAG_CODE,
+                Some(FREEZE_WRAPPED_FILTER_NAME),
             ),
         ],
     )
