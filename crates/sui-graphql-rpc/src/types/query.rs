@@ -3,8 +3,8 @@
 
 use async_graphql::*;
 
-use crate::server::data_provider::fetch_chain_id;
 use super::{address::Address, object::Object, owner::Owner, sui_address::SuiAddress};
+use crate::server::data_provider::fetch_chain_id;
 
 pub(crate) struct Query;
 pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;

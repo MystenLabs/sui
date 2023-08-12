@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{*, connection::Connection};
+use async_graphql::{connection::Connection, *};
 
 use super::{
     balance::{Balance, BalanceConnection},
