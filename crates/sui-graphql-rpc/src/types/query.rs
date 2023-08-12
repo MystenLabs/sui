@@ -3,7 +3,7 @@
 
 use async_graphql::*;
 
-use super::{address::Address, object::Object, owner::Owner, sui_address::SuiAddress};
+use super::{address::Address, object::Object, owner::ObjectOwner, sui_address::SuiAddress};
 
 pub(crate) struct Query;
 pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
@@ -16,12 +16,12 @@ impl Query {
         "0000".to_string()
     }
 
-    async fn owner(&self, ctx: &Context<'_>, address: SuiAddress) -> Result<Option<Owner>> {
+    async fn owner(&self, ctx: &Context<'_>, address: SuiAddress) -> Result<Option<ObjectOwner>> {
         // Currently only an account address can own an object
         let cl = ctx.data_unchecked::<sui_sdk::SuiClient>();
         let o = crate::server::data_provider::fetch_obj(cl, address, None).await?;
         Ok(o.and_then(|q| q.owner)
-            .map(|o| Owner::Address(Address { address: o })))
+            .map(|o| ObjectOwner::Address(Address { address: o })))
     }
 
     async fn object(

@@ -9,6 +9,7 @@ use crate::types::address::Address;
 use crate::types::balance::Balance;
 use crate::types::base64::Base64;
 use crate::types::big_int::BigInt;
+use crate::types::object::ObjectKind;
 use crate::types::transaction_block::TransactionBlock;
 use crate::types::{object::Object, sui_address::SuiAddress};
 use async_graphql::*;
@@ -17,8 +18,8 @@ use sui_json_rpc_types::{
 };
 use sui_sdk::types::base_types::ObjectID;
 use sui_sdk::types::digests::TransactionDigest;
+use sui_sdk::types::object::Owner as NativeOwner;
 use sui_sdk::SuiClient;
-
 pub(crate) async fn fetch_obj(
     cl: &SuiClient,
     address: SuiAddress,
@@ -73,6 +74,13 @@ fn convert_obj(s: sui_json_rpc_types::SuiObjectData) -> Object {
             .ok(),
         bcs: Some(Base64::from(&bcs::to_bytes(&s.bcs).unwrap())), // TODO: is this correct?
         previous_transaction: Some(s.previous_transaction.unwrap().to_string()),
+        kind: Some(match s.owner.unwrap() {
+            NativeOwner::AddressOwner(_) | NativeOwner::ObjectOwner(_) => ObjectKind::Owned,
+            NativeOwner::Shared {
+                initial_shared_version: _,
+            } => ObjectKind::Shared,
+            NativeOwner::Immutable => ObjectKind::Immutable,
+        }),
     }
 }
 
