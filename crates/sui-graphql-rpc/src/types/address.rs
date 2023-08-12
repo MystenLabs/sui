@@ -1,15 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::*;
+use async_graphql::{connection::Connection, *};
 
-use crate::server::data_provider::fetch_balance;
+use crate::server::data_provider::{fetch_balance, fetch_owned_objs};
 
 use super::{
     balance::{Balance, BalanceConnection},
     coin::CoinConnection,
     name_service::NameServiceConnection,
-    object::{ObjectConnection, ObjectFilter},
+    object::{Object, ObjectFilter},
     stake::StakeConnection,
     sui_address::SuiAddress,
     transaction_block::{TransactionBlockConnection, TransactionBlockFilter},
@@ -52,13 +52,23 @@ impl Address {
 
     pub async fn object_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
         filter: Option<ObjectFilter>,
-    ) -> Option<ObjectConnection> {
-        unimplemented!()
+    ) -> Result<Connection<String, Object>> {
+        fetch_owned_objs(
+            ctx.data_unchecked::<sui_sdk::SuiClient>(),
+            &self.address,
+            first,
+            after,
+            last,
+            before,
+            filter,
+        )
+        .await
     }
 
     pub async fn balance(&self, ctx: &Context<'_>, type_: Option<String>) -> Result<Balance> {

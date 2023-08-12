@@ -3,6 +3,7 @@
 
 use async_graphql::*;
 
+use crate::server::data_provider::fetch_chain_id;
 use super::{address::Address, object::Object, owner::Owner, sui_address::SuiAddress};
 
 pub(crate) struct Query;
@@ -12,8 +13,8 @@ pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, EmptyMutation, E
 #[allow(unused_variables)]
 #[Object]
 impl Query {
-    async fn chain_identifier(&self) -> String {
-        "0000".to_string()
+    async fn chain_identifier(&self, ctx: &Context<'_>) -> Result<String> {
+        fetch_chain_id(ctx.data_unchecked::<sui_sdk::SuiClient>()).await
     }
 
     async fn owner(&self, ctx: &Context<'_>, address: SuiAddress) -> Result<Option<Owner>> {

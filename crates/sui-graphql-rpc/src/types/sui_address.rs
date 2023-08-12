@@ -50,4 +50,8 @@ impl SuiAddress {
     pub fn from_array(arr: [u8; SUI_ADDRESS_LENGTH]) -> Self {
         SuiAddress(arr)
     }
+
+    pub fn as_slice(&self) -> &[u8] {
+        &self.0
+    }
 }
