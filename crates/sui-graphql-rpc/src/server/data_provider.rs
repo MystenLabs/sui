@@ -8,6 +8,7 @@ use crate::types::balance::Balance;
 use crate::types::base64::Base64;
 use crate::types::big_int::BigInt;
 use crate::types::object::ObjectFilter;
+use crate::types::object::ObjectKind;
 use crate::types::transaction_block::TransactionBlock;
 use crate::types::{object::Object, sui_address::SuiAddress};
 use async_graphql::connection::{Connection, Edge};
@@ -20,8 +21,8 @@ use sui_json_rpc_types::{
 use sui_sdk::types::base_types::ObjectID as NaiveObjectID;
 use sui_sdk::types::base_types::SuiAddress as NativeSuiAddress;
 use sui_sdk::types::digests::TransactionDigest;
+use sui_sdk::types::object::Owner as NativeOwner;
 use sui_sdk::SuiClient;
-
 pub(crate) async fn fetch_obj(
     cl: &SuiClient,
     address: SuiAddress,
@@ -115,6 +116,30 @@ pub(crate) async fn fetch_balance(
     Ok(convert_bal(b))
 }
 
+fn convert_obj(s: &sui_json_rpc_types::SuiObjectData) -> Object {
+    Object {
+        version: s.version.into(),
+        digest: s.digest.to_string(),
+        storage_rebate: s.storage_rebate,
+        address: SuiAddress::from_array(**s.object_id),
+        owner: s
+            .owner
+            .unwrap()
+            .get_owner_address()
+            .map(|x| SuiAddress::from_array(x.to_inner()))
+            .ok(),
+        bcs: Some(Base64::from(&bcs::to_bytes(&s.bcs).unwrap())), // TODO: is this correct?
+        previous_transaction: Some(s.previous_transaction.unwrap().to_string()),
+        kind: Some(match s.owner.unwrap() {
+            NativeOwner::AddressOwner(_) | NativeOwner::ObjectOwner(_) => ObjectKind::Owned,
+            NativeOwner::Shared {
+                initial_shared_version: _,
+            } => ObjectKind::Shared,
+            NativeOwner::Immutable => ObjectKind::Immutable,
+        }),
+    }
+}
+
 pub(crate) async fn fetch_tx(cl: &SuiClient, digest: &String) -> Result<Option<TransactionBlock>> {
     let tx_digest = TransactionDigest::from_str(digest)?;
     let tx = cl
@@ -138,23 +163,6 @@ pub(crate) async fn fetch_tx(cl: &SuiClient, digest: &String) -> Result<Option<T
 
 pub(crate) async fn fetch_chain_id(cl: &SuiClient) -> Result<String> {
     Ok(cl.read_api().get_chain_identifier().await?)
-}
-
-fn convert_obj(s: &sui_json_rpc_types::SuiObjectData) -> Object {
-    Object {
-        version: s.version.into(),
-        digest: s.digest.to_string(),
-        storage_rebate: s.storage_rebate,
-        address: SuiAddress::from_array(**s.object_id),
-        owner: s
-            .owner
-            .unwrap()
-            .get_owner_address()
-            .map(|x| SuiAddress::from_array(x.to_inner()))
-            .ok(),
-        bcs: Some(Base64::from(&bcs::to_bytes(&s.bcs).unwrap())), // TODO: is this correct?
-        previous_transaction: Some(s.previous_transaction.unwrap().to_string()),
-    }
 }
 
 fn convert_bal(b: sui_json_rpc_types::Balance) -> Balance {

@@ -2,7 +2,7 @@
 source: crates/sui-graphql-rpc/tests/snapshot_tests.rs
 expression: sdl
 ---
-type Address implements Owner {
+type Address implements ObjectOwner {
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter): TransactionBlockConnection
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
@@ -19,17 +19,6 @@ enum AddressTransactionBlockRelationship {
 	SENT
 	RECV
 	PAID
-}
-
-type AmbiguousOwner implements Owner {
-	location: SuiAddress!
-	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
-	balance(type: String): Balance!
-	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
-	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
-	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
-	defaultNameServiceName: String
-	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
 }
 
 type Balance {
@@ -60,12 +49,14 @@ type NameServiceConnection {
 	unimplemented: Boolean!
 }
 
-type Object implements Owner {
+type Object implements ObjectOwner {
 	version: Int!
 	digest: String!
 	storageRebate: Int
 	bcs: Base64
 	previousTransactionBlock: TransactionBlock
+	kind: ObjectKind
+	owner: Owner
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
 	balance(type: String): Balance!
@@ -114,9 +105,28 @@ input ObjectFilter {
 	version: Int
 }
 
-interface Owner {
+enum ObjectKind {
+	OWNED
+	SHARED
+	IMMUTABLE
+}
+
+interface ObjectOwner {
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	balance(type: String): Balance!
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	defaultNameServiceName: String
+	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+}
+
+type Owner implements ObjectOwner {
+	asAddress: Address
+	asObject: Object
+	location: SuiAddress!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
 	balance(type: String): Balance!
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
@@ -149,7 +159,7 @@ type PageInfo {
 
 type Query {
 	chainIdentifier: String!
-	owner(address: SuiAddress!): Owner
+	owner(address: SuiAddress!): ObjectOwner
 	object(address: SuiAddress!, version: Int): Object
 	address(address: SuiAddress!): Address
 }

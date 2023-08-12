@@ -7,6 +7,7 @@ use super::{
     balance::{Balance, BalanceConnection},
     coin::CoinConnection,
     name_service::NameServiceConnection,
+    owner::Owner,
     stake::StakeConnection,
     sui_address::SuiAddress,
     transaction_block::TransactionBlock,
@@ -24,6 +25,14 @@ pub(crate) struct Object {
     pub owner: Option<SuiAddress>,
     pub bcs: Option<Base64>,
     pub previous_transaction: Option<String>,
+    pub kind: Option<ObjectKind>,
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
+pub(crate) enum ObjectKind {
+    Owned,
+    Shared,
+    Immutable,
 }
 
 #[derive(InputObject)]
@@ -66,6 +75,14 @@ impl Object {
         } else {
             Ok(None)
         }
+    }
+
+    async fn kind(&self) -> Option<ObjectKind> {
+        self.kind
+    }
+
+    async fn owner(&self) -> Option<Owner> {
+        self.owner.as_ref().map(|q| Owner { address: q.clone() })
     }
 
     // =========== Owner interface methods =============

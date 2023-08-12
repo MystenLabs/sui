@@ -66,20 +66,35 @@ use super::address::Address;
         arg(name = "before", type = "Option<String>")
     )
 )]
-pub(crate) enum Owner {
+pub(crate) enum ObjectOwner {
     Address(Address),
-    AmbiguousOwner(AmbiguousOwner),
+    Owner(Owner),
     Object(Object),
 }
 
-pub(crate) struct AmbiguousOwner {
+pub(crate) struct Owner {
     pub address: SuiAddress,
 }
 
 #[allow(unreachable_code)]
 #[allow(unused_variables)]
 #[Object]
-impl AmbiguousOwner {
+impl Owner {
+    async fn as_address(&self, ctx: &Context<'_>) -> Option<Address> {
+        // For now only addresses can be owners
+        Some(Address {
+            address: self.address.clone(),
+        })
+    }
+
+    async fn as_object(&self, ctx: &Context<'_>) -> Option<Object> {
+        // TODO: extend when send to object imnplementation is done
+        // For now only addresses can be owners
+        None
+    }
+
+    // =========== Owner interface methods =============
+
     pub async fn location(&self, ctx: &Context<'_>) -> SuiAddress {
         self.address.clone()
     }
