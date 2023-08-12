@@ -5,7 +5,7 @@ expression: sdl
 type Address implements ObjectOwner {
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter): TransactionBlockConnection
 	location: SuiAddress!
-	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
 	balance(type: String): Balance!
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
@@ -58,7 +58,7 @@ type Object implements ObjectOwner {
 	kind: ObjectKind
 	owner: Owner
 	location: SuiAddress!
-	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
 	balance(type: String): Balance!
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
@@ -68,7 +68,32 @@ type Object implements ObjectOwner {
 }
 
 type ObjectConnection {
-	unimplemented: Boolean!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ObjectEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Object!]!
+}
+
+"""
+An edge in a connection.
+"""
+type ObjectEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Object!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
 }
 
 input ObjectFilter {
@@ -101,13 +126,35 @@ type Owner implements ObjectOwner {
 	asAddress: Address
 	asObject: Object
 	location: SuiAddress!
-	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
 	balance(type: String): Balance!
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
 	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+}
+
+"""
+Information about pagination in a connection
+"""
+type PageInfo {
+	"""
+	When paginating backwards, are there more items?
+	"""
+	hasPreviousPage: Boolean!
+	"""
+	When paginating forwards, are there more items?
+	"""
+	hasNextPage: Boolean!
+	"""
+	When paginating backwards, the cursor to continue.
+	"""
+	startCursor: String
+	"""
+	When paginating forwards, the cursor to continue.
+	"""
+	endCursor: String
 }
 
 type Query {
