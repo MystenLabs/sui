@@ -249,6 +249,8 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P,
             "sudo apt-get -y autoremove",
             // Disable "pending kernel upgrade" message.
             "sudo apt-get -y remove needrestart",
+            // Prevent the error: "Could not get lock /var/lib/dpkg/lock-frontend".
+            "sudo apt remove unattended-upgrades",
             // The following dependencies:
             // * build-essential: prevent the error: [error: linker `cc` not found].
             // * libssl-dev - Required to compile the orchestrator, todo remove this dependency
