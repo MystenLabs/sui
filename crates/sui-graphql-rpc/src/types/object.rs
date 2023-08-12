@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::*;
+use async_graphql::{connection::Connection, *};
 
 use super::{
     balance::{Balance, BalanceConnection},
@@ -12,7 +12,7 @@ use super::{
     transaction_block::TransactionBlock,
 };
 use crate::{
-    server::data_provider::{fetch_balance, fetch_tx},
+    server::data_provider::{fetch_balance, fetch_owned_objs, fetch_tx},
     types::base64::Base64,
 };
 
@@ -25,8 +25,6 @@ pub(crate) struct Object {
     pub bcs: Option<Base64>,
     pub previous_transaction: Option<String>,
 }
-
-pub(crate) struct ObjectConnection;
 
 #[derive(InputObject)]
 pub(crate) struct ObjectFilter {
@@ -78,13 +76,23 @@ impl Object {
 
     pub async fn object_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
         filter: Option<ObjectFilter>,
-    ) -> Option<ObjectConnection> {
-        unimplemented!()
+    ) -> Result<Connection<String, Object>> {
+        fetch_owned_objs(
+            ctx.data_unchecked::<sui_sdk::SuiClient>(),
+            &self.address,
+            first,
+            after,
+            last,
+            before,
+            filter,
+        )
+        .await
     }
 
     pub async fn balance(&self, ctx: &Context<'_>, type_: Option<String>) -> Result<Balance> {
@@ -138,15 +146,6 @@ impl Object {
         last: Option<u64>,
         before: Option<String>,
     ) -> Option<NameServiceConnection> {
-        unimplemented!()
-    }
-}
-
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
-#[Object]
-impl ObjectConnection {
-    async fn unimplemented(&self) -> bool {
         unimplemented!()
     }
 }

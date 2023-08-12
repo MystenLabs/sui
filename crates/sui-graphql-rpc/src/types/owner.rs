@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::server::data_provider::fetch_balance;
+use crate::server::data_provider::fetch_owned_objs;
 use crate::types::balance::*;
 use crate::types::coin::*;
 use crate::types::name_service::*;
 use crate::types::object::*;
 use crate::types::stake::*;
 use crate::types::sui_address::SuiAddress;
+use async_graphql::connection::Connection;
 use async_graphql::*;
 
 use super::address::Address;
@@ -17,7 +19,7 @@ use super::address::Address;
     field(name = "location", type = "SuiAddress"),
     field(
         name = "object_connection",
-        type = "Option<ObjectConnection>",
+        type = "Option<Connection<String, Object>>",
         arg(name = "first", type = "Option<u64>"),
         arg(name = "after", type = "Option<String>"),
         arg(name = "last", type = "Option<u64>"),
@@ -84,13 +86,23 @@ impl AmbiguousOwner {
 
     pub async fn object_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
         filter: Option<ObjectFilter>,
-    ) -> Option<ObjectConnection> {
-        unimplemented!()
+    ) -> Result<Connection<String, Object>> {
+        fetch_owned_objs(
+            ctx.data_unchecked::<sui_sdk::SuiClient>(),
+            &self.address,
+            first,
+            after,
+            last,
+            before,
+            filter,
+        )
+        .await
     }
 
     pub async fn balance(&self, ctx: &Context<'_>, type_: Option<String>) -> Result<Balance> {
