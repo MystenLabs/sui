@@ -157,20 +157,19 @@ impl Inner {
         let digest = certificate.digest();
 
         // Validate that certificates are accepted in causal order.
-        // This should be relatively cheap because of certificate store caching.
-        if certificate.round() > self.gc_round.load(Ordering::Acquire) + 1 {
-            let existence = self
-                .certificate_store
-                .multi_contains(certificate.header().ancestor_digests().iter())?;
-            for (ancestor, exists) in certificate
-                .header()
-                .ancestors()
-                .iter()
-                .zip(existence.iter())
-            {
-                if !*exists {
-                    panic!("Ancestor {ancestor:?} not found for {certificate:?}!")
-                }
+        // Currently it is relatively cheap because of certificate store caching.
+        let gc_round = self.gc_round.load(Ordering::Acquire);
+        let existence = self
+            .certificate_store
+            .multi_contains(certificate.header().ancestor_digests().iter())?;
+        for ((round, ancestor), exists) in certificate
+            .header()
+            .ancestors()
+            .iter()
+            .zip(existence.iter())
+        {
+            if !*exists && *round > gc_round {
+                panic!("Ancestor {ancestor:?} not found for {certificate:?}!")
             }
         }
 
@@ -567,7 +566,7 @@ impl Synchronizer {
                 loop {
                     tokio::select! {
                         result = rx_batch_tasks.recv() => {
-                            let (header, max_age) = match result {
+                            let (header, _max_age) = match result {
                                 Some(r) => r,
                                 None => {
                                     // exit loop if the channel has been closed
@@ -581,7 +580,7 @@ impl Synchronizer {
                             };
 
                             batch_tasks.spawn(async move {
-                                Synchronizer::sync_batches_internal(inner.clone(), &header, max_age, true).await
+                                Synchronizer::sync_batches_internal(inner.clone(), &header, true).await
                             });
                         },
                         Some(result) = batch_tasks.join_next() => {
@@ -692,12 +691,6 @@ impl Synchronizer {
                 expected: self.inner.committee.epoch(),
                 received: certificate.epoch()
             }
-        );
-        // Ok to drop old certificate, because it will never be included into the consensus dag.
-        let gc_round = self.inner.gc_round.load(Ordering::Acquire);
-        ensure!(
-            gc_round < certificate.round(),
-            DagError::TooOld(certificate.digest().into(), certificate.round(), gc_round)
         );
         // Verify the certificate (and the embedded header).
         certificate.verify(&self.inner.committee, &self.inner.worker_cache)
@@ -867,29 +860,33 @@ impl Synchronizer {
             }
         }
 
-        // Ensure either we have all the ancestors of this certificate, or the ancestors have been garbage collected.
-        // If we don't, the synchronizer will start fetching missing certificates.
-        if certificate.round() > inner.gc_round.load(Ordering::Acquire) + 1 {
-            let missing_ancestors = inner.get_missing_ancestors(&certificate).await?;
-            if !missing_ancestors.is_empty() {
-                debug!(
-                    "Processing certificate {:?} suspended: missing ancestors",
-                    certificate
-                );
-                inner
-                    .metrics
-                    .certificates_suspended
-                    .with_label_values(&["missing_ancestors"])
-                    .inc();
-                // There is no upper round limit to suspended certificates. Currently there is no
-                // memory usage issue and this will speed up catching up. But we can revisit later.
-                let notify = state.insert(certificate, missing_ancestors, !early_suspend);
-                inner
-                    .metrics
-                    .certificates_currently_suspended
-                    .set(state.num_suspended() as i64);
-                return Err(DagError::Suspended(notify));
-            }
+        // Check if all non-gc'ed ancestors of this certificate are available.
+        // If not, the synchronizer will start fetching missing certificates.
+        let gc_round = inner.gc_round.load(Ordering::Acquire);
+        let missing_ancestors: Vec<_> = inner
+            .get_missing_ancestors(&certificate)
+            .await?
+            .into_iter()
+            .filter(|(r, _c)| *r > gc_round)
+            .collect();
+        if !missing_ancestors.is_empty() {
+            debug!(
+                "Processing certificate {:?} suspended: missing ancestors",
+                certificate
+            );
+            inner
+                .metrics
+                .certificates_suspended
+                .with_label_values(&["missing_ancestors"])
+                .inc();
+            // There is no upper round limit to suspended certificates. Currently there is no
+            // memory usage issue and this will speed up catching up. But we can revisit later.
+            let notify = state.insert(certificate, missing_ancestors, !early_suspend);
+            inner
+                .metrics
+                .certificates_currently_suspended
+                .set(state.num_suspended() as i64);
+            return Err(DagError::Suspended(notify));
         }
 
         let suspended_certs = state.accept_children(certificate.round(), certificate.digest());
@@ -992,8 +989,8 @@ impl Synchronizer {
     /// Blocks until either synchronization is complete, or the current consensus rounds advances
     /// past the max allowed age. (`max_age == 0` means the header's round must match current
     /// round.)
-    pub async fn sync_header_batches(&self, header: &Header, max_age: Round) -> DagResult<()> {
-        Synchronizer::sync_batches_internal(self.inner.clone(), header, max_age, false).await
+    pub async fn sync_header_batches(&self, header: &Header) -> DagResult<()> {
+        Synchronizer::sync_batches_internal(self.inner.clone(), header, false).await
     }
 
     // TODO: Add batching support to synchronizer and use this call from executor.
@@ -1010,7 +1007,6 @@ impl Synchronizer {
     async fn sync_batches_internal(
         inner: Arc<Inner>,
         header: &Header,
-        max_age: Round,
         is_certified: bool,
     ) -> DagResult<()> {
         if header.author() == inner.authority_id {
@@ -1021,15 +1017,6 @@ impl Synchronizer {
         // Clone the round updates channel so we can get update notifications specific to
         // this RPC handler.
         let mut rx_consensus_round_updates = inner.rx_consensus_round_updates.clone();
-        let mut consensus_round = rx_consensus_round_updates.borrow().committed_round;
-        ensure!(
-            header.round() >= consensus_round.saturating_sub(max_age),
-            DagError::TooOld(
-                header.digest().into(),
-                header.round(),
-                consensus_round.saturating_sub(max_age)
-            )
-        );
 
         let mut missing = HashMap::new();
         for (digest, (worker_id, _)) in header.payload().iter() {
@@ -1107,24 +1094,13 @@ impl Synchronizer {
                         .map(|_| ())
                         .map_err(|e| DagError::NetworkError(format!("error synchronizing batches: {e:?}")))
                 },
-                // This aborts based on consensus round and not narwhal round. When this function
-                // is used as part of handling vote requests, this may cause us to wait a bit
-                // longer than needed to give up on synchronizing batches for headers that are
-                // too old to receive a vote. This shouldn't be a big deal (the requester can
-                // always abort their request at any point too), however if the extra resources
-                // used to attempt to synchronize batches for longer than strictly needed become
-                // problematic, this function could be augmented to also support cancellation based
-                // on narwhal round.
+                // Headers past GC round will never become part of commit, so it becomes
+                // unnecessary to sync the payloads.
                 Ok(()) = rx_consensus_round_updates.changed() => {
-                    consensus_round = rx_consensus_round_updates.borrow().committed_round;
-                    ensure!(
-                        header.round() >= consensus_round.saturating_sub(max_age),
-                        DagError::TooOld(
-                            header.digest().into(),
-                            header.round(),
-                            consensus_round.saturating_sub(max_age),
-                        )
-                    );
+                    let gc_round = rx_consensus_round_updates.borrow().gc_round;
+                    if header.round() < gc_round {
+                        break Ok(())
+                    }
                 },
             }
         }

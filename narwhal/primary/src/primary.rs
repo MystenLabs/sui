@@ -714,9 +714,7 @@ impl PrimaryReceiverHandler {
         );
 
         // Synchronize all batches referenced in the header.
-        self.synchronizer
-            .sync_header_batches(header, /* max_age */ 0)
-            .await?;
+        self.synchronizer.sync_header_batches(header).await?;
 
         // Check that the time of the header is smaller than the current time. If not but the difference is
         // small, just wait. Otherwise reject with an error.
@@ -853,27 +851,15 @@ impl PrimaryReceiverHandler {
             .get_unknown_ancestor_digests(header)
             .await?;
 
-        // Maximum header age is chosen to strike a balance between allowing for slightly older
-        // certificates to still have a chance to be included in the DAG while not wasting
-        // resources on very old vote requests. This value affects performance but not correctness
-        // of the algorithm.
-        const HEADER_AGE_LIMIT: Round = 10;
-
-        // Check that the header is not too old.
-        let narwhal_round = *self.rx_narwhal_round_updates.borrow();
-        let limit_round = narwhal_round.saturating_sub(HEADER_AGE_LIMIT);
-        ensure!(
-            limit_round <= header.round(),
-            DagError::TooOld(header.digest().into(), header.round(), narwhal_round)
-        );
-
         // Lock to ensure consistency between limit_round and where ancestor_digests are gc'ed.
         let mut ancestor_digests = self.ancestor_digests.lock();
 
         // Drop old entries from ancestor_digests.
+        let narwhal_round = *self.rx_narwhal_round_updates.borrow();
+        let limit_round = narwhal_round.saturating_sub(50);
         while let Some(((round, _digest), _authority)) = ancestor_digests.first_key_value() {
             // Minimum header round is limit_round, so minimum parent round is limit_round - 1.
-            if *round < limit_round.saturating_sub(1) {
+            if *round < limit_round {
                 ancestor_digests.pop_first();
             } else {
                 break;

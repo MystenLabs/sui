@@ -167,11 +167,7 @@ impl Certifier {
                     missing_ancestors = response.missing;
                 }
                 Err(status) => {
-                    if status.status() == anemo::types::response::StatusCode::BadRequest {
-                        return Err(DagError::NetworkError(format!(
-                            "unrecoverable error requesting vote for {header}: {status:?}"
-                        )));
-                    }
+                    warn!("error requesting vote for {header}: {status:?}");
                     missing_ancestors = Vec::new();
                 }
             }
@@ -348,6 +344,7 @@ impl Certifier {
                 // We also receive here our new headers created by the `Proposer`.
                 // TODO: move logic into Proposer.
                 Some(header) = self.rx_headers.recv() => {
+                    info!("Received header to certify: {header:?}");
                     let name = self.authority_id;
                     let committee = self.committee.clone();
                     let certificate_store = self.certificate_store.clone();

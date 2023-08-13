@@ -255,10 +255,7 @@ impl Proposer {
             else {
                 continue;
             };
-            // TODO: pass in GC depth.
-            if round + 50 > this_round {
-                *entry = Some((round, digest));
-            }
+            *entry = Some((round, digest));
         }
 
         let header: Header = if self.use_header_v2 {
@@ -472,7 +469,7 @@ impl Proposer {
                 && enough_parents
                 && opt_latest_header.is_none();
 
-            debug!(
+            info!(
                 "Proposer loop starts: round={} enough_parents={} enough_digests={} advance={} max_delay_timed_out={} min_delay_timed_out={} should_create_header={}", 
                 self.round, enough_parents, enough_digests, advance, max_delay_timed_out, min_delay_timed_out, should_create_header
             );
@@ -570,9 +567,9 @@ impl Proposer {
 
                     // Remove committed headers from the list of pending
                     let mut max_committed_round = 0;
-                    for round in commit_headers {
-                        max_committed_round = max_committed_round.max(round);
-                        let Some(_) = self.proposed_headers.remove(&round) else {
+                    for round in &commit_headers {
+                        max_committed_round = max_committed_round.max(*round);
+                        let Some(_) = self.proposed_headers.remove(round) else {
                             info!("Own committed header not found at round {round}, probably because of restarts.");
                             // There can still be later committed headers in proposed_headers.
                             continue;
@@ -616,8 +613,11 @@ impl Proposer {
                             self.proposed_headers.remove(round);
                         }
 
-                        debug!(
-                            "Retransmit {num_digests_to_resend} batches and {num_system_messages_to_resend} system messages in undelivered headers {retransmit_rounds:?} at commit round {commit_round:?}, remaining headers {}",
+                        warn!(
+                            "Retransmit {} batches in undelivered headers {:?} at commit round {:?}, remaining headers {}",
+                            num_digests_to_resend,
+                            retransmit_rounds,
+                            commit_round,
                             self.proposed_headers.len()
                         );
 
