@@ -37,7 +37,7 @@ module fungible_tokens::closed_loop {
     use sui::balance::{Self, Balance, Supply};
     use sui::object::{Self, ID, UID};
     use sui::vec_set::{Self, VecSet};
-    use sui::tx_context::TxContext;
+    use sui::tx_context::{sender, TxContext};
     use sui::coin::{Self, Coin};
 
     /// Trying to use not one-time witness.
@@ -65,17 +65,25 @@ module fungible_tokens::closed_loop {
         /// NOTE: depending on whether we want to allow multiple policies, we can choose to use the
         /// TreasuryCap here.
         supply: Supply<T>,
+
+        custom_resolvers: VecSet<ID>,
         allowed_actions: VecSet<TypeName>
     }
 
-    // === Token and it's temporary state ===
+    /// A resolver that can be used to resolve a specific action.
+    struct Resolver<phantom T, phantom Action> has key, store {
+        id: UID,
+    }
 
-    /// A single OWNED token. It is important to differentiate shared and owned balances to split
-    /// the functionalities and provide guarantees for both scenarios.
-    // struct CLToken<phantom T> has key {
-    //     id: UID,
-    //     balance: Balance<T>
-    // }
+    // === Storage Models ===
+
+    /// A single owner Token.
+    struct Token<phantom T> has key {
+        id: UID,
+        balance: Balance<T>
+    }
+
+    // === Token and it's temporary state ===
 
     /// A temporary struct which is used in between operations.
     /// We use it to generalize Owned and Shared balance operations.
@@ -124,7 +132,12 @@ module fungible_tokens::closed_loop {
         let policy_id = object::uid_to_inner(&policy_uid);
 
         (
-            CLPolicy { id: policy_uid, supply: balance::create_supply(otw), allowed_actions: vec_set::empty() },
+            CLPolicy {
+                id: policy_uid,
+                supply: balance::create_supply(otw),
+                allowed_actions: vec_set::empty(),
+                custom_resolvers: vec_set::empty()
+            },
             CoinIssuerCap { id: object::new(ctx), policy_id }
         )
     }
@@ -168,16 +181,30 @@ module fungible_tokens::closed_loop {
 
     // === Ownership and storage models ===
 
-    /// Transfer an existing token (without splitting!)
-    public fun transfer<T>(_token: TempToken<T>, _to: address, _ctx: &mut TxContext): ActionRequest<T, Transfer> {
-        // let amount = value(&token);
-        // sui::transfer::transfer(token, to);
-        // ActionRequest<Transfer> { amount };
-
-        abort ENotImplemented
+    /// Create a temporary token from an owned one.
+    public fun temp_from_owned<T>(owned: Token<T>, _ctx: &mut TxContext): TempToken<T> {
+        let Token { id, balance } = owned;
+        object::delete(id);
+        TempToken { balance }
     }
 
+    /// Create an owned token from a temporary one.
+    public fun temp_into_owned<T>(token: TempToken<T>, ctx: &mut TxContext) {
+        let TempToken { balance } = token;
+        let id = object::new(ctx);
 
+        sui::transfer::transfer(Token { id, balance }, sender(ctx));
+    }
+
+    /// Transfer an existing token (without splitting!)
+    public fun transfer<T>(token: TempToken<T>, to: address, ctx: &mut TxContext): ActionRequest<T, Transfer> {
+        let TempToken { balance } = token;
+        let amount = balance::value(&balance);
+        let owned = Token { id: object::new(ctx), balance };
+
+        sui::transfer::transfer(owned, to);
+        ActionRequest { amount }
+    }
 
     // === Danger Zone - Coin Conversion ===
 
@@ -200,8 +227,23 @@ module fungible_tokens::closed_loop {
 
     // === ActionRequest resolution ===
 
+    /// Create a custom resolver for a policy (unlike default when an action is allowed in the policy by default).
+    public fun create_resolver<T, Action>(_cap: &CoinIssuerCap<T>, policy: &mut CLPolicy<T>, ctx: &mut TxContext): Resolver<T, Action> {
+        let id = object::new(ctx);
+        let resolver_id = object::uid_to_inner(&policy.id);
+
+        vec_set::insert(&mut policy.custom_resolvers, resolver_id);
+
+        Resolver { id }
+    }
+
+    /// Resolve an action request using a custom resolver.
+    public fun resolve_custom<T, Action>(resolver: &Resolver<T, Action>, req: ActionRequest<T, Action>) {
+        let ActionRequest { amount: _ } = req;
+    }
+
     /// Resolve an action request if it is allowed.
-    public fun resolve<T, Action>(policy: &mut CLPolicy<T>, req: ActionRequest<T, Action>) {
+    public fun resolve_default<T, Action>(policy: &mut CLPolicy<T>, req: ActionRequest<T, Action>) {
         assert!(vec_set::contains(&policy.allowed_actions, &type_name::get<Action>()), ENotAllowed);
         let ActionRequest { amount: _ } = req;
     }
@@ -233,22 +275,86 @@ module fungible_tokens::closed_loop {
 }
 
 #[test_only]
-module fungible_tokens::bonus {
+/// Create an in-game economy where users can:
+///
+/// - freely transfer tokens between each other
+/// - split and merge any received tokens together into one
+module fungible_tokens::game_coin {
     use sui::tx_context::{sender, TxContext};
-    use sui::object;
+    use fungible_tokens::closed_loop::{
+        Self as cl,
+        Split,
+        Join,
+        Burn,
+        Transfer
+    };
 
-    use fungible_tokens::closed_loop;
+    /// The Token type for the in-game economy.
+    struct GAME_COIN has drop {}
 
-    struct BONUS has drop {}
+    /// In the module initializer we create a new CL
+    fun init(otw: GAME_COIN, ctx: &mut TxContext) {
+        let (policy, owner_cap) = cl::new_token(otw, ctx);
 
-    /// Create a new Token with a policy. Allow transfers.
-    fun init(otw: BONUS, ctx: &mut TxContext) {
-        let (policy, cap) = closed_loop::new_token(otw, ctx);
+        cl::allow<GAME_COIN, Join>(&owner_cap, &mut policy);
+        cl::allow<GAME_COIN, Burn>(&owner_cap, &mut policy);
+        cl::allow<GAME_COIN, Split>(&owner_cap, &mut policy);
+        cl::allow<GAME_COIN, Transfer>(&owner_cap, &mut policy);
 
+        sui::transfer::public_share_object(policy);
+        sui::transfer::public_transfer(owner_cap, sender(ctx));
+    }
+}
 
+#[test_only]
+/// Using the GAME_COIN token, this module implements a reward system where an
+/// admin (CoinIssuer) can reward players with tokens. The tokens can then be
+/// spent in game to get some benefits (using a dummy object).
+///
+module fungible_tokens::game_economy {
+    use sui::tx_context::TxContext;
 
-        let token = closed_loop::mint(policy, 100, ctx);
-        closed_loop::transfer(token, to, ctx);
+    use fungible_tokens::closed_loop::{
+        Self as cl,
+        CLPolicy,
+        TempToken,
+        CoinIssuerCap,
+    };
+
+    use fungible_tokens::game_coin::GAME_COIN;
+
+    /// The Token type for the in-game economy.
+    /// No precision, no decimals.
+    const REWARD: u64 = 50;
+
+    /// The reward players get for 100 coins.
+    struct Dummy has drop {}
+
+    /// Reward the player with 50 tokens. Once user receives two rewards, they
+    /// can spend them to get a Dummy object.
+    public fun reward_player(
+        cap: &CoinIssuerCap<GAME_COIN>,
+        policy: &mut CLPolicy<GAME_COIN>,
+        player: address,
+        ctx: &mut TxContext
+    ) {
+        let (reward, mint_req) = cl::mint(policy, REWARD, ctx);
+        let transfer_req = cl::transfer(reward, player, ctx);
+
+        cl::resolve_as_owner(cap, mint_req);
+        cl::resolve_as_owner(cap, transfer_req);
     }
 
+    /// Purchase a dummy object for 100 coins.
+    ///
+    /// Important: for simplicity and for working with default resolver, we allow anyone burn
+    /// the token, be it used for purchasing or not. 
+    public fun purchase_dummy(
+        policy: &mut CLPolicy<GAME_COIN>,
+        coin: TempToken<GAME_COIN>,
+        ctx: &mut TxContext
+    ) {
+        let (burn_req) = cl::burn(policy, coin, ctx);
+        cl::resolve_default(policy, burn_req);
+    }
 }
