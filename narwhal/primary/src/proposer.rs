@@ -10,7 +10,7 @@ use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::{BTreeMap, VecDeque};
 use std::{cmp::Ordering, sync::Arc};
 use storage::{CertificateStore, ProposerStore};
-use tokio::time::{sleep_until, Instant, self};
+use tokio::time::{self, sleep_until, Instant};
 use tokio::{
     sync::{oneshot, watch},
     task::JoinHandle,
@@ -235,10 +235,7 @@ impl Proposer {
             let Some((round, digest)) = self.certificate_store.prev_round_and_digest(id, this_round)? else {
                 continue;
             };
-            // TODO: pass in GC depth.
-            if round + 50 > this_round {
-                *entry = Some((round, digest));
-            }
+            *entry = Some((round, digest));
         }
 
         let header = Header::new(
@@ -433,7 +430,7 @@ impl Proposer {
                 && enough_parents
                 && opt_latest_header.is_none();
 
-            debug!(
+            info!(
                 "Proposer loop starts: round={} enough_parents={} enough_digests={} advance={} max_delay_timed_out={} min_delay_timed_out={} should_create_header={}", 
                 self.round, enough_parents, enough_digests, advance, max_delay_timed_out, min_delay_timed_out, should_create_header
             );
@@ -506,7 +503,10 @@ impl Proposer {
             let notify_certificate = async {
                 match &opt_latest_header {
                     Some(header) => {
-                        let result = self.certificate_store.notify_read(CertificateDigest(header.digest().0)).await;
+                        let result = self
+                            .certificate_store
+                            .notify_read(CertificateDigest(header.digest().0))
+                            .await;
                         match result {
                             Ok(_) => true,
                             Err(e) => {
@@ -514,7 +514,7 @@ impl Proposer {
                                 false
                             }
                         }
-                    },
+                    }
                     None => false,
                 }
             };
@@ -528,9 +528,9 @@ impl Proposer {
 
                     // Remove committed headers from the list of pending
                     let mut max_committed_round = 0;
-                    for round in commit_headers {
-                        max_committed_round = max_committed_round.max(round);
-                        let Some(_) = self.proposed_headers.remove(&round) else {
+                    for round in &commit_headers {
+                        max_committed_round = max_committed_round.max(*round);
+                        let Some(_) = self.proposed_headers.remove(round) else {
                             info!("Own committed header not found at round {round}, probably because of restarts.");
                             // There can still be later committed headers in proposed_headers.
                             continue;
@@ -568,7 +568,7 @@ impl Proposer {
                             self.proposed_headers.remove(round);
                         }
 
-                        debug!(
+                        warn!(
                             "Retransmit {} batches in undelivered headers {:?} at commit round {:?}, remaining headers {}",
                             num_to_resend,
                             retransmit_rounds,
