@@ -173,7 +173,7 @@ pub struct AuthorityPerEpochStore {
     /// a metric that doesn't have to be available for each epoch, and it's only used during
     /// the last few seconds of an epoch.
     epoch_close_time: RwLock<Option<Instant>>,
-    metrics: Arc<EpochMetrics>,
+    pub metrics: Arc<EpochMetrics>,
     epoch_start_configuration: Arc<EpochStartConfiguration>,
 
     /// Execution state that has to restart at each epoch change

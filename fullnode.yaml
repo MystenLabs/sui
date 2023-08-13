@@ -1,0 +1,61 @@
+# Update this value to the location you want Sui to store its database
+db-path: "suidb"
+
+network-address: "/dns/localhost/tcp/8080/http"
+metrics-address: "0.0.0.0:9184"
+# this address is also used for web socket connections
+json-rpc-address: "0.0.0.0:9000"
+enable-event-processing: true
+
+genesis:
+  # Update this to the location of where the genesis file is stored
+  genesis-file-location: "genesis.blob"
+
+authority-store-pruning-config:
+  num-latest-epoch-dbs-to-retain: 3
+  epoch-db-pruning-period-secs: 3600
+  num-epochs-to-retain: 1
+  max-checkpoints-in-batch: 10
+  max-transactions-in-batch: 1000
+  use-range-deletion: true
+  pruning-run-delay-seconds: 60
+
+
+state-archive-read-config:
+  - object-store-config:
+      object-store: "S3"
+      # Use mysten-testnet-archives for testnet
+      # Use mysten-mainnet-archives for mainnet
+      bucket: "mysten-mainnet-archives"
+      # Use your AWS account access key id
+      aws-access-key-id: "AKIAVFGSLW7OYRHSI45J"
+      # Use your AWS account secret access key
+      aws-secret-access-key: "CasvEFj+Bbtw3II+IQjFOPuyAKGzOQHymdf5531b"
+      aws-region: "us-west-2"
+      object-store-connection-limit: 20
+    # How many objects to read ahead when catching up
+    concurrency: 5
+    # Whether to prune local state based on latest checkpoint in archive.
+    # This should stay false for most use cases
+    use-for-pruning-watermark: false
+
+p2p-config:
+  seed-peers:
+    - address: /dns/icn-00.mainnet.sui.io/udp/8084
+      peer-id: 303f1f35afc9a6f82f8d21724f44e1245f4d8eca0806713a07c525dadda95a66
+    - address: /dns/icn-01.mainnet.sui.io/udp/8084
+      peer-id: cb7ce193cf7a41e9cc2f99e65dd1487b6314a57c74be42cc8c9225b203301812
+    - address: /dns/mel-00.mainnet.sui.io/udp/8084
+      peer-id: d32b55bdf1737ec415df8c88b3bf91e194b59ee3127e3f38ea46fd88ba2e7849
+    - address: /dns/mel-01.mainnet.sui.io/udp/8084
+      peer-id: bbf3be337fc16614a1953da83db729abfdc40596e197f36fe408574f7c9b780e
+    - address: /dns/ewr-00.mainnet.sui.io/udp/8084
+      peer-id: c7bf6cb93ca8fdda655c47ebb85ace28e6931464564332bf63e27e90199c50ee
+    - address: /dns/ewr-01.mainnet.sui.io/udp/8084
+      peer-id: 3227f8a05f0faa1a197c075d31135a366a1c6f3d4872cb8af66c14dea3e0eb66
+    - address: /dns/sjc-01.mainnet.sui.io/udp/8084
+      peer-id: af1d5d8468b3612ac2b6ff3ca91e99a71390dbe5b83dea9f6ae2da708d689227
+    - address: /dns/lhr-00.mainnet.sui.io/udp/8084
+      peer-id: c619a5e0f8f36eac45118c1f8bda28f0f508e2839042781f1d4a9818043f732c
+    - address: /dns/lhr-01.mainnet.sui.io/udp/8084
+      peer-id: 53dcedf250f73b1ec83250614498947db00d17c0181020fcdb7b6db12afbc175

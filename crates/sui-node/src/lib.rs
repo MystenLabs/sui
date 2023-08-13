@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 
 use anemo::Network;
 use anemo_tower::callback::CallbackLayer;
@@ -1125,6 +1126,8 @@ impl SuiNode {
             &self.registry_service.default_registry(),
         );
 
+        let mut now = Instant::now();
+        let mut prev_num_tx = 0;
         loop {
             let cur_epoch_store = self.state.load_epoch_store_one_call_per_task();
 
@@ -1156,6 +1159,7 @@ impl SuiNode {
             }
 
             checkpoint_executor.run_epoch(cur_epoch_store.clone()).await;
+
             let latest_system_state = self
                 .state
                 .get_sui_system_state_object_during_reconfig()
@@ -1321,6 +1325,23 @@ impl SuiNode {
             }
 
             info!("Reconfiguration finished");
+            // print TPS at end of epoch
+            let elapsed = now.elapsed();
+            let epoch_id = cur_epoch_store.epoch();
+            let new_num_tx = self
+                .checkpoint_store
+                .get_epoch_last_checkpoint(epoch_id)
+                .expect("Can't get last checkpoint of epoch")
+                .expect("Can't get last checkpoint")
+                .network_total_transactions;
+            let delta_num_tx = new_num_tx - prev_num_tx;
+            prev_num_tx = new_num_tx;
+            println!(
+                "#epoch TPS:{}, {}",
+                cur_epoch_store.epoch(),
+                1000.0 * delta_num_tx as f64 / elapsed.as_millis() as f64
+            );
+            now = Instant::now();
         }
     }
 
