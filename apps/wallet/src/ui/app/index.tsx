@@ -56,6 +56,7 @@ import { useAppDispatch, useAppSelector } from '_hooks';
 import { setNavVisibility } from '_redux/slices/app';
 import { isLedgerAccountSerializedUI } from '_src/background/accounts/LedgerAccount';
 import { type AccountsPublicInfoUpdates } from '_src/background/keyring/accounts';
+import { persistableStorage } from '_src/shared/analytics/amplitude';
 
 const HIDDEN_MENU_PATHS = [
 	'/nft-details',
@@ -86,6 +87,15 @@ const App = () => {
 	);
 	const backgroundClient = useBackgroundClient();
 	const { connectToLedger, suiLedgerClient } = useSuiLedgerClient();
+	useEffect(() => {
+		if (accounts?.length) {
+			// The user has accepted our terms of service after their primary
+			// account has been initialized (either by creating a new wallet
+			// or importing a previous account). This means we've gained
+			// consent and can persist device data to cookie storage
+			persistableStorage.persist();
+		}
+	}, [accounts]);
 	useEffect(() => {
 		// update ledger accounts without the public key
 		(async () => {

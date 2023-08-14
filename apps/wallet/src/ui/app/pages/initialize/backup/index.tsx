@@ -12,8 +12,6 @@ import { useLockedGuard } from '_app/wallet/hooks';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
 import { useAppDispatch } from '_hooks';
-import { loadEntropyFromKeyring } from '_redux/slices/account';
-import { entropyToMnemonic, toEntropy } from '_shared/utils/bip39';
 import { HideShowDisplayBox } from '_src/ui/app/components/HideShowDisplayBox';
 import { PasswordInputDialog } from '_src/ui/app/components/PasswordInputDialog';
 
@@ -24,7 +22,7 @@ export type BackupPageProps = {
 const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
 	const guardsLoading = useLockedGuard(false);
 	const [loading, setLoading] = useState(true);
-	const [mnemonic, setLocalMnemonic] = useState<string[] | null>(null);
+	const [mnemonic, _setLocalMnemonic] = useState<string[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [passwordCopied, setPasswordCopied] = useState(false);
 	const { state } = useLocation();
@@ -38,17 +36,8 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
 				return;
 			}
 			setLoading(true);
-			try {
-				setLocalMnemonic(
-					entropyToMnemonic(toEntropy(await dispatch(loadEntropyFromKeyring({})).unwrap())).split(
-						' ',
-					),
-				);
-			} catch (e) {
-				setError((e as Error).message || 'Something is wrong, Recovery Phrase is empty.');
-			} finally {
-				setLoading(false);
-			}
+			setError('Not implemented yet');
+			setLoading(false);
 		})();
 	}, [dispatch, mode, guardsLoading, isOnboardingFlow, passwordConfirmed]);
 	useEffect(() => {

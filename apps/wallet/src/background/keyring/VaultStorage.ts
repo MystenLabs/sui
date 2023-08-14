@@ -173,4 +173,7 @@ class VaultStorageClass {
 	}
 }
 
+/**
+ * @deprecated
+ */
 export const VaultStorage = new VaultStorageClass();

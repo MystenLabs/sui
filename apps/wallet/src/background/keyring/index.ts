@@ -293,11 +293,6 @@ export class Keyring {
 			} else if (isKeyringPayload(payload, 'unlock') && payload.args) {
 				await this.unlock(payload.args.password);
 				uiConnection.send(createMessage({ type: 'done' }, id));
-			} else if (isKeyringPayload(payload, 'walletStatusUpdate')) {
-				// wait to avoid ui showing locked and then unlocked screen
-				// ui waits until it receives this status to render
-				await this.reviveDone;
-				uiConnection.sendLockedStatusUpdate(this.isLocked, id);
 			} else if (isKeyringPayload(payload, 'lock')) {
 				this.lock();
 				uiConnection.send(createMessage({ type: 'done' }, id));

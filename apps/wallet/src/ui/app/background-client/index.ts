@@ -22,12 +22,10 @@ import { isSetNetworkPayload, type SetNetworkPayload } from '_payloads/network';
 import { isPermissionRequests } from '_payloads/permissions';
 import { isUpdateActiveOrigin } from '_payloads/tabs/updateActiveOrigin';
 import { isGetTransactionRequestsResponse } from '_payloads/transactions/ui/GetTransactionRequestsResponse';
-import { setKeyringStatus } from '_redux/slices/account';
 import { setActiveOrigin, changeActiveNetwork } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
 import { type MnemonicSerializedUiAccount } from '_src/background/accounts/MnemonicAccount';
-import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
 import { type AccountsPublicInfoUpdates } from '_src/background/keyring/accounts';
 import {
 	type MethodPayload,
@@ -76,7 +74,6 @@ export class BackgroundClient {
 		return Promise.all([
 			this.sendGetPermissionRequests(),
 			this.sendGetTransactionRequests(),
-			this.getWalletStatus(),
 			this.loadFeatures(),
 			this.getNetwork(),
 		]).then(() => undefined);
@@ -295,18 +292,6 @@ export class BackgroundClient {
 					throw new Error('Error unknown response for derive account message');
 				}),
 			),
-		);
-	}
-
-	importLedgerAccounts(ledgerAccounts: SerializedLedgerAccount[]) {
-		return lastValueFrom(
-			this.sendMessage(
-				createMessage<KeyringPayload<'importLedgerAccounts'>>({
-					type: 'keyring',
-					method: 'importLedgerAccounts',
-					args: { ledgerAccounts },
-				}),
-			).pipe(take(1)),
 		);
 	}
 
@@ -576,17 +561,6 @@ export class BackgroundClient {
 		);
 	}
 
-	private getWalletStatus() {
-		return lastValueFrom(
-			this.sendMessage(
-				createMessage<KeyringPayload<'walletStatusUpdate'>>({
-					type: 'keyring',
-					method: 'walletStatusUpdate',
-				}),
-			).pipe(take(1)),
-		);
-	}
-
 	private loadFeatures() {
 		return lastValueFrom(
 			this.sendMessage(
@@ -619,11 +593,6 @@ export class BackgroundClient {
 			action = setTransactionRequests(payload.txRequests);
 		} else if (isUpdateActiveOrigin(payload)) {
 			action = setActiveOrigin(payload);
-		} else if (
-			isKeyringPayload<'walletStatusUpdate'>(payload, 'walletStatusUpdate') &&
-			payload.return
-		) {
-			action = setKeyringStatus(payload.return);
 		} else if (isLoadedFeaturesPayload(payload)) {
 			growthbook.setAttributes(payload.attributes);
 			growthbook.setFeatures(payload.features);

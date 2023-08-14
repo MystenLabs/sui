@@ -13,7 +13,7 @@ import { getAllAccounts } from './accounts';
 import { accountsEvents } from './accounts/events';
 import { Connections } from './connections';
 import Keyring from './keyring';
-import { deleteAccountsPublicInfo, getStoredAccountsPublicInfo } from './keyring/accounts';
+import { getStoredAccountsPublicInfo } from './keyring/accounts';
 import * as Qredo from './qredo';
 import { initSentry } from './sentry';
 import { isSessionStorageSupported } from './storage-utils';
@@ -85,23 +85,6 @@ Permissions.on('connectedAccountsChanged', async ({ origin, accounts }) => {
 			})),
 		},
 	});
-});
-
-const keyringStatusCallback = () => {
-	connections.notifyUI({
-		event: 'lockStatusUpdate',
-		isLocked: Keyring.isLocked,
-	});
-};
-Keyring.on('lockedStatusUpdate', keyringStatusCallback);
-Keyring.on('accountsChanged', keyringStatusCallback);
-Keyring.on('activeAccountChanged', keyringStatusCallback);
-
-Keyring.on('accountsChanged', async (accounts) => {
-	await deleteAccountsPublicInfo({
-		toKeep: accounts.map(({ address }) => address),
-	});
-	await Permissions.ensurePermissionAccountsUpdated(accounts);
 });
 
 accountsEvents.on('accountsChanged', async () => {
