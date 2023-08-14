@@ -1,5 +1,19 @@
 # @mysten/wallet-kit-core
 
+## 0.6.0
+
+### Minor Changes
+
+- 85f785c97: Rebuild wallet kit and wallet standard to no longer use wallet adapters.
+
+### Patch Changes
+
+- Updated dependencies [ba8e3b857]
+- Updated dependencies [f4b7b3474]
+- Updated dependencies [85f785c97]
+  - @mysten/sui.js@0.41.0
+  - @mysten/wallet-standard@0.7.0
+
 ## 0.5.0
 
 ### Minor Changes
