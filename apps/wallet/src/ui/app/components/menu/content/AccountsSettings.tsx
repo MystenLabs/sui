@@ -11,7 +11,7 @@ import { useNextMenuUrl } from '_components/menu/hooks';
 import { AppType } from '_redux/slices/app/AppType';
 import { ampli } from '_src/shared/analytics/ampli';
 import { useAppSelector } from '_src/ui/app/hooks';
-import { useAccounts } from '_src/ui/app/hooks/accounts-v2/useAccounts';
+import { useAccounts } from '_src/ui/app/hooks/useAccounts';
 import { useDeriveNextAccountMutation } from '_src/ui/app/hooks/useDeriveNextAccountMutation';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 

@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { AccountGroup } from './AccountGroup';
 
 import Overlay from '../../../components/overlay';
-import { useAccounts } from '../../../hooks/accounts-v2/useAccounts';
+import { useAccounts } from '../../../hooks/useAccounts';
 
 export function ManageAccountsPage() {
 	const { data: accounts = [] } = useAccounts();

@@ -4,7 +4,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { useAccounts } from './accounts-v2/useAccounts';
+import { useAccounts } from './useAccounts';
 import { useRestrictedGuard } from './useRestrictedGuard';
 
 export default function useInitializedGuard(initializedRequired: boolean) {

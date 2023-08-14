@@ -10,9 +10,9 @@ import { type QueryKey } from '@tanstack/react-query';
 import { lastValueFrom, map, take } from 'rxjs';
 
 import { growthbook } from '../experimentation/feature-gating';
+import { accountsQueryKey } from '../helpers/query-client-keys';
 import { queryClient } from '../helpers/queryClient';
-import { accountsQueryKey } from '../hooks/accounts-v2/constants';
-import { accountSourcesQueryKey } from '../hooks/accounts-v2/useAccountSources';
+import { accountSourcesQueryKey } from '../hooks/useAccountSources';
 import { createMessage } from '_messages';
 import { PortStream } from '_messaging/PortStream';
 import { type BasePayload } from '_payloads';

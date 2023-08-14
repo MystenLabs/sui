@@ -20,18 +20,19 @@ import { createValidationSchema } from './utils/validation';
 import { QredoActionIgnoredByUser } from '../../QredoSigner';
 import Alert from '../../components/alert';
 import { getSignerOperationErrorMessage } from '../../helpers/errorMessages';
+import { useActiveAccount } from '../../hooks/useActiveAccount';
 import { useQredoTransaction } from '../../hooks/useQredoTransaction';
+import { useSigner } from '../../hooks/useSigner';
 import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
 import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
-import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout';
 import { Collapsible } from '_app/shared/collapse';
 import { Text } from '_app/shared/text';
 import Loading from '_components/loading';
 import { parseAmount } from '_helpers';
-import { useSigner, useCoinsReFetchingConfig } from '_hooks';
+import { useCoinsReFetchingConfig } from '_hooks';
 import { Coin } from '_redux/slices/sui-objects/Coin';
 import { ampli } from '_src/shared/analytics/ampli';
 import { MIN_NUMBER_SUI_TO_STAKE } from '_src/shared/constants';
@@ -48,7 +49,8 @@ export type FormValues = typeof initialValues;
 
 function StakingCard() {
 	const coinType = SUI_TYPE_ARG;
-	const accountAddress = useActiveAddress();
+	const activeAccount = useActiveAccount();
+	const accountAddress = activeAccount?.address;
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
 	const { data: suiBalance, isLoading: loadingSuiBalances } = useGetCoinBalance(
 		SUI_TYPE_ARG,
@@ -102,7 +104,7 @@ function StakingCard() {
 	}, [stakeData]);
 
 	const navigate = useNavigate();
-	const signer = useSigner();
+	const signer = useSigner(activeAccount);
 	const { clientIdentifier, notificationModal } = useQredoTransaction();
 
 	const stakeToken = useMutation({

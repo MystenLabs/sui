@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { AccountListItem, type AccountItemProps } from './AccountListItem';
-import { useAccounts } from '../hooks/accounts-v2/useAccounts';
+import { useAccounts } from '../hooks/useAccounts';
 
 export type AccountListProps = {
 	onAccountSelected: AccountItemProps['onAccountSelected'];

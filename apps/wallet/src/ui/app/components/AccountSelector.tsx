@@ -7,8 +7,8 @@ import { ChevronDown12, Copy12 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js/utils';
 
 import { AccountList } from './AccountList';
-import { useAccounts } from '../hooks/accounts-v2/useAccounts';
-import { useActiveAccount } from '../hooks/accounts-v2/useActiveAccount';
+import { useActiveAddress } from '../hooks';
+import { useAccounts } from '../hooks/useAccounts';
 import { useBackgroundClient } from '../hooks/useBackgroundClient';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import { ButtonConnectedTo } from '../shared/ButtonConnectedTo';
@@ -17,8 +17,7 @@ import { ampli } from '_src/shared/analytics/ampli';
 
 export function AccountSelector() {
 	const { data: allAccounts } = useAccounts();
-	const activeAccount = useActiveAccount();
-	const activeAddress = activeAccount?.address || '';
+	const activeAddress = useActiveAddress() || '';
 	const copyToAddress = useCopyToClipboard(activeAddress, {
 		copySuccessMessage: 'Address copied',
 	});

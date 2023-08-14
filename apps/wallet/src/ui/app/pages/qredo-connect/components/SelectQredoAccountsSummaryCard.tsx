@@ -9,7 +9,7 @@ import Alert from '_components/alert';
 import Loading from '_components/loading';
 import { isQredoAccountSerializedUI } from '_src/background/accounts/QredoAccount';
 import { type Wallet } from '_src/shared/qredo-api';
-import { useAccounts } from '_src/ui/app/hooks/accounts-v2/useAccounts';
+import { useAccounts } from '_src/ui/app/hooks/useAccounts';
 import { Link } from '_src/ui/app/shared/Link';
 
 export type SelectQredoAccountsSummaryCardProps = {

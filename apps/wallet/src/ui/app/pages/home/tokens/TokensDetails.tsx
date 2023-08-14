@@ -36,12 +36,11 @@ import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
 import { filterAndSortTokenBalances } from '_helpers';
-import { useAppSelector, useCoinsReFetchingConfig } from '_hooks';
+import { useActiveAddress, useAppSelector, useCoinsReFetchingConfig } from '_hooks';
 import { ampli } from '_src/shared/analytics/ampli';
 import { API_ENV } from '_src/shared/api-env';
 import { FEATURES } from '_src/shared/experimentation/features';
 import { AccountsList } from '_src/ui/app/components/accounts/AccountsList';
-import { useActiveAccount } from '_src/ui/app/hooks/accounts-v2/useActiveAccount';
 import { usePinnedCoinTypes } from '_src/ui/app/hooks/usePinnedCoinTypes';
 import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
 import PageTitle from '_src/ui/app/shared/PageTitle';
@@ -169,15 +168,15 @@ function MyTokens({
 function TokenDetails({ coinType }: TokenDetailsProps) {
 	const [interstitialDismissed, setInterstitialDismissed] = useState<boolean>(false);
 	const activeCoinType = coinType || SUI_TYPE_ARG;
-	const activeAccount = useActiveAccount();
-	const { data: domainName } = useResolveSuiNSName(activeAccount?.address);
+	const activeAccountAddress = useActiveAddress();
+	const { data: domainName } = useResolveSuiNSName(activeAccountAddress);
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
 	const {
 		data: coinBalance,
 		isError,
 		isLoading,
 		isFetched,
-	} = useGetCoinBalance(activeCoinType, activeAccount?.address, refetchInterval, staleTime);
+	} = useGetCoinBalance(activeCoinType, activeAccountAddress, refetchInterval, staleTime);
 	const { apiEnv } = useAppSelector((state) => state.app);
 	const { request } = useAppsBackend();
 	const { data } = useQuery({
@@ -197,7 +196,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 		isLoading: coinBalancesLoading,
 		isFetched: coinBalancesFetched,
 	} = useGetAllBalances(
-		activeAccount?.address,
+		activeAccountAddress,
 		staleTime,
 		refetchInterval,
 		filterAndSortTokenBalances,
@@ -230,7 +229,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 		);
 	}
 	const accountHasSui = coinBalances?.some(({ coinType }) => coinType === SUI_TYPE_ARG);
-	if (!activeAccount) {
+	if (!activeAccountAddress) {
 		return null;
 	}
 	return (
@@ -256,7 +255,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 				>
 					<AccountsList />
 					<div className="flex flex-col">
-						<PortfolioName name={domainName ?? formatAddress(activeAccount?.address)} />
+						<PortfolioName name={domainName ?? formatAddress(activeAccountAddress)} />
 						<div
 							data-testid="coin-balance"
 							className="bg-sui/10 rounded-2xl py-5 px-4 flex flex-col w-full gap-3 items-center mt-4"
@@ -315,7 +314,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 							</div>
 							<div className="w-full">
 								{activeCoinType === SUI_TYPE_ARG ? (
-									<TokenIconLink disabled={!tokenBalance} accountAddress={activeAccount.address} />
+									<TokenIconLink disabled={!tokenBalance} accountAddress={activeAccountAddress} />
 								) : null}
 							</div>
 						</div>

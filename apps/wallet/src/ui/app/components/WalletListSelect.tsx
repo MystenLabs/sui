@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react';
 
 import { SummaryCard } from './SummaryCard';
 import { WalletListSelectItem, type WalletListSelectItemProps } from './WalletListSelectItem';
-import { useAccounts } from '../hooks/accounts-v2/useAccounts';
+import { useAccounts } from '../hooks/useAccounts';
 import { useDeriveNextAccountMutation } from '../hooks/useDeriveNextAccountMutation';
 import { Link } from '../shared/Link';
 

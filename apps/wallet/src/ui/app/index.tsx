@@ -1,9 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEffect } from 'react';
+import { toB64 } from '@mysten/sui.js/utils';
+import { useEffect, useMemo } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
+import { useSuiLedgerClient } from './components/ledger/SuiLedgerClientProvider';
+import { useAccounts } from './hooks/useAccounts';
+import { useBackgroundClient } from './hooks/useBackgroundClient';
 import { useInitialPageView } from './hooks/useInitialPageView';
 
 import { useStorageMigrationStatus } from './hooks/useStorageMigrationStatus';
@@ -50,6 +54,8 @@ import { Staking } from './staking/home';
 import { useAppDispatch, useAppSelector } from '_hooks';
 
 import { setNavVisibility } from '_redux/slices/app';
+import { isLedgerAccountSerializedUI } from '_src/background/accounts/LedgerAccount';
+import { type AccountsPublicInfoUpdates } from '_src/background/keyring/accounts';
 
 const HIDDEN_MENU_PATHS = [
 	'/nft-details',
@@ -73,6 +79,47 @@ const App = () => {
 	}, [location, dispatch]);
 
 	useInitialPageView();
+	const { data: accounts } = useAccounts();
+	const allLedgerWithoutPublicKey = useMemo(
+		() => accounts?.filter(isLedgerAccountSerializedUI).filter(({ publicKey }) => !publicKey) || [],
+		[accounts],
+	);
+	const backgroundClient = useBackgroundClient();
+	const { connectToLedger, suiLedgerClient } = useSuiLedgerClient();
+	useEffect(() => {
+		// update ledger accounts without the public key
+		(async () => {
+			if (allLedgerWithoutPublicKey.length) {
+				try {
+					if (!suiLedgerClient) {
+						await connectToLedger();
+						return;
+					}
+					const updates: AccountsPublicInfoUpdates = [];
+					for (const { derivationPath, address } of allLedgerWithoutPublicKey) {
+						if (derivationPath) {
+							try {
+								const { publicKey } = await suiLedgerClient.getPublicKey(derivationPath);
+								updates.push({
+									accountAddress: address,
+									changes: {
+										publicKey: toB64(publicKey),
+									},
+								});
+							} catch (e) {
+								// do nothing
+							}
+						}
+					}
+					if (updates.length) {
+						await backgroundClient.updateAccountsPublicInfo(updates);
+					}
+				} catch (e) {
+					// do nothing
+				}
+			}
+		})();
+	}, [allLedgerWithoutPublicKey, suiLedgerClient, backgroundClient, connectToLedger]);
 
 	const storageMigration = useStorageMigrationStatus();
 	if (storageMigration.isLoading || !storageMigration?.data) {

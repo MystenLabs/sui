@@ -7,12 +7,12 @@ import { useMemo, useState } from 'react';
 import { AccountListItem } from './AccountListItem';
 import { FooterLink } from './FooterLink';
 import { UnlockAccountModal } from './UnlockAccountModal';
-import { useActiveAccount } from '../../hooks/accounts-v2/useActiveAccount';
+import { useActiveAccount } from '../../hooks/useActiveAccount';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { Heading } from '../../shared/heading';
 
 import { ampli } from '_src/shared/analytics/ampli';
-import { useAccounts } from '_src/ui/app/hooks/accounts-v2/useAccounts';
+import { useAccounts } from '_src/ui/app/hooks/useAccounts';
 import { Collapsible } from '_src/ui/app/shared/collapse';
 
 export function AccountsList() {
