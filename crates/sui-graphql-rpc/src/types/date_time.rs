@@ -7,7 +7,8 @@ use async_graphql::*;
 // Encoded as a 64-bit unix timestamp
 struct DateTime(u64);
 
-/// TODO: implement DateTime scalar type
+// TODO: unit tests
+// TODO: implement DateTime scalar type
 #[Scalar]
 impl ScalarType for DateTime {
     fn parse(_value: Value) -> InputValueResult<Self> {

@@ -83,13 +83,13 @@ impl Object {
     }
 
     async fn owner(&self) -> Option<Owner> {
-        self.owner.as_ref().map(|q| Owner { address: q.clone() })
+        self.owner.as_ref().map(|q| Owner { address: *q })
     }
 
     // =========== Owner interface methods =============
 
     pub async fn location(&self) -> SuiAddress {
-        self.address.clone()
+        self.address
     }
 
     pub async fn object_connection(
