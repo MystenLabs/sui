@@ -29,6 +29,27 @@ pub(crate) struct Object {
     pub kind: Option<ObjectKind>,
 }
 
+pub(crate) struct ObjectPayload {
+    pub object: Option<Object>,
+    pub errors: Option<String>,
+}
+
+impl ObjectPayload {
+    pub fn with_error(errors: String) -> Self {
+        Self {
+            object: None,
+            errors: Some(errors),
+        }
+    }
+
+    pub fn with_object(object: Object) -> Self {
+        Self {
+            object: Some(object),
+            errors: None,
+        }
+    }
+}
+
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 pub(crate) enum ObjectKind {
     Owned,
@@ -107,7 +128,7 @@ impl Object {
         last: Option<u64>,
         before: Option<String>,
         filter: Option<ObjectFilter>,
-    ) -> Result<Connection<String, Object>> {
+    ) -> Result<Connection<String, ObjectPayload>> {
         fetch_owned_objs(
             ctx.data_unchecked::<sui_sdk::SuiClient>(),
             &self.address,
@@ -172,5 +193,18 @@ impl Object {
         before: Option<String>,
     ) -> Option<NameServiceConnection> {
         unimplemented!()
+    }
+}
+
+#[allow(unreachable_code)]
+#[allow(unused_variables)]
+#[Object]
+impl ObjectPayload {
+    async fn object(&self) -> Option<&Object> {
+        self.object.as_ref()
+    }
+
+    async fn errors(&self) -> Option<&String> {
+        self.errors.as_ref()
     }
 }

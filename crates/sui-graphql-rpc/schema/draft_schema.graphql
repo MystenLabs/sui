@@ -1118,7 +1118,12 @@ type ObjectConnection {
 
 type ObjectEdge {
   cursor: String
-  node: Object!
+  node: ObjectPayload!
+}
+
+type ObjectPayload {
+  object: Object
+  errors: String
 }
 
 # Event

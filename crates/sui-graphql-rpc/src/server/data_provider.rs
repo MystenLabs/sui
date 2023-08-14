@@ -15,7 +15,10 @@ use crate::types::protocol_config::ProtocolConfigAttr;
 use crate::types::protocol_config::ProtocolConfigFeatureFlag;
 use crate::types::protocol_config::ProtocolConfigs;
 use crate::types::transaction_block::TransactionBlock;
-use crate::types::{object::Object, sui_address::SuiAddress};
+use crate::types::{
+    object::{Object, ObjectPayload},
+    sui_address::SuiAddress,
+};
 use async_graphql::connection::{Connection, Edge};
 use async_graphql::*;
 use std::str::FromStr;
@@ -68,7 +71,7 @@ pub(crate) async fn fetch_owned_objs(
     last: Option<u64>,
     before: Option<String>,
     _filter: Option<ObjectFilter>,
-) -> Result<Connection<String, Object>> {
+) -> Result<Connection<String, ObjectPayload>> {
     if before.is_some() && after.is_some() {
         return Err(Error::CursorNoBeforeAfter.extend());
     }
@@ -96,17 +99,29 @@ pub(crate) async fn fetch_owned_objs(
         .get_owned_objects(native_owner, Some(query), cursor, count)
         .await?;
 
-    // TODO: support partial success/ failure responses
-        if n.error.is_some() {
-            return Err(
-                Error::CursorConnectionFetchFailed(n.error.as_ref().unwrap().to_string()).extend(),
-            .extend());
-        let g = n.data.unwrap();
-        let o = convert_obj(&g);
+    let mut connection = Connection::new(false, pg.has_next_page);
 
-        Edge::new(g.object_id.to_string(), o)
-    }));
-    Ok(connection)
+    connection.edges.extend(
+        pg.data
+            .into_iter()
+            .enumerate()
+            .map(|(idx, n)| {
+                if let Some(err) = &n.error {
+                    let cursor = "error_cursor".to_string();
+                    let errors = err.as_ref().to_string();
+                    Ok(Edge::new(cursor, ObjectPayload::with_error(errors)))
+                } else if let Some(g) = n.data {
+                    let object = convert_obj(&g);
+                    let cursor = g.object_id.to_string();
+                    Ok(Edge::new(cursor, ObjectPayload::with_object(object)))
+                } else {
+                    Err(CustomError::ClientFetch("Unexpected".to_string()).extend())
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+    );
+
+    Ok::<_, async_graphql::Error>(connection)
 }
 
 pub(crate) async fn fetch_balance(

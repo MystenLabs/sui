@@ -9,7 +9,7 @@ use super::{
     balance::{Balance, BalanceConnection},
     coin::CoinConnection,
     name_service::NameServiceConnection,
-    object::{Object, ObjectFilter},
+    object::{ObjectFilter, ObjectPayload},
     stake::StakeConnection,
     sui_address::SuiAddress,
     transaction_block::{TransactionBlockConnection, TransactionBlockFilter},
@@ -58,7 +58,7 @@ impl Address {
         last: Option<u64>,
         before: Option<String>,
         filter: Option<ObjectFilter>,
-    ) -> Result<Connection<String, Object>> {
+    ) -> Result<Connection<String, ObjectPayload>> {
         fetch_owned_objs(
             ctx.data_unchecked::<sui_sdk::SuiClient>(),
             &self.address,

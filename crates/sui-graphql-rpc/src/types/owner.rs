@@ -19,7 +19,7 @@ use super::address::Address;
     field(name = "location", type = "SuiAddress"),
     field(
         name = "object_connection",
-        type = "Option<Connection<String, Object>>",
+        type = "Option<Connection<String, ObjectPayload>>",
         arg(name = "first", type = "Option<u64>"),
         arg(name = "after", type = "Option<String>"),
         arg(name = "last", type = "Option<u64>"),
@@ -107,7 +107,7 @@ impl Owner {
         last: Option<u64>,
         before: Option<String>,
         filter: Option<ObjectFilter>,
-    ) -> Result<Connection<String, Object>> {
+    ) -> Result<Connection<String, ObjectPayload>> {
         fetch_owned_objs(
             ctx.data_unchecked::<sui_sdk::SuiClient>(),
             &self.address,
