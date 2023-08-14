@@ -101,9 +101,10 @@ export class ZkAccount
 		) {
 			throw new Error('Missing jwt data');
 		}
-		// based on jose typings aud can be an array
-		// we expect it to be string so here just doing a join if necessary
-		const aud = Array.isArray(decodedJWT.aud) ? decodedJWT.aud.join(' ') : decodedJWT.aud;
+		if (Array.isArray(decodedJWT.aud)) {
+			throw new Error('Not supported aud. Aud is an array, string was expected.');
+		}
+		const aud = decodedJWT.aud;
 		const claims: JwtSerializedClaims = {
 			email: decodedJWT.email,
 			fullName: String(decodedJWT.name || '') || null,
