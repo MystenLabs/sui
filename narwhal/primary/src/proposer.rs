@@ -803,7 +803,7 @@ impl Proposer {
         // if this node has somehow drifted a lot.
         if ((remaining_until_time_based_on_network + MIN_TIMEOUT_DRIFT) < remaining_until_timeout)
             || (remaining_until_timeout
-                < (remaining_until_time_based_on_network - MIN_TIMEOUT_DRIFT))
+                < (remaining_until_time_based_on_network.saturating_sub(MIN_TIMEOUT_DRIFT)))
         {
             debug!("Resetting min_delay to {remaining_until_time_based_on_network:?} vs {remaining_until_timeout:?}");
 
