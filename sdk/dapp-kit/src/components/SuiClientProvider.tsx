@@ -25,7 +25,7 @@ export interface SuiClientProviderProps<T extends NetworkConfigs> {
 }
 
 const DEFAULT_NETWORKS = {
-	devnet: { url: getFullnodeUrl('devnet') },
+	localnet: { url: getFullnodeUrl('localnet') },
 };
 
 const DEFAULT_CREATE_CLIENT = function createClient(
@@ -40,7 +40,7 @@ const DEFAULT_CREATE_CLIENT = function createClient(
 };
 
 export function SuiClientProvider<T extends NetworkConfigs>(props: SuiClientProviderProps<T>) {
-	const networks = props.networks ?? (DEFAULT_NETWORKS as never);
+	const networks = (props.networks ?? DEFAULT_NETWORKS) as T;
 	const createClient =
 		(props.createClient as typeof DEFAULT_CREATE_CLIENT) ?? DEFAULT_CREATE_CLIENT;
 
