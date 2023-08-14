@@ -64,9 +64,6 @@ CREATE INDEX objects_history_checkpoint_index ON objects_history (checkpoint);
 CREATE INDEX objects_history_id_version_index ON objects_history (object_id, version);
 CREATE INDEX objects_history_owner_index ON objects_history (owner_type, owner_address);
 CREATE INDEX objects_history_old_owner_index ON objects_history (old_owner_type, old_owner_address);
--- fast-path partition for the most recent objects before checkpoint, range is half-open.
--- partition name need to match regex of '.*(_partition_)\d+'.
-CREATE TABLE objects_history_fast_path_partition_0 PARTITION OF objects_history FOR VALUES FROM (-1) TO (0);
 CREATE TABLE objects_history_partition_0 PARTITION OF objects_history FOR VALUES FROM (0) TO (MAXVALUE);
 
 CREATE OR REPLACE FUNCTION objects_modified_func() RETURNS TRIGGER AS

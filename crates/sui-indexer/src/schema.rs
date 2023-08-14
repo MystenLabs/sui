@@ -299,13 +299,13 @@ diesel::table! {
 }
 
 diesel::table! {
-    transactions (id) {
+    transactions (id, checkpoint) {
         id -> Int8,
         #[max_length = 44]
         transaction_digest -> Varchar,
         #[max_length = 255]
         sender -> Varchar,
-        checkpoint_sequence_number -> Nullable<Int8>,
+        checkpoint -> Int8,
         timestamp_ms -> Nullable<Int8>,
         transaction_kind -> Text,
         transaction_count -> Int8,

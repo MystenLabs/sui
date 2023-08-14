@@ -242,6 +242,7 @@ pub trait IndexerStore {
         recipients: &[Recipient],
     ) -> Result<(), IndexerError>;
 
+    async fn advance_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError>;
     async fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError>;
     async fn get_network_total_transactions_previous_epoch(
         &self,

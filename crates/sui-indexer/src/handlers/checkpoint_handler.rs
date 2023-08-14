@@ -169,6 +169,7 @@ where
                 self.metrics.total_epoch_committed.inc();
                 info!("Persisted genesis epoch");
             } else {
+                self.state.advance_epoch(&epoch).await?;
                 // NOTE: when the channel is full, epoch_sender_guard will wait until the channel has space.
                 self.epoch_indexing_sender.send(epoch).await.map_err(|e| {
                     error!(
@@ -388,7 +389,7 @@ where
                 id: None,
                 transaction_digest: transaction_digest.base58_encode(),
                 sender: tx.sender().to_string(),
-                checkpoint_sequence_number: Some(*checkpoint_summary.sequence_number() as i64),
+                checkpoint: *checkpoint_summary.sequence_number() as i64,
                 timestamp_ms: Some(checkpoint_summary.timestamp_ms as i64),
                 transaction_kind: tx.kind().name().to_owned(),
                 transaction_count: tx.kind().num_commands() as i64,

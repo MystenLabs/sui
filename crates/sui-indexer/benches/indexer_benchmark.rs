@@ -105,7 +105,7 @@ fn create_transaction(sequence_number: i64) -> Transaction {
         id: None,
         transaction_digest: TransactionDigest::random().base58_encode(),
         sender: SuiAddress::random_for_testing_only().to_string(),
-        checkpoint_sequence_number: Some(sequence_number),
+        checkpoint: sequence_number,
         timestamp_ms: Some(Utc::now().timestamp_millis()),
         transaction_kind: "test".to_string(),
         transaction_count: 0,

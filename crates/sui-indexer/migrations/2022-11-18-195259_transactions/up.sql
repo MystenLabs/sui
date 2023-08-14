@@ -12,10 +12,10 @@ END $$;
 
 
 CREATE TABLE transactions (
-    id                          BIGSERIAL PRIMARY KEY,
+    id                          BIGSERIAL    NOT NULL,
     transaction_digest          base58digest NOT NULL,
     sender                      VARCHAR(255) NOT NULL,
-    checkpoint_sequence_number  BIGINT,
+    checkpoint                  BIGINT       NOT NULL,
     timestamp_ms                BIGINT,
     transaction_kind            TEXT         NOT NULL,
     transaction_count           BIGINT       NOT NULL,
@@ -38,12 +38,13 @@ CREATE TABLE transactions (
     raw_transaction             bytea        NOT NULL,
     transaction_effects_content TEXT         NOT NULL,
     confirmed_local_execution   BOOLEAN,
-    UNIQUE (transaction_digest)
-);
-
+    UNIQUE (transaction_digest, checkpoint),
+    CONSTRAINT transactions_pkey PRIMARY KEY (id, checkpoint)
+) PARTITION BY RANGE (checkpoint);
 CREATE INDEX transactions_transaction_digest ON transactions (transaction_digest);
 CREATE INDEX transactions_timestamp_ms ON transactions (timestamp_ms);
 CREATE INDEX transactions_sender ON transactions (sender);
-CREATE INDEX transactions_checkpoint_sequence_number ON transactions (checkpoint_sequence_number);
+CREATE INDEX transactions_checkpoint ON transactions (checkpoint);
 CREATE INDEX transactions_execution_success ON transactions (execution_success);
 CREATE INDEX transactions_transaction_kind ON transactions (transaction_kind);
+CREATE TABLE transactions_partition_0 PARTITION OF transactions FOR VALUES FROM (0) TO (MAXVALUE);

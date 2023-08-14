@@ -1351,10 +1351,8 @@ pub mod pg_integration_test {
         let since = std::time::Instant::now();
         loop {
             let tx = store.get_transaction_by_digest(tx_digest).await;
-            if let Ok(t) = tx {
-                if t.checkpoint_sequence_number.is_some() {
-                    break;
-                }
+            if tx.is_ok() {
+                break;
             }
             let now = std::time::Instant::now();
             if now.duration_since(since).as_secs() > WAIT_UNTIL_TIME_LIMIT {

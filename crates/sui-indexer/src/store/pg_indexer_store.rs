@@ -64,6 +64,7 @@ use crate::schema::{
 };
 use crate::store::diesel_marco::{read_only_blocking, transactional_blocking};
 use crate::store::module_resolver::IndexerModuleResolver;
+use crate::store::pg_partition_manager::PgPartitionManager;
 use crate::store::query::DBFilter;
 use crate::store::TransactionObjectChanges;
 use crate::store::{IndexerStore, TemporaryEpochStore};
@@ -71,18 +72,7 @@ use crate::PgConnectionPool;
 
 const MAX_EVENT_PAGE_SIZE: usize = 1000;
 const PG_COMMIT_CHUNK_SIZE: usize = 1000;
-
-const GET_PARTITION_SQL: &str = r#"
-SELECT parent.relname                           AS table_name,
-       MAX(SUBSTRING(child.relname FROM '\d$')) AS last_partition
-FROM pg_inherits
-         JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
-         JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-         JOIN pg_namespace nmsp_parent ON nmsp_parent.oid = parent.relnamespace
-         JOIN pg_namespace nmsp_child ON nmsp_child.oid = child.relnamespace
-WHERE parent.relkind = 'p'
-GROUP BY table_name;
-"#;
+const PARTITION_TABLES: [&str; 1] = ["transactions"];
 
 #[derive(QueryableByName, Debug, Clone)]
 struct TempDigestTable {
@@ -95,7 +85,7 @@ pub struct PgIndexerStore {
     blocking_cp: PgConnectionPool,
     // MUSTFIX(gegaowp): temporarily disable partition management.
     #[allow(dead_code)]
-    partition_manager: PartitionManager,
+    partition_manager: PgPartitionManager,
     module_cache: Arc<SyncModuleCache<IndexerModuleResolver>>,
     metrics: IndexerMetrics,
 }
@@ -107,7 +97,7 @@ impl PgIndexerStore {
         )));
         PgIndexerStore {
             blocking_cp: blocking_cp.clone(),
-            partition_manager: PartitionManager::new(blocking_cp).unwrap(),
+            partition_manager: PgPartitionManager::new(blocking_cp).unwrap(),
             module_cache,
             metrics,
         }
@@ -576,7 +566,7 @@ impl PgIndexerStore {
             effects: effects_opt,
             confirmed_local_execution: tx.confirmed_local_execution,
             timestamp_ms: tx.timestamp_ms.map(|t| t as u64),
-            checkpoint: tx.checkpoint_sequence_number.map(|c| c as u64),
+            checkpoint: Some(tx.checkpoint as u64),
             events,
             object_changes,
             balance_changes,
@@ -891,14 +881,14 @@ impl PgIndexerStore {
 
     fn get_transaction_page_by_checkpoint(
         &self,
-        checkpoint_sequence_number: i64,
+        checkpoint: i64,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
     ) -> Result<Vec<Transaction>, IndexerError> {
         read_only_blocking!(&self.blocking_cp, |conn| {
             let mut boxed_query = transactions::dsl::transactions
-                .filter(transactions::dsl::checkpoint_sequence_number.eq(checkpoint_sequence_number))
+                .filter(transactions::dsl::checkpoint.eq(checkpoint))
                 .into_boxed();
             if let Some(start_sequence) = start_sequence {
                 if is_descending {
@@ -918,7 +908,7 @@ impl PgIndexerStore {
                     .limit((limit) as i64)
                     .load::<Transaction>(conn)
             }
-        }).context(&format!("Failed reading transaction digests with checkpoint_sequence_number {checkpoint_sequence_number:?} and start_sequence {start_sequence:?} and limit {limit}"))
+        }).context(&format!("Failed reading transaction digests with checkpoint {checkpoint:?} and start_sequence {start_sequence:?} and limit {limit}"))
     }
 
     fn get_transaction_page_by_transaction_kinds(
@@ -1450,18 +1440,16 @@ impl PgIndexerStore {
         .context("Failed to count network transactions in previous epoch")
     }
 
-    fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError> {
-        // MUSTFIX(gegaowp): temporarily disable the epoch advance logic.
-        // let last_epoch_cp_id = if data.last_epoch.is_none() {
-        //     0
-        // } else {
-        //     self.get_current_epoch()?.first_checkpoint_id as i64
-        // };
-        if data.last_epoch.is_none() {
-            let last_epoch_cp_id = 0;
+    fn advance_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError> {
+        let epoch_partition_data = data.clone().into();
+        for &table in PARTITION_TABLES.iter() {
             self.partition_manager
-                .advance_epoch(&data.new_epoch, last_epoch_cp_id)?;
+                .advance_table_epoch_partition(table, &epoch_partition_data)?;
         }
+        Ok(())
+    }
+
+    fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError> {
         transactional_blocking!(&self.blocking_cp, |conn| {
             if let Some(last_epoch) = &data.last_epoch {
                 info!("Persisting at the end of epoch {}", last_epoch.epoch);
@@ -2320,6 +2308,12 @@ impl IndexerStore for PgIndexerStore {
         .await
     }
 
+    async fn advance_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError> {
+        let data = data.to_owned();
+        self.spawn_blocking(move |this| this.advance_epoch(&data))
+            .await
+    }
+
     async fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError> {
         let data = data.to_owned();
         self.spawn_blocking(move |this| this.persist_epoch(&data))
@@ -2504,88 +2498,6 @@ fn persist_object_deletions(
     }
     object_deletion_guard.stop_and_record();
     Ok(())
-}
-
-#[derive(Clone)]
-struct PartitionManager {
-    cp: PgConnectionPool,
-}
-
-impl PartitionManager {
-    fn new(cp: PgConnectionPool) -> Result<Self, IndexerError> {
-        // Find all tables with partition
-        let manager = Self { cp };
-        let tables = manager.get_table_partitions()?;
-        info!(
-            "Found {} tables with partitions : [{:?}]",
-            tables.len(),
-            tables
-        );
-        Ok(manager)
-    }
-
-    // MUSTFIX(gegaowp): temporarily disable partition management.
-    #[allow(dead_code)]
-    fn advance_epoch(
-        &self,
-        new_epoch: &DBEpochInfo,
-        last_epoch_start_cp: i64,
-    ) -> Result<(), IndexerError> {
-        let next_epoch_id = new_epoch.epoch;
-        let last_epoch_id = new_epoch.epoch - 1;
-        let next_epoch_start_cp = new_epoch.first_checkpoint_id;
-
-        let tables = self.get_table_partitions()?;
-
-        let table_updated = transactional_blocking!(&self.cp, |conn| {
-            let mut updated_table = vec![];
-            for (table, last_partition) in &tables {
-                if last_partition < &(next_epoch_id as u64) {
-                    let detach_partition = format!(
-                        "ALTER TABLE {table} DETACH PARTITION {table}_partition_{last_epoch_id};"
-                    );
-                    let attach_partition_with_new_range = format!("ALTER TABLE {table} ATTACH PARTITION {table}_partition_{last_epoch_id} FOR VALUES FROM ('{last_epoch_start_cp}') TO ('{next_epoch_start_cp}');");
-                    info! {"Changed last epoch partition {last_epoch_id} for {table}, with new range {last_epoch_start_cp} to {next_epoch_start_cp}"};
-                    let new_partition = format!("CREATE TABLE {table}_partition_{next_epoch_id} PARTITION OF {table} FOR VALUES FROM ({next_epoch_start_cp}) TO (MAXVALUE);");
-                    info! {"Created epoch partition {next_epoch_id} for {table}, with new range {next_epoch_start_cp} to MAXVALUE"};
-                    diesel::RunQueryDsl::execute(diesel::sql_query(detach_partition), conn)?;
-                    diesel::RunQueryDsl::execute(
-                        diesel::sql_query(attach_partition_with_new_range),
-                        conn,
-                    )?;
-                    diesel::RunQueryDsl::execute(diesel::sql_query(new_partition), conn)?;
-                    updated_table.push(table.clone());
-                }
-            }
-            Ok::<_, diesel::result::Error>(updated_table)
-        })?;
-        info! {"Created epoch partition {next_epoch_id} for {table_updated:?}"};
-        Ok(())
-    }
-
-    fn get_table_partitions(&self) -> Result<BTreeMap<String, u64>, IndexerError> {
-        #[derive(QueryableByName, Debug, Clone)]
-        struct PartitionedTable {
-            #[diesel(sql_type = VarChar)]
-            table_name: String,
-            #[diesel(sql_type = VarChar)]
-            last_partition: String,
-        }
-
-        Ok(
-            read_only_blocking!(&self.cp, |conn| diesel::RunQueryDsl::load(
-                diesel::sql_query(GET_PARTITION_SQL),
-                conn
-            ))?
-            .into_iter()
-            .map(|table: PartitionedTable| {
-                u64::from_str(&table.last_partition)
-                    .map(|last_partition| (table.table_name, last_partition))
-                    .map_err(|e| anyhow!(e))
-            })
-            .collect::<Result<_, _>>()?,
-        )
-    }
 }
 
 // Run this function only once every `time` seconds

@@ -282,7 +282,7 @@ pub struct TemporaryTransactionBlockResponseStore {
     pub balance_changes: Option<Vec<BalanceChange>>,
     pub timestamp_ms: Option<u64>,
     pub confirmed_local_execution: Option<bool>,
-    pub checkpoint: Option<CheckpointSequenceNumber>,
+    pub checkpoint: CheckpointSequenceNumber,
 }
 
 impl From<CheckpointTransactionBlockResponse> for TemporaryTransactionBlockResponseStore {
@@ -308,7 +308,7 @@ impl From<CheckpointTransactionBlockResponse> for TemporaryTransactionBlockRespo
             balance_changes: None,
             timestamp_ms: Some(timestamp_ms),
             confirmed_local_execution,
-            checkpoint: Some(checkpoint),
+            checkpoint,
         }
     }
 }
