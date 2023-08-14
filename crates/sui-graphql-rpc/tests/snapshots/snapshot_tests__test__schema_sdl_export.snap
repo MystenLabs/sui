@@ -107,6 +107,7 @@ input ObjectFilter {
 
 enum ObjectKind {
 	OWNED
+	CHILD
 	SHARED
 	IMMUTABLE
 }

@@ -131,7 +131,8 @@ fn convert_obj(s: &sui_json_rpc_types::SuiObjectData) -> Object {
         bcs: Some(Base64::from(&bcs::to_bytes(&s.bcs).unwrap())), // TODO: is this correct?
         previous_transaction: Some(s.previous_transaction.unwrap().to_string()),
         kind: Some(match s.owner.unwrap() {
-            NativeOwner::AddressOwner(_) | NativeOwner::ObjectOwner(_) => ObjectKind::Owned,
+            NativeOwner::AddressOwner(_) => ObjectKind::Owned,
+            NativeOwner::ObjectOwner(_) => ObjectKind::Child,
             NativeOwner::Shared {
                 initial_shared_version: _,
             } => ObjectKind::Shared,
