@@ -9,12 +9,12 @@ module axelar::validators {
     use sui::dynamic_field as df;
     use sui::ecdsa_k1 as ecdsa;
     use sui::hash;
-    use sui::object::UID;
-    use sui::vec_map;
-    use sui::vec_map::VecMap;
+    use sui::object::{Self, UID};
+    use sui::transfer;
+    use sui::tx_context::TxContext;
+    use sui::vec_map:: {Self, VecMap};
 
-    use axelar::approved_call;
-    use axelar::approved_call::ApprovedCall;
+    use axelar::approved_call::{ Self, ApprovedCall };
     use axelar::utils::{normalize_signature, operators_hash};
 
     friend axelar::gateway;
@@ -60,6 +60,17 @@ module axelar::validators {
         source_address: String,
         /// Hash of the full payload (including source_* fields).
         payload_hash: vector<u8>,
+    }
+
+    fun init(ctx: &mut TxContext) {
+        let validators = AxelarValidators {
+            id: object::new(ctx),
+        };
+        df::add(&mut validators.id, 1, AxelarValidatorsV1 {
+            epoch: 0,
+            epoch_for_hash: vec_map::empty(),
+        });
+        transfer::share_object(validators);
     }
 
     /// Implementation of the `AxelarAuthWeighted.validateProof`.
@@ -207,13 +218,6 @@ module axelar::validators {
     }
 
     #[test_only]
-    use axelar::utils::to_sui_signed;
-    #[test_only]
-    use sui::object;
-    #[test_only]
-    use sui::tx_context::TxContext;
-
-    #[test_only]
     public fun new(epoch: u64, epoch_for_hash: VecMap<vector<u8>, u64>, ctx: &mut TxContext): AxelarValidators {
         let base = AxelarValidators {
             id: object::new(ctx),
@@ -224,6 +228,9 @@ module axelar::validators {
         });
         base
     }
+
+    #[test_only]
+    use axelar::utils::to_sui_signed;
 
     #[test_only]
     public fun delete(self: AxelarValidators) {
