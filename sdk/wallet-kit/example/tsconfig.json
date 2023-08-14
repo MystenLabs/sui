@@ -4,5 +4,5 @@
 		"baseUrl": "."
 	},
 	"include": ["src"],
-	"references": [{ "path": "../wallet-kit" }, { "path": "../../typescript" }]
+	"references": [{ "path": "../react" }, { "path": "../../typescript" }]
 }
