@@ -104,8 +104,7 @@ pub(crate) async fn fetch_owned_objs(
     connection.edges.extend(
         pg.data
             .into_iter()
-            .enumerate()
-            .map(|(idx, n)| {
+            .map(|n| {
                 if let Some(err) = &n.error {
                     let cursor = "error_cursor".to_string();
                     let errors = err.as_ref().to_string();
@@ -115,7 +114,7 @@ pub(crate) async fn fetch_owned_objs(
                     let cursor = g.object_id.to_string();
                     Ok(Edge::new(cursor, ObjectPayload::with_object(object)))
                 } else {
-                    Err(CustomError::ClientFetch("Unexpected".to_string()).extend())
+                    Err(CustomError::Internal.extend())
                 }
             })
             .collect::<Result<Vec<_>, _>>()?,

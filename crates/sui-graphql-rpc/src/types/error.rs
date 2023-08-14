@@ -3,12 +3,15 @@
 
 use async_graphql::{Error, ErrorExtensions};
 
+#[allow(dead_code)]
 #[derive(Debug, thiserror::Error)]
 pub enum CustomError {
     #[error("{0}")]
     Input(String),
     #[error("{0}")]
     ClientFetch(String),
+    #[error("Internal error occurred")]
+    Internal,
 }
 
 impl ErrorExtensions for CustomError {
@@ -19,6 +22,9 @@ impl ErrorExtensions for CustomError {
             }
             CustomError::ClientFetch(_) => {
                 e.set("code", "CLIENT_FETCH_ERROR");
+            }
+            CustomError::Internal => {
+                e.set("code", "INTERNAL_ERROR");
             }
         })
     }
