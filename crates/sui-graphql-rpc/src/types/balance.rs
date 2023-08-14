@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::*;
-
 use super::big_int::BigInt;
+use async_graphql::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
 pub(crate) struct Balance {
