@@ -3,6 +3,7 @@
 
 // For testing, use existing RPC as data source
 
+use crate::error::Error;
 use crate::types::address::Address;
 use crate::types::balance::Balance;
 use crate::types::base64::Base64;
@@ -68,13 +69,13 @@ pub(crate) async fn fetch_owned_objs(
     _filter: Option<ObjectFilter>,
 ) -> Result<Connection<String, Object>> {
     if before.is_some() && after.is_some() {
-        return Err(Error::new("before and after must not be used together"));
+        return Err(Error::CursorNoBeforeAfter.extend());
     }
     if first.is_some() && last.is_some() {
-        return Err(Error::new("first and last must not be used together"));
+        return Err(Error::CursorNoFirstLast.extend());
     }
     if before.is_some() || last.is_some() {
-        return Err(Error::new("reverse pagination is not supported"));
+        return Err(Error::CursorNoReversePagination.extend());
     }
 
     let count = first.map(|q| q as usize);
@@ -84,7 +85,7 @@ pub(crate) async fn fetch_owned_objs(
     let cursor = match after {
         Some(q) => Some(
             NativeObjectID::from_hex_literal(&q)
-                .map_err(|w| Error::new(format!("invalid object id: {}", w)))?,
+                .map_err(|w| Error::InvalidCursor(w.to_string()).extend())?,
         ),
         None => None,
     };
@@ -94,10 +95,17 @@ pub(crate) async fn fetch_owned_objs(
         .get_owned_objects(native_owner, Some(query), cursor, count)
         .await?;
 
-    // TODO: handle errors
+    // TODO: support partial success/ failure responses
     pg.data.iter().try_for_each(|n| {
-        if n.error.is_some() || n.data.is_none() {
-            return Err(Error::new("error"));
+        if n.error.is_some() {
+            return Err(
+                Error::CursorConnectionFetchFailed(n.error.as_ref().unwrap().to_string()).extend(),
+            );
+        } else if n.data.is_none() {
+            return Err(Error::Internal(
+                "Expected either data or error fields, received neither".to_string(),
+            )
+            .extend());
         }
         Ok(())
     })?;

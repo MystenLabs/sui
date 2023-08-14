@@ -10267,6 +10267,7 @@ dependencies = [
  "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-sdk",
+ "thiserror",
  "tokio",
  "tower",
  "workspace-hack",
