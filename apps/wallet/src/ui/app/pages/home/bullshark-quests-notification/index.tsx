@@ -47,7 +47,7 @@ export function InterstitialText({ children, stroke, ...styleProps }: TextProps)
 }
 
 const setInterstitialDismissed = () =>
-	localStorage.setItem('bullshark-interstitial-dismissed', 'true');
+	localStorage.setItem('quests2-interstitial-dismissed', 'true');
 
 function BullsharkQuestsNotification({ onClose }: { onClose: () => void }) {
 	const navigate = useNavigate();

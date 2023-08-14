@@ -211,7 +211,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	const isFirstTimeLoading = isLoading && !isFetched;
 
 	useEffect(() => {
-		const dismissed = localStorage.getItem('bullshark-interstitial-dismissed');
+		const dismissed = localStorage.getItem('quests2-interstitial-dismissed');
 		setInterstitialDismissed(dismissed === 'true');
 	}, []);
 
