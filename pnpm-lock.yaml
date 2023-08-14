@@ -1144,12 +1144,24 @@ importers:
       '@tanstack/react-query':
         specifier: ^4.29.25
         version: 4.29.25(react-dom@18.2.0)(react@18.2.0)
+      '@testing-library/dom':
+        specifier: ^9.3.1
+        version: 9.3.1
+      '@testing-library/jest-dom':
+        specifier: ^5.17.0
+        version: 5.17.0
       '@testing-library/react':
         specifier: ^14.0.0
         version: 14.0.0(react-dom@18.2.0)(react@18.2.0)
+      '@testing-library/user-event':
+        specifier: ^14.4.3
+        version: 14.4.3(@testing-library/dom@9.3.1)
       '@types/react':
         specifier: ^18.2.15
         version: 18.2.15
+      '@types/testing-library__jest-dom':
+        specifier: ^5.14.9
+        version: 5.14.9
       happy-dom:
         specifier: ^10.5.1
         version: 10.5.1
@@ -8440,7 +8452,7 @@ packages:
     dependencies:
       '@adobe/css-tools': 4.2.0
       '@babel/runtime': 7.22.6
-      '@types/testing-library__jest-dom': 5.14.8
+      '@types/testing-library__jest-dom': 5.14.9
       aria-query: 5.3.0
       chalk: 3.0.0
       css.escape: 1.5.1
@@ -8990,8 +9002,8 @@ packages:
     resolution: {integrity: sha512-Hl219/BT5fLAaz6NDkSuhzasy49dwQS/DSdu4MdggFB8zcXv7vflBI3xp7FEmkmdDkBUI2bPUNeMttp2knYdxw==}
     dev: true
 
-  /@types/testing-library__jest-dom@5.14.8:
-    resolution: {integrity: sha512-NRfJE9Cgpmu4fx716q9SYmU4jxxhYRU1BQo239Txt/9N3EC745XZX1Yl7h/SBIDlo1ANVOCRB4YDXjaQdoKCHQ==}
+  /@types/testing-library__jest-dom@5.14.9:
+    resolution: {integrity: sha512-FSYhIjFlfOpGSRyVoMBMuS3ws5ehFQODymf3vlI7U1K8c7PHwWwFY7VREfmsuzHSOnoKs/9/Y983ayOs7eRzqw==}
     dependencies:
       '@types/jest': 29.5.3
     dev: true
