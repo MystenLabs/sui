@@ -2,12 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import {
-	useAppsBackend,
-	useGetCoinBalance,
-	useGetAllBalances,
-	useResolveSuiNSName,
-} from '@mysten/core';
+import { useAppsBackend, useResolveSuiNSName } from '@mysten/core';
+import { useAllBalances, useBalance } from '@mysten/dapp-kit';
 import {
 	Info12,
 	WalletActionBuy24,
@@ -176,7 +172,10 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 		isError,
 		isLoading,
 		isFetched,
-	} = useGetCoinBalance(activeCoinType, activeAccountAddress, refetchInterval, staleTime);
+	} = useBalance(
+		{ coinType: activeCoinType, owner: activeAccountAddress! },
+		{ enabled: !!activeAccountAddress, refetchInterval, staleTime },
+	);
 	const { apiEnv } = useAppSelector((state) => state.app);
 	const { request } = useAppsBackend();
 	const { data } = useQuery({
@@ -195,11 +194,14 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 		data: coinBalances,
 		isLoading: coinBalancesLoading,
 		isFetched: coinBalancesFetched,
-	} = useGetAllBalances(
-		activeAccountAddress,
-		staleTime,
-		refetchInterval,
-		filterAndSortTokenBalances,
+	} = useAllBalances(
+		{ owner: activeAccountAddress! },
+		{
+			enabled: !!activeAccountAddress,
+			staleTime,
+			refetchInterval,
+			select: filterAndSortTokenBalances,
+		},
 	);
 
 	const BullsharkInterstitialEnabled = useFeature<boolean>(

@@ -113,7 +113,7 @@ const commonConfig: () => Promise<Configuration> = async () => {
 			extensions: ['.ts', '.tsx', '.js'],
 			// Fix .js imports from @mysten/sui.js since we are importing it from source
 			extensionAlias: {
-				'.js': ['.js', '.ts'],
+				'.js': ['.js', '.ts', '.tsx', '.jsx'],
 				'.mjs': ['.mjs', '.mts'],
 				'.cjs': ['.cjs', '.cts'],
 			},
