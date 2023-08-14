@@ -8,6 +8,7 @@ use crate::types::address::Address;
 use crate::types::balance::Balance;
 use crate::types::base64::Base64;
 use crate::types::big_int::BigInt;
+use crate::types::error::CustomError;
 use crate::types::object::ObjectFilter;
 use crate::types::object::ObjectKind;
 use crate::types::protocol_config::ProtocolConfigAttr;
@@ -96,22 +97,10 @@ pub(crate) async fn fetch_owned_objs(
         .await?;
 
     // TODO: support partial success/ failure responses
-    pg.data.iter().try_for_each(|n| {
         if n.error.is_some() {
             return Err(
                 Error::CursorConnectionFetchFailed(n.error.as_ref().unwrap().to_string()).extend(),
-            );
-        } else if n.data.is_none() {
-            return Err(Error::Internal(
-                "Expected either data or error fields, received neither".to_string(),
-            )
             .extend());
-        }
-        Ok(())
-    })?;
-    let mut connection = Connection::new(false, pg.has_next_page);
-
-    connection.edges.extend(pg.data.into_iter().map(|n| {
         let g = n.data.unwrap();
         let o = convert_obj(&g);
 
