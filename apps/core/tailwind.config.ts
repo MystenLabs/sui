@@ -80,9 +80,9 @@ export default {
 			brand: {
 				buttercup: "#F5CF54",
 				avocado: {
-				  200: "#CBE5BE",
-				  500: "#7ABB56",
-				  800: "#436D2C",
+					200: "#CBE5BE",
+					500: "#7ABB56",
+					800: "#436D2C",
 				},
 			}
 		},
