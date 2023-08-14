@@ -39,7 +39,7 @@ pub struct OurDigestMessage {
 pub mod proposer_tests;
 
 const DEFAULT_HEADER_RESEND_TIMEOUT: Duration = Duration::from_secs(60);
-const MIN_TIMEOUT_DRIFT: Duration = Duration::from_millis(50);
+const MIN_TIMEOUT_DRIFT: Duration = Duration::from_millis(150);
 
 /// The proposer creates new headers and send them to the core for broadcasting and further processing.
 pub struct Proposer {
@@ -327,7 +327,7 @@ impl Proposer {
         }
     }
 
-    fn min_delay(&self, current_time: TimestampMs, last_parents: Vec<Certificate>) -> Duration {
+    fn min_delay(&self) -> Duration {
         // TODO: consider even out the boost provided by the even/odd rounds so we avoid perpetually
         // boosting the nodes and affect the scores.
         // If this node is going to be the leader of the next round and there are more than
@@ -342,46 +342,6 @@ impl Proposer {
                     && self.committee.leader(next_round).id() == self.authority_id))
         {
             return Duration::ZERO;
-        }
-
-        // If this node was the leader of currently proposed round, we want to apply some counter delay
-        // forces so we stop them from getting a perpetual boosting.
-        // Since the leader is immediately proposing by the time they receive a quorum of parents from the previous round,
-        // all we want to do is measure the time it took for this quorum of parents to get formed from
-        // the time the node proposed for the previous round. Then we'll use that to calculate the theoretical
-        // remainder of time if the leader was supposed to wait for the full min delay timeout.
-        if self.committee.size() > 1
-            && ((self.round % 2 == 0
-                && self.leader_schedule.leader(self.round).id() == self.authority_id)
-                || (self.round % 2 != 0
-                    && self.committee.leader(self.round).id() == self.authority_id))
-        {
-            // calculate the round start (propose) of previous round by taking the max header (if not our proposal exists) creation time
-            let last_proposal_timestamp: Option<TimestampMs> = if let Some(c) = last_parents
-                .iter()
-                .find(|c| c.origin() == self.authority_id)
-            {
-                Some(*c.header().created_at())
-            } else {
-                last_parents.iter().map(|c| *c.header().created_at()).max()
-            };
-
-            if let Some(ts) = last_proposal_timestamp {
-                // we only take the timestamp into account if the earlier timestamp is of the previous round.
-                let diff = Duration::from_millis(current_time - ts);
-                let delay = (2 * self.min_header_delay).saturating_sub(diff);
-
-                debug!(
-                    "Setting min_delay to: {delay:?}, with diff: {diff:?} for round {}",
-                    self.round
-                );
-
-                self.metrics
-                    .proposal_counter_booster_diff
-                    .observe(diff.as_secs_f64());
-
-                return delay.min(self.max_header_delay);
-            }
         }
 
         self.min_header_delay
@@ -513,9 +473,6 @@ impl Proposer {
                     "min_timeout"
                 };
 
-                // Snapshot the parents
-                let last_parents = self.last_parents.clone();
-
                 // Make a new header.
                 match self.make_header().await {
                     Err(e @ DagError::ShuttingDown) => debug!("{e}"),
@@ -543,7 +500,7 @@ impl Proposer {
                     .reset(timer_start + self.max_delay());
                 min_delay_timer
                     .as_mut()
-                    .reset(timer_start + self.min_delay(current_timestamp, last_parents));
+                    .reset(timer_start + self.min_delay());
 
                 // Update metrics and timestamps
                 if let Some((_round, t)) = &self.last_round_timestamp {
@@ -779,7 +736,7 @@ impl Proposer {
         // As the schedule can change after an odd round proposal - when the new schedule algorithm is
         // enabled - make sure that the timer is reset correctly for the round leader. No harm doing
         // this here as well.
-        if self.min_delay(now(), vec![]) == Duration::ZERO {
+        if self.min_delay() == Duration::ZERO {
             return Some(Instant::now());
         }
 
@@ -806,6 +763,10 @@ impl Proposer {
                 < (remaining_until_time_based_on_network.saturating_sub(MIN_TIMEOUT_DRIFT)))
         {
             debug!("Resetting min_delay to {remaining_until_time_based_on_network:?} vs {remaining_until_timeout:?}");
+
+            self.metrics
+                .proposal_reset_min_delay
+                .observe(remaining_until_time_based_on_network.as_secs_f64());
 
             return Some(Instant::now() + remaining_until_time_based_on_network);
         }
