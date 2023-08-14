@@ -770,6 +770,7 @@ async fn test_entry_point_vector_empty() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
+    let rgp = authority.reference_gas_price_for_testing().unwrap();
 
     let package = build_and_publish_test_package(
         &authority,
@@ -802,7 +803,7 @@ async fn test_entry_point_vector_empty() {
         &sender,
         &sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap();
@@ -831,7 +832,7 @@ async fn test_entry_point_vector_empty() {
         &sender,
         &sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap();
@@ -861,7 +862,7 @@ async fn test_entry_point_vector_empty() {
         &sender,
         &sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap_err();
@@ -891,7 +892,7 @@ async fn test_entry_point_vector_empty() {
         &sender,
         &sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap_err();
@@ -2281,6 +2282,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
             vec![vec, n],
         );
     }
+    let rgp = authority.reference_gas_price_for_testing().unwrap();
     // empty
     let mut builder = ProgrammableTransactionBuilder::new();
     make_and_drop(&mut builder, package_id, &t, vec![]);
@@ -2291,7 +2293,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
         sender,
         sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap();
@@ -2313,7 +2315,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
         sender,
         sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap();
@@ -2338,7 +2340,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
         sender,
         sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap();
@@ -2368,7 +2370,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
         sender,
         sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap();
@@ -2405,7 +2407,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
         sender,
         sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap();
@@ -2534,6 +2536,8 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
     t: TypeTag,
     value: T,
 ) {
+    let rgp = authority.reference_gas_price_for_testing().unwrap();
+
     // single without a type argument
     let mut builder = ProgrammableTransactionBuilder::new();
     let arg = builder.pure(value.clone()).unwrap();
@@ -2545,7 +2549,7 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
         sender,
         sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap();
@@ -2574,7 +2578,7 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
         sender,
         sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap();
@@ -2605,7 +2609,7 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
         sender,
         sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap();
@@ -2718,6 +2722,7 @@ async fn test_make_move_vec_empty() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
+    let rgp = authority.reference_gas_price_for_testing().unwrap();
     let mut builder = ProgrammableTransactionBuilder::new();
     builder.command(Command::MakeMoveVec(None, vec![]));
     let pt = builder.finish();
@@ -2727,7 +2732,7 @@ async fn test_make_move_vec_empty() {
         &sender,
         &sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap_err();

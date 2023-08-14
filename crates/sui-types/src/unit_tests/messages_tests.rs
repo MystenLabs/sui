@@ -1140,7 +1140,7 @@ fn test_move_input_objects() {
         SuiAddress::random_for_testing_only(),
         vec![gas_object_ref],
         builder.finish(),
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        1_000_000, // any random number the transaction is not run
         1,
     );
     let mut input_objects = data.input_objects().unwrap();
