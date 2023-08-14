@@ -31,6 +31,7 @@ pub(crate) struct Object {
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 pub(crate) enum ObjectKind {
     Owned,
+    Child,
     Shared,
     Immutable,
 }

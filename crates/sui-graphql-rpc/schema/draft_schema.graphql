@@ -340,6 +340,7 @@ enum AddressTransactionBlockRelationship {
 
 enum ObjectKind {
   OWNED
+  CHILD
   SHARED
   IMMUTABLE
 }
