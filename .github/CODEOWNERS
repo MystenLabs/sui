@@ -28,4 +28,4 @@ CHANGELOG.md
 apps/ @MystenLabs/fe-and-apps
 sdk/ @MystenLabs/sdk-reviewers
 sdk/kiosk @MystenLabs/kiosk-sdk-reviewers
-sdk/wallet-adapter @MystenLabs/wallet-kit-reviewers
+sdk/wallet-standard @MystenLabs/wallet-kit-reviewers

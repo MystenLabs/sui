@@ -8,7 +8,7 @@
 	},
 	"references": [
 		{ "path": "../../typescript" },
-		{ "path": "../wallet-kit-core" },
-		{ "path": "../wallet-standard" }
+		{ "path": "../core" },
+		{ "path": "../../wallet-standard" }
 	]
 }
