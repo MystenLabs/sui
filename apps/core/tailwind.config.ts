@@ -77,6 +77,14 @@ export default {
 			offwhite: '#fefefe',
 			offblack: '#111111',
 			ebony: '#101828',
+			brand: {
+				buttercup: "#F5CF54",
+				avocado: {
+				  200: "#CBE5BE",
+				  500: "#7ABB56",
+				  800: "#436D2C",
+				},
+			}
 		},
 
 		extend: {
@@ -130,6 +138,9 @@ export default {
 				heading4: ['18px', MIN_LINE_HEIGHT],
 				heading5: ['17px', MIN_LINE_HEIGHT],
 				heading6: ['16px', MIN_LINE_HEIGHT],
+
+				// Announcement sizes:
+				announcement1: ['64px', MIN_LINE_HEIGHT],
 
 				// Paragraph sizes:
 				pHeading6: ['16px', '1.4'],

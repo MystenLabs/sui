@@ -61,7 +61,8 @@ export default {
 				accountModal: ['0px 10px 30px rgba(0, 0, 0, 0.15)', '0px 10px 50px rgba(0, 0, 0, 0.15)'],
 			},
 			fontFamily: {
-				frankfurter: ['Frankfurter Normal', 'sans-serif'],
+				frankfurter: ['Frankfurter', 'sans-serif'],
+				arialRoundedBold: ['Arial Rounded MT Bold', 'sans-serif'],
 			},
 		},
 	},
