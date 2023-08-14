@@ -41,9 +41,6 @@
 	"dependencies": {
 		"@headlessui/react": "^1.7.15",
 		"@mysten/sui.js": "workspace:*",
-		"@mysten/wallet-adapter-base": "workspace:*",
-		"@mysten/wallet-adapter-unsafe-burner": "workspace:*",
-		"@mysten/wallet-adapter-wallet-standard": "workspace:*",
 		"@mysten/wallet-kit-core": "workspace:*",
 		"@mysten/wallet-standard": "workspace:*",
 		"@stitches/react": "^1.2.8"
