@@ -17,7 +17,7 @@ use crate::{
     diagnostics::{Diagnostic, Diagnostics},
     editions::Flavor,
     expansion::ast::AbilitySet,
-    hlir::ast::{Command, Exp, LValue, Label, ModuleCall, SingleType, Type, Type_, Var},
+    hlir::ast::{Exp, Label, ModuleCall, SingleType, Type, Type_, Var},
     parser::ast::{Ability_, StructName},
     shared::{unique_map::UniqueMap, CompilationEnv, Identifier},
     sui_mode::{OBJECT_NEW, TEST_SCENARIO_MODULE_NAME, TS_NEW_OBJECT},
@@ -188,20 +188,6 @@ impl<'a> SimpleAbsInt for IDLeakVerifierAI<'a> {
             Type_::Single(t) => vec![value_for_ty(loc, t)],
             Type_::Multiple(ts) => ts.iter().map(|t| value_for_ty(loc, t)).collect(),
         })
-    }
-
-    fn command_custom(&self, _: &mut ExecutionContext, _: &mut State, _: &Command) -> bool {
-        false
-    }
-
-    fn lvalue_custom(
-        &self,
-        _: &mut ExecutionContext,
-        _: &mut State,
-        _: &LValue,
-        _: &Value,
-    ) -> bool {
-        false
     }
 }
 
