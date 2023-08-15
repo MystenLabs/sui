@@ -423,8 +423,8 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
         let is_entry = def.entry.is_some();
         let visibility = match def.visibility {
             EA::Visibility::Public(_) => FunctionVisibility::Public,
-            EA::Visibility::Package(_) => FunctionVisibility::Friend, // Converted to friend during
-                                                                      // compilation.
+            // Packages are converted to friend during compilation.
+            EA::Visibility::Package(_) => FunctionVisibility::Friend,
             EA::Visibility::Friend(_) => FunctionVisibility::Friend,
             EA::Visibility::Internal => FunctionVisibility::Private,
         };
