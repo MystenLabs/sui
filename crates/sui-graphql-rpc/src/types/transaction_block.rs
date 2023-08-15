@@ -15,10 +15,8 @@ pub(crate) struct TransactionBlockConnection;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum TransactionBlockKindInput {
-    ConsensusCommitPrologue,
-    Genesis,
-    ChangeEpoch,
-    Programmable,
+    ProgrammableTx,
+    SystemTx,
 }
 
 #[derive(InputObject)]
