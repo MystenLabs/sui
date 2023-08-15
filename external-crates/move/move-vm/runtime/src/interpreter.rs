@@ -2312,55 +2312,55 @@ impl Frame {
                 };
                 gas_meter.charge_move_from(true, make_ty!(&ty), val)?;
             }
-            Bytecode::MoveTo(sd_idx) => {
-                let mut stack = interpreter.peek_last_n(2)?;
-                let signer_reference = stack.pop().unwrap().value_as::<StructRef>()?;
-                let resource = stack.pop().unwrap();
-                let addr = signer_reference
-                    .borrow_field(0)?
-                    .value_as::<Reference>()?
-                    .read_ref()?
-                    .value_as::<AccountAddress>()?;
-                let ty = resolver.get_struct_type(*sd_idx);
-                // REVIEW: Can we simplify Interpreter::move_to?
+            // Bytecode::MoveTo(sd_idx) => {
+            //     let mut stack = interpreter.peek_last_n(2)?;
+            //     let signer_reference = stack.pop().unwrap().value_as::<StructRef>()?;
+            //     let resource = stack.pop().unwrap();
+            //     let addr = signer_reference
+            //         .borrow_field(0)?
+            //         .value_as::<Reference>()?
+            //         .read_ref()?
+            //         .value_as::<AccountAddress>()?;
+            //     let ty = resolver.get_struct_type(*sd_idx);
+            //     // REVIEW: Can we simplify Interpreter::move_to?
 
-                match res.move_to(resource) {
-                    Ok(()) => {
-                        gas_meter.charge_move_to(
-                            false,
-                            make_ty!(&ty),
-                            res.view().unwrap(),
-                            true,
-                        )?;
-                        return Ok(());
-                    }
-                    Err((err, resource)) => {
-                        gas_meter.charge_move_to(false, make_ty!(&ty), resource, false)?;
-                        return Err(err);
-                    }
-                }
-            }
-            Bytecode::MoveToGeneric(si_idx) => {
-                let mut stack = interpreter.peek_last_n(2)?;
-                let signer_reference = stack.pop().unwrap().value_as::<StructRef>()?;
-                let resource = stack.pop().unwrap();
-                let addr = signer_reference
-                    .borrow_field(0)?
-                    .value_as::<Reference>()?
-                    .read_ref()?
-                    .value_as::<AccountAddress>()?;
-                let ty = resolver.instantiate_generic_type(*si_idx, ty_args)?;
-                match res.move_to(resource.clone()) {
-                    Ok(()) => {
-                        gas_meter.charge_move_to(true, make_ty!(&ty), res.view().unwrap(), true)?;
-                        return Ok(());
-                    }
-                    Err((err, resource)) => {
-                        gas_meter.charge_move_to(true, make_ty!(&ty), resource, false)?;
-                        return Err(err);
-                    }
-                }
-            }
+            //     match res.move_to(resource) {
+            //         Ok(()) => {
+            //             gas_meter.charge_move_to(
+            //                 false,
+            //                 make_ty!(&ty),
+            //                 res.view().unwrap(),
+            //                 true,
+            //             )?;
+            //             return Ok(());
+            //         }
+            //         Err((err, resource)) => {
+            //             gas_meter.charge_move_to(false, make_ty!(&ty), resource, false)?;
+            //             return Err(err);
+            //         }
+            //     }
+            // }
+            // Bytecode::MoveToGeneric(si_idx) => {
+            //     let mut stack = interpreter.peek_last_n(2)?;
+            //     let signer_reference = stack.pop().unwrap().value_as::<StructRef>()?;
+            //     let resource = stack.pop().unwrap();
+            //     let addr = signer_reference
+            //         .borrow_field(0)?
+            //         .value_as::<Reference>()?
+            //         .read_ref()?
+            //         .value_as::<AccountAddress>()?;
+            //     let ty = resolver.instantiate_generic_type(*si_idx, ty_args)?;
+            //     match res.move_to(resource.clone()) {
+            //         Ok(()) => {
+            //             gas_meter.charge_move_to(true, make_ty!(&ty), res.view().unwrap(), true)?;
+            //             return Ok(());
+            //         }
+            //         Err((err, resource)) => {
+            //             gas_meter.charge_move_to(true, make_ty!(&ty), resource, false)?;
+            //             return Err(err);
+            //         }
+            //     }
+            // }
             Bytecode::FreezeRef => {}
             Bytecode::Not => {}
             Bytecode::Nop => {}

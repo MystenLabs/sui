@@ -82,7 +82,7 @@ enum Container {
 /// A ContainerRef is a direct reference to a container, which could live either in the frame
 /// or in global storage. In the latter case, it also keeps a status flag indicating whether
 /// the container has been possibly modified.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 enum ContainerRef {
     Local(Container),
     Global {
@@ -101,7 +101,7 @@ enum GlobalDataStatus {
 }
 
 /// A Move reference pointing to an element in a container.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct IndexedRef {
     idx: usize,
     container_ref: ContainerRef,
@@ -132,7 +132,7 @@ enum ReferenceImpl {
  **************************************************************************************/
 /// A Move value -- a wrapper around `ValueImpl` which can be created only through valid
 /// means.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Value(ValueImpl);
 
 /// An integer value in Move.
