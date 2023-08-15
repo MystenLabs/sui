@@ -1,0 +1,27 @@
+warning[Lint W05001]: possibly useless collections compare
+   ┌─ tests/linter/collection_equality.move:12:14
+   │
+12 │         bag1 == bag2
+   │              ^^ Comparing collections of type 'sui::bag::Bag' may yield unexpected result.
+   │
+   = Equality for collections IS NOT a structural check based on content
+   = This warning can be suppressed with '#[lint_allow(collection_equality)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W05001]: possibly useless collections compare
+   ┌─ tests/linter/collection_equality.move:16:16
+   │
+16 │         table1 != table2
+   │                ^^ Comparing collections of type 'sui::table::Table' may yield unexpected result.
+   │
+   = Equality for collections IS NOT a structural check based on content
+   = This warning can be suppressed with '#[lint_allow(collection_equality)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W05001]: possibly useless collections compare
+   ┌─ tests/linter/collection_equality.move:20:16
+   │
+20 │         table1 == table2
+   │                ^^ Comparing collections of type 'sui::table_vec::TableVec' may yield unexpected result.
+   │
+   = Equality for collections IS NOT a structural check based on content
+   = This warning can be suppressed with '#[lint_allow(collection_equality)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

@@ -55,9 +55,9 @@ use sui_types::{
 use sui_verifier::verifier as sui_bytecode_verifier;
 
 use crate::linters::{
-    coin_field::CoinFieldVisitor, custom_state_change::CustomStateChangeVerifier,
-    freeze_wrapped::FreezeWrappedVisitor, known_filters, self_transfer::SelfTransferVerifier,
-    share_owned::ShareOwnedVerifier,
+    coin_field::CoinFieldVisitor, collection_equality::CollectionEqualityVisitor,
+    custom_state_change::CustomStateChangeVerifier, freeze_wrapped::FreezeWrappedVisitor,
+    known_filters, self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier,
 };
 
 #[cfg(test)]
@@ -143,6 +143,7 @@ impl BuildConfig {
                     CustomStateChangeVerifier.visitor(),
                     CoinFieldVisitor.visitor(),
                     FreezeWrappedVisitor::default().visitor(),
+                    CollectionEqualityVisitor.visitor(),
                 ];
                 let (filter_attr_name, filters) = known_filters();
                 compiler

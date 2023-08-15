@@ -20,7 +20,7 @@ use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 
 use super::{
-    LinterDiagCategory, FREEZE_FUN, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
+    base_type, LinterDiagCategory, FREEZE_FUN, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
     PUBLIC_FREEZE_FUN, SUI_PKG_NAME, TRANSFER_MOD_NAME,
 };
 
@@ -358,13 +358,4 @@ fn add_diag(
         d.add_secondary_label((wrapped_tloc, "Indirectly wrapped object is of this type"));
     }
     env.add_diag(d);
-}
-
-fn base_type(t: &N::Type) -> Option<&N::Type> {
-    use N::Type_ as T;
-    match &t.value {
-        T::Ref(_, inner_t) => base_type(inner_t),
-        T::Apply(_, _, _) | T::Param(_) => Some(t),
-        T::Unit | T::Var(_) | T::Anything | T::UnresolvedError => None,
-    }
 }
