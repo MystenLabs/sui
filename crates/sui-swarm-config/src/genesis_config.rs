@@ -357,13 +357,13 @@ impl GenesisConfig {
             .iter()
             .map(|gas_key| {
                 let gas_address = SuiAddress::from(&gas_key.public());
-                let number_of_objects = 100 / validator_config_info.len() + 1;
+                let _number_of_objects = 100 / validator_config_info.len() + 1;
 
                 AccountConfig {
                     address: Some(gas_address),
                     // Generate one genesis gas object per validator (this seems a good rule of thumb to produce
                     // enough gas objects for most types of benchmarks).
-                    gas_amounts: vec![Self::BENCHMARK_GAS_AMOUNT; number_of_objects],
+                    gas_amounts: vec![Self::BENCHMARK_GAS_AMOUNT; 1],
                 }
             })
             .collect();
