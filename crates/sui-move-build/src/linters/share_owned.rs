@@ -22,8 +22,8 @@ use move_compiler::{
         Diagnostic, Diagnostics,
     },
     hlir::ast::{
-        BaseType_, Command, Exp, LValue, LValue_, Label, ModuleCall, SingleType, SingleType_, Type,
-        Type_, Var,
+        BaseType_, Exp, LValue, LValue_, Label, ModuleCall, SingleType, SingleType_, Type, Type_,
+        Var,
     },
     parser::ast::Ability_,
     shared::{CompilationEnv, Identifier},
@@ -178,10 +178,6 @@ impl SimpleAbsInt for ShareOwnedVerifierAI {
                 })
                 .collect(),
         })
-    }
-
-    fn command_custom(&self, _: &mut ExecutionContext, _: &mut State, _: &Command) -> bool {
-        false
     }
 
     fn lvalue_custom(
