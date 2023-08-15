@@ -83,7 +83,7 @@ impl Owner {
     async fn as_address(&self, ctx: &Context<'_>) -> Option<Address> {
         // For now only addresses can be owners
         Some(Address {
-            address: self.address.clone(),
+            address: self.address,
         })
     }
 
@@ -96,7 +96,7 @@ impl Owner {
     // =========== Owner interface methods =============
 
     pub async fn location(&self, ctx: &Context<'_>) -> SuiAddress {
-        self.address.clone()
+        self.address
     }
 
     pub async fn object_connection(

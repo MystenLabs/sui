@@ -1,12 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{address::Address, base64::Base64, sui_address::SuiAddress};
 use async_graphql::*;
 
-use super::{address::Address, base64::Base64, sui_address::SuiAddress};
-
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
-
 pub(crate) struct TransactionBlock {
     pub digest: String,
     pub sender: Option<Address>,
