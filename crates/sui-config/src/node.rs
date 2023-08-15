@@ -485,9 +485,11 @@ impl Default for CheckpointExecutorConfig {
 #[serde(rename_all = "kebab-case")]
 pub struct AuthorityStorePruningConfig {
     /// number of the latest epoch dbs to retain
-    pub num_latest_epoch_dbs_to_retain: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub num_latest_epoch_dbs_to_retain: Option<usize>,
     /// time interval used by the pruner to determine whether there are any epoch DBs to remove
-    pub epoch_db_pruning_period_secs: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub epoch_db_pruning_period_secs: Option<u64>,
     /// number of epochs to keep the latest version of objects for.
     /// Note that a zero value corresponds to an aggressive pruner.
     /// This mode is experimental and needs to be used with caution.
@@ -497,9 +499,11 @@ pub struct AuthorityStorePruningConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pruning_run_delay_seconds: Option<u64>,
     /// maximum number of checkpoints in the pruning batch. Can be adjusted to increase performance
-    pub max_checkpoints_in_batch: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_checkpoints_in_batch: Option<usize>,
     /// maximum number of transaction in the pruning batch
-    pub max_transactions_in_batch: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_transactions_in_batch: Option<usize>,
     /// enables periodic background compaction for old SST files whose last modified time is
     /// older than `periodic_compaction_threshold_days` days.
     /// That ensures that all sst files eventually go through the compaction process
@@ -516,12 +520,12 @@ impl Default for AuthorityStorePruningConfig {
         let num_epochs_to_retain = if cfg!(msim) { 0 } else { 2 };
         let pruning_run_delay_seconds = if cfg!(msim) { Some(5) } else { None };
         Self {
-            num_latest_epoch_dbs_to_retain: usize::MAX,
-            epoch_db_pruning_period_secs: u64::MAX,
+            num_latest_epoch_dbs_to_retain: Some(usize::MAX),
+            epoch_db_pruning_period_secs: Some(u64::MAX),
             num_epochs_to_retain,
             pruning_run_delay_seconds,
-            max_checkpoints_in_batch: 10,
-            max_transactions_in_batch: 1000,
+            max_checkpoints_in_batch: Some(10),
+            max_transactions_in_batch: Some(1000),
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints: None,
         }
@@ -535,12 +539,12 @@ impl AuthorityStorePruningConfig {
         let pruning_run_delay_seconds = if cfg!(msim) { Some(2) } else { None };
         let num_epochs_to_retain_for_checkpoints = if cfg!(msim) { Some(2) } else { None };
         Self {
-            num_latest_epoch_dbs_to_retain: 3,
-            epoch_db_pruning_period_secs: 60 * 60,
+            num_latest_epoch_dbs_to_retain: Some(3),
+            epoch_db_pruning_period_secs: Some(60 * 60),
             num_epochs_to_retain,
             pruning_run_delay_seconds,
-            max_checkpoints_in_batch: 10,
-            max_transactions_in_batch: 1000,
+            max_checkpoints_in_batch: Some(10),
+            max_transactions_in_batch: Some(1000),
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints,
         }
@@ -551,12 +555,12 @@ impl AuthorityStorePruningConfig {
         let pruning_run_delay_seconds = if cfg!(msim) { Some(2) } else { None };
         let num_epochs_to_retain_for_checkpoints = if cfg!(msim) { Some(2) } else { None };
         Self {
-            num_latest_epoch_dbs_to_retain: 3,
-            epoch_db_pruning_period_secs: 60 * 60,
+            num_latest_epoch_dbs_to_retain: Some(3),
+            epoch_db_pruning_period_secs: Some(60 * 60),
             num_epochs_to_retain,
             pruning_run_delay_seconds,
-            max_checkpoints_in_batch: 10,
-            max_transactions_in_batch: 1000,
+            max_checkpoints_in_batch: Some(10),
+            max_transactions_in_batch: Some(1000),
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints,
         }

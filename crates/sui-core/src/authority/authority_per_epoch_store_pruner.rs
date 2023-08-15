@@ -17,13 +17,14 @@ pub struct AuthorityPerEpochStorePruner {
 impl AuthorityPerEpochStorePruner {
     pub fn new(parent_path: PathBuf, config: &AuthorityStorePruningConfig) -> Self {
         let (_cancel_handle, mut recv) = tokio::sync::oneshot::channel();
-        let num_latest_epoch_dbs_to_retain = config.num_latest_epoch_dbs_to_retain;
+        let num_latest_epoch_dbs_to_retain = config.num_latest_epoch_dbs_to_retain.unwrap_or(3);
         if num_latest_epoch_dbs_to_retain == 0 || num_latest_epoch_dbs_to_retain == usize::MAX {
             info!("Skipping pruning of epoch tables as we want to retain all versions");
             return Self { _cancel_handle };
         }
-        let mut prune_interval =
-            tokio::time::interval(Duration::from_secs(config.epoch_db_pruning_period_secs));
+        let mut prune_interval = tokio::time::interval(Duration::from_secs(
+            config.epoch_db_pruning_period_secs.unwrap_or(3600),
+        ));
         tokio::task::spawn(async move {
             loop {
                 tokio::select! {

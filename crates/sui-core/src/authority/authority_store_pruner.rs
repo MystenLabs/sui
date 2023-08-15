@@ -337,6 +337,8 @@ impl AuthorityStorePruner {
         let mut checkpoints_to_prune = vec![];
         let mut checkpoint_content_to_prune = vec![];
         let mut effects_to_prune = vec![];
+        let max_checkpoints_in_batch = config.max_checkpoints_in_batch.unwrap_or(10);
+        let max_transactions_in_batch = config.max_transactions_in_batch.unwrap_or(1000);
 
         loop {
             let Some(ckpt) = checkpoint_store.certified_checkpoints.get(&(checkpoint_number + 1))? else {break;};
@@ -362,8 +364,8 @@ impl AuthorityStorePruner {
             checkpoint_content_to_prune.push(content);
             effects_to_prune.extend(effects.into_iter().flatten());
 
-            if effects_to_prune.len() >= config.max_transactions_in_batch
-                || checkpoints_to_prune.len() >= config.max_checkpoints_in_batch
+            if effects_to_prune.len() >= max_transactions_in_batch
+                || checkpoints_to_prune.len() >= max_checkpoints_in_batch
             {
                 match mode {
                     PruningMode::Objects => {
