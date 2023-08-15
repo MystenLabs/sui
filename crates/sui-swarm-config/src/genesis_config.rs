@@ -357,7 +357,7 @@ impl GenesisConfig {
             .iter()
             .map(|gas_key| {
                 let gas_address = SuiAddress::from(&gas_key.public());
-                let number_of_objects = 100 / validator_config_info.len();
+                let number_of_objects = 100 / validator_config_info.len() + 1;
 
                 AccountConfig {
                     address: Some(gas_address),

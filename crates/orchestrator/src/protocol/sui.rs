@@ -25,17 +25,26 @@ pub struct SuiBenchmarkType {
     /// Percentage of shared vs owned objects; 0 means only owned objects and 100 means
     /// only shared objects.
     shared_objects_ratio: u16,
+    batch_size: u16,
 }
 
 impl Debug for SuiBenchmarkType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.shared_objects_ratio)
+        if self.batch_size == 1 {
+            write!(f, "{}", self.shared_objects_ratio)
+        } else {
+            write!(f, "b{}", self.batch_size)
+        }
     }
 }
 
 impl Display for SuiBenchmarkType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}% shared objects", self.shared_objects_ratio)
+        if self.batch_size == 1 {
+            write!(f, "{}% shared objects", self.shared_objects_ratio)
+        } else {
+            write!(f, "batch payments ({})", self.batch_size)
+        }
     }
 }
 
@@ -43,9 +52,17 @@ impl FromStr for SuiBenchmarkType {
     type Err = std::num::ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self {
-            shared_objects_ratio: s.parse::<u16>()?.min(100),
-        })
+        if s == "batch" {
+            Ok(Self {
+                shared_objects_ratio: 0,
+                batch_size: 100,
+            })
+        } else {
+            Ok(Self {
+                shared_objects_ratio: s.parse::<u16>()?.min(100),
+                batch_size: 1,
+            })
+        }
     }
 }
 
@@ -172,10 +189,21 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
         let committee_size = parameters.nodes;
         let clients: Vec<_> = instances.into_iter().collect();
         let load_share = parameters.load / clients.len();
-        let shared_counter = parameters.benchmark_type.shared_objects_ratio;
-        let transfer_objects = 100 - shared_counter;
         let metrics_port = Self::CLIENT_METRICS_PORT;
         let gas_keys = GenesisConfig::benchmark_gas_keys(committee_size);
+
+        let batch_size = parameters.benchmark_type.batch_size;
+        let (shared_counter, transfer_objects, batch_payments) = if batch_size == 1 {
+            let shared_counter = parameters.benchmark_type.shared_objects_ratio;
+            let transfer_objects = 100 - shared_counter;
+            let batch_payments = 0;
+            (shared_counter, transfer_objects, batch_payments)
+        } else {
+            let shared_counter = 0;
+            let transfer_objects = 0;
+            let batch_payments = 100;
+            (shared_counter, transfer_objects, batch_payments)
+        };
 
         clients
             .into_iter()
@@ -197,6 +225,7 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
                     &format!(
                         "--shared-counter {shared_counter} --transfer-object {transfer_objects}"
                     ),
+                    &format!("--batch-payment {batch_payments} --batch-size {batch_size}"),
                     "--shared-counter-hotness-factor 50",
                     &format!("--client-metric-host 0.0.0.0 --client-metric-port {metrics_port}"),
                 ]
