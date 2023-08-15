@@ -498,7 +498,7 @@ fn parse_module_member_modifiers(context: &mut Context) -> Result<Modifiers, Box
 }
 
 // Parse a function visibility modifier:
-//      Visibility = "public" ( "(" "script" | "friend" ")" )?
+//      Visibility = "public" ( "(" "script" | "friend" | "package" ")" )?
 fn parse_visibility(context: &mut Context) -> Result<Visibility, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     consume_token(context.tokens, Tok::Public)?;
@@ -519,6 +519,7 @@ fn parse_visibility(context: &mut Context) -> Result<Visibility, Box<Diagnostic>
         None => Visibility::Public(loc),
         Some(Tok::Script) => Visibility::Script(loc),
         Some(Tok::Friend) => Visibility::Friend(loc),
+        Some(Tok::Package) => Visibility::Package(loc),
         _ => {
             let msg = format!(
                 "Invalid visibility modifier. Consider removing it or using '{}' or '{}'",

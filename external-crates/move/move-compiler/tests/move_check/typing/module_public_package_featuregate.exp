@@ -1,0 +1,6 @@
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/typing/module_public_package_featuregate.move:4:5
+  │
+4 │     public(package) fun foo(): u64 { 0 }
+  │     ^^^^^^^^^^^^^^^  not supported by current edition 'legacy'
+

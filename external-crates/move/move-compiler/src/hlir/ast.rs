@@ -6,11 +6,11 @@ use crate::{
     diagnostics::WarningFilters,
     expansion::ast::{
         ability_modifiers_ast_debug, AbilitySet, Attributes, Friend, ModuleIdent, SpecId,
-        Visibility,
     },
     naming::ast::{BuiltinTypeName, BuiltinTypeName_, StructTypeParameter, TParam},
     parser::ast::{BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER},
     shared::{ast_debug::*, unique_map::UniqueMap, Name, NumericalAddress, TName},
+    typing::ast::Visibility,
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;

@@ -1,0 +1,12 @@
+error[E02016]: invalid visibility modifier
+   ┌─ tests/move_2024/typing/module_call_visibility_mixed_invalid.move:12:5
+   │
+12 │     public(package) fun f_package_call_package() { X::f_pkg_public() }
+   │     ^^^^^^^^^^^^^^^ Invalid visibility modifier 'public(package)'. Module 'Other' defines functions with 'package(friend)' visibility, which can't be used in the same module as this visibility.
+
+error[E02016]: invalid visibility modifier
+   ┌─ tests/move_2024/typing/module_call_visibility_mixed_invalid.move:13:5
+   │
+13 │     public(friend) fun f_friend_call_package() { X::f_pkg_public() }
+   │     ^^^^^^^^^^^^^^ Invalid visibility modifier 'public(friend)'. Module 'Other' defines functions with 'package(package)' visibility, which can't be used in the same module as this visibility.
+

@@ -53,6 +53,7 @@ pub struct ConstantInfo {
 
 pub struct ModuleInfo {
     pub friends: UniqueMap<ModuleIdent, Loc>,
+    pub package: Option<Symbol>,
     pub structs: UniqueMap<StructName, StructDefinition>,
     pub functions: UniqueMap<FunctionName, FunctionInfo>,
     pub constants: UniqueMap<ConstantName, ConstantInfo>,
@@ -186,6 +187,17 @@ impl<const AFTER_TYPING: bool> ProgramInfo<AFTER_TYPING> {
         let constants = &self.module(m).constants;
         constants.get(n).expect("ICE should have failed in naming")
     }
+
+    // `loc` indicates the location that caused the add to occur
+    pub fn add_friend(&mut self, m: &ModuleIdent, friend: &ModuleIdent, loc: Loc) {
+        let module = self.0.get_mut(m).expect("ICE should have failed in naming");
+        let friends = &mut module.friends;
+        if !friends.contains_key(friend) {
+            friends
+                .add(*friend, loc)
+                .expect("ICE couldn't update friends list during typing");
+        }
+    }
 }
 
 impl<'env> Context<'env> {
@@ -307,6 +319,26 @@ impl<'env> Context<'env> {
 
     pub fn is_current_function(&self, m: &ModuleIdent, f: &FunctionName) -> bool {
         self.is_current_module(m) && matches!(&self.current_function, Some(curf) if curf == f)
+    }
+
+    // `loc` indicates the location that caused the add to occur
+    fn add_current_module_as_friend(&mut self, m: &ModuleIdent, loc: Loc) {
+        match &self.current_module {
+            None => {}
+            Some(current_mident) => {
+                self.modules.add_friend(m, current_mident, loc);
+            }
+        }
+    }
+
+    fn current_module_shares_package(&self, m: &ModuleIdent) -> bool {
+        match &self.current_module {
+            None => false,
+            Some(current_mident) => {
+                m.value.has_same_address(current_mident.value)
+                    && self.module_info(m).package == self.module_info(current_mident).package
+            }
+        }
     }
 
     fn current_module_is_a_friend_of(&self, m: &ModuleIdent) -> bool {
@@ -828,20 +860,39 @@ pub fn make_function_type(
     } else {
         BTreeMap::new()
     };
+
     let defined_loc = finfo.defined_loc;
     match finfo.visibility {
         Visibility::Internal if in_current_module => (),
         Visibility::Internal => {
             let internal_msg = format!(
-                "This function is internal to its module. Only '{}' and '{}' functions can \
+                "This function is internal to its module. Only '{}', '{}', and '{}' functions can \
                  be called outside of their module",
                 Visibility::PUBLIC,
-                Visibility::FRIEND
+                Visibility::FRIEND,
+                Visibility::PACKAGE
             );
             context.env.add_diag(diag!(
                 TypeSafety::Visibility,
                 (loc, format!("Invalid call to '{}::{}'", m, f)),
                 (defined_loc, internal_msg),
+            ));
+        }
+        Visibility::Package(loc)
+            if in_current_module || context.current_module_shares_package(m) =>
+        {
+            context.add_current_module_as_friend(m, loc);
+        }
+        Visibility::Package(vis_loc) => {
+            // FIXME(cswords): add the package's name here.
+            let internal_msg = format!(
+                "This function can only be called from the same package as module '{}'",
+                m
+            );
+            context.env.add_diag(diag!(
+                TypeSafety::Visibility,
+                (loc, format!("Invalid call to '{}::{}'", m, f)),
+                (vis_loc, internal_msg),
             ));
         }
         Visibility::Friend(_) if in_current_module || context.current_module_is_a_friend_of(m) => {}

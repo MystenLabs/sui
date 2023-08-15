@@ -4,9 +4,11 @@
 
 use crate::{
     diagnostics::WarningFilters,
-    expansion::ast::{Attributes, Fields, Friend, ModuleIdent, SpecId, Value, Visibility},
+    expansion::ast::{Attributes, Fields, Friend, ModuleIdent, SpecId, Value},
     naming::ast::{FunctionSignature, StructDefinition, Type, TypeName_, Type_, Var},
-    parser::ast::{BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER},
+    parser::ast::{
+        self as P, BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER,
+    },
     shared::{ast_debug::*, unique_map::UniqueMap},
 };
 use move_ir_types::location::*;
@@ -64,6 +66,13 @@ pub struct ModuleDefinition {
 //**************************************************************************************************
 // Functions
 //**************************************************************************************************
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum Visibility {
+    Public(Loc),
+    Friend(Loc),
+    Internal,
+}
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum FunctionBody_ {
@@ -249,6 +258,19 @@ impl BuiltinFunction_ {
     }
 }
 
+impl Visibility {
+    pub const FRIEND: &'static str = P::Visibility::FRIEND;
+    pub const INTERNAL: &'static str = P::Visibility::INTERNAL;
+    pub const PUBLIC: &'static str = P::Visibility::PUBLIC;
+
+    pub fn loc(&self) -> Option<Loc> {
+        match self {
+            Visibility::Friend(loc) | Visibility::Public(loc) => Some(*loc),
+            Visibility::Internal => None,
+        }
+    }
+}
+
 //**************************************************************************************************
 // Display
 //**************************************************************************************************
@@ -256,6 +278,20 @@ impl BuiltinFunction_ {
 impl fmt::Display for BuiltinFunction_ {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.display_name())
+    }
+}
+
+impl fmt::Display for Visibility {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match &self {
+                Visibility::Public(_) => Visibility::PUBLIC,
+                Visibility::Friend(_) => Visibility::FRIEND,
+                Visibility::Internal => Visibility::INTERNAL,
+            }
+        )
     }
 }
 
@@ -345,6 +381,12 @@ impl AstDebug for ModuleDefinition {
             fdef.ast_debug(w);
             w.new_line();
         }
+    }
+}
+
+impl AstDebug for Visibility {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.write(&format!("{} ", self))
     }
 }
 

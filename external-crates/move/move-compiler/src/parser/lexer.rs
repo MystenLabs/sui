@@ -78,6 +78,7 @@ pub enum Tok {
     Script,
     Const,
     Friend,
+    Package,
     NumSign,
     AtSign,
 }
@@ -152,6 +153,7 @@ impl fmt::Display for Tok {
             Script => "script",
             Const => "const",
             Friend => "friend",
+            Package => "package",
             NumSign => "#",
             AtSign => "@",
         };
@@ -623,6 +625,7 @@ fn get_name_token(name: &str) -> Tok {
         "false" => Tok::False,
         "fun" => Tok::Fun,
         "friend" => Tok::Friend,
+        "package" => Tok::Package,
         "if" => Tok::If,
         "invariant" => Tok::Invariant,
         "let" => Tok::Let,

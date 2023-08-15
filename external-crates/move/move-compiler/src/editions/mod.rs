@@ -26,7 +26,9 @@ pub struct Edition {
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
-pub enum FeatureGate {}
+pub enum FeatureGate {
+    PublicPackage,
+}
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
 pub enum Flavor {
@@ -38,14 +40,13 @@ pub enum Flavor {
 // Entry
 //**************************************************************************************************
 
-pub fn check_feature(env: &mut CompilationEnv, edition: Edition, loc: Loc, feature: FeatureGate) {
-    let is_supported = SUPPORTED_FEATURES.get(&edition).unwrap().contains(&feature);
-    if !is_supported {
+pub fn check_feature(env: &mut CompilationEnv, edition: Edition, feature: &FeatureGate, loc: Loc) {
+    if !edition.supports(&feature) {
         env.add_diag(diag!(
             Editions::FeatureTooNew,
             (
                 loc,
-                format!("{feature} requires edition {edition} or newer")
+                format!("{feature} not supported by current edition '{edition}'")
             )
         ))
     }
@@ -72,6 +73,10 @@ impl Edition {
 
     pub const ALL: &[Self] = &[Self::LEGACY, Self::E2024_ALPHA];
 
+    pub fn supports(&self, feature: &FeatureGate) -> bool {
+        SUPPORTED_FEATURES.get(self).unwrap().contains(feature)
+    }
+
     // Intended only for implementing the lazy static (supported feature map) above
     fn prev(&self) -> Option<Self> {
         match self {
@@ -84,9 +89,13 @@ impl Edition {
     // Inefficient and should be called only to implement the lazy static
     // (supported feature map) above
     fn features(&self) -> BTreeSet<FeatureGate> {
-        match self {
-            &Self::LEGACY => BTreeSet::new(),
-            &Self::E2024_ALPHA => self.prev().unwrap().features(),
+        match *self {
+            Self::LEGACY => BTreeSet::new(),
+            Self::E2024_ALPHA => {
+                let prev = self.prev().unwrap().features();
+                let output = BTreeSet::from([FeatureGate::PublicPackage]);
+                BTreeSet::from_iter(output.union(&prev).cloned())
+            }
             _ => self.unknown_edition_panic(),
         }
     }

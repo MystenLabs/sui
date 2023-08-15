@@ -251,6 +251,7 @@ pub enum Visibility {
     Public(Loc),
     Script(Loc),
     Friend(Loc),
+    Package(Loc),
     Internal,
 }
 
@@ -888,16 +889,18 @@ impl BinOp_ {
 }
 
 impl Visibility {
-    pub const PUBLIC: &'static str = "public";
-    pub const SCRIPT: &'static str = "public(script)";
     pub const FRIEND: &'static str = "public(friend)";
     pub const INTERNAL: &'static str = "";
+    pub const PACKAGE: &'static str = "public(package)";
+    pub const PUBLIC: &'static str = "public";
+    pub const SCRIPT: &'static str = "public(script)";
 
     pub fn loc(&self) -> Option<Loc> {
         match self {
-            Visibility::Public(loc) | Visibility::Script(loc) | Visibility::Friend(loc) => {
-                Some(*loc)
-            }
+            Visibility::Friend(loc)
+            | Visibility::Package(loc)
+            | Visibility::Public(loc)
+            | Visibility::Script(loc) => Some(*loc),
             Visibility::Internal => None,
         }
     }
@@ -950,10 +953,11 @@ impl fmt::Display for Visibility {
             f,
             "{}",
             match &self {
-                Visibility::Public(_) => Visibility::PUBLIC,
-                Visibility::Script(_) => Visibility::SCRIPT,
                 Visibility::Friend(_) => Visibility::FRIEND,
                 Visibility::Internal => Visibility::INTERNAL,
+                Visibility::Package(_) => Visibility::PACKAGE,
+                Visibility::Public(_) => Visibility::PUBLIC,
+                Visibility::Script(_) => Visibility::SCRIPT,
             }
         )
     }
