@@ -201,7 +201,7 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
         } else {
             let shared_counter = 0;
             let transfer_objects = 0;
-            let batch_payments = 100;
+            let batch_payments = 50;
             (shared_counter, transfer_objects, batch_payments)
         };
 
@@ -225,7 +225,7 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
                     &format!(
                         "--shared-counter {shared_counter} --transfer-object {transfer_objects}"
                     ),
-                    &format!("--batch-payment {batch_payments} --batch-size {batch_size}"),
+                    &format!("--batch-payment {batch_payments} --batch-payment-size {batch_size}"),
                     "--shared-counter-hotness-factor 50",
                     &format!("--client-metric-host 0.0.0.0 --client-metric-port {metrics_port}"),
                 ]
