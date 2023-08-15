@@ -473,7 +473,7 @@ mod checked {
                                 previous_transaction: tx_ctx.digest(),
                                 storage_rebate: 0,
                             };
-                            temporary_store.write_object(object, WriteKind::Create);
+                            temporary_store.create_object(object);
                         }
                     }
                 }
@@ -679,7 +679,7 @@ mod checked {
             tracing::error!(
             "Failed to execute advance epoch transaction. Switching to safe mode. Error: {:?}. Input objects: {:?}. Tx data: {:?}",
             result.as_ref().err(),
-            temporary_store.objects(),
+            temporary_store.input_objects(),
             change_epoch,
         );
             temporary_store.drop_writes();
@@ -760,7 +760,7 @@ mod checked {
                     .decrement_version();
 
                 // upgrade of a previously existing framework module
-                temporary_store.write_object(new_package, WriteKind::Mutate);
+                temporary_store.upgrade_system_package(new_package);
             }
         }
 

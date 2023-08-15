@@ -166,21 +166,6 @@ impl TreasuryCap {
     }
 }
 
-pub fn transfer_coin(
-    temporary_store: &mut TemporaryStore<'_>,
-    coin: &Coin,
-    recipient: SuiAddress,
-    coin_type: MoveObjectType,
-    previous_transaction: TransactionDigest,
-) {
-    let new_coin = Object::new_move(
-        MoveObject::new_coin(coin_type, SequenceNumber::new(), *coin.id(), coin.value()),
-        Owner::AddressOwner(recipient),
-        previous_transaction,
-    );
-    temporary_store.write_object(new_coin, WriteKind::Create);
-}
-
 // Rust version of the Move sui::coin::CoinMetadata type
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Eq, PartialEq)]
 pub struct CoinMetadata {

@@ -141,7 +141,7 @@ pub mod checked {
                 .gas_coins
                 .iter()
                 .map(|obj_ref| {
-                    let obj = temporary_store.objects().get(&obj_ref.0).unwrap();
+                    let obj = temporary_store.input_objects().get(&obj_ref.0).unwrap();
                     let Data::Move(move_obj) = &obj.data else {
                     return Err(ExecutionError::invariant_violation(
                         "Provided non-gas coin object as input for gas!"
@@ -166,7 +166,7 @@ pub mod checked {
                 .iter()
                 .sum();
             let mut primary_gas_object = temporary_store
-                .objects()
+                .input_objects()
                 .get(&gas_coin_id)
                 // unwrap should be safe because we checked that this exists in `self.objects()` above
                 .unwrap_or_else(|| {
@@ -179,7 +179,7 @@ pub mod checked {
             // delete all gas objects except the primary_gas_object
             for (id, version, _digest) in &self.gas_coins[1..] {
                 debug_assert_ne!(*id, primary_gas_object.id());
-                temporary_store.delete_object(id, DeleteKindWithOldVersion::Normal(*version));
+                temporary_store.delete_input_object(id, *version);
             }
             primary_gas_object
                 .data
@@ -192,7 +192,7 @@ pub mod checked {
                     )
                 })
                 .set_coin_value_unsafe(new_balance);
-            temporary_store.write_object(primary_gas_object, WriteKind::Mutate);
+            temporary_store.mutate_input_object(primary_gas_object);
         }
 
         //
@@ -216,12 +216,12 @@ pub mod checked {
             &mut self,
             temporary_store: &TemporaryStore<'_>,
         ) -> Result<(), ExecutionError> {
-            let objects = temporary_store.objects();
+            let objects = temporary_store.input_objects();
             // TODO: Charge input object count.
             let _object_count = objects.len();
             // Charge bytes read
             let total_size = temporary_store
-                .objects()
+                .input_objects()
                 .iter()
                 // don't charge for loading Sui Framework or Move stdlib
                 .filter(|(id, _)| !is_system_package(**id))
@@ -293,7 +293,7 @@ pub mod checked {
                 #[skip_checked_arithmetic]
                 trace!(gas_used, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
 
-                temporary_store.write_object(gas_object, WriteKind::Mutate);
+                temporary_store.mutate_input_object(gas_object);
                 cost_summary
             } else {
                 GasCostSummary::default()
