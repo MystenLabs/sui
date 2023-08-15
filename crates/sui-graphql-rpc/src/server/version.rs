@@ -2,35 +2,76 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use axum::{
-    http::{HeaderMap, HeaderValue, Request, StatusCode},
+    headers,
+    http::{HeaderName, HeaderValue, Request, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
+    TypedHeader,
 };
 
 use crate::error::{code, graphql_error};
 
-const VERSION_HEADER: &str = "X-Sui-RPC-Version";
-
 const RPC_VERSION_FULL: &str = env!("CARGO_PKG_VERSION");
 const RPC_VERSION_YEAR: &str = env!("CARGO_PKG_VERSION_MAJOR");
 const RPC_VERSION_MONTH: &str = env!("CARGO_PKG_VERSION_MINOR");
+
+static VERSION_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-version");
+
+pub(crate) struct SuiRpcVersion(Vec<u8>, Vec<Vec<u8>>);
+
+impl headers::Header for SuiRpcVersion {
+    fn name() -> &'static HeaderName {
+        &VERSION_HEADER
+    }
+
+    fn decode<'i, I>(values: &mut I) -> Result<Self, headers::Error>
+    where
+        I: Iterator<Item = &'i HeaderValue>,
+    {
+        let mut values = values.map(|v| v.as_bytes().to_owned());
+        let Some(value) = values.next() else {
+            // No values for this header -- it doesn't exist.
+            return Err(headers::Error::invalid());
+        };
+
+        // Extract the header values as bytes.  Distinguish the first value as we expect there to be
+        // just one under normal operation.  Do not attempt to parse the value, as a header parsing
+        // failure produces a generic error.
+        Ok(SuiRpcVersion(value, values.collect()))
+    }
+
+    fn encode<E: Extend<HeaderValue>>(&self, _values: &mut E) {
+        unimplemented!()
+    }
+}
 
 /// Middleware to check for the existence of a version constraint in the request header, and confirm
 /// that this instance of the RPC matches that version constraint.  Each RPC instance only supports
 /// one version of the RPC software, and it is the responsibility of the load balancer to make sure
 /// version constraints are met.
 pub(crate) async fn check_version_middleware<B>(
-    headers: HeaderMap,
+    version: Option<TypedHeader<SuiRpcVersion>>,
     request: Request<B>,
     next: Next<B>,
 ) -> Response {
-    if let Some(req_version) = headers.get(VERSION_HEADER) {
-        let Ok(req_version) = req_version.to_str() else {
+    if let Some(TypedHeader(SuiRpcVersion(req_version, rest))) = version {
+        if !rest.is_empty() {
             return (
                 StatusCode::BAD_REQUEST,
                 graphql_error(
                     code::BAD_REQUEST,
-                    format!("Failed to parse {VERSION_HEADER}: Not an ASCII string."),
+                    format!("Failed to parse {VERSION_HEADER}: Multiple possible versions found."),
+                ),
+            )
+                .into_response();
+        }
+
+        let Ok(req_version) = std::str::from_utf8(&req_version) else {
+            return (
+                StatusCode::BAD_REQUEST,
+                graphql_error(
+                    code::BAD_REQUEST,
+                    format!("Failed to parse {VERSION_HEADER}: Not a UTF8 string."),
                 ),
             ).into_response();
         };
@@ -68,7 +109,10 @@ pub(crate) async fn check_version_middleware<B>(
 pub(crate) async fn set_version_middleware<B>(request: Request<B>, next: Next<B>) -> Response {
     let mut response = next.run(request).await;
     let headers = response.headers_mut();
-    headers.insert(VERSION_HEADER, HeaderValue::from_static(RPC_VERSION_FULL));
+    headers.insert(
+        VERSION_HEADER.clone(),
+        HeaderValue::from_static(RPC_VERSION_FULL),
+    );
     response
 }
 
@@ -77,7 +121,7 @@ pub(crate) async fn set_version_middleware<B>(request: Request<B>, next: Next<B>
 /// Confirms that the version specifier contains exactly two components, and that both
 /// components are entirely comprised of digits.
 fn parse_version(version: &str) -> Option<(&str, &str)> {
-    let mut parts = version.split(".");
+    let mut parts = version.split('.');
     let year = parts.next()?;
     let month = parts.next()?;
 
@@ -213,7 +257,7 @@ mod tests {
               "data": null,
               "errors": [
                 {
-                  "message": "Failed to parse X-Sui-RPC-Version: 'not-a-version' not a valid <YEAR>.<MONTH> version.",
+                  "message": "Failed to parse x-sui-rpc-version: 'not-a-version' not a valid <YEAR>.<MONTH> version.",
                   "extensions": {
                     "code": "BAD_REQUEST"
                   }
@@ -245,7 +289,7 @@ mod tests {
               "data": null,
               "errors": [
                 {
-                  "message": "Failed to parse X-Sui-RPC-Version: Not an ASCII string.",
+                  "message": "Failed to parse x-sui-rpc-version: Not a UTF8 string.",
                   "extensions": {
                     "code": "BAD_REQUEST"
                   }

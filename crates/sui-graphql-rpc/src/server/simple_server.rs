@@ -3,7 +3,7 @@
 
 use crate::{
     server::version::{check_version_middleware, set_version_middleware},
-    types::query::{Query, SuiGraphQLSchema}
+    types::query::{Query, SuiGraphQLSchema},
 };
 use async_graphql::{EmptyMutation, EmptySubscription};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
