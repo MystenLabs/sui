@@ -49,7 +49,8 @@
 			"@mysten/kiosk": ["../../sdk/kiosk/src/index.ts"],
 			"@mysten/bcs": ["../../sdk/bcs/src/"],
 			"@mysten/ledgerjs-hw-app-sui": ["../../sdk/ledgerjs-hw-app-sui/src/Sui.ts"],
-			"@mysten/wallet-standard": ["../../sdk/wallet-standard/src/"]
+			"@mysten/wallet-standard": ["../../sdk/wallet-standard/src/"],
+			"@mysten/zklogin": ["../../sdk/zklogin/src/"]
 		}
 	},
 	"include": ["../../src", "../../tests"],
