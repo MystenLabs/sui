@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useState } from 'react';
 import { useCreateAccountsMutation } from '../hooks/useCreateAccountMutation';
 import { SocialButton } from '../shared/SocialButton';
+import { Toaster } from '../shared/toaster';
 import { Button } from '_app/shared/ButtonUI';
 import { Heading } from '_app/shared/heading';
 import { Text } from '_app/shared/text';
@@ -13,8 +15,6 @@ import PageLayout from '_pages/layout';
 import { type ZkProvider } from '_src/background/accounts/zk/providers';
 import { ampli } from '_src/shared/analytics/ampli';
 import WelcomeSplash from '_src/ui/assets/images/WelcomeSplash.svg';
-import { useState } from 'react';
-import { Toaster } from '../shared/toaster';
 
 export function WelcomePage() {
 	const isInitializedLoading = useInitializedGuard(false);

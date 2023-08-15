@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useMutation } from '@tanstack/react-query';
-import { useBackgroundClient } from './useBackgroundClient';
 import { toast } from 'react-hot-toast';
+import { useBackgroundClient } from './useBackgroundClient';
 
 export function useCreateAccountsMutation() {
 	const backgroundService = useBackgroundClient();
