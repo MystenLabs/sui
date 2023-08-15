@@ -25,11 +25,9 @@ different weights for each key (which is complex in threshold cryptography), Mul
 transaction. On the other hand, threshold signatures provide the benefits of hiding the threshold policy, but also
 resulting in a single signature payload, making it indistinguishable from a single-key account.
 
-![MultiSig Sui supported structures](../../../static/sui_multisig_structures.png "MultiSig Sui supported structures")
-
 # Example Workflow
 
-Here we demonstrate the steps to create a MultiSig transaction in Sui using CLI and then submit it using the Sui CLI against a local network. A transaction can be a transfer of an object, publish or upgrade a package, pay Sui, etc. To learn how to set up a local network, see [Sui Local Network](../build/sui-local-network.md)
+Here we demonstrate the steps to create a MultiSig transaction in Sui using CLI and then submit it using the Sui CLI against a local network. A transaction can be a transfer of an object, publish or upgrade a package, pay Sui, etc. To learn how to set up a local network, see [Sui Local Network](../../build/sui-local-network.md)
  
 ## Step 1: Add keys to Sui keystore
 
