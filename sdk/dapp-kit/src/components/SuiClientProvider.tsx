@@ -3,7 +3,7 @@
 
 import { SuiClient, getFullnodeUrl, isSuiClient } from '@mysten/sui.js/client';
 import type { SuiClientOptions } from '@mysten/sui.js/client';
-import { createContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useMemo, useState } from 'react';
 
 type NetworkConfig = SuiClient | SuiClientOptions;
 type NetworkConfigs<T extends NetworkConfig = NetworkConfig> = Record<string, T>;
@@ -17,13 +17,21 @@ export interface SuiClientProviderContext {
 
 export const SuiClientContext = createContext<SuiClientProviderContext | null>(null);
 
-export interface SuiClientProviderProps<T extends NetworkConfigs> {
-	network?: keyof T & string;
-	networks?: T;
+export type SuiClientProviderProps<T extends NetworkConfigs> = {
 	createClient?: (name: keyof T, config: T[keyof T]) => SuiClient;
-	defaultNetwork?: keyof T & string;
 	children: React.ReactNode;
-}
+	networks?: T;
+	onNetworkChange?: (network: keyof T & string) => void;
+} & (
+	| {
+			defaultNetwork?: keyof T & string;
+			network?: never;
+	  }
+	| {
+			defaultNetwork?: never;
+			network?: keyof T & string;
+	  }
+);
 
 const DEFAULT_NETWORKS = {
 	localnet: { url: getFullnodeUrl('localnet') },
@@ -41,6 +49,7 @@ const DEFAULT_CREATE_CLIENT = function createClient(
 };
 
 export function SuiClientProvider<T extends NetworkConfigs>(props: SuiClientProviderProps<T>) {
+	const { onNetworkChange, network, children } = props;
 	const networks = (props.networks ?? DEFAULT_NETWORKS) as T;
 	const createClient =
 		(props.createClient as typeof DEFAULT_CREATE_CLIENT) ?? DEFAULT_CREATE_CLIENT;
@@ -49,30 +58,30 @@ export function SuiClientProvider<T extends NetworkConfigs>(props: SuiClientProv
 		props.network ?? props.defaultNetwork ?? (Object.keys(networks)[0] as keyof T & string),
 	);
 
-	const [client, setClient] = useState<SuiClient>(() => {
-		return createClient(selectedNetwork, networks[selectedNetwork]);
-	});
+	const currentNetwork = props.network ?? selectedNetwork;
 
-	useEffect(() => {
-		if (props.network && props.network !== selectedNetwork) {
-			setSelectedNetwork(props.network);
-			setClient(createClient(props.network, networks[props.network]));
-		}
-	}, [createClient, networks, props.network, selectedNetwork, setClient, setSelectedNetwork]);
+	const client = useMemo(() => {
+		return createClient(currentNetwork, networks[currentNetwork]);
+	}, [createClient, currentNetwork, networks]);
 
 	const ctx = useMemo((): SuiClientProviderContext => {
 		return {
 			client,
 			networks,
 			selectedNetwork,
-			selectNetwork: (network) => {
-				if (network !== selectedNetwork) {
-					setSelectedNetwork(network);
-					setClient(createClient(network, networks[network]));
+			selectNetwork: (newNetwork) => {
+				if (currentNetwork === newNetwork) {
+					return;
 				}
+
+				if (!network && newNetwork !== selectedNetwork) {
+					setSelectedNetwork(newNetwork);
+				}
+
+				onNetworkChange?.(newNetwork);
 			},
 		};
-	}, [client, setClient, createClient, selectedNetwork, networks]);
+	}, [client, networks, selectedNetwork, currentNetwork, network, onNetworkChange]);
 
-	return <SuiClientContext.Provider value={ctx}>{props.children}</SuiClientContext.Provider>;
+	return <SuiClientContext.Provider value={ctx}>{children}</SuiClientContext.Provider>;
 }

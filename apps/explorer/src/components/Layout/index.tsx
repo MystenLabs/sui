@@ -45,6 +45,7 @@ export function Layout() {
 					networks={NetworkConfigs}
 					createClient={createSuiClient}
 					network={network as Network}
+					onNetworkChange={setNetwork}
 				>
 					<NetworkContext.Provider value={[network, setNetwork]}>
 						<Outlet />
