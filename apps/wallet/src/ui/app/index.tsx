@@ -13,6 +13,7 @@ import { useInitialPageView } from './hooks/useInitialPageView';
 import { useStorageMigrationStatus } from './hooks/useStorageMigrationStatus';
 import { StorageMigrationPage } from './pages/StorageMigrationPage';
 
+import { WelcomePage } from './pages/WelcomePage';
 import { AccountsPage } from './pages/accounts/AccountsPage';
 import { AddAccountPage } from './pages/accounts/AddAccountPage';
 import { ForgotPasswordPage } from './pages/accounts/ForgotPasswordPage';
@@ -47,7 +48,6 @@ import { SelectQredoAccountsPage } from './pages/qredo-connect/SelectQredoAccoun
 
 import { RestrictedPage } from './pages/restricted';
 import SiteConnectPage from './pages/site-connect';
-import WelcomePage from './pages/welcome';
 import { AppType } from './redux/slices/app/AppType';
 import { Staking } from './staking/home';
 
