@@ -25,7 +25,7 @@ jobs:
           output: ${{ env.LYCHEE_OUT }}
           format: markdown
           ## Do not fail this step on broken links
-          fail: false
+          fail: true
           ## Allow pages replying with 200 (Ok)in at most 20 seconds
           ## This checks all md files in the repo
           args: >-
@@ -38,43 +38,3 @@ jobs:
         env:
           ## Avoid rate limiting when checking github.com links
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Find the last report issue open
-        uses: micalevisk/last-issue-action@v2.1
-        id: last_issue
-        with:
-          state: open
-          labels: |
-            report
-            automated issue
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create issue from report file
-        if: ${{ steps.last_issue.outputs.has_found == 'false' }}
-        uses: peter-evans/create-issue-from-file@v4
-        with:
-          title: Link checker report
-          content-filepath: ${{ env.LYCHEE_OUT }}
-          assignees: ronny-mysten, randall-Mysten, awelc, lxfind, patrickkuo
-          issue-number: ${{ steps.last_issue.outputs.issue_number }}
-          labels: |
-            report
-            automated issue
-
-      - name: Update last report open issue created
-        if: ${{ steps.last_issue.outputs.has_found == 'true' }}
-        uses: peter-evans/create-issue-from-file@v4
-        with:
-          title: Link checker report
-          content-filepath: ${{ env.LYCHEE_OUT }}
-          issue-number: ${{ steps.last_issue.outputs.issue_number }}
-          labels: |
-            report
-            automated issue
-
-      - name: Close last report open issue
-        if: ${{ steps.lychee.outputs.exit_code == 0 }}
-        uses: peter-evans/close-issue@v3
-        with:
-          issue-number: ${{ steps.last_issue.outputs.issue_number }}
