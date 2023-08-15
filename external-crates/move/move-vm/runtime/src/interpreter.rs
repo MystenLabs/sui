@@ -100,8 +100,8 @@ impl<'a, 'b> TypeView for TypeWithLoader<'a, 'b> {
 }
 
 pub trait InterpreterInterface {
-    fn peek_last_n(&self, n: usize) -> PartialVMResult<Vec<Value>>;
-    fn peek(&self) -> PartialVMResult<Value>;
+    fn peek_last_n(&self, n: usize) -> PartialVMResult<Vec<&Value>>;
+    fn peek(&self) -> PartialVMResult<&Value>;
     fn get_stack_len(&self) -> usize;
     fn get_internal_state(&self) -> ExecutionState;
     fn set_location(&self, err: PartialVMError) -> VMError;
@@ -109,18 +109,15 @@ pub trait InterpreterInterface {
 }
 
 impl InterpreterInterface for Interpreter {
-    fn peek_last_n(&self, n: usize) -> PartialVMResult<Vec<Value>> {
-        Ok(vec)
+    fn peek_last_n(&self, n: usize) -> PartialVMResult<Vec<&Value>> {
+        Ok(self.operand_stack.last_n(n)?.collect())
     }
-    fn peek(&self) -> PartialVMResult<Value> {
-        Ok(self
-            .operand_stack
-            .last_n(1)
-            .map(|mut iter| iter.next().unwrap())?
-            .clone())
+    fn peek(&self) -> PartialVMResult<&Value> {
+        Ok(self.peek_last_n(1)?[0])
     }
     fn get_stack_len(&self) -> usize {
         self.get_stack_len()
+    }
     fn get_internal_state(&self) -> ExecutionState {
         self.get_internal_state()
     }

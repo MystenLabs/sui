@@ -36,7 +36,7 @@ use std::{
  **************************************************************************************/
 
 /// Runtime representation of a Move value.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 enum ValueImpl {
     Invalid,
 
