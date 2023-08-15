@@ -3,7 +3,10 @@
 
 use async_graphql::*;
 
-use super::{address::Address, object::Object, owner::ObjectOwner, sui_address::SuiAddress};
+use super::{
+    address::Address, object::Object, owner::ObjectOwner, protocol_config::ProtocolConfigs,
+    sui_address::SuiAddress,
+};
 use crate::server::data_provider::fetch_chain_id;
 
 pub(crate) struct Query;
@@ -37,5 +40,14 @@ impl Query {
 
     async fn address(&self, address: SuiAddress) -> Option<Address> {
         Some(Address { address })
+    }
+
+    async fn protocol_config(
+        &self,
+        ctx: &Context<'_>,
+        protocol_version: Option<u64>,
+    ) -> Result<ProtocolConfigs> {
+        let cl = ctx.data_unchecked::<sui_sdk::SuiClient>();
+        crate::server::data_provider::fetch_protocol_config(cl, protocol_version).await
     }
 }

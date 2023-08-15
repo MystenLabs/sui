@@ -9,6 +9,9 @@ use crate::types::base64::Base64;
 use crate::types::big_int::BigInt;
 use crate::types::object::ObjectFilter;
 use crate::types::object::ObjectKind;
+use crate::types::protocol_config::ProtocolConfigAttr;
+use crate::types::protocol_config::ProtocolConfigFeatureFlag;
+use crate::types::protocol_config::ProtocolConfigs;
 use crate::types::transaction_block::TransactionBlock;
 use crate::types::{object::Object, sui_address::SuiAddress};
 use async_graphql::connection::{Connection, Edge};
@@ -170,6 +173,41 @@ pub(crate) async fn fetch_tx(cl: &SuiClient, digest: &String) -> Result<Option<T
 
 pub(crate) async fn fetch_chain_id(cl: &SuiClient) -> Result<String> {
     Ok(cl.read_api().get_chain_identifier().await?)
+}
+
+pub(crate) async fn fetch_protocol_config(
+    cl: &SuiClient,
+    version: Option<u64>,
+) -> Result<ProtocolConfigs> {
+    let cfg = cl
+        .read_api()
+        .get_protocol_config(version.map(|x| x.into()))
+        .await?;
+
+    Ok(ProtocolConfigs {
+        configs: cfg
+            .attributes
+            .into_iter()
+            .map(|(k, v)| ProtocolConfigAttr {
+                key: k,
+                // TODO:  what to return when value is None? nothing?
+                // TODO: do we want to return type info separately?
+                value: match v {
+                    Some(q) => format!("{:?}", q),
+                    None => "".to_string(),
+                },
+            })
+            .collect(),
+        feature_flags: cfg
+            .feature_flags
+            .into_iter()
+            .map(|x| ProtocolConfigFeatureFlag {
+                key: x.0,
+                value: x.1,
+            })
+            .collect(),
+        protocol_version: cfg.protocol_version.as_u64(),
+    })
 }
 
 fn convert_bal(b: sui_json_rpc_types::Balance) -> Balance {
