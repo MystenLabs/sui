@@ -150,10 +150,12 @@ mod tests {
         Request::builder().uri("/").body(Body::empty()).unwrap()
     }
 
-    fn header_request(name: &'static str, value: &[u8]) -> Request<Body> {
+    fn header_request(kvps: &[(&HeaderName, &[u8])]) -> Request<Body> {
         let mut request = plain_request();
         let headers = request.headers_mut();
-        headers.insert(name, HeaderValue::from_bytes(value).unwrap());
+        for (name, value) in kvps {
+            headers.append(*name, HeaderValue::from_bytes(value).unwrap());
+        }
         request
     }
 
@@ -168,13 +170,13 @@ mod tests {
         let version = format!("{RPC_VERSION_YEAR}.{RPC_VERSION_MONTH}");
         let service = service();
         let response = service
-            .oneshot(header_request("X-Sui-RPC-Version", version.as_bytes()))
+            .oneshot(header_request(&[(&VERSION_HEADER, version.as_bytes())]))
             .await
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
-            response.headers().get("X-Sui-RPC-Version"),
+            response.headers().get(&VERSION_HEADER),
             Some(&HeaderValue::from_static(RPC_VERSION_FULL)),
         );
     }
@@ -184,13 +186,16 @@ mod tests {
         let version = format!("{RPC_VERSION_YEAR}.{RPC_VERSION_MONTH}");
         let service = service();
         let response = service
-            .oneshot(header_request("x-sUI-RpC-VeRSion", version.as_bytes()))
+            .oneshot(header_request(&[(
+                &HeaderName::try_from("x-sUi-RpC-vERSION").unwrap(),
+                version.as_bytes(),
+            )]))
             .await
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
-            response.headers().get("X-Sui-RPC-Version"),
+            response.headers().get(&VERSION_HEADER),
             Some(&HeaderValue::from_static(RPC_VERSION_FULL)),
         );
     }
@@ -202,24 +207,22 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
-            response.headers().get("X-Sui-RPC-Version"),
+            response.headers().get(&VERSION_HEADER),
             Some(&HeaderValue::from_static(RPC_VERSION_FULL)),
         );
     }
 
     #[tokio::test]
     async fn incompatible_version() {
-        let next_year = 1 + RPC_VERSION_YEAR.parse::<u16>().expect("a number");
-        let version = format!("{next_year}.{RPC_VERSION_MONTH}");
         let service = service();
         let response = service
-            .oneshot(header_request("X-Sui-RPC-Version", version.as_bytes()))
+            .oneshot(header_request(&[(&VERSION_HEADER, "0.0".as_bytes())]))
             .await
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::MISDIRECTED_REQUEST);
         assert_eq!(
-            response.headers().get("X-Sui-RPC-Version"),
+            response.headers().get(&VERSION_HEADER),
             Some(&HeaderValue::from_static(RPC_VERSION_FULL)),
         );
 
@@ -228,9 +231,41 @@ mod tests {
               "data": null,
               "errors": [
                 {
-                  "message": "Version '1.1' not supported.",
+                  "message": "Version '0.0' not supported.",
                   "extensions": {
                     "code": "INTERNAL_SERVER_ERROR"
+                  }
+                }
+              ]
+            }"#]];
+        expect.assert_eq(&response_body(response).await);
+    }
+
+    #[tokio::test]
+    async fn multiple_versions() {
+        let service = service();
+        let response = service
+            .oneshot(header_request(&[
+                (&VERSION_HEADER, "0.0".as_bytes()),
+                (&VERSION_HEADER, "1.0".as_bytes()),
+            ]))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            response.headers().get(&VERSION_HEADER),
+            Some(&HeaderValue::from_static(RPC_VERSION_FULL)),
+        );
+
+        let expect = expect![[r#"
+            {
+              "data": null,
+              "errors": [
+                {
+                  "message": "Failed to parse x-sui-rpc-version: Multiple possible versions found.",
+                  "extensions": {
+                    "code": "BAD_REQUEST"
                   }
                 }
               ]
@@ -242,13 +277,13 @@ mod tests {
     async fn not_a_version() {
         let service = service();
         let response = service
-            .oneshot(header_request("X-Sui-RPC-Version", b"not-a-version"))
+            .oneshot(header_request(&[(&VERSION_HEADER, b"not-a-version")]))
             .await
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         assert_eq!(
-            response.headers().get("X-Sui-RPC-Version"),
+            response.headers().get(&VERSION_HEADER),
             Some(&HeaderValue::from_static(RPC_VERSION_FULL)),
         );
 
@@ -271,16 +306,16 @@ mod tests {
     async fn not_a_string() {
         let service = service();
         let response = service
-            .oneshot(header_request(
-                "X-Sui-RPC-Version",
+            .oneshot(header_request(&[(
+                &VERSION_HEADER,
                 &[0xf1, 0xf2, 0xf3, 0xf4],
-            ))
+            )]))
             .await
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         assert_eq!(
-            response.headers().get("X-Sui-RPC-Version"),
+            response.headers().get(&VERSION_HEADER),
             Some(&HeaderValue::from_static(RPC_VERSION_FULL)),
         );
 
