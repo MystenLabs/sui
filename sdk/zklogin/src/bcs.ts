@@ -4,18 +4,20 @@
 import { BCS } from '@mysten/bcs';
 import { bcs } from '@mysten/sui.js/bcs';
 
-bcs.registerStructType('AddressParams', {
+export const zkBcs = new BCS(bcs);
+
+zkBcs.registerStructType('AddressParams', {
 	iss: BCS.STRING,
 	aud: BCS.STRING,
 });
 
-bcs.registerStructType('ZkClaim', {
+zkBcs.registerStructType('ZkClaim', {
 	name: BCS.STRING,
 	value_base64: BCS.STRING,
 	index_mod_4: BCS.U8,
 });
 
-bcs.registerStructType('ZkSignature', {
+zkBcs.registerStructType('ZkSignature', {
 	inputs: {
 		proof_points: {
 			pi_a: [BCS.VECTOR, BCS.STRING],
@@ -29,5 +31,3 @@ bcs.registerStructType('ZkSignature', {
 	max_epoch: BCS.U64,
 	user_signature: [BCS.VECTOR, BCS.U8],
 });
-
-export { bcs } from '@mysten/sui.js/bcs';

@@ -8,17 +8,16 @@ import {
 	toSerializedSignature,
 } from '@mysten/sui.js/cryptography';
 import { fromB64, toB64 } from '@mysten/sui.js/utils';
+import { computeZkAddress, zkBcs } from '@mysten/zklogin';
 import { blake2b } from '@noble/hashes/blake2b';
 import { toBigIntBE } from 'bigint-buffer';
 import { decodeJwt } from 'jose';
-import { bcs } from './bcs';
 import { getCurrentEpoch } from './current-epoch';
 import { type ZkProvider } from './providers';
 import {
 	type PartialZkSignature,
 	createPartialZKSignature,
 	fetchPin,
-	getAddress,
 	prepareZKLogin,
 	zkLogin,
 } from './utils';
@@ -117,7 +116,7 @@ export class ZkAccount
 		};
 		return {
 			type: 'zk',
-			address: await getAddress({
+			address: computeZkAddress({
 				claimName: 'sub',
 				claimValue: decodedJWT.sub,
 				iss: decodedJWT.iss,
@@ -229,7 +228,7 @@ export class ZkAccount
 			signatureScheme: keyPair.getKeyScheme(),
 			publicKey: keyPair.getPublicKey(),
 		});
-		const bytes = bcs
+		const bytes = zkBcs
 			.ser(
 				'ZkSignature',
 				{
