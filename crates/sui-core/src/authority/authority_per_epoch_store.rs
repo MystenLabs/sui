@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto_zkp::bn254::zk_login::JWK;
 use futures::future::{join_all, select, Either};
 use futures::FutureExt;
 use itertools::izip;
@@ -26,7 +27,6 @@ use sui_types::transaction::{
     CertifiedTransaction, SenderSignedData, SharedInputObject, TransactionDataAPI,
     VerifiedCertificate, VerifiedSignedTransaction,
 };
-use sui_types::zk_login_util::OAuthProviderContent;
 use tracing::{debug, error, info, trace, warn};
 use typed_store::rocks::{
     default_db_options, DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError,
@@ -309,8 +309,8 @@ pub struct AuthorityEpochTables {
     pub(crate) executed_transactions_to_checkpoint:
         DBMap<TransactionDigest, CheckpointSequenceNumber>,
 
-    /// Map from kid (key id) to the fetched OAuthProviderContent for that key.
-    oauth_provider_jwk: DBMap<String, OAuthProviderContent>,
+    /// Map from (kid, iss) to the fetched JWK for that key.
+    oauth_provider_jwk: DBMap<(String, String), JWK>,
 }
 
 fn signed_transactions_table_default_config() -> DBOptions {
@@ -392,7 +392,7 @@ impl AuthorityEpochTables {
         Ok(self.last_consensus_index.get(&LAST_CONSENSUS_INDEX_ADDR)?)
     }
 
-    fn load_oauth_provider_jwk(&self) -> SuiResult<HashMap<String, Arc<OAuthProviderContent>>> {
+    fn load_oauth_provider_jwk(&self) -> SuiResult<HashMap<(String, String), Arc<JWK>>> {
         Ok(self
             .oauth_provider_jwk
             .unbounded_iter()
@@ -466,8 +466,8 @@ impl AuthorityPerEpochStore {
 
         let signature_verifier =
             SignatureVerifier::new(committee.clone(), signature_verifier_metrics);
-        for (_, v) in oauth_provider_jwk.iter() {
-            signature_verifier.insert_oauth_jwk(v);
+        for ((kid, iss), v) in oauth_provider_jwk.iter() {
+            signature_verifier.insert_oauth_jwk(v, kid.to_string(), iss.to_string());
         }
 
         let is_validator = committee.authority_index(&name).is_some();
@@ -2156,15 +2156,18 @@ impl AuthorityPerEpochStore {
     }
 
     // TODO: should be pub(crate) when it is inserted only from consensus
-    pub fn insert_oauth_jwk(&self, content: &OAuthProviderContent) {
-        if self.signature_verifier.insert_oauth_jwk(content) {
+    pub fn insert_oauth_jwk(&self, content: &JWK, iss: String, kid: String) {
+        if self
+            .signature_verifier
+            .insert_oauth_jwk(content, kid.clone(), iss.clone())
+        {
             self.tables
                 .oauth_provider_jwk
-                .insert(&content.kid().to_string(), content)
+                .insert(&(kid.to_string(), iss.to_string()), content)
                 .expect("write to oauth_provider_jwk should not fail");
-            info!("Added new JWK with kid {}: {:?}", content.kid(), content);
+            info!("Added new JWK with kid {} iss {}: {:?}", kid, iss, content);
         } else {
-            info!("OAuth JWK with kid {} already exists", content.kid());
+            info!("JWK with kid {} iss {} already exists", kid, iss);
         }
     }
 }

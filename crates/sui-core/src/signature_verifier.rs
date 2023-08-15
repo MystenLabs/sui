@@ -2,15 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use either::Either;
+use fastcrypto_zkp::bn254::zk_login::JWK;
 use futures::pin_mut;
-use im::hashmap::HashMap as ImHashMap;
 use itertools::izip;
 use lru::LruCache;
+use mysten_metrics::monitored_scope;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use shared_crypto::intent::Intent;
+use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::Arc;
+use sui_types::digests::SenderSignedDataDigest;
+use sui_types::transaction::SenderSignedData;
 use sui_types::{
     committee::Committee,
     crypto::{AuthoritySignInfoTrait, VerificationObligation},
@@ -20,12 +24,7 @@ use sui_types::{
     messages_checkpoint::SignedCheckpointSummary,
     signature::VerifyParams,
     transaction::{CertifiedTransaction, VerifiedCertificate},
-    zk_login_util::OAuthProviderContent,
 };
-
-use mysten_metrics::monitored_scope;
-use sui_types::digests::SenderSignedDataDigest;
-use sui_types::transaction::SenderSignedData;
 use tap::TapFallible;
 use tokio::runtime::Handle;
 use tokio::{
@@ -92,12 +91,12 @@ pub struct SignatureVerifier {
     certificate_cache: VerifiedDigestCache<CertificateDigest>,
     signed_data_cache: VerifiedDigestCache<SenderSignedDataDigest>,
 
-    /// Map from kid (key id) to the fetched OAuthProviderContent for that key.
+    /// Map from (kid, iss) to the fetched JWK for that key.
     /// We use an immutable data structure because verification of ZKLogins may be slow, so we
     /// don't want to pass a reference to the map to the verify method, since that would lead to a
     /// lengthy critical section. Instead, we use an immutable data structure which can be cloned
     /// very cheaply.
-    oauth_provider_jwk: RwLock<ImHashMap<String, OAuthProviderContent>>,
+    oauth_provider_jwk: RwLock<HashMap<(String, String), JWK>>,
 
     queue: Mutex<CertBuffer>,
     pub metrics: Arc<SignatureVerifierMetrics>,
@@ -275,17 +274,14 @@ impl SignatureVerifier {
         });
     }
 
-    /// Insert a JWK into the verifier state. Returns true if the kid of the JWK has not already
+    /// Insert a JWK into the verifier state based on provider. Returns true if the kid of the JWK has not already
     /// been inserted.
-    pub(crate) fn insert_oauth_jwk(&self, content: &OAuthProviderContent) -> bool {
+    pub(crate) fn insert_oauth_jwk(&self, content: &JWK, kid: String, iss: String) -> bool {
         let mut oauth_provider_jwk = self.oauth_provider_jwk.write();
-
-        if oauth_provider_jwk.contains_key(content.kid()) {
+        if oauth_provider_jwk.contains_key(&(kid.clone(), iss.clone())) {
             return false;
         }
-
-        let kid = content.kid().to_string();
-        oauth_provider_jwk.insert(kid, content.clone());
+        oauth_provider_jwk.insert((kid, iss), content.clone());
         true
     }
 
