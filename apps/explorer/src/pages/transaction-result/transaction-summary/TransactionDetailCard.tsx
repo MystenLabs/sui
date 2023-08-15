@@ -8,7 +8,7 @@ import { useBreakpoint } from '~/hooks/useBreakpoint';
 import { AddressLink, CheckpointSequenceLink, EpochLink } from '~/ui/InternalLink';
 import { TransactionBlockCard, TransactionBlockCardSection } from '~/ui/TransactionBlockCard';
 
-export function TransactionDetail({ label, value }: { label: string; value: ReactNode | string }) {
+function TransactionDetail({ label, value }: { label: string; value: ReactNode | string }) {
 	return (
 		<div className="flex basis-1/3 flex-col gap-2 pl-3 first:pl-0 md:pl-5">
 			<Heading variant="heading4/semibold" color="steel-darker">

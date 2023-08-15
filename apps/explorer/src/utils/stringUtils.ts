@@ -3,22 +3,11 @@
 
 const IPFS_START_STRING = 'https://ipfs.io/ipfs/';
 
-export function hexToAscii(hex: string) {
-	if (!hex || typeof hex != 'string') return;
-	hex = hex.replace(/^0x/, '');
-
-	var str = '';
-	for (var n = 0; n < hex.length; n += 2)
-		str += String.fromCharCode(parseInt(hex.substring(n, 2), 16));
-
-	return str;
-}
-
 export const trimStdLibPrefix = (str: string): string => str.replace(/^0x2::/, '');
 
 export const findIPFSvalue = (url: string): string | undefined => url.match(/^ipfs:\/\/(.*)/)?.[1];
 
-export function transformURL(url: string) {
+function transformURL(url: string) {
 	const found = findIPFSvalue(url);
 	if (!found) {
 		return url;
@@ -26,7 +15,7 @@ export function transformURL(url: string) {
 	return `${IPFS_START_STRING}${found}`;
 }
 
-export async function extractFileType(displayString: string, signal: AbortSignal) {
+async function extractFileType(displayString: string, signal: AbortSignal) {
 	// First check Content-Type in header:
 	const result = await fetch(transformURL(displayString), {
 		signal: signal,

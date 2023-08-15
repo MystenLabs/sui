@@ -7,7 +7,7 @@ import { cva, cx, type VariantProps } from 'class-variance-authority';
 import clsx from 'clsx';
 import { useEffect, useState } from 'react';
 
-import useImage from '~/hooks/useImage';
+import { useImage } from '~/hooks/useImage';
 import { VISIBILITY } from '~/hooks/useImageMod';
 
 const imageStyles = cva(null, {

@@ -13,7 +13,7 @@ import type { SuiMoveNormalizedType } from '@mysten/sui.js/client';
  * @param str This function is recursive and this field is used to pass the already resolved type
  * @returns
  */
-export function normalizedFunctionParameterTypeToString(
+function normalizedFunctionParameterTypeToString(
 	param: SuiMoveNormalizedType,
 	functionTypeArgNames?: string[],
 	str = '',

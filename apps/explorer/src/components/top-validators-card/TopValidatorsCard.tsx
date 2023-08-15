@@ -19,7 +19,7 @@ import { ampli } from '~/utils/analytics/ampli';
 
 const NUMBER_OF_VALIDATORS = 10;
 
-export function processValidators(set: SuiValidatorSummary[]) {
+function processValidators(set: SuiValidatorSummary[]) {
 	return set.map((av) => ({
 		name: av.name,
 		address: av.suiAddress,

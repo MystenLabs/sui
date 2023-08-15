@@ -46,5 +46,3 @@ export function useImage({ src = '', moderate = true }: UseImageProps) {
 
 	return { moderation, url: formatted, status, ref };
 }
-
-export default useImage;
