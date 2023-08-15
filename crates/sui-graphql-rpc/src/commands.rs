@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::*;
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[clap(
@@ -12,6 +13,19 @@ use clap::*;
     version
 )]
 pub enum Command {
-    GenerateSchema,
-    StartServer,
+    GenerateSchema {
+        #[clap(short, long)]
+        file: Option<PathBuf>,
+    },
+    StartServer {
+        /// URL of the RPC server for data fetching
+        #[clap(short, long, default_value = "https://fullnode.testnet.sui.io:443/")]
+        rpc_url: String,
+        /// Port to bind the server to
+        #[clap(short, long, default_value = "8000")]
+        port: u16,
+        /// Host to bind the server to
+        #[clap(short, long, default_value = "127.0.0.1")]
+        host: String,
+    },
 }

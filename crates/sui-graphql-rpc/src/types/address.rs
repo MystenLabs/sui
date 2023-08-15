@@ -15,7 +15,7 @@ use super::{
     transaction_block::{TransactionBlockConnection, TransactionBlockFilter},
 };
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Copy)]
 pub(crate) struct Address {
     pub address: SuiAddress,
 }
@@ -47,7 +47,7 @@ impl Address {
     // =========== Owner interface methods =============
 
     pub async fn location(&self) -> SuiAddress {
-        self.address.clone()
+        self.address
     }
 
     pub async fn object_connection(

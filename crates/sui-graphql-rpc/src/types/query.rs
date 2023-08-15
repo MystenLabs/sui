@@ -39,9 +39,7 @@ impl Query {
     }
 
     async fn address(&self, address: SuiAddress) -> Option<Address> {
-        Some(Address {
-            address: address.clone(),
-        })
+        Some(Address { address })
     }
 
     async fn protocol_config(

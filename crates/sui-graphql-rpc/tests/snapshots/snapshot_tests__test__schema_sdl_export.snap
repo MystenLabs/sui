@@ -30,9 +30,6 @@ type BalanceConnection {
 	unimplemented: Boolean!
 }
 
-"""
-TODO: implement Base64 scalar type
-"""
 scalar Base64
 
 scalar BigInt
