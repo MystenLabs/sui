@@ -60,6 +60,6 @@ pub(crate) trait Plugin {
         instruction: &Bytecode,
         ty_args: &[Type],
         resolver: &Resolver,
-        r: &InstrRet,
+        exec_result: &PartialVMResult<InstrRet>,
     ) -> PartialVMResult<()>;
 }

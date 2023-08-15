@@ -34,7 +34,7 @@ use move_vm_types::{
         self, GlobalValue, IntegerValue, Locals, Reference, Struct, StructRef, VMValueCast, Value,
         Vector, VectorRef,
     },
-    views::TypeView,
+    views::{TypeView, ValueView},
 };
 use smallvec::SmallVec;
 
@@ -247,13 +247,18 @@ impl Interpreter {
         instruction: &Bytecode,
         ty_args: &[Type],
         resolver: &Resolver,
-        r: &InstrRet,
         exec_result: &PartialVMResult<InstrRet>,
     ) -> PartialVMResult<()> {
         profile_close_instr!(gas_meter, format!("{:?}", instruction));
         for plugin in plugins.iter_mut() {
-            let result =
-                plugin.post_instr(interpreter, function, instruction, ty_args, resolver, r);
+            let result = plugin.post_instr(
+                interpreter,
+                function,
+                instruction,
+                ty_args,
+                resolver,
+                exec_result,
+            );
             if plugin.is_critical() {
                 result?;
             }
@@ -1614,7 +1619,6 @@ impl Frame {
                     instruction,
                     &self.ty_args,
                     resolver,
-                    &r,
                     &exec_result,
                 )?;
 
@@ -1751,21 +1755,30 @@ impl Frame {
                     .charge_pack(true, interpreter.peek_last_n(field_count as usize)?.iter())?;
             }
             Bytecode::Unpack(_sd_idx) => {
-                let struct_ = interpreter.peek()?.value_as::<Struct>()?;
+                let value = interpreter.peek()?;
+                let struct_ = interpreter.peek()?.copy_value()?.value_as::<Struct>()?;
+                // VMValueCast<Struct> for Value -> cast
+                // if it is ValueImpl::Container(Container::Struct(r)) -> Struct { fields: take_unique_ownership(r)? }
+                // Which basically does Rc::try_unwrap(r) -> Ok(cell) -> Ok(cell.into_inner())
+                // match self.0 to ValueImpl::Container(Container::Struct(r)) -> r.borrow().iter()
                 gas_meter.charge_unpack(false, struct_.field_views())?;
             }
             Bytecode::UnpackGeneric(_si_idx) => {
-                let struct_ = interpreter.peek()?.value_as::<Struct>()?;
+                let struct_ = interpreter.peek()?.copy_value()?.value_as::<Struct>()?;
                 gas_meter.charge_unpack(true, struct_.field_views())?;
             }
             Bytecode::ReadRef => {
-                let reference = interpreter.peek()?.value_as::<Reference>()?;
+                let reference = interpreter.peek()?.copy_value()?.value_as::<Reference>()?;
                 gas_meter.charge_read_ref(reference.value_view())?;
             }
             Bytecode::WriteRef => {
                 let mut ref_and_val = interpreter.peek_last_n(2)?;
                 let value = ref_and_val.pop().unwrap();
-                let reference = ref_and_val.pop().unwrap().value_as::<Reference>()?;
+                let reference = ref_and_val
+                    .pop()
+                    .unwrap()
+                    .copy_value()?
+                    .value_as::<Reference>()?;
                 gas_meter.charge_write_ref(&value, reference.value_view())?;
             }
             Bytecode::CastU8 => {
@@ -1850,7 +1863,10 @@ impl Frame {
                 gas_meter.charge_neq(&lhs, &rhs)?;
             }
             Bytecode::MutBorrowGlobal(sd_idx) | Bytecode::ImmBorrowGlobal(sd_idx) => {
-                let addr = interpreter.peek()?.value_as::<AccountAddress>()?;
+                let addr = interpreter
+                    .peek()?
+                    .copy_value()?
+                    .value_as::<AccountAddress>()?;
                 let ty = resolver.get_struct_type(*sd_idx);
                 let res = match data_store.load_resource(addr, &ty) {
                     Ok((gv, load_res)) => {
@@ -1885,7 +1901,10 @@ impl Frame {
             }
             Bytecode::MutBorrowGlobalGeneric(si_idx) | Bytecode::ImmBorrowGlobalGeneric(si_idx) => {
                 let is_mut = matches!(instruction, Bytecode::MutBorrowGlobalGeneric(_));
-                let addr = interpreter.peek()?.value_as::<AccountAddress>()?;
+                let addr = interpreter
+                    .peek()?
+                    .copy_value()?
+                    .value_as::<AccountAddress>()?;
                 let ty = resolver.instantiate_generic_type(*si_idx, ty_args)?;
                 let res = match data_store.load_resource(addr, &ty) {
                     Ok((gv, load_res)) => {
@@ -1919,7 +1938,10 @@ impl Frame {
                 };
             }
             Bytecode::Exists(sd_idx) => {
-                let addr = interpreter.peek()?.value_as::<AccountAddress>()?;
+                let addr = interpreter
+                    .peek()?
+                    .copy_value()?
+                    .value_as::<AccountAddress>()?;
                 let ty = resolver.get_struct_type(*sd_idx);
                 let res = match data_store.load_resource(addr, &ty) {
                     Ok((gv, load_res)) => {
@@ -1955,7 +1977,10 @@ impl Frame {
                 gas_meter.charge_exists(false, make_ty!(&ty), exists)?;
             }
             Bytecode::ExistsGeneric(si_idx) => {
-                let addr = interpreter.peek()?.value_as::<AccountAddress>()?;
+                let addr = interpreter
+                    .peek()?
+                    .copy_value()?
+                    .value_as::<AccountAddress>()?;
                 let ty = resolver.instantiate_generic_type(*si_idx, ty_args)?;
                 let res = match data_store.load_resource(addr, &ty) {
                     Ok((gv, load_res)) => {
@@ -1991,7 +2016,10 @@ impl Frame {
                 gas_meter.charge_exists(true, make_ty!(&ty), exists)?;
             }
             Bytecode::MoveFrom(sd_idx) => {
-                let addr = interpreter.peek()?.value_as::<AccountAddress>()?;
+                let addr = interpreter
+                    .peek()?
+                    .copy_value()?
+                    .value_as::<AccountAddress>()?;
                 let ty = resolver.get_struct_type(*sd_idx);
                 let res = match data_store.load_resource(addr, &ty) {
                     Ok((gv, load_res)) => {
@@ -2025,7 +2053,10 @@ impl Frame {
                 }?;
             }
             Bytecode::MoveFromGeneric(si_idx) => {
-                let addr = interpreter.peek()?.value_as::<AccountAddress>()?;
+                let addr = interpreter
+                    .peek()?
+                    .copy_value()?
+                    .value_as::<AccountAddress>()?;
                 let ty = resolver.instantiate_generic_type(*si_idx, ty_args)?;
                 let res = match data_store.load_resource(addr, &ty) {
                     Ok((gv, load_res)) => {
@@ -2060,7 +2091,8 @@ impl Frame {
             }
             Bytecode::MoveTo(sd_idx) => {
                 let mut stack = interpreter.peek_last_n(2)?;
-                let signer_reference = stack.pop().unwrap().value_as::<StructRef>()?;
+                let signer_reference =
+                    stack.pop().unwrap().copy_value()?.value_as::<StructRef>()?;
                 let resource = stack.pop().unwrap();
                 let addr = signer_reference
                     .borrow_field(0)?
@@ -2102,7 +2134,8 @@ impl Frame {
             }
             Bytecode::MoveToGeneric(si_idx) => {
                 let mut stack = interpreter.peek_last_n(2)?;
-                let signer_reference = stack.pop().unwrap().value_as::<StructRef>()?;
+                let signer_reference =
+                    stack.pop().unwrap().copy_value()?.value_as::<StructRef>()?;
                 let resource = stack.pop().unwrap();
                 let addr = signer_reference
                     .borrow_field(0)?
@@ -2175,7 +2208,7 @@ impl Frame {
             }
             Bytecode::VecPopBack(si) => {}
             Bytecode::VecUnpack(si, num) => {
-                let vec_val = interpreter.peek()?.value_as::<Vector>()?;
+                let vec_val = interpreter.peek()?.copy_value()?.value_as::<Vector>()?;
                 let ty = &resolver.instantiate_single_type(*si, ty_args)?;
                 gas_meter.charge_vec_unpack(
                     make_ty!(ty),
@@ -2287,7 +2320,10 @@ impl Frame {
             }
             Bytecode::MutBorrowGlobalGeneric(si_idx) | Bytecode::ImmBorrowGlobalGeneric(si_idx) => {
                 let is_mut = matches!(instruction, Bytecode::MutBorrowGlobalGeneric(_));
-                let addr = interpreter.peek()?.value_as::<AccountAddress>()?;
+                let addr = interpreter
+                    .peek()?
+                    .copy_value()?
+                    .value_as::<AccountAddress>()?;
                 let ty = resolver.instantiate_generic_type(*si_idx, ty_args)?;
                 let result = interpreter.peek()?;
                 gas_meter.charge_borrow_global(is_mut, true, make_ty!(&ty), exec_result.is_ok())?;
@@ -2295,7 +2331,10 @@ impl Frame {
             Bytecode::Exists(sd_idx) => {}
             Bytecode::ExistsGeneric(si_idx) => {}
             Bytecode::MoveFrom(sd_idx) => {
-                let addr = interpreter.peek()?.value_as::<AccountAddress>()?;
+                let addr = interpreter
+                    .peek()?
+                    .copy_value()?
+                    .value_as::<AccountAddress>()?;
                 let ty = resolver.get_struct_type(*sd_idx);
                 let val = match exec_result {
                     Ok(_) => Some(interpreter.peek()?),
@@ -2304,7 +2343,10 @@ impl Frame {
                 gas_meter.charge_move_from(false, make_ty!(&ty), val)?;
             }
             Bytecode::MoveFromGeneric(si_idx) => {
-                let addr = interpreter.peek()?.value_as::<AccountAddress>()?;
+                let addr = interpreter
+                    .peek()?
+                    .copy_value()?
+                    .value_as::<AccountAddress>()?;
                 let ty = resolver.instantiate_generic_type(*si_idx, ty_args)?;
                 let val = match exec_result {
                     Ok(_) => Some(interpreter.peek()?),
@@ -2312,6 +2354,93 @@ impl Frame {
                 };
                 gas_meter.charge_move_from(true, make_ty!(&ty), val)?;
             }
+            Bytecode::MoveTo(sd_idx) => {
+                let mut stack = interpreter.peek_last_n(2)?;
+                let signer_reference =
+                    stack.pop().unwrap().copy_value()?.value_as::<StructRef>()?;
+                let resource = stack.pop().unwrap();
+                let addr = signer_reference
+                    .borrow_field(0)?
+                    .value_as::<Reference>()?
+                    .read_ref()?
+                    .value_as::<AccountAddress>()?;
+                let ty = resolver.get_struct_type(*sd_idx);
+                // REVIEW: Can we simplify Interpreter::move_to?
+                let res = match data_store.load_resource(addr, &ty) {
+                    Ok((gv, load_res)) => {
+                        if let Some(loaded) = load_res {
+                            let opt = match loaded {
+                                Some(num_bytes) => {
+                                    let view = gv.view().ok_or_else(|| {
+                                        PartialVMError::new(
+                                            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                                        )
+                                        .with_message(
+                                            "Failed to create view for global value".to_owned(),
+                                        )
+                                    })?;
+
+                                    Some((num_bytes, view))
+                                }
+                                None => None,
+                            };
+                            gas_meter.charge_load_resource(opt)?;
+                        }
+                        Ok(gv)
+                    }
+                    Err(e) => {
+                        error!(
+                            "[VM] error loading resource at ({}, {:?}): {:?} from data store",
+                            addr, ty, e
+                        );
+                        Err(e)
+                    }
+                }?;
+            }
+            Bytecode::MoveToGeneric(si_idx) => {
+                let mut stack = interpreter.peek_last_n(2)?;
+                let signer_reference =
+                    stack.pop().unwrap().copy_value()?.value_as::<StructRef>()?;
+                let resource = stack.pop().unwrap();
+                let addr = signer_reference
+                    .borrow_field(0)?
+                    .value_as::<Reference>()?
+                    .read_ref()?
+                    .value_as::<AccountAddress>()?;
+                let ty = resolver.instantiate_generic_type(*si_idx, ty_args)?;
+                // REVIEW: Can we simplify Interpreter::move_to?
+                let res = match data_store.load_resource(addr, &ty) {
+                    Ok((gv, load_res)) => {
+                        if let Some(loaded) = load_res {
+                            let opt = match loaded {
+                                Some(num_bytes) => {
+                                    let view = gv.view().ok_or_else(|| {
+                                        PartialVMError::new(
+                                            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                                        )
+                                        .with_message(
+                                            "Failed to create view for global value".to_owned(),
+                                        )
+                                    })?;
+
+                                    Some((num_bytes, view))
+                                }
+                                None => None,
+                            };
+                            gas_meter.charge_load_resource(opt)?;
+                        }
+                        Ok(gv)
+                    }
+                    Err(e) => {
+                        error!(
+                            "[VM] error loading resource at ({}, {:?}): {:?} from data store",
+                            addr, ty, e
+                        );
+                        Err(e)
+                    }
+                }?;
+            }
+
             // Bytecode::MoveTo(sd_idx) => {
             //     let mut stack = interpreter.peek_last_n(2)?;
             //     let signer_reference = stack.pop().unwrap().value_as::<StructRef>()?;
@@ -2364,8 +2493,8 @@ impl Frame {
             Bytecode::FreezeRef => {}
             Bytecode::Not => {}
             Bytecode::Nop => {}
-            Bytecode::VecPack(si, num) => {}
-            Bytecode::VecLen(si) => {}
+            Bytecode::VecPack(..) => {}
+            Bytecode::VecLen(_) => {}
             Bytecode::VecImmBorrow(si) => {
                 let ty = resolver.instantiate_single_type(*si, ty_args)?;
                 gas_meter.charge_vec_borrow(false, make_ty!(&ty), exec_result.is_ok())?;
@@ -2374,7 +2503,7 @@ impl Frame {
                 let ty = &resolver.instantiate_single_type(*si, ty_args)?;
                 gas_meter.charge_vec_borrow(true, make_ty!(ty), exec_result.is_ok())?;
             }
-            Bytecode::VecPushBack(si) => {}
+            Bytecode::VecPushBack(_) => {}
             Bytecode::VecPopBack(si) => {
                 let ty = &resolver.instantiate_single_type(*si, ty_args)?;
                 let val = match exec_result {
@@ -2383,8 +2512,8 @@ impl Frame {
                 };
                 gas_meter.charge_vec_pop_back(make_ty!(ty), val)?;
             }
-            Bytecode::VecUnpack(si, num) => {}
-            Bytecode::VecSwap(si) => {}
+            Bytecode::VecUnpack(..) => {}
+            Bytecode::VecSwap(_) => {}
         }
         Ok(())
     }

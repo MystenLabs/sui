@@ -172,11 +172,14 @@ impl Plugin for ParanoidTypeChecker {
         instruction: &Bytecode,
         ty_args: &[Type],
         resolver: &Resolver,
-        r: &InstrRet,
+        exec_result: &PartialVMResult<InstrRet>,
     ) -> PartialVMResult<()> {
         let local_tys = self.get_local_types(&resolver, &function, &ty_args)?;
 
-        self.post_instr(interpreter, &local_tys, ty_args, resolver, instruction, r)?;
+        if exec_result.is_ok() {
+            let r = exec_result.as_ref().ok().unwrap();
+            self.post_instr(interpreter, &local_tys, ty_args, resolver, instruction, r)?;
+        }
         Ok(())
     }
 }
