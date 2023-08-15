@@ -206,8 +206,13 @@ input ObjectFilter {
   type: String
 
   owner: SuiAddress
-  objectId: SuiAddress
-  version: Int
+  objectIds: [SuiAddress!]
+  objectKeys: [ObjectKey!]
+}
+
+input ObjectKey {
+  objectId: SuiAddress!
+  version: Int!
 }
 
 input EventFilter {
@@ -596,10 +601,8 @@ type TransactionBlock {
 }
 
 enum TransactionBlockKindInput {
-  CONSENSUS_COMMIT_PROLOGUE
-  GENESIS
-  CHANGE_EPOCH
-  PROGRAMMABLE
+  PROGRAMMABLE_TX
+  SYSTEM_TX
 }
 
 union TransactionBlockKind =

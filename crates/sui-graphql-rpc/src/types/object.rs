@@ -44,8 +44,14 @@ pub(crate) struct ObjectFilter {
     ty: Option<String>,
 
     owner: Option<SuiAddress>,
-    object_id: Option<SuiAddress>,
-    version: Option<u64>,
+    object_ids: Option<Vec<SuiAddress>>,
+    object_keys: Option<Vec<ObjectKey>>,
+}
+
+#[derive(InputObject)]
+pub(crate) struct ObjectKey {
+    object_id: SuiAddress,
+    version: u64,
 }
 
 #[allow(unreachable_code)]
