@@ -19,6 +19,7 @@ import {
 	type StandardEventsListeners,
 	type SuiSignTransactionBlockMethod,
 	type SuiSignMessageMethod,
+	type SuiSignPersonalMessageMethod,
 	SUI_MAINNET_CHAIN,
 } from '@mysten/wallet-standard';
 import mitt, { type Emitter } from 'mitt';
@@ -53,7 +54,7 @@ import type {
 	SignTransactionRequest,
 	SignTransactionResponse,
 } from '_payloads/transactions';
-import type { NetworkEnvType } from '_src/background/NetworkEnv';
+import type { NetworkEnvType } from '_src/shared/api-env';
 
 type WalletEventsMap = {
 	[E in keyof StandardEventsListeners]: Parameters<StandardEventsListeners[E]>[0];
@@ -143,6 +144,10 @@ export class SuiWallet implements Wallet {
 			'sui:signMessage': {
 				version: '1.0.0',
 				signMessage: this.#signMessage,
+			},
+			'sui:signPersonalMessage': {
+				version: '1.0.0',
+				signPersonalMessage: this.#signPersonalMessage,
 			},
 			'qredo:connect': {
 				version: '0.0.1',
@@ -299,6 +304,27 @@ export class SuiWallet implements Wallet {
 					throw new Error('Invalid sign message response');
 				}
 				return response.return;
+			},
+		);
+	};
+
+	#signPersonalMessage: SuiSignPersonalMessageMethod = async ({ message, account }) => {
+		return mapToPromise(
+			this.#send<SignMessageRequest, SignMessageRequest>({
+				type: 'sign-message-request',
+				args: {
+					message: toB64(message),
+					accountAddress: account.address,
+				},
+			}),
+			(response) => {
+				if (!response.return) {
+					throw new Error('Invalid sign message response');
+				}
+				return {
+					bytes: response.return.messageBytes,
+					signature: response.return.signature,
+				};
 			},
 		);
 	};

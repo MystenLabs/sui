@@ -4,10 +4,10 @@
 #[test_only]
 module sui::kiosk_test_utils {
     use std::vector;
-    use sui::package;
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
     use sui::object::{Self, ID, UID};
+    use sui::package::{Self, Publisher};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer_policy::{Self as policy, TransferPolicy, TransferPolicyCap};
     use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
@@ -22,11 +22,16 @@ module sui::kiosk_test_utils {
     /// Alice, Bob and my favorite guy - Carl
     public fun folks(): (address, address, address) { (@0xA11CE, @0xB0B, @0xCA51) }
 
+    /// Get the Publisher object.
+    public fun get_publisher(ctx: &mut TxContext): Publisher {
+        package::test_claim(OTW {}, ctx)
+    }
+
     /// Prepare: TransferPolicy<Asset>
     public fun get_policy(ctx: &mut TxContext): (TransferPolicy<Asset>, TransferPolicyCap<Asset>) {
-        let publisher = package::test_claim(OTW {}, ctx);
+        let publisher = get_publisher(ctx);
         let (policy, cap) = policy::new(&publisher, ctx);
-        package::burn_publisher(publisher);
+        return_publisher(publisher);
         (policy, cap)
     }
 
@@ -45,6 +50,10 @@ module sui::kiosk_test_utils {
     /// Prepare: Kiosk
     public fun get_kiosk(ctx: &mut TxContext): (Kiosk, KioskOwnerCap) {
         kiosk::new(ctx)
+    }
+
+    public fun return_publisher(publisher: Publisher) {
+        package::burn_publisher(publisher)
     }
 
     /// Cleanup: TransferPolicy

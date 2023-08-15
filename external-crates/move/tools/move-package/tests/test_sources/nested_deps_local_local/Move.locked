@@ -2,6 +2,7 @@
 
 [move]
 version = 0
+manifest_digest = "B3E0DD65821AEA6C343A1189D119E81DF00830A3E3B48C84D52B7018F47626F4"
 
 dependencies = [
   { name = "Nested" },

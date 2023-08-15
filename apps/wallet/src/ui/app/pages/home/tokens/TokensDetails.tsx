@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { useAppsBackend, useGetCoinBalance, useGetAllBalances } from '@mysten/core';
+import {
+	useAppsBackend,
+	useGetCoinBalance,
+	useGetAllBalances,
+	useResolveSuiNSName,
+} from '@mysten/core';
 import {
 	Info12,
 	WalletActionBuy24,
@@ -11,17 +16,19 @@ import {
 	Unpin16,
 	Pin16,
 } from '@mysten/icons';
-import { Coin } from '@mysten/sui.js';
+
 import { type CoinBalance as CoinBalanceType } from '@mysten/sui.js/client';
-import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { Coin } from '@mysten/sui.js/framework';
+import { SUI_TYPE_ARG, formatAddress } from '@mysten/sui.js/utils';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
-import { CoinActivitiesCard } from './CoinActivityCard';
+import { PortfolioName } from './PortfolioName';
 import { TokenIconLink } from './TokenIconLink';
 import { TokenLink } from './TokenLink';
 import { TokenList } from './TokenList';
-import CoinBalance from './coin-balance';
+import SvgSuiTokensStack from './TokensStackIcon';
+import { CoinBalance } from './coin-balance';
 import BullsharkQuestsNotification from '../bullshark-quests-notification';
 import { useOnrampProviders } from '../onramp/useOnrampProviders';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
@@ -34,7 +41,7 @@ import { useAppSelector, useCoinsReFetchingConfig } from '_hooks';
 import { ampli } from '_src/shared/analytics/ampli';
 import { API_ENV } from '_src/shared/api-env';
 import { FEATURES } from '_src/shared/experimentation/features';
-import { AccountSelector } from '_src/ui/app/components/AccountSelector';
+import { AccountsList } from '_src/ui/app/components/accounts/AccountsList';
 import { usePinnedCoinTypes } from '_src/ui/app/hooks/usePinnedCoinTypes';
 import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
 import PageTitle from '_src/ui/app/shared/PageTitle';
@@ -61,23 +68,23 @@ function PinButton({ unpin, onClick }: { unpin?: boolean; onClick: () => void })
 	);
 }
 
-function MyTokens() {
-	const accountAddress = useActiveAddress();
+function MyTokens({
+	coinBalances,
+	isLoading,
+	isFetched,
+}: {
+	coinBalances: CoinBalanceType[];
+	isLoading: boolean;
+	isFetched: boolean;
+}) {
 	const apiEnv = useAppSelector(({ app }) => app.apiEnv);
-	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
-	const { data, isLoading, isFetched } = useGetAllBalances(
-		accountAddress,
-		staleTime,
-		refetchInterval,
-		filterAndSortTokenBalances,
-	);
 
 	const recognizedPackages = useRecognizedPackages();
 	const [pinnedCoinTypes, { pinCoinType, unpinCoinType }] = usePinnedCoinTypes();
 
 	const { recognized, pinned, unrecognized } = useMemo(
 		() =>
-			data?.reduce(
+			coinBalances?.reduce(
 				(acc, coinBalance) => {
 					if (recognizedPackages.includes(coinBalance.coinType.split('::')[0])) {
 						acc.recognized.push(coinBalance);
@@ -94,10 +101,8 @@ function MyTokens() {
 					unrecognized: [] as CoinBalanceType[],
 				},
 			) ?? { recognized: [], pinned: [], unrecognized: [] },
-		[data, recognizedPackages, pinnedCoinTypes],
+		[coinBalances, recognizedPackages, pinnedCoinTypes],
 	);
-
-	const noSuiToken = !data?.find(({ coinType }) => coinType === SUI_TYPE_ARG);
 
 	// Avoid perpetual loading state when fetching and retry keeps failing; add isFetched check.
 	const isFirstTimeLoading = isLoading && !isFetched;
@@ -157,15 +162,6 @@ function MyTokens() {
 					))}
 				</TokenList>
 			)}
-
-			{noSuiToken ? (
-				<div className="flex flex-col flex-nowrap justify-center items-center gap-2 text-center mt-6 px-2.5">
-					<FaucetRequestButton />
-					<Text variant="pBodySmall" color="gray-80" weight="normal">
-						To conduct transactions on the Sui network, you need SUI in your wallet.
-					</Text>
-				</div>
-			) : null}
 		</Loading>
 	);
 }
@@ -174,6 +170,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	const [interstitialDismissed, setInterstitialDismissed] = useState<boolean>(false);
 	const activeCoinType = coinType || SUI_TYPE_ARG;
 	const accountAddress = useActiveAddress();
+	const { data: domainName } = useResolveSuiNSName(accountAddress);
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
 	const {
 		data: coinBalance,
@@ -194,13 +191,20 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 		retry: false,
 		enabled: apiEnv === API_ENV.mainnet,
 	});
+
+	const {
+		data: coinBalances,
+		isLoading: coinBalancesLoading,
+		isFetched: coinBalancesFetched,
+	} = useGetAllBalances(accountAddress, staleTime, refetchInterval, filterAndSortTokenBalances);
+
 	const BullsharkInterstitialEnabled = useFeature<boolean>(
 		FEATURES.BULLSHARK_QUESTS_INTERSTITIAL,
 	).value;
 
 	const { providers } = useOnrampProviders();
 
-	const tokenBalance = coinBalance?.totalBalance || BigInt(0);
+	const tokenBalance = BigInt(coinBalance?.totalBalance ?? 0);
 
 	const coinSymbol = useMemo(() => Coin.getCoinSymbol(activeCoinType), [activeCoinType]);
 	// Avoid perpetual loading state when fetching and retry keeps failing add isFetched check
@@ -221,6 +225,8 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 		);
 	}
 
+	const accountHasSui = coinBalances?.some(({ coinType }) => coinType === SUI_TYPE_ARG);
+
 	return (
 		<>
 			{apiEnv === API_ENV.mainnet && data?.degraded && (
@@ -239,70 +245,81 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 				{coinType && <PageTitle title={coinSymbol} back="/tokens" />}
 
 				<div
-					className="flex flex-col h-full flex-1 flex-grow items-center overflow-y-auto"
+					className="flex flex-col h-full flex-1 flex-grow items-center overflow-y-auto gap-8"
 					data-testid="coin-page"
 				>
-					<div className="max-w-full">{!coinType && <AccountSelector />}</div>
-
-					<div data-testid="coin-balance" className="mt-1.5">
-						<CoinBalance balance={BigInt(tokenBalance)} type={activeCoinType} mode="standalone" />
-					</div>
-					{isError ? (
-						<Alert>
-							<div>
-								<strong>Error updating balance</strong>
-							</div>
-						</Alert>
-					) : null}
-					<div className="flex flex-nowrap gap-3 justify-center w-full mt-5">
-						<LargeButton
-							center
-							to="/onramp"
-							disabled={(coinType && coinType !== SUI_TYPE_ARG) || !providers?.length}
-							top={<WalletActionBuy24 />}
+					<AccountsList />
+					<div className="flex flex-col">
+						<PortfolioName name={domainName ?? formatAddress(accountAddress!)} />
+						<div
+							data-testid="coin-balance"
+							className="bg-sui/10 rounded-2xl py-5 px-4 flex flex-col w-full gap-3 items-center mt-4"
 						>
-							Buy
-						</LargeButton>
+							{accountHasSui ? (
+								<CoinBalance amount={BigInt(tokenBalance)} type={activeCoinType} />
+							) : (
+								<div className="flex flex-col gap-5">
+									<div className="flex flex-col flex-nowrap justify-center items-center text-center px-2.5">
+										<SvgSuiTokensStack className="h-14 w-14 text-steel" />
+										<div className="flex flex-col gap-2 justify-center">
+											<Text variant="pBodySmall" color="gray-80" weight="normal">
+												To conduct transactions on the Sui network, you need SUI in your wallet.
+											</Text>
+										</div>
+									</div>
+									<FaucetRequestButton />
+								</div>
+							)}
+							{isError ? (
+								<Alert>
+									<div>
+										<strong>Error updating balance</strong>
+									</div>
+								</Alert>
+							) : null}
+							<div className="grid grid-cols-3 gap-3 w-full">
+								<LargeButton
+									center
+									to="/onramp"
+									disabled={(coinType && coinType !== SUI_TYPE_ARG) || !providers?.length}
+									top={<WalletActionBuy24 />}
+								>
+									Buy
+								</LargeButton>
 
-						<LargeButton
-							center
-							data-testid="send-coin-button"
-							to={`/send${
-								coinBalance?.coinType
-									? `?${new URLSearchParams({
-											type: coinBalance.coinType,
-									  }).toString()}`
-									: ''
-							}`}
-							disabled={!tokenBalance}
-							top={<WalletActionSend24 />}
-						>
-							Send
-						</LargeButton>
+								<LargeButton
+									center
+									data-testid="send-coin-button"
+									to={`/send${
+										coinBalance?.coinType
+											? `?${new URLSearchParams({
+													type: coinBalance.coinType,
+											  }).toString()}`
+											: ''
+									}`}
+									disabled={!tokenBalance}
+									top={<WalletActionSend24 />}
+								>
+									Send
+								</LargeButton>
 
-						<LargeButton center to="/" disabled top={<Swap16 />}>
-							Swap
-						</LargeButton>
-					</div>
-
-					{activeCoinType === SUI_TYPE_ARG && accountAddress ? (
-						<div className="mt-6 flex justify-start gap-2 flex-col w-full">
-							<TokenIconLink accountAddress={accountAddress} />
-						</div>
-					) : null}
-
-					{!coinType ? (
-						<MyTokens />
-					) : (
-						<div className="mt-6 flex-1 justify-start gap-2 flex-col w-full">
-							<Text variant="caption" color="steel" weight="semibold">
-								{coinSymbol} activity
-							</Text>
-							<div className="flex flex-col flex-nowrap flex-1">
-								<CoinActivitiesCard coinType={activeCoinType} />
+								<LargeButton center to="/" disabled top={<Swap16 />}>
+									Swap
+								</LargeButton>
+							</div>
+							<div className="w-full">
+								{activeCoinType === SUI_TYPE_ARG && accountAddress ? (
+									<TokenIconLink disabled={!tokenBalance} accountAddress={accountAddress} />
+								) : null}
 							</div>
 						</div>
-					)}
+					</div>
+
+					<MyTokens
+						coinBalances={coinBalances ?? []}
+						isLoading={coinBalancesLoading}
+						isFetched={coinBalancesFetched}
+					/>
 				</div>
 			</Loading>
 		</>

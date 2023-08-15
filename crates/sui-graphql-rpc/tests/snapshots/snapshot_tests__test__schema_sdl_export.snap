@@ -1,0 +1,225 @@
+---
+source: crates/sui-graphql-rpc/tests/snapshot_tests.rs
+expression: sdl
+---
+type Address implements ObjectOwner {
+	transactionBlockConnection(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter): TransactionBlockConnection
+	location: SuiAddress!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
+	balance(type: String): Balance!
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	defaultNameServiceName: String
+	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+}
+
+enum AddressTransactionBlockRelationship {
+	SIGN
+	SENT
+	RECV
+	PAID
+}
+
+type Balance {
+	coinObjectCount: Int!
+	totalBalance: BigInt!
+}
+
+type BalanceConnection {
+	unimplemented: Boolean!
+}
+
+scalar Base64
+
+scalar BigInt
+
+
+type CoinConnection {
+	unimplemented: Boolean!
+}
+
+
+
+
+type NameServiceConnection {
+	unimplemented: Boolean!
+}
+
+type Object implements ObjectOwner {
+	version: Int!
+	digest: String!
+	storageRebate: Int
+	bcs: Base64
+	previousTransactionBlock: TransactionBlock
+	kind: ObjectKind
+	owner: Owner
+	location: SuiAddress!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
+	balance(type: String): Balance!
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	defaultNameServiceName: String
+	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+}
+
+type ObjectConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ObjectEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Object!]!
+}
+
+"""
+An edge in a connection.
+"""
+type ObjectEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Object!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+input ObjectFilter {
+	package: SuiAddress
+	module: String
+	ty: String
+	owner: SuiAddress
+	objectId: SuiAddress
+	version: Int
+}
+
+enum ObjectKind {
+	OWNED
+	CHILD
+	SHARED
+	IMMUTABLE
+}
+
+interface ObjectOwner {
+	location: SuiAddress!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	balance(type: String): Balance!
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	defaultNameServiceName: String
+	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+}
+
+type Owner implements ObjectOwner {
+	asAddress: Address
+	asObject: Object
+	location: SuiAddress!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
+	balance(type: String): Balance!
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	defaultNameServiceName: String
+	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+}
+
+"""
+Information about pagination in a connection
+"""
+type PageInfo {
+	"""
+	When paginating backwards, are there more items?
+	"""
+	hasPreviousPage: Boolean!
+	"""
+	When paginating forwards, are there more items?
+	"""
+	hasNextPage: Boolean!
+	"""
+	When paginating backwards, the cursor to continue.
+	"""
+	startCursor: String
+	"""
+	When paginating forwards, the cursor to continue.
+	"""
+	endCursor: String
+}
+
+type ProtocolConfigAttr {
+	key: String!
+	value: String!
+}
+
+type ProtocolConfigFeatureFlag {
+	key: String!
+	value: Boolean!
+}
+
+type ProtocolConfigs {
+	configs: [ProtocolConfigAttr!]
+	featureFlags: [ProtocolConfigFeatureFlag!]
+	protocolVersion: Int!
+	config(key: String!): ProtocolConfigAttr
+	featureFlag(key: String!): ProtocolConfigFeatureFlag
+}
+
+type Query {
+	chainIdentifier: String!
+	owner(address: SuiAddress!): ObjectOwner
+	object(address: SuiAddress!, version: Int): Object
+	address(address: SuiAddress!): Address
+	protocolConfig(protocolVersion: Int): ProtocolConfigs!
+}
+
+type StakeConnection {
+	unimplemented: Boolean!
+}
+
+
+scalar SuiAddress
+
+type TransactionBlock {
+	digest: String!
+	sender: Address
+	bcs: Base64
+}
+
+type TransactionBlockConnection {
+	unimplemented: Boolean!
+}
+
+input TransactionBlockFilter {
+	package: SuiAddress
+	module: String
+	function: String
+	kind: TransactionBlockKindInput
+	checkpoint: Int
+	signAddress: SuiAddress
+	sentAddress: SuiAddress
+	recvAddress: SuiAddress
+	paidAddress: SuiAddress
+	inputObject: SuiAddress
+	changedObject: SuiAddress
+}
+
+enum TransactionBlockKindInput {
+	CONSENSUS_COMMIT_PROLOGUE
+	GENESIS
+	CHANGE_EPOCH
+	PROGRAMMABLE
+}
+
+schema {
+	query: Query
+}
+

@@ -11,9 +11,11 @@ export type SerializedQredoAccount = {
 	address: string;
 	qredoConnectionID: string;
 	qredoWalletID: string;
-	labels?: Wallet['labels'];
+	labels: Wallet['labels'];
 	derivationPath: null;
 	publicKey: string;
+	network: string;
+	walletID: string;
 };
 
 export class QredoAccount implements Account {
@@ -23,6 +25,8 @@ export class QredoAccount implements Account {
 	readonly qredoWalletID: string;
 	readonly labels: Wallet['labels'];
 	readonly publicKey: string;
+	readonly network: string;
+	readonly walletID: string;
 
 	constructor({
 		address,
@@ -30,12 +34,16 @@ export class QredoAccount implements Account {
 		qredoWalletID,
 		labels = [],
 		publicKey,
+		network,
+		walletID,
 	}: Omit<SerializedQredoAccount, 'type' | 'derivationPath'>) {
 		this.address = normalizeSuiAddress(address);
 		this.qredoConnectionID = qredoConnectionID;
 		this.qredoWalletID = qredoWalletID;
 		this.labels = labels;
 		this.publicKey = publicKey;
+		this.network = network;
+		this.walletID = walletID;
 	}
 
 	toJSON(): SerializedQredoAccount {
@@ -47,6 +55,8 @@ export class QredoAccount implements Account {
 			labels: this.labels,
 			derivationPath: null,
 			publicKey: this.publicKey,
+			network: this.network,
+			walletID: this.walletID,
 		};
 	}
 

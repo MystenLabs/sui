@@ -20,7 +20,7 @@ export const RadioGroupItem = forwardRef<
 	return (
 		<RadioGroupPrimitive.Item
 			ref={ref}
-			className="flex flex-col rounded-md border border-transparent bg-white text-steel-dark hover:text-steel-darker data-[state=checked]:border-steel  data-[state=checked]:text-hero-dark  disabled:text-gray-60 px-2 py-1 text-captionSmall font-semibold"
+			className="flex flex-col rounded-md border border-transparent bg-white text-hero-dark hover:text-steel-darker data-[state=checked]:border-steel  data-[state=checked]:text-hero-dark disabled:text-gray-60 px-2 py-1 text-captionSmall font-semibold justify-center"
 			{...props}
 		>
 			{label}

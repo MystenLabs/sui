@@ -10,7 +10,7 @@ mod checked {
         sync::Arc,
     };
 
-    use crate::adapter::{missing_unwrapped_msg, new_native_extensions};
+    use crate::adapter::new_native_extensions;
     use crate::error::convert_vm_error;
     use move_binary_format::{
         errors::{Location, VMError, VMResult},
@@ -775,9 +775,7 @@ mod checked {
             for (id, delete_kind) in deletions {
                 // For deleted and wrapped objects, the object must exist either in the input or was
                 // loaded as child object. We can read them to get the previous version.
-                // For unwrap_then_delete, in older protocol versions, we must consult the object store
-                // to see if there exists a tombstone, and if so we include it otherwise we skip it.
-                // In newer protocol versions, we can just skip it.
+                // For unwrap_then_delete, we don't need the old version.
                 let delete_kind_with_seq = match delete_kind {
                     DeleteKind::Normal | DeleteKind::Wrap => {
                         let old_version = match input_object_metadata.get(&id) {
@@ -801,20 +799,7 @@ mod checked {
                             DeleteKindWithOldVersion::Wrap(old_version)
                         }
                     }
-                    DeleteKind::UnwrapThenDelete => {
-                        if protocol_config.simplified_unwrap_then_delete() {
-                            DeleteKindWithOldVersion::UnwrapThenDelete
-                        } else {
-                            let old_version = match state_view.get_latest_parent_entry_ref(id) {
-                                Ok(Some((_, previous_version, _))) => previous_version,
-                                // This object was not created this transaction but has never existed in
-                                // storage, skip it.
-                                Ok(None) => continue,
-                                Err(_) => invariant_violation!("{}", missing_unwrapped_msg(&id)),
-                            };
-                            DeleteKindWithOldVersion::UnwrapThenDeleteDEPRECATED(old_version)
-                        }
-                    }
+                    DeleteKind::UnwrapThenDelete => DeleteKindWithOldVersion::UnwrapThenDelete,
                 };
                 object_changes.insert(id, ObjectChange::Delete(delete_kind_with_seq));
             }

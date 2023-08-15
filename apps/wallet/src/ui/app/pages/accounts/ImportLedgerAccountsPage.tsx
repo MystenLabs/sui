@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import {
 	LockUnlocked16 as UnlockedLockIcon,
 	Spinner16 as SpinnerIcon,
@@ -17,7 +16,6 @@ import {
 } from '../../components/ledger/LedgerAccountList';
 import { useDeriveLedgerAccounts } from '../../components/ledger/useDeriveLedgerAccounts';
 import { useImportLedgerAccountsMutation } from '../../components/ledger/useImportLedgerAccountsMutation';
-import { useNextMenuUrl } from '../../components/menu/hooks';
 import Overlay from '../../components/overlay';
 import { getSuiApplicationErrorMessage } from '../../helpers/errorMessages';
 import { useAccounts } from '../../hooks/useAccounts';
@@ -29,11 +27,18 @@ import { Text } from '_src/ui/app/shared/text';
 
 const numLedgerAccountsToDeriveByDefault = 10;
 
-export function ImportLedgerAccountsPage() {
-	const accountMenuUrl = useNextMenuUrl(true, `/accounts`);
-	const shouldUseNewRedirectUrls = useFeatureIsOn('enoki-social-sign-in');
-	const closeRedirectUrl = shouldUseNewRedirectUrls ? '/accounts/add-account' : accountMenuUrl;
-	const successRedirectUrl = shouldUseNewRedirectUrls ? '/tokens' : accountMenuUrl;
+export function ImportLedgerAccountsPage({
+	onClose,
+	onConfirmed,
+	password,
+}: {
+	onConfirmed?: () => void;
+	onClose?: () => void;
+	// TODO: remove, this is temporary for testing new accounts
+	password?: string;
+}) {
+	const closeRedirectUrl = '/accounts/add-account';
+	const successRedirectUrl = '/tokens';
 	const navigate = useNavigate();
 
 	const existingAccounts = useAccounts();
@@ -54,17 +59,26 @@ export function ImportLedgerAccountsPage() {
 		},
 		onError: (error) => {
 			toast.error(getSuiApplicationErrorMessage(error) || 'Something went wrong.');
-			navigate(closeRedirectUrl, { replace: true });
+			if (onClose) {
+				onClose();
+			} else {
+				navigate(closeRedirectUrl, { replace: true });
+			}
 		},
 	});
 
 	const importLedgerAccountsMutation = useImportLedgerAccountsMutation({
+		password,
 		onSuccess: (_, importedAccounts) => {
 			ampli.addedAccounts({
 				accountType: 'Ledger',
 				numberOfAccounts: importedAccounts.length,
 			});
-			navigate(successRedirectUrl);
+			if (onConfirmed) {
+				onConfirmed();
+			} else {
+				navigate(successRedirectUrl);
+			}
 		},
 		onError: () => {
 			toast.error('There was an issue importing your Ledger accounts.');
@@ -134,7 +148,11 @@ export function ImportLedgerAccountsPage() {
 			showModal
 			title="Import Accounts"
 			closeOverlay={() => {
-				navigate(closeRedirectUrl);
+				if (onClose) {
+					onClose();
+				} else {
+					navigate(closeRedirectUrl);
+				}
 			}}
 		>
 			<div className="w-full flex flex-col gap-5">

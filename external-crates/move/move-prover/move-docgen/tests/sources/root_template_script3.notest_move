@@ -1,4 +1,5 @@
 script {
+#[allow(unused_type_parameter)]
 /// This script does also abort, similar as script `some` and `other`.
 fun yet_another<T>(_account: signer) {
     abort 3

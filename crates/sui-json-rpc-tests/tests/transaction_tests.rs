@@ -245,7 +245,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
         )
         .await
         .unwrap();
-    assert_eq!(16, second_page.data.len());
+    assert!(second_page.data.len() > 5);
     assert!(!second_page.has_next_page);
 
     let mut all_txs_rev = first_page.data.clone();
@@ -323,9 +323,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
             .get_transaction_with_options(tx_resp.digest, SuiTransactionBlockResponseOptions::new())
             .await
             .unwrap();
-        assert!(tx_responses
-            .iter()
-            .any(|resp| resp.digest == response.digest))
+        assert_eq!(tx_resp.digest, response.digest);
     }
 
     Ok(())

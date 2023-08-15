@@ -7,6 +7,7 @@ import { VerifyLedgerConnectionStatus } from './VerifyLedgerConnectionStatus';
 import { BadgeLabel } from '../../BadgeLabel';
 import { useNextMenuUrl } from '../hooks';
 import { AccountType, type SerializedAccount } from '_src/background/keyring/Account';
+import { Button } from '_src/ui/app/shared/ButtonUI';
 import { Link } from '_src/ui/app/shared/Link';
 
 export type AccountActionsProps = {
@@ -38,24 +39,20 @@ export function AccountActions({ account }: AccountActionsProps) {
 			break;
 		case AccountType.DERIVED:
 			actionContent = (
-				<>
-					<div>
-						<Link
-							text="Export Private Key"
-							to={exportAccountUrl}
-							color="heroDark"
-							weight="medium"
-						/>
-					</div>
-					<div>
-						<Link
-							to={recoveryPassphraseUrl}
-							color="heroDark"
-							weight="medium"
-							text="Export Passphrase"
-						/>
-					</div>
-				</>
+				<div className="flex flex-col gap-2 w-full">
+					{/* <Button
+						variant="secondary"
+						text="Export Private Key"
+						to={exportAccountUrl}
+						color="heroDark"
+					/> */}
+					<Button
+						variant="secondary"
+						text="Export Passphrase"
+						to={recoveryPassphraseUrl}
+						color="heroDark"
+					/>
+				</div>
 			);
 			break;
 		case AccountType.QREDO:

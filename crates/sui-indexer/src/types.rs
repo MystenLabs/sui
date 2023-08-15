@@ -11,6 +11,7 @@ use sui_json_rpc_types::{
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Owner;
+use sui_types::storage::WriteKind;
 use sui_types::transaction::{SenderSignedData, TransactionDataAPI};
 
 use crate::errors::IndexerError;
@@ -20,83 +21,11 @@ const CREATED_OBJECT_CHANGE_TYPE: &str = "created";
 const MUTATED_OBJECT_CHANGE_TYPE: &str = "mutated";
 const UNWRAPPED_OBJECT_CHANGE_TYPE: &str = "unwrapped";
 
-pub struct FastPathTransactionBlockResponse {
-    pub digest: TransactionDigest,
-    pub transaction: SuiTransactionBlock,
-    pub raw_transaction: Vec<u8>,
-    pub effects: SuiTransactionBlockEffects,
-    pub events: SuiTransactionBlockEvents,
-    pub object_changes: Vec<ObjectChange>,
-    pub balance_changes: Vec<BalanceChange>,
-    pub confirmed_local_execution: Option<bool>,
-}
-
-impl TryFrom<SuiTransactionBlockResponse> for FastPathTransactionBlockResponse {
-    type Error = anyhow::Error;
-
-    fn try_from(response: SuiTransactionBlockResponse) -> Result<Self, Self::Error> {
-        let SuiTransactionBlockResponse {
-            digest,
-            transaction,
-            raw_transaction,
-            effects,
-            events,
-            object_changes,
-            balance_changes,
-            timestamp_ms: _,
-            confirmed_local_execution,
-            checkpoint: _,
-            errors,
-        } = response;
-
-        let transaction = transaction.ok_or_else(|| {
-            anyhow::anyhow!(
-                "Transaction is None in FastPathTransactionBlockResponse of digest {:?}.",
-                digest
-            )
-        })?;
-        let effects = effects.ok_or_else(|| {
-            anyhow::anyhow!(
-                "Effects is None in FastPathTransactionBlockResponse of digest {:?}.",
-                digest
-            )
-        })?;
-        let events = events.ok_or_else(|| {
-            anyhow::anyhow!(
-                "Events is None in FastPathTransactionBlockResponse of digest {:?}.",
-                digest
-            )
-        })?;
-        let object_changes = object_changes.ok_or_else(|| {
-            anyhow::anyhow!(
-                "ObjectChanges is None in FastPathTransactionBlockResponse of digest {:?}.",
-                digest
-            )
-        })?;
-        let balance_changes = balance_changes.ok_or_else(|| {
-            anyhow::anyhow!(
-                "BalanceChanges is None in FastPathTransactionBlockResponse of digest {:?}.",
-                digest
-            )
-        })?;
-        if !errors.is_empty() {
-            return Err(anyhow::anyhow!(
-                "Errors in SuiTransactionFullResponse of digest {:?}: {:?}",
-                digest,
-                errors
-            ));
-        }
-
-        Ok(FastPathTransactionBlockResponse {
-            digest,
-            transaction,
-            raw_transaction,
-            effects,
-            events,
-            object_changes,
-            balance_changes,
-            confirmed_local_execution,
-        })
+pub fn write_kind_to_str(write_kind: WriteKind) -> &'static str {
+    match write_kind {
+        WriteKind::Mutate => MUTATED_OBJECT_CHANGE_TYPE,
+        WriteKind::Create => CREATED_OBJECT_CHANGE_TYPE,
+        WriteKind::Unwrap => UNWRAPPED_OBJECT_CHANGE_TYPE,
     }
 }
 
@@ -354,34 +283,6 @@ pub struct TemporaryTransactionBlockResponseStore {
     pub timestamp_ms: Option<u64>,
     pub confirmed_local_execution: Option<bool>,
     pub checkpoint: Option<CheckpointSequenceNumber>,
-}
-
-impl From<FastPathTransactionBlockResponse> for TemporaryTransactionBlockResponseStore {
-    fn from(value: FastPathTransactionBlockResponse) -> Self {
-        let FastPathTransactionBlockResponse {
-            digest,
-            transaction,
-            raw_transaction,
-            effects,
-            events,
-            object_changes,
-            balance_changes,
-            confirmed_local_execution,
-        } = value;
-
-        TemporaryTransactionBlockResponseStore {
-            digest,
-            transaction,
-            raw_transaction,
-            effects,
-            events,
-            object_changes: Some(object_changes),
-            balance_changes: Some(balance_changes),
-            timestamp_ms: None,
-            confirmed_local_execution,
-            checkpoint: None,
-        }
-    }
 }
 
 impl From<CheckpointTransactionBlockResponse> for TemporaryTransactionBlockResponseStore {

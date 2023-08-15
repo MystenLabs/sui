@@ -3,12 +3,13 @@
 
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
-use anemo::{PeerId, Request};
+use anemo::{Network, PeerId, Request};
 use async_trait::async_trait;
 use crypto::{traits::KeyPair, NetworkKeyPair, NetworkPublicKey};
 use mysten_common::sync::notify_once::NotifyOnce;
 use parking_lot::RwLock;
 use tokio::{select, time::sleep};
+use tracing::error;
 use types::{
     error::LocalClientError, FetchBatchesRequest, FetchBatchesResponse, PrimaryToWorker,
     WorkerOthersBatchMessage, WorkerOwnBatchMessage, WorkerSynchronizeMessage, WorkerToPrimary,
@@ -30,8 +31,9 @@ pub struct NetworkClient {
 }
 
 struct Inner {
-    // The private-public network key pair of this authority.
     primary_peer_id: PeerId,
+    primary_network: Option<Network>,
+    worker_network: BTreeMap<u32, Network>,
     worker_to_primary_handler: Option<Arc<dyn WorkerToPrimary>>,
     primary_to_worker_handler: BTreeMap<PeerId, Arc<dyn PrimaryToWorker>>,
     shutdown: bool,
@@ -45,6 +47,8 @@ impl NetworkClient {
         Self {
             inner: Arc::new(RwLock::new(Inner {
                 primary_peer_id,
+                primary_network: None,
+                worker_network: BTreeMap::new(),
                 worker_to_primary_handler: None,
                 primary_to_worker_handler: BTreeMap::new(),
                 shutdown: false,
@@ -59,7 +63,57 @@ impl NetworkClient {
 
     pub fn new_with_empty_id() -> Self {
         // ED25519_PUBLIC_KEY_LENGTH is 32 bytes.
-        Self::new(empty_peer_id())
+        Self::new(PeerId([0u8; 32]))
+    }
+
+    pub fn set_primary_network(&self, network: Network) {
+        let mut inner = self.inner.write();
+        if inner.primary_network.is_some() {
+            error!("Primary network is already set");
+        }
+        inner.primary_network = Some(network);
+    }
+
+    pub fn set_worker_network(&self, worker_id: u32, network: Network) {
+        let mut inner = self.inner.write();
+        if inner.worker_network.insert(worker_id, network).is_some() {
+            error!("Worker {} network is already set", worker_id);
+        }
+    }
+
+    pub async fn get_primary_network(&self) -> Result<Network, anemo::rpc::Status> {
+        for _ in 0..Self::GET_CLIENT_RETRIES {
+            {
+                let inner = self.inner.read();
+                if inner.shutdown {
+                    return Err(anemo::rpc::Status::internal("This node has shutdown"));
+                }
+                if let Some(network) = &inner.primary_network {
+                    return Ok(network.clone());
+                }
+            }
+            sleep(Self::GET_CLIENT_INTERVAL).await;
+        }
+        Err(anemo::rpc::Status::internal("Primary has not started"))
+    }
+
+    pub async fn get_worker_network(&self, worker_id: u32) -> Result<Network, anemo::rpc::Status> {
+        for _ in 0..Self::GET_CLIENT_RETRIES {
+            {
+                let inner = self.inner.read();
+                if inner.shutdown {
+                    return Err(anemo::rpc::Status::internal("This node has shutdown"));
+                }
+                if let Some(network) = inner.worker_network.get(&worker_id) {
+                    return Ok(network.clone());
+                }
+            }
+            sleep(Self::GET_CLIENT_INTERVAL).await;
+        }
+        Err(anemo::rpc::Status::internal(format!(
+            "The worker {} has not started",
+            worker_id
+        )))
     }
 
     pub fn set_worker_to_primary_local_handler(&self, handler: Arc<dyn WorkerToPrimary>) {
@@ -202,8 +256,4 @@ impl WorkerToPrimaryClient for NetworkClient {
             },
         }
     }
-}
-
-fn empty_peer_id() -> PeerId {
-    PeerId([0u8; 32])
 }

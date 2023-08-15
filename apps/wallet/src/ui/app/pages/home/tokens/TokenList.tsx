@@ -12,7 +12,7 @@ type Props = {
 
 export function TokenList({ title, defaultOpen, children }: Props) {
 	return (
-		<div className="flex flex-shrink-0 justify-start flex-col w-full mt-6">
+		<div className="flex flex-shrink-0 justify-start flex-col w-full">
 			<Collapsible title={title} defaultOpen={defaultOpen}>
 				{children}
 			</Collapsible>

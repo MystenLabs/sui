@@ -6,12 +6,20 @@ use futures::FutureExt;
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::base_types::random_object_ref;
+use sui_types::base_types::{random_object_ref, ExecutionDigests};
+use sui_types::committee::Committee;
+use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
-use sui_types::digests::{TransactionDigest, TransactionEventsDigest};
+use sui_types::digests::{
+    CheckpointContentsDigest, CheckpointDigest, TransactionDigest, TransactionEventsDigest,
+};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::SuiResult;
 use sui_types::event::Event;
+use sui_types::messages_checkpoint::{
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber, CheckpointSummary,
+    SignedCheckpointSummary,
+};
 use sui_types::transaction::Transaction;
 
 use sui_storage::key_value_store::*;
@@ -35,19 +43,22 @@ fn random_events() -> TransactionEvents {
     TransactionEvents { data: vec![event] }
 }
 
+#[derive(Default)]
 struct MockTxStore {
     txs: HashMap<TransactionDigest, Transaction>,
     fxs: HashMap<TransactionDigest, TransactionEffects>,
     events: HashMap<TransactionEventsDigest, TransactionEvents>,
+    checkpoint_summaries: HashMap<CheckpointSequenceNumber, CertifiedCheckpointSummary>,
+    checkpoint_contents: HashMap<CheckpointSequenceNumber, CheckpointContents>,
+    checkpoint_summaries_by_digest: HashMap<CheckpointDigest, CertifiedCheckpointSummary>,
+    checkpoint_contents_by_digest: HashMap<CheckpointContentsDigest, CheckpointContents>,
+
+    next_seq_number: u64,
 }
 
 impl MockTxStore {
     fn new() -> Self {
-        Self {
-            txs: HashMap::new(),
-            fxs: HashMap::new(),
-            events: HashMap::new(),
-        }
+        Self::default()
     }
 
     fn add_tx(&mut self, tx: Transaction) {
@@ -78,6 +89,48 @@ impl MockTxStore {
         let events = random_events();
         self.add_events(events.clone());
         events
+    }
+
+    fn add_random_checkpoint(&mut self) -> (CertifiedCheckpointSummary, CheckpointContents) {
+        let contents = CheckpointContents::new_with_causally_ordered_transactions(
+            [ExecutionDigests::random()].into_iter(),
+        );
+
+        let next_seq = self.next_seq_number;
+        self.next_seq_number += 1;
+
+        let (committee, keys) = Committee::new_simple_test_committee_of_size(1);
+        let summary = CheckpointSummary::new(
+            committee.epoch,
+            next_seq,
+            1,
+            &contents,
+            None,
+            Default::default(),
+            None,
+            0,
+        );
+
+        let signed = SignedCheckpointSummary::new(
+            committee.epoch,
+            summary.clone(),
+            &keys[0],
+            keys[0].public().into(),
+        );
+        let sign_info = signed.into_sig();
+
+        let certified =
+            CertifiedCheckpointSummary::new(summary.clone(), vec![sign_info], &committee).unwrap();
+
+        self.checkpoint_summaries
+            .insert(summary.sequence_number, certified.clone());
+        self.checkpoint_contents
+            .insert(summary.sequence_number, contents.clone());
+        self.checkpoint_summaries_by_digest
+            .insert(*certified.digest(), certified.clone());
+        self.checkpoint_contents_by_digest
+            .insert(*contents.digest(), contents.clone());
+        (certified, contents)
     }
 }
 
@@ -119,6 +172,41 @@ impl TransactionKeyValueStoreTrait for MockTxStore {
         }
 
         Ok((txs, fxs, evts))
+    }
+
+    async fn multi_get_checkpoints(
+        &self,
+        checkpoint_summaries: &[CheckpointSequenceNumber],
+        checkpoint_contents: &[CheckpointSequenceNumber],
+        checkpoint_summaries_by_digest: &[CheckpointDigest],
+        checkpoint_contents_by_digest: &[CheckpointContentsDigest],
+    ) -> SuiResult<(
+        Vec<Option<CertifiedCheckpointSummary>>,
+        Vec<Option<CheckpointContents>>,
+        Vec<Option<CertifiedCheckpointSummary>>,
+        Vec<Option<CheckpointContents>>,
+    )> {
+        let mut summaries = Vec::new();
+        for digest in checkpoint_summaries {
+            summaries.push(self.checkpoint_summaries.get(digest).cloned());
+        }
+
+        let mut contents = Vec::new();
+        for digest in checkpoint_contents {
+            contents.push(self.checkpoint_contents.get(digest).cloned());
+        }
+
+        let mut summaries_by_digest = Vec::new();
+        for digest in checkpoint_summaries_by_digest {
+            summaries_by_digest.push(self.checkpoint_summaries_by_digest.get(digest).cloned());
+        }
+
+        let mut contents_by_digest = Vec::new();
+        for digest in checkpoint_contents_by_digest {
+            contents_by_digest.push(self.checkpoint_contents_by_digest.get(digest).cloned());
+        }
+
+        Ok((summaries, contents, summaries_by_digest, contents_by_digest))
     }
 }
 
@@ -218,6 +306,36 @@ async fn test_multi_get() {
         .now_or_never()
         .unwrap();
     assert_eq!(result.unwrap(), vec![None]);
+}
+
+#[tokio::test]
+async fn test_checkpoints() {
+    let mut store = MockTxStore::new();
+    let (s1, _c1) = store.add_random_checkpoint();
+    let (s2, c2) = store.add_random_checkpoint();
+
+    let store = TransactionKeyValueStore::from(store);
+
+    let result = store
+        .multi_get_checkpoints(
+            &[s1.sequence_number, s2.sequence_number],
+            &[s1.sequence_number, s2.sequence_number],
+            &[*s1.digest(), *s2.digest()],
+            &[s1.content_digest, s2.content_digest],
+        )
+        .now_or_never()
+        .unwrap()
+        .unwrap();
+
+    let summaries_by_seq = result.0;
+    let contents_by_seq = result.1;
+    let summaries_by_digest = result.2;
+    let contents_by_digest = result.3;
+
+    assert_eq!(summaries_by_seq[0].as_ref().unwrap().data(), s1.data());
+    assert_eq!(contents_by_seq[1].as_ref().unwrap(), &c2);
+    assert_eq!(summaries_by_digest[0].as_ref().unwrap().data(), s1.data());
+    assert_eq!(contents_by_digest[1].as_ref().unwrap(), &c2);
 }
 
 #[tokio::test]

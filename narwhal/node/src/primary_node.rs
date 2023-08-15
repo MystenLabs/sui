@@ -5,7 +5,7 @@ use crate::{try_join_all, FuturesUnordered, NodeError};
 use anemo::PeerId;
 use config::{AuthorityIdentifier, Committee, Parameters, WorkerCache};
 use consensus::bullshark::Bullshark;
-use consensus::consensus::{ConsensusRound, LeaderSchedule, LeaderSwapTable};
+use consensus::consensus::{ConsensusRound, LeaderSchedule};
 use consensus::metrics::{ChannelMetrics, ConsensusMetrics};
 use consensus::Consensus;
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
@@ -263,7 +263,6 @@ impl PrimaryNodeInner {
             protocol_config.clone(),
             parameters.clone(),
             client,
-            store.header_store.clone(),
             store.certificate_store.clone(),
             store.proposer_store.clone(),
             store.payload_store.clone(),
@@ -325,12 +324,11 @@ impl PrimaryNodeInner {
             .recovered_consensus_output
             .inc_by(num_sub_dags);
 
-        // TODO: restore the LeaderSchedule when recovering from storage to ensure that the correct one
-        // will be used
-        // Using a LeaderSwapTable::default() will just adhere to the original schedule without any swaps.
-        // That means, whatever authority is elected for a round from the Committee::leader method, that's the
-        // one that will be used.
-        let leader_schedule = LeaderSchedule::new(committee.clone(), LeaderSwapTable::default());
+        let leader_schedule = LeaderSchedule::from_store(
+            committee.clone(),
+            store.consensus_store.clone(),
+            protocol_config.clone(),
+        );
 
         // Spawn the consensus core who only sequences transactions.
         let ordering_engine = Bullshark::new(

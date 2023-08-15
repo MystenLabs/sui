@@ -26,14 +26,18 @@ export default function CoinsPanel({ coinType, id }: CoinsPanelProps) {
 	}, [isIntersecting, hasNextPage, isFetching, fetchNextPage]);
 
 	return (
-		<div>
-			{data &&
-				data.pages.map((page) =>
-					page.data.map((coin) => <CoinItem key={coin.coinObjectId} coin={coin} />),
-				)}
+		<div className="pb-3">
+			<div className="grid grid-cols-1 gap-3 px-6 md:grid-cols-2">
+				{data &&
+					data.pages.map((page) =>
+						page.data.map((coin) => <CoinItem key={coin.coinObjectId} coin={coin} />),
+					)}
+			</div>
 			{isSpinnerVisible && (
-				<div ref={containerRef}>
-					<LoadingIndicator />
+				<div className="flex justify-center" ref={containerRef}>
+					<div className="mt-5 flex">
+						<LoadingIndicator />
+					</div>
 				</div>
 			)}
 		</div>

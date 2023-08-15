@@ -7,7 +7,7 @@ import Alert from '../../components/alert';
 
 type FormFieldProps = {
 	name: string;
-	label: ReactNode;
+	label?: ReactNode;
 	children: ReactNode;
 };
 
@@ -16,7 +16,7 @@ export function FormField({ children, name, label }: FormFieldProps) {
 	const state = getFieldState(name, formState);
 
 	return (
-		<div className="flex flex-col gap-2.5">
+		<div className="flex flex-col gap-2.5 w-full">
 			<FormLabel label={label}>{children}</FormLabel>
 			{state.error && <Alert>{state.error.message}</Alert>}
 		</div>

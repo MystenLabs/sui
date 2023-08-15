@@ -1,0 +1,6 @@
+[package]
+name = "ADep"
+version = "0.0.0"
+
+[addresses]
+A = "0x0"

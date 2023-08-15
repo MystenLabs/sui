@@ -8,7 +8,7 @@ import { PasswordInput } from './controls/PasswordInput';
 
 type TextFieldProps = {
 	name: string;
-	label: ReactNode;
+	label?: ReactNode;
 } & ComponentProps<'input'>;
 
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(

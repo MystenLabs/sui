@@ -91,7 +91,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .route("/", get(health))
         .route("/gas", post(request_gas))
         .route("/v1/gas", post(batch_request_gas))
-        .route("/v1/status", post(request_status))
+        .route("/v1/status", get(request_status))
         .layer(
             ServiceBuilder::new()
                 .layer(HandleErrorLayer::new(handle_error))

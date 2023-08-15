@@ -3,6 +3,7 @@
 
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
 // import { Filter16 } from '@mysten/icons';
+import { Heading } from '@mysten/ui';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 
@@ -65,9 +66,15 @@ export function Activity({ initialTab, initialLimit, disablePagination }: Props)
 			<Tabs size="lg" value={activeTab} onValueChange={setActiveTab}>
 				<div className="relative">
 					<TabsList>
-						<TabsTrigger value="transactions">Transaction Blocks</TabsTrigger>
-						<TabsTrigger value="epochs">Epochs</TabsTrigger>
-						<TabsTrigger value="checkpoints">Checkpoints</TabsTrigger>
+						<TabsTrigger value="transactions">
+							<Heading variant="heading4/semibold">Transaction Blocks</Heading>
+						</TabsTrigger>
+						<TabsTrigger value="epochs">
+							<Heading variant="heading4/semibold">Epochs</Heading>
+						</TabsTrigger>
+						<TabsTrigger value="checkpoints">
+							<Heading variant="heading4/semibold">Checkpoints</Heading>
+						</TabsTrigger>
 					</TabsList>
 					<div className="absolute inset-y-0 -top-1 right-0 flex items-center gap-3 text-2xl">
 						{/* TODO re-enable this when index is stable */}

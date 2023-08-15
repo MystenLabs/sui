@@ -6,3 +6,4 @@ export * from './coins.js';
 export * from './common.js';
 export * from './changes.js';
 export * from './generated.js';
+export * from './params.js';

@@ -1,1 +1,1 @@
-Found cycle between packages: Root -> Other -> Root
+Failed to resolve dependencies for package 'Root': Failed to resolve dependencies for package 'Other': Failed to resolve dependencies for package 'Root': Found cycle between packages: Other -> Root -> Other

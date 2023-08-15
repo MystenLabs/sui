@@ -278,16 +278,20 @@ impl CertifiedCheckpointSummary {
 
         Ok(())
     }
-}
 
-impl VerifiedCheckpoint {
     pub fn into_summary_and_sequence(self) -> (CheckpointSequenceNumber, CheckpointSummary) {
-        let summary = self.into_inner().into_data();
+        let summary = self.into_data();
         (summary.sequence_number, summary)
     }
 
     pub fn get_validator_signature(self) -> AggregateAuthoritySignature {
         self.auth_sig().signature.clone()
+    }
+}
+
+impl VerifiedCheckpoint {
+    pub fn into_summary_and_sequence(self) -> (CheckpointSequenceNumber, CheckpointSummary) {
+        self.into_inner().into_summary_and_sequence()
     }
 }
 

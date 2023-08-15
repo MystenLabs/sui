@@ -3,15 +3,19 @@
 
 import { isSuiNSName, useResolveSuiNSAddress, useResolveSuiNSName } from '@mysten/core';
 import { Domain32 } from '@mysten/icons';
-import { Heading, LoadingIndicator } from '@mysten/ui';
+import { LoadingIndicator } from '@mysten/ui';
 import { useParams } from 'react-router-dom';
 
-import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
-import { TransactionsForAddress } from '../../components/transactions/TransactionsForAddress';
 import { PageLayout } from '~/components/Layout/PageLayout';
 import { OwnedCoins } from '~/components/OwnedCoins';
 import { OwnedObjects } from '~/components/OwnedObjects';
+import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
+import { TransactionsForAddress } from '~/components/transactions/TransactionsForAddress';
+import { useBreakpoint } from '~/hooks/useBreakpoint';
+import { Divider } from '~/ui/Divider';
 import { PageHeader } from '~/ui/PageHeader';
+import { SplitPanes } from '~/ui/SplitPanes';
+import { TabHeader } from '~/ui/Tabs';
 
 function AddressResultPageHeader({ address, loading }: { address: string; loading?: boolean }) {
 	const { data: domainName, isFetching } = useResolveSuiNSName(address);
@@ -34,25 +38,41 @@ function SuiNSAddressResultPageHeader({ name }: { name: string }) {
 }
 
 function AddressResult({ address }: { address: string }) {
+	const isMediumOrAbove = useBreakpoint('md');
+
+	const leftPane = {
+		panel: (
+			<div className="flex-1 overflow-hidden md:pr-7">
+				<OwnedCoins id={address} />
+			</div>
+		),
+		minSize: 30,
+	};
+
+	const rightPane = {
+		panel: <OwnedObjects id={address} />,
+		minSize: 30,
+	};
+
 	return (
 		<div className="space-y-12">
 			<div>
-				<div className="border-b border-gray-45 pb-5 md:mt-12">
-					<Heading color="gray-90" variant="heading4/semibold">
-						Owned Objects
-					</Heading>
-				</div>
-				<ErrorBoundary>
-					<div className="flex flex-col gap-10 md:flex-row">
-						<div className="flex-1 overflow-hidden">
-							<OwnedCoins id={address} />
-						</div>
-						<div className="hidden w-px bg-gray-45 md:block" />
-						<div className="flex-1 overflow-hidden">
-							<OwnedObjects id={address} />
-						</div>
-					</div>
-				</ErrorBoundary>
+				<TabHeader title="Owned Objects" noGap>
+					<ErrorBoundary>
+						{isMediumOrAbove ? (
+							<SplitPanes splitPanels={[leftPane, rightPane]} direction="horizontal" />
+						) : (
+							<>
+								{leftPane.panel}
+								<div className="my-8">
+									<Divider />
+								</div>
+								{rightPane.panel}
+							</>
+						)}
+						<Divider />
+					</ErrorBoundary>
+				</TabHeader>
 			</div>
 
 			<div>

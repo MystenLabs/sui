@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useZodForm } from '@mysten/core';
+import { toast } from 'react-hot-toast';
 import { z } from 'zod';
+import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { Link } from '../../shared/Link';
 import { PasswordInput } from '../../shared/forms/controls/PasswordInput';
 import { Button } from '_src/ui/app/shared/ButtonUI';
@@ -23,13 +25,14 @@ type FormValues = z.infer<typeof formSchema>;
 
 type UnlockAccountModalProps = {
 	onClose: () => void;
-	onConfirm: () => void;
+	onSuccess: () => void;
 };
 
-export function UnlockAccountModal({ onClose, onConfirm }: UnlockAccountModalProps) {
+export function UnlockAccountModal({ onClose, onSuccess }: UnlockAccountModalProps) {
 	const {
 		register,
 		handleSubmit,
+		setError,
 		formState: { isSubmitting, isValid },
 	} = useZodForm({
 		mode: 'all',
@@ -38,15 +41,25 @@ export function UnlockAccountModal({ onClose, onConfirm }: UnlockAccountModalPro
 			password: '',
 		},
 	});
-	const onSubmit = (formValues: FormValues) => {
-		// eslint-disable-next-line no-console
-		console.log('TODO: Do something when the user submits the form successfully', formValues);
-		onConfirm();
+	const backgroundService = useBackgroundClient();
+	const onSubmit = async (formValues: FormValues) => {
+		try {
+			await backgroundService.verifyPassword(formValues.password);
+			await onSuccess();
+		} catch (e) {
+			toast.error((e as Error).message || 'Wrong password');
+			setError('password', { message: 'Incorrect password' }, { shouldFocus: true });
+		}
 	};
 
 	return (
-		<Dialog defaultOpen>
-			<DialogContent>
+		<Dialog
+			defaultOpen
+			onOpenChange={(open) => {
+				if (!open) onClose?.();
+			}}
+		>
+			<DialogContent onPointerDownOutside={(e) => e.preventDefault()}>
 				<DialogHeader>
 					<DialogTitle>Enter Account Password</DialogTitle>
 					<DialogDescription asChild>

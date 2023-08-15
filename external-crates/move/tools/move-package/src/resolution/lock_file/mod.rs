@@ -36,7 +36,11 @@ pub struct LockFile {
 impl LockFile {
     /// Creates a new lock file in a sub-directory of `install_dir` (the compiled output directory
     /// of a move package).
-    pub fn new(install_dir: PathBuf) -> Result<LockFile> {
+    pub fn new(
+        install_dir: PathBuf,
+        manifest_digest: Option<String>,
+        deps_digest: Option<String>,
+    ) -> Result<LockFile> {
         let mut locks_dir = install_dir;
         locks_dir.extend([
             CompiledPackageLayout::Root.path(),
@@ -49,7 +53,8 @@ impl LockFile {
             .tempfile_in(locks_dir)
             .context("Creating lock file")?;
 
-        schema::write_prologue(&mut lock).context("Initializing lock file")?;
+        schema::write_prologue(&mut lock, manifest_digest, deps_digest)
+            .context("Initializing lock file")?;
 
         Ok(LockFile { file: lock })
     }

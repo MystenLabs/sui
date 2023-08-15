@@ -59,7 +59,10 @@ impl ModelBuilder {
                     *nm,
                     dep_source_paths,
                     &pkg.resolved_table,
-                    pkg.compiler_config(&self.resolution_graph.build_options),
+                    pkg.compiler_config(
+                        /* is_dependency */ true,
+                        &self.resolution_graph.build_options,
+                    ),
                 )))
             })
             .collect::<Result<Vec<_>>>()?;

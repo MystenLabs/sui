@@ -8,7 +8,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 
 import { ImageIcon } from '_app/shared/image-icon';
 
-const imageStyle = cva(['rounded-full flex rounded-full'], {
+const imageStyle = cva(['rounded-full flex'], {
 	variants: {
 		size: {
 			sm: 'w-6 h-6',
@@ -16,16 +16,20 @@ const imageStyle = cva(['rounded-full flex rounded-full'], {
 			lg: 'md:w-10 md:h-10 w-8 h-8',
 			xl: 'md:w-31.5 md:h-31.5 w-16 h-16 ',
 		},
+		fill: {
+			sui: 'bg-sui',
+			suiPrimary2023: 'bg-sui-primaryBlue2023',
+		},
 	},
-
 	defaultVariants: {
 		size: 'md',
+		fill: 'suiPrimary2023',
 	},
 });
 
 function SuiCoin() {
 	return (
-		<Sui className="flex items-center w-full h-full justify-center text-white text-body p-1.5 bg-sui rounded-full" />
+		<Sui className="flex items-center w-full h-full justify-center text-white p-1 text-body rounded-full" />
 	);
 }
 

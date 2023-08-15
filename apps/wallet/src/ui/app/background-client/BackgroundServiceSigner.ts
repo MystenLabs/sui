@@ -4,28 +4,37 @@
 import { type SuiClient } from '@mysten/sui.js/client';
 import { WalletSigner } from '../WalletSigner';
 
+import { type SerializedUIAccount } from '_src/background/accounts/Account';
+import { type SerializedAccount } from '_src/background/keyring/Account';
 import type { BackgroundClient } from '.';
 import type { SerializedSignature } from '@mysten/sui.js/cryptography';
 
 export class BackgroundServiceSigner extends WalletSigner {
-	readonly #address: string;
+	readonly #account: SerializedAccount | SerializedUIAccount;
 	readonly #backgroundClient: BackgroundClient;
 
-	constructor(address: string, backgroundClient: BackgroundClient, client: SuiClient) {
+	constructor(
+		account: SerializedAccount | SerializedUIAccount,
+		backgroundClient: BackgroundClient,
+		client: SuiClient,
+	) {
 		super(client);
-		this.#address = address;
+		this.#account = account;
 		this.#backgroundClient = backgroundClient;
 	}
 
 	async getAddress(): Promise<string> {
-		return this.#address;
+		return this.#account.address;
 	}
 
 	signData(data: Uint8Array): Promise<SerializedSignature> {
-		return this.#backgroundClient.signData(this.#address, data);
+		return this.#backgroundClient.signData(
+			'id' in this.#account ? this.#account.id : this.#account.address,
+			data,
+		);
 	}
 
 	connect(client: SuiClient) {
-		return new BackgroundServiceSigner(this.#address, this.#backgroundClient, client);
+		return new BackgroundServiceSigner(this.#account, this.#backgroundClient, client);
 	}
 }

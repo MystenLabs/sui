@@ -15,7 +15,7 @@ import { useAppDispatch } from '_hooks';
 import { loadEntropyFromKeyring } from '_redux/slices/account';
 import { entropyToMnemonic, toEntropy } from '_shared/utils/bip39';
 import { HideShowDisplayBox } from '_src/ui/app/components/HideShowDisplayBox';
-import { PasswordInputDialog } from '_src/ui/app/components/menu/content/PasswordInputDialog';
+import { PasswordInputDialog } from '_src/ui/app/components/PasswordInputDialog';
 
 export type BackupPageProps = {
 	mode?: 'created' | 'imported';
@@ -73,6 +73,7 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
 							setShowPasswordDialog(false);
 						}}
 						continueLabel="Confirm"
+						showBackButton
 					/>
 				</CardLayout>
 			) : (

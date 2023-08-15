@@ -108,6 +108,7 @@ export interface TransactionBlockCardProps extends Omit<CardProps, 'size'> {
 	footer?: ReactNode;
 	collapsible?: boolean;
 	size?: Size;
+	initialClose?: boolean;
 }
 
 export function TransactionBlockCard({
@@ -116,9 +117,10 @@ export function TransactionBlockCard({
 	collapsible,
 	size = 'md',
 	children,
+	initialClose,
 	...cardProps
 }: TransactionBlockCardProps) {
-	const [open, setOpen] = useState(true);
+	const [open, setOpen] = useState(!initialClose);
 	return (
 		<div className="relative w-full">
 			<Card rounded="2xl" border="gray45" bg="white" spacing="none" {...cardProps}>
