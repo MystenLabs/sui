@@ -1756,12 +1756,8 @@ impl Frame {
             }
             Bytecode::Unpack(_sd_idx) => {
                 let value = interpreter.peek()?;
-                let struct_ = interpreter.peek()?.copy_value()?.value_as::<Struct>()?;
-                // VMValueCast<Struct> for Value -> cast
-                // if it is ValueImpl::Container(Container::Struct(r)) -> Struct { fields: take_unique_ownership(r)? }
-                // Which basically does Rc::try_unwrap(r) -> Ok(cell) -> Ok(cell.into_inner())
-                // match self.0 to ValueImpl::Container(Container::Struct(r)) -> r.borrow().iter()
-                gas_meter.charge_unpack(false, struct_.field_views())?;
+                let field_views = value.get_field_views()?;
+                gas_meter.charge_unpack(false, field_views.iter())?;
             }
             Bytecode::UnpackGeneric(_si_idx) => {
                 let struct_ = interpreter.peek()?.copy_value()?.value_as::<Struct>()?;

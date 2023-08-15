@@ -19,7 +19,7 @@ use move_core_types::{
     vm_status::{sub_status::NFE_VECTOR_ERROR_BASE, StatusCode},
 };
 use std::{
-    cell::RefCell,
+    cell::{Ref, RefCell},
     fmt::{self, Debug, Display},
     iter,
     rc::Rc,
@@ -37,7 +37,7 @@ use std::{
 
 /// Runtime representation of a Move value.
 #[derive(Debug)]
-enum ValueImpl {
+pub enum ValueImpl {
     Invalid,
 
     U8(u8),
@@ -65,7 +65,7 @@ enum ValueImpl {
 /// Except when not owned by the VM stack, a container always lives inside an Rc<RefCell<>>,
 /// making it possible to be shared by references.
 #[derive(Debug, Clone)]
-enum Container {
+pub enum Container {
     Locals(Rc<RefCell<Vec<ValueImpl>>>),
     Vec(Rc<RefCell<Vec<ValueImpl>>>),
     Struct(Rc<RefCell<Vec<ValueImpl>>>),
@@ -83,7 +83,7 @@ enum Container {
 /// or in global storage. In the latter case, it also keeps a status flag indicating whether
 /// the container has been possibly modified.
 #[derive(Debug)]
-enum ContainerRef {
+pub enum ContainerRef {
     Local(Container),
     Global {
         status: Rc<RefCell<GlobalDataStatus>>,
@@ -95,14 +95,14 @@ enum ContainerRef {
 /// Clean - the data was only read.
 /// Dirty - the data was possibly modified.
 #[derive(Debug, Clone, Copy)]
-enum GlobalDataStatus {
+pub enum GlobalDataStatus {
     Clean,
     Dirty,
 }
 
 /// A Move reference pointing to an element in a container.
 #[derive(Debug)]
-struct IndexedRef {
+pub struct IndexedRef {
     idx: usize,
     container_ref: ContainerRef,
 }
@@ -436,6 +436,14 @@ impl ContainerRef {
 impl Value {
     pub fn copy_value(&self) -> PartialVMResult<Self> {
         Ok(Self(self.0.copy_value()?))
+    }
+
+    pub fn get_field_views<'a>(&'a self) -> PartialVMResult<Ref<Vec<ValueImpl>>> {
+        match &self.0 {
+            ValueImpl::Container(Container::Struct(r)) => Ok(r.borrow()),
+            v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                .with_message(format!("cannot cast {:?} to struct", v))), // TODO (wlmyng): maintain parity with VMValueCast for now, but eventually want this error to be more accurate
+        }
     }
 }
 
