@@ -421,13 +421,20 @@ type Epoch {
 
 type ProtocolConfigs {
   protocolVersion: Int!
-  configs: [ProtocolConfig]
-  config(key: String!): ProtocolConfig
+  featureFlags: [ProtocolConfigFeatureFlag]
+  configs: [ProtocolConfigAttr]
+  config(key: String!): ProtocolConfigAttr
+  featureFlag(key: String!): ProtocolConfigFeatureFlag
 }
 
-type ProtocolConfig {
+type ProtocolConfigAttr {
   key: String!
   value: String!
+}
+
+type ProtocolConfigFeatureFlag {
+  key: String!
+  value: Boolean!
 }
 
 type SystemParameters {
