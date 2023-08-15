@@ -601,10 +601,8 @@ type TransactionBlock {
 }
 
 enum TransactionBlockKindInput {
-  CONSENSUS_COMMIT_PROLOGUE
-  GENESIS
-  CHANGE_EPOCH
-  PROGRAMMABLE
+  PROGRAMMABLE_TX
+  SYSTEM_TX
 }
 
 union TransactionBlockKind =
