@@ -12,7 +12,7 @@ use sui_types::object::ObjectFormatOptions;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::value::MoveStruct;
 
-use sui_indexer::{get_pg_pool_connection, new_pg_connection_pool, Indexer, IndexerConfig};
+use sui_indexer::new_pg_connection_pool;
 use self::models::*;
 use std::env;
 use sui_indexer::store::module_resolver::IndexerModuleResolver;
@@ -34,12 +34,11 @@ fn main() {
     use self::schema::events::dsl::*;
     use self::schema::events_json::dsl::*;
 
+
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let connection = &mut establish_connection();
 
-    //let start_id = 1;
-    let start_id = 465778286;
-    //let start_id = 743159312;
+    let start_id = 773827507;
 
     let blocking_cp = new_pg_connection_pool(&database_url).map_err(|e| anyhow!("Unable to connect to Postgres, is it running? {e}"));
     let module_cache = Arc::new(SyncModuleCache::new(IndexerModuleResolver::new(blocking_cp.expect("REASON").clone())));
