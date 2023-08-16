@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use either::Either;
-use fastcrypto_zkp::bn254::zk_login::JWK;
+use fastcrypto_zkp::bn254::zk_login::{OIDCProvider, JWK};
+use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::pin_mut;
 use itertools::izip;
 use lru::LruCache;
@@ -12,6 +13,7 @@ use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use shared_crypto::intent::Intent;
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::str::FromStr;
 use std::sync::Arc;
 use sui_types::digests::SenderSignedDataDigest;
 use sui_types::transaction::SenderSignedData;
@@ -31,7 +33,6 @@ use tokio::{
     sync::oneshot,
     time::{timeout, Duration},
 };
-
 // Maximum amount of time we wait for a batch to fill up before verifying a partial batch.
 const BATCH_TIMEOUT_MS: Duration = Duration::from_millis(10);
 
@@ -96,7 +97,11 @@ pub struct SignatureVerifier {
     /// don't want to pass a reference to the map to the verify method, since that would lead to a
     /// lengthy critical section. Instead, we use an immutable data structure which can be cloned
     /// very cheaply.
+    // todo(joyqvq): check what to use here since im is not apache.
     oauth_provider_jwk: RwLock<HashMap<(String, String), JWK>>,
+
+    supported_providers: RwLock<Vec<OIDCProvider>>,
+    zklogin_env: RwLock<ZkLoginEnv>,
 
     queue: Mutex<CertBuffer>,
     pub metrics: Arc<SignatureVerifierMetrics>,
@@ -121,6 +126,8 @@ impl SignatureVerifier {
             oauth_provider_jwk: Default::default(),
             queue: Mutex::new(CertBuffer::new(batch_size)),
             metrics,
+            supported_providers: Default::default(),
+            zklogin_env: Default::default(),
         }
     }
 
@@ -285,12 +292,26 @@ impl SignatureVerifier {
         true
     }
 
+    pub(crate) fn set_config(&self, providers_list: String, env: ZkLoginEnv) -> bool {
+        let mut supported_providers = self.supported_providers.write();
+        *supported_providers = providers_list
+            .split(',')
+            .map(|s| OIDCProvider::from_str(s).unwrap())
+            .collect::<Vec<_>>();
+        let mut zklogin_env = self.zklogin_env.write();
+        *zklogin_env = env;
+        true
+    }
+
     pub fn verify_tx(&self, signed_tx: &SenderSignedData) -> SuiResult {
         self.signed_data_cache
             .is_verified(signed_tx.full_message_digest(), || {
                 signed_tx.verify_epoch(self.committee.epoch())?;
                 let oauth_provider_jwk = self.oauth_provider_jwk.read().clone();
-                let aux_data = VerifyParams::new(oauth_provider_jwk);
+                let supported_providers = self.supported_providers.read().clone();
+                let zklogin_env = self.zklogin_env.read().clone();
+                let aux_data =
+                    VerifyParams::new(oauth_provider_jwk, supported_providers, zklogin_env);
                 signed_tx.verify_message_signature(&aux_data)
             })
     }
@@ -390,8 +411,9 @@ pub fn batch_verify_certificates(
     certs: &[CertifiedTransaction],
 ) -> Vec<SuiResult> {
     // certs.data() is assumed to be verified already by the caller.
-
-    let verify_params = VerifyParams::new(Default::default());
+    // todo: check if this is safe to use default
+    let verify_params =
+        VerifyParams::new(Default::default(), Default::default(), Default::default());
     match batch_verify(committee, certs, &[]) {
         Ok(_) => vec![Ok(()); certs.len()],
 

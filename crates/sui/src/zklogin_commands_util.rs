@@ -21,7 +21,7 @@ use sui_types::transaction::Transaction;
 use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
 
 const GAS_URL: &str = "http://127.0.0.1:9123/gas";
-const SALT_SERVER_URL: &str = "http://salt.api.mystenlabs.com/get_salt";
+const SALT_SERVER_URL: &str = "http://salt.api-devnet.mystenlabs.com/get_salt";
 const PROVER_SERVER_URL: &str = "http://185.209.177.123:8000/zkp";
 
 /// Read a line from stdin, parse the id_token field and return.
@@ -128,7 +128,7 @@ pub async fn perform_zk_login_test_tx(
     println!("{:?}", serde_json::to_string(&zk_login_inputs).unwrap());
     zk_login_inputs.init()?;
     let zklogin_address = SuiAddress::from_bytes(get_enoki_address(
-        zk_login_inputs.get_address_seed().to_owned(),
+        zk_login_inputs.get_address_seed(),
         zk_login_inputs.get_address_params(),
     ))?;
     println!("ZkLogin Address: {:?}", zklogin_address);

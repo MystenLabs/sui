@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto_zkp::bn254::zk_login::JWK;
+use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::future::{join_all, select, Either};
 use futures::FutureExt;
 use itertools::izip;
@@ -55,7 +56,7 @@ use mysten_metrics::monitored_scope;
 use prometheus::IntCounter;
 use sui_execution::{self, Executor};
 use sui_macros::fail_point;
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::{
@@ -469,6 +470,16 @@ impl AuthorityPerEpochStore {
         for ((kid, iss), v) in oauth_provider_jwk.iter() {
             signature_verifier.insert_oauth_jwk(v, kid.to_string(), iss.to_string());
         }
+
+        let zklogin_env = match chain_identifier.chain() {
+            Chain::Mainnet => ZkLoginEnv::Prod,
+            _ => ZkLoginEnv::Test,
+        };
+
+        signature_verifier.set_config(
+            protocol_config.zklogin_supported_providers().to_string(),
+            zklogin_env,
+        );
 
         let is_validator = committee.authority_index(&name).is_some();
         if is_validator {
@@ -2156,6 +2167,7 @@ impl AuthorityPerEpochStore {
     }
 
     // TODO: should be pub(crate) when it is inserted only from consensus
+    // todo(joyqvq): prune the old kids.
     pub fn insert_oauth_jwk(&self, content: &JWK, iss: String, kid: String) {
         if self
             .signature_verifier

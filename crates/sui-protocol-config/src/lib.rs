@@ -252,6 +252,9 @@ struct FeatureFlags {
     // If true, then the new algorithm for the leader election schedule will be used
     #[serde(skip_serializing_if = "is_false")]
     narwhal_new_leader_election_schedule: bool,
+
+    // A list of supported OIDC providers that can be used for zklogin.
+    zklogin_supported_providers: String,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -817,6 +820,10 @@ impl ProtocolConfig {
 
     pub fn zklogin_auth(&self) -> bool {
         self.feature_flags.zklogin_auth
+    }
+
+    pub fn zklogin_supported_providers(&self) -> &str {
+        &self.feature_flags.zklogin_supported_providers
     }
 
     pub fn consensus_transaction_ordering(&self) -> ConsensusTransactionOrdering {
@@ -1427,6 +1434,9 @@ impl ProtocolConfig {
 
     pub fn set_consensus_bad_nodes_stake_threshold(&mut self, val: u64) {
         self.consensus_bad_nodes_stake_threshold = Some(val);
+    }
+    pub fn set_zklogin_supported_providers(&mut self, list: String) {
+        self.feature_flags.zklogin_supported_providers = list
     }
 }
 

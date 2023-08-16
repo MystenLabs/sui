@@ -8,7 +8,7 @@ use crate::{
     signature::{AuthenticatorTrait, VerifyParams},
 };
 use fastcrypto::{error::FastCryptoError, traits::ToFromBytes};
-use fastcrypto_zkp::bn254::{zk_login::AddressParams, zk_login_api::Environment};
+use fastcrypto_zkp::bn254::zk_login::{AddressParams, OIDCProvider};
 use fastcrypto_zkp::bn254::{zk_login::ZkLoginInputs, zk_login_api::verify_zk_login};
 use once_cell::sync::OnceCell;
 use schemars::JsonSchema;
@@ -94,29 +94,44 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         T: Serialize,
     {
         // Verify the author of the transaction is indeed computed from address seed,
-        // iss and key claim name.
+        // iss, aud and key claim (e.g. sub).
         if author != self.into() {
             return Err(SuiError::InvalidAddress);
         }
 
-        // Verify the user signature over the intent message of the transaction data.
+        if !aux_verify_data.supported_providers.contains(
+            &OIDCProvider::from_iss(self.inputs.get_iss()).map_err(|_| {
+                SuiError::InvalidSignature {
+                    error: "Unknown provider".to_string(),
+                }
+            })?,
+        ) {
+            return Err(SuiError::InvalidSignature {
+                error: format!("OIDC provider not supported: {}", self.inputs.get_iss()),
+            });
+        }
+
+        // Verify the ephemeral signature over the intent message of the transaction data.
         if self
             .user_signature
             .verify_secure(intent_msg, author, SignatureScheme::ZkLoginAuthenticator)
             .is_err()
         {
             return Err(SuiError::InvalidSignature {
-                error: "User signature verify failed".to_string(),
+                error: "Ephermal signature verify failed".to_string(),
             });
         }
+
+        // Use flag || pk_bytes.
         let mut extended_pk_bytes = vec![self.user_signature.scheme().flag()];
         extended_pk_bytes.extend(self.user_signature.public_key_bytes());
+
         verify_zk_login(
             &self.inputs,
             self.max_epoch,
             &extended_pk_bytes,
-            &aux_verify_data.oauth_provider_jwks,
-            Environment::Test,
+            &aux_verify_data.oidc_provider_jwks,
+            &aux_verify_data.zk_login_env,
         )
         .map_err(|e| SuiError::InvalidSignature {
             error: e.to_string(),

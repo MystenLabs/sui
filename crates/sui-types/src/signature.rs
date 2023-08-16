@@ -11,7 +11,8 @@ use fastcrypto::{
     error::FastCryptoError,
     traits::{EncodeDecodeBase64, ToFromBytes},
 };
-use fastcrypto_zkp::bn254::zk_login::JWK;
+use fastcrypto_zkp::bn254::zk_login::{OIDCProvider, JWK};
+use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use schemars::JsonSchema;
 use serde::Serialize;
 use shared_crypto::intent::IntentMessage;
@@ -21,13 +22,21 @@ use std::hash::Hash;
 #[derive(Default, Debug, Clone)]
 pub struct VerifyParams {
     // map from (kid, iss) => JWK
-    pub oauth_provider_jwks: HashMap<(String, String), JWK>,
+    pub oidc_provider_jwks: HashMap<(String, String), JWK>,
+    pub supported_providers: Vec<OIDCProvider>,
+    pub zk_login_env: ZkLoginEnv,
 }
 
 impl VerifyParams {
-    pub fn new(oauth_provider_jwks: HashMap<(String, String), JWK>) -> Self {
+    pub fn new(
+        oidc_provider_jwks: HashMap<(String, String), JWK>,
+        supported_providers: Vec<OIDCProvider>,
+        zk_login_env: ZkLoginEnv,
+    ) -> Self {
         Self {
-            oauth_provider_jwks,
+            oidc_provider_jwks,
+            supported_providers,
+            zk_login_env,
         }
     }
 }

@@ -41,6 +41,21 @@ async fn test_zklogin_feature_deny() {
 }
 
 #[sim_test]
+async fn test_zklogin_provider_not_supported() {
+    use sui_protocol_config::ProtocolConfig;
+
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_zklogin_auth(true);
+        config.set_zklogin_supported_providers("Google,Facebook".to_string());
+        config
+    });
+
+    let err = do_zklogin_test().await.unwrap_err();
+
+    assert!(matches!(err, SuiError::InvalidSignature { .. }));
+}
+
+#[sim_test]
 async fn test_zklogin_feature_allow() {
     use sui_protocol_config::ProtocolConfig;
 

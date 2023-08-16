@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
+use std::str::FromStr;
 #[cfg(msim)]
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -17,6 +18,7 @@ use anemo_tower::trace::TraceLayer;
 use anyhow::anyhow;
 use anyhow::Result;
 use arc_swap::ArcSwap;
+use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::TryFutureExt;
 use mysten_common::sync::async_once_cell::AsyncOnceCell;
 use prometheus::Registry;
@@ -204,10 +206,16 @@ impl SuiNode {
                 info!("Starting JWK updater task");
                 loop {
                     let epoch_store_ = epoch_store.clone();
+                    let supported_providers = epoch_store
+                        .protocol_config()
+                        .zklogin_supported_providers()
+                        .split(',')
+                        .map(|s| OIDCProvider::from_str(s).unwrap())
+                        .collect::<Vec<_>>();
                     let fetch_and_sleep = async move {
                         // Update the JWK value in the authority server
                         info!("fetching new JWKs");
-                        match Self::fetch_jwks().await {
+                        match Self::fetch_jwks(&supported_providers).await {
                             Err(e) => {
                                 warn!("Error when fetching JWK {:?}", e);
                                 // Retry in 30 seconds
@@ -237,13 +245,25 @@ impl SuiNode {
     }
 
     #[cfg(not(msim))]
-    async fn fetch_jwks() -> SuiResult<Vec<((String, String), JWK)>> {
+    async fn fetch_jwks(
+        supported_providers: &[OIDCProvider],
+    ) -> SuiResult<Vec<((String, String), JWK)>> {
         use fastcrypto_zkp::bn254::zk_login::fetch_jwks;
-        fetch_jwks().await.map_err(|_| SuiError::JWKRetrievalError)
+        let mut res = Vec::new();
+        let client = reqwest::Client::new();
+        for p in supported_providers {
+            let jwks = fetch_jwks(p, &client)
+                .await
+                .map_err(|_| SuiError::JWKRetrievalError)?;
+            res.extend(jwks);
+        }
+        Ok(res)
     }
 
     #[cfg(msim)]
-    async fn fetch_jwks() -> SuiResult<Vec<((String, String), JWK)>> {
+    async fn fetch_jwks(
+        supported_providers: &[OIDCProvider],
+    ) -> SuiResult<Vec<((String, String), JWK)>> {
         parse_jwks(sui_types::zk_login_util::DEFAULT_JWK_BYTES, provider)
     }
 
