@@ -13,20 +13,24 @@ use crate::types::object::ObjectKind;
 use crate::types::protocol_config::ProtocolConfigAttr;
 use crate::types::protocol_config::ProtocolConfigFeatureFlag;
 use crate::types::protocol_config::ProtocolConfigs;
-use crate::types::transaction_block::TransactionBlock;
+use crate::types::transaction_block::{TransactionBlock, TransactionBlockEffects};
 use crate::types::{object::Object, sui_address::SuiAddress};
+
+use crate::types::gas::{GasCostSummary, GasEffects, GasInput};
 use async_graphql::connection::{Connection, Edge};
 use async_graphql::*;
 use async_trait::async_trait;
 use std::str::FromStr;
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiObjectResponseQuery, SuiPastObjectResponse, SuiRawData,
-    SuiTransactionBlockDataAPI, SuiTransactionBlockResponseOptions,
+    OwnedObjectRef, SuiGasData, SuiObjectDataOptions, SuiObjectResponseQuery,
+    SuiPastObjectResponse, SuiRawData, SuiTransactionBlockDataAPI, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_sdk::{
     types::{
         base_types::{ObjectID as NativeObjectID, SuiAddress as NativeSuiAddress},
         digests::TransactionDigest,
+        gas::GasCostSummary as NativeGasCostSummary,
         object::Owner as NativeOwner,
     },
     SuiClient,
@@ -139,13 +143,25 @@ impl DataProvider for SuiClient {
                 SuiTransactionBlockResponseOptions::full_content(),
             )
             .await?;
-        let sender = *tx.transaction.unwrap().data.sender();
+
+        let tx_data = tx.transaction.as_ref().unwrap();
+        let tx_effects = tx.effects.as_ref().unwrap();
+        let sender = *tx_data.data.sender();
+        let gas_effects =
+            convert_to_gas_effects(self, tx_effects.gas_cost_summary(), tx_effects.gas_object())
+                .await?;
+
         Ok(Some(TransactionBlock {
             digest: digest.to_string(),
+            effects: Some(TransactionBlockEffects {
+                digest: tx_effects.transaction_digest().to_string(),
+                gas_effects,
+            }),
             sender: Some(Address {
                 address: SuiAddress::from_array(sender.to_inner()),
             }),
             bcs: Some(Base64::from(&tx.raw_transaction)),
+            gas_input: Some(convert_to_gas_input(self, tx_data.data.gas_data()).await?),
         }))
     }
 
@@ -219,6 +235,59 @@ fn convert_bal(b: sui_json_rpc_types::Balance) -> Balance {
         coin_object_count: b.coin_object_count as u64,
         total_balance: BigInt::from_str(&format!("{}", b.total_balance)).unwrap(),
     }
+}
+
+pub(crate) async fn convert_to_gas_input(
+    cl: &SuiClient,
+    gas_data: &SuiGasData,
+) -> Result<GasInput> {
+    let payment_obj_ids: Vec<_> = gas_data.payment.iter().map(|o| o.object_id).collect();
+
+    let obj_responses = cl
+        .read_api()
+        .multi_get_object_with_options(payment_obj_ids, SuiObjectDataOptions::full_content())
+        .await?;
+
+    let payment_objs = obj_responses
+        .iter()
+        .map(|x| convert_obj(x.data.as_ref().unwrap()))
+        .collect();
+
+    Ok(GasInput {
+        gas_sponsor: Some(Address::from(SuiAddress::from(gas_data.owner))),
+        gas_payment: Some(payment_objs),
+        gas_price: Some(BigInt::from(gas_data.price)),
+        gas_budget: Some(BigInt::from(gas_data.budget)),
+    })
+}
+
+pub(crate) fn convert_to_gas_cost_summary(gcs: &NativeGasCostSummary) -> Result<GasCostSummary> {
+    Ok(GasCostSummary {
+        computation_cost: Some(BigInt::from(gcs.computation_cost)),
+        storage_cost: Some(BigInt::from(gcs.storage_cost)),
+        storage_rebate: Some(BigInt::from(gcs.storage_rebate)),
+        non_refundable_storage_fee: Some(BigInt::from(gcs.non_refundable_storage_fee)),
+    })
+}
+
+pub(crate) async fn convert_to_gas_effects(
+    cl: &SuiClient,
+    gcs: &NativeGasCostSummary,
+    gas_obj_ref: &OwnedObjectRef,
+) -> Result<GasEffects> {
+    let gas_summary = convert_to_gas_cost_summary(gcs)?;
+    let gas_obj = cl
+        .read_api()
+        .get_object_with_options(
+            gas_obj_ref.object_id(),
+            SuiObjectDataOptions::full_content(),
+        )
+        .await?;
+    let gas_object = convert_obj(&gas_obj.data.unwrap());
+    Ok(GasEffects {
+        gas_object: Some(gas_object),
+        gas_summary: Some(gas_summary),
+    })
 }
 
 impl From<Address> for SuiAddress {
