@@ -25,7 +25,7 @@ export function StakeButton() {
 	if (!stakeButtonEnabled) return null;
 
 	const stakeSupportedWallets = wallets.filter((wallet) => {
-		if (!('wallet' in wallet)) {
+		if (!('wallet' in wallet) || !wallet.wallet) {
 			return false;
 		}
 
