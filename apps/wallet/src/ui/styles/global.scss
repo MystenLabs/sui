@@ -107,18 +107,10 @@ textarea {
 }
 
 @font-face {
-	font-family: 'Arial Rounded MT';
-	src: url('../assets/fonts/arialRoundedMt.woff2') format('woff2');
-}
-
-@font-face {
-	font-family: 'Arial Rounded MT Bold';
-	src: url('../assets/fonts/arialRoundedMtBold.woff2') format('woff2');
-}
-
-@font-face {
-	font-family: 'Frankfurter';
-	src: url('../assets/fonts/Frankfurter.woff2') format('woff2');
+	font-family: 'Frankfurter Normal';
+	src:
+		url('../assets/fonts/FrankfurterNormal.woff2') format('woff2'),
+		url('../assets/fonts/FrankfurterNormal.woff') format('woff');
 }
 
 @keyframes fade-in-up {
