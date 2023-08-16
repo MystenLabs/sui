@@ -46,7 +46,7 @@ function Interstitial({ enabled, dismissKey, imageUrl, bannerUrl, onClose }: Int
 	return (
 		<Portal containerId="overlay-portal-container">
 			<div className="flex flex-col justify-center flex-nowrap items-center rounded-lg z-50 overflow-hidden absolute top-0 bottom-0 left-0 right-0 backdrop-blur-sm">
-				<img src={imageUrl} />
+				<img src={imageUrl} alt="interstitial-banner" />
 				<button
 					data-testid="bullshark-dismiss"
 					className="appearance-none bg-transparent border-none cursor-pointer absolute bottom-5"

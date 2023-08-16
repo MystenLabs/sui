@@ -5,7 +5,6 @@ import { useFeature } from '@growthbook/growthbook-react';
 import ExternalLink from '../external-link';
 import { ampli } from '_src/shared/analytics/ampli';
 import { FEATURES } from '_src/shared/experimentation/features';
-import Quests2Banner from '_src/ui/assets/images/quests-2-banner.svg';
 
 export type BannerProps = {
 	enabled: boolean;
@@ -15,7 +14,6 @@ export type BannerProps = {
 
 export function AppsPageBanner() {
 	const AppsBannerConfig = useFeature<BannerProps>(FEATURES.WALLET_APPS_BANNER_CONFIG);
-	console.log(AppsBannerConfig.value);
 
 	if (!AppsBannerConfig.value?.enabled) {
 		return null;
@@ -28,7 +26,7 @@ export function AppsPageBanner() {
 					href={AppsBannerConfig.value?.bannerUrl}
 					onClick={() => ampli.clickedBullsharkQuestsCta({ sourceFlow: 'Banner - Apps tab' })}
 				>
-					<img src={AppsBannerConfig.value?.imageUrl} />
+					<img src={AppsBannerConfig.value?.imageUrl} alt="Apps Banner" />
 				</ExternalLink>
 			)}
 		</div>

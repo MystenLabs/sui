@@ -216,7 +216,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 			walletInterstitialConfig?.dismissKey &&
 			localStorage.getItem(walletInterstitialConfig.dismissKey);
 		setInterstitialDismissed(dismissed === 'true');
-	}, []);
+	}, [walletInterstitialConfig?.dismissKey]);
 
 	if (walletInterstitialConfig?.enabled && !interstitialDismissed) {
 		return (
