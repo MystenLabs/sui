@@ -96,6 +96,8 @@ pub struct Context<'env> {
     /// context's current module. Note there may be more than one location in practice, but
     /// tracking a single one is sufficient for error reporting.
     pub new_friends: BTreeSet<(ModuleIdent, Loc)>,
+    /// collects all used constants in the current module
+    pub used_consts: BTreeSet<Symbol>,
 }
 
 macro_rules! program_info {
@@ -220,6 +222,7 @@ impl<'env> Context<'env> {
             env,
             called_fns: BTreeSet::new(),
             new_friends: BTreeSet::new(),
+            used_consts: BTreeSet::new(),
         }
     }
 

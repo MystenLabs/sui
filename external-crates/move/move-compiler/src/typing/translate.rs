@@ -97,6 +97,7 @@ fn module(
     assert!(context.current_script_constants.is_none());
     assert!(context.called_fns.is_empty());
     assert!(context.new_friends.is_empty());
+    assert!(context.used_consts.is_empty());
 
     context.current_module = Some(ident);
     let N::ModuleDefinition {
@@ -132,9 +133,10 @@ fn module(
     gen_unused_warnings(context, &typed_module);
     // get the list of new friends and reset the list.
     let new_friends = std::mem::take(&mut context.new_friends);
-    // reset called functions set so that it's ready to be be populated with values from
-    // a single module only
+    // reset called functions and used consts set so that they are ready to be be populated with
+    // values from a single module only
     context.called_fns.clear();
+    context.used_consts.clear();
     (typed_module, new_friends)
 }
 
@@ -1241,6 +1243,11 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
 
         NE::Constant(m, c) => {
             let ty = core::make_constant_type(context, eloc, &m, &c);
+            if m.is_none() || context.is_current_module(&m.unwrap()) {
+                // module where constant is accessed is either implicitly or explicitly defined to
+                // be the same where it's defined
+                context.used_consts.insert(c.value());
+            }
             (ty, TE::Constant(m, c))
         }
 
@@ -2335,6 +2342,21 @@ fn gen_unused_warnings(context: &mut Context, mdef: &T::ModuleDefinition) {
     context
         .env
         .add_warning_filter_scope(mdef.warning_filter.clone());
+
+    for (loc, name, c) in &mdef.constants {
+        context
+            .env
+            .add_warning_filter_scope(c.warning_filter.clone());
+
+        if !context.used_consts.contains(name) {
+            let msg = format!("The constant '{name}' is never used. Consider removing it.");
+            context
+                .env
+                .add_diag(diag!(UnusedItem::Constant, (loc, msg)))
+        }
+
+        context.env.pop_warning_filter_scope();
+    }
 
     for (loc, name, fun) in &mdef.functions {
         if fun.attributes.iter().any(|(_, n, _)| {
