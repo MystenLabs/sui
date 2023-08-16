@@ -11,6 +11,7 @@ use sui_json_rpc_types::{
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Owner;
+use sui_types::storage::WriteKind;
 use sui_types::transaction::{SenderSignedData, TransactionDataAPI};
 
 use crate::errors::IndexerError;
@@ -19,6 +20,14 @@ use crate::models::transaction_index::{ChangedObject, InputObject, MoveCall, Rec
 const CREATED_OBJECT_CHANGE_TYPE: &str = "created";
 const MUTATED_OBJECT_CHANGE_TYPE: &str = "mutated";
 const UNWRAPPED_OBJECT_CHANGE_TYPE: &str = "unwrapped";
+
+pub fn write_kind_to_str(write_kind: WriteKind) -> &'static str {
+    match write_kind {
+        WriteKind::Mutate => MUTATED_OBJECT_CHANGE_TYPE,
+        WriteKind::Create => CREATED_OBJECT_CHANGE_TYPE,
+        WriteKind::Unwrap => UNWRAPPED_OBJECT_CHANGE_TYPE,
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct CheckpointTransactionBlockResponse {

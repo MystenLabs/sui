@@ -24,6 +24,6 @@
 	"references": [
 		{ "path": "../../sdk/typescript/" },
 		{ "path": "../../sdk/kiosk/" },
-		{ "path": "../../sdk/wallet-adapter/wallet-kit/" }
+		{ "path": "../../sdk/wallet-kit/react/" }
 	]
 }

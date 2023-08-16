@@ -80,6 +80,7 @@ const options: {
 		SuiCoinMetadata: { alias: 'CoinMetadata' },
 		SuiProgrammableMoveCall: { alias: 'MoveCallSuiTransaction' },
 		Supply: { alias: 'CoinSupply' },
+		TransactionBlock: { alias: 'SuiTransactionBlock' },
 		TransactionBlockEffects: { alias: 'TransactionEffects' },
 		TransactionBlockKind: { alias: 'SuiTransactionBlockKind' },
 		TransactionBlockResponse: { alias: 'SuiTransactionBlockResponse' },

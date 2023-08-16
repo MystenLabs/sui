@@ -14,7 +14,6 @@
     "@mysten/core",
     "@mysten/ui",
     "sui-wallet-adapter-demo",
-    "wallet-kit-site",
     "sponsored-transactions"
   ]
 }

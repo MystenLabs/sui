@@ -1,0 +1,10 @@
+{
+	"extends": "../wallet-kit/tsconfig.base.json",
+	"include": ["src"],
+	"compilerOptions": {
+		"outDir": "dist",
+		"rootDir": "src",
+		"baseUrl": "."
+	},
+	"references": [{ "path": "../typescript" }]
+}

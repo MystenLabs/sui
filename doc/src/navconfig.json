@@ -71,6 +71,10 @@
 					{
 						"label": "Consensus Engine",
 						"fileName": "learn/architecture/consensus"
+					},
+					{
+						"label": "Full Node Data Management",
+						"fileName": "learn/architecture/sui-full-node-data"
 					}
 				]
 			},

@@ -1,16 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SuiClient } from '@mysten/sui.js/client';
-import { createContext, useContext } from 'react';
-
-export const SuiClientContext = createContext<
-	| {
-			client: SuiClient;
-			queryKey: (key: unknown[]) => unknown[];
-	  }
-	| undefined
->(undefined);
+import { useContext } from 'react';
+import { SuiClientContext } from '../components/SuiClientProvider.js';
 
 export function useSuiClientContext() {
 	const suiClient = useContext(SuiClientContext);

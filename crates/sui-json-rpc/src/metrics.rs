@@ -5,6 +5,7 @@ use hyper::body::HttpBody;
 use std::collections::HashSet;
 use std::net::SocketAddr;
 
+use crate::error::TRANSIENT_ERROR_CODE;
 use crate::{CLIENT_SDK_TYPE_HEADER, CLIENT_TARGET_API_VERSION_HEADER};
 use jsonrpsee::server::logger::{HttpRequest, Logger, MethodKind, TransportProtocol};
 use jsonrpsee::types::Params;
@@ -31,6 +32,7 @@ pub struct Metrics {
     errors_by_route: IntCounterVec,
     server_errors_by_route: IntCounterVec,
     client_errors_by_route: IntCounterVec,
+    transient_errors_by_route: IntCounterVec,
     /// Client info
     client: IntCounterVec,
     /// Connection count
@@ -90,6 +92,13 @@ impl MetricsLogger {
             server_errors_by_route: register_int_counter_vec_with_registry!(
                 "server_errors_by_route",
                 "Number of server errors by route",
+                &["route"],
+                registry,
+            )
+            .unwrap(),
+            transient_errors_by_route: register_int_counter_vec_with_registry!(
+                "transient_errors_by_route",
+                "Number of transient errors by route",
                 &["route"],
                 registry,
             )
@@ -226,6 +235,11 @@ impl Logger for MetricsLogger {
             {
                 self.metrics
                     .server_errors_by_route
+                    .with_label_values(&[method_name])
+                    .inc();
+            } else if code == TRANSIENT_ERROR_CODE {
+                self.metrics
+                    .transient_errors_by_route
                     .with_label_values(&[method_name])
                     .inc();
             } else {

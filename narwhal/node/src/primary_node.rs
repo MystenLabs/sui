@@ -263,7 +263,6 @@ impl PrimaryNodeInner {
             protocol_config.clone(),
             parameters.clone(),
             client,
-            store.header_store.clone(),
             store.certificate_store.clone(),
             store.proposer_store.clone(),
             store.payload_store.clone(),

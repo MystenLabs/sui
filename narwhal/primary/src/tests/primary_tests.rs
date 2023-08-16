@@ -83,7 +83,6 @@ async fn test_get_network_peers_from_admin_server() {
         test_utils::latest_protocol_version(),
         primary_1_parameters.clone(),
         client_1.clone(),
-        store.header_store.clone(),
         store.certificate_store.clone(),
         store.proposer_store.clone(),
         store.payload_store.clone(),
@@ -198,7 +197,6 @@ async fn test_get_network_peers_from_admin_server() {
         test_utils::latest_protocol_version(),
         primary_2_parameters.clone(),
         client_2.clone(),
-        store.header_store.clone(),
         store.certificate_store.clone(),
         store.proposer_store.clone(),
         store.payload_store.clone(),
@@ -279,7 +277,7 @@ async fn test_request_vote_has_missing_parents() {
     let network = test_utils::test_network(target.network_keypair(), target.address());
     let client = NetworkClient::new_from_keypair(&target.network_keypair());
 
-    let (header_store, certificate_store, payload_store) = create_db_stores();
+    let (certificate_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
@@ -308,7 +306,6 @@ async fn test_request_vote_has_missing_parents() {
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
-        header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
@@ -447,7 +444,7 @@ async fn test_request_vote_accept_missing_parents() {
     let network = test_utils::test_network(target.network_keypair(), target.address());
     let client = NetworkClient::new_from_keypair(&target.network_keypair());
 
-    let (header_store, certificate_store, payload_store) = create_db_stores();
+    let (certificate_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
@@ -476,7 +473,6 @@ async fn test_request_vote_accept_missing_parents() {
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
-        header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
@@ -603,7 +599,7 @@ async fn test_request_vote_missing_batches() {
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
     let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
-    let (header_store, certificate_store, payload_store) = create_db_stores();
+    let (certificate_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
@@ -632,7 +628,6 @@ async fn test_request_vote_missing_batches() {
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
-        header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
@@ -749,7 +744,7 @@ async fn test_request_vote_already_voted() {
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
     let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
-    let (header_store, certificate_store, payload_store) = create_db_stores();
+    let (certificate_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
@@ -779,7 +774,6 @@ async fn test_request_vote_already_voted() {
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
-        header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
@@ -938,7 +932,7 @@ async fn test_fetch_certificates_handler() {
     let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
-    let (header_store, certificate_store, payload_store) = create_db_stores();
+    let (certificate_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
@@ -967,7 +961,6 @@ async fn test_fetch_certificates_handler() {
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
-        header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
@@ -1110,7 +1103,7 @@ async fn test_request_vote_created_at_in_future() {
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
     let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
-    let (header_store, certificate_store, payload_store) = create_db_stores();
+    let (certificate_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
@@ -1139,7 +1132,6 @@ async fn test_request_vote_created_at_in_future() {
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
-        header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
