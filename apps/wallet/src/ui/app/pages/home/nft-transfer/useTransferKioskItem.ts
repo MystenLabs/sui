@@ -13,8 +13,8 @@ import {
 import { take } from '@mysten/kiosk';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { useMutation } from '@tanstack/react-query';
-
-import { useActiveAddress, useSigner } from '_src/ui/app/hooks';
+import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
+import { useSigner } from '_src/ui/app/hooks/useSigner';
 
 const ORIGINBYTE_PACKAGE_ID = '0x083b02db943238dcea0ff0938a54a17d7575f5b48034506446e501e963391480';
 
@@ -26,8 +26,9 @@ export function useTransferKioskItem({
 	objectType?: string | null;
 }) {
 	const rpc = useRpcClient();
-	const signer = useSigner();
-	const address = useActiveAddress();
+	const activeAccount = useActiveAccount();
+	const signer = useSigner(activeAccount);
+	const address = activeAccount?.address;
 	const obPackageId = useFeatureValue('kiosk-originbyte-packageid', ORIGINBYTE_PACKAGE_ID);
 	const { data: kioskData } = useGetKioskContents(address);
 

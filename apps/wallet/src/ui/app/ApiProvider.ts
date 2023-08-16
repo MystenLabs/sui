@@ -6,7 +6,6 @@ import { type WalletSigner } from './WalletSigner';
 import { BackgroundServiceSigner } from './background-client/BackgroundServiceSigner';
 import { queryClient } from './helpers/queryClient';
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
-import { AccountType, type SerializedAccount } from '_src/background/keyring/Account';
 import { API_ENV } from '_src/shared/api-env';
 
 import { getSuiClient } from '_src/shared/sui-client';
@@ -42,6 +41,8 @@ export const generateActiveNetworkList = (): NetworkTypes[] => {
 	return Object.values(API_ENV);
 };
 
+const accountTypesWithBackgroundSigner = ['mnemonic-derived', 'imported', 'zk'];
+
 export default class ApiProvider {
 	private _apiFullNodeProvider?: SuiClient;
 	private _signerByAddress: Map<string, SignerWithProvider> = new Map();
@@ -71,21 +72,16 @@ export default class ApiProvider {
 	}
 
 	public getSignerInstance(
-		// TODO: Remove SerializedAccount
-		account: SerializedAccount | SerializedUIAccount,
+		account: SerializedUIAccount,
 		backgroundClient: BackgroundClient,
 	): SignerWithProvider {
 		if (!this._apiFullNodeProvider) {
 			this.setNewJsonRpcProvider();
 		}
-		if (
-			[AccountType.DERIVED, AccountType.IMPORTED, 'mnemonic-derived', 'imported', 'zk'].includes(
-				account.type,
-			)
-		) {
+		if (accountTypesWithBackgroundSigner.includes(account.type)) {
 			return this.getBackgroundSignerInstance(account, backgroundClient);
 		}
-		if ([AccountType.LEDGER, 'ledger'].includes(account.type)) {
+		if ('ledger' === account.type) {
 			// Ideally, Ledger transactions would be signed in the background
 			// and exist as an asynchronous keypair; however, this isn't possible
 			// because you can't connect to a Ledger device from the background
@@ -102,11 +98,11 @@ export default class ApiProvider {
 	}
 
 	public getBackgroundSignerInstance(
-		account: SerializedAccount | SerializedUIAccount,
+		account: SerializedUIAccount,
 		backgroundClient: BackgroundClient,
 	): WalletSigner {
-		const key = 'id' in account ? account.id : account.address;
-		if (!this._signerByAddress.has(key)) {
+		const key = account.id;
+		if (!this._signerByAddress.has(account.id)) {
 			this._signerByAddress.set(
 				key,
 				new BackgroundServiceSigner(account, backgroundClient, this._apiFullNodeProvider!),

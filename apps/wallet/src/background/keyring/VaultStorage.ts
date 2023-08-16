@@ -22,6 +22,9 @@ const VAULT_KEY = 'vault';
 export const EPHEMERAL_PASSWORD_KEY = '244e4b24e667ebf';
 export const EPHEMERAL_VAULT_KEY = 'a8e451b8ae8a1b4';
 
+/**
+ * @deprecated
+ */
 class VaultStorageClass {
 	#vault: Vault | null = null;
 
@@ -170,4 +173,7 @@ class VaultStorageClass {
 	}
 }
 
+/**
+ * @deprecated
+ */
 export const VaultStorage = new VaultStorageClass();

@@ -13,7 +13,6 @@ import { Button } from '../../shared/ButtonUI';
 import { testPassNewAccounts } from '../accounts-dev';
 import Overlay from '_components/overlay';
 import { ampli } from '_src/shared/analytics/ampli';
-import { NEW_ACCOUNTS_ENABLED } from '_src/shared/constants';
 import { type Wallet } from '_src/shared/qredo-api';
 import { PasswordInputDialog } from '_src/ui/app/components/PasswordInputDialog';
 
@@ -94,17 +93,16 @@ export function SelectQredoAccountsPage() {
 								after={<ArrowRight16 />}
 								disabled={!selectedAccounts?.length}
 								onClick={async () => {
-									if (NEW_ACCOUNTS_ENABLED) {
-										await backgroundService.acceptQredoConnection({
-											qredoID: id,
-											accounts: selectedAccounts,
-											password: testPassNewAccounts,
-										});
-										toast.success(`Qredo account${selectedAccounts.length > 1 ? 's' : ''} added`);
-										window.close();
-									} else {
-										setShowPassword(true);
-									}
+									// TODO: now it just stores the accounts with test password
+									// aka qredo is broken! fix it
+									await backgroundService.acceptQredoConnection({
+										qredoID: id,
+										accounts: selectedAccounts,
+										password: testPassNewAccounts,
+									});
+									toast.success(`Qredo account${selectedAccounts.length > 1 ? 's' : ''} added`);
+									window.close();
+									// setShowPassword(true);
 								}}
 							/>
 						</div>

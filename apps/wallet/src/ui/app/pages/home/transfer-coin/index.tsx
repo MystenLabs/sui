@@ -20,9 +20,9 @@ import Overlay from '_components/overlay';
 import { ampli } from '_src/shared/analytics/ampli';
 import { QredoActionIgnoredByUser } from '_src/ui/app/QredoSigner';
 import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
-import { useSigner } from '_src/ui/app/hooks';
-import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
+import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
 import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
+import { useSigner } from '_src/ui/app/hooks/useSigner';
 
 import type { SubmitProps } from './SendTokenForm';
 
@@ -33,8 +33,9 @@ function TransferCoinPage() {
 	const [formData, setFormData] = useState<SubmitProps>();
 	const navigate = useNavigate();
 	const { data: coinMetadata } = useCoinMetadata(coinType);
-	const signer = useSigner();
-	const address = useActiveAddress();
+	const activeAccount = useActiveAccount();
+	const signer = useSigner(activeAccount);
+	const address = activeAccount?.address;
 	const queryClient = useQueryClient();
 	const { clientIdentifier, notificationModal } = useQredoTransaction();
 

@@ -27,10 +27,12 @@ type EphemeralData = {
 interface QredoAccountSourceSerialized extends AccountSourceSerialized, QredoConnectIdentity {
 	type: 'qredo';
 	encrypted: string;
+	originFavIcon: string;
 }
 
 interface QredoAccountSourceSerializedUI extends AccountSourceSerializedUI, QredoConnectIdentity {
 	type: 'qredo';
+	originFavIcon: string;
 }
 
 export class QredoAccountSource extends AccountSource<QredoAccountSourceSerialized, EphemeralData> {
@@ -44,6 +46,7 @@ export class QredoAccountSource extends AccountSource<QredoAccountSourceSerializ
 		origin,
 		service,
 		refreshToken,
+		originFavIcon,
 	}: {
 		password: string;
 		apiUrl: string;
@@ -51,6 +54,7 @@ export class QredoAccountSource extends AccountSource<QredoAccountSourceSerializ
 		origin: string;
 		service: string;
 		refreshToken: string;
+		originFavIcon: string;
 	}) {
 		const decryptedData: DataDecrypted = {
 			refreshToken,
@@ -63,6 +67,7 @@ export class QredoAccountSource extends AccountSource<QredoAccountSourceSerializ
 			origin,
 			service,
 			encrypted: await encrypt(password, decryptedData),
+			originFavIcon,
 		};
 		const allAccountSources = await getAccountSources();
 		for (const anAccountSource of allAccountSources) {
@@ -106,7 +111,7 @@ export class QredoAccountSource extends AccountSource<QredoAccountSourceSerializ
 	}
 
 	async toUISerialized(): Promise<QredoAccountSourceSerializedUI> {
-		const { apiUrl, id, organization, origin, service } = await this.getStoredData();
+		const { apiUrl, id, organization, origin, service, originFavIcon } = await this.getStoredData();
 		return {
 			id,
 			type: 'qredo',
@@ -115,6 +120,7 @@ export class QredoAccountSource extends AccountSource<QredoAccountSourceSerializ
 			organization,
 			service,
 			isLocked: await this.isLocked(),
+			originFavIcon,
 		};
 	}
 

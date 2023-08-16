@@ -7,16 +7,12 @@ import { HideShowDisplayBox } from '_components/HideShowDisplayBox';
 import Alert from '_components/alert';
 import { MenuLayout } from '_components/menu/content/MenuLayout';
 import { useNextMenuUrl } from '_components/menu/hooks';
-import { useAppDispatch } from '_hooks';
-import { loadEntropyFromKeyring } from '_redux/slices/account';
-import { entropyToMnemonic, toEntropy } from '_shared/utils/bip39';
 import { PasswordInputDialog } from '_src/ui/app/components/PasswordInputDialog';
 
 export function RecoveryPassphrase() {
-	const [passwordConfirmed, setPasswordConfirmed] = useState(false);
-	const [mnemonic, setMnemonic] = useState<string[] | null>(null);
+	const [passwordConfirmed, _setPasswordConfirmed] = useState(false);
+	const [mnemonic, _setMnemonic] = useState<string[] | null>(null);
 	const accountsUrl = useNextMenuUrl(true, '/accounts');
-	const dispatch = useAppDispatch();
 
 	if (!passwordConfirmed) {
 		return (
@@ -26,11 +22,7 @@ export function RecoveryPassphrase() {
 					title="Export Recovery Passphrase"
 					continueLabel="Continue"
 					onPasswordVerified={async () => {
-						const mnemonic = entropyToMnemonic(
-							toEntropy(await dispatch(loadEntropyFromKeyring({})).unwrap()),
-						).split(' ');
-						setMnemonic(mnemonic);
-						setPasswordConfirmed(true);
+						throw new Error('Not implemented yet');
 					}}
 					showBackButton
 				/>
