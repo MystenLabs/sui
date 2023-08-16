@@ -1,14 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{address::Address, base64::Base64, sui_address::SuiAddress};
+use super::{
+    address::Address,
+    base64::Base64,
+    gas::{GasEffects, GasInput},
+    sui_address::SuiAddress,
+};
 use async_graphql::*;
 
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
 pub(crate) struct TransactionBlock {
     pub digest: String,
+    pub effects: Option<TransactionBlockEffects>,
     pub sender: Option<Address>,
     pub bcs: Option<Base64>,
+    pub gas_input: Option<GasInput>,
+}
+
+#[derive(SimpleObject, Clone, Eq, PartialEq)]
+pub(crate) struct TransactionBlockEffects {
+    pub digest: String,
+    pub gas_effects: GasEffects,
 }
 
 pub(crate) struct TransactionBlockConnection;

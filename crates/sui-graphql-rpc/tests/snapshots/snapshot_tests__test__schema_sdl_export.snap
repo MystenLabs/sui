@@ -40,6 +40,25 @@ type CoinConnection {
 }
 
 
+type GasCostSummary {
+	computationCost: BigInt
+	storageCost: BigInt
+	storageRebate: BigInt
+	nonRefundableStorageFee: BigInt
+}
+
+type GasEffects {
+	gasObject: Object
+	gasSummary: GasCostSummary
+}
+
+type GasInput {
+	gasSponsor: Address
+	gasPayment: [Object!]
+	gasPrice: BigInt
+	gasBudget: BigInt
+}
+
 
 
 type NameServiceConnection {
@@ -195,12 +214,19 @@ scalar SuiAddress
 
 type TransactionBlock {
 	digest: String!
+	effects: TransactionBlockEffects
 	sender: Address
 	bcs: Base64
+	gasInput: GasInput
 }
 
 type TransactionBlockConnection {
 	unimplemented: Boolean!
+}
+
+type TransactionBlockEffects {
+	digest: String!
+	gasEffects: GasEffects!
 }
 
 input TransactionBlockFilter {
