@@ -71,16 +71,6 @@ The resource that a client tried to create already exists (http: 409)
 
 
 
-<a name="0x1_error_CANCELLED"></a>
-
-Request cancelled by the client (http: 499)
-
-
-<pre><code><b>const</b> <a href="error.md#0x1_error_CANCELLED">CANCELLED</a>: u64 = 10;
-</code></pre>
-
-
-
 <a name="0x1_error_INTERNAL"></a>
 
 Internal error (http: 500)
