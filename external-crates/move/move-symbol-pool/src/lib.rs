@@ -70,8 +70,17 @@ static_symbols!(
     "TxContext",
     "ID",
     "SUI",
+<<<<<<< HEAD
     "authenticator_state",
     "AuthenticatorState",
+=======
+    "id",
+    "transfer",
+    "freeze_object",
+    "share_object",
+    "event",
+    "emit",
+>>>>>>> 01016866de ([move-compiler][sui-mode] Added struct declaration, private generics, and global storage checks)
 );
 
 /// The global, unique cache of strings.

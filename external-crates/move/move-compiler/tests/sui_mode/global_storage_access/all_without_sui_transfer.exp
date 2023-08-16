@@ -1,0 +1,88 @@
+error[Sui E02009]: invalid global storage usage
+   ┌─ tests/sui_mode/global_storage_access/all_without_sui_transfer.move:11:76
+   │
+11 │     public fun no<T>(s: &signer, addr: address, r: R, g: G<T>) acquires R, G {
+   │                                                                            ^ Invalid usage of global storage acquires
+   │
+   = Global storage is not used in Sui. Instead objects (structs with the 'key' ability) are used with programmable transaction blocks and the 'sui::transfer' functions.
+
+error[Sui E02009]: invalid global storage usage
+   ┌─ tests/sui_mode/global_storage_access/all_without_sui_transfer.move:12:13
+   │
+12 │         _ = exists<R>(addr);
+   │             ^^^^^^^^^^^^^^^ Invalid usage of global storage primitive 'exists'
+   │
+   = Global storage is not used in Sui. Instead objects (structs with the 'key' ability) are used with programmable transaction blocks and the 'sui::transfer' functions.
+
+error[Sui E02009]: invalid global storage usage
+   ┌─ tests/sui_mode/global_storage_access/all_without_sui_transfer.move:13:13
+   │
+13 │         _ = exists<G<T>>(addr);
+   │             ^^^^^^^^^^^^^^^^^^ Invalid usage of global storage primitive 'exists'
+   │
+   = Global storage is not used in Sui. Instead objects (structs with the 'key' ability) are used with programmable transaction blocks and the 'sui::transfer' functions.
+
+error[Sui E02009]: invalid global storage usage
+   ┌─ tests/sui_mode/global_storage_access/all_without_sui_transfer.move:14:13
+   │
+14 │         _ = borrow_global<R>(addr);
+   │             ^^^^^^^^^^^^^^^^^^^^^^ Invalid usage of global storage primitive 'borrow_global'
+   │
+   = Global storage is not used in Sui. Instead objects (structs with the 'key' ability) are used with programmable transaction blocks and the 'sui::transfer' functions.
+
+error[Sui E02009]: invalid global storage usage
+   ┌─ tests/sui_mode/global_storage_access/all_without_sui_transfer.move:15:13
+   │
+15 │         _ = borrow_global<G<T>>(addr);
+   │             ^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid usage of global storage primitive 'borrow_global'
+   │
+   = Global storage is not used in Sui. Instead objects (structs with the 'key' ability) are used with programmable transaction blocks and the 'sui::transfer' functions.
+
+error[Sui E02009]: invalid global storage usage
+   ┌─ tests/sui_mode/global_storage_access/all_without_sui_transfer.move:16:13
+   │
+16 │         _ = borrow_global_mut<R>(addr);
+   │             ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid usage of global storage primitive 'borrow_global_mut'
+   │
+   = Global storage is not used in Sui. Instead objects (structs with the 'key' ability) are used with programmable transaction blocks and the 'sui::transfer' functions.
+
+error[Sui E02009]: invalid global storage usage
+   ┌─ tests/sui_mode/global_storage_access/all_without_sui_transfer.move:17:13
+   │
+17 │         _ = borrow_global_mut<G<T>>(addr);
+   │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid usage of global storage primitive 'borrow_global_mut'
+   │
+   = Global storage is not used in Sui. Instead objects (structs with the 'key' ability) are used with programmable transaction blocks and the 'sui::transfer' functions.
+
+error[Sui E02009]: invalid global storage usage
+   ┌─ tests/sui_mode/global_storage_access/all_without_sui_transfer.move:18:20
+   │
+18 │         consume<R>(move_from<R>(addr));
+   │                    ^^^^^^^^^^^^^^^^^^ Invalid usage of global storage primitive 'move_from'
+   │
+   = Global storage is not used in Sui. Instead objects (structs with the 'key' ability) are used with programmable transaction blocks and the 'sui::transfer' functions.
+
+error[Sui E02009]: invalid global storage usage
+   ┌─ tests/sui_mode/global_storage_access/all_without_sui_transfer.move:19:23
+   │
+19 │         consume<G<T>>(move_from<G<T>>(addr));
+   │                       ^^^^^^^^^^^^^^^^^^^^^ Invalid usage of global storage primitive 'move_from'
+   │
+   = Global storage is not used in Sui. Instead objects (structs with the 'key' ability) are used with programmable transaction blocks and the 'sui::transfer' functions.
+
+error[Sui E02009]: invalid global storage usage
+   ┌─ tests/sui_mode/global_storage_access/all_without_sui_transfer.move:20:9
+   │
+20 │         move_to<R>(s, r);
+   │         ^^^^^^^^^^^^^^^^ Invalid usage of global storage primitive 'move_to'
+   │
+   = Global storage is not used in Sui. Instead objects (structs with the 'key' ability) are used with programmable transaction blocks and the 'sui::transfer' functions.
+
+error[Sui E02009]: invalid global storage usage
+   ┌─ tests/sui_mode/global_storage_access/all_without_sui_transfer.move:21:9
+   │
+21 │         move_to<G<T>>(s, g);
+   │         ^^^^^^^^^^^^^^^^^^^ Invalid usage of global storage primitive 'move_to'
+   │
+   = Global storage is not used in Sui. Instead objects (structs with the 'key' ability) are used with programmable transaction blocks and the 'sui::transfer' functions.
+
