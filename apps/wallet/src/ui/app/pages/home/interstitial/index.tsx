@@ -8,14 +8,12 @@ import { useNavigate } from 'react-router-dom';
 import { Portal } from '../../../shared/Portal';
 import { ampli } from '_src/shared/analytics/ampli';
 import ExternalLink from '_src/ui/app/components/external-link';
-import { useAppSelector } from '_src/ui/app/hooks';
-import { AppType } from '_src/ui/app/redux/slices/app/AppType';
 
 export type InterstitialConfig = {
 	enabled: boolean;
 	dismissKey?: string;
-	imageFullUrl?: string;
-	imageSmallUrl?: string;
+	imageUrl?: string;
+
 	bannerUrl?: string;
 };
 
@@ -25,17 +23,8 @@ interface InterstitialProps extends InterstitialConfig {
 
 const setInterstitialDismissed = (dismissKey: string) => localStorage.setItem(dismissKey, 'true');
 
-function Interstitial({
-	enabled,
-	dismissKey,
-	imageFullUrl,
-	imageSmallUrl,
-	bannerUrl,
-	onClose,
-}: InterstitialProps) {
+function Interstitial({ enabled, dismissKey, imageUrl, bannerUrl, onClose }: InterstitialProps) {
 	const navigate = useNavigate();
-	const appType = useAppSelector((state) => state.app.appType);
-	const isFullScreen = appType === AppType.fullscreen;
 
 	useEffect(() => {
 		const t = setTimeout(setInterstitialDismissed, 1000);
@@ -66,7 +55,7 @@ function Interstitial({
 						}}
 						className="w-full h-full"
 					>
-						<img src={isFullScreen ? imageFullUrl : imageSmallUrl} alt="interstitial-banner" />
+						<img src={imageUrl} alt="interstitial-banner" />
 					</ExternalLink>
 				)}
 				<button
