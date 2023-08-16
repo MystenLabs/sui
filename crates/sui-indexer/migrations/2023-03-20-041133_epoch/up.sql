@@ -1,31 +1,3 @@
-CREATE MATERIALIZED VIEW epoch_network_metrics as
-WITH checkpoints_30d AS (
-  SELECT
-    MAX(sequence_number) AS sequence_number,
-    SUM(total_successful_transactions) AS total_successful_transactions,
-    timestamp_ms
-  FROM
-    checkpoints
-  WHERE
-    timestamp_ms > EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - INTERVAL '30 days')) * 1000
-  GROUP BY
-    timestamp_ms
-),
-tps_data AS (
-  SELECT
-    sequence_number,
-    total_successful_transactions,
-    LAG(timestamp_ms) OVER (ORDER BY timestamp_ms DESC) - timestamp_ms AS time_diff
-  FROM 
-    checkpoints_30d
-)
-SELECT 
-  MAX(total_successful_transactions * 1000.0 / time_diff)::float8 as tps_30_days
-FROM 
-  tps_data
-WHERE 
-  time_diff IS NOT NULL;
-
 CREATE TABLE epochs
 (
     epoch                           BIGINT PRIMARY KEY,
@@ -56,7 +28,6 @@ CREATE TABLE epochs
 CREATE INDEX epochs_start_index ON epochs (epoch_start_timestamp ASC);
 CREATE INDEX epochs_end_index ON epochs (epoch_end_timestamp ASC NULLS LAST);
 
--- update epoch_network_metrics on every epoch
 CREATE OR REPLACE FUNCTION refresh_view_func() RETURNS TRIGGER AS
 $body$
 DECLARE
@@ -66,7 +37,6 @@ BEGIN
         LOOP
             BEGIN
                 attempts := attempts + 1;
-                REFRESH MATERIALIZED VIEW epoch_network_metrics;
                 REFRESH MATERIALIZED VIEW epoch_move_call_metrics;
                 EXIT;
             EXCEPTION

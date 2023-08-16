@@ -2622,7 +2622,15 @@ impl PartitionManager {
 #[once(time = 20, result = true)]
 fn get_network_metrics_cached(cp: &PgConnectionPool) -> Result<NetworkMetrics, IndexerError> {
     let metrics = read_only_blocking!(cp, |conn| diesel::sql_query(
-        "SELECT * FROM network_metrics;"
+        "SELECT
+            real_time_tps,
+            peak_tps_30d,
+            total_packets,
+            total_addresses,
+            total_objects,
+            epoch,
+            checkpoint
+        FROM checkpoint_metrics ORDER BY checkpoint DESC limit 1;"
     )
     .get_result::<DBNetworkMetrics>(conn))?;
     Ok(metrics.into())
