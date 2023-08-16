@@ -25,7 +25,8 @@ different weights for each key (which is complex in threshold cryptography), Mul
 transaction. On the other hand, threshold signatures provide the benefits of hiding the threshold policy, but also
 resulting in a single signature payload, making it indistinguishable from a single-key account.
 
-![MultiSig Sui supported structures]('/sui_multisig_structures.png' "MultiSig Sui supported structures")
+![Supported structures in Sui MultiSig]('/sui_multisig_structures.png' "Supported structures in Sui MultiSig") 
+*This table shows the MultiSig structures supported in Sui.*
 
 # Example Workflow
 
