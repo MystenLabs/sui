@@ -114,7 +114,6 @@ export class Connections {
 	public notifyUI(
 		notification:
 			| { event: 'networkChanged'; network: NetworkEnvType }
-			| { event: 'lockStatusUpdate'; isLocked: boolean }
 			| { event: 'storedEntitiesUpdated'; type: UIAccessibleEntityType },
 	) {
 		for (const aConnection of this.#connections) {
@@ -127,9 +126,6 @@ export class Connections {
 								network: notification.network,
 							}),
 						);
-						break;
-					case 'lockStatusUpdate':
-						aConnection.sendLockedStatusUpdate(notification.isLocked);
 						break;
 					case 'storedEntitiesUpdated':
 						aConnection.notifyEntitiesUpdated(notification.type);

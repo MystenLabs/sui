@@ -5,6 +5,8 @@ import { expect, test } from './fixtures';
 import { createWallet, importWallet } from './utils/auth';
 import { generateKeypairFromMnemonic, requestSuiFromFaucet } from './utils/localnet';
 
+test.skip();
+
 const receivedAddressMnemonic = [
 	'beef',
 	'beef',

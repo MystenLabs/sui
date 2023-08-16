@@ -1,9 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::types::query::{Query, SuiGraphQLSchema};
+use crate::{
+    server::version::{check_version_middleware, set_version_middleware},
+    types::query::{Query, SuiGraphQLSchema},
+};
 use async_graphql::{EmptyMutation, EmptySubscription};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+use axum::middleware;
 use std::time::Duration;
 
 pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
@@ -66,7 +70,9 @@ pub async fn start_example_server(config: Option<ServerConfig>) {
 
     let app = axum::Router::new()
         .route("/", axum::routing::get(graphiql).post(graphql_handler))
-        .layer(axum::extract::Extension(schema));
+        .layer(axum::extract::Extension(schema))
+        .layer(middleware::from_fn(check_version_middleware))
+        .layer(middleware::from_fn(set_version_middleware));
 
     println!("Launch GraphiQL IDE at: {}", config.url());
 

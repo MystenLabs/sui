@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useQuery } from '@tanstack/react-query';
-import { useBackgroundClient } from '../useBackgroundClient';
+import { useBackgroundClient } from './useBackgroundClient';
 import { type AccountSourceSerializedUI } from '_src/background/account-sources/AccountSource';
 
 export const accountSourcesQueryKey = ['background', 'client', 'account', 'sources'] as const;
