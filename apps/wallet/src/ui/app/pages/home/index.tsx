@@ -4,7 +4,6 @@
 import { Outlet } from 'react-router-dom';
 
 import PageMainLayout from '_app/shared/page-main-layout';
-import { useLockedGuard } from '_app/wallet/hooks';
 import Loading from '_components/loading';
 import { useInitializedGuard } from '_hooks';
 import PageLayout from '_pages/layout';
@@ -16,8 +15,7 @@ interface Props {
 
 const HomePage = ({ disableNavigation }: Props) => {
 	const initChecking = useInitializedGuard(true);
-	const lockedChecking = useLockedGuard(false);
-	const guardChecking = initChecking || lockedChecking;
+	const guardChecking = initChecking;
 
 	useSetGrowthbookAttributes();
 	return (

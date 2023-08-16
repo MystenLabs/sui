@@ -6,9 +6,7 @@ use crate::effects::{TransactionEffects, TransactionEvents};
 use crate::execution::LoadedChildObjectMetadata;
 use crate::execution_status::ExecutionStatus;
 use crate::storage::{DeleteKindWithOldVersion, ObjectStore};
-use crate::sui_system_state::{
-    get_sui_system_state, get_sui_system_state_wrapper, AdvanceEpochParams, SuiSystemState,
-};
+use crate::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
 use crate::type_resolver::LayoutResolver;
 use crate::{
     base_types::{
@@ -58,47 +56,6 @@ pub struct InnerTemporaryStore {
     pub max_binary_format_version: u32,
     pub no_extraneous_module_bytes: bool,
     pub runtime_packages_loaded_from_db: BTreeMap<ObjectID, Object>,
-}
-
-impl InnerTemporaryStore {
-    /// Return the written object value with the given ID (if any)
-    pub fn get_written_object(&self, id: &ObjectID) -> Option<&Object> {
-        self.written.get(id).map(|o| &o.1)
-    }
-
-    /// Return the set of object ID's created during the current tx
-    pub fn created(&self) -> Vec<ObjectID> {
-        self.written
-            .values()
-            .filter_map(|(obj_ref, _, w)| {
-                if *w == WriteKind::Create {
-                    Some(obj_ref.0)
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
-    /// Get the written objects owned by `address`
-    pub fn get_written_objects_owned_by(&self, address: &SuiAddress) -> Vec<ObjectID> {
-        self.written
-            .values()
-            .filter_map(|(_, o, _)| {
-                if o.get_single_owner()
-                    .map_or(false, |owner| &owner == address)
-                {
-                    Some(o.id())
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
-    pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
-        get_sui_system_state(&self.written)
-    }
 }
 
 pub struct TemporaryModuleResolver<'a, R> {

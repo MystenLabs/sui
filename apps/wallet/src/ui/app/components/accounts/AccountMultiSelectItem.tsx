@@ -7,27 +7,23 @@ import { CheckFill16, SocialGoogle24 } from '@mysten/icons';
 import * as ToggleGroup from '@radix-ui/react-toggle-group';
 import cn from 'classnames';
 import { AccountItem } from './AccountItem';
+import { type SerializedUIAccount } from '_src/background/accounts/Account';
 
 type AccountMultiSelectItemProps = {
-	address: string;
-	name: string;
+	account: SerializedUIAccount;
 	state?: 'selected' | 'disabled';
 };
 
-export function AccountMultiSelectItem({
-	address,
-	name,
-	state,
-	...props
-}: AccountMultiSelectItemProps) {
-	const { data: domainName } = useResolveSuiNSName(address);
+export function AccountMultiSelectItem({ account, state, ...props }: AccountMultiSelectItemProps) {
+	const { data: domainName } = useResolveSuiNSName(account.address);
 	return (
-		<ToggleGroup.Item asChild value={address}>
+		<ToggleGroup.Item asChild value={account.id}>
 			<AccountItem
-				name={domainName ?? name}
+				// TODO: nickname
+				name={domainName || ''}
 				/* todo: replace this with a real icon */
 				icon={<SocialGoogle24 className="h-4 w-4" />}
-				address={address}
+				address={account.address}
 				disabled={state === 'disabled'}
 				selected={state === 'selected'}
 				after={

@@ -7,13 +7,13 @@ import { Navigate, useParams } from 'react-router-dom';
 import { CompletedTransactions } from './CompletedTransactions';
 import { QredoPendingTransactions } from './QredoPendingTransactions';
 import FiltersPortal from '_components/filters-tags';
-import { AccountType } from '_src/background/keyring/Account';
+import { isQredoAccountSerializedUI } from '_src/background/accounts/QredoAccount';
 import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
 function TransactionBlocksPage() {
 	const activeAccount = useActiveAccount();
-	const isQredoAccount = activeAccount?.type === AccountType.QREDO;
+	const isQredoAccount = !!(activeAccount && isQredoAccountSerializedUI(activeAccount));
 	const { status } = useParams();
 	const isPendingTransactions = status === 'pending';
 	if (activeAccount && !isQredoAccount && isPendingTransactions) {

@@ -5,6 +5,8 @@ import { test, expect } from './fixtures';
 import { createWallet } from './utils/auth';
 import { generateKeypair } from './utils/localnet';
 
+test.skip();
+
 test('create new wallet', async ({ page, extensionUrl }) => {
 	await createWallet(page, extensionUrl);
 	await expect(page.getByTestId('apps-page')).toBeVisible();

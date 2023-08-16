@@ -6,12 +6,18 @@ import { type Keypair } from '@mysten/sui.js/cryptography';
 import { type Account, AccountType } from './Account';
 import { AccountKeypair } from './AccountKeypair';
 
+/**
+ * @deprecated
+ */
 export type SerializedImportedAccount = {
 	type: AccountType.IMPORTED;
 	address: string;
 	derivationPath: null;
 };
 
+/**
+ * @deprecated
+ */
 export class ImportedAccount implements Account {
 	readonly accountKeypair: AccountKeypair;
 	readonly type: AccountType;

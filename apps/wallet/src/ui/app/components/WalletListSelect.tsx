@@ -30,8 +30,11 @@ export function WalletListSelect({
 	boxShadow = false,
 }: WalletListSelectProps) {
 	const [newAccounts, setNewAccounts] = useState<string[]>([]);
-	const accounts = useAccounts();
+	const { data: accounts } = useAccounts();
 	const filteredAccounts = useMemo(() => {
+		if (!accounts) {
+			return [];
+		}
 		if (visibleValues) {
 			return accounts.filter(({ address }) => visibleValues.includes(address));
 		}
@@ -100,7 +103,7 @@ export function WalletListSelect({
 								color="heroDark"
 								weight="medium"
 								text="New account"
-								disabled={disabled}
+								disabled={disabled || true}
 								loading={deriveNextAccount.isLoading}
 								onClick={async () => {
 									const newAccountAddress = await deriveNextAccount.mutateAsync();

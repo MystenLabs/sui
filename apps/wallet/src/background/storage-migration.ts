@@ -20,20 +20,21 @@ import { STORAGE_LAST_ACCOUNT_INDEX_KEY, getSavedLedgerAccounts } from './keyrin
 import { VaultStorage } from './keyring/VaultStorage';
 import { getAllQredoConnections } from './qredo/storage';
 import { getFromLocalStorage, makeUniqueKey, setToLocalStorage } from './storage-utils';
-import { NEW_ACCOUNTS_ENABLED } from '_src/shared/constants';
 
 export type Status = 'required' | 'inProgress' | 'ready';
 
 const migrationDoneStorageKey = 'storage-migration-done';
+const storageActiveAccountKey = 'active_account';
+
+function getActiveAccountAddress() {
+	return getFromLocalStorage<string>(storageActiveAccountKey);
+}
 
 let statusCache: Status | null = null;
 
 export async function getStatus() {
 	if (statusCache) {
 		return statusCache;
-	}
-	if (!NEW_ACCOUNTS_ENABLED) {
-		return (statusCache = 'ready');
 	}
 	const vaultInitialized = await VaultStorage.isWalletInitialized();
 	if (!vaultInitialized) {
@@ -105,6 +106,7 @@ async function makeQredoAccounts(password: string) {
 			origin: aQredoConnection.origin,
 			service: aQredoConnection.service,
 			refreshToken,
+			originFavIcon: aQredoConnection.originFavIcon || '',
 		});
 		qredoSources.push(aQredoSource);
 		for (const aWallet of aQredoConnection.accounts) {
@@ -113,6 +115,7 @@ async function makeQredoAccounts(password: string) {
 				type: 'qredo',
 				lastUnlockedOn: null,
 				sourceID: aQredoSource.id,
+				selected: false,
 			});
 		}
 	}
@@ -133,6 +136,7 @@ export async function doMigration(password: string) {
 		statusCache = 'inProgress';
 		try {
 			const db = await getDB();
+			const currentActiveAccountAddress = await getActiveAccountAddress();
 			const { mnemonicAccounts, mnemonicSource } = await makeMnemonicAccounts(password);
 			const importedAccounts = await makeImportedAccounts(password);
 			const ledgerAccounts = await makeLedgerAccounts(password);
@@ -146,6 +150,18 @@ export async function doMigration(password: string) {
 					await QredoAccountSource.save(aQredoSource, { skipBackup: true, skipEventEmit: true });
 				}
 				await db.accounts.bulkPut(qredoAccounts.map(withID));
+				if (currentActiveAccountAddress) {
+					const accountToSetSelected = await db.accounts.get({
+						address: currentActiveAccountAddress,
+					});
+					if (accountToSetSelected) {
+						await db.accounts
+							.where('id')
+							.notEqual(accountToSetSelected.id)
+							.modify({ selected: false });
+						await db.accounts.update(accountToSetSelected.id, { selected: true });
+					}
+				}
 				await Dexie.waitFor(setToLocalStorage(migrationDoneStorageKey, true));
 			});
 			statusCache = 'ready';

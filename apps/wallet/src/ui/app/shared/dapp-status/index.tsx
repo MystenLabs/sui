@@ -34,12 +34,12 @@ function DappStatus() {
 		}
 	}, [activeOriginUrl]);
 	const activeOriginFavIcon = useAppSelector(({ app }) => app.activeOriginFavIcon);
+	const activeAddress = useActiveAddress();
 	const dappStatusSelector = useMemo(
-		() => createDappStatusSelector(activeOriginUrl),
-		[activeOriginUrl],
+		() => createDappStatusSelector(activeOriginUrl, activeAddress),
+		[activeOriginUrl, activeAddress],
 	);
 	const isConnected = useAppSelector(dappStatusSelector);
-	const activeAddress = useActiveAddress();
 	const [disconnecting, setDisconnecting] = useState(false);
 	const [visible, setVisible] = useState(false);
 	const onHandleClick = useCallback(

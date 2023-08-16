@@ -62,7 +62,7 @@ export class QredoAccount
 	}
 
 	async toUISerialized(): Promise<QredoSerializedUiAccount> {
-		const { id, type, address, publicKey, sourceID, labels, network, walletID } =
+		const { id, type, address, publicKey, sourceID, labels, network, walletID, selected } =
 			await this.getStoredData();
 		return {
 			id,
@@ -75,6 +75,7 @@ export class QredoAccount
 			network,
 			walletID,
 			lastUnlockedOn: await this.lastUnlockedOn,
+			selected,
 		};
 	}
 

@@ -22,9 +22,7 @@ impl ScalarType for Base64 {
                     InputValueError::custom(format!("Invalid Base64: {}", r))
                 })?))
             }
-            _ => Err(InputValueError::custom(
-                "Invalid Base64: Input must be String type",
-            )),
+            _ => Err(InputValueError::expected_type(value)),
         }
     }
 

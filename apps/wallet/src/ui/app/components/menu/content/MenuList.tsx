@@ -28,7 +28,6 @@ import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerL
 import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 import { useAutoLockInterval } from '_src/ui/app/hooks/useAutoLockInterval';
 import { useExplorerLink } from '_src/ui/app/hooks/useExplorerLink';
-import { logout } from '_src/ui/app/redux/slices/account';
 import { ConfirmationModal } from '_src/ui/app/shared/ConfirmationModal';
 import { Link } from '_src/ui/app/shared/Link';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
@@ -117,13 +116,14 @@ function MenuList() {
 							}
 						}}
 						text="Lock Wallet"
+						disabled
 					/>
 					<Button
 						variant="outline"
 						text="Logout"
 						size="narrow"
 						loading={logoutInProgress}
-						disabled={isLogoutDialogOpen}
+						disabled={isLogoutDialogOpen || true}
 						onClick={async () => {
 							setIsLogoutDialogOpen(true);
 						}}
@@ -153,7 +153,7 @@ function MenuList() {
 					if (confirmed) {
 						setLogoutInProgress(true);
 						try {
-							await dispatch(logout());
+							// TODO
 							window.location.reload();
 						} finally {
 							setLogoutInProgress(false);

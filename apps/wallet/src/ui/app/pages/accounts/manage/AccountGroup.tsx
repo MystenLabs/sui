@@ -3,7 +3,7 @@
 
 import { ArrowBgFill16, Plus12 } from '@mysten/icons';
 import * as CollapsiblePrimitive from '@radix-ui/react-collapsible';
-import { AccountType, type SerializedAccount } from '_src/background/keyring/Account';
+import { type AccountType, type SerializedUIAccount } from '_src/background/accounts/Account';
 import { AccountItem } from '_src/ui/app/components/accounts/AccountItem';
 import { AccountActions } from '_src/ui/app/components/menu/content/AccountActions';
 import { Heading } from '_src/ui/app/shared/heading';
@@ -11,11 +11,12 @@ import { Text } from '_src/ui/app/shared/text';
 import { ButtonOrLink, type ButtonOrLinkProps } from '_src/ui/app/shared/utils/ButtonOrLink';
 
 // todo: these will likely be shared in various parts of the UI
-const labels = {
-	[AccountType.DERIVED]: 'Passphrase Derived',
-	[AccountType.LEDGER]: 'Ledger',
-	[AccountType.IMPORTED]: 'Imported',
-	[AccountType.QREDO]: 'Qredo',
+const labels: Record<AccountType, string> = {
+	'mnemonic-derived': 'Passphrase Derived',
+	ledger: 'Ledger',
+	imported: 'Imported',
+	qredo: 'Qredo',
+	zk: 'zkLogin',
 };
 
 // todo: we probbaly have some duplication here with the various FooterLink / ButtonOrLink
@@ -51,7 +52,7 @@ export function AccountGroup({
 	accounts,
 	type,
 }: {
-	accounts: SerializedAccount[];
+	accounts: SerializedUIAccount[];
 	type: AccountType;
 }) {
 	return (
@@ -84,7 +85,7 @@ export function AccountGroup({
 						{accounts.map((account) => {
 							return (
 								<AccountItem
-									key={account.address}
+									key={account.id}
 									background="gradient"
 									address={account.address}
 									after={<AccountFooter />}

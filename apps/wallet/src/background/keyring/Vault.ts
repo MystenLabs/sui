@@ -27,6 +27,7 @@ export type V2DecryptedDataType = {
 /**
  * Holds the mnemonic of the wallet and any imported Keypairs.
  * Also provides functionality to create/encrypt/decrypt it.
+ * @deprecated
  */
 export class Vault {
 	public readonly entropy: Uint8Array;

@@ -2,17 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { BadgeLabel } from './BadgeLabel';
-import { AccountType } from '_src/background/keyring/Account';
+import { type AccountType } from '_src/background/accounts/Account';
 
 type AccountBadgeProps = {
 	accountType: AccountType;
 };
 
 const TYPE_TO_TEXT: Record<AccountType, string | null> = {
-	[AccountType.LEDGER]: 'Ledger',
-	[AccountType.IMPORTED]: 'Imported',
-	[AccountType.QREDO]: 'Qredo',
-	[AccountType.DERIVED]: null,
+	ledger: 'Ledger',
+	imported: 'Imported',
+	qredo: 'Qredo',
+	'mnemonic-derived': null,
+	zk: 'zkLogin',
 };
 
 export function AccountBadge({ accountType }: AccountBadgeProps) {

@@ -9,12 +9,12 @@ import { cx } from 'class-variance-authority';
 
 import { AccountActions } from './AccountActions';
 import { AccountBadge } from '../../AccountBadge';
-import { type SerializedAccount } from '_src/background/keyring/Account';
+import { type SerializedUIAccount } from '_src/background/accounts/Account';
 import { useCopyToClipboard } from '_src/ui/app/hooks/useCopyToClipboard';
 import { Text } from '_src/ui/app/shared/text';
 
 export type AccountProps = {
-	account: SerializedAccount;
+	account: SerializedUIAccount;
 };
 
 export function Account({ account }: AccountProps) {

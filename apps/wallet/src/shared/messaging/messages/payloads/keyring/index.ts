@@ -10,18 +10,30 @@ import type { BasePayload, Payload } from '_payloads';
 import type { SerializedAccount } from '_src/background/keyring/Account';
 
 type MethodToPayloads = {
+	/**
+	 * @deprecated
+	 */
 	create: {
 		args: { password: string; importedEntropy?: string };
 		return: void;
 	};
+	/**
+	 * @deprecated
+	 */
 	getEntropy: {
 		args: string | undefined;
 		return: string;
 	};
+	/**
+	 * @deprecated
+	 */
 	unlock: {
 		args: { password: string };
 		return: void;
 	};
+	/**
+	 * @deprecated
+	 */
 	walletStatusUpdate: {
 		args: void;
 		return: {
@@ -31,56 +43,88 @@ type MethodToPayloads = {
 			activeAddress: string | null;
 		};
 	};
+	/**
+	 * @deprecated
+	 */
 	lock: {
 		args: void;
 		return: void;
 	};
+	/**
+	 * @deprecated
+	 */
 	clear: {
 		args: void;
 		return: void;
 	};
+	/**
+	 * @deprecated
+	 */
 	appStatusUpdate: {
 		args: { active: boolean };
 		return: void;
 	};
+	/**
+	 * @deprecated
+	 */
 	setLockTimeout: {
 		args: { timeout: number };
 		return: void;
 	};
+	/**
+	 * @deprecated
+	 */
 	signData: {
 		args: { data: string; address: string };
 		return: SerializedSignature;
 	};
-	switchAccount: {
-		args: { address: string };
-		return: void;
-	};
+	/**
+	 * @deprecated
+	 */
 	deriveNextAccount: {
 		args: void;
 		return: { accountAddress: string };
 	};
+	/**
+	 * @deprecated
+	 */
 	importLedgerAccounts: {
 		args: { ledgerAccounts: SerializedLedgerAccount[] };
 		return: void;
 	};
+	/**
+	 * @deprecated
+	 */
 	verifyPassword: {
 		args: { password: string };
 		return: void;
 	};
+	/**
+	 * @deprecated
+	 */
 	exportAccount: {
 		args: { password: string; accountAddress: string };
 		return: { keyPair: ExportedKeypair };
 	};
+	/**
+	 * @deprecated
+	 */
 	importPrivateKey: {
 		args: { password: string; keyPair: ExportedKeypair };
 		return: void;
 	};
+	/**
+	 * @deprecated
+	 */
 	updateAccountPublicInfo: {
 		args: { updates: AccountsPublicInfoUpdates };
 		return: void;
 	};
 };
 
+/**
+ * @deprecated
+ */
 export interface KeyringPayload<Method extends keyof MethodToPayloads> extends BasePayload {
 	type: 'keyring';
 	method: Method;
@@ -88,6 +132,9 @@ export interface KeyringPayload<Method extends keyof MethodToPayloads> extends B
 	return?: MethodToPayloads[Method]['return'];
 }
 
+/**
+ * @deprecated
+ */
 export function isKeyringPayload<Method extends keyof MethodToPayloads>(
 	payload: Payload,
 	method: Method,
