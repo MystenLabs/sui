@@ -30,7 +30,7 @@ export default {
 				7.5: '1.875rem',
 				8: '2rem',
 				15: '3.75rem',
-				'popup-height': '680px',
+				'popup-height': '600px',
 				'popup-width': '360px',
 			},
 			boxShadow: {

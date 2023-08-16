@@ -43,7 +43,6 @@ import type { KeyringPayload } from '_payloads/keyring';
 
 /** The key for the extension's storage, that holds the index of the last derived account (zero based) */
 export const STORAGE_LAST_ACCOUNT_INDEX_KEY = 'last_account_index';
-const STORAGE_ACTIVE_ACCOUNT = 'active_account';
 
 export const STORAGE_IMPORTED_LEDGER_ACCOUNTS = 'imported_ledger_accounts';
 
@@ -61,6 +60,9 @@ export async function getSavedLedgerAccounts() {
 	return ledgerAccounts || [];
 }
 
+/**
+ * @deprecated
+ */
 // exported to make testing easier the default export should be used
 export class Keyring {
 	#events = mitt<KeyringEvents>();
@@ -117,18 +119,6 @@ export class Keyring {
 
 	public off = this.#events.off;
 
-	public async getActiveAccount() {
-		if (this.isLocked) {
-			return null;
-		}
-		const address = await getFromLocalStorage(STORAGE_ACTIVE_ACCOUNT, this.#mainDerivedAccount);
-		return (
-			(address && this.#accountsMap.get(address)) ||
-			(this.#mainDerivedAccount && this.#accountsMap.get(this.#mainDerivedAccount)) ||
-			null
-		);
-	}
-
 	public async deriveNextAccount() {
 		if (this.isLocked) {
 			return null;
@@ -173,15 +163,6 @@ export class Keyring {
 			return null;
 		}
 		return Array.from(this.#accountsMap.values());
-	}
-
-	public async changeActiveAccount(address: string) {
-		if (!this.isLocked && this.#accountsMap.has(address)) {
-			await this.storeActiveAccount(address);
-			this.#events.emit('activeAccountChanged', address);
-			return true;
-		}
-		return false;
 	}
 
 	/**
@@ -312,11 +293,6 @@ export class Keyring {
 			} else if (isKeyringPayload(payload, 'unlock') && payload.args) {
 				await this.unlock(payload.args.password);
 				uiConnection.send(createMessage({ type: 'done' }, id));
-			} else if (isKeyringPayload(payload, 'walletStatusUpdate')) {
-				// wait to avoid ui showing locked and then unlocked screen
-				// ui waits until it receives this status to render
-				await this.reviveDone;
-				uiConnection.sendLockedStatusUpdate(this.isLocked, id);
 			} else if (isKeyringPayload(payload, 'lock')) {
 				this.lock();
 				uiConnection.send(createMessage({ type: 'done' }, id));
@@ -361,19 +337,6 @@ export class Keyring {
 				} else {
 					throw new Error(`Unable to sign message for account with type ${account.type}`);
 				}
-			} else if (isKeyringPayload(payload, 'switchAccount')) {
-				if (this.#locked) {
-					throw new Error('Keyring is locked. Unlock it first.');
-				}
-				if (!payload.args) {
-					throw new Error('Missing parameters.');
-				}
-				const { address } = payload.args;
-				const changed = await this.changeActiveAccount(address);
-				if (!changed) {
-					throw new Error(`Failed to change account to ${address}`);
-				}
-				uiConnection.send(createMessage({ type: 'done' }, id));
 			} else if (isKeyringPayload(payload, 'deriveNextAccount')) {
 				const nextAccount = await this.deriveNextAccount();
 				if (!nextAccount) {
@@ -566,10 +529,6 @@ export class Keyring {
 		return setToLocalStorage(STORAGE_LAST_ACCOUNT_INDEX_KEY, index);
 	}
 
-	private storeActiveAccount(address: string) {
-		return setToLocalStorage(STORAGE_ACTIVE_ACCOUNT, address);
-	}
-
 	private storeLedgerAccounts(ledgerAccounts: SerializedLedgerAccount[]) {
 		return setToLocalStorage(STORAGE_IMPORTED_LEDGER_ACCOUNTS, ledgerAccounts);
 	}
@@ -603,4 +562,8 @@ export class Keyring {
 }
 
 const keyring = new Keyring();
+
+/**
+ * @deprecated
+ */
 export default keyring;

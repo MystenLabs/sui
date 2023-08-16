@@ -16,7 +16,6 @@ export { useGetTxnRecipientAddress } from './useGetTxnRecipientAddress';
 export { useQueryTransactionsByAddress } from './useQueryTransactionsByAddress';
 export { useGetTransferAmount } from './useGetTransferAmount';
 export { useOwnedNFT } from './useOwnedNFT';
-export * from './useSigner';
 export * from './useTransactionData';
 export * from './useActiveAddress';
 export * from './useGetAllCoins';

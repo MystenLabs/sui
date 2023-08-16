@@ -61,6 +61,7 @@ export class MnemonicAccount
 			derivationPath,
 			publicKey: keyPair.getPublicKey().toBase64(),
 			lastUnlockedOn: null,
+			selected: false,
 		};
 	}
 
@@ -88,7 +89,8 @@ export class MnemonicAccount
 	}
 
 	async toUISerialized(): Promise<MnemonicSerializedUiAccount> {
-		const { id, type, address, derivationPath, publicKey, sourceID } = await this.getStoredData();
+		const { id, type, address, derivationPath, publicKey, sourceID, selected } =
+			await this.getStoredData();
 		return {
 			id,
 			type,
@@ -98,6 +100,7 @@ export class MnemonicAccount
 			publicKey,
 			sourceID,
 			lastUnlockedOn: await this.lastUnlockedOn,
+			selected,
 		};
 	}
 

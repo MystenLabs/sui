@@ -5,14 +5,17 @@ import { Ed25519PublicKey } from '@mysten/sui.js/keypairs/ed25519';
 import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
 
 import { useSuiLedgerClient } from './SuiLedgerClientProvider';
-import { AccountType } from '_src/background/keyring/Account';
-import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
+import { type LedgerAccountSerializedUI } from '_src/background/accounts/LedgerAccount';
 
 import type SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
 
+export type DerivedLedgerAccount = Pick<
+	LedgerAccountSerializedUI,
+	'address' | 'publicKey' | 'type' | 'derivationPath'
+>;
 type UseDeriveLedgerAccountOptions = {
 	numAccountsToDerive: number;
-} & Pick<UseQueryOptions<SerializedLedgerAccount[], unknown>, 'select' | 'onSuccess' | 'onError'>;
+} & Pick<UseQueryOptions<DerivedLedgerAccount[], unknown>, 'select' | 'onSuccess' | 'onError'>;
 
 export function useDeriveLedgerAccounts(options: UseDeriveLedgerAccountOptions) {
 	const { numAccountsToDerive, ...useQueryOptions } = options;
@@ -36,7 +39,7 @@ async function deriveAccountsFromLedger(
 	suiLedgerClient: SuiLedgerClient,
 	numAccountsToDerive: number,
 ) {
-	const ledgerAccounts: SerializedLedgerAccount[] = [];
+	const ledgerAccounts: DerivedLedgerAccount[] = [];
 	const derivationPaths = getDerivationPathsForLedger(numAccountsToDerive);
 
 	for (const derivationPath of derivationPaths) {
@@ -44,7 +47,7 @@ async function deriveAccountsFromLedger(
 		const publicKey = new Ed25519PublicKey(publicKeyResult.publicKey);
 		const suiAddress = publicKey.toSuiAddress();
 		ledgerAccounts.push({
-			type: AccountType.LEDGER,
+			type: 'ledger',
 			address: suiAddress,
 			derivationPath,
 			publicKey: publicKey.toBase64(),

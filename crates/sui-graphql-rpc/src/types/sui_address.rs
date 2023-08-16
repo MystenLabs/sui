@@ -25,7 +25,8 @@ impl ScalarType for SuiAddress {
                 let bytes = hex::decode(s)?;
                 if bytes.len() != SUI_ADDRESS_LENGTH {
                     return Err(InputValueError::custom(format!(
-                        "Invalid SuiAddress length: {}",
+                        "Expected SuiAddress of length {}, received {}.",
+                        SUI_ADDRESS_LENGTH,
                         bytes.len()
                     )));
                 }
@@ -33,7 +34,7 @@ impl ScalarType for SuiAddress {
                 arr.copy_from_slice(&bytes);
                 Ok(SuiAddress(arr))
             }
-            _ => Err(InputValueError::custom("Invalid SuiAddress")),
+            _ => Err(InputValueError::expected_type(value)),
         }
     }
 

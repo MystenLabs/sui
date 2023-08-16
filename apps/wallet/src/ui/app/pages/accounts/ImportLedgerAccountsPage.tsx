@@ -14,12 +14,14 @@ import {
 	type SelectableLedgerAccount,
 	LedgerAccountList,
 } from '../../components/ledger/LedgerAccountList';
-import { useDeriveLedgerAccounts } from '../../components/ledger/useDeriveLedgerAccounts';
+import {
+	type DerivedLedgerAccount,
+	useDeriveLedgerAccounts,
+} from '../../components/ledger/useDeriveLedgerAccounts';
 import { useImportLedgerAccountsMutation } from '../../components/ledger/useImportLedgerAccountsMutation';
 import Overlay from '../../components/overlay';
 import { getSuiApplicationErrorMessage } from '../../helpers/errorMessages';
 import { useAccounts } from '../../hooks/useAccounts';
-import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
 import { ampli } from '_src/shared/analytics/ampli';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import { Link } from '_src/ui/app/shared/Link';
@@ -30,7 +32,7 @@ const numLedgerAccountsToDeriveByDefault = 10;
 export function ImportLedgerAccountsPage({
 	onClose,
 	onConfirmed,
-	password,
+	password = '',
 }: {
 	onConfirmed?: () => void;
 	onClose?: () => void;
@@ -41,10 +43,8 @@ export function ImportLedgerAccountsPage({
 	const successRedirectUrl = '/tokens';
 	const navigate = useNavigate();
 
-	const existingAccounts = useAccounts();
-	const [selectedLedgerAccounts, setSelectedLedgerAccounts] = useState<SerializedLedgerAccount[]>(
-		[],
-	);
+	const { data: existingAccounts } = useAccounts();
+	const [selectedLedgerAccounts, setSelectedLedgerAccounts] = useState<DerivedLedgerAccount[]>([]);
 
 	const {
 		data: ledgerAccounts,
@@ -54,7 +54,7 @@ export function ImportLedgerAccountsPage({
 		numAccountsToDerive: numLedgerAccountsToDeriveByDefault,
 		select: (ledgerAccounts) => {
 			return ledgerAccounts.filter(
-				({ address }) => !existingAccounts.some((account) => account.address === address),
+				({ address }) => !existingAccounts?.some((account) => account.address === address),
 			);
 		},
 		onError: (error) => {
