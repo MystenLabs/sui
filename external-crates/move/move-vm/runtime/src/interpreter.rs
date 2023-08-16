@@ -16,7 +16,7 @@ use move_binary_format::{
 };
 use move_core_types::{
     account_address::AccountAddress,
-    gas_algebra::{Byte, GasQuantity, NumArgs, NumBytes},
+    gas_algebra::{NumArgs, NumBytes},
     language_storage::TypeTag,
     vm_status::{StatusCode, StatusType},
 };
@@ -34,7 +34,7 @@ use move_vm_types::{
         self, GlobalValue, IntegerValue, Locals, Reference, Struct, StructRef, VMValueCast, Value,
         Vector, VectorRef,
     },
-    views::{TypeView, ValueView},
+    views::TypeView,
 };
 use smallvec::SmallVec;
 
@@ -800,7 +800,7 @@ impl Interpreter {
         //            the move_to operation.
         match gv.move_to(resource) {
             Ok(()) => Ok(()),
-            Err((err, resource)) => Err(err),
+            Err((err, _resource)) => Err(err),
         }
     }
 
@@ -1585,7 +1585,6 @@ impl Frame {
                     &self.ty_args,
                     instruction,
                     resolver,
-                    &mut self.locals,
                     data_store,
                 )?;
 
@@ -1606,7 +1605,6 @@ impl Frame {
                     &self.ty_args,
                     instruction,
                     resolver,
-                    &mut self.locals,
                     data_store,
                     &exec_result,
                 )?;
@@ -1657,7 +1655,6 @@ impl Frame {
         ty_args: &[Type],
         instruction: &Bytecode,
         resolver: &Resolver,
-        locals: &mut Locals,
         data_store: &mut impl DataStore,
     ) -> PartialVMResult<()> {
         use SimpleInstruction as S;
@@ -1715,7 +1712,7 @@ impl Frame {
             Bytecode::LdFalse => {
                 gas_meter.charge_simple_instr(S::LdFalse)?;
             }
-            Bytecode::CopyLoc(idx) | Bytecode::MoveLoc(idx) => {}
+            Bytecode::CopyLoc(_) | Bytecode::MoveLoc(_) => {}
             Bytecode::StLoc(_) => {
                 let value_to_store = interpreter.peek()?;
                 gas_meter.charge_store_loc(&value_to_store)?;
@@ -1755,27 +1752,21 @@ impl Frame {
                     .charge_pack(true, interpreter.peek_last_n(field_count as usize)?.iter())?;
             }
             Bytecode::Unpack(_sd_idx) => {
-                let value = interpreter.peek()?;
-                let field_views = value.get_field_views()?;
-                gas_meter.charge_unpack(false, field_views.iter())?;
+                let struct_view = interpreter.peek()?.get_struct_view()?;
+                gas_meter.charge_unpack(false, struct_view.field_views())?;
             }
             Bytecode::UnpackGeneric(_si_idx) => {
-                let struct_ = interpreter.peek()?.copy_value()?.value_as::<Struct>()?;
-                gas_meter.charge_unpack(true, struct_.field_views())?;
+                let struct_view = interpreter.peek()?.get_struct_view()?;
+                gas_meter.charge_unpack(true, struct_view.field_views())?;
             }
             Bytecode::ReadRef => {
-                let reference = interpreter.peek()?.copy_value()?.value_as::<Reference>()?;
-                gas_meter.charge_read_ref(reference.value_view())?;
+                gas_meter.charge_read_ref(interpreter.peek()?.get_reference_view()?)?;
             }
             Bytecode::WriteRef => {
                 let mut ref_and_val = interpreter.peek_last_n(2)?;
                 let value = ref_and_val.pop().unwrap();
-                let reference = ref_and_val
-                    .pop()
-                    .unwrap()
-                    .copy_value()?
-                    .value_as::<Reference>()?;
-                gas_meter.charge_write_ref(&value, reference.value_view())?;
+                let reference = ref_and_val.pop().unwrap().get_reference_view()?;
+                gas_meter.charge_write_ref(&value, reference)?;
             }
             Bytecode::CastU8 => {
                 gas_meter.charge_simple_instr(S::CastU8)?;
@@ -1864,7 +1855,7 @@ impl Frame {
                     .copy_value()?
                     .value_as::<AccountAddress>()?;
                 let ty = resolver.get_struct_type(*sd_idx);
-                let res = match data_store.load_resource(addr, &ty) {
+                match data_store.load_resource(addr, &ty) {
                     Ok((gv, load_res)) => {
                         if let Some(loaded) = load_res {
                             let opt = match loaded {
@@ -1884,25 +1875,23 @@ impl Frame {
                             };
                             gas_meter.charge_load_resource(opt)?;
                         }
-                        Ok(gv)
                     }
                     Err(e) => {
                         error!(
                             "[VM] error loading resource at ({}, {:?}): {:?} from data store",
                             addr, ty, e
                         );
-                        Err(e)
+                        return Err(e);
                     }
-                };
+                }
             }
             Bytecode::MutBorrowGlobalGeneric(si_idx) | Bytecode::ImmBorrowGlobalGeneric(si_idx) => {
-                let is_mut = matches!(instruction, Bytecode::MutBorrowGlobalGeneric(_));
                 let addr = interpreter
                     .peek()?
                     .copy_value()?
                     .value_as::<AccountAddress>()?;
                 let ty = resolver.instantiate_generic_type(*si_idx, ty_args)?;
-                let res = match data_store.load_resource(addr, &ty) {
+                match data_store.load_resource(addr, &ty) {
                     Ok((gv, load_res)) => {
                         if let Some(loaded) = load_res {
                             let opt = match loaded {
@@ -1922,14 +1911,13 @@ impl Frame {
                             };
                             gas_meter.charge_load_resource(opt)?;
                         }
-                        Ok(gv)
                     }
                     Err(e) => {
                         error!(
                             "[VM] error loading resource at ({}, {:?}): {:?} from data store",
                             addr, ty, e
                         );
-                        Err(e)
+                        return Err(e);
                     }
                 };
             }
@@ -2017,7 +2005,7 @@ impl Frame {
                     .copy_value()?
                     .value_as::<AccountAddress>()?;
                 let ty = resolver.get_struct_type(*sd_idx);
-                let res = match data_store.load_resource(addr, &ty) {
+                match data_store.load_resource(addr, &ty) {
                     Ok((gv, load_res)) => {
                         if let Some(loaded) = load_res {
                             let opt = match loaded {
@@ -2037,16 +2025,15 @@ impl Frame {
                             };
                             gas_meter.charge_load_resource(opt)?;
                         }
-                        Ok(gv)
                     }
                     Err(e) => {
                         error!(
                             "[VM] error loading resource at ({}, {:?}): {:?} from data store",
                             addr, ty, e
                         );
-                        Err(e)
+                        return Err(e);
                     }
-                }?;
+                };
             }
             Bytecode::MoveFromGeneric(si_idx) => {
                 let addr = interpreter
@@ -2054,7 +2041,7 @@ impl Frame {
                     .copy_value()?
                     .value_as::<AccountAddress>()?;
                 let ty = resolver.instantiate_generic_type(*si_idx, ty_args)?;
-                let res = match data_store.load_resource(addr, &ty) {
+                match data_store.load_resource(addr, &ty) {
                     Ok((gv, load_res)) => {
                         if let Some(loaded) = load_res {
                             let opt = match loaded {
@@ -2074,30 +2061,29 @@ impl Frame {
                             };
                             gas_meter.charge_load_resource(opt)?;
                         }
-                        Ok(gv)
                     }
                     Err(e) => {
                         error!(
                             "[VM] error loading resource at ({}, {:?}): {:?} from data store",
                             addr, ty, e
                         );
-                        Err(e)
+                        return Err(e);
                     }
-                }?;
+                };
             }
             Bytecode::MoveTo(sd_idx) => {
                 let mut stack = interpreter.peek_last_n(2)?;
-                let signer_reference =
-                    stack.pop().unwrap().copy_value()?.value_as::<StructRef>()?;
-                let resource = stack.pop().unwrap();
-                let addr = signer_reference
-                    .borrow_field(0)?
+                let addr = stack
+                    .pop()
+                    .unwrap()
+                    .borrow_field_from_struct_ref(0)?
                     .value_as::<Reference>()?
                     .read_ref()?
                     .value_as::<AccountAddress>()?;
+
                 let ty = resolver.get_struct_type(*sd_idx);
                 // REVIEW: Can we simplify Interpreter::move_to?
-                let res = match data_store.load_resource(addr, &ty) {
+                match data_store.load_resource(addr, &ty) {
                     Ok((gv, load_res)) => {
                         if let Some(loaded) = load_res {
                             let opt = match loaded {
@@ -2117,30 +2103,29 @@ impl Frame {
                             };
                             gas_meter.charge_load_resource(opt)?;
                         }
-                        Ok(gv)
                     }
                     Err(e) => {
                         error!(
                             "[VM] error loading resource at ({}, {:?}): {:?} from data store",
                             addr, ty, e
                         );
-                        Err(e)
+                        return Err(e);
                     }
-                }?;
+                };
             }
             Bytecode::MoveToGeneric(si_idx) => {
                 let mut stack = interpreter.peek_last_n(2)?;
-                let signer_reference =
-                    stack.pop().unwrap().copy_value()?.value_as::<StructRef>()?;
-                let resource = stack.pop().unwrap();
-                let addr = signer_reference
-                    .borrow_field(0)?
+                let addr = stack
+                    .pop()
+                    .unwrap()
+                    .borrow_field_from_struct_ref(0)?
                     .value_as::<Reference>()?
                     .read_ref()?
                     .value_as::<AccountAddress>()?;
+
                 let ty = resolver.instantiate_generic_type(*si_idx, ty_args)?;
                 // REVIEW: Can we simplify Interpreter::move_to?
-                let res = match data_store.load_resource(addr, &ty) {
+                match data_store.load_resource(addr, &ty) {
                     Ok((gv, load_res)) => {
                         if let Some(loaded) = load_res {
                             let opt = match loaded {
@@ -2160,16 +2145,15 @@ impl Frame {
                             };
                             gas_meter.charge_load_resource(opt)?;
                         }
-                        Ok(gv)
                     }
                     Err(e) => {
                         error!(
                             "[VM] error loading resource at ({}, {:?}): {:?} from data store",
                             addr, ty, e
                         );
-                        Err(e)
+                        return Err(e);
                     }
-                }?;
+                };
             }
             Bytecode::FreezeRef => {
                 gas_meter.charge_simple_instr(S::FreezeRef)?;
@@ -2195,21 +2179,21 @@ impl Frame {
                     loader: resolver.loader(),
                 })?;
             }
-            Bytecode::VecImmBorrow(si) => {}
-            Bytecode::VecMutBorrow(si) => {}
+            Bytecode::VecImmBorrow(_) => {}
+            Bytecode::VecMutBorrow(_) => {}
             Bytecode::VecPushBack(si) => {
                 let elem = interpreter.peek()?;
                 let ty = &resolver.instantiate_single_type(*si, ty_args)?;
                 gas_meter.charge_vec_push_back(make_ty!(ty), &elem)?;
             }
-            Bytecode::VecPopBack(si) => {}
+            Bytecode::VecPopBack(_) => {}
             Bytecode::VecUnpack(si, num) => {
-                let vec_val = interpreter.peek()?.copy_value()?.value_as::<Vector>()?;
+                let value = interpreter.peek()?;
                 let ty = &resolver.instantiate_single_type(*si, ty_args)?;
                 gas_meter.charge_vec_unpack(
                     make_ty!(ty),
                     NumArgs::new(*num),
-                    vec_val.elem_views(),
+                    value.elem_views()?,
                 )?;
             }
             Bytecode::VecSwap(si) => {
@@ -2226,7 +2210,6 @@ impl Frame {
         ty_args: &[Type],
         instruction: &Bytecode,
         resolver: &Resolver,
-        locals: &mut Locals,
         data_store: &mut impl DataStore,
         exec_result: &PartialVMResult<InstrRet>,
     ) -> PartialVMResult<()> {
@@ -2256,11 +2239,11 @@ impl Frame {
                 gas_meter.charge_ld_const_after_deserialization(&val)?;
             }
             Bytecode::LdTrue | Bytecode::LdFalse => {}
-            Bytecode::CopyLoc(idx) => {
+            Bytecode::CopyLoc(_) => {
                 let val = interpreter.peek()?;
                 gas_meter.charge_copy_loc(&val)?;
             }
-            Bytecode::MoveLoc(idx) => {
+            Bytecode::MoveLoc(_) => {
                 let val = interpreter.peek()?;
                 gas_meter.charge_move_loc(&val)?;
             }
@@ -2273,8 +2256,8 @@ impl Frame {
             Bytecode::MutBorrowField(_) => {}
             Bytecode::ImmBorrowFieldGeneric(_) => {}
             Bytecode::MutBorrowFieldGeneric(_) => {}
-            Bytecode::Pack(sd_idx) => {}
-            Bytecode::PackGeneric(si_idx) => {}
+            Bytecode::Pack(_) => {}
+            Bytecode::PackGeneric(_) => {}
             Bytecode::Unpack(_sd_idx) => {}
             Bytecode::UnpackGeneric(_si_idx) => {}
             Bytecode::ReadRef => {}
@@ -2316,53 +2299,39 @@ impl Frame {
             }
             Bytecode::MutBorrowGlobalGeneric(si_idx) | Bytecode::ImmBorrowGlobalGeneric(si_idx) => {
                 let is_mut = matches!(instruction, Bytecode::MutBorrowGlobalGeneric(_));
-                let addr = interpreter
-                    .peek()?
-                    .copy_value()?
-                    .value_as::<AccountAddress>()?;
                 let ty = resolver.instantiate_generic_type(*si_idx, ty_args)?;
-                let result = interpreter.peek()?;
                 gas_meter.charge_borrow_global(is_mut, true, make_ty!(&ty), exec_result.is_ok())?;
             }
-            Bytecode::Exists(sd_idx) => {}
-            Bytecode::ExistsGeneric(si_idx) => {}
+            Bytecode::Exists(_) => {}
+            Bytecode::ExistsGeneric(_) => {}
             Bytecode::MoveFrom(sd_idx) => {
-                let addr = interpreter
-                    .peek()?
-                    .copy_value()?
-                    .value_as::<AccountAddress>()?;
                 let ty = resolver.get_struct_type(*sd_idx);
                 let val = match exec_result {
                     Ok(_) => Some(interpreter.peek()?),
-                    Err(err) => None,
+                    Err(_) => None,
                 };
                 gas_meter.charge_move_from(false, make_ty!(&ty), val)?;
             }
             Bytecode::MoveFromGeneric(si_idx) => {
-                let addr = interpreter
-                    .peek()?
-                    .copy_value()?
-                    .value_as::<AccountAddress>()?;
                 let ty = resolver.instantiate_generic_type(*si_idx, ty_args)?;
                 let val = match exec_result {
                     Ok(_) => Some(interpreter.peek()?),
-                    Err(err) => None,
+                    Err(_) => None,
                 };
                 gas_meter.charge_move_from(true, make_ty!(&ty), val)?;
             }
             Bytecode::MoveTo(sd_idx) => {
                 let mut stack = interpreter.peek_last_n(2)?;
-                let signer_reference =
-                    stack.pop().unwrap().copy_value()?.value_as::<StructRef>()?;
-                let resource = stack.pop().unwrap();
-                let addr = signer_reference
-                    .borrow_field(0)?
+                let addr = stack
+                    .pop()
+                    .unwrap()
+                    .borrow_field_from_struct_ref(0)?
                     .value_as::<Reference>()?
                     .read_ref()?
                     .value_as::<AccountAddress>()?;
                 let ty = resolver.get_struct_type(*sd_idx);
                 // REVIEW: Can we simplify Interpreter::move_to?
-                let res = match data_store.load_resource(addr, &ty) {
+                match data_store.load_resource(addr, &ty) {
                     Ok((gv, load_res)) => {
                         if let Some(loaded) = load_res {
                             let opt = match loaded {
@@ -2382,30 +2351,28 @@ impl Frame {
                             };
                             gas_meter.charge_load_resource(opt)?;
                         }
-                        Ok(gv)
                     }
                     Err(e) => {
                         error!(
                             "[VM] error loading resource at ({}, {:?}): {:?} from data store",
                             addr, ty, e
                         );
-                        Err(e)
+                        return Err(e);
                     }
-                }?;
+                };
             }
             Bytecode::MoveToGeneric(si_idx) => {
                 let mut stack = interpreter.peek_last_n(2)?;
-                let signer_reference =
-                    stack.pop().unwrap().copy_value()?.value_as::<StructRef>()?;
-                let resource = stack.pop().unwrap();
-                let addr = signer_reference
-                    .borrow_field(0)?
+                let addr = stack
+                    .pop()
+                    .unwrap()
+                    .borrow_field_from_struct_ref(0)?
                     .value_as::<Reference>()?
                     .read_ref()?
                     .value_as::<AccountAddress>()?;
                 let ty = resolver.instantiate_generic_type(*si_idx, ty_args)?;
                 // REVIEW: Can we simplify Interpreter::move_to?
-                let res = match data_store.load_resource(addr, &ty) {
+                match data_store.load_resource(addr, &ty) {
                     Ok((gv, load_res)) => {
                         if let Some(loaded) = load_res {
                             let opt = match loaded {
@@ -2425,16 +2392,15 @@ impl Frame {
                             };
                             gas_meter.charge_load_resource(opt)?;
                         }
-                        Ok(gv)
                     }
                     Err(e) => {
                         error!(
                             "[VM] error loading resource at ({}, {:?}): {:?} from data store",
                             addr, ty, e
                         );
-                        Err(e)
+                        return Err(e);
                     }
-                }?;
+                };
             }
 
             // Bytecode::MoveTo(sd_idx) => {
@@ -2504,7 +2470,7 @@ impl Frame {
                 let ty = &resolver.instantiate_single_type(*si, ty_args)?;
                 let val = match exec_result {
                     Ok(_) => Some(interpreter.peek()?),
-                    Err(err) => None,
+                    Err(_) => None,
                 };
                 gas_meter.charge_vec_pop_back(make_ty!(ty), val)?;
             }

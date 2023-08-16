@@ -37,7 +37,7 @@ use std::{
 
 /// Runtime representation of a Move value.
 #[derive(Debug)]
-pub enum ValueImpl {
+enum ValueImpl {
     Invalid,
 
     U8(u8),
@@ -65,7 +65,7 @@ pub enum ValueImpl {
 /// Except when not owned by the VM stack, a container always lives inside an Rc<RefCell<>>,
 /// making it possible to be shared by references.
 #[derive(Debug, Clone)]
-pub enum Container {
+enum Container {
     Locals(Rc<RefCell<Vec<ValueImpl>>>),
     Vec(Rc<RefCell<Vec<ValueImpl>>>),
     Struct(Rc<RefCell<Vec<ValueImpl>>>),
@@ -83,7 +83,7 @@ pub enum Container {
 /// or in global storage. In the latter case, it also keeps a status flag indicating whether
 /// the container has been possibly modified.
 #[derive(Debug)]
-pub enum ContainerRef {
+enum ContainerRef {
     Local(Container),
     Global {
         status: Rc<RefCell<GlobalDataStatus>>,
@@ -95,14 +95,14 @@ pub enum ContainerRef {
 /// Clean - the data was only read.
 /// Dirty - the data was possibly modified.
 #[derive(Debug, Clone, Copy)]
-pub enum GlobalDataStatus {
+enum GlobalDataStatus {
     Clean,
     Dirty,
 }
 
 /// A Move reference pointing to an element in a container.
 #[derive(Debug)]
-pub struct IndexedRef {
+struct IndexedRef {
     idx: usize,
     container_ref: ContainerRef,
 }
@@ -150,6 +150,11 @@ pub enum IntegerValue {
 #[derive(Debug)]
 pub struct Struct {
     fields: Vec<ValueImpl>,
+}
+
+#[derive(Debug)]
+pub struct StructView<'a> {
+    fields: Ref<'a, Vec<ValueImpl>>,
 }
 
 // A vector. This is an alias for a Container for now but we may change
@@ -438,12 +443,80 @@ impl Value {
         Ok(Self(self.0.copy_value()?))
     }
 
-    pub fn get_field_views<'a>(&'a self) -> PartialVMResult<Ref<Vec<ValueImpl>>> {
+    pub fn get_struct_view<'a>(&'a self) -> PartialVMResult<StructView> {
         match &self.0 {
-            ValueImpl::Container(Container::Struct(r)) => Ok(r.borrow()),
+            ValueImpl::Container(Container::Struct(r)) => {
+                let borrowed_vec = r.borrow();
+                Ok(StructView {
+                    fields: borrowed_vec,
+                })
+            }
             v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
                 .with_message(format!("cannot cast {:?} to struct", v))), // TODO (wlmyng): maintain parity with VMValueCast for now, but eventually want this error to be more accurate
         }
+    }
+
+    pub fn get_reference_view<'a>(&'a self) -> PartialVMResult<impl ValueView + 'a> {
+        match &self.0 {
+            ValueImpl::ContainerRef(_) | ValueImpl::IndexedRef(_) => {}
+            v => {
+                return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                    .with_message(format!("cannot cast {:?} to reference", v,)));
+            }
+        }
+
+        struct ValueBehindRef<'b>(&'b ValueImpl);
+
+        impl<'b> ValueView for ValueBehindRef<'b> {
+            fn visit(&self, visitor: &mut impl ValueVisitor) {
+                match &self.0 {
+                    ValueImpl::ContainerRef(r) => r.container().visit_impl(visitor, 0),
+                    ValueImpl::IndexedRef(r) => {
+                        r.container_ref.container().visit_indexed(visitor, 0, r.idx)
+                    }
+                    _ => unreachable!(),
+                }
+            }
+        }
+
+        Ok(ValueBehindRef(&self.0))
+    }
+
+    pub fn borrow_field_from_struct_ref<'a>(&'a self, idx: usize) -> PartialVMResult<Value> {
+        match &self.0 {
+            ValueImpl::ContainerRef(r) => Ok(Value(r.borrow_elem(idx)?)),
+            v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                .with_message(format!("cannot cast {:?} to struct reference", v))), // TODO (wlmyng): maintain parity with VMValueCast for now, but eventually want this error to be more accurate
+        }
+    }
+
+    pub fn elem_views<'a>(
+        &'a self,
+    ) -> PartialVMResult<impl ExactSizeIterator<Item = impl ValueView + 'a>> {
+        let inner = if let ValueImpl::Container(r) = &self.0 {
+            r
+        } else {
+            return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                .with_message(format!("cannot cast {:?} to vector", self.0)));
+        };
+
+        struct ElemView<'b> {
+            container: &'b Container,
+            idx: usize,
+        }
+
+        impl<'b> ValueView for ElemView<'b> {
+            fn visit(&self, visitor: &mut impl ValueVisitor) {
+                self.container.visit_indexed(visitor, 0, self.idx)
+            }
+        }
+
+        let len = inner.len();
+
+        Ok((0..len).map(|idx| ElemView {
+            container: inner,
+            idx,
+        }))
     }
 }
 
@@ -3449,6 +3522,12 @@ impl ValueView for SignerRef {
 impl Struct {
     #[allow(clippy::needless_lifetimes)]
     pub fn field_views<'a>(&'a self) -> impl ExactSizeIterator<Item = impl ValueView + 'a> {
+        self.fields.iter()
+    }
+}
+
+impl StructView<'_> {
+    pub fn field_views(&self) -> impl ExactSizeIterator<Item = impl ValueView + '_> {
         self.fields.iter()
     }
 }
