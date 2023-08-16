@@ -3,3 +3,4 @@
 
 pub mod data_provider;
 pub mod simple_server;
+mod version;
