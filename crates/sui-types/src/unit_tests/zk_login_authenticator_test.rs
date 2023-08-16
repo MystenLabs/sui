@@ -50,6 +50,7 @@ fn zklogin_authenticator_jwk() {
     let res =
         authenticator.verify_authenticator(&intent_msg, user_address, Some(0), &aux_verify_data);
     assert!(res.is_err());
+    
     // Epoch expired fails to verify.
     let aux_verify_data =
         VerifyParams::new(parsed.clone(), vec![OIDCProvider::Twitch], ZkLoginEnv::Test);

@@ -254,13 +254,16 @@ struct FeatureFlags {
     narwhal_new_leader_election_schedule: bool,
 
     // A list of supported OIDC providers that can be used for zklogin.
+    #[serde(skip_serializing_if = "is_empty")]
     zklogin_supported_providers: String,
 }
 
 fn is_false(b: &bool) -> bool {
     !b
 }
-
+fn is_empty(b: &str) -> bool {
+    b.is_empty()
+}
 /// Ordering mechanism for transactions in one Narwhal consensus output.
 #[derive(Default, Copy, Clone, Serialize, Debug)]
 pub enum ConsensusTransactionOrdering {

@@ -206,9 +206,7 @@ impl SuiNode {
                 info!("Starting JWK updater task");
                 loop {
                     let epoch_store_ = epoch_store.clone();
-                    let supported_providers = epoch_store
-                        .protocol_config()
-                        .zklogin_supported_providers()
+                    let supported_providers = "Google,Twitch,Facebook"
                         .split(',')
                         .map(|s| OIDCProvider::from_str(s).unwrap())
                         .collect::<Vec<_>>();
