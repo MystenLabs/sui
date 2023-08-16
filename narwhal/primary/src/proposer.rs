@@ -39,7 +39,7 @@ pub struct OurDigestMessage {
 pub mod proposer_tests;
 
 const DEFAULT_HEADER_RESEND_TIMEOUT: Duration = Duration::from_secs(60);
-const MIN_TIMEOUT_DRIFT: Duration = Duration::from_millis(150);
+const MIN_TIMEOUT_DRIFT: Duration = Duration::from_millis(200);
 
 /// The proposer creates new headers and send them to the core for broadcasting and further processing.
 pub struct Proposer {
@@ -745,11 +745,7 @@ impl Proposer {
         // Try to correct the proposal timeout based on the last proposed round's avg proposed header time.
         // If we detect that our remaining timeout value is greater than the calculated proposal remaining time,
         // then we reset to the one calculated from the proposal to align with the others.
-        let last_round_start_ts: TimestampMs = parents
-            .iter()
-            .map(|c| *c.header().created_at())
-            .sum::<TimestampMs>()
-            / parents.len() as u64;
+        let last_round_start_ts: TimestampMs = Self::calculate_round_start_median(parents);
         let remaining_until_timeout: Duration = min_delay_timer_deadline.sub(Instant::now());
 
         let remaining_until_time_based_on_network = self.min_header_delay.saturating_sub(
@@ -771,5 +767,24 @@ impl Proposer {
             return Some(Instant::now() + remaining_until_time_based_on_network);
         }
         None
+    }
+
+    fn calculate_round_start_median(round_certificates: &[Certificate]) -> TimestampMs {
+        let mut start_timestamps: Vec<TimestampMs> = round_certificates
+            .iter()
+            .map(|c| *c.header().created_at())
+            .collect();
+
+        start_timestamps.sort();
+
+        let len = start_timestamps.len();
+        if len % 2 == 1 {
+            start_timestamps[len / 2]
+        } else {
+            // Even number of elements, median is the average of the middle two values
+            let middle_left = start_timestamps[len / 2 - 1];
+            let middle_right = start_timestamps[len / 2];
+            (middle_left + middle_right) / 2
+        }
     }
 }
