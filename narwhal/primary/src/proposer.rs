@@ -39,7 +39,8 @@ pub struct OurDigestMessage {
 pub mod proposer_tests;
 
 const DEFAULT_HEADER_RESEND_TIMEOUT: Duration = Duration::from_secs(60);
-const TIMEOUT_DRIFT: Duration = Duration::from_millis(200);
+const TIMEOUT_DRIFT_LOWER_THRESHOLD: Duration = Duration::from_millis(200);
+const TIMEOUT_DRIFT_UPPER_THRESHOLD: Duration = Duration::from_millis(100);
 
 /// The proposer creates new headers and send them to the core for broadcasting and further processing.
 pub struct Proposer {
@@ -643,9 +644,12 @@ impl Proposer {
                             max_delay_timer
                                 .as_mut()
                                 .reset(timer_start + self.max_delay());
-                            min_delay_timer
+
+                            if let Some(d) = self.reset_min_delay_timeout(&self.last_parents, min_delay_timer.deadline()) {
+                                min_delay_timer
                                 .as_mut()
-                                .reset(timer_start);
+                                .reset(d);
+                            }
                         },
                         Ordering::Less => {
                             debug!("Proposer ignoring older parents, round={} parent.round={}", self.round, round);
@@ -754,13 +758,16 @@ impl Proposer {
 
         // We add some threshold so we don't always calibrate based on the network timeout, but only
         // if this node has somehow drifted a lot.
-        if ((remaining_until_time_based_on_network + TIMEOUT_DRIFT) < remaining_until_timeout)
+        if ((remaining_until_time_based_on_network + TIMEOUT_DRIFT_UPPER_THRESHOLD)
+            < remaining_until_timeout)
             || (remaining_until_timeout
-                < (remaining_until_time_based_on_network.saturating_sub(TIMEOUT_DRIFT)))
+                < (remaining_until_time_based_on_network
+                    .saturating_sub(TIMEOUT_DRIFT_LOWER_THRESHOLD)))
         {
             debug!("Resetting min_delay to {remaining_until_time_based_on_network:?} vs {remaining_until_timeout:?}");
 
-            let direction = if (remaining_until_time_based_on_network + TIMEOUT_DRIFT)
+            let direction = if (remaining_until_time_based_on_network
+                + TIMEOUT_DRIFT_UPPER_THRESHOLD)
                 < remaining_until_timeout
             {
                 "set_lower"
