@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{time::Duration, vec};
+use std::{sync::Arc, time::Duration, vec};
 
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
@@ -16,6 +16,7 @@ use sui_types::{
 };
 use tokio::{
     sync::mpsc::{unbounded_channel, UnboundedReceiver},
+    sync::Semaphore,
     time::sleep,
 };
 
@@ -23,6 +24,7 @@ use crate::{
     authority::{
         authority_store::InputKey, authority_tests::init_state_with_objects, AuthorityState,
     },
+    execution_driver::ExecutionDispatcher,
     transaction_manager::TransactionManager,
 };
 
@@ -39,10 +41,17 @@ fn make_transaction_manager(
     // Create a new transaction manager instead of reusing the authority's, to examine
     // transaction_manager output from rx_ready_certificates.
     let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
+    // no permits so that we don't try to spawn execution tasks in txn manager test
+    let execution_limit = Arc::new(Semaphore::new(0));
+    let execution_dispatcher = Arc::new(ExecutionDispatcher::new(
+        tx_ready_certificates,
+        execution_limit,
+        state.metrics.clone(),
+    ));
     let transaction_manager = TransactionManager::new(
         state.database.clone(),
         &state.epoch_store_for_testing(),
-        tx_ready_certificates,
+        execution_dispatcher,
         state.metrics.clone(),
     );
 
