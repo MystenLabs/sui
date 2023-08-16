@@ -27,11 +27,26 @@ pub const COIN_STRUCT_NAME: &str = "Coin";
 pub const BAG_MOD_NAME: &str = "bag";
 pub const BAG_STRUCT_NAME: &str = "Bag";
 
+pub const OBJECT_BAG_MOD_NAME: &str = "object_bag";
+pub const OBJECT_BAG_STRUCT_NAME: &str = "ObjectBag";
+
 pub const TABLE_MOD_NAME: &str = "table";
 pub const TABLE_STRUCT_NAME: &str = "Table";
 
+pub const OBJECT_TABLE_MOD_NAME: &str = "object_table";
+pub const OBJECT_TABLE_STRUCT_NAME: &str = "ObjectTable";
+
+pub const LINKED_TABLE_MOD_NAME: &str = "linked_table";
+pub const LINKED_TABLE_STRUCT_NAME: &str = "LinkedTable";
+
 pub const TABLE_VEC_MOD_NAME: &str = "table_vec";
 pub const TABLE_VEC_STRUCT_NAME: &str = "TableVec";
+
+pub const VEC_MAP_MOD_NAME: &str = "vec_map";
+pub const VEC_MAP_STRUCT_NAME: &str = "VecMap";
+
+pub const VEC_SET_MOD_NAME: &str = "vec_set";
+pub const VEC_SET_STRUCT_NAME: &str = "VecSet";
 
 pub const ALLOW_ATTR_NAME: &str = "lint_allow";
 pub const LINT_WARNING_PREFIX: &str = "Lint ";

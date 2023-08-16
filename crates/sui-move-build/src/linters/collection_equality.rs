@@ -15,9 +15,11 @@ use move_compiler::{
 };
 
 use super::{
-    base_type, LinterDiagCategory, BAG_MOD_NAME, BAG_STRUCT_NAME, LINTER_DEFAULT_DIAG_CODE,
-    LINT_WARNING_PREFIX, SUI_PKG_NAME, TABLE_MOD_NAME, TABLE_STRUCT_NAME, TABLE_VEC_MOD_NAME,
-    TABLE_VEC_STRUCT_NAME,
+    base_type, LinterDiagCategory, BAG_MOD_NAME, BAG_STRUCT_NAME, LINKED_TABLE_MOD_NAME,
+    LINKED_TABLE_STRUCT_NAME, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX, OBJECT_BAG_MOD_NAME,
+    OBJECT_BAG_STRUCT_NAME, OBJECT_TABLE_MOD_NAME, OBJECT_TABLE_STRUCT_NAME, SUI_PKG_NAME,
+    TABLE_MOD_NAME, TABLE_STRUCT_NAME, TABLE_VEC_MOD_NAME, TABLE_VEC_STRUCT_NAME, VEC_MAP_MOD_NAME,
+    VEC_MAP_STRUCT_NAME, VEC_SET_MOD_NAME, VEC_SET_STRUCT_NAME,
 };
 
 const COLLECTIONS_EQUALITY_DIAG: DiagnosticInfo = custom(
@@ -30,8 +32,21 @@ const COLLECTIONS_EQUALITY_DIAG: DiagnosticInfo = custom(
 
 const COLLECTION_TYPES: &[(&str, &str, &str)] = &[
     (SUI_PKG_NAME, BAG_MOD_NAME, BAG_STRUCT_NAME),
+    (SUI_PKG_NAME, OBJECT_BAG_MOD_NAME, OBJECT_BAG_STRUCT_NAME),
     (SUI_PKG_NAME, TABLE_MOD_NAME, TABLE_STRUCT_NAME),
+    (
+        SUI_PKG_NAME,
+        OBJECT_TABLE_MOD_NAME,
+        OBJECT_TABLE_STRUCT_NAME,
+    ),
+    (
+        SUI_PKG_NAME,
+        LINKED_TABLE_MOD_NAME,
+        LINKED_TABLE_STRUCT_NAME,
+    ),
     (SUI_PKG_NAME, TABLE_VEC_MOD_NAME, TABLE_VEC_STRUCT_NAME),
+    (SUI_PKG_NAME, VEC_MAP_MOD_NAME, VEC_MAP_STRUCT_NAME),
+    (SUI_PKG_NAME, VEC_SET_MOD_NAME, VEC_SET_STRUCT_NAME),
 ];
 
 pub struct CollectionEqualityVisitor;
@@ -69,7 +84,7 @@ impl TypingVisitor for CollectionEqualityVisitor {
                     "Comparing collections of type '{caddr}::{cmodule}::{cname}' may yield unexpected result."
                 );
                 let note_msg =
-                    "Equality for collections IS NOT a structural check based on content";
+                    format!("Equality for collections of type '{caddr}::{cmodule}::{cname}' IS NOT a structural check based on content");
                 let mut d = diag!(COLLECTIONS_EQUALITY_DIAG, (op.loc, msg),);
                 d.add_note(note_msg);
                 env.add_diag(d);
