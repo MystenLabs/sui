@@ -11,7 +11,7 @@ type NetworkConfigs<T extends NetworkConfig = NetworkConfig> = Record<string, T>
 export interface SuiClientProviderContext {
 	client: SuiClient;
 	networks: NetworkConfigs;
-	selectedNetwork: string;
+	network: string;
 	selectNetwork: (network: string) => void;
 }
 
@@ -68,7 +68,7 @@ export function SuiClientProvider<T extends NetworkConfigs>(props: SuiClientProv
 		return {
 			client,
 			networks,
-			selectedNetwork,
+			network: currentNetwork,
 			selectNetwork: (newNetwork) => {
 				if (currentNetwork === newNetwork) {
 					return;

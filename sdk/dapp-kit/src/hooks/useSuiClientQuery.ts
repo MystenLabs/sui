@@ -52,7 +52,7 @@ export function useSuiClientQuery<T extends keyof Methods>(
 
 	return useQuery({
 		...options,
-		queryKey: [suiContext.selectedNetwork, method, params],
+		queryKey: [suiContext.network, method, params],
 		enabled,
 		queryFn: async () => {
 			return await suiContext.client[method](params as never);
