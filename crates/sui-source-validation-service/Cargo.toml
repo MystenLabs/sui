@@ -17,6 +17,7 @@ name = "sui-source-validation-service"
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 clap = { version = "3.2.17", features = ["derive"] }
 hyper = "0.14"
+jsonrpsee.workspace = true
 tempfile = "3.3.0"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 toml = { version = "0.7.4", features = ["preserve_order"] }
@@ -45,4 +46,6 @@ expect-test = "1.4.0"
 fs_extra = "1.3.0"
 reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"] }
 
+sui.workspace = true
+sui-json-rpc-types.workspace = true
 test-cluster.workspace = true
