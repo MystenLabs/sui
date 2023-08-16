@@ -43,13 +43,24 @@ function Interstitial({ enabled, dismissKey, imageUrl, bannerUrl, onClose }: Int
 	if (!enabled) {
 		return null;
 	}
+
 	return (
 		<Portal containerId="overlay-portal-container">
 			<div className="flex flex-col justify-center flex-nowrap items-center rounded-lg z-50 overflow-hidden absolute top-0 bottom-0 left-0 right-0 backdrop-blur-sm">
-				<img src={imageUrl} alt="interstitial-banner" />
+				{bannerUrl && (
+					<ExternalLink
+						href={bannerUrl}
+						onClick={() => {
+							ampli.clickedBullsharkQuestsCta({ sourceFlow: 'Interstitial' });
+							closeInterstitial();
+						}}
+					>
+						<img src={imageUrl} alt="interstitial-banner" />
+					</ExternalLink>
+				)}
 				<button
 					data-testid="bullshark-dismiss"
-					className="appearance-none bg-transparent border-none cursor-pointer absolute bottom-5"
+					className="appearance-none bg-transparent border-none cursor-pointer absolute bottom-0 pb-5 w-full"
 					onClick={() => closeInterstitial(dismissKey)}
 				>
 					<X32 className="text-black h-8 w-8" />
