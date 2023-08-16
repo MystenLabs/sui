@@ -13,7 +13,7 @@ const TYPE_TO_TEXT: Record<AccountType, string | null> = {
 	imported: 'Imported',
 	qredo: 'Qredo',
 	'mnemonic-derived': null,
-	zk: 'zk Login',
+	zk: 'zkLogin',
 };
 
 export function AccountBadge({ accountType }: AccountBadgeProps) {
