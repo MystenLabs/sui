@@ -92,6 +92,7 @@ pub trait TypingVisitor {
         }
         let sp!(_, uexp) = &exp.exp;
         match uexp {
+            E::ModuleCall(c) => self.visit_exp(&c.arguments, env, program_info, program),
             E::Builtin(_, e) => self.visit_exp(e, env, program_info, program),
             E::Vector(_, _, _, e) => self.visit_exp(e, env, program_info, program),
             E::IfElse(e1, e2, e3) => {
@@ -143,7 +144,6 @@ pub trait TypingVisitor {
             | E::Copy { .. }
             | E::Use(_)
             | E::Constant(..)
-            | E::ModuleCall(_)
             | E::Break
             | E::Continue
             | E::BorrowLocal(..)
