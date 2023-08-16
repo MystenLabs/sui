@@ -110,6 +110,7 @@ members = [
     "crates/sui-protocol-config-macros",
     "crates/sui-proxy",
     "crates/sui-replay",
+    "crates/sui-rest-api",
     "crates/sui-rosetta",
     "crates/sui-rpc-loadgen",
     "crates/sui-sdk",
@@ -479,6 +480,7 @@ sui-telemetry = { path = "crates/sui-telemetry" }
 sui-test-transaction-builder = { path = "crates/sui-test-transaction-builder" }
 sui-test-validator = { path = "crates/sui-test-validator" }
 sui-tls = { path = "crates/sui-tls" }
+sui-rest-api = { path = "crates/sui-rest-api" }
 sui-tool = { path = "crates/sui-tool" }
 sui-transaction-builder = { path = "crates/sui-transaction-builder" }
 sui-transactional-test-runner = { path = "crates/sui-transactional-test-runner" }

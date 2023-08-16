@@ -9,8 +9,6 @@
         "icons": "pnpm --filter ./apps/icons",
         "explorer": "pnpm --filter ./apps/explorer",
         "wallet": "pnpm --filter ./apps/wallet",
-        "wallet-adapter": "pnpm --filter ./sdk/wallet-adapter",
-        "wallet-kit-site": "pnpm --filter wallet-kit-site",
         "sdk": "pnpm --filter ./sdk/typescript",
         "bcs": "pnpm --filter ./sdk/bcs",
         "kiosk": "pnpm --filter ./sdk/kiosk",

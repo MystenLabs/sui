@@ -50,7 +50,7 @@ use std::{
     thread::sleep,
     time::Duration,
 };
-use storage::{CertificateStore, HeaderStore, PayloadStore, ProposerStore, VoteDigestStore};
+use storage::{CertificateStore, PayloadStore, ProposerStore, VoteDigestStore};
 use sui_protocol_config::ProtocolConfig;
 use tokio::{sync::oneshot, time::Instant};
 use tokio::{sync::watch, task::JoinHandle};
@@ -93,7 +93,6 @@ impl Primary {
         _protocol_config: ProtocolConfig,
         parameters: Parameters,
         client: NetworkClient,
-        header_store: HeaderStore,
         certificate_store: CertificateStore,
         proposer_store: ProposerStore,
         payload_store: PayloadStore,
@@ -194,7 +193,6 @@ impl Primary {
             worker_cache: worker_cache.clone(),
             synchronizer: synchronizer.clone(),
             signature_service: signature_service.clone(),
-            header_store: header_store.clone(),
             certificate_store: certificate_store.clone(),
             vote_digest_store,
             rx_narwhal_round_updates,
@@ -427,7 +425,6 @@ impl Primary {
         let core_handle = Certifier::spawn(
             authority.id(),
             committee.clone(),
-            header_store,
             certificate_store.clone(),
             synchronizer.clone(),
             signature_service,
@@ -528,7 +525,6 @@ struct PrimaryReceiverHandler {
     synchronizer: Arc<Synchronizer>,
     /// Service to sign headers.
     signature_service: SignatureService<Signature, { crypto::INTENT_MESSAGE_LENGTH }>,
-    header_store: HeaderStore,
     certificate_store: CertificateStore,
     /// The store to persist the last voted round per authority, used to ensure idempotence.
     vote_digest_store: VoteDigestStore,
@@ -699,11 +695,6 @@ impl PrimaryReceiverHandler {
                 });
             }
         }
-
-        // Store the header.
-        self.header_store
-            .write(header)
-            .map_err(DagError::StoreError)?;
 
         // Check if we can vote for this header.
         // Send the vote when:

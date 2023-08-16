@@ -85,7 +85,7 @@ use sui_json_rpc::move_utils::MoveUtils;
 use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
-use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
+use sui_json_rpc::JsonRpcServerBuilder;
 use sui_kvstore::writer::setup_key_value_store_uploader;
 use sui_macros::fail_point_async;
 use sui_network::api::ValidatorServer;
@@ -143,7 +143,8 @@ struct SimState {
 pub struct SuiNode {
     config: NodeConfig,
     validator_components: Mutex<Option<ValidatorComponents>>,
-    _json_rpc_service: Option<ServerHandle>,
+    /// The http server responsible for serving JSON-RPC as well as the expirimental rest service
+    _http_server: Option<tokio::task::JoinHandle<()>>,
     state: Arc<AuthorityState>,
     transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     registry_service: RegistryService,
@@ -504,14 +505,13 @@ impl SuiNode {
             None
         };
 
-        let json_rpc_service = build_server(
+        let http_server = build_http_server(
             state.clone(),
             &transaction_orchestrator.clone(),
             &config,
             &prometheus_registry,
             custom_rpc_runtime,
-        )
-        .await?;
+        )?;
 
         let accumulator = Arc::new(StateAccumulator::new(store));
 
@@ -568,7 +568,7 @@ impl SuiNode {
         let node = Self {
             config,
             validator_components: Mutex::new(validator_components),
-            _json_rpc_service: json_rpc_service,
+            _http_server: http_server,
             state,
             transaction_orchestrator,
             registry_service,
@@ -1492,61 +1492,77 @@ fn build_kv_store(
     )))
 }
 
-pub async fn build_server(
+pub fn build_http_server(
     state: Arc<AuthorityState>,
     transaction_orchestrator: &Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     config: &NodeConfig,
     prometheus_registry: &Registry,
-    custom_runtime: Option<Handle>,
-) -> Result<Option<ServerHandle>> {
+    _custom_runtime: Option<Handle>,
+) -> Result<Option<tokio::task::JoinHandle<()>>> {
     // Validators do not expose these APIs
     if config.consensus_config().is_some() {
         return Ok(None);
     }
 
-    let mut server = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
+    let mut router = axum::Router::new();
 
-    let kv_store = build_kv_store(&state, config, prometheus_registry)?;
+    let json_rpc_router = {
+        let mut server = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
 
-    let metrics = Arc::new(JsonRpcMetrics::new(prometheus_registry));
-    server.register_module(ReadApi::new(
-        state.clone(),
-        kv_store.clone(),
-        metrics.clone(),
-    ))?;
-    server.register_module(CoinReadApi::new(
-        state.clone(),
-        kv_store.clone(),
-        metrics.clone(),
-    ))?;
-    server.register_module(TransactionBuilderApi::new(state.clone()))?;
-    server.register_module(GovernanceReadApi::new(state.clone(), metrics.clone()))?;
+        let kv_store = build_kv_store(&state, config, prometheus_registry)?;
 
-    if let Some(transaction_orchestrator) = transaction_orchestrator {
-        server.register_module(TransactionExecutionApi::new(
+        let metrics = Arc::new(JsonRpcMetrics::new(prometheus_registry));
+        server.register_module(ReadApi::new(
             state.clone(),
-            transaction_orchestrator.clone(),
+            kv_store.clone(),
             metrics.clone(),
         ))?;
+        server.register_module(CoinReadApi::new(
+            state.clone(),
+            kv_store.clone(),
+            metrics.clone(),
+        ))?;
+        server.register_module(TransactionBuilderApi::new(state.clone()))?;
+        server.register_module(GovernanceReadApi::new(state.clone(), metrics.clone()))?;
+
+        if let Some(transaction_orchestrator) = transaction_orchestrator {
+            server.register_module(TransactionExecutionApi::new(
+                state.clone(),
+                transaction_orchestrator.clone(),
+                metrics.clone(),
+            ))?;
+        }
+
+        server.register_module(IndexerApi::new(
+            state.clone(),
+            ReadApi::new(state.clone(), kv_store.clone(), metrics.clone()),
+            kv_store,
+            config.name_service_package_address,
+            config.name_service_registry_id,
+            config.name_service_reverse_registry_id,
+            metrics,
+            config.indexer_max_subscriptions,
+        ))?;
+        server.register_module(MoveUtils::new(state.clone()))?;
+
+        server.to_router(None)?
+    };
+
+    router = router.merge(json_rpc_router);
+
+    if config.enable_experimental_rest_api {
+        let rest_router = sui_rest_api::rest_router(state);
+        router = router.nest("/rest", rest_router);
     }
 
-    server.register_module(IndexerApi::new(
-        state.clone(),
-        ReadApi::new(state.clone(), kv_store.clone(), metrics.clone()),
-        kv_store,
-        config.name_service_package_address,
-        config.name_service_registry_id,
-        config.name_service_reverse_registry_id,
-        metrics.clone(),
-        config.indexer_max_subscriptions,
-    ))?;
-    server.register_module(MoveUtils::new(state.clone()))?;
+    let server = axum::Server::bind(&config.json_rpc_address).serve(router.into_make_service());
 
-    let rpc_server_handle = server
-        .start(config.json_rpc_address, custom_runtime, None)
-        .await?;
+    let addr = server.local_addr();
+    let handle = tokio::spawn(async move { server.await.unwrap() });
 
-    Ok(Some(rpc_server_handle))
+    info!(local_addr =? addr, "Sui JSON-RPC server listening on {addr}");
+
+    Ok(Some(handle))
 }
 
 #[cfg(not(test))]
