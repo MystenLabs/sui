@@ -17,7 +17,11 @@
 		"jsx": "react-jsx",
 		"baseUrl": ".",
 		"paths": {
-			"~/*": ["./src/*"]
+			"~/*": ["./src/*"],
+			"@mysten/sui.js/transactions": ["../../sdk/typescript/src/builder/export.ts"],
+			"@mysten/sui.js/*": ["../../sdk/typescript/src/*"],
+			"@mysten/sui.js": ["../../sdk/typescript/src/"],
+			"@mysten/dapp-kit": ["../../sdk/dapp-kit/src/"]
 		}
 	},
 	"include": ["src", "tests"],

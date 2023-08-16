@@ -1,12 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	formatPercentageDisplay,
-	useGetValidatorsApy,
-	calculateStakeShare,
-	useGetSystemState,
-} from '@mysten/core';
+import { formatPercentageDisplay, useGetValidatorsApy, calculateStakeShare } from '@mysten/core';
+import { useLatestSuiSystemState } from '@mysten/dapp-kit';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -36,7 +32,7 @@ export function ValidatorFormDetail({ validatorAddress, unstake }: ValidatorForm
 		data: system,
 		isLoading: loadingValidators,
 		isError: errorValidators,
-	} = useGetSystemState();
+	} = useLatestSuiSystemState();
 
 	const { data: stakeData, isLoading, isError, error } = useGetDelegatedStake(accountAddress || '');
 

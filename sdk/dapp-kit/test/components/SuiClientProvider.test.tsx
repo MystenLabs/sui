@@ -101,4 +101,109 @@ describe('SuiClientProvider', () => {
 
 		expect(screen.getByText('selected network: b')).toBeInTheDocument();
 	});
+
+	test('controlled mode', async () => {
+		function NetworkSelector(props: { selectNetwork: (network: string) => void }) {
+			const ctx = useSuiClientContext();
+
+			return (
+				<div>
+					<div>{`selected network: ${ctx.network}`}</div>
+					{Object.keys(ctx.networks).map((network) => (
+						<button key={network} onClick={() => props.selectNetwork(network)}>
+							{`select ${network}`}
+						</button>
+					))}
+				</div>
+			);
+		}
+
+		function ControlledProvider() {
+			const [selectedNetwork, setSelectedNetwork] = useState<'a' | 'b'>('a');
+
+			return (
+				<SuiClientProvider
+					networks={{
+						a: {
+							url: 'http://localhost:8080',
+							custom: setSelectedNetwork,
+						},
+						b: {
+							url: 'http://localhost:8080',
+							custom: setSelectedNetwork,
+						},
+					}}
+					network={selectedNetwork}
+				>
+					<NetworkSelector
+						selectNetwork={(network) => {
+							setSelectedNetwork(network as 'a' | 'b');
+						}}
+					/>
+				</SuiClientProvider>
+			);
+		}
+
+		const user = userEvent.setup();
+
+		render(<ControlledProvider />);
+
+		expect(screen.getByText('selected network: a')).toBeInTheDocument();
+
+		await user.click(screen.getByText('select b'));
+
+		expect(screen.getByText('selected network: b')).toBeInTheDocument();
+	});
+
+	test('onNetworkChange', async () => {
+		function NetworkSelector() {
+			const ctx = useSuiClientContext();
+
+			return (
+				<div>
+					<div>{`selected network: ${ctx.network}`}</div>
+					{Object.keys(ctx.networks).map((network) => (
+						<button key={network} onClick={() => ctx.selectNetwork(network)}>
+							{`select ${network}`}
+						</button>
+					))}
+				</div>
+			);
+		}
+
+		function ControlledProvider() {
+			const [selectedNetwork, setSelectedNetwork] = useState<string>('a');
+
+			return (
+				<SuiClientProvider
+					networks={{
+						a: {
+							url: 'http://localhost:8080',
+							custom: setSelectedNetwork,
+						},
+						b: {
+							url: 'http://localhost:8080',
+							custom: setSelectedNetwork,
+						},
+					}}
+					network={selectedNetwork as 'a' | 'b'}
+					onNetworkChange={(network) => {
+						setSelectedNetwork(network);
+					}}
+				>
+					<NetworkSelector />
+				</SuiClientProvider>
+			);
+		}
+
+		const user = userEvent.setup();
+
+		render(<ControlledProvider />);
+
+		expect(screen.getByText('selected network: a')).toBeInTheDocument();
+
+		await user.click(screen.getByText('select b'));
+
+		expect(screen.getByText('selected network: b')).toBeInTheDocument();
+	});
 });

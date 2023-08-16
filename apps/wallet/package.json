@@ -116,6 +116,7 @@
 		"@ledgerhq/hw-transport-webusb": "^6.27.13",
 		"@metamask/browser-passworder": "^4.1.0",
 		"@mysten/core": "workspace:*",
+		"@mysten/dapp-kit": "workspace:*",
 		"@mysten/icons": "workspace:*",
 		"@mysten/kiosk": "workspace:*",
 		"@mysten/ledgerjs-hw-app-sui": "workspace:*",

@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useSuiClient } from '@mysten/dapp-kit';
-import useAppSelector from './useAppSelector';
-import { useBackgroundClient } from './useBackgroundClient';
-import { useQredoAPI } from './useQredoAPI';
-import { LedgerSigner } from '../LedgerSigner';
-import { QredoSigner } from '../QredoSigner';
-import { type WalletSigner } from '../WalletSigner';
-import { useSuiLedgerClient } from '../components/ledger/SuiLedgerClientProvider';
-import { thunkExtras } from '../redux/store/thunk-extras';
+import { LedgerSigner } from '../../LedgerSigner';
+import { QredoSigner } from '../../QredoSigner';
+import { type WalletSigner } from '../../WalletSigner';
+import { useSuiLedgerClient } from '../../components/ledger/SuiLedgerClientProvider';
+import { thunkExtras } from '../../redux/store/thunk-extras';
+import useAppSelector from '../useAppSelector';
+import { useBackgroundClient } from '../useBackgroundClient';
+import { useQredoAPI } from '../useQredoAPI';
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
 import { isLedgerAccountSerializedUI } from '_src/background/accounts/LedgerAccount';
 import { isQredoAccountSerializedUI } from '_src/background/accounts/QredoAccount';
