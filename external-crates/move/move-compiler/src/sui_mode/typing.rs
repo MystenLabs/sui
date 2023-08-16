@@ -134,7 +134,7 @@ fn module(
         };
         if valid_fields {
             let name = mdef.structs.get_full_key_(&context.upper_module).unwrap();
-            check_otw_type(&mut context, name, sdef)
+            check_otw_type(&mut context, name, sdef, None)
         }
     }
 
@@ -324,7 +324,7 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
                 .structs
                 .get_full_key_(&upper_module)
                 .unwrap();
-            check_otw_type(context, name, sdef)
+            check_otw_type(context, name, sdef, Some(first_ty.loc))
         }
     } else if parameters.len() > 2 {
         // no init function can take more than 2 parameters (the OTW and the TxContext)
@@ -343,7 +343,14 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
 // While theoretically we could call this just once for the upper cased module struct, we break it
 // out into a separate function to help programmers understand the rules for one-time witness types,
 // when trying to write an 'init' function.
-fn check_otw_type(context: &mut Context, name: StructName, sdef: &N::StructDefinition) {
+fn check_otw_type(
+    context: &mut Context,
+    name: StructName,
+    sdef: &N::StructDefinition,
+    usage_loc: Option<Loc>,
+) {
+    const OTW_USAGE: &str = "Used as a one-time witness here";
+
     if context.one_time_witness.is_some() {
         return;
     }
@@ -356,6 +363,9 @@ fn check_otw_type(context: &mut Context, name: StructName, sdef: &N::StructDefin
             (name.loc(), "Invalid one-time witness declaration"),
             (tp.param.user_specified_name.loc, msg),
         );
+        if let Some(usage) = usage_loc {
+            diag.add_secondary_label((usage, OTW_USAGE))
+        }
         diag.add_note(OTW_NOTE);
         context.env.add_diag(diag);
         valid = false
@@ -373,6 +383,9 @@ fn check_otw_type(context: &mut Context, name: StructName, sdef: &N::StructDefin
                 (name.loc(), "Invalid one-time witness declaration"),
                 (invalid_field_loc, msg),
             );
+            if let Some(usage) = usage_loc {
+                diag.add_secondary_label((usage, OTW_USAGE))
+            }
             diag.add_note(OTW_NOTE);
             context.env.add_diag(diag);
             valid = false
@@ -406,6 +419,9 @@ fn check_otw_type(context: &mut Context, name: StructName, sdef: &N::StructDefin
             (name.loc(), "Invalid one-time witness declaration"),
             (loc, msg),
         );
+        if let Some(usage) = usage_loc {
+            diag.add_secondary_label((usage, OTW_USAGE))
+        }
         diag.add_note(OTW_NOTE);
         context.env.add_diag(diag);
         valid = false
