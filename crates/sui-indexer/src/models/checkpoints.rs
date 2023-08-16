@@ -86,6 +86,44 @@ impl Checkpoint {
         })
     }
 
+    pub fn from_sui_checkpoint(
+        checkpoint: &sui_types::messages_checkpoint::CertifiedCheckpointSummary,
+        contents: &sui_types::messages_checkpoint::CheckpointContents,
+        total_transactions: i64,
+        total_successful_transactions: i64,
+        total_successful_transaction_blocks: i64,
+    ) -> Self {
+        let total_gas_cost = checkpoint.epoch_rolling_gas_cost_summary.computation_cost as i64
+            + checkpoint.epoch_rolling_gas_cost_summary.storage_cost as i64
+            - checkpoint.epoch_rolling_gas_cost_summary.storage_rebate as i64;
+
+        let checkpoint_transactions: Vec<Option<String>> = contents
+            .iter()
+            .map(|digests| Some(digests.transaction.base58_encode()))
+            .collect();
+
+        Checkpoint {
+            sequence_number: checkpoint.sequence_number as i64,
+            checkpoint_digest: checkpoint.digest().base58_encode(),
+            epoch: checkpoint.epoch as i64,
+            transactions: checkpoint_transactions,
+            previous_checkpoint_digest: checkpoint.previous_digest.map(|d| d.base58_encode()),
+            end_of_epoch: checkpoint.end_of_epoch_data.is_some(),
+            total_gas_cost,
+            total_computation_cost: checkpoint.epoch_rolling_gas_cost_summary.computation_cost
+                as i64,
+            total_storage_cost: checkpoint.epoch_rolling_gas_cost_summary.storage_cost as i64,
+            total_storage_rebate: checkpoint.epoch_rolling_gas_cost_summary.storage_rebate as i64,
+            total_transaction_blocks: contents.size() as i64,
+            total_transactions,
+            total_successful_transaction_blocks,
+            total_successful_transactions,
+            network_total_transactions: checkpoint.network_total_transactions as i64,
+            timestamp_ms: checkpoint.timestamp_ms as i64,
+            validator_signature: checkpoint.auth_sig().signature.encode_base64(),
+        }
+    }
+
     pub fn into_rpc(
         self,
         end_of_epoch_data: Option<EndOfEpochData>,

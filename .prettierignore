@@ -20,6 +20,5 @@ dist/
 out/
 playwright-report/
 storybook-static/
-sdk/wallet-adapter/site/pages/
 CHANGELOG.md
 

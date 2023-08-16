@@ -226,10 +226,12 @@ pub trait SimpleAbsInt: Sized {
     /// custom visit for a command. It will skip `command` if `command_custom` returns true.
     fn command_custom(
         &self,
-        context: &mut Self::ExecutionContext,
-        state: &mut Self::State,
-        cmd: &Command,
-    ) -> bool;
+        _context: &mut Self::ExecutionContext,
+        _state: &mut Self::State,
+        _cmd: &Command,
+    ) -> bool {
+        false
+    }
     fn command(
         &self,
         context: &mut Self::ExecutionContext,
@@ -280,11 +282,13 @@ pub trait SimpleAbsInt: Sized {
     /// custom visit for an lvalue. It will skip `lvalue` if `lvalue_custom` returns true.
     fn lvalue_custom(
         &self,
-        context: &mut Self::ExecutionContext,
-        state: &mut Self::State,
-        l: &LValue,
-        value: &<Self::State as SimpleDomain>::Value,
-    ) -> bool;
+        _context: &mut Self::ExecutionContext,
+        _state: &mut Self::State,
+        _l: &LValue,
+        _value: &<Self::State as SimpleDomain>::Value,
+    ) -> bool {
+        false
+    }
     fn lvalue(
         &self,
         context: &mut Self::ExecutionContext,
@@ -315,19 +319,23 @@ pub trait SimpleAbsInt: Sized {
     /// custom visit for an exp. It will skip `exp` and `call_custom` if `exp_custom` returns Some.
     fn exp_custom(
         &self,
-        context: &mut Self::ExecutionContext,
-        state: &mut Self::State,
-        parent_e: &Exp,
-    ) -> Option<Vec<<Self::State as SimpleDomain>::Value>>;
+        _context: &mut Self::ExecutionContext,
+        _state: &mut Self::State,
+        _parent_e: &Exp,
+    ) -> Option<Vec<<Self::State as SimpleDomain>::Value>> {
+        None
+    }
     fn call_custom(
         &self,
-        context: &mut Self::ExecutionContext,
-        state: &mut Self::State,
-        loc: &Loc,
-        return_ty: &Type,
-        f: &ModuleCall,
-        args: Vec<<Self::State as SimpleDomain>::Value>,
-    ) -> Option<Vec<<Self::State as SimpleDomain>::Value>>;
+        _context: &mut Self::ExecutionContext,
+        _state: &mut Self::State,
+        _loc: &Loc,
+        _return_ty: &Type,
+        _f: &ModuleCall,
+        _args: Vec<<Self::State as SimpleDomain>::Value>,
+    ) -> Option<Vec<<Self::State as SimpleDomain>::Value>> {
+        None
+    }
     fn exp(
         &self,
         context: &mut Self::ExecutionContext,

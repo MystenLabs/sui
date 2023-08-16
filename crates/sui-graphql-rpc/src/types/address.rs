@@ -1,19 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::*;
+use async_graphql::{connection::Connection, *};
+
+use crate::server::data_provider::{fetch_balance, fetch_owned_objs};
 
 use super::{
     balance::{Balance, BalanceConnection},
     coin::CoinConnection,
     name_service::NameServiceConnection,
-    object::{ObjectConnection, ObjectFilter},
+    object::{Object, ObjectFilter},
     stake::StakeConnection,
     sui_address::SuiAddress,
     transaction_block::{TransactionBlockConnection, TransactionBlockFilter},
 };
 
-pub(crate) struct Address;
+#[derive(Clone, Debug, PartialEq, Eq, Copy)]
+pub(crate) struct Address {
+    pub address: SuiAddress,
+}
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum AddressTransactionBlockRelationship {
@@ -42,22 +47,37 @@ impl Address {
     // =========== Owner interface methods =============
 
     pub async fn location(&self) -> SuiAddress {
-        unimplemented!()
+        self.address
     }
 
     pub async fn object_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
         filter: Option<ObjectFilter>,
-    ) -> Option<ObjectConnection> {
-        unimplemented!()
+    ) -> Result<Connection<String, Object>> {
+        fetch_owned_objs(
+            ctx.data_unchecked::<sui_sdk::SuiClient>(),
+            &self.address,
+            first,
+            after,
+            last,
+            before,
+            filter,
+        )
+        .await
     }
 
-    pub async fn balance(&self, type_: Option<String>) -> Balance {
-        unimplemented!()
+    pub async fn balance(&self, ctx: &Context<'_>, type_: Option<String>) -> Result<Balance> {
+        fetch_balance(
+            ctx.data_unchecked::<sui_sdk::SuiClient>(),
+            &self.address,
+            type_,
+        )
+        .await
     }
 
     pub async fn balance_connection(

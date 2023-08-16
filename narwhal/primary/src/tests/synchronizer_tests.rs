@@ -45,7 +45,7 @@ async fn accept_certificates() {
         watch::channel(ConsensusRound::default());
 
     // Create test stores.
-    let (_, certificate_store, payload_store) = create_db_stores();
+    let (certificate_store, payload_store) = create_db_stores();
 
     // Make a synchronizer.
     let synchronizer = Arc::new(Synchronizer::new(
@@ -131,7 +131,7 @@ async fn accept_suspended_certificates() {
     let authority_id = primary.id();
     let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
-    let (_header_store, certificate_store, payload_store) = create_db_stores();
+    let (certificate_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(100);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
@@ -241,7 +241,7 @@ async fn synchronizer_recover_basic() {
         watch::channel(ConsensusRound::default());
 
     // Create test stores.
-    let (_, certificate_store, payload_store) = create_db_stores();
+    let (certificate_store, payload_store) = create_db_stores();
 
     // Make Synchronizer.
     let synchronizer = Arc::new(Synchronizer::new(
@@ -357,7 +357,7 @@ async fn synchronizer_recover_partial_certs() {
         watch::channel(ConsensusRound::default());
 
     // Create test stores.
-    let (_, certificate_store, payload_store) = create_db_stores();
+    let (certificate_store, payload_store) = create_db_stores();
 
     // Make a synchronizer.
     let synchronizer = Arc::new(Synchronizer::new(
@@ -462,7 +462,7 @@ async fn synchronizer_recover_previous_round() {
         watch::channel(ConsensusRound::default());
 
     // Create test stores.
-    let (_, certificate_store, payload_store) = create_db_stores();
+    let (certificate_store, payload_store) = create_db_stores();
 
     // Make a synchronizer.
     let synchronizer = Arc::new(Synchronizer::new(
@@ -574,7 +574,7 @@ async fn deliver_certificate_using_store() {
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
 
-    let (_, certificates_store, payload_store) = create_db_stores();
+    let (certificates_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
@@ -645,7 +645,7 @@ async fn deliver_certificate_not_found_parents() {
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
 
-    let (_, certificates_store, payload_store) = create_db_stores();
+    let (certificates_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, mut rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
@@ -726,7 +726,7 @@ async fn sync_batches_drops_old() {
     let author = fixture.authorities().nth(2).unwrap();
     let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
-    let (_header_store, certificate_store, payload_store) = create_db_stores();
+    let (certificate_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
@@ -812,7 +812,7 @@ async fn gc_suspended_certificates() {
     let primary = fixture.authorities().next().unwrap();
     let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
-    let (_header_store, certificate_store, payload_store) = create_db_stores();
+    let (certificate_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(100);
     let (tx_new_certificates, mut rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);

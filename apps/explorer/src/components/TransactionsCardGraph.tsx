@@ -65,7 +65,8 @@ function useEpochTransactions() {
 export function TransactionsCardGraph() {
 	const { data: totalTransactions } = useGetTotalTransactionBlocks();
 	const { data: epochMetrics, isLoading } = useEpochTransactions();
-	const lastEpochTotalTransactions = epochMetrics?.[epochMetrics.length - 1].epochTotalTransactions;
+	const lastEpochTotalTransactions =
+		epochMetrics?.[epochMetrics.length - 1]?.epochTotalTransactions;
 
 	return (
 		<Card bg="white/80" spacing={!epochMetrics?.length ? 'lg' : 'lgGraph'} height="full">

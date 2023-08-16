@@ -25,8 +25,7 @@ use move_compiler::{
         Diagnostic, Diagnostics,
     },
     hlir::ast::{
-        BaseType_, Command, Exp, LValue, Label, ModuleCall, SingleType, SingleType_, Type,
-        TypeName_, Type_, Var,
+        BaseType_, Label, ModuleCall, SingleType, SingleType_, Type, TypeName_, Type_, Var,
     },
     parser::ast::Ability_,
     shared::{CompilationEnv, Identifier},
@@ -123,15 +122,6 @@ impl SimpleAbsInt for CustomStateChangeVerifierAI {
         diags
     }
 
-    fn exp_custom(
-        &self,
-        _context: &mut ExecutionContext,
-        _state: &mut State,
-        _e: &Exp,
-    ) -> Option<Vec<Value>> {
-        None
-    }
-
     fn call_custom(
         &self,
         context: &mut ExecutionContext,
@@ -182,20 +172,6 @@ impl SimpleAbsInt for CustomStateChangeVerifierAI {
             Type_::Single(_) => vec![Value::Other],
             Type_::Multiple(types) => vec![Value::Other; types.len()],
         })
-    }
-
-    fn command_custom(&self, _: &mut ExecutionContext, _: &mut State, _: &Command) -> bool {
-        false
-    }
-
-    fn lvalue_custom(
-        &self,
-        _context: &mut ExecutionContext,
-        _state: &mut State,
-        _l: &LValue,
-        _value: &Value,
-    ) -> bool {
-        false
     }
 }
 

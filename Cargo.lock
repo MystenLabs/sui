@@ -10255,10 +10255,15 @@ dependencies = [
  "async-graphql",
  "async-graphql-axum",
  "axum",
+ "bcs",
  "clap 3.2.23",
+ "fastcrypto",
+ "hex",
  "insta",
- "move-core-types",
  "serde",
+ "sui-json-rpc",
+ "sui-json-rpc-types",
+ "sui-sdk",
  "tokio",
  "workspace-hack",
 ]
@@ -10300,6 +10305,7 @@ dependencies = [
  "sui-move-build",
  "sui-node",
  "sui-open-rpc",
+ "sui-rest-api",
  "sui-sdk",
  "sui-test-transaction-builder",
  "sui-types",
@@ -10704,6 +10710,7 @@ dependencies = [
  "sui-macros",
  "sui-network",
  "sui-protocol-config",
+ "sui-rest-api",
  "sui-simulator",
  "sui-snapshot",
  "sui-storage",
@@ -10910,6 +10917,23 @@ dependencies = [
  "tokio",
  "tracing",
  "typed-store",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-rest-api"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "bcs",
+ "futures",
+ "reqwest",
+ "serde",
+ "sui-core",
+ "sui-types",
+ "tap",
+ "tokio",
  "workspace-hack",
 ]
 

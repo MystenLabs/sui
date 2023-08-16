@@ -1,6 +1,7 @@
 ---
 title: Sui Multi-Signature
 ---
+
 Sui supports `k` out of `n` Multi-Signature (MultiSig) transactions where `k` is the threshold and `n` is the total weights of all participating parties. The maximum number of parties is required to be `<= 10`. 
 
 Pure Ed25519, ECDSA Secp256k1 and ECDSA Secp256r1 are supported as valid participating keys for MultiSig. A ([u8](https://doc.rust-lang.org/std/primitive.u8.html)) weight is set for each participating keys and the threshold can be set as [u16](https://doc.rust-lang.org/std/primitive.u16.html). If the serialized MultiSig contains enough valid signatures of which the sum of weights passes the threshold, the MultiSig is considered valid and the transaction can be executed. 
@@ -24,8 +25,6 @@ different weights for each key (which is complex in threshold cryptography), Mul
 "accountable" and "transparent" due to the fact that both participating parties and observers can see who signed each
 transaction. On the other hand, threshold signatures provide the benefits of hiding the threshold policy, but also
 resulting in a single signature payload, making it indistinguishable from a single-key account.
-
-
 
 # Example Workflow
 

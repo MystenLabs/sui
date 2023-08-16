@@ -3,29 +3,51 @@
 
 use async_graphql::*;
 
-use super::{address::Address, object::Object, owner::Owner, sui_address::SuiAddress};
+use super::{
+    address::Address, object::Object, owner::ObjectOwner, protocol_config::ProtocolConfigs,
+    sui_address::SuiAddress,
+};
+use crate::server::data_provider::fetch_chain_id;
 
 pub(crate) struct Query;
-
 pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
 
 #[allow(unreachable_code)]
 #[allow(unused_variables)]
 #[Object]
 impl Query {
-    async fn chain_identifier(&self) -> String {
-        "0000".to_string()
+    async fn chain_identifier(&self, ctx: &Context<'_>) -> Result<String> {
+        fetch_chain_id(ctx.data_unchecked::<sui_sdk::SuiClient>()).await
     }
 
-    async fn owner(&self, address: SuiAddress) -> Option<Owner> {
-        None
+    async fn owner(&self, ctx: &Context<'_>, address: SuiAddress) -> Result<Option<ObjectOwner>> {
+        // Currently only an account address can own an object
+        let cl = ctx.data_unchecked::<sui_sdk::SuiClient>();
+        let o = crate::server::data_provider::fetch_obj(cl, address, None).await?;
+        Ok(o.and_then(|q| q.owner)
+            .map(|o| ObjectOwner::Address(Address { address: o })))
     }
 
-    async fn object(&self, address: SuiAddress, version: Option<u64>) -> Option<Object> {
-        None
+    async fn object(
+        &self,
+        ctx: &Context<'_>,
+        address: SuiAddress,
+        version: Option<u64>,
+    ) -> Result<Option<Object>> {
+        let cl = ctx.data_unchecked::<sui_sdk::SuiClient>();
+        crate::server::data_provider::fetch_obj(cl, address, version).await
     }
 
     async fn address(&self, address: SuiAddress) -> Option<Address> {
-        None
+        Some(Address { address })
+    }
+
+    async fn protocol_config(
+        &self,
+        ctx: &Context<'_>,
+        protocol_version: Option<u64>,
+    ) -> Result<ProtocolConfigs> {
+        let cl = ctx.data_unchecked::<sui_sdk::SuiClient>();
+        crate::server::data_provider::fetch_protocol_config(cl, protocol_version).await
     }
 }

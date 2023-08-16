@@ -1,12 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::server::data_provider::fetch_balance;
+use crate::server::data_provider::fetch_owned_objs;
 use crate::types::balance::*;
 use crate::types::coin::*;
 use crate::types::name_service::*;
 use crate::types::object::*;
 use crate::types::stake::*;
 use crate::types::sui_address::SuiAddress;
+use async_graphql::connection::Connection;
 use async_graphql::*;
 
 use super::address::Address;
@@ -16,7 +19,7 @@ use super::address::Address;
     field(name = "location", type = "SuiAddress"),
     field(
         name = "object_connection",
-        type = "Option<ObjectConnection>",
+        type = "Option<Connection<String, Object>>",
         arg(name = "first", type = "Option<u64>"),
         arg(name = "after", type = "Option<String>"),
         arg(name = "last", type = "Option<u64>"),
@@ -63,35 +66,67 @@ use super::address::Address;
         arg(name = "before", type = "Option<String>")
     )
 )]
-pub(crate) enum Owner {
+pub(crate) enum ObjectOwner {
     Address(Address),
-    AmbiguousOwner(AmbiguousOwner),
+    Owner(Owner),
     Object(Object),
 }
 
-pub(crate) struct AmbiguousOwner;
+pub(crate) struct Owner {
+    pub address: SuiAddress,
+}
 
 #[allow(unreachable_code)]
 #[allow(unused_variables)]
 #[Object]
-impl AmbiguousOwner {
-    pub async fn location(&self) -> SuiAddress {
-        unimplemented!()
+impl Owner {
+    async fn as_address(&self, ctx: &Context<'_>) -> Option<Address> {
+        // For now only addresses can be owners
+        Some(Address {
+            address: self.address,
+        })
+    }
+
+    async fn as_object(&self, ctx: &Context<'_>) -> Option<Object> {
+        // TODO: extend when send to object imnplementation is done
+        // For now only addresses can be owners
+        None
+    }
+
+    // =========== Owner interface methods =============
+
+    pub async fn location(&self, ctx: &Context<'_>) -> SuiAddress {
+        self.address
     }
 
     pub async fn object_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
         filter: Option<ObjectFilter>,
-    ) -> Option<ObjectConnection> {
-        unimplemented!()
+    ) -> Result<Connection<String, Object>> {
+        fetch_owned_objs(
+            ctx.data_unchecked::<sui_sdk::SuiClient>(),
+            &self.address,
+            first,
+            after,
+            last,
+            before,
+            filter,
+        )
+        .await
     }
 
-    pub async fn balance(&self, type_: Option<String>) -> Balance {
-        unimplemented!()
+    pub async fn balance(&self, ctx: &Context<'_>, type_: Option<String>) -> Result<Balance> {
+        fetch_balance(
+            ctx.data_unchecked::<sui_sdk::SuiClient>(),
+            &self.address,
+            type_,
+        )
+        .await
     }
 
     pub async fn balance_connection(

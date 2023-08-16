@@ -1,18 +1,41 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::*;
+use async_graphql::{connection::Connection, *};
 
 use super::{
     balance::{Balance, BalanceConnection},
     coin::CoinConnection,
     name_service::NameServiceConnection,
+    owner::Owner,
     stake::StakeConnection,
     sui_address::SuiAddress,
+    transaction_block::TransactionBlock,
+};
+use crate::{
+    server::data_provider::{fetch_balance, fetch_owned_objs, fetch_tx},
+    types::base64::Base64,
 };
 
-pub(crate) struct Object;
-pub(crate) struct ObjectConnection;
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub(crate) struct Object {
+    pub address: SuiAddress,
+    pub version: u64,
+    pub digest: String,
+    pub storage_rebate: Option<u64>,
+    pub owner: Option<SuiAddress>,
+    pub bcs: Option<Base64>,
+    pub previous_transaction: Option<String>,
+    pub kind: Option<ObjectKind>,
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
+pub(crate) enum ObjectKind {
+    Owned,
+    Child,
+    Shared,
+    Immutable,
+}
 
 #[derive(InputObject)]
 pub(crate) struct ObjectFilter {
@@ -21,33 +44,89 @@ pub(crate) struct ObjectFilter {
     ty: Option<String>,
 
     owner: Option<SuiAddress>,
-    object_id: Option<SuiAddress>,
-    version: Option<u64>,
+    object_ids: Option<Vec<SuiAddress>>,
+    object_keys: Option<Vec<ObjectKey>>,
+}
+
+#[derive(InputObject)]
+pub(crate) struct ObjectKey {
+    object_id: SuiAddress,
+    version: u64,
 }
 
 #[allow(unreachable_code)]
 #[allow(unused_variables)]
 #[Object]
 impl Object {
+    async fn version(&self) -> u64 {
+        self.version
+    }
+
+    async fn digest(&self) -> String {
+        self.digest.clone()
+    }
+
+    async fn storage_rebate(&self) -> Option<u64> {
+        self.storage_rebate
+    }
+
+    async fn bcs(&self) -> Option<Base64> {
+        self.bcs.clone()
+    }
+
+    async fn previous_transaction_block(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<TransactionBlock>> {
+        if let Some(tx) = &self.previous_transaction {
+            fetch_tx(ctx.data_unchecked::<sui_sdk::SuiClient>(), tx).await
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn kind(&self) -> Option<ObjectKind> {
+        self.kind
+    }
+
+    async fn owner(&self) -> Option<Owner> {
+        self.owner.as_ref().map(|q| Owner { address: *q })
+    }
+
     // =========== Owner interface methods =============
 
     pub async fn location(&self) -> SuiAddress {
-        unimplemented!()
+        self.address
     }
 
     pub async fn object_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
         filter: Option<ObjectFilter>,
-    ) -> Option<ObjectConnection> {
-        unimplemented!()
+    ) -> Result<Connection<String, Object>> {
+        fetch_owned_objs(
+            ctx.data_unchecked::<sui_sdk::SuiClient>(),
+            &self.address,
+            first,
+            after,
+            last,
+            before,
+            filter,
+        )
+        .await
     }
 
-    pub async fn balance(&self, type_: Option<String>) -> Balance {
-        unimplemented!()
+    pub async fn balance(&self, ctx: &Context<'_>, type_: Option<String>) -> Result<Balance> {
+        fetch_balance(
+            ctx.data_unchecked::<sui_sdk::SuiClient>(),
+            &self.address,
+            type_,
+        )
+        .await
     }
 
     pub async fn balance_connection(
@@ -92,15 +171,6 @@ impl Object {
         last: Option<u64>,
         before: Option<String>,
     ) -> Option<NameServiceConnection> {
-        unimplemented!()
-    }
-}
-
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
-#[Object]
-impl ObjectConnection {
-    async fn unimplemented(&self) -> bool {
         unimplemented!()
     }
 }
