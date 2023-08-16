@@ -22,7 +22,7 @@ import { TokenIconLink } from './TokenIconLink';
 import { TokenLink } from './TokenLink';
 import { TokenList } from './TokenList';
 import CoinBalance from './coin-balance';
-import BullsharkQuestsNotification from '../bullshark-quests-notification';
+import Interstitial, { type InterstitialConfig } from '../interstitial';
 import { useOnrampProviders } from '../onramp/useOnrampProviders';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import { LargeButton } from '_app/shared/LargeButton';
@@ -194,10 +194,9 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 		retry: false,
 		enabled: apiEnv === API_ENV.mainnet,
 	});
-	const BullsharkInterstitialEnabled = useFeature<boolean>(
-		FEATURES.BULLSHARK_QUESTS_INTERSTITIAL,
+	const walletInterstitialConfig = useFeature<InterstitialConfig>(
+		FEATURES.WALLET_INTERSTITIAL_CONFIG,
 	).value;
-
 	const { providers } = useOnrampProviders();
 
 	const tokenBalance = coinBalance?.totalBalance || BigInt(0);
@@ -207,13 +206,16 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	const isFirstTimeLoading = isLoading && !isFetched;
 
 	useEffect(() => {
-		const dismissed = localStorage.getItem('bullshark-interstitial-dismissed');
+		const dismissed =
+			walletInterstitialConfig?.dismissKey &&
+			localStorage.getItem(walletInterstitialConfig.dismissKey);
 		setInterstitialDismissed(dismissed === 'true');
-	}, []);
+	}, [walletInterstitialConfig?.dismissKey]);
 
-	if (BullsharkInterstitialEnabled && !interstitialDismissed) {
+	if (walletInterstitialConfig?.enabled && !interstitialDismissed) {
 		return (
-			<BullsharkQuestsNotification
+			<Interstitial
+				{...walletInterstitialConfig}
 				onClose={() => {
 					setInterstitialDismissed(true);
 				}}
