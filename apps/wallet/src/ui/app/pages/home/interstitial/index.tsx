@@ -3,12 +3,11 @@
 
 import { X32 } from '@mysten/icons';
 
-import { type ReactNode, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Portal } from '../../../shared/Portal';
 import { ampli } from '_src/shared/analytics/ampli';
 import ExternalLink from '_src/ui/app/components/external-link';
-import FullBanner from '_src/ui/assets/images/quests-2-full-banner.svg';
 
 export type InterstitialConfig = {
 	enabled: boolean;
@@ -21,8 +20,7 @@ interface InterstitialProps extends InterstitialConfig {
 	onClose: () => void;
 }
 
-const setInterstitialDismissed = (dismissKey: string) => console.log('dismiss me');
-// localStorage.setItem(dismissKey, 'true');
+const setInterstitialDismissed = (dismissKey: string) => localStorage.setItem(dismissKey, 'true');
 
 function Interstitial({ enabled, dismissKey, imageUrl, bannerUrl, onClose }: InterstitialProps) {
 	const navigate = useNavigate();
@@ -54,6 +52,7 @@ function Interstitial({ enabled, dismissKey, imageUrl, bannerUrl, onClose }: Int
 							ampli.clickedBullsharkQuestsCta({ sourceFlow: 'Interstitial' });
 							closeInterstitial();
 						}}
+						className="pt-1"
 					>
 						<img src={imageUrl} alt="interstitial-banner" />
 					</ExternalLink>
