@@ -745,7 +745,7 @@ impl Proposer {
         // Try to correct the proposal timeout based on the last proposed round's avg proposed header time.
         // If we detect that our remaining timeout value is greater than the calculated proposal remaining time,
         // then we reset to the one calculated from the proposal to align with the others.
-        let last_round_start_ts: TimestampMs = Self::calculate_round_start_median(parents);
+        let last_round_start_ts: TimestampMs = Self::calculate_round_start_avg(parents);
         let remaining_until_timeout: Duration = min_delay_timer_deadline.sub(Instant::now());
 
         let remaining_until_time_based_on_network = self.min_header_delay.saturating_sub(
@@ -769,6 +769,7 @@ impl Proposer {
         None
     }
 
+    #[allow(dead_code)]
     fn calculate_round_start_median(round_certificates: &[Certificate]) -> TimestampMs {
         let mut start_timestamps: Vec<TimestampMs> = round_certificates
             .iter()
@@ -786,5 +787,14 @@ impl Proposer {
             let middle_right = start_timestamps[len / 2];
             (middle_left + middle_right) / 2
         }
+    }
+
+    #[allow(dead_code)]
+    fn calculate_round_start_avg(round_certificates: &[Certificate]) -> TimestampMs {
+        round_certificates
+            .iter()
+            .map(|c| *c.header().created_at())
+            .sum::<TimestampMs>()
+            / round_certificates.len() as u64
     }
 }
