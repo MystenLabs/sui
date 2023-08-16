@@ -9,3 +9,5 @@ export { zkBcs } from './bcs.js';
 export { poseidonHash } from './poseidon.js';
 
 export { generateNonce } from './nonce.js';
+
+export { convertBase, hashToField, hashASCIIStrToField, genAddressSeed } from './utils.js';
