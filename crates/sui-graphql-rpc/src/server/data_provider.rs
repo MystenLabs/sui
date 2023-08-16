@@ -8,7 +8,6 @@ use crate::types::address::Address;
 use crate::types::balance::Balance;
 use crate::types::base64::Base64;
 use crate::types::big_int::BigInt;
-use crate::types::error::CustomError;
 use crate::types::object::ObjectFilter;
 use crate::types::object::ObjectKind;
 use crate::types::protocol_config::ProtocolConfigAttr;
@@ -114,7 +113,10 @@ pub(crate) async fn fetch_owned_objs(
                     let cursor = g.object_id.to_string();
                     Ok(Edge::new(cursor, ObjectPayload::with_object(object)))
                 } else {
-                    Err(CustomError::Internal.extend())
+                    Err(Error::Internal(
+                        "Expected either data or error fields, received neither".to_string(),
+                    )
+                    .extend())
                 }
             })
             .collect::<Result<Vec<_>, _>>()?,
