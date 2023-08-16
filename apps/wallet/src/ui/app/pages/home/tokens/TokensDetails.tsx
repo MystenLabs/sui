@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// import { useFeature } from '@growthbook/growthbook-react';
 import { useFeature } from '@growthbook/growthbook-react';
 import {
 	useAppsBackend,
@@ -29,7 +30,7 @@ import { TokenLink } from './TokenLink';
 import { TokenList } from './TokenList';
 import SvgSuiTokensStack from './TokensStackIcon';
 import { CoinBalance } from './coin-balance';
-import BullsharkQuestsNotification from '../bullshark-quests-notification';
+import Interstitial, { type InterstitialConfig } from '../interstitial';
 import { useOnrampProviders } from '../onramp/useOnrampProviders';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import { LargeButton } from '_app/shared/LargeButton';
@@ -198,8 +199,8 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 		isFetched: coinBalancesFetched,
 	} = useGetAllBalances(accountAddress, staleTime, refetchInterval, filterAndSortTokenBalances);
 
-	const BullsharkInterstitialEnabled = useFeature<boolean>(
-		FEATURES.BULLSHARK_QUESTS_INTERSTITIAL,
+	const walletInterstitialConfig = useFeature<InterstitialConfig>(
+		FEATURES.WALLET_INTERSTITIAL_CONFIG,
 	).value;
 
 	const { providers } = useOnrampProviders();
@@ -211,13 +212,16 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	const isFirstTimeLoading = isLoading && !isFetched;
 
 	useEffect(() => {
-		const dismissed = localStorage.getItem('quests2-interstitial-dismissed');
+		const dismissed =
+			walletInterstitialConfig?.dismissKey &&
+			localStorage.getItem(walletInterstitialConfig.dismissKey);
 		setInterstitialDismissed(dismissed === 'true');
 	}, []);
 
-	if (BullsharkInterstitialEnabled && !interstitialDismissed) {
+	if (walletInterstitialConfig?.enabled && !interstitialDismissed) {
 		return (
-			<BullsharkQuestsNotification
+			<Interstitial
+				{...walletInterstitialConfig}
 				onClose={() => {
 					setInterstitialDismissed(true);
 				}}

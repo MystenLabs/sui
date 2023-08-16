@@ -5,10 +5,10 @@ import { useFeature } from '@growthbook/growthbook-react';
 import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
+import { AppsPageBanner } from './Banner';
 import { SuiApp, type DAppEntry } from './SuiApp';
 import { SuiAppEmpty } from './SuiAppEmpty';
 import { permissionsSelectors } from '../../redux/slices/permissions';
-import { QuestsBanner } from '../quests-banner';
 import { Heading } from '_app/shared/heading';
 import { Text } from '_app/shared/text';
 import { useAppSelector } from '_hooks';
@@ -17,9 +17,6 @@ import { prepareLinkToCompare } from '_src/shared/utils';
 
 function AppsPlayGround() {
 	const ecosystemApps = useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value;
-	const BullsharkInterstitialEnabled = useFeature<boolean>(
-		FEATURES.BULLSHARK_QUESTS_INTERSTITIAL,
-	).value;
 	const { tagName } = useParams();
 
 	const filteredEcosystemApps = useMemo(() => {
@@ -51,7 +48,7 @@ function AppsPlayGround() {
 				</Heading>
 			</div>
 
-			{BullsharkInterstitialEnabled && <QuestsBanner />}
+			<AppsPageBanner />
 
 			{filteredEcosystemApps?.length ? (
 				<div className="p-4 bg-gray-40 rounded-xl">
