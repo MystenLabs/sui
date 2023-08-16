@@ -39,7 +39,7 @@ pub struct OurDigestMessage {
 pub mod proposer_tests;
 
 const DEFAULT_HEADER_RESEND_TIMEOUT: Duration = Duration::from_secs(60);
-const MIN_TIMEOUT_DRIFT: Duration = Duration::from_millis(200);
+const TIMEOUT_DRIFT: Duration = Duration::from_millis(200);
 
 /// The proposer creates new headers and send them to the core for broadcasting and further processing.
 pub struct Proposer {
@@ -754,14 +754,23 @@ impl Proposer {
 
         // We add some threshold so we don't always calibrate based on the network timeout, but only
         // if this node has somehow drifted a lot.
-        if ((remaining_until_time_based_on_network + MIN_TIMEOUT_DRIFT) < remaining_until_timeout)
+        if ((remaining_until_time_based_on_network + TIMEOUT_DRIFT) < remaining_until_timeout)
             || (remaining_until_timeout
-                < (remaining_until_time_based_on_network.saturating_sub(MIN_TIMEOUT_DRIFT)))
+                < (remaining_until_time_based_on_network.saturating_sub(TIMEOUT_DRIFT)))
         {
             debug!("Resetting min_delay to {remaining_until_time_based_on_network:?} vs {remaining_until_timeout:?}");
 
+            let direction = if (remaining_until_time_based_on_network + TIMEOUT_DRIFT)
+                < remaining_until_timeout
+            {
+                "set_lower"
+            } else {
+                "set_higher"
+            };
+
             self.metrics
                 .proposal_reset_min_delay
+                .with_label_values(&[direction])
                 .observe(remaining_until_time_based_on_network.as_secs_f64());
 
             return Some(Instant::now() + remaining_until_time_based_on_network);
