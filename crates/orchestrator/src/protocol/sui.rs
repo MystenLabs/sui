@@ -201,7 +201,7 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
         } else {
             let shared_counter = 0;
             let transfer_objects = 0;
-            let batch_payments = 50;
+            let batch_payments = 100;
             (shared_counter, transfer_objects, batch_payments)
         };
 
