@@ -6,8 +6,7 @@ import { poseidonHash } from './poseidon.js';
 type bit = 0 | 1;
 
 const MAX_KEY_CLAIM_NAME_LENGTH = 40;
-// NOTE: The below param is in flux. It might change in the next few weeks.
-const MAX_KEY_CLAIM_VALUE_LENGTH = 200;
+const MAX_KEY_CLAIM_VALUE_LENGTH = 100;
 const PACK_WIDTH = 248;
 
 // TODO: We need to rewrite this to not depend on Buffer.
