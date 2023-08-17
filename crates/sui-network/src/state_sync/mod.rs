@@ -1181,7 +1181,15 @@ async fn sync_checkpoint_contents<S>(
                     }
                     Err(checkpoint) => {
                         let _: &VerifiedCheckpoint = &checkpoint;  // type hint
-                        info!("unable to sync contents of checkpoint {}", checkpoint.sequence_number());
+                        if let Some(lowest_peer_checkpoint) =
+                            peer_heights.read().ok().and_then(|x| x.peers.values().map(|state_sync_info| state_sync_info.lowest).min()) {
+                            if checkpoint.sequence_number() >= &lowest_peer_checkpoint {
+                                info!("unable to sync contents of checkpoint through state sync {} with lowest peer checkpoint: {}", checkpoint.sequence_number(), lowest_peer_checkpoint);
+                            }
+                        } else {
+                            info!("unable to sync contents of checkpoint through state sync {}", checkpoint.sequence_number());
+
+                        }
                         // Retry contents sync on failure.
                         checkpoint_contents_tasks.push_front(sync_one_checkpoint_contents(
                             network.clone(),

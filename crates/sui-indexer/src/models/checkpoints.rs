@@ -44,48 +44,6 @@ pub struct Checkpoint {
 }
 
 impl Checkpoint {
-    pub fn from(
-        rpc_checkpoint: &RpcCheckpoint,
-        total_transactions: i64,
-        total_successful_transactions: i64,
-        total_successful_transaction_blocks: i64,
-    ) -> Result<Self, IndexerError> {
-        let total_gas_cost = rpc_checkpoint
-            .epoch_rolling_gas_cost_summary
-            .computation_cost as i64
-            + rpc_checkpoint.epoch_rolling_gas_cost_summary.storage_cost as i64
-            - rpc_checkpoint.epoch_rolling_gas_cost_summary.storage_rebate as i64;
-
-        let checkpoint_transactions: Vec<Option<String>> = rpc_checkpoint
-            .transactions
-            .iter()
-            .map(|t| Some(t.base58_encode()))
-            .collect();
-
-        Ok(Checkpoint {
-            sequence_number: rpc_checkpoint.sequence_number as i64,
-            checkpoint_digest: rpc_checkpoint.digest.base58_encode(),
-            epoch: rpc_checkpoint.epoch as i64,
-            transactions: checkpoint_transactions,
-            previous_checkpoint_digest: rpc_checkpoint.previous_digest.map(|d| d.base58_encode()),
-            end_of_epoch: rpc_checkpoint.end_of_epoch_data.is_some(),
-            total_gas_cost,
-            total_computation_cost: rpc_checkpoint
-                .epoch_rolling_gas_cost_summary
-                .computation_cost as i64,
-            total_storage_cost: rpc_checkpoint.epoch_rolling_gas_cost_summary.storage_cost as i64,
-            total_storage_rebate: rpc_checkpoint.epoch_rolling_gas_cost_summary.storage_rebate
-                as i64,
-            total_transaction_blocks: rpc_checkpoint.transactions.len() as i64,
-            total_transactions,
-            total_successful_transaction_blocks,
-            total_successful_transactions,
-            network_total_transactions: rpc_checkpoint.network_total_transactions as i64,
-            timestamp_ms: rpc_checkpoint.timestamp_ms as i64,
-            validator_signature: rpc_checkpoint.validator_signature.encode_base64(),
-        })
-    }
-
     pub fn from_sui_checkpoint(
         checkpoint: &sui_types::messages_checkpoint::CertifiedCheckpointSummary,
         contents: &sui_types::messages_checkpoint::CheckpointContents,

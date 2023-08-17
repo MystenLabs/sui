@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_compiler::{diagnostics::codes::WarningFilter, expansion::ast as E};
+use move_compiler::{diagnostics::codes::WarningFilter, expansion::ast as E, naming::ast as N};
 use move_ir_types::location::Loc;
 
 pub mod coin_field;
+pub mod collection_equality;
 pub mod custom_state_change;
 pub mod freeze_wrapped;
 pub mod self_transfer;
@@ -23,6 +24,30 @@ pub const PUBLIC_FREEZE_FUN: &str = "public_freeze_object";
 pub const COIN_MOD_NAME: &str = "coin";
 pub const COIN_STRUCT_NAME: &str = "Coin";
 
+pub const BAG_MOD_NAME: &str = "bag";
+pub const BAG_STRUCT_NAME: &str = "Bag";
+
+pub const OBJECT_BAG_MOD_NAME: &str = "object_bag";
+pub const OBJECT_BAG_STRUCT_NAME: &str = "ObjectBag";
+
+pub const TABLE_MOD_NAME: &str = "table";
+pub const TABLE_STRUCT_NAME: &str = "Table";
+
+pub const OBJECT_TABLE_MOD_NAME: &str = "object_table";
+pub const OBJECT_TABLE_STRUCT_NAME: &str = "ObjectTable";
+
+pub const LINKED_TABLE_MOD_NAME: &str = "linked_table";
+pub const LINKED_TABLE_STRUCT_NAME: &str = "LinkedTable";
+
+pub const TABLE_VEC_MOD_NAME: &str = "table_vec";
+pub const TABLE_VEC_STRUCT_NAME: &str = "TableVec";
+
+pub const VEC_MAP_MOD_NAME: &str = "vec_map";
+pub const VEC_MAP_STRUCT_NAME: &str = "VecMap";
+
+pub const VEC_SET_MOD_NAME: &str = "vec_set";
+pub const VEC_SET_STRUCT_NAME: &str = "VecSet";
+
 pub const ALLOW_ATTR_NAME: &str = "lint_allow";
 pub const LINT_WARNING_PREFIX: &str = "Lint ";
 
@@ -31,6 +56,7 @@ pub const SELF_TRANSFER_FILTER_NAME: &str = "self_transfer";
 pub const CUSTOM_STATE_CHANGE_FILTER_NAME: &str = "custom_state_change";
 pub const COIN_FIELD_FILTER_NAME: &str = "coin_field";
 pub const FREEZE_WRAPPED_FILTER_NAME: &str = "freeze_wrapped";
+pub const COLLECTION_EQUALITY_FILTER_NAME: &str = "collection_equality";
 
 pub const INVALID_LOC: Loc = Loc::invalid();
 
@@ -40,6 +66,7 @@ pub enum LinterDiagCategory {
     CustomStateChange,
     CoinField,
     FreezeWrapped,
+    CollectionEquality,
 }
 
 /// A default code for each linter category (as long as only one code per category is used, no other
@@ -81,6 +108,21 @@ pub fn known_filters() -> (E::AttributeName_, Vec<WarningFilter>) {
                 LINTER_DEFAULT_DIAG_CODE,
                 Some(FREEZE_WRAPPED_FILTER_NAME),
             ),
+            WarningFilter::code(
+                Some(LINT_WARNING_PREFIX),
+                LinterDiagCategory::CollectionEquality as u8,
+                LINTER_DEFAULT_DIAG_CODE,
+                Some(COLLECTION_EQUALITY_FILTER_NAME),
+            ),
         ],
     )
+}
+
+pub fn base_type(t: &N::Type) -> Option<&N::Type> {
+    use N::Type_ as T;
+    match &t.value {
+        T::Ref(_, inner_t) => base_type(inner_t),
+        T::Apply(_, _, _) | T::Param(_) => Some(t),
+        T::Unit | T::Var(_) | T::Anything | T::UnresolvedError => None,
+    }
 }

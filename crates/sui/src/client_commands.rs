@@ -65,7 +65,7 @@ macro_rules! serialize_or_execute {
     ($tx_data:expr, $serialize_unsigned:expr, $serialize_signed:expr, $context:expr, $result_variant:ident) => {{
         assert!(
             !$serialize_unsigned || !$serialize_signed,
-            "Cannot specify both --serialize-unsigned and --serialize-signed"
+            "Cannot specify both --serialize-unsigned-transaction and --serialize-signed-transaction"
         );
         if $serialize_unsigned {
             SuiClientCommandResult::SerializedUnsignedTransaction($tx_data)

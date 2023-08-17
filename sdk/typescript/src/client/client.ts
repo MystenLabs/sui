@@ -115,8 +115,23 @@ export type NetworkOrTransport =
 			url?: never;
 	  };
 
+export const SUI_CLIENT_BRAND = Symbol.for('@mysten/SuiClient');
+
+export function isSuiClient(client: unknown): client is SuiClient {
+	return (
+		typeof client === 'object' &&
+		client !== null &&
+		(client as { [SUI_CLIENT_BRAND]: unknown })[SUI_CLIENT_BRAND] === true
+	);
+}
+
 export class SuiClient {
 	protected transport: SuiTransport;
+
+	get [SUI_CLIENT_BRAND]() {
+		return true;
+	}
+
 	/**
 	 * Establish a connection to a Sui RPC endpoint
 	 *

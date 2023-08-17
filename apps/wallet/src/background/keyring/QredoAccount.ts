@@ -6,6 +6,9 @@ import { normalizeSuiAddress } from '@mysten/sui.js/utils';
 import { type Account, AccountType } from './Account';
 import { type Wallet } from '_src/shared/qredo-api';
 
+/**
+ * @deprecated
+ */
 export type SerializedQredoAccount = {
 	type: AccountType.QREDO;
 	address: string;
@@ -18,7 +21,9 @@ export type SerializedQredoAccount = {
 	walletID: string;
 };
 
-export class QredoAccount implements Account {
+/**
+ * @deprecated
+ */ export class QredoAccount implements Account {
 	readonly type = AccountType.QREDO;
 	readonly address: string;
 	readonly qredoConnectionID: string;

@@ -8,10 +8,7 @@ import {
 	deletePendingRequest,
 	getAllPendingRequests,
 	getPendingRequest,
-	getQredoConnection,
 	storeAllPendingRequests,
-	storeQredoConnection,
-	storeQredoConnectionAccessToken,
 	updatePendingRequest,
 } from './storage';
 import { type UIQredoInfo, type QredoConnectPendingRequest } from './types';
@@ -23,9 +20,7 @@ import { QredoAccountSource } from '../account-sources/QredoAccountSource';
 import { addNewAccounts } from '../accounts';
 import { type QredoSerializedAccount } from '../accounts/QredoAccount';
 import { type ContentScriptConnection } from '../connections/ContentScriptConnection';
-import keyring from '../keyring';
 import { type QredoConnectInput } from '_src/dapp-interface/WalletStandardInterface';
-import { NEW_ACCOUNTS_ENABLED } from '_src/shared/constants';
 import { type Message } from '_src/shared/messaging/messages';
 import { type QredoConnectPayload } from '_src/shared/messaging/messages/payloads/QredoConnect';
 import { QredoAPI } from '_src/shared/qredo-api';
@@ -131,25 +126,20 @@ const IN_PROGRESS_ACCESS_TOKENS_RENEWALS: Record<string, Promise<string> | null>
 
 async function renewAccessToken(
 	qredoInfo: { requestID: string; apiUrl: string; refreshToken: string } | QredoAccountSource,
-	isPendingRequest: boolean,
 ) {
 	let accessToken: string;
-	const requestID = qredoInfo instanceof QredoAccountSource ? qredoInfo.id : qredoInfo.requestID;
+	const isPendingRequest = !(qredoInfo instanceof QredoAccountSource);
+	const requestID = isPendingRequest ? qredoInfo.requestID : qredoInfo.id;
 	if (!IN_PROGRESS_ACCESS_TOKENS_RENEWALS[requestID]) {
-		IN_PROGRESS_ACCESS_TOKENS_RENEWALS[requestID] =
-			qredoInfo instanceof QredoAccountSource
-				? qredoInfo.renewAccessToken()
-				: new QredoAPI(requestID, qredoInfo.apiUrl)
-						.createAccessToken({ refreshToken: qredoInfo.refreshToken })
-						.then(({ access_token }) => access_token)
-						.finally(() => (IN_PROGRESS_ACCESS_TOKENS_RENEWALS[requestID] = null));
+		IN_PROGRESS_ACCESS_TOKENS_RENEWALS[requestID] = isPendingRequest
+			? new QredoAPI(requestID, qredoInfo.apiUrl)
+					.createAccessToken({ refreshToken: qredoInfo.refreshToken })
+					.then(({ access_token }) => access_token)
+					.finally(() => (IN_PROGRESS_ACCESS_TOKENS_RENEWALS[requestID] = null))
+			: qredoInfo.renewAccessToken();
 		accessToken = (await IN_PROGRESS_ACCESS_TOKENS_RENEWALS[requestID])!;
 		if (isPendingRequest) {
 			await updatePendingRequest(requestID, { accessToken });
-		} else {
-			if (!(qredoInfo instanceof QredoAccountSource)) {
-				await storeQredoConnectionAccessToken(requestID, accessToken);
-			}
 		}
 	} else {
 		accessToken = (await IN_PROGRESS_ACCESS_TOKENS_RENEWALS[requestID])!;
@@ -164,31 +154,21 @@ export async function getUIQredoInfo(
 	forceRenewAccessToken: boolean,
 ): Promise<UIQredoInfo | null> {
 	const pendingRequest = await getPendingRequest(qredoID);
-	const existingConnection = pendingRequest
-		? null
-		: await (NEW_ACCOUNTS_ENABLED ? getQredoAccountSource(qredoID) : getQredoConnection(qredoID));
+	const existingConnection = pendingRequest ? null : await getQredoAccountSource(qredoID);
 	if (!pendingRequest && !existingConnection) {
 		return null;
 	}
 	const { id, service, apiUrl } = (pendingRequest || existingConnection)!;
-	let refreshToken = pendingRequest?.token || null;
-	if (!refreshToken) {
-		if (NEW_ACCOUNTS_ENABLED && existingConnection instanceof QredoAccountSource) {
-			refreshToken = await existingConnection.refreshToken;
-		} else {
-			refreshToken = await keyring.getQredoRefreshToken(id);
-		}
-	}
+	const refreshToken = pendingRequest
+		? pendingRequest.token
+		: await existingConnection!.refreshToken;
 	let accessToken = pendingRequest?.accessToken || existingConnection?.accessToken || null;
 	if (forceRenewAccessToken || !accessToken) {
 		if (!refreshToken) {
 			return null;
 		}
 		accessToken = await renewAccessToken(
-			existingConnection instanceof QredoAccountSource
-				? existingConnection
-				: { requestID: id, apiUrl: await apiUrl, refreshToken },
-			!!pendingRequest,
+			existingConnection || { requestID: id, apiUrl: await apiUrl, refreshToken },
 		);
 	}
 	return {
@@ -228,51 +208,36 @@ export async function acceptQredoConnection({
 		service,
 		organization,
 	};
-	if (NEW_ACCOUNTS_ENABLED) {
-		// make sure we replace an existing connection when it's the same
-		let qredoAccountSource = await getQredoAccountSource(connectionIdentity);
-		if (!qredoAccountSource) {
-			qredoAccountSource = await QredoAccountSource.save(
-				await QredoAccountSource.createNew({
-					password,
-					apiUrl,
-					origin,
-					organization,
-					refreshToken: pendingRequest.token,
-					service,
-				}),
-			);
-		}
-		if (!(await qredoAccountSource.isLocked())) {
-			// credentials are kept in session storage, force renewal
-			await qredoAccountSource.unlock(password);
-		}
-		const newQredoAccounts: Omit<QredoSerializedAccount, 'id'>[] = [];
-		for (const aWallet of accounts) {
-			newQredoAccounts.push({
-				...aWallet,
-				type: 'qredo',
-				sourceID: qredoAccountSource.id,
-				lastUnlockedOn: null,
-			});
-		}
-		await addNewAccounts(newQredoAccounts);
-	} else {
-		// make sure we replace an existing connection when it's the same
-		const existingConnection = await getQredoConnection(connectionIdentity);
-		const qredoIDToUse = existingConnection?.id || pendingRequest.id;
-		await keyring.storeQredoConnection(qredoIDToUse, pendingRequest.token, password, accounts);
-		await storeQredoConnection({
-			id: qredoIDToUse,
-			apiUrl,
-			origin,
-			originFavIcon,
-			service,
-			accounts,
-			accessToken: null,
-			organization,
+	// make sure we replace an existing connection when it's the same
+	let qredoAccountSource = await getQredoAccountSource(connectionIdentity);
+	if (!qredoAccountSource) {
+		qredoAccountSource = await QredoAccountSource.save(
+			await QredoAccountSource.createNew({
+				password,
+				apiUrl,
+				origin,
+				organization,
+				refreshToken: pendingRequest.token,
+				service,
+				originFavIcon: originFavIcon || '',
+			}),
+		);
+	}
+	if (!(await qredoAccountSource.isLocked())) {
+		// credentials are kept in session storage, force renewal
+		await qredoAccountSource.unlock(password);
+	}
+	const newQredoAccounts: Omit<QredoSerializedAccount, 'id'>[] = [];
+	for (const aWallet of accounts) {
+		newQredoAccounts.push({
+			...aWallet,
+			type: 'qredo',
+			sourceID: qredoAccountSource.id,
+			lastUnlockedOn: null,
+			selected: false,
 		});
 	}
+	await addNewAccounts(newQredoAccounts);
 	await deletePendingRequest(pendingRequest);
 	qredoEvents.emit('onConnectionResponse', {
 		allowed: true,

@@ -3,22 +3,16 @@
 
 import { ArrowRight16, Check12 } from '@mysten/icons';
 import { Formik, Form, Field } from 'formik';
-import { useNavigate } from 'react-router-dom';
 
 import { createMnemonicValidation } from './validation';
 import { Button } from '_app/shared/ButtonUI';
 import { CardLayout } from '_app/shared/card-layout';
 import { Text } from '_app/shared/text';
 import ExternalLink from '_components/external-link';
-import { useAppDispatch } from '_hooks';
 import PasswordFields from '_pages/initialize/shared/password-fields';
-import { createVault } from '_redux/slices/account';
 import { ToS_LINK } from '_shared/constants';
-import { ampli } from '_src/shared/analytics/ampli';
 
 const CreatePage = () => {
-	const dispatch = useAppDispatch();
-	const navigate = useNavigate();
 	return (
 		<CardLayout title="Create Password for This Wallet" headerCaption="create a new wallet">
 			<Formik
@@ -29,15 +23,8 @@ const CreatePage = () => {
 				}}
 				validationSchema={createMnemonicValidation}
 				validateOnMount={true}
-				onSubmit={async (values) => {
-					try {
-						await dispatch(createVault({ password: values.password })).unwrap();
-
-						ampli.createdNewWallet();
-						navigate('../backup', { state: { onboarding: true } });
-					} catch (e) {
-						// Do nothing
-					}
+				onSubmit={async () => {
+					throw new Error('Not implemented yet');
 				}}
 			>
 				{({ isValid, isSubmitting }) => (
@@ -62,7 +49,7 @@ const CreatePage = () => {
 						</div>
 						<Button
 							type="submit"
-							disabled={!isValid || isSubmitting}
+							disabled={!isValid || isSubmitting || true}
 							size="tall"
 							text="Create Wallet"
 							loading={isSubmitting}

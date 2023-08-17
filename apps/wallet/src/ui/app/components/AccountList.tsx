@@ -9,15 +9,14 @@ export type AccountListProps = {
 };
 
 export function AccountList({ onAccountSelected }: AccountListProps) {
-	const allAccounts = useAccounts();
+	const { data: allAccounts } = useAccounts();
+	if (!allAccounts) {
+		return null;
+	}
 	return (
 		<ul className="list-none m-0 px-0 py-1.25 flex flex-col items-stretch">
 			{allAccounts.map((account) => (
-				<AccountListItem
-					account={account}
-					key={account.address}
-					onAccountSelected={onAccountSelected}
-				/>
+				<AccountListItem account={account} key={account.id} onAccountSelected={onAccountSelected} />
 			))}
 		</ul>
 	);

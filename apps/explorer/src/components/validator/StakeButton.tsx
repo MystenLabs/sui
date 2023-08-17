@@ -3,12 +3,7 @@
 
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { Button } from '@mysten/ui';
-import {
-	ConnectButton,
-	useWalletKit,
-	type StandardWalletAdapter,
-	type WalletWithFeatures,
-} from '@mysten/wallet-kit';
+import { ConnectButton, useWalletKit, type WalletWithFeatures } from '@mysten/wallet-kit';
 import { useParams } from 'react-router-dom';
 
 // This is a custom feature supported by the Sui Wallet:
@@ -29,15 +24,7 @@ export function StakeButton() {
 
 	if (!stakeButtonEnabled) return null;
 
-	const stakeSupportedWallets = wallets.filter((wallet) => {
-		if (!('wallet' in wallet)) {
-			return false;
-		}
-
-		const standardWallet = wallet.wallet as StakeWallet;
-		return 'suiWallet:stake' in standardWallet.features;
-	});
-
+	const stakeSupportedWallets = wallets.filter((wallet) => 'suiWallet:stake' in wallet.features);
 	const currentWalletSupportsStake =
 		currentWallet && !!stakeSupportedWallets.find(({ name }) => currentWallet.name === name);
 
@@ -82,9 +69,9 @@ export function StakeButton() {
 		<Button
 			size="lg"
 			onClick={() => {
-				((currentWallet as StandardWalletAdapter).wallet as StakeWallet).features[
-					'suiWallet:stake'
-				]?.stake({ validatorAddress: id! });
+				(currentWallet as StakeWallet).features['suiWallet:stake']?.stake({
+					validatorAddress: id!,
+				});
 			}}
 		>
 			Stake SUI

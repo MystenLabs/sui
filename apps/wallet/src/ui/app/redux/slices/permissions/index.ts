@@ -8,8 +8,6 @@ import {
 	createSlice,
 } from '@reduxjs/toolkit';
 
-import { activeAddressSelector } from '../account';
-
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { Permission } from '_messages/payloads/permissions';
 import type { RootState } from '_redux/RootReducer';
@@ -70,23 +68,17 @@ export const permissionsSelectors = permissionsAdapter.getSelectors(
 	(state: RootState) => state.permissions,
 );
 
-export function createDappStatusSelector(origin: string | null) {
-	if (!origin) {
+export function createDappStatusSelector(origin: string | null, activeAddress: string | null) {
+	if (!origin || !activeAddress) {
 		return () => false;
 	}
-	return createSelector(
-		permissionsSelectors.selectAll,
-		activeAddressSelector,
-		(permissions, activeAddress) => {
-			const originPermission = permissions.find((aPermission) => aPermission.origin === origin);
-			if (!originPermission) {
-				return false;
-			}
-			return (
-				originPermission.allowed &&
-				activeAddress &&
-				originPermission.accounts.includes(activeAddress)
-			);
-		},
-	);
+	return createSelector(permissionsSelectors.selectAll, (permissions) => {
+		const originPermission = permissions.find((aPermission) => aPermission.origin === origin);
+		if (!originPermission) {
+			return false;
+		}
+		return (
+			originPermission.allowed && activeAddress && originPermission.accounts.includes(activeAddress)
+		);
+	});
 }
