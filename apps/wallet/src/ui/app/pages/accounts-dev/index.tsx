@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Popover } from '@headlessui/react';
-import { useFormatCoin, useGetCoinBalance } from '@mysten/core';
+import { useFormatCoin } from '@mysten/core';
+import { useBalance } from '@mysten/dapp-kit';
 import { TransactionBlock } from '@mysten/sui.js/builder';
 import { type ExportedKeypair } from '@mysten/sui.js/cryptography';
 import { SUI_TYPE_ARG } from '@mysten/sui.js/framework';
@@ -336,7 +337,10 @@ function Account({ account }: { account: SerializedUIAccount }) {
 			toast.success(JSON.stringify(result, null, 2));
 		},
 	});
-	const { data: coinBalance } = useGetCoinBalance(SUI_TYPE_ARG, account.address, 5000);
+	const { data: coinBalance } = useBalance(
+		{ coinType: SUI_TYPE_ARG, owner: account.address },
+		{ refetchInterval: 5000 },
+	);
 	const [formattedSuiBalance] = useFormatCoin(coinBalance?.totalBalance, coinBalance?.coinType);
 
 	const network = useAppSelector(({ app }) => app.apiEnv);

@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { formatAmount, formatDate, useGetTotalTransactionBlocks, useRpcClient } from '@mysten/core';
+import { formatAmount, formatDate } from '@mysten/core';
+import { useSuiClient, useTotalTransactionBlocks } from '@mysten/dapp-kit';
 import { Heading, Text, LoadingIndicator } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 import { ParentSize } from '@visx/responsive';
@@ -39,13 +40,13 @@ function TooltipContent({
 }
 
 function useEpochTransactions() {
-	const rpc = useRpcClient();
+	const client = useSuiClient();
 	return useQuery({
 		queryKey: ['get', 'last', '30', 'epoch', 'transactions'],
 		queryFn: async () =>
 			[
 				...(
-					await rpc.getEpochs({
+					await client.getEpochs({
 						descendingOrder: true,
 						limit: 31,
 					})
@@ -63,7 +64,14 @@ function useEpochTransactions() {
 }
 
 export function TransactionsCardGraph() {
-	const { data: totalTransactions } = useGetTotalTransactionBlocks();
+	const { data: totalTransactions } = useTotalTransactionBlocks(
+		{},
+		{
+			cacheTime: 24 * 60 * 60 * 1000,
+			staleTime: Infinity,
+			retry: 5,
+		},
+	);
 	const { data: epochMetrics, isLoading } = useEpochTransactions();
 	const lastEpochTotalTransactions =
 		epochMetrics?.[epochMetrics.length - 1]?.epochTotalTransactions;

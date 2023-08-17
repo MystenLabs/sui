@@ -8,8 +8,8 @@ import {
 	getKioskIdFromOwnerCap,
 	useGetKioskContents,
 	useGetObject,
-	useRpcClient,
 } from '@mysten/core';
+import { useSuiClient } from '@mysten/dapp-kit';
 import { take } from '@mysten/kiosk';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { useMutation } from '@tanstack/react-query';
@@ -25,10 +25,11 @@ export function useTransferKioskItem({
 	objectId: string;
 	objectType?: string | null;
 }) {
-	const rpc = useRpcClient();
+	const client = useSuiClient();
 	const activeAccount = useActiveAccount();
 	const signer = useSigner(activeAccount);
 	const address = activeAccount?.address;
+
 	const obPackageId = useFeatureValue('kiosk-originbyte-packageid', ORIGINBYTE_PACKAGE_ID);
 	const { data: kioskData } = useGetKioskContents(address);
 
@@ -68,7 +69,7 @@ export function useTransferKioskItem({
 
 			if (kiosk.type === KioskTypes.ORIGINBYTE && objectData?.data?.data?.type) {
 				const tx = new TransactionBlock();
-				const recipientKiosks = await rpc.getOwnedObjects({
+				const recipientKiosks = await client.getOwnedObjects({
 					owner: to,
 					options: { showContent: true },
 					filter: { StructType: ORIGINBYTE_KIOSK_OWNER_TOKEN },

@@ -8,7 +8,7 @@ Managing the data on your Sui Full node is critical to ensuring a healthy Sui ne
 
 The minimal version of a Sui Full Node executes all of the transactions committed by Sui Validators. Sui Full nodes also orchestrate the submitting  new transactions to the system:
 
-![Basic Sui Full node functionality](../../../static/data_mgmt/fn-basic-functionality.png "A diagram that shows the operations of a basic Sui Full node.")
+![Basic Sui Full node functionality](/fn-basic-functionality.png "A diagram that shows the operations of a basic Sui Full node.")
 
 The image shows how data flows through a Full node as follows:
 1. **`State sync` protocol:** A Sui Full node performs the following to achieve state synchronization:

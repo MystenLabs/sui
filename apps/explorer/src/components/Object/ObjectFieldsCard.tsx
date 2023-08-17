@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetObject, useGetNormalizedMoveStruct } from '@mysten/core';
+import { useGetObject } from '@mysten/core';
+import { useNormalizedMoveStruct } from '@mysten/dapp-kit';
 import { Search24 } from '@mysten/icons';
 import { Text, LoadingIndicator, Combobox, ComboboxInput, ComboboxList } from '@mysten/ui';
 import { useState } from 'react';
@@ -35,16 +36,21 @@ export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
 		data: normalizedStruct,
 		isLoading: loadingNormalizedStruct,
 		isError: errorNormalizedMoveStruct,
-	} = useGetNormalizedMoveStruct({
-		packageId,
-		module: moduleName,
-		struct: functionName,
-		onSuccess: (data) => {
-			if (data?.fields && activeFieldName === '') {
-				setActiveFieldName(data.fields[0].name);
-			}
+	} = useNormalizedMoveStruct(
+		{
+			package: packageId,
+			module: moduleName,
+			struct: functionName,
 		},
-	});
+		{
+			enabled: !!packageId && !!moduleName && !!functionName,
+			onSuccess: (data) => {
+				if (data?.fields && activeFieldName === '') {
+					setActiveFieldName(data.fields[0].name);
+				}
+			},
+		},
+	);
 
 	if (isLoading || loadingNormalizedStruct) {
 		return (
