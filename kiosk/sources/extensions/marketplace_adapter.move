@@ -35,8 +35,7 @@ module kiosk::marketplace_adapter {
         purchase_cap: PurchaseCap<T>
     }
 
-    /// The `MarketKioskOwnerCap` wraps the `KioskOwnerCap` and forces the
-    /// unlocking with a TransferRequest.
+    /// Create a new `PurchaseCap` and wrap it into the `MarketPurchaseCap`.
     public fun new<T: key + store, Market>(
         kiosk: &mut Kiosk,
         cap: &KioskOwnerCap,
@@ -51,8 +50,8 @@ module kiosk::marketplace_adapter {
         }
     }
 
-    /// The `MarketKioskOwnerCap` wraps the `KioskOwnerCap` and forces the
-    /// unlocking with a TransferRequest.
+    /// Return the `MarketPurchaseCap` to the `Kiosk`. Similar to how a PurchaseCap
+    /// can be returned at any moment.
     public fun return_cap<T: key  + store, Market>(
         kiosk: &mut Kiosk,
         cap: MarketPurchaseCap<T, Market>
