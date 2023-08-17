@@ -25,7 +25,7 @@ serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.88"
 url = "2.3.1"
 
-sui-move.workspace = true
+sui-move = { workspace = true, features = ["all"] }
 sui-move-build.workspace = true
 sui-sdk.workspace = true
 sui-source-validation.workspace = true

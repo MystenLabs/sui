@@ -10,7 +10,7 @@ use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use sui_source_validation_service::{
     host_port, initialize, serve, verify_packages, AppState, CloneCommand, Config, ErrorResponse,
-    Network, NetworkLookup, PackageSources, RepositorySource, SourceInfo, SourceResponse,
+    Network, NetworkLookup, Package, PackageSources, RepositorySource, SourceInfo, SourceResponse,
     SUI_SOURCE_VALIDATION_VERSION_HEADER,
 };
 use test_cluster::TestClusterBuilder;
@@ -29,7 +29,10 @@ async fn test_verify_packages() -> anyhow::Result<()> {
         packages: vec![PackageSources::Repository(RepositorySource {
             repository: "https://github.com/mystenlabs/sui".into(),
             branch: "main".into(),
-            paths: vec!["move-stdlib".into()],
+            packages: vec![Package {
+                path: "move-stdlib".into(),
+                watch: None,
+            }],
             network: Some(Network::Localnet),
         })],
     };
@@ -140,47 +143,62 @@ fn test_parse_package_config() -> anyhow::Result<()> {
     [packages.values]
     repository = "https://github.com/mystenlabs/sui"
     branch = "main"
-    paths = [
-        "crates/sui-framework/packages/deepbook",
-        "crates/sui-framework/packages/move-stdlib",
-        "crates/sui-framework/packages/sui-framework",
-        "crates/sui-framework/packages/sui-system",
+    packages = [
+        { path = "crates/sui-framework/packages/sui-framework", watch = "0x2" },
+        { path = "immutable" },
     ]
 
     [[packages]]
     source = "Directory"
     [packages.values]
-    paths = [ "home/user/some/package" ]
+    packages = [
+        { path = "home/user/some/upgradeable-package", watch = "0x1234" },
+        { path = "home/user/some/immutable-package" },
+    ]
 "#;
 
     let config: Config = toml::from_str(config).unwrap();
-    let expect = expect![
-        r#"Config {
-    packages: [
-        Repository(
-            RepositorySource {
-                repository: "https://github.com/mystenlabs/sui",
-                branch: "main",
-                paths: [
-                    "crates/sui-framework/packages/deepbook",
-                    "crates/sui-framework/packages/move-stdlib",
-                    "crates/sui-framework/packages/sui-framework",
-                    "crates/sui-framework/packages/sui-system",
-                ],
-                network: None,
-            },
-        ),
-        Directory(
-            DirectorySource {
-                paths: [
-                    "home/user/some/package",
-                ],
-                network: None,
-            },
-        ),
-    ],
-}"#
-    ];
+    let expect = expect![[r#"
+        Config {
+            packages: [
+                Repository(
+                    RepositorySource {
+                        repository: "https://github.com/mystenlabs/sui",
+                        branch: "main",
+                        packages: [
+                            Package {
+                                path: "crates/sui-framework/packages/sui-framework",
+                                watch: Some(
+                                    0x0000000000000000000000000000000000000000000000000000000000000002,
+                                ),
+                            },
+                            Package {
+                                path: "immutable",
+                                watch: None,
+                            },
+                        ],
+                        network: None,
+                    },
+                ),
+                Directory(
+                    DirectorySource {
+                        packages: [
+                            Package {
+                                path: "home/user/some/upgradeable-package",
+                                watch: Some(
+                                    0x0000000000000000000000000000000000000000000000000000000000001234,
+                                ),
+                            },
+                            Package {
+                                path: "home/user/some/immutable-package",
+                                watch: None,
+                            },
+                        ],
+                        network: None,
+                    },
+                ),
+            ],
+        }"#]];
     expect.assert_eq(&format!("{:#?}", config));
     Ok(())
 }
@@ -190,7 +208,16 @@ fn test_clone_command() -> anyhow::Result<()> {
     let source = RepositorySource {
         repository: "https://github.com/user/repo".into(),
         branch: "main".into(),
-        paths: vec!["a".into(), "b".into()],
+        packages: vec![
+            Package {
+                path: "a".into(),
+                watch: None,
+            },
+            Package {
+                path: "b".into(),
+                watch: None,
+            },
+        ],
         network: Some(Network::Localnet),
     };
 
