@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// The best practical approach to trading on marketplaces and favoring their
-/// fees and conditions is issuing an additional `TransferRequest` which requires
-/// resolution in the marketplace. However, issuing another `TransferRequest`
-/// is not always possible because it must be copied from TransferRequest<Item>,
-/// mostly because the price of the sale is not known to the very moment of the
-/// sale. And if there's already a TransferRequest<Item>, how do we enforce the
-/// creation of an extra request?
+/// fees and conditions is issuing an additional `TransferRequest` (eg `Market`).
+/// However, doing so is not always possible because it must be copied from
+/// TransferRequest<Item>. Mainly because the price of the sale is not known to
+/// the very moment of the sale. And if there's already a TransferRequest<Item>,
+/// how do we enforce the creation of an extra request? That means that sale has
+/// already happened.
 ///
 /// To address this problem and also solve the extension interoperability issue,
 /// we created a `marketplace_adapter` - simple utility which wraps the
