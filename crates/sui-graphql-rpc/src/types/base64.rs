@@ -76,8 +76,15 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_non_string_value() {
+    fn test_parse_invalid_boolean_value() {
         let input = Value::Boolean(true);
+        let parsed = <Base64 as ScalarType>::parse(input);
+        assert_input_value_error(parsed);
+    }
+
+    #[test]
+    fn test_parse_invalid_number() {
+        let input = Value::Number(1.into());
         let parsed = <Base64 as ScalarType>::parse(input);
         assert_input_value_error(parsed);
     }

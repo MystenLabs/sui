@@ -158,9 +158,18 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_invalid_prefix() {
+    fn test_parse_no_prefix() {
         let input = Value::String(
             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+        );
+        let parsed = <SuiAddress as ScalarType>::parse(input);
+        assert_input_value_error(parsed);
+    }
+
+    #[test]
+    fn test_parse_invalid_prefix() {
+        let input = Value::String(
+            "1x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
         );
         let parsed = <SuiAddress as ScalarType>::parse(input);
         assert_input_value_error(parsed);
