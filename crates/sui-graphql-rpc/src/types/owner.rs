@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::server::data_provider::fetch_balance;
-use crate::server::data_provider::fetch_owned_objs;
+use crate::server::data_provider::DataProvider;
 use crate::types::balance::*;
 use crate::types::coin::*;
 use crate::types::name_service::*;
@@ -108,25 +107,15 @@ impl Owner {
         before: Option<String>,
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, Object>> {
-        fetch_owned_objs(
-            ctx.data_unchecked::<sui_sdk::SuiClient>(),
-            &self.address,
-            first,
-            after,
-            last,
-            before,
-            filter,
-        )
-        .await
+        ctx.data_unchecked::<Box<dyn DataProvider>>()
+            .fetch_owned_objs(&self.address, first, after, last, before, filter)
+            .await
     }
 
     pub async fn balance(&self, ctx: &Context<'_>, type_: Option<String>) -> Result<Balance> {
-        fetch_balance(
-            ctx.data_unchecked::<sui_sdk::SuiClient>(),
-            &self.address,
-            type_,
-        )
-        .await
+        ctx.data_unchecked::<Box<dyn DataProvider>>()
+            .fetch_balance(&self.address, type_)
+            .await
     }
 
     pub async fn balance_connection(
