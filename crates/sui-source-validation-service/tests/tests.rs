@@ -4,14 +4,27 @@
 use expect_test::expect;
 use reqwest::Client;
 use std::fs;
+use std::io::Read;
+use std::os::unix::fs::FileExt;
 use std::{collections::BTreeMap, path::PathBuf};
+use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
+use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
+use sui_move_build::{BuildConfig, SuiPackageHooks};
+use sui_sdk::rpc_types::{
+    OwnedObjectRef, SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionBlockEffects,
+    SuiTransactionBlockEffectsV1,
+};
+use sui_sdk::types::base_types::ObjectID;
+use sui_sdk::types::object::Owner;
+use sui_sdk::types::transaction::TEST_ONLY_GAS_UNIT_FOR_PUBLISH;
+use sui_sdk::wallet_context::WalletContext;
 
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use sui_source_validation_service::{
-    host_port, initialize, serve, verify_packages, AppState, CloneCommand, Config, ErrorResponse,
-    Network, NetworkLookup, Package, PackageSources, RepositorySource, SourceInfo, SourceResponse,
-    SUI_SOURCE_VALIDATION_VERSION_HEADER,
+    host_port, initialize, serve, verify_packages, watch_for_upgrades, AppState, CloneCommand,
+    Config, DirectorySource, ErrorResponse, Network, NetworkLookup, Package, PackageSources,
+    RepositorySource, SourceInfo, SourceResponse, SUI_SOURCE_VALIDATION_VERSION_HEADER,
 };
 use test_cluster::TestClusterBuilder;
 
@@ -19,12 +32,80 @@ const LOCALNET_PORT: u16 = 9000;
 const TEST_FIXTURES_DIR: &str = "tests/fixture";
 
 #[tokio::test]
-async fn test_verify_packages() -> anyhow::Result<()> {
-    let _cluster = TestClusterBuilder::new()
+async fn test_end_to_end() -> anyhow::Result<()> {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    let mut test_cluster = TestClusterBuilder::new()
         .with_fullnode_rpc_port(LOCALNET_PORT)
         .build()
         .await;
 
+    ///////////////////////////
+    // Test watch_for_upgrades
+    //////////////////////////
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+    let mut package_path = PathBuf::from(TEST_FIXTURES_DIR);
+    package_path.push("custom");
+
+    // Publish and get upgrade capability to monitor.
+    let effects = run_publish(package_path.clone(), context, gas_obj_id, rgp).await?;
+    let cap = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::AddressOwner(_)))
+        .unwrap();
+
+    // Set up source service config to watch the upgrade cap.
+    let config = Config {
+        packages: vec![PackageSources::Directory(DirectorySource {
+            packages: vec![Package {
+                path: "unused".into(),
+                watch: Some(cap.reference.object_id), // watch the upgrade cap
+            }],
+            network: Some(Network::Localnet),
+        })],
+    };
+    // Start watching for upgrades.
+    let t = tokio::spawn(async move { watch_for_upgrades(&config).await });
+
+    // Set up to upgrade package.
+    let package = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::Immutable))
+        .unwrap();
+    let package_id = package.reference.object_id;
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let upgrade_pkg_path =
+        copy_with_published_at_manifest(&package_path, &tmp_dir.path().to_path_buf(), package_id);
+    // Run the upgrade.
+    run_upgrade(upgrade_pkg_path, cap, context, gas_obj_id, rgp).await?;
+
+    // Test expects to terminate when we observe an upgrade transaction.
+    t.await.unwrap()?;
+
+    ///////////////////////////
+    // Test verify_packages
+    //////////////////////////
     let config = Config {
         packages: vec![PackageSources::Repository(RepositorySource {
             repository: "https://github.com/mystenlabs/sui".into(),
@@ -61,6 +142,103 @@ Multiple source verification errors found:
     ];
     expected.assert_eq(truncated_error_message);
     Ok(())
+}
+
+async fn run_publish(
+    package_path: PathBuf,
+    context: &mut WalletContext,
+    gas_obj_id: ObjectID,
+    rgp: u64,
+) -> anyhow::Result<SuiTransactionBlockEffectsV1> {
+    let build_config = BuildConfig::new_for_testing().config;
+    let resp = SuiClientCommands::Publish {
+        package_path: package_path.clone(),
+        build_config,
+        gas: Some(gas_obj_id),
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
+        lint: false,
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::Publish(response) = resp else {
+        unreachable!("Invalid response");
+    };
+    let SuiTransactionBlockEffects::V1(effects) = response.effects.unwrap();
+    assert!(effects.status.is_ok());
+    Ok(effects)
+}
+
+async fn run_upgrade(
+    upgrade_pkg_path: PathBuf,
+    cap: &OwnedObjectRef,
+    context: &mut WalletContext,
+    gas_obj_id: ObjectID,
+    rgp: u64,
+) -> anyhow::Result<()> {
+    let build_config = BuildConfig::new_for_testing().config;
+    let resp = SuiClientCommands::Upgrade {
+        package_path: upgrade_pkg_path,
+        upgrade_capability: cap.reference.object_id,
+        build_config,
+        gas: Some(gas_obj_id),
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
+        lint: false,
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::Upgrade(response) = resp else {
+            unreachable!("Invalid upgrade response");
+        };
+    let SuiTransactionBlockEffects::V1(effects) = response.effects.unwrap();
+    assert!(effects.status.is_ok());
+    Ok(())
+}
+
+/// Copy the package and set `published-at` in the Move toml file. The need for
+/// this will be subsumed by automated address management.
+fn copy_with_published_at_manifest(
+    source_path: &PathBuf,
+    dest_path: &PathBuf,
+    package_id: ObjectID,
+) -> PathBuf {
+    fs_extra::dir::copy(
+        source_path,
+        dest_path,
+        &fs_extra::dir::CopyOptions::default(),
+    )
+    .unwrap();
+    let mut upgrade_pkg_path = dest_path.clone();
+    upgrade_pkg_path.extend(["custom", "Move.toml"]);
+    let mut move_toml = std::fs::File::options()
+        .read(true)
+        .write(true)
+        .open(&upgrade_pkg_path)
+        .unwrap();
+    upgrade_pkg_path.pop();
+
+    let mut buf = String::new();
+    move_toml.read_to_string(&mut buf).unwrap();
+
+    // Add a `published-at = "0x<package_object_id>"` to the Move manifest.
+    let mut lines: Vec<String> = buf.split('\n').map(|x| x.to_string()).collect();
+    let idx = lines.iter().position(|s| s == "[package]").unwrap();
+    lines.insert(
+        idx + 1,
+        format!("published-at = \"{}\"", package_id.to_hex_uncompressed()),
+    );
+    let new = lines.join("\n");
+    move_toml.write_at(new.as_bytes(), 0).unwrap();
+    upgrade_pkg_path
 }
 
 #[tokio::test]
