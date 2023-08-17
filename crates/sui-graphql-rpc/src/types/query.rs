@@ -7,7 +7,7 @@ use super::{
     address::Address, object::Object, owner::ObjectOwner, protocol_config::ProtocolConfigs,
     sui_address::SuiAddress,
 };
-use crate::server::data_provider::fetch_chain_id;
+use crate::server::data_provider::DataProvider;
 
 pub(crate) struct Query;
 pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
@@ -17,13 +17,17 @@ pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, EmptyMutation, E
 #[Object]
 impl Query {
     async fn chain_identifier(&self, ctx: &Context<'_>) -> Result<String> {
-        fetch_chain_id(ctx.data_unchecked::<sui_sdk::SuiClient>()).await
+        ctx.data_unchecked::<Box<dyn DataProvider>>()
+            .fetch_chain_id()
+            .await
     }
 
     async fn owner(&self, ctx: &Context<'_>, address: SuiAddress) -> Result<Option<ObjectOwner>> {
         // Currently only an account address can own an object
-        let cl = ctx.data_unchecked::<sui_sdk::SuiClient>();
-        let o = crate::server::data_provider::fetch_obj(cl, address, None).await?;
+        let o = ctx
+            .data_unchecked::<Box<dyn DataProvider>>()
+            .fetch_obj(address, None)
+            .await?;
         Ok(o.and_then(|q| q.owner)
             .map(|o| ObjectOwner::Address(Address { address: o })))
     }
@@ -35,7 +39,9 @@ impl Query {
         version: Option<u64>,
     ) -> Result<Option<Object>> {
         let cl = ctx.data_unchecked::<sui_sdk::SuiClient>();
-        crate::server::data_provider::fetch_obj(cl, address, version).await
+        ctx.data_unchecked::<Box<dyn DataProvider>>()
+            .fetch_obj(address, version)
+            .await
     }
 
     async fn address(&self, address: SuiAddress) -> Option<Address> {
@@ -47,7 +53,8 @@ impl Query {
         ctx: &Context<'_>,
         protocol_version: Option<u64>,
     ) -> Result<ProtocolConfigs> {
-        let cl = ctx.data_unchecked::<sui_sdk::SuiClient>();
-        crate::server::data_provider::fetch_protocol_config(cl, protocol_version).await
+        ctx.data_unchecked::<Box<dyn DataProvider>>()
+            .fetch_protocol_config(protocol_version)
+            .await
     }
 }

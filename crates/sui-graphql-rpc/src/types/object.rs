@@ -12,10 +12,7 @@ use super::{
     sui_address::SuiAddress,
     transaction_block::TransactionBlock,
 };
-use crate::{
-    server::data_provider::{fetch_balance, fetch_owned_objs, fetch_tx},
-    types::base64::Base64,
-};
+use crate::{server::data_provider::DataProvider, types::base64::Base64};
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub(crate) struct Object {
@@ -79,7 +76,9 @@ impl Object {
         ctx: &Context<'_>,
     ) -> Result<Option<TransactionBlock>> {
         if let Some(tx) = &self.previous_transaction {
-            fetch_tx(ctx.data_unchecked::<sui_sdk::SuiClient>(), tx).await
+            ctx.data_unchecked::<Box<dyn DataProvider>>()
+                .fetch_tx(tx)
+                .await
         } else {
             Ok(None)
         }
@@ -108,25 +107,15 @@ impl Object {
         before: Option<String>,
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, Object>> {
-        fetch_owned_objs(
-            ctx.data_unchecked::<sui_sdk::SuiClient>(),
-            &self.address,
-            first,
-            after,
-            last,
-            before,
-            filter,
-        )
-        .await
+        ctx.data_unchecked::<Box<dyn DataProvider>>()
+            .fetch_owned_objs(&self.address, first, after, last, before, filter)
+            .await
     }
 
     pub async fn balance(&self, ctx: &Context<'_>, type_: Option<String>) -> Result<Balance> {
-        fetch_balance(
-            ctx.data_unchecked::<sui_sdk::SuiClient>(),
-            &self.address,
-            type_,
-        )
-        .await
+        ctx.data_unchecked::<Box<dyn DataProvider>>()
+            .fetch_balance(&self.address, type_)
+            .await
     }
 
     pub async fn balance_connection(
