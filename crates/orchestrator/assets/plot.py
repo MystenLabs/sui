@@ -257,12 +257,13 @@ class Plotter:
     def _file_format(self, shared_objects_ratio, faults, nodes, load):
         return f'measurements-{shared_objects_ratio}-{faults}-{nodes}-{load}.json'
 
-    def plot_latency_throughput(self):
+    def plot_latency_throughput(self, batch=1):
         plot_lines_data = []
         shared_objects_ratio = self.parameters.shared_objects_ratio
         for n in self.parameters.nodes:
             for f in self.parameters.faults:
-                filename = self._file_format(shared_objects_ratio, f, n, '*')
+                bench_type = f"b{batch}" if batch != 1 else shared_objects_ratio
+                filename = self._file_format(bench_type, f, n, '*')
                 plot_lines_data += [self._load_measurement_data(filename)]
 
         plot_data = []
@@ -280,6 +281,7 @@ class Plotter:
 
             if x_values:
                 id = MeasurementId(measurements[0])
+                x_values = [x * batch for x in x_values]
                 plot_data += [(id, x_values, y_values, e_values)]
 
         self._plot(plot_data, PlotType.L_GRAPH)
@@ -478,6 +480,10 @@ if __name__ == "__main__":
         '--p50', action='store_true',
         help='Plot duration using p50 rather than average latency'
     )
+    parser.add_argument(
+        '--batch', type=int, default=1,
+        help='The workload is made of batches of transactions'
+    )
     args = parser.parse_args()
 
     for r in args.shared_objects_ratio:
@@ -485,7 +491,7 @@ if __name__ == "__main__":
         plotter = Plotter(
             args.dir, parameters, args.y_max, args.legend_columns, median=False
         )
-        plotter.plot_latency_throughput()
+        plotter.plot_latency_throughput(args.batch)
         plotter.plot_health()
         plotter.plot_scalability(args.max_latencies)
 
