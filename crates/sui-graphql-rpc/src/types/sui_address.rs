@@ -61,7 +61,7 @@ mod tests {
     use super::*;
     use async_graphql::Value;
 
-    fn assert_input_value_error(result: Result<SuiAddress, InputValueError<SuiAddress>>) {
+    fn assert_input_value_error<T>(result: Result<T, InputValueError<T>>) {
         match result {
             Err(InputValueError { .. }) => {}
             _ => panic!("Expected InputValueError"),
