@@ -10,13 +10,3 @@ pub(crate) struct Balance {
     pub(crate) coin_object_count: u64,
     pub(crate) total_balance: BigInt,
 }
-pub(crate) struct BalanceConnection;
-
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
-#[Object]
-impl BalanceConnection {
-    async fn unimplemented(&self) -> bool {
-        unimplemented!()
-    }
-}
