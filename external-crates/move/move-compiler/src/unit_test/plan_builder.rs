@@ -330,9 +330,18 @@ fn parse_failure_attribute(
                             value_name_loc,
                             &attr_value,
                         )?;
+                    if let Some((module_id, const_name)) = &const_location_opt {
+                        // we found a constant used in the `expected_failure` annotation - if a warning about
+                        // constant being unused was generated, remove it
+                        context.env.remove_unused_const_diag(
+                            &module_id.name().as_str().into(),
+                            const_name,
+                        );
+                    }
+
                     let location = if let Some((location_loc, location_attr)) = location_opt {
                         convert_location(context, location_loc, location_attr)?
-                    } else if let Some(location) = const_location_opt {
+                    } else if let Some((location, _)) = const_location_opt {
                         location
                     } else {
                         let tip = format!(
@@ -565,7 +574,7 @@ fn convert_constant_value_u64_constant_or_value(
     context: &mut Context,
     loc: Loc,
     value: &AttributeValue,
-) -> Option<(Loc, Option<ModuleId>, u64)> {
+) -> Option<(Loc, Option<(ModuleId, Symbol)>, u64)> {
     use E::AttributeValue_ as EAV;
     let (vloc, module, member) = match value {
         sp!(
@@ -606,7 +615,7 @@ fn convert_constant_value_u64_constant_or_value(
             ));
             None
         }
-        (_, Some(u)) => Some((vloc, Some(module_id), *u)),
+        (_, Some(u)) => Some((vloc, Some((module_id, member.value)), *u)),
     }
 }
 

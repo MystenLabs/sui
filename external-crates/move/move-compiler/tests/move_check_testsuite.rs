@@ -135,7 +135,7 @@ fn testsuite(path: &Path, mut config: PackageConfig) -> datatest_stable::Result<
             path,
             Path::new(&unused_exp_path),
             Path::new(&unused_out_path),
-            Flags::empty(),
+            Flags::testing(),
             config.clone(),
         )?;
     }

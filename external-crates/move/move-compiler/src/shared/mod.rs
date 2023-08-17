@@ -227,6 +227,9 @@ pub struct CompilationEnv {
     known_filter_names: BTreeMap<DiagnosticsID, KnownFilterInfo>,
     /// Attribute names (including externally provided ones) identifying known warning filters.
     known_filter_attributes: BTreeSet<E::AttributeName_>,
+    /// Per module indexes of unused const warnings (for a const with a given name) in a vector of
+    /// Diagnostic-s (in diags field above)
+    unused_const_warn_ids: BTreeMap<Symbol, BTreeMap<Symbol, usize>>,
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
 }
@@ -360,6 +363,35 @@ impl CompilationEnv {
             known_filters,
             known_filter_names,
             known_filter_attributes: filter_attributes,
+            unused_const_warn_ids: BTreeMap::new(),
+        }
+    }
+
+    pub fn remove_unused_const_diag(&mut self, mod_name: &Symbol, const_name: &Symbol) {
+        let Some(unused_const_indexes) = self.unused_const_warn_ids.get(mod_name) else {
+            return;
+        };
+        let Some(index) = unused_const_indexes.get(const_name) else {
+            return;
+        };
+        self.diags.remove(*index);
+    }
+
+    pub fn add_unused_const_diag(
+        &mut self,
+        mod_name: Symbol,
+        const_name: Symbol,
+        diag: Diagnostic,
+    ) {
+        let diags_len = self.diags.len();
+        self.add_diag(diag);
+        if self.diags.len() == diags_len + 1 {
+            // diag was actually added
+            let diag_index = diags_len;
+            self.unused_const_warn_ids
+                .entry(mod_name)
+                .or_insert_with(BTreeMap::new)
+                .insert(const_name, diag_index);
         }
     }
 

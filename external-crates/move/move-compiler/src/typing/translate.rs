@@ -130,7 +130,7 @@ fn module(
         constants,
         functions,
     };
-    gen_unused_warnings(context, &typed_module);
+    gen_unused_warnings(context, &ident, &typed_module);
     // get the list of new friends and reset the list.
     let new_friends = std::mem::take(&mut context.new_friends);
     // reset called functions and used consts set so that they are ready to be be populated with
@@ -2330,7 +2330,11 @@ fn make_arg_types<S: std::fmt::Display, F: Fn() -> S>(
 //**************************************************************************************************
 
 /// Generates warnings for unused (private) functions.
-fn gen_unused_warnings(context: &mut Context, mdef: &T::ModuleDefinition) {
+fn gen_unused_warnings(
+    context: &mut Context,
+    sp!(_, mident): &ModuleIdent,
+    mdef: &T::ModuleDefinition,
+) {
     if !mdef.is_source_module {
         // generate warnings only for modules compiled in this pass rather than for all modules
         // including pre-compiled libraries for which we do not have source code available and
@@ -2350,9 +2354,11 @@ fn gen_unused_warnings(context: &mut Context, mdef: &T::ModuleDefinition) {
 
         if !context.used_consts.contains(name) {
             let msg = format!("The constant '{name}' is never used. Consider removing it.");
-            context
-                .env
-                .add_diag(diag!(UnusedItem::Constant, (loc, msg)))
+            context.env.add_unused_const_diag(
+                mident.module.value(),
+                *name,
+                diag!(UnusedItem::Constant, (loc, msg)),
+            )
         }
 
         context.env.pop_warning_filter_scope();

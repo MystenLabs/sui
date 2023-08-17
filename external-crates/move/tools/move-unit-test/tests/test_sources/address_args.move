@@ -1,6 +1,5 @@
 address 0x1 {
 module M {
-    #[test_only]
     const ErrorCode: u64 = 100;
 
     #[test(a = @0x42)]
