@@ -10,6 +10,7 @@ edition = "2021"
 [dependencies]
 async-graphql.workspace = true
 async-graphql-axum = { version = "5.0.10" }
+async-trait.workspace = true
 axum.workspace = true
 clap.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }

@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    server::version::{check_version_middleware, set_version_middleware},
+    server::{
+        data_provider::DataProvider,
+        json_rpc_data_provider::JsonRpcDataProvider,
+        version::{check_version_middleware, set_version_middleware},
+    },
     types::query::{Query, SuiGraphQLSchema},
 };
 use async_graphql::{EmptyMutation, EmptySubscription};
@@ -64,8 +68,11 @@ pub async fn start_example_server(config: Option<ServerConfig>) {
         .await
         .expect("Failed to create SuiClient");
 
+    let data_provider: Box<dyn DataProvider> =
+        Box::new(JsonRpcDataProvider::new(sui_sdk_client_v0));
+
     let schema = async_graphql::Schema::build(Query, EmptyMutation, EmptySubscription)
-        .data(sui_sdk_client_v0)
+        .data(data_provider)
         .finish();
 
     let app = axum::Router::new()
