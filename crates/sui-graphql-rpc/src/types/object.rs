@@ -12,7 +12,7 @@ use super::{
     sui_address::SuiAddress,
     transaction_block::TransactionBlock,
 };
-use crate::{server::data_provider::DataProvider, types::base64::Base64};
+use crate::{server::context_ext::DataProviderContextExt, types::base64::Base64};
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub(crate) struct Object {
@@ -76,9 +76,7 @@ impl Object {
         ctx: &Context<'_>,
     ) -> Result<Option<TransactionBlock>> {
         if let Some(tx) = &self.previous_transaction {
-            ctx.data_unchecked::<Box<dyn DataProvider>>()
-                .fetch_tx(tx)
-                .await
+            ctx.data_provider().fetch_tx(tx).await
         } else {
             Ok(None)
         }
@@ -107,13 +105,13 @@ impl Object {
         before: Option<String>,
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, Object>> {
-        ctx.data_unchecked::<Box<dyn DataProvider>>()
+        ctx.data_provider()
             .fetch_owned_objs(&self.address, first, after, last, before, filter)
             .await
     }
 
     pub async fn balance(&self, ctx: &Context<'_>, type_: Option<String>) -> Result<Balance> {
-        ctx.data_unchecked::<Box<dyn DataProvider>>()
+        ctx.data_provider()
             .fetch_balance(&self.address, type_)
             .await
     }
