@@ -3,7 +3,7 @@
 
 use async_graphql::*;
 
-use crate::server::data_provider::DataProvider;
+use crate::server::context_ext::DataProviderContextExt;
 
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
 pub(crate) struct ProtocolConfigAttr {
@@ -30,7 +30,7 @@ pub(crate) struct ProtocolConfigs {
 impl ProtocolConfigs {
     async fn configs(&self, ctx: &Context<'_>) -> Result<Option<Vec<ProtocolConfigAttr>>> {
         Ok(Some(
-            ctx.data_unchecked::<Box<dyn DataProvider>>()
+            ctx.data_provider()
                 .fetch_protocol_config(None)
                 .await?
                 .configs,
@@ -42,7 +42,7 @@ impl ProtocolConfigs {
         ctx: &Context<'_>,
     ) -> Result<Option<Vec<ProtocolConfigFeatureFlag>>> {
         Ok(Some(
-            ctx.data_unchecked::<Box<dyn DataProvider>>()
+            ctx.data_provider()
                 .fetch_protocol_config(None)
                 .await?
                 .feature_flags,
@@ -51,7 +51,7 @@ impl ProtocolConfigs {
 
     async fn protocol_version(&self, ctx: &Context<'_>) -> Result<u64> {
         Ok(ctx
-            .data_unchecked::<Box<dyn DataProvider>>()
+            .data_provider()
             .fetch_protocol_config(None)
             .await?
             .protocol_version)
