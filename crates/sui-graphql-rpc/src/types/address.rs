@@ -11,7 +11,7 @@ use super::{
     object::{Object, ObjectFilter},
     stake::Stake,
     sui_address::SuiAddress,
-    transaction_block::{TransactionBlockConnection, TransactionBlockFilter},
+    transaction_block::{TransactionBlock, TransactionBlockFilter},
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Copy)]
@@ -39,7 +39,7 @@ impl Address {
         before: Option<String>,
         relation: Option<AddressTransactionBlockRelationship>,
         filter: Option<TransactionBlockFilter>,
-    ) -> Option<TransactionBlockConnection> {
+    ) -> Option<Connection<String, TransactionBlock>> {
         unimplemented!()
     }
 
