@@ -69,10 +69,16 @@ export function hashASCIIStrToField(str: string, maxSize: number) {
 	return hashToField(strPadded, 8);
 }
 
-export function genAddressSeed(pin: bigint, name: string, value: string) {
+export function genAddressSeed(
+	pin: bigint,
+	name: string,
+	value: string,
+	max_name_length = MAX_KEY_CLAIM_NAME_LENGTH,
+	max_value_length = MAX_KEY_CLAIM_VALUE_LENGTH,
+) {
 	return poseidonHash([
-		hashASCIIStrToField(name, MAX_KEY_CLAIM_NAME_LENGTH),
-		hashASCIIStrToField(value, MAX_KEY_CLAIM_VALUE_LENGTH),
+		hashASCIIStrToField(name, max_name_length),
+		hashASCIIStrToField(value, max_value_length),
 		poseidonHash([pin]),
 	]);
 }
