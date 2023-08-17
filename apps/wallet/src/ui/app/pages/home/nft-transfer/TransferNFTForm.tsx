@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetKioskContents, isSuiNSName, useRpcClient, useSuiNSEnabled } from '@mysten/core';
+import { useGetKioskContents, isSuiNSName, useSuiNSEnabled } from '@mysten/core';
+import { useSuiClient } from '@mysten/dapp-kit';
 import { ArrowRight16 } from '@mysten/icons';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -31,7 +32,7 @@ export function TransferNFTForm({
 	objectType?: string | null;
 }) {
 	const activeAddress = useActiveAddress();
-	const rpc = useRpcClient();
+	const rpc = useSuiClient();
 	const suiNSEnabled = useSuiNSEnabled();
 	const validationSchema = createValidationSchema(rpc, suiNSEnabled, activeAddress || '', objectId);
 	const activeAccount = useActiveAccount();

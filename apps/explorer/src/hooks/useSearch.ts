@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient, useGetSystemState, isSuiNSName, useSuiNSEnabled } from '@mysten/core';
+import { isSuiNSName, useSuiNSEnabled } from '@mysten/core';
+import { useLatestSuiSystemState, useSuiClient } from '@mysten/dapp-kit';
 import { type SuiClient, type SuiSystemStateSummary } from '@mysten/sui.js/client';
 import {
 	isValidTransactionDigest,
@@ -123,8 +124,8 @@ const getResultsForValidatorByPoolIdOrSuiAddress = async (
 };
 
 export function useSearch(query: string) {
-	const rpc = useRpcClient();
-	const { data: systemStateSummery } = useGetSystemState();
+	const client = useSuiClient();
+	const { data: systemStateSummery } = useLatestSuiSystemState();
 	const suiNSEnabled = useSuiNSEnabled();
 
 	return useQuery({
@@ -133,10 +134,10 @@ export function useSearch(query: string) {
 		queryFn: async () => {
 			const results = (
 				await Promise.allSettled([
-					getResultsForTransaction(rpc, query),
-					getResultsForCheckpoint(rpc, query),
-					getResultsForAddress(rpc, query, suiNSEnabled),
-					getResultsForObject(rpc, query),
+					getResultsForTransaction(client, query),
+					getResultsForCheckpoint(client, query),
+					getResultsForAddress(client, query, suiNSEnabled),
+					getResultsForObject(client, query),
 					getResultsForValidatorByPoolIdOrSuiAddress(systemStateSummery || null, query),
 				])
 			).filter((r) => r.status === 'fulfilled' && r.value) as PromiseFulfilledResult<Results>[];

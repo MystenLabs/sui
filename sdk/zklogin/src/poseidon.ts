@@ -39,7 +39,7 @@ const poseidonNumToHashFN = [
 	poseidon16,
 ];
 
-export function poseidonHash(inputs: (string | number | bigint)[]): bigint {
+export function poseidonHash(inputs: (number | bigint)[]): bigint {
 	const hashFN = poseidonNumToHashFN[inputs.length - 1];
 
 	if (hashFN) {

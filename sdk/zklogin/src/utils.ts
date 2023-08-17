@@ -6,7 +6,8 @@ import { poseidonHash } from './poseidon.js';
 type bit = 0 | 1;
 
 const MAX_KEY_CLAIM_NAME_LENGTH = 40;
-const MAX_KEY_CLAIM_VALUE_LENGTH = 256;
+// NOTE: The below param is in flux. It might change in the next few weeks.
+const MAX_KEY_CLAIM_VALUE_LENGTH = 200;
 const PACK_WIDTH = 248;
 
 // TODO: We need to rewrite this to not depend on Buffer.
@@ -29,29 +30,32 @@ function chunkArray<T>(arr: T[], chunkSize: number) {
 	);
 }
 
-// Pack into an array of chunks each outWidth bits
-function pack(inArr: bigint[], inWidth: number, outWidth: number, outCount: number): bigint[] {
+/**
+ * ConvertBase
+ * 1. Converts each input element into exactly inWidth bits
+ *     - Prefixing zeroes if needed
+ * 2. Splits the resulting array into chunks of outWidth bits where
+ *    the last chunk's size is <= outWidth bits.
+ * 3. Converts each chunk into a bigint
+ * 4. Returns a vector of size Math.ceil((inArr.length * inWidth) / outWidth)
+ */
+export function convertBase(inArr: bigint[], inWidth: number, outWidth: number): bigint[] {
 	const bits = bigintArrayToBitArray(inArr, inWidth);
-	const extraBits = bits.length % outWidth === 0 ? 0 : outWidth - (bits.length % outWidth);
-	const bitsPadded = bits.concat(Array(extraBits).fill(0));
-	if (bitsPadded.length % outWidth !== 0) {
-		throw new Error('Invalid logic');
-	}
-	const packed = chunkArray(bitsPadded, outWidth).map((chunk) => BigInt('0b' + chunk.join('')));
-	return packed.concat(Array(outCount - packed.length).fill(0));
+	const packed = chunkArray(bits, outWidth).map((chunk) => BigInt('0b' + chunk.join('')));
+	return packed;
 }
 
-function mapToField(input: bigint[], inWidth: number) {
+// hashes a stream of bigints to a field element
+export function hashToField(input: bigint[], inWidth: number) {
 	if (PACK_WIDTH % 8 !== 0) {
 		throw new Error('PACK_WIDTH must be a multiple of 8');
 	}
-	const numElements = Math.ceil((input.length * inWidth) / PACK_WIDTH);
-	const packed = pack(input, inWidth, PACK_WIDTH, numElements);
+	const packed = convertBase(input, inWidth, PACK_WIDTH);
 	return poseidonHash(packed);
 }
 
-// Pads a stream of bytes and maps it to a field element
-function mapBytesToField(str: string, maxSize: number) {
+// hashes an ASCII string to a field element
+export function hashASCIIStrToField(str: string, maxSize: number) {
 	if (str.length > maxSize) {
 		throw new Error(`String ${str} is longer than ${maxSize} chars`);
 	}
@@ -63,13 +67,13 @@ function mapBytesToField(str: string, maxSize: number) {
 		.split('')
 		.map((c) => BigInt(c.charCodeAt(0)));
 
-	return mapToField(strPadded, 8);
+	return hashToField(strPadded, 8);
 }
 
 export function genAddressSeed(pin: bigint, name: string, value: string) {
 	return poseidonHash([
-		mapBytesToField(name, MAX_KEY_CLAIM_NAME_LENGTH),
-		mapBytesToField(value, MAX_KEY_CLAIM_VALUE_LENGTH),
+		hashASCIIStrToField(name, MAX_KEY_CLAIM_NAME_LENGTH),
+		hashASCIIStrToField(value, MAX_KEY_CLAIM_VALUE_LENGTH),
 		poseidonHash([pin]),
 	]);
 }

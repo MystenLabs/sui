@@ -90,6 +90,9 @@ importers:
       '@hookform/resolvers':
         specifier: ^3.1.1
         version: 3.1.1(react-hook-form@7.45.2)
+      '@mysten/dapp-kit':
+        specifier: workspace:*
+        version: link:../../sdk/dapp-kit
       '@mysten/kiosk':
         specifier: workspace:*
         version: link:../../sdk/kiosk
@@ -178,6 +181,9 @@ importers:
       '@mysten/core':
         specifier: workspace:*
         version: link:../core
+      '@mysten/dapp-kit':
+        specifier: workspace:*
+        version: link:../../sdk/dapp-kit
       '@mysten/icons':
         specifier: workspace:*
         version: link:../icons
@@ -546,6 +552,9 @@ importers:
       '@mysten/core':
         specifier: workspace:*
         version: link:../core
+      '@mysten/dapp-kit':
+        specifier: workspace:*
+        version: link:../../sdk/dapp-kit
       '@mysten/icons':
         specifier: workspace:*
         version: link:../icons
