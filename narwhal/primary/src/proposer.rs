@@ -749,7 +749,7 @@ impl Proposer {
         // Try to correct the proposal timeout based on the last proposed round's avg proposed header time.
         // If we detect that our remaining timeout value is greater than the calculated proposal remaining time,
         // then we reset to the one calculated from the proposal to align with the others.
-        let last_round_start_ts: TimestampMs = Self::calculate_round_start_avg(parents);
+        let last_round_start_ts: TimestampMs = Self::calculate_round_start_median(parents);
         let remaining_until_timeout: Duration = min_delay_timer_deadline.sub(Instant::now());
 
         let remaining_until_time_based_on_network = self.min_header_delay.saturating_sub(
