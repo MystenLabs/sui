@@ -22,7 +22,7 @@ use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
 
 const GAS_URL: &str = "http://127.0.0.1:9123/gas";
 const SALT_SERVER_URL: &str = "http://salt.api-devnet.mystenlabs.com/get_salt";
-const PROVER_SERVER_URL: &str = "http://185.209.177.123:8000/zkp";
+const PROVER_SERVER_URL: &str = "http://185.209.177.123:8000/test/zkp";
 
 /// Read a line from stdin, parse the id_token field and return.
 pub fn read_cli_line() -> Result<String, anyhow::Error> {
@@ -60,7 +60,6 @@ pub(crate) async fn request_tokens_from_faucet(address: SuiAddress) -> Result<()
 pub async fn get_salt(jwt_token: &str) -> Result<String, anyhow::Error> {
     let client = Client::new();
     let body = json!({ "token": jwt_token });
-    println!("body: {:?}", body);
     let response = client
         .post(SALT_SERVER_URL)
         .json(&body)

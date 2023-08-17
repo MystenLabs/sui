@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::cell::RefCell;
+use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use sui_protocol_config_macros::{ProtocolConfigAccessors, ProtocolConfigFeatureFlagsGetters};
 use tracing::{info, warn};
@@ -255,7 +256,7 @@ struct FeatureFlags {
 
     // A list of supported OIDC providers that can be used for zklogin.
     #[serde(skip_serializing_if = "is_empty")]
-    zklogin_supported_providers: String,
+    zklogin_supported_providers: BTreeSet<String>,
 
     // Whether to use the secure ZkLogin Groth16 verifying key generated from the ceremony.
     #[serde(skip_serializing_if = "is_false")]
@@ -265,7 +266,7 @@ struct FeatureFlags {
 fn is_false(b: &bool) -> bool {
     !b
 }
-fn is_empty(b: &str) -> bool {
+fn is_empty(b: &BTreeSet<String>) -> bool {
     b.is_empty()
 }
 /// Ordering mechanism for transactions in one Narwhal consensus output.
@@ -829,7 +830,7 @@ impl ProtocolConfig {
         self.feature_flags.zklogin_auth
     }
 
-    pub fn zklogin_supported_providers(&self) -> &str {
+    pub fn zklogin_supported_providers(&self) -> &BTreeSet<String> {
         &self.feature_flags.zklogin_supported_providers
     }
 
@@ -1386,8 +1387,11 @@ impl ProtocolConfig {
                 let mut cfg = Self::get_for_version_impl(version - 1, chain);
 
                 if chain != Chain::Mainnet {
-                    cfg.feature_flags.zklogin_supported_providers =
-                        "Google,Facebook,Twitch".to_string();
+                    cfg.feature_flags.zklogin_supported_providers = BTreeSet::from([
+                        "Google".to_string(),
+                        "Facebook".to_string(),
+                        "Twitch".to_string(),
+                    ]);
                     cfg.feature_flags.zklogin_use_secure_vk = false;
                 }
                 cfg
@@ -1456,8 +1460,11 @@ impl ProtocolConfig {
     pub fn set_consensus_bad_nodes_stake_threshold(&mut self, val: u64) {
         self.consensus_bad_nodes_stake_threshold = Some(val);
     }
-    pub fn set_zklogin_supported_providers(&mut self, list: String) {
+    pub fn set_zklogin_supported_providers(&mut self, list: BTreeSet<String>) {
         self.feature_flags.zklogin_supported_providers = list
+    }
+    pub fn set_zklogin_use_secure_vk(&mut self, val: bool) {
+        self.feature_flags.zklogin_use_secure_vk = val
     }
 }
 

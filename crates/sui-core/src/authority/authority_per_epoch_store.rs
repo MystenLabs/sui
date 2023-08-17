@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto_zkp::bn254::zk_login::JWK;
+use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::future::{join_all, select, Either};
 use futures::FutureExt;
@@ -310,8 +310,8 @@ pub struct AuthorityEpochTables {
     pub(crate) executed_transactions_to_checkpoint:
         DBMap<TransactionDigest, CheckpointSequenceNumber>,
 
-    /// Map from (kid, iss) to the fetched JWK for that key.
-    oauth_provider_jwk: DBMap<(String, String), JWK>,
+    /// Map from JwkId (iss, kid) to the fetched JWK for that key.
+    oauth_provider_jwk: DBMap<JwkId, JWK>,
 }
 
 fn signed_transactions_table_default_config() -> DBOptions {
@@ -393,7 +393,7 @@ impl AuthorityEpochTables {
         Ok(self.last_consensus_index.get(&LAST_CONSENSUS_INDEX_ADDR)?)
     }
 
-    fn load_oauth_provider_jwk(&self) -> SuiResult<HashMap<(String, String), Arc<JWK>>> {
+    fn load_oauth_provider_jwk(&self) -> SuiResult<HashMap<JwkId, Arc<JWK>>> {
         Ok(self
             .oauth_provider_jwk
             .unbounded_iter()
@@ -467,8 +467,8 @@ impl AuthorityPerEpochStore {
 
         let signature_verifier =
             SignatureVerifier::new(committee.clone(), signature_verifier_metrics);
-        for ((kid, iss), v) in oauth_provider_jwk.iter() {
-            signature_verifier.insert_oauth_jwk(v, kid.to_string(), iss.to_string());
+        for (jwk_id, jwk) in oauth_provider_jwk.iter() {
+            signature_verifier.insert_oauth_jwk(jwk_id, jwk);
         }
 
         let zklogin_env = match protocol_config.zklogin_use_secure_vk() {
@@ -477,7 +477,7 @@ impl AuthorityPerEpochStore {
         };
 
         signature_verifier.set_config(
-            protocol_config.zklogin_supported_providers().to_string(),
+            protocol_config.zklogin_supported_providers().clone(),
             zklogin_env,
         );
 
@@ -2167,19 +2167,16 @@ impl AuthorityPerEpochStore {
     }
 
     // TODO: should be pub(crate) when it is inserted only from consensus
-    // todo(joyqvq): prune the old kids.
-    pub fn insert_oauth_jwk(&self, content: &JWK, iss: String, kid: String) {
-        if self
-            .signature_verifier
-            .insert_oauth_jwk(content, kid.clone(), iss.clone())
-        {
+    pub fn insert_oauth_jwk(&self, jwk_id: &JwkId, jwk: &JWK) {
+        if self.signature_verifier.insert_oauth_jwk(jwk_id, jwk) {
             self.tables
                 .oauth_provider_jwk
-                .insert(&(kid.to_string(), iss.to_string()), content)
+                .insert(jwk_id, jwk)
                 .expect("write to oauth_provider_jwk should not fail");
-            info!("Added new JWK with kid {} iss {}: {:?}", kid, iss, content);
+            // TODO: Remove old kid -> jwks.
+            info!("Added new JWK with id {:?}: {:?}", jwk_id, jwk);
         } else {
-            info!("JWK with kid {} iss {} already exists", kid, iss);
+            info!("JWK with id {:?} already exists", jwk_id);
         }
     }
 }

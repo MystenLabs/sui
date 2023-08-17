@@ -2,16 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use either::Either;
+use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::{OIDCProvider, JWK};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::pin_mut;
+use im::hashmap::HashMap as ImHashMap;
 use itertools::izip;
 use lru::LruCache;
 use mysten_metrics::monitored_scope;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use shared_crypto::intent::Intent;
-use std::collections::HashMap;
+use std::collections::BTreeSet;
 use std::hash::Hash;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -92,13 +94,12 @@ pub struct SignatureVerifier {
     certificate_cache: VerifiedDigestCache<CertificateDigest>,
     signed_data_cache: VerifiedDigestCache<SenderSignedDataDigest>,
 
-    /// Map from (kid, iss) to the fetched JWK for that key.
+    /// Map from JwkId (iss, kid) to the fetched JWK for that key.
     /// We use an immutable data structure because verification of ZKLogins may be slow, so we
     /// don't want to pass a reference to the map to the verify method, since that would lead to a
     /// lengthy critical section. Instead, we use an immutable data structure which can be cloned
     /// very cheaply.
-    // todo(joyqvq): check what to use here since im is not apache.
-    oauth_provider_jwk: RwLock<HashMap<(String, String), JWK>>,
+    oauth_provider_jwk: RwLock<ImHashMap<JwkId, JWK>>,
 
     supported_providers: RwLock<Vec<OIDCProvider>>,
     zklogin_env: RwLock<ZkLoginEnv>,
@@ -283,20 +284,20 @@ impl SignatureVerifier {
 
     /// Insert a JWK into the verifier state based on provider. Returns true if the kid of the JWK has not already
     /// been inserted.
-    pub(crate) fn insert_oauth_jwk(&self, content: &JWK, kid: String, iss: String) -> bool {
+    pub(crate) fn insert_oauth_jwk(&self, jwk_id: &JwkId, jwk: &JWK) -> bool {
         let mut oauth_provider_jwk = self.oauth_provider_jwk.write();
-        if oauth_provider_jwk.contains_key(&(kid.clone(), iss.clone())) {
+        if oauth_provider_jwk.contains_key(jwk_id) {
             return false;
         }
-        oauth_provider_jwk.insert((kid, iss), content.clone());
+        oauth_provider_jwk.insert(jwk_id.clone(), jwk.clone());
         true
     }
 
-    pub(crate) fn set_config(&self, providers_list: String, env: ZkLoginEnv) -> bool {
+    pub(crate) fn set_config(&self, providers_list: BTreeSet<String>, env: ZkLoginEnv) -> bool {
         let mut supported_providers = self.supported_providers.write();
         *supported_providers = providers_list
-            .split(',')
-            .map(|s| OIDCProvider::from_str(s).unwrap())
+            .into_iter()
+            .map(|s| OIDCProvider::from_str(&s).expect("Invalid zklogin provider"))
             .collect::<Vec<_>>();
         let mut zklogin_env = self.zklogin_env.write();
         *zklogin_env = env;
@@ -411,7 +412,6 @@ pub fn batch_verify_certificates(
     certs: &[CertifiedTransaction],
 ) -> Vec<SuiResult> {
     // certs.data() is assumed to be verified already by the caller.
-    // todo(joyqvq): check if this is safe to use default
     let verify_params = VerifyParams::new(Default::default(), Vec::new(), Default::default());
     match batch_verify(committee, certs, &[]) {
         Ok(_) => vec![Ok(()); certs.len()],

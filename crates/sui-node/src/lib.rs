@@ -18,6 +18,7 @@ use anemo_tower::trace::TraceLayer;
 use anyhow::anyhow;
 use anyhow::Result;
 use arc_swap::ArcSwap;
+use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::TryFutureExt;
 use mysten_common::sync::async_once_cell::AsyncOnceCell;
@@ -209,7 +210,7 @@ impl SuiNode {
                     let supported_providers = epoch_store
                         .protocol_config()
                         .zklogin_supported_providers()
-                        .split(',')
+                        .iter()
                         .map(|s| OIDCProvider::from_str(s).unwrap())
                         .collect::<Vec<_>>();
                     let fetch_and_sleep = async move {
@@ -222,8 +223,8 @@ impl SuiNode {
                                 tokio::time::sleep(Duration::from_secs(30)).await;
                             }
                             Ok(keys) => {
-                                for ((kid, iss), v) in keys {
-                                    epoch_store_.insert_oauth_jwk(&v, iss, kid);
+                                for (jwk_id, jwk) in keys {
+                                    epoch_store_.insert_oauth_jwk(&jwk_id, &jwk);
                                 }
                             }
                         }
@@ -245,9 +246,7 @@ impl SuiNode {
     }
 
     #[cfg(not(msim))]
-    async fn fetch_jwks(
-        supported_providers: &[OIDCProvider],
-    ) -> SuiResult<Vec<((String, String), JWK)>> {
+    async fn fetch_jwks(supported_providers: &[OIDCProvider]) -> SuiResult<Vec<(JwkId, JWK)>> {
         use fastcrypto_zkp::bn254::zk_login::fetch_jwks;
         let mut res = Vec::new();
         let client = reqwest::Client::new();
@@ -261,10 +260,14 @@ impl SuiNode {
     }
 
     #[cfg(msim)]
-    async fn fetch_jwks(
-        supported_providers: &[OIDCProvider],
-    ) -> SuiResult<Vec<((String, String), JWK)>> {
-        parse_jwks(sui_types::zk_login_util::DEFAULT_JWK_BYTES, provider)
+    #[allow(unused_variables)]
+    async fn fetch_jwks(supported_providers: &[OIDCProvider]) -> SuiResult<Vec<(JwkId, JWK)>> {
+        use fastcrypto_zkp::bn254::zk_login::parse_jwks;
+        parse_jwks(
+            sui_types::zk_login_util::DEFAULT_JWK_BYTES,
+            &OIDCProvider::Twitch,
+        )
+        .map_err(|_| SuiError::JWKRetrievalError)
     }
 
     pub async fn start_async(

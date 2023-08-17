@@ -7,10 +7,10 @@ use crate::{
     base_types::SuiAddress, signature::GenericSignature, zk_login_util::DEFAULT_JWK_BYTES,
 };
 use fastcrypto::traits::ToFromBytes;
-use fastcrypto_zkp::bn254::zk_login::{parse_jwks, OIDCProvider, JWK};
+use fastcrypto_zkp::bn254::zk_login::{parse_jwks, JwkId, OIDCProvider, JWK};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
+use im::hashmap::HashMap as ImHashMap;
 use shared_crypto::intent::{Intent, IntentMessage};
-use std::collections::HashMap;
 
 #[test]
 fn zklogin_authenticator_jwk() {
@@ -21,11 +21,10 @@ fn zklogin_authenticator_jwk() {
         tx.into_data().transaction_data().clone(),
     );
 
-    let parsed: HashMap<(String, String), JWK> =
-        parse_jwks(DEFAULT_JWK_BYTES, &OIDCProvider::Twitch)
-            .unwrap()
-            .into_iter()
-            .collect();
+    let parsed: ImHashMap<JwkId, JWK> = parse_jwks(DEFAULT_JWK_BYTES, &OIDCProvider::Twitch)
+        .unwrap()
+        .into_iter()
+        .collect();
 
     // Construct the required info to verify a zk login authenticator, jwks, supported providers list and env (prod/test).
     let aux_verify_data =
@@ -33,7 +32,6 @@ fn zklogin_authenticator_jwk() {
 
     let res =
         authenticator.verify_authenticator(&intent_msg, user_address, Some(0), &aux_verify_data);
-
     // Verify passes.
     assert!(res.is_ok());
 
@@ -57,10 +55,14 @@ fn zklogin_authenticator_jwk() {
     assert!(authenticator
         .verify_authenticator(&intent_msg, user_address, Some(11), &aux_verify_data)
         .is_err());
-    let parsed: HashMap<(String, String), JWK> = parsed
+    let parsed: ImHashMap<JwkId, JWK> = parsed
         .into_iter()
-        .enumerate()
-        .map(|(i, ((_, _), v))| ((format!("nosuchkey_{}", i), "".to_string()), v))
+        .map(|(jwk_id, v)| {
+            (
+                JwkId::new(format!("nosuchkey_{}", jwk_id.iss), jwk_id.kid),
+                v,
+            )
+        })
         .collect();
 
     // Correct kid can no longer be found fails to verify.
