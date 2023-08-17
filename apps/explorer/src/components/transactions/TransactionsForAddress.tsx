@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient } from '@mysten/core';
+import { useSuiClient } from '@mysten/dapp-kit';
 import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 import { LoadingIndicator } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -17,7 +17,7 @@ interface Props {
 }
 
 export function TransactionsForAddress({ address, type }: Props) {
-	const rpc = useRpcClient();
+	const client = useSuiClient();
 
 	const { data, isLoading, isError } = useQuery({
 		queryKey: ['transactions-for-address', address, type],
@@ -29,7 +29,7 @@ export function TransactionsForAddress({ address, type }: Props) {
 
 			const results = await Promise.all(
 				filters.map((filter) =>
-					rpc.queryTransactionBlocks({
+					client.queryTransactionBlocks({
 						filter,
 						order: 'descending',
 						limit: 100,

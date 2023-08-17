@@ -4,7 +4,7 @@
 import '@fontsource-variable/inter';
 import '@fontsource-variable/red-hat-mono';
 import { GrowthBookProvider } from '@growthbook/growthbook-react';
-import { RpcClientContext } from '@mysten/core';
+import { SuiClientProvider } from '@mysten/dapp-kit';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { Fragment, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -74,11 +74,11 @@ function AppWrapper() {
 								},
 							}}
 						>
-							<RpcClientContext.Provider value={api.instance.fullNode}>
+							<SuiClientProvider networks={{ [api.apiEnv]: api.instance.fullNode }}>
 								<ErrorBoundary>
 									<App />
 								</ErrorBoundary>
-							</RpcClientContext.Provider>
+							</SuiClientProvider>
 						</PersistQueryClientProvider>
 					</Fragment>
 				</SuiLedgerClientProvider>

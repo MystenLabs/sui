@@ -39,7 +39,7 @@ impl ScalarType for SuiAddress {
     }
 
     fn to_value(&self) -> Value {
-        Value::String(hex::encode(self.0))
+        Value::String(format!("0x{}", hex::encode(self.0)))
     }
 }
 

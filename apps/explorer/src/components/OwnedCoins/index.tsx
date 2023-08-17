@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetAllBalances } from '@mysten/core';
+import { useAllBalances } from '@mysten/dapp-kit';
 import { Info16 } from '@mysten/icons';
-import { type CoinBalance } from '@mysten/sui.js';
 import { Coin } from '@mysten/sui.js';
+import { type CoinBalance } from '@mysten/sui.js/client';
+import { normalizeSuiAddress } from '@mysten/sui.js/utils';
 import { Heading, Text, LoadingIndicator, RadioGroup, RadioGroupItem } from '@mysten/ui';
 import { useMemo, useState } from 'react';
 
@@ -26,7 +27,7 @@ export function OwnedCoins({ id }: { id: string }) {
 	const [currentSlice, setCurrentSlice] = useState(1);
 	const [limit, setLimit] = useState(20);
 	const [filterValue, setFilterValue] = useState(COIN_FILTERS.RECOGNIZED);
-	const { isLoading, data, isError } = useGetAllBalances(id);
+	const { isLoading, data, isError } = useAllBalances({ owner: normalizeSuiAddress(id) });
 	const recognizedPackages = useRecognizedPackages();
 
 	const balances: Record<COIN_FILTERS, CoinBalanceVerified[]> = useMemo(() => {

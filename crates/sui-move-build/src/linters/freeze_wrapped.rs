@@ -20,7 +20,7 @@ use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 
 use super::{
-    LinterDiagCategory, FREEZE_FUN, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
+    base_type, LinterDiagCategory, FREEZE_FUN, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
     PUBLIC_FREEZE_FUN, SUI_PKG_NAME, TRANSFER_MOD_NAME,
 };
 
@@ -105,152 +105,55 @@ pub struct FreezeWrappedVisitor {
 }
 
 impl TypingVisitor for FreezeWrappedVisitor {
-    fn visit(
+    fn visit_exp_custom(
         &mut self,
+        exp: &T::Exp,
         env: &mut CompilationEnv,
         _program_info: &ProgramInfo,
-        program: &mut T::Program,
-    ) {
-        for (_, _, mdef) in program.modules.iter() {
-            env.add_warning_filter_scope(mdef.warning_filter.clone());
-
-            for (_, _, fdef) in mdef.functions.iter() {
-                env.add_warning_filter_scope(fdef.warning_filter.clone());
-
-                if let T::FunctionBody_::Defined(seq) = &fdef.body.value {
-                    self.visit_seq(seq, env, &program.modules);
+        program: &T::Program,
+    ) -> bool {
+        use T::UnannotatedExp_ as E;
+        if let E::ModuleCall(fun) = &exp.exp.value {
+            if FREEZE_FUNCTIONS.iter().any(|(addr, module, fname)| {
+                fun.module.value.is(*addr, *module) && &fun.name.value().as_str() == fname
+            }) {
+                let Some(bt) = base_type(&fun.type_arguments[0]) else {
+                        // not an (potentially dereferenced) N::Type_::Apply nor N::Type_::Param
+                        return true;
+                    };
+                let N::Type_::Apply(_,tname, _) = &bt.value else {
+                        // not a struct type
+                        return true;
+                    };
+                let N::TypeName_::ModuleType(mident, sname) = tname.value else {
+                        // struct with a given name not found
+                        return true;
+                    };
+                if let Some(wrapping_field_info) = self.find_wrapping_field_loc(
+                    &program.modules,
+                    mident,
+                    sname,
+                    /* outer_field_info */ None,
+                    /* field_depth  */ 0,
+                ) {
+                    add_diag(
+                        env,
+                        fun.arguments.exp.loc,
+                        sname.value(),
+                        wrapping_field_info.fname(),
+                        wrapping_field_info.ftype_loc(),
+                        wrapping_field_info.wrapped_type_loc(),
+                        wrapping_field_info.direct(),
+                    );
                 }
-
-                env.pop_warning_filter_scope();
             }
-
-            env.pop_warning_filter_scope();
+            return true;
         }
+        false
     }
 }
 
 impl FreezeWrappedVisitor {
-    fn visit_seq_item(
-        &mut self,
-        sp!(_, seq_item): &T::SequenceItem,
-        env: &mut CompilationEnv,
-        modules: &UniqueMap<E::ModuleIdent, T::ModuleDefinition>,
-    ) {
-        use T::SequenceItem_ as SI;
-        match seq_item {
-            SI::Seq(e) => self.visit_exp(e, env, modules),
-            SI::Declare(_) => (),
-            SI::Bind(_, _, e) => self.visit_exp(e, env, modules),
-        }
-    }
-
-    fn visit_exp(
-        &mut self,
-        exp: &T::Exp,
-        env: &mut CompilationEnv,
-        modules: &UniqueMap<E::ModuleIdent, T::ModuleDefinition>,
-    ) {
-        use T::UnannotatedExp_ as E;
-        let sp!(_, uexp) = &exp.exp;
-        match uexp {
-            E::ModuleCall(fun) => {
-                if FREEZE_FUNCTIONS.iter().any(|(addr, module, fname)| {
-                    fun.module.value.is(*addr, *module) && &fun.name.value().as_str() == fname
-                }) {
-                    let Some(bt) = base_type(&fun.type_arguments[0]) else {
-                        // not an (potentially dereferenced) N::Type_::Apply nor N::Type_::Param
-                        return;
-                    };
-                    let N::Type_::Apply(_,tname, _) = &bt.value else {
-                        // not a struct type
-                        return;
-                    };
-                    let N::TypeName_::ModuleType(mident, sname) = tname.value else {
-                        // struct with a given name not found
-                        return;
-                    };
-                    if let Some(wrapping_field_info) = self.find_wrapping_field_loc(
-                        modules, mident, sname, /* outer_field_info */ None,
-                        /* field_depth  */ 0,
-                    ) {
-                        add_diag(
-                            env,
-                            fun.arguments.exp.loc,
-                            sname.value(),
-                            wrapping_field_info.fname(),
-                            wrapping_field_info.ftype_loc(),
-                            wrapping_field_info.wrapped_type_loc(),
-                            wrapping_field_info.direct(),
-                        );
-                    }
-                }
-            }
-            E::Builtin(_, e) => self.visit_exp(e, env, modules),
-            E::Vector(_, _, _, e) => self.visit_exp(e, env, modules),
-            E::IfElse(e1, e2, e3) => {
-                self.visit_exp(e1, env, modules);
-                self.visit_exp(e2, env, modules);
-                self.visit_exp(e3, env, modules);
-            }
-            E::While(e1, e2) => {
-                self.visit_exp(e1, env, modules);
-                self.visit_exp(e2, env, modules);
-            }
-            E::Loop { has_break: _, body } => self.visit_exp(body, env, modules),
-            E::Block(seq) => self.visit_seq(seq, env, modules),
-            E::Assign(_, _, e) => self.visit_exp(e, env, modules),
-            E::Mutate(e1, e2) => {
-                self.visit_exp(e1, env, modules);
-                self.visit_exp(e2, env, modules);
-            }
-            E::Return(e) => self.visit_exp(e, env, modules),
-            E::Abort(e) => self.visit_exp(e, env, modules),
-            E::Dereference(e) => self.visit_exp(e, env, modules),
-            E::UnaryExp(_, e) => self.visit_exp(e, env, modules),
-            E::BinopExp(e1, _, _, e2) => {
-                self.visit_exp(e1, env, modules);
-                self.visit_exp(e2, env, modules);
-            }
-            E::Pack(_, _, _, fields) => fields
-                .iter()
-                .for_each(|(_, _, (_, (_, e)))| self.visit_exp(e, env, modules)),
-            E::ExpList(list) => {
-                for l in list {
-                    match l {
-                        T::ExpListItem::Single(e, _) => self.visit_exp(e, env, modules),
-                        T::ExpListItem::Splat(_, e, _) => self.visit_exp(e, env, modules),
-                    }
-                }
-            }
-            E::Borrow(_, e, _) => self.visit_exp(e, env, modules),
-            E::TempBorrow(_, e) => self.visit_exp(e, env, modules),
-            E::Cast(e, _) => self.visit_exp(e, env, modules),
-            E::Annotate(e, _) => self.visit_exp(e, env, modules),
-            E::Unit { .. }
-            | E::Value(_)
-            | E::Move { .. }
-            | E::Copy { .. }
-            | E::Use(_)
-            | E::Constant(..)
-            | E::Break
-            | E::Continue
-            | E::BorrowLocal(..)
-            | E::Spec(..)
-            | E::UnresolvedError => (),
-        }
-    }
-
-    fn visit_seq(
-        &mut self,
-        seq: &T::Sequence,
-        env: &mut CompilationEnv,
-        modules: &UniqueMap<E::ModuleIdent, T::ModuleDefinition>,
-    ) {
-        for s in seq {
-            self.visit_seq_item(s, env, modules);
-        }
-    }
-
     fn struct_fields<'a>(
         &mut self,
         sname: &P::StructName,
@@ -455,13 +358,4 @@ fn add_diag(
         d.add_secondary_label((wrapped_tloc, "Indirectly wrapped object is of this type"));
     }
     env.add_diag(d);
-}
-
-fn base_type(t: &N::Type) -> Option<&N::Type> {
-    use N::Type_ as T;
-    match &t.value {
-        T::Ref(_, inner_t) => base_type(inner_t),
-        T::Apply(_, _, _) | T::Param(_) => Some(t),
-        T::Unit | T::Var(_) | T::Anything | T::UnresolvedError => None,
-    }
 }

@@ -11,18 +11,27 @@ type NetworkConfigs<T extends NetworkConfig = NetworkConfig> = Record<string, T>
 export interface SuiClientProviderContext {
 	client: SuiClient;
 	networks: NetworkConfigs;
-	selectedNetwork: string;
+	network: string;
 	selectNetwork: (network: string) => void;
 }
 
 export const SuiClientContext = createContext<SuiClientProviderContext | null>(null);
 
-export interface SuiClientProviderProps<T extends NetworkConfigs> {
-	networks?: T;
+export type SuiClientProviderProps<T extends NetworkConfigs> = {
 	createClient?: (name: keyof T, config: T[keyof T]) => SuiClient;
-	defaultNetwork?: keyof T & string;
 	children: React.ReactNode;
-}
+	networks?: T;
+	onNetworkChange?: (network: keyof T & string) => void;
+} & (
+	| {
+			defaultNetwork?: keyof T & string;
+			network?: never;
+	  }
+	| {
+			defaultNetwork?: never;
+			network?: keyof T & string;
+	  }
+);
 
 const DEFAULT_NETWORKS = {
 	localnet: { url: getFullnodeUrl('localnet') },
@@ -40,31 +49,39 @@ const DEFAULT_CREATE_CLIENT = function createClient(
 };
 
 export function SuiClientProvider<T extends NetworkConfigs>(props: SuiClientProviderProps<T>) {
+	const { onNetworkChange, network, children } = props;
 	const networks = (props.networks ?? DEFAULT_NETWORKS) as T;
 	const createClient =
 		(props.createClient as typeof DEFAULT_CREATE_CLIENT) ?? DEFAULT_CREATE_CLIENT;
 
 	const [selectedNetwork, setSelectedNetwork] = useState<keyof T & string>(
-		props.defaultNetwork ?? (Object.keys(networks)[0] as keyof T & string),
+		props.network ?? props.defaultNetwork ?? (Object.keys(networks)[0] as keyof T & string),
 	);
 
-	const [client, setClient] = useState<SuiClient>(() => {
-		return createClient(selectedNetwork, networks[selectedNetwork]);
-	});
+	const currentNetwork = props.network ?? selectedNetwork;
+
+	const client = useMemo(() => {
+		return createClient(currentNetwork, networks[currentNetwork]);
+	}, [createClient, currentNetwork, networks]);
 
 	const ctx = useMemo((): SuiClientProviderContext => {
 		return {
 			client,
 			networks,
-			selectedNetwork,
-			selectNetwork: (network) => {
-				if (network !== selectedNetwork) {
-					setSelectedNetwork(network);
-					setClient(createClient(network, networks[network]));
+			network: currentNetwork,
+			selectNetwork: (newNetwork) => {
+				if (currentNetwork === newNetwork) {
+					return;
 				}
+
+				if (!network && newNetwork !== selectedNetwork) {
+					setSelectedNetwork(newNetwork);
+				}
+
+				onNetworkChange?.(newNetwork);
 			},
 		};
-	}, [client, setClient, createClient, selectedNetwork, networks]);
+	}, [client, networks, selectedNetwork, currentNetwork, network, onNetworkChange]);
 
-	return <SuiClientContext.Provider value={ctx}>{props.children}</SuiClientContext.Provider>;
+	return <SuiClientContext.Provider value={ctx}>{children}</SuiClientContext.Provider>;
 }

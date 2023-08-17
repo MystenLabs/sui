@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
-import { useCoinMetadata, useGetSystemState, useGetCoinBalance } from '@mysten/core';
+import { useCoinMetadata } from '@mysten/core';
+import { useBalance, useLatestSuiSystemState } from '@mysten/dapp-kit';
 import { ArrowLeft16 } from '@mysten/icons';
 import { MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import * as Sentry from '@sentry/react';
@@ -52,11 +53,9 @@ function StakingCard() {
 	const activeAccount = useActiveAccount();
 	const accountAddress = activeAccount?.address;
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
-	const { data: suiBalance, isLoading: loadingSuiBalances } = useGetCoinBalance(
-		SUI_TYPE_ARG,
-		accountAddress,
-		refetchInterval,
-		staleTime,
+	const { data: suiBalance, isLoading: loadingSuiBalances } = useBalance(
+		{ coinType: SUI_TYPE_ARG, owner: accountAddress! },
+		{ refetchInterval, staleTime, enabled: !!accountAddress },
 	);
 	const coinBalance = BigInt(suiBalance?.totalBalance || 0);
 	const [searchParams] = useSearchParams();
@@ -68,7 +67,7 @@ function StakingCard() {
 		FEATURES.WALLET_EFFECTS_ONLY_SHARED_TRANSACTION as string,
 	);
 
-	const { data: system, isLoading: validatorsIsloading } = useGetSystemState();
+	const { data: system, isLoading: validatorsIsloading } = useLatestSuiSystemState();
 
 	const totalTokenBalance = useMemo(() => {
 		if (!allDelegation) return 0n;
