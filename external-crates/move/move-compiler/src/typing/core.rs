@@ -88,6 +88,12 @@ pub struct Context<'env> {
 
     /// collects all called functions in the current module
     pub called_fns: BTreeSet<Symbol>,
+
+    /// collects all friends that should be added over the course of 'public(package)' calls
+    /// structured as (defining module, new friend, location) where `new friend` is usually the
+    /// context's current module. Note there may be more than one location in practice, but
+    /// tracking a single one is sufficient for error reporting.
+    pub new_friends: BTreeMap<(ModuleIdent, ModuleIdent), Loc>,
 }
 
 macro_rules! program_info {
@@ -187,17 +193,6 @@ impl<const AFTER_TYPING: bool> ProgramInfo<AFTER_TYPING> {
         let constants = &self.module(m).constants;
         constants.get(n).expect("ICE should have failed in naming")
     }
-
-    // `loc` indicates the location that caused the add to occur
-    pub fn add_friend(&mut self, m: &ModuleIdent, friend: &ModuleIdent, loc: Loc) {
-        let module = self.0.get_mut(m).expect("ICE should have failed in naming");
-        let friends = &mut module.friends;
-        if !friends.contains_key(friend) {
-            friends
-                .add(*friend, loc)
-                .expect("ICE couldn't update friends list during typing");
-        }
-    }
 }
 
 impl<'env> Context<'env> {
@@ -219,6 +214,7 @@ impl<'env> Context<'env> {
             modules,
             env,
             called_fns: BTreeSet::new(),
+            new_friends: BTreeMap::new(),
         }
     }
 
@@ -322,20 +318,20 @@ impl<'env> Context<'env> {
     }
 
     // `loc` indicates the location that caused the add to occur
-    fn add_current_module_as_friend(&mut self, m: &ModuleIdent, loc: Loc) {
+    fn record_current_module_as_friend(&mut self, m: &ModuleIdent, loc: Loc) {
         match &self.current_module {
-            None => {}
-            Some(current_mident) => {
-                self.modules.add_friend(m, current_mident, loc);
+            Some(current_mident) if m != current_mident => {
+                self.new_friends.insert((*m, *current_mident), loc);
             }
+            _ => {}
         }
     }
 
-    fn current_module_shares_package(&self, m: &ModuleIdent) -> bool {
+    fn current_module_shares_package_and_address(&self, m: &ModuleIdent) -> bool {
         match &self.current_module {
             None => false,
             Some(current_mident) => {
-                m.value.has_same_address(current_mident.value)
+                m.value.address == current_mident.value.address
                     && self.module_info(m).package == self.module_info(current_mident).package
             }
         }
@@ -879,15 +875,23 @@ pub fn make_function_type(
             ));
         }
         Visibility::Package(loc)
-            if in_current_module || context.current_module_shares_package(m) =>
+            if in_current_module || context.current_module_shares_package_and_address(m) =>
         {
-            context.add_current_module_as_friend(m, loc);
+            context.record_current_module_as_friend(m, loc);
         }
         Visibility::Package(vis_loc) => {
-            // FIXME(cswords): add the package's name here.
             let internal_msg = format!(
-                "This function can only be called from the same package as module '{}'",
-                m
+                "This function can only be called from the same address and package as module '{}' (package: '{}'). \
+                This call is at address '{}', package '{}'",
+                m,
+                context.module_info(&m).package.map(|pkg_name| format!("{}", pkg_name)).unwrap_or("<no package>".to_string()),
+                &context
+                    .current_module.map(|cur_module| cur_module.value.address.to_string()).unwrap_or("<no_addr>".to_string()),
+                &context
+                    .current_module
+                    .and_then(|cur_module| context.module_info(&cur_module).package)
+                    .map(|pkg_name| format!("{}", pkg_name))
+                    .unwrap_or("<no package>".to_string())
             );
             context.env.add_diag(diag!(
                 TypeSafety::Visibility,

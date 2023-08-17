@@ -472,7 +472,7 @@ fn module_(
         }
     }
 
-    check_visibility_modifiers(context, &functions, friends.len() > 0, name, package_name);
+    check_visibility_modifiers(context, &functions, &friends, name, package_name);
 
     context.set_to_outer_scope(old_aliases);
 
@@ -498,75 +498,104 @@ fn module_(
 fn check_visibility_modifiers(
     context: &mut Context,
     functions: &UniqueMap<FunctionName, E::Function>,
-    has_friends: bool,
+    friends: &UniqueMap<ModuleIdent, E::Friend>,
     module_name: ModuleName,
     package_name: Option<Symbol>,
 ) {
-    let (public_friend_usage, public_package_usage) = functions.iter().fold(
-        (false, false),
-        |(public_friend_usage, public_package_usage), (_, _, function)| match function.visibility {
-            E::Visibility::Friend(_) => (true, public_package_usage),
-            E::Visibility::Internal => (public_friend_usage, public_package_usage),
+    let mut friend_definition = None;
+    for (_, _, friend) in friends {
+        friend_definition = Some(friend.loc);
+    }
+    let mut public_friend_usage = None;
+    let mut public_package_usage = None;
+    for (_, _, function) in functions {
+        match function.visibility {
+            E::Visibility::Friend(loc) => {
+                public_friend_usage = Some(loc);
+            }
             E::Visibility::Package(loc) => {
                 context
                     .env
                     .check_feature(&FeatureGate::PublicPackage, package_name, loc);
-                (public_friend_usage, true)
+                public_package_usage = Some(loc);
             }
-            E::Visibility::Public(_) => (public_friend_usage, public_package_usage),
-        },
-    );
-    match (has_friends, public_friend_usage, public_package_usage) {
-        (false, false, false) => {}
-        (false, false, true) => {}
-        (true, _, false) => {}
-        (_, true, false) => {}
-        (true, _, true) => {
-            // ERROR: can't have friend definitions with public(package) exports.
-            for (_, _, function) in functions {
-                match function.visibility {
-                    E::Visibility::Package(loc) => {
-                        let msg = format!(
-                            "Invalid visibility modifier 'public(package)'. \
-                            Module '{}' defines friends, which can't be used with this visibility.",
-                            module_name
-                        );
-                        context
-                            .env
-                            .add_diag(diag!(Declarations::InvalidVisibilityModifier, (loc, msg)));
-                    }
-                    _ => {}
-                }
-            }
+            _ => {}
         }
-        (_, true, true) => {
-            // ERROR: can't have friend definitions with public(package) exports.
-            for (_, _, function) in functions {
-                match function.visibility {
-                    E::Visibility::Package(loc) => {
-                        let msg = format!(
-                            "Invalid visibility modifier 'public(package)'. \
-                            Module '{}' defines functions with 'package(friend)' visibility, which \
-                            can't be used in the same module as this visibility.",
-                            module_name
-                        );
-                        context
-                            .env
-                            .add_diag(diag!(Declarations::InvalidVisibilityModifier, (loc, msg)));
-                    }
-                    E::Visibility::Friend(loc) => {
-                        let msg = format!(
-                            "Invalid visibility modifier 'public(friend)'. \
-                            Module '{}' defines functions with 'package(package)' visibility, which \
-                            can't be used in the same module as this visibility.",
-                            module_name
-                        );
-                        context
-                            .env
-                            .add_diag(diag!(Declarations::InvalidVisibilityModifier, (loc, msg)));
-                    }
-                    _ => {}
+    }
+
+    // Emit any errors.
+    if public_package_usage.is_some()
+        && (public_friend_usage.is_some() || friend_definition.is_some())
+    {
+        let friend_error_msg = format!(
+            "Incompatible friend definition in module '{}' that uses '{}'",
+            module_name,
+            E::Visibility::PACKAGE
+        );
+        let package_definition_msg = format!("'{}' visibility used here", E::Visibility::PACKAGE);
+        for (_, _, friend) in friends {
+            context.env.add_diag(diag!(
+                Declarations::InvalidVisibilityModifier,
+                (friend.loc, friend_error_msg.clone()),
+                (
+                    public_package_usage.unwrap(),
+                    package_definition_msg.clone()
+                )
+            ));
+        }
+        let package_error_msg = format!(
+            "Incompatible visibility '{}' in module '{}'",
+            E::Visibility::PACKAGE,
+            module_name
+        );
+        let friend_error_msg = format!(
+            "Incompatible visibility '{}' in module '{}'",
+            E::Visibility::FRIEND,
+            module_name
+        );
+        for (_, _, function) in functions {
+            match function.visibility {
+                E::Visibility::Friend(loc) => {
+                    context.env.add_diag(diag!(
+                        Declarations::InvalidVisibilityModifier,
+                        (loc, friend_error_msg.clone()),
+                        (
+                            public_package_usage.unwrap(),
+                            package_definition_msg.clone()
+                        )
+                    ));
                 }
+                E::Visibility::Package(loc)
+                    if friend_definition.is_some() && public_friend_usage.is_some() =>
+                {
+                    context.env.add_diag(diag!(
+                        Declarations::InvalidVisibilityModifier,
+                        (loc, package_error_msg.clone()),
+                        (friend_definition.unwrap(), "Friend module defined here"),
+                        (
+                            public_friend_usage.unwrap(),
+                            &format!("'{}' visibility used here", E::Visibility::FRIEND)
+                        )
+                    ));
+                }
+                E::Visibility::Package(loc) if friend_definition.is_some() => {
+                    context.env.add_diag(diag!(
+                        Declarations::InvalidVisibilityModifier,
+                        (loc, package_error_msg.clone()),
+                        (friend_definition.unwrap(), "Friend module defined here")
+                    ));
+                }
+                E::Visibility::Package(loc) => {
+                    context.env.add_diag(diag!(
+                        Declarations::InvalidVisibilityModifier,
+                        (loc, package_error_msg.clone()),
+                        (
+                            public_friend_usage.unwrap(),
+                            &format!("'{}' visibility used here", E::Visibility::FRIEND)
+                        )
+                    ));
+                }
+                _ => {}
             }
         }
     }

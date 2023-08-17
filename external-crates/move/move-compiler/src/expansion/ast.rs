@@ -88,7 +88,9 @@ pub type Attributes = UniqueMap<AttributeName, Attribute>;
 #[derive(Debug, Clone)]
 pub struct Script {
     pub warning_filter: WarningFilters,
-    // package name metadata from compiler arguments, used for determining package-public vis.
+    // package name metadata from compiler arguments.
+    // It is used primarily for retrieving the associated `PackageConfig`,
+    // but it is also used in determining public(package) visibility.
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
     pub loc: Loc,
@@ -613,10 +615,6 @@ impl ModuleIdent_ {
             module: m,
         } = self;
         a.is(address) && m == module.as_ref()
-    }
-
-    pub fn has_same_address(&self, other: ModuleIdent_) -> bool {
-        self.address == other.address
     }
 }
 

@@ -42,14 +42,36 @@ pub enum Flavor {
 
 pub fn check_feature(env: &mut CompilationEnv, edition: Edition, feature: &FeatureGate, loc: Loc) {
     if !edition.supports(&feature) {
-        env.add_diag(diag!(
+        let valid_editions = valid_editions_for_feature(&feature)
+            .into_iter()
+            .map(|e| e.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut diag = diag!(
             Editions::FeatureTooNew,
             (
                 loc,
-                format!("{feature} not supported by current edition '{edition}'")
+                format!(
+                    "{feature} not supported by current edition '{edition}', \
+                    only '{valid_editions}'"
+                )
             )
-        ))
+        );
+        diag.add_note(
+            "You can update the edition in the 'Move.toml', \
+            or via command line flag if invoking the compiler directly.",
+        );
+        env.add_diag(diag);
     }
+}
+
+pub fn valid_editions_for_feature(feature: &FeatureGate) -> Vec<Edition> {
+    Edition::ALL
+        .iter()
+        .into_iter()
+        .filter(|e| e.supports(feature))
+        .cloned()
+        .collect()
 }
 
 //**************************************************************************************************
@@ -92,9 +114,9 @@ impl Edition {
         match *self {
             Self::LEGACY => BTreeSet::new(),
             Self::E2024_ALPHA => {
-                let prev = self.prev().unwrap().features();
-                let output = BTreeSet::from([FeatureGate::PublicPackage]);
-                BTreeSet::from_iter(output.union(&prev).cloned())
+                let mut features = self.prev().unwrap().features();
+                features.extend([FeatureGate::PublicPackage]);
+                features
             }
             _ => self.unknown_edition_panic(),
         }

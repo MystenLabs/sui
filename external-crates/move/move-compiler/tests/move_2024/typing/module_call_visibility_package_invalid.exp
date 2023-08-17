@@ -1,54 +1,54 @@
 error[E04001]: restricted visibility
-   ┌─ tests/move_2024/typing/module_call_visibility_package_invalid.move:16:52
+   ┌─ tests/move_2024/typing/module_call_visibility_package_invalid.move:10:52
    │
- 5 │     public(package) fun f_pkg_public() {}
-   │     --------------- This function can only be called from the same package as module '0x2::X'
+ 3 │     public(package) fun f_pkg_public() {}
+   │     --------------- This function can only be called from the same address and package as module '0x42::mod_0' (package: '<no package>'). This call is at address '0x54', package '<no package>'
    ·
-16 │     public(package) fun f_package_call_package() { X::f_pkg_public() }
-   │                                                    ^^^^^^^^^^^^^^^^^ Invalid call to '0x2::X::f_pkg_public'
+10 │     public(package) fun f_package_call_package() { mod_0::f_pkg_public() }
+   │                                                    ^^^^^^^^^^^^^^^^^^^^^ Invalid call to '0x42::mod_0::f_pkg_public'
 
 error[E04001]: restricted visibility
-   ┌─ tests/move_2024/typing/module_call_visibility_package_invalid.move:17:42
+   ┌─ tests/move_2024/typing/module_call_visibility_package_invalid.move:11:42
    │
- 5 │     public(package) fun f_pkg_public() {}
-   │     --------------- This function can only be called from the same package as module '0x2::X'
+ 3 │     public(package) fun f_pkg_public() {}
+   │     --------------- This function can only be called from the same address and package as module '0x42::mod_0' (package: '<no package>'). This call is at address '0x54', package '<no package>'
    ·
-17 │     public fun f_public_call_package() { X::f_pkg_public() }
-   │                                          ^^^^^^^^^^^^^^^^^ Invalid call to '0x2::X::f_pkg_public'
+11 │     public fun f_public_call_package() { mod_0::f_pkg_public() }
+   │                                          ^^^^^^^^^^^^^^^^^^^^^ Invalid call to '0x42::mod_0::f_pkg_public'
 
 error[E04001]: restricted visibility
-   ┌─ tests/move_2024/typing/module_call_visibility_package_invalid.move:18:36
+   ┌─ tests/move_2024/typing/module_call_visibility_package_invalid.move:12:36
    │
- 5 │     public(package) fun f_pkg_public() {}
-   │     --------------- This function can only be called from the same package as module '0x2::X'
+ 3 │     public(package) fun f_pkg_public() {}
+   │     --------------- This function can only be called from the same address and package as module '0x42::mod_0' (package: '<no package>'). This call is at address '0x54', package '<no package>'
    ·
-18 │     fun f_private_call_package() { X::f_pkg_public() }
-   │                                    ^^^^^^^^^^^^^^^^^ Invalid call to '0x2::X::f_pkg_public'
+12 │     fun f_private_call_package() { mod_0::f_pkg_public() }
+   │                                    ^^^^^^^^^^^^^^^^^^^^^ Invalid call to '0x42::mod_0::f_pkg_public'
 
 error[E04001]: restricted visibility
-   ┌─ tests/move_2024/typing/module_call_visibility_package_invalid.move:25:50
+   ┌─ tests/move_2024/typing/module_call_visibility_package_invalid.move:19:50
    │
- 5 │     public(package) fun f_pkg_public() {}
-   │     --------------- This function can only be called from the same package as module '0x2::X'
+ 3 │     public(package) fun f_pkg_public() {}
+   │     --------------- This function can only be called from the same address and package as module '0x42::mod_0' (package: '<no package>'). This call is at address '0x54', package '<no package>'
    ·
-25 │     public(friend) fun f_friend_call_package() { X::f_pkg_public() }
-   │                                                  ^^^^^^^^^^^^^^^^^ Invalid call to '0x2::X::f_pkg_public'
+19 │     public(friend) fun f_friend_call_package() { mod_0::f_pkg_public() }
+   │                                                  ^^^^^^^^^^^^^^^^^^^^^ Invalid call to '0x42::mod_0::f_pkg_public'
 
 error[E04001]: restricted visibility
-   ┌─ tests/move_2024/typing/module_call_visibility_package_invalid.move:26:42
+   ┌─ tests/move_2024/typing/module_call_visibility_package_invalid.move:20:42
    │
- 5 │     public(package) fun f_pkg_public() {}
-   │     --------------- This function can only be called from the same package as module '0x2::X'
+ 3 │     public(package) fun f_pkg_public() {}
+   │     --------------- This function can only be called from the same address and package as module '0x42::mod_0' (package: '<no package>'). This call is at address '0x54', package '<no package>'
    ·
-26 │     public fun f_public_call_package() { X::f_pkg_public() }
-   │                                          ^^^^^^^^^^^^^^^^^ Invalid call to '0x2::X::f_pkg_public'
+20 │     public fun f_public_call_package() { mod_0::f_pkg_public() }
+   │                                          ^^^^^^^^^^^^^^^^^^^^^ Invalid call to '0x42::mod_0::f_pkg_public'
 
 error[E04001]: restricted visibility
-   ┌─ tests/move_2024/typing/module_call_visibility_package_invalid.move:27:36
+   ┌─ tests/move_2024/typing/module_call_visibility_package_invalid.move:21:36
    │
- 5 │     public(package) fun f_pkg_public() {}
-   │     --------------- This function can only be called from the same package as module '0x2::X'
+ 3 │     public(package) fun f_pkg_public() {}
+   │     --------------- This function can only be called from the same address and package as module '0x42::mod_0' (package: '<no package>'). This call is at address '0x54', package '<no package>'
    ·
-27 │     fun f_private_call_package() { X::f_pkg_public() }
-   │                                    ^^^^^^^^^^^^^^^^^ Invalid call to '0x2::X::f_pkg_public'
+21 │     fun f_private_call_package() { mod_0::f_pkg_public() }
+   │                                    ^^^^^^^^^^^^^^^^^^^^^ Invalid call to '0x42::mod_0::f_pkg_public'
 
