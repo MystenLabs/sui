@@ -3,7 +3,7 @@
 
 use async_graphql::{connection::Connection, *};
 
-use crate::server::data_provider::DataProvider;
+use crate::server::context_ext::DataProviderContextExt;
 
 use super::{
     balance::{Balance, BalanceConnection},
@@ -59,15 +59,15 @@ impl Address {
         before: Option<String>,
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, Object>> {
-        let data_provider = ctx.data_unchecked::<Box<dyn DataProvider>>();
-        data_provider
+        ctx.data_provider()
             .fetch_owned_objs(&self.address, first, after, last, before, filter)
             .await
     }
 
     pub async fn balance(&self, ctx: &Context<'_>, type_: Option<String>) -> Result<Balance> {
-        let data_provider = ctx.data_unchecked::<Box<dyn DataProvider>>();
-        data_provider.fetch_balance(&self.address, type_).await
+        ctx.data_provider()
+            .fetch_balance(&self.address, type_)
+            .await
     }
 
     pub async fn balance_connection(

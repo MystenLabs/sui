@@ -34,25 +34,14 @@ use sui_sdk::{
 
 use crate::server::data_provider::DataProvider;
 
-pub struct JsonRpcDataProvider {
-    cl: SuiClient,
-}
-
-impl JsonRpcDataProvider {
-    pub fn new(cl: SuiClient) -> Self {
-        Self { cl }
-    }
-}
-
 #[async_trait]
-impl DataProvider for JsonRpcDataProvider {
+impl DataProvider for SuiClient {
     async fn fetch_obj(&self, address: SuiAddress, version: Option<u64>) -> Result<Option<Object>> {
         let oid: NativeObjectID = address.into_array().as_slice().try_into()?;
         let opts = SuiObjectDataOptions::full_content();
 
         let g = match version {
             Some(v) => match self
-                .cl
                 .read_api()
                 .try_get_parsed_past_object(oid, v.into(), opts)
                 .await?
@@ -61,11 +50,7 @@ impl DataProvider for JsonRpcDataProvider {
                 _ => return Ok(None),
             },
             None => {
-                let val = self
-                    .cl
-                    .read_api()
-                    .get_object_with_options(oid, opts)
-                    .await?;
+                let val = self.read_api().get_object_with_options(oid, opts).await?;
                 if val.error.is_some() || val.data.is_none() {
                     return Ok(None);
                 }
@@ -107,7 +92,6 @@ impl DataProvider for JsonRpcDataProvider {
         };
 
         let pg = self
-            .cl
             .read_api()
             .get_owned_objects(native_owner, Some(query), cursor, count)
             .await?;
@@ -140,7 +124,6 @@ impl DataProvider for JsonRpcDataProvider {
 
     async fn fetch_balance(&self, address: &SuiAddress, type_: Option<String>) -> Result<Balance> {
         let b = self
-            .cl
             .coin_read_api()
             .get_balance(address.into(), type_)
             .await?;
@@ -150,7 +133,6 @@ impl DataProvider for JsonRpcDataProvider {
     async fn fetch_tx(&self, digest: &str) -> Result<Option<TransactionBlock>> {
         let tx_digest = TransactionDigest::from_str(digest)?;
         let tx = self
-            .cl
             .read_api()
             .get_transaction_with_options(
                 tx_digest,
@@ -168,12 +150,11 @@ impl DataProvider for JsonRpcDataProvider {
     }
 
     async fn fetch_chain_id(&self) -> Result<String> {
-        Ok(self.cl.read_api().get_chain_identifier().await?)
+        Ok(self.read_api().get_chain_identifier().await?)
     }
 
     async fn fetch_protocol_config(&self, version: Option<u64>) -> Result<ProtocolConfigs> {
         let cfg = self
-            .cl
             .read_api()
             .get_protocol_config(version.map(|x| x.into()))
             .await?;
