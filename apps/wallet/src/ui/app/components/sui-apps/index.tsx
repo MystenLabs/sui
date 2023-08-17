@@ -5,22 +5,18 @@ import { useFeature } from '@growthbook/growthbook-react';
 import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
+import { AppsPageBanner } from './Banner';
 import { SuiApp, type DAppEntry } from './SuiApp';
 import { SuiAppEmpty } from './SuiAppEmpty';
 import { permissionsSelectors } from '../../redux/slices/permissions';
-import ExternalLink from '../external-link';
 import { Heading } from '_app/shared/heading';
 import { Text } from '_app/shared/text';
 import { useAppSelector } from '_hooks';
-import { ampli } from '_src/shared/analytics/ampli';
 import { FEATURES } from '_src/shared/experimentation/features';
 import { prepareLinkToCompare } from '_src/shared/utils';
 
 function AppsPlayGround() {
 	const ecosystemApps = useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value;
-	const BullsharkInterstitialEnabled = useFeature<boolean>(
-		FEATURES.BULLSHARK_QUESTS_INTERSTITIAL,
-	).value;
 	const { tagName } = useParams();
 
 	const filteredEcosystemApps = useMemo(() => {
@@ -52,19 +48,7 @@ function AppsPlayGround() {
 				</Heading>
 			</div>
 
-			{BullsharkInterstitialEnabled && (
-				<div className="font-frankfurter flex flex-col w-full border-2 border-black border-solid bg-[#99DBFB] p-3 rounded-lg items-center text-white gap-1 [-webkit-text-stroke:1px_black] mb-3">
-					<div className="text-heading6">Join bullsharks quests!</div>
-					<div className="text-heading3">5 million sui prize pool!</div>
-					<ExternalLink
-						className="appearance-none no-underline text-white bg-[#EA3389] rounded-lg p-2 [-webkit-text-stroke:1px_black] leading-none text-heading6"
-						href="https://tech.mystenlabs.com/bullshark-quest-2"
-						onClick={() => ampli.clickedBullsharkQuestsCta({ sourceFlow: 'Banner - Apps tab' })}
-					>
-						read more on the blog
-					</ExternalLink>
-				</div>
-			)}
+			<AppsPageBanner />
 
 			{filteredEcosystemApps?.length ? (
 				<div className="p-4 bg-gray-40 rounded-xl">
