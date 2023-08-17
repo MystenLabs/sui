@@ -368,7 +368,7 @@ impl CompilationEnv {
     }
 
     pub fn remove_unused_const_diag(&mut self, mod_name: &Symbol, const_name: &Symbol) {
-        let Some(unused_const_indexes) = self.unused_const_warn_ids.get(mod_name) else {
+        let Some(unused_const_indexes) = self.unused_const_warn_ids.remove(mod_name) else {
             return;
         };
         let Some(index) = unused_const_indexes.get(const_name) else {
