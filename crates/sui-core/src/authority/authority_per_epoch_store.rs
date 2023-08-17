@@ -56,7 +56,7 @@ use mysten_metrics::monitored_scope;
 use prometheus::IntCounter;
 use sui_execution::{self, Executor};
 use sui_macros::fail_point;
-use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::{
@@ -471,9 +471,9 @@ impl AuthorityPerEpochStore {
             signature_verifier.insert_oauth_jwk(v, kid.to_string(), iss.to_string());
         }
 
-        let zklogin_env = match chain_identifier.chain() {
-            Chain::Mainnet => ZkLoginEnv::Prod,
-            _ => ZkLoginEnv::Test,
+        let zklogin_env = match protocol_config.zklogin_use_secure_vk() {
+            true => ZkLoginEnv::Prod,
+            false => ZkLoginEnv::Test,
         };
 
         signature_verifier.set_config(

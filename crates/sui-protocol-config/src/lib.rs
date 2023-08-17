@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 20;
+const MAX_PROTOCOL_VERSION: u64 = 21;
 
 // Record history of protocol version allocations here:
 //
@@ -256,6 +256,10 @@ struct FeatureFlags {
     // A list of supported OIDC providers that can be used for zklogin.
     #[serde(skip_serializing_if = "is_empty")]
     zklogin_supported_providers: String,
+
+    // Whether to use the secure ZkLogin Groth16 verifying key generated from the ceremony.
+    #[serde(skip_serializing_if = "is_false")]
+    zklogin_use_secure_vk: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -829,6 +833,10 @@ impl ProtocolConfig {
         &self.feature_flags.zklogin_supported_providers
     }
 
+    pub fn zklogin_use_secure_vk(&self) -> bool {
+        self.feature_flags.zklogin_use_secure_vk
+    }
+
     pub fn consensus_transaction_ordering(&self) -> ConsensusTransactionOrdering {
         self.feature_flags.consensus_transaction_ordering
     }
@@ -1374,6 +1382,16 @@ impl ProtocolConfig {
                 cfg
             }
 
+            21 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+
+                if chain != Chain::Mainnet {
+                    cfg.feature_flags.zklogin_supported_providers =
+                        "Google,Facebook,Twitch".to_string();
+                    cfg.feature_flags.zklogin_use_secure_vk = false;
+                }
+                cfg
+            }
             // Use this template when making changes:
             //
             //     // modify an existing constant.

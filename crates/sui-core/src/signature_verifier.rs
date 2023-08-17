@@ -294,8 +294,7 @@ impl SignatureVerifier {
 
     pub(crate) fn set_config(&self, providers_list: String, env: ZkLoginEnv) -> bool {
         let mut supported_providers = self.supported_providers.write();
-        // todo(joyqvq): fix this
-        *supported_providers = "Google,Facebook,Twitch"
+        *supported_providers = providers_list
             .split(',')
             .map(|s| OIDCProvider::from_str(s).unwrap())
             .collect::<Vec<_>>();
@@ -413,8 +412,7 @@ pub fn batch_verify_certificates(
 ) -> Vec<SuiResult> {
     // certs.data() is assumed to be verified already by the caller.
     // todo(joyqvq): check if this is safe to use default
-    let verify_params =
-        VerifyParams::new(Default::default(), Vec::new(), Default::default());
+    let verify_params = VerifyParams::new(Default::default(), Vec::new(), Default::default());
     match batch_verify(committee, certs, &[]) {
         Ok(_) => vec![Ok(()); certs.len()],
 

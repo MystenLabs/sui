@@ -60,6 +60,7 @@ pub(crate) async fn request_tokens_from_faucet(address: SuiAddress) -> Result<()
 pub async fn get_salt(jwt_token: &str) -> Result<String, anyhow::Error> {
     let client = Client::new();
     let body = json!({ "token": jwt_token });
+    println!("body: {:?}", body);
     let response = client
         .post(SALT_SERVER_URL)
         .json(&body)
