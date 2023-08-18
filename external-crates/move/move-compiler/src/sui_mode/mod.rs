@@ -28,6 +28,8 @@ pub const UID_TYPE_NAME: Symbol = symbol!("UID");
 pub const ID_TYPE_NAME: Symbol = symbol!("ID");
 pub const TX_CONTEXT_MODULE_NAME: Symbol = symbol!("tx_context");
 pub const TX_CONTEXT_TYPE_NAME: Symbol = symbol!("TxContext");
+pub const SUI_MODULE_NAME: Symbol = symbol!("sui");
+pub const SUI_OTW_NAME: Symbol = symbol!("SUI");
 
 pub const SUI_SYSTEM_ADDR_NAME: Symbol = symbol!("sui_system");
 pub const SUI_SYSTEM_MODULE_NAME: Symbol = symbol!("sui_system");
@@ -67,4 +69,32 @@ pub const ENTRY_FUN_SIGNATURE_DIAG: DiagnosticInfo = custom(
     /* category */ TYPING,
     /* code */ 2,
     "invalid 'entry' function signature",
+);
+pub const INIT_FUN_DIAG: DiagnosticInfo = custom(
+    SUI_DIAG_PREFIX,
+    Severity::NonblockingError,
+    /* category */ TYPING,
+    /* code */ 3,
+    "invalid 'init' function",
+);
+pub const OTW_DECL_DIAG: DiagnosticInfo = custom(
+    SUI_DIAG_PREFIX,
+    Severity::NonblockingError,
+    /* category */ TYPING,
+    /* code */ 4,
+    "invalid one-time witness declaration",
+);
+pub const OTW_USAGE_DIAG: DiagnosticInfo = custom(
+    SUI_DIAG_PREFIX,
+    Severity::NonblockingError,
+    /* category */ TYPING,
+    /* code */ 5,
+    "invalid one-time witness usage",
+);
+pub const INIT_CALL_DIAG: DiagnosticInfo = custom(
+    SUI_DIAG_PREFIX,
+    Severity::NonblockingError,
+    /* category */ TYPING,
+    /* code */ 6,
+    "invalid 'init' call",
 );

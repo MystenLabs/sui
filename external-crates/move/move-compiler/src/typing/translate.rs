@@ -46,8 +46,8 @@ pub fn program(
     assert!(context.constraints.is_empty());
     recursive_structs::modules(context.env, &modules);
     infinite_instantiations::modules(context.env, &modules);
-    let module_info = context.modules;
     let mut prog = T::Program { modules, scripts };
+    let module_info = core::TypingProgramInfo::new(pre_compiled_lib, &prog);
     for v in &compilation_env.visitors().typing {
         let mut v = v.borrow_mut();
         v.visit(compilation_env, &module_info, &mut prog);
