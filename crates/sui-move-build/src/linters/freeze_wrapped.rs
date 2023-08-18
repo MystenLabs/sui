@@ -119,11 +119,11 @@ impl TypingVisitor for FreezeWrappedVisitor {
             }) {
                 let Some(bt) = base_type(&fun.type_arguments[0]) else {
                         // not an (potentially dereferenced) N::Type_::Apply nor N::Type_::Param
-                        return true;
+                        return false;
                     };
                 let N::Type_::Apply(_,tname, _) = &bt.value else {
                         // not a struct type
-                        return true;
+                        return false;
                     };
                 let N::TypeName_::ModuleType(mident, sname) = tname.value else {
                         // struct with a given name not found
@@ -147,8 +147,8 @@ impl TypingVisitor for FreezeWrappedVisitor {
                     );
                 }
             }
-            return true;
         }
+        // always return false to process arguments of the call
         false
     }
 }

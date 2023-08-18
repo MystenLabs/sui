@@ -4,18 +4,10 @@
 use async_graphql::{connection::Connection, *};
 
 use super::{
-    balance::{Balance, BalanceConnection},
-    coin::CoinConnection,
-    name_service::NameServiceConnection,
-    owner::Owner,
-    stake::StakeConnection,
-    sui_address::SuiAddress,
+    balance::Balance, coin::Coin, owner::Owner, stake::Stake, sui_address::SuiAddress,
     transaction_block::TransactionBlock,
 };
-use crate::{
-    server::data_provider::{fetch_balance, fetch_owned_objs, fetch_tx},
-    types::base64::Base64,
-};
+use crate::{server::context_ext::DataProviderContextExt, types::base64::Base64};
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub(crate) struct Object {
@@ -79,7 +71,7 @@ impl Object {
         ctx: &Context<'_>,
     ) -> Result<Option<TransactionBlock>> {
         if let Some(tx) = &self.previous_transaction {
-            fetch_tx(ctx.data_unchecked::<sui_sdk::SuiClient>(), tx).await
+            ctx.data_provider().fetch_tx(tx).await
         } else {
             Ok(None)
         }
@@ -108,25 +100,15 @@ impl Object {
         before: Option<String>,
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, Object>> {
-        fetch_owned_objs(
-            ctx.data_unchecked::<sui_sdk::SuiClient>(),
-            &self.address,
-            first,
-            after,
-            last,
-            before,
-            filter,
-        )
-        .await
+        ctx.data_provider()
+            .fetch_owned_objs(&self.address, first, after, last, before, filter)
+            .await
     }
 
     pub async fn balance(&self, ctx: &Context<'_>, type_: Option<String>) -> Result<Balance> {
-        fetch_balance(
-            ctx.data_unchecked::<sui_sdk::SuiClient>(),
-            &self.address,
-            type_,
-        )
-        .await
+        ctx.data_provider()
+            .fetch_balance(&self.address, type_)
+            .await
     }
 
     pub async fn balance_connection(
@@ -135,7 +117,7 @@ impl Object {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<BalanceConnection> {
+    ) -> Option<Connection<String, Balance>> {
         unimplemented!()
     }
 
@@ -146,7 +128,7 @@ impl Object {
         last: Option<u64>,
         before: Option<String>,
         type_: Option<String>,
-    ) -> Option<CoinConnection> {
+    ) -> Option<Connection<String, Coin>> {
         unimplemented!()
     }
 
@@ -156,7 +138,7 @@ impl Object {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<StakeConnection> {
+    ) -> Option<Connection<String, Stake>> {
         unimplemented!()
     }
 
@@ -170,7 +152,7 @@ impl Object {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<NameServiceConnection> {
+    ) -> Option<Connection<String, String>> {
         unimplemented!()
     }
 }
