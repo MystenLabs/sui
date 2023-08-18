@@ -62,7 +62,7 @@ const getResultsForCheckpoint = async (client: SuiClient, query: string) => {
 
 const getResultsForAddress = async (client: SuiClient, query: string, suiNSEnabled: boolean) => {
 	if (suiNSEnabled && isSuiNSName(query)) {
-		const resolved = await client.resolveNameServiceAddress({ name: query });
+		const resolved = await client.resolveNameServiceAddress({ name: query.toLowerCase() });
 		if (!resolved) return null;
 		return [
 			{
