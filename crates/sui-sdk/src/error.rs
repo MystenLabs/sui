@@ -13,15 +13,13 @@ pub type SuiRpcResult<T = ()> = Result<T, Error>;
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
-    RpcError(#[from] jsonrpsee::core::Error),
+    JsonRpcError(JsonRpcError),
     #[error(transparent)]
     BcsSerialisationError(#[from] bcs::Error),
     #[error(transparent)]
     UserInputError(#[from] UserInputError),
     #[error("Subscription error : {0}")]
     Subscription(String),
-    #[error("Encountered error when confirming tx status for {0:?}, err: {1:?}")]
-    TransactionConfirmationError(TransactionDigest, jsonrpsee::core::Error),
     #[error("Failed to confirm tx status for {0:?} within {1} seconds.")]
     FailToConfirmTransactionStatus(TransactionDigest, u64),
     #[error("Data error: {0}")]
@@ -35,10 +33,22 @@ pub enum Error {
     InsufficientFund { address: SuiAddress, amount: u128 },
 }
 
-#[derive(Debug, Clone)]
-pub struct RpcErrorObject {
-    code: ErrorCode,
-    message: String,
+#[derive(Error, Debug, Clone)]
+pub struct JsonRpcError {
+    pub code: ErrorCode,
+    pub message: String,
+    pub data: Option<serde_json::Value>,
+}
+
+impl std::fmt::Display for JsonRpcError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "code: {}, message: {}",
+            self.code.message(),
+            self.message
+        )
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -60,6 +70,16 @@ impl ErrorCode {
             ErrorCode::Custom(code) => *code,
         }
     }
+
+    pub fn message(&self) -> &str {
+        match self {
+            ErrorCode::InvalidParams => "Invalid params",
+            ErrorCode::InternalError => "Internal error",
+            ErrorCode::TransientError => "Transient error",
+            ErrorCode::TransactionExecutionClientError => "Transaction execution client error",
+            ErrorCode::Custom(_) => "Custom error",
+        }
+    }
 }
 
 impl From<i32> for ErrorCode {
@@ -74,12 +94,14 @@ impl From<i32> for ErrorCode {
     }
 }
 
-impl From<jsonrpsee::core::Error> for RpcErrorObject {
+impl From<jsonrpsee::core::Error> for Error {
     fn from(err: jsonrpsee::core::Error) -> Self {
         let error_object_owned: ErrorObjectOwned = err.into();
-        RpcErrorObject {
+        Error::JsonRpcError(JsonRpcError {
             code: ErrorCode::from(error_object_owned.code()),
             message: error_object_owned.message().to_string(),
-        }
+            // TODO: as this SDK is specialized for the Sui JSON RPC implementation, we should define structured representation for the data field if applicable
+            data: None,
+        })
     }
 }
