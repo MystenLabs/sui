@@ -8,7 +8,7 @@ import {
 	More24 as MoreIcon,
 	Clipboard16 as ClipboardIcon,
 } from '@mysten/icons';
-import { useState } from 'react';
+// import { useState } from 'react';
 import Browser from 'webextension-polyfill';
 
 import { MenuLayout } from './MenuLayout';
@@ -23,13 +23,15 @@ import { Text } from '_src/ui/app/shared/text';
 
 function MenuList() {
 	const networkUrl = useNextMenuUrl(true, '/network');
+	const passwordProtectUrl = useNextMenuUrl(true, '/password-protect');
+
 	const moreOptionsUrl = useNextMenuUrl(true, '/more-options');
 
 	const apiEnv = useAppSelector((state) => state.app.apiEnv);
 	const networkName = API_ENV_TO_INFO[apiEnv].name;
 	const version = Browser.runtime.getManifest().version;
 
-	const [isUnlockAccountModalOpen, setUnlockAccountModalOpen] = useState(false);
+	// const [isUnlockAccountModalOpen, setUnlockAccountModalOpen] = useState(false);
 
 	return (
 		<>
@@ -42,11 +44,12 @@ function MenuList() {
 						subtitle={networkName}
 					/>
 					<MenuListItem
+						to={passwordProtectUrl}
 						icon={<LockedLockIcon />}
 						title={
-							<div className="flex gap-1.5 items-center">
+							<div className="flex flex-col justify-start gap-1.5 items-center">
 								<div>Password Protect Accounts</div>
-								Not setup yet
+								{/* <div>Not setup yet</div> */}
 							</div>
 						}
 					/>

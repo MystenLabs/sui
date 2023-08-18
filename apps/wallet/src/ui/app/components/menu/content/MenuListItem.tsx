@@ -31,18 +31,20 @@ function MenuListItem({
 		<>
 			<div className="flex flex-nowrap flex-1 gap-2 items-center overflow-hidden basis-3/5">
 				<div className="flex text-steel text-2xl flex-none">{icon}</div>
-				<div className="flex-1 text-gray-90 text-body font-semibold truncate">{title}</div>
+				<div className="flex-1 text-gray-90 text-body font-semibold flex">{title}</div>
 			</div>
-			<div className="flex flex-nowrap flex-1 justify-end gap-1 items-center overflow-hidden basis-2/5">
-				{subtitle ? (
-					<div className="transition truncate text-steel-dark text-bodySmall font-medium group-hover:text-steel-darker">
-						{subtitle}
+			{subtitle || iconAfter || to ? (
+				<div className="flex flex-nowrap flex-1 justify-end gap-1 items-center overflow-hidden basis-2/5">
+					{subtitle ? (
+						<div className="transition text-steel-dark text-bodySmall font-medium group-hover:text-steel-darker">
+							{subtitle}
+						</div>
+					) : null}
+					<div className="transition flex text-steel flex-none text-base group-hover:text-steel-darker">
+						{iconAfter || (to && <ChevronRight16 />) || null}
 					</div>
-				) : null}
-				<div className="transition flex text-steel flex-none text-base group-hover:text-steel-darker">
-					{iconAfter || (to && <ChevronRight16 />) || null}
 				</div>
-			</div>
+			) : null}
 		</>
 	);
 

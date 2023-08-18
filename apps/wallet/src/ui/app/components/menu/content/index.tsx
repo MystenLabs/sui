@@ -4,15 +4,16 @@
 import { useCallback } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
-import { AccountsSettings } from './AccountsSettings';
-import { AutoLockSettings } from './AutoLockSettings';
-import { ExportAccount } from './ExportAccount';
-import { ImportPrivateKey } from './ImportPrivateKey';
-import MenuList from './MenuList';
+// import { AccountsSettings } from './AccountsSettings';
+// import { AutoLockSettings } from './AutoLockSettings';
+// import { ExportAccount } from './ExportAccount';
+// import { ImportPrivateKey } from './ImportPrivateKey';
+// import MenuList from './MenuList';
 import { MoreOptions } from './MoreOptions';
 import { NetworkSettings } from './NetworkSettings';
+import { PasswordProtect } from './PasswordProtect';
 import WalletSettingsMenuList from './WalletSettingsMenuList';
-import { ConnectLedgerModalContainer } from '../../ledger/ConnectLedgerModalContainer';
+// import { ConnectLedgerModalContainer } from '../../ledger/ConnectLedgerModalContainer';
 import { ErrorBoundary } from '_components/error-boundary';
 import {
 	MainLocationContext,
@@ -20,10 +21,10 @@ import {
 	useMenuUrl,
 	useNextMenuUrl,
 } from '_components/menu/hooks';
-import { RecoveryPassphrase } from '_components/recovery-passphrase/RecoveryPassphrase';
+// import { RecoveryPassphrase } from '_components/recovery-passphrase/RecoveryPassphrase';
 import { useOnKeyboardEvent } from '_hooks';
 
-import { ImportLedgerAccountsPage } from '_src/ui/app/pages/accounts/ImportLedgerAccountsPage';
+// import { ImportLedgerAccountsPage } from '_src/ui/app/pages/accounts/ImportLedgerAccountsPage';
 import type { MouseEvent } from 'react';
 
 const CLOSE_KEY_CODES: string[] = ['Escape'];
@@ -57,6 +58,7 @@ function MenuContent() {
 					<Routes location={menuUrl || ''}>
 						<Route path="/" element={<WalletSettingsMenuList />} />
 						<Route path="/network" element={<NetworkSettings />} />
+						<Route path="/password-protect" element={<PasswordProtect />} />
 						<Route path="/more-options" element={<MoreOptions />} />
 						<Route path="*" element={<Navigate to={menuHomeUrl} replace={true} />} />
 					</Routes>

@@ -5,15 +5,12 @@ import { useState } from 'react';
 import { MenuLayout } from './MenuLayout';
 import { Button } from '_app/shared/ButtonUI';
 import { useNextMenuUrl } from '_components/menu/hooks';
-import { useAppDispatch } from '_hooks';
-import { logout } from '_src/ui/app/redux/slices/account';
 import { ConfirmationModal } from '_src/ui/app/shared/ConfirmationModal';
 
 export function MoreOptions() {
 	const mainMenuUrl = useNextMenuUrl(true, '/');
 	const [logoutInProgress, setLogoutInProgress] = useState(false);
 	const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
-	const dispatch = useAppDispatch();
 
 	return (
 		<MenuLayout title="More Options" back={mainMenuUrl}>
@@ -38,7 +35,7 @@ export function MoreOptions() {
 					if (confirmed) {
 						setLogoutInProgress(true);
 						try {
-							await dispatch(logout());
+							// TODO: implement logout
 							window.location.reload();
 						} finally {
 							setLogoutInProgress(false);
