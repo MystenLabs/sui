@@ -604,7 +604,7 @@ impl From<&MultiSigPublicKey> for SuiAddress {
 }
 
 /// Sui address for [struct ZkLoginAuthenticator] is defined as the black2b hash of
-/// [zklogin_flag || bcs bytes of AddressParams || address seed in bytes] where
+/// [zklogin_flag || bcs bytes of AddressParams || address_seed in bytes] where
 /// AddressParams contains iss and aud string.
 impl From<&ZkLoginAuthenticator> for SuiAddress {
     fn from(authenticator: &ZkLoginAuthenticator) -> Self {

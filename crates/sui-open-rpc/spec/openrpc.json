@@ -1369,8 +1369,7 @@
                 "simplified_unwrap_then_delete": false,
                 "txn_base_cost_as_multiplier": false,
                 "upgraded_multisig_supported": false,
-                "zklogin_auth": false,
-                "zklogin_use_secure_vk": false
+                "zklogin_auth": false
               },
               "attributes": {
                 "address_from_bytes_cost_base": {

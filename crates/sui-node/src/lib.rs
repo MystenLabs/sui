@@ -211,7 +211,7 @@ impl SuiNode {
                         .protocol_config()
                         .zklogin_supported_providers()
                         .iter()
-                        .map(|s| OIDCProvider::from_str(s).unwrap())
+                        .map(|s| OIDCProvider::from_str(s).expect("Invalid provider string"))
                         .collect::<Vec<_>>();
                     let fetch_and_sleep = async move {
                         // Update the JWK value in the authority server
@@ -263,6 +263,7 @@ impl SuiNode {
     #[allow(unused_variables)]
     async fn fetch_jwks(supported_providers: &[OIDCProvider]) -> SuiResult<Vec<(JwkId, JWK)>> {
         use fastcrypto_zkp::bn254::zk_login::parse_jwks;
+        // Just load a default Twitch jwk for testing.
         parse_jwks(
             sui_types::zk_login_util::DEFAULT_JWK_BYTES,
             &OIDCProvider::Twitch,

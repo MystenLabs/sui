@@ -109,9 +109,9 @@ pub struct SignatureVerifier {
 /// Contains two parameters to pass in to verify a ZkLogin signature.
 #[derive(Clone)]
 struct ZkLoginParams {
-    /// A list of supported providers for ZkLogin supports.
+    /// A list of supported OAuth providers for ZkLogin.
     pub supported_providers: Vec<OIDCProvider>,
-    /// The environment (prod/test) the code runs in.
+    /// The environment (prod/test) the code runs in. It decides which verifying key to use in fastcrypto.
     pub env: ZkLoginEnv,
 }
 

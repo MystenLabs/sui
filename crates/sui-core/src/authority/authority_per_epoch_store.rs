@@ -473,7 +473,7 @@ impl AuthorityPerEpochStore {
         let supported_providers = protocol_config
             .zklogin_supported_providers()
             .iter()
-            .map(|a| OIDCProvider::from_str(&a).expect("Invalid provider string"))
+            .map(|s| OIDCProvider::from_str(s).expect("Invalid provider string"))
             .collect::<Vec<_>>();
 
         let signature_verifier = SignatureVerifier::new(
