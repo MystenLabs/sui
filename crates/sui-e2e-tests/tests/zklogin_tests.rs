@@ -2,6 +2,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::utils::{get_zklogin_user_address, make_zklogin_tx, sign_zklogin_tx};
@@ -41,11 +43,31 @@ async fn test_zklogin_feature_deny() {
 }
 
 #[sim_test]
+async fn test_zklogin_provider_not_supported() {
+    use sui_protocol_config::ProtocolConfig;
+
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_zklogin_auth(true);
+        config.set_zklogin_supported_providers(BTreeSet::from([
+            "Google".to_string(),
+            "Facebook".to_string(),
+        ]));
+        config
+    });
+
+    // Doing a Twitch zklogin tx fails because its not in the supported list.
+    let err = do_zklogin_test().await.unwrap_err();
+
+    assert!(matches!(err, SuiError::InvalidSignature { .. }));
+}
+
+#[sim_test]
 async fn test_zklogin_feature_allow() {
     use sui_protocol_config::ProtocolConfig;
 
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_zklogin_auth(true);
+        config.set_zklogin_supported_providers(BTreeSet::from(["Twitch".to_string()]));
         config
     });
 

@@ -243,8 +243,8 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail = { version = "0.4", default-features = false }
 fast_chemail = { version = "0.9", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "e5b57ef4b3b41e799954f6cac83034154e8cf33a", features = ["copy_key"] }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "e5b57ef4b3b41e799954f6cac83034154e8cf33a", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4e7debce78340848f0009b648f56d912d6bd02d5", features = ["copy_key"] }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4e7debce78340848f0009b648f56d912d6bd02d5", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -480,7 +480,7 @@ plotters-backend = { version = "0.3", default-features = false }
 plotters-svg = { version = "0.3", default-features = false }
 polyval = { version = "0.6", default-features = false }
 portable-atomic = { version = "0.3" }
-poseidon-ark = { git = "https://github.com/MystenLabs/poseidon-ark.git", rev = "39844046ded0c4aa7a247e8545e131b59a330a9c", default-features = false }
+poseidon-ark = { git = "https://github.com/arnaucube/poseidon-ark.git", rev = "ff7f5e05d55667b4ffba129b837da780c4c5c849", default-features = false }
 ppv-lite86 = { version = "0.2", default-features = false, features = ["simd", "std"] }
 pq-sys = { version = "0.4", default-features = false }
 predicates = { version = "2" }
@@ -994,9 +994,9 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail = { version = "0.4", default-features = false }
 fast_chemail = { version = "0.9", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "e5b57ef4b3b41e799954f6cac83034154e8cf33a", features = ["copy_key"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "e5b57ef4b3b41e799954f6cac83034154e8cf33a", default-features = false }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "e5b57ef4b3b41e799954f6cac83034154e8cf33a", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4e7debce78340848f0009b648f56d912d6bd02d5", features = ["copy_key"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4e7debce78340848f0009b648f56d912d6bd02d5", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4e7debce78340848f0009b648f56d912d6bd02d5", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -1267,7 +1267,7 @@ plotters-backend = { version = "0.3", default-features = false }
 plotters-svg = { version = "0.3", default-features = false }
 polyval = { version = "0.6", default-features = false }
 portable-atomic = { version = "0.3" }
-poseidon-ark = { git = "https://github.com/MystenLabs/poseidon-ark.git", rev = "39844046ded0c4aa7a247e8545e131b59a330a9c", default-features = false }
+poseidon-ark = { git = "https://github.com/arnaucube/poseidon-ark.git", rev = "ff7f5e05d55667b4ffba129b837da780c4c5c849", default-features = false }
 ppv-lite86 = { version = "0.2", default-features = false, features = ["simd", "std"] }
 pq-sys = { version = "0.4", default-features = false }
 predicates = { version = "2" }

@@ -5,13 +5,14 @@ use crate::committee::EpochId;
 use crate::crypto::{SignatureScheme, SuiSignature};
 use crate::multisig_legacy::MultiSigLegacy;
 use crate::zk_login_authenticator::ZkLoginAuthenticator;
-use crate::zk_login_util::OAuthProviderContent;
 use crate::{base_types::SuiAddress, crypto::Signature, error::SuiResult, multisig::MultiSig};
 pub use enum_dispatch::enum_dispatch;
 use fastcrypto::{
     error::FastCryptoError,
     traits::{EncodeDecodeBase64, ToFromBytes},
 };
+use fastcrypto_zkp::bn254::zk_login::{JwkId, OIDCProvider, JWK};
+use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use im::hashmap::HashMap as ImHashMap;
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -20,14 +21,22 @@ use std::hash::Hash;
 
 #[derive(Default, Debug, Clone)]
 pub struct VerifyParams {
-    // map from kid => OauthProviderContent
-    pub oauth_provider_jwks: ImHashMap<String, OAuthProviderContent>,
+    // map from JwkId (iss, kid) => JWK
+    pub oidc_provider_jwks: ImHashMap<JwkId, JWK>,
+    pub supported_providers: Vec<OIDCProvider>,
+    pub zk_login_env: ZkLoginEnv,
 }
 
 impl VerifyParams {
-    pub fn new(oauth_provider_jwks: ImHashMap<String, OAuthProviderContent>) -> Self {
+    pub fn new(
+        oidc_provider_jwks: ImHashMap<JwkId, JWK>,
+        supported_providers: Vec<OIDCProvider>,
+        zk_login_env: ZkLoginEnv,
+    ) -> Self {
         Self {
-            oauth_provider_jwks,
+            oidc_provider_jwks,
+            supported_providers,
+            zk_login_env,
         }
     }
 }

@@ -1347,7 +1347,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "20",
+              "maxSupportedProtocolVersion": "21",
               "protocolVersion": "6",
               "featureFlags": {
                 "advance_epoch_start_time_in_safe_mode": true,
@@ -5145,73 +5145,6 @@
           }
         ]
       },
-      "AuxInputs": {
-        "description": "A parsed result of all aux inputs.",
-        "type": "object",
-        "required": [
-          "addr_seed",
-          "eph_public_key",
-          "jwt_sha2_hash",
-          "jwt_signature",
-          "key_claim_name",
-          "masked_content",
-          "max_epoch",
-          "num_sha2_blocks",
-          "payload_len",
-          "payload_start_index"
-        ],
-        "properties": {
-          "addr_seed": {
-            "type": "string"
-          },
-          "eph_public_key": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "jwt_sha2_hash": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "jwt_signature": {
-            "type": "string"
-          },
-          "key_claim_name": {
-            "type": "string"
-          },
-          "masked_content": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
-          },
-          "max_epoch": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "num_sha2_blocks": {
-            "type": "integer",
-            "format": "uint8",
-            "minimum": 0.0
-          },
-          "payload_len": {
-            "type": "integer",
-            "format": "uint16",
-            "minimum": 0.0
-          },
-          "payload_start_index": {
-            "type": "integer",
-            "format": "uint16",
-            "minimum": 0.0
-          }
-        }
-      },
       "Balance": {
         "type": "object",
         "required": [
@@ -5422,6 +5355,28 @@
             "$ref": "#/components/schemas/CheckpointDigest"
           }
         ]
+      },
+      "Claim": {
+        "description": "Necessary value for claim.",
+        "type": "object",
+        "required": [
+          "index_mod_4",
+          "name",
+          "value_base64"
+        ],
+        "properties": {
+          "index_mod_4": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0.0
+          },
+          "name": {
+            "type": "string"
+          },
+          "value_base64": {
+            "type": "string"
+          }
+        }
       },
       "Coin": {
         "type": "object",
@@ -7757,21 +7712,6 @@
       },
       "ProtocolVersion": {
         "$ref": "#/components/schemas/BigInt_for_uint64"
-      },
-      "PublicInputs": {
-        "description": "The public inputs containing an array of string that is the all inputs hash.",
-        "type": "object",
-        "required": [
-          "inputs"
-        ],
-        "properties": {
-          "inputs": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
       },
       "PublicKey": {
         "oneOf": [
@@ -10446,23 +10386,48 @@
         "description": "An zk login authenticator with all the necessary fields.",
         "type": "object",
         "required": [
-          "aux_inputs",
-          "proof",
-          "public_inputs",
+          "inputs",
+          "max_epoch",
           "user_signature"
         ],
         "properties": {
-          "aux_inputs": {
-            "$ref": "#/components/schemas/AuxInputs"
+          "inputs": {
+            "$ref": "#/components/schemas/ZkLoginInputs"
           },
-          "proof": {
-            "$ref": "#/components/schemas/ZkLoginProof"
-          },
-          "public_inputs": {
-            "$ref": "#/components/schemas/PublicInputs"
+          "max_epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           },
           "user_signature": {
             "$ref": "#/components/schemas/Signature"
+          }
+        }
+      },
+      "ZkLoginInputs": {
+        "description": "All inputs required for the zk login proof verification and other auxiliary inputs.",
+        "type": "object",
+        "required": [
+          "address_seed",
+          "claims",
+          "header_base64",
+          "proof_points"
+        ],
+        "properties": {
+          "address_seed": {
+            "type": "string"
+          },
+          "claims": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Claim"
+            }
+          },
+          "header_base64": {
+            "type": "string"
+          },
+          "proof_points": {
+            "$ref": "#/components/schemas/ZkLoginProof"
           }
         }
       },
@@ -10472,8 +10437,7 @@
         "required": [
           "pi_a",
           "pi_b",
-          "pi_c",
-          "protocol"
+          "pi_c"
         ],
         "properties": {
           "pi_a": {
@@ -10496,9 +10460,6 @@
             "items": {
               "type": "string"
             }
-          },
-          "protocol": {
-            "type": "string"
           }
         }
       }
