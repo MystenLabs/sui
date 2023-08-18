@@ -19,16 +19,10 @@ use move_compiler::{
 };
 
 use sui_move_build::linters::{
-<<<<<<< HEAD
     coin_field::CoinFieldVisitor, collection_equality::CollectionEqualityVisitor,
     custom_state_change::CustomStateChangeVerifier, freeze_wrapped::FreezeWrappedVisitor,
-    known_filters, self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier,
-    LINT_WARNING_PREFIX,
-=======
-    coin_field::CoinFieldVisitor, custom_state_change::CustomStateChangeVerifier, known_filters,
-    native_primitives_only::NativePrimitivesOnlyVisitor, self_transfer::SelfTransferVerifier,
-    share_owned::ShareOwnedVerifier, LINT_WARNING_PREFIX,
->>>>>>> d8cdb2845 (First linter tweaks)
+    known_filters, native_primitives_only::NativePrimitivesOnlyVisitor,
+    self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier, LINT_WARNING_PREFIX,
 };
 
 const SUI_FRAMEWORK_PATH: &str = "../sui-framework/packages/sui-framework";
@@ -75,12 +69,9 @@ fn run_tests(path: &Path) -> anyhow::Result<()> {
         SelfTransferVerifier.visitor(),
         CustomStateChangeVerifier.visitor(),
         CoinFieldVisitor.visitor(),
-<<<<<<< HEAD
         FreezeWrappedVisitor::default().visitor(),
         CollectionEqualityVisitor.visitor(),
-=======
         NativePrimitivesOnlyVisitor.visitor(),
->>>>>>> d8cdb2845 (First linter tweaks)
     ];
     let (filter_attr_name, filters) = known_filters_for_test();
     let (files, comments_and_compiler_res) = Compiler::from_files(
