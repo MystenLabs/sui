@@ -6,6 +6,7 @@ authors = ["Mysten Labs <build@mystenlabs.com>"]
 edition = "2021"
 repository = "https://github.com/mystenlabs/sui.git"
 license = "Apache-2.0"
+publish = false
 
 [dependencies]
 move-binary-format = { path = "../../external-crates/move/move-binary-format", features = ["wasm"] }
