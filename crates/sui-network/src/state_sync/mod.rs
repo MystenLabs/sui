@@ -384,6 +384,8 @@ where
     pub async fn start(mut self) {
         info!("State-Synchronizer started");
 
+        self.config.pinned_checkpoints.sort();
+
         let mut interval = tokio::time::interval(self.config.interval_period());
         let mut peer_events = {
             let (subscriber, peers) = self.network.subscribe().unwrap();
@@ -678,6 +680,7 @@ where
                 self.store.clone(),
                 self.peer_heights.clone(),
                 self.metrics.clone(),
+                self.config.pinned_checkpoints.clone(),
                 self.config.checkpoint_header_download_concurrency(),
                 self.config.timeout(),
                 // The if condition should ensure that this is Some
@@ -932,6 +935,7 @@ async fn sync_to_checkpoint<S>(
     store: S,
     peer_heights: Arc<RwLock<PeerHeights>>,
     metrics: Metrics,
+    pinned_checkpoints: Vec<(CheckpointSequenceNumber, CheckpointDigest)>,
     checkpoint_header_download_concurrency: usize,
     timeout: Duration,
     checkpoint: Checkpoint,
@@ -964,6 +968,7 @@ where
         .map(|next| {
             let peers = peer_balancer.clone().with_checkpoint(next);
             let peer_heights = peer_heights.clone();
+            let pinned_checkpoints = &pinned_checkpoints;
             async move {
                 if let Some(checkpoint) = peer_heights
                     .read()
@@ -993,6 +998,22 @@ where
                                 checkpoint.sequence_number()
                             );
                             continue;
+                        }
+
+                        // peer gave us a checkpoint whose digest does not match pinned digest
+                        let checkpoint_digest = checkpoint.digest();
+                        if let Ok(pinned_digest_index) = pinned_checkpoints.binary_search_by_key(
+                            checkpoint.sequence_number(),
+                            |(seq_num, _digest)| *seq_num
+                        ) {
+                            if pinned_checkpoints[pinned_digest_index].1 != *checkpoint_digest {
+                                tracing::debug!(
+                                    "peer returned checkpoint with digest that does not match pinned digest: expected {:?}, got {:?}",
+                                    pinned_checkpoints[pinned_digest_index].1,
+                                    checkpoint_digest
+                                );
+                                continue;
+                            }
                         }
 
                         // Insert in our store in the event that things fail and we need to retry
