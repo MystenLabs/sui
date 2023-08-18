@@ -12,12 +12,16 @@ import { Button } from '_app/shared/ButtonUI';
 import { Text } from '_app/shared/text';
 import Overlay from '_components/overlay';
 import { ampli } from '_src/shared/analytics/ampli';
+import { ZkProvider } from '_src/background/accounts/zk/providers';
+import { useCreateAccountsMutation } from '../../hooks/useCreateAccountMutation';
 
 type AddAccountPageProps = {
 	showSocialSignInOptions?: boolean;
 };
 
 export function AddAccountPage({ showSocialSignInOptions = false }: AddAccountPageProps) {
+	const createAccountsMutation = useCreateAccountsMutation();
+	const [createInProgressProvider, setCreateInProgressProvider] = useState<ZkProvider | null>(null);
 	const [isConnectLedgerModalOpen, setConnectLedgerModalOpen] = useState(false);
 	const [searchParams] = useSearchParams();
 	const navigate = useNavigate();
@@ -33,14 +37,24 @@ export function AddAccountPage({ showSocialSignInOptions = false }: AddAccountPa
 							<SocialButton
 								provider="google"
 								showLabel
-								onClick={() => {
-									// eslint-disable-next-line no-console
-									console.log('TODO: Open OAuth flow');
+								onClick={async () => {
+									setCreateInProgressProvider('Google');
 									ampli.clickedSocialSignInButton({
 										signInProvider: 'Google',
 										sourceFlow,
 									});
+									await createAccountsMutation
+										.mutateAsync({
+											type: 'zk',
+											provider: 'Google',
+										})
+										.catch(() => {
+											// do nothing
+										});
+									setCreateInProgressProvider(null);
 								}}
+								disabled={createAccountsMutation.isLoading}
+								loading={createInProgressProvider === 'Google'}
 							/>
 							<SocialButton
 								provider="twitch"
