@@ -11,7 +11,7 @@ type Address implements ObjectOwner {
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
-	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+	nameServiceConnection(first: Int, after: String, last: Int, before: String): StringConnection
 }
 
 enum AddressTransactionBlockRelationship {
@@ -27,7 +27,32 @@ type Balance {
 }
 
 type BalanceConnection {
-	unimplemented: Boolean!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [BalanceEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Balance!]!
+}
+
+"""
+An edge in a connection.
+"""
+type BalanceEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Balance!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
 }
 
 scalar Base64
@@ -35,8 +60,37 @@ scalar Base64
 scalar BigInt
 
 
+type Coin {
+	id: ID!
+}
+
 type CoinConnection {
-	unimplemented: Boolean!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [CoinEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Coin!]!
+}
+
+"""
+An edge in a connection.
+"""
+type CoinEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Coin!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
 }
 
 
@@ -61,10 +115,6 @@ type GasInput {
 
 
 
-type NameServiceConnection {
-	unimplemented: Boolean!
-}
-
 type Object implements ObjectOwner {
 	version: Int!
 	digest: String!
@@ -80,7 +130,7 @@ type Object implements ObjectOwner {
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
-	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+	nameServiceConnection(first: Int, after: String, last: Int, before: String): StringConnection
 }
 
 type ObjectConnection {
@@ -141,7 +191,7 @@ interface ObjectOwner {
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
-	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+	nameServiceConnection(first: Int, after: String, last: Int, before: String): StringConnection
 }
 
 type Owner implements ObjectOwner {
@@ -154,7 +204,7 @@ type Owner implements ObjectOwner {
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
-	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+	nameServiceConnection(first: Int, after: String, last: Int, before: String): StringConnection
 }
 
 """
@@ -205,10 +255,68 @@ type Query {
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
 }
 
-type StakeConnection {
-	unimplemented: Boolean!
+type Stake {
+	id: ID!
 }
 
+type StakeConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [StakeEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Stake!]!
+}
+
+"""
+An edge in a connection.
+"""
+type StakeEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Stake!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+
+type StringConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [StringEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [String!]!
+}
+
+"""
+An edge in a connection.
+"""
+type StringEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: String!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
 
 scalar SuiAddress
 
@@ -221,7 +329,32 @@ type TransactionBlock {
 }
 
 type TransactionBlockConnection {
-	unimplemented: Boolean!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [TransactionBlockEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [TransactionBlock!]!
+}
+
+"""
+An edge in a connection.
+"""
+type TransactionBlockEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: TransactionBlock!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
 }
 
 type TransactionBlockEffects {

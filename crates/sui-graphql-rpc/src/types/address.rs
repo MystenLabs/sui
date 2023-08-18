@@ -6,13 +6,12 @@ use async_graphql::{connection::Connection, *};
 use crate::server::context_ext::DataProviderContextExt;
 
 use super::{
-    balance::{Balance, BalanceConnection},
-    coin::CoinConnection,
-    name_service::NameServiceConnection,
+    balance::Balance,
+    coin::Coin,
     object::{Object, ObjectFilter},
-    stake::StakeConnection,
+    stake::Stake,
     sui_address::SuiAddress,
-    transaction_block::{TransactionBlockConnection, TransactionBlockFilter},
+    transaction_block::{TransactionBlock, TransactionBlockFilter},
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Copy)]
@@ -40,7 +39,7 @@ impl Address {
         before: Option<String>,
         relation: Option<AddressTransactionBlockRelationship>,
         filter: Option<TransactionBlockFilter>,
-    ) -> Option<TransactionBlockConnection> {
+    ) -> Option<Connection<String, TransactionBlock>> {
         unimplemented!()
     }
 
@@ -76,7 +75,7 @@ impl Address {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<BalanceConnection> {
+    ) -> Option<Connection<String, Balance>> {
         unimplemented!()
     }
 
@@ -87,7 +86,7 @@ impl Address {
         last: Option<u64>,
         before: Option<String>,
         type_: Option<String>,
-    ) -> Option<CoinConnection> {
+    ) -> Option<Connection<String, Coin>> {
         unimplemented!()
     }
 
@@ -97,7 +96,7 @@ impl Address {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<StakeConnection> {
+    ) -> Option<Connection<String, Stake>> {
         unimplemented!()
     }
 
@@ -111,7 +110,7 @@ impl Address {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<NameServiceConnection> {
+    ) -> Option<Connection<String, String>> {
         unimplemented!()
     }
 }
