@@ -6,7 +6,7 @@ use crate::diagnostics::WarningFilters;
 use crate::expansion::ast::ModuleIdent;
 use crate::parser::ast::FunctionName;
 use crate::shared::CompilationEnv;
-use crate::typing::{ast as T, core::ProgramInfo};
+use crate::typing::{ast as T, core::TypingProgramInfo};
 use move_symbol_pool::Symbol;
 
 pub type TypingVisitorObj = Box<dyn TypingVisitor>;
@@ -15,7 +15,7 @@ pub trait TypingVisitor {
     fn visit(
         &mut self,
         env: &mut CompilationEnv,
-        program_info: &ProgramInfo,
+        program_info: &TypingProgramInfo,
         program: &mut T::Program,
     );
 
@@ -32,14 +32,14 @@ pub trait TypingVisitorConstructor {
 
     fn context<'a>(
         env: &'a mut CompilationEnv,
-        program_info: &'a ProgramInfo,
+        program_info: &'a TypingProgramInfo,
         program: &T::Program,
     ) -> Self::Context<'a>;
 
     fn visit(
         &mut self,
         env: &mut CompilationEnv,
-        program_info: &ProgramInfo,
+        program_info: &TypingProgramInfo,
         program: &mut T::Program,
     ) {
         let mut context = Self::context(env, program_info, program);
@@ -210,7 +210,7 @@ impl<V: TypingVisitorConstructor> TypingVisitor for V {
     fn visit(
         &mut self,
         env: &mut CompilationEnv,
-        program_info: &ProgramInfo,
+        program_info: &TypingProgramInfo,
         program: &mut T::Program,
     ) {
         self.visit(env, program_info, program)

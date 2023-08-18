@@ -12,6 +12,7 @@ use crate::{
     },
     parser::ast::{Ability_, ConstantName, Field, FunctionName, StructName},
     shared::{unique_map::UniqueMap, *},
+    typing::ast as T,
     FullyCompiledProgram,
 };
 use move_ir_types::location::*;
@@ -57,7 +58,9 @@ pub struct ModuleInfo {
     pub constants: UniqueMap<ConstantName, ConstantInfo>,
 }
 
-pub struct ProgramInfo(UniqueMap<ModuleIdent, ModuleInfo>);
+pub struct ProgramInfo<const AFTER_TYPING: bool>(UniqueMap<ModuleIdent, ModuleInfo>);
+pub type NamingProgramInfo = ProgramInfo<false>;
+pub type TypingProgramInfo = ProgramInfo<true>;
 
 pub struct LoopInfo(LoopInfo_);
 
@@ -68,7 +71,7 @@ enum LoopInfo_ {
 }
 
 pub struct Context<'env> {
-    pub modules: ProgramInfo,
+    pub modules: NamingProgramInfo,
     pub env: &'env mut CompilationEnv,
 
     pub current_module: Option<ModuleIdent>,
@@ -86,7 +89,56 @@ pub struct Context<'env> {
     pub called_fns: BTreeSet<Symbol>,
 }
 
-impl ProgramInfo {
+macro_rules! program_info {
+    ($pre_compiled_lib:ident, $prog:ident, $pass:ident) => {{
+        let all_modules = $prog
+            .modules
+            .key_cloned_iter()
+            .chain($pre_compiled_lib.iter().flat_map(|pre_compiled| {
+                pre_compiled
+                    .$pass
+                    .modules
+                    .key_cloned_iter()
+                    .filter(|(mident, _m)| !$prog.modules.contains_key(mident))
+            }));
+        let modules = UniqueMap::maybe_from_iter(all_modules.map(|(mident, mdef)| {
+            let structs = mdef.structs.clone();
+            let functions = mdef.functions.ref_map(|fname, fdef| FunctionInfo {
+                defined_loc: fname.loc(),
+                visibility: fdef.visibility.clone(),
+                signature: fdef.signature.clone(),
+                acquires: fdef.acquires.clone(),
+            });
+            let constants = mdef.constants.ref_map(|cname, cdef| ConstantInfo {
+                defined_loc: cname.loc(),
+                signature: cdef.signature.clone(),
+            });
+            let minfo = ModuleInfo {
+                friends: mdef.friends.ref_map(|_, friend| friend.loc),
+                structs,
+                functions,
+                constants,
+            };
+            (mident, minfo)
+        }))
+        .unwrap();
+        ProgramInfo(modules)
+    }};
+}
+
+impl TypingProgramInfo {
+    pub fn new(pre_compiled_lib: Option<&FullyCompiledProgram>, prog: &T::Program) -> Self {
+        program_info!(pre_compiled_lib, prog, typing)
+    }
+}
+
+impl NamingProgramInfo {
+    pub fn new(pre_compiled_lib: Option<&FullyCompiledProgram>, prog: &N::Program) -> Self {
+        program_info!(pre_compiled_lib, prog, naming)
+    }
+}
+
+impl<const AFTER_TYPING: bool> ProgramInfo<AFTER_TYPING> {
     pub fn module(&self, m: &ModuleIdent) -> &ModuleInfo {
         self.0.get(m).expect("ICE should have failed in naming")
     }
@@ -142,38 +194,7 @@ impl<'env> Context<'env> {
         pre_compiled_lib: Option<&FullyCompiledProgram>,
         prog: &N::Program,
     ) -> Self {
-        let all_modules = prog
-            .modules
-            .key_cloned_iter()
-            .chain(pre_compiled_lib.iter().flat_map(|pre_compiled| {
-                pre_compiled
-                    .naming
-                    .modules
-                    .key_cloned_iter()
-                    .filter(|(mident, _m)| !prog.modules.contains_key(mident))
-            }));
-        let modules = UniqueMap::maybe_from_iter(all_modules.map(|(mident, mdef)| {
-            let structs = mdef.structs.clone();
-            let functions = mdef.functions.ref_map(|fname, fdef| FunctionInfo {
-                defined_loc: fname.loc(),
-                visibility: fdef.visibility.clone(),
-                signature: fdef.signature.clone(),
-                acquires: fdef.acquires.clone(),
-            });
-            let constants = mdef.constants.ref_map(|cname, cdef| ConstantInfo {
-                defined_loc: cname.loc(),
-                signature: cdef.signature.clone(),
-            });
-            let minfo = ModuleInfo {
-                friends: mdef.friends.ref_map(|_, friend| friend.loc),
-                structs,
-                functions,
-                constants,
-            };
-            (mident, minfo)
-        }))
-        .unwrap();
-
+        let modules = NamingProgramInfo::new(pre_compiled_lib, prog);
         Context {
             subst: Subst::empty(),
             current_module: None,
@@ -183,7 +204,7 @@ impl<'env> Context<'env> {
             constraints: vec![],
             locals: UniqueMap::new(),
             loop_info: LoopInfo(LoopInfo_::NotInLoop),
-            modules: ProgramInfo(modules),
+            modules,
             env,
             called_fns: BTreeSet::new(),
         }
@@ -505,7 +526,11 @@ fn error_format_impl_(b_: &Type_, subst: &Subst, nested: bool) -> String {
 // Type utils
 //**************************************************************************************************
 
-pub fn infer_abilities(context: &ProgramInfo, subst: &Subst, ty: Type) -> AbilitySet {
+pub fn infer_abilities<const INFO_PASS: bool>(
+    context: &ProgramInfo<INFO_PASS>,
+    subst: &Subst,
+    ty: Type,
+) -> AbilitySet {
     use Type_ as T;
     let loc = ty.loc;
     match unfold_type(subst, ty).value {

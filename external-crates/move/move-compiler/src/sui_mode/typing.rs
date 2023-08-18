@@ -9,9 +9,7 @@ use crate::{
     diagnostics::WarningFilters,
     editions::Flavor,
     expansion::ast::{AbilitySet, AttributeName_, Fields, ModuleIdent, Visibility},
-    naming::ast::{
-        self as N, BuiltinTypeName_, FunctionSignature, TParam, Type, TypeName_, Type_, Var,
-    },
+    naming::ast::{self as N, BuiltinTypeName_, FunctionSignature, Type, TypeName_, Type_, Var},
     parser::ast::{Ability_, FunctionName, StructName},
     shared::{
         known_attributes::{KnownAttribute, TestingAttribute},
@@ -26,7 +24,7 @@ use crate::{
     },
     typing::{
         ast as T,
-        core::{ability_not_satisfied_tips, error_format, error_format_, ProgramInfo, Subst},
+        core::{ability_not_satisfied_tips, error_format, error_format_, Subst, TypingProgramInfo},
         visitor::{TypingVisitorConstructor, TypingVisitorContext},
     },
 };
@@ -41,7 +39,7 @@ impl TypingVisitorConstructor for SuiTypeChecks {
     type Context<'a> = Context<'a>;
     fn context<'a>(
         env: &'a mut CompilationEnv,
-        program_info: &'a ProgramInfo,
+        program_info: &'a TypingProgramInfo,
         _program: &T::Program,
     ) -> Self::Context<'a> {
         Context::new(env, program_info)
@@ -55,7 +53,7 @@ impl TypingVisitorConstructor for SuiTypeChecks {
 #[allow(unused)]
 pub struct Context<'a> {
     env: &'a mut CompilationEnv,
-    info: &'a ProgramInfo,
+    info: &'a TypingProgramInfo,
     current_module: Option<ModuleIdent>,
     upper_module: Option<Symbol>,
     one_time_witness: Option<Result<StructName, ()>>,
@@ -63,7 +61,7 @@ pub struct Context<'a> {
 }
 
 impl<'a> Context<'a> {
-    fn new(env: &'a mut CompilationEnv, info: &'a ProgramInfo) -> Self {
+    fn new(env: &'a mut CompilationEnv, info: &'a TypingProgramInfo) -> Self {
         Context {
             env,
             current_module: None,
@@ -738,19 +736,8 @@ fn entry_return(
 }
 
 fn get_abilities(sp!(loc, ty_): &Type) -> AbilitySet {
-    use Type_ as T;
-    let loc = *loc;
-    match ty_ {
-        T::UnresolvedError | T::Anything => AbilitySet::all(loc),
-        T::Unit => AbilitySet::collection(loc),
-        T::Ref(_, _) => AbilitySet::references(loc),
-        T::Param(TParam { abilities, .. }) | Type_::Apply(Some(abilities), _, _) => {
-            abilities.clone()
-        }
-        T::Var(_) | Type_::Apply(None, _, _) => {
-            unreachable!("ICE abilities should have been expanded")
-        }
-    }
+    ty_.abilities(*loc)
+        .expect("ICE abilities should have been expanded")
 }
 
 fn invalid_entry_return_ty<'a>(

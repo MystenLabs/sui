@@ -13,7 +13,7 @@ use move_compiler::{
     shared::{CompilationEnv, Identifier},
     typing::{
         ast as T,
-        core::ProgramInfo,
+        core::TypingProgramInfo,
         visitor::{TypingVisitorConstructor, TypingVisitorContext},
     },
 };
@@ -63,7 +63,7 @@ impl TypingVisitorConstructor for CollectionEqualityVisitor {
 
     fn context<'a>(
         env: &'a mut CompilationEnv,
-        _program_info: &'a ProgramInfo,
+        _program_info: &'a TypingProgramInfo,
         _program: &T::Program,
     ) -> Self::Context<'a> {
         Context { env }
