@@ -3,7 +3,7 @@
 
 use move_cli::base::test::UnitTestResult;
 use move_unit_test::UnitTestingConfig;
-use std::{path::PathBuf, io, fs};
+use std::{fs, io, path::PathBuf};
 use sui_move::unit_test::run_move_unit_tests;
 use sui_move_build::BuildConfig;
 

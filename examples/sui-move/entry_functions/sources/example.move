@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 module entry_functions::example {
     use sui::object::{Self, UID};
     use sui::transfer;
