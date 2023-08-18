@@ -13,8 +13,12 @@ use move_compiler::{
     expansion::ast as E,
     naming::ast as N,
     parser::ast as P,
-    shared::{unique_map::UniqueMap, CompilationEnv, Identifier},
-    typing::{ast as T, core::ProgramInfo, visitor::TypingVisitor},
+    shared::{CompilationEnv, Identifier},
+    typing::{
+        ast as T,
+        core::ProgramInfo,
+        visitor::{TypingVisitorConstructor, TypingVisitorContext},
+    },
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
@@ -98,20 +102,33 @@ impl WrappingFieldInfo {
 /// Structs (per-module) that have fields wrapping other objects.
 type WrappingFields = BTreeMap<E::ModuleIdent, BTreeMap<P::StructName, Option<WrappingFieldInfo>>>;
 
-#[derive(Default)]
-pub struct FreezeWrappedVisitor {
+pub struct FreezeWrappedVisitor;
+
+pub struct Context<'a> {
+    env: &'a mut CompilationEnv,
+    program_info: &'a ProgramInfo,
     /// Memoizes information about struct fields wrapping other objects as they are discovered
     wrapping_fields: WrappingFields,
 }
 
-impl TypingVisitor for FreezeWrappedVisitor {
-    fn visit_exp_custom(
-        &mut self,
-        exp: &T::Exp,
-        env: &mut CompilationEnv,
-        _program_info: &ProgramInfo,
-        program: &T::Program,
-    ) -> bool {
+impl TypingVisitorConstructor for FreezeWrappedVisitor {
+    type Context<'a> = Context<'a>;
+
+    fn context<'a>(
+        env: &'a mut CompilationEnv,
+        program_info: &'a ProgramInfo,
+        _program: &T::Program,
+    ) -> Self::Context<'a> {
+        Context {
+            env,
+            program_info,
+            wrapping_fields: WrappingFields::new(),
+        }
+    }
+}
+
+impl<'a> TypingVisitorContext for Context<'a> {
+    fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
         use T::UnannotatedExp_ as E;
         if let E::ModuleCall(fun) = &exp.exp.value {
             if FREEZE_FUNCTIONS.iter().any(|(addr, module, fname)| {
@@ -130,14 +147,10 @@ impl TypingVisitor for FreezeWrappedVisitor {
                         return true;
                     };
                 if let Some(wrapping_field_info) = self.find_wrapping_field_loc(
-                    &program.modules,
-                    mident,
-                    sname,
-                    /* outer_field_info */ None,
-                    /* field_depth  */ 0,
+                    mident, sname, /* outer_field_info */ None, /* field_depth  */ 0,
                 ) {
                     add_diag(
-                        env,
+                        self.env,
                         fun.arguments.exp.loc,
                         sname.value(),
                         wrapping_field_info.fname(),
@@ -151,22 +164,26 @@ impl TypingVisitor for FreezeWrappedVisitor {
         // always return false to process arguments of the call
         false
     }
+
+    fn add_warning_filter_scope(&mut self, filter: move_compiler::diagnostics::WarningFilters) {
+        self.env.add_warning_filter_scope(filter)
+    }
+
+    fn pop_warning_filter_scope(&mut self) {
+        self.env.pop_warning_filter_scope()
+    }
 }
 
-impl FreezeWrappedVisitor {
-    fn struct_fields<'a>(
+impl<'a> Context<'a> {
+    fn struct_fields(
         &mut self,
         sname: &P::StructName,
         mident: &E::ModuleIdent,
-        modules: &'a UniqueMap<E::ModuleIdent, T::ModuleDefinition>,
     ) -> Option<(&'a E::Fields<N::Type>, Loc)> {
-        if let Some(mdef) = modules.get(mident) {
-            if let Some(sdef) = mdef.structs.get(sname) {
-                if let N::StructFields::Defined(sfields) = &sdef.fields {
-                    // unwrap is safe since we know that mdef.structs.get succeeded
-                    return Some((sfields, *mdef.structs.get_loc(sname).unwrap()));
-                }
-            }
+        let sdef = self.program_info.struct_definition(mident, sname);
+        if let N::StructFields::Defined(sfields) = &sdef.fields {
+            let loc = self.program_info.struct_declared_loc(mident, sname);
+            return Some((sfields, loc));
         }
         None
     }
@@ -177,7 +194,6 @@ impl FreezeWrappedVisitor {
         &mut self,
         ftype: &N::Type,
         fname: Symbol,
-        modules: &UniqueMap<E::ModuleIdent, T::ModuleDefinition>,
         field_depth: usize,
     ) -> Option<(Loc, /* direct wrapping */ bool)> {
         use N::Type_ as T;
@@ -197,7 +213,6 @@ impl FreezeWrappedVisitor {
                     // don't have to check all variants of H::TypeName_ as only H::TypeName_::ModuleType
                     // can be a struct or have abilities
                     if let Some(wrapping_field_info) = self.find_wrapping_field_loc(
-                        modules,
                         mident,
                         sname,
                         Some(FieldInfo::new(fname, ftype.loc, abilities.clone())),
@@ -221,7 +236,6 @@ impl FreezeWrappedVisitor {
     /// information is included as well.
     fn find_wrapping_field_loc(
         &mut self,
-        modules: &UniqueMap<E::ModuleIdent, T::ModuleDefinition>,
         mident: E::ModuleIdent,
         sname: P::StructName,
         outer_field_info: Option<FieldInfo>,
@@ -236,7 +250,7 @@ impl FreezeWrappedVisitor {
             // did not find fields wrapping object in the past - makes no sense to keep looking
             return None;
         }
-        let Some((sfields, sloc)) = self.struct_fields(&sname, &mident, modules) else {
+        let Some((sfields, sloc)) = self.struct_fields(&sname, &mident) else {
             return None;
         };
 
@@ -259,7 +273,7 @@ impl FreezeWrappedVisitor {
         }
 
         let wrapping_field_info = sfields.iter().find_map(|(_, fname, (_, ftype))| {
-            let res = self.wraps_object(ftype, *fname, modules, field_depth + 1);
+            let res = self.wraps_object(ftype, *fname, field_depth + 1);
             if let Some((wrapped_tloc, direct)) = res {
                 // a field wrapping an object found - memoize it
                 return Some(self.insert_wrapping_field(

@@ -178,6 +178,11 @@ impl<K: TName, V> UniqueMap<K, V> {
         self.into_iter()
     }
 
+    pub fn key_cloned_iter_mut(&mut self) -> impl Iterator<Item = (K, &mut V)> {
+        self.into_iter()
+            .map(|(loc, k_, v)| (K::add_loc(loc, k_.clone()), v))
+    }
+
     pub fn maybe_from_opt_iter(
         iter: impl Iterator<Item = Option<(K, V)>>,
     ) -> Option<Result<UniqueMap<K, V>, (K::Key, K::Loc, K::Loc)>> {

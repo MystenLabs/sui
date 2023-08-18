@@ -6,6 +6,7 @@ use move_symbol_pool::Symbol;
 
 use crate::{
     diag,
+    diagnostics::WarningFilters,
     editions::Flavor,
     expansion::ast::{AbilitySet, AttributeName_, Fields, ModuleIdent, Visibility},
     naming::ast::{
@@ -26,7 +27,7 @@ use crate::{
     typing::{
         ast as T,
         core::{ability_not_satisfied_tips, error_format, error_format_, ProgramInfo, Subst},
-        visitor::TypingVisitor,
+        visitor::{TypingVisitorConstructor, TypingVisitorContext},
     },
 };
 
@@ -36,9 +37,14 @@ use crate::{
 
 pub struct SuiTypeChecks;
 
-impl TypingVisitor for SuiTypeChecks {
-    fn visit(&mut self, env: &mut CompilationEnv, info: &ProgramInfo, prog: &mut T::Program) {
-        program(env, info, prog)
+impl TypingVisitorConstructor for SuiTypeChecks {
+    type Context<'a> = Context<'a>;
+    fn context<'a>(
+        env: &'a mut CompilationEnv,
+        program_info: &'a ProgramInfo,
+        _program: &T::Program,
+    ) -> Self::Context<'a> {
+        Context::new(env, program_info)
     }
 }
 
@@ -47,31 +53,41 @@ impl TypingVisitor for SuiTypeChecks {
 //**************************************************************************************************
 
 #[allow(unused)]
-struct Context<'a> {
+pub struct Context<'a> {
     env: &'a mut CompilationEnv,
     info: &'a ProgramInfo,
-    current_module: ModuleIdent,
-    upper_module: Symbol,
+    current_module: Option<ModuleIdent>,
+    upper_module: Option<Symbol>,
     one_time_witness: Option<Result<StructName, ()>>,
     in_test: bool,
 }
 
 impl<'a> Context<'a> {
-    fn new(
-        env: &'a mut CompilationEnv,
-        info: &'a ProgramInfo,
-        current_module: ModuleIdent,
-    ) -> Self {
-        let upper_module: Symbol =
-            Symbol::from(current_module.value.module.0.value.as_str().to_uppercase());
+    fn new(env: &'a mut CompilationEnv, info: &'a ProgramInfo) -> Self {
         Context {
             env,
-            current_module,
-            upper_module,
+            current_module: None,
+            upper_module: None,
             one_time_witness: None,
             info,
             in_test: false,
         }
+    }
+
+    fn set_module(&mut self, current_module: ModuleIdent) {
+        self.current_module = Some(current_module);
+        self.upper_module = Some(Symbol::from(
+            current_module.value.module.0.value.as_str().to_uppercase(),
+        ));
+        self.one_time_witness = None;
+    }
+
+    fn current_module(&self) -> &ModuleIdent {
+        self.current_module.as_ref().unwrap()
+    }
+
+    fn upper_module(&self) -> Symbol {
+        self.upper_module.unwrap()
     }
 }
 
@@ -85,74 +101,91 @@ const OTW_NOTE: &str = "One-time witness types are structs with the following re
 // Entry
 //**************************************************************************************************
 
-pub fn program(env: &mut CompilationEnv, info: &ProgramInfo, prog: &T::Program) {
-    let T::Program { modules, scripts } = prog;
-    for script in scripts.values() {
-        let config = env.package_config(script.package_name);
+impl<'a> TypingVisitorContext for Context<'a> {
+    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
+        self.env.add_warning_filter_scope(filter)
+    }
+
+    fn pop_warning_filter_scope(&mut self) {
+        self.env.pop_warning_filter_scope()
+    }
+
+    fn visit_script_custom(&mut self, _name: Symbol, script: &mut T::Script) -> bool {
+        let config = self.env.package_config(script.package_name);
+        if config.flavor == Flavor::Sui {
+            // TODO point to PTB docs?
+            let msg = "'scripts' are not supported on Sui. \
+                        Consider removing or refactoring into a 'module'";
+            self.env.add_diag(diag!(SCRIPT_DIAG, (script.loc, msg)));
+        }
+        // skip scripts
+        true
+    }
+
+    fn visit_module_custom(&mut self, ident: ModuleIdent, mdef: &mut T::ModuleDefinition) -> bool {
+        let config = self.env.package_config(mdef.package_name);
         if config.flavor != Flavor::Sui {
-            continue;
+            // skip if not sui
+            return true;
         }
 
-        // TODO point to PTB docs?
-        let msg = "'scripts' are not supported on Sui. \
-        Consider removing or refactoring into a 'module'";
-        env.add_diag(diag!(SCRIPT_DIAG, (script.loc, msg)))
+        if !mdef.is_source_module {
+            // Skip non-source, dependency modules
+            return true;
+        }
+
+        self.set_module(ident);
+        self.in_test = mdef.attributes.iter().any(|(_, attr_, _)| {
+            matches!(
+                attr_,
+                AttributeName_::Known(KnownAttribute::Testing(TestingAttribute::TestOnly))
+            )
+        });
+        if let Some(sdef) = mdef.structs.get_(&self.upper_module()) {
+            let valid_fields = if let N::StructFields::Defined(fields) = &sdef.fields {
+                invalid_otw_field_loc(fields).is_none()
+            } else {
+                true
+            };
+            if valid_fields {
+                let name = mdef.structs.get_full_key_(&self.upper_module()).unwrap();
+                check_otw_type(self, name, sdef, None)
+            }
+        }
+
+        if let Some(fdef) = mdef.functions.get_(&symbol!("init")) {
+            let name = mdef.functions.get_full_key_(&symbol!("init")).unwrap();
+            init_signature(self, name, &fdef.signature)
+        }
+        self.in_test = false;
+        // do not skip module
+        false
     }
-    for (mident, mdef) in modules.key_cloned_iter() {
-        module(env, info, mident, mdef);
+
+    fn visit_function_custom(
+        &mut self,
+        module: Option<ModuleIdent>,
+        name: FunctionName,
+        fdef: &mut T::Function,
+    ) -> bool {
+        debug_assert!(self.current_module == module);
+        function(self, name, fdef);
+        // skip since we have already visited the body
+        true
+    }
+
+    fn visit_exp_custom(&mut self, e: &mut T::Exp) -> bool {
+        exp(self, e);
+        // do not skip recursion
+        false
     }
 }
 
-fn module(
-    env: &mut CompilationEnv,
-    info: &ProgramInfo,
-    mident: ModuleIdent,
-    mdef: &T::ModuleDefinition,
-) {
-    let config = env.package_config(mdef.package_name);
-    if config.flavor != Flavor::Sui {
-        return;
-    }
-
-    // Skip non-source, dependency modules
-    if !mdef.is_source_module {
-        return;
-    }
-
-    let mut context = Context::new(env, info, mident);
-    context.in_test = mdef.attributes.iter().any(|(_, attr_, _)| {
-        matches!(
-            attr_,
-            AttributeName_::Known(KnownAttribute::Testing(TestingAttribute::TestOnly))
-        )
-    });
-    if let Some(sdef) = mdef.structs.get_(&context.upper_module) {
-        let valid_fields = if let N::StructFields::Defined(fields) = &sdef.fields {
-            invalid_otw_field_loc(fields).is_none()
-        } else {
-            true
-        };
-        if valid_fields {
-            let name = mdef.structs.get_full_key_(&context.upper_module).unwrap();
-            check_otw_type(&mut context, name, sdef, None)
-        }
-    }
-
-    if let Some(fdef) = mdef.functions.get_(&symbol!("init")) {
-        let name = mdef.functions.get_full_key_(&symbol!("init")).unwrap();
-        init_signature(&mut context, name, &fdef.signature)
-    }
-
-    for (name, fdef) in mdef.functions.key_cloned_iter() {
-        function(&mut context, name, fdef);
-    }
-}
-
-//**************************************************************************************************
+//**********************************************************************************************
 // Functions
-//**************************************************************************************************
+//**********************************************************************************************
 
-fn function(context: &mut Context, name: FunctionName, fdef: &T::Function) {
+fn function(context: &mut Context, name: FunctionName, fdef: &mut T::Function) {
     let T::Function {
         visibility,
         signature,
@@ -181,7 +214,7 @@ fn function(context: &mut Context, name: FunctionName, fdef: &T::Function) {
         entry_signature(context, *entry_loc, name, signature);
     }
     if let sp!(_, T::FunctionBody_::Defined(seq)) = body {
-        sequence(context, seq)
+        context.visit_seq(seq)
     }
     context.in_test = prev_in_test;
 }
@@ -260,27 +293,17 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
             (last_loc, msg),
         ))
     }
-    let upper_module: Symbol = Symbol::from(
-        context
-            .current_module
-            .value
-            .module
-            .0
-            .value
-            .as_str()
-            .to_uppercase(),
-    );
-
+    let upper_module: Symbol = context.upper_module();
     if parameters.len() == 1 && context.one_time_witness.is_some() {
         // if there is 1 parameter, and a OTW, this is an error since the OTW must be used
         let msg = format!(
             "Invalid first parameter to 'init'. \
             Expected this module's one-time witness type '{}::{upper_module}'",
-            context.current_module,
+            context.current_module(),
         );
         let otw_loc = context
             .info
-            .struct_declared_loc_(&context.current_module, &upper_module);
+            .struct_declared_loc_(context.current_module(), &upper_module);
         let otw_msg = "One-time witness declared here";
         let mut diag = diag!(
             INIT_FUN_DIAG,
@@ -295,7 +318,7 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
         let is_otw = matches!(
             first_ty.value.type_name(),
             Some(sp!(_, TypeName_::ModuleType(m, n)))
-                if m == &context.current_module && n.value() == upper_module
+                if m == context.current_module() && n.value() == upper_module
         );
         if !is_otw {
             let msg = format!(
@@ -303,7 +326,7 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
                 Expected a one-time witness type, '{}::{upper_module}",
                 first_var.value.name,
                 error_format(first_ty, &Subst::empty()),
-                context.current_module,
+                context.current_module(),
             );
             let mut diag = diag!(
                 INIT_FUN_DIAG,
@@ -314,13 +337,13 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
             context.env.add_diag(diag)
         } else if let Some(sdef) = context
             .info
-            .module(&context.current_module)
+            .module(context.current_module())
             .structs
             .get_(&upper_module)
         {
             let name = context
                 .info
-                .module(&context.current_module)
+                .module(context.current_module())
                 .structs
                 .get_full_key_(&upper_module)
                 .unwrap();
@@ -757,40 +780,10 @@ fn invalid_entry_return_ty<'a>(
 // Expr
 //**************************************************************************************************
 
-fn sequence(context: &mut Context, seq: &T::Sequence) {
-    for item in seq {
-        sequence_item(context, item)
-    }
-}
-
-fn sequence_item(context: &mut Context, sp!(_, item_): &T::SequenceItem) {
-    match item_ {
-        T::SequenceItem_::Seq(e) => exp(context, e),
-        T::SequenceItem_::Declare(_) => (),
-        T::SequenceItem_::Bind(_, _, e) => exp(context, e),
-    }
-}
-
 fn exp(context: &mut Context, e: &T::Exp) {
     match &e.exp.value {
-        T::UnannotatedExp_::Unit { .. }
-        | T::UnannotatedExp_::Value(_)
-        | T::UnannotatedExp_::Move { .. }
-        | T::UnannotatedExp_::Copy { .. }
-        | T::UnannotatedExp_::Use(_)
-        | T::UnannotatedExp_::Constant(_, _)
-        | T::UnannotatedExp_::Break
-        | T::UnannotatedExp_::Continue
-        | T::UnannotatedExp_::BorrowLocal(_, _)
-        | T::UnannotatedExp_::Spec(_, _)
-        | T::UnannotatedExp_::UnresolvedError => (),
         T::UnannotatedExp_::ModuleCall(mcall) => {
-            let T::ModuleCall {
-                module,
-                name,
-                arguments,
-                ..
-            } = &**mcall;
+            let T::ModuleCall { module, name, .. } = &**mcall;
             if !context.in_test && name.value() == symbol!("init") {
                 let msg = format!(
                     "Invalid call to '{}::{}'. \
@@ -806,46 +799,16 @@ fn exp(context: &mut Context, e: &T::Exp) {
                 );
                 context.env.add_diag(diag)
             }
-            exp(context, arguments)
         }
-
-        T::UnannotatedExp_::TempBorrow(_, e)
-        | T::UnannotatedExp_::Builtin(_, e)
-        | T::UnannotatedExp_::Vector(_, _, _, e)
-        | T::UnannotatedExp_::Loop { body: e, .. }
-        | T::UnannotatedExp_::Assign(_, _, e)
-        | T::UnannotatedExp_::Return(e)
-        | T::UnannotatedExp_::Abort(e)
-        | T::UnannotatedExp_::Dereference(e)
-        | T::UnannotatedExp_::UnaryExp(_, e)
-        | T::UnannotatedExp_::Borrow(_, e, _)
-        | T::UnannotatedExp_::Cast(e, _)
-        | T::UnannotatedExp_::Annotate(e, _) => exp(context, e),
-        T::UnannotatedExp_::BinopExp(el, _, _, er) | T::UnannotatedExp_::Mutate(el, er) => {
-            exp(context, el);
-            exp(context, er)
-        }
-        T::UnannotatedExp_::IfElse(econd, etrue, efalse) => {
-            exp(context, econd);
-            exp(context, etrue);
-            exp(context, efalse)
-        }
-        T::UnannotatedExp_::While(econd, ebody) => {
-            exp(context, econd);
-            exp(context, ebody)
-        }
-        T::UnannotatedExp_::Block(seq) => sequence(context, seq),
-        T::UnannotatedExp_::ExpList(es) => exp_list(context, es),
-
-        T::UnannotatedExp_::Pack(m, s, _, fields) => {
+        T::UnannotatedExp_::Pack(m, s, _, _) => {
             if !context.in_test
                 && !context
-                    .current_module
+                    .current_module()
                     .value
                     .is(SUI_ADDR_NAME, SUI_MODULE_NAME)
                 && context.one_time_witness.as_ref().is_some_and(|otw| {
                     otw.as_ref()
-                        .is_ok_and(|o| m == &context.current_module && o == s)
+                        .is_ok_and(|o| m == context.current_module() && o == s)
                 })
             {
                 let msg = "Invalid one-time witness construction. One-time witness types \
@@ -854,17 +817,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
                 diag.add_note(OTW_NOTE);
                 context.env.add_diag(diag)
             }
-            for (_, _, (_, (_, e))) in fields {
-                exp(context, e)
-            }
         }
-    }
-}
-
-fn exp_list(context: &mut Context, es: &[T::ExpListItem]) {
-    for item in es {
-        match item {
-            T::ExpListItem::Single(e, _) | T::ExpListItem::Splat(_, e, _) => exp(context, e),
-        }
+        _ => (),
     }
 }
