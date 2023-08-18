@@ -3,4 +3,5 @@
 
 export * from './hooks/useSuiClient.js';
 export * from './components/SuiClientProvider.js';
+export * from './hooks/useRpcApiVersion.js';
 export * from './hooks/rpc/index.js';

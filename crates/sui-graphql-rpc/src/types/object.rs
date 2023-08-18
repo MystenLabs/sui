@@ -12,10 +12,7 @@ use super::{
     sui_address::SuiAddress,
     transaction_block::TransactionBlock,
 };
-use crate::{
-    server::data_provider::{fetch_balance, fetch_owned_objs, fetch_tx},
-    types::base64::Base64,
-};
+use crate::{server::context_ext::DataProviderContextExt, types::base64::Base64};
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub(crate) struct Object {
@@ -44,8 +41,14 @@ pub(crate) struct ObjectFilter {
     ty: Option<String>,
 
     owner: Option<SuiAddress>,
-    object_id: Option<SuiAddress>,
-    version: Option<u64>,
+    object_ids: Option<Vec<SuiAddress>>,
+    object_keys: Option<Vec<ObjectKey>>,
+}
+
+#[derive(InputObject)]
+pub(crate) struct ObjectKey {
+    object_id: SuiAddress,
+    version: u64,
 }
 
 #[allow(unreachable_code)]
@@ -73,7 +76,7 @@ impl Object {
         ctx: &Context<'_>,
     ) -> Result<Option<TransactionBlock>> {
         if let Some(tx) = &self.previous_transaction {
-            fetch_tx(ctx.data_unchecked::<sui_sdk::SuiClient>(), tx).await
+            ctx.data_provider().fetch_tx(tx).await
         } else {
             Ok(None)
         }
@@ -102,25 +105,15 @@ impl Object {
         before: Option<String>,
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, Object>> {
-        fetch_owned_objs(
-            ctx.data_unchecked::<sui_sdk::SuiClient>(),
-            &self.address,
-            first,
-            after,
-            last,
-            before,
-            filter,
-        )
-        .await
+        ctx.data_provider()
+            .fetch_owned_objs(&self.address, first, after, last, before, filter)
+            .await
     }
 
     pub async fn balance(&self, ctx: &Context<'_>, type_: Option<String>) -> Result<Balance> {
-        fetch_balance(
-            ctx.data_unchecked::<sui_sdk::SuiClient>(),
-            &self.address,
-            type_,
-        )
-        .await
+        ctx.data_provider()
+            .fetch_balance(&self.address, type_)
+            .await
     }
 
     pub async fn balance_connection(

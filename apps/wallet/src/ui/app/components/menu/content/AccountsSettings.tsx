@@ -18,12 +18,14 @@ import { Button } from '_src/ui/app/shared/ButtonUI';
 export function AccountsSettings() {
 	const backUrl = useNextMenuUrl(true, '/');
 	const importPrivateKeyUrl = useNextMenuUrl(true, '/import-private-key');
-	const accounts = useAccounts();
+	const { data: accounts } = useAccounts();
 	const createAccountMutation = useDeriveNextAccountMutation();
 	const navigate = useNavigate();
 	const appType = useAppSelector((state) => state.app.appType);
 	const connectLedgerModalUrl = useNextMenuUrl(true, '/accounts/connect-ledger-modal');
-
+	if (!accounts) {
+		return null;
+	}
 	return (
 		<MenuLayout title="Accounts" back={backUrl}>
 			<div className="flex flex-col gap-3">
@@ -36,8 +38,15 @@ export function AccountsSettings() {
 					text="Create New Account"
 					loading={createAccountMutation.isLoading}
 					onClick={() => createAccountMutation.mutate()}
+					disabled
 				/>
-				<Button variant="outline" size="tall" text="Import Private Key" to={importPrivateKeyUrl} />
+				<Button
+					variant="outline"
+					size="tall"
+					text="Import Private Key"
+					to={importPrivateKeyUrl}
+					disabled
+				/>
 				<Button
 					variant="outline"
 					size="tall"
@@ -55,6 +64,7 @@ export function AccountsSettings() {
 							navigate(connectLedgerModalUrl);
 						}
 					}}
+					disabled
 				/>
 				<Outlet />
 			</div>

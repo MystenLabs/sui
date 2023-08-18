@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient } from '@mysten/core';
+import { useSuiClient } from '@mysten/dapp-kit';
 import { LedgerSigner } from '../../LedgerSigner';
 import { QredoSigner } from '../../QredoSigner';
 import { type WalletSigner } from '../../WalletSigner';
@@ -16,7 +16,7 @@ import { isQredoAccountSerializedUI } from '_src/background/accounts/QredoAccoun
 
 export function useSigner(account: SerializedUIAccount | null): WalletSigner | null {
 	const { connectToLedger } = useSuiLedgerClient();
-	const api = useRpcClient();
+	const api = useSuiClient();
 	const background = useBackgroundClient();
 	const [qredoAPI] = useQredoAPI(
 		account && !account?.isLocked && isQredoAccountSerializedUI(account)

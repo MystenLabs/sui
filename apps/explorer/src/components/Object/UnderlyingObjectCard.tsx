@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetDynamicFieldObject, useGetNormalizedMoveStruct } from '@mysten/core';
+import { useDynamicFieldObject, useNormalizedMoveStruct } from '@mysten/dapp-kit';
 import { LoadingIndicator } from '@mysten/ui';
 
 import { FieldItem } from './FieldItem';
@@ -20,7 +20,7 @@ export function UnderlyingObjectCard({
 	name,
 	dynamicFieldType,
 }: UnderlyingObjectCardProps) {
-	const { data, isLoading, isError, isFetched } = useGetDynamicFieldObject(parentId, name);
+	const { data, isLoading, isError, isFetched } = useDynamicFieldObject({ parentId, name });
 	const objectType =
 		data?.data?.type ??
 		(data?.data?.content?.dataType === 'package' ? 'package' : data?.data?.content?.type) ??
@@ -33,8 +33,8 @@ export function UnderlyingObjectCard({
 		data: normalizedStruct,
 		isFetched: normalizedStructFetched,
 		isLoading: loadingNormalizedStruct,
-	} = useGetNormalizedMoveStruct({
-		packageId,
+	} = useNormalizedMoveStruct({
+		package: packageId,
 		module: moduleName,
 		struct: functionName,
 	});

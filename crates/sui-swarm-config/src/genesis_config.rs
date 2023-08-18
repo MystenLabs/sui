@@ -29,9 +29,13 @@ pub struct SsfnGenesisConfig {
 // All information needed to build a NodeConfig for a validator.
 #[derive(Serialize, Deserialize)]
 pub struct ValidatorGenesisConfig {
+    #[serde(default = "default_bls12381_key_pair")]
     pub key_pair: AuthorityKeyPair,
+    #[serde(default = "default_ed25519_key_pair")]
     pub worker_key_pair: NetworkKeyPair,
+    #[serde(default = "default_sui_key_pair")]
     pub account_key_pair: SuiKeyPair,
+    #[serde(default = "default_ed25519_key_pair")]
     pub network_key_pair: NetworkKeyPair,
     pub network_address: Multiaddr,
     pub p2p_address: Multiaddr,
@@ -215,6 +219,18 @@ fn default_multiaddr_address() -> Multiaddr {
 
 fn default_stake() -> u64 {
     sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST
+}
+
+fn default_bls12381_key_pair() -> AuthorityKeyPair {
+    get_key_pair_from_rng(&mut rand::rngs::OsRng).1
+}
+
+fn default_ed25519_key_pair() -> NetworkKeyPair {
+    get_key_pair_from_rng(&mut rand::rngs::OsRng).1
+}
+
+fn default_sui_key_pair() -> SuiKeyPair {
+    SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut rand::rngs::OsRng).1)
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

@@ -1,33 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::error::ExecutionErrorKind;
+use crate::error::SuiError;
+use crate::{
+    balance::{Balance, Supply},
+    error::ExecutionError,
+    object::{Data, Object},
+};
+use crate::{base_types::ObjectID, id::UID, SUI_FRAMEWORK_ADDRESS};
 use move_core_types::{
     ident_str,
     identifier::IdentStr,
     language_storage::{StructTag, TypeTag},
     value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
 };
-use serde::{Deserialize, Serialize};
-
-use crate::object::{MoveObject, Owner};
-use crate::storage::WriteKind;
-use crate::temporary_store::TemporaryStore;
-use crate::{
-    balance::{Balance, Supply},
-    error::ExecutionError,
-    object::{Data, Object},
-};
-use crate::{base_types::TransactionDigest, error::SuiError};
-use crate::{
-    base_types::{MoveObjectType, SequenceNumber},
-    error::ExecutionErrorKind,
-};
-use crate::{
-    base_types::{ObjectID, SuiAddress},
-    id::UID,
-    SUI_FRAMEWORK_ADDRESS,
-};
 use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
 pub const COIN_MODULE_NAME: &IdentStr = ident_str!("coin");
 pub const COIN_STRUCT_NAME: &IdentStr = ident_str!("Coin");
@@ -164,21 +153,6 @@ impl TreasuryCap {
             type_params: vec![TypeTag::Struct(Box::new(type_param))],
         }
     }
-}
-
-pub fn transfer_coin(
-    temporary_store: &mut TemporaryStore<'_>,
-    coin: &Coin,
-    recipient: SuiAddress,
-    coin_type: MoveObjectType,
-    previous_transaction: TransactionDigest,
-) {
-    let new_coin = Object::new_move(
-        MoveObject::new_coin(coin_type, SequenceNumber::new(), *coin.id(), coin.value()),
-        Owner::AddressOwner(recipient),
-        previous_transaction,
-    );
-    temporary_store.write_object(new_coin, WriteKind::Create);
 }
 
 // Rust version of the Move sui::coin::CoinMetadata type

@@ -7,11 +7,10 @@ import { useParams } from 'react-router-dom';
 import { DAppPermissionsList } from '../../components/DAppPermissionsList';
 import { SummaryCard } from '../../components/SummaryCard';
 import { WalletListSelect } from '../../components/WalletListSelect';
-import { useActiveAddress } from '../../hooks/useActiveAddress';
 import { PageMainLayoutTitle } from '../../shared/page-main-layout/PageMainLayoutTitle';
 import Loading from '_components/loading';
 import { UserApproveContainer } from '_components/user-approve-container';
-import { useAppDispatch, useAppSelector } from '_hooks';
+import { useActiveAddress, useAppDispatch, useAppSelector } from '_hooks';
 import { permissionsSelectors, respondToPermissionRequest } from '_redux/slices/permissions';
 import { ampli } from '_src/shared/analytics/ampli';
 

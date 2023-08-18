@@ -301,8 +301,8 @@ struct PgConectionPoolConfig {
 
 impl PgConectionPoolConfig {
     const DEFAULT_POOL_SIZE: u32 = 100;
-    const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_secs(30);
-    const DEFAULT_STATEMENT_TIMEOUT: Duration = Duration::from_secs(5);
+    const DEFAULT_CONNECTION_TIMEOUT: u64 = 30;
+    const DEFAULT_STATEMENT_TIMEOUT: u64 = 30;
 
     fn connection_config(&self) -> PgConnectionConfig {
         PgConnectionConfig {
@@ -317,10 +317,19 @@ impl Default for PgConectionPoolConfig {
             .ok()
             .and_then(|s| s.parse::<u32>().ok())
             .unwrap_or(Self::DEFAULT_POOL_SIZE);
+        let conn_timeout_secs = std::env::var("DB_CONNECTION_TIMEOUT")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(Self::DEFAULT_CONNECTION_TIMEOUT);
+        let statement_timeout_secs = std::env::var("DB_STATEMENT_TIMEOUT")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(Self::DEFAULT_STATEMENT_TIMEOUT);
+
         Self {
             pool_size: db_pool_size,
-            connection_timeout: Self::DEFAULT_CONNECTION_TIMEOUT,
-            statement_timeout: Self::DEFAULT_STATEMENT_TIMEOUT,
+            connection_timeout: Duration::from_secs(conn_timeout_secs),
+            statement_timeout: Duration::from_secs(statement_timeout_secs),
         }
     }
 }

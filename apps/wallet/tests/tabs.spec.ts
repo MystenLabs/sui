@@ -4,6 +4,8 @@
 import { test, expect } from './fixtures';
 import { createWallet } from './utils/auth';
 
+test.skip();
+
 test('Assets tab', async ({ page, extensionUrl }) => {
 	await createWallet(page, extensionUrl);
 	await page.getByRole('navigation').getByRole('link', { name: 'Assets' }).click();

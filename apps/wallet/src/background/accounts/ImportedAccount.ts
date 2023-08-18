@@ -53,6 +53,7 @@ export class ImportedAccount
 			publicKey: keyPair.getPublicKey().toBase64(),
 			encrypted: await encrypt(inputs.password, dataToEncrypt),
 			lastUnlockedOn: null,
+			selected: false,
 		};
 	}
 
@@ -74,7 +75,7 @@ export class ImportedAccount
 	}
 
 	async toUISerialized(): Promise<ImportedAccountSerializedUI> {
-		const { address, publicKey, type } = await this.getStoredData();
+		const { address, publicKey, type, selected } = await this.getStoredData();
 		return {
 			id: this.id,
 			type,
@@ -82,6 +83,7 @@ export class ImportedAccount
 			publicKey,
 			isLocked: await this.isLocked(),
 			lastUnlockedOn: await this.lastUnlockedOn,
+			selected,
 		};
 	}
 

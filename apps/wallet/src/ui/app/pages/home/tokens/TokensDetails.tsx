@@ -1,13 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// import { useFeature } from '@growthbook/growthbook-react';
 import { useFeature } from '@growthbook/growthbook-react';
-import {
-	useAppsBackend,
-	useGetCoinBalance,
-	useGetAllBalances,
-	useResolveSuiNSName,
-} from '@mysten/core';
+import { useAppsBackend, useResolveSuiNSName } from '@mysten/core';
+import { useAllBalances, useBalance } from '@mysten/dapp-kit';
 import {
 	Info12,
 	WalletActionBuy24,
@@ -29,15 +26,14 @@ import { TokenLink } from './TokenLink';
 import { TokenList } from './TokenList';
 import SvgSuiTokensStack from './TokensStackIcon';
 import { CoinBalance } from './coin-balance';
-import BullsharkQuestsNotification from '../bullshark-quests-notification';
+import Interstitial, { type InterstitialConfig } from '../interstitial';
 import { useOnrampProviders } from '../onramp/useOnrampProviders';
-import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import { LargeButton } from '_app/shared/LargeButton';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
 import { filterAndSortTokenBalances } from '_helpers';
-import { useAppSelector, useCoinsReFetchingConfig } from '_hooks';
+import { useActiveAddress, useAppSelector, useCoinsReFetchingConfig } from '_hooks';
 import { ampli } from '_src/shared/analytics/ampli';
 import { API_ENV } from '_src/shared/api-env';
 import { FEATURES } from '_src/shared/experimentation/features';
@@ -169,15 +165,18 @@ function MyTokens({
 function TokenDetails({ coinType }: TokenDetailsProps) {
 	const [interstitialDismissed, setInterstitialDismissed] = useState<boolean>(false);
 	const activeCoinType = coinType || SUI_TYPE_ARG;
-	const accountAddress = useActiveAddress();
-	const { data: domainName } = useResolveSuiNSName(accountAddress);
+	const activeAccountAddress = useActiveAddress();
+	const { data: domainName } = useResolveSuiNSName(activeAccountAddress);
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
 	const {
 		data: coinBalance,
 		isError,
 		isLoading,
 		isFetched,
-	} = useGetCoinBalance(activeCoinType, accountAddress, refetchInterval, staleTime);
+	} = useBalance(
+		{ coinType: activeCoinType, owner: activeAccountAddress! },
+		{ enabled: !!activeAccountAddress, refetchInterval, staleTime },
+	);
 	const { apiEnv } = useAppSelector((state) => state.app);
 	const { request } = useAppsBackend();
 	const { data } = useQuery({
@@ -196,10 +195,18 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 		data: coinBalances,
 		isLoading: coinBalancesLoading,
 		isFetched: coinBalancesFetched,
-	} = useGetAllBalances(accountAddress, staleTime, refetchInterval, filterAndSortTokenBalances);
+	} = useAllBalances(
+		{ owner: activeAccountAddress! },
+		{
+			enabled: !!activeAccountAddress,
+			staleTime,
+			refetchInterval,
+			select: filterAndSortTokenBalances,
+		},
+	);
 
-	const BullsharkInterstitialEnabled = useFeature<boolean>(
-		FEATURES.BULLSHARK_QUESTS_INTERSTITIAL,
+	const walletInterstitialConfig = useFeature<InterstitialConfig>(
+		FEATURES.WALLET_INTERSTITIAL_CONFIG,
 	).value;
 
 	const { providers } = useOnrampProviders();
@@ -211,22 +218,26 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	const isFirstTimeLoading = isLoading && !isFetched;
 
 	useEffect(() => {
-		const dismissed = localStorage.getItem('bullshark-interstitial-dismissed');
+		const dismissed =
+			walletInterstitialConfig?.dismissKey &&
+			localStorage.getItem(walletInterstitialConfig.dismissKey);
 		setInterstitialDismissed(dismissed === 'true');
-	}, []);
+	}, [walletInterstitialConfig?.dismissKey]);
 
-	if (BullsharkInterstitialEnabled && !interstitialDismissed) {
+	if (walletInterstitialConfig?.enabled && !interstitialDismissed) {
 		return (
-			<BullsharkQuestsNotification
+			<Interstitial
+				{...walletInterstitialConfig}
 				onClose={() => {
 					setInterstitialDismissed(true);
 				}}
 			/>
 		);
 	}
-
 	const accountHasSui = coinBalances?.some(({ coinType }) => coinType === SUI_TYPE_ARG);
-
+	if (!activeAccountAddress) {
+		return null;
+	}
 	return (
 		<>
 			{apiEnv === API_ENV.mainnet && data?.degraded && (
@@ -250,7 +261,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 				>
 					<AccountsList />
 					<div className="flex flex-col">
-						<PortfolioName name={domainName ?? formatAddress(accountAddress!)} />
+						<PortfolioName name={domainName ?? formatAddress(activeAccountAddress)} />
 						<div
 							data-testid="coin-balance"
 							className="bg-sui/10 rounded-2xl py-5 px-4 flex flex-col w-full gap-3 items-center mt-4"
@@ -308,8 +319,8 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 								</LargeButton>
 							</div>
 							<div className="w-full">
-								{activeCoinType === SUI_TYPE_ARG && accountAddress ? (
-									<TokenIconLink disabled={!tokenBalance} accountAddress={accountAddress} />
+								{activeCoinType === SUI_TYPE_ARG ? (
+									<TokenIconLink disabled={!tokenBalance} accountAddress={activeAccountAddress} />
 								) : null}
 							</div>
 						</div>

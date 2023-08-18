@@ -25,7 +25,7 @@ pub enum Command {
         #[clap(short, long, default_value = "8000")]
         port: u16,
         /// Host to bind the server to
-        #[clap(short, long, default_value = "127.0.0.1")]
+        #[clap(long, default_value = "127.0.0.1")]
         host: String,
     },
 }

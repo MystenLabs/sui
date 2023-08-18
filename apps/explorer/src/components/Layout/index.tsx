@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { RpcClientContext, useCookieConsentBanner } from '@mysten/core';
+import { useCookieConsentBanner } from '@mysten/core';
+import { SuiClientProvider } from '@mysten/dapp-kit';
 import { WalletKitProvider } from '@mysten/wallet-kit';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { Fragment, useMemo } from 'react';
+import { Fragment } from 'react';
 import { resolveValue, Toaster, type ToastType } from 'react-hot-toast';
 import { Outlet, ScrollRestoration } from 'react-router-dom';
 
@@ -12,7 +13,7 @@ import { useInitialPageView } from '../../hooks/useInitialPageView';
 import { NetworkContext, useNetwork } from '~/context';
 import { Banner, type BannerProps } from '~/ui/Banner';
 import { persistableStorage } from '~/utils/analytics/amplitude';
-import { DefaultRpcClient } from '~/utils/api/DefaultRpcClient';
+import { type Network, NetworkConfigs, createSuiClient } from '~/utils/api/DefaultRpcClient';
 
 const toastVariants: Partial<Record<ToastType, BannerProps['variant']>> = {
 	success: 'positive',
@@ -21,7 +22,6 @@ const toastVariants: Partial<Record<ToastType, BannerProps['variant']>> = {
 
 export function Layout() {
 	const [network, setNetwork] = useNetwork();
-	const jsonRpcProvider = useMemo(() => DefaultRpcClient(network), [network]);
 
 	useCookieConsentBanner(persistableStorage, {
 		cookie_name: 'sui_explorer_cookie_consent',
@@ -41,7 +41,12 @@ export function Layout() {
 				/*autoConnect={false}*/
 				enableUnsafeBurner={import.meta.env.DEV}
 			>
-				<RpcClientContext.Provider value={jsonRpcProvider}>
+				<SuiClientProvider
+					networks={NetworkConfigs}
+					createClient={createSuiClient}
+					network={network as Network}
+					onNetworkChange={setNetwork}
+				>
 					<NetworkContext.Provider value={[network, setNetwork]}>
 						<Outlet />
 						<Toaster
@@ -65,7 +70,7 @@ export function Layout() {
 						</Toaster>
 						<ReactQueryDevtools />
 					</NetworkContext.Provider>
-				</RpcClientContext.Provider>
+				</SuiClientProvider>
 			</WalletKitProvider>
 		</Fragment>
 	);

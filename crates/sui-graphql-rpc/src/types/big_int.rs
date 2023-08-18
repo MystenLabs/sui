@@ -27,10 +27,12 @@ impl ScalarType for BigInt {
                 } else if r.chars().all(|c| c.is_ascii_digit()) {
                     format!("{}{}", if signed { "-" } else { "" }, r)
                 } else {
-                    return Err(InputValueError::custom("Invalid BigInt"));
+                    return Err(InputValueError::custom(
+                        "Invalid BigInt value. All characters should be digits.",
+                    ));
                 }))
             }
-            _ => Err(InputValueError::custom("Invalid BigInt")),
+            _ => Err(InputValueError::expected_type(value)),
         }
     }
 

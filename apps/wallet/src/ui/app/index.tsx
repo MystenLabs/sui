@@ -1,9 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEffect } from 'react';
-import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
+import { toB64 } from '@mysten/sui.js/utils';
+import { useEffect, useMemo } from 'react';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
+import { useSuiLedgerClient } from './components/ledger/SuiLedgerClientProvider';
+import { useAccounts } from './hooks/useAccounts';
+import { useBackgroundClient } from './hooks/useBackgroundClient';
 import { useInitialPageView } from './hooks/useInitialPageView';
 
 import { useStorageMigrationStatus } from './hooks/useStorageMigrationStatus';
@@ -46,12 +50,13 @@ import SiteConnectPage from './pages/site-connect';
 import WelcomePage from './pages/welcome';
 import { AppType } from './redux/slices/app/AppType';
 import { Staking } from './staking/home';
-import LockedPage from './wallet/locked-page';
 
 import { useAppDispatch, useAppSelector } from '_hooks';
 
 import { setNavVisibility } from '_redux/slices/app';
-import { NEW_ACCOUNTS_ENABLED } from '_src/shared/constants';
+import { isLedgerAccountSerializedUI } from '_src/background/accounts/LedgerAccount';
+import { type AccountsPublicInfoUpdates } from '_src/background/keyring/accounts';
+import { persistableStorage } from '_src/shared/analytics/amplitude';
 
 const HIDDEN_MENU_PATHS = [
 	'/nft-details',
@@ -75,6 +80,56 @@ const App = () => {
 	}, [location, dispatch]);
 
 	useInitialPageView();
+	const { data: accounts } = useAccounts();
+	const allLedgerWithoutPublicKey = useMemo(
+		() => accounts?.filter(isLedgerAccountSerializedUI).filter(({ publicKey }) => !publicKey) || [],
+		[accounts],
+	);
+	const backgroundClient = useBackgroundClient();
+	const { connectToLedger, suiLedgerClient } = useSuiLedgerClient();
+	useEffect(() => {
+		if (accounts?.length) {
+			// The user has accepted our terms of service after their primary
+			// account has been initialized (either by creating a new wallet
+			// or importing a previous account). This means we've gained
+			// consent and can persist device data to cookie storage
+			persistableStorage.persist();
+		}
+	}, [accounts]);
+	useEffect(() => {
+		// update ledger accounts without the public key
+		(async () => {
+			if (allLedgerWithoutPublicKey.length) {
+				try {
+					if (!suiLedgerClient) {
+						await connectToLedger();
+						return;
+					}
+					const updates: AccountsPublicInfoUpdates = [];
+					for (const { derivationPath, address } of allLedgerWithoutPublicKey) {
+						if (derivationPath) {
+							try {
+								const { publicKey } = await suiLedgerClient.getPublicKey(derivationPath);
+								updates.push({
+									accountAddress: address,
+									changes: {
+										publicKey: toB64(publicKey),
+									},
+								});
+							} catch (e) {
+								// do nothing
+							}
+						}
+					}
+					if (updates.length) {
+						await backgroundClient.updateAccountsPublicInfo(updates);
+					}
+				} catch (e) {
+					// do nothing
+				}
+			}
+		})();
+	}, [allLedgerWithoutPublicKey, suiLedgerClient, backgroundClient, connectToLedger]);
 
 	const storageMigration = useStorageMigrationStatus();
 	if (storageMigration.isLoading || !storageMigration?.data) {
@@ -86,8 +141,6 @@ const App = () => {
 	return (
 		<Routes>
 			<Route path="/welcome" element={<WelcomePage />} />
-
-			<Route path="locked" element={<LockedPage />} />
 			<Route path="forgot-password" element={<ForgotPasswordPage />} />
 			<Route path="restricted" element={<RestrictedPage />} />
 
@@ -128,33 +181,16 @@ const App = () => {
 			<Route path="/account">
 				<Route path="forgot-password" element={<ForgotPasswordPage />} />
 			</Route>
-
-			{NEW_ACCOUNTS_ENABLED ? (
-				<>
-					<Route path="/accounts-dev" element={<AccountsDev />} />
-					<Route
-						path="/dapp/"
-						element={
-							<>
-								<div className="p-3 flex bg-white rounded-lg flex-col w-80">
-									<Outlet />
-								</div>
-								<div id="overlay-portal-container"></div>
-							</>
-						}
-					>
-						<Route path="/dapp/qredo-connect/:requestID" element={<QredoConnectInfoPage />} />
-						<Route path="/dapp/qredo-connect/:id/select" element={<SelectQredoAccountsPage />} />
-					</Route>
-				</>
-			) : null}
-
 			<Route path="/dapp/*" element={<HomePage disableNavigation />}>
 				<Route path="connect/:requestID" element={<SiteConnectPage />} />
 				<Route path="approve/:requestID" element={<ApprovalRequestPage />} />
 				<Route path="qredo-connect/:requestID" element={<QredoConnectInfoPage />} />
 				<Route path="qredo-connect/:id/select" element={<SelectQredoAccountsPage />} />
 			</Route>
+
+			{process.env.NODE_ENV === 'development' ? (
+				<Route path="/accounts-dev" element={<AccountsDev />} />
+			) : null}
 		</Routes>
 	);
 };

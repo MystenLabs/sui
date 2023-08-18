@@ -3,11 +3,11 @@
 
 import { Filter16, Plus12 } from '@mysten/icons';
 import * as ToggleGroup from '@radix-ui/react-toggle-group';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AccountListItem } from './AccountListItem';
 import { FooterLink } from './FooterLink';
 import { UnlockAccountModal } from './UnlockAccountModal';
-import { useActiveAddress } from '../../hooks';
+import { useActiveAccount } from '../../hooks/useActiveAccount';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { Heading } from '../../shared/heading';
 
@@ -16,12 +16,15 @@ import { useAccounts } from '_src/ui/app/hooks/useAccounts';
 import { Collapsible } from '_src/ui/app/shared/collapse';
 
 export function AccountsList() {
-	const activeAddress = useActiveAddress();
-	const accounts = useAccounts();
+	const { data: accounts } = useAccounts();
+	const activeAccount = useActiveAccount();
 	const backgroundClient = useBackgroundClient();
 
 	// todo: these will be grouped by account type
-	const otherAccounts = accounts.filter((a) => a.address !== activeAddress);
+	const otherAccounts = useMemo(
+		() => accounts?.filter((a) => a.id !== activeAccount?.id) || [],
+		[accounts, activeAccount?.id],
+	);
 
 	// todo: replace this with a real flow
 	const [unlockModalOpen, setUnlockModalOpen] = useState(false);
@@ -31,17 +34,19 @@ export function AccountsList() {
 
 	const close = () => setUnlockModalOpen(false);
 
-	const handleSelectAccount = async (address: string) => {
-		const account = accounts.find((a) => a.address === address);
+	const handleSelectAccount = async (accountID: string) => {
+		const account = accounts?.find((a) => a.id === accountID);
 		if (!account) return;
-		if (address !== activeAddress) {
+		if (accountID !== activeAccount?.id) {
 			ampli.switchedAccount({
 				toAccountType: account.type,
 			});
-			await backgroundClient.selectAccount(address);
+			await backgroundClient.selectAccount(accountID);
 		}
 	};
-
+	if (!accounts || !activeAccount) {
+		return null;
+	}
 	return (
 		<div className="bg-gradients-graph-cards flex flex-col rounded-xl p-4 gap-5 border border-solid border-hero/10 w-full">
 			<Heading variant="heading5" weight="semibold" color="steel-darker">
@@ -50,16 +55,16 @@ export function AccountsList() {
 
 			<ToggleGroup.Root
 				asChild
-				value={activeAddress!}
+				value={activeAccount.id}
 				type="single"
 				onValueChange={handleSelectAccount}
 			>
 				<>
 					<Collapsible title="Current" defaultOpen shade="darker">
-						<ToggleGroup.Item asChild value={activeAddress!}>
+						<ToggleGroup.Item asChild value={activeAccount.id}>
 							<div>
 								<AccountListItem
-									address={activeAddress!}
+									address={activeAccount.address}
 									handleUnlockAccount={handleUnlockAccount}
 								/>
 							</div>
@@ -71,7 +76,7 @@ export function AccountsList() {
 							<div className="flex flex-col gap-3">
 								{otherAccounts.map((account) => {
 									return (
-										<ToggleGroup.Item asChild key={account.address} value={account.address}>
+										<ToggleGroup.Item asChild key={account.id} value={account.id}>
 											<div>
 												<AccountListItem
 													address={account.address}

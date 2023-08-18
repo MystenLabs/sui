@@ -5,10 +5,10 @@ import {
 	useCoinMetadata,
 	useFormatCoin,
 	CoinFormat,
-	useRpcClient,
 	isSuiNSName,
 	useSuiNSEnabled,
 } from '@mysten/core';
+import { useSuiClient } from '@mysten/dapp-kit';
 import { ArrowRight16 } from '@mysten/icons';
 import { Coin as CoinAPI } from '@mysten/sui.js';
 import { type CoinStruct } from '@mysten/sui.js/client';
@@ -67,7 +67,7 @@ function GasBudgetEstimation({
 	const { values, setFieldValue } = useFormikContext<FormValues>();
 	const suiNSEnabled = useSuiNSEnabled();
 
-	const rpc = useRpcClient();
+	const client = useSuiClient();
 	const { data: gasBudget } = useQuery({
 		// eslint-disable-next-line @tanstack/query/exhaustive-deps
 		queryKey: [
@@ -87,7 +87,7 @@ function GasBudgetEstimation({
 
 			let to = values.to;
 			if (suiNSEnabled && isSuiNSName(values.to)) {
-				const address = await rpc.resolveNameServiceAddress({
+				const address = await client.resolveNameServiceAddress({
 					name: values.to,
 				});
 				if (!address) {
@@ -106,7 +106,7 @@ function GasBudgetEstimation({
 			});
 
 			tx.setSender(activeAddress);
-			await tx.build({ client: rpc });
+			await tx.build({ client });
 			return tx.blockData.gasConfig.budget;
 		},
 	});
@@ -141,7 +141,7 @@ export function SendTokenForm({
 	initialAmount = '',
 	initialTo = '',
 }: SendTokenFormProps) {
-	const rpc = useRpcClient();
+	const client = useSuiClient();
 	const activeAddress = useActiveAddress();
 	// Get all coins of the type
 	const { data: coinsData, isLoading: coinsIsLoading } = useGetAllCoins(coinType, activeAddress!);
@@ -163,8 +163,8 @@ export function SendTokenForm({
 	const suiNSEnabled = useSuiNSEnabled();
 
 	const validationSchemaStepOne = useMemo(
-		() => createValidationSchemaStepOne(rpc, suiNSEnabled, coinBalance, symbol, coinDecimals),
-		[rpc, coinBalance, symbol, coinDecimals, suiNSEnabled],
+		() => createValidationSchemaStepOne(client, suiNSEnabled, coinBalance, symbol, coinDecimals),
+		[client, coinBalance, symbol, coinDecimals, suiNSEnabled],
 	);
 
 	// remove the comma from the token balance
@@ -196,7 +196,7 @@ export function SendTokenForm({
 						.map(({ coinObjectId }) => coinObjectId);
 
 					if (suiNSEnabled && isSuiNSName(to)) {
-						const address = await rpc.resolveNameServiceAddress({
+						const address = await client.resolveNameServiceAddress({
 							name: to,
 						});
 						if (!address) {
