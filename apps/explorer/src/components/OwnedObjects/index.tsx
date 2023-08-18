@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetKioskContents, useGetOwnedObjects } from '@mysten/core';
+import { useGetKioskContents, useGetOwnedObjects, useLocalStorage } from '@mysten/core';
 import { ViewList16, ViewSmallThumbnails16 } from '@mysten/icons';
 import { Heading, IconButton, RadioGroup, RadioGroupItem, Text } from '@mysten/ui';
 import clsx from 'clsx';
@@ -14,6 +14,7 @@ import { Pagination, useCursorPagination } from '~/ui/Pagination';
 
 const PAGE_SIZES = [10, 20, 30, 40, 50];
 const SHOW_PAGINATION_MAX_ITEMS = 9;
+const OWNED_OBJECTS_LOCAL_STORAGE_VIEW_MODE = 'owned-objects-viewMode';
 
 const FILTER_OPTIONS = [
 	{ label: 'NFTS', value: 'all' },
@@ -42,7 +43,11 @@ function getShowPagination(itemsLength: number, currentPage: number, isFetching:
 export function OwnedObjects({ id }: { id: string }) {
 	const [filter, setFilter] = useState('all');
 	const [limit, setLimit] = useState(PAGE_SIZES[4]);
-	const [viewMode, setViewMode] = useState(OBJECT_VIEW_MODES.SMALL_THUMBNAILS);
+	const [viewMode, setViewMode] = useLocalStorage(
+		OWNED_OBJECTS_LOCAL_STORAGE_VIEW_MODE,
+		OBJECT_VIEW_MODES.SMALL_THUMBNAILS,
+	);
+
 	const ownedObjects = useGetOwnedObjects(
 		id,
 		{
