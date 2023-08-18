@@ -120,7 +120,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
 ## Advanced examples
 
-See the transaction builder [example](examples/transaction_builder_api.rs).
+See the programmable transactions [example](examples/programmable_transactions_api.rs).
 
 ## Games examples
 
