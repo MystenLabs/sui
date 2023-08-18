@@ -20,6 +20,7 @@ futures.workspace = true
 tokio.workspace = true
 bcs.workspace = true
 thiserror.workspace = true
+reqwest.workspace = true
 
 sui-swarm-config.workspace = true
 sui-json-rpc.workspace = true
@@ -46,6 +47,35 @@ futures-core.workspace = true
 futures.workspace = true
 
 [[example]]
-name = "tic-tac-toe"
+name = "tic_tac_toe"
 path = "examples/tic_tac_toe.rs"
 test = false
+
+[[example]]
+name = "coin_read_api"
+path = "examples/coin_read_api.rs"
+
+[[example]]
+name = "read_api"
+path = "examples/read_api.rs"
+
+[[example]]
+name = "event_api"
+path = "examples/event_api.rs"
+
+[[example]]
+name = "governance_api"
+path = "examples/governance_api.rs"
+
+[[example]]
+name = "programmable_transactions_api"
+path = "examples/programmable_transactions_api.rs"
+
+[[example]]
+name = "sui_client"
+path = "examples/sui_client.rs"
+
+[[example]]
+name = "utils"
+path = "examples/utils.rs"
+crate-type = ["staticlib"]
