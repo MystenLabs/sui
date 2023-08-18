@@ -99,8 +99,8 @@ pub struct SignatureVerifier {
     /// very cheaply.
     oauth_provider_jwk: RwLock<ImHashMap<JwkId, JWK>>,
 
-    /// A list of supported providers for ZKLogin and the environment (prod/test) the code runs in.
-    zk_login_params: RwLock<ZkLoginParams>,
+    /// Params that contains a list of supported providers for ZKLogin and the environment (prod/test) the code runs in.
+    zk_login_params: ZkLoginParams,
 
     queue: Mutex<CertBuffer>,
     pub metrics: Arc<SignatureVerifierMetrics>,
@@ -136,10 +136,10 @@ impl SignatureVerifier {
             oauth_provider_jwk: Default::default(),
             queue: Mutex::new(CertBuffer::new(batch_size)),
             metrics,
-            zk_login_params: RwLock::new(ZkLoginParams {
+            zk_login_params: ZkLoginParams {
                 supported_providers,
                 env,
-            }),
+            },
         }
     }
 
@@ -320,11 +320,10 @@ impl SignatureVerifier {
             .is_verified(signed_tx.full_message_digest(), || {
                 signed_tx.verify_epoch(self.committee.epoch())?;
                 let oauth_provider_jwk = self.oauth_provider_jwk.read().clone();
-                let zklogin_params = self.zk_login_params.read().clone();
                 let aux_data = VerifyParams::new(
                     oauth_provider_jwk,
-                    zklogin_params.supported_providers,
-                    zklogin_params.env,
+                    self.zk_login_params.supported_providers.clone(),
+                    self.zk_login_params.env.clone(),
                 );
                 signed_tx.verify_message_signature(&aux_data)
             })

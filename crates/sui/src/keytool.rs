@@ -11,7 +11,7 @@ use fastcrypto::traits::{KeyPair, ToFromBytes};
 use fastcrypto_zkp::bn254::utils::get_oidc_url;
 use fastcrypto_zkp::bn254::zk_login::{AddressParams, OIDCProvider};
 use json_to_table::{json_to_table, Orientation};
-use num_bigint::{BigInt, Sign};
+use num_bigint::BigUint;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use rusoto_core::Region;
@@ -179,7 +179,7 @@ pub enum KeyToolCommand {
     Unpack { keypair: SuiKeyPair },
 
     /// Given the max_epoch, generate an OAuth url, ask user to paste the redirect with id_token, call salt server, then call the prover server,
-    /// create a test transaction, use the ephemeral key to sign and execute it with a serialized zklogin signature.
+    /// create a test transaction, use the ephemeral key to sign and execute it by assembling to a serialized zkLogin signature.
     ZkLoginSignAndExecuteTx {
         #[clap(long)]
         max_epoch: EpochId,
@@ -712,14 +712,14 @@ impl KeyToolCommand {
 
                 let mut eph_pk_bytes = vec![pk.flag()];
                 eph_pk_bytes.extend(pk.as_ref());
-                let kp_bigint = BigInt::from_bytes_be(Sign::Plus, &eph_pk_bytes);
+                let kp_bigint = BigUint::from_bytes_be(&eph_pk_bytes);
                 println!("Ephemeral pubkey (BigInt): {:?}", kp_bigint);
 
                 let jwt_randomness = if fixed {
                     "100681567828351849884072155819400689117".to_string()
                 } else {
                     let random_bytes = rand::thread_rng().gen::<[u8; 16]>();
-                    let jwt_random_bytes = BigInt::from_bytes_be(Sign::Plus, &random_bytes);
+                    let jwt_random_bytes = BigUint::from_bytes_be(&random_bytes);
                     jwt_random_bytes.to_string()
                 };
                 println!("Jwt randomness: {jwt_randomness}");
