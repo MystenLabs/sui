@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// Representation of metadata,
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
