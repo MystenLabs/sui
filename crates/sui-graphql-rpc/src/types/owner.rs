@@ -1,11 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::server::data_provider::fetch_balance;
-use crate::server::data_provider::fetch_owned_objs;
+use crate::server::context_ext::DataProviderContextExt;
 use crate::types::balance::*;
 use crate::types::coin::*;
-use crate::types::name_service::*;
 use crate::types::object::*;
 use crate::types::stake::*;
 use crate::types::sui_address::SuiAddress;
@@ -33,7 +31,7 @@ use super::address::Address;
     ),
     field(
         name = "balance_connection",
-        type = "Option<BalanceConnection>",
+        type = "Option<Connection<String, Balance>>",
         arg(name = "first", type = "Option<u64>"),
         arg(name = "after", type = "Option<String>"),
         arg(name = "last", type = "Option<u64>"),
@@ -41,7 +39,7 @@ use super::address::Address;
     ),
     field(
         name = "coin_connection",
-        type = "Option<CoinConnection>",
+        type = "Option<Connection<String, Coin>>",
         arg(name = "first", type = "Option<u64>"),
         arg(name = "after", type = "Option<String>"),
         arg(name = "last", type = "Option<u64>"),
@@ -50,7 +48,7 @@ use super::address::Address;
     ),
     field(
         name = "stake_connection",
-        type = "Option<StakeConnection>",
+        type = "Option<Connection<String, Stake>>",
         arg(name = "first", type = "Option<u64>"),
         arg(name = "after", type = "Option<String>"),
         arg(name = "last", type = "Option<u64>"),
@@ -59,7 +57,7 @@ use super::address::Address;
     field(name = "default_name_service_name", type = "Option<String>"),
     field(
         name = "name_service_connection",
-        type = "Option<NameServiceConnection>",
+        type = "Option<Connection<String, String>>",
         arg(name = "first", type = "Option<u64>"),
         arg(name = "after", type = "Option<String>"),
         arg(name = "last", type = "Option<u64>"),
@@ -108,25 +106,15 @@ impl Owner {
         before: Option<String>,
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, Object>> {
-        fetch_owned_objs(
-            ctx.data_unchecked::<sui_sdk::SuiClient>(),
-            &self.address,
-            first,
-            after,
-            last,
-            before,
-            filter,
-        )
-        .await
+        ctx.data_provider()
+            .fetch_owned_objs(&self.address, first, after, last, before, filter)
+            .await
     }
 
     pub async fn balance(&self, ctx: &Context<'_>, type_: Option<String>) -> Result<Balance> {
-        fetch_balance(
-            ctx.data_unchecked::<sui_sdk::SuiClient>(),
-            &self.address,
-            type_,
-        )
-        .await
+        ctx.data_provider()
+            .fetch_balance(&self.address, type_)
+            .await
     }
 
     pub async fn balance_connection(
@@ -135,7 +123,7 @@ impl Owner {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<BalanceConnection> {
+    ) -> Option<Connection<String, Balance>> {
         unimplemented!()
     }
 
@@ -146,7 +134,7 @@ impl Owner {
         last: Option<u64>,
         before: Option<String>,
         type_: Option<String>,
-    ) -> Option<CoinConnection> {
+    ) -> Option<Connection<String, Coin>> {
         unimplemented!()
     }
 
@@ -156,7 +144,7 @@ impl Owner {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<StakeConnection> {
+    ) -> Option<Connection<String, Stake>> {
         unimplemented!()
     }
 
@@ -170,7 +158,7 @@ impl Owner {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<NameServiceConnection> {
+    ) -> Option<Connection<String, String>> {
         unimplemented!()
     }
 }
