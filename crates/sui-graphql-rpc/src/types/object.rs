@@ -4,12 +4,7 @@
 use async_graphql::{connection::Connection, *};
 
 use super::{
-    balance::{Balance, BalanceConnection},
-    coin::CoinConnection,
-    name_service::NameServiceConnection,
-    owner::Owner,
-    stake::StakeConnection,
-    sui_address::SuiAddress,
+    balance::Balance, coin::Coin, owner::Owner, stake::Stake, sui_address::SuiAddress,
     transaction_block::TransactionBlock,
 };
 use crate::{server::context_ext::DataProviderContextExt, types::base64::Base64};
@@ -122,7 +117,7 @@ impl Object {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<BalanceConnection> {
+    ) -> Option<Connection<String, Balance>> {
         unimplemented!()
     }
 
@@ -133,7 +128,7 @@ impl Object {
         last: Option<u64>,
         before: Option<String>,
         type_: Option<String>,
-    ) -> Option<CoinConnection> {
+    ) -> Option<Connection<String, Coin>> {
         unimplemented!()
     }
 
@@ -143,7 +138,7 @@ impl Object {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<StakeConnection> {
+    ) -> Option<Connection<String, Stake>> {
         unimplemented!()
     }
 
@@ -157,7 +152,7 @@ impl Object {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<NameServiceConnection> {
+    ) -> Option<Connection<String, String>> {
         unimplemented!()
     }
 }

@@ -24,8 +24,6 @@ pub(crate) struct TransactionBlockEffects {
     pub gas_effects: GasEffects,
 }
 
-pub(crate) struct TransactionBlockConnection;
-
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum TransactionBlockKindInput {
     ProgrammableTx,
@@ -48,13 +46,4 @@ pub(crate) struct TransactionBlockFilter {
 
     input_object: Option<SuiAddress>,
     changed_object: Option<SuiAddress>,
-}
-
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
-#[Object]
-impl TransactionBlockConnection {
-    async fn unimplemented(&self) -> bool {
-        unimplemented!()
-    }
 }
