@@ -4,13 +4,14 @@
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::cell::RefCell;
+use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use sui_protocol_config_macros::{ProtocolConfigAccessors, ProtocolConfigFeatureFlagsGetters};
 use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 20;
+const MAX_PROTOCOL_VERSION: u64 = 21;
 
 // Record history of protocol version allocations here:
 //
@@ -252,12 +253,18 @@ struct FeatureFlags {
     // If true, then the new algorithm for the leader election schedule will be used
     #[serde(skip_serializing_if = "is_false")]
     narwhal_new_leader_election_schedule: bool,
+
+    // A list of supported OIDC providers that can be used for zklogin.
+    #[serde(skip_serializing_if = "is_empty")]
+    zklogin_supported_providers: BTreeSet<String>,
 }
 
 fn is_false(b: &bool) -> bool {
     !b
 }
-
+fn is_empty(b: &BTreeSet<String>) -> bool {
+    b.is_empty()
+}
 /// Ordering mechanism for transactions in one Narwhal consensus output.
 #[derive(Default, Copy, Clone, Serialize, Debug)]
 pub enum ConsensusTransactionOrdering {
@@ -819,6 +826,10 @@ impl ProtocolConfig {
         self.feature_flags.zklogin_auth
     }
 
+    pub fn zklogin_supported_providers(&self) -> &BTreeSet<String> {
+        &self.feature_flags.zklogin_supported_providers
+    }
+
     pub fn consensus_transaction_ordering(&self) -> ConsensusTransactionOrdering {
         self.feature_flags.consensus_transaction_ordering
     }
@@ -1364,6 +1375,18 @@ impl ProtocolConfig {
                 cfg
             }
 
+            21 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+
+                if chain != Chain::Mainnet {
+                    cfg.feature_flags.zklogin_supported_providers = BTreeSet::from([
+                        "Google".to_string(),
+                        "Facebook".to_string(),
+                        "Twitch".to_string(),
+                    ]);
+                }
+                cfg
+            }
             // Use this template when making changes:
             //
             //     // modify an existing constant.
@@ -1427,6 +1450,9 @@ impl ProtocolConfig {
 
     pub fn set_consensus_bad_nodes_stake_threshold(&mut self, val: u64) {
         self.consensus_bad_nodes_stake_threshold = Some(val);
+    }
+    pub fn set_zklogin_supported_providers(&mut self, list: BTreeSet<String>) {
+        self.feature_flags.zklogin_supported_providers = list
     }
 }
 

@@ -14,6 +14,7 @@ use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair};
 use sui_types::transaction::CertifiedTransaction;
 
+use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use sui_core::signature_verifier::*;
 
 fn gen_certs(
@@ -75,6 +76,8 @@ fn async_verifier_bench(c: &mut Criterion) {
                         committee.clone(),
                         batch_size,
                         metrics.clone(),
+                        vec![],
+                        ZkLoginEnv::Test,
                     ));
 
                     b.iter(|| {

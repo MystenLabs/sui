@@ -3628,8 +3628,8 @@ dependencies = [
 
 [[package]]
 name = "fastcrypto"
-version = "0.1.5"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=e5b57ef4b3b41e799954f6cac83034154e8cf33a#e5b57ef4b3b41e799954f6cac83034154e8cf33a"
+version = "0.1.6"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=4e7debce78340848f0009b648f56d912d6bd02d5#4e7debce78340848f0009b648f56d912d6bd02d5"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -3684,7 +3684,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=e5b57ef4b3b41e799954f6cac83034154e8cf33a#e5b57ef4b3b41e799954f6cac83034154e8cf33a"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=4e7debce78340848f0009b648f56d912d6bd02d5#4e7debce78340848f0009b648f56d912d6bd02d5"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2 1.0.58",
@@ -3695,7 +3695,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.1"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=e5b57ef4b3b41e799954f6cac83034154e8cf33a#e5b57ef4b3b41e799954f6cac83034154e8cf33a"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=4e7debce78340848f0009b648f56d912d6bd02d5#4e7debce78340848f0009b648f56d912d6bd02d5"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
@@ -3705,14 +3705,17 @@ dependencies = [
  "ark-groth16",
  "ark-relations",
  "ark-serialize",
+ "bcs",
  "blst",
  "byte-slice-cast",
  "derive_more",
  "fastcrypto",
+ "im",
  "num-bigint",
  "once_cell",
  "poseidon-ark",
  "regex",
+ "reqwest",
  "schemars",
  "serde",
  "serde_json",
@@ -7580,8 +7583,8 @@ checksum = "26f6a7b87c2e435a3241addceeeff740ff8b7e76b74c13bf9acb17fa454ea00b"
 
 [[package]]
 name = "poseidon-ark"
-version = "0.0.10"
-source = "git+https://github.com/MystenLabs/poseidon-ark.git?rev=39844046ded0c4aa7a247e8545e131b59a330a9c#39844046ded0c4aa7a247e8545e131b59a330a9c"
+version = "0.0.1"
+source = "git+https://github.com/arnaucube/poseidon-ark.git?rev=ff7f5e05d55667b4ffba129b837da780c4c5c849#ff7f5e05d55667b4ffba129b837da780c4c5c849"
 dependencies = [
  "ark-bn254",
  "ark-ff",
@@ -9581,6 +9584,8 @@ dependencies = [
  "prettytable-rs",
  "prometheus",
  "rand 0.8.5",
+ "regex",
+ "reqwest",
  "rocksdb",
  "rusoto_core",
  "rusoto_kms",
@@ -10641,6 +10646,7 @@ dependencies = [
  "clap 3.2.23",
  "const-str",
  "fastcrypto",
+ "fastcrypto-zkp",
  "futures",
  "git-version",
  "mysten-common",
