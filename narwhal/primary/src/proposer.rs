@@ -326,30 +326,6 @@ impl Proposer {
     }
 
     fn min_delay(&self) -> Duration {
-        // TODO: consider even out the boost provided by the even/odd rounds so we avoid perpetually
-        // boosting the nodes and affect the scores.
-        // If this node is going to be the leader of the next round and there are more than
-        // 1 primary in the committee, we use a lower min delay value to increase the chance
-        // of committing the leader. Pay attention that we use here the leader_schedule to figure out
-        // the next leader.
-        let next_round = self.round + 1;
-        if self.committee.size() > 1
-            && next_round % 2 == 0
-            && self.leader_schedule.leader(next_round).id() == self.authority_id
-        {
-            return Duration::ZERO;
-        }
-
-        // Give a boost on the odd rounds to a node by using the whole committee here, not just the
-        // nodes of the leader_schedule. By doing this we keep the proposal rate as high as possible
-        // which leads to higher round rate and also acting as a score booster to the less strong nodes
-        // as well.
-        if self.committee.size() > 1
-            && next_round % 2 != 0
-            && self.committee.leader(next_round).id() == self.authority_id
-        {
-            return Duration::ZERO;
-        }
         self.min_header_delay
     }
 
