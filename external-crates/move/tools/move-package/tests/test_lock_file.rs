@@ -8,7 +8,7 @@ use std::{
 };
 use tempfile::TempDir;
 
-use move_package::resolution::lock_file::LockFile;
+use move_package::lock_file::LockFile;
 
 #[test]
 fn commit() {
