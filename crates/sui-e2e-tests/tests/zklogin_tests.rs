@@ -62,33 +62,12 @@ async fn test_zklogin_provider_not_supported() {
 }
 
 #[sim_test]
-async fn test_zklogin_secure_vk_not_supported() {
-    use sui_protocol_config::ProtocolConfig;
-
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.set_zklogin_auth(true);
-        config.set_zklogin_supported_providers(BTreeSet::from([
-            "Google".to_string(),
-            "Facebook".to_string(),
-            "Twitch".to_string(),
-        ]));
-        config.set_zklogin_use_secure_vk(true);
-        config
-    });
-    // The Twitch zklogin tx here is generated using the insecure pk, so verifying against the secure vk fails.
-    let err = do_zklogin_test().await.unwrap_err();
-
-    assert!(matches!(err, SuiError::InvalidSignature { .. }));
-}
-
-#[sim_test]
 async fn test_zklogin_feature_allow() {
     use sui_protocol_config::ProtocolConfig;
 
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_zklogin_auth(true);
         config.set_zklogin_supported_providers(BTreeSet::from(["Twitch".to_string()]));
-        config.set_zklogin_use_secure_vk(false);
         config
     });
 

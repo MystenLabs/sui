@@ -13,9 +13,7 @@ use mysten_metrics::monitored_scope;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use shared_crypto::intent::Intent;
-use std::collections::BTreeSet;
 use std::hash::Hash;
-use std::str::FromStr;
 use std::sync::Arc;
 use sui_types::digests::SenderSignedDataDigest;
 use sui_types::transaction::SenderSignedData;
@@ -101,11 +99,20 @@ pub struct SignatureVerifier {
     /// very cheaply.
     oauth_provider_jwk: RwLock<ImHashMap<JwkId, JWK>>,
 
-    supported_providers: RwLock<Vec<OIDCProvider>>,
-    zklogin_env: RwLock<ZkLoginEnv>,
+    /// A list of supported providers for ZKLogin and the environment (prod/test) the code runs in.
+    zk_login_params: RwLock<ZkLoginParams>,
 
     queue: Mutex<CertBuffer>,
     pub metrics: Arc<SignatureVerifierMetrics>,
+}
+
+/// Contains two parameters to pass in to verify a ZkLogin signature.
+#[derive(Clone)]
+struct ZkLoginParams {
+    /// A list of supported providers for ZkLogin supports.
+    pub supported_providers: Vec<OIDCProvider>,
+    /// The environment (prod/test) the code runs in.
+    pub env: ZkLoginEnv,
 }
 
 impl SignatureVerifier {
@@ -113,6 +120,8 @@ impl SignatureVerifier {
         committee: Arc<Committee>,
         batch_size: usize,
         metrics: Arc<SignatureVerifierMetrics>,
+        supported_providers: Vec<OIDCProvider>,
+        env: ZkLoginEnv,
     ) -> Self {
         Self {
             committee,
@@ -127,13 +136,26 @@ impl SignatureVerifier {
             oauth_provider_jwk: Default::default(),
             queue: Mutex::new(CertBuffer::new(batch_size)),
             metrics,
-            supported_providers: Default::default(),
-            zklogin_env: Default::default(),
+            zk_login_params: RwLock::new(ZkLoginParams {
+                supported_providers,
+                env,
+            }),
         }
     }
 
-    pub fn new(committee: Arc<Committee>, metrics: Arc<SignatureVerifierMetrics>) -> Self {
-        Self::new_with_batch_size(committee, MAX_BATCH_SIZE, metrics)
+    pub fn new(
+        committee: Arc<Committee>,
+        metrics: Arc<SignatureVerifierMetrics>,
+        supported_providers: Vec<OIDCProvider>,
+        zklogin_env: ZkLoginEnv,
+    ) -> Self {
+        Self::new_with_batch_size(
+            committee,
+            MAX_BATCH_SIZE,
+            metrics,
+            supported_providers,
+            zklogin_env,
+        )
     }
 
     /// Verifies all certs, returns Ok only if all are valid.
@@ -293,26 +315,17 @@ impl SignatureVerifier {
         true
     }
 
-    pub(crate) fn set_config(&self, providers_list: BTreeSet<String>, env: ZkLoginEnv) -> bool {
-        let mut supported_providers = self.supported_providers.write();
-        *supported_providers = providers_list
-            .into_iter()
-            .map(|s| OIDCProvider::from_str(&s).expect("Invalid zklogin provider"))
-            .collect::<Vec<_>>();
-        let mut zklogin_env = self.zklogin_env.write();
-        *zklogin_env = env;
-        true
-    }
-
     pub fn verify_tx(&self, signed_tx: &SenderSignedData) -> SuiResult {
         self.signed_data_cache
             .is_verified(signed_tx.full_message_digest(), || {
                 signed_tx.verify_epoch(self.committee.epoch())?;
                 let oauth_provider_jwk = self.oauth_provider_jwk.read().clone();
-                let supported_providers = self.supported_providers.read().clone();
-                let zklogin_env = self.zklogin_env.read().clone();
-                let aux_data =
-                    VerifyParams::new(oauth_provider_jwk, supported_providers, zklogin_env);
+                let zklogin_params = self.zk_login_params.read().clone();
+                let aux_data = VerifyParams::new(
+                    oauth_provider_jwk,
+                    zklogin_params.supported_providers,
+                    zklogin_params.env,
+                );
                 signed_tx.verify_message_signature(&aux_data)
             })
     }

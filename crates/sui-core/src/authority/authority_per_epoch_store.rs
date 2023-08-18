@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
+use fastcrypto_zkp::bn254::zk_login::{JwkId, OIDCProvider, JWK};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::future::{join_all, select, Either};
 use futures::FutureExt;
@@ -34,6 +34,7 @@ use typed_store::rocks::{
 };
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 
+use super::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use crate::authority::{AuthorityStore, ResolverWrapper};
 use crate::checkpoints::{
@@ -54,9 +55,10 @@ use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_common::sync::notify_read::NotifyRead;
 use mysten_metrics::monitored_scope;
 use prometheus::IntCounter;
+use std::str::FromStr;
 use sui_execution::{self, Executor};
 use sui_macros::fail_point;
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::{
@@ -77,8 +79,6 @@ use tap::TapOptional;
 use tokio::time::Instant;
 use typed_store::{retry_transaction_forever, Map};
 use typed_store_derive::DBMapUtils;
-
-use super::epoch_start_configuration::EpochStartConfigTrait;
 
 /// The key where the latest consensus index is stored in the database.
 // TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
@@ -465,21 +465,26 @@ impl AuthorityPerEpochStore {
             .load_oauth_provider_jwk()
             .expect("Load oauth provider jwk at initialization cannot fail");
 
-        let signature_verifier =
-            SignatureVerifier::new(committee.clone(), signature_verifier_metrics);
+        let zklogin_env = match chain_identifier.chain() {
+            Chain::Mainnet => ZkLoginEnv::Prod,
+            _ => ZkLoginEnv::Test,
+        };
+
+        let supported_providers = protocol_config
+            .zklogin_supported_providers()
+            .iter()
+            .map(|a| OIDCProvider::from_str(&a).expect("Invalid provider string"))
+            .collect::<Vec<_>>();
+
+        let signature_verifier = SignatureVerifier::new(
+            committee.clone(),
+            signature_verifier_metrics,
+            supported_providers,
+            zklogin_env,
+        );
         for (jwk_id, jwk) in oauth_provider_jwk.iter() {
             signature_verifier.insert_oauth_jwk(jwk_id, jwk);
         }
-
-        let zklogin_env = match protocol_config.zklogin_use_secure_vk() {
-            true => ZkLoginEnv::Prod,
-            false => ZkLoginEnv::Test,
-        };
-
-        signature_verifier.set_config(
-            protocol_config.zklogin_supported_providers().clone(),
-            zklogin_env,
-        );
 
         let is_validator = committee.authority_index(&name).is_some();
         if is_validator {

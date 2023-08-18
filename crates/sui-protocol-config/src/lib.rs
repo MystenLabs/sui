@@ -257,10 +257,6 @@ struct FeatureFlags {
     // A list of supported OIDC providers that can be used for zklogin.
     #[serde(skip_serializing_if = "is_empty")]
     zklogin_supported_providers: BTreeSet<String>,
-
-    // Whether to use the secure ZkLogin Groth16 verifying key generated from the ceremony.
-    #[serde(skip_serializing_if = "is_false")]
-    zklogin_use_secure_vk: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -834,10 +830,6 @@ impl ProtocolConfig {
         &self.feature_flags.zklogin_supported_providers
     }
 
-    pub fn zklogin_use_secure_vk(&self) -> bool {
-        self.feature_flags.zklogin_use_secure_vk
-    }
-
     pub fn consensus_transaction_ordering(&self) -> ConsensusTransactionOrdering {
         self.feature_flags.consensus_transaction_ordering
     }
@@ -1392,7 +1384,6 @@ impl ProtocolConfig {
                         "Facebook".to_string(),
                         "Twitch".to_string(),
                     ]);
-                    cfg.feature_flags.zklogin_use_secure_vk = false;
                 }
                 cfg
             }
@@ -1462,9 +1453,6 @@ impl ProtocolConfig {
     }
     pub fn set_zklogin_supported_providers(&mut self, list: BTreeSet<String>) {
         self.feature_flags.zklogin_supported_providers = list
-    }
-    pub fn set_zklogin_use_secure_vk(&mut self, val: bool) {
-        self.feature_flags.zklogin_use_secure_vk = val
     }
 }
 
