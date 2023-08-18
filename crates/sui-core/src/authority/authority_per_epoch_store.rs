@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto_zkp::bn254::zk_login::{JwkId, OIDCProvider, JWK};
+use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::future::{join_all, select, Either};
 use futures::FutureExt;
 use itertools::izip;
@@ -26,13 +28,13 @@ use sui_types::transaction::{
     CertifiedTransaction, SenderSignedData, SharedInputObject, TransactionDataAPI,
     VerifiedCertificate, VerifiedSignedTransaction,
 };
-use sui_types::zk_login_util::OAuthProviderContent;
 use tracing::{debug, error, info, trace, warn};
 use typed_store::rocks::{
     default_db_options, DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError,
 };
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 
+use super::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use crate::authority::{AuthorityStore, ResolverWrapper};
 use crate::checkpoints::{
@@ -53,9 +55,10 @@ use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_common::sync::notify_read::NotifyRead;
 use mysten_metrics::monitored_scope;
 use prometheus::IntCounter;
+use std::str::FromStr;
 use sui_execution::{self, Executor};
 use sui_macros::fail_point;
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::{
@@ -76,8 +79,6 @@ use tap::TapOptional;
 use tokio::time::Instant;
 use typed_store::{retry_transaction_forever, Map};
 use typed_store_derive::DBMapUtils;
-
-use super::epoch_start_configuration::EpochStartConfigTrait;
 
 /// The key where the latest consensus index is stored in the database.
 // TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
@@ -309,8 +310,8 @@ pub struct AuthorityEpochTables {
     pub(crate) executed_transactions_to_checkpoint:
         DBMap<TransactionDigest, CheckpointSequenceNumber>,
 
-    /// Map from kid (key id) to the fetched OAuthProviderContent for that key.
-    oauth_provider_jwk: DBMap<String, OAuthProviderContent>,
+    /// Map from JwkId (iss, kid) to the fetched JWK for that key.
+    oauth_provider_jwk: DBMap<JwkId, JWK>,
 }
 
 fn signed_transactions_table_default_config() -> DBOptions {
@@ -392,7 +393,7 @@ impl AuthorityEpochTables {
         Ok(self.last_consensus_index.get(&LAST_CONSENSUS_INDEX_ADDR)?)
     }
 
-    fn load_oauth_provider_jwk(&self) -> SuiResult<HashMap<String, Arc<OAuthProviderContent>>> {
+    fn load_oauth_provider_jwk(&self) -> SuiResult<HashMap<JwkId, Arc<JWK>>> {
         Ok(self
             .oauth_provider_jwk
             .unbounded_iter()
@@ -464,10 +465,25 @@ impl AuthorityPerEpochStore {
             .load_oauth_provider_jwk()
             .expect("Load oauth provider jwk at initialization cannot fail");
 
-        let signature_verifier =
-            SignatureVerifier::new(committee.clone(), signature_verifier_metrics);
-        for (_, v) in oauth_provider_jwk.iter() {
-            signature_verifier.insert_oauth_jwk(v);
+        let zklogin_env = match chain_identifier.chain() {
+            Chain::Mainnet => ZkLoginEnv::Prod,
+            _ => ZkLoginEnv::Test,
+        };
+
+        let supported_providers = protocol_config
+            .zklogin_supported_providers()
+            .iter()
+            .map(|s| OIDCProvider::from_str(s).expect("Invalid provider string"))
+            .collect::<Vec<_>>();
+
+        let signature_verifier = SignatureVerifier::new(
+            committee.clone(),
+            signature_verifier_metrics,
+            supported_providers,
+            zklogin_env,
+        );
+        for (jwk_id, jwk) in oauth_provider_jwk.iter() {
+            signature_verifier.insert_oauth_jwk(jwk_id, jwk);
         }
 
         let is_validator = committee.authority_index(&name).is_some();
@@ -2156,15 +2172,16 @@ impl AuthorityPerEpochStore {
     }
 
     // TODO: should be pub(crate) when it is inserted only from consensus
-    pub fn insert_oauth_jwk(&self, content: &OAuthProviderContent) {
-        if self.signature_verifier.insert_oauth_jwk(content) {
+    pub fn insert_oauth_jwk(&self, jwk_id: &JwkId, jwk: &JWK) {
+        if self.signature_verifier.insert_oauth_jwk(jwk_id, jwk) {
             self.tables
                 .oauth_provider_jwk
-                .insert(&content.kid().to_string(), content)
+                .insert(jwk_id, jwk)
                 .expect("write to oauth_provider_jwk should not fail");
-            info!("Added new JWK with kid {}: {:?}", content.kid(), content);
+            // TODO: Remove old kid -> jwks.
+            info!("Added new JWK with id {:?}: {:?}", jwk_id, jwk);
         } else {
-            info!("OAuth JWK with kid {} already exists", content.kid());
+            info!("JWK with id {:?} already exists", jwk_id);
         }
     }
 }

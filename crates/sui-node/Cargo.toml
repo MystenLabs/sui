@@ -48,6 +48,7 @@ typed-store.workspace = true
 mysten-network.workspace = true
 telemetry-subscribers.workspace = true
 fastcrypto.workspace = true
+fastcrypto-zkp.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [target.'cfg(msim)'.dependencies]

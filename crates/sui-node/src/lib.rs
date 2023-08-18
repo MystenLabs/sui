@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
+use std::str::FromStr;
 #[cfg(msim)]
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -17,6 +18,8 @@ use anemo_tower::trace::TraceLayer;
 use anyhow::anyhow;
 use anyhow::Result;
 use arc_swap::ArcSwap;
+use fastcrypto_zkp::bn254::zk_login::JwkId;
+use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::TryFutureExt;
 use mysten_common::sync::async_once_cell::AsyncOnceCell;
 use prometheus::Registry;
@@ -37,6 +40,7 @@ use tracing::{debug, error, warn};
 use tracing::{error_span, info, Instrument};
 
 use checkpoint_executor::CheckpointExecutor;
+use fastcrypto_zkp::bn254::zk_login::JWK;
 pub use handle::SuiNodeHandle;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
 use mysten_network::server::ServerBuilder;
@@ -110,7 +114,6 @@ use sui_types::quorum_driver_types::QuorumDriverEffectsQueueResult;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::zk_login_util::{parse_jwks, OAuthProviderContent};
 use typed_store::rocks::default_db_options;
 use typed_store::DBMetrics;
 
@@ -204,24 +207,29 @@ impl SuiNode {
                 info!("Starting JWK updater task");
                 loop {
                     let epoch_store_ = epoch_store.clone();
+                    let supported_providers = epoch_store
+                        .protocol_config()
+                        .zklogin_supported_providers()
+                        .iter()
+                        .map(|s| OIDCProvider::from_str(s).expect("Invalid provider string"))
+                        .collect::<Vec<_>>();
                     let fetch_and_sleep = async move {
                         // Update the JWK value in the authority server
                         info!("fetching new JWKs");
-                        match Self::fetch_jwk().await {
+                        match Self::fetch_jwks(&supported_providers).await {
                             Err(e) => {
                                 warn!("Error when fetching JWK {:?}", e);
                                 // Retry in 30 seconds
                                 tokio::time::sleep(Duration::from_secs(30)).await;
                             }
                             Ok(keys) => {
-                                for (_, v) in keys {
-                                    epoch_store_.insert_oauth_jwk(&v);
+                                for (jwk_id, jwk) in keys {
+                                    epoch_store_.insert_oauth_jwk(&jwk_id, &jwk);
                                 }
-
-                                // Sleep for 1 hour
-                                tokio::time::sleep(Duration::from_secs(3600)).await;
                             }
                         }
+                        // Sleep for 1 hour
+                        tokio::time::sleep(Duration::from_secs(3600)).await;
                     };
 
                     tokio::select! {
@@ -238,24 +246,29 @@ impl SuiNode {
     }
 
     #[cfg(not(msim))]
-    async fn fetch_jwk() -> SuiResult<Vec<(String, OAuthProviderContent)>> {
+    async fn fetch_jwks(supported_providers: &[OIDCProvider]) -> SuiResult<Vec<(JwkId, JWK)>> {
+        use fastcrypto_zkp::bn254::zk_login::fetch_jwks;
+        let mut res = Vec::new();
         let client = reqwest::Client::new();
-        let response = client
-            .get("https://www.googleapis.com/oauth2/v2/certs")
-            .send()
-            .await
-            .map_err(|_| SuiError::JWKRetrievalError)?;
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|_| SuiError::JWKRetrievalError)?;
-
-        parse_jwks(&bytes)
+        for p in supported_providers {
+            let jwks = fetch_jwks(p, &client)
+                .await
+                .map_err(|_| SuiError::JWKRetrievalError)?;
+            res.extend(jwks);
+        }
+        Ok(res)
     }
 
     #[cfg(msim)]
-    async fn fetch_jwk() -> SuiResult<Vec<(String, OAuthProviderContent)>> {
-        parse_jwks(sui_types::zk_login_util::DEFAULT_JWK_BYTES)
+    #[allow(unused_variables)]
+    async fn fetch_jwks(supported_providers: &[OIDCProvider]) -> SuiResult<Vec<(JwkId, JWK)>> {
+        use fastcrypto_zkp::bn254::zk_login::parse_jwks;
+        // Just load a default Twitch jwk for testing.
+        parse_jwks(
+            sui_types::zk_login_util::DEFAULT_JWK_BYTES,
+            &OIDCProvider::Twitch,
+        )
+        .map_err(|_| SuiError::JWKRetrievalError)
     }
 
     pub async fn start_async(
