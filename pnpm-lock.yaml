@@ -1208,15 +1208,30 @@ importers:
       '@types/node':
         specifier: ^20.4.2
         version: 20.4.2
+      tmp:
+        specifier: ^0.2.1
+        version: 0.2.1
       ts-node:
         specifier: ^10.9.1
         version: 10.9.1(@types/node@20.4.2)(typescript@5.1.6)
+      ts-retry-promise:
+        specifier: ^0.7.0
+        version: 0.7.0
       tsup:
         specifier: ^7.1.0
         version: 7.1.0(ts-node@10.9.1)(typescript@5.1.6)
       typescript:
         specifier: ^5.1.6
         version: 5.1.6
+      vite:
+        specifier: ^4.4.4
+        version: 4.4.4(@types/node@20.4.2)(sass@1.63.6)
+      vitest:
+        specifier: ^0.33.0
+        version: 0.33.0(@vitest/ui@0.33.0)(happy-dom@10.5.1)
+      wait-on:
+        specifier: ^7.0.1
+        version: 7.0.1(debug@4.3.4)
 
   sdk/docs:
     dependencies:
@@ -4014,6 +4029,7 @@ packages:
 
   /@emotion/memoize@0.7.4:
     resolution: {integrity: sha512-Ja/Vfqe3HpuzRsG1oBtWTHk2PGZ7GR+2Vz5iYGelAw8dx32K0y7PjVuxK6z1nMpZOqAFsRUPCkK1YjJ56qJlgw==}
+    requiresBuild: true
     dev: false
     optional: true
 
@@ -14730,6 +14746,7 @@ packages:
 
   /glob@6.0.4:
     resolution: {integrity: sha512-MKZeRNyYZAVVVG1oZeLaWie1uweH40m9AZwIwxyPbTSX4hHrVYSzLg0Ro5Z5R7XKkIX+Cc6oD1rqeDJnwsB8/A==}
+    requiresBuild: true
     dependencies:
       inflight: 1.0.6
       inherits: 2.0.4
@@ -17765,6 +17782,7 @@ packages:
 
   /nan@2.17.0:
     resolution: {integrity: sha512-2ZTgtl0nJsO0KQCjEpxcIr5D+Yv90plTitZt9JBfQvVJDS5seMl3FOvsh3+9CoYWXf/1l5OaZzzF6nDm4cagaQ==}
+    requiresBuild: true
     dev: true
     optional: true
 
@@ -17794,6 +17812,7 @@ packages:
   /ncp@2.0.0:
     resolution: {integrity: sha512-zIdGUrPRFTUELUvr3Gmc7KZ2Sw/h1PiVM0Af/oHB6zgnV1ikqSfRk+TOufi79aHYCW3NiOXmr1BP5nWbzojLaA==}
     hasBin: true
+    requiresBuild: true
     dev: true
     optional: true
 
@@ -20543,6 +20562,7 @@ packages:
   /rimraf@2.4.5:
     resolution: {integrity: sha512-J5xnxTyqaiw06JjMftq7L9ouA448dw/E7dKghkP9WpKNuwmARNNg+Gk8/u5ryb9N/Yo2+z3MCwuqFK/+qPOPfQ==}
     hasBin: true
+    requiresBuild: true
     dependencies:
       glob: 6.0.4
     dev: true
@@ -23111,6 +23131,7 @@ packages:
   /wait-on@7.0.1(debug@4.3.4):
     resolution: {integrity: sha512-9AnJE9qTjRQOlTZIldAaf/da2eW0eSRSgcqq85mXQja/DW3MriHxkpODDSUEg+Gri/rKEcXUZHe+cevvYItaog==}
     engines: {node: '>=12.0.0'}
+    hasBin: true
     dependencies:
       axios: 0.27.2(debug@4.3.4)
       joi: 17.7.0
