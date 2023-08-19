@@ -1179,17 +1179,12 @@ impl AuthorityState {
         let protocol_config = epoch_store.protocol_config();
         let shared_object_refs = input_objects.filter_shared_objects();
         let transaction_dependencies = input_objects.transaction_dependencies();
-        let temporary_store = TemporaryStore::new(
-            self.database.clone(),
-            input_objects,
-            tx_digest,
-            protocol_config,
-        );
         let transaction_data = &certificate.data().intent_message().value;
         let (kind, signer, gas) = transaction_data.execution_parts();
         let mut gas_charger = GasCharger::new(tx_digest, gas, gas_status, protocol_config);
         let (inner_temp_store, effects, execution_error_opt) =
             epoch_store.executor().execute_transaction_to_effects(
+                self.database.clone(),
                 protocol_config,
                 self.metrics.limits_metrics.clone(),
                 // TODO: would be nice to pass the whole NodeConfig here, but it creates a
@@ -1202,7 +1197,7 @@ impl AuthorityState {
                     .epoch_start_config()
                     .epoch_data()
                     .epoch_start_timestamp(),
-                temporary_store,
+                input_objects,
                 shared_object_refs,
                 &mut gas_charger,
                 kind,
@@ -1286,12 +1281,6 @@ impl AuthorityState {
 
         let protocol_config = epoch_store.protocol_config();
         let transaction_dependencies = input_objects.transaction_dependencies();
-        let temporary_store = TemporaryStore::new_for_mock_transaction(
-            self.database.clone(),
-            input_objects,
-            transaction_digest,
-            protocol_config,
-        );
         let (kind, signer, _) = transaction.execution_parts();
 
         let silent = true;
@@ -1304,6 +1293,7 @@ impl AuthorityState {
         let expensive_checks = false;
         let (inner_temp_store, effects, _execution_error) = executor
             .execute_transaction_to_effects(
+                self.database.clone(),
                 protocol_config,
                 self.metrics.limits_metrics.clone(),
                 expensive_checks,
@@ -1313,7 +1303,7 @@ impl AuthorityState {
                     .epoch_start_config()
                     .epoch_data()
                     .epoch_start_timestamp(),
-                temporary_store,
+                input_objects,
                 shared_object_refs,
                 &mut GasCharger::new(
                     transaction_digest,
@@ -1421,12 +1411,6 @@ impl AuthorityState {
         let transaction_digest = TransactionDigest::new(default_hash(&data));
         let transaction_kind = data.into_kind();
         let transaction_dependencies = input_objects.transaction_dependencies();
-        let temporary_store = TemporaryStore::new_for_mock_transaction(
-            self.database.clone(),
-            input_objects,
-            transaction_digest,
-            protocol_config,
-        );
         let silent = true;
         let executor = sui_execution::executor(
             protocol_config,
@@ -1437,6 +1421,7 @@ impl AuthorityState {
         .expect("Creating an executor should not fail here");
         let expensive_checks = false;
         let (inner_temp_store, effects, execution_result) = executor.dev_inspect_transaction(
+            self.database.clone(),
             protocol_config,
             self.metrics.limits_metrics.clone(),
             expensive_checks,
@@ -1446,7 +1431,7 @@ impl AuthorityState {
                 .epoch_start_config()
                 .epoch_data()
                 .epoch_start_timestamp(),
-            temporary_store,
+            input_objects,
             shared_object_refs,
             &mut GasCharger::new(
                 transaction_digest,
