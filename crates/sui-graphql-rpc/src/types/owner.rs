@@ -11,6 +11,7 @@ use async_graphql::connection::Connection;
 use async_graphql::*;
 
 use super::address::Address;
+use super::name_service::NameService;
 
 #[derive(Interface)]
 #[graphql(
@@ -57,7 +58,7 @@ use super::address::Address;
     field(name = "default_name_service_name", type = "Option<String>"),
     field(
         name = "name_service_connection",
-        type = "Option<Connection<String, String>>",
+        type = "Option<Connection<String, NameService>>",
         arg(name = "first", type = "Option<u64>"),
         arg(name = "after", type = "Option<String>"),
         arg(name = "last", type = "Option<u64>"),
@@ -158,7 +159,7 @@ impl Owner {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<Connection<String, String>> {
+    ) -> Option<Connection<String, NameService>> {
         unimplemented!()
     }
 }
