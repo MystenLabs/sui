@@ -11,7 +11,7 @@ use move_compiler::{
     expansion::ast as E,
     naming::ast as N,
     shared::{CompilationEnv, Identifier},
-    typing::{ast as T, core::ProgramInfo, visitor::TypingVisitor},
+    typing::{ast as T, core::TypingProgramInfo, visitor::TypingVisitor},
 };
 use move_core_types::account_address::AccountAddress;
 use move_ir_types::location::Loc;
@@ -36,7 +36,7 @@ impl TypingVisitor for CoinFieldVisitor {
     fn visit(
         &mut self,
         env: &mut CompilationEnv,
-        _program_info: &ProgramInfo,
+        _program_info: &TypingProgramInfo,
         program: &mut T::Program,
     ) {
         for (_, _, mdef) in program.modules.iter() {
