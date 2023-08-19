@@ -9,6 +9,7 @@ pub(crate) mod coin;
 pub(crate) mod date_time;
 pub(crate) mod display;
 pub(crate) mod gas;
+pub(crate) mod name_service;
 pub(crate) mod object;
 pub(crate) mod owner;
 pub(crate) mod protocol_config;
