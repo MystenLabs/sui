@@ -6,12 +6,12 @@ use std::{
     str::FromStr,
 };
 
-use diesel::deserialize::FromSql;
 use diesel::pg::{Pg, PgValue};
 use diesel::prelude::*;
 use diesel::serialize::{Output, ToSql, WriteTuple};
 use diesel::sql_types::{Bytea, Nullable, Record, VarChar};
 use diesel::SqlType;
+use diesel::{deserialize::FromSql, expression::is_aggregate::No};
 use diesel_derive_enum::DbEnum;
 use fastcrypto::encoding::{Base64, Encoding};
 use serde::{Deserialize, Serialize};
@@ -20,7 +20,7 @@ use std::collections::hash_map::Entry;
 
 use move_bytecode_utils::module_cache::GetModule;
 use sui_json_rpc_types::{SuiObjectData, SuiObjectRef, SuiRawData};
-use sui_types::digests::TransactionDigest;
+use sui_types::{digests::TransactionDigest, object::Object, dynamic_field::DynamicFieldInfo};
 use sui_types::move_package::MovePackage;
 use sui_types::object::{Data, MoveObject, ObjectFormatOptions, ObjectRead, Owner};
 use sui_types::{
@@ -29,206 +29,214 @@ use sui_types::{
 };
 
 use crate::errors::IndexerError;
-use crate::models::owners::OwnerType;
 use crate::schema::objects;
-use crate::schema::sql_types::BcsBytes;
+// use crate::schema::sql_types::BcsBytes;
 
-const OBJECT: &str = "object";
+// const OBJECT: &str = "object";
+
+#[derive(Debug, Copy, Clone)]
+pub enum OwnerType {
+    Immutable = 0,
+    Address = 1,
+    Object = 2,
+    Shared = 3,
+    Deleted = 4,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum ObjectStatus {
+    NotExist = 0,
+    Exists = 1,
+    NotFound = 2,
+}
 
 // NOTE: please add updating statement like below in pg_indexer_store.rs,
 // if new columns are added here:
 // objects::epoch.eq(excluded(objects::epoch))
 #[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
 #[diesel(table_name = objects, primary_key(object_id))]
-pub struct Object {
-    // epoch id in which this object got update.
-    pub epoch: i64,
-    // checkpoint seq number in which this object got updated,
-    // it can be temp -1 for object updates from fast path,
-    // it will be updated to the real checkpoint seq number in the following checkpoint.
-    pub checkpoint: i64,
-    pub object_id: String,
-    pub version: i64,
-    pub object_digest: String,
-    pub owner_type: OwnerType,
-    pub owner_address: Option<String>,
-    pub initial_shared_version: Option<i64>,
-    pub previous_transaction: String,
-    pub object_type: String,
+pub struct StoredObject {
+    pub object_id: Vec<u8>,
+    pub object_version: i64,
+    pub checkpoint_sequence_number: i64,
+    pub object_status: i16,
+    pub owner_type: i16,
+    pub owner_id: Option<Vec<u8>>,
+    pub serialized_object: Vec<u8>,
+    pub coin_type: Option<String>,
+    // TODO hmmm overflow?
+    pub coin_balance: Option<i64>,
+    pub dynamic_field_name_type: Option<String>,
+    pub dynamic_field_value: Option<String>,
+    pub dynamic_field_type: Option<i16>,
+}
+
+#[derive(Debug)]
+pub struct IndexedObject {
+    pub object_id: ObjectID,
+    pub object_version: u64,
+    pub checkpoint_sequence_number: u64,
     pub object_status: ObjectStatus,
-    pub has_public_transfer: bool,
-    pub storage_rebate: i64,
-    pub bcs: Vec<NamedBcsBytes>,
-}
-#[derive(SqlType, Debug, Clone)]
-#[diesel(sql_type = crate::schema::sql_types::BcsBytes)]
-pub struct NamedBcsBytes(pub String, pub Vec<u8>);
-
-impl ToSql<Nullable<BcsBytes>, Pg> for NamedBcsBytes {
-    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Pg>) -> diesel::serialize::Result {
-        WriteTuple::<(VarChar, Bytea)>::write_tuple(&(self.0.clone(), self.1.clone()), out)
-    }
-}
-
-impl FromSql<Nullable<BcsBytes>, Pg> for NamedBcsBytes {
-    fn from_sql(bytes: PgValue) -> diesel::deserialize::Result<Self> {
-        let (name, data) = FromSql::<Record<(VarChar, Bytea)>, Pg>::from_sql(bytes)?;
-        Ok(NamedBcsBytes(name, data))
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct DeletedObject {
-    // epoch id in which this object got deleted.
-    pub epoch: i64,
-    // checkpoint seq number in which this object got deleted.
-    pub checkpoint: Option<i64>,
-    pub object_id: String,
-    pub version: i64,
-    pub object_digest: String,
     pub owner_type: OwnerType,
-    pub previous_transaction: String,
-    pub object_type: String,
-    pub object_status: ObjectStatus,
-    pub has_public_transfer: bool,
+    pub owner_id: Option<SuiAddress>,
+    pub object: Object,
+    pub coin_type: Option<String>,
+    // TODO hmmm overflow?
+    pub coin_balance: Option<u64>,
+    pub df_info: Option<DynamicFieldInfo>,
+    // pub dynamic_field_name_type: Option<String>,
+    // pub dynamic_field_value: Option<String>,
+    // pub dynamic_field_type: Option<DynamicFieldType>,
 }
 
-impl From<DeletedObject> for Object {
-    fn from(o: DeletedObject) -> Self {
-        Object {
-            epoch: o.epoch,
-            // NOTE: -1 as temp checkpoint for object updates from fast path,
-            checkpoint: o.checkpoint.unwrap_or(-1),
-            object_id: o.object_id,
-            version: o.version,
-            object_digest: o.object_digest,
-            owner_type: o.owner_type,
-            owner_address: None,
-            initial_shared_version: None,
-            previous_transaction: o.previous_transaction,
-            object_type: o.object_type,
-            object_status: o.object_status,
-            has_public_transfer: o.has_public_transfer,
-            storage_rebate: 0,
-            bcs: vec![],
-        }
-    }
-}
 
-#[derive(DbEnum, Debug, Clone, Copy, Deserialize, Serialize)]
-#[ExistingTypePath = "crate::schema::sql_types::ObjectStatus"]
-#[serde(rename_all = "snake_case")]
-pub enum ObjectStatus {
-    Created,
-    Mutated,
-    Deleted,
-    Wrapped,
-    Unwrapped,
-    UnwrappedThenDeleted,
-}
+// #[derive(SqlType, Debug, Clone)]
+// #[diesel(sql_type = crate::schema::sql_types::BcsBytes)]
+// pub struct NamedBcsBytes(pub String, pub Vec<u8>);
 
-impl From<WriteKind> for ObjectStatus {
-    fn from(value: WriteKind) -> Self {
-        match value {
-            WriteKind::Mutate => Self::Mutated,
-            WriteKind::Create => Self::Created,
-            WriteKind::Unwrap => Self::Unwrapped,
-        }
-    }
-}
+// impl ToSql<Nullable<BcsBytes>, Pg> for NamedBcsBytes {
+//     fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Pg>) -> diesel::serialize::Result {
+//         WriteTuple::<(VarChar, Bytea)>::write_tuple(&(self.0.clone(), self.1.clone()), out)
+//     }
+// }
 
-impl Object {
-    pub fn new(
-        epoch: u64,
-        checkpoint: u64,
-        kind: WriteKind,
-        object: &sui_types::object::Object,
+// impl FromSql<Nullable<BcsBytes>, Pg> for NamedBcsBytes {
+//     fn from_sql(bytes: PgValue) -> diesel::deserialize::Result<Self> {
+//         let (name, data) = FromSql::<Record<(VarChar, Bytea)>, Pg>::from_sql(bytes)?;
+//         Ok(NamedBcsBytes(name, data))
+//     }
+// }
+
+// #[derive(Debug, Clone)]
+// pub struct DeletedObject {
+//     // epoch id in which this object got deleted.
+//     pub epoch: i64,
+//     // checkpoint seq number in which this object got deleted.
+//     pub checkpoint: Option<i64>,
+//     pub object_id: String,
+//     pub version: i64,
+//     pub object_digest: String,
+//     pub owner_type: OwnerType,
+//     pub previous_transaction: String,
+//     pub object_type: String,
+//     pub object_status: ObjectStatus,
+//     pub has_public_transfer: bool,
+// }
+
+// impl From<DeletedObject> for Object {
+//     fn from(o: DeletedObject) -> Self {
+//         Object {
+//             epoch: o.epoch,
+//             // NOTE: -1 as temp checkpoint for object updates from fast path,
+//             checkpoint: o.checkpoint.unwrap_or(-1),
+//             object_id: o.object_id,
+//             version: o.version,
+//             object_digest: o.object_digest,
+//             owner_type: o.owner_type,
+//             owner_address: None,
+//             initial_shared_version: None,
+//             previous_transaction: o.previous_transaction,
+//             object_type: o.object_type,
+//             object_status: o.object_status,
+//             has_public_transfer: o.has_public_transfer,
+//             storage_rebate: 0,
+//             bcs: vec![],
+//         }
+//     }
+// }
+
+// #[derive(DbEnum, Debug, Clone, Copy, Deserialize, Serialize)]
+// #[ExistingTypePath = "crate::schema::sql_types::ObjectStatus"]
+// #[serde(rename_all = "snake_case")]
+// pub enum ObjectStatus {
+//     Created,
+//     Mutated,
+//     Deleted,
+//     Wrapped,
+//     Unwrapped,
+//     UnwrappedThenDeleted,
+// }
+
+// impl From<WriteKind> for ObjectStatus {
+//     fn from(value: WriteKind) -> Self {
+//         match value {
+//             WriteKind::Mutate => Self::Mutated,
+//             WriteKind::Create => Self::Created,
+//             WriteKind::Unwrap => Self::Unwrapped,
+//         }
+//     }
+// }
+
+impl IndexedObject {
+    pub fn from_object(
+        checkpoint_sequence_number: u64,
+        object: Object,
+        df_info: Option<DynamicFieldInfo>,
     ) -> Self {
-        let (owner_type, owner_address, initial_shared_version) =
-            owner_to_owner_info(&object.owner);
-
-        let has_public_transfer = object
-            .data
-            .try_as_move()
-            .map(|o| o.has_public_transfer())
-            .unwrap_or(false);
-        let object_type = object
-            .data
-            .try_as_move()
-            .map(|o| o.type_().to_string())
-            .unwrap_or_else(|| "".to_owned());
+        let (owner_type, owner_id) = owner_to_owner_info(&object.owner);
+        let coin_type = object.coin_type_maybe().map(|t| t.to_string());
+        let coin_balance = if coin_type.is_some() {
+            Some(object.get_coin_value_unsafe())
+        } else {
+            None
+        };
 
         Self {
-            epoch: epoch as i64,
-            checkpoint: checkpoint as i64,
-            object_id: object.id().to_string(),
-            version: object.version().value() as i64,
-            object_digest: object.digest().to_string(),
+            checkpoint_sequence_number,
+            object_id: object.id(),
+            object_version: object.version().value(),
+            object_status: ObjectStatus::Exists,
             owner_type,
-            owner_address,
-            initial_shared_version,
-            previous_transaction: object.previous_transaction.to_string(),
-            object_type,
-            object_status: kind.into(),
-            has_public_transfer,
-            storage_rebate: object.storage_rebate as i64,
-            bcs: vec![NamedBcsBytes(
-                OBJECT.to_string(),
-                bcs::to_bytes(object).unwrap(),
-            )],
+            owner_id,
+            object,
+            coin_type,
+            coin_balance,
+            df_info,
         }
     }
+}
+    // pub fn from(
+    //     // epoch: u64,
+    //     checkpoint: u64,
+    //     // status: &ObjectStatus,
+    //     o: &SuiObjectData,
+    // ) -> Self {
+    //     let object: sui_types::object::Object = o.try_into()
+    //         .map_err(|e | IndexerError::DataTransformationError(format!("Can't convert SuiObjectData into Object: {e}")))?;
+    //     let (owner_type, owner_id) = owner_to_owner_info(&object.owner);
+    //     // let (has_public_transfer, bcs) =
+    //     //     match o.bcs.clone().expect("Expect BCS data to be non-empty") {
+    //     //         SuiRawData::MoveObject(o) => (
+    //     //             o.has_public_transfer,
+    //     //             vec![NamedBcsBytes(OBJECT.to_string(), o.bcs_bytes)],
+    //     //         ),
+    //     //         SuiRawData::Package(p) => (
+    //     //             false,
+    //     //             p.module_map
+    //     //                 .into_iter()
+    //     //                 .map(|(k, v)| NamedBcsBytes(k, v))
+    //     //                 .collect(),
+    //     //         ),
+    //     //     };
 
-    pub fn from(
-        epoch: u64,
-        checkpoint: Option<u64>,
-        status: &ObjectStatus,
-        o: &SuiObjectData,
-    ) -> Self {
-        let (owner_type, owner_address, initial_shared_version) =
-            owner_to_owner_info(&o.owner.expect("Expect the owner type to be non-empty"));
+    //     Self {
+    //         checkpoint_sequence_number: checkpoint as i64,
+    //         object_id: object.id().into_bytes(),
+    //         object_version: object.version().value() as i64,
+    //         owner_type,
+    //         owner_id,
+    //         serialized_object: bcs::to_bytes(&object).unwrap(),
+    //         // FIXME
+    //         coin_type: None,
+    //         coin_balance: None,
+    //         dynamic_field_name_type: None,
+    //         dynamic_field_type: None,
+    //         dynamic_field_value: None,
 
-        let (has_public_transfer, bcs) =
-            match o.bcs.clone().expect("Expect BCS data to be non-empty") {
-                SuiRawData::MoveObject(o) => (
-                    o.has_public_transfer,
-                    vec![NamedBcsBytes(OBJECT.to_string(), o.bcs_bytes)],
-                ),
-                SuiRawData::Package(p) => (
-                    false,
-                    p.module_map
-                        .into_iter()
-                        .map(|(k, v)| NamedBcsBytes(k, v))
-                        .collect(),
-                ),
-            };
+    //     }
+    // }
 
-        Object {
-            epoch: epoch as i64,
-            // NOTE: -1 as temp checkpoint for object updates from fast path,
-            checkpoint: checkpoint.map(|v| v as i64).unwrap_or(-1),
-            object_id: o.object_id.to_string(),
-            version: o.version.value() as i64,
-            object_digest: o.digest.base58_encode(),
-            owner_type,
-            owner_address,
-            initial_shared_version,
-            previous_transaction: o
-                .previous_transaction
-                .expect("Expect previous transaction to be non-empty")
-                .base58_encode(),
-            object_type: o
-                .type_
-                .as_ref()
-                .expect("Expect the object type to be non-empty")
-                .to_string(),
-            object_status: *status,
-            has_public_transfer,
-            storage_rebate: o.storage_rebate.unwrap_or_default() as i64,
-            bcs,
-        }
-    }
-
+impl StoredObject {
     pub fn try_into_object_read(
         self,
         module_cache: &impl GetModule,
@@ -247,7 +255,9 @@ impl Object {
     }
 
     pub fn get_object_ref(&self) -> Result<ObjectRef, IndexerError> {
-        let object_id = self.object_id.parse()?;
+        let object_id = ObjectID::from_bytes(self.object_id).map_err(IndexerError::CorruptedData(
+            format!("Can't convert {} to object_id", self.object_id),
+        ));
         let digest = self.object_digest.parse().map_err(|e| {
             IndexerError::SerdeError(format!(
                 "Failed to parse object digest: {}, error: {}",
@@ -256,127 +266,58 @@ impl Object {
         })?;
         Ok((object_id, (self.version as u64).into(), digest))
     }
+
+    pub fn make_deleted(
+        // epoch: u64,
+        checkpoint: u64,
+        oref: &SuiObjectRef,
+        // previous_tx: &TransactionDigest,
+        // status: &ObjectStatus,
+    ) -> Self {
+        Self {
+            checkpoint_sequence_number: checkpoint as i64,
+            object_id: oref.object_id.into_bytes(),
+            object_version: oref.version.value() as i64,
+            object_status: ObjectStatus::Deleted,
+            owner_type: OwnerType::Deleted,
+            owner_id: None,
+            serialized_object: vec![],
+            coin_type: None,
+            coin_balance: None,
+            dynamic_field_name_type: None,
+            dynamic_field_type: None,
+            dynamic_field_value: None,
+            // DeleteObject is use for upsert only, this value will not be inserted into the DB
+            // this dummy value is use to satisfy non null constrain.
+            // object_digest: "DELETED".to_string(),
+            // owner_type: OwnerType::AddressOwner,
+            // previous_transaction: previous_tx.base58_encode(),
+            // object_type: "DELETED".to_string(),
+            // object_status: *status,
+            // has_public_transfer: false,
+        }
+    }
 }
 
 impl TryFrom<Object> for sui_types::object::Object {
     type Error = IndexerError;
 
     fn try_from(o: Object) -> Result<Self, Self::Error> {
-        let object_type = ObjectType::from_str(&o.object_type)?;
-        let object_id = ObjectID::from_str(&o.object_id)?;
-        let version = SequenceNumber::from_u64(o.version as u64);
-        let owner = match o.owner_type {
-            OwnerType::AddressOwner => Owner::AddressOwner(SuiAddress::from_str(
-                &o.owner_address.expect("Owner address should not be empty."),
-            )?),
-            OwnerType::ObjectOwner => Owner::ObjectOwner(SuiAddress::from_str(
-                &o.owner_address.expect("Owner address should not be empty."),
-            )?),
-            OwnerType::Shared => Owner::Shared {
-                initial_shared_version: SequenceNumber::from_u64(
-                    o.initial_shared_version
-                        .expect("Shared version should not be empty.") as u64,
-                ),
-            },
-            OwnerType::Immutable => Owner::Immutable,
-        };
-        let previous_transaction = TransactionDigest::from_str(&o.previous_transaction)?;
-
-        Ok(match object_type {
-            ObjectType::Package => {
-                let modules = o
-                    .bcs
-                    .into_iter()
-                    .map(|NamedBcsBytes(name, bytes)| (name, bytes))
-                    .collect();
-                // Ok to unwrap, package size is safe guarded by the full node, we are not limiting size when reading back from DB.
-                let package = MovePackage::new(
-                    object_id,
-                    version,
-                    modules,
-                    u64::MAX,
-                    // TODO: these represent internal data needed for Move code execution and as
-                    // long as this MovePackage does not find its way to the Move adapter (which is
-                    // the assumption here) they can remain uninitialized though we could consider
-                    // storing them in the database and properly initializing here for completeness
-                    Vec::new(),
-                    BTreeMap::new(),
-                )
-                .unwrap();
-                sui_types::object::Object {
-                    data: Data::Package(package),
-                    owner,
-                    previous_transaction,
-                    storage_rebate: o.storage_rebate as u64,
-                }
-            }
-            // Reconstructing MoveObject form database table, move VM safety concern is irrelevant here.
-            ObjectType::Struct(object_type) => unsafe {
-                let content = o
-                    .bcs
-                    .first()
-                    .expect("BCS content should not be empty")
-                    .1
-                    .clone();
-                // Ok to unwrap, object size is safe guarded by the full node, we are not limiting size when reading back from DB.
-                let object = MoveObject::new_from_execution_with_limit(
-                    object_type,
-                    o.has_public_transfer,
-                    version,
-                    content,
-                    u64::MAX,
-                )
-                .unwrap();
-
-                sui_types::object::Object {
-                    data: Data::Move(object),
-                    owner,
-                    previous_transaction,
-                    storage_rebate: o.storage_rebate as u64,
-                }
-            },
+        o.try_into().map_err(|e| {
+            IndexerError::DataTransformationError(format!(
+                "Can't convert SuiObjectData into Object: {e}"
+            ))
         })
     }
 }
 
-impl DeletedObject {
-    pub fn from(
-        epoch: u64,
-        checkpoint: Option<u64>,
-        oref: &SuiObjectRef,
-        previous_tx: &TransactionDigest,
-        status: &ObjectStatus,
-    ) -> Self {
-        Self {
-            epoch: epoch as i64,
-            checkpoint: checkpoint.map(|c| c as i64),
-            object_id: oref.object_id.to_string(),
-            version: oref.version.value() as i64,
-            // DeleteObject is use for upsert only, this value will not be inserted into the DB
-            // this dummy value is use to satisfy non null constrain.
-            object_digest: "DELETED".to_string(),
-            owner_type: OwnerType::AddressOwner,
-            previous_transaction: previous_tx.base58_encode(),
-            object_type: "DELETED".to_string(),
-            object_status: *status,
-            has_public_transfer: false,
-        }
-    }
-}
-
-// return owner_type, owner_address and initial_shared_version
-pub fn owner_to_owner_info(owner: &Owner) -> (OwnerType, Option<String>, Option<i64>) {
+// return owner_type, owner_address
+pub fn owner_to_owner_info(owner: &Owner) -> (OwnerType, Option<SuiAddress>) {
     match owner {
-        Owner::AddressOwner(address) => (OwnerType::AddressOwner, Some(address.to_string()), None),
-        Owner::ObjectOwner(address) => (OwnerType::ObjectOwner, Some(address.to_string()), None),
-        Owner::Shared {
-            initial_shared_version,
-        } => (
-            OwnerType::Shared,
-            None,
-            Some(initial_shared_version.value() as i64),
-        ),
-        Owner::Immutable => (OwnerType::Immutable, None, None),
+        Owner::AddressOwner(address) => (OwnerType::Address, Some(address)),
+        Owner::ObjectOwner(address) => (OwnerType::ObjectOwner, Some(address)),
+        Owner::Shared { .. } => (OwnerType::Shared, None),
+        Owner::Immutable => (OwnerType::Immutable, None),
     }
 }
 

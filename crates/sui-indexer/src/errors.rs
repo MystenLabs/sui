@@ -72,6 +72,9 @@ pub enum IndexerError {
     #[error("Indexer failed to serialize/deserialize with error: `{0}`")]
     SerdeError(String),
 
+    #[error("Indexer failed to transform data with error: `{0}`")]
+    DataTransformationError(String),
+
     #[error("Indexer does not support the feature with error: `{0}`")]
     NotSupportedError(String),
 

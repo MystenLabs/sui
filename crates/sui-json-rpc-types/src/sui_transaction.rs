@@ -360,6 +360,10 @@ impl SuiTransactionBlockKind {
             Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
         }
     }
+
+    pub fn is_system_transaction(&self) -> bool {
+        !matches!(self, Self::ProgrammableTransaction(_))
+    }
 }
 
 #[serde_as]

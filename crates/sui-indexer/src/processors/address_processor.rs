@@ -104,24 +104,24 @@ where
                         dedup_from_addresses(from_address_data);
 
                     // retry here to avoid duplicate DB reads
-                    let mut address_commit_res = self
-                        .store
-                        .persist_addresses(&addresses, &active_addresses)
-                        .await;
-                    while let Err(e) = address_commit_res {
-                        warn!(
-                        "Indexer address commit failed with error: {:?}, retrying after {:?} milli-secs...",
-                        e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
-                    );
-                        tokio::time::sleep(std::time::Duration::from_millis(
-                            DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
-                        ))
-                        .await;
-                        address_commit_res = self
-                            .store
-                            .persist_addresses(&addresses, &active_addresses)
-                            .await;
-                    }
+                    // let mut address_commit_res = self
+                    //     .store
+                    //     .persist_addresses(&addresses, &active_addresses)
+                    //     .await;
+                    // while let Err(e) = address_commit_res {
+                    //     warn!(
+                    //     "Indexer address commit failed with error: {:?}, retrying after {:?} milli-secs...",
+                    //     e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
+                    // );
+                    //     tokio::time::sleep(std::time::Duration::from_millis(
+                    //         DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
+                    //     ))
+                    //     .await;
+                    //     address_commit_res = self
+                    //         .store
+                    //         .persist_addresses(&addresses, &active_addresses)
+                    //         .await;
+                    // }
                 }
 
                 let addr_stats = self

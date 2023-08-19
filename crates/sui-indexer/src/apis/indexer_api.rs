@@ -60,215 +60,216 @@ impl<S: IndexerStore> IndexerApi<S> {
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> Result<TransactionBlocksPage, IndexerError> {
-        let limit = cap_page_limit(limit);
-        let is_descending = descending_order.unwrap_or_default();
-        let cursor_str = cursor.map(|digest| digest.to_string());
-        let mut tx_vec_from_db = match query.filter {
-            None => {
-                let indexer_seq_number = self
-                    .state
-                    .get_transaction_sequence_by_digest(cursor_str, is_descending)
-                    .await?;
-                self.state
-                    .get_all_transaction_page(indexer_seq_number, limit + 1, is_descending)
-                    .await
-            }
-            Some(TransactionFilter::Checkpoint(checkpoint_id)) => {
-                let indexer_seq_number = self
-                    .state
-                    .get_transaction_sequence_by_digest(cursor_str, is_descending)
-                    .await?;
-                self.state
-                    .get_transaction_page_by_checkpoint(
-                        checkpoint_id as i64,
-                        indexer_seq_number,
-                        limit + 1,
-                        is_descending,
-                    )
-                    .await
-            }
-            Some(TransactionFilter::MoveFunction {
-                package,
-                module,
-                function,
-            }) => {
-                let module = if let Some(m) = module {
-                    Some(
-                        Identifier::new(m)
-                            .map_err(|e| IndexerError::InvalidArgumentError(e.to_string()))?,
-                    )
-                } else {
-                    None
-                };
-                let function = if let Some(f) = function {
-                    Some(
-                        Identifier::new(f)
-                            .map_err(|e| IndexerError::InvalidArgumentError(e.to_string()))?,
-                    )
-                } else {
-                    None
-                };
-                let move_call_seq_number = self
-                    .state
-                    .get_move_call_sequence_by_digest(cursor_str, is_descending)
-                    .await?;
-                self.state
-                    .get_transaction_page_by_move_call(
-                        package,
-                        module,
-                        function,
-                        move_call_seq_number,
-                        limit + 1,
-                        is_descending,
-                    )
-                    .await
-            }
-            Some(TransactionFilter::InputObject(input_obj_id)) => {
-                let input_obj_seq = self
-                    .state
-                    .get_input_object_sequence_by_digest(cursor_str, is_descending)
-                    .await?;
-                self.state
-                    .get_transaction_page_by_input_object(
-                        input_obj_id,
-                        /* version */ None,
-                        input_obj_seq,
-                        limit + 1,
-                        is_descending,
-                    )
-                    .await
-            }
-            Some(TransactionFilter::ChangedObject(mutated_obj_id)) => {
-                let indexer_seq_number = self
-                    .state
-                    .get_transaction_sequence_by_digest(cursor_str, is_descending)
-                    .await?;
-                self.state
-                    .get_transaction_page_by_changed_object(
-                        mutated_obj_id,
-                        None,
-                        indexer_seq_number,
-                        limit + 1,
-                        is_descending,
-                    )
-                    .await
-            }
-            // NOTE: more efficient to run this query over transactions table
-            Some(TransactionFilter::FromAddress(sender_address)) => {
-                let indexer_seq_number = self
-                    .state
-                    .get_transaction_sequence_by_digest(cursor_str, is_descending)
-                    .await?;
-                self.state
-                    .get_transaction_page_by_sender_address(
-                        sender_address.to_string(),
-                        indexer_seq_number,
-                        limit + 1,
-                        is_descending,
-                    )
-                    .await
-            }
-            Some(TransactionFilter::ToAddress(recipient_address)) => {
-                let recipient_seq_number = self
-                    .state
-                    .get_recipient_sequence_by_digest(cursor_str, is_descending)
-                    .await?;
-                self.state
-                    .get_transaction_page_by_recipient_address(
-                        /* from */ None,
-                        recipient_address,
-                        recipient_seq_number,
-                        limit + 1,
-                        is_descending,
-                    )
-                    .await
-            }
-            Some(TransactionFilter::FromAndToAddress { from, to }) => {
-                let recipient_seq_number = self
-                    .state
-                    .get_recipient_sequence_by_digest(cursor_str, is_descending)
-                    .await?;
-                self.state
-                    .get_transaction_page_by_recipient_address(
-                        Some(from),
-                        to,
-                        recipient_seq_number,
-                        limit + 1,
-                        is_descending,
-                    )
-                    .await
-            }
-            Some(TransactionFilter::FromOrToAddress { addr }) => {
-                let start_sequence = self
-                    .state
-                    .get_recipient_sequence_by_digest(cursor_str, is_descending)
-                    .await?;
-                self.state
-                    .get_transaction_page_by_address(addr, start_sequence, limit + 1, is_descending)
-                    .await
-            }
-            Some(TransactionFilter::TransactionKind(tx_kind_name)) => {
-                let indexer_seq_number = self
-                    .state
-                    .get_transaction_sequence_by_digest(cursor_str, is_descending)
-                    .await?;
-                self.state
-                    .get_transaction_page_by_transaction_kinds(
-                        vec![tx_kind_name],
-                        indexer_seq_number,
-                        limit + 1,
-                        is_descending,
-                    )
-                    .await
-            }
-            Some(TransactionFilter::TransactionKindIn(tx_kind_names)) => {
-                let indexer_seq_number = self
-                    .state
-                    .get_transaction_sequence_by_digest(cursor_str, is_descending)
-                    .await?;
-                self.state
-                    .get_transaction_page_by_transaction_kinds(
-                        tx_kind_names,
-                        indexer_seq_number,
-                        limit + 1,
-                        is_descending,
-                    )
-                    .await
-            }
-        }?;
+        unimplemented!()
+        // let limit = cap_page_limit(limit);
+        // let is_descending = descending_order.unwrap_or_default();
+        // let cursor_str = cursor.map(|digest| digest.to_string());
+        // let mut tx_vec_from_db = match query.filter {
+        //     None => {
+        //         let indexer_seq_number = self
+        //             .state
+        //             .get_transaction_sequence_by_digest(cursor_str, is_descending)
+        //             .await?;
+        //         self.state
+        //             .get_all_transaction_page(indexer_seq_number, limit + 1, is_descending)
+        //             .await
+        //     }
+        //     Some(TransactionFilter::Checkpoint(checkpoint_id)) => {
+        //         let indexer_seq_number = self
+        //             .state
+        //             .get_transaction_sequence_by_digest(cursor_str, is_descending)
+        //             .await?;
+        //         self.state
+        //             .get_transaction_page_by_checkpoint(
+        //                 checkpoint_id as i64,
+        //                 indexer_seq_number,
+        //                 limit + 1,
+        //                 is_descending,
+        //             )
+        //             .await
+        //     }
+        //     Some(TransactionFilter::MoveFunction {
+        //         package,
+        //         module,
+        //         function,
+        //     }) => {
+        //         let module = if let Some(m) = module {
+        //             Some(
+        //                 Identifier::new(m)
+        //                     .map_err(|e| IndexerError::InvalidArgumentError(e.to_string()))?,
+        //             )
+        //         } else {
+        //             None
+        //         };
+        //         let function = if let Some(f) = function {
+        //             Some(
+        //                 Identifier::new(f)
+        //                     .map_err(|e| IndexerError::InvalidArgumentError(e.to_string()))?,
+        //             )
+        //         } else {
+        //             None
+        //         };
+        //         let move_call_seq_number = self
+        //             .state
+        //             .get_move_call_sequence_by_digest(cursor_str, is_descending)
+        //             .await?;
+        //         self.state
+        //             .get_transaction_page_by_move_call(
+        //                 package,
+        //                 module,
+        //                 function,
+        //                 move_call_seq_number,
+        //                 limit + 1,
+        //                 is_descending,
+        //             )
+        //             .await
+        //     }
+        //     Some(TransactionFilter::InputObject(input_obj_id)) => {
+        //         let input_obj_seq = self
+        //             .state
+        //             .get_input_object_sequence_by_digest(cursor_str, is_descending)
+        //             .await?;
+        //         self.state
+        //             .get_transaction_page_by_input_object(
+        //                 input_obj_id,
+        //                 /* version */ None,
+        //                 input_obj_seq,
+        //                 limit + 1,
+        //                 is_descending,
+        //             )
+        //             .await
+        //     }
+        //     Some(TransactionFilter::ChangedObject(mutated_obj_id)) => {
+        //         let indexer_seq_number = self
+        //             .state
+        //             .get_transaction_sequence_by_digest(cursor_str, is_descending)
+        //             .await?;
+        //         self.state
+        //             .get_transaction_page_by_changed_object(
+        //                 mutated_obj_id,
+        //                 None,
+        //                 indexer_seq_number,
+        //                 limit + 1,
+        //                 is_descending,
+        //             )
+        //             .await
+        //     }
+        //     // NOTE: more efficient to run this query over transactions table
+        //     Some(TransactionFilter::FromAddress(sender_address)) => {
+        //         let indexer_seq_number = self
+        //             .state
+        //             .get_transaction_sequence_by_digest(cursor_str, is_descending)
+        //             .await?;
+        //         self.state
+        //             .get_transaction_page_by_sender_address(
+        //                 sender_address.to_string(),
+        //                 indexer_seq_number,
+        //                 limit + 1,
+        //                 is_descending,
+        //             )
+        //             .await
+        //     }
+        //     Some(TransactionFilter::ToAddress(recipient_address)) => {
+        //         let recipient_seq_number = self
+        //             .state
+        //             .get_recipient_sequence_by_digest(cursor_str, is_descending)
+        //             .await?;
+        //         self.state
+        //             .get_transaction_page_by_recipient_address(
+        //                 /* from */ None,
+        //                 recipient_address,
+        //                 recipient_seq_number,
+        //                 limit + 1,
+        //                 is_descending,
+        //             )
+        //             .await
+        //     }
+        //     Some(TransactionFilter::FromAndToAddress { from, to }) => {
+        //         let recipient_seq_number = self
+        //             .state
+        //             .get_recipient_sequence_by_digest(cursor_str, is_descending)
+        //             .await?;
+        //         self.state
+        //             .get_transaction_page_by_recipient_address(
+        //                 Some(from),
+        //                 to,
+        //                 recipient_seq_number,
+        //                 limit + 1,
+        //                 is_descending,
+        //             )
+        //             .await
+        //     }
+        //     Some(TransactionFilter::FromOrToAddress { addr }) => {
+        //         let start_sequence = self
+        //             .state
+        //             .get_recipient_sequence_by_digest(cursor_str, is_descending)
+        //             .await?;
+        //         self.state
+        //             .get_transaction_page_by_address(addr, start_sequence, limit + 1, is_descending)
+        //             .await
+        //     }
+        //     Some(TransactionFilter::TransactionKind(tx_kind_name)) => {
+        //         let indexer_seq_number = self
+        //             .state
+        //             .get_transaction_sequence_by_digest(cursor_str, is_descending)
+        //             .await?;
+        //         self.state
+        //             .get_transaction_page_by_transaction_kinds(
+        //                 vec![tx_kind_name],
+        //                 indexer_seq_number,
+        //                 limit + 1,
+        //                 is_descending,
+        //             )
+        //             .await
+        //     }
+        //     Some(TransactionFilter::TransactionKindIn(tx_kind_names)) => {
+        //         let indexer_seq_number = self
+        //             .state
+        //             .get_transaction_sequence_by_digest(cursor_str, is_descending)
+        //             .await?;
+        //         self.state
+        //             .get_transaction_page_by_transaction_kinds(
+        //                 tx_kind_names,
+        //                 indexer_seq_number,
+        //                 limit + 1,
+        //                 is_descending,
+        //             )
+        //             .await
+        //     }
+        // }?;
 
-        let has_next_page = tx_vec_from_db.len() > limit;
-        tx_vec_from_db.truncate(limit);
-        let next_cursor = tx_vec_from_db
-            .last()
-            .cloned()
-            .map(|tx| {
-                let digest = tx.transaction_digest;
-                let tx_digest: Result<TransactionDigest, _> = digest.parse();
-                tx_digest.map_err(|e| {
-                    IndexerError::SerdeError(format!(
-                        "Failed to deserialize transaction digest: {:?} with error {:?}",
-                        digest, e
-                    ))
-                })
-            })
-            .transpose()?
-            .map_or(cursor, Some);
+        // let has_next_page = tx_vec_from_db.len() > limit;
+        // tx_vec_from_db.truncate(limit);
+        // let next_cursor = tx_vec_from_db
+        //     .last()
+        //     .cloned()
+        //     .map(|tx| {
+        //         let digest = tx.transaction_digest;
+        //         let tx_digest: Result<TransactionDigest, _> = digest.parse();
+        //         tx_digest.map_err(|e| {
+        //             IndexerError::SerdeError(format!(
+        //                 "Failed to deserialize transaction digest: {:?} with error {:?}",
+        //                 digest, e
+        //             ))
+        //         })
+        //     })
+        //     .transpose()?
+        //     .map_or(cursor, Some);
 
-        let tx_resp_futures = tx_vec_from_db.into_iter().map(|tx| {
-            self.state
-                .compose_sui_transaction_block_response(tx, query.options.as_ref())
-        });
-        let sui_tx_resp_vec = join_all(tx_resp_futures)
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()?;
+        // let tx_resp_futures = tx_vec_from_db.into_iter().map(|tx| {
+        //     self.state
+        //         .compose_sui_transaction_block_response(tx, query.options.as_ref())
+        // });
+        // let sui_tx_resp_vec = join_all(tx_resp_futures)
+        //     .await
+        //     .into_iter()
+        //     .collect::<Result<Vec<_>, _>>()?;
 
-        Ok(Page {
-            data: sui_tx_resp_vec,
-            next_cursor,
-            has_next_page,
-        })
+        // Ok(Page {
+        //     data: sui_tx_resp_vec,
+        //     next_cursor,
+        //     has_next_page,
+        // })
     }
 
     async fn get_owned_objects_internal(

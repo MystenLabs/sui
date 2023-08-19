@@ -39,7 +39,7 @@ pub struct EpochInfo {
     #[serde_as(as = "BigInt<u64>")]
     pub epoch_start_timestamp: u64,
     pub end_of_epoch_info: Option<EndOfEpochInfo>,
-    pub reference_gas_price: Option<u64>,
+    pub reference_gas_price: u64,
 }
 
 #[serde_as]
