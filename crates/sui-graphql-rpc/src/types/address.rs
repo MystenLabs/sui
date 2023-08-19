@@ -5,6 +5,7 @@ use async_graphql::{connection::Connection, *};
 
 use crate::server::context_ext::DataProviderContextExt;
 
+use super::name_service::NameService;
 use super::{
     balance::Balance,
     coin::Coin,
@@ -110,7 +111,7 @@ impl Address {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<Connection<String, String>> {
+    ) -> Option<Connection<String, NameService>> {
         unimplemented!()
     }
 }

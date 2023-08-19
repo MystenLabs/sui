@@ -3,6 +3,7 @@
 
 use async_graphql::{connection::Connection, *};
 
+use super::name_service::NameService;
 use super::{
     balance::Balance, coin::Coin, owner::Owner, stake::Stake, sui_address::SuiAddress,
     transaction_block::TransactionBlock,
@@ -152,7 +153,7 @@ impl Object {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<Connection<String, String>> {
+    ) -> Option<Connection<String, NameService>> {
         unimplemented!()
     }
 }
