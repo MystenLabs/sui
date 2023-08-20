@@ -1,5 +1,11 @@
 # @mysten/deepbook
 
+## 0.4.0
+
+### Minor Changes
+
+- ce5388bb7: Migrate to CLOB V2
+
 ## 0.3.3
 
 ### Patch Changes
