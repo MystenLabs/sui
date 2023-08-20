@@ -360,7 +360,7 @@ mod test {
     use sui_config::genesis::Genesis;
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
     use sui_types::epoch_data::EpochData;
-    use sui_types::gas::GasCharger;
+    use sui_types::gas::SuiGasStatus;
     use sui_types::in_memory_storage::InMemoryStorage;
     use sui_types::metrics::LimitsMetrics;
     use sui_types::sui_system_state::SuiSystemStateTrait;
@@ -418,7 +418,8 @@ mod test {
                 epoch.epoch_start_timestamp(),
                 InputObjects::new(vec![]),
                 shared_object_refs,
-                &mut GasCharger::new_unmetered(genesis_digest),
+                vec![],
+                SuiGasStatus::new_unmetered(),
                 kind,
                 signer,
                 genesis_digest,

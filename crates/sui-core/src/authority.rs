@@ -90,7 +90,7 @@ use sui_types::effects::{
 use sui_types::error::{ExecutionError, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::gas::{GasCharger, GasCostSummary, SuiGasStatus};
+use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointCommitment, CheckpointContents, CheckpointContentsDigest,
@@ -1181,7 +1181,6 @@ impl AuthorityState {
         let transaction_dependencies = input_objects.transaction_dependencies();
         let transaction_data = &certificate.data().intent_message().value;
         let (kind, signer, gas) = transaction_data.execution_parts();
-        let mut gas_charger = GasCharger::new(tx_digest, gas, gas_status, protocol_config);
         let (inner_temp_store, effects, execution_error_opt) =
             epoch_store.executor().execute_transaction_to_effects(
                 self.database.clone(),
@@ -1199,7 +1198,8 @@ impl AuthorityState {
                     .epoch_start_timestamp(),
                 input_objects,
                 shared_object_refs,
-                &mut gas_charger,
+                gas,
+                gas_status,
                 kind,
                 signer,
                 tx_digest,
@@ -1305,12 +1305,8 @@ impl AuthorityState {
                     .epoch_start_timestamp(),
                 input_objects,
                 shared_object_refs,
-                &mut GasCharger::new(
-                    transaction_digest,
-                    gas_object_refs,
-                    gas_status,
-                    protocol_config,
-                ),
+                gas_object_refs,
+                gas_status,
                 kind,
                 signer,
                 transaction_digest,
@@ -1433,12 +1429,8 @@ impl AuthorityState {
                 .epoch_start_timestamp(),
             input_objects,
             shared_object_refs,
-            &mut GasCharger::new(
-                transaction_digest,
-                vec![gas_object_ref],
-                gas_status,
-                protocol_config,
-            ),
+            vec![gas_object_ref],
+            gas_status,
             transaction_kind,
             sender,
             transaction_digest,

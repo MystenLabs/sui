@@ -44,7 +44,7 @@ use sui_types::digests::TransactionDigest;
 use sui_types::error::ExecutionError;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::gas::{GasCharger, SuiGasStatus};
+use sui_types::gas::SuiGasStatus;
 use sui_types::metrics::LimitsMetrics;
 use sui_types::object::{Data, Object, Owner};
 use sui_types::storage::get_module_by_id;
@@ -732,7 +732,8 @@ impl LocalExec {
                 epoch_start_timestamp,
                 InputObjects::new(input_objects),
                 tx_info.shared_object_refs.clone(),
-                &mut GasCharger::new(*tx_digest, tx_info.gas.clone(), gas_status, protocol_config),
+                tx_info.gas.clone(),
+                gas_status,
                 override_transaction_kind.unwrap_or(tx_info.kind.clone()),
                 tx_info.sender,
                 *tx_digest,

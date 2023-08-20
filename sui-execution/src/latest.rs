@@ -17,7 +17,7 @@ use sui_types::{
     error::{ExecutionError, SuiError, SuiResult},
     execution::TypeLayoutStore,
     execution_mode::{self, ExecutionResult},
-    gas::GasCharger,
+    gas::{GasCharger, SuiGasStatus},
     metrics::{BytecodeVerifierMetrics, LimitsMetrics},
     temporary_store::{BackingStore, InnerTemporaryStore, TemporaryStore},
     transaction::{InputObjects, ProgrammableTransaction, TransactionKind},
@@ -87,7 +87,8 @@ impl executor::Executor for Executor {
         epoch_timestamp_ms: u64,
         input_objects: InputObjects,
         shared_object_refs: Vec<ObjectRef>,
-        gas_charger: &mut GasCharger,
+        gas_coins: Vec<ObjectRef>,
+        gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
@@ -99,12 +100,14 @@ impl executor::Executor for Executor {
     ) {
         let temporary_store =
             TemporaryStore::new(store, input_objects, transaction_digest, protocol_config);
+        let mut gas_charger =
+            GasCharger::new(transaction_digest, gas_coins, gas_status, protocol_config);
         execute_transaction_to_effects::<execution_mode::Normal>(
             shared_object_refs,
             temporary_store,
             transaction_kind,
             transaction_signer,
-            gas_charger,
+            &mut gas_charger,
             transaction_digest,
             transaction_dependencies,
             &self.0,
@@ -128,7 +131,8 @@ impl executor::Executor for Executor {
         epoch_timestamp_ms: u64,
         input_objects: InputObjects,
         shared_object_refs: Vec<ObjectRef>,
-        gas_charger: &mut GasCharger,
+        gas_coins: Vec<ObjectRef>,
+        gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
@@ -144,12 +148,14 @@ impl executor::Executor for Executor {
             transaction_digest,
             protocol_config,
         );
+        let mut gas_charger =
+            GasCharger::new(transaction_digest, gas_coins, gas_status, protocol_config);
         execute_transaction_to_effects::<execution_mode::DevInspect>(
             shared_object_refs,
             temporary_store,
             transaction_kind,
             transaction_signer,
-            gas_charger,
+            &mut gas_charger,
             transaction_digest,
             transaction_dependencies,
             &self.0,
@@ -168,19 +174,19 @@ impl executor::Executor for Executor {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         tx_context: &mut TxContext,
-        gas_charger: &mut GasCharger,
         input_objects: InputObjects,
         pt: ProgrammableTransaction,
     ) -> Result<InnerTemporaryStore, ExecutionError> {
         let mut temporary_store =
             TemporaryStore::new(store, input_objects, tx_context.digest(), protocol_config);
+        let mut gas_charger = GasCharger::new_unmetered(tx_context.digest());
         programmable_transactions::execution::execute::<execution_mode::Genesis>(
             protocol_config,
             metrics,
             &self.0,
             &mut temporary_store,
             tx_context,
-            gas_charger,
+            &mut gas_charger,
             pt,
         )?;
         Ok(temporary_store.into_inner())

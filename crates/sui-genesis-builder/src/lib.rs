@@ -29,7 +29,7 @@ use sui_types::crypto::{
 };
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::epoch_data::EpochData;
-use sui_types::gas::GasCharger;
+use sui_types::gas::SuiGasStatus;
 use sui_types::gas_coin::GasCoin;
 use sui_types::governance::StakedSui;
 use sui_types::in_memory_storage::InMemoryStorage;
@@ -830,7 +830,8 @@ fn create_genesis_transaction(
                 epoch_data.epoch_start_timestamp(),
                 InputObjects::new(vec![]),
                 shared_object_refs,
-                &mut GasCharger::new_unmetered(genesis_digest),
+                vec![],
+                SuiGasStatus::new_unmetered(),
                 kind,
                 signer,
                 genesis_digest,
@@ -953,7 +954,6 @@ fn process_package(
         })
         .collect();
 
-    let genesis_digest = ctx.digest();
     let module_bytes = modules
         .iter()
         .map(|m| {
@@ -975,7 +975,6 @@ fn process_package(
         protocol_config,
         metrics,
         ctx,
-        &mut GasCharger::new_unmetered(genesis_digest),
         InputObjects::new(loaded_dependencies),
         pt,
     )?;
@@ -995,7 +994,6 @@ pub fn generate_genesis_system_object(
     token_distribution_schedule: &TokenDistributionSchedule,
     metrics: Arc<LimitsMetrics>,
 ) -> anyhow::Result<()> {
-    let genesis_digest = genesis_ctx.digest();
     // We don't know the chain ID here since we haven't yet created the genesis checkpoint.
     // However since we know there are no chain specific protocol config options in genesis,
     // we use Chain::Unknown here.
@@ -1063,7 +1061,6 @@ pub fn generate_genesis_system_object(
         &protocol_config,
         metrics,
         genesis_ctx,
-        &mut GasCharger::new_unmetered(genesis_digest),
         InputObjects::new(vec![]),
         pt,
     )?;
