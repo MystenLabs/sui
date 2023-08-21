@@ -43,14 +43,22 @@ export function AddAccountPage({ showSocialSignInOptions = false }: AddAccountPa
 										signInProvider: 'Google',
 										sourceFlow,
 									});
-									await createAccountsMutation
-										.mutateAsync({
+									createAccountsMutation.mutate(
+										{
 											type: 'zk',
 											provider: 'Google',
-										})
-										.catch(() => {
-											// do nothing
-										});
+										},
+										{
+											onError: (error) => {
+												toast.error(
+													(error as Error)?.message || 'Failed to create account. (Unknown error)',
+												);
+											},
+											onSettled: () => {
+												setCreateInProgressProvider(null);
+											},
+										},
+									);
 									setCreateInProgressProvider(null);
 								}}
 								disabled={createAccountsMutation.isLoading}
