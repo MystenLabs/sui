@@ -13,6 +13,7 @@ mod checked {
 
     use crate::adapter::{missing_unwrapped_msg, new_native_extensions};
     use crate::error::convert_vm_error;
+    use crate::gas_charger::GasCharger;
     use crate::programmable_transactions::linkage_view::{LinkageInfo, LinkageView, SavedLinkage};
     use move_binary_format::{
         errors::{Location, VMError, VMResult},
@@ -33,7 +34,6 @@ mod checked {
         self, get_all_uids, max_event_error, ObjectRuntime, RuntimeResults,
     };
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::gas::GasCharger;
     use sui_types::{
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress, TxContext},

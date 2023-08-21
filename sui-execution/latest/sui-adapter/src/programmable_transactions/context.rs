@@ -12,6 +12,7 @@ mod checked {
 
     use crate::adapter::new_native_extensions;
     use crate::error::convert_vm_error;
+    use crate::gas_charger::GasCharger;
     use move_binary_format::{
         errors::{Location, VMError, VMResult},
         file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
@@ -31,7 +32,6 @@ mod checked {
         self, get_all_uids, max_event_error, ObjectRuntime, RuntimeResults,
     };
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::gas::GasCharger;
     use sui_types::{
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress, TxContext},
