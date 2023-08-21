@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -1270,16 +1270,13 @@ impl PgIndexerStore {
     ) -> Result<(), IndexerError> {
         let mutated_objects: Vec<Object> = tx_object_changes
             .iter()
-            .flat_map(|changes| changes.changed_objects.iter().cloned())
+            .flat_map(|changes| changes.changed_objects.iter())
+            .map(|changed_object| (changed_object.object_id.as_str(), changed_object))
+            .collect::<HashMap<_, _>>()
+            .into_values()
+            .map(|changed_object| changed_object.to_owned())
             .collect();
-        let deleted_changes = tx_object_changes
-            .iter()
-            .flat_map(|changes| changes.deleted_objects.iter().cloned())
-            .collect::<Vec<_>>();
-        let deleted_objects: Vec<Object> = deleted_changes
-            .iter()
-            .map(|deleted_object| deleted_object.clone().into())
-            .collect();
+
         transactional_blocking!(&self.blocking_cp, |conn| {
             persist_object_mutations(
                 conn,
@@ -1289,6 +1286,16 @@ impl PgIndexerStore {
             )?;
             Ok::<(), IndexerError>(())
         })?;
+
+        let deleted_objects: Vec<Object> = tx_object_changes
+            .iter()
+            .flat_map(|changes| changes.deleted_objects.iter())
+            .map(|deleted_object| (deleted_object.object_id.as_str(), deleted_object))
+            .collect::<HashMap<_, _>>()
+            .into_values()
+            .map(|deleted_object| deleted_object.to_owned().into())
+            .collect();
+
         // commit object deletions after mutations b/c objects cannot be mutated after deletion,
         // otherwise object mutations might override object deletions.
         transactional_blocking!(&self.blocking_cp, |conn| {
