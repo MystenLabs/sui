@@ -473,7 +473,7 @@ mod checked {
                                 previous_transaction: tx_ctx.digest(),
                                 storage_rebate: 0,
                             };
-                            temporary_store.write_object(object, WriteKind::Create);
+                            temporary_store.create_object(object);
                         }
                     }
                 }

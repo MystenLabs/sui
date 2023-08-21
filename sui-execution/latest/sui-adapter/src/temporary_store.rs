@@ -13,7 +13,7 @@ use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::execution::{ExecutionResults, LoadedChildObjectMetadata};
+use sui_types::execution::{ExecutionResults, ExecutionResultsV2, LoadedChildObjectMetadata};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::storage::{BackingStore, DeleteKindWithOldVersion};
@@ -49,6 +49,9 @@ pub struct TemporaryStore<'backing> {
     /// The version to assign to all objects written by the transaction using this store.
     lamport_timestamp: SequenceNumber,
     mutable_input_refs: Vec<ObjectRef>, // Inputs that are mutable
+
+    execution_results: ExecutionResultsV2,
+
     // When an object is being written, we need to ensure that a few invariants hold.
     // It's critical that we always call write_object to update `written`, instead of writing
     // into written directly.
@@ -88,6 +91,7 @@ impl<'backing> TemporaryStore<'backing> {
             written: BTreeMap::new(),
             deleted: BTreeMap::new(),
             events: Vec::new(),
+            execution_results: ExecutionResultsV2::default(),
             protocol_config: protocol_config.clone(),
             loaded_child_objects: BTreeMap::new(),
             runtime_packages_loaded_from_db: RwLock::new(BTreeMap::new()),
@@ -118,6 +122,7 @@ impl<'backing> TemporaryStore<'backing> {
             written: BTreeMap::new(),
             deleted: BTreeMap::new(),
             events: Vec::new(),
+            execution_results: ExecutionResultsV2::default(),
             protocol_config: protocol_config.clone(),
             loaded_child_objects: BTreeMap::new(),
             runtime_packages_loaded_from_db: RwLock::new(BTreeMap::new()),
@@ -127,6 +132,10 @@ impl<'backing> TemporaryStore<'backing> {
     // Helpers to access private fields
     pub fn objects(&self) -> &BTreeMap<ObjectID, Object> {
         &self.input_objects
+    }
+
+    fn written(&self) -> &BTreeMap<ObjectID, Object> {
+        &self.execution_results.written_objects
     }
 
     /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
@@ -139,7 +148,7 @@ impl<'backing> TemporaryStore<'backing> {
         let mut written = BTreeMap::new();
         let mut deleted = BTreeMap::new();
 
-        for (id, (mut obj, kind)) in self.written {
+        for (id, mut obj) in self.execution_results.written_objects {
             // Update the version for the written object.
             match &mut obj.data {
                 Data::Move(obj) => {
@@ -370,16 +379,35 @@ impl<'backing> TemporaryStore<'backing> {
         }
     }
 
+    pub fn create_object(&mut self, mut object: Object) {
+        // Created mutable objects' versions are set to the store's lamport timestamp when it is
+        // committed to effects. Creating an object at a non-zero version risks violating the
+        // lamport timestamp invariant (that a transaction's lamport timestamp is strictly greater
+        // than all versions witnessed by the transaction).
+        debug_assert!(
+            object.is_immutable() || object.version() == SequenceNumber::MIN,
+            "Created mutable objects should not have a version set",
+        );
+
+        self.write_object(object);
+    }
+
+    pub fn mutate_input_object(&mut self, mut object: Object) {
+        debug_assert!(self.input_objects.contains_key(&object.id()));
+        self.write_object(object);
+    }
+
     // Invariant: A key assumption of the write-delete logic
     // is that an entry is not both added and deleted by the
     // caller.
 
-    pub fn write_object(&mut self, mut object: Object, kind: WriteKind) {
+    fn write_object(&mut self, mut object: Object) {
+        let id = object.id();
         // there should be no write after delete
-        debug_assert!(self.deleted.get(&object.id()).is_none());
+        debug_assert!(!self.execution_results.deleted_object_ids.contains(&id));
         // Check it is not read-only
         #[cfg(test)] // Movevm should ensure this
-        if let Some(existing_object) = self.read_object(&object.id()) {
+        if let Some(existing_object) = self.read_object(&id) {
             if existing_object.is_immutable() {
                 // This is an internal invariant violation. Move only allows us to
                 // mutate objects if they are &mut so they cannot be read-only.
@@ -387,26 +415,17 @@ impl<'backing> TemporaryStore<'backing> {
             }
         }
 
-        // Created mutable objects' versions are set to the store's lamport timestamp when it is
-        // committed to effects. Creating an object at a non-zero version risks violating the
-        // lamport timestamp invariant (that a transaction's lamport timestamp is strictly greater
-        // than all versions witnessed by the transaction).
-        debug_assert!(
-            kind != WriteKind::Create
-                || object.is_immutable()
-                || object.version() == SequenceNumber::MIN,
-            "Created mutable objects should not have a version set",
-        );
-
         // The adapter is not very disciplined at filling in the correct
         // previous transaction digest, so we ensure it is correct here.
         object.previous_transaction = self.tx_digest;
-        self.written.insert(object.id(), (object, kind));
+        self.execution_results
+            .written_objects
+            .insert(object.id(), object);
     }
 
-    pub fn delete_object(&mut self, id: &ObjectID, kind: DeleteKindWithOldVersion) {
+    pub fn delete_input_object(&mut self, id: &ObjectID) {
         // there should be no deletion after write
-        debug_assert!(self.written.get(id).is_none());
+        debug_assert!(!self.written().contains_key(id));
 
         // TODO: promote this to an on-in-prod check that raises an invariant_violation
         // Check that we are not deleting an immutable object
@@ -422,9 +441,7 @@ impl<'backing> TemporaryStore<'backing> {
             }
         }
 
-        // For object deletion, we will increment the version when converting the store to effects
-        // so the object will eventually show up in the parent_sync table with a new version.
-        self.deleted.insert(*id, kind);
+        self.execution_results.deleted_object_ids.insert(*id);
     }
 
     pub fn drop_writes(&mut self) {
@@ -438,22 +455,12 @@ impl<'backing> TemporaryStore<'backing> {
     }
 
     pub fn read_object(&self, id: &ObjectID) -> Option<&Object> {
-        // there should be no read after delete
-        debug_assert!(self.deleted.get(id).is_none());
-        self.written
+        self.execution_results
+            .written_objects
             .get(id)
-            .map(|(obj, _kind)| obj)
             .or_else(|| self.input_objects.get(id))
     }
 
-    pub fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>) {
-        for (id, change) in changes {
-            match change {
-                ObjectChange::Write(new_value, kind) => self.write_object(new_value, kind),
-                ObjectChange::Delete(kind) => self.delete_object(&id, kind),
-            }
-        }
-    }
     pub fn save_loaded_child_objects(
         &mut self,
         loaded_child_objects: BTreeMap<ObjectID, LoadedChildObjectMetadata>,
@@ -513,7 +520,7 @@ impl<'backing> TemporaryStore<'backing> {
         // If not, we would be dropping SUI on the floor by overriding it.
         assert_eq!(system_state_wrapper.storage_rebate, 0);
         system_state_wrapper.storage_rebate = unmetered_storage_rebate;
-        self.write_object(system_state_wrapper, WriteKind::Mutate);
+        self.mutate_input_object(system_state_wrapper);
     }
 }
 
@@ -780,7 +787,7 @@ impl<'backing> TemporaryStore<'backing> {
             .expect("System state wrapper object must exist");
         let new_object =
             wrapper.advance_epoch_safe_mode(params, self.store.as_object_store(), protocol_config);
-        self.write_object(new_object, WriteKind::Mutate);
+        self.mutate_input_object(new_object);
     }
 }
 
@@ -977,9 +984,7 @@ impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
 
 impl<'backing> Storage for TemporaryStore<'backing> {
     fn reset(&mut self) {
-        self.written.clear();
-        self.deleted.clear();
-        self.events.clear();
+        TemporaryStore::drop_writes(self);
     }
 
     fn read_object(&self, id: &ObjectID) -> Option<&Object> {

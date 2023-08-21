@@ -83,7 +83,7 @@ pub struct ExecutionResultsV1 {
 /// Used by sui-execution v1 and above, to capture the execution results from Move.
 /// The results represent the primitive information that can then be used to construct
 /// both transaction effects V1 and V2.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ExecutionResultsV2 {
     /// All objects written regardless of whether they were mutated, created, or unwrapped.
     pub written_objects: BTreeMap<ObjectID, Object>,
