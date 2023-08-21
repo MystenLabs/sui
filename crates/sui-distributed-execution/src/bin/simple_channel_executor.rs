@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use clap::*;
@@ -47,6 +47,10 @@ struct Args {
     /// Specifies the watermark up to which I will execute checkpoints
     #[clap(long)]
     execute: u64,
+
+    /// Specifies the epoch at which to take state snapshots of SW and EW
+    #[clap(long)]
+    snapshot_epoch: u64,
 }
 
 #[tokio::main]
@@ -54,26 +58,43 @@ async fn main() {
     let args = Args::parse();
 
     // Initialize SW
-    let sw_attrs = HashMap::from([
+    let attrs = HashMap::from([
         ("config".to_string(), args.config_path.to_string_lossy().into_owned()),
         ("download".to_string(), args.download.to_string()),
         ("execute".to_string(), args.download.to_string()),
+        ("snapshot_epoch".to_string(), args.snapshot_epoch.to_string()),
     ]);
     
-    let mut sw_state = seqn_worker::SequenceWorkerState::new(0, sw_attrs).await;    
+    let mut sw_state = seqn_worker::SequenceWorkerState::new(0, &attrs).await;    
     let metrics1 = sw_state.metrics.clone();
     let metrics2 = sw_state.metrics.clone();
 
     // Initialize EW
     let config = NodeConfig::load(&args.config_path).unwrap();
     let genesis = Arc::new(config.genesis().expect("Could not load genesis"));
+
+    let mut ew_state1 = if Path::new("objects.dat").exists() {
+        exec_worker::ExecutionWorkerState::load(&attrs)
+    } else {
+        let store = DashMemoryBackedStore::new(); // use the mutexed store for concurrency control
+        let mut ew_state = exec_worker::ExecutionWorkerState::new(store, &attrs);
+        ew_state.init_store(&genesis);
+        ew_state
+    };
     
-    let store1 = DashMemoryBackedStore::new(); // use the mutexed store for concurrency control
-    let store2 = DashMemoryBackedStore::new(); // use the mutexed store for concurrency control
-    let mut ew_state1 = exec_worker::ExecutionWorkerState::new(store1);
-    let mut ew_state2 = exec_worker::ExecutionWorkerState::new(store2);
-    ew_state1.init_store(&genesis);
-    ew_state2.init_store(&genesis);
+    /*let (mut ew_state1, mut ew_state2) = if Path::new("objects.dat").exists() {
+        let mut ew_state1 = exec_worker::ExecutionWorkerState::load(&attrs);
+        let mut ew_state2 = exec_worker::ExecutionWorkerState::load(&attrs);
+        (ew_state1, ew_state2)
+    } else {
+        let store1 = DashMemoryBackedStore::new(); // use the mutexed store for concurrency control
+        let store2 = DashMemoryBackedStore::new(); // use the mutexed store for concurrency control
+        let mut ew_state1 = exec_worker::ExecutionWorkerState::new(store1, &attrs);
+        let mut ew_state2 = exec_worker::ExecutionWorkerState::new(store2, &attrs);
+        ew_state1.init_store(&genesis);
+        ew_state2.init_store(&genesis);
+        (ew_state1, ew_state2)
+    };*/
 
     // ==== Run Both (EW + SW) ====
     // Results from here are used by the EW below to substitute the missing SW.
@@ -115,7 +136,7 @@ async fn main() {
     sw_handler.await.expect("sw failed");
     channel_splitter.await.expect("splitter failed");
 
-    programmable_transactions::context::LOOKUP_TABLE.write().unwrap().clear();
+    /*programmable_transactions::context::LOOKUP_TABLE.write().unwrap().clear();
 
     // ==== Measure Execution Worker (w/o SW) ====
     // This uses the results from the exeuction above (SW + EW) stored in an mpsc channel.
@@ -147,5 +168,5 @@ async fn main() {
         fw_receiver,
         ew_sender
     ).await;
-    forwarder.await.unwrap();
+    forwarder.await.unwrap();*/
 }

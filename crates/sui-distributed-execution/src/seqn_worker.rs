@@ -1,15 +1,19 @@
 use std::cmp;
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::{BufReader, BufWriter, Read, Write};
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
+use bincode::{deserialize_from, serialize_into, config::Options};
 use once_cell::sync::OnceCell;
 use prometheus::Registry;
 use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::{Config, NodeConfig};
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
-use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
+use sui_core::authority::epoch_start_configuration::{EpochStartConfiguration, self};
 use sui_core::authority::AuthorityStore;
 use sui_core::checkpoints::CheckpointStore;
 use sui_core::epoch::committee_store::CommitteeStore;
@@ -18,7 +22,10 @@ use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::storage::RocksDbStore;
 use sui_node::metrics;
+use sui_protocol_config::ProtocolConfig;
+use sui_types::committee::Committee;
 use sui_types::digests::ChainIdentifier;
+use sui_types::epoch_data::EpochData;
 use sui_types::metrics::LimitsMetrics;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
@@ -39,10 +46,12 @@ pub struct SequenceWorkerState {
     pub metrics: Arc<LimitsMetrics>,
     pub download: Option<u64>,
     pub execute: Option<u64>,
+    pub snapshot_epoch: Option<u64>,
+    pub start_epoch: u64,
 }
 
 impl SequenceWorkerState {
-    pub async fn new(_id: UniqueId, attrs: HashMap<String, String>) -> Self {
+    pub async fn new(_id: UniqueId, attrs: &HashMap<String, String>) -> Self {
         let config_path = attrs.get("config").unwrap();
         let config = NodeConfig::load(config_path).unwrap();
 
@@ -75,18 +84,29 @@ impl SequenceWorkerState {
         )
         .await
         .expect("Could not create AuthorityStore");
-        let epoch_start_configuration = {
-            let epoch_start_configuration = EpochStartConfiguration::new(
+
+        let (epoch_start_config, cur_epoch) = if Path::new("sw_recovery.dat").exists() {
+            let mut f = BufReader::new(File::open("sw_recovery.dat").unwrap());
+            let (epoch_start_config, cur_epoch): (EpochStartConfiguration, u64)
+                = deserialize_from(&mut f).unwrap();
+            println!("reloading SW from epoch {} snapshot in sw_recovery.dat", cur_epoch - 1);
+            println!("starting epoch {} now", cur_epoch);
+            (epoch_start_config, cur_epoch)
+        } else {
+            let epoch_start_config = EpochStartConfiguration::new(
                 genesis.sui_system_object().into_epoch_start_state(),
                 *genesis.checkpoint().digest(),
             );
+            (epoch_start_config, 0)
+        };
+
+        let epoch_start_configuration = {
             store
-                .set_epoch_start_configuration(&epoch_start_configuration)
+                .set_epoch_start_configuration(&epoch_start_config)
                 .await
                 .expect("Could not set epoch start configuration");
-            epoch_start_configuration
+            epoch_start_config
         };
-        let cur_epoch = 0; // always start from epoch 0
         let committee = committee_store
             .get_committee(&cur_epoch)
             .expect("Could not get committee")
@@ -94,6 +114,7 @@ impl SequenceWorkerState {
         let cache_metrics = Arc::new(ResolverMetrics::new(&prometheus_registry));
         let signature_verifier_metrics = SignatureVerifierMetrics::new(&prometheus_registry);
         let epoch_options = default_db_options().optimize_db_for_write_throughput(4);
+
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
             committee.clone(),
@@ -122,6 +143,8 @@ impl SequenceWorkerState {
             metrics,
             download: Some(attrs.get("download").unwrap().parse().unwrap()),
             execute: Some(attrs.get("execute").unwrap().parse().unwrap()),
+            snapshot_epoch: attrs.get("snapshot_epoch").map(|s| s.parse().unwrap()),
+            start_epoch: cur_epoch,
         }
     }
 
@@ -202,6 +225,8 @@ impl SequenceWorkerState {
             metrics,
             download: None,
             execute: None,
+            snapshot_epoch: None,
+            start_epoch: cur_epoch,
         }
     }
 
@@ -310,18 +335,27 @@ impl SequenceWorkerState {
         let mut num_tx: usize = 0;
         let mut now = Instant::now();
 
-        // Epoch Start
-        sw_sender
-            .send(SailfishMessage::EpochStart {
-                conf: protocol_config.clone(),
-                data: epoch_start_config.epoch_data(),
-                ref_gas_price: reference_gas_price,
-            })
-            .await
-            .expect("Sending doesn't work");
+        // Epoch Start of first epoch. Send only if running from genesis.
+        if self.start_epoch == 0 {
+            sw_sender
+                .send(SailfishMessage::EpochStart {
+                    conf: protocol_config.clone(),
+                    data: epoch_start_config.epoch_data(),
+                    ref_gas_price: reference_gas_price,
+                })
+                .await
+                .expect("Sending doesn't work");
+        }
+
+        let start_seq = if self.start_epoch == 0 {
+            genesis_seq
+        } else {
+            let cp = self.checkpoint_store.get_epoch_last_checkpoint(self.start_epoch - 1).unwrap().unwrap();
+            cp.sequence_number + 1
+        };
 
         if let Some(watermark) = self.execute {
-            for checkpoint_seq in genesis_seq..cmp::min(watermark, highest_synced_seq) {
+            for checkpoint_seq in start_seq..cmp::min(watermark, highest_synced_seq) {
                 let checkpoint_summary = self
                     .checkpoint_store
                     .get_checkpoint_by_sequence_number(checkpoint_seq)
@@ -399,7 +433,8 @@ impl SequenceWorkerState {
                             new_epoch_start_state,
                             *last_checkpoint.digest(),
                         );
-                        assert_eq!(self.epoch_store.epoch() + 1, next_epoch);
+                        let committee = next_epoch_committee.clone();
+                        //assert_eq!(self.epoch_store.epoch() + 1, next_epoch);
                         self.epoch_store = self.epoch_store.new_at_next_epoch(
                             self.config.protocol_public_key(),
                             next_epoch_committee,
@@ -423,14 +458,27 @@ impl SequenceWorkerState {
                         now = Instant::now();
                         num_tx = 0;
 
+                        if self.snapshot_epoch.is_some() && next_epoch - 1 == self.snapshot_epoch.unwrap() {
+                            println!("persisting snapshot of SW data at epoch {} to disk", next_epoch - 1);
+                            let epoch_recovery: (ProtocolConfig, EpochData, u64)
+                                = (protocol_config.clone(), epoch_start_config.epoch_data(), reference_gas_price);
+                            let mut f = BufWriter::new(File::create("epoch.dat").unwrap());
+                            serialize_into(&mut f, &epoch_recovery).unwrap();
+                            f.flush().unwrap();
+
+                            let mut f = BufWriter::new(File::create("sw_recovery.dat").unwrap());
+                            serialize_into(&mut f, &(&*epoch_start_config, next_epoch)).unwrap();
+                            f.flush().unwrap();
+                        }
+
+                        let msg = SailfishMessage::EpochStart {
+                            conf: protocol_config.clone(),
+                            data: epoch_start_config.epoch_data(),
+                            ref_gas_price: reference_gas_price,
+                        };
+
                         // send EpochStart message to start next epoch
-                        sw_sender
-                            .send(SailfishMessage::EpochStart {
-                                conf: protocol_config.clone(),
-                                data: epoch_start_config.epoch_data(),
-                                ref_gas_price: reference_gas_price,
-                            })
-                            .await
+                        sw_sender.send(msg).await
                             .expect("Sending doesn't work");
                     }
                 }
