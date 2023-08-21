@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ChevronRight16 } from '@mysten/icons';
+import clsx from 'classnames';
 import { Link } from 'react-router-dom';
 
 import type { MouseEventHandler, ReactNode } from 'react';
@@ -34,7 +35,12 @@ function MenuListItem({
 				<div className="flex-1 text-gray-90 text-body font-semibold flex">{title}</div>
 			</div>
 			{subtitle || iconAfter || to ? (
-				<div className="flex flex-nowrap flex-1 justify-end gap-1 items-center overflow-hidden basis-2/5">
+				<div
+					className={clsx(
+						{ 'flex-1 basis-2/5': Boolean(subtitle) },
+						'flex flex-nowrap justify-end gap-1 items-center overflow-hidden',
+					)}
+				>
 					{subtitle ? (
 						<div className="transition text-steel-dark text-bodySmall font-medium group-hover:text-steel-darker">
 							{subtitle}
