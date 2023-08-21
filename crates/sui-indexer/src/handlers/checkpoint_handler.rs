@@ -759,8 +759,8 @@ pub async fn start_object_checkpoint_commit_task<S>(
             .await;
         while let Err(e) = object_changes_commit_res {
             warn!(
-                "Indexer object changes commit failed with error: {:?}, retrying after {:?} milli-secs...",
-                e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
+                "Indexer object changes commit failed (checkpoints [{:?}, {:?}]) with error: {:?}, retrying after {:?} milli-secs...",
+                first_checkpoint_seq, last_checkpoint_seq, e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
             );
             tokio::time::sleep(std::time::Duration::from_millis(
                 DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
