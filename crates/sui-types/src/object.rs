@@ -679,6 +679,10 @@ impl Object {
         }
     }
 
+    pub fn new_from_package(package: MovePackage, previous_transaction: TransactionDigest) -> Self {
+        Self::new_package_from_data(Data::Package(package), previous_transaction)
+    }
+
     // Note: this will panic if `modules` is empty
     pub fn new_package<'p>(
         modules: &[CompiledModule],

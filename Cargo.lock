@@ -5443,6 +5443,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-bytecode-verifier-rem-sess"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fail",
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-borrow-graph",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph 0.5.1",
+]
+
+[[package]]
 name = "move-bytecode-verifier-v0"
 version = "0.1.0"
 dependencies = [
@@ -5938,6 +5952,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-stdlib-rem-sess"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "hex",
+ "log",
+ "move-binary-format",
+ "move-command-line-common",
+ "move-core-types",
+ "move-docgen",
+ "move-errmapgen",
+ "move-prover",
+ "move-vm-runtime-rem-sess",
+ "move-vm-types",
+ "sha2 0.9.9",
+ "sha3 0.9.1",
+ "smallvec",
+ "walkdir",
+]
+
+[[package]]
 name = "move-stdlib-v0"
 version = "0.1.1"
 dependencies = [
@@ -6057,6 +6092,25 @@ dependencies = [
  "fail",
  "move-binary-format",
  "move-bytecode-verifier",
+ "move-core-types",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-types",
+ "once_cell",
+ "parking_lot 0.11.2",
+ "sha3 0.9.1",
+ "smallvec",
+ "tracing",
+]
+
+[[package]]
+name = "move-vm-runtime-rem-sess"
+version = "0.1.0"
+dependencies = [
+ "better_any",
+ "fail",
+ "move-binary-format",
+ "move-bytecode-verifier-rem-sess",
  "move-core-types",
  "move-vm-config",
  "move-vm-profiler",
@@ -9656,6 +9710,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-adapter-rem-sess"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "leb128",
+ "linked-hash-map",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier-rem-sess",
+ "move-core-types",
+ "move-package",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-runtime-rem-sess",
+ "move-vm-types",
+ "mysten-metrics",
+ "once_cell",
+ "serde",
+ "sui-macros",
+ "sui-move-natives-rem-sess",
+ "sui-protocol-config",
+ "sui-types",
+ "sui-verifier-rem-sess",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-adapter-transactional-tests"
 version = "0.1.0"
 dependencies = [
@@ -10041,15 +10124,19 @@ dependencies = [
  "move-core-types",
  "move-vm-config",
  "move-vm-runtime",
+ "move-vm-runtime-rem-sess",
  "move-vm-runtime-v0",
  "petgraph 0.5.1",
  "sui-adapter-latest",
+ "sui-adapter-rem-sess",
  "sui-adapter-v0",
  "sui-move-natives-latest",
+ "sui-move-natives-rem-sess",
  "sui-move-natives-v0",
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
+ "sui-verifier-rem-sess",
  "sui-verifier-v0",
  "workspace-hack",
 ]
@@ -10573,6 +10660,26 @@ dependencies = [
  "move-core-types",
  "move-stdlib",
  "move-vm-runtime",
+ "move-vm-types",
+ "smallvec",
+ "sui-protocol-config",
+ "sui-types",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-move-natives-rem-sess"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "better_any",
+ "fastcrypto",
+ "fastcrypto-zkp",
+ "linked-hash-map",
+ "move-binary-format",
+ "move-core-types",
+ "move-stdlib-rem-sess",
+ "move-vm-runtime-rem-sess",
  "move-vm-types",
  "smallvec",
  "sui-protocol-config",
@@ -11542,6 +11649,21 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-utils",
  "move-bytecode-verifier",
+ "move-core-types",
+ "move-vm-config",
+ "sui-protocol-config",
+ "sui-types",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-verifier-rem-sess"
+version = "0.1.0"
+dependencies = [
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier-rem-sess",
  "move-core-types",
  "move-vm-config",
  "sui-protocol-config",
@@ -13756,6 +13878,7 @@ dependencies = [
  "move-bytecode-source-map",
  "move-bytecode-utils",
  "move-bytecode-verifier",
+ "move-bytecode-verifier-rem-sess",
  "move-bytecode-verifier-v0",
  "move-bytecode-viewer",
  "move-cli",
@@ -13780,6 +13903,7 @@ dependencies = [
  "move-stackless-bytecode",
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
+ "move-stdlib-rem-sess",
  "move-stdlib-v0",
  "move-symbol-pool",
  "move-transactional-test-runner",
@@ -13787,6 +13911,7 @@ dependencies = [
  "move-vm-config",
  "move-vm-profiler",
  "move-vm-runtime",
+ "move-vm-runtime-rem-sess",
  "move-vm-runtime-v0",
  "move-vm-test-utils",
  "move-vm-types",

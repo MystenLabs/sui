@@ -20,7 +20,7 @@ use move_core_types::{
     account_address::AccountAddress,
     ident_str,
     identifier::{IdentStr, Identifier},
-    language_storage::StructTag,
+    language_storage::{ModuleId, StructTag},
 };
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
@@ -380,6 +380,19 @@ impl MovePackage {
             type_origin_table,
             linkage_table,
         )
+    }
+
+    // Retrieve the module with `ModuleId` in the given package.
+    // The module must be the `storage_id` or the call will return `None`.
+    // Check if the address of the module is the same of the package
+    // and return `None` if that is not the case.
+    // All modules in a package share the address with the package.
+    pub fn get_module(&self, storage_id: &ModuleId) -> Option<&Vec<u8>> {
+        if self.id != ObjectID::from(*storage_id.address()) {
+            None
+        } else {
+            self.module_map.get(&storage_id.name().to_string())
+        }
     }
 
     /// Return the size of the package in bytes
