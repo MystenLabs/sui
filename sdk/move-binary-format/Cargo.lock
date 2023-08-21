@@ -249,6 +249,7 @@ version = "0.1.0"
 dependencies = [
  "hex",
  "move-binary-format 0.0.3",
+ "move-core-types",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
