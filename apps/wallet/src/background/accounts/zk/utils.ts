@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type PublicKey } from '@mysten/sui.js/cryptography';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { generateNonce } from '@mysten/zklogin';
 import { randomBytes } from '@noble/hashes/utils';
@@ -68,19 +69,25 @@ export async function zkLogin({
 }
 
 // TODO: update when we have the final production url
-const pinRegistryUrl = 'https://enoki-server-7e33d356b89c.herokuapp.com';
+const saltRegistryUrl = 'http://salt.api-devnet.mystenlabs.com';
 
-export async function fetchPin(jwt: string): Promise<{ id: string; pin: string }> {
-	const response = await fetchWithSentry('fetchUserPin', `${pinRegistryUrl}/get_pin/${jwt}`);
-	return response.json();
+export async function fetchSalt(jwt: string): Promise<string> {
+	const response = await fetchWithSentry('fetchUserSalt', `${saltRegistryUrl}/get_salt`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify({ token: jwt }),
+	});
+	return (await response.json()).salt;
 }
 
 type WalletInputs = {
 	jwt: string;
-	ephemeralPublicKey: bigint;
+	ephemeralPublicKey: PublicKey;
 	maxEpoch: number;
 	jwtRandomness: bigint;
-	userPin: bigint;
+	userSalt: bigint;
 	keyClaimName?: 'sub' | 'email';
 };
 type Claim = {
@@ -108,20 +115,20 @@ export async function createPartialZKSignature({
 	ephemeralPublicKey,
 	jwtRandomness,
 	maxEpoch,
-	userPin,
+	userSalt,
 	keyClaimName = 'sub',
 }: WalletInputs): Promise<PartialZkSignature> {
-	const response = await fetchWithSentry('createZKProofs', `${zkProofsServerUrl}/zkp`, {
+	const response = await fetchWithSentry('createZKProofs', `${zkProofsServerUrl}/test/zkp`, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 		},
 		body: JSON.stringify({
 			jwt,
-			eph_public_key: ephemeralPublicKey.toString(),
+			eph_public_key: toBigIntBE(Buffer.from(ephemeralPublicKey.toSuiBytes())).toString(),
 			max_epoch: maxEpoch,
 			jwt_randomness: jwtRandomness.toString(),
-			subject_pin: userPin.toString(),
+			subject_pin: userSalt.toString(),
 			key_claim_name: keyClaimName,
 		}),
 	});
