@@ -5,8 +5,8 @@ use std::{
     collections::{BTreeSet, HashSet},
     sync::Arc,
 };
-
 use sui_protocol_config::ProtocolConfig;
+use sui_types::storage::BackingStore;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress, TxContext},
     committee::EpochId,
@@ -16,8 +16,8 @@ use sui_types::{
     execution::TypeLayoutStore,
     execution_mode::ExecutionResult,
     gas::SuiGasStatus,
+    inner_temporary_store::InnerTemporaryStore,
     metrics::LimitsMetrics,
-    temporary_store::{BackingStore, InnerTemporaryStore},
     transaction::{InputObjects, ProgrammableTransaction, TransactionKind},
     type_resolver::LayoutResolver,
 };

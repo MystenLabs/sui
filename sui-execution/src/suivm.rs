@@ -17,9 +17,10 @@ use sui_types::{
     error::{ExecutionError, SuiError, SuiResult},
     execution::TypeLayoutStore,
     execution_mode::{self, ExecutionResult},
-    gas::{GasCharger, SuiGasStatus},
+    gas::SuiGasStatus,
+    inner_temporary_store::InnerTemporaryStore,
     metrics::{BytecodeVerifierMetrics, LimitsMetrics},
-    temporary_store::{BackingStore, InnerTemporaryStore, TemporaryStore},
+    storage::BackingStore,
     transaction::{InputObjects, ProgrammableTransaction, TransactionKind},
     type_resolver::LayoutResolver,
 };
@@ -29,7 +30,9 @@ use sui_adapter_suivm::adapter::{
     default_verifier_config, new_move_vm, run_metered_move_bytecode_verifier,
 };
 use sui_adapter_suivm::execution_engine::execute_transaction_to_effects;
+use sui_adapter_suivm::gas_charger::GasCharger;
 use sui_adapter_suivm::programmable_transactions;
+use sui_adapter_suivm::temporary_store::TemporaryStore;
 use sui_adapter_suivm::type_layout_resolver::TypeLayoutResolver;
 use sui_move_natives_suivm::all_natives;
 use sui_verifier_suivm::meter::SuiVerifierMeter;
