@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useState } from 'react';
+import { toast } from 'react-hot-toast';
 import { useCreateAccountsMutation } from '../hooks/useCreateAccountMutation';
 import { SocialButton } from '../shared/SocialButton';
 import { Toaster } from '../shared/toaster';
@@ -48,21 +49,29 @@ export function WelcomePage() {
 							<div className="flex-1">
 								<SocialButton
 									provider="google"
-									onClick={async () => {
+									onClick={() => {
 										setCreateInProgressProvider('Google');
 										ampli.clickedSocialSignInButton({
 											signInProvider: 'Google',
 											sourceFlow: 'Onboarding',
 										});
-										await createAccountsMutation
-											.mutateAsync({
+										createAccountsMutation.mutate(
+											{
 												type: 'zk',
 												provider: 'Google',
-											})
-											.catch(() => {
-												// do nothing
-											});
-										setCreateInProgressProvider(null);
+											},
+											{
+												onError: (error) => {
+													toast.error(
+														(error as Error)?.message ||
+															'Failed to create account. (Unknown error)',
+													);
+												},
+												onSettled: () => {
+													setCreateInProgressProvider(null);
+												},
+											},
+										);
 									}}
 									disabled={createAccountsMutation.isLoading}
 									loading={createInProgressProvider === 'Google'}
