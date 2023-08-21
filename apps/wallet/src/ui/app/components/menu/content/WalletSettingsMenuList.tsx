@@ -31,8 +31,6 @@ function MenuList() {
 	const networkName = API_ENV_TO_INFO[apiEnv].name;
 	const version = Browser.runtime.getManifest().version;
 
-	// const [isUnlockAccountModalOpen, setUnlockAccountModalOpen] = useState(false);
-
 	return (
 		<>
 			<MenuLayout title="Wallet Settings">
