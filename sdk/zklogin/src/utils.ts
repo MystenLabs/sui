@@ -70,7 +70,7 @@ export function hashASCIIStrToField(str: string, maxSize: number) {
 }
 
 export function genAddressSeed(
-	pin: bigint,
+	salt: bigint,
 	name: string,
 	value: string,
 	max_name_length = MAX_KEY_CLAIM_NAME_LENGTH,
@@ -79,6 +79,6 @@ export function genAddressSeed(
 	return poseidonHash([
 		hashASCIIStrToField(name, max_name_length),
 		hashASCIIStrToField(value, max_value_length),
-		poseidonHash([pin]),
+		poseidonHash([salt]),
 	]);
 }

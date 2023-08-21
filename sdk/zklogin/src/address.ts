@@ -9,7 +9,7 @@ import { zkBcs } from './bcs.js';
 import { decodeJwt } from 'jose';
 import { genAddressSeed, toBufferBE } from './utils.js';
 
-export function jwtToAddress(jwt: string, userPin: bigint) {
+export function jwtToAddress(jwt: string, userSalt: bigint) {
 	const decodedJWT = decodeJwt(jwt);
 	if (
 		!decodedJWT.sub ||
@@ -26,7 +26,7 @@ export function jwtToAddress(jwt: string, userPin: bigint) {
 	}
 
 	return computeZkAddress({
-		userSalt: userPin,
+		userSalt,
 		claimName: 'sub',
 		claimValue: decodedJWT.sub,
 		aud: decodedJWT.aud,

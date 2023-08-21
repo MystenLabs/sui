@@ -71,7 +71,7 @@ export async function zkLogin({
 // TODO: update when we have the final production url
 const saltRegistryUrl = 'http://salt.api-devnet.mystenlabs.com';
 
-export async function fetchSalt(jwt: string): Promise<{ salt: string }> {
+export async function fetchSalt(jwt: string): Promise<string> {
 	const response = await fetchWithSentry('fetchUserSalt', `${saltRegistryUrl}/get_salt`, {
 		method: 'POST',
 		headers: {
@@ -79,7 +79,7 @@ export async function fetchSalt(jwt: string): Promise<{ salt: string }> {
 		},
 		body: JSON.stringify({ token: jwt }),
 	});
-	return response.json();
+	return (await response.json()).salt;
 }
 
 type WalletInputs = {
