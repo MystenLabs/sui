@@ -14,6 +14,7 @@ use std::{
 };
 
 use crate::{
+    lock_file::{schema, LockFile},
     package_hooks,
     source_package::{
         layout::SourcePackageLayout,
@@ -28,7 +29,6 @@ use super::{
     dependency_cache::DependencyCache,
     digest::{digest_str, hashed_files_digest},
     local_path,
-    lock_file::{schema, LockFile},
 };
 
 /// A representation of the transitive dependency graph of a Move package.  If successfully created,

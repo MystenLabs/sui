@@ -2,30 +2,38 @@
 title: Sui Kiosk
 ---
 
-Sui Kiosk is a primitive, or building block (a module in the Sui Framework), you can use to build a trading platform for digital assets. Sui Kiosk supports adding digital assets that you can store and list for sale to other users. You can also define rules for the kiosk as part of a transfer policy that controls how purchasers can use the asset after purchase. 
-To add digital assets to your kiosk to list for sale, you must first create and publish a package to Sui as part of a programmable transaction block. The package must define a type (T). You can then create a transfer policy (`TransferPolicy`) using the `Publisher` object. The transfer policy which determines the conditions that must be met for the purchase to succeed. You can specify different requirements for each asset and transaction. To learn more about transfer policies, see [Transfer Policy](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/transfer_policy.md). To learn more about using the Publisher object, see [Publisher](https://examples.sui.io/basics/publisher.html) in Sui by Example.
+Kiosk is a decentralized system for commerce applications on Sui. It consists of “Kiosks” - shared objects owned by individual parties which store assets and allow listing them for sale as well as utilize custom trading functionality - for example, an Auction. While being highly decentralized, Kiosk provides a set of strong guarantees:
+ * Kiosk Owners retain ownership of their assets to the moment of purchase;
+* Creators set custom “policies” - sets of rules applied to every trade (eg pay Royalty fee, do some arbitrary action X);
+* Marketplaces can index events emitted by the Kiosk and subscribe to a single feed for on-chain asset trading;
+Practically, Kiosk is a part of the Sui Framework, and it is native to the system and available to everyone “out of the box”.
 
-To extend and customize Kiosk functionality, Sui Kiosk also supports building extensions that take full advantage of the highly accessible, composable, and dynamic nature of objects on Sui.
+## Sui Kiosk Owners
 
-## Sui Kiosk architecture
-
-A Sui Kiosk is a single, typically shared `Kiosk` object. Each `Kiosk` object has a owned capability, `KioskOwnerCap`, to manage it. The `Kiosk` object provides a rich base for building custom extensions, such as creating a marketplace for your digital assets, while maintaining strong security and protected ownership of your assets . 
-
-
-To see all of the properties supported in Sui Kiosk, see [Sui Kiosk](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/kiosk.md) in the Sui Framework documentation.
-
-## Sui Kiosk design principles
-
-Sui Kiosk is built on the following principles:
-**True ownership** - Kiosk is a shared object. Each has a shared state and anyone can access a Kiosk on the network. Only the kiosk owner (an address or entity such as a dApp), can perform actions on the kiosk, such as taking assets from it or listing an asset in the kiosk. The only action available to everyone else is to purchase an asset that the kiosk owner listed from the kiosk.
-
-* **Foundation for commerce applications on Sui** - Sui Kiosk defines a base framework to build on, and each change or enhancement goes through rigorous testing to ensure compatibility within the community.
-* **Permissioned expandability** - The base implementation of Sui Kiosk is generic. Any community or third-party extensions and modifications must maintain and ensure asset security. For example, any transferring of ownership for a kiosk must be clearly communicated to users and require their consent. Any extensions built on Sui Kiosk must use an explicit entry call to install them transparently.
-
-## Sui Kiosk for collectors and traders
-
-Anyone can create a Sui Kiosk. As a kiosk owner, you can sell any asset with a type (T) that has a shared `TransferPolicy` available, or you can use a kiosk to store assets even without a shared policy. You can’t sell or transfer any assets from your kiosk that do not have an associated transfer policy available. 
+Anyone can create a Sui Kiosk. Ownership of a kiosk is determined by the owner of the `KioskOwnerCap`, a special object that grants full access to a single kiosk. As the owner, you can sell any asset with a type (T) that has a shared `TransferPolicy` available, or you can use a kiosk to store assets even without a shared policy. You can’t sell or transfer any assets from your kiosk that do not have an associated transfer policy available.
 To sell an item, if there is an existing transfer policy for the type (T), you just add your assets to your kiosk and then list them. You specify an offer amount when you list an item. Anyone can then purchase the item for the amount of SUI specified in the listing. The associated transfer policy determines what the buyer can do with the purchased asset.
+A Kiosk owner can:
+* Place and take items
+* List items for sale
+* Add and remove Extensions
+* Withdraw profits from sales
+* Borrow and mutate owned assets
+* Access the full set of trading tools, such as auctions, lotteries, and collection bidding
+
+## Sui Kiosk for Buyers
+
+A buyer is a party that purchases (or - more generally - receives) items from Kiosks, anyone on the network can be a Buyer (and, for example, a Kiosk Owner at the same time).
+** Benefits:**
+* Buyers get access to global liquidity and can get the best offer
+* Buyers can place bids on collections through their Kiosks
+* Most of the actions performed in Kiosks are free (gas-less) for Buyers
+
+**Responsibilities:**
+* Buyer is the party that pays the fees if they're set in the policy
+* Buyer must follow the rules set by creators or a transaction won't succeed
+
+**Guarantees:**
+* When using a custom trading logic such as an Auction, the items are guaranteed to be unchanged until the trade is complete
 
 ## Sui Kiosk for marketplaces
 
@@ -35,93 +43,533 @@ As a marketplace operator, you can implement Sui Kiosk to watch for offers made 
 
 As a creator, Sui Kiosk supports strong enforcement for transfer policies and associated rules to protect assets and enforce asset ownership. Sui Kiosk gives creators more control over their creations, and puts creators and owners in control of how their works can be used.
 
-## Create a Sui Kiosk
+Creator is a party that creates and controls the TransferPolicy for a single type. For example, the authors of SuiFrens are the Creators of the SuiFren<Capy> type and act as creators in the Kiosk ecosystem. Creators set the policy, but they may also be the first sellers of their assets through a Kiosk.
 
-To create a Sui Kiosk, you need to have an active address on the Sui network you use. The address is the owner of the `Kiosk` object you create.
-To create a base Sui kiosk (`Kiosk` object):
+**Creators can:**
+* Set any rules for trades
+* Set multiple ways ("tracks") of rules
+* Enable or disable trades at any moment with a policy
+* Enforce policies (eg royalties) on all trades
+* Perform a primary sale of their assets through a Kiosk
 
-```rust
-kiosk::new(Kiosk, KioskOwnerCap)
-```
+All of the above is effective immediately and globally.
 
-The function returns the `Kiosk` object and the `KioskOwnerCap`, an object that grants full access to the `Kiosk` and makes the holder the `Kiosk` owner.
-For a full list of the available parameters, see [Sui Kiosk](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/kiosk.md) in the Sui Framework documentation.
+**Creators cannot:**
+* Take or modify items stored in someone else's Kiosk
+* Restrict taking items from Kiosks if the "locking" rule was not set in the policy
 
-## Place an item in your Sui Kiosk
+## Sui Kiosk Guarantees
 
-To add an asset to your kiosk, use the `place` function. Only the kiosk owner has permission to perform actions on a `Kiosk` object - you must hold the `KioskOwnerCap` to [`place`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/kiosk.md#0x2_kiosk_place) or [`withdraw`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/kiosk.md#function-withdraw) an item from a kiosk.
+Sui Kiosk provides a set of guarantees that Sui enforces through smart contracts. 
+These guarantees include:
+* Every trade in Sui Kiosk requires a `TransferPolicy` resolution. This gives creators control over how their assets can be traded.
+* True Ownership, which means that only a kiosk owner can take, list, borrow, or modify the assets added to their kiosk. This is similar to how single-owner objects work on Sui.
+* Strong policy enforcement, for example Royalty policies, that lets creators enable or disable policies at any time that applies to all trades on the platform for objects with that policy attached.
+* Changes to a `TransferPolicy` apply instantly and globally.
 
-To place an item in a Sui kiosk:
-
-```rust
-kiosk::place(Kiosk, KioskOwnerCap, id)
-```
-
-To place an item in your kiosk as a [dynamic field](https://docs.sui.io/build/programming-with-objects/ch5-dynamic-fields):
-
-```rust
-kiosk::place(Kiosk, KioskOwnerCap, Item)
-```
-
-If you also want to list an item after you place it in a kiosk, you can use the [`place_and_list`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/kiosk.md#0x2_kiosk_place_and_list) function to place the item in the kiosk and then list it.
-To place and list an item in a Sui kiosk:
-
-```rust
-kiosk::place_and_list(Kiosk, KioskOwnerCap, id, price)
-```
+In practice, these guarantees mean that:
+* When you list an item for sale, no one can modify it or take it from the kiosk.
+* When you define a `PurchaseCap`, an item remains locked and you can’t modify or take the item from the kiosk unless the trade uses or returns the `PurchaseCap`.
+* You can remove any rule at any time (as the owner).
+* You can disable any extension at any time (as the owner).
+* The state of an extension state is always accessible to the extension.
 
 ### Asset states in Sui kiosk
 
 Sui Kiosk is a shared object that can store heterogeneous values, such as different sets of asset collectibles. When you add an asset to your kiosk, it has one of the following states:
-* PLACED - an item placed in the kiosk using the `kiosk::place` function. The Kiosk Owner can withdraw it and use it directly, borrow it mutably or immutably, or list an item for sale.
-* LOCKED - an item placed in the kiosk using the `kiosk::lock` function. You can’t withdraw a  Locked item from a kiosk, but you can borrow it mutably and list it for sale. Any item placed in a kiosk that has an associated Kiosk Lock policy have a LOCKED state.
+* PLACED - an item placed in the kiosk using the `kiosk::place` function. The Kiosk Owner can withdraw it and use it directly, borrow it (mutably or immutably), or list an item for sale.
+* LOCKED - an item placed in the kiosk using the `kiosk::lock` function. You can’t withdraw a Locked item from a kiosk, but you can borrow it mutably and list it for sale. Any item placed in a kiosk that has an associated Kiosk Lock policy have a LOCKED state.
 * LISTED - an item in the kiosk that is listed for sale using the `kiosk::list` or `kiosk::place_and_list` functions. You can’t modify an item while listed, but you can borrow it immutably or delist it, which returns it to its previous state.
-* LISTED EXCLUSIVELY - an item placed or locked in the kiosk by an extension that calls the  `kiosk::list_with_purchase_cap` function. Only the kiosk owner can approve calling the function. The owner can only borrow it immutably. The extension must provide the functionality to delist / unlock the asset, or it might stay locked forever. Given that this action is explicitly performed by the Owner - it is the responsibility of the Owner to choose verified and audited extensions to use.
+* LISTED EXCLUSIVELY - an item placed or locked in the kiosk by an extension that calls the `kiosk::list_with_purchase_cap` function. Only the kiosk owner can approve calling the function. The owner can only borrow it immutably. The extension must provide the functionality to delist / unlock the asset, or it might stay locked forever. Given that this action is explicitly performed by the Owner - it is the responsibility of the Owner to choose verified and audited extensions to use.
 
 When someone purchases an asset from a kiosk, the asset leaves the kiosk and ownership transfers to the buyer’s address.
 
-## List items from your kiosk
+## Open a Sui Kiosk
 
-As a kiosk owner, you can use the [`list`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/kiosk.md#0x2_kiosk_list) function to list any item you placed in the kiosk. Buyers can purchase only items that have an associated transfer policy ([`TransferPolicy`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/transfer_policy.md) object) that is shared and available to them. Use the `list` function to list assets already placed in your kiosk.
+To use a Sui Kiosk, you must create one and have the `KioskOwnerCap` that matches the `Kiosk` object. You can create a new kiosk using a single transaction by calling the `kiosk::default` function. The function creates and shares a `Kiosk`, and transfers the `KioskOwnerCap` to your address.
 
-To list an item in a Sui kiosk:
+### Create a Sui Kiosk using the Kiosk SDK
 
 ```rust
-kiosk::list(Kiosk, KioskOwnerCap, ID, price)
+import { createKioskAndShare } from '@mysten/kiosk';
+
+let tx = new TransactionBuilder();
+let kioskOwnerCap = createKioskAndShare(tx);
+
+tx.transferObjects([ kioskOwnerCap ], tx.pure(sender, 'address'));
 ```
 
-## List assets that include a PurchaseCap
-
-When you use the `list` function, you specify a fixed price that someone must pay to purchase it. The listing is available to anyone. To list an item without a set price, you can use the [`kiosk::list_with_purchase_cap`] (https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/kiosk.md#0x2_kiosk_list_with_purchase_cap) function to include a `PurchaseCap`. A `PurchaseCap`is an object that grants exclusive rights to purchase a specific asset. The asset gets a state of LISTED EXCLUSIVELY. You can’t take the asset from the kiosk, delist it, or modify it until the `PurchaseCap` is returned (which unlocks the asset) or the holder uses it to purchase the asset. You can use `PurchaseCap` to implement any special trading conditions you want, such as for an auction, or to send to a user directly.
-
-To list an asset with a `PurchaseCap`:
+### Create a Kiosk using programmable transaction blocks
 
 ```rust
-kiosk::list_with_purchase_cap(Kiosk, KioskOwnerCap, id, min_price)
+let tx = new TransactionBuilder();
+tx.moveCall({
+    target: '0x2::kiosk::default'
+});
 ```
 
-Only the user that holds the `PurchaseCap` can purchase the associated asset.
-
-## Remove an item from your Sui kiosk
-
-To remove an item from a kiosk, as the kiosk owner, use the `kiosk::take` function. You can take only items that are not locked or listed. 
-
-To take an item from your Sui kiosk:
+### Create a Kiosk using the Sui CLI
 
 ```rust
-kiosk::take(Kiosk, KioskOwnerCap, ID): Item
+sui client call \
+    --package 0x2 \
+    --module kiosk \
+    --function default \
+    --gas-budget 1000000000
+```
+
+### Create a Kiosk with advanced options
+For more advanced use cases, when you want to choose the storage model or perform an action right away, you can use the  programmable transaction block (PTB) friendly function kiosk::new.
+Kiosk is designed to be shared. If you choose a different storage model, such as owned, your kiosk might not function as intended or not be accessible to other users. You can make sure your Kiosk works by testing it on Sui Testnet.
+
+### Create a Kiosk with advanced options using the Kiosk SDK
+
+```rust
+import { createKiosk } from '@mysten/kiosk';
+
+let tx = new TransactionBuilder();
+let [kiosk, kioskOwnerCap] = createKiosk(tx);
+
+tx.transferObjects([ kioskOwnerCap ], tx.pure(sender, 'address'));
+tx.moveCall({
+    target: '0x2::transfer::public_share_object',
+    arguments: [ kiosk ],
+    typeArguments: '0x2::kiosk::Kiosk'
+})
+```
+
+### Create a Kiosk with advanced options using programmable transaction blocks
+
+```rust
+let tx = new TransactionBuilder();
+let [kiosk, kioskOwnerCap] = tx.moveCall({
+    target: '0x2::kiosk::new'
+});
+
+tx.transferObjects([ kioskOwnerCap ], tx.pure(sender, 'address'));
+tx.moveCall({
+    target: '0x2::transfer::public_share_object',
+    arguments: [ kiosk ],
+    typeArguments: '0x2::kiosk::Kiosk'
+})
+```
+
+### Create a Kiosk with advanced options using the SUI CLI
+
+Sui CLI does not support PTBs and transaction chaining yet. You can use the kiosk::default function instead.
+
+## Place items in and take items from your kiosk 
+
+As a Kiosk owner, you can place any assets into your Sui Kiosk. You can take any item from your kiosk that is not currently listed for sale.
+There's no limitations on which assets you can place in your kiosk. However, you can’t necessarily list and trade all of the items you place in your kiosk. The `TransferPolicy` associated with the type for the item determines whether you can trade it. To learn more, see the _Purchase items from a Kiosk_ section.
+
+### Place an item in your kiosk
+
+To place an item to the Kiosk, the owner needs to call the `sui::kiosk::place` function on the `Kiosk` object and pass the `KioskOwnerCap` and the `Item` as arguments.
+
+`ITEM_TYPE` in the following examples represents the full type of the item.
+
+### Place an item using the Kiosk SDK
+
+```rust
+import { place } from '@mysten/kiosk';
+
+let tx = new TransactionBuilder();
+
+let itemArg = tx.object('<ID>');
+let kioskArg = tx.object('<ID>');
+let kioskOwnerCapArg = tx.object('<ID>');
+
+place(tx, '<ITEM_TYPE>', kioskArg, kioskOwnerCapArg, item);
+```
+
+### Place an item using programmable transaction blocks
+
+```rust
+let tx = new TransactionBuilder();
+
+let itemArg = tx.object('<ID>');
+let kioskArg = tx.object('<ID>');
+let kioskOwnerCapArg = tx.object('<ID>');
+
+tx.moveCall({
+    target: '0x2::kiosk::place',
+    arguments: [ kioskArg, kioskOwnerCapArg, itemArg ],
+    typeArguments: [ '<ITEM_TYPE>' ]
+})
+```
+
+### Place an item using the Sui CLI
+
+```shell
+sui client call \
+    --package 0x2 \
+    --module kiosk \
+    --function place \
+    --args "<KIOSK_ID>" "<CAP_ID>" "<ITEM_ID>" \
+    --type-args "<ITEM_TYPE>" \
+    --gas-budget 1000000000
+```
+
+## Take items from a kiosk
+
+To take an item from a kiosk you must be the kiosk owner. As the owner, call the `sui::kiosk::take` function on the `Kiosk` object, and pass the `KioskOwnerCap` and `ID` of the item as arguments.
+
+`ITEM_TYPE` in the following examples represents the full type of the item.
+
+### Take an item from a kiosk using the Kiosk SDK
+
+```rust
+import { take } from '@mysten/kiosk';
+
+let tx = new TransactionBuilder();
+
+let itemId = tx.pure('<ITEM_ID>', 'address');
+let kioskArg = tx.object('<ID>');
+let kioskOwnerCapArg = tx.object('<ID>');
+
+let item = take('<ITEM_TYPE>', kioskArg, kioskOwnerCapArg, itemId);
+
+tx.transferObjects([ item ], tx.pure(sender, 'address'));
+```
+
+### Take an item from a kiosk using programmable transaction blocks
+
+```rust
+let tx = new TransactionBuilder();
+
+let itemId = tx.pure('<ITEM_ID>', 'address');
+let kioskArg = tx.object('<ID>');
+let kioskOwnerCapArg = tx.object('<ID>');
+
+let item = tx.moveCall({
+    target: '0x2::kiosk::take',
+    arguments: [ kioskArg, kioskOwnerCapArg, itemId ],
+    typeArguments: [ '<ITEM_TYPE>' ]
+});
+```
+
+### Take an item from a kiosk using the Sui CLI
+
+The `kiosk::take` function is built to be PTB friendly and returns the asset. The Sui CLI does not yet support transaction chaining.
+
+## Lock items in a kiosk
+
+Some policies require that assets never get removed from a kiosk, such as for strong royalty enforcement. To support this, Sui Kiosk provides a locking mechanism. Locking is similar to placing except that you can’t take a locked asset out of the Kiosk.
+
+To lock an asset in a kiosk, call the `sui::kiosk::lock` function. To ensure that you can later unlock the asset you must associate a TransferPolicy with the asset.
+
+### Lock an item in a kiosk
+
+When you use the lock `function`, similar to using the `place` function, you specify the `KioskOwnerCap` and the `Item` as arguments. But to lock the item you must also show the TransferPolicy. 
+
+`<ITEM_TYPE>` in the following examples represents the full type of the asset.
+
+### Lock an item using the Kiosk SDK
+
+```rust
+import { lock } from '@mysten/kiosk';
+
+const tx = new TransactionBuilder();
+
+let kioskArg = tx.object('<ID>');
+let kioskOwnerCapArg = tx.object('<ID>');
+let itemArg = tx.object('<ID>');
+let transferPolicyArg = tx.object('<ID>');
+
+lock(tx, '<ITEM_TYPE>', kioskArg, kioskOwnerCapArg, transferPolicyArg, itemArg);
+```
+
+### Lock an item using programmable transaction blocks
+
+```rust
+const tx = new TransactionBuilder();
+
+let kioskArg = tx.object('<ID>');
+let kioskOwnerCapArg = tx.object('<ID>');
+let itemArg = tx.object('<ID>');
+let transferPolicyArg = tx.object('<ID>');
+
+tx.moveCall({
+    target: '0x2::kiosk::lock',
+    arguments: [ kioskArg, kioskOwnerCapArg, transferPolicyArg, itemArg ],
+    typeArguments: [ '<ITEM_TYPE>' ]
+});
+```
+
+### Lock an item using the Sui CLI
+
+```shell
+sui client call \
+    --package 0x2 \
+    --module kiosk \
+    --function lock \
+    --args "<KIOSK_ID>" "<CAP_ID>" "<TRANSFER_POLICY_ID>" "<ITEM_ID>" \
+    --type-args "<ITEM_TYPE>" \
+    --gas-budget 1000000000
+```
+
+## List and delist items from a kiosk
+
+Sui Kiosk provides basic trading functionality. As a kiosk owner, you can list assets for sale, and buyers can discover and purchase them. Sui Kiosk  supports listing items by default with three primary functions:
+* `kiosk::list` - list an asset for sale for a fixed price
+* `kiosk::delist` - remove an existing listing
+* `kiosk::purchase` - purchase an asset listed for sale
+
+Anyone on the network can purchase an item listed from a Sui Kiosk. To learn more about the purchase flow, see the Purchase section. To learn more about asset states and what can be done with a listed item, see the Asset States section.
+
+### List an item from a kiosk
+
+As a kiosk owner, you can use the `kiosk::list` function to list any asset you added to your kiosk. Include the item to sell and the list price as arguments. All listings on Sui are in SUI tokens.
+When you list an item, Sui emits a `kiosk::ItemListed` event that  contains the Kiosk ID, Item ID, type of the Item, and the list price.
+
+### List an item using the Kiosk SDK
+
+```rust
+import { list } from '@mysten/kiosk';
+
+let tx = new TransactionBlock();
+let kioskArg = tx.object('<ID>');
+let capArg = tx.object('<ID>');
+let itemId = tx.pure('<ID>', 'address');
+let itemType = 'ITEM_TYPE';
+let price = '<price>'; // in MIST (1 SUI = 10^9 MIST)
+
+list(tx, itemType, kioskArg, capArg, itemId, price);
+```
+
+### List an item using programmable transaction blocks
+
+```rust
+let tx = new TransactionBlock();
+
+let kioskArg = tx.object('<ID>');
+let capArg = tx.object('<ID>');
+let itemId = tx.pure('<ID>', 'address');
+let itemType = 'ITEM_TYPE';
+let priceArg = tx.pure('<price>', 'u64'); // in MIST (1 SUI = 10^9 MIST)
+
+tx.moveCall({
+    target: '0x2::kiosk::list',
+    arguments: [ kioskArg, capArg, itemId, priceArg ],
+    typeArguments: [ itemType ]
+});
+```
+
+### List an item using the Sui CLI
+
+```shell
+sui client call \
+    --package 0x2 \
+    --module kiosk \
+    --function list \
+    --args "<KIOSK_ID>" "<CAP_ID>" "<ITEM_ID>" "<PRICE>" \
+    --type-args "ITEM_TYPE" \
+    --gas-budget 1000000000
+```
+
+### Delist an item
+
+As a kiosk owner you can use the `kiosk::delist` to delist any currently listed asset. Specify the item to delist as an argument.
+
+When you delist an item, Sui returns to the kiosk owner the gas fees charged to list the item.
+
+When you delist an item, Sui emits a `kiosk::ItemDelisted` event that contains the Kiosk ID, Item ID, and the type of the item.
+
+### Delist an item using the Kiosk SDK
+
+```rust
+import { delist } from '@mysten/kiosk';
+
+let tx = new TransactionBlock();
+let kioskArg = tx.object('<ID>');
+let capArg = tx.object('<ID>');
+let itemId = tx.pure('<ID>', 'address');
+let itemType = 'ITEM_TYPE';
+
+delist(tx, itemType, kioskArg, capArg, itemId);
+```
+
+### Delist an item using the programmable transaction blocks
+
+```rust
+let tx = new TransactionBlock();
+let kioskArg = tx.object('<ID>');
+let capArg = tx.object('<ID>');
+let itemId = tx.pure('<ID>', 'address');
+let itemType = 'ITEM_TYPE';
+
+tx.moveCall({
+    target: '0x2::kiosk::delist',
+    arguments: [ kioskArg, capArg, itemId ],
+    typeArguments: [ itemType ]
+});
+```
+
+### Delist an item using the Sui CLI
+
+```shell
+sui client call \
+    --package 0x2 \
+    --module kiosk \
+    --function delist \
+    --args "<KIOSK_ID>" "<CAP_ID>" "<ITEM_ID>" \
+    --type-args "ITEM_TYPE" \
+    --gas-budget 1000000000
 ```
 
 ## Purchase an item from a kiosk
 
-To purchase a listed item from a kiosk, use the [`kiosk::purchase`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/kiosk.md#function-purchase) function. The asset becomes available to the purchaser when the TransferRequest for the purchase resolves. If there is a policy that enforces locking, such a kiosk lock rule, he asset must be placed into the purchaser's kiosk.
+Anyone that has an address on the Sui network can purchase an item listed from a Sui Kiosk. To purchase an item, you can use the `kiosk::purchase` function. Specify the item to purchase and pay the list price set by the Kiosk Owner.
 
-To purchase an item listed on a kiosk:
+You can discover the items listed on the network with the `kiosk::ItemListed` event. 
+
+When you use the `kiosk::purchase` function, it returns the purchased asset and the `TransferRequest` for the type associated with the asset. To complete the purchase, you must meet the terms defined in the TransferPolicy applied to the asset. To learn more, see the TransferPolicy topic.
+
+## Borrow an item from a kiosk
+
+As a kiosk owner, you can access an asset placed or locked in a kiosk without taking the asset from the kiosk. You can always borrow the asset immutably. Whether you can mutably borrow an asset depends on the state of the asset. For example, you can’t borrow a listed asset because you can’t modify it while listed. The functions available include:
+* `kiosk::borrow` - returns an immutable reference to the asset
+* `kiosk::borrow_mut` - returns a mutable reference to the asset
+* `kiosk::borrow_val` - a PTB-friendly version of `borrow_mut`, which allows you to take an asset and place it back in the same transaction.
+
+### Immutable borrow
+
+You can always borrow an asset from a kiosk immutably. You can use the  `kiosk::borrow` function to borrow an asset, however, it is not possible to use references within a programmable transaction block. To access the asset you must use a published module (function).
+
+### Immutably borrow an asset using Sui Move
 
 ```rust
-kiosk::purchase(Kiosk, ID, Coin): (Item, TransferRequest<Item>)
+module examples::immutable_borrow
+    use sui::object::ID;
+    use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
+
+    public fun immutable_borrow_example<T>(self: &Kiosk, cap: &KioskOwnerCap, item_id: ID): &T {
+        kiosk::borrow(self, cap, item_id)
+    }
+}
 ```
 
-## Lock an item in your Sui kiosk
+### Mutable borrow with borrow_mut
 
-You can lock items in your kiosk using the [`kiosk::lock`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/kiosk.md#0x2_kiosk_lock) function. You can lock only items that have an associated `TransferPolicy`. To lock an item in a Kiosk, you must include the `TransferPolicy` for the item as a transaction argument. This requirement prevents asset loss from locking an asset forever, such as when one inadvertently locks an item and then can’t take the item from the kiosk or list it without a transfer policy.
+You can mutably borrow an asset from a kiosk if it is not listed. You can use the `kiosk::borrow_mut` function to mutably borrow an asset. However, it is not possible to use references within a PTB, so to access the mutably borrowed asset you must use a published module (function).
+
+### Mutably borrow an asset using Sui Move
+
+```rust
+module examples::mutable_borrow
+    use sui::object::ID;
+    use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
+
+    public fun mutable_borrow_example<T>(
+        self: &mut Kiosk, cap: &KioskOwnerCap, item_id: ID
+    ): &mut T {
+        kiosk::borrow_mut(self, cap, item_id)
+    }
+}
+```
+
+### Mutable borrow with borrow_val
+
+You can use the PTB-friendly kiosk::borrow_val function. It allows you to take an asset and place it back in the same transaction. To make sure the asset is placed back into the kiosk, the function "obliges" the caller with a “Hot Potato”.
+
+### Mutable borrow with `borrow_val` using the Kiosk SDK
+
+The Kiosk SDK provides a function with borrowing logic you can use within a PTB: `borrowValue` (and `returnValue`).
+
+```rust
+import { borrowValue, returnValue } from '@sui/kiosk-sdk';
+
+let tx = new TransactionBuilder();
+let itemType = 'ITEM_TYPE';
+let itemId = tx.pure('<ITEM_ID>', 'address');
+let kioskArg = tx.object('<ID>');
+let capArg = tx.object('<ID>');
+
+let [item, promise] = borrowValue(tx, itemType, kioskArg, capArg, itemId);
+
+// freely mutate or reference the `item`
+// any calls are available as long as they take a reference
+// `returnValue` must be explicitly called
+
+returnValue(tx, itemType, kioskArg, item, promise);
+```
+
+### Mutable borrow with `borrow_val` using programmable transaction blocks
+
+```rust
+let tx = new TransactionBuilder();
+
+let itemType = 'ITEM_TYPE';
+let itemId = tx.pure('<ITEM_ID>', 'address');
+let kioskArg = tx.object('<ID>');
+let capArg = tx.object('<ID>');
+
+let [item, promise] = tx.moveCall({
+    target: '0x2::kiosk::borrow_val',
+    arguments: [ kioskArg, capArg, itemId ],
+    typeArguments: [ itemType ],
+});
+
+// freely mutate or reference the `item`
+// any calls are available as long as they take a reference
+// `returnValue` must be explicitly called
+
+tx.moveCall({
+    target: '0x2::kiosk::return_val',
+    arguments: [ kioskArg, item, promise ],
+    typeArguments: [ itemType ],
+});
+```
+
+## Withdraw proceeds from a completed sale
+
+When someone purchases an item, Sui stores the proceeds from the sale in the Kiosk. As the kiosk owner, you can withdraw the proceeds at any time by calling the `kiosk::withdraw` function. The function is simple, but because it is PTB friendly it is not currently supported in the Sui CLI.
+
+### Withdraw proceeds using the Kiosk SDK
+
+```rust
+import { withdrawFromKiosk } from '@mysten/kiosk';
+
+let tx = new TransactionBlock();
+let kioskArg = tx.object('<ID>');
+let capArg = tx.object('<ID>');
+
+// The amount can be `null` to withdraw everything or a specific amount
+let amount = '<amount>';
+let withdrawAll = null;
+
+let coin = withdrawFromKiosk(tx, kioskArg, capArg, amount);
+```
+
+### Withdraw proceeds using programmable transaction blocks
+
+```rust
+let tx = new TransactionBlock();
+let kioskArg = tx.object('<ID>');
+let capArg = tx.object('<ID>');
+
+// because the function uses an Option<u64> argument,
+// constructing is a bit more complex
+let amountArg = tx.moveCall({
+    target: '0x1::option::some',
+    arguments: [ tx.pure('<amount>', 'u64') ],
+    typeArguments: [ 'u64' ],
+});
+
+// alternatively
+let withdrawAllArg = tx.moveCall({
+    target: '0x1::option::none',
+    typeArguments: [ 'u64' ],
+});
+
+let coin = tx.moveCall({
+    target: '0x2::kiosk::withdraw',
+    arguments: [ kioskArg, capArg, amountArg ],
+    typeArguments: [ 'u64' ],
+});
+```
+
+### Withdraw proceeds using the Sui CLI
+
+Due to the function being PTB friendly, it is not currently supported in the CLI environment.

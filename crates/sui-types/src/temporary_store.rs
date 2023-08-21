@@ -753,6 +753,11 @@ impl<'backing> TemporaryStore<'backing> {
         } else if let Some(metadata) = self.loaded_child_objects.get(id) {
             debug_assert_eq!(metadata.version, expected_version);
             metadata.storage_rebate
+        } else if let Ok(Some(obj)) = self.store.get_object_by_key(id, expected_version) {
+            // The only case where an modified input object is not in the input list nor child object,
+            // is when we upgrade a system package during epoch change.
+            debug_assert!(obj.is_package());
+            obj.storage_rebate
         } else {
             // not a lot we can do safely and under this condition everything is broken
             panic!(
@@ -859,14 +864,15 @@ impl<'backing> TemporaryStore<'backing> {
     }
 }
 
+type ModifiedObjectInfo<'a> = (ObjectID, Option<(SequenceNumber, u64)>, Option<&'a Object>);
+
 impl<'backing> TemporaryStore<'backing> {
     fn get_input_sui(
         &self,
         id: &ObjectID,
         expected_version: SequenceNumber,
         layout_resolver: &mut impl LayoutResolver,
-        do_expensive_checks: bool,
-    ) -> Result<(u64, u64), ExecutionError> {
+    ) -> Result<u64, ExecutionError> {
         if let Some(obj) = self.input_objects.get(id) {
             // the assumption here is that if it is in the input objects must be the right one
             if obj.version() != expected_version {
@@ -877,18 +883,13 @@ impl<'backing> TemporaryStore<'backing> {
                     obj.version(),
                 );
             }
-            let input_sui = if do_expensive_checks {
-                obj.get_total_sui(layout_resolver).map_err(|e| {
-                    make_invariant_violation!(
-                        "Failed looking up input SUI in SUI conservation checking for input with \
+            obj.get_total_sui(layout_resolver).map_err(|e| {
+                make_invariant_violation!(
+                    "Failed looking up input SUI in SUI conservation checking for input with \
                          type {:?}: {e:#?}",
-                        obj.struct_tag(),
-                    )
-                })?
-            } else {
-                0
-            };
-            Ok((input_sui, obj.storage_rebate))
+                    obj.struct_tag(),
+                )
+            })
         } else {
             // not in input objects, must be a dynamic field
             let Ok(Some(obj))= self.store.get_object_by_key(id, expected_version) else {
@@ -896,19 +897,42 @@ impl<'backing> TemporaryStore<'backing> {
                     "Failed looking up dynamic field {id} in SUI conservation checking"
                 );
             };
-            let input_sui = if do_expensive_checks {
-                obj.get_total_sui(layout_resolver).map_err(|e| {
-                    make_invariant_violation!(
-                        "Failed looking up input SUI in SUI conservation checking for type \
+            obj.get_total_sui(layout_resolver).map_err(|e| {
+                make_invariant_violation!(
+                    "Failed looking up input SUI in SUI conservation checking for type \
                          {:?}: {e:#?}",
-                        obj.struct_tag(),
-                    )
-                })?
-            } else {
-                0
-            };
-            Ok((input_sui, obj.storage_rebate))
+                    obj.struct_tag(),
+                )
+            })
         }
+    }
+
+    /// Return the list of all modified objects, for each object, returns
+    /// - Object ID,
+    /// - Input: If the object existed prior to this transaction, include their version and storage_rebate,
+    /// - Output: If a new version of the object is written, include the new object.
+    fn get_modified_objects(&self) -> Vec<ModifiedObjectInfo<'_>> {
+        self.written
+            .iter()
+            .map(|(id, (object, kind))| match kind {
+                WriteKind::Mutate => {
+                    // When an object is mutated, its version remains the old version until the end.
+                    let version = object.version();
+                    let storage_rebate = self.get_input_storage_rebate(id, version);
+                    (*id, Some((object.version(), storage_rebate)), Some(object))
+                }
+                WriteKind::Create | WriteKind::Unwrap => (*id, None, Some(object)),
+            })
+            .chain(self.deleted.iter().filter_map(|(id, kind)| match kind {
+                DeleteKindWithOldVersion::Normal(version)
+                | DeleteKindWithOldVersion::Wrap(version) => {
+                    let storage_rebate = self.get_input_storage_rebate(id, *version);
+                    Some((*id, Some((*version, storage_rebate)), None))
+                }
+                DeleteKindWithOldVersion::UnwrapThenDelete
+                | DeleteKindWithOldVersion::UnwrapThenDeleteDEPRECATED(_) => None,
+            }))
+            .collect()
     }
 
     /// Check that this transaction neither creates nor destroys SUI. This should hold for all txes
@@ -948,100 +972,26 @@ impl<'backing> TemporaryStore<'backing> {
         let mut total_input_rebate = 0;
         // total amount of SUI in storage rebate of output objects
         let mut total_output_rebate = 0;
-        for (id, (output_obj, kind)) in &self.written {
-            match kind {
-                WriteKind::Mutate => {
-                    // note: output_obj.version has not yet been increased by the tx, so output_obj.version
-                    // is the object version at tx input
-                    let input_version = output_obj.version();
-                    let (input_sui, input_storage_rebate) = self.get_input_sui(
-                        id,
-                        input_version,
-                        layout_resolver,
-                        do_expensive_checks,
-                    )?;
-                    total_input_sui += input_sui;
-                    if do_expensive_checks {
-                        total_output_sui +=
-                            output_obj.get_total_sui(layout_resolver).map_err(|e| {
-                                make_invariant_violation!(
-                                    "Failed looking up output SUI in SUI conservation checking for \
-                                     mutated type {:?}: {e:#?}",
-                                    output_obj.struct_tag(),
-                                )
-                            })?;
-                    }
-                    total_input_rebate += input_storage_rebate;
-                    total_output_rebate += output_obj.storage_rebate;
+        for (id, input, output) in self.get_modified_objects() {
+            if let Some((version, storage_rebate)) = input {
+                total_input_rebate += storage_rebate;
+                if do_expensive_checks {
+                    total_input_sui += self.get_input_sui(&id, version, layout_resolver)?;
                 }
-                WriteKind::Create => {
-                    // created objects did not exist at input, and thus contribute 0 to input SUI
-                    if do_expensive_checks {
-                        total_output_sui +=
-                            output_obj.get_total_sui(layout_resolver).map_err(|e| {
-                                make_invariant_violation!(
-                                    "Failed looking up output SUI in SUI conservation checking for \
-                                     created type {:?}: {e:#?}",
-                                    output_obj.struct_tag()
-                                )
-                            })?;
-                    }
-                    total_output_rebate += output_obj.storage_rebate;
-                }
-                WriteKind::Unwrap => {
-                    // an unwrapped object was either:
-                    // 1. wrapped in an input object A,
-                    // 2. wrapped in a dynamic field A, or itself a dynamic field
-                    // in both cases, its contribution to input SUI will be captured by looking at A
-                    if do_expensive_checks {
-                        total_output_sui +=
-                            output_obj.get_total_sui(layout_resolver).map_err(|e| {
-                                make_invariant_violation!(
-                                    "Failed looking up output SUI in SUI conservation checking for \
-                                     unwrapped type {:?}: {e:#?}",
-                                    output_obj.struct_tag(),
-                                )
-                            })?;
-                    }
-                    total_output_rebate += output_obj.storage_rebate;
+            }
+            if let Some(object) = output {
+                total_output_rebate += object.storage_rebate;
+                if do_expensive_checks {
+                    total_output_sui += object.get_total_sui(layout_resolver).map_err(|e| {
+                        make_invariant_violation!(
+                            "Failed looking up output SUI in SUI conservation checking for \
+                             mutated type {:?}: {e:#?}",
+                            object.struct_tag(),
+                        )
+                    })?;
                 }
             }
         }
-        for (id, kind) in &self.deleted {
-            match kind {
-                DeleteKindWithOldVersion::Normal(input_version) => {
-                    let (input_sui, input_storage_rebate) = self.get_input_sui(
-                        id,
-                        *input_version,
-                        layout_resolver,
-                        do_expensive_checks,
-                    )?;
-                    total_input_sui += input_sui;
-                    total_input_rebate += input_storage_rebate;
-                }
-                DeleteKindWithOldVersion::Wrap(input_version) => {
-                    // wrapped object was a tx input or dynamic field--need to account for it in input SUI
-                    // note: if an object is created by the tx, then wrapped, it will not appear here
-                    let (input_sui, input_storage_rebate) = self.get_input_sui(
-                        id,
-                        *input_version,
-                        layout_resolver,
-                        do_expensive_checks,
-                    )?;
-                    total_input_sui += input_sui;
-                    total_input_rebate += input_storage_rebate;
-                    // else, the wrapped object was either:
-                    // 1. freshly created, which means it has 0 contribution to input SUI
-                    // 2. unwrapped from another object A, which means its contribution to input SUI will be captured by looking at A
-                }
-                DeleteKindWithOldVersion::UnwrapThenDelete
-                | DeleteKindWithOldVersion::UnwrapThenDeleteDEPRECATED(_) => {
-                    // an unwrapped option was wrapped in input object or dynamic field A, which means its contribution to input SUI will
-                    // be captured by looking at A
-                }
-            }
-        }
-
         if do_expensive_checks {
             // note: storage_cost flows into the storage_rebate field of the output objects, which is why it is not accounted for here.
             // similarly, all of the storage_rebate *except* the storage_fund_rebate_inflow gets credited to the gas coin
