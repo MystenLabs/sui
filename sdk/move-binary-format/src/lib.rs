@@ -3,8 +3,8 @@
 
 use std::collections::HashMap;
 
+use move_binary_format::{file_format::StructFieldInformation, CompiledModule};
 use move_core_types::identifier::Identifier;
-use move_binary_format::{CompiledModule, file_format::StructFieldInformation};
 use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen::to_value;
 use wasm_bindgen::{prelude::*, JsValue};
@@ -38,11 +38,9 @@ pub fn update_identifiers(binary: String, map: JsValue) -> Result<JsValue, JsErr
     for ident in compiled_module.identifiers.iter_mut() {
         let old = ident.to_string();
         if let Some(new) = updates.get(&old) {
-            *ident = Identifier::new(new.clone()).map_err(|err| {
-                JsErr {
-                    display: format!("{}", err),
-                    message: err.to_string(),
-                }
+            *ident = Identifier::new(new.clone()).map_err(|err| JsErr {
+                display: format!("{}", err),
+                message: err.to_string(),
             })?;
         }
     }
@@ -56,36 +54,35 @@ pub fn update_identifiers(binary: String, map: JsValue) -> Result<JsValue, JsErr
     let find_pos = |a: u16| indexes.iter().position(|x| *x == a as usize).unwrap() as u16;
 
     // Then update the rest of the struct.
-    compiled_module.module_handles
+    compiled_module
+        .module_handles
         .iter_mut()
         .for_each(|handle| {
             handle.name.0 = find_pos(handle.name.0);
         });
 
-    compiled_module.struct_handles
+    compiled_module
+        .struct_handles
         .iter_mut()
         .for_each(|handle| {
             handle.name.0 = find_pos(handle.name.0);
         });
 
-    compiled_module.function_handles
+    compiled_module
+        .function_handles
         .iter_mut()
         .for_each(|handle| {
             handle.name.0 = find_pos(handle.name.0);
         });
 
-    compiled_module.struct_defs
-        .iter_mut()
-        .for_each(|def| {
-            def.struct_handle.0 = find_pos(def.struct_handle.0);
-            if let StructFieldInformation::Declared(definitions) = &mut def.field_information {
-                definitions
-                    .iter_mut()
-                    .for_each(|field| {
-                        field.name.0 = find_pos(field.name.0);
-                    });
-            }
-        });
+    compiled_module.struct_defs.iter_mut().for_each(|def| {
+        def.struct_handle.0 = find_pos(def.struct_handle.0);
+        if let StructFieldInformation::Declared(definitions) = &mut def.field_information {
+            definitions.iter_mut().for_each(|field| {
+                field.name.0 = find_pos(field.name.0);
+            });
+        }
+    });
 
     let mut binary = Vec::new();
     compiled_module
