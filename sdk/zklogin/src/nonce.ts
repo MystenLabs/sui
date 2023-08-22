@@ -10,7 +10,7 @@ import { toBufferBE } from './utils.js';
 const NONCE_LENGTH = 27;
 
 export function generateNonce(publicKey: PublicKey, maxEpoch: number, randomness: bigint) {
-	const publicKeyBytes = toBigIntBE(Buffer.from(publicKey.toRawBytes()));
+	const publicKeyBytes = toBigIntBE(Buffer.from(publicKey.toSuiBytes()));
 	const eph_public_key_0 = publicKeyBytes / 2n ** 128n;
 	const eph_public_key_1 = publicKeyBytes % 2n ** 128n;
 	const bigNum = poseidonHash([eph_public_key_0, eph_public_key_1, maxEpoch, randomness]);
