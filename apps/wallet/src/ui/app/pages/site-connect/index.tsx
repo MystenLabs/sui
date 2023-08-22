@@ -131,7 +131,7 @@ function SiteConnectPage() {
 							{unlockedAccounts.length > 0 && (
 								<AccountMultiSelectWithControls
 									selectedAccountIDs={accountsToConnect.map((account) => account.id)}
-									accounts={accounts ?? []}
+									accounts={unlockedAccounts ?? []}
 									onChange={(value) => {
 										setAccountsToConnect(value.map((id) => accounts?.find((a) => a.id === id)!));
 									}}
@@ -141,12 +141,7 @@ function SiteConnectPage() {
 								<div className="flex flex-col gap-3">
 									<SectionHeader title="Locked & Unavailable" />
 									{lockedAccounts?.map((account) => (
-										<AccountListItem
-											key={account.id}
-											isLocked
-											selected={false}
-											address={account.address}
-										/>
+										<AccountListItem key={account.id} selected={false} account={account} />
 									))}
 								</div>
 							)}

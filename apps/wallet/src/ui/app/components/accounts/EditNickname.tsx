@@ -19,7 +19,7 @@ import {
 } from '_src/ui/app/shared/Dialog';
 
 const formSchema = z.object({
-	nickname: z.string().trim().nonempty('Required'),
+	nickname: z.string().trim(),
 });
 
 export function EditNickname() {
@@ -45,7 +45,10 @@ export function EditNickname() {
 	const onSubmit = async ({ nickname }: { nickname: string }) => {
 		if (account && accountID) {
 			try {
-				await backgroundClient.setAccountNickname({ id: accountID, nickname });
+				await backgroundClient.setAccountNickname({
+					id: accountID,
+					nickname: nickname || null,
+				});
 				close();
 			} catch (e) {
 				toast.error((e as Error).message || 'Failed to set nickname');
