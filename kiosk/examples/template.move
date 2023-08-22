@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[test_only]
 /// Template bytecode to use when working with (de)serialized bytecode.
 module kiosk::template {
     use std::option::{some, none};

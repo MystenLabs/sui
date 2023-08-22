@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[test_only]
 /// This module contains a simple `unlocker` module which enables creators to
 /// `unlock` (as opposed to `lock`) assets without fulfilling the default set
 /// of requirements (rules / policies).

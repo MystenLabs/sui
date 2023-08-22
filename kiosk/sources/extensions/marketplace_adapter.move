@@ -16,6 +16,12 @@
 /// Unlike `PurchaseCap` purpose of which was to be "free", `MarketPurchaseCap`
 /// - the wrapper - only comes with a `store` to reduce the amount of scenarios
 /// when it is transferred by accident or sent to an address / object.
+///
+/// Notes:
+///
+/// - The Adapter intentionally does not have any errors built-in and the error
+/// handling needs to be implemented in the extension utilizing the Marketplace
+/// Adapter.
 module kiosk::marketplace_adapter {
     use sui::transfer_policy::{Self as policy, TransferRequest};
     use sui::kiosk::{Self, Kiosk, KioskOwnerCap, PurchaseCap};
@@ -50,11 +56,13 @@ module kiosk::marketplace_adapter {
         }
     }
 
-    /// Return the `MarketPurchaseCap` to the `Kiosk`. Similar to how a PurchaseCap
-    /// can be returned at any moment.
+    /// Return the `MarketPurchaseCap` to the `Kiosk`. Similar to how the
+    /// `PurchaseCap` can be returned at any moment. But it can't be unwrapped
+    /// into the `PurchaseCap` because that would allow cheating on a `Market`.
     public fun return_cap<T: key  + store, Market>(
         kiosk: &mut Kiosk,
-        cap: MarketPurchaseCap<T, Market>
+        cap: MarketPurchaseCap<T, Market>,
+        _ctx: &mut TxContext
     ) {
         let MarketPurchaseCap { purchase_cap } = cap;
         kiosk::return_purchase_cap(kiosk, purchase_cap);
@@ -66,7 +74,8 @@ module kiosk::marketplace_adapter {
     public fun purchase<T: key + store, Market>(
         kiosk: &mut Kiosk,
         cap: MarketPurchaseCap<T, Market>,
-        coin: Coin<SUI>
+        coin: Coin<SUI>,
+        _ctx: &mut TxContext
     ): (T, TransferRequest<T>, TransferRequest<Market>) {
         let MarketPurchaseCap { purchase_cap } = cap;
         let (item, request) = kiosk::purchase_with_cap(kiosk, purchase_cap, coin);
@@ -78,6 +87,8 @@ module kiosk::marketplace_adapter {
 
         (item, request, market_request)
     }
+
+    // === Getters ===
 
     /// Handy wrapper to read the `kiosk` field of the inner `PurchaseCap`
     public fun kiosk<T: key + store, Market>(self: &MarketPurchaseCap<T, Market>): ID {

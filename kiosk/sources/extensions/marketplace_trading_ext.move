@@ -8,21 +8,48 @@
 /// - list
 /// - delist
 /// - purchase
-module kiosk::fixed_price_ext {
+module kiosk::marketplace_trading_ext {
     use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
     use sui::transfer_policy::TransferRequest;
     use sui::kiosk_extension as ext;
     use sui::tx_context::TxContext;
     use sui::object::{Self, ID};
-    use sui::coin::Coin;
+    use sui::coin::{Self, Coin};
     use sui::sui::SUI;
     use sui::event;
     use sui::bag;
 
-    use kiosk::marketplace_adapter as mkt;
+    use kiosk::marketplace_adapter::{Self as mkt, MarketPurchaseCap};
 
     /// For when the caller is not the owner of the Kiosk.
     const ENotOwner: u64 = 0;
+    /// Trying to purchase or delist an item that is not listed.
+    const ENotListed: u64 = 1;
+    /// The payment is not enough to purchase the item.
+    const EInsufficientPayment: u64 = 2;
+
+    // === Events ===
+
+    /// An item has been listed on a Marketplace.
+    struct ItemListed<phantom T, phantom Market> has copy, drop {
+        kiosk_id: ID,
+        item_id: ID,
+        price: u64
+    }
+
+    /// An item has been delisted from a Marketplace.
+    struct ItemDelisted<phantom T, phantom Market> has copy, drop {
+        kiosk_id: ID,
+        item_id: ID
+    }
+
+    /// An item has been purchased from a Marketplace.
+    struct ItemPurchased<phantom T, phantom Market> has copy, drop {
+        kiosk_id: ID,
+        item_id: ID,
+    }
+
+    // === Extension ===
 
     /// The Extension Witness
     struct Extension has drop {}
@@ -30,26 +57,12 @@ module kiosk::fixed_price_ext {
     /// This Extension does not require any permissions.
     const PERMISSIONS: u128 = 0;
 
-    struct ItemListed<phantom T, phantom Market> has copy, drop {
-        kiosk_id: ID,
-        item_id: ID,
-        price: u64
-    }
-
-    struct ItemDelisted<phantom T, phantom Market> has copy, drop {
-        kiosk_id: ID,
-        item_id: ID
-    }
-
-    struct ItemPurchased<phantom T, phantom Market> has copy, drop {
-        kiosk_id: ID,
-        item_id: ID,
-    }
-
     /// Adds the Extension
     public fun add(kiosk: &mut Kiosk, cap: &KioskOwnerCap, ctx: &mut TxContext) {
         ext::add(Extension {}, kiosk, cap, PERMISSIONS, ctx)
     }
+
+    // === Trading Functions ===
 
     /// List an item on a specified Marketplace.
     public fun list<T: key + store, Market>(
@@ -76,12 +89,13 @@ module kiosk::fixed_price_ext {
         self: &mut Kiosk,
         cap: &KioskOwnerCap,
         item_id: ID,
-        _ctx: &mut TxContext
+        ctx: &mut TxContext
     ) {
         assert!(kiosk::has_access(self, cap), ENotOwner);
+        assert!(is_listed<T, Market>(self, item_id), ENotListed);
 
         let mkt_cap = bag::remove(ext::storage_mut(Extension {}, self), item_id);
-        mkt::return_cap<T, Market>(self, mkt_cap);
+        mkt::return_cap<T, Market>(self, mkt_cap, ctx);
 
         event::emit(ItemDelisted<T, Market> {
             kiosk_id: object::id(self),
@@ -89,19 +103,39 @@ module kiosk::fixed_price_ext {
         });
     }
 
+    /// Purchase an item from a specified Marketplace.
     public fun purchase<T: key + store, Market>(
         self: &mut Kiosk,
         item_id: ID,
         payment: Coin<SUI>,
-        _ctx: &mut TxContext
+        ctx: &mut TxContext
     ): (T, TransferRequest<T>, TransferRequest<Market>) {
+        assert!(is_listed<T, Market>(self, item_id), ENotListed);
+
         let mkt_cap = bag::remove(ext::storage_mut(Extension {}, self), item_id);
+        assert!(coin::value(&payment) >= mkt::min_price(&mkt_cap), EInsufficientPayment);
 
         event::emit(ItemPurchased<T, Market> {
             kiosk_id: object::id(self),
             item_id
         });
 
-        mkt::purchase(self, mkt_cap, payment)
+        mkt::purchase(self, mkt_cap, payment, ctx)
+    }
+
+    // === Getters ===
+
+    /// Check if an item is currently listed on a specified Marketplace.
+    public fun is_listed<T: key + store, Market>(self: &Kiosk, item_id: ID): bool {
+        bag::contains_with_type<ID, MarketPurchaseCap<T, Market>>(
+            ext::storage(Extension {}, self),
+            item_id
+        )
+    }
+
+    /// Get the price of a currently listed item from a specified Marketplace.
+    public fun price<T: key + store, Market>(self: &Kiosk, item_id: ID): u64 {
+        let mkt_cap = bag::borrow(ext::storage(Extension {}, self), item_id);
+        mkt::min_price<T, Market>(mkt_cap)
     }
 }
