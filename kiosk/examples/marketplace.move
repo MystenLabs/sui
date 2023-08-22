@@ -12,7 +12,7 @@ module kiosk::marketplace_example {
     use sui::transfer_policy as policy;
     use sui::transfer;
 
-    /// The One-Time-Witness for the Marketplace.
+    /// The One-Time-Witness for the module.
     struct MARKETPLACE_EXAMPLE has drop {}
 
     /// A type identifying the Marketplace.
