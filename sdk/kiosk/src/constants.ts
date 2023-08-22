@@ -67,4 +67,6 @@ export const testnetRules: TransferPolicyRule[] = [
 	},
 ];
 
+// TODO: Create mainnet rules equivalent array.
+
 export const rules: TransferPolicyRule[] = [...testnetRules];
