@@ -10,3 +10,4 @@ export * from './utils';
 export * from './query/transfer-policy';
 export * from './types';
 export * from './constants';
+export * from './client/kiosk-client';

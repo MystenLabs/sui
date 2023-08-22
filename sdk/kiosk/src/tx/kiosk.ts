@@ -217,46 +217,6 @@ export function withdrawFromKiosk(
 }
 
 /**
- * Call the `kiosk::borrow<T>(Kiosk, KioskOwnerCap, ID): &T` function.
- * Immutably borrow an item from the Kiosk.
- */
-export function borrow(
-	tx: TransactionBlock,
-	itemType: string,
-	kiosk: ObjectArgument,
-	kioskCap: ObjectArgument,
-	itemId: string,
-): TransactionArgument {
-	let [item] = tx.moveCall({
-		target: `${KIOSK_MODULE}::borrow`,
-		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure(itemId, 'address')],
-	});
-
-	return item;
-}
-
-/**
- * Call the `kiosk::borrow_mut<T>(Kiosk, KioskOwnerCap, ID): &mut T` function.
- * Mutably borrow an item from the Kiosk.
- */
-export function borrowMut(
-	tx: TransactionBlock,
-	itemType: string,
-	kiosk: ObjectArgument,
-	kioskCap: ObjectArgument,
-	itemId: string,
-): TransactionArgument {
-	let [item] = tx.moveCall({
-		target: `${KIOSK_MODULE}::borrow_mut`,
-		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure(itemId, 'address')],
-	});
-
-	return item;
-}
-
-/**
  * Call the `kiosk::borrow_value<T>(Kiosk, KioskOwnerCap, ID): T` function.
  * Immutably borrow an item from the Kiosk and return it in the end.
  *
@@ -327,7 +287,6 @@ export function purchaseAndResolvePolicies(
 
 	// Start resolving rules.
 	// Right now we support `kiosk_lock_rule` and `royalty_rule`.
-	// They can also be supplied in parallel (supports combination).
 	let hasKioskLockRule = false;
 
 	for (let rule of policy.rules) {

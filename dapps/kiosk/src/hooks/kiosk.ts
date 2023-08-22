@@ -9,16 +9,18 @@ import {
 	TANSTACK_OWNED_KIOSK_KEY,
 } from '../utils/constants';
 import { useRpc } from '../context/RpcClientContext';
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
 import { SuiObjectResponse } from '@mysten/sui.js/client';
 import {
 	Kiosk,
+	KioskClient,
 	KioskData,
 	KioskItem,
 	KioskListing,
 	KioskOwnerCap,
+	Network,
 	fetchKiosk,
 	getKioskObject,
-	getOwnedKiosks,
 } from '@mysten/kiosk';
 import { parseObjectDisplays, processKioskListings } from '../utils/utils';
 import { OwnedObjectType } from '../components/Inventory/OwnedObjects';
@@ -29,9 +31,14 @@ export type KioskFnType = (item: OwnedObjectType, price?: string) => Promise<voi
  * A helper to get user's kiosks.
  * If the user doesn't have a kiosk, the return is an object with null values.
  */
-export function useOwnedKiosk(address: string | undefined) {
-	const provider = useRpc();
+const kioskClient = new KioskClient({
+	client: new SuiClient({
+		url: getFullnodeUrl('testnet'),
+	}),
+	network: Network.TESTNET,
+});
 
+export function useOwnedKiosk(address: string | undefined) {
 	return useQuery({
 		queryKey: [TANSTACK_OWNED_KIOSK_KEY, address],
 		refetchOnMount: false,
@@ -39,16 +46,17 @@ export function useOwnedKiosk(address: string | undefined) {
 		queryFn: async (): Promise<{
 			caps: KioskOwnerCap[];
 			kioskId: string | undefined;
-			kioskCap: string | undefined;
+			kioskCap: KioskOwnerCap;
 		} | null> => {
 			if (!address) return null;
 
-			const { kioskOwnerCaps, kioskIds } = await getOwnedKiosks(provider, address);
+			const { kioskOwnerCaps, kioskIds } = await kioskClient.getOwnedKiosks(address);
+			// const { kioskOwnerCaps, kioskIds } = await getOwnedKiosks(provider, address);
 
 			return {
 				caps: kioskOwnerCaps,
 				kioskId: kioskIds[0],
-				kioskCap: kioskOwnerCaps[0]?.objectId,
+				kioskCap: kioskOwnerCaps[0],
 			};
 		},
 	});

@@ -127,6 +127,7 @@ export type OwnedKiosks = {
 } & Omit<PaginatedObjectsResponse, 'data'>;
 
 export type KioskOwnerCap = {
+	isPersonal?: boolean;
 	objectId: string;
 	kioskId: string;
 	digest: string;

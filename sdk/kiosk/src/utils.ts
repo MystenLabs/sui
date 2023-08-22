@@ -10,8 +10,9 @@ import { KIOSK_TYPE, Kiosk, KioskData, KioskListing, RulesEnvironmentParam } fro
 import { MAINNET_RULES_PACKAGE_ADDRESS, TESTNET_RULES_PACKAGE_ADDRESS } from './constants';
 import { SuiClient, PaginationArguments } from '@mysten/sui.js/client';
 
-/* A simple map to the rule package addresses */
-// TODO: Supply the mainnet and devnet addresses.
+/**
+ * @deprecated Deprecated in favor of `KioskClient`, will be removed in next versions.
+ */
 export const rulesPackageAddresses = {
 	mainnet: MAINNET_RULES_PACKAGE_ADDRESS,
 	testnet: TESTNET_RULES_PACKAGE_ADDRESS,
@@ -160,6 +161,7 @@ export function attachLockedItems(kioskData: KioskData, lockedItemIds: string[])
 
 /**
  * A helper to get a rule's environment address.
+ * @deprecated Deprecated in favor of `KioskClient` approach. Will be removed in future versions.
  */
 export function getRulePackageAddress(environment: RulesEnvironmentParam): string {
 	// if we have custom environment, we return it.

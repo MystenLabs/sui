@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiObjectData, SuiObjectResponse } from '@mysten/sui.js/client';
+import { SuiObjectData, SuiObjectDataFilter, SuiObjectResponse } from '@mysten/sui.js/client';
 import { isValidSuiAddress } from '@mysten/sui.js/utils';
 import {
 	attachListingsAndPrices,
@@ -76,6 +76,7 @@ export async function getOwnedKiosks(
 	address: string,
 	options?: {
 		pagination?: PaginationArguments<string>;
+		personalKioskType: string;
 	},
 ): Promise<OwnedKiosks> {
 	if (!isValidSuiAddress(address))
@@ -86,12 +87,27 @@ export async function getOwnedKiosks(
 			kioskIds: [],
 		};
 
+	let filter: SuiObjectDataFilter = {
+		MatchAny: [
+			{
+				StructType: KIOSK_OWNER_CAP,
+			},
+		],
+	};
+
+	if (options?.personalKioskType) {
+		filter.MatchAny.push({
+			StructType: options.personalKioskType,
+		});
+	}
+
 	// fetch owned kiosk caps, paginated.
 	const { data, hasNextPage, nextCursor } = await client.getOwnedObjects({
 		owner: address,
-		filter: { StructType: KIOSK_OWNER_CAP },
+		filter,
 		options: {
 			showContent: true,
+			showType: true,
 		},
 		...(options?.pagination || {}),
 	});
@@ -99,7 +115,9 @@ export async function getOwnedKiosks(
 	// get kioskIds from the OwnerCaps.
 	const kioskIdList = data?.map((x: SuiObjectResponse) => {
 		const fields = x.data?.content?.dataType === 'moveObject' ? x.data.content.fields : null;
-		return (fields as { for: string })?.for;
+		// @ts-ignore-next-line TODO: should i remove ts ignore here? :/
+		return (fields?.cap ? fields?.cap?.fields?.for : fields?.for) as string;
+		// return (fields as { for: string })?.for;
 	});
 
 	// clean up data that might have an error in them.
@@ -110,6 +128,7 @@ export async function getOwnedKiosks(
 		nextCursor,
 		hasNextPage,
 		kioskOwnerCaps: filteredData.map((x, idx) => ({
+			isPersonal: x.type !== KIOSK_OWNER_CAP,
 			digest: x.digest,
 			version: x.version,
 			objectId: x.objectId,
