@@ -101,4 +101,8 @@ impl MoveVM {
     pub fn get_module_metadata(&self, module: ModuleId, key: &[u8]) -> Option<Metadata> {
         self.runtime.loader().get_metadata(module, key)
     }
+
+    pub fn get_runtime(&self) -> &VMRuntime {
+        &self.runtime
+    }
 }
