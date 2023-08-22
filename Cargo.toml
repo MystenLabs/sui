@@ -69,6 +69,7 @@ exclude = [
 
 members = [
     "crates/anemo-benchmark",
+    "crates/merkle",
     "crates/mysten-common",
     "crates/mysten-metrics",
     "crates/mysten-network",
