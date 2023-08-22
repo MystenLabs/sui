@@ -1,12 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	useGetValidatorsApy,
-	useGetSystemState,
-	useCoinMetadata,
-	useGetCoinBalance,
-} from '@mysten/core';
+import { useGetValidatorsApy, useCoinMetadata } from '@mysten/core';
+import { useBalance, useLatestSuiSystemState } from '@mysten/dapp-kit';
 import { ArrowLeft16, StakeAdd16, StakeRemove16 } from '@mysten/icons';
 import { MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import BigNumber from 'bignumber.js';
@@ -42,7 +38,7 @@ export function DelegationDetailCard({ validatorAddress, stakedId }: DelegationD
 		data: system,
 		isLoading: loadingValidators,
 		isError: errorValidators,
-	} = useGetSystemState();
+	} = useLatestSuiSystemState();
 
 	const accountAddress = useActiveAddress();
 
@@ -50,11 +46,9 @@ export function DelegationDetailCard({ validatorAddress, stakedId }: DelegationD
 
 	const apiEnv = useAppSelector(({ app }) => app.apiEnv);
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
-	const { data: suiCoinBalance } = useGetCoinBalance(
-		SUI_TYPE_ARG,
-		accountAddress,
-		refetchInterval,
-		staleTime,
+	const { data: suiCoinBalance } = useBalance(
+		{ coinType: SUI_TYPE_ARG, owner: accountAddress!! },
+		{ refetchInterval, staleTime, enabled: !!accountAddress },
 	);
 	const { data: metadata } = useCoinMetadata(SUI_TYPE_ARG);
 	// set minimum stake amount to 1 SUI

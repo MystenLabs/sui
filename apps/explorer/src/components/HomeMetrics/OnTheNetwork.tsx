@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { CoinFormat, formatBalance, useGetReferenceGasPrice } from '@mysten/core';
+import { CoinFormat, formatBalance } from '@mysten/core';
+import { useReferenceGasPrice } from '@mysten/dapp-kit';
 import { Heading } from '@mysten/ui';
 
 import { FormattedStatsAmount, StatsWrapper } from './FormattedStatsAmount';
@@ -11,7 +12,7 @@ import { Divider } from '~/ui/Divider';
 
 export function OnTheNetwork() {
 	const { data: networkMetrics } = useGetNetworkMetrics();
-	const { data: referenceGasPrice } = useGetReferenceGasPrice();
+	const { data: referenceGasPrice } = useReferenceGasPrice();
 	const gasPriceFormatted =
 		typeof referenceGasPrice === 'bigint'
 			? formatBalance(referenceGasPrice, 0, CoinFormat.FULL)

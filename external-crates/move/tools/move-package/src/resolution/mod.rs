@@ -19,7 +19,6 @@ use self::dependency_graph::DependencyGraphBuilder;
 pub mod dependency_cache;
 pub mod dependency_graph;
 mod digest;
-pub mod lock_file;
 pub mod resolution_graph;
 pub mod resolving_table;
 

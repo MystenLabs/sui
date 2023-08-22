@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient } from '@mysten/core';
+import { useSuiClient } from '@mysten/dapp-kit';
 import { X12, QrCode } from '@mysten/icons';
 import { isValidSuiAddress } from '@mysten/sui.js/utils';
 import { useQuery } from '@tanstack/react-query';
@@ -34,7 +34,7 @@ export function AddressInput({
 }: AddressInputProps) {
 	const [field, meta] = useField(name);
 
-	const rpc = useRpcClient();
+	const client = useSuiClient();
 	const { data: warningData } = useQuery({
 		queryKey: ['address-input-warning', field.value],
 		queryFn: async () => {
@@ -43,18 +43,18 @@ export function AddressInput({
 				return null;
 			}
 
-			const object = await rpc.getObject({ id: field.value });
+			const object = await client.getObject({ id: field.value });
 
 			if (object && 'data' in object) {
 				return RecipientWarningType.OBJECT;
 			}
 
 			const [fromAddr, toAddr] = await Promise.all([
-				rpc.queryTransactionBlocks({
+				client.queryTransactionBlocks({
 					filter: { FromAddress: field.value },
 					limit: 1,
 				}),
-				rpc.queryTransactionBlocks({
+				client.queryTransactionBlocks({
 					filter: { ToAddress: field.value },
 					limit: 1,
 				}),

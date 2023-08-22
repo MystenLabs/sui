@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient } from '@mysten/core';
+import { useSuiClient } from '@mysten/dapp-kit';
 import { useQuery } from '@tanstack/react-query';
 
 export function useGetAddressMetrics() {
-	const rpc = useRpcClient();
+	const client = useSuiClient();
 	return useQuery({
 		queryKey: ['home', 'addresses'],
-		queryFn: () => rpc.getAddressMetrics(),
+		queryFn: () => client.getAddressMetrics(),
 		cacheTime: 24 * 60 * 60 * 1000,
 		staleTime: Infinity,
 		retry: 5,

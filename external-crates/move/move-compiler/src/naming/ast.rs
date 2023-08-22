@@ -8,7 +8,9 @@ use crate::{
         ability_constraints_ast_debug, ability_modifiers_ast_debug, AbilitySet, Attributes, Fields,
         Friend, ModuleIdent, SpecId, Value, Value_, Visibility,
     },
-    parser::ast::{BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER},
+    parser::ast::{
+        Ability_, BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER,
+    },
     shared::{ast_debug::*, unique_map::UniqueMap, *},
 };
 use move_ir_types::location::*;
@@ -609,6 +611,45 @@ impl Type_ {
         match self {
             Type_::Apply(_, sp!(_, TypeName_::Builtin(b)), _) => Some(b),
             _ => None,
+        }
+    }
+
+    pub fn type_name(&self) -> Option<&TypeName> {
+        match self {
+            Type_::Apply(_, tn, _) => Some(tn),
+            _ => None,
+        }
+    }
+
+    pub fn is(
+        &self,
+        address: impl AsRef<str>,
+        module: impl AsRef<str>,
+        name: impl AsRef<str>,
+    ) -> bool {
+        self.type_name()
+            .is_some_and(|tn| tn.value.is(address, module, name))
+    }
+
+    pub fn abilities(&self, loc: Loc) -> Option<AbilitySet> {
+        match self {
+            Type_::Apply(abilities, _, _) => abilities.clone(),
+            Type_::Param(tp) => Some(tp.abilities.clone()),
+            Type_::Unit => Some(AbilitySet::collection(loc)),
+            Type_::Ref(_, _) => Some(AbilitySet::references(loc)),
+            Type_::Anything | Type_::UnresolvedError => Some(AbilitySet::all(loc)),
+            Type_::Var(_) => None,
+        }
+    }
+
+    pub fn has_ability_(&self, ability: Ability_) -> Option<bool> {
+        match self {
+            Type_::Apply(abilities, _, _) => abilities.as_ref().map(|s| s.has_ability_(ability)),
+            Type_::Param(tp) => Some(tp.abilities.has_ability_(ability)),
+            Type_::Unit => Some(AbilitySet::COLLECTION.contains(&ability)),
+            Type_::Ref(_, _) => Some(AbilitySet::REFERENCES.contains(&ability)),
+            Type_::Anything | Type_::UnresolvedError => Some(true),
+            Type_::Var(_) => None,
         }
     }
 }

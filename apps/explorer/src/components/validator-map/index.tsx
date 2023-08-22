@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetSystemState, useAppsBackend } from '@mysten/core';
+import { useAppsBackend } from '@mysten/core';
+import { useLatestSuiSystemState } from '@mysten/dapp-kit';
 import { Heading, Text, Placeholder } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 import { ParentSize } from '@visx/responsive';
@@ -38,7 +39,7 @@ interface Props {
 // NOTE: This component is lazy imported, so it needs to be default exported:
 export default function ValidatorMap({ minHeight }: Props) {
 	const [network] = useNetwork();
-	const { data: systemState, isError: systemStateError } = useGetSystemState();
+	const { data: systemState, isError: systemStateError } = useLatestSuiSystemState();
 
 	const { request } = useAppsBackend();
 

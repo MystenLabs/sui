@@ -107,8 +107,8 @@ use sui_types::metrics::{BytecodeVerifierMetrics, LimitsMetrics};
 use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
 use sui_types::storage::{ObjectKey, ObjectStore, WriteKind};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
-use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
 pub use sui_types::temporary_store::TemporaryStore;
 use sui_types::temporary_store::{
     InnerTemporaryStore, ObjectMap, TemporaryModuleResolver, TxCoins, WrittenObjects,
@@ -3913,8 +3913,7 @@ impl AuthorityState {
         let (temporary_store, effects, _execution_error_opt) = self
             .prepare_certificate(&execution_guard, &executable_tx, epoch_store)
             .await?;
-        let system_obj = temporary_store
-            .get_sui_system_state_object()
+        let system_obj = get_sui_system_state(&temporary_store.written)
             .expect("change epoch tx must write to system object");
 
         // We must write tx and effects to the state sync tables so that state sync is able to

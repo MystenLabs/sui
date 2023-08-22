@@ -33,7 +33,8 @@ prometheus.workspace = true
 git-version.workspace = true
 const-str.workspace = true
 num-bigint.workspace = true
-
+regex.workspace = true
+reqwest.workspace = true
 move-bytecode-verifier = { path = "../../external-crates/move/move-bytecode-verifier" }
 sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
 sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }

@@ -14,7 +14,7 @@ import { getAccountSourceByID } from '../account-sources';
 import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
 import { type UiConnection } from '../connections/UiConnection';
 import { backupDB, getDB } from '../db';
-import { getFromLocalStorage, makeUniqueKey } from '../storage-utils';
+import { makeUniqueKey } from '../storage-utils';
 import { createMessage, type Message } from '_src/shared/messaging/messages';
 import {
 	type MethodPayload,
@@ -71,12 +71,17 @@ export async function isAccountsInitialized() {
 	return (await (await getDB()).accounts.count()) > 0;
 }
 
-export async function getActiveAccount() {
-	const accountID = await getFromLocalStorage<string>('active-account-id-key');
-	if (!accountID) {
-		return null;
-	}
-	return getAccountByID(accountID);
+export async function changeActiveAccount(accountID: string) {
+	const db = await getDB();
+	return db.transaction('rw', db.accounts, async () => {
+		const newSelectedAccount = await db.accounts.get(accountID);
+		if (!newSelectedAccount) {
+			throw new Error(`Failed, account with id ${accountID} not found`);
+		}
+		await db.accounts.where('id').notEqual(accountID).modify({ selected: false });
+		await db.accounts.update(accountID, { selected: true });
+		accountsEvents.emit('activeAccountChanged', { accountID });
+	});
 }
 
 async function deleteQredoAccounts<T extends SerializedAccount>(accounts: Omit<T, 'id'>[]) {
@@ -147,6 +152,11 @@ export async function addNewAccounts<T extends SerializedAccount>(accounts: Omit
 				throw new Error(`Something went wrong account with id ${id} not found`);
 			}
 			accountInstances.push(accountInstance);
+		}
+		const selectedAccount = await db.accounts.filter(({ selected }) => selected).first();
+		if (!selectedAccount && accountInstances.length) {
+			const firstAccount = accountInstances[0];
+			await db.accounts.update(firstAccount.id, { selected: true });
 		}
 		return accountInstances;
 	});
@@ -242,6 +252,11 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 				msg.id,
 			),
 		);
+		return true;
+	}
+	if (isMethodPayload(payload, 'switchAccount')) {
+		await changeActiveAccount(payload.args.accountID);
+		await uiConnection.send(createMessage({ type: 'done' }, msg.id));
 		return true;
 	}
 	return false;

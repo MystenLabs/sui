@@ -114,6 +114,10 @@ export interface SerializedAccount {
 	readonly address: string;
 	readonly publicKey: string | null;
 	readonly lastUnlockedOn: number | null;
+	/**
+	 * indicates if it's the selected account in the UI (active account)
+	 */
+	readonly selected: boolean;
 }
 
 export interface SerializedUIAccount {
@@ -131,6 +135,10 @@ export interface SerializedUIAccount {
 	 * This is used to determine if the account is locked for read or not. (eg. lastUnlockedOn more than 4 hours ago -> read locked)
 	 */
 	readonly lastUnlockedOn: number | null;
+	/**
+	 * indicates if it's the selected account in the UI (active account)
+	 */
+	readonly selected: boolean;
 }
 
 export interface PasswordUnlockableAccount {

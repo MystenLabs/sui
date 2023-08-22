@@ -3,9 +3,9 @@
 
 import { KIOSK_ITEM, KioskItem, fetchKiosk, getOwnedKiosks } from '@mysten/kiosk';
 import { useQuery } from '@tanstack/react-query';
-import { useRpcClient } from '../api/RpcClientContext';
 import { ORIGINBYTE_KIOSK_OWNER_TOKEN, getKioskIdFromOwnerCap } from '../utils/kiosk';
 import { SuiClient, SuiObjectResponse } from '@mysten/sui.js/src/client';
+import { useSuiClient } from '@mysten/dapp-kit';
 
 export enum KioskTypes {
 	SUI = 'sui',
@@ -100,13 +100,13 @@ async function getSuiKioskContents(address: string, client: SuiClient) {
 }
 
 export function useGetKioskContents(address?: string | null, disableOriginByteKiosk?: boolean) {
-	const rpc = useRpcClient();
+	const client = useSuiClient();
 	return useQuery({
 		// eslint-disable-next-line @tanstack/query/exhaustive-deps
 		queryKey: ['get-kiosk-contents', address, disableOriginByteKiosk],
 		queryFn: async () => {
-			const suiKiosks = await getSuiKioskContents(address!, rpc);
-			const obKiosks = await getOriginByteKioskContents(address!, rpc);
+			const suiKiosks = await getSuiKioskContents(address!, client);
+			const obKiosks = await getOriginByteKioskContents(address!, client);
 			return [...suiKiosks, ...obKiosks];
 		},
 		select(data) {
