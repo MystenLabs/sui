@@ -29,10 +29,8 @@ ResolvedGraph {
             "OtherDep",
             "Root",
         },
-        manifest_digest: Some(
-            "54BEFE786504E00C25811696A09F9CB02DD4490BC4DC1B4908A02966B087656E",
-        ),
-        deps_digest: None,
+        manifest_digest: "54BEFE786504E00C25811696A09F9CB02DD4490BC4DC1B4908A02966B087656E",
+        deps_digest: "F8BBB0CCB2491CA29A3DF03D6F92277A4F3574266507ACD77214D37ECA3F3082",
     },
     build_options: BuildConfig {
         dev_mode: true,

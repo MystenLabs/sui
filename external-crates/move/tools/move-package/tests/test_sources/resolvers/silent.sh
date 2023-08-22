@@ -10,6 +10,8 @@ PACKAGE="$2"
 cat <<EOF
 [move]
 version = 0
+manifest_digest = "0x42"
+deps_digest = "0x7"
 $TYPE = [
     { name = "$PACKAGE" },
 ]

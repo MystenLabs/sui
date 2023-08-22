@@ -26,14 +26,15 @@ fn test_additonal_addresses() {
     let mut dep_graph_builder = DG::DependencyGraphBuilder::new(
         /* skip_fetch_latest_git_deps */ true,
         std::io::sink(),
+        tempdir().unwrap().path().to_path_buf(),
     );
-    let dg = dep_graph_builder
+    let (dg, _) = dep_graph_builder
         .new_graph(
             &PM::DependencyKind::default(),
             &pm,
             path,
-            /* manifest_digest */ None,
-            /* deps_digest */ None,
+            /* new_manifest_digest */ "DUMMY".to_string(),
+            /* lock_string_opt */ None,
         )
         .unwrap();
 
@@ -81,14 +82,15 @@ fn test_additonal_addresses_already_assigned_same_value() {
     let mut dep_graph_builder = DG::DependencyGraphBuilder::new(
         /* skip_fetch_latest_git_deps */ true,
         std::io::sink(),
+        tempdir().unwrap().path().to_path_buf(),
     );
-    let dg = dep_graph_builder
+    let (dg, _) = dep_graph_builder
         .new_graph(
             &PM::DependencyKind::default(),
             &pm,
             path,
-            /* manifest_digest */ None,
-            /* deps_digest */ None,
+            /* new_manifest_digest */ "DUMMY".to_string(),
+            /* lock_string_opt */ None,
         )
         .unwrap();
 
@@ -125,14 +127,15 @@ fn test_additonal_addresses_already_assigned_different_value() {
     let mut dep_graph_builder = DG::DependencyGraphBuilder::new(
         /* skip_fetch_latest_git_deps */ true,
         std::io::sink(),
+        tempdir().unwrap().path().to_path_buf(),
     );
-    let dg = dep_graph_builder
+    let (dg, _) = dep_graph_builder
         .new_graph(
             &PM::DependencyKind::default(),
             &pm,
             path,
-            /* manifest_digest */ None,
-            /* deps_digest */ None,
+            /* new_manifest_digest */ "DUMMY".to_string(),
+            /* lock_string_opt */ None,
         )
         .unwrap();
 
