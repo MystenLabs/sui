@@ -181,42 +181,22 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         }
     }
 
-    /// Get a graph for a given manifest file and a given lock file. Return false if lock file was
-    /// up-to-date and used to create a new graph, return true otherwise.
+    /// Get a new graph by either reading it from Move.lock file (if this file is up-to-date, in
+    /// which case also return false) or by computing a new graph based on the content of the
+    /// Move.toml (manifest) file (in which case also return true).
     pub fn get_graph(
         &mut self,
         parent: &PM::DependencyKind,
         root_path: PathBuf,
         manifest_string: String,
-        lock_string: Option<String>,
+        lock_string_opt: Option<String>,
     ) -> Result<(DependencyGraph, bool)> {
         let toml_manifest = parse_move_manifest_string(manifest_string.clone())?;
-        let manifest = parse_source_manifest(toml_manifest)?;
+        let root_manifest = parse_source_manifest(toml_manifest)?;
 
         // compute digests eagerly as even if we can't reuse existing lock file, they need to become
         // part of the newly computed dependency graph
         let new_manifest_digest = digest_str(manifest_string.into_bytes().as_slice());
-
-        Ok(self.new_graph(
-            parent,
-            &manifest,
-            root_path.to_path_buf(),
-            new_manifest_digest,
-            lock_string,
-        )?)
-    }
-
-    /// Create a new graph by either reading it from Move.lock file (if this file is up-to-date, in
-    /// which case also return false) or by computing a new graph based on the content of the
-    /// Move.toml (manifest) file (in which case also return false true).
-    pub fn new_graph(
-        &mut self,
-        parent: &PM::DependencyKind,
-        root_manifest: &PM::SourceManifest,
-        root_path: PathBuf,
-        new_manifest_digest: String,
-        lock_string_opt: Option<String>,
-    ) -> Result<(DependencyGraph, bool)> {
         let (old_manifest_digest_opt, old_deps_digest_opt, lock_string) = match lock_string_opt {
             Some(lock_string) => match schema::read_header(&lock_string) {
                 Ok(header) => (

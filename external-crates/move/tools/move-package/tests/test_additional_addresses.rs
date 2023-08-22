@@ -5,7 +5,7 @@
 use move_core_types::account_address::AccountAddress;
 use move_package::{
     resolution::{dependency_graph as DG, resolution_graph as RG},
-    source_package::{manifest_parser as MP, parsed_manifest as PM},
+    source_package::{layout::SourcePackageLayout, parsed_manifest as PM},
     BuildConfig,
 };
 use std::{collections::BTreeMap, path::PathBuf};
@@ -21,7 +21,8 @@ fn test_additonal_addresses() {
     .into_iter()
     .collect();
 
-    let pm = MP::parse_move_manifest_from_file(&path).unwrap();
+    let manifest_string =
+        std::fs::read_to_string(&path.join(SourcePackageLayout::Manifest.path())).unwrap();
 
     let mut dep_graph_builder = DG::DependencyGraphBuilder::new(
         /* skip_fetch_latest_git_deps */ true,
@@ -29,11 +30,10 @@ fn test_additonal_addresses() {
         tempdir().unwrap().path().to_path_buf(),
     );
     let (dg, _) = dep_graph_builder
-        .new_graph(
+        .get_graph(
             &PM::DependencyKind::default(),
-            &pm,
             path,
-            /* new_manifest_digest */ "DUMMY".to_string(),
+            manifest_string,
             /* lock_string_opt */ None,
         )
         .unwrap();
@@ -77,7 +77,8 @@ fn test_additonal_addresses_already_assigned_same_value() {
         .into_iter()
         .collect();
 
-    let pm = MP::parse_move_manifest_from_file(&path).unwrap();
+    let manifest_string =
+        std::fs::read_to_string(&path.join(SourcePackageLayout::Manifest.path())).unwrap();
 
     let mut dep_graph_builder = DG::DependencyGraphBuilder::new(
         /* skip_fetch_latest_git_deps */ true,
@@ -85,11 +86,10 @@ fn test_additonal_addresses_already_assigned_same_value() {
         tempdir().unwrap().path().to_path_buf(),
     );
     let (dg, _) = dep_graph_builder
-        .new_graph(
+        .get_graph(
             &PM::DependencyKind::default(),
-            &pm,
             path,
-            /* new_manifest_digest */ "DUMMY".to_string(),
+            manifest_string,
             /* lock_string_opt */ None,
         )
         .unwrap();
@@ -122,7 +122,8 @@ fn test_additonal_addresses_already_assigned_different_value() {
         .into_iter()
         .collect();
 
-    let pm = MP::parse_move_manifest_from_file(&path).unwrap();
+    let manifest_string =
+        std::fs::read_to_string(&path.join(SourcePackageLayout::Manifest.path())).unwrap();
 
     let mut dep_graph_builder = DG::DependencyGraphBuilder::new(
         /* skip_fetch_latest_git_deps */ true,
@@ -130,11 +131,10 @@ fn test_additonal_addresses_already_assigned_different_value() {
         tempdir().unwrap().path().to_path_buf(),
     );
     let (dg, _) = dep_graph_builder
-        .new_graph(
+        .get_graph(
             &PM::DependencyKind::default(),
-            &pm,
             path,
-            /* new_manifest_digest */ "DUMMY".to_string(),
+            manifest_string,
             /* lock_string_opt */ None,
         )
         .unwrap();

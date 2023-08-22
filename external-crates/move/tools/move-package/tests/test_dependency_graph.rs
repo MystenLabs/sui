@@ -14,7 +14,7 @@ use move_package::{
         DependencyGraph, DependencyGraphBuilder, DependencyGraphInfo, DependencyMode,
     },
     source_package::{
-        manifest_parser::parse_move_manifest_from_file,
+        layout::SourcePackageLayout,
         parsed_manifest::{Dependency, DependencyKind, InternalDependency},
     },
 };
@@ -32,18 +32,18 @@ macro_rules! assert_error_contains {
 fn no_dep_graph() {
     let pkg = no_dep_test_package();
 
-    let manifest = parse_move_manifest_from_file(&pkg).expect("Loading manifest");
+    let manifest_string = std::fs::read_to_string(&pkg.join(SourcePackageLayout::Manifest.path()))
+        .expect("Loading manifest");
     let mut dep_graph_builder = DependencyGraphBuilder::new(
         /* skip_fetch_latest_git_deps */ true,
         std::io::sink(),
         tempfile::tempdir().unwrap().path().to_path_buf(),
     );
     let (graph, _) = dep_graph_builder
-        .new_graph(
+        .get_graph(
             &DependencyKind::default(),
-            &manifest,
             pkg,
-            /* new_manifest_digest */ "DUMMY".to_string(),
+            manifest_string,
             /* lock_string_opt */ None,
         )
         .expect("Creating DependencyGraph");
@@ -145,18 +145,18 @@ fn lock_file_missing_dependency() {
 fn always_deps() {
     let pkg = dev_dep_test_package();
 
-    let manifest = parse_move_manifest_from_file(&pkg).expect("Loading manifest");
+    let manifest_string = std::fs::read_to_string(&pkg.join(SourcePackageLayout::Manifest.path()))
+        .expect("Loading manifest");
     let mut dep_graph_builder = DependencyGraphBuilder::new(
         /* skip_fetch_latest_git_deps */ true,
         std::io::sink(),
         tempfile::tempdir().unwrap().path().to_path_buf(),
     );
     let (graph, _) = dep_graph_builder
-        .new_graph(
+        .get_graph(
             &DependencyKind::default(),
-            &manifest,
             pkg,
-            /* new_manifest_digest */ "DUMMY".to_string(),
+            manifest_string,
             /* lock_string_opt */ None,
         )
         .expect("Creating DependencyGraph");
@@ -509,18 +509,18 @@ fn merge_overlapping_different_deps() {
 fn immediate_dependencies() {
     let pkg = dev_dep_test_package();
 
-    let manifest = parse_move_manifest_from_file(&pkg).expect("Loading manifest");
+    let manifest_string = std::fs::read_to_string(&pkg.join(SourcePackageLayout::Manifest.path()))
+        .expect("Loading manifest");
     let mut dep_graph_builder = DependencyGraphBuilder::new(
         /* skip_fetch_latest_git_deps */ true,
         std::io::sink(),
         tempfile::tempdir().unwrap().path().to_path_buf(),
     );
     let (graph, _) = dep_graph_builder
-        .new_graph(
+        .get_graph(
             &DependencyKind::default(),
-            &manifest,
             pkg,
-            /* new_manifest_digest */ "DUMMY".to_string(),
+            manifest_string,
             /* lock_string_opt */ None,
         )
         .expect("Creating DependencyGraph");
