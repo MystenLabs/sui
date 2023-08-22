@@ -13,20 +13,15 @@ import { Text } from '_app/shared/text';
 import Overlay from '_components/overlay';
 import { ampli } from '_src/shared/analytics/ampli';
 
-type AddAccountPageProps = {
-	showSocialSignInOptions?: boolean;
-};
-
-export function AddAccountPage({ showSocialSignInOptions = false }: AddAccountPageProps) {
+export function AddAccountPage() {
 	const [isConnectLedgerModalOpen, setConnectLedgerModalOpen] = useState(false);
 	const [searchParams] = useSearchParams();
 	const navigate = useNavigate();
-
 	const sourceFlow = searchParams.get('sourceFlow') || 'Unknown';
-
+	const showSocialSignInOptions = sourceFlow !== 'Onboarding';
 	return (
 		<Overlay showModal title="Add Account" closeOverlay={() => navigate('/')}>
-			<div className="w-full flex flex-col gap-8 pt-3">
+			<div className="w-full flex flex-col gap-8">
 				<div className="flex flex-col gap-3">
 					{showSocialSignInOptions && (
 						<>

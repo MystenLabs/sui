@@ -16,7 +16,7 @@ export function ProtectAccountPage() {
 	const [accountsFormValues] = useAccountsFormContext();
 	const navigate = useNavigate();
 	return (
-		<div className="rounded-20 bg-sui-lightest shadow-wallet-content flex flex-col items-center px-6 py-10 h-full">
+		<div className="rounded-20 bg-sui-lightest shadow-wallet-content flex flex-col items-center px-6 py-10 h-full overflow-auto">
 			<Text variant="caption" color="steel-dark" weight="semibold">
 				Wallet Setup
 			</Text>

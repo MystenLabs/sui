@@ -11,6 +11,7 @@ import { useBackgroundClient } from './hooks/useBackgroundClient';
 import { useInitialPageView } from './hooks/useInitialPageView';
 
 import { useStorageMigrationStatus } from './hooks/useStorageMigrationStatus';
+import { AccountsDev } from './pages/AccountsDevPage';
 import { StorageMigrationPage } from './pages/StorageMigrationPage';
 
 import { WelcomePage } from './pages/WelcomePage';
@@ -22,7 +23,6 @@ import { ImportPassphrasePage } from './pages/accounts/ImportPassphrasePage';
 import { ImportPrivateKeyPage } from './pages/accounts/ImportPrivateKeyPage';
 import { ProtectAccountPage } from './pages/accounts/ProtectAccountPage';
 import { ManageAccountsPage } from './pages/accounts/manage/ManageAccountsPage';
-import { AccountsDev } from './pages/accounts-dev';
 
 import { ApprovalRequestPage } from './pages/approval-request';
 import HomePage, {
@@ -141,14 +141,14 @@ const App = () => {
 			<Route path="/welcome" element={<WelcomePage />} />
 			<Route path="forgot-password" element={<ForgotPasswordPage />} />
 			<Route path="restricted" element={<RestrictedPage />} />
-
+			{/* 
 			<Route path="/initialize" element={<InitializePage />}>
 				<Route path="select" element={<SelectPage />} />
 				<Route path="create" element={<CreatePage />} />
 				<Route path="import" element={<ImportPage />} />
 				<Route path="backup" element={<BackupPage />} />
 				<Route path="backup-imported" element={<BackupPage mode="imported" />} />
-			</Route>
+			</Route> */}
 
 			<Route path="/*" element={<HomePage />}>
 				<Route path="apps/*" element={<AppsPage />} />
@@ -167,7 +167,6 @@ const App = () => {
 			</Route>
 
 			<Route path="accounts/*" element={<AccountsPage />}>
-				<Route path="add-account" element={<AddAccountPage />} />
 				<Route path="add-account" element={<AddAccountPage />} />
 				<Route path="import-ledger-accounts" element={<ImportLedgerAccountsPage />} />
 				<Route path="import-passphrase" element={<ImportPassphrasePage />} />

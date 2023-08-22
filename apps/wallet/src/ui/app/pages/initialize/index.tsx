@@ -7,15 +7,16 @@ import Loading from '_components/loading';
 import { useInitializedGuard } from '_hooks';
 import PageLayout from '_pages/layout';
 
-import st from './InitializePage.module.scss';
-
 const InitializePage = () => {
 	const { pathname } = useLocation();
 	const checkingInitialized = useInitializedGuard(
 		/^\/initialize\/backup(-imported)?(\/)?$/.test(pathname),
 	);
 	return (
-		<PageLayout forceFullscreen={true} className={st.container}>
+		<PageLayout
+			forceFullscreen
+			className="flex flex-col flex-nowrap items-center mx-auto my-0 justify-center"
+		>
 			<Loading loading={checkingInitialized}>
 				<Outlet />
 			</Loading>

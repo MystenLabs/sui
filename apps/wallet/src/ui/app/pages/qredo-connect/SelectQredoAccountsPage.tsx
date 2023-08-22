@@ -10,7 +10,7 @@ import { SelectQredoAccountsSummaryCard } from './components/SelectQredoAccounts
 import { useQredoUIPendingRequest } from './hooks';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { Button } from '../../shared/ButtonUI';
-import { testPassNewAccounts } from '../accounts-dev';
+import { testPassNewAccounts } from '../AccountsDevPage';
 import Overlay from '_components/overlay';
 import { ampli } from '_src/shared/analytics/ampli';
 import { type Wallet } from '_src/shared/qredo-api';
