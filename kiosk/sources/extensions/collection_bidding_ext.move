@@ -51,7 +51,7 @@ module kiosk::collection_bidding_ext {
     struct NewBid<phantom T, phantom Market> has copy, drop {
         kiosk_id: ID,
         count: u64,
-        bid: u64,
+        bids: vector<u64>,
     }
 
     /// An event that is emitted when a bid is accepted.
@@ -81,24 +81,27 @@ module kiosk::collection_bidding_ext {
     // === Bidding logic ===
 
     /// Place a bid on any item in a collection (`T`). We do not assert that all
-    /// the values in the `place_bids` are identical.
+    /// the values in the `place_bids` are identical, the amounts are emitted
+    /// in the event, the order is reversed.
+    ///
+    /// Use `sui::pay::split_n` to prepare the Coins for the bid.
     public fun place_bids<T: key + store, Market>(
         self: &mut Kiosk, cap: &KioskOwnerCap, bids: vector<Coin<SUI>>, _ctx: &mut TxContext
     ) {
         assert!(vector::length(&bids) > 0, ENoCoinsPassed);
         assert!(kiosk::has_access(self, cap), ENotAuthorized);
 
-        let expected_amount = coin::value(vector::borrow(&bids, 0));
+        let amounts = vector[];
         let (i, count) = (0, vector::length(&bids));
         while (i < count) {
-            assert!(coin::value(vector::borrow(&bids, i)) == expected_amount, EIncorrectAmount);
+            vector::push_back(&mut amounts, coin::value(vector::borrow(&bids, i)));
             i = i + 1;
         };
 
         event::emit(NewBid<T, Market> {
             kiosk_id: object::id(self),
-            bid: expected_amount,
             count: count,
+            bids: amounts,
         });
 
         bag::add(ext::storage_mut(Extension {}, self), Bid<T, Market> {}, bids);
