@@ -53,7 +53,7 @@ pub fn check_feature(env: &mut CompilationEnv, edition: Edition, feature: &Featu
                 loc,
                 format!(
                     "{feature} not supported by current edition '{edition}', \
-                    only '{valid_editions}'"
+                    only '{valid_editions}' support this feature"
                 )
             )
         );
