@@ -17,6 +17,8 @@ import { PageHeader } from '~/ui/PageHeader';
 import { SplitPanes } from '~/ui/SplitPanes';
 import { TabHeader } from '~/ui/Tabs';
 
+const LEFT_PANE_DEFAULT_SIZE = 30;
+
 function AddressResultPageHeader({ address, loading }: { address: string; loading?: boolean }) {
 	const { data: domainName, isFetching } = useResolveSuiNSName(address);
 
@@ -42,11 +44,12 @@ function AddressResult({ address }: { address: string }) {
 
 	const leftPane = {
 		panel: (
-			<div className="flex-1 overflow-hidden md:pr-7">
+			<div className="flex-1 overflow-hidden pt-5 md:pr-7 md:pt-0">
 				<OwnedCoins id={address} />
 			</div>
 		),
-		minSize: 30,
+		minSize: LEFT_PANE_DEFAULT_SIZE,
+		defaultSize: LEFT_PANE_DEFAULT_SIZE,
 	};
 
 	const rightPane = {
@@ -67,7 +70,7 @@ function AddressResult({ address }: { address: string }) {
 								<div className="my-8">
 									<Divider />
 								</div>
-								{rightPane.panel}
+								<div className="h-coinsAndAssetsContainer">{rightPane.panel}</div>
 							</>
 						)}
 					</ErrorBoundary>
@@ -78,9 +81,15 @@ function AddressResult({ address }: { address: string }) {
 
 	const bottomPane = {
 		panel: (
-			<div className="h-full overflow-auto">
+			<div className="flex h-full flex-col">
+				<div className="pt-12">
+					<TabHeader title="Transaction Blocks">
+						<div className="h-0" />
+					</TabHeader>
+				</div>
+
 				<ErrorBoundary>
-					<div className="mt-2">
+					<div data-testid="tx" className="h-full overflow-auto">
 						<TransactionsForAddress address={address} type="address" />
 					</div>
 				</ErrorBoundary>
@@ -90,42 +99,21 @@ function AddressResult({ address }: { address: string }) {
 
 	return (
 		<TabHeader title="Owned Objects" noGap>
-			<div className="mt-5 h-[1200px]">
-				<SplitPanes splitPanels={[topPane, bottomPane]} direction="vertical" />
-			</div>
+			{isMediumOrAbove ? (
+				<div className="mt-5 h-[1200px]">
+					<SplitPanes splitPanels={[topPane, bottomPane]} direction="vertical" />
+				</div>
+			) : (
+				<>
+					{topPane.panel}
+					<div className="mt-5">
+						<Divider />
+					</div>
+					{bottomPane.panel}
+				</>
+			)}
 		</TabHeader>
 	);
-
-	// return (
-	// 	<div className="space-y-12">
-	// 		<div>
-	// 			<TabHeader title="Owned Objects" noGap>
-	// 				<ErrorBoundary>
-	// 					{isMediumOrAbove ? (
-	// 						<SplitPanes splitPanels={[leftPane, rightPane]} direction="horizontal" />
-	// 					) : (
-	// 						<>
-	// 							{leftPane.panel}
-	// 							<div className="my-8">
-	// 								<Divider />
-	// 							</div>
-	// 							{rightPane.panel}
-	// 						</>
-	// 					)}
-	// 					<Divider />
-	// 				</ErrorBoundary>
-	// 			</TabHeader>
-	// 		</div>
-	//
-	// 		<div>
-	// 			<ErrorBoundary>
-	// 				<div className="mt-2">
-	// 					<TransactionsForAddress address={address} type="address" />
-	// 				</div>
-	// 			</ErrorBoundary>
-	// 		</div>
-	// 	</div>
-	// );
 }
 
 function SuiNSAddressResult({ name }: { name: string }) {

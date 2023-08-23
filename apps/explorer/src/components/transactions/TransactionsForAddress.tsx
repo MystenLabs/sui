@@ -9,7 +9,6 @@ import { useQuery } from '@tanstack/react-query';
 import { genTableDataFromTxData } from './TxCardUtils';
 import { Banner } from '~/ui/Banner';
 import { TableCard } from '~/ui/TableCard';
-import { TabHeader } from '~/ui/Tabs';
 
 interface Props {
 	address: string;
@@ -74,11 +73,5 @@ export function TransactionsForAddress({ address, type }: Props) {
 
 	const tableData = genTableDataFromTxData(data);
 
-	return (
-		<div data-testid="tx" className="h-full overflow-auto">
-			{/*<TabHeader title="Transaction Blocks">*/}
-			<TableCard data={tableData.data} columns={tableData.columns} />
-			{/*</TabHeader>*/}
-		</div>
-	);
+	return <TableCard data={tableData.data} columns={tableData.columns} />;
 }

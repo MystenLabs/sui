@@ -102,13 +102,7 @@ export function OwnedObjects({ id }: { id: string }) {
 	}
 
 	return (
-		<div
-			className={clsx(
-				'flex h-full overflow-hidden md:pl-7',
-				// 'mb-5 flex-1 overflow-hidden sm:mt-10 md:mt-5 md:pl-7',
-				// showPagination && 'h-coinsAndAssetsContainer',
-			)}
-		>
+		<div className="flex h-full overflow-hidden md:pl-7">
 			<div className="flex h-full flex-col justify-between gap-4">
 				<div className="flex w-full justify-between border-b border-gray-45 pb-3">
 					<div className="flex w-full flex-col items-start gap-3 sm:flex-row sm:items-center">
