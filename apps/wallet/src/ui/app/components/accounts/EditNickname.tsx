@@ -55,19 +55,17 @@ export function EditNickname() {
 				</DialogHeader>
 				<Form className="flex flex-col gap-6 h-full" form={form} onSubmit={onSubmit}>
 					<TextField label="Personalize account with a nickname." {...register('nickname')} />
-					<DialogFooter>
-						<div className="flex gap-2.5">
-							<Button variant="outline" size="tall" text="Cancel" onClick={close} />
-							<Button
-								type="submit"
-								disabled={isSubmitting || !isValid}
-								variant="primary"
-								size="tall"
-								loading={isSubmitting}
-								text={'Save'}
-							/>
-						</div>
-					</DialogFooter>
+					<div className="flex gap-2.5">
+						<Button variant="outline" size="tall" text="Cancel" onClick={close} />
+						<Button
+							type="submit"
+							disabled={isSubmitting || !isValid}
+							variant="primary"
+							size="tall"
+							loading={isSubmitting}
+							text={'Save'}
+						/>
+					</div>
 				</Form>
 			</DialogContent>
 		</Dialog>
