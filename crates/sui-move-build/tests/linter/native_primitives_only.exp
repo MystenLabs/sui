@@ -1,0 +1,9 @@
+warning[Lint W06001]: passing non-native types to native functions
+   ┌─ tests/linter/native_primitives_only.move:14:9
+   │
+14 │     fun returns_something(a:bool,b:u64,c:Coolstruct,d:&Coolstruct) : (bool,u64){
+   │         ^^^^^^^^^^^^^^^^^ The parameter 'c' of 'returns_something' is not native or a reference
+   │
+   = Only native types or references are allowed
+   = This warning can be suppressed with '#[lint_allow(native_primitives_only)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

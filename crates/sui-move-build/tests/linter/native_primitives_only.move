@@ -1,6 +1,6 @@
 
+#[allow(unused_variable)]
 module 0x42::test1{
-    use std::vector;
     //has copy needed because it's a vector
 
     struct S1 has copy{}
@@ -10,10 +10,15 @@ module 0x42::test1{
         b: u64,
     }
 
+    #[allow(unused_function)]
+    fun returns_something(a:bool,b:u64,c:Coolstruct,d:&Coolstruct) : (bool,u64){
+        let x = b;
+        (a,x)
+    }
+
     public entry fun main(){
-        let v = vector::empty<Coolstruct>();
         //The linter should complain because push_back is native 
         //and S2 is not a primitive type
-        vector::push_back(&mut v, Coolstruct{a:true,b:42});
+        let (_cazzo,_palle) = returns_something(true,42,Coolstruct{a:true,b:42},&Coolstruct{a:true,b:42});
     }
 }
