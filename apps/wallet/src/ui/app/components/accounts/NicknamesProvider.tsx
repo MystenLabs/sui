@@ -40,7 +40,7 @@ export const NicknamesProvider = ({ children }: { children: ReactNode }) => {
 				setAccountNicknames(newNicknamesMapping);
 				await set(NICKNAMES_MAPPING, newNicknamesMapping);
 			} catch (error) {
-				// Restore the asset ID back to the hidden asset IDs list
+				// Restore the nicknames back to what they were before
 				setAccountNicknames(accountNicknames);
 				await set(NICKNAMES_MAPPING, accountNicknames);
 			}
