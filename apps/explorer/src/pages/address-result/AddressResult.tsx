@@ -54,10 +54,10 @@ function AddressResult({ address }: { address: string }) {
 		minSize: 30,
 	};
 
-	return (
-		<div className="space-y-12">
-			<div>
-				<TabHeader title="Owned Objects" noGap>
+	const topPane = {
+		panel: (
+			<div id="top-pane" className="flex h-full flex-col justify-between">
+				<div className="h-full">
 					<ErrorBoundary>
 						{isMediumOrAbove ? (
 							<SplitPanes splitPanels={[leftPane, rightPane]} direction="horizontal" />
@@ -70,20 +70,62 @@ function AddressResult({ address }: { address: string }) {
 								{rightPane.panel}
 							</>
 						)}
-						<Divider />
 					</ErrorBoundary>
-				</TabHeader>
+				</div>
 			</div>
+		),
+	};
 
-			<div>
+	const bottomPane = {
+		panel: (
+			<div className="h-full overflow-auto">
 				<ErrorBoundary>
 					<div className="mt-2">
 						<TransactionsForAddress address={address} type="address" />
 					</div>
 				</ErrorBoundary>
 			</div>
-		</div>
+		),
+	};
+
+	return (
+		<TabHeader title="Owned Objects" noGap>
+			<div className="mt-5 h-[1200px]">
+				<SplitPanes splitPanels={[topPane, bottomPane]} direction="vertical" />
+			</div>
+		</TabHeader>
 	);
+
+	// return (
+	// 	<div className="space-y-12">
+	// 		<div>
+	// 			<TabHeader title="Owned Objects" noGap>
+	// 				<ErrorBoundary>
+	// 					{isMediumOrAbove ? (
+	// 						<SplitPanes splitPanels={[leftPane, rightPane]} direction="horizontal" />
+	// 					) : (
+	// 						<>
+	// 							{leftPane.panel}
+	// 							<div className="my-8">
+	// 								<Divider />
+	// 							</div>
+	// 							{rightPane.panel}
+	// 						</>
+	// 					)}
+	// 					<Divider />
+	// 				</ErrorBoundary>
+	// 			</TabHeader>
+	// 		</div>
+	//
+	// 		<div>
+	// 			<ErrorBoundary>
+	// 				<div className="mt-2">
+	// 					<TransactionsForAddress address={address} type="address" />
+	// 				</div>
+	// 			</ErrorBoundary>
+	// 		</div>
+	// 	</div>
+	// );
 }
 
 function SuiNSAddressResult({ name }: { name: string }) {

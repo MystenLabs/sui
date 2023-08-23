@@ -145,6 +145,7 @@ export function SplitPanes({ splitPanels, ...props }: SplitPanesProps) {
 		<PanelGroup {...props}>
 			{splitPanels.map((panel, index) => (
 				<SplitPanel
+					className="h-full"
 					key={index}
 					order={index}
 					renderResizeHandle={index < splitPanels.length - 1}

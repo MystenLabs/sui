@@ -75,10 +75,10 @@ export function TransactionsForAddress({ address, type }: Props) {
 	const tableData = genTableDataFromTxData(data);
 
 	return (
-		<div data-testid="tx">
-			<TabHeader title="Transaction Blocks">
-				<TableCard data={tableData.data} columns={tableData.columns} />
-			</TabHeader>
+		<div data-testid="tx" className="h-full overflow-auto">
+			{/*<TabHeader title="Transaction Blocks">*/}
+			<TableCard data={tableData.data} columns={tableData.columns} />
+			{/*</TabHeader>*/}
 		</div>
 	);
 }
