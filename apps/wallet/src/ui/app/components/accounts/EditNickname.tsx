@@ -12,7 +12,6 @@ import {
 	Dialog,
 	DialogContent,
 	DialogHeader,
-	DialogFooter,
 	DialogTitle,
 	DialogDescription,
 } from '_src/ui/app/shared/Dialog';
