@@ -40,6 +40,7 @@ import { FEATURES } from '_src/shared/experimentation/features';
 import { AccountsList } from '_src/ui/app/components/accounts/AccountsList';
 import { UnlockAccountButton } from '_src/ui/app/components/accounts/UnlockAccountButton';
 import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
+import { useIsAccountReadLocked } from '_src/ui/app/hooks/useIsAccountReadLocked';
 import { usePinnedCoinTypes } from '_src/ui/app/hooks/usePinnedCoinTypes';
 import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
 import PageTitle from '_src/ui/app/shared/PageTitle';
@@ -169,7 +170,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	const activeCoinType = coinType || SUI_TYPE_ARG;
 	const activeAccount = useActiveAccount();
 	const activeAccountAddress = activeAccount?.address;
-	const isAccountLocked = activeAccount?.isLocked;
+	const isAccountLocked = useIsAccountReadLocked(activeAccount);
 	const { data: domainName } = useResolveSuiNSName(activeAccountAddress);
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
 	const {
