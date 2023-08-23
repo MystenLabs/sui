@@ -46,7 +46,7 @@ export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 		ref,
 	) => {
 		const { accountNicknames } = useAccountNicknames();
-		const nickname = accountNicknames[address];
+		const nickname = accountNicknames && accountNicknames[address];
 		return (
 			<div
 				ref={ref}
