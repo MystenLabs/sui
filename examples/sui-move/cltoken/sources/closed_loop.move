@@ -32,7 +32,7 @@
 /// - We will intentionally utilize multiple `Supply`s to allow multiple policies.
 /// - CL stands for Closed-Loop.
 /// - We're using TempToken to abstract away from ownership.
-module fungible_tokens::closed_loop {
+module closed_loop::closed_loop {
     use std::type_name::{Self, TypeName};
     use sui::balance::{Self, Balance, Supply};
     use sui::object::{Self, ID, UID};
@@ -71,8 +71,8 @@ module fungible_tokens::closed_loop {
     }
 
     /// A resolver that can be used to resolve a specific action.
-    struct Resolver<phantom T, phantom Action> has key, store {
-        id: UID,
+    struct Resolver<phantom T, phantom Action> has store, drop {
+        id: ID,
     }
 
     // === Storage Models ===
@@ -229,11 +229,8 @@ module fungible_tokens::closed_loop {
 
     /// Create a custom resolver for a policy (unlike default when an action is allowed in the policy by default).
     public fun create_resolver<T, Action>(_cap: &CoinIssuerCap<T>, policy: &mut CLPolicy<T>, ctx: &mut TxContext): Resolver<T, Action> {
-        let id = object::new(ctx);
-        let resolver_id = object::uid_to_inner(&policy.id);
-
-        vec_set::insert(&mut policy.custom_resolvers, resolver_id);
-
+        let id = object::id_from_address(sui::tx_context::fresh_object_address(ctx));
+        vec_set::insert(&mut policy.custom_resolvers, id);
         Resolver { id }
     }
 
@@ -272,89 +269,4 @@ module fungible_tokens::closed_loop {
     // - How to solve mint / burn requests and how to delegate them to a third party.
     // - Should split / merge be protected? In my opinion - yes, but wonder if there's a caveat to this.
     // - Which ownership types do we want to allow. I'm pro everything altogether.
-}
-
-#[test_only]
-/// Create an in-game economy where users can:
-///
-/// - freely transfer tokens between each other
-/// - split and merge any received tokens together into one
-module fungible_tokens::game_coin {
-    use sui::tx_context::{sender, TxContext};
-    use fungible_tokens::closed_loop::{
-        Self as cl,
-        Split,
-        Join,
-        Burn,
-        Transfer
-    };
-
-    /// The Token type for the in-game economy.
-    struct GAME_COIN has drop {}
-
-    /// In the module initializer we create a new CL
-    fun init(otw: GAME_COIN, ctx: &mut TxContext) {
-        let (policy, owner_cap) = cl::new_token(otw, ctx);
-
-        cl::allow<GAME_COIN, Join>(&owner_cap, &mut policy);
-        cl::allow<GAME_COIN, Burn>(&owner_cap, &mut policy);
-        cl::allow<GAME_COIN, Split>(&owner_cap, &mut policy);
-        cl::allow<GAME_COIN, Transfer>(&owner_cap, &mut policy);
-
-        sui::transfer::public_share_object(policy);
-        sui::transfer::public_transfer(owner_cap, sender(ctx));
-    }
-}
-
-#[test_only]
-/// Using the GAME_COIN token, this module implements a reward system where an
-/// admin (CoinIssuer) can reward players with tokens. The tokens can then be
-/// spent in game to get some benefits (using a dummy object).
-///
-module fungible_tokens::game_economy {
-    use sui::tx_context::TxContext;
-
-    use fungible_tokens::closed_loop::{
-        Self as cl,
-        CLPolicy,
-        TempToken,
-        CoinIssuerCap,
-    };
-
-    use fungible_tokens::game_coin::GAME_COIN;
-
-    /// The Token type for the in-game economy.
-    /// No precision, no decimals.
-    const REWARD: u64 = 50;
-
-    /// The reward players get for 100 coins.
-    struct Dummy has drop {}
-
-    /// Reward the player with 50 tokens. Once user receives two rewards, they
-    /// can spend them to get a Dummy object.
-    public fun reward_player(
-        cap: &CoinIssuerCap<GAME_COIN>,
-        policy: &mut CLPolicy<GAME_COIN>,
-        player: address,
-        ctx: &mut TxContext
-    ) {
-        let (reward, mint_req) = cl::mint(policy, REWARD, ctx);
-        let transfer_req = cl::transfer(reward, player, ctx);
-
-        cl::resolve_as_owner(cap, mint_req);
-        cl::resolve_as_owner(cap, transfer_req);
-    }
-
-    /// Purchase a dummy object for 100 coins.
-    ///
-    /// Important: for simplicity and for working with default resolver, we allow anyone burn
-    /// the token, be it used for purchasing or not. 
-    public fun purchase_dummy(
-        policy: &mut CLPolicy<GAME_COIN>,
-        coin: TempToken<GAME_COIN>,
-        ctx: &mut TxContext
-    ) {
-        let (burn_req) = cl::burn(policy, coin, ctx);
-        cl::resolve_default(policy, burn_req);
-    }
 }
