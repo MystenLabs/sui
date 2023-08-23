@@ -361,44 +361,36 @@ impl SequenceWorkerState {
                         .expect("Transaction effects exist")
                         .expect("Transaction effects exist");
 
+                    let _ = tx.digest();
                     let full_tx = Transaction {
                         tx: tx.clone(),
                         ground_truth_effects: tx_effects.clone(),
+                        child_inputs: Vec::new(),
                         checkpoint_seq,
                     };
 
-                    for ew in full_tx.get_relevant_ews(sw_senders.len() as u8) {
-                        sw_senders[ew as usize]
+                    for sender in &sw_senders {
+                        sender
                             .send(SailfishMessage::ProposeExec(full_tx.clone()))
                             .await
                             .expect("sending failed");
                     }
 
                     if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
-                        println!("Change epoch tx {}", tx.digest());
                         // wait for epoch end message from execution worker
                         println!(
-                            "SW waiting for epoch end message. Checkpoint_seq: {}",
+                            "SW waiting for epoch end message. Change epoch tx {} at checkpoint {}",
+                            tx.digest(),
                             checkpoint_seq
                         );
 
-                        let SailfishMessage::EpochEnd{new_epoch_start_state} = ew_receiver
+                        let SailfishMessage::EpochEnd {new_epoch_start_state } = ew_receiver
                             .recv()
                             .await
                             .expect("Receiving doesn't work")
                         else {
                             panic!("unexpected message")
                         };
-                        for _ in 0..sw_senders.len() - 1 {
-                            let SailfishMessage::EpochEnd { new_epoch_start_state: start_state } = ew_receiver
-                                .recv()
-                                .await
-                                .expect("Receiving doesn't work")
-                            else {
-                                panic!("unexpected message")
-                            };
-                            assert_eq!(start_state, new_epoch_start_state);
-                        }
                         let next_epoch_committee = new_epoch_start_state.get_sui_committee();
                         let next_epoch = next_epoch_committee.epoch();
                         let last_checkpoint = self

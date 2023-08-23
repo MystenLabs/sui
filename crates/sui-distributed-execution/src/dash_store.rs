@@ -64,14 +64,12 @@ impl WritableObjectStore for DashMemoryBackedStore {
 
 impl ParentSync for DashMemoryBackedStore {
     fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
-        // println!("Parent: {:?}", object_id);
         Ok(self.objects.get(&object_id).map(|v| v.0))
     }
 }
 
 impl BackingPackageStore for DashMemoryBackedStore {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
-        // println!("Package: {:?}", package_id);
         Ok(self.objects.get(package_id).map(|v| v.1.clone()))
     }
 }

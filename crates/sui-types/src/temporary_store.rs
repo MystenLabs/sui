@@ -50,14 +50,14 @@ pub struct InnerTemporaryStore {
     pub mutable_inputs: Vec<ObjectRef>,
     // All the written objects' sequence number should have been updated to the lamport version.
     pub written: WrittenObjects,
-    // deleted or wrapped or unwrap-then-delete. The sequence number should have been updated to
-    // the lamport version.
+    pub tmp_objects: HashSet<ObjectID>,
+    // deleted or wrapped or unwrap-then-delete
     pub deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
     pub loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
     pub events: TransactionEvents,
     pub max_binary_format_version: u32,
     pub no_extraneous_module_bytes: bool,
-    pub runtime_packages_loaded_from_db: BTreeMap<ObjectID, Object>,
+    pub runtime_read_objects: HashSet<ObjectID>,
 }
 
 impl InnerTemporaryStore {
@@ -176,6 +176,7 @@ pub struct TemporaryStore<'backing> {
     // It's critical that we always call write_object to update `written`, instead of writing
     // into written directly.
     written: BTreeMap<ObjectID, (Object, WriteKind)>, // Objects written
+    tmp_objects: HashSet<ObjectID>, // Objects written at some point during Tx execution
     /// Objects actively deleted.
     deleted: BTreeMap<ObjectID, DeleteKindWithOldVersion>,
     /// Child objects loaded during dynamic field opers
@@ -185,9 +186,8 @@ pub struct TemporaryStore<'backing> {
     events: Vec<Event>,
     protocol_config: ProtocolConfig,
 
-    /// Every package that was loaded from DB store during execution.
-    /// These packages were not previously loaded into the temporary store.
-    runtime_packages_loaded_from_db: RwLock<BTreeMap<ObjectID, Object>>,
+    // Every object that was read from store during exec
+    runtime_read_objects: RwLock<HashSet<ObjectID>>,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -209,11 +209,12 @@ impl<'backing> TemporaryStore<'backing> {
             lamport_timestamp,
             mutable_input_refs: mutable_inputs,
             written: BTreeMap::new(),
+            tmp_objects: HashSet::new(),
             deleted: BTreeMap::new(),
             events: Vec::new(),
             protocol_config: protocol_config.clone(),
             loaded_child_objects: BTreeMap::new(),
-            runtime_packages_loaded_from_db: RwLock::new(BTreeMap::new()),
+            runtime_read_objects: RwLock::new(HashSet::new()),
         }
     }
 
@@ -239,11 +240,12 @@ impl<'backing> TemporaryStore<'backing> {
             lamport_timestamp,
             mutable_input_refs: mutable_inputs,
             written: BTreeMap::new(),
+            tmp_objects: HashSet::new(),
             deleted: BTreeMap::new(),
             events: Vec::new(),
             protocol_config: protocol_config.clone(),
             loaded_child_objects: BTreeMap::new(),
-            runtime_packages_loaded_from_db: RwLock::new(BTreeMap::new()),
+            runtime_read_objects: RwLock::new(HashSet::new()),
         }
     }
 
@@ -313,6 +315,7 @@ impl<'backing> TemporaryStore<'backing> {
             objects: self.input_objects,
             mutable_inputs: self.mutable_input_refs,
             written,
+            tmp_objects: self.tmp_objects,
             deleted,
             events: TransactionEvents { data: self.events },
             max_binary_format_version: self.protocol_config.move_binary_format_version(),
@@ -322,7 +325,7 @@ impl<'backing> TemporaryStore<'backing> {
                 .map(|(id, metadata)| (id, metadata.version))
                 .collect(),
             no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),
-            runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.read().clone(),
+            runtime_read_objects: self.runtime_read_objects.into_inner(),
         }
     }
 
@@ -524,6 +527,9 @@ impl<'backing> TemporaryStore<'backing> {
         // The adapter is not very disciplined at filling in the correct
         // previous transaction digest, so we ensure it is correct here.
         object.previous_transaction = self.tx_digest;
+        if kind == WriteKind::Create || kind == WriteKind::Unwrap {
+            self.tmp_objects.insert(object.id());
+        }
         self.written.insert(object.id(), (object, kind));
     }
 
@@ -561,6 +567,7 @@ impl<'backing> TemporaryStore<'backing> {
     }
 
     pub fn read_object(&self, id: &ObjectID) -> Option<&Object> {
+        self.runtime_read_objects.write().insert(*id);
         // there should be no read after delete
         debug_assert!(self.deleted.get(id).is_none());
         self.written
@@ -1138,12 +1145,12 @@ impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
     ) -> SuiResult<Option<Object>> {
         // there should be no read after delete
         debug_assert!(self.deleted.get(child).is_none());
-        let obj_opt = self.written.get(child).map(|(obj, _kind)| obj);
-        if obj_opt.is_some() {
-            Ok(obj_opt.cloned())
+        if let Some((obj, kind)) = self.written.get(child) {
+            self.runtime_read_objects.write().insert(*child);
+            Ok(Some(obj.clone()))
         } else {
-            self.store
-                .read_child_object(parent, child, child_version_upper_bound)
+            self.runtime_read_objects.write().insert(*child);
+            self.store.read_child_object(parent, child)
         }
     }
 }
@@ -1177,20 +1184,8 @@ impl<'backing> Storage for TemporaryStore<'backing> {
 
 impl<'backing> BackingPackageStore for TemporaryStore<'backing> {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
-        if let Some((obj, _)) = self.written.get(package_id) {
-            Ok(Some(obj.clone()))
-        } else {
-            self.store.get_package_object(package_id).map(|obj| {
-                // Track object but leave unchanged
-                if let Some(v) = obj.clone() {
-                    // TODO: Can this lock ever block execution?
-                    self.runtime_packages_loaded_from_db
-                        .write()
-                        .insert(*package_id, v);
-                }
-                obj
-            })
-        }
+        self.runtime_read_objects.write().insert(*package_id);
+        self.store.get_package_object(package_id)
     }
 }
 
@@ -1263,6 +1258,7 @@ impl<'backing> ResourceResolver for TemporaryStore<'backing> {
 
 impl<'backing> ParentSync for TemporaryStore<'backing> {
     fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
+        self.runtime_read_objects.write().insert(object_id);
         self.store.get_latest_parent_entry_ref(object_id)
     }
 }
@@ -1273,6 +1269,7 @@ impl<'backing> GetModule for TemporaryStore<'backing> {
 
     fn get_module_by_id(&self, module_id: &ModuleId) -> Result<Option<Self::Item>, Self::Error> {
         let package_id = &ObjectID::from(*module_id.address());
+        self.runtime_read_objects.write().insert(*package_id);
         if let Some((obj, _)) = self.written.get(package_id) {
             Ok(Some(
                 obj.data
