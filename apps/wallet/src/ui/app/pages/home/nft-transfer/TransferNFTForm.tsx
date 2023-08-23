@@ -18,6 +18,7 @@ import { Text } from '_app/shared/text';
 import { AddressInput } from '_components/address-input';
 import { ampli } from '_src/shared/analytics/ampli';
 import { QredoActionIgnoredByUser } from '_src/ui/app/QredoSigner';
+import { UnlockAccountButton } from '_src/ui/app/components/accounts/UnlockAccountButton';
 import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
 import { useActiveAddress } from '_src/ui/app/hooks';
 import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
@@ -36,6 +37,7 @@ export function TransferNFTForm({
 	const suiNSEnabled = useSuiNSEnabled();
 	const validationSchema = createValidationSchema(rpc, suiNSEnabled, activeAddress || '', objectId);
 	const activeAccount = useActiveAccount();
+	const isAccountWriteLocked = !activeAccount || activeAccount.isLocked;
 	const signer = useSigner(activeAccount);
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
@@ -107,7 +109,9 @@ export function TransferNFTForm({
 			}
 		},
 	});
-
+	if (!activeAccount) {
+		return null;
+	}
 	return (
 		<Formik
 			initialValues={{
@@ -138,15 +142,19 @@ export function TransferNFTForm({
 							</div>
 						</Content>
 						<Menu stuckClass="sendCoin-cta" className="w-full px-0 pb-0 mx-0 gap-2.5">
-							<Button
-								type="submit"
-								variant="primary"
-								loading={transferNFT.isLoading}
-								disabled={!isValid}
-								size="tall"
-								text="Send NFT Now"
-								after={<ArrowRight16 />}
-							/>
+							{isAccountWriteLocked ? (
+								<UnlockAccountButton account={activeAccount} />
+							) : (
+								<Button
+									type="submit"
+									variant="primary"
+									loading={transferNFT.isLoading}
+									disabled={!isValid}
+									size="tall"
+									text="Send NFT Now"
+									after={<ArrowRight16 />}
+								/>
+							)}
 						</Menu>
 					</BottomMenuLayout>
 					{notificationModal}

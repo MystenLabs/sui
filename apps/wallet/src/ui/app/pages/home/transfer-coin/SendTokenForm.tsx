@@ -28,6 +28,8 @@ import Alert from '_components/alert';
 import Loading from '_components/loading';
 import { parseAmount } from '_helpers';
 import { useGetAllCoins } from '_hooks';
+import { UnlockAccountButton } from '_src/ui/app/components/accounts/UnlockAccountButton';
+import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
 import { GAS_SYMBOL } from '_src/ui/app/redux/slices/sui-objects/Coin';
 import { InputWithAction } from '_src/ui/app/shared/InputWithAction';
 
@@ -142,7 +144,9 @@ export function SendTokenForm({
 	initialTo = '',
 }: SendTokenFormProps) {
 	const client = useSuiClient();
-	const activeAddress = useActiveAddress();
+	const activeAccount = useActiveAccount();
+	const activeAddress = activeAccount?.address;
+	const isAccountWriteLocked = !activeAccount || activeAccount.isLocked;
 	// Get all coins of the type
 	const { data: coinsData, isLoading: coinsIsLoading } = useGetAllCoins(coinType, activeAddress!);
 
@@ -174,7 +178,11 @@ export function SendTokenForm({
 	return (
 		<Loading
 			loading={
-				queryResult.isLoading || coinMetadata.isLoading || suiCoinsIsLoading || coinsIsLoading
+				queryResult.isLoading ||
+				coinMetadata.isLoading ||
+				suiCoinsIsLoading ||
+				coinsIsLoading ||
+				!activeAccount
 			}
 		>
 			<Formik
@@ -286,18 +294,22 @@ export function SendTokenForm({
 								</Form>
 							</Content>
 							<Menu stuckClass="sendCoin-cta" className="w-full px-0 pb-0 mx-0 gap-2.5">
-								<Button
-									type="submit"
-									onClick={submitForm}
-									variant="primary"
-									loading={isSubmitting}
-									disabled={
-										!isValid || isSubmitting || !hasEnoughBalance || values.gasBudgetEst === ''
-									}
-									size="tall"
-									text="Review"
-									after={<ArrowRight16 />}
-								/>
+								{isAccountWriteLocked ? (
+									<UnlockAccountButton account={activeAccount!} />
+								) : (
+									<Button
+										type="submit"
+										onClick={submitForm}
+										variant="primary"
+										loading={isSubmitting}
+										disabled={
+											!isValid || isSubmitting || !hasEnoughBalance || values.gasBudgetEst === ''
+										}
+										size="tall"
+										text="Review"
+										after={<ArrowRight16 />}
+									/>
+								)}
 							</Menu>
 						</BottomMenuLayout>
 					);
