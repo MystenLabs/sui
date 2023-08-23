@@ -32,9 +32,7 @@ export function EditNickname() {
 	} = form;
 
 	const onSubmit = ({ nickname }: { nickname: string }) => {
-		console.log(address, nickname);
 		address && setAccountNickname(address, nickname);
-		console.log(accountNicknames);
 	};
 	return (
 		<Overlay showModal closeOverlay={() => navigate('/accounts/manage')}>

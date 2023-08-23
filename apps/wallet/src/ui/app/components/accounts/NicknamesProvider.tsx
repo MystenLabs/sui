@@ -21,7 +21,6 @@ export const NicknamesContext = createContext<NicknameContext>({
 
 export const NicknamesProvider = ({ children }: { children: ReactNode }) => {
 	const [accountNicknames, setAccountNicknames] = useState<NicknamesMap>({});
-	console.log(accountNicknames);
 	useEffect(() => {
 		(async () => {
 			const nicknames = await get<NicknamesMap>(NICKNAMES_MAPPING);

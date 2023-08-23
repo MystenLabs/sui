@@ -29,8 +29,7 @@ export function AccountListItem({
 	// todo: remove this when we implement account locking / unlocking
 	const [locked, setLocked] = useState(false);
 	const { accountNicknames } = useAccountNicknames();
-	console.log(accountNicknames);
-	const nickname = accountNicknames?.[address];
+	const nickname = accountNicknames && accountNicknames[address];
 
 	return (
 		<AccountItem
