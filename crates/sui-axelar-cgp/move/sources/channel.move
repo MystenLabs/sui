@@ -9,10 +9,8 @@ module axelar::channel {
     use sui::vec_set;
     use sui::vec_set::VecSet;
 
-    use axelar::approved_call;
-    use axelar::approved_call::ApprovedCall;
-    use axelar::validators;
-    use axelar::validators::AxelarValidators;
+    use axelar::approved_call::{Self, ApprovedCall};
+    use axelar::validators::{Self, AxelarValidators};
 
     /// Generic target for the messaging system.
     ///
@@ -46,7 +44,7 @@ module axelar::channel {
     /// For when trying to consume the wrong object.
     const EWrongDestination: u64 = 0;
     /// For when message has already been processed and submitted twice.
-    const EDuplicateMessage: u64 = 2;
+    const EDuplicateMessage: u64 = 1;
 
     struct Channel<T: store> has store {
         /// Unique ID of the target object which allows message targeting
@@ -89,7 +87,12 @@ module axelar::channel {
     /// Destroy a `Channel<T>` releasing the T. Not constrained and can be performed
     /// by any party as long as they own a Channel.
     public fun destroy_channel<T: store>(self: Channel<T>): T {
-        let Channel { id, processed_call_approvals: _, last_processed_approval_epoch: _, data } = self;
+        let Channel {
+            id,
+            processed_call_approvals: _,
+            last_processed_approval_epoch: _,
+            data
+        } = self;
         object::delete(id);
         data
     }
