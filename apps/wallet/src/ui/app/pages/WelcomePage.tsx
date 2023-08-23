@@ -50,7 +50,7 @@ export function WelcomePage() {
 								<SocialButton
 									provider="google"
 									onClick={() => {
-										setCreateInProgressProvider('Google');
+										setCreateInProgressProvider('google');
 										ampli.clickedSocialSignInButton({
 											signInProvider: 'Google',
 											sourceFlow: 'Onboarding',
@@ -58,7 +58,7 @@ export function WelcomePage() {
 										createAccountsMutation.mutate(
 											{
 												type: 'zk',
-												provider: 'Google',
+												provider: 'google',
 											},
 											{
 												onError: (error) => {
@@ -74,7 +74,7 @@ export function WelcomePage() {
 										);
 									}}
 									disabled={createAccountsMutation.isLoading}
-									loading={createInProgressProvider === 'Google'}
+									loading={createInProgressProvider === 'google'}
 								/>
 							</div>
 							<div className="flex-1">

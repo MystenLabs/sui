@@ -139,11 +139,13 @@ export interface SerializedUIAccount {
 	 * indicates if it's the selected account in the UI (active account)
 	 */
 	readonly selected: boolean;
+	readonly isPasswordUnlockable: boolean;
 }
 
 export interface PasswordUnlockableAccount {
 	readonly unlockType: 'password';
 	passwordUnlock(password: string): Promise<void>;
+	verifyPassword(password: string): Promise<void>;
 }
 
 export function isPasswordUnLockable(account: unknown): account is PasswordUnlockableAccount {
