@@ -135,7 +135,7 @@ export function AccountsDev() {
 						<Button
 							text="Connect Google Account"
 							loading={zkCreateAccount.isLoading}
-							onClick={() => zkCreateAccount.mutate({ provider: 'Google' })}
+							onClick={() => zkCreateAccount.mutate({ provider: 'google' })}
 						/>
 					</div>
 					{accounts.isLoading ? (
