@@ -102,7 +102,7 @@ async fn main() {
     // Channel from sw to ew
     let (sw_sender, mut cs_receiver) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
     let (cs_sender1, sw_receiver1) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
-    let (cs_sender2, mut sw_receiver2) = mpsc::unbounded_channel();
+    //let (cs_sender2, mut sw_receiver2) = mpsc::unbounded_channel();
     // Channel from ew to sw
     let (ew_sender1, ew_receiver1) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
 
@@ -118,9 +118,9 @@ async fn main() {
     // before passing it on to the channel for the 1st Execution Worker.
     let channel_splitter = tokio::spawn(async move {
         while let Some(msg) = cs_receiver.recv().await {
-            cs_sender1.send(msg.clone()).await.expect("send failed");
+            cs_sender1.send(msg).await.expect("send failed");
             //let permit = cs_sender2.try_reserve().expect("channel full");
-            cs_sender2.send(msg).expect("send failed");
+            //cs_sender2.send(msg).expect("send failed");
         }
     });
 

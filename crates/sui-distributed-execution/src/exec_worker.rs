@@ -277,18 +277,26 @@ impl ExecutionWorkerState {
     fn write_updates_to_store(
         memory_store: Arc<DashMemoryBackedStore>,
         inner_temp_store: InnerTemporaryStore,
+        protocol_config: &ProtocolConfig,
     ) {
         // And now we mutate the store.
         // First delete:
         for obj_del in inner_temp_store.deleted {
             match obj_del.1 .1 {
                 sui_types::storage::DeleteKind::Wrap => {
-                    let wrap_tombstone =
-                        (obj_del.0, obj_del.1 .0, ObjectDigest::OBJECT_DIGEST_WRAPPED);
-                    let old_object = memory_store
-                            .get_object(&obj_del.0)
-                            .unwrap().unwrap();
-                    memory_store.insert(obj_del.0, (wrap_tombstone, old_object)); // insert the old object with a wrapped tombstone
+                    if !protocol_config.simplified_unwrap_then_delete() {
+                        let wrap_tombstone =
+                            (obj_del.0, obj_del.1 .0, ObjectDigest::OBJECT_DIGEST_WRAPPED);
+                        let old_object = memory_store
+                                .get_object(&obj_del.0)
+                                .unwrap().unwrap();
+                        memory_store.insert(obj_del.0, (wrap_tombstone, old_object)); // insert the old object with a wrapped tombstone
+                    }
+                }
+                sui_types::storage::DeleteKind::UnwrapThenDelete => {
+                    if !protocol_config.simplified_unwrap_then_delete() {
+                        memory_store.remove(obj_del.0);
+                    }
                 }
                 _ => {
                     memory_store.remove(obj_del.0);
@@ -363,9 +371,8 @@ impl ExecutionWorkerState {
         debug_assert!(Self::check_effects_match(&full_tx, &effects));
 
         // And now we mutate the store.
-        Self::write_updates_to_store(self.memory_store.clone(), inner_temp_store);
+        Self::write_updates_to_store(self.memory_store.clone(), inner_temp_store, &protocol_config);
     }
-
 
     async fn async_exec(
         full_tx: Transaction,
@@ -410,7 +417,7 @@ impl ExecutionWorkerState {
                 &HashSet::new(),
             );
 
-        Self::write_updates_to_store(memory_store, inner_temp_store);
+        Self::write_updates_to_store(memory_store, inner_temp_store, &protocol_config);
         
         #[cfg(not(debug_assertions))]
         return TransactionWithResults {
