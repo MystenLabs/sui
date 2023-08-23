@@ -7,13 +7,19 @@ allows this implementation to reach peak performance of around 200k tps for
 simple SUI transfers on a MacBook Pro and peaks at 10k-20k tps for other types
 of transactions.
 
-## Checkpointing
+## Snapshotting
 
-A simple checkpoint and restore mechanism is implemented. By passing the flag
-`--epoch <EPOCH>` to the executor it will dump SW/EW state at the epoch boundary
-after the given epoch. This creates three files: `objects.dat`, `epoch.dat`, and
-`sw_recovery.dat`. If these files exist upon startup SW/EW will both restore
-from the checkpointed state.
+A simple snapshot and restore mechanism is implemented. By passing the flag
+`--snapshot-epoch <EPOCH>` to the executor it will dump SW/EW state at the epoch
+boundary after the given epoch. This creates three files: `objects.dat`,
+`epoch.dat`, and `sw_recovery.dat`. If these files exist upon startup SW/EW will
+both restore from the snapshotted state.
+
+_Note: Execution does not stop at the snapshotted epoch, it continues up to the
+snapshot provided by the `--execute` flag._
+
+_Note: The snapshot flag is currently mandatory. Snapshotting can thus only be
+disabled by setting the snapshot epoch to a high value that is never reached._
 
 ## Benchmarking Artificial Workloads
 
