@@ -4,6 +4,7 @@
 mod constant_fold;
 mod eliminate_locals;
 mod inline_blocks;
+mod known_jumps;
 mod simplify_jumps;
 
 use crate::{cfgir::cfg::MutForwardCFG, hlir::ast::*, shared::unique_map::UniqueMap};
@@ -14,6 +15,7 @@ pub type Optimization =
 const OPTIMIZATIONS: &[Optimization] = &[
     eliminate_locals::optimize,
     constant_fold::optimize,
+    known_jumps::optimize,
     simplify_jumps::optimize,
     inline_blocks::optimize,
 ];
