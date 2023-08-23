@@ -45,6 +45,7 @@ type MethodPayloads = {
 	storageMigrationStatus: { status: Status };
 	doStorageMigration: { password: string };
 	switchAccount: { accountID: string };
+	verifyPassword: { password: string };
 };
 
 type Methods = keyof MethodPayloads;

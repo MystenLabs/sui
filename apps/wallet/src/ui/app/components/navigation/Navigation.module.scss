@@ -81,6 +81,10 @@
 			border-bottom-color: v.use(v.$colors-nav-item-active-highlighted-color);
 		}
 	}
+
+	&.disabled {
+		color: #c3c5c8;
+	}
 }
 
 .icon {

@@ -143,6 +143,11 @@ export class QredoAccountSource extends AccountSource<QredoAccountSourceSerializ
 		accountSourcesEvents.emit('accountSourceStatusUpdated', { accountSourceID: this.id });
 	}
 
+	async verifyPassword(password: string) {
+		const { encrypted } = await this.getStoredData();
+		await decrypt<DataDecrypted>(password, encrypted);
+	}
+
 	async renewAccessToken() {
 		const ephemeralData = await this.getEphemeralValue();
 		if (!ephemeralData) {

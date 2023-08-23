@@ -259,5 +259,16 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 		await uiConnection.send(createMessage({ type: 'done' }, msg.id));
 		return true;
 	}
+	if (isMethodPayload(payload, 'verifyPassword')) {
+		const allAccounts = await getAllAccounts();
+		for (const anAccount of allAccounts) {
+			if (isPasswordUnLockable(anAccount)) {
+				await anAccount.verifyPassword(payload.args.password);
+				await uiConnection.send(createMessage({ type: 'done' }, msg.id));
+				return true;
+			}
+		}
+		throw new Error('No password protected account found');
+	}
 	return false;
 }
