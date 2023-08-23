@@ -24,6 +24,7 @@ impl ScalarType for DateTime {
     }
 
     fn to_value(&self) -> Value {
+        // Debug format for chrono::DateTime is YYYY-MM-DDTHH:MM:SS.mmmZ
         Value::String(format!("{:?}", self.0))
     }
 }
