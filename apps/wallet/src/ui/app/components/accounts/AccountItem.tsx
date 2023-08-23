@@ -6,6 +6,7 @@ import { formatAddress } from '@mysten/sui.js/utils';
 
 import cn from 'classnames';
 import { forwardRef, type ReactNode } from 'react';
+import { useAccountNicknames } from './NicknamesProvider';
 import { AddressLink } from '../explorer-link';
 import { Text } from '_src/ui/app/shared/text';
 
@@ -44,6 +45,8 @@ export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 		},
 		ref,
 	) => {
+		const { accountNicknames } = useAccountNicknames();
+		const nickname = accountNicknames[address];
 		return (
 			<div
 				ref={ref}
@@ -58,7 +61,7 @@ export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 				{icon}
 				<div className="flex flex-col gap-1 overflow-hidden">
 					<Text variant="pBody" weight="semibold" color="steel-darker" truncate>
-						{name ?? formatAddress(address)}
+						{nickname || name || formatAddress(address)}
 					</Text>
 					<AddressLink address={address} />
 				</div>
