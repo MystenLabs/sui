@@ -293,7 +293,7 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
         warning_filter,
         index,
         attributes,
-        visibility,
+        visibility: evisibility,
         entry,
         signature,
         acquires,
@@ -307,7 +307,7 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
         warning_filter,
         index,
         attributes,
-        visibility,
+        visibility: visibility(evisibility),
         entry,
         signature,
         acquires,
@@ -382,6 +382,16 @@ fn function_body_defined(
     check_trailing_unit(context, &mut body);
     context.signature = None;
     (locals, body)
+}
+
+fn visibility(evisibility: E::Visibility) -> H::Visibility {
+    match evisibility {
+        E::Visibility::Internal => H::Visibility::Internal,
+        E::Visibility::Friend(loc) => H::Visibility::Friend(loc),
+        // We added any friends we needed during typing, so we convert this over.
+        E::Visibility::Package(loc) => H::Visibility::Friend(loc),
+        E::Visibility::Public(loc) => H::Visibility::Public(loc),
+    }
 }
 
 //**************************************************************************************************

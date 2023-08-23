@@ -222,7 +222,7 @@ fn function(
         warning_filter,
         index,
         attributes,
-        visibility: evisibility,
+        visibility,
         entry,
         mut signature,
         body: n_body,
@@ -232,7 +232,6 @@ fn function(
     assert!(context.constraints.is_empty());
     context.reset_for_module_item();
     context.current_function = Some(name);
-    let visibility = visibility(evisibility);
     function_signature(context, &signature);
     if is_script {
         let mk_msg = || {
@@ -265,16 +264,6 @@ fn function(
         signature,
         acquires,
         body,
-    }
-}
-
-fn visibility(evisibility: Visibility) -> T::Visibility {
-    match evisibility {
-        Visibility::Internal => T::Visibility::Internal,
-        Visibility::Friend(loc) => T::Visibility::Friend(loc),
-        // We add friends as we process calls, so we can convert this over.
-        Visibility::Package(loc) => T::Visibility::Friend(loc),
-        Visibility::Public(loc) => T::Visibility::Public(loc),
     }
 }
 
@@ -2393,7 +2382,7 @@ fn gen_unused_warnings(context: &mut Context, mdef: &T::ModuleDefinition) {
             .add_warning_filter_scope(fun.warning_filter.clone());
         if !context.called_fns.contains(name)
             && fun.entry.is_none()
-            && matches!(fun.visibility, T::Visibility::Internal)
+            && matches!(fun.visibility, Visibility::Internal)
         {
             // TODO: postponing handling of friend functions until we decide what to do with them
             // vis-a-vis ideas around package-private

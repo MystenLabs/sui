@@ -228,11 +228,13 @@ fn init_visibility(
     entry: Option<Loc>,
 ) {
     match visibility {
-        Visibility::Public(loc) | Visibility::Friend(loc) => context.env.add_diag(diag!(
-            INIT_FUN_DIAG,
-            (name.loc(), "Invalid 'init' function declaration"),
-            (loc, "'init' functions must be internal to their module"),
-        )),
+        Visibility::Public(loc) | Visibility::Friend(loc) | Visibility::Package(loc) => {
+            context.env.add_diag(diag!(
+                INIT_FUN_DIAG,
+                (name.loc(), "Invalid 'init' function declaration"),
+                (loc, "'init' functions must be internal to their module"),
+            ))
+        }
         Visibility::Internal => (),
     }
     if let Some(entry) = entry {

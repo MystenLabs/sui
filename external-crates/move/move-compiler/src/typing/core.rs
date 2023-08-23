@@ -122,6 +122,7 @@ macro_rules! program_info {
             });
             let minfo = ModuleInfo {
                 friends: mdef.friends.ref_map(|_, friend| friend.loc),
+                package: mdef.package_name,
                 structs,
                 functions,
                 constants,

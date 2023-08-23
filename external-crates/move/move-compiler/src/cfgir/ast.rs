@@ -7,10 +7,10 @@ use crate::{
     expansion::ast::{Attributes, Friend, ModuleIdent},
     hlir::ast::{
         BaseType, Command, Command_, FunctionSignature, Label, SingleType, StructDefinition, Var,
+        Visibility,
     },
     parser::ast::{ConstantName, FunctionName, StructName, ENTRY_MODIFIER},
     shared::{ast_debug::*, unique_map::UniqueMap},
-    typing::ast::Visibility,
 };
 use move_core_types::value::MoveValue;
 use move_ir_types::location::*;

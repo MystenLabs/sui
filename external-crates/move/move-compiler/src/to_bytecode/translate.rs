@@ -9,7 +9,7 @@ use crate::{
     diag,
     expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, SpecId},
     hlir::{
-        ast::{self as H, Value_, Var},
+        ast::{self as H, Value_, Var, Visibility},
         translate::{display_var, DisplayVar},
     },
     naming::{
@@ -21,7 +21,6 @@ use crate::{
         StructName, UnaryOp, UnaryOp_,
     },
     shared::{unique_map::UniqueMap, *},
-    typing::ast::Visibility,
     FullyCompiledProgram,
 };
 use move_binary_format::file_format as F;
