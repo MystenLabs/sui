@@ -26,6 +26,12 @@ disabled by setting the snapshot epoch to a high value that is never reached._
 See [benchmarking](./benchmarking/README.md) for more information on how the
 generation and benchmarking of artificial workloads works.
 
+## Parallelizability Study of Sui Mainnet Workload
+
+See [sui_parallelizability](./sui_parallelizability/README.md) for a small tool
+for analyzing the transaction workload on Sui mainnet with regards to
+parallelizability.
+
 _Below you can find the original README of the repo._
 
 ---
