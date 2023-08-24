@@ -170,6 +170,7 @@ impl ValidatorConfigBuilder {
                 .map(|i| i.as_secs())
                 .unwrap_or(3600),
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
+            overload_threshold_config: Default::default(),
         }
     }
 
@@ -406,6 +407,7 @@ impl FullnodeConfigBuilder {
             // note: not used by fullnodes.
             jwk_fetch_interval_seconds: 3600,
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
+            overload_threshold_config: Default::default(),
         }
     }
 }
