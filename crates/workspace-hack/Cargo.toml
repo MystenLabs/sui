@@ -444,8 +444,7 @@ once_cell = { version = "1" }
 oorandom = { version = "11", default-features = false }
 opaque-debug = { version = "0.3", default-features = false }
 os_str_bytes = { version = "6", default-features = false, features = ["raw_os_str"] }
-ouroboros-274715c4dabd11b0 = { package = "ouroboros", version = "0.9", default-features = false }
-ouroboros-9067fe90e8c1f593 = { package = "ouroboros", version = "0.17" }
+ouroboros = { version = "0.17" }
 outref = { version = "0.5", default-features = false }
 overload = { version = "0.1", default-features = false }
 owo-colors = { version = "3", default-features = false }
@@ -604,7 +603,6 @@ spin-274715c4dabd11b0 = { package = "spin", version = "0.9", default-features = 
 spin-d8f496e17d97b5cb = { package = "spin", version = "0.5", default-features = false }
 spki-3b31131e45eafb45 = { package = "spki", version = "0.6", default-features = false, features = ["pem", "std"] }
 spki-ca01ad9e24f5d932 = { package = "spki", version = "0.7", default-features = false, features = ["pem", "std"] }
-stable_deref_trait = { version = "1" }
 static_assertions = { version = "1", default-features = false }
 strip-ansi-escapes = { version = "0.1", default-features = false }
 strsim = { version = "0.10", default-features = false }
@@ -1213,10 +1211,8 @@ once_cell = { version = "1" }
 oorandom = { version = "11", default-features = false }
 opaque-debug = { version = "0.3", default-features = false }
 os_str_bytes = { version = "6", default-features = false, features = ["raw_os_str"] }
-ouroboros-274715c4dabd11b0 = { package = "ouroboros", version = "0.9", default-features = false }
-ouroboros-9067fe90e8c1f593 = { package = "ouroboros", version = "0.17" }
-ouroboros_macro-274715c4dabd11b0 = { package = "ouroboros_macro", version = "0.9", default-features = false }
-ouroboros_macro-9067fe90e8c1f593 = { package = "ouroboros_macro", version = "0.17", default-features = false, features = ["std"] }
+ouroboros = { version = "0.17" }
+ouroboros_macro = { version = "0.17", default-features = false, features = ["std"] }
 outref = { version = "0.5", default-features = false }
 overload = { version = "0.1", default-features = false }
 owo-colors = { version = "3", default-features = false }
@@ -1411,7 +1407,6 @@ spin-274715c4dabd11b0 = { package = "spin", version = "0.9", default-features = 
 spin-d8f496e17d97b5cb = { package = "spin", version = "0.5", default-features = false }
 spki-3b31131e45eafb45 = { package = "spki", version = "0.6", default-features = false, features = ["pem", "std"] }
 spki-ca01ad9e24f5d932 = { package = "spki", version = "0.7", default-features = false, features = ["pem", "std"] }
-stable_deref_trait = { version = "1" }
 static_assertions = { version = "1", default-features = false }
 strip-ansi-escapes = { version = "0.1", default-features = false }
 strsim = { version = "0.10", default-features = false }
@@ -1581,6 +1576,7 @@ security-framework-sys = { version = "2", default-features = false, features = [
 signal-hook = { version = "0.3" }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_7", "support-v0_8"] }
 signal-hook-registry = { version = "1", default-features = false }
+stable_deref_trait = { version = "1" }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
@@ -1617,6 +1613,7 @@ security-framework-sys = { version = "2", default-features = false, features = [
 signal-hook = { version = "0.3" }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_7", "support-v0_8"] }
 signal-hook-registry = { version = "1", default-features = false }
+stable_deref_trait = { version = "1" }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
@@ -1648,6 +1645,7 @@ rustix-d736d0ac4424f0f1 = { package = "rustix", version = "0.37", features = ["t
 signal-hook = { version = "0.3" }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_7", "support-v0_8"] }
 signal-hook-registry = { version = "1", default-features = false }
+stable_deref_trait = { version = "1" }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
@@ -1681,6 +1679,7 @@ rustix-d736d0ac4424f0f1 = { package = "rustix", version = "0.37", features = ["t
 signal-hook = { version = "0.3" }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_7", "support-v0_8"] }
 signal-hook-registry = { version = "1", default-features = false }
+stable_deref_trait = { version = "1" }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
