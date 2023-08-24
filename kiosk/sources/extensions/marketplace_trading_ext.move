@@ -9,6 +9,8 @@
 /// - delist
 /// - purchase
 module kiosk::marketplace_trading_ext {
+    use std::option::Option;
+
     use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
     use sui::transfer_policy::TransferRequest;
     use sui::kiosk_extension as ext;
@@ -19,6 +21,7 @@ module kiosk::marketplace_trading_ext {
     use sui::event;
     use sui::bag;
 
+    use kiosk::personal_kiosk;
     use kiosk::marketplace_adapter::{Self as mkt, MarketPurchaseCap};
 
     /// For when the caller is not the owner of the Kiosk.
@@ -34,19 +37,22 @@ module kiosk::marketplace_trading_ext {
     struct ItemListed<phantom T, phantom Market> has copy, drop {
         kiosk_id: ID,
         item_id: ID,
-        price: u64
+        price: u64,
+        kiosk_owner: Option<address>
     }
 
     /// An item has been delisted from a Marketplace.
     struct ItemDelisted<phantom T, phantom Market> has copy, drop {
         kiosk_id: ID,
-        item_id: ID
+        item_id: ID,
+        kiosk_owner: Option<address>
     }
 
     /// An item has been purchased from a Marketplace.
     struct ItemPurchased<phantom T, phantom Market> has copy, drop {
         kiosk_id: ID,
         item_id: ID,
+        kiosk_owner: Option<address>
     }
 
     // === Extension ===
@@ -78,9 +84,10 @@ module kiosk::marketplace_trading_ext {
         bag::add(ext::storage_mut(Extension {}, self), item_id, mkt_cap);
 
         event::emit(ItemListed<T, Market> {
+            kiosk_owner: personal_kiosk::try_owner(self),
             kiosk_id: object::id(self),
             item_id,
-            price
+            price,
         });
     }
 
@@ -98,6 +105,7 @@ module kiosk::marketplace_trading_ext {
         mkt::return_cap<T, Market>(self, mkt_cap, ctx);
 
         event::emit(ItemDelisted<T, Market> {
+            kiosk_owner: personal_kiosk::try_owner(self),
             kiosk_id: object::id(self),
             item_id
         });
@@ -116,6 +124,7 @@ module kiosk::marketplace_trading_ext {
         assert!(coin::value(&payment) >= mkt::min_price(&mkt_cap), EInsufficientPayment);
 
         event::emit(ItemPurchased<T, Market> {
+            kiosk_owner: personal_kiosk::try_owner(self),
             kiosk_id: object::id(self),
             item_id
         });

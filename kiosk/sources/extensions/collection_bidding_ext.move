@@ -5,6 +5,7 @@
 ///
 /// It is important that the bidder chooses the Marketplace, not the buyer.
 module kiosk::collection_bidding_ext {
+    use std::option::Option;
     use std::type_name;
     use std::vector;
 
@@ -24,6 +25,7 @@ module kiosk::collection_bidding_ext {
     use sui::pay;
     use sui::bag;
 
+    use kiosk::personal_kiosk;
     use kiosk::kiosk_lock_rule::Rule as LockRule;
     use kiosk::marketplace_adapter::{Self as mkt, MarketPurchaseCap, NoMarket};
 
@@ -52,17 +54,21 @@ module kiosk::collection_bidding_ext {
         kiosk_id: ID,
         count: u64,
         bids: vector<u64>,
+        kiosk_owner: Option<address>,
     }
 
     /// An event that is emitted when a bid is accepted.
     struct BidAccepted<phantom T, phantom Market> has copy, drop {
         kiosk_id: ID,
         item_id: ID,
+        source_kiosk_owner: Option<address>,
+        destination_kiosk_owner: Option<address>,
     }
 
     /// An event that is emitted when a bid is canceled.
     struct BidCanceled<phantom T, phantom Market> has copy, drop {
         kiosk_id: ID,
+        kiosk_owner: Option<address>,
     }
 
     // === Extension ===
@@ -102,6 +108,7 @@ module kiosk::collection_bidding_ext {
             kiosk_id: object::id(self),
             count: count,
             bids: amounts,
+            kiosk_owner: personal_kiosk::try_owner(self)
         });
 
         bag::add(ext::storage_mut(Extension {}, self), Bid<T, Market> {}, bids);
@@ -115,6 +122,7 @@ module kiosk::collection_bidding_ext {
 
         event::emit(BidCanceled<T, Market> {
             kiosk_id: object::id(self),
+            kiosk_owner: personal_kiosk::try_owner(self)
         });
 
         let coins = bag::remove(ext::storage_mut(Extension {}, self), Bid<T, Market> {});
@@ -169,6 +177,8 @@ module kiosk::collection_bidding_ext {
         event::emit(BidAccepted<T, Market> {
             kiosk_id: object::id(destination),
             item_id: object::id(&item),
+            destination_kiosk_owner: personal_kiosk::try_owner(destination),
+            source_kiosk_owner: personal_kiosk::try_owner(source)
         });
 
         // Place of lock the item in the Buyer's Kiosk.

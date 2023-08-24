@@ -115,6 +115,16 @@ module kiosk::personal_kiosk {
         *df::borrow(kiosk::uid(kiosk), OwnerMarker {})
     }
 
+    /// Try to get the owner of the Kiosk if the Kiosk is "personal". Returns
+    /// None otherwise.
+    public fun try_owner(kiosk: &Kiosk): Option<address> {
+        if (is_personal(kiosk)) {
+            option::some(owner(kiosk))
+        } else {
+            option::none()
+        }
+    }
+
     /// Transfer the `PersonalKioskCap` to the transaction sender.
     public fun transfer_to_sender(self: PersonalKioskCap, ctx: &mut TxContext) {
         transfer::transfer(self, sender(ctx));
