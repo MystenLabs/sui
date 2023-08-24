@@ -242,7 +242,7 @@ export function createWalletKitCore({
 			setState({ currentWallet });
 
 			if (currentWallet) {
-				if (walletEventUnsubscribe) {
+				if (typeof walletEventUnsubscribe === 'function') {
 					walletEventUnsubscribe();
 				}
 				walletEventUnsubscribe = currentWallet.features['standard:events'].on(
