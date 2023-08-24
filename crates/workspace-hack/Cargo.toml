@@ -27,9 +27,9 @@ aho-corasick-dff4ba8e3ae991db = { package = "aho-corasick", version = "1" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "c3fca7c423798e60a8d082a5c4cdea65cfb5f8ea", default-features = false }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "c3fca7c423798e60a8d082a5c4cdea65cfb5f8ea", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "c3fca7c423798e60a8d082a5c4cdea65cfb5f8ea", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35", default-features = false }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anstream = { version = "0.3" }
@@ -281,7 +281,7 @@ git-version = { version = "0.3", default-features = false }
 glob = { version = "0.3", default-features = false }
 globset = { version = "0.4" }
 globwalk = { version = "0.8", default-features = false }
-governor = { version = "0.5" }
+governor = { version = "0.6" }
 group-594e8ee84c453af0 = { package = "group", version = "0.13", default-features = false, features = ["alloc"] }
 group-5ef9efb8ec2df382 = { package = "group", version = "0.12", default-features = false }
 guppy = { version = "0.15", default-features = false, features = ["rayon1", "summaries"] }
@@ -498,7 +498,7 @@ proptest = { version = "1" }
 prost = { version = "0.11" }
 prost-types = { version = "0.11" }
 protobuf = { version = "2", default-features = false, features = ["with-bytes"] }
-quanta = { version = "0.9" }
+quanta = { version = "0.11" }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
 quick-error-f595c2ba2a3f28df = { package = "quick-error", version = "2", default-features = false }
 quinn = { version = "0.10", default-features = false, features = ["futures-io", "runtime-tokio", "tls-rustls"] }
@@ -737,10 +737,10 @@ aho-corasick-dff4ba8e3ae991db = { package = "aho-corasick", version = "1" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "c3fca7c423798e60a8d082a5c4cdea65cfb5f8ea", default-features = false }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "c3fca7c423798e60a8d082a5c4cdea65cfb5f8ea", default-features = false }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "c3fca7c423798e60a8d082a5c4cdea65cfb5f8ea", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "c3fca7c423798e60a8d082a5c4cdea65cfb5f8ea", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35", default-features = false }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35", default-features = false }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anstream = { version = "0.3" }
@@ -1031,7 +1031,7 @@ git-version-macro = { version = "0.3", default-features = false }
 glob = { version = "0.3", default-features = false }
 globset = { version = "0.4" }
 globwalk = { version = "0.8", default-features = false }
-governor = { version = "0.5" }
+governor = { version = "0.6" }
 group-594e8ee84c453af0 = { package = "group", version = "0.13", default-features = false, features = ["alloc"] }
 group-5ef9efb8ec2df382 = { package = "group", version = "0.12", default-features = false }
 guppy = { version = "0.15", default-features = false, features = ["rayon1", "summaries"] }
@@ -1290,7 +1290,7 @@ prost-build = { version = "0.11" }
 prost-derive = { version = "0.11", default-features = false }
 prost-types = { version = "0.11" }
 protobuf = { version = "2", default-features = false, features = ["with-bytes"] }
-quanta = { version = "0.9" }
+quanta = { version = "0.11" }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
 quick-error-f595c2ba2a3f28df = { package = "quick-error", version = "2", default-features = false }
 quinn = { version = "0.10", default-features = false, features = ["futures-io", "runtime-tokio", "tls-rustls"] }
@@ -1564,7 +1564,7 @@ ipnet = { version = "2" }
 jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5" }
 libc = { version = "0.2", default-features = false, features = ["extra_traits"] }
-mach = { version = "0.3" }
+mach2 = { version = "0.4" }
 memmap2 = { version = "0.5", default-features = false }
 memoffset-3b31131e45eafb45 = { package = "memoffset", version = "0.6" }
 mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["os-util", "uds"] }
@@ -1600,7 +1600,7 @@ ipnet = { version = "2" }
 jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5" }
 libc = { version = "0.2", default-features = false, features = ["extra_traits"] }
-mach = { version = "0.3" }
+mach2 = { version = "0.4" }
 memmap2 = { version = "0.5", default-features = false }
 memoffset-3b31131e45eafb45 = { package = "memoffset", version = "0.6" }
 mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["os-util", "uds"] }
