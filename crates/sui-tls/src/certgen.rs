@@ -91,13 +91,11 @@ pub(crate) fn public_key_from_certificate(
     use x509_parser::{certificate::X509Certificate, prelude::FromDer};
 
     let cert = X509Certificate::from_der(certificate.0.as_ref())
-        .map_err(|_| rustls::Error::InvalidCertificateEncoding)?;
+        .map_err(|e| rustls::Error::General(e.to_string()))?;
     let spki = cert.1.public_key();
     let public_key_bytes =
         <ed25519::pkcs8::PublicKeyBytes as pkcs8::DecodePublicKey>::from_public_key_der(spki.raw)
-            .map_err(|e| {
-            rustls::Error::InvalidCertificateData(format!("invalid ed25519 public key: {e}"))
-        })?;
+            .map_err(|e| rustls::Error::General(format!("invalid ed25519 public key: {e}")))?;
 
     let public_key = Ed25519PublicKey::from_bytes(public_key_bytes.as_ref())?;
 
