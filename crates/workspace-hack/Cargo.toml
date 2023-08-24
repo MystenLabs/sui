@@ -549,7 +549,7 @@ rustls-56bd22fc3884b12 = { package = "rustls", version = "0.20", features = ["da
 rustls-647d43efb71741da = { package = "rustls", version = "0.21", features = ["dangerous_configuration", "quic"] }
 rustls-native-certs = { version = "0.6", default-features = false }
 rustls-pemfile = { version = "1", default-features = false }
-rustls-webpki = { version = "0.100" }
+rustls-webpki = { version = "0.100.2" }
 rusty-fork = { version = "0.3", default-features = false, features = ["timeout"] }
 rustyline = { version = "9" }
 ryu = { version = "1", default-features = false }
