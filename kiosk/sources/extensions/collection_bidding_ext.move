@@ -52,7 +52,6 @@ module kiosk::collection_bidding_ext {
     /// An event that is emitted when a new bid is placed.
     struct NewBid<phantom T, phantom Market> has copy, drop {
         kiosk_id: ID,
-        count: u64,
         bids: vector<u64>,
         kiosk_owner: Option<address>,
     }
@@ -106,7 +105,6 @@ module kiosk::collection_bidding_ext {
 
         event::emit(NewBid<T, Market> {
             kiosk_id: object::id(self),
-            count: count,
             bids: amounts,
             kiosk_owner: personal_kiosk::try_owner(self)
         });
