@@ -287,7 +287,7 @@ fs_extra = "1.3.0"
 futures = "0.3.25"
 futures-core = "0.3.21"
 git-version = "0.3.5"
-governor = "0.5.1"
+governor = "0.6.0"
 hashbrown = "0.12"
 hdrhistogram = "7.5.1"
 hex = "0.4.3"
@@ -500,10 +500,10 @@ fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4e7debce
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4e7debce78340848f0009b648f56d912d6bd02d5", package = "fastcrypto-zkp" }
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "c3fca7c423798e60a8d082a5c4cdea65cfb5f8ea" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "c3fca7c423798e60a8d082a5c4cdea65cfb5f8ea" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "c3fca7c423798e60a8d082a5c4cdea65cfb5f8ea" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "c3fca7c423798e60a8d082a5c4cdea65cfb5f8ea" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
