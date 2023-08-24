@@ -501,10 +501,10 @@ fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4e7debce
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4e7debce78340848f0009b648f56d912d6bd02d5", package = "fastcrypto-zkp" }
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "c3fca7c423798e60a8d082a5c4cdea65cfb5f8ea" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "c3fca7c423798e60a8d082a5c4cdea65cfb5f8ea" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "c3fca7c423798e60a8d082a5c4cdea65cfb5f8ea" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "c3fca7c423798e60a8d082a5c4cdea65cfb5f8ea" }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }

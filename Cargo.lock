@@ -141,7 +141,7 @@ dependencies = [
 [[package]]
 name = "anemo"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=0f0ae8d8f222820a20b586088ea7a2941478a159#0f0ae8d8f222820a20b586088ea7a2941478a159"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=c3fca7c423798e60a8d082a5c4cdea65cfb5f8ea#c3fca7c423798e60a8d082a5c4cdea65cfb5f8ea"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -160,6 +160,7 @@ dependencies = [
  "rcgen",
  "ring",
  "rustls 0.21.1",
+ "rustls-webpki 0.101.4",
  "serde",
  "serde_json",
  "socket2 0.5.2",
@@ -169,7 +170,6 @@ dependencies = [
  "tokio-util 0.7.4",
  "tower",
  "tracing",
- "webpki",
  "x509-parser",
 ]
 
@@ -194,7 +194,7 @@ dependencies = [
 [[package]]
 name = "anemo-build"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=0f0ae8d8f222820a20b586088ea7a2941478a159#0f0ae8d8f222820a20b586088ea7a2941478a159"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=c3fca7c423798e60a8d082a5c4cdea65cfb5f8ea#c3fca7c423798e60a8d082a5c4cdea65cfb5f8ea"
 dependencies = [
  "prettyplease 0.1.23",
  "proc-macro2 1.0.58",
@@ -205,7 +205,7 @@ dependencies = [
 [[package]]
 name = "anemo-cli"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=0f0ae8d8f222820a20b586088ea7a2941478a159#0f0ae8d8f222820a20b586088ea7a2941478a159"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=c3fca7c423798e60a8d082a5c4cdea65cfb5f8ea#c3fca7c423798e60a8d082a5c4cdea65cfb5f8ea"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -221,7 +221,7 @@ dependencies = [
 [[package]]
 name = "anemo-tower"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=0f0ae8d8f222820a20b586088ea7a2941478a159#0f0ae8d8f222820a20b586088ea7a2941478a159"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=c3fca7c423798e60a8d082a5c4cdea65cfb5f8ea#c3fca7c423798e60a8d082a5c4cdea65cfb5f8ea"
 dependencies = [
  "anemo",
  "bytes",
@@ -8670,7 +8670,7 @@ checksum = "c911ba11bc8433e811ce56fde130ccf32f5127cab0e0194e9c68c5a5b671791e"
 dependencies = [
  "log",
  "ring",
- "rustls-webpki",
+ "rustls-webpki 0.100.1",
  "sct",
 ]
 
@@ -8700,6 +8700,16 @@ name = "rustls-webpki"
 version = "0.100.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6207cd5ed3d8dca7816f8f3725513a34609c0c765bf652b8c3cb4cfd87db46b"
+dependencies = [
+ "ring",
+ "untrusted",
+]
+
+[[package]]
+name = "rustls-webpki"
+version = "0.101.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d93931baf2d282fff8d3a532bbfd7653f734643161b87e3e01e59a04439bf0d"
 dependencies = [
  "ring",
  "untrusted",
@@ -13972,7 +13982,8 @@ dependencies = [
  "rustls 0.21.1",
  "rustls-native-certs",
  "rustls-pemfile",
- "rustls-webpki",
+ "rustls-webpki 0.100.1",
+ "rustls-webpki 0.101.4",
  "rustversion",
  "rusty-fork",
  "rustyline",
