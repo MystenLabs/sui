@@ -222,7 +222,7 @@ axum = { version = "0.6.6", default-features = false, features = [
   "ws",
 ] }
 axum-extra = "0.4.2"
-axum-server = { version = "0.4.4", default-features = false, features = [
+axum-server = { version = "0.5.1", default-features = false, features = [
   "tls-rustls",
 ] }
 backoff = { version = "0.4.0", features = [
@@ -383,7 +383,7 @@ rusoto_kms = { version = "0.48.0", default_features = false, features = [
   "rustls",
 ] }
 rust-version = "1.56.1"
-rustls = { version = "0.20.4", features = ["dangerous_configuration"] }
+rustls = { version = "0.21.6", features = ["dangerous_configuration"] }
 rustls-pemfile = "1.0.2"
 rustversion = "1.0.9"
 rustyline = "9.1.2"
@@ -424,7 +424,7 @@ thiserror = "1.0.40"
 tiny-bip39 = "1.0.0"
 tokio = "1.28.1"
 tokio-retry = "0.3"
-tokio-rustls = "0.23"
+tokio-rustls = "0.24"
 tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
 tokio-util = "0.7.4"
 toml = { version = "0.7.4", features = ["preserve_order"] }
@@ -465,7 +465,7 @@ uint = "0.9.4"
 unescape = "0.1.0"
 url = "2.3.1"
 uuid = { version = "1.1.2", features = ["v4", "fast-rng"] }
-webpki = { version = "0.22.0", features = ["alloc", "std"] }
+webpki = { version = "0.101.0", package = "rustls-webpki", features = ["alloc", "std"] }
 x509-parser = "0.14.0"
 zstd = "0.12.3"
 versions = "4.1.0"

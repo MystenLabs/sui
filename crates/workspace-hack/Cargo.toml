@@ -94,7 +94,7 @@ aws-types = { version = "0.56", default-features = false }
 axum = { version = "0.6", features = ["headers", "http2", "ws"] }
 axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
-axum-server = { version = "0.4", default-features = false, features = ["tls-rustls"] }
+axum-server = { version = "0.5", default-features = false, features = ["tls-rustls"] }
 backoff = { version = "0.4", features = ["tokio"] }
 backtrace = { version = "0.3" }
 base-x = { version = "0.2", default-features = false }
@@ -545,12 +545,11 @@ rustc-demangle = { version = "0.1", default-features = false }
 rustc-hash = { version = "1" }
 rustc-hex = { version = "2", default-features = false, features = ["std"] }
 rusticata-macros = { version = "4", default-features = false }
-rustls-56bd22fc3884b12 = { package = "rustls", version = "0.20", features = ["dangerous_configuration"] }
+rustls-56bd22fc3884b12 = { package = "rustls", version = "0.20", default-features = false, features = ["logging", "tls12"] }
 rustls-647d43efb71741da = { package = "rustls", version = "0.21", features = ["dangerous_configuration", "quic"] }
 rustls-native-certs = { version = "0.6", default-features = false }
 rustls-pemfile = { version = "1", default-features = false }
-rustls-webpki-1f4c5ed5f1f8932d = { package = "rustls-webpki", version = "0.100" }
-rustls-webpki-26f2e2773eea2a46 = { package = "rustls-webpki", version = "0.101" }
+rustls-webpki = { version = "0.101" }
 rusty-fork = { version = "0.3", default-features = false, features = ["timeout"] }
 rustyline = { version = "9" }
 ryu = { version = "1", default-features = false }
@@ -642,7 +641,7 @@ tokio = { version = "1", features = ["full", "test-util", "tracing"] }
 tokio-io-timeout = { version = "1", default-features = false }
 tokio-retry = { version = "0.3", default-features = false }
 tokio-rustls-2b5c6dc72f624058 = { package = "tokio-rustls", version = "0.23" }
-tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24", default-features = false, features = ["logging", "tls12"] }
+tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
 tokio-tungstenite = { version = "0.18" }
 tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
@@ -815,7 +814,7 @@ aws-types = { version = "0.56", default-features = false }
 axum = { version = "0.6", features = ["headers", "http2", "ws"] }
 axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
-axum-server = { version = "0.4", default-features = false, features = ["tls-rustls"] }
+axum-server = { version = "0.5", default-features = false, features = ["tls-rustls"] }
 backoff = { version = "0.4", features = ["tokio"] }
 backtrace = { version = "0.3" }
 base-x = { version = "0.2", default-features = false }
@@ -1342,12 +1341,11 @@ rustc-hash = { version = "1" }
 rustc-hex = { version = "2", default-features = false, features = ["std"] }
 rustc_version = { version = "0.4", default-features = false }
 rusticata-macros = { version = "4", default-features = false }
-rustls-56bd22fc3884b12 = { package = "rustls", version = "0.20", features = ["dangerous_configuration"] }
+rustls-56bd22fc3884b12 = { package = "rustls", version = "0.20", default-features = false, features = ["logging", "tls12"] }
 rustls-647d43efb71741da = { package = "rustls", version = "0.21", features = ["dangerous_configuration", "quic"] }
 rustls-native-certs = { version = "0.6", default-features = false }
 rustls-pemfile = { version = "1", default-features = false }
-rustls-webpki-1f4c5ed5f1f8932d = { package = "rustls-webpki", version = "0.100" }
-rustls-webpki-26f2e2773eea2a46 = { package = "rustls-webpki", version = "0.101" }
+rustls-webpki = { version = "0.101" }
 rustversion = { version = "1", default-features = false }
 rusty-fork = { version = "0.3", default-features = false, features = ["timeout"] }
 rustyline = { version = "9" }
@@ -1458,7 +1456,7 @@ tokio-io-timeout = { version = "1", default-features = false }
 tokio-macros = { version = "2", default-features = false }
 tokio-retry = { version = "0.3", default-features = false }
 tokio-rustls-2b5c6dc72f624058 = { package = "tokio-rustls", version = "0.23" }
-tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24", default-features = false, features = ["logging", "tls12"] }
+tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
 tokio-tungstenite = { version = "0.18" }
 tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
@@ -1583,7 +1581,6 @@ signal-hook-registry = { version = "1", default-features = false }
 stable_deref_trait = { version = "1" }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
-tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
 
 [target.aarch64-apple-darwin.build-dependencies]
 autotools = { version = "0.2", default-features = false }
@@ -1620,7 +1617,6 @@ signal-hook-registry = { version = "1", default-features = false }
 stable_deref_trait = { version = "1" }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
-tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 cpp_demangle = { version = "0.4" }
@@ -1652,7 +1648,6 @@ signal-hook-registry = { version = "1", default-features = false }
 stable_deref_trait = { version = "1" }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
-tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
 autotools = { version = "0.2", default-features = false }
@@ -1686,7 +1681,6 @@ signal-hook-registry = { version = "1", default-features = false }
 stable_deref_trait = { version = "1" }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
-tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
 
 [target.x86_64-pc-windows-msvc.dependencies]
 anstyle-wincon = { version = "1", default-features = false }
@@ -1704,7 +1698,6 @@ rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", defau
 raw-cpuid = { version = "10", default-features = false }
 schannel = { version = "0.1", default-features = false }
 str-buf = { version = "1", default-features = false }
-tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
 widestring = { version = "0.5" }
 winapi = { version = "0.3", default-features = false, features = ["basetsd", "cfg", "combaseapi", "consoleapi", "errhandlingapi", "evntrace", "fileapi", "handleapi", "heapapi", "ifdef", "impl-debug", "impl-default", "in6addr", "inaddr", "ioapiset", "iphlpapi", "knownfolders", "libloaderapi", "lmaccess", "lmapibuf", "lmcons", "memoryapi", "minwinbase", "minwindef", "namedpipeapi", "netioapi", "ntdef", "ntlsa", "ntsecapi", "ntstatus", "objbase", "objidl", "oleauto", "pdh", "powerbase", "processenv", "processthreadsapi", "profileapi", "psapi", "rpcdce", "securitybaseapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "wbemcli", "winbase", "wincon", "windef", "winerror", "winioctl", "winnt", "winreg", "winsock2", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
@@ -1732,7 +1725,6 @@ rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", defau
 raw-cpuid = { version = "10", default-features = false }
 schannel = { version = "0.1", default-features = false }
 str-buf = { version = "1", default-features = false }
-tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
 vcpkg = { version = "0.2", default-features = false }
 widestring = { version = "0.5" }
 winapi = { version = "0.3", default-features = false, features = ["basetsd", "cfg", "combaseapi", "consoleapi", "errhandlingapi", "evntrace", "fileapi", "handleapi", "heapapi", "ifdef", "impl-debug", "impl-default", "in6addr", "inaddr", "ioapiset", "iphlpapi", "knownfolders", "libloaderapi", "lmaccess", "lmapibuf", "lmcons", "memoryapi", "minwinbase", "minwindef", "namedpipeapi", "netioapi", "ntdef", "ntlsa", "ntsecapi", "ntstatus", "objbase", "objidl", "oleauto", "pdh", "powerbase", "processenv", "processthreadsapi", "profileapi", "psapi", "rpcdce", "securitybaseapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "wbemcli", "winbase", "wincon", "windef", "winerror", "winioctl", "winnt", "winreg", "winsock2", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
