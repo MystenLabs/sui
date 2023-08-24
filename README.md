@@ -26,6 +26,11 @@ disabled by setting the snapshot epoch to a high value that is never reached._
 See [benchmarking](./benchmarking/README.md) for more information on how the
 generation and benchmarking of artificial workloads works.
 
+## Comparing Tx Queueing Mechanisms
+
+See [queues_test](./queues_test/README.md) for a micro-benchmark comparing
+different methods of internally implementing the transaction queues.
+
 ## Parallelizability Study of Sui Mainnet Workload
 
 See [sui_parallelizability](./sui_parallelizability/README.md) for a small tool
