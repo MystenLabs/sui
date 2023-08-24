@@ -7096,12 +7096,13 @@ dependencies = [
 
 [[package]]
 name = "ouroboros"
-version = "0.15.5"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dfbb50b356159620db6ac971c6d5c9ab788c9cc38a6f49619fca2a27acb062ca"
+checksum = "e2ba07320d39dfea882faa70554b4bd342a5f273ed59ba7c1c6b4c840492c954"
 dependencies = [
  "aliasable",
- "ouroboros_macro 0.15.5",
+ "ouroboros_macro 0.17.2",
+ "static_assertions",
 ]
 
 [[package]]
@@ -7119,15 +7120,15 @@ dependencies = [
 
 [[package]]
 name = "ouroboros_macro"
-version = "0.15.5"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a0d9d1a6191c4f391f87219d1ea42b23f09ee84d64763cd05ee6ea88d9f384d"
+checksum = "ec4c6225c69b4ca778c0aea097321a64c421cf4577b331c61b229267edabb6f8"
 dependencies = [
- "Inflector",
+ "heck 0.4.1",
  "proc-macro-error",
  "proc-macro2 1.0.58",
  "quote 1.0.26",
- "syn 1.0.107",
+ "syn 2.0.16",
 ]
 
 [[package]]
@@ -12544,7 +12545,7 @@ dependencies = [
  "msim",
  "num_cpus",
  "once_cell",
- "ouroboros 0.15.5",
+ "ouroboros 0.17.2",
  "proc-macro2 1.0.58",
  "prometheus",
  "quote 1.0.26",
@@ -13780,9 +13781,9 @@ dependencies = [
  "opaque-debug",
  "openssl-probe",
  "os_str_bytes",
- "ouroboros 0.15.5",
+ "ouroboros 0.17.2",
  "ouroboros 0.9.5",
- "ouroboros_macro 0.15.5",
+ "ouroboros_macro 0.17.2",
  "ouroboros_macro 0.9.5",
  "output_vt100",
  "outref",

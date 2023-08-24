@@ -338,7 +338,7 @@ object_store = { version = "=0.5.4", features = [
   "azure",
 ] }
 once_cell = "1.18.0"
-ouroboros = "0.15.5"
+ouroboros = "0.17"
 parking_lot = "0.12.1"
 pkcs8 = { version = "0.9.0", features = ["std"] }
 pprof = { version = "0.11.0", features = ["cpp", "frame-pointer"] }
