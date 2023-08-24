@@ -69,27 +69,28 @@ async_once = { version = "0.2", default-features = false }
 atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
 auto_ops = { version = "0.3", default-features = false }
-aws-config = { version = "0.55" }
-aws-credential-types = { version = "0.55", default-features = false }
-aws-endpoint = { version = "0.55", default-features = false }
-aws-http = { version = "0.55", default-features = false }
-aws-sdk-dynamodb = { version = "0.28" }
-aws-sdk-s3 = { version = "0.28" }
-aws-sdk-sso = { version = "0.28", default-features = false }
-aws-sdk-sts = { version = "0.28", default-features = false }
-aws-sig-auth = { version = "0.55", default-features = false, features = ["sign-eventstream"] }
-aws-sigv4 = { version = "0.55", features = ["sign-eventstream"] }
-aws-smithy-async = { version = "0.55", default-features = false, features = ["rt-tokio"] }
-aws-smithy-checksums = { version = "0.55", default-features = false }
-aws-smithy-client = { version = "0.55", default-features = false, features = ["rustls"] }
-aws-smithy-eventstream = { version = "0.55", default-features = false }
-aws-smithy-http = { version = "0.55", default-features = false, features = ["event-stream", "rt-tokio"] }
-aws-smithy-http-tower = { version = "0.55", default-features = false }
-aws-smithy-json = { version = "0.55", default-features = false }
-aws-smithy-query = { version = "0.55", default-features = false }
-aws-smithy-types = { version = "0.55", default-features = false }
-aws-smithy-xml = { version = "0.55", default-features = false }
-aws-types = { version = "0.55", default-features = false }
+aws-config = { version = "0.56" }
+aws-credential-types = { version = "0.56", default-features = false }
+aws-http = { version = "0.56", default-features = false }
+aws-runtime = { version = "0.56", default-features = false, features = ["event-stream"] }
+aws-sdk-dynamodb = { version = "0.29" }
+aws-sdk-s3 = { version = "0.29" }
+aws-sdk-sso = { version = "0.30", default-features = false }
+aws-sdk-sts = { version = "0.30", default-features = false }
+aws-sigv4 = { version = "0.56", features = ["sign-eventstream"] }
+aws-smithy-async = { version = "0.56", default-features = false, features = ["rt-tokio"] }
+aws-smithy-checksums = { version = "0.56", default-features = false }
+aws-smithy-client = { version = "0.56", default-features = false, features = ["rustls"] }
+aws-smithy-eventstream = { version = "0.56", default-features = false }
+aws-smithy-http = { version = "0.56", default-features = false, features = ["event-stream", "rt-tokio"] }
+aws-smithy-http-tower = { version = "0.56", default-features = false }
+aws-smithy-json = { version = "0.56", default-features = false }
+aws-smithy-query = { version = "0.56", default-features = false }
+aws-smithy-runtime = { version = "0.56", default-features = false, features = ["client"] }
+aws-smithy-runtime-api = { version = "0.56", features = ["client"] }
+aws-smithy-types = { version = "0.56", default-features = false }
+aws-smithy-xml = { version = "0.56", default-features = false }
+aws-types = { version = "0.56", default-features = false }
 axum = { version = "0.6", features = ["headers", "http2", "ws"] }
 axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
@@ -244,7 +245,8 @@ fail = { version = "0.4", default-features = false }
 fast_chemail = { version = "0.9", default-features = false }
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4e7debce78340848f0009b648f56d912d6bd02d5", features = ["copy_key"] }
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4e7debce78340848f0009b648f56d912d6bd02d5", default-features = false }
-fastrand = { version = "1", default-features = false }
+fastrand-dff4ba8e3ae991db = { package = "fastrand", version = "1", default-features = false }
+fastrand-f595c2ba2a3f28df = { package = "fastrand", version = "2" }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
 ff-594e8ee84c453af0 = { package = "ff", version = "0.13", default-features = false, features = ["alloc"] }
@@ -788,27 +790,28 @@ atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
 auto_ops = { version = "0.3", default-features = false }
 autocfg = { version = "1", default-features = false }
-aws-config = { version = "0.55" }
-aws-credential-types = { version = "0.55", default-features = false }
-aws-endpoint = { version = "0.55", default-features = false }
-aws-http = { version = "0.55", default-features = false }
-aws-sdk-dynamodb = { version = "0.28" }
-aws-sdk-s3 = { version = "0.28" }
-aws-sdk-sso = { version = "0.28", default-features = false }
-aws-sdk-sts = { version = "0.28", default-features = false }
-aws-sig-auth = { version = "0.55", default-features = false, features = ["sign-eventstream"] }
-aws-sigv4 = { version = "0.55", features = ["sign-eventstream"] }
-aws-smithy-async = { version = "0.55", default-features = false, features = ["rt-tokio"] }
-aws-smithy-checksums = { version = "0.55", default-features = false }
-aws-smithy-client = { version = "0.55", default-features = false, features = ["rustls"] }
-aws-smithy-eventstream = { version = "0.55", default-features = false }
-aws-smithy-http = { version = "0.55", default-features = false, features = ["event-stream", "rt-tokio"] }
-aws-smithy-http-tower = { version = "0.55", default-features = false }
-aws-smithy-json = { version = "0.55", default-features = false }
-aws-smithy-query = { version = "0.55", default-features = false }
-aws-smithy-types = { version = "0.55", default-features = false }
-aws-smithy-xml = { version = "0.55", default-features = false }
-aws-types = { version = "0.55", default-features = false }
+aws-config = { version = "0.56" }
+aws-credential-types = { version = "0.56", default-features = false }
+aws-http = { version = "0.56", default-features = false }
+aws-runtime = { version = "0.56", default-features = false, features = ["event-stream"] }
+aws-sdk-dynamodb = { version = "0.29" }
+aws-sdk-s3 = { version = "0.29" }
+aws-sdk-sso = { version = "0.30", default-features = false }
+aws-sdk-sts = { version = "0.30", default-features = false }
+aws-sigv4 = { version = "0.56", features = ["sign-eventstream"] }
+aws-smithy-async = { version = "0.56", default-features = false, features = ["rt-tokio"] }
+aws-smithy-checksums = { version = "0.56", default-features = false }
+aws-smithy-client = { version = "0.56", default-features = false, features = ["rustls"] }
+aws-smithy-eventstream = { version = "0.56", default-features = false }
+aws-smithy-http = { version = "0.56", default-features = false, features = ["event-stream", "rt-tokio"] }
+aws-smithy-http-tower = { version = "0.56", default-features = false }
+aws-smithy-json = { version = "0.56", default-features = false }
+aws-smithy-query = { version = "0.56", default-features = false }
+aws-smithy-runtime = { version = "0.56", default-features = false, features = ["client"] }
+aws-smithy-runtime-api = { version = "0.56", features = ["client"] }
+aws-smithy-types = { version = "0.56", default-features = false }
+aws-smithy-xml = { version = "0.56", default-features = false }
+aws-types = { version = "0.56", default-features = false }
 axum = { version = "0.6", features = ["headers", "http2", "ws"] }
 axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
@@ -990,7 +993,8 @@ fast_chemail = { version = "0.9", default-features = false }
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4e7debce78340848f0009b648f56d912d6bd02d5", features = ["copy_key"] }
 fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4e7debce78340848f0009b648f56d912d6bd02d5", default-features = false }
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4e7debce78340848f0009b648f56d912d6bd02d5", default-features = false }
-fastrand = { version = "1", default-features = false }
+fastrand-dff4ba8e3ae991db = { package = "fastrand", version = "1", default-features = false }
+fastrand-f595c2ba2a3f28df = { package = "fastrand", version = "2" }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
 ff-594e8ee84c453af0 = { package = "ff", version = "0.13", default-features = false, features = ["alloc"] }
