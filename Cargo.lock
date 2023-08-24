@@ -8654,7 +8654,7 @@ checksum = "c911ba11bc8433e811ce56fde130ccf32f5127cab0e0194e9c68c5a5b671791e"
 dependencies = [
  "log",
  "ring",
- "rustls-webpki 0.100.1",
+ "rustls-webpki 0.100.2",
  "sct",
 ]
 
@@ -8681,9 +8681,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.100.1"
+version = "0.100.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6207cd5ed3d8dca7816f8f3725513a34609c0c765bf652b8c3cb4cfd87db46b"
+checksum = "e98ff011474fa39949b7e5c0428f9b4937eda7da7848bbb947786b7be0b27dab"
 dependencies = [
  "ring",
  "untrusted",
@@ -13920,7 +13920,7 @@ dependencies = [
  "rustls 0.21.1",
  "rustls-native-certs",
  "rustls-pemfile",
- "rustls-webpki 0.100.1",
+ "rustls-webpki 0.100.2",
  "rustls-webpki 0.101.4",
  "rustversion",
  "rusty-fork",
