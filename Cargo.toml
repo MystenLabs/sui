@@ -206,9 +206,9 @@ assert_cmd = "2.0.6"
 async-graphql = "5.0.10"
 async-recursion = "1.0.4"
 async-trait = "0.1.61"
-aws-config = "0.55.3"
-aws-sdk-dynamodb = "0.28.0"
-aws-sdk-s3 = "0.28.0"
+aws-config = "0.56"
+aws-sdk-dynamodb = "0.29.0"
+aws-sdk-s3 = "0.29.0"
 axum = { version = "0.6.6", default-features = false, features = [
   "headers",
   "tokio",
