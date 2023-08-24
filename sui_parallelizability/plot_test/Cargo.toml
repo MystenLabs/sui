@@ -1,0 +1,8 @@
+[package]
+name = "plot_test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+charming = { version = "0.2", features = ["ssr"] }
+polars = { version = "0.31", features = ["lazy"] }

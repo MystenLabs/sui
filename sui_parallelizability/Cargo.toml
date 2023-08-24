@@ -1,0 +1,14 @@
+[package]
+name = "sui_parallelizability"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+clap = "4"
+futures = "0.3"
+petgraph = "0.6"
+rayon = "1"
+sui-json-rpc = { git = "https://github.com/MystenLabs/sui" }
+sui-sdk = { git = "https://github.com/MystenLabs/sui" }
+tokio = "1"
