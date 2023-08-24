@@ -15,9 +15,12 @@ import { useBreakpoint } from '~/hooks/useBreakpoint';
 import { Divider } from '~/ui/Divider';
 import { PageHeader } from '~/ui/PageHeader';
 import { SplitPanes } from '~/ui/SplitPanes';
-import { TabHeader } from '~/ui/Tabs';
+import { TabHeader, TabsList, TabsTrigger } from '~/ui/Tabs';
+import { Tooltip } from '~/ui/Tooltip';
+import { ampli } from '~/utils/analytics/ampli';
 
-const LEFT_PANE_DEFAULT_SIZE = 30;
+const LEFT_RIGHT_PANEL_MIN_SIZE = 30;
+const TOP_PANEL_MIN_SIZE = 20;
 
 function AddressResultPageHeader({ address, loading }: { address: string; loading?: boolean }) {
 	const { data: domainName, isFetching } = useResolveSuiNSName(address);
@@ -43,53 +46,46 @@ function AddressResult({ address }: { address: string }) {
 	const isMediumOrAbove = useBreakpoint('md');
 
 	const leftPane = {
-		panel: (
-			<div className="flex-1 overflow-hidden pt-5 md:pr-7 md:pt-0">
-				<OwnedCoins id={address} />
-			</div>
-		),
-		minSize: LEFT_PANE_DEFAULT_SIZE,
-		defaultSize: LEFT_PANE_DEFAULT_SIZE,
+		panel: <OwnedCoins id={address} />,
+		minSize: LEFT_RIGHT_PANEL_MIN_SIZE,
+		defaultSize: LEFT_RIGHT_PANEL_MIN_SIZE,
 	};
 
 	const rightPane = {
 		panel: <OwnedObjects id={address} />,
-		minSize: 30,
+		minSize: LEFT_RIGHT_PANEL_MIN_SIZE,
 	};
 
 	const topPane = {
 		panel: (
-			<div id="top-pane" className="flex h-full flex-col justify-between">
-				<div className="h-full">
-					<ErrorBoundary>
-						{isMediumOrAbove ? (
-							<SplitPanes splitPanels={[leftPane, rightPane]} direction="horizontal" />
-						) : (
-							<>
-								{leftPane.panel}
-								<div className="my-8">
-									<Divider />
-								</div>
-								<div className="h-coinsAndAssetsContainer">{rightPane.panel}</div>
-							</>
-						)}
-					</ErrorBoundary>
-				</div>
+			<div className="flex h-full flex-col justify-between pt-5">
+				<ErrorBoundary>
+					{isMediumOrAbove ? (
+						<SplitPanes splitPanels={[leftPane, rightPane]} direction="horizontal" />
+					) : (
+						<>
+							{leftPane.panel}
+							<div className="my-8">
+								<Divider />
+							</div>
+							<div className="h-coinsAndAssetsContainer">{rightPane.panel}</div>
+						</>
+					)}
+				</ErrorBoundary>
 			</div>
 		),
+		minSize: TOP_PANEL_MIN_SIZE,
 	};
 
 	const bottomPane = {
 		panel: (
-			<div className="flex h-full flex-col">
-				<div className="pt-12">
-					<TabHeader title="Transaction Blocks">
-						<div className="h-0" />
-					</TabHeader>
-				</div>
+			<div className="flex h-full flex-col pt-12">
+				<TabsList>
+					<TabsTrigger value="tab">Transaction Blocks</TabsTrigger>
+				</TabsList>
 
 				<ErrorBoundary>
-					<div data-testid="tx" className="h-full overflow-auto">
+					<div data-testid="tx" className="mt-4 h-full overflow-auto">
 						<TransactionsForAddress address={address} type="address" />
 					</div>
 				</ErrorBoundary>
@@ -100,7 +96,7 @@ function AddressResult({ address }: { address: string }) {
 	return (
 		<TabHeader title="Owned Objects" noGap>
 			{isMediumOrAbove ? (
-				<div className="mt-5 h-[1200px]">
+				<div className="h-300">
 					<SplitPanes splitPanels={[topPane, bottomPane]} direction="vertical" />
 				</div>
 			) : (

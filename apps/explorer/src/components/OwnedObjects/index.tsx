@@ -103,7 +103,7 @@ export function OwnedObjects({ id }: { id: string }) {
 
 	return (
 		<div className="flex h-full overflow-hidden md:pl-7">
-			<div className="flex h-full flex-col justify-between gap-4">
+			<div className="flex h-full w-full flex-col gap-4">
 				<div className="flex w-full justify-between border-b border-gray-45 pb-3">
 					<div className="flex w-full flex-col items-start gap-3 sm:flex-row sm:items-center">
 						<Heading color="steel-darker" variant="heading4/semibold">
@@ -164,7 +164,7 @@ export function OwnedObjects({ id }: { id: string }) {
 					<SmallThumbNailsView loading={isFetching} data={sortedDataByDisplayImages} />
 				)}
 				{showPagination && (
-					<div className="flex flex-row flex-wrap gap-2">
+					<div className="mt-auto flex flex-row flex-wrap gap-2">
 						<Pagination {...pagination} />
 						<div className="ml-auto flex items-center">
 							{!isFetching && (

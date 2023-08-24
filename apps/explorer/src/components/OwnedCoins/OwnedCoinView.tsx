@@ -89,13 +89,7 @@ export default function OwnedCoinView({ coin, id }: OwnedCoinViewProps) {
 			</Collapsible.Trigger>
 
 			<Collapsible.Content>
-				<div
-					className="flex flex-col gap-1 bg-gray-40 p-3"
-					style={{
-						borderBottomLeftRadius: '8px',
-						borderBottomRightRadius: '8px',
-					}}
-				>
+				<div className="flex flex-col gap-1 rounded-bl-lg rounded-br-lg bg-gray-40 p-3">
 					<CoinsPanel id={id} coinType={coin.coinType} />
 				</div>
 			</Collapsible.Content>

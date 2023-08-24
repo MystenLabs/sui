@@ -118,7 +118,7 @@ export function ListView({ data, loading }: ListViewProps) {
 			</div>
 			{loading && new Array(10).fill(0).map((_, index) => <ListViewItem key={index} loading />)}
 
-			<div className="flex h-full w-full flex-col overflow-y-scroll">
+			<div className="flex h-full w-full flex-col overflow-auto">
 				{data?.map((obj) => {
 					if (!obj.data) {
 						return null;

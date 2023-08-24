@@ -169,6 +169,7 @@ export default {
 			height: {
 				31.5: '7.5rem',
 				120: '30rem',
+				300: '75rem',
 				coinsAndAssetsContainer: '31.25rem',
 			},
 			maxHeight: {
