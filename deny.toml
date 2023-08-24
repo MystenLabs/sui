@@ -51,8 +51,6 @@ ignore = [
     # "RUSTSEC-0000-0000",
     # potential segfault in the time crate, brought by chrono et al.
     "RUSTSEC-2020-0071",
-    # potential segfault in localtime_r, brought by chrono et al.
-    "RUSTSEC-2020-0159",
     # potential DOS
     "RUSTSEC-2023-0034"
 ]
