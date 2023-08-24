@@ -13,7 +13,7 @@ use crate::types::object::ObjectKind;
 use crate::types::protocol_config::ProtocolConfigAttr;
 use crate::types::protocol_config::ProtocolConfigFeatureFlag;
 use crate::types::protocol_config::ProtocolConfigs;
-use crate::types::transaction_block::{TransactionBlock, TransactionBlockEffects};
+use crate::types::transaction_block::{ExecutionStatus, TransactionBlock, TransactionBlockEffects};
 use crate::types::{object::Object, sui_address::SuiAddress};
 
 use crate::types::gas::{GasCostSummary, GasEffects, GasInput};
@@ -22,7 +22,7 @@ use async_graphql::*;
 use async_trait::async_trait;
 use std::str::FromStr;
 use sui_json_rpc_types::{
-    OwnedObjectRef, SuiGasData, SuiObjectDataOptions, SuiObjectResponseQuery,
+    OwnedObjectRef, SuiExecutionStatus, SuiGasData, SuiObjectDataOptions, SuiObjectResponseQuery,
     SuiPastObjectResponse, SuiRawData, SuiTransactionBlockDataAPI, SuiTransactionBlockEffectsAPI,
     SuiTransactionBlockResponseOptions,
 };
@@ -37,6 +37,8 @@ use sui_sdk::{
 };
 
 use crate::server::data_provider::DataProvider;
+
+const DEFAULT_PAGE_SIZE: usize = 50;
 
 #[async_trait]
 impl DataProvider for SuiClient {
@@ -73,15 +75,7 @@ impl DataProvider for SuiClient {
         before: Option<String>,
         _filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, Object>> {
-        if before.is_some() && after.is_some() {
-            return Err(Error::CursorNoBeforeAfter.extend());
-        }
-        if first.is_some() && last.is_some() {
-            return Err(Error::CursorNoFirstLast.extend());
-        }
-        if before.is_some() || last.is_some() {
-            return Err(Error::CursorNoReversePagination.extend());
-        }
+        ensure_forward_pagination(&first, &after, &last, &before)?;
 
         let count = first.map(|q| q as usize);
         let native_owner = NativeSuiAddress::from(owner);
@@ -134,6 +128,44 @@ impl DataProvider for SuiClient {
         Ok(convert_bal(b))
     }
 
+    async fn fetch_balance_connection(
+        &self,
+        address: &SuiAddress,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+    ) -> Result<Connection<String, Balance>> {
+        ensure_forward_pagination(&first, &after, &last, &before)?;
+
+        let count = first.unwrap_or(DEFAULT_PAGE_SIZE as u64) as usize;
+        let offset = after
+            .map(|q| q.parse::<usize>().unwrap())
+            .unwrap_or(0 as usize);
+
+        // This fetches all balances but we only want a slice
+        // The pagination logic here can break if data is added
+        // This is okay for now as we're only using this for testing
+        let balances = self
+            .coin_read_api()
+            .get_all_balances(NativeSuiAddress::from(address))
+            .await?;
+
+        let max = balances.len();
+
+        let bs = balances.into_iter().skip(offset).take(count);
+
+        let mut connection = Connection::new(false, offset + count < max);
+
+        connection
+            .edges
+            .extend(bs.into_iter().enumerate().map(|(i, b)| {
+                let balance = convert_bal(b);
+                Edge::new(format!("{:032}", offset + i).to_string(), balance)
+            }));
+        Ok(connection)
+    }
+
     async fn fetch_tx(&self, digest: &str) -> Result<Option<TransactionBlock>> {
         let tx_digest = TransactionDigest::from_str(digest)?;
         let tx = self
@@ -156,6 +188,14 @@ impl DataProvider for SuiClient {
             effects: Some(TransactionBlockEffects {
                 digest: tx_effects.transaction_digest().to_string(),
                 gas_effects,
+                status: Some(match tx_effects.status() {
+                    SuiExecutionStatus::Success => ExecutionStatus::Success,
+                    SuiExecutionStatus::Failure { error: _ } => ExecutionStatus::Failure,
+                }),
+                errors: match tx_effects.status() {
+                    SuiExecutionStatus::Success => None,
+                    SuiExecutionStatus::Failure { error } => Some(error.clone()),
+                },
             }),
             sender: Some(Address {
                 address: SuiAddress::from_array(sender.to_inner()),
@@ -318,4 +358,22 @@ impl From<&SuiAddress> for NativeSuiAddress {
     fn from(a: &SuiAddress) -> Self {
         NativeSuiAddress::try_from(a.as_slice()).unwrap()
     }
+}
+
+fn ensure_forward_pagination(
+    first: &Option<u64>,
+    after: &Option<String>,
+    last: &Option<u64>,
+    before: &Option<String>,
+) -> Result<()> {
+    if before.is_some() && after.is_some() {
+        return Err(Error::CursorNoBeforeAfter.extend());
+    }
+    if first.is_some() && last.is_some() {
+        return Err(Error::CursorNoFirstLast.extend());
+    }
+    if before.is_some() || last.is_some() {
+        return Err(Error::CursorNoReversePagination.extend());
+    }
+    Ok(())
 }

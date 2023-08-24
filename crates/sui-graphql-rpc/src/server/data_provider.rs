@@ -26,6 +26,15 @@ pub(crate) trait DataProvider: Send + Sync {
 
     async fn fetch_balance(&self, address: &SuiAddress, type_: Option<String>) -> Result<Balance>;
 
+    async fn fetch_balance_connection(
+        &self,
+        address: &SuiAddress,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+    ) -> Result<Connection<String, Balance>>;
+
     async fn fetch_tx(&self, digest: &str) -> Result<Option<TransactionBlock>>;
 
     async fn fetch_chain_id(&self) -> Result<String>;
