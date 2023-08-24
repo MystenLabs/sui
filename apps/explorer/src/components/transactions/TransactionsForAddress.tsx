@@ -73,5 +73,5 @@ export function TransactionsForAddress({ address, type }: Props) {
 
 	const tableData = genTableDataFromTxData(data);
 
-	return <TableCard data={tableData.data} columns={tableData.columns} />;
+	return <TableCard noBorderBottom data={tableData.data} columns={tableData.columns} />;
 }

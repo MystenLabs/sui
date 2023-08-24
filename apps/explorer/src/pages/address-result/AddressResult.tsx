@@ -16,8 +16,6 @@ import { Divider } from '~/ui/Divider';
 import { PageHeader } from '~/ui/PageHeader';
 import { SplitPanes } from '~/ui/SplitPanes';
 import { TabHeader, TabsList, TabsTrigger } from '~/ui/Tabs';
-import { Tooltip } from '~/ui/Tooltip';
-import { ampli } from '~/utils/analytics/ampli';
 
 const LEFT_RIGHT_PANEL_MIN_SIZE = 30;
 const TOP_PANEL_MIN_SIZE = 20;
@@ -58,10 +56,14 @@ function AddressResult({ address }: { address: string }) {
 
 	const topPane = {
 		panel: (
-			<div className="flex h-full flex-col justify-between pt-5">
+			<div className="flex h-full flex-col justify-between">
 				<ErrorBoundary>
 					{isMediumOrAbove ? (
-						<SplitPanes splitPanels={[leftPane, rightPane]} direction="horizontal" />
+						<SplitPanes
+							dividerSize="none"
+							splitPanels={[leftPane, rightPane]}
+							direction="horizontal"
+						/>
 					) : (
 						<>
 							{leftPane.panel}
@@ -89,6 +91,10 @@ function AddressResult({ address }: { address: string }) {
 						<TransactionsForAddress address={address} type="address" />
 					</div>
 				</ErrorBoundary>
+
+				<div className="mt-0.5">
+					<Divider />
+				</div>
 			</div>
 		),
 	};
@@ -97,7 +103,7 @@ function AddressResult({ address }: { address: string }) {
 		<TabHeader title="Owned Objects" noGap>
 			{isMediumOrAbove ? (
 				<div className="h-300">
-					<SplitPanes splitPanels={[topPane, bottomPane]} direction="vertical" />
+					<SplitPanes dividerSize="none" splitPanels={[topPane, bottomPane]} direction="vertical" />
 				</div>
 			) : (
 				<>

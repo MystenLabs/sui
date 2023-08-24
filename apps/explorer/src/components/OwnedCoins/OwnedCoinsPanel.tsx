@@ -8,12 +8,12 @@ import { useEffect, useRef } from 'react';
 
 import CoinItem from './CoinItem';
 
+const MIN_CONTAINER_WIDTH_SIZE = 500;
+
 type CoinsPanelProps = {
 	coinType: string;
 	id: string;
 };
-
-const MIN_COIN_ITEM_WIDTH = 250;
 
 export default function CoinsPanel({ coinType, id }: CoinsPanelProps) {
 	const containerRef = useRef(null);
@@ -39,8 +39,8 @@ export default function CoinsPanel({ coinType, id }: CoinsPanelProps) {
 							<div
 								key={coin.coinObjectId}
 								className={clsx(
-									`w-full min-w-[${MIN_COIN_ITEM_WIDTH}px] basis-1/2 pb-3 pr-3`,
-									containerWidth <= MIN_COIN_ITEM_WIDTH * 2 && 'basis-full',
+									'w-full min-w-coinItemContainer pb-3 md:pr-3',
+									containerWidth > MIN_CONTAINER_WIDTH_SIZE && 'basis-1/3',
 								)}
 							>
 								<CoinItem coin={coin} />
