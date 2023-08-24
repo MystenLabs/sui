@@ -16,6 +16,8 @@
 /// - shared balance
 /// - convert to Coin
 /// - convert from Coin
+/// - create zero
+/// - destroy zero
 ///
 /// The Sui Framework already has a Balance<T> primitive which seems like the best base to utilize
 /// for an experiment like this. Supply<T> will control the supply, however, in this implemntation
@@ -33,6 +35,7 @@
 /// - CL stands for Closed-Loop.
 /// - We're using TempToken to abstract away from ownership.
 module closed_loop::closed_loop {
+    use std::option::{Self, Option};
     use std::type_name::{Self, TypeName};
     use sui::balance::{Self, Balance, Supply};
     use sui::object::{Self, ID, UID};
@@ -48,8 +51,12 @@ module closed_loop::closed_loop {
     const EAlreadyExists: u64 = 2;
     /// Trying to spend more than the balance.
     const ENotEnough: u64 = 3;
-    /// For the functions that are being designed.
-    const ENotImplemented: u64 = 1337;
+    /// Trying to use a disabled resolver.
+    const EResolverDisabled: u64 = 4;
+    /// Trying to process more than the single limit.
+    const ESingleLimitExceeded: u64 = 5;
+    /// Trying to process more than the total limit.
+    const ETotalLimitExceeded: u64 = 6;
 
     // === Policy and Cap ===
 
@@ -60,24 +67,39 @@ module closed_loop::closed_loop {
     }
 
     /// A policy that defines the rules for a specific token.
+    ///
+    /// Similar to `TreasuryCap<T>`
     struct CLPolicy<phantom T> has key, store {
         id: UID,
         /// NOTE: depending on whether we want to allow multiple policies, we can choose to use the
         /// TreasuryCap here.
         supply: Supply<T>,
-
+        /// A list of currently active resolvers for this policy. Resolvers can
+        /// be disabled at any moment by removing them from this `VecSet`.
+        /// Added via the `create_resolver` function.
         custom_resolvers: VecSet<ID>,
+        /// A list of actions that are allowed to be resolved by default. Added
+        /// via the `allow` function.
         allowed_actions: VecSet<TypeName>
     }
 
     /// A resolver that can be used to resolve a specific action.
+    /// Comes with a configuration:
+    /// - single limit - max amount that can be processed in a single operation
+    /// - total limit  - max amount that can be processed in total by the Resolver
     struct Resolver<phantom T, phantom Action> has store, drop {
         id: ID,
+        /// Total limit of Tokens that can be processed by this resolver in total.
+        total_limit: Option<u64>,
+        /// Max amount of a single Token that can be processed by this resolver.
+        single_limit: Option<u64>,
+        /// Sum of amounts of Tokens that have been processed by this resolver.
+        processed: u64
     }
 
     // === Storage Models ===
 
-    /// A single owner Token.
+    /// A single owner Token, similar to Coin<T> but without `store`.
     struct Token<phantom T> has key {
         id: UID,
         balance: Balance<T>
@@ -88,39 +110,36 @@ module closed_loop::closed_loop {
     /// A temporary struct which is used in between operations.
     /// We use it to generalize Owned and Shared balance operations.
     struct TempToken<phantom T> {
+        /// Balance of the token, similar to Coin<T>
         balance: Balance<T>
     }
 
     // === Actions ===
 
-    /// A single permission that can be granted to a token.
+    /// A request for an action to be resolved; whenever any of the action
+    /// functions are called, they return an `ActionRequest` which can must
+    /// resolved either in the Policy using the `resolve_default` function or
+    /// in a custom resolver using the `resolve_custom` function.
     struct ActionRequest<phantom T, phantom Action> {
-        /// The amount of the CLToken that is being operated on.
+        /// The amount of the Token that is being operated on.
         amount: u64,
-        // Whether the request was resolved using a 3rd party functionality.
-        // external: bool
     }
 
-    // I really want an enum...
+    // === Action Types ===
 
-    /// GENERAL: The action of minting a new token.
-    struct Mint {}
-    /// GENERAL: The action of burning an existing token.
-    struct Burn {}
-    /// GENERAL: The action of splitting an existing token into two.
-    struct Split {}
-    /// GENERAL: The action of joining two existing tokens into one.
-    struct Join {}
+    struct Mint {}      // GENERAL: The action of minting a new token.
+    struct Burn {}      // GENERAL: The action of burning an existing token.
+    struct Split {}     // GENERAL: The action of splitting an existing token into two.
+    struct Join {}      // GENERAL: The action of joining two existing tokens into one.
 
-    /// STORAGE: The action of merging an existing token with a shared balance.
-    struct Spend {}
-    /// STORAGE: The action of transferring an existing token.
-    struct Transfer {}
+    struct Spend {}     // STORAGE: The action of merging an existing token with a shared balance.
+    struct Transfer {}  // STORAGE: The action of transferring an existing token.
 
-    /// CONVERSION: The action of converting a token into a Coin.
-    struct ToCoin {}
-    /// CONVERSION: The action of converting a Coin into a token.
-    struct FromCoin {}
+    struct ToCoin {}    // CONVERSION: The action of converting a token into a Coin.
+    struct FromCoin {}  // CONVERSION: The action of converting a Coin into a token.
+
+    struct Zero {}        // UTILITY: The action of creating a zero Token.
+    struct DestroyZero {} // UTILITY: The action of destroying a zero Token.
 
     // === Creator Actions ===
 
@@ -179,6 +198,18 @@ module closed_loop::closed_loop {
         ActionRequest { amount }
     }
 
+    /// Create a zero balance token.
+    public fun zero<T>(_ctx: &mut TxContext): (TempToken<T>, ActionRequest<T, Zero>) {
+        (TempToken { balance: balance::zero() }, ActionRequest { amount: 0 })
+    }
+
+    /// Destroy zero balance token.
+    public fun destroy_zero<T>(token: TempToken<T>, _ctx: &mut TxContext): ActionRequest<T, DestroyZero> {
+        let TempToken { balance } = token;
+        balance::destroy_zero(balance);
+        ActionRequest { amount: 0 }
+    }
+
     // === Ownership and storage models ===
 
     /// Create a temporary token from an owned one.
@@ -225,19 +256,7 @@ module closed_loop::closed_loop {
         (token, ActionRequest { amount })
     }
 
-    // === ActionRequest resolution ===
-
-    /// Create a custom resolver for a policy (unlike default when an action is allowed in the policy by default).
-    public fun create_resolver<T, Action>(_cap: &CoinIssuerCap<T>, policy: &mut CLPolicy<T>, ctx: &mut TxContext): Resolver<T, Action> {
-        let id = object::id_from_address(sui::tx_context::fresh_object_address(ctx));
-        vec_set::insert(&mut policy.custom_resolvers, id);
-        Resolver { id }
-    }
-
-    /// Resolve an action request using a custom resolver.
-    public fun resolve_custom<T, Action>(resolver: &Resolver<T, Action>, req: ActionRequest<T, Action>) {
-        let ActionRequest { amount: _ } = req;
-    }
+    // === ActionRequest Resolution ===
 
     /// Resolve an action request if it is allowed.
     public fun resolve_default<T, Action>(policy: &mut CLPolicy<T>, req: ActionRequest<T, Action>) {
@@ -245,12 +264,53 @@ module closed_loop::closed_loop {
         let ActionRequest { amount: _ } = req;
     }
 
-    /// Allow an action to be resolved in the policy.
+    /// Allow an action to be resolved in the policy - allowed to everyone.
     public fun allow<T, Action>(_cap: &CoinIssuerCap<T>, policy: &mut CLPolicy<T>) {
         let type_name = type_name::get<Action>();
 
         assert!(!vec_set::contains(&policy.allowed_actions, &type_name), EAlreadyExists);
         vec_set::insert(&mut policy.allowed_actions, type_name);
+    }
+
+    // === Custom Resolution ===
+
+    /// Create a custom resolver for a policy (unlike default when an action is allowed in the policy by default).
+    public fun create_resolver<T, Action>(
+        _cap: &CoinIssuerCap<T>,
+        policy: &mut CLPolicy<T>,
+        single_limit: Option<u64>,
+        total_limit: Option<u64>,
+        ctx: &mut TxContext
+    ): Resolver<T, Action> {
+        let id = object::id_from_address(sui::tx_context::fresh_object_address(ctx));
+        vec_set::insert(&mut policy.custom_resolvers, id);
+        Resolver { id, single_limit, total_limit, processed: 0 }
+    }
+
+    /// Resolve an action request using a custom resolver.
+    public fun resolve_custom<T, Action>(
+        policy: &mut CLPolicy<T>,
+        resolver: &mut Resolver<T, Action>,
+        req: ActionRequest<T, Action>,
+    ) {
+        let ActionRequest { amount } = req;
+        let processed = resolver.processed + amount;
+
+        assert!(vec_set::contains(&policy.custom_resolvers, &resolver.id), EResolverDisabled);
+        assert!(less_than_option(amount, &resolver.single_limit), ESingleLimitExceeded);
+        assert!(less_than_option(processed, &resolver.total_limit), ETotalLimitExceeded);
+
+        resolver.processed = processed;
+    }
+
+    /// Disable a custom resolver by removing it from the `custom_resolvers` list.
+    public fun disable_resolver<T>(
+        _cap: &CoinIssuerCap<T>,
+        policy: &mut CLPolicy<T>,
+        resolver_id: ID,
+        _ctx: &mut TxContext
+    ) {
+        vec_set::remove(&mut policy.custom_resolvers, &resolver_id);
     }
 
     /// Only for owner (or custom logic). Resolves any request.
@@ -260,13 +320,33 @@ module closed_loop::closed_loop {
 
     // === Reads ===
 
-    /// Read the value of the token.
+    /// Get the value of the token.
     public fun value<T>(token: &TempToken<T>): u64 { balance::value(&token.balance) }
 
+    /// Get the value of the action request.
+    public fun action_value<T, Action>(action: &ActionRequest<T, Action>): u64 { action.amount }
 
-    // Open questions:
-    //
-    // - How to solve mint / burn requests and how to delegate them to a third party.
-    // - Should split / merge be protected? In my opinion - yes, but wonder if there's a caveat to this.
-    // - Which ownership types do we want to allow. I'm pro everything altogether.
+    /// Get the total supply of the policy.
+    public fun total_supply<T>(policy: &CLPolicy<T>): u64 { balance::supply_value(&policy.supply) }
+
+    /// Get the processed amount of the resolver.
+    public fun resolver_processed<T, Action>(resolver: &Resolver<T, Action>): u64 { resolver.processed }
+
+    /// Get the total limit of the resolver.
+    public fun resolver_total_limit<T, Action>(resolver: &Resolver<T, Action>): Option<u64> { resolver.total_limit }
+
+    /// Get the single limit of the resolver.
+    public fun resolver_single_limit<T, Action>(resolver: &Resolver<T, Action>): Option<u64> { resolver.single_limit }
+
+    // === Internal ===
+
+    /// If the Option is Some, then make sure that the value is less or equal
+    /// to the stored value. If the Option is None, return true.
+    fun less_than_option(value: u64, option: &Option<u64>): bool {
+        if (option::is_some(option)) {
+            value <= *option::borrow(option)
+        } else {
+            true
+        }
+    }
 }

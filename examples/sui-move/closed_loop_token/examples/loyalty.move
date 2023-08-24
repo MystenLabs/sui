@@ -6,6 +6,8 @@
 /// are not transferable, however, they can be joined and split and can be spent
 /// on a product or service.
 module closed_loop::loyalty {
+    use std::option;
+
     use sui::tx_context::{sender, TxContext};
     use sui::object::{Self, UID};
     use sui::transfer;
@@ -58,11 +60,11 @@ module closed_loop::loyalty {
         cl::allow<LOYALTY, Split>(&cl_cap, &mut cl_policy);
 
         let mint_resolver = cl::create_resolver<LOYALTY, Mint>(
-            &cl_cap, &mut cl_policy, ctx
+            &cl_cap, &mut cl_policy, option::none(), option::none(), ctx
         );
 
         let burn_resolver = cl::create_resolver<LOYALTY, Burn>(
-            &cl_cap, &mut cl_policy, ctx
+            &cl_cap, &mut cl_policy, option::none(), option::none(), ctx
         );
 
         // This is our application, created and shared only once.
@@ -93,7 +95,7 @@ module closed_loop::loyalty {
 
         // Resolve requests using protected `Resolver`s in the App.
         // `Join` and `Split` can be resolved without custom resolvers.
-        cl::resolve_custom(&app.mint_resolver, mint_req);
+        cl::resolve_custom(policy, &mut app.mint_resolver, mint_req);
 
         token
     }
@@ -117,7 +119,7 @@ module closed_loop::loyalty {
         let burn_req = cl::burn(policy, tokens, ctx);
 
         // done.
-        cl::resolve_custom(&app.burn_resolver, burn_req);
+        cl::resolve_custom(policy, &mut app.burn_resolver, burn_req);
 
         PlushyBara {
             id: object::new(ctx)
@@ -141,11 +143,11 @@ module closed_loop::loyalty {
         cl::allow<LOYALTY, Split>(&cl_cap, &mut cl_policy);
 
         let mint_resolver = cl::create_resolver<LOYALTY, Mint>(
-            &cl_cap, &mut cl_policy, ctx
+            &cl_cap, &mut cl_policy, option::none(), option::none(), ctx
         );
 
         let burn_resolver = cl::create_resolver<LOYALTY, Burn>(
-            &cl_cap, &mut cl_policy, ctx
+            &cl_cap, &mut cl_policy, option::none(), option::none(), ctx
         );
 
         // This is our application, created and shared only once.
