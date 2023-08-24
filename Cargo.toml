@@ -252,7 +252,7 @@ colored = "2.0.0"
 comfy-table = "6.1.3"
 console-subscriber = "0.1.6"
 const-str = "0.5.3"
-criterion = { version = "0.4.0", features = [
+criterion = { version = "0.5.0", features = [
   "async",
   "async_tokio",
   "html_reports",
