@@ -331,9 +331,8 @@ ntest = "0.9.0"
 num-bigint = "0.4.3"
 num_cpus = "1.15.0"
 num_enum = "0.6.1"
-object_store = { version = "=0.5.4", features = [
+object_store = { version = "0.7", features = [
   "aws",
-  "aws_profile",
   "gcp",
   "azure",
 ] }
