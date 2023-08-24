@@ -154,8 +154,7 @@ ciborium-io = { version = "0.2", default-features = false, features = ["std"] }
 ciborium-ll = { version = "0.2", default-features = false }
 cipher = { version = "0.4", default-features = false, features = ["block-padding", "std"] }
 clap-164d15cefe24d7eb = { package = "clap", version = "4", features = ["derive"] }
-clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["derive"] }
-clap-f595c2ba2a3f28df = { package = "clap", version = "2" }
+clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["cargo", "derive"] }
 clap_builder = { version = "4", default-features = false, features = ["color", "help", "std", "suggestions", "usage"] }
 clap_lex-6f8ce4dd05d13bba = { package = "clap_lex", version = "0.2", default-features = false }
 clap_lex-d8f496e17d97b5cb = { package = "clap_lex", version = "0.5", default-features = false }
@@ -608,9 +607,7 @@ spki-ca01ad9e24f5d932 = { package = "spki", version = "0.7", default-features = 
 stable_deref_trait = { version = "1" }
 static_assertions = { version = "1", default-features = false }
 strip-ansi-escapes = { version = "0.1", default-features = false }
-strsim-93f6ce9d446188ac = { package = "strsim", version = "0.10", default-features = false }
-strsim-c38e5c1d305a1b54 = { package = "strsim", version = "0.8", default-features = false }
-structopt = { version = "0.3" }
+strsim = { version = "0.10", default-features = false }
 strum = { version = "0.24", features = ["derive"] }
 subtle = { version = "2", default-features = false, features = ["i128", "std"] }
 subtle-ng = { version = "2", default-features = false, features = ["std"] }
@@ -630,8 +627,7 @@ termtree = { version = "0.4", default-features = false }
 test-fuzz = { version = "3", default-features = false }
 test-fuzz-internal = { version = "3", default-features = false }
 test-fuzz-runtime = { version = "3", default-features = false }
-textwrap-986da7b5efc2b80e = { package = "textwrap", version = "0.16", default-features = false }
-textwrap-a6292c17cd707f01 = { package = "textwrap", version = "0.11", default-features = false }
+textwrap = { version = "0.16", default-features = false }
 thiserror = { version = "1", default-features = false }
 thread_local = { version = "1", default-features = false }
 threadpool = { version = "1", default-features = false }
@@ -704,7 +700,6 @@ urlencoding = { version = "2", default-features = false }
 utf-8 = { version = "0.7", default-features = false }
 utf8parse = { version = "0.2" }
 uuid = { version = "1", features = ["fast-rng", "v4"] }
-vec_map = { version = "0.8", default-features = false }
 versions = { version = "4", default-features = false }
 vsimd = { version = "0.8", default-features = false, features = ["detect"] }
 vte = { version = "0.10" }
@@ -887,8 +882,7 @@ ciborium-ll = { version = "0.2", default-features = false }
 cipher = { version = "0.4", default-features = false, features = ["block-padding", "std"] }
 clang-sys = { version = "1", default-features = false, features = ["clang_6_0", "runtime"] }
 clap-164d15cefe24d7eb = { package = "clap", version = "4", features = ["derive"] }
-clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["derive"] }
-clap-f595c2ba2a3f28df = { package = "clap", version = "2" }
+clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["cargo", "derive"] }
 clap_builder = { version = "4", default-features = false, features = ["color", "help", "std", "suggestions", "usage"] }
 clap_derive-164d15cefe24d7eb = { package = "clap_derive", version = "4" }
 clap_derive-7b89eefb6aaa9bf3 = { package = "clap_derive", version = "3" }
@@ -1420,10 +1414,7 @@ spki-ca01ad9e24f5d932 = { package = "spki", version = "0.7", default-features = 
 stable_deref_trait = { version = "1" }
 static_assertions = { version = "1", default-features = false }
 strip-ansi-escapes = { version = "0.1", default-features = false }
-strsim-93f6ce9d446188ac = { package = "strsim", version = "0.10", default-features = false }
-strsim-c38e5c1d305a1b54 = { package = "strsim", version = "0.8", default-features = false }
-structopt = { version = "0.3" }
-structopt-derive = { version = "0.4", default-features = false }
+strsim = { version = "0.10", default-features = false }
 strum = { version = "0.24", features = ["derive"] }
 strum_macros = { version = "0.24", default-features = false }
 subprocess = { version = "0.2", default-features = false }
@@ -1450,8 +1441,7 @@ test-fuzz = { version = "3", default-features = false }
 test-fuzz-internal = { version = "3", default-features = false }
 test-fuzz-macro = { version = "3", default-features = false }
 test-fuzz-runtime = { version = "3", default-features = false }
-textwrap-986da7b5efc2b80e = { package = "textwrap", version = "0.16", default-features = false }
-textwrap-a6292c17cd707f01 = { package = "textwrap", version = "0.11", default-features = false }
+textwrap = { version = "0.16", default-features = false }
 thiserror = { version = "1", default-features = false }
 thiserror-impl = { version = "1", default-features = false }
 thread_local = { version = "1", default-features = false }
@@ -1534,7 +1524,6 @@ utf-8 = { version = "0.7", default-features = false }
 utf8parse = { version = "0.2" }
 uuid = { version = "1", features = ["fast-rng", "v4"] }
 variant_count = { version = "1", default-features = false }
-vec_map = { version = "0.8", default-features = false }
 version_check = { version = "0.9", default-features = false }
 versions = { version = "4", default-features = false }
 vsimd = { version = "0.8", default-features = false, features = ["detect"] }
