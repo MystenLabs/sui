@@ -11,7 +11,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 21;
+const MAX_PROTOCOL_VERSION: u64 = 22;
 
 // Record history of protocol version allocations here:
 //
@@ -1385,6 +1385,11 @@ impl ProtocolConfig {
                         "Twitch".to_string(),
                     ]);
                 }
+                cfg
+            }
+            22 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.execution_version = Some(2);
                 cfg
             }
             // Use this template when making changes:

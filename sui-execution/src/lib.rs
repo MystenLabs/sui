@@ -21,7 +21,7 @@ mod v0;
 #[cfg(test)]
 mod tests;
 
-pub const SUIVM: u64 = u64::MAX;
+pub const SUIVM: u64 = 2;
 pub fn executor(
     protocol_config: &ProtocolConfig,
     paranoid_type_checks: bool,
