@@ -159,7 +159,7 @@ dependencies = [
  "rand 0.8.5",
  "rcgen",
  "ring",
- "rustls 0.21.1",
+ "rustls 0.21.6",
  "serde",
  "serde_json",
  "socket2 0.5.2",
@@ -1155,7 +1155,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "660a02a98ab1af83bd8d714afbab2d502ba9b18c49e7e4cddd6bf8837ff778cb"
 dependencies = [
  "aws-credential-types 0.54.1",
- "aws-sigv4 0.54.1",
+ "aws-sigv4 0.54.2",
  "aws-smithy-http 0.54.4",
  "aws-types 0.54.1",
  "http",
@@ -1179,9 +1179,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sigv4"
-version = "0.54.1"
+version = "0.54.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdaf11005b7444e6cd66f600d09861a3aeb6eb89a0f003c7c9820dbab2d15297"
+checksum = "86529e7b64d902efea8fff52c1b2529368d04f90305cf632729e3713f6b57dc0"
 dependencies = [
  "aws-smithy-http 0.54.4",
  "form_urlencoded",
@@ -1584,9 +1584,9 @@ dependencies = [
 
 [[package]]
 name = "axum-server"
-version = "0.4.4"
+version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8456dab8f11484979a86651da8e619b355ede5d61a160755155f6c344bd18c47"
+checksum = "bace45b270e36e3c27a190c65883de6dfc9f1d18c829907c127464815dc67b24"
 dependencies = [
  "arc-swap",
  "bytes",
@@ -4485,7 +4485,7 @@ dependencies = [
  "http",
  "hyper",
  "log",
- "rustls 0.21.1",
+ "rustls 0.21.6",
  "rustls-native-certs",
  "tokio",
  "tokio-rustls 0.24.0",
@@ -7112,12 +7112,12 @@ dependencies = [
 
 [[package]]
 name = "ouroboros"
-version = "0.15.5"
+version = "0.15.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dfbb50b356159620db6ac971c6d5c9ab788c9cc38a6f49619fca2a27acb062ca"
+checksum = "e1358bd1558bd2a083fed428ffeda486fbfb323e698cdda7794259d592ca72db"
 dependencies = [
  "aliasable",
- "ouroboros_macro 0.15.5",
+ "ouroboros_macro 0.15.6",
 ]
 
 [[package]]
@@ -7135,9 +7135,9 @@ dependencies = [
 
 [[package]]
 name = "ouroboros_macro"
-version = "0.15.5"
+version = "0.15.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a0d9d1a6191c4f391f87219d1ea42b23f09ee84d64763cd05ee6ea88d9f384d"
+checksum = "5f7d21ccd03305a674437ee1248f3ab5d4b1db095cf1caf49f1713ddf61956b7"
 dependencies = [
  "Inflector",
  "proc-macro-error",
@@ -7983,7 +7983,7 @@ dependencies = [
  "quinn-proto",
  "quinn-udp",
  "rustc-hash",
- "rustls 0.21.1",
+ "rustls 0.21.6",
  "thiserror",
  "tokio",
  "tracing",
@@ -7999,7 +7999,7 @@ dependencies = [
  "rand 0.8.5",
  "ring",
  "rustc-hash",
- "rustls 0.21.1",
+ "rustls 0.21.6",
  "slab",
  "thiserror",
  "tinyvec",
@@ -8345,7 +8345,7 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
- "rustls 0.21.1",
+ "rustls 0.21.6",
  "rustls-pemfile",
  "serde",
  "serde_json",
@@ -8664,13 +8664,13 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.21.1"
+version = "0.21.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c911ba11bc8433e811ce56fde130ccf32f5127cab0e0194e9c68c5a5b671791e"
+checksum = "1d1feddffcfcc0b33f5c6ce9a29e341e4cd59c3f78e7ee45f4a40c038b1d6cbb"
 dependencies = [
  "log",
  "ring",
- "rustls-webpki",
+ "rustls-webpki 0.101.4",
  "sct",
 ]
 
@@ -8697,9 +8697,19 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.100.1"
+version = "0.100.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6207cd5ed3d8dca7816f8f3725513a34609c0c765bf652b8c3cb4cfd87db46b"
+checksum = "e98ff011474fa39949b7e5c0428f9b4937eda7da7848bbb947786b7be0b27dab"
+dependencies = [
+ "ring",
+ "untrusted",
+]
+
+[[package]]
+name = "rustls-webpki"
+version = "0.101.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d93931baf2d282fff8d3a532bbfd7653f734643161b87e3e01e59a04439bf0d"
 dependencies = [
  "ring",
  "untrusted",
@@ -12105,7 +12115,7 @@ version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0d409377ff5b1e3ca6437aa86c1eb7d40c134bfec254e44c830defa92669db5"
 dependencies = [
- "rustls 0.21.1",
+ "rustls 0.21.6",
  "tokio",
 ]
 
@@ -12589,7 +12599,7 @@ dependencies = [
  "msim",
  "num_cpus",
  "once_cell",
- "ouroboros 0.15.5",
+ "ouroboros 0.15.6",
  "proc-macro2 1.0.58",
  "prometheus",
  "quote 1.0.26",
@@ -13832,9 +13842,9 @@ dependencies = [
  "opaque-debug",
  "openssl-probe",
  "os_str_bytes",
- "ouroboros 0.15.5",
+ "ouroboros 0.15.6",
  "ouroboros 0.9.5",
- "ouroboros_macro 0.15.5",
+ "ouroboros_macro 0.15.6",
  "ouroboros_macro 0.9.5",
  "output_vt100",
  "outref",
@@ -13969,10 +13979,10 @@ dependencies = [
  "rustix 0.36.6",
  "rustix 0.37.7",
  "rustls 0.20.7",
- "rustls 0.21.1",
+ "rustls 0.21.6",
  "rustls-native-certs",
  "rustls-pemfile",
- "rustls-webpki",
+ "rustls-webpki 0.100.2",
  "rustversion",
  "rusty-fork",
  "rustyline",
