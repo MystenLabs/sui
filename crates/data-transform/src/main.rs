@@ -20,6 +20,8 @@ use sui_indexer::errors::IndexerError;
 
 use sui_types::parse_sui_struct_tag;
 use sui_json_rpc_types::SuiMoveStruct;
+use move_core_types::language_storage::ModuleId;
+use move_bytecode_utils::module_cache::GetModule;
 
 use tracing::debug;
 
@@ -78,12 +80,10 @@ fn main() {
                 let text = String::from_utf8_lossy(&event.event_bcs);
                 debug!("bcs in text = {:#?}", text);
 
-                if event.package == "0x72f9c76421170b5a797432ba9e1b3b2e2b7cf6faa26eb955396c773af2479e1e" {
-                    println!("8192 event, skipping...");
+                if event.package != "0x000000000000000000000000000000000000000000000000000000000000dee9" {
+                    println!("not deepbook skipping...");
                     continue;
                 }
-
-                println!("Non 8192 event!");
 
                 // check for the previous record in events_json
                 let eventj = events_json
@@ -105,12 +105,22 @@ fn main() {
                     }
                 }
 
+
                 // JSON parsing starts here
-                let type_ = parse_sui_struct_tag(&event.event_type);
-                println!("type = {:#?}", type_);
+                let type_ = parse_sui_struct_tag(&event.event_type).expect("cannot load StructTag");
+                let module_id = ModuleId::new(type_.address, type_.module.clone());
+                println!("module id = {}", module_id);
+
+                let newmodule = module_cache.get_module_by_id(&module_id).expect("Module {module_id} must load").unwrap();
+                println!("{newmodule:#?}");
+
+                println!("iterating...");
+                for type_def in &newmodule.struct_defs {
+                    println!("- {:#?}", newmodule.struct_handles[type_def.struct_handle.0 as usize]);
+                }
 
                 let layout = MoveObject::get_layout_from_struct_tag(
-                    type_.expect("REASON").clone(),
+                    type_,
                     ObjectFormatOptions::default(),
                     &module_cache,
                     );
@@ -124,7 +134,7 @@ fn main() {
                             Ok(m) => {
                                 let parsed_json = SuiMoveStruct::from(m).to_json_value();
                                 let final_result = serde_json::to_string_pretty(&parsed_json).unwrap();
-                                debug!("event json = {}", final_result);
+                                println!("event json = {}", final_result);
 
                                 let new_event_json = EventsJson { id: event.id, event_json: final_result };
 
@@ -143,8 +153,8 @@ fn main() {
                         }
                     }
                     Err(err) => {
-                        println!("error in get_layout {}", err);
-                        continue;
+                        println!("error in get_layout: {}", err);
+                        exit(0);
                     }
                 }
             }
