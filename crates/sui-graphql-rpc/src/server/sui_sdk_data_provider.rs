@@ -141,7 +141,7 @@ impl DataProvider for SuiClient {
         let count = first.unwrap_or(DEFAULT_PAGE_SIZE as u64) as usize;
         let offset = after
             .map(|q| q.parse::<usize>().unwrap())
-            .unwrap_or(0 as usize);
+            .unwrap_or(0_usize);
 
         // This fetches all balances but we only want a slice
         // The pagination logic here can break if data is added
@@ -161,7 +161,7 @@ impl DataProvider for SuiClient {
             .edges
             .extend(bs.into_iter().enumerate().map(|(i, b)| {
                 let balance = convert_bal(b);
-                Edge::new(format!("{:032}", offset + i).to_string(), balance)
+                Edge::new(format!("{:032}", offset + i), balance)
             }));
         Ok(connection)
     }
