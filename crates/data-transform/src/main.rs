@@ -117,6 +117,9 @@ fn main() {
                 println!("iterating...");
                 for type_def in &newmodule.struct_defs {
                     println!("- {:#?}", newmodule.struct_handles[type_def.struct_handle.0 as usize]);
+                    let handle = &newmodule.struct_handles[type_def.struct_handle.0 as usize];
+                    let name_idx = handle.name;
+                    println!("struct {:?}", newmodule.identifiers[name_idx.0 as usize]);
                 }
 
                 let layout = MoveObject::get_layout_from_struct_tag(
