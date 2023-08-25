@@ -13,19 +13,20 @@ use sui_types::{
     digests::TransactionDigest,
     effects::TransactionEffects,
     error::ExecutionError,
-    execution::{ExecutionState, TypeLayoutStore},
+    execution::TypeLayoutStore,
     execution_mode::ExecutionResult,
-    gas::GasCharger,
+    gas::SuiGasStatus,
     metrics::LimitsMetrics,
-    temporary_store::{InnerTemporaryStore, TemporaryStore},
-    transaction::{ProgrammableTransaction, TransactionKind},
+    temporary_store::{BackingStore, InnerTemporaryStore},
+    transaction::{InputObjects, ProgrammableTransaction, TransactionKind},
     type_resolver::LayoutResolver,
 };
 
 /// Abstracts over access to the VM across versions of the execution layer.
 pub trait Executor {
-    fn execute_transaction_to_effects(
+    fn execute_transaction_to_effects<'backing>(
         &self,
+        store: Arc<dyn BackingStore + Send + Sync + 'backing>,
         // Configuration
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -35,9 +36,11 @@ pub trait Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         // Transaction Inputs
-        temporary_store: TemporaryStore,
+        input_objects: InputObjects,
         shared_object_refs: Vec<ObjectRef>,
-        gas_charger: &mut GasCharger,
+        // Gas related
+        gas_coins: Vec<ObjectRef>,
+        gas_status: SuiGasStatus,
         // Transaction
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
@@ -51,6 +54,7 @@ pub trait Executor {
 
     fn dev_inspect_transaction(
         &self,
+        store: Arc<dyn BackingStore + Send + Sync>,
         // Configuration
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -60,9 +64,11 @@ pub trait Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         // Transaction Inputs
-        temporary_store: TemporaryStore,
+        input_objects: InputObjects,
         shared_object_refs: Vec<ObjectRef>,
-        gas_charger: &mut GasCharger,
+        // Gas related
+        gas_coins: Vec<ObjectRef>,
+        gas_status: SuiGasStatus,
         // Transaction
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
@@ -76,16 +82,16 @@ pub trait Executor {
 
     fn update_genesis_state(
         &self,
+        store: Arc<dyn BackingStore + Send + Sync>,
         // Configuration
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         // Genesis State
-        state_view: &mut dyn ExecutionState,
         tx_context: &mut TxContext,
-        gas_charger: &mut GasCharger,
         // Transaction
+        input_objects: InputObjects,
         pt: ProgrammableTransaction,
-    ) -> Result<(), ExecutionError>;
+    ) -> Result<InnerTemporaryStore, ExecutionError>;
 
     fn type_layout_resolver<'r, 'vm: 'r, 'store: 'r>(
         &'vm self,
