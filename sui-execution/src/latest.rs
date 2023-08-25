@@ -15,12 +15,12 @@ use sui_types::{
     digests::TransactionDigest,
     effects::TransactionEffects,
     error::{ExecutionError, SuiError, SuiResult},
-    execution::{ExecutionState, TypeLayoutStore},
+    execution::TypeLayoutStore,
     execution_mode::{self, ExecutionResult},
-    gas::GasCharger,
+    gas::{GasCharger, SuiGasStatus},
     metrics::{BytecodeVerifierMetrics, LimitsMetrics},
-    temporary_store::{InnerTemporaryStore, TemporaryStore},
-    transaction::{ProgrammableTransaction, TransactionKind},
+    temporary_store::{BackingStore, InnerTemporaryStore, TemporaryStore},
+    transaction::{InputObjects, ProgrammableTransaction, TransactionKind},
     type_resolver::LayoutResolver,
 };
 
@@ -76,17 +76,19 @@ impl<'m> Verifier<'m> {
 }
 
 impl executor::Executor for Executor {
-    fn execute_transaction_to_effects(
+    fn execute_transaction_to_effects<'backing>(
         &self,
+        store: Arc<dyn BackingStore + Send + Sync + 'backing>,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
         certificate_deny_set: &HashSet<TransactionDigest>,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
-        temporary_store: TemporaryStore,
+        input_objects: InputObjects,
         shared_object_refs: Vec<ObjectRef>,
-        gas_charger: &mut GasCharger,
+        gas_coins: Vec<ObjectRef>,
+        gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
@@ -96,12 +98,16 @@ impl executor::Executor for Executor {
         TransactionEffects,
         Result<(), ExecutionError>,
     ) {
+        let temporary_store =
+            TemporaryStore::new(store, input_objects, transaction_digest, protocol_config);
+        let mut gas_charger =
+            GasCharger::new(transaction_digest, gas_coins, gas_status, protocol_config);
         execute_transaction_to_effects::<execution_mode::Normal>(
             shared_object_refs,
             temporary_store,
             transaction_kind,
             transaction_signer,
-            gas_charger,
+            &mut gas_charger,
             transaction_digest,
             transaction_dependencies,
             &self.0,
@@ -116,15 +122,17 @@ impl executor::Executor for Executor {
 
     fn dev_inspect_transaction(
         &self,
+        store: Arc<dyn BackingStore + Send + Sync>,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
         certificate_deny_set: &HashSet<TransactionDigest>,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
-        temporary_store: TemporaryStore,
+        input_objects: InputObjects,
         shared_object_refs: Vec<ObjectRef>,
-        gas_charger: &mut GasCharger,
+        gas_coins: Vec<ObjectRef>,
+        gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
@@ -134,12 +142,20 @@ impl executor::Executor for Executor {
         TransactionEffects,
         Result<Vec<ExecutionResult>, ExecutionError>,
     ) {
+        let temporary_store = TemporaryStore::new_for_mock_transaction(
+            store,
+            input_objects,
+            transaction_digest,
+            protocol_config,
+        );
+        let mut gas_charger =
+            GasCharger::new(transaction_digest, gas_coins, gas_status, protocol_config);
         execute_transaction_to_effects::<execution_mode::DevInspect>(
             shared_object_refs,
             temporary_store,
             transaction_kind,
             transaction_signer,
-            gas_charger,
+            &mut gas_charger,
             transaction_digest,
             transaction_dependencies,
             &self.0,
@@ -154,22 +170,26 @@ impl executor::Executor for Executor {
 
     fn update_genesis_state(
         &self,
+        store: Arc<dyn BackingStore + Send + Sync>,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
-        state_view: &mut dyn ExecutionState,
         tx_context: &mut TxContext,
-        gas_charger: &mut GasCharger,
+        input_objects: InputObjects,
         pt: ProgrammableTransaction,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<InnerTemporaryStore, ExecutionError> {
+        let mut temporary_store =
+            TemporaryStore::new(store, input_objects, tx_context.digest(), protocol_config);
+        let mut gas_charger = GasCharger::new_unmetered(tx_context.digest());
         programmable_transactions::execution::execute::<execution_mode::Genesis>(
             protocol_config,
             metrics,
             &self.0,
-            state_view,
+            &mut temporary_store,
             tx_context,
-            gas_charger,
+            &mut gas_charger,
             pt,
-        )
+        )?;
+        Ok(temporary_store.into_inner())
     }
 
     fn type_layout_resolver<'r, 'vm: 'r, 'store: 'r>(
