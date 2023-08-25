@@ -26,7 +26,6 @@ use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_core::authority::NodeStateDump;
-use sui_core::authority::TemporaryStore;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
@@ -45,7 +44,7 @@ use sui_types::digests::TransactionDigest;
 use sui_types::error::ExecutionError;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::gas::{GasCharger, SuiGasStatus};
+use sui_types::gas::SuiGasStatus;
 use sui_types::metrics::LimitsMetrics;
 use sui_types::object::{Data, Object, Owner};
 use sui_types::storage::get_module_by_id;
@@ -373,7 +372,7 @@ impl LocalExec {
                 }
             }
         }
-        error!("No more configs to attempt. Try specifing Full Node RPC URL directly or provide a config file with a valid URL");
+        error!("No more configs to attempt. Try specifying Full Node RPC URL directly or provide a config file with a valid URL");
         Err(ReplayEngineError::UnableToExecuteWithNetworkConfigs { cfgs: cfg })
     }
 
@@ -464,18 +463,6 @@ impl LocalExec {
             executor_version_override: None,
             protocol_version_override: None,
         })
-    }
-
-    #[allow(clippy::wrong_self_convention)]
-    pub fn to_temporary_store(
-        &mut self,
-        tx_digest: &TransactionDigest,
-        input_objects: InputObjects,
-        protocol_config: &ProtocolConfig,
-    ) -> TemporaryStore {
-        // Wrap `&mut self` in an `Arc` because of `TemporaryStore`'s interface, not because it will
-        // be shared across multiple threads
-        TemporaryStore::new(Arc::new(self), input_objects, *tx_digest, protocol_config)
     }
 
     pub async fn multi_download_and_store(
@@ -675,6 +662,13 @@ impl LocalExec {
         Ok((succeeded, num as u64))
     }
 
+    // TODO: Could we get rid of this strange self move?
+    #[allow(clippy::wrong_self_convention, clippy::redundant_allocation)]
+    fn to_backing_store(&mut self) -> Arc<&mut LocalExec> {
+        // Execution interface requires Arc for the store.
+        Arc::new(self)
+    }
+
     pub async fn execution_engine_execute_with_tx_info_impl(
         &mut self,
         tx_info: &OnChainTransactionInfo,
@@ -718,29 +712,28 @@ impl LocalExec {
 
         let ov = self.executor_version_override;
 
-        // Temp store for data
-        let temporary_store =
-            self.to_temporary_store(tx_digest, InputObjects::new(input_objects), protocol_config);
-
         // We could probably cache the executor per protocol config
         let executor = get_executor(ov, protocol_config, expensive_safety_check_config);
 
         // All prep done
         let expensive_checks = true;
         let certificate_deny_set = HashSet::new();
+        let store = self.to_backing_store();
         let res = if let Ok(gas_status) =
             SuiGasStatus::new(tx_info.gas_budget, tx_info.gas_price, rgp, protocol_config)
         {
             executor.execute_transaction_to_effects(
+                store,
                 protocol_config,
                 metrics,
                 expensive_checks,
                 &certificate_deny_set,
                 &tx_info.executed_epoch,
                 epoch_start_timestamp,
-                temporary_store,
+                InputObjects::new(input_objects),
                 tx_info.shared_object_refs.clone(),
-                &mut GasCharger::new(*tx_digest, tx_info.gas.clone(), gas_status, protocol_config),
+                tx_info.gas.clone(),
+                gas_status,
                 override_transaction_kind.unwrap_or(tx_info.kind.clone()),
                 tx_info.sender,
                 *tx_digest,

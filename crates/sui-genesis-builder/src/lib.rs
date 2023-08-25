@@ -29,7 +29,7 @@ use sui_types::crypto::{
 };
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::epoch_data::EpochData;
-use sui_types::gas::GasCharger;
+use sui_types::gas::SuiGasStatus;
 use sui_types::gas_coin::GasCoin;
 use sui_types::governance::StakedSui;
 use sui_types::in_memory_storage::InMemoryStorage;
@@ -41,7 +41,7 @@ use sui_types::metrics::LimitsMetrics;
 use sui_types::object::{Object, Owner};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState, SuiSystemStateTrait};
-use sui_types::temporary_store::{InnerTemporaryStore, TemporaryStore};
+use sui_types::temporary_store::InnerTemporaryStore;
 use sui_types::transaction::{CallArg, Command, InputObjectKind, InputObjects, Transaction};
 use sui_types::{SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
 use tracing::trace;
@@ -808,13 +808,6 @@ fn create_genesis_transaction(
     let genesis_digest = *genesis_transaction.digest();
     // execute txn to effects
     let (effects, events, objects) = {
-        let temporary_store = TemporaryStore::new(
-            InMemoryStorage::new(Vec::new()),
-            InputObjects::new(vec![]),
-            genesis_digest,
-            protocol_config,
-        );
-
         let silent = true;
         let paranoid_checks = false;
         let executor = sui_execution::executor(protocol_config, paranoid_checks, silent)
@@ -828,15 +821,17 @@ fn create_genesis_transaction(
         let transaction_dependencies = BTreeSet::new();
         let (inner_temp_store, effects, _execution_error) = executor
             .execute_transaction_to_effects(
+                InMemoryStorage::new(Vec::new()),
                 protocol_config,
                 metrics,
                 expensive_checks,
                 &certificate_deny_set,
                 &epoch_data.epoch_id(),
                 epoch_data.epoch_start_timestamp(),
-                temporary_store,
+                InputObjects::new(vec![]),
                 shared_object_refs,
-                &mut GasCharger::new_unmetered(genesis_digest),
+                vec![],
+                SuiGasStatus::new_unmetered(),
                 kind,
                 signer,
                 genesis_digest,
@@ -959,13 +954,6 @@ fn process_package(
         })
         .collect();
 
-    let genesis_digest = ctx.digest();
-    let mut temporary_store = TemporaryStore::new(
-        store.clone(),
-        InputObjects::new(loaded_dependencies),
-        genesis_digest,
-        protocol_config,
-    );
     let module_bytes = modules
         .iter()
         .map(|m| {
@@ -980,18 +968,16 @@ fn process_package(
         builder.command(Command::Publish(module_bytes, dependencies));
         builder.finish()
     };
-    executor.update_genesis_state(
-        protocol_config,
-        metrics,
-        &mut temporary_store,
-        ctx,
-        &mut GasCharger::new_unmetered(genesis_digest),
-        pt,
-    )?;
-
     let InnerTemporaryStore {
         written, deleted, ..
-    } = temporary_store.into_inner();
+    } = executor.update_genesis_state(
+        store.clone(),
+        protocol_config,
+        metrics,
+        ctx,
+        InputObjects::new(loaded_dependencies),
+        pt,
+    )?;
 
     let store = Arc::get_mut(store).expect("only one reference to store");
     store.finish(written, deleted);
@@ -1008,19 +994,12 @@ pub fn generate_genesis_system_object(
     token_distribution_schedule: &TokenDistributionSchedule,
     metrics: Arc<LimitsMetrics>,
 ) -> anyhow::Result<()> {
-    let genesis_digest = genesis_ctx.digest();
     // We don't know the chain ID here since we haven't yet created the genesis checkpoint.
     // However since we know there are no chain specific protocol config options in genesis,
     // we use Chain::Unknown here.
     let protocol_config = ProtocolConfig::get_for_version(
         ProtocolVersion::new(genesis_chain_parameters.protocol_version),
         sui_protocol_config::Chain::Unknown,
-    );
-    let mut temporary_store = TemporaryStore::new(
-        store.clone(),
-        InputObjects::new(vec![]),
-        genesis_digest,
-        &protocol_config,
     );
 
     let pt = {
@@ -1075,18 +1054,16 @@ pub fn generate_genesis_system_object(
         builder.finish()
     };
 
-    executor.update_genesis_state(
-        &protocol_config,
-        metrics,
-        &mut temporary_store,
-        genesis_ctx,
-        &mut GasCharger::new_unmetered(genesis_digest),
-        pt,
-    )?;
-
     let InnerTemporaryStore {
         written, deleted, ..
-    } = temporary_store.into_inner();
+    } = executor.update_genesis_state(
+        store.clone(),
+        &protocol_config,
+        metrics,
+        genesis_ctx,
+        InputObjects::new(vec![]),
+        pt,
+    )?;
 
     let store = Arc::get_mut(store).expect("only one reference to store");
     store.finish(written, deleted);
