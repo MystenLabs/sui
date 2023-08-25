@@ -8,7 +8,7 @@ use fastcrypto::traits::KeyPair;
 use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
@@ -815,10 +815,9 @@ fn create_genesis_transaction(
 
         let expensive_checks = false;
         let certificate_deny_set = HashSet::new();
-        let shared_object_refs = vec![];
         let transaction_data = &genesis_transaction.data().intent_message().value;
         let (kind, signer, _) = transaction_data.execution_parts();
-        let transaction_dependencies = BTreeSet::new();
+        let input_objects = InputObjects::new(vec![]);
         let (inner_temp_store, effects, _execution_error) = executor
             .execute_transaction_to_effects(
                 InMemoryStorage::new(Vec::new()),
@@ -828,14 +827,12 @@ fn create_genesis_transaction(
                 &certificate_deny_set,
                 &epoch_data.epoch_id(),
                 epoch_data.epoch_start_timestamp(),
-                InputObjects::new(vec![]),
-                shared_object_refs,
+                input_objects,
                 vec![],
                 SuiGasStatus::new_unmetered(),
                 kind,
                 signer,
                 genesis_digest,
-                transaction_dependencies,
             );
         assert!(inner_temp_store.objects.is_empty());
         assert!(inner_temp_store.mutable_inputs.is_empty());

@@ -9,10 +9,7 @@ mod checked {
     use move_binary_format::CompiledModule;
     use move_vm_runtime::move_vm::MoveVM;
     use once_cell::sync::Lazy;
-    use std::{
-        collections::{BTreeSet, HashSet},
-        sync::Arc,
-    };
+    use std::{collections::HashSet, sync::Arc};
     use sui_types::balance::{
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
         BALANCE_MODULE_NAME,
@@ -35,12 +32,15 @@ mod checked {
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
     use sui_types::execution_status::ExecutionStatus;
     use sui_types::gas::GasCostSummary;
+    use sui_types::gas::SuiGasStatus;
     use sui_types::inner_temporary_store::InnerTemporaryStore;
     use sui_types::messages_consensus::ConsensusCommitPrologue;
+    use sui_types::storage::BackingStore;
     use sui_types::storage::WriteKind;
     #[cfg(msim)]
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
     use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
+    use sui_types::transaction::InputObjects;
     use sui_types::transaction::{
         Argument, CallArg, ChangeEpoch, Command, GenesisTransaction, ProgrammableTransaction,
         TransactionKind,
@@ -85,14 +85,14 @@ mod checked {
     }
 
     #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
-    pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
-        shared_object_refs: Vec<ObjectRef>,
-        mut temporary_store: TemporaryStore<'_>,
+    pub fn execute_transaction_to_effects<Mode: ExecutionMode, 'backing>(
+        store: Arc<dyn BackingStore + Send + Sync + 'backing>,
+        input_objects: InputObjects,
+        gas_coins: Vec<ObjectRef>,
+        gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
-        gas_charger: &mut GasCharger,
         transaction_digest: TransactionDigest,
-        mut transaction_dependencies: BTreeSet<TransactionDigest>,
         move_vm: &Arc<MoveVM>,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
@@ -105,6 +105,14 @@ mod checked {
         TransactionEffects,
         Result<Mode::ExecutionResults, ExecutionError>,
     ) {
+        let shared_object_refs = input_objects.filter_shared_objects();
+        let mut transaction_dependencies = input_objects.transaction_dependencies();
+        let mut temporary_store =
+            TemporaryStore::new(store, input_objects, transaction_digest, protocol_config);
+
+        let mut gas_charger =
+            GasCharger::new(transaction_digest, gas_coins, gas_status, protocol_config);
+
         let mut tx_ctx = TxContext::new_from_components(
             &transaction_signer,
             &transaction_digest,
@@ -118,7 +126,7 @@ mod checked {
         let (gas_cost_summary, execution_result) = execute_transaction::<Mode>(
             &mut temporary_store,
             transaction_kind,
-            gas_charger,
+            &mut gas_charger,
             &mut tx_ctx,
             move_vm,
             protocol_config,
@@ -185,7 +193,7 @@ mod checked {
 
         if enable_expensive_checks && !Mode::allow_arbitrary_function_calls() {
             temporary_store
-                .check_ownership_invariants(&transaction_signer, gas_charger, is_epoch_change)
+                .check_ownership_invariants(&transaction_signer, &mut gas_charger, is_epoch_change)
                 .unwrap()
         } // else, in dev inspect mode and anything goes--don't check
 
@@ -195,10 +203,34 @@ mod checked {
             transaction_dependencies.into_iter().collect(),
             gas_cost_summary,
             status,
-            gas_charger,
+            &mut gas_charger,
             *epoch_id,
         );
         (inner, effects, execution_result)
+    }
+
+    pub fn execute_genesis_state_update(
+        store: Arc<dyn BackingStore + Send + Sync>,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
+        move_vm: &Arc<MoveVM>,
+        tx_context: &mut TxContext,
+        input_objects: InputObjects,
+        pt: ProgrammableTransaction,
+    ) -> Result<InnerTemporaryStore, ExecutionError> {
+        let mut temporary_store =
+            TemporaryStore::new(store, input_objects, tx_context.digest(), protocol_config);
+        let mut gas_charger = GasCharger::new_unmetered(tx_context.digest());
+        programmable_transactions::execution::execute::<execution_mode::Genesis>(
+            protocol_config,
+            metrics,
+            move_vm,
+            &mut temporary_store,
+            tx_context,
+            &mut gas_charger,
+            pt,
+        )?;
+        Ok(temporary_store.into_inner())
     }
 
     #[instrument(name = "tx_execute", level = "debug", skip_all)]

@@ -698,6 +698,14 @@ impl LocalExec {
         // Initialize the state necessary for execution
         // Get the input objects
         let input_objects = self.initialize_execution_env_state(tx_info).await?;
+        assert_eq!(
+            &input_objects.filter_shared_objects(),
+            &tx_info.shared_object_refs
+        );
+        assert_eq!(
+            input_objects.transaction_dependencies(),
+            tx_info.dependencies.clone().into_iter().collect(),
+        );
         // At this point we have all the objects needed for replay
 
         // This assumes we already initialized the protocol version table `protocol_version_epoch_table`
@@ -730,14 +738,12 @@ impl LocalExec {
                 &certificate_deny_set,
                 &tx_info.executed_epoch,
                 epoch_start_timestamp,
-                InputObjects::new(input_objects),
-                tx_info.shared_object_refs.clone(),
+                input_objects,
                 tx_info.gas.clone(),
                 gas_status,
                 override_transaction_kind.unwrap_or(tx_info.kind.clone()),
                 tx_info.sender,
                 *tx_digest,
-                tx_info.dependencies.clone().into_iter().collect(),
             )
         } else {
             unreachable!("Transaction was valid so gas status must be valid");
@@ -1602,7 +1608,7 @@ impl LocalExec {
     async fn initialize_execution_env_state(
         &mut self,
         tx_info: &OnChainTransactionInfo,
-    ) -> Result<Vec<(InputObjectKind, Object)>, ReplayEngineError> {
+    ) -> Result<InputObjects, ReplayEngineError> {
         // We need this for other activities in this session
         self.current_protocol_version = tx_info.protocol_config.version.as_u64();
 
@@ -1631,7 +1637,7 @@ impl LocalExec {
         self.diag.loaded_child_objects = loaded_child_refs.clone();
         self.multi_download_and_store(&loaded_child_refs).await?;
 
-        Ok(input_objs)
+        Ok(InputObjects::new(input_objs))
     }
 }
 
