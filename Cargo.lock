@@ -2132,13 +2132,13 @@ checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
 
 [[package]]
 name = "colored"
-version = "2.0.4"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2674ec482fbc38012cf31e6c42ba0177b431a0cb6f15fe40efa5aab1bda516f6"
+checksum = "b3616f750b84d8f0de8a58bda93e08e2a81ad3f523089b05f1dffecab48c6cbd"
 dependencies = [
- "is-terminal",
+ "atty",
  "lazy_static",
- "windows-sys 0.48.0",
+ "winapi",
 ]
 
 [[package]]
@@ -2357,9 +2357,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-channel"
-version = "0.5.8"
+version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a33c2bf77f2df06183c3aa30d1e96c0695a313d4f9c453cc3762a6db39f99200"
+checksum = "c2dd04ddaf88237dc3b8d8f9a3c1004b506b54b3313403944054d23c0870c521"
 dependencies = [
  "cfg-if",
  "crossbeam-utils",
@@ -4056,9 +4056,9 @@ dependencies = [
 
 [[package]]
 name = "hermit-abi"
-version = "0.3.2"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "443144c8cdadd93ebf52ddb4056d257f5b52c04d3c804e657d19eb73fc33668b"
+checksum = "fed44880c466736ef9a5c5b5facefb5ed0785676d0c02d612db14e54f0d84286"
 
 [[package]]
 name = "hex"
@@ -4401,9 +4401,9 @@ dependencies = [
 
 [[package]]
 name = "inquire"
-version = "0.6.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c33e7c1ddeb15c9abcbfef6029d8e29f69b52b6d6c891031b88ed91b5065803b"
+checksum = "fd079157ad94a32f7511b2e13037f3ae417ad80a6a9b0de29154d48b86f5d6c8"
 dependencies = [
  "bitflags 1.3.2",
  "crossterm 0.25.0",
@@ -4490,7 +4490,7 @@ version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adcf93614601c8129ddf72e2d5633df827ba6551541c6d8c59520a371475be1f"
 dependencies = [
- "hermit-abi 0.3.2",
+ "hermit-abi 0.3.1",
  "io-lifetimes",
  "rustix 0.37.7",
  "windows-sys 0.48.0",
@@ -5174,6 +5174,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-bytecode-verifier-suivm"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fail",
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-borrow-graph",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph 0.5.1",
+]
+
+[[package]]
 name = "move-bytecode-verifier-v0"
 version = "0.1.0"
 dependencies = [
@@ -5669,6 +5683,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-stdlib-suivm"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "hex",
+ "log",
+ "move-binary-format",
+ "move-command-line-common",
+ "move-core-types",
+ "move-docgen",
+ "move-errmapgen",
+ "move-prover",
+ "move-vm-runtime-suivm",
+ "move-vm-types",
+ "sha2 0.9.9",
+ "sha3 0.9.1",
+ "smallvec",
+ "walkdir",
+]
+
+[[package]]
 name = "move-stdlib-v0"
 version = "0.1.1"
 dependencies = [
@@ -5788,6 +5823,25 @@ dependencies = [
  "fail",
  "move-binary-format",
  "move-bytecode-verifier",
+ "move-core-types",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-types",
+ "once_cell",
+ "parking_lot 0.11.2",
+ "sha3 0.9.1",
+ "smallvec",
+ "tracing",
+]
+
+[[package]]
+name = "move-vm-runtime-suivm"
+version = "0.1.0"
+dependencies = [
+ "better_any",
+ "fail",
+ "move-binary-format",
+ "move-bytecode-verifier-suivm",
  "move-core-types",
  "move-vm-config",
  "move-vm-profiler",
@@ -9333,6 +9387,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-adapter-suivm"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "leb128",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier-suivm",
+ "move-core-types",
+ "move-package",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-runtime-suivm",
+ "move-vm-types",
+ "mysten-metrics",
+ "once_cell",
+ "serde",
+ "sui-macros",
+ "sui-move-natives-suivm",
+ "sui-protocol-config",
+ "sui-types",
+ "sui-verifier-suivm",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-adapter-transactional-tests"
 version = "0.1.0"
 dependencies = [
@@ -9718,15 +9800,19 @@ dependencies = [
  "move-core-types",
  "move-vm-config",
  "move-vm-runtime",
+ "move-vm-runtime-suivm",
  "move-vm-runtime-v0",
  "petgraph 0.5.1",
  "sui-adapter-latest",
+ "sui-adapter-suivm",
  "sui-adapter-v0",
  "sui-move-natives-latest",
+ "sui-move-natives-suivm",
  "sui-move-natives-v0",
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
+ "sui-verifier-suivm",
  "sui-verifier-v0",
  "workspace-hack",
 ]
@@ -10250,6 +10336,26 @@ dependencies = [
  "move-core-types",
  "move-stdlib",
  "move-vm-runtime",
+ "move-vm-types",
+ "smallvec",
+ "sui-protocol-config",
+ "sui-types",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-move-natives-suivm"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "better_any",
+ "fastcrypto",
+ "fastcrypto-zkp",
+ "linked-hash-map",
+ "move-binary-format",
+ "move-core-types",
+ "move-stdlib-suivm",
+ "move-vm-runtime-suivm",
  "move-vm-types",
  "smallvec",
  "sui-protocol-config",
@@ -11219,6 +11325,21 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-utils",
  "move-bytecode-verifier",
+ "move-core-types",
+ "move-vm-config",
+ "sui-protocol-config",
+ "sui-types",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-verifier-suivm"
+version = "0.1.0"
+dependencies = [
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier-suivm",
  "move-core-types",
  "move-vm-config",
  "sui-protocol-config",
@@ -13419,6 +13540,7 @@ dependencies = [
  "move-bytecode-source-map",
  "move-bytecode-utils",
  "move-bytecode-verifier",
+ "move-bytecode-verifier-suivm",
  "move-bytecode-verifier-v0",
  "move-bytecode-viewer",
  "move-cli",
@@ -13443,6 +13565,7 @@ dependencies = [
  "move-stackless-bytecode",
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
+ "move-stdlib-suivm",
  "move-stdlib-v0",
  "move-symbol-pool",
  "move-transactional-test-runner",
@@ -13450,6 +13573,7 @@ dependencies = [
  "move-vm-config",
  "move-vm-profiler",
  "move-vm-runtime",
+ "move-vm-runtime-suivm",
  "move-vm-runtime-v0",
  "move-vm-test-utils",
  "move-vm-types",
