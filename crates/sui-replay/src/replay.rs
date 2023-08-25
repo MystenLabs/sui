@@ -1328,7 +1328,7 @@ impl LocalExec {
                     .await?
                     .checkpoint
                     .expect(&format!(
-                        "Required transaction {} not present. Could be due to pruning",
+                        "Checkpoint for transaction {} not present. Could be due to pruning",
                         epoch_change_tx
                     )),
                 idx,
@@ -1346,7 +1346,7 @@ impl LocalExec {
             .await?
             .checkpoint
             .expect(&format!(
-                "Required transaction {} not present. Could be due to pruning",
+                "Checkpoint for transaction {} not present. Could be due to pruning",
                 next_epoch_change_tx
             ));
 
