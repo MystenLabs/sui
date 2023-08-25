@@ -2,162 +2,168 @@
 resolver = "2"
 
 exclude = [
-  "external-crates/move-execution/v0/move-bytecode-verifier",
-  "external-crates/move-execution/v0/move-stdlib",
-  "external-crates/move-execution/v0/move-vm/runtime",
-  "external-crates/move/move-abstract-stack",
-  "external-crates/move/move-binary-format",
-  "external-crates/move/move-binary-format/serializer-tests",
-  "external-crates/move/move-borrow-graph",
-  "external-crates/move/move-bytecode-verifier",
-  "external-crates/move/move-bytecode-verifier/bytecode-verifier-tests",
-  "external-crates/move/move-bytecode-verifier/fuzz",
-  "external-crates/move/move-bytecode-verifier/invalid-mutations",
-  "external-crates/move/move-bytecode-verifier/transactional-tests",
-  "external-crates/move/move-command-line-common",
-  "external-crates/move/move-compiler",
-  "external-crates/move/move-compiler/transactional-tests",
-  "external-crates/move/move-core/types",
-  "external-crates/move/move-ir-compiler",
-  "external-crates/move/move-ir-compiler/move-bytecode-source-map",
-  "external-crates/move/move-ir-compiler/move-ir-to-bytecode",
-  "external-crates/move/move-ir-compiler/move-ir-to-bytecode/syntax",
-  "external-crates/move/move-ir-compiler/transactional-tests",
-  "external-crates/move/move-ir/types",
-  "external-crates/move/move-model",
-  "external-crates/move/move-prover",
-  "external-crates/move/move-prover/boogie-backend",
-  "external-crates/move/move-prover/bytecode",
-  "external-crates/move/move-prover/interpreter",
-  "external-crates/move/move-prover/interpreter-testsuite",
-  "external-crates/move/move-prover/interpreter/crypto",
-  "external-crates/move/move-prover/move-abigen",
-  "external-crates/move/move-prover/move-docgen",
-  "external-crates/move/move-prover/move-errmapgen",
-  "external-crates/move/move-prover/test-utils",
-  "external-crates/move/move-stdlib",
-  "external-crates/move/move-symbol-pool",
-  "external-crates/move/move-vm/config",
-  "external-crates/move/move-vm/integration-tests",
-  "external-crates/move/move-vm/paranoid-tests",
-  "external-crates/move/move-vm/profiler",
-  "external-crates/move/move-vm/runtime",
-  "external-crates/move/move-vm/test-utils",
-  "external-crates/move/move-vm/transactional-tests",
-  "external-crates/move/move-vm/types",
-  "external-crates/move/testing-infra/enum-compat-util",
-  "external-crates/move/testing-infra/module-generation",
-  "external-crates/move/testing-infra/move-proc-macros",
-  "external-crates/move/testing-infra/test-generation",
-  "external-crates/move/testing-infra/transactional-test-runner",
-  "external-crates/move/tools/move-bytecode-utils",
-  "external-crates/move/tools/move-bytecode-viewer",
-  "external-crates/move/tools/move-cli",
-  "external-crates/move/tools/move-coverage",
-  "external-crates/move/tools/move-disassembler",
-  "external-crates/move/tools/move-explain",
-  "external-crates/move/tools/move-package",
-  "external-crates/move/tools/move-resource-viewer",
-  "external-crates/move/tools/move-unit-test",
-  "external-crates/move/tools/read-write-set",
-  "external-crates/move/tools/read-write-set/dynamic",
-  "external-crates/move/tools/read-write-set/types",
+    "external-crates/move-execution/suivm/move-bytecode-verifier",
+    "external-crates/move-execution/suivm/move-stdlib",
+    "external-crates/move-execution/suivm/move-vm/runtime",
+    "external-crates/move-execution/v0/move-bytecode-verifier",
+    "external-crates/move-execution/v0/move-stdlib",
+    "external-crates/move-execution/v0/move-vm/runtime",
+    "external-crates/move/move-abstract-stack",
+    "external-crates/move/move-binary-format",
+    "external-crates/move/move-binary-format/serializer-tests",
+    "external-crates/move/move-borrow-graph",
+    "external-crates/move/move-bytecode-verifier",
+    "external-crates/move/move-bytecode-verifier/bytecode-verifier-tests",
+    "external-crates/move/move-bytecode-verifier/fuzz",
+    "external-crates/move/move-bytecode-verifier/invalid-mutations",
+    "external-crates/move/move-bytecode-verifier/transactional-tests",
+    "external-crates/move/move-command-line-common",
+    "external-crates/move/move-compiler",
+    "external-crates/move/move-compiler/transactional-tests",
+    "external-crates/move/move-core/types",
+    "external-crates/move/move-ir-compiler",
+    "external-crates/move/move-ir-compiler/move-bytecode-source-map",
+    "external-crates/move/move-ir-compiler/move-ir-to-bytecode",
+    "external-crates/move/move-ir-compiler/move-ir-to-bytecode/syntax",
+    "external-crates/move/move-ir-compiler/transactional-tests",
+    "external-crates/move/move-ir/types",
+    "external-crates/move/move-model",
+    "external-crates/move/move-prover",
+    "external-crates/move/move-prover/boogie-backend",
+    "external-crates/move/move-prover/bytecode",
+    "external-crates/move/move-prover/interpreter",
+    "external-crates/move/move-prover/interpreter-testsuite",
+    "external-crates/move/move-prover/interpreter/crypto",
+    "external-crates/move/move-prover/move-abigen",
+    "external-crates/move/move-prover/move-docgen",
+    "external-crates/move/move-prover/move-errmapgen",
+    "external-crates/move/move-prover/test-utils",
+    "external-crates/move/move-stdlib",
+    "external-crates/move/move-symbol-pool",
+    "external-crates/move/move-vm/config",
+    "external-crates/move/move-vm/integration-tests",
+    "external-crates/move/move-vm/paranoid-tests",
+    "external-crates/move/move-vm/profiler",
+    "external-crates/move/move-vm/runtime",
+    "external-crates/move/move-vm/test-utils",
+    "external-crates/move/move-vm/transactional-tests",
+    "external-crates/move/move-vm/types",
+    "external-crates/move/testing-infra/enum-compat-util",
+    "external-crates/move/testing-infra/module-generation",
+    "external-crates/move/testing-infra/move-proc-macros",
+    "external-crates/move/testing-infra/test-generation",
+    "external-crates/move/testing-infra/transactional-test-runner",
+    "external-crates/move/tools/move-bytecode-utils",
+    "external-crates/move/tools/move-bytecode-viewer",
+    "external-crates/move/tools/move-cli",
+    "external-crates/move/tools/move-coverage",
+    "external-crates/move/tools/move-disassembler",
+    "external-crates/move/tools/move-explain",
+    "external-crates/move/tools/move-package",
+    "external-crates/move/tools/move-resource-viewer",
+    "external-crates/move/tools/move-unit-test",
+    "external-crates/move/tools/read-write-set",
+    "external-crates/move/tools/read-write-set/dynamic",
+    "external-crates/move/tools/read-write-set/types",
 ]
 
 members = [
-  "crates/anemo-benchmark",
-  "crates/mysten-common",
-  "crates/mysten-metrics",
-  "crates/mysten-network",
-  "crates/mysten-util-mem",
-  "crates/mysten-util-mem-derive",
-  "crates/prometheus-closure-metric",
-  "crates/shared-crypto",
-  "crates/sui",
-  "crates/sui-adapter-transactional-tests",
-  "crates/sui-archival",
-  "crates/sui-benchmark",
-  "crates/sui-cluster-test",
-  "crates/sui-config",
-  "crates/sui-core",
-  "crates/sui-cost",
-  "crates/sui-e2e-tests",
-  "crates/sui-enum-compat-util",
-  "crates/sui-faucet",
-  "crates/sui-framework",
-  "crates/sui-framework-snapshot",
-  "crates/sui-framework-tests",
-  "crates/sui-genesis-builder",
-  "crates/sui-graphql-rpc",
-  "crates/sui-indexer",
-  "crates/sui-json",
-  "crates/sui-json-rpc",
-  "crates/sui-json-rpc-tests",
-  "crates/sui-json-rpc-types",
-  "crates/sui-keys",
-  "crates/sui-kvstore",
-  "crates/sui-macros",
-  "crates/sui-metric-checker",
-  "crates/sui-move",
-  "crates/sui-move-build",
-  "crates/sui-network",
-  "crates/sui-node",
-  "crates/sui-open-rpc",
-  "crates/sui-open-rpc-macros",
-  "crates/sui-oracle",
-  "crates/sui-proc-macros",
-  "crates/sui-protocol-config",
-  "crates/sui-protocol-config-macros",
-  "crates/sui-proxy",
-  "crates/sui-replay",
-  "crates/sui-rest-api",
-  "crates/sui-rosetta",
-  "crates/sui-rpc-loadgen",
-  "crates/sui-sdk",
-  "crates/sui-simulator",
-  "crates/sui-snapshot",
-  "crates/sui-source-validation",
-  "crates/sui-source-validation-service",
-  "crates/sui-storage",
-  "crates/sui-surfer",
-  "crates/sui-swarm",
-  "crates/sui-swarm-config",
-  "crates/sui-telemetry",
-  "crates/sui-test-transaction-builder",
-  "crates/sui-test-validator",
-  "crates/sui-tls",
-  "crates/sui-tool",
-  "crates/sui-transaction-builder",
-  "crates/sui-transactional-test-runner",
-  "crates/sui-types",
-  "crates/sui-upgrade-compatibility-transactional-tests",
-  "crates/sui-verifier-transactional-tests",
-  "crates/telemetry-subscribers",
-  "crates/test-cluster",
-  "crates/transaction-fuzzer",
-  "crates/typed-store",
-  "crates/typed-store-derive",
-  "crates/workspace-hack",
-  "crates/x",
-  "narwhal/config",
-  "narwhal/consensus",
-  "narwhal/crypto",
-  "narwhal/executor",
-  "narwhal/network",
-  "narwhal/node",
-  "narwhal/primary",
-  "narwhal/storage",
-  "narwhal/test-utils",
-  "narwhal/types",
-  "narwhal/worker",
-  "sui-execution",
-  "sui-execution/cut",
-  "sui-execution/latest/sui-adapter",
-  "sui-execution/latest/sui-move-natives",
-  "sui-execution/latest/sui-verifier",
-  "sui-execution/v0/sui-adapter",
-  "sui-execution/v0/sui-move-natives",
-  "sui-execution/v0/sui-verifier",
+    "crates/anemo-benchmark",
+    "crates/mysten-common",
+    "crates/mysten-metrics",
+    "crates/mysten-network",
+    "crates/mysten-util-mem",
+    "crates/mysten-util-mem-derive",
+    "crates/prometheus-closure-metric",
+    "crates/shared-crypto",
+    "crates/sui",
+    "crates/sui-adapter-transactional-tests",
+    "crates/sui-archival",
+    "crates/sui-benchmark",
+    "crates/sui-cluster-test",
+    "crates/sui-config",
+    "crates/sui-core",
+    "crates/sui-cost",
+    "crates/sui-e2e-tests",
+    "crates/sui-enum-compat-util",
+    "crates/sui-faucet",
+    "crates/sui-framework",
+    "crates/sui-framework-snapshot",
+    "crates/sui-framework-tests",
+    "crates/sui-genesis-builder",
+    "crates/sui-graphql-rpc",
+    "crates/sui-indexer",
+    "crates/sui-json",
+    "crates/sui-json-rpc",
+    "crates/sui-json-rpc-tests",
+    "crates/sui-json-rpc-types",
+    "crates/sui-keys",
+    "crates/sui-kvstore",
+    "crates/sui-macros",
+    "crates/sui-metric-checker",
+    "crates/sui-move",
+    "crates/sui-move-build",
+    "crates/sui-network",
+    "crates/sui-node",
+    "crates/sui-open-rpc",
+    "crates/sui-open-rpc-macros",
+    "crates/sui-oracle",
+    "crates/sui-proc-macros",
+    "crates/sui-protocol-config",
+    "crates/sui-protocol-config-macros",
+    "crates/sui-proxy",
+    "crates/sui-replay",
+    "crates/sui-rest-api",
+    "crates/sui-rosetta",
+    "crates/sui-rpc-loadgen",
+    "crates/sui-sdk",
+    "crates/sui-simulator",
+    "crates/sui-snapshot",
+    "crates/sui-source-validation",
+    "crates/sui-source-validation-service",
+    "crates/sui-storage",
+    "crates/sui-surfer",
+    "crates/sui-swarm",
+    "crates/sui-swarm-config",
+    "crates/sui-telemetry",
+    "crates/sui-test-transaction-builder",
+    "crates/sui-test-validator",
+    "crates/sui-tls",
+    "crates/sui-tool",
+    "crates/sui-transaction-builder",
+    "crates/sui-transactional-test-runner",
+    "crates/sui-types",
+    "crates/sui-upgrade-compatibility-transactional-tests",
+    "crates/sui-verifier-transactional-tests",
+    "crates/telemetry-subscribers",
+    "crates/test-cluster",
+    "crates/transaction-fuzzer",
+    "crates/typed-store",
+    "crates/typed-store-derive",
+    "crates/workspace-hack",
+    "crates/x",
+    "narwhal/config",
+    "narwhal/consensus",
+    "narwhal/crypto",
+    "narwhal/executor",
+    "narwhal/network",
+    "narwhal/node",
+    "narwhal/primary",
+    "narwhal/storage",
+    "narwhal/test-utils",
+    "narwhal/types",
+    "narwhal/worker",
+    "sui-execution",
+    "sui-execution/cut",
+    "sui-execution/latest/sui-adapter",
+    "sui-execution/latest/sui-move-natives",
+    "sui-execution/latest/sui-verifier",
+    "sui-execution/suivm/sui-adapter",
+    "sui-execution/suivm/sui-move-natives",
+    "sui-execution/suivm/sui-verifier",
+    "sui-execution/v0/sui-adapter",
+    "sui-execution/v0/sui-move-natives",
+    "sui-execution/v0/sui-verifier",
 ]
 
 [workspace.package]
@@ -206,9 +212,9 @@ assert_cmd = "2.0.6"
 async-graphql = "5.0.10"
 async-recursion = "1.0.4"
 async-trait = "0.1.61"
-aws-config = "0.55.3"
-aws-sdk-dynamodb = "0.28.0"
-aws-sdk-s3 = "0.28.0"
+aws-config = "0.56"
+aws-sdk-dynamodb = "0.29.0"
+aws-sdk-s3 = "0.29.0"
 axum = { version = "0.6.6", default-features = false, features = [
   "headers",
   "tokio",
@@ -222,7 +228,7 @@ axum = { version = "0.6.6", default-features = false, features = [
   "ws",
 ] }
 axum-extra = "0.4.2"
-axum-server = { version = "0.4.4", default-features = false, features = [
+axum-server = { version = "0.5.1", default-features = false, features = [
   "tls-rustls",
 ] }
 backoff = { version = "0.4.0", features = [
@@ -245,14 +251,14 @@ cached = "0.43.0"
 camino = "1.1.1"
 cfg-if = "1.0.0"
 chrono = { version = "0.4.26", features = ["clock", "serde"] }
-clap = { version = "3.2.17", features = ["derive"] }
+clap = { version = "3.2.17", features = ["derive", "cargo"] }
 # clap = { version = "4.3.2", features = ["derive"] }
 collectable = "0.0.2"
 colored = "2.0.0"
 comfy-table = "6.1.3"
 console-subscriber = "0.1.6"
 const-str = "0.5.3"
-criterion = { version = "0.4.0", features = [
+criterion = { version = "0.5.0", features = [
   "async",
   "async_tokio",
   "html_reports",
@@ -287,7 +293,7 @@ fs_extra = "1.3.0"
 futures = "0.3.25"
 futures-core = "0.3.21"
 git-version = "0.3.5"
-governor = "0.5.1"
+governor = "0.6.0"
 hashbrown = "0.12"
 hdrhistogram = "7.5.1"
 hex = "0.4.3"
@@ -331,14 +337,13 @@ ntest = "0.9.0"
 num-bigint = "0.4.3"
 num_cpus = "1.15.0"
 num_enum = "0.6.1"
-object_store = { version = "=0.5.4", features = [
+object_store = { version = "0.7", features = [
   "aws",
-  "aws_profile",
   "gcp",
   "azure",
 ] }
 once_cell = "1.18.0"
-ouroboros = "0.15.5"
+ouroboros = "0.17"
 parking_lot = "0.12.1"
 pkcs8 = { version = "0.9.0", features = ["std"] }
 pprof = { version = "0.11.0", features = ["cpp", "frame-pointer"] }
@@ -383,7 +388,7 @@ rusoto_kms = { version = "0.48.0", default_features = false, features = [
   "rustls",
 ] }
 rust-version = "1.56.1"
-rustls = { version = "0.20.4", features = ["dangerous_configuration"] }
+rustls = { version = "0.21.6", features = ["dangerous_configuration"] }
 rustls-pemfile = "1.0.2"
 rustversion = "1.0.9"
 rustyline = "9.1.2"
@@ -410,7 +415,6 @@ slip10_ed25519 = "0.1.3"
 smallvec = "1.10.0"
 snap = "1.1.0"
 static_assertions = "1.1.0"
-structopt = "0.3.26"
 strum = { version = "0.24", features = ["derive"] }
 strum_macros = "0.24.3"
 syn = { version = "1.0.104", features = ["full", "derive", "extra-traits"] }
@@ -425,7 +429,7 @@ thiserror = "1.0.40"
 tiny-bip39 = "1.0.0"
 tokio = "1.28.1"
 tokio-retry = "0.3"
-tokio-rustls = "0.23"
+tokio-rustls = "0.24"
 tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
 tokio-util = "0.7.4"
 toml = { version = "0.7.4", features = ["preserve_order"] }
@@ -466,7 +470,7 @@ uint = "0.9.4"
 unescape = "0.1.0"
 url = "2.3.1"
 uuid = { version = "1.1.2", features = ["v4", "fast-rng"] }
-webpki = { version = "0.22.0", features = ["alloc", "std"] }
+webpki = { version = "0.101.0", package = "rustls-webpki", features = ["alloc", "std"] }
 x509-parser = "0.14.0"
 zstd = "0.12.3"
 versions = "4.1.0"
@@ -501,10 +505,10 @@ fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4e7debce
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4e7debce78340848f0009b648f56d912d6bd02d5", package = "fastcrypto-zkp" }
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
