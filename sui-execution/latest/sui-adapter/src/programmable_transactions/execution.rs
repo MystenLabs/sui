@@ -4,12 +4,7 @@
 pub use checked::*;
 #[sui_macros::with_checked_arithmetic]
 mod checked {
-    use std::{
-        collections::{BTreeMap, BTreeSet},
-        fmt,
-        sync::Arc,
-    };
-
+    use crate::gas_charger::GasCharger;
     use move_binary_format::{
         access::ModuleAccess,
         compatibility::{Compatibility, InclusionCheck},
@@ -29,6 +24,11 @@ mod checked {
     };
     use move_vm_types::loaded_data::runtime_types::{StructType, Type};
     use serde::{de::DeserializeSeed, Deserialize};
+    use std::{
+        collections::{BTreeMap, BTreeSet},
+        fmt,
+        sync::Arc,
+    };
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
@@ -43,7 +43,6 @@ mod checked {
             CommandKind, ExecutionResults, ExecutionState, ObjectContents, ObjectValue,
             RawValueType, Value,
         },
-        gas::GasCharger,
         id::{RESOLVED_SUI_ID, UID},
         metrics::LimitsMetrics,
         move_package::{

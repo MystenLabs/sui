@@ -10,6 +10,7 @@ mod checked {
         sync::Arc,
     };
 
+    use crate::gas_charger::GasCharger;
     use move_binary_format::{
         access::ModuleAccess,
         compatibility::{Compatibility, InclusionCheck},
@@ -43,7 +44,6 @@ mod checked {
             CommandKind, ExecutionResults, ExecutionState, ObjectContents, ObjectValue,
             RawValueType, Value,
         },
-        gas::GasCharger,
         id::{RESOLVED_SUI_ID, UID},
         metrics::LimitsMetrics,
         move_package::{
