@@ -50,6 +50,10 @@ export abstract class Account<
 		return this.getCachedData().then(({ lastUnlockedOn }) => lastUnlockedOn);
 	}
 
+	get publicKey() {
+		return this.getCachedData().then(({ publicKey }) => publicKey);
+	}
+
 	protected getCachedData() {
 		if (!this.cachedData) {
 			this.cachedData = this.getStoredData();

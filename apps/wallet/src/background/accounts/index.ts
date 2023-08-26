@@ -20,6 +20,7 @@ import {
 	type MethodPayload,
 	isMethodPayload,
 } from '_src/shared/messaging/messages/payloads/MethodPayload';
+import { type WalletStatusChange } from '_src/shared/messaging/messages/payloads/wallet-status-change';
 
 function toAccount(account: SerializedAccount) {
 	if (MnemonicAccount.isOfType(account)) {
@@ -69,6 +70,17 @@ export async function getAllSerializedUIAccounts() {
 
 export async function isAccountsInitialized() {
 	return (await (await getDB()).accounts.count()) > 0;
+}
+
+export async function getAccountsStatusData(
+	accountsFilter?: string[],
+): Promise<Required<WalletStatusChange>['accounts']> {
+	const allAccounts = await (await getDB()).accounts.toArray();
+	let filteredAccounts = allAccounts;
+	if (accountsFilter?.length) {
+		filteredAccounts = allAccounts.filter(({ address }) => accountsFilter.includes(address));
+	}
+	return filteredAccounts.map(({ address, publicKey }) => ({ address, publicKey }));
 }
 
 export async function changeActiveAccount(accountID: string) {
@@ -278,6 +290,11 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 			}
 		}
 		throw new Error('No password protected account found');
+	}
+	if (isMethodPayload(payload, 'storeLedgerAccountsPublicKeys')) {
+		console.log('store ledger public keys', payload.args);
+		// TODO: implement
+		return true;
 	}
 	return false;
 }
