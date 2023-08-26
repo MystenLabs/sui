@@ -45,12 +45,12 @@ use sui_types::error::ExecutionError;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::gas::SuiGasStatus;
+use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::metrics::LimitsMetrics;
 use sui_types::object::{Data, Object, Owner};
 use sui_types::storage::get_module_by_id;
 use sui_types::storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
-use sui_types::temporary_store::InnerTemporaryStore;
 use sui_types::transaction::{
     CertifiedTransaction, InputObjectKind, InputObjects, SenderSignedData, Transaction,
     TransactionData, TransactionDataAPI, TransactionKind, VerifiedCertificate, VerifiedTransaction,

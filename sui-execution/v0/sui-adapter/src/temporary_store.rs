@@ -1,21 +1,32 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::committee::EpochId;
-use crate::effects::{TransactionEffects, TransactionEvents};
-use crate::execution::LoadedChildObjectMetadata;
-use crate::execution_status::ExecutionStatus;
-use crate::storage::{DeleteKindWithOldVersion, ObjectStore};
-use crate::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
-use crate::type_resolver::LayoutResolver;
-use crate::{
+use crate::gas_charger::GasCharger;
+use move_binary_format::CompiledModule;
+use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::account_address::AccountAddress;
+use move_core_types::language_storage::{ModuleId, StructTag};
+use move_core_types::resolver::{ModuleResolver, ResourceResolver};
+use parking_lot::RwLock;
+use std::collections::{BTreeMap, HashSet};
+use std::sync::Arc;
+use sui_protocol_config::ProtocolConfig;
+use sui_types::committee::EpochId;
+use sui_types::effects::{TransactionEffects, TransactionEvents};
+use sui_types::execution::LoadedChildObjectMetadata;
+use sui_types::execution_status::ExecutionStatus;
+use sui_types::inner_temporary_store::InnerTemporaryStore;
+use sui_types::storage::{BackingStore, DeleteKindWithOldVersion};
+use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
+use sui_types::type_resolver::LayoutResolver;
+use sui_types::{
     base_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
     },
     error::{ExecutionError, SuiError, SuiResult},
     event::Event,
     fp_bail,
-    gas::{GasCharger, GasCostSummary},
+    gas::GasCostSummary,
     object::Owner,
     object::{Data, Object},
     storage::{
@@ -24,98 +35,7 @@ use crate::{
     },
     transaction::InputObjects,
 };
-use crate::{is_system_package, SUI_SYSTEM_STATE_OBJECT_ID};
-use move_binary_format::CompiledModule;
-use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::account_address::AccountAddress;
-use move_core_types::language_storage::{ModuleId, StructTag};
-use move_core_types::resolver::{ModuleResolver, ResourceResolver};
-use parking_lot::RwLock;
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
-use std::collections::{BTreeMap, HashSet};
-use std::sync::Arc;
-use sui_protocol_config::ProtocolConfig;
-
-pub type WrittenObjects = BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>;
-pub type ObjectMap = BTreeMap<ObjectID, Object>;
-pub type TxCoins = (ObjectMap, WrittenObjects);
-
-#[serde_as]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct InnerTemporaryStore {
-    pub objects: ObjectMap,
-    pub mutable_inputs: Vec<ObjectRef>,
-    // All the written objects' sequence number should have been updated to the lamport version.
-    pub written: WrittenObjects,
-    // deleted or wrapped or unwrap-then-delete. The sequence number should have been updated to
-    // the lamport version.
-    pub deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
-    pub loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
-    pub events: TransactionEvents,
-    pub max_binary_format_version: u32,
-    pub no_extraneous_module_bytes: bool,
-    pub runtime_packages_loaded_from_db: BTreeMap<ObjectID, Object>,
-}
-
-pub struct TemporaryModuleResolver<'a, R> {
-    temp_store: &'a InnerTemporaryStore,
-    fallback: R,
-}
-
-impl<'a, R> TemporaryModuleResolver<'a, R> {
-    pub fn new(temp_store: &'a InnerTemporaryStore, fallback: R) -> Self {
-        Self {
-            temp_store,
-            fallback,
-        }
-    }
-}
-
-impl<R> GetModule for TemporaryModuleResolver<'_, R>
-where
-    R: GetModule<Item = Arc<CompiledModule>, Error = anyhow::Error>,
-{
-    type Error = anyhow::Error;
-    type Item = Arc<CompiledModule>;
-
-    fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
-        let obj = self.temp_store.written.get(&ObjectID::from(*id.address()));
-        if let Some((_, o, _)) = obj {
-            if let Some(p) = o.data.try_as_package() {
-                return Ok(Some(Arc::new(p.deserialize_module(
-                    &id.name().into(),
-                    self.temp_store.max_binary_format_version,
-                    self.temp_store.no_extraneous_module_bytes,
-                )?)));
-            }
-        }
-        self.fallback.get_module_by_id(id)
-    }
-}
-
-pub trait BackingStore:
-    BackingPackageStore
-    + ChildObjectResolver
-    + GetModule<Error = SuiError, Item = CompiledModule>
-    + ObjectStore
-    + ParentSync
-{
-    fn as_object_store(&self) -> &dyn ObjectStore;
-}
-
-impl<T> BackingStore for T
-where
-    T: BackingPackageStore,
-    T: ChildObjectResolver,
-    T: GetModule<Error = SuiError, Item = CompiledModule>,
-    T: ObjectStore,
-    T: ParentSync,
-{
-    fn as_object_store(&self) -> &dyn ObjectStore {
-        self
-    }
-}
+use sui_types::{is_system_package, SUI_SYSTEM_STATE_OBJECT_ID};
 
 pub struct TemporaryStore<'backing> {
     // The backing store for retrieving Move packages onchain.

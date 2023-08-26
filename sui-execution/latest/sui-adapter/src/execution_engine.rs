@@ -26,6 +26,7 @@ mod checked {
 
     use crate::programmable_transactions;
     use crate::type_layout_resolver::TypeLayoutResolver;
+    use crate::{gas_charger::GasCharger, temporary_store::TemporaryStore};
     use move_binary_format::access::ModuleAccess;
     use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
     use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
@@ -33,14 +34,13 @@ mod checked {
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
     use sui_types::execution_status::ExecutionStatus;
-    use sui_types::gas::{GasCharger, GasCostSummary};
+    use sui_types::gas::GasCostSummary;
+    use sui_types::inner_temporary_store::InnerTemporaryStore;
     use sui_types::messages_consensus::ConsensusCommitPrologue;
     use sui_types::storage::WriteKind;
     #[cfg(msim)]
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
     use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
-    use sui_types::temporary_store::InnerTemporaryStore;
-    use sui_types::temporary_store::TemporaryStore;
     use sui_types::transaction::{
         Argument, CallArg, ChangeEpoch, Command, GenesisTransaction, ProgrammableTransaction,
         TransactionKind,
@@ -189,7 +189,7 @@ mod checked {
                 .unwrap()
         } // else, in dev inspect mode and anything goes--don't check
 
-        let (inner, effects) = temporary_store.to_effects(
+        let (inner, effects) = temporary_store.into_effects(
             shared_object_refs,
             &transaction_digest,
             transaction_dependencies.into_iter().collect(),

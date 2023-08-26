@@ -29,9 +29,9 @@ use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{self, DynamicFieldInfo};
 use sui_types::effects::TransactionEvents;
 use sui_types::error::{SuiError, SuiResult, UserInputError};
+use sui_types::inner_temporary_store::TxCoins;
 use sui_types::object::{Object, Owner};
 use sui_types::parse_sui_struct_tag;
-use sui_types::temporary_store::TxCoins;
 use tokio::task::spawn_blocking;
 use tracing::{debug, trace};
 use typed_store::rocks::{
