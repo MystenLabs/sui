@@ -285,6 +285,14 @@ The recommended IDE for Move development is [Visual Studio Code](https://code.vi
 cargo install --git https://github.com/move-language/move move-analyzer --branch sui-move --features "address32"
 ```
 
+## Upgrade Sui binaries
+
+In order to upgrade Sui binaries use the same command that installs the binaries:
+
+```shell
+cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devnet sui
+```
+
 See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [Awesome Move](https://github.com/MystenLabs/awesome-move) documentation.
 
 ## SUI tokens
