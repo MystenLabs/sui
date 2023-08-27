@@ -859,6 +859,17 @@ impl PgIndexerStore {
         ))
     }
 
+    fn get_recipients_data_by_checkpoint(&self, seq: u64) -> Result<Vec<Recipient>, IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            recipients::dsl::recipients
+                .filter(recipients::dsl::checkpoint_sequence_number.eq(seq as i64))
+                .load::<Recipient>(conn)
+        })
+        .context(&format!(
+            "Failed reading recipients with checkpoint sequence number {seq}"
+        ))
+    }
+
     fn get_all_transaction_page(
         &self,
         start_sequence: Option<i64>,
@@ -2237,6 +2248,14 @@ impl IndexerStore for PgIndexerStore {
             this.get_recipient_sequence_by_digest(tx_digest, is_descending)
         })
         .await
+    }
+
+    async fn get_recipients_data_by_checkpoint(
+        &self,
+        seq: u64,
+    ) -> Result<Vec<Recipient>, IndexerError> {
+        self.spawn_blocking(move |this| this.get_recipients_data_by_checkpoint(seq))
+            .await
     }
 
     async fn get_network_metrics(&self) -> Result<NetworkMetrics, IndexerError> {
