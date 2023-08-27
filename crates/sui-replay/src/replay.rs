@@ -123,9 +123,9 @@ pub struct ProtocolVersionSummary {
     /// The last epoch that uses this protocol version
     pub epoch_end: u64,
     /// The first checkpoint in this protocol v ersion
-    pub checkpoint_start: u64,
+    pub checkpoint_start: Option<u64>,
     /// The last checkpoint in this protocol version
-    pub checkpoint_end: u64,
+    pub checkpoint_end: Option<u64>,
     /// The transaction which triggered this epoch change
     pub epoch_change_tx: TransactionDigest,
 }
@@ -1076,7 +1076,8 @@ impl LocalExec {
             .expect("Genesis TX must be in first checkpoint");
         // Somehow the genesis TX did not emit any event, but we know it was the start of version 1
         // So we need to manually add this range
-        let (mut start_epoch, mut start_protocol_version, mut start_checkpoint) = (0, 1, 0u64);
+        let (mut start_epoch, mut start_protocol_version, mut start_checkpoint) =
+            (0, 1, Some(0u64));
 
         let (mut curr_epoch, mut curr_protocol_version, mut curr_checkpoint) =
             (start_epoch, start_protocol_version, start_checkpoint);
@@ -1102,8 +1103,7 @@ impl LocalExec {
                 .fetcher
                 .get_transaction(&event.id.tx_digest)
                 .await?
-                .checkpoint
-                .expect("Checkpoint should be present");
+                .checkpoint;
             // Insert the last range
             range_map.insert(
                 start_protocol_version,
@@ -1112,7 +1112,7 @@ impl LocalExec {
                     epoch_start: start_epoch,
                     epoch_end: curr_epoch - 1,
                     checkpoint_start: start_checkpoint,
-                    checkpoint_end: curr_checkpoint - 1,
+                    checkpoint_end: curr_checkpoint.map(|x| x - 1),
                     epoch_change_tx: tx_digest,
                 },
             );
@@ -1135,8 +1135,7 @@ impl LocalExec {
                     .fetcher
                     .get_transaction(&end_epoch_tx_digest)
                     .await?
-                    .checkpoint
-                    .expect("Checkpoint should be present"),
+                    .checkpoint,
                 epoch_change_tx: tx_digest,
             },
         );
@@ -1328,7 +1327,12 @@ impl LocalExec {
                     .get_transaction(&epoch_change_tx)
                     .await?
                     .checkpoint
-                    .expect("Checkpoint should be present"),
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Checkpoint for transaction {} not present. Could be due to pruning",
+                            epoch_change_tx
+                        )
+                    }),
                 idx,
             )
         };
@@ -1343,7 +1347,12 @@ impl LocalExec {
             .get_transaction(&next_epoch_change_tx)
             .await?
             .checkpoint
-            .expect("Checkpoint should be present");
+            .unwrap_or_else(|| {
+                panic!(
+                    "Checkpoint for transaction {} not present. Could be due to pruning",
+                    next_epoch_change_tx
+                )
+            });
 
         Ok((start_checkpoint, next_epoch_checkpoint - 1))
     }
