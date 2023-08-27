@@ -17,8 +17,6 @@ module 0x42::test1{
     }
 
     public entry fun main(){
-        //The linter should complain because push_back is native 
-        //and S2 is not a primitive type
-        let (_cazzo,_palle) = returns_something(true,42,Coolstruct{a:true,b:42},&Coolstruct{a:true,b:42});
+        let (_x,_y) = returns_something(true,42,Coolstruct{a:true,b:42},&Coolstruct{a:true,b:42});
     }
 }
