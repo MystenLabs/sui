@@ -1327,10 +1327,12 @@ impl LocalExec {
                     .get_transaction(&epoch_change_tx)
                     .await?
                     .checkpoint
-                    .expect(&format!(
-                        "Checkpoint for transaction {} not present. Could be due to pruning",
-                        epoch_change_tx
-                    )),
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Checkpoint for transaction {} not present. Could be due to pruning",
+                            epoch_change_tx
+                        )
+                    }),
                 idx,
             )
         };
@@ -1345,10 +1347,12 @@ impl LocalExec {
             .get_transaction(&next_epoch_change_tx)
             .await?
             .checkpoint
-            .expect(&format!(
-                "Checkpoint for transaction {} not present. Could be due to pruning",
-                next_epoch_change_tx
-            ));
+            .unwrap_or_else(|| {
+                panic!(
+                    "Checkpoint for transaction {} not present. Could be due to pruning",
+                    next_epoch_change_tx
+                )
+            });
 
         Ok((start_checkpoint, next_epoch_checkpoint - 1))
     }
