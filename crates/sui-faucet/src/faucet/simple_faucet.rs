@@ -127,9 +127,14 @@ impl SimpleFaucet {
         let (sender, mut receiver) =
             mpsc::channel::<(Uuid, SuiAddress, Vec<u64>)>(config.max_request_queue_length as usize);
 
-        let split_point = coins.len() / 2;
-
+        // This is to handle the case where there is only 1 coin, we want it to go to the normal queue
+        let split_point = if coins.len() > 10 {
+            coins.len() / 2
+        } else {
+            coins.len()
+        };
         // Put half of the coins in the old faucet impl queue, and put half in the other queue for batch coins.
+        // In the test cases we create an account with 5 coins so we just let this run with a minimum of 5 coins
         for (coins_processed, coin) in coins.iter().enumerate() {
             let coin_id = *coin.id();
             if let Some(write_ahead_log::Entry {
@@ -144,6 +149,7 @@ impl SimpleFaucet {
                 info!(?uuid, ?recipient, ?coin_id, "Retrying txn from WAL.");
                 pending.push((uuid, recipient, coin_id, tx));
             } else if coins_processed < split_point {
+                println!("Sending coin to producer queue.");
                 producer
                     .send(coin_id)
                     .await
@@ -154,6 +160,7 @@ impl SimpleFaucet {
                     .tap_err(|e| error!(?coin_id, "Failed to add coin to gas pools: {e:?}"))
                     .unwrap();
             } else {
+                println!("Sending coin to batch producer queue.");
                 batch_producer
                     .send(coin_id)
                     .await
@@ -177,7 +184,6 @@ impl SimpleFaucet {
             metrics,
             wal: Mutex::new(wal),
             request_producer: sender,
-            // request_consumer: Mutex::new(receiver),
             batch_request_size: config.batch_request_size,
             // Max faucet requests times 10 minutes worth of requests to hold onto at max.
             // Note that the cache holds onto a Uuid for [ttl_expiration] in from every update in status with both INPROGRESS and SUCCEEDED
@@ -285,9 +291,9 @@ impl SimpleFaucet {
         for_batch: bool,
     ) -> GasCoinResponse {
         let coin_id = if for_batch {
-            self.pop_gas_coin(uuid).await
-        } else {
             self.pop_gas_coin_for_batch(uuid).await
+        } else {
+            self.pop_gas_coin(uuid).await
         };
 
         let Some(coin_id) = coin_id else {
@@ -1094,7 +1100,7 @@ mod tests {
         )
         .await
         .unwrap();
-        faucet.shutdown_batch_send_task();
+        // faucet.shutdown_batch_send_task();
 
         let faucet = Arc::try_unwrap(faucet).unwrap();
 
@@ -1552,6 +1558,7 @@ mod tests {
         let gases = get_current_gases(address, &mut context).await;
         let config = FaucetConfig::default();
 
+        // The coin that is split off stays because we don't try to refresh the coin vector
         let reasonable_value = (config.num_coins as u64 * config.amount) * 10;
         SuiClientCommands::SplitCoin {
             coin_id: *gases[0].id(),
@@ -1598,7 +1605,7 @@ mod tests {
         .await
         .unwrap();
 
-        // We traverse the the list twice, which must trigger the transferred gas to be kicked out
+        // We traverse the the list twice, which must trigger the split gas to be kicked out
         futures::future::join_all((0..2).map(|_| {
             faucet.send(
                 Uuid::new_v4(),
