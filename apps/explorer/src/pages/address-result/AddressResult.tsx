@@ -15,7 +15,10 @@ import { useBreakpoint } from '~/hooks/useBreakpoint';
 import { Divider } from '~/ui/Divider';
 import { PageHeader } from '~/ui/PageHeader';
 import { SplitPanes } from '~/ui/SplitPanes';
-import { TabHeader } from '~/ui/Tabs';
+import { TabHeader, TabsList, TabsTrigger } from '~/ui/Tabs';
+
+const LEFT_RIGHT_PANEL_MIN_SIZE = 30;
+const TOP_PANEL_MIN_SIZE = 20;
 
 function AddressResultPageHeader({ address, loading }: { address: string; loading?: boolean }) {
 	const { data: domainName, isFetching } = useResolveSuiNSName(address);
@@ -41,48 +44,77 @@ function AddressResult({ address }: { address: string }) {
 	const isMediumOrAbove = useBreakpoint('md');
 
 	const leftPane = {
-		panel: (
-			<div className="flex-1 overflow-hidden md:pr-7">
-				<OwnedCoins id={address} />
-			</div>
-		),
-		minSize: 30,
+		panel: <OwnedCoins id={address} />,
+		minSize: LEFT_RIGHT_PANEL_MIN_SIZE,
+		defaultSize: LEFT_RIGHT_PANEL_MIN_SIZE,
 	};
 
 	const rightPane = {
 		panel: <OwnedObjects id={address} />,
-		minSize: 30,
+		minSize: LEFT_RIGHT_PANEL_MIN_SIZE,
 	};
 
-	return (
-		<div className="space-y-12">
-			<div>
-				<TabHeader title="Owned Objects" noGap>
-					<ErrorBoundary>
-						{isMediumOrAbove ? (
-							<SplitPanes splitPanels={[leftPane, rightPane]} direction="horizontal" />
-						) : (
-							<>
-								{leftPane.panel}
-								<div className="my-8">
-									<Divider />
-								</div>
-								{rightPane.panel}
-							</>
-						)}
-						<Divider />
-					</ErrorBoundary>
-				</TabHeader>
-			</div>
-
-			<div>
+	const topPane = {
+		panel: (
+			<div className="flex h-full flex-col justify-between">
 				<ErrorBoundary>
-					<div className="mt-2">
+					{isMediumOrAbove ? (
+						<SplitPanes
+							dividerSize="none"
+							splitPanels={[leftPane, rightPane]}
+							direction="horizontal"
+						/>
+					) : (
+						<>
+							{leftPane.panel}
+							<div className="my-8">
+								<Divider />
+							</div>
+							<div className="h-coinsAndAssetsContainer">{rightPane.panel}</div>
+						</>
+					)}
+				</ErrorBoundary>
+			</div>
+		),
+		minSize: TOP_PANEL_MIN_SIZE,
+	};
+
+	const bottomPane = {
+		panel: (
+			<div className="flex h-full flex-col pt-12">
+				<TabsList>
+					<TabsTrigger value="tab">Transaction Blocks</TabsTrigger>
+				</TabsList>
+
+				<ErrorBoundary>
+					<div data-testid="tx" className="mt-4 h-full overflow-auto">
 						<TransactionsForAddress address={address} type="address" />
 					</div>
 				</ErrorBoundary>
+
+				<div className="mt-0.5">
+					<Divider />
+				</div>
 			</div>
-		</div>
+		),
+	};
+
+	return (
+		<TabHeader title="Owned Objects" noGap>
+			{isMediumOrAbove ? (
+				<div className="h-300">
+					<SplitPanes dividerSize="none" splitPanels={[topPane, bottomPane]} direction="vertical" />
+				</div>
+			) : (
+				<>
+					{topPane.panel}
+					<div className="mt-5">
+						<Divider />
+					</div>
+					{bottomPane.panel}
+				</>
+			)}
+		</TabHeader>
 	);
 }
 

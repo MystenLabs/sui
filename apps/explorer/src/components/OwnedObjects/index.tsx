@@ -102,63 +102,56 @@ export function OwnedObjects({ id }: { id: string }) {
 	}
 
 	return (
-		<div
-			className={clsx(
-				'mb-5 flex-1 overflow-hidden sm:mt-10 md:mt-5 md:pl-7',
-				showPagination && 'h-coinsAndAssetsContainer',
-			)}
-		>
-			<div className="flex h-full flex-col justify-between gap-4">
-				<div className="flex w-full justify-between border-b border-gray-45 pb-3">
-					<div className="flex w-full flex-col items-start gap-3 sm:flex-row sm:items-center">
-						<Heading color="steel-darker" variant="heading4/semibold">
-							Assets
-						</Heading>
+		<div className="flex h-full overflow-hidden md:pl-10">
+			<div className="flex h-full w-full flex-col gap-4">
+				<div className="flex w-full flex-col items-start gap-3 border-b border-gray-45 max-sm:pb-3 sm:h-14 sm:min-h-14 sm:flex-row sm:items-center">
+					<Heading color="steel-darker" variant="heading4/semibold">
+						Assets
+					</Heading>
 
-						<div className="flex w-full flex-row-reverse justify-between sm:flex-row">
-							<div className="flex items-center gap-1">
-								{VIEW_MODES.map((mode) => {
-									const selected = mode.value === viewMode;
-									return (
-										<div
-											key={mode.value}
+					<div className="flex w-full flex-row-reverse justify-between sm:flex-row">
+						<div className="flex items-center gap-1">
+							{VIEW_MODES.map((mode) => {
+								const selected = mode.value === viewMode;
+								return (
+									<div
+										key={mode.value}
+										className={clsx(
+											'flex h-6 w-6 items-center justify-center',
+											selected ? 'text-white' : 'text-steel',
+										)}
+									>
+										<IconButton
 											className={clsx(
-												'flex h-6 w-6 items-center justify-center',
-												selected ? 'text-white' : 'text-steel',
+												'flex h-full w-full items-center justify-center rounded',
+												selected ? 'bg-steel' : 'bg-white',
 											)}
+											aria-label="view-filter"
+											onClick={() => {
+												setViewMode(mode.value);
+											}}
 										>
-											<IconButton
-												className={clsx(
-													'flex h-full w-full items-center justify-center rounded',
-													selected ? 'bg-steel' : 'bg-white',
-												)}
-												aria-label="view-filter"
-												onClick={() => {
-													setViewMode(mode.value);
-												}}
-											>
-												{mode.icon}
-											</IconButton>
-										</div>
-									);
-								})}
-							</div>
-
-							<RadioGroup
-								aria-label="View transactions by a specific filter"
-								value={filter}
-								onValueChange={setFilter}
-							>
-								{FILTER_OPTIONS.map((filter) => (
-									<RadioGroupItem
-										key={filter.value}
-										value={filter.value}
-										label={filter.label}
-										disabled={filter.value === 'kiosks' && !kioskData?.list?.length}
-									/>
-								))}
-							</RadioGroup>
+											{mode.icon}
+										</IconButton>
+									</div>
+								);
+							})}
 						</div>
+
+						<RadioGroup
+							aria-label="View transactions by a specific filter"
+							value={filter}
+							onValueChange={setFilter}
+						>
+							{FILTER_OPTIONS.map((filter) => (
+								<RadioGroupItem
+									key={filter.value}
+									value={filter.value}
+									label={filter.label}
+									disabled={filter.value === 'kiosks' && !kioskData?.list?.length}
+								/>
+							))}
+						</RadioGroup>
 					</div>
 				</div>
 
@@ -169,7 +162,7 @@ export function OwnedObjects({ id }: { id: string }) {
 					<SmallThumbNailsView loading={isFetching} data={sortedDataByDisplayImages} />
 				)}
 				{showPagination && (
-					<div className="flex flex-row flex-wrap gap-2">
+					<div className="mt-auto flex flex-row flex-wrap gap-2 md:mb-5">
 						<Pagination {...pagination} />
 						<div className="ml-auto flex items-center">
 							{!isFetching && (

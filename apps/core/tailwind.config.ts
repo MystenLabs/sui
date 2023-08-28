@@ -169,6 +169,7 @@ export default {
 			height: {
 				31.5: '7.5rem',
 				120: '30rem',
+				300: '75rem',
 				coinsAndAssetsContainer: '31.25rem',
 			},
 			maxHeight: {
@@ -188,6 +189,10 @@ export default {
 				transactionColumn: '31.875rem',
 				ownObjectContainer: '13.125rem',
 				ownObjectContainerMobile: '9.375rem',
+				coinItemContainer: '15.625rem',
+			},
+			minHeight: {
+				14: '3.5rem',
 			},
 			transitionTimingFunction: {
 				'ease-in-out-cubic': 'cubic-bezier(0.65, 0, 0.35, 1)',
@@ -208,7 +213,6 @@ export default {
 			},
 			borderRadius: {
 				'2lg': '0.625rem',
-				full: '16px',
 			},
 		},
 	},
