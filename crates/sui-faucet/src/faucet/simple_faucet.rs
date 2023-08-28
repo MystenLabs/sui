@@ -149,7 +149,6 @@ impl SimpleFaucet {
                 info!(?uuid, ?recipient, ?coin_id, "Retrying txn from WAL.");
                 pending.push((uuid, recipient, coin_id, tx));
             } else if coins_processed < split_point {
-                println!("Sending coin to producer queue.");
                 producer
                     .send(coin_id)
                     .await
@@ -160,7 +159,6 @@ impl SimpleFaucet {
                     .tap_err(|e| error!(?coin_id, "Failed to add coin to gas pools: {e:?}"))
                     .unwrap();
             } else {
-                println!("Sending coin to batch producer queue.");
                 batch_producer
                     .send(coin_id)
                     .await
@@ -1088,12 +1086,29 @@ mod tests {
     async fn simple_faucet_basic_interface_should_work() {
         telemetry_subscribers::init_for_testing();
         let test_cluster = TestClusterBuilder::new().build().await;
-
         let tmp = tempfile::tempdir().unwrap();
         let prom_registry = Registry::new();
         let config = FaucetConfig::default();
+
+        let address = test_cluster.get_address_0();
+        let mut context = test_cluster.wallet;
+        let gases = get_current_gases(address, &mut context).await;
+        // Split some extra gas coins so that we can test batch queue
+        SuiClientCommands::SplitCoin {
+            coin_id: *gases[0].id(),
+            amounts: None,
+            gas_budget: 50000000,
+            gas: None,
+            count: Some(10),
+            serialize_unsigned_transaction: false,
+            serialize_signed_transaction: false,
+        }
+        .execute(&mut context)
+        .await
+        .expect("split failed");
+
         let faucet = SimpleFaucet::new(
-            test_cluster.wallet,
+            context,
             &prom_registry,
             &tmp.path().join("faucet.wal"),
             config,
@@ -1199,11 +1214,27 @@ mod tests {
     #[tokio::test]
     async fn test_batch_transfer_interface() {
         let test_cluster = TestClusterBuilder::new().build().await;
-        let context = test_cluster.wallet;
         let config: FaucetConfig = Default::default();
         let coin_amount = config.amount;
         let prom_registry = Registry::new();
         let tmp = tempfile::tempdir().unwrap();
+        let address = test_cluster.get_address_0();
+        let mut context = test_cluster.wallet;
+        let gases = get_current_gases(address, &mut context).await;
+        // Split some extra gas coins so that we can test batch queue
+        SuiClientCommands::SplitCoin {
+            coin_id: *gases[0].id(),
+            amounts: None,
+            gas_budget: 50000000,
+            gas: None,
+            count: Some(10),
+            serialize_unsigned_transaction: false,
+            serialize_signed_transaction: false,
+        }
+        .execute(&mut context)
+        .await
+        .expect("split failed");
+
         let faucet = SimpleFaucet::new(
             context,
             &prom_registry,
@@ -1386,10 +1417,6 @@ mod tests {
         // Note `gases` does not contain the bad gas.
         let available = faucet.metrics.total_available_coins.get();
         let discarded = faucet.metrics.total_discarded_coins.get();
-        println!(
-            "gases: {:?}, avail: {available:?} disc: {discarded:?}",
-            gases
-        );
         let candidates = faucet.drain_gas_queue(gases.len()).await;
         assert_eq!(available as usize, candidates.len());
         assert_eq!(discarded, 1);
@@ -1760,8 +1787,23 @@ mod tests {
     #[tokio::test]
     async fn test_amounts_transferred_on_batch() {
         let test_cluster = TestClusterBuilder::new().build().await;
-        let context = test_cluster.wallet;
         let config: FaucetConfig = Default::default();
+        let address = test_cluster.get_address_0();
+        let mut context = test_cluster.wallet;
+        let gases = get_current_gases(address, &mut context).await;
+        // Split some extra gas coins so that we can test batch queue
+        SuiClientCommands::SplitCoin {
+            coin_id: *gases[0].id(),
+            amounts: None,
+            gas_budget: 50000000,
+            gas: None,
+            count: Some(10),
+            serialize_unsigned_transaction: false,
+            serialize_signed_transaction: false,
+        }
+        .execute(&mut context)
+        .await
+        .expect("split failed");
 
         let prom_registry = Registry::new();
         let tmp = tempfile::tempdir().unwrap();
