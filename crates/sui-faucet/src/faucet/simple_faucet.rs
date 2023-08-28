@@ -143,30 +143,26 @@ impl SimpleFaucet {
                 let uuid = Uuid::from_bytes(uuid);
                 info!(?uuid, ?recipient, ?coin_id, "Retrying txn from WAL.");
                 pending.push((uuid, recipient, coin_id, tx));
+            } else if coins_processed < split_point {
+                producer
+                    .send(coin_id)
+                    .await
+                    .tap_ok(|_| {
+                        info!(?coin_id, "Adding coin to gas pool");
+                        metrics.total_available_coins.inc();
+                    })
+                    .tap_err(|e| error!(?coin_id, "Failed to add coin to gas pools: {e:?}"))
+                    .unwrap();
             } else {
-                if coins_processed < split_point {
-                    producer
-                        .send(coin_id)
-                        .await
-                        .tap_ok(|_| {
-                            info!(?coin_id, "Adding coin to gas pool");
-                            metrics.total_available_coins.inc();
-                        })
-                        .tap_err(|e| error!(?coin_id, "Failed to add coin to gas pools: {e:?}"))
-                        .unwrap();
-                } else {
-                    batch_producer
-                        .send(coin_id)
-                        .await
-                        .tap_ok(|_| {
-                            info!(?coin_id, "Adding coin to batch gas pool");
-                            metrics.total_available_coins.inc();
-                        })
-                        .tap_err(|e| {
-                            error!(?coin_id, "Failed to add coin to batch gas pools: {e:?}")
-                        })
-                        .unwrap();
-                }
+                batch_producer
+                    .send(coin_id)
+                    .await
+                    .tap_ok(|_| {
+                        info!(?coin_id, "Adding coin to batch gas pool");
+                        metrics.total_available_coins.inc();
+                    })
+                    .tap_err(|e| error!(?coin_id, "Failed to add coin to batch gas pools: {e:?}"))
+                    .unwrap();
             }
         }
         let (batch_transfer_shutdown, mut rx_batch_transfer_shutdown) = oneshot::channel();
