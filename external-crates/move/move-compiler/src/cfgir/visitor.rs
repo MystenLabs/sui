@@ -110,7 +110,7 @@ impl<V: SimpleDomain> AbstractDomain for V {
         );
         let mut result = JoinResult::Unchanged;
         for (local, other_state) in other_locals {
-            match (self.locals().get(&local).unwrap(), other_state) {
+            match (self.locals().get(local).unwrap(), other_state) {
                 // both available, join the value
                 (L::Available(loc, v1), L::Available(_, v2)) => {
                     let loc = *loc;
@@ -390,7 +390,7 @@ pub trait SimpleAbsInt: Sized {
             E::ModuleCall(mcall) => {
                 let evalues = self.exp(context, state, &mcall.arguments);
                 if let Some(vs) =
-                    self.call_custom(context, state, eloc, &parent_e.ty, &mcall, evalues)
+                    self.call_custom(context, state, eloc, &parent_e.ty, mcall, evalues)
                 {
                     return vs;
                 }

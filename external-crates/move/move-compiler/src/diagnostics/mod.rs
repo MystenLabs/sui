@@ -391,7 +391,7 @@ impl WarningFilters {
     pub fn union(&mut self, other: &Self) {
         for (prefix, filters) in &other.0 {
             self.0
-                .entry(prefix.clone())
+                .entry(*prefix)
                 .or_insert_with(UnprefixedWarningFilters::new)
                 .union(filters);
         }
@@ -468,7 +468,7 @@ impl UnprefixedWarningFilters {
                 codes.extend(
                     other_codes
                         .iter()
-                        .filter(|((category, _), _)| !categories.contains_key(&category)),
+                        .filter(|((category, _), _)| !categories.contains_key(category)),
                 );
             }
         }
@@ -489,7 +489,7 @@ impl UnprefixedWarningFilters {
                     categories: BTreeMap::new(),
                     codes: BTreeMap::new(),
                 };
-                return self.add(filter_category, filter_code, filter_name);
+                self.add(filter_category, filter_code, filter_name)
             }
             Self::Specified { categories, .. } if categories.contains_key(&filter_category) => (),
             Self::Specified { categories, codes } => {
@@ -509,16 +509,16 @@ impl UnprefixedWarningFilters {
         let unused_fn_tparam_info = UnusedItem::FunTypeParam.into_info();
         let filtered_codes = BTreeMap::from([
             (
-                (unused_fun_info.category() as u8, unused_fun_info.code()),
+                (unused_fun_info.category(), unused_fun_info.code()),
                 Some(FILTER_UNUSED_FUNCTION),
             ),
             (
-                (unused_field_info.category() as u8, unused_field_info.code()),
+                (unused_field_info.category(), unused_field_info.code()),
                 Some(FILTER_UNUSED_STRUCT_FIELD),
             ),
             (
                 (
-                    unused_fn_tparam_info.category() as u8,
+                    unused_fn_tparam_info.category(),
                     unused_fn_tparam_info.code(),
                 ),
                 Some(FILTER_UNUSED_TYPE_PARAMETER),

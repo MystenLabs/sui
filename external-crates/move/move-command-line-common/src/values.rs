@@ -117,7 +117,7 @@ impl ParsableValue for () {
 }
 
 impl Display for ValueToken {
-    fn fmt<'f>(&self, formatter: &mut fmt::Formatter<'f>) -> Result<(), fmt::Error> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         let s = match self {
             ValueToken::Number => "[num]",
             ValueToken::NumberTyped => "[num typed]",
