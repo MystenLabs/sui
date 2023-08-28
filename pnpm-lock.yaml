@@ -1146,6 +1146,9 @@ importers:
       '@mysten/sui.js':
         specifier: workspace:*
         version: link:../typescript
+      '@mysten/wallet-standard':
+        specifier: workspace:*
+        version: link:../wallet-standard
     devDependencies:
       '@mysten/build-scripts':
         specifier: workspace:*
