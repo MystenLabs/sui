@@ -366,7 +366,7 @@ rand = "0.8.5"
 rayon = "1.5.3"
 rcgen = "0.9.2"
 regex = "1.7.1"
-reqwest = { version = "0.11.18", default_features = false, features = [
+reqwest = { version = "0.11.20", default_features = false, features = [
   "blocking",
   "json",
   "rustls-tls",
@@ -501,8 +501,8 @@ move-stackless-bytecode = { path = "external-crates/move/move-prover/bytecode" }
 move-symbol-pool = { path = "external-crates/move/move-symbol-pool" }
 move-abstract-stack = { path = "external-crates/move/move-abstract-stack" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4e7debce78340848f0009b648f56d912d6bd02d5" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4e7debce78340848f0009b648f56d912d6bd02d5", package = "fastcrypto-zkp" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "91360ec4a70afb68e3f03fa332b4c7df070476d4" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "91360ec4a70afb68e3f03fa332b4c7df070476d4", package = "fastcrypto-zkp" }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }

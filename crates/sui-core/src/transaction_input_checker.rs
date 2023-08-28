@@ -27,7 +27,10 @@ mod checked {
         gas::SuiGasStatus,
         object::{Object, Owner},
     };
-    use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
+    use sui_types::{
+        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
+        SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
+    };
     use tracing::instrument;
 
     // Entry point for all checks related to gas.
@@ -121,17 +124,12 @@ mod checked {
     ) -> SuiResult<(ObjectRef, InputObjects)> {
         let gas_object_ref = gas_object.compute_object_reference();
         kind.validity_check(config)?;
-        match kind {
-            TransactionKind::ProgrammableTransaction(_) => (),
-            TransactionKind::ChangeEpoch(_)
-            | TransactionKind::Genesis(_)
-            | TransactionKind::ConsensusCommitPrologue(_) => {
-                return Err(UserInputError::Unsupported(format!(
-                    "Transaction kind {} is not supported in dev-inspect",
-                    kind
-                ))
-                .into())
-            }
+        if kind.is_system_tx() {
+            return Err(UserInputError::Unsupported(format!(
+                "Transaction kind {} is not supported in dev-inspect",
+                kind
+            ))
+            .into());
         }
         let mut input_objects = kind.input_objects()?;
         let mut objects = store.check_input_objects(&input_objects, config)?;
@@ -357,6 +355,26 @@ mod checked {
                         object_id: SUI_CLOCK_OBJECT_ID,
                     });
                 }
+            }
+            InputObjectKind::SharedMoveObject {
+                id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                initial_shared_version: SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
+                ..
+            } => {
+                if system_transaction {
+                    return Ok(());
+                } else {
+                    return Err(UserInputError::InaccessibleSystemObject {
+                        object_id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                    });
+                }
+            }
+            // Catch any attempt to refer to these objects with incorrect starting versions.
+            InputObjectKind::SharedMoveObject {
+                id: SUI_CLOCK_OBJECT_ID | SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                ..
+            } => {
+                return Err(UserInputError::SharedObjectStartingVersionMismatch);
             }
             InputObjectKind::SharedMoveObject {
                 initial_shared_version: input_initial_shared_version,

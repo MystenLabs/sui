@@ -261,6 +261,9 @@ struct FeatureFlags {
     // If true, use the new child object format
     #[serde(skip_serializing_if = "is_false")]
     loaded_child_object_format: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
+    enable_jwk_consensus_updates: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -856,6 +859,10 @@ impl ProtocolConfig {
 
     pub fn loaded_child_object_format(&self) -> bool {
         self.feature_flags.loaded_child_object_format
+    }
+
+    pub fn enable_jwk_consensus_updates(&self) -> bool {
+        self.feature_flags.enable_jwk_consensus_updates
     }
 }
 

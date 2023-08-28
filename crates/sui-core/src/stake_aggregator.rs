@@ -101,6 +101,10 @@ impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
         self.total_votes
     }
 
+    pub fn has_quorum(&self) -> bool {
+        self.total_votes >= self.committee.threshold::<STRENGTH>()
+    }
+
     pub fn validator_sig_count(&self) -> usize {
         self.data.len()
     }
@@ -270,5 +274,43 @@ where
             .iter()
             .map(|(k, (_, s))| (k.clone(), (s.data.keys().copied().collect(), s.total_votes)))
             .collect()
+    }
+}
+
+/// Like MultiStakeAggregator, but for counting votes for a generic value instead of an envelope, in
+/// scenarios where byzantine validators may submit multiple votes for different values.
+pub struct GenericMultiStakeAggregator<K, const STRENGTH: bool> {
+    committee: Arc<Committee>,
+    stake_maps: HashMap<K, StakeAggregator<(), STRENGTH>>,
+}
+
+impl<K, const STRENGTH: bool> GenericMultiStakeAggregator<K, STRENGTH>
+where
+    K: Hash + Eq,
+{
+    pub fn new(committee: Arc<Committee>) -> Self {
+        Self {
+            committee,
+            stake_maps: Default::default(),
+        }
+    }
+
+    pub fn insert(
+        &mut self,
+        authority: AuthorityName,
+        k: K,
+    ) -> InsertResult<&HashMap<AuthorityName, ()>> {
+        self.stake_maps
+            .entry(k)
+            .or_insert_with(|| StakeAggregator::new(self.committee.clone()))
+            .insert_generic(authority, ())
+    }
+
+    pub fn has_quorum_for_key(&self, k: &K) -> bool {
+        if let Some(entry) = self.stake_maps.get(k) {
+            entry.has_quorum()
+        } else {
+            false
+        }
     }
 }

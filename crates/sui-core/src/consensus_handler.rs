@@ -16,6 +16,7 @@ use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use fastcrypto::hash::Hash as _Hash;
 use fastcrypto::traits::ToFromBytes;
+use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
 use lru::LruCache;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use narwhal_config::Committee;
@@ -29,6 +30,7 @@ use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use sui_protocol_config::ConsensusTransactionOrdering;
+use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::storage::ParentSync;
 use sui_types::transaction::{SenderSignedData, VerifiedTransaction};
@@ -141,6 +143,13 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             .protocol_config()
             .consensus_order_end_of_epoch_last());
 
+        let last_committed_round = self
+            .epoch_store
+            .get_last_consensus_index()
+            .expect("Unrecoverable error in consensus handler")
+            .index
+            .last_committed_round;
+
         let mut sequenced_transactions = Vec::new();
         let mut end_of_publish_transactions = Vec::new();
 
@@ -179,6 +188,29 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             SequencedConsensusTransactionKind::System(prologue_transaction),
             Arc::new(consensus_output.sub_dag.leader.clone()),
         ));
+
+        // Load all jwks that became active in the previous round, and commit them in this round.
+        // We want to delay one round because none of the transactions in the previous round could
+        // have been authenticated with the jwks that became active in that round.
+        //
+        // Because of this delay, jwks that become active in the last round of the epoch will
+        // never be committed. That is ok, because in the new epoch, the validators should
+        // immediately re-submit these jwks, and they can become active then.
+        let new_jwks = self
+            .epoch_store
+            .get_new_jwks(last_committed_round)
+            .expect("Unrecoverable error in consensus handler");
+
+        if !new_jwks.is_empty() {
+            let authenticator_state_update_transaction =
+                self.authenticator_state_update_transaction(round, new_jwks);
+
+            transactions.push((
+                vec![],
+                SequencedConsensusTransactionKind::System(authenticator_state_update_transaction),
+                Arc::new(consensus_output.sub_dag.leader.clone()),
+            ));
+        }
 
         // TODO: spawn a separate task for this as an optimization
         update_low_scoring_authorities(
@@ -440,7 +472,6 @@ impl AsyncTransactionScheduler {
 }
 
 impl<T> ConsensusHandler<T> {
-    #[allow(dead_code)]
     fn consensus_commit_prologue_transaction(
         &self,
         round: u64,
@@ -450,6 +481,19 @@ impl<T> ConsensusHandler<T> {
             self.epoch(),
             round,
             commit_timestamp_ms,
+        );
+        VerifiedExecutableTransaction::new_system(transaction, self.epoch())
+    }
+
+    fn authenticator_state_update_transaction(
+        &self,
+        round: u64,
+        new_active_jwks: Vec<ActiveJwk>,
+    ) -> VerifiedExecutableTransaction {
+        let transaction = VerifiedTransaction::new_authenticator_state_update(
+            self.epoch(),
+            round,
+            new_active_jwks,
         );
         VerifiedExecutableTransaction::new_system(transaction, self.epoch())
     }
@@ -471,6 +515,7 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
         ConsensusTransactionKind::CheckpointSignature(_) => "checkpoint_signature",
         ConsensusTransactionKind::EndOfPublish(_) => "end_of_publish",
         ConsensusTransactionKind::CapabilityNotification(_) => "capability_notification",
+        ConsensusTransactionKind::NewJWKFetched(_, _) => "new_jwk_fetched",
     }
 }
 
@@ -486,7 +531,7 @@ pub enum SequencedConsensusTransactionKind {
     System(VerifiedExecutableTransaction),
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Hash, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq, Debug)]
 pub enum SequencedConsensusTransactionKey {
     External(ConsensusTransactionKey),
     System(TransactionDigest),

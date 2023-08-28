@@ -284,6 +284,8 @@ pub enum SuiTransactionBlockKind {
     /// A series of transactions where the results of one transaction can be used in future
     /// transactions
     ProgrammableTransaction(SuiProgrammableTransactionBlock),
+    /// An transaction which updates global authenticator state
+    AuthenticatorStateUpdate(SuiAuthenticatorStateUpdate),
     // .. more transaction types go here
 }
 
@@ -314,6 +316,9 @@ impl Display for SuiTransactionBlockKind {
                 writeln!(writer, "Transaction Kind : Programmable")?;
                 write!(writer, "{p}")?;
             }
+            Self::AuthenticatorStateUpdate(_) => {
+                writeln!(writer, "Transaction Kind : Authenticator State Update")?;
+            }
         }
         write!(f, "{}", writer)
     }
@@ -342,6 +347,9 @@ impl SuiTransactionBlockKind {
             TransactionKind::ProgrammableTransaction(p) => Self::ProgrammableTransaction(
                 SuiProgrammableTransactionBlock::try_from(p, module_cache)?,
             ),
+            TransactionKind::AuthenticatorStateUpdate(_) => {
+                Self::AuthenticatorStateUpdate(SuiAuthenticatorStateUpdate {})
+            }
         })
     }
 
@@ -358,6 +366,7 @@ impl SuiTransactionBlockKind {
             Self::Genesis(_) => "Genesis",
             Self::ConsensusCommitPrologue(_) => "ConsensusCommitPrologue",
             Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
+            Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
         }
     }
 }
@@ -1036,6 +1045,10 @@ pub struct SuiConsensusCommitPrologue {
     #[serde_as(as = "BigInt<u64>")]
     pub commit_timestamp_ms: u64,
 }
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct SuiAuthenticatorStateUpdate {}
 
 #[serde_as]
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, JsonSchema)]
