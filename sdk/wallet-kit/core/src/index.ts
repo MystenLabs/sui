@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+	DefaultRequiredFeatureName,
 	getWallets,
 	isWalletWithSuiFeatures,
 	StandardConnectInput,
@@ -15,13 +16,14 @@ import {
 	SuiSignTransactionBlockOutput,
 	Wallet,
 	WalletAccount,
+	WalletFeatureName,
 	WalletWithSuiFeatures,
 } from '@mysten/wallet-standard';
 
 import { localStorageAdapter, StorageAdapter } from './storage';
 export * from './storage';
 
-export const DEFAULT_FEATURES: (keyof WalletWithSuiFeatures['features'])[] = [
+export const DEFAULT_FEATURES: Exclude<WalletFeatureName, DefaultRequiredFeatureName>[] = [
 	'sui:signAndExecuteTransactionBlock',
 ];
 
@@ -29,7 +31,7 @@ export interface WalletKitCoreOptions {
 	preferredWallets?: string[];
 	storageAdapter?: StorageAdapter;
 	storageKey?: string;
-	features?: string[];
+	features?: WalletFeatureName[];
 }
 
 export enum WalletKitCoreConnectionStatus {
@@ -108,7 +110,7 @@ function waitToBeVisible() {
 function sortWallets(
 	wallets: readonly Wallet[],
 	preferredWallets: string[],
-	features?: string[],
+	features?: WalletFeatureName[],
 ): WalletWithSuiFeatures[] {
 	const suiWallets = wallets.filter((wallet) =>
 		isWalletWithSuiFeatures(wallet, features),
