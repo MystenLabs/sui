@@ -83,6 +83,9 @@ export default {
 			scale: {
 				'101': '1.01',
 			},
+			backdropBlur: {
+				networkSwitcher: '20px',
+			},
 			colors: {
 				'gradient-blue-start': '#589AEA',
 				'gradient-blue-end': '#4C75A6',
