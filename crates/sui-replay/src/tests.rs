@@ -105,10 +105,7 @@ async fn extract_one_system_tx(
     mut txs: Vec<TransactionDigest>,
 ) -> Option<TransactionDigest> {
     let opts = SuiTransactionBlockResponseOptions::full_content();
-    txs = txs
-        .into_iter()
-        .filter(|q| *q != TransactionDigest::genesis())
-        .collect();
+    txs.retain(|q| *q != TransactionDigest::genesis());
 
     for ch in txs.chunks(*QUERY_MAX_RESULT_LIMIT) {
         match rpc_client
@@ -141,7 +138,7 @@ async fn extract_one_system_tx(
     None
 }
 
-async fn execute_replay(url: &String, tx: &TransactionDigest) -> Result<(), ReplayEngineError> {
+async fn execute_replay(url: &str, tx: &TransactionDigest) -> Result<(), ReplayEngineError> {
     LocalExec::new_from_fn_url(url)
         .await?
         .init_for_execution()
