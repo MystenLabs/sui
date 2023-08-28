@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-	DefaultRequiredFeatureName,
+	AdditionalRequiredFeatureNames,
 	getWallets,
 	isWalletWithSuiFeatures,
 	StandardConnectInput,
@@ -23,7 +23,7 @@ import {
 import { localStorageAdapter, StorageAdapter } from './storage';
 export * from './storage';
 
-export const DEFAULT_FEATURES: Exclude<WalletFeatureName, DefaultRequiredFeatureName>[] = [
+export const DEFAULT_REQUIRED_FEATURES: AdditionalRequiredFeatureNames = [
 	'sui:signAndExecuteTransactionBlock',
 ];
 
@@ -110,10 +110,10 @@ function waitToBeVisible() {
 function sortWallets(
 	wallets: readonly Wallet[],
 	preferredWallets: string[],
-	features?: WalletFeatureName[],
+	additionalFeatures?: AdditionalRequiredFeatureNames,
 ): WalletWithSuiFeatures[] {
 	const suiWallets = wallets.filter((wallet) =>
-		isWalletWithSuiFeatures(wallet, features),
+		isWalletWithSuiFeatures(wallet, additionalFeatures),
 	) as WalletWithSuiFeatures[];
 
 	return [
@@ -131,7 +131,7 @@ export function createWalletKitCore({
 	preferredWallets = [SUI_WALLET_NAME],
 	storageAdapter = localStorageAdapter,
 	storageKey = RECENT_WALLET_STORAGE,
-	features = DEFAULT_FEATURES,
+	features = DEFAULT_REQUIRED_FEATURES,
 }: WalletKitCoreOptions): WalletKitCore {
 	const registeredWallets = getWallets();
 	let wallets = registeredWallets.get();
