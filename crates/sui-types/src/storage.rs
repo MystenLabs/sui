@@ -8,7 +8,7 @@ use crate::digests::{
 };
 use crate::effects::{TransactionEffects, TransactionEvents};
 use crate::error::SuiError;
-use crate::execution::LoadedChildObjectMetadata;
+use crate::execution::{ExecutionResults, LoadedChildObjectMetadata};
 use crate::message_envelope::Message;
 use crate::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, FullCheckpointContents, VerifiedCheckpoint,
@@ -19,7 +19,6 @@ use crate::transaction::{SenderSignedData, TransactionDataAPI, VerifiedTransacti
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::SuiResult,
-    event::Event,
     object::Object,
 };
 use itertools::Itertools;
@@ -125,12 +124,9 @@ pub trait ChildObjectResolver {
 pub trait Storage {
     fn reset(&mut self);
 
-    /// Record an event that happened during execution
-    fn log_event(&mut self, event: Event);
-
     fn read_object(&self, id: &ObjectID) -> Option<&Object>;
 
-    fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>);
+    fn record_execution_results(&mut self, results: ExecutionResults);
 
     fn save_loaded_child_objects(
         &mut self,

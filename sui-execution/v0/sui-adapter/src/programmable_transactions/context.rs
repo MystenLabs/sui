@@ -38,10 +38,12 @@ mod checked {
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress, TxContext},
         coin::Coin,
-        error::{ExecutionError, ExecutionErrorKind},
+        error::{command_argument_error, ExecutionError, ExecutionErrorKind},
+        event::Event,
         execution::{
-            ExecutionResults, ExecutionState, InputObjectMetadata, InputValue, ObjectValue,
-            RawValueType, ResultValue, UsageKind,
+            CommandKind, ExecutionResults, ExecutionResultsV1, ExecutionState, InputObjectMetadata,
+            InputValue, ObjectContents, ObjectValue, RawValueType, ResultValue, TryFromValue,
+            UsageKind, Value,
         },
         metrics::LimitsMetrics,
         move_package::MovePackage,
@@ -53,12 +55,7 @@ mod checked {
         transaction::{Argument, CallArg, ObjectArg},
         type_resolver::TypeTagResolver,
     };
-    use sui_types::{
-        error::command_argument_error,
-        execution::{CommandKind, ObjectContents, TryFromValue, Value},
-        execution_mode::ExecutionMode,
-        execution_status::CommandArgumentError,
-    };
+    use sui_types::{execution_mode::ExecutionMode, execution_status::CommandArgumentError};
 
     /// Maintains all runtime state specific to programmable transactions
     pub struct ExecutionContext<'vm, 'state, 'a> {
@@ -832,10 +829,21 @@ mod checked {
             assert_invariant!(change_set.accounts().is_empty(), "Change set must be empty");
             assert_invariant!(move_events.is_empty(), "Events must be empty");
 
-            Ok(ExecutionResults {
+            Ok(ExecutionResults::V1(ExecutionResultsV1 {
                 object_changes,
-                user_events,
-            })
+                user_events: user_events
+                    .into_iter()
+                    .map(|(module_id, tag, contents)| {
+                        Event::new(
+                            module_id.address(),
+                            module_id.name(),
+                            tx_context.sender(),
+                            tag,
+                            contents,
+                        )
+                    })
+                    .collect(),
+            }))
         }
 
         /// Convert a VM Error to an execution one
@@ -1171,6 +1179,7 @@ mod checked {
             is_mutable_input,
             owner,
             version,
+            digest: obj.digest(),
         };
         let obj_value = value_from_object(vm, session, obj)?;
         let contained_uids = {
