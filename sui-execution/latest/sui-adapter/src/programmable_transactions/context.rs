@@ -6,7 +6,7 @@ pub use checked::*;
 #[sui_macros::with_checked_arithmetic]
 mod checked {
     use std::{
-        collections::{BTreeMap, HashMap},
+        collections::{BTreeMap, BTreeSet, HashMap},
         sync::Arc,
     };
 
@@ -573,6 +573,7 @@ mod checked {
             let gas_id_opt = gas.object_metadata.as_ref().map(|info| info.id);
             let mut loaded_runtime_objects = BTreeMap::new();
             let mut additional_writes = BTreeMap::new();
+            let mut by_value_shared_objects = BTreeSet::new();
             for input in inputs.into_iter().chain(std::iter::once(gas)) {
                 let InputValue {
                     object_metadata: Some(InputObjectMetadata {
@@ -597,9 +598,7 @@ mod checked {
                 } else {
                     // The object has been taken by value.
                     if owner.is_shared() {
-                        // TODO: This would be a case of wrapping shared object, once we support
-                        // shared object deletion. We should report error below.
-                        unreachable!("Passing shared object by value should not be allowed yet");
+                        by_value_shared_objects.insert(id);
                     }
                 }
             }
@@ -684,6 +683,14 @@ mod checked {
                 remaining_events.is_empty(),
                 "Events should be taken after every Move call"
             );
+
+            for by_value_shared_object in by_value_shared_objects {
+                if !deleted_object_ids.contains_key(&by_value_shared_object) {
+                    // TODO: This would be a case of wrapping shared object, once we support
+                    // shared object deletion. We should report error below.
+                    unreachable!("Passing shared object by value should not be allowed yet");
+                }
+            }
 
             loaded_runtime_objects.extend(loaded_child_objects);
 
