@@ -44,15 +44,17 @@ use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use tap::Pipe;
 use tracing::trace;
 
-// TODO: The following constants appear to be very large.
-// We should revisit them.
-pub const TEST_ONLY_GAS_UNIT_FOR_TRANSFER: u64 = 2_000_000;
-pub const TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS: u64 = 10_000_000;
-pub const TEST_ONLY_GAS_UNIT_FOR_PUBLISH: u64 = 25_000_000;
-pub const TEST_ONLY_GAS_UNIT_FOR_STAKING: u64 = 10_000_000;
-pub const TEST_ONLY_GAS_UNIT_FOR_GENERIC: u64 = 5_000_000;
-pub const TEST_ONLY_GAS_UNIT_FOR_VALIDATOR: u64 = 25_000_000;
-pub const TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN: u64 = 1_000_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_TRANSFER: u64 = 10_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS: u64 = 50_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_PUBLISH: u64 = 50_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_STAKING: u64 = 50_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_GENERIC: u64 = 50_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN: u64 = 10_000;
+// For some transactions we may either perform heavy operations or touch
+// objects that are storage expensive. That may happen (and often is the case)
+// because the object touched are set up in genesis and carry no storage cost
+// (and thus rebate) on first usage.
+pub const TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE: u64 = 5_000_000;
 
 pub const GAS_PRICE_FOR_SYSTEM_TX: u64 = 1;
 
