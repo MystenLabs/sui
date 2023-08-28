@@ -128,10 +128,9 @@ impl SimpleFaucet {
             mpsc::channel::<(Uuid, SuiAddress, Vec<u64>)>(config.max_request_queue_length as usize);
 
         let split_point = coins.len() / 2;
-        let mut coins_processed = 0;
 
         // Put half of the coins in the old faucet impl queue, and put half in the other queue for batch coins.
-        for coin in &coins {
+        for (coins_processed, coin) in coins.iter().enumerate() {
             let coin_id = *coin.id();
             if let Some(write_ahead_log::Entry {
                 uuid,
@@ -169,7 +168,6 @@ impl SimpleFaucet {
                         .unwrap();
                 }
             }
-            coins_processed += 1;
         }
         let (batch_transfer_shutdown, mut rx_batch_transfer_shutdown) = oneshot::channel();
 
