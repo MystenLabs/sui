@@ -106,7 +106,8 @@ module axelar::channel {
         t: &mut Channel<T>,
         destination: vector<u8>,
         destination_address: vector<u8>,
-        payload: vector<u8>
+        payload: vector<u8>,
+        _ctx: &mut TxContext
     ) {
         sui::event::emit(ContractCall {
             source: bcs::to_bytes(&t.id),
