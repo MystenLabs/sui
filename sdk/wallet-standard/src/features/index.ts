@@ -29,8 +29,6 @@ export type WalletWithSuiFeatures = WalletWithFeatures<
 		Partial<StandardDisconnectFeature>
 >;
 
-export type WalletFeatureName = keyof WalletWithSuiFeatures['features'];
-
 export * from './suiSignMessage';
 export * from './suiSignTransactionBlock';
 export * from './suiSignAndExecuteTransactionBlock';
