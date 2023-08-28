@@ -25,9 +25,6 @@ interface WalletKitProviderProps extends Partial<WalletKitCoreOptions> {
 	enableUnsafeBurner?: boolean;
 	children: ReactNode;
 	disableAutoConnect?: boolean;
-	// Define the wallet standard features that you will use. This will filter the list of wallets
-	// displayed to the user.
-	features?: string[];
 }
 
 export function WalletKitProvider({
