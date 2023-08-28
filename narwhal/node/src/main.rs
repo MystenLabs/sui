@@ -8,7 +8,7 @@
     rust_2021_compatibility
 )]
 
-use clap::{crate_name, crate_version, App, AppSettings, ArgMatches, SubCommand};
+use clap::{Parser, Subcommand};
 use config::{Committee, Import, Parameters, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair};
 use eyre::Context;
@@ -23,7 +23,10 @@ use node::{
     metrics::{primary_metrics_registry, start_prometheus_server, worker_metrics_registry},
 };
 use prometheus::Registry;
-use std::sync::Arc;
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use storage::{CertificateStoreCacheMetrics, NodeStorage};
 use sui_keys::keypair_file::{
     read_authority_keypair_from_file, read_network_keypair_from_file,
@@ -40,49 +43,82 @@ use tracing::{info, warn};
 use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 use worker::TrivialTransactionValidator;
 
+#[derive(Parser)]
+#[command(author, version, about)]
+/// A production implementation of Narwhal and Bullshark.
+struct App {
+    #[arg(short, action = clap::ArgAction::Count)]
+    /// Sets the level of verbosity
+    verbosity: u8,
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Save an encoded bls12381 keypair (Base64 encoded `privkey`) to file
+    GenerateKeys {
+        /// The file where to save the encoded authority key pair
+        #[arg(long)]
+        filename: PathBuf,
+    },
+    /// Save an encoded ed25519 network keypair (Base64 encoded `flag || privkey`) to file
+    GenerateNetworkKeys {
+        /// The file where to save the encoded network key pair
+        #[arg(long)]
+        filename: PathBuf,
+    },
+    /// Get the public key from a keypair file
+    GetPubKey {
+        /// The file where the keypair is stored
+        #[arg(long)]
+        filename: PathBuf,
+    },
+    /// Run a node
+    Run {
+        /// The file containing the node's primary keys
+        #[arg(long)]
+        primary_keys: PathBuf,
+        /// The file containing the node's primary network keys
+        #[arg(long)]
+        primary_network_keys: PathBuf,
+        /// The file containing the node's worker network keys
+        #[arg(long)]
+        worker_keys: PathBuf,
+        /// The file containing committee information
+        #[arg(long)]
+        committee: String,
+        /// The file containing worker information
+        #[arg(long)]
+        workers: String,
+        /// The file containing the node parameters
+        #[arg(long)]
+        parameters: Option<String>,
+        /// The path where to create the data store
+        #[arg(long)]
+        store: PathBuf,
+
+        #[command(subcommand)]
+        subcommand: NodeType,
+    },
+}
+
+#[derive(Subcommand)]
+enum NodeType {
+    /// Run a single primary
+    Primary,
+    /// Run a single worker
+    Worker {
+        /// The worker Id
+        id: WorkerId,
+    },
+}
+
 #[tokio::main]
 async fn main() -> Result<(), eyre::Report> {
-    let matches = App::new(crate_name!())
-        .version(crate_version!())
-        .about("A production implementation of Narwhal and Bullshark.")
-        .args_from_usage("-v... 'Sets the level of verbosity'")
-        .subcommand(
-            SubCommand::with_name("generate_keys")
-                .about("Save an encoded bls12381 keypair (Base64 encoded `privkey`) to file")
-                .args_from_usage("--filename=<FILE> 'The file where to save the encoded authority key pair'"),
-        )
-        .subcommand(
-            SubCommand::with_name("generate_network_keys")
-            .about("Save an encoded ed25519 network keypair (Base64 encoded `flag || privkey`) to file")
-            .args_from_usage("--filename=<FILE> 'The file where to save the encoded network key pair'"),
-        )
-        .subcommand(
-            SubCommand::with_name("get_pub_key")
-                .about("Get the public key from a keypair file")
-                .args_from_usage("--filename=<FILE> 'The file where the keypair is stored'"),
-        )
-        .subcommand(
-            SubCommand::with_name("run")
-                .about("Run a node")
-                .args_from_usage("--primary-keys=<FILE> 'The file containing the node's primary keys'")
-                .args_from_usage("--primary-network-keys=<FILE> 'The file containing the node's primary network keys'")
-                .args_from_usage("--worker-keys=<FILE> 'The file containing the node's worker keys'")
-                .args_from_usage("--committee=<FILE> 'The file containing committee information'")
-                .args_from_usage("--workers=<FILE> 'The file containing worker information'")
-                .args_from_usage("--parameters=[FILE] 'The file containing the node parameters'")
-                .args_from_usage("--store=<PATH> 'The path where to create the data store'")
-                .subcommand(SubCommand::with_name("primary").about("Run a single primary"))
-                .subcommand(
-                    SubCommand::with_name("worker")
-                        .about("Run a single worker")
-                        .args_from_usage("--id=<INT> 'The worker id'"),
-                )
-                .setting(AppSettings::SubcommandRequiredElseHelp),
-        )
-        .setting(AppSettings::SubcommandRequiredElseHelp)
-        .get_matches();
+    let app = App::parse();
 
-    let tracing_level = match matches.occurrences_of("v") {
+    let tracing_level = match app.verbosity {
         0 => "error",
         1 => "warn",
         2 => "info",
@@ -91,7 +127,7 @@ async fn main() -> Result<(), eyre::Report> {
     };
 
     // some of the network is very verbose, so we require more 'v's
-    let network_tracing_level = match matches.occurrences_of("v") {
+    let network_tracing_level = match app.verbosity {
         0 | 1 => "error",
         2 => "warn",
         3 => "info",
@@ -99,52 +135,53 @@ async fn main() -> Result<(), eyre::Report> {
         _ => "trace",
     };
 
-    match matches.subcommand() {
-        Some(("generate_keys", sub_matches)) => {
-            let _guard = setup_telemetry(tracing_level, network_tracing_level, None);
-            let key_file = sub_matches.value_of("filename").unwrap();
+    let _guard = setup_telemetry(tracing_level, network_tracing_level, None);
+
+    match &app.command {
+        Commands::GenerateKeys { filename } => {
             let keypair: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
-            write_authority_keypair_to_file(&keypair, key_file).unwrap();
+            write_authority_keypair_to_file(&keypair, filename).unwrap();
         }
-        Some(("generate_network_keys", sub_matches)) => {
-            let _guard = setup_telemetry(tracing_level, network_tracing_level, None);
-            let network_key_file = sub_matches.value_of("filename").unwrap();
+        Commands::GenerateNetworkKeys { filename } => {
             let network_keypair: NetworkKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
-            write_keypair_to_file(&SuiKeyPair::Ed25519(network_keypair), network_key_file).unwrap();
+            write_keypair_to_file(&SuiKeyPair::Ed25519(network_keypair), filename).unwrap();
         }
-        Some(("get_pub_key", sub_matches)) => {
-            let _guard = setup_telemetry(tracing_level, network_tracing_level, None);
-            let file = sub_matches.value_of("filename").unwrap();
-            match read_network_keypair_from_file(file) {
+        Commands::GetPubKey { filename } => {
+            match read_network_keypair_from_file(filename) {
                 Ok(keypair) => {
                     // Network keypair file is stored as `flag || privkey`.
                     println!("{:?}", keypair.public())
                 }
                 Err(_) => {
                     // Authority keypair file is stored as `privkey`.
-                    match read_authority_keypair_from_file(file) {
+                    match read_authority_keypair_from_file(filename) {
                         Ok(kp) => println!("{:?}", kp.public()),
                         Err(e) => {
-                            println!("Failed to read keypair at path {:?} err: {:?}", file, e)
+                            println!("Failed to read keypair at path {:?} err: {:?}", filename, e)
                         }
                     }
                 }
             }
         }
-        Some(("run", sub_matches)) => {
-            let primary_key_file = sub_matches.value_of("primary-keys").unwrap();
-            let primary_keypair = read_authority_keypair_from_file(primary_key_file)
+        Commands::Run {
+            primary_keys,
+            primary_network_keys,
+            worker_keys,
+            committee,
+            workers,
+            parameters,
+            store,
+            subcommand,
+        } => {
+            let primary_keypair = read_authority_keypair_from_file(primary_keys)
                 .expect("Failed to load the node's primary keypair");
-            let primary_network_key_file = sub_matches.value_of("primary-network-keys").unwrap();
-            let primary_network_keypair = read_network_keypair_from_file(primary_network_key_file)
+            let primary_network_keypair = read_network_keypair_from_file(primary_network_keys)
                 .expect("Failed to load the node's primary network keypair");
-            let worker_key_file = sub_matches.value_of("worker-keys").unwrap();
-            let worker_keypair = read_network_keypair_from_file(worker_key_file)
+            let worker_keypair = read_network_keypair_from_file(worker_keys)
                 .expect("Failed to load the node's worker keypair");
 
-            let committee_file = sub_matches.value_of("committee").unwrap();
-            let mut committee = Committee::import(committee_file)
-                .context("Failed to load the committee information")?;
+            let mut committee =
+                Committee::import(committee).context("Failed to load the committee information")?;
             committee.load();
 
             let authority_id = committee
@@ -152,18 +189,9 @@ async fn main() -> Result<(), eyre::Report> {
                 .unwrap()
                 .id();
 
-            let registry = match sub_matches.subcommand() {
-                Some(("primary", _)) => primary_metrics_registry(authority_id),
-                Some(("worker", worker_matches)) => {
-                    let id = worker_matches
-                        .value_of("id")
-                        .unwrap()
-                        .parse::<WorkerId>()
-                        .context("The worker id must be a positive integer")?;
-
-                    worker_metrics_registry(id, authority_id)
-                }
-                _ => unreachable!(),
+            let registry = match subcommand {
+                NodeType::Primary => primary_metrics_registry(authority_id),
+                NodeType::Worker { id } => worker_metrics_registry(*id, authority_id),
             };
 
             // In benchmarks, transactions are not deserializable => many errors at the debug level
@@ -176,7 +204,10 @@ async fn main() -> Result<(), eyre::Report> {
                 }
             }
             run(
-                sub_matches,
+                subcommand,
+                workers,
+                parameters.as_deref(),
+                store,
                 committee,
                 primary_keypair,
                 primary_network_keypair,
@@ -185,8 +216,8 @@ async fn main() -> Result<(), eyre::Report> {
             )
             .await?
         }
-        _ => unreachable!(),
     }
+
     Ok(())
 }
 
@@ -239,23 +270,22 @@ fn setup_benchmark_telemetry(
 
 // Runs either a worker or a primary.
 async fn run(
-    matches: &ArgMatches,
+    node_type: &NodeType,
+    workers: &str,
+    parameters: Option<&str>,
+    store: &Path,
     committee: Committee,
     primary_keypair: KeyPair,
     primary_network_keypair: NetworkKeyPair,
     worker_keypair: NetworkKeyPair,
     registry: Registry,
 ) -> Result<(), eyre::Report> {
-    let workers_file = matches.value_of("workers").unwrap();
-    let parameters_file = matches.value_of("parameters");
-    let store_path = matches.value_of("store").unwrap();
-
     // Read the workers and node's keypair from file.
     let worker_cache =
-        WorkerCache::import(workers_file).context("Failed to load the worker information")?;
+        WorkerCache::import(workers).context("Failed to load the worker information")?;
 
     // Load default parameters if none are specified.
-    let parameters = match parameters_file {
+    let parameters = match parameters {
         Some(filename) => {
             Parameters::import(filename).context("Failed to load the node's parameters")?
         }
@@ -267,7 +297,7 @@ async fn run(
     let certificate_store_cache_metrics =
         CertificateStoreCacheMetrics::new(&registry_service.default_registry());
 
-    let store = NodeStorage::reopen(store_path, Some(certificate_store_cache_metrics));
+    let store = NodeStorage::reopen(store, Some(certificate_store_cache_metrics));
 
     let client = NetworkClient::new_from_keypair(&primary_network_keypair);
 
@@ -275,9 +305,8 @@ async fn run(
     let (_tx_transaction_confirmation, _rx_transaction_confirmation) = channel(100);
 
     // Check whether to run a primary, a worker, or an entire authority.
-    let (primary, worker) = match matches.subcommand() {
-        // Spawn the primary and consensus core.
-        Some(("primary", _)) => {
+    let (primary, worker) = match node_type {
+        NodeType::Primary => {
             let primary = PrimaryNode::new(parameters.clone(), registry_service);
 
             primary
@@ -295,17 +324,9 @@ async fn run(
 
             (Some(primary), None)
         }
-
-        // Spawn a single worker.
-        Some(("worker", sub_matches)) => {
-            let id = sub_matches
-                .value_of("id")
-                .unwrap()
-                .parse::<WorkerId>()
-                .context("The worker id must be a positive integer")?;
-
+        NodeType::Worker { id } => {
             let worker = WorkerNode::new(
-                id,
+                *id,
                 ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown),
                 parameters.clone(),
                 registry_service,
@@ -326,7 +347,6 @@ async fn run(
 
             (None, Some(worker))
         }
-        _ => unreachable!(),
     };
 
     // spin up prometheus server exporter

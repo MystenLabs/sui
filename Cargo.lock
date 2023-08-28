@@ -6268,7 +6268,7 @@ dependencies = [
  "axum",
  "bytes",
  "cfg-if",
- "clap 3.2.23",
+ "clap 4.3.3",
  "eyre",
  "fastcrypto",
  "futures",
