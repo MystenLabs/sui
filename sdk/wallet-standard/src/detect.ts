@@ -8,10 +8,11 @@ import { WalletFeatureName, WalletWithSuiFeatures } from './features';
 // Eventually, as wallets have more consistent support of features, we may want to extend this list.
 const REQUIRED_BASE_FEATURES = ['standard:connect', 'standard:events'] as const;
 
-export type DefaultRequiredFeatureName = (typeof REQUIRED_BASE_FEATURES)[number];
+export type DefaultRequiredWalletFeatureName = (typeof REQUIRED_BASE_FEATURES)[number];
+
 export type AdditionallyRequiredWalletFeatureName = Exclude<
 	WalletFeatureName,
-	DefaultRequiredFeatureName
+	DefaultRequiredWalletFeatureName
 >;
 
 export function isWalletWithSuiFeatures(
