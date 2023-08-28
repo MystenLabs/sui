@@ -9,15 +9,15 @@ import { WalletFeatureName, WalletWithSuiFeatures } from './features';
 const REQUIRED_BASE_FEATURES = ['standard:connect', 'standard:events'] as const;
 
 export type DefaultRequiredFeatureName = (typeof REQUIRED_BASE_FEATURES)[number];
-export type AdditionalRequiredFeatureNames = Exclude<
+export type AdditionallyRequiredWalletFeatureName = Exclude<
 	WalletFeatureName,
 	DefaultRequiredFeatureName
->[];
+>;
 
 export function isWalletWithSuiFeatures(
 	wallet: Wallet,
 	/** Extra features that are required to be present, in addition to the expected feature set. */
-	additionalFeatures: AdditionalRequiredFeatureNames = [],
+	additionalFeatures: AdditionallyRequiredWalletFeatureName[] = [],
 ): wallet is WalletWithSuiFeatures {
 	return [...REQUIRED_BASE_FEATURES, ...additionalFeatures].every(
 		(feature) => feature in wallet.features,
