@@ -30,7 +30,6 @@ use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     id::UID,
     object::Owner,
-    storage::WriteKind,
 };
 
 const E_COULD_NOT_GENERATE_EFFECTS: u64 = 0;
@@ -67,17 +66,13 @@ pub fn end_transaction(
     let object_runtime_state = object_runtime_ref.take_state();
     // Determine writes and deletes
     // We pass an empty map as we do not expose dynamic field objects in the system
-    let results = object_runtime_state.finish(
-        BTreeSet::new(),
-        BTreeSet::new(),
-        BTreeMap::new(),
-        BTreeMap::new(),
-    );
+    let results = object_runtime_state.finish(BTreeMap::new(), BTreeMap::new());
     let RuntimeResults {
         writes,
-        deletions,
         user_events,
         loaded_child_objects: _,
+        created_object_ids,
+        deleted_object_ids,
     } = match results {
         Ok(res) => res,
         Err(_) => {
@@ -99,7 +94,7 @@ pub fn end_transaction(
     // - deleted objects need to be removed to mark deletions
     // - written objects are removed and later replaced to mark new values and new owners
     // - child objects will not be reflected in transfers, but need to be no longer retrievable
-    for id in deletions
+    for id in deleted_object_ids
         .keys()
         .chain(writes.keys())
         .chain(&all_active_child_objects)
@@ -120,7 +115,7 @@ pub fn end_transaction(
     // handle transfers, inserting transferred/written objects into their respective inventory
     let mut created = vec![];
     let mut written = vec![];
-    for (id, (kind, owner, ty, value)) in writes {
+    for (id, (owner, ty, value)) in writes {
         new_object_values.insert(id, (ty.clone(), value.copy_value().unwrap()));
         transferred.push((id, owner));
         incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling
@@ -128,9 +123,10 @@ pub fn end_transaction(
                 .get(&id)
                 .map(|shared_or_imm_owner| shared_or_imm_owner != &owner)
                 .unwrap_or(/* not incorrect */ false);
-        match kind {
-            WriteKind::Create => created.push(id),
-            WriteKind::Mutate | WriteKind::Unwrap => written.push(id),
+        if created_object_ids.contains_key(&id) {
+            created.push(id);
+        } else {
+            written.push(id);
         }
         match owner {
             Owner::AddressOwner(a) => {
@@ -161,7 +157,7 @@ pub fn end_transaction(
     }
     // deletions already handled above, but we drop the delete kind for the effects
     let mut deleted = vec![];
-    for (id, _) in deletions {
+    for (id, _) in deleted_object_ids {
         incorrect_shared_or_imm_handling =
             incorrect_shared_or_imm_handling || taken_shared_or_imm.contains_key(&id);
         deleted.push(id);
