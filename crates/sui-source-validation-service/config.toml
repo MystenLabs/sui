@@ -2,7 +2,7 @@
 source = "Repository"
 [packages.values]
 repository = "https://github.com/mystenlabs/sui"
-branch = "framework/mainnet"
+branch = "mainnet"
 network = "mainnet"
 packages = [
     { path = "crates/sui-framework/packages/deepbook", watch = "0xdee9" },
@@ -15,7 +15,7 @@ packages = [
 source = "Repository"
 [packages.values]
 repository = "https://github.com/mystenlabs/sui"
-branch = "framework/testnet"
+branch = "testnet"
 network = "testnet"
 packages = [
     { path = "crates/sui-framework/packages/deepbook", watch = "0xdee9" },
@@ -28,7 +28,7 @@ packages = [
 source = "Repository"
 [packages.values]
 repository = "https://github.com/mystenlabs/sui"
-branch = "framework/devnet"
+branch = "devnet"
 network = "devnet"
 packages = [
     { path = "crates/sui-framework/packages/deepbook", watch = "0xdee9" },
