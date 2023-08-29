@@ -160,12 +160,7 @@ pub enum SuiClientCommands {
     #[clap(name = "publish")]
     Publish {
         /// Path to directory containing a Move package
-        #[clap(
-            name = "package_path",
-            global = true,
-            parse(from_os_str),
-            default_value = "."
-        )]
+        #[clap(name = "package_path", global = true, default_value = ".")]
         package_path: PathBuf,
 
         /// Package build options
@@ -209,12 +204,7 @@ pub enum SuiClientCommands {
     #[clap(name = "verify-bytecode-meter")]
     VerifyBytecodeMeter {
         /// Path to directory containing a Move package
-        #[clap(
-            name = "package_path",
-            global = true,
-            parse(from_os_str),
-            default_value = "."
-        )]
+        #[clap(name = "package_path", global = true, default_value = ".")]
         package_path: PathBuf,
 
         /// Package build options
@@ -226,12 +216,7 @@ pub enum SuiClientCommands {
     #[clap(name = "upgrade")]
     Upgrade {
         /// Path to directory containing a Move package
-        #[clap(
-            name = "package_path",
-            global = true,
-            parse(from_os_str),
-            default_value = "."
-        )]
+        #[clap(name = "package_path", global = true, default_value = ".")]
         package_path: PathBuf,
 
         /// ID of the upgrade capability for the package being upgraded.
@@ -279,12 +264,7 @@ pub enum SuiClientCommands {
     #[clap(name = "verify-source")]
     VerifySource {
         /// Path to directory containing a Move package
-        #[clap(
-            name = "package_path",
-            global = true,
-            parse(from_os_str),
-            default_value = "."
-        )]
+        #[clap(name = "package_path", global = true, default_value = ".")]
         package_path: PathBuf,
 
         /// Package build options
@@ -319,15 +299,14 @@ pub enum SuiClientCommands {
         function: String,
         /// Function name in module
         #[clap(
-        long,
-        parse(try_from_str = parse_sui_type_tag),
-        multiple_occurrences = false,
-        multiple_values = true
+            long,
+            value_parser = parse_sui_type_tag,
+            multiple_values = true
         )]
         type_args: Vec<TypeTag>,
         /// Simplified ordered args like in the function syntax
         /// ObjectIDs, Addresses must be hex strings
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, multiple_values = true)]
         args: Vec<SuiJsonValue>,
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         #[clap(long)]
@@ -415,15 +394,15 @@ pub enum SuiClientCommands {
     #[clap(name = "pay")]
     Pay {
         /// The input coins to be used for pay recipients, following the specified amounts.
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, multiple_values = true)]
         input_coins: Vec<ObjectID>,
 
         /// The recipient addresses, must be of same length as amounts
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, multiple_values = true)]
         recipients: Vec<SuiAddress>,
 
         /// The amounts to be paid, following the order of recipients.
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, multiple_values = true)]
         amounts: Vec<u64>,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
@@ -451,15 +430,15 @@ pub enum SuiClientCommands {
     /// The input coins also include the coin for gas payment, so no extra gas coin is required.
     PaySui {
         /// The input coins to be used for pay recipients, including the gas coin.
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, multiple_values = true)]
         input_coins: Vec<ObjectID>,
 
         /// The recipient addresses, must be of same length as amounts.
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, multiple_values = true)]
         recipients: Vec<SuiAddress>,
 
         /// The amounts to be paid, following the order of recipients.
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, multiple_values = true)]
         amounts: Vec<u64>,
 
         /// Gas budget for this transaction
@@ -481,11 +460,11 @@ pub enum SuiClientCommands {
     /// The input coins also include the coin for gas payment, so no extra gas coin is required.
     PayAllSui {
         /// The input coins to be used for pay recipients, including the gas coin.
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, multiple_values = true)]
         input_coins: Vec<ObjectID>,
 
         /// The recipient address.
-        #[clap(long, multiple_occurrences = false)]
+        #[clap(long)]
         recipient: SuiAddress,
 
         /// Gas budget for this transaction
@@ -556,7 +535,7 @@ pub enum SuiClientCommands {
         #[clap(long)]
         coin_id: ObjectID,
         /// Specific amounts to split out from the coin
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, multiple_values = true)]
         amounts: Option<Vec<u64>>,
         /// Count of equal-size coins to split into
         #[clap(long)]

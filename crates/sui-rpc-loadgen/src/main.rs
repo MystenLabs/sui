@@ -96,7 +96,7 @@ pub enum ClapCommand {
     },
     #[clap(name = "query-transaction-blocks")]
     QueryTransactionBlocks {
-        #[clap(long, parse(try_from_str), case_insensitive = true)]
+        #[clap(long, ignore_case = true)]
         address_type: AddressQueryType,
 
         #[clap(flatten)]

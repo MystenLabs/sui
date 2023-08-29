@@ -97,7 +97,7 @@ pub struct IndexerConfig {
     pub rpc_server_url: String,
     #[clap(long, default_value = "9000", global = true)]
     pub rpc_server_port: u16,
-    #[clap(long, multiple_occurrences = false, multiple_values = true)]
+    #[clap(long, multiple_values = true)]
     pub migrated_methods: Vec<String>,
     #[clap(long)]
     pub reset_db: bool,

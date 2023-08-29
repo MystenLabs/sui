@@ -77,7 +77,6 @@ pub enum SuiCommand {
         #[clap(
             long,
             value_name = "ADDR",
-            multiple_occurrences = false,
             multiple_values = true,
             value_delimiter = ',',
             help = "A list of ip addresses to generate a genesis suitable for benchmarks"
@@ -142,7 +141,7 @@ pub enum SuiCommand {
     #[clap(name = "move")]
     Move {
         /// Path to a package which the command should be run with respect to.
-        #[clap(long = "path", short = 'p', global = true, parse(from_os_str))]
+        #[clap(long = "path", short = 'p', global = true)]
         package_path: Option<PathBuf>,
         /// Package build options
         #[clap(flatten)]
