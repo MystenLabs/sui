@@ -19,4 +19,4 @@ move-prover = { path = "../.." }
 anyhow = "1.0.52"
 itertools = "0.10.1"
 pretty = "0.10.0"
-clap = { version = "3.1.8", features = ["derive"] }
+clap.workspace = true

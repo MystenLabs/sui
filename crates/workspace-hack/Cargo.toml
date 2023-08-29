@@ -32,7 +32,7 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6a
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
-anstream = { version = "0.3" }
+anstream = { version = "0.5" }
 anstyle = { version = "1" }
 anstyle-parse = { version = "0.2" }
 anstyle-query = { version = "1", default-features = false }
@@ -67,7 +67,6 @@ async-lock = { version = "2", default-features = false }
 async-stream = { version = "0.3", default-features = false }
 async_once = { version = "0.2", default-features = false }
 atomicwrites = { version = "0.3", default-features = false }
-atty = { version = "0.2", default-features = false }
 auto_ops = { version = "0.3", default-features = false }
 aws-config = { version = "0.56" }
 aws-credential-types = { version = "0.56", default-features = false }
@@ -154,11 +153,9 @@ ciborium = { version = "0.2" }
 ciborium-io = { version = "0.2", default-features = false, features = ["std"] }
 ciborium-ll = { version = "0.2", default-features = false }
 cipher = { version = "0.4", default-features = false, features = ["block-padding", "std"] }
-clap-164d15cefe24d7eb = { package = "clap", version = "4", features = ["derive"] }
-clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["cargo", "derive"] }
-clap_builder = { version = "4", default-features = false, features = ["color", "help", "std", "suggestions", "usage"] }
-clap_lex-6f8ce4dd05d13bba = { package = "clap_lex", version = "0.2", default-features = false }
-clap_lex-d8f496e17d97b5cb = { package = "clap_lex", version = "0.5", default-features = false }
+clap = { version = "4", features = ["derive", "wrap_help"] }
+clap_builder = { version = "4", default-features = false, features = ["color", "std", "suggestions", "usage", "wrap_help"] }
+clap_lex = { version = "0.5", default-features = false }
 clear_on_drop = { version = "0.2", default-features = false }
 codespan = { version = "0.11", default-features = false, features = ["serialization"] }
 codespan-reporting = { version = "0.11", default-features = false, features = ["serialization"] }
@@ -199,7 +196,7 @@ curve25519-dalek-ng = { version = "4", features = ["serde"] }
 dashmap = { version = "5", default-features = false }
 data-encoding = { version = "2" }
 data-encoding-macro = { version = "0.1", default-features = false }
-datatest-stable = { version = "0.1", default-features = false }
+datatest-stable = { git = "https://github.com/nextest-rs/datatest-stable.git", rev = "72db7f6d1bbe36a5407e96b9488a581f763e106f", default-features = false }
 debug-ignore = { version = "1", default-features = false }
 der-3b31131e45eafb45 = { package = "der", version = "0.6", default-features = false, features = ["oid", "pem", "std"] }
 der-ca01ad9e24f5d932 = { package = "der", version = "0.7", default-features = false, features = ["oid", "pem", "std"] }
@@ -349,7 +346,7 @@ leb128 = { version = "0.2", default-features = false }
 libc = { version = "0.2" }
 libm = { version = "0.2" }
 librocksdb-sys = { version = "0.11", features = ["lz4", "snappy", "zlib", "zstd"] }
-libtest-mimic = { version = "0.5", default-features = false }
+libtest-mimic = { version = "0.6", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
 linked-hash-map = { version = "0.5", default-features = false }
 lock_api = { version = "0.4", default-features = false }
@@ -448,7 +445,6 @@ oid-registry = { version = "0.6", features = ["crypto", "x509"] }
 once_cell = { version = "1" }
 oorandom = { version = "11", default-features = false }
 opaque-debug = { version = "0.3", default-features = false }
-os_str_bytes = { version = "6", default-features = false, features = ["raw_os_str"] }
 ouroboros = { version = "0.17" }
 outref = { version = "0.5", default-features = false }
 overload = { version = "0.1", default-features = false }
@@ -625,11 +621,11 @@ tempfile = { version = "3", default-features = false }
 tera = { version = "1" }
 term = { version = "0.7" }
 termcolor = { version = "1", default-features = false }
+terminal_size = { version = "0.2", default-features = false }
 termtree = { version = "0.4", default-features = false }
 test-fuzz = { version = "3", default-features = false }
 test-fuzz-internal = { version = "3", default-features = false }
 test-fuzz-runtime = { version = "3", default-features = false }
-textwrap = { version = "0.16", default-features = false }
 thiserror = { version = "1", default-features = false }
 thread_local = { version = "1", default-features = false }
 threadpool = { version = "1", default-features = false }
@@ -745,7 +741,7 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6a
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
-anstream = { version = "0.3" }
+anstream = { version = "0.5" }
 anstyle = { version = "1" }
 anstyle-parse = { version = "0.2" }
 anstyle-query = { version = "1", default-features = false }
@@ -789,7 +785,6 @@ async-stream-impl = { version = "0.3", default-features = false }
 async-trait = { version = "0.1", default-features = false }
 async_once = { version = "0.2", default-features = false }
 atomicwrites = { version = "0.3", default-features = false }
-atty = { version = "0.2", default-features = false }
 auto_ops = { version = "0.3", default-features = false }
 autocfg = { version = "1", default-features = false }
 aws-config = { version = "0.56" }
@@ -884,13 +879,10 @@ ciborium-io = { version = "0.2", default-features = false, features = ["std"] }
 ciborium-ll = { version = "0.2", default-features = false }
 cipher = { version = "0.4", default-features = false, features = ["block-padding", "std"] }
 clang-sys = { version = "1", default-features = false, features = ["clang_6_0", "runtime"] }
-clap-164d15cefe24d7eb = { package = "clap", version = "4", features = ["derive"] }
-clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["cargo", "derive"] }
-clap_builder = { version = "4", default-features = false, features = ["color", "help", "std", "suggestions", "usage"] }
-clap_derive-164d15cefe24d7eb = { package = "clap_derive", version = "4" }
-clap_derive-7b89eefb6aaa9bf3 = { package = "clap_derive", version = "3" }
-clap_lex-6f8ce4dd05d13bba = { package = "clap_lex", version = "0.2", default-features = false }
-clap_lex-d8f496e17d97b5cb = { package = "clap_lex", version = "0.5", default-features = false }
+clap = { version = "4", features = ["derive", "wrap_help"] }
+clap_builder = { version = "4", default-features = false, features = ["color", "std", "suggestions", "usage", "wrap_help"] }
+clap_derive = { version = "4" }
+clap_lex = { version = "0.5", default-features = false }
 clear_on_drop = { version = "0.2", default-features = false }
 codespan = { version = "0.11", default-features = false, features = ["serialization"] }
 codespan-reporting = { version = "0.11", default-features = false, features = ["serialization"] }
@@ -937,7 +929,7 @@ dashmap = { version = "5", default-features = false }
 data-encoding = { version = "2" }
 data-encoding-macro = { version = "0.1", default-features = false }
 data-encoding-macro-internal = { version = "0.1", default-features = false }
-datatest-stable = { version = "0.1", default-features = false }
+datatest-stable = { git = "https://github.com/nextest-rs/datatest-stable.git", rev = "72db7f6d1bbe36a5407e96b9488a581f763e106f", default-features = false }
 debug-ignore = { version = "1", default-features = false }
 der-3b31131e45eafb45 = { package = "der", version = "0.6", default-features = false, features = ["oid", "pem", "std"] }
 der-ca01ad9e24f5d932 = { package = "der", version = "0.7", default-features = false, features = ["oid", "pem", "std"] }
@@ -1112,7 +1104,7 @@ libc = { version = "0.2" }
 libloading = { version = "0.7", default-features = false }
 libm = { version = "0.2" }
 librocksdb-sys = { version = "0.11", features = ["lz4", "snappy", "zlib", "zstd"] }
-libtest-mimic = { version = "0.5", default-features = false }
+libtest-mimic = { version = "0.6", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
 linked-hash-map = { version = "0.5", default-features = false }
 lock_api = { version = "0.4", default-features = false }
@@ -1219,7 +1211,6 @@ oid-registry = { version = "0.6", features = ["crypto", "x509"] }
 once_cell = { version = "1" }
 oorandom = { version = "11", default-features = false }
 opaque-debug = { version = "0.3", default-features = false }
-os_str_bytes = { version = "6", default-features = false, features = ["raw_os_str"] }
 ouroboros = { version = "0.17" }
 ouroboros_macro = { version = "0.17", default-features = false, features = ["std"] }
 outref = { version = "0.5", default-features = false }
@@ -1439,12 +1430,12 @@ tempfile = { version = "3", default-features = false }
 tera = { version = "1" }
 term = { version = "0.7" }
 termcolor = { version = "1", default-features = false }
+terminal_size = { version = "0.2", default-features = false }
 termtree = { version = "0.4", default-features = false }
 test-fuzz = { version = "3", default-features = false }
 test-fuzz-internal = { version = "3", default-features = false }
 test-fuzz-macro = { version = "3", default-features = false }
 test-fuzz-runtime = { version = "3", default-features = false }
-textwrap = { version = "0.16", default-features = false }
 thiserror = { version = "1", default-features = false }
 thiserror-impl = { version = "1", default-features = false }
 thread_local = { version = "1", default-features = false }
@@ -1689,7 +1680,7 @@ symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]
-anstyle-wincon = { version = "1", default-features = false }
+anstyle-wincon = { version = "2", default-features = false }
 clipboard-win = { version = "4", default-features = false }
 cpufeatures = { version = "0.2", default-features = false }
 crossterm_winapi-274715c4dabd11b0 = { package = "crossterm_winapi", version = "0.9", default-features = false }
@@ -1715,7 +1706,7 @@ windows_x86_64_msvc-c8eced492e86ede7 = { package = "windows_x86_64_msvc", versio
 winreg = { version = "0.10", default-features = false }
 
 [target.x86_64-pc-windows-msvc.build-dependencies]
-anstyle-wincon = { version = "1", default-features = false }
+anstyle-wincon = { version = "2", default-features = false }
 clipboard-win = { version = "4", default-features = false }
 cpufeatures = { version = "0.2", default-features = false }
 crossterm_winapi-274715c4dabd11b0 = { package = "crossterm_winapi", version = "0.9", default-features = false }
