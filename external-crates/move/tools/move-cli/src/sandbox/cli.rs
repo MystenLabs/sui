@@ -153,7 +153,7 @@ pub enum GenerateCommand {
 #[derive(Parser)]
 pub struct StructLayoutOptions {
     /// Generate layout bindings for this struct.
-    #[clap(long = "struct")]
+    #[clap(id = "struct", long = "struct")]
     struct_: Option<String>,
     /// Generate layout bindings for `struct` bound to these type arguments.
     #[clap(
@@ -161,6 +161,7 @@ pub struct StructLayoutOptions {
         value_parser = parser::parse_type_tag,
         requires="struct",
         action = clap::ArgAction::Append,
+        num_args(1..),
     )]
     type_args: Option<Vec<TypeTag>>,
     /// If set, replace all Move source syntax separators ("::" for address/struct/module name

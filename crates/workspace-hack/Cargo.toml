@@ -32,7 +32,7 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6a
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
-anstream = { version = "0.3" }
+anstream = { version = "0.5" }
 anstyle = { version = "1" }
 anstyle-parse = { version = "0.2" }
 anstyle-query = { version = "1", default-features = false }
@@ -746,7 +746,7 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6a
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
-anstream = { version = "0.3" }
+anstream = { version = "0.5" }
 anstyle = { version = "1" }
 anstyle-parse = { version = "0.2" }
 anstyle-query = { version = "1", default-features = false }
@@ -1691,7 +1691,7 @@ symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]
-anstyle-wincon = { version = "1", default-features = false }
+anstyle-wincon = { version = "2", default-features = false }
 clipboard-win = { version = "4", default-features = false }
 cpufeatures = { version = "0.2", default-features = false }
 crossterm_winapi-274715c4dabd11b0 = { package = "crossterm_winapi", version = "0.9", default-features = false }
@@ -1717,7 +1717,7 @@ windows_x86_64_msvc-c8eced492e86ede7 = { package = "windows_x86_64_msvc", versio
 winreg = { version = "0.10", default-features = false }
 
 [target.x86_64-pc-windows-msvc.build-dependencies]
-anstyle-wincon = { version = "1", default-features = false }
+anstyle-wincon = { version = "2", default-features = false }
 clipboard-win = { version = "4", default-features = false }
 cpufeatures = { version = "0.2", default-features = false }
 crossterm_winapi-274715c4dabd11b0 = { package = "crossterm_winapi", version = "0.9", default-features = false }

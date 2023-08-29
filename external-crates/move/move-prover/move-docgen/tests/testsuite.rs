@@ -89,7 +89,7 @@ fn test_docgen(path: &Path, mut options: Options, suffix: &str) -> anyhow::Resul
     let mut output = match run_move_prover(&mut error_writer, options) {
         Ok(()) => {
             let mut contents = String::new();
-            debug!("writing to {}", temp_path.display());
+            println!("writing to {}", temp_path.display());
             let mut file = File::open(temp_path.as_path()).unwrap();
             file.read_to_string(&mut contents).unwrap();
             contents

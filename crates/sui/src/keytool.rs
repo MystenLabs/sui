@@ -686,7 +686,8 @@ impl KeyToolCommand {
             }
 
             KeyToolCommand::Unpack { keypair } => {
-                let keypair: SuiKeyPair = keypair.parse().unwrap();
+                let keypair: SuiKeyPair = keypair.parse()
+                    .expect("Expected a Base64 private key, but could not decode the input string to a SuiKeyPair");
 
                 let key = Key::from(&keypair);
                 let path_str = format!("{}.key", key.sui_address).to_lowercase();

@@ -9,7 +9,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.52"
-clap.worspace = true
+clap = { version = "4", features = ["derive"] }
 
 bcs = "0.1.4"
 
