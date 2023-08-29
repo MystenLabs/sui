@@ -280,9 +280,14 @@ export class TransferPolicyClient {
 
 	// Internal function that that the policy's Id + Cap + type have been set.
 	#validateInputs() {
-		if (!this.policyId) throw new Error('Please set the Transfer Policy Id.');
-		if (!this.policyCap) throw new Error('Please set the Transfer Policy Cap Id');
+		const genericErrorMessage = `Please use 'setPolicyAsync' or 'setPolicy' to setup the TransferPolicy.`;
+		if (!this.policyId)
+			throw new Error(`${genericErrorMessage} Missing: Transfer Policy Object ID.`);
+		if (!this.policyCap)
+			throw new Error(`${genericErrorMessage} Missing: TransferPolicyCap Object ID`);
 		if (!this.itemType)
-			throw new Error('Please set the Transfer Policy Item Type (e.g. `{packageId}::item::Item`)');
+			throw new Error(
+				`${genericErrorMessage} Missing: Transfer Policy Item Type (e.g. {packageId}::item::Item)`,
+			);
 	}
 }
