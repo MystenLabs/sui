@@ -31,14 +31,16 @@ type FormValues = z.infer<typeof formSchema>;
 
 type ProtectAccountFormProps = {
 	submitButtonText: string;
-	cancelButtonText: string;
+	cancelButtonText?: string;
 	onSubmit: SubmitHandler<FormValues>;
+	displayToS?: boolean;
 };
 
 export function ProtectAccountForm({
 	submitButtonText,
 	cancelButtonText,
 	onSubmit,
+	displayToS = true,
 }: ProtectAccountFormProps) {
 	const form = useZodForm({
 		mode: 'all',
@@ -46,7 +48,7 @@ export function ProtectAccountForm({
 		defaultValues: {
 			password: '',
 			confirmedPassword: '',
-			acceptedTos: false,
+			acceptedTos: !displayToS,
 			enabledAutolock: true,
 			autoLockTimer: 1,
 			autoLockInterval: 'Hour',
@@ -77,25 +79,30 @@ export function ProtectAccountForm({
 					<SelectField name="autoLockInterval" options={LOCK_INTERVALS} />
 				</div>
 			</div>
+
 			<div className="flex flex-col gap-5 mt-auto">
-				<CheckboxField
-					name="acceptedTos"
-					label={
-						<>
-							I read and agreed to the{' '}
-							<ExternalLink href={ToS_LINK} className="text-[#1F6493] no-underline">
-								Terms of Services
-							</ExternalLink>
-						</>
-					}
-				/>
-				<div className="flex gap-2.5">
-					<Button
-						variant="outline"
-						size="tall"
-						text={cancelButtonText}
-						onClick={() => navigate(-1)}
+				{displayToS ? (
+					<CheckboxField
+						name="acceptedTos"
+						label={
+							<>
+								I read and agreed to the{' '}
+								<ExternalLink href={ToS_LINK} className="text-[#1F6493] no-underline">
+									Terms of Services
+								</ExternalLink>
+							</>
+						}
 					/>
+				) : null}
+				<div className="flex gap-2.5">
+					{cancelButtonText ? (
+						<Button
+							variant="outline"
+							size="tall"
+							text={cancelButtonText}
+							onClick={() => navigate(-1)}
+						/>
+					) : null}
 					<Button
 						type="submit"
 						disabled={isSubmitting || !isValid}

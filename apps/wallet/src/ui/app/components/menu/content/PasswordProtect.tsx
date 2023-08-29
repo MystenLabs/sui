@@ -12,6 +12,7 @@ import { CheckboxField } from '_src/ui/app/shared/forms/CheckboxField';
 import { Form } from '_src/ui/app/shared/forms/Form';
 import { SelectField } from '_src/ui/app/shared/forms/SelectField';
 import { TextField } from '_src/ui/app/shared/forms/TextField';
+import { ProtectAccountForm } from '../../accounts/ProtectAccountForm';
 
 const LOCK_INTERVALS = ['Hour', 'Minute', 'Second'];
 
@@ -34,58 +35,6 @@ type ProtectAccountFormProps = {
 	onSubmit: SubmitHandler<FormValues>;
 	displayToS?: boolean;
 };
-
-export function ProtectAccountForm({ submitButtonText, onSubmit }: ProtectAccountFormProps) {
-	const form = useZodForm({
-		mode: 'all',
-		schema: formSchema,
-		defaultValues: {
-			password: '',
-			confirmedPassword: '',
-			enabledAutolock: true,
-			autoLockTimer: 1,
-			autoLockInterval: 'Hour',
-		},
-	});
-	const {
-		register,
-		formState: { isSubmitting, isValid },
-	} = form;
-	return (
-		<Form className="flex flex-col gap-6 h-full" form={form} onSubmit={onSubmit}>
-			<TextField
-				autoFocus
-				type="password"
-				label="Create Account Password"
-				{...register('password')}
-			/>
-			<TextField
-				type="password"
-				label="Confirm Account Password"
-				{...register('confirmedPassword')}
-			/>
-			<div className="flex flex-col gap-4">
-				<CheckboxField name="enabledAutolock" label="Auto-lock after I am inactive for" />
-				<div className="flex items-start justify-between gap-2">
-					<TextField type="number" {...register('autoLockTimer')} />
-					<SelectField name="autoLockInterval" options={LOCK_INTERVALS} />
-				</div>
-			</div>
-			<div className="flex flex-col gap-5 mt-auto">
-				<div className="flex gap-2.5">
-					<Button
-						type="submit"
-						disabled={isSubmitting || !isValid}
-						variant="primary"
-						size="tall"
-						loading={isSubmitting}
-						text={submitButtonText}
-					/>
-				</div>
-			</div>
-		</Form>
-	);
-}
 
 export function PasswordProtect() {
 	const mainMenuUrl = useNextMenuUrl(true, '/');
