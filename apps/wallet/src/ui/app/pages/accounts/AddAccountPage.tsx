@@ -7,13 +7,13 @@ import toast from 'react-hot-toast';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ConnectLedgerModal } from '../../components/ledger/ConnectLedgerModal';
 import { getLedgerConnectionErrorMessage } from '../../helpers/errorMessages';
+import { useCreateAccountsMutation } from '../../hooks/useCreateAccountMutation';
 import { SocialButton } from '../../shared/SocialButton';
 import { Button } from '_app/shared/ButtonUI';
 import { Text } from '_app/shared/text';
 import Overlay from '_components/overlay';
+import { type ZkProvider } from '_src/background/accounts/zk/providers';
 import { ampli } from '_src/shared/analytics/ampli';
-import { ZkProvider } from '_src/background/accounts/zk/providers';
-import { useCreateAccountsMutation } from '../../hooks/useCreateAccountMutation';
 
 type AddAccountPageProps = {
 	showSocialSignInOptions?: boolean;
