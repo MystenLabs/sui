@@ -879,8 +879,8 @@ pub fn make_function_type(
         }
         Visibility::Package(vis_loc) => {
             let internal_msg = format!(
-                "A '{}' function can only be called from the same address and package as the \
-                module '{}' in package: '{}'. This call is from address '{}' in package '{}'",
+                "A '{}' function can only be called from the same address and package as \
+                module '{}' in package '{}'. This call is from address '{}' in package '{}'",
                 Visibility::PACKAGE,
                 m,
                 context
