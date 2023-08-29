@@ -505,6 +505,12 @@ impl ObjectRuntimeState {
         // Check new owners from transfers, reports an error on cycles.
         // TODO can we have cycles in the new system?
         check_circular_ownership(transfers.iter().map(|(id, (owner, _, _))| (*id, *owner)))?;
+        // For both written_objects and deleted_ids, we need to mark the loaded child object as modified.
+        // These may not be covered in the child object effects if they are taken out in one PT command and then
+        // transferred/deleted in a different command. Marking them as modified will allow us properly determine their
+        // mutation category in effects.
+        // TODO: This could get error-prone quickly: what if we forgot to mark an object as modified? There may be a cleaner
+        // sulution.
         let written_objects: LinkedHashMap<_, _> = transfers
             .into_iter()
             .map(|(id, (owner, type_, value))| {
@@ -514,6 +520,11 @@ impl ObjectRuntimeState {
                 (id, (owner, type_, value))
             })
             .collect();
+        for deleted_id in deleted_ids.keys() {
+            if let Some(loaded_child) = loaded_child_objects.get_mut(deleted_id) {
+                loaded_child.is_modified = true;
+            }
+        }
 
         Ok(RuntimeResults {
             writes: written_objects,
