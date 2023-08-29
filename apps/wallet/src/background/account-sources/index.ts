@@ -120,6 +120,15 @@ export async function accountSourcesHandleUIMessage(msg: Message, uiConnection: 
 			return true;
 		}
 	}
+	if (isMethodPayload(payload, 'setAccountNickname')) {
+		const { id, nickname } = payload.args;
+		const account = await getAccountSourceByID(id);
+		if (account) {
+			account.setNickname(nickname);
+			await uiConnection.send(createMessage({ type: 'done' }, msg.id));
+			return true;
+		}
+	}
 	if (isMethodPayload(payload, 'lockAccountSourceOrAccount')) {
 		const accountSource = await getAccountSourceByID(payload.args.id);
 		if (accountSource) {

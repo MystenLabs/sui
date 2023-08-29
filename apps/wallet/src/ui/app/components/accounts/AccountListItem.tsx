@@ -7,8 +7,8 @@ import { formatAddress } from '@mysten/sui.js/utils';
 import { type ReactNode, useState } from 'react';
 import { AccountItem } from './AccountItem';
 import { LockUnlockButton } from './LockUnlockButton';
-import { useAccountNicknames } from './NicknamesProvider';
 import { useActiveAddress } from '../../hooks';
+import { useAccounts } from '../../hooks/useAccounts';
 
 type AccountListItemProps = {
 	address: string;
@@ -28,13 +28,12 @@ export function AccountListItem({
 	const { data: domainName } = useResolveSuiNSName(address);
 	// todo: remove this when we implement account locking / unlocking
 	const [locked, setLocked] = useState(false);
-	const { accountNicknames } = useAccountNicknames();
-	const nickname = accountNicknames && accountNicknames[address];
-
+	const { data: accounts } = useAccounts();
+	const account = accounts?.find((account) => account.address === address);
 	return (
 		<AccountItem
 			icon={icon}
-			name={nickname || domainName || formatAddress(address)}
+			name={account?.nickname || domainName || formatAddress(address)}
 			selected={address === activeAddress}
 			after={
 				<div className="ml-auto">

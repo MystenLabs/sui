@@ -18,7 +18,7 @@ class DB extends Dexie {
 
 	constructor() {
 		super(dbName);
-		this.version(1).stores({
+		this.version(2).stores({
 			accountSources: 'id, type',
 			accounts: 'id, type, address, sourceID',
 			settings: 'setting',

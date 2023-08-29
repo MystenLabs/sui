@@ -56,6 +56,7 @@ export class LedgerAccount
 			derivationPath,
 			lastUnlockedOn: null,
 			selected: false,
+			nickname: '',
 		};
 	}
 
@@ -84,7 +85,8 @@ export class LedgerAccount
 	}
 
 	async toUISerialized(): Promise<LedgerAccountSerializedUI> {
-		const { address, type, publicKey, derivationPath, selected } = await this.getStoredData();
+		const { address, type, publicKey, derivationPath, selected, nickname } =
+			await this.getStoredData();
 		return {
 			id: this.id,
 			type,
@@ -94,6 +96,7 @@ export class LedgerAccount
 			derivationPath,
 			lastUnlockedOn: await this.lastUnlockedOn,
 			selected,
+			nickname,
 		};
 	}
 }

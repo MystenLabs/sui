@@ -11,7 +11,6 @@ import { getNavIsVisible } from '_redux/slices/app';
 import type { ReactNode } from 'react';
 
 import st from './Layout.module.scss';
-import { NicknamesProvider } from '../../components/accounts/NicknamesProvider';
 
 export type PageLayoutProps = {
 	forceFullscreen?: boolean;
@@ -25,7 +24,6 @@ function PageLayout({ forceFullscreen = false, children, className }: PageLayout
 
 	return (
 		<Loading loading={guardLoading}>
-			<NicknamesProvider>
 			<div
 				className={cl('w-popup-width h-popup-height', st.container, className, {
 					[st.navHidden]: !isNavVisible,
@@ -35,8 +33,6 @@ function PageLayout({ forceFullscreen = false, children, className }: PageLayout
 				<div id="overlay-portal-container"></div>
 				<div id="toaster-portal-container"></div>
 			</div>
-			</NicknamesProvider>
-			
 		</Loading>
 	);
 }

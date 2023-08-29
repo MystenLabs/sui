@@ -260,7 +260,6 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 					data-testid="coin-page"
 				>
 					<AccountsList />
-
 					<div className="flex flex-col">
 						<PortfolioName name={domainName ?? formatAddress(activeAccountAddress)} />
 						<div
