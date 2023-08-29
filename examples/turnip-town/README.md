@@ -43,8 +43,8 @@ To keep the initial version of the demonstration focussed, the
 following possible extensions have not been implemented, but are left
 as an exercise for the reader!
 
- - Defining **Display for Turnips** to illustrate the size and
-   freshness of Turnips when viewed from the Explorer.
+ - Defining **Display** for `Turnip` and `Deed` to visualize them in
+   Explorers.
  - Using **on-chain randomness** to control how much rain and sun a
    field gets, rather than deciding that off-chain in the game
    service.

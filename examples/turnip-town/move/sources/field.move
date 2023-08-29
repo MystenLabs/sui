@@ -21,11 +21,16 @@ module turnip_town::field {
     use std::vector;
     use sui::math;
     use sui::object::{Self, UID};
+    use sui::package;
+    use sui::transfer;
+    use sui::transfer_policy;
     use sui::tx_context::{Self, TxContext};
 
     use turnip_town::turnip::{Self, Turnip};
 
     friend turnip_town::game;
+
+    struct FIELD has drop {}
 
     struct Field has store {
         slots: vector<Option<Turnip>>,
@@ -55,6 +60,17 @@ module turnip_town::field {
 
     const WIDTH: u64 = 4;
     const HEIGHT: u64 = 4;
+
+    fun init(otw: FIELD, ctx: &mut TxContext) {
+        let publisher = package::claim(otw, ctx);
+
+        // Make `Deed`'s transferable between Kiosks, but without any
+        // additional rules.
+        let (policy, cap) = transfer_policy::new<Deed>(&publisher, ctx);
+        transfer::public_share_object(policy);
+        transfer::public_transfer(cap, tx_context::sender(ctx));
+        package::burn_publisher(publisher);
+    }
 
     public fun deed_field(deed: &Deed): address {
         deed.field
