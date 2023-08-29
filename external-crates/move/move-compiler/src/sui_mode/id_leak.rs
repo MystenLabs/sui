@@ -53,8 +53,7 @@ pub struct IDLeakVerifierAI<'a> {
     declared_abilities: &'a UniqueMap<StructName, AbilitySet>,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-#[derive(Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum Value {
     FreshID(Loc),
     NotFresh(Loc),
@@ -238,5 +237,3 @@ impl SimpleExecutionContext for ExecutionContext {
         self.diags.add(diag)
     }
 }
-
-

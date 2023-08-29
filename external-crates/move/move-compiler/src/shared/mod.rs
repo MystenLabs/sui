@@ -459,7 +459,8 @@ impl CompilationEnv {
     ) -> BTreeSet<WarningFilter> {
         self.known_filters
             .get(&KnownFilterInfo::new(name, attribute_name))
-            .cloned().unwrap_or_default()
+            .cloned()
+            .unwrap_or_default()
     }
 
     pub fn filter_attributes(&self) -> &BTreeSet<E::AttributeName_> {

@@ -28,8 +28,7 @@ pub struct Edition {
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
 pub enum FeatureGate {}
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
-#[derive(Default)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
 pub enum Flavor {
     #[default]
     GlobalStorage,
@@ -234,5 +233,3 @@ impl Default for Edition {
         Edition::LEGACY
     }
 }
-
-

@@ -589,7 +589,7 @@ fn compile_friends(
 fn compile_imports(context: &mut Context, imports: Vec<ImportDefinition>) -> Result<()> {
     for import in imports {
         context.declare_import(import.ident, import.alias)?;
-    };
+    }
     Ok(())
 }
 

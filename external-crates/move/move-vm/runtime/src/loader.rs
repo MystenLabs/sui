@@ -522,7 +522,7 @@ impl ModuleCache {
                     })
                     .collect::<PartialVMResult<BTreeMap<_, _>>>()?;
                 let struct_formula = self.calculate_depth_of_struct(&struct_type, depth_cache)?;
-                
+
                 struct_formula.subst(ty_arg_map)?
             }
         })

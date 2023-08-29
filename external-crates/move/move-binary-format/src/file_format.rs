@@ -434,8 +434,6 @@ impl Visibility {
     pub const DEPRECATED_SCRIPT: u8 = 0x2;
 }
 
-
-
 impl std::convert::TryFrom<u8> for Visibility {
     type Error = ();
 

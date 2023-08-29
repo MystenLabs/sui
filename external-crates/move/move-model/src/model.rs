@@ -2062,10 +2062,13 @@ impl<'env> ModuleEnv<'env> {
     /// Gets a FunctionEnv in this module by name.
     pub fn find_function(&self, name: Symbol) -> Option<FunctionEnv<'env>> {
         let id = FunId(name);
-        self.data.function_data.get(&id).map(move |data| FunctionEnv {
-            module_env: self.clone(),
-            data,
-        })
+        self.data
+            .function_data
+            .get(&id)
+            .map(move |data| FunctionEnv {
+                module_env: self.clone(),
+                data,
+            })
     }
 
     /// Gets a FunctionEnv by id.
@@ -2197,13 +2200,10 @@ impl<'env> ModuleEnv<'env> {
 
     /// Returns iterator over structs in this module.
     pub fn into_structs(self) -> impl Iterator<Item = StructEnv<'env>> {
-        self.data
-            .struct_data
-            .values()
-            .map(move |data| StructEnv {
-                module_env: self.clone(),
-                data,
-            })
+        self.data.struct_data.values().map(move |data| StructEnv {
+            module_env: self.clone(),
+            data,
+        })
     }
 
     /// Globalizes a signature local to this module.
