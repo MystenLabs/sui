@@ -106,9 +106,9 @@ pub enum KeyToolCommand {
     MultiSigAddress {
         #[clap(long)]
         threshold: ThresholdUnit,
-        #[clap(long, multiple_values = true)]
+        #[clap(long, num_args(1..))]
         pks: Vec<PublicKey>,
-        #[clap(long, multiple_values = true)]
+        #[clap(long, num_args(1..))]
         weights: Vec<WeightUnit>,
     },
     /// Provides a list of participating signatures (`flag || sig || pk` encoded in Base64),
@@ -121,21 +121,21 @@ pub enum KeyToolCommand {
     /// e.g. for [pk1, pk2, pk3, pk4, pk5], [sig1, sig2, sig5] is valid, but
     /// [sig2, sig1, sig5] is invalid.
     MultiSigCombinePartialSig {
-        #[clap(long, multiple_values = true)]
+        #[clap(long, num_args(1..))]
         sigs: Vec<Signature>,
-        #[clap(long, multiple_values = true)]
+        #[clap(long, num_args(1..))]
         pks: Vec<PublicKey>,
-        #[clap(long, multiple_values = true)]
+        #[clap(long, num_args(1..))]
         weights: Vec<WeightUnit>,
         #[clap(long)]
         threshold: ThresholdUnit,
     },
     MultiSigCombinePartialSigLegacy {
-        #[clap(long, multiple_values = true)]
+        #[clap(long, num_args(1..))]
         sigs: Vec<Signature>,
-        #[clap(long, multiple_values = true)]
+        #[clap(long, num_args(1..))]
         pks: Vec<PublicKey>,
-        #[clap(long, multiple_values = true)]
+        #[clap(long, num_args(1..))]
         weights: Vec<WeightUnit>,
         #[clap(long)]
         threshold: ThresholdUnit,
@@ -176,7 +176,7 @@ pub enum KeyToolCommand {
     /// This takes [enum SuiKeyPair] of Base64 encoded of 33-byte `flag || privkey`). It
     /// outputs the keypair into a file at the current directory where the address is the filename,
     /// and prints out its Sui address, Base64 encoded public key, the key scheme, and the key scheme flag.
-    Unpack { keypair: SuiKeyPair },
+    Unpack { keypair: String },
 
     /// Given the max_epoch, generate an OAuth url, ask user to paste the redirect with id_token, call salt server, then call the prover server,
     /// create a test transaction, use the ephemeral key to sign and execute it by assembling to a serialized zkLogin signature.
@@ -686,6 +686,8 @@ impl KeyToolCommand {
             }
 
             KeyToolCommand::Unpack { keypair } => {
+                let keypair: SuiKeyPair = keypair.parse().unwrap();
+
                 let key = Key::from(&keypair);
                 let path_str = format!("{}.key", key.sui_address).to_lowercase();
                 let path = Path::new(&path_str);

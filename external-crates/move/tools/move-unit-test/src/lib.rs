@@ -59,8 +59,7 @@ pub struct UnitTestingConfig {
         name = "dependencies",
         long = "dependencies",
         short = 'd',
-        takes_value(true),
-        multiple_values(true),
+        num_args(1..),
         action = clap::ArgAction::Append,
     )]
     pub dep_files: Vec<String>,
@@ -96,8 +95,7 @@ pub struct UnitTestingConfig {
     /// Source files
     #[clap(
         name = "sources",
-        takes_value(true),
-        multiple_values(true),
+        num_args(1..),
         action = clap::ArgAction::Append,
     )]
     pub source_files: Vec<String>,

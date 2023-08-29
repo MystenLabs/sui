@@ -1625,7 +1625,9 @@ pub mod bcs_signable_test {
     }
 }
 
-#[derive(Deserialize, Serialize, JsonSchema, Debug, EnumString, strum_macros::Display)]
+#[derive(
+    Clone, Copy, Deserialize, Serialize, JsonSchema, Debug, EnumString, strum_macros::Display,
+)]
 #[strum(serialize_all = "lowercase")]
 pub enum SignatureScheme {
     ED25519,

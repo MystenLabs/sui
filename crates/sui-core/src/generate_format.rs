@@ -164,7 +164,7 @@ fn get_registry() -> Result<Registry> {
     tracer.registry()
 }
 
-#[derive(Debug, Parser, Clone, Copy, ArgEnum)]
+#[derive(Debug, Parser, Clone, Copy, ValueEnum)]
 enum Action {
     Print,
     Test,
@@ -177,7 +177,7 @@ enum Action {
     about = "Trace serde (de)serialization to generate format descriptions for Sui types"
 )]
 struct Options {
-    #[clap(arg_enum, default_value = "Print", ignore_case = true)]
+    #[clap(value_enum, default_value = "Print", ignore_case = true)]
     action: Action,
 }
 

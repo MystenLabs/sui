@@ -77,7 +77,7 @@ pub enum SuiCommand {
         #[clap(
             long,
             value_name = "ADDR",
-            multiple_values = true,
+            num_args(1..),
             value_delimiter = ',',
             help = "A list of ip addresses to generate a genesis suitable for benchmarks"
         )]

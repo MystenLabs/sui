@@ -146,7 +146,7 @@ impl Options {
                 Arg::new("config")
                     .short('c')
                     .long("config")
-                    .takes_value(true)
+                    .num_args(1)
                     .value_name("TOML_FILE")
                     .help("path to a configuration file. \
                      Values in this file will be overridden by command line flags"),
@@ -156,7 +156,7 @@ impl Options {
                     .conflicts_with("config")
                     .short('C')
                     .long("config-str")
-                    .takes_value(true)
+                    .num_args(1)
                     .action(clap::ArgAction::Append)
                     .number_of_values(1)
                     .value_name("TOML_STRING")
@@ -172,7 +172,7 @@ impl Options {
                 Arg::new("output")
                     .short('o')
                     .long("output")
-                    .takes_value(true)
+                    .num_args(1)
                     .value_name("BOOGIE_FILE")
                     .help("path to the boogie output which represents the verification problem"),
             )
@@ -180,14 +180,14 @@ impl Options {
                 Arg::new("verbosity")
                     .short('v')
                     .long("verbose")
-                    .takes_value(true)
+                    .num_args(1)
                     .value_parser(["error", "warn", "info", "debug"])
                     .help("verbosity level"),
             )
             .arg(
                 Arg::new("vector-theory")
                     .long("vector-theory")
-                    .takes_value(true)
+                    .num_args(1)
                     .value_parser(["BoogieArray", "BoogieArrayIntern",
                                               "SmtArray", "SmtArrayExt", "SmtSeq"])
                     .help("vector theory to use"),
@@ -202,7 +202,7 @@ impl Options {
                 Arg::new("severity")
                     .long("severity")
                     .short('s')
-                    .takes_value(true)
+                    .num_args(1)
                     .value_parser(["bug", "error", "warn", "note"])
                     .help("The minimall level on which diagnostics are reported")
             )
@@ -236,7 +236,7 @@ impl Options {
                 Arg::new("seed")
                     .long("seed")
                     .short('S')
-                    .takes_value(true)
+                    .num_args(1)
                     .value_name("NUMBER")
                     .value_parser(is_number)
                     .help("sets a random seed for the prover (default 0)")
@@ -244,7 +244,7 @@ impl Options {
             .arg(
                 Arg::new("cores")
                     .long("cores")
-                    .takes_value(true)
+                    .num_args(1)
                     .value_name("NUMBER")
                     .value_parser(is_number)
                     .help("sets the number of cores to use. \
@@ -255,7 +255,7 @@ impl Options {
                 Arg::new("timeout")
                     .long("timeout")
                     .short('T')
-                    .takes_value(true)
+                    .num_args(1)
                     .value_name("NUMBER")
                     .value_parser(is_number)
                     .help("sets a timeout (in seconds) for each \
@@ -276,7 +276,7 @@ impl Options {
             .arg(
                 Arg::new("simplification-pipeline")
                     .long("simplify")
-                    .takes_value(true)
+                    .num_args(1)
                     .action(clap::ArgAction::Append)
                     .number_of_values(1)
                     .help("Specify one simplification pass to run on the specifications. \
@@ -291,7 +291,7 @@ impl Options {
             .arg(
                 Arg::new("docgen-template")
                     .long("docgen-template")
-                    .takes_value(true)
+                    .num_args(1)
                     .value_name("FILE")
                     .help("a template for documentation generation."),
             )
@@ -325,7 +325,7 @@ impl Options {
             .arg(
                 Arg::new("verify")
                     .long("verify")
-                    .takes_value(true)
+                    .num_args(1)
                     .value_parser(["public", "all", "none"])
                     .value_name("SCOPE")
                     .help("default scope of verification \
@@ -334,7 +334,7 @@ impl Options {
             .arg(
                 Arg::new("bench-repeat")
                     .long("bench-repeat")
-                    .takes_value(true)
+                    .num_args(1)
                     .value_name("COUNT")
                     .value_parser(is_number)
                     .help(
@@ -351,7 +351,7 @@ impl Options {
             .arg(
                 Arg::new("mutation-add-sub")
                     .long("mutation-add-sub")
-                    .takes_value(true)
+                    .num_args(1)
                     .value_name("COUNT")
                     .value_parser(is_number)
                     .help(
@@ -362,7 +362,7 @@ impl Options {
             .arg(
                 Arg::new("mutation-sub-add")
                     .long("mutation-sub-add")
-                    .takes_value(true)
+                    .num_args(1)
                     .value_name("COUNT")
                     .value_parser(is_number)
                     .help(
@@ -373,7 +373,7 @@ impl Options {
             .arg(
                 Arg::new("mutation-mul-div")
                     .long("mutation-mul-div")
-                    .takes_value(true)
+                    .num_args(1)
                     .value_name("COUNT")
                     .value_parser(is_number)
                     .help(
@@ -384,7 +384,7 @@ impl Options {
             .arg(
                 Arg::new("mutation-div-mul")
                     .long("mutation-div-mul")
-                    .takes_value(true)
+                    .num_args(1)
                     .value_name("COUNT")
                     .value_parser(is_number)
                     .help(
@@ -398,7 +398,7 @@ impl Options {
                     .short('d')
                     .action(clap::ArgAction::Append)
                     .number_of_values(1)
-                    .takes_value(true)
+                    .num_args(1)
                     .value_name("PATH_TO_DEPENDENCY")
                     .help("path to a Move file, or a directory which will be searched for \
                     Move files, containing dependencies which will not be verified")
@@ -408,20 +408,20 @@ impl Options {
                 .long("named-addresses")
                 .short('a')
                 .action(clap::ArgAction::Append)
-                .takes_value(true)
+                .num_args(1)
                 .help("specifies the value(s) of named addresses used in Move files")
             )
             .arg(
                 Arg::new("sources")
                     .action(clap::ArgAction::Append)
                     .value_name("PATH_TO_SOURCE_FILE")
-                    .min_values(1)
+                    .num_args(1..)
                     .help("the source files to verify"),
             )
             .arg(
                 Arg::new("eager-threshold")
                     .long("eager-threshold")
-                    .takes_value(true)
+                    .num_args(1)
                     .value_name("NUMBER")
                     .value_parser(is_number)
                     .help("sets the eager threshold for quantifier instantiation (default 100)")
@@ -429,7 +429,7 @@ impl Options {
             .arg(
                 Arg::new("lazy-threshold")
                     .long("lazy-threshold")
-                    .takes_value(true)
+                    .num_args(1)
                     .value_name("NUMBER")
                     .value_parser(is_number)
                     .help("sets the lazy threshold for quantifier instantiation (default 100)")
@@ -448,7 +448,7 @@ impl Options {
             .arg(
                 Arg::new("num-instances")
                     .long("num-instances")
-                    .takes_value(true)
+                    .num_args(1)
                     .value_name("NUMBER")
                     .value_parser(is_number)
                     .help("sets the number of Boogie instances to run concurrently (default 1)")
@@ -510,7 +510,7 @@ impl Options {
             .arg(
                 Arg::new("verify-only")
                     .long("verify-only")
-                    .takes_value(true)
+                    .num_args(1)
                     .value_name("FUNCTION_NAME")
                     .help("only generate verification condition for one function. \
                     This overrides verification scope and can be overridden by the pragma verify=false")
@@ -518,7 +518,7 @@ impl Options {
             .arg(
                 Arg::new("z3-trace")
                     .long("z3-trace")
-                    .takes_value(true)
+                    .num_args(1)
                     .value_name("FUNCTION_NAME")
                     .help("only generate verification condition for given function, \
                     and generate a z3 trace file for analysis. The file will be stored \
@@ -601,7 +601,7 @@ impl Options {
                 }
         }
 
-        if matches.get_flag("generate-only") {
+        if matches.contains_id("generate-only") {
             options.prover.generate_only = true;
         }
         if let Some(m) = matches.get_many::<String>("sources") {
@@ -613,7 +613,7 @@ impl Options {
         if let Some(m) = matches.get_many::<String>("named-addresses") {
             options.move_named_address_values = m.cloned().collect();
         }
-        if matches.get_flag("mutation") {
+        if matches.contains_id("mutation") {
             options.prover.mutation = true;
         }
         if matches.contains_id("mutation-add-sub") {
@@ -655,20 +655,20 @@ impl Options {
                 .unwrap()
                 .parse::<usize>()?;
         }
-        if matches.get_flag("ignore-pragma-opaque-when-possible") {
+        if matches.contains_id("ignore-pragma-opaque-when-possible") {
             options.model_builder.ignore_pragma_opaque_when_possible = true;
         }
-        if matches.get_flag("ignore-pragma-opaque-internal-only") {
+        if matches.contains_id("ignore-pragma-opaque-internal-only") {
             options.model_builder.ignore_pragma_opaque_internal_only = true;
         }
         if let Some(m) = matches.get_many::<String>("simplification-pipeline") {
             for name in m {
-                let pass = SimplificationPass::from_str(&name)
+                let pass = SimplificationPass::from_str(name)
                     .map_err(|e| anyhow!("Unknown simplification pass: {}", e))?;
                 options.model_builder.simplification_pipeline.push(pass);
             }
         }
-        if matches.get_flag("docgen") {
+        if matches.contains_id("docgen") {
             options.run_docgen = true;
         }
         if matches.contains_id("docgen-template") {
@@ -678,25 +678,25 @@ impl Options {
                 .map(|s| s.to_string())
                 .unwrap()]
         }
-        if matches.get_flag("abigen") {
+        if matches.contains_id("abigen") {
             options.run_abigen = true;
         }
-        if matches.get_flag("errmapgen") {
+        if matches.contains_id("errmapgen") {
             options.run_errmapgen = true;
         }
-        if matches.get_flag("read-write-set") {
+        if matches.contains_id("read-write-set") {
             options.run_read_write_set = true;
         }
-        if matches.get_flag("escape") {
+        if matches.contains_id("escape") {
             options.run_escape = true;
         }
-        if matches.get_flag("trace") {
+        if matches.contains_id("trace") {
             options.prover.auto_trace_level = AutoTraceLevel::VerifiedFunction;
         }
-        if matches.get_flag("dump-bytecode") {
+        if matches.contains_id("dump-bytecode") {
             options.prover.dump_bytecode = true;
         }
-        if matches.get_flag("dump-cfg") {
+        if matches.contains_id("dump-cfg") {
             options.prover.dump_cfg = true;
         }
         if matches.contains_id("num-instances") {
@@ -706,17 +706,17 @@ impl Options {
                 .parse::<usize>()?;
             options.backend.num_instances = std::cmp::max(num_instances, 1); // at least one instance
         }
-        if matches.get_flag("sequential") {
+        if matches.contains_id("sequential") {
             options.prover.sequential_task = true;
         }
-        if matches.get_flag("stable-test-output") {
+        if matches.contains_id("stable-test-output") {
             //options.prover.stable_test_output = true;
             options.backend.stable_test_output = true;
         }
-        if matches.get_flag("keep") {
+        if matches.contains_id("keep") {
             options.backend.keep_artifacts = true;
         }
-        if matches.get_flag("boogie-poly") {
+        if matches.contains_id("boogie-poly") {
             options.prover.boogie_poly = true;
         }
         if matches.contains_id("seed") {
@@ -725,7 +725,7 @@ impl Options {
                 .unwrap()
                 .parse::<usize>()?;
         }
-        if matches.get_flag("experimental-pipeline") {
+        if matches.contains_id("experimental-pipeline") {
             options.experimental_pipeline = true;
         }
         if matches.contains_id("timeout") {
@@ -752,20 +752,20 @@ impl Options {
                 .unwrap()
                 .parse::<usize>()?;
         }
-        if matches.get_flag("use-cvc5") {
+        if matches.contains_id("use-cvc5") {
             options.backend.use_cvc5 = true;
         }
-        if matches.get_flag("use-exp-boogie") {
+        if matches.contains_id("use-exp-boogie") {
             options.backend.use_exp_boogie = true;
         }
-        if matches.get_flag("generate-smt") {
+        if matches.contains_id("generate-smt") {
             options.backend.generate_smt = true;
         }
 
-        if matches.get_flag("check-inconsistency") {
+        if matches.contains_id("check-inconsistency") {
             options.prover.check_inconsistency = true;
         }
-        if matches.get_flag("unconditional-abort-as-inconsistency") {
+        if matches.contains_id("unconditional-abort-as-inconsistency") {
             options.prover.unconditional_abort_as_inconsistency = true;
         }
 
@@ -787,17 +787,17 @@ impl Options {
             options.backend.z3_trace_file = Some(format!("{}.z3log", fun_name));
         }
 
-        if matches.get_flag("script-reach") {
+        if matches.contains_id("script-reach") {
             options.script_reach = true;
         }
 
-        if matches.get_flag("ban-int-2-bv") {
+        if matches.contains_id("ban-int-2-bv") {
             options.prover.ban_int_2_bv = true;
         }
 
         options.backend.derive_options();
 
-        if matches.get_flag("print-config") {
+        if matches.contains_id("print-config") {
             println!("{}", toml::to_string(&options).unwrap());
             Err(anyhow!("exiting"))
         } else {

@@ -27,24 +27,21 @@ pub enum ExperimentalCommand {
         fun_name: String,
         #[clap(
             long = "signers",
-            takes_value(true),
-            multiple_values(true),
+            num_args(1..),
             action = clap::ArgAction::Append,
         )]
         signers: Vec<String>,
         #[clap(
             long = "args",
             value_parser = parser::parse_transaction_argument,
-            takes_value(true),
-            multiple_values(true),
+            num_args(1..),
             action = clap::ArgAction::Append,
         )]
         args: Vec<TransactionArgument>,
         #[clap(
             long = "type-args",
             value_parser = parser::parse_type_tag,
-            takes_value(true),
-            multiple_values(true),
+            num_args(1..),
             action = clap::ArgAction::Append,
         )]
         type_args: Vec<TypeTag>,
