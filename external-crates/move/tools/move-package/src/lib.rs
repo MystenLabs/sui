@@ -54,7 +54,7 @@ pub struct BuildConfig {
     pub generate_abis: bool,
 
     /// Installation directory for compiled artifacts. Defaults to current directory.
-    #[clap(long = "install-dir", parse(from_os_str), global = true)]
+    #[clap(long = "install-dir", global = true)]
     pub install_dir: Option<PathBuf>,
 
     /// Force recompilation of all packages

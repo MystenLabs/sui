@@ -47,7 +47,7 @@ pub fn benchmark(args: &[String]) {
                 .short('c')
                 .long("config")
                 .takes_value(true)
-                .multiple_occurrences(true)
+                .action(clap::ArgAction::Append)
                 .number_of_values(1)
                 .value_name("CONFIG_PATH")
                 .help(
@@ -66,7 +66,7 @@ pub fn benchmark(args: &[String]) {
             Arg::new("dependencies")
                 .long("dependency")
                 .short('d')
-                .multiple_occurrences(true)
+                .action(clap::ArgAction::Append)
                 .number_of_values(1)
                 .takes_value(true)
                 .value_name("PATH_TO_DEPENDENCY")
@@ -77,26 +77,26 @@ pub fn benchmark(args: &[String]) {
         )
         .arg(
             Arg::new("sources")
-                .multiple_occurrences(true)
+                .action(clap::ArgAction::Append)
                 .value_name("PATH_TO_SOURCE_FILE")
                 .min_values(1)
                 .help("the source files to verify"),
         );
     let matches = cmd_line_parser.get_matches_from(args);
     let get_vec = |s: &str| -> Vec<String> {
-        match matches.values_of(s) {
+        match matches.get_many::<String>(s) {
             Some(vs) => vs.map(|v| v.to_string()).collect(),
             _ => vec![],
         }
     };
     let sources = get_vec("sources");
     let deps = get_vec("dependencies");
-    let configs: Vec<Option<String>> = if matches.is_present("config") {
+    let configs: Vec<Option<String>> = if matches.contains_id("config") {
         get_vec("config").into_iter().map(Some).collect_vec()
     } else {
         vec![None]
     };
-    let per_function = matches.is_present("function");
+    let per_function = matches.get_flag("function");
 
     for config_spec in configs {
         let (config, out) = if let Some(config_file) = &config_spec {

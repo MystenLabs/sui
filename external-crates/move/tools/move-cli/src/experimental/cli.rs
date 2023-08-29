@@ -11,7 +11,7 @@ use move_core_types::{
 };
 use std::path::Path;
 
-use clap::{ArgEnum, Parser};
+use clap::{Parser, ValueEnum};
 
 #[derive(Parser)]
 pub enum ExperimentalCommand {
@@ -20,7 +20,7 @@ pub enum ExperimentalCommand {
     #[clap(name = "read-write-set")]
     ReadWriteSet {
         /// Path to .mv file containing module bytecode.
-        #[clap(name = "module", parse(from_os_str))]
+        #[clap(name = "module")]
         module_file: PathBuf,
         /// A function inside `module_file`.
         #[clap(name = "function")]
@@ -29,26 +29,31 @@ pub enum ExperimentalCommand {
             long = "signers",
             takes_value(true),
             multiple_values(true),
-            multiple_occurrences(true)
+            action = clap::ArgAction::Append,
         )]
         signers: Vec<String>,
         #[clap(
             long = "args",
-            parse(try_from_str = parser::parse_transaction_argument),
+            value_parser = parser::parse_transaction_argument,
             takes_value(true),
             multiple_values(true),
-            multiple_occurrences(true)
+            action = clap::ArgAction::Append,
         )]
         args: Vec<TransactionArgument>,
         #[clap(
             long = "type-args",
-            parse(try_from_str = parser::parse_type_tag),
+            value_parser = parser::parse_type_tag,
             takes_value(true),
             multiple_values(true),
-            multiple_occurrences(true)
+            action = clap::ArgAction::Append,
         )]
         type_args: Vec<TypeTag>,
-        #[clap(long = "concretize", possible_values = ConcretizeMode::variants(), ignore_case = true, default_value = "dont")]
+        #[clap(
+            long = "concretize",
+            value_enum,
+            ignore_case = true,
+            default_value = "dont"
+        )]
         concretize: ConcretizeMode,
     },
 }
@@ -56,7 +61,7 @@ pub enum ExperimentalCommand {
 // Specify if/how the analysis should concretize and filter the static analysis summary
 
 // Specify if/how the analysis should concretize and filter the static analysis summary
-#[derive(Debug, Clone, Copy, ArgEnum)]
+#[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum ConcretizeMode {
     // Show the full concretized access paths read or written (e.g. 0xA/0x1::M::S/f/g)
     Paths,
@@ -79,12 +84,6 @@ impl FromStr for ConcretizeMode {
             "dont" => Ok(ConcretizeMode::Dont),
             _ => Err(anyhow::anyhow!("Invalid concretize mode: {}", s)),
         }
-    }
-}
-
-impl ConcretizeMode {
-    fn variants() -> [&'static str; 4] {
-        ["paths", "reads", "writes", "dont"]
     }
 }
 
