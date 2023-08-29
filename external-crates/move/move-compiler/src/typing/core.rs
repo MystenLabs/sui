@@ -320,11 +320,8 @@ impl<'env> Context<'env> {
 
     // `loc` indicates the location that caused the add to occur
     fn record_current_module_as_friend(&mut self, m: &ModuleIdent, loc: Loc) {
-        match &self.current_module {
-            Some(current_mident) if m != current_mident => {
-                self.new_friends.insert((*m, loc));
-            }
-            _ => {}
+        if matches!(self.current_module, Some(current_mident) if m != &current_mident) {
+            self.new_friends.insert((*m, loc));
         }
     }
 

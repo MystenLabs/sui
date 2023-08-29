@@ -2,7 +2,7 @@
 
 //# publish
 address 0x42 {
-    module X {
+    module x {
         struct T has drop {}
 
         public(package) fun new(): T {
@@ -10,11 +10,11 @@ address 0x42 {
         }
     }
 
-    module Y {
-        use 0x42::X;
+    module y {
+        use 0x42::x;
 
-        public fun foo(): X::T {
-            X::new()
+        public fun foo(): x::T {
+            x::new()
         }
     }
 }

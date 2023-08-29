@@ -381,21 +381,3 @@ impl<'a, K: TName, V> IntoIterator for &'a mut UniqueMap<K, V> {
         IterMut(self.0.iter_mut().map(fix), len)
     }
 }
-
-//**************************************************************************************************
-// FromIterator
-//**************************************************************************************************
-
-impl<K: TName, V> FromIterator<(K, V)> for UniqueMap<K, V> {
-    fn from_iter<T>(iter: T) -> Self
-    where
-        T: IntoIterator<Item = (K, V)>,
-    {
-        let mut result = UniqueMap::new();
-        for (k, v) in iter {
-            let insert_result = result.add(k, v);
-            assert!(insert_result.is_ok());
-        }
-        result
-    }
-}

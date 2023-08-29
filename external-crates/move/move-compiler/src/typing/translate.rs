@@ -82,9 +82,8 @@ fn modules(
         // point of interest: if we have any new friends, we know there can't be any
         // "current" friends becahse all thew new friends are generated off of
         // `public(package)` usage, which disallows other friends.
-        mdef.friends = friends
-            .into_iter()
-            .collect::<UniqueMap<ModuleIdent, Friend>>();
+        mdef.friends = UniqueMap::maybe_from_iter(friends.into_iter())
+            .expect("ICE compiler added duplicate friends to public(package) friend list");
     }
 
     typed_modules
