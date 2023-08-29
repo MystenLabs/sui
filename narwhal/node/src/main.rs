@@ -100,19 +100,19 @@ async fn main() -> Result<(), eyre::Report> {
     };
 
     match matches.subcommand() {
-        ("generate_keys", Some(sub_matches)) => {
+        Some(("generate_keys", sub_matches)) => {
             let _guard = setup_telemetry(tracing_level, network_tracing_level, None);
             let key_file = sub_matches.value_of("filename").unwrap();
             let keypair: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
             write_authority_keypair_to_file(&keypair, key_file).unwrap();
         }
-        ("generate_network_keys", Some(sub_matches)) => {
+        Some(("generate_network_keys", sub_matches)) => {
             let _guard = setup_telemetry(tracing_level, network_tracing_level, None);
             let network_key_file = sub_matches.value_of("filename").unwrap();
             let network_keypair: NetworkKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
             write_keypair_to_file(&SuiKeyPair::Ed25519(network_keypair), network_key_file).unwrap();
         }
-        ("get_pub_key", Some(sub_matches)) => {
+        Some(("get_pub_key", sub_matches)) => {
             let _guard = setup_telemetry(tracing_level, network_tracing_level, None);
             let file = sub_matches.value_of("filename").unwrap();
             match read_network_keypair_from_file(file) {
@@ -131,7 +131,7 @@ async fn main() -> Result<(), eyre::Report> {
                 }
             }
         }
-        ("run", Some(sub_matches)) => {
+        Some(("run", sub_matches)) => {
             let primary_key_file = sub_matches.value_of("primary-keys").unwrap();
             let primary_keypair = read_authority_keypair_from_file(primary_key_file)
                 .expect("Failed to load the node's primary keypair");
@@ -153,8 +153,8 @@ async fn main() -> Result<(), eyre::Report> {
                 .id();
 
             let registry = match sub_matches.subcommand() {
-                ("primary", _) => primary_metrics_registry(authority_id),
-                ("worker", Some(worker_matches)) => {
+                Some(("primary", _)) => primary_metrics_registry(authority_id),
+                Some(("worker", worker_matches)) => {
                     let id = worker_matches
                         .value_of("id")
                         .unwrap()
@@ -239,7 +239,7 @@ fn setup_benchmark_telemetry(
 
 // Runs either a worker or a primary.
 async fn run(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     committee: Committee,
     primary_keypair: KeyPair,
     primary_network_keypair: NetworkKeyPair,
@@ -277,7 +277,7 @@ async fn run(
     // Check whether to run a primary, a worker, or an entire authority.
     let (primary, worker) = match matches.subcommand() {
         // Spawn the primary and consensus core.
-        ("primary", _) => {
+        Some(("primary", _)) => {
             let primary = PrimaryNode::new(parameters.clone(), registry_service);
 
             primary
@@ -297,7 +297,7 @@ async fn run(
         }
 
         // Spawn a single worker.
-        ("worker", Some(sub_matches)) => {
+        Some(("worker", sub_matches)) => {
             let id = sub_matches
                 .value_of("id")
                 .unwrap()

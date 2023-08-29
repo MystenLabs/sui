@@ -1,0 +1,9 @@
+[package]
+name = "entry_functions"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../../crates/sui-framework/packages/sui-framework" }
+
+[addresses]
+entry_functions = "0x0"

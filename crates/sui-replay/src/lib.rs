@@ -345,8 +345,8 @@ pub async fn execute_replay_command(
                     tx_digest,
                     start_epoch,
                     end_epoch,
-                    checkpoint_start,
-                    checkpoint_end
+                    checkpoint_start.unwrap_or(u64::MAX),
+                    checkpoint_end.unwrap_or(u64::MAX)
                 );
             }
 

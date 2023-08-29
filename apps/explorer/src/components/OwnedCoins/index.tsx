@@ -94,14 +94,14 @@ export function OwnedCoins({ id }: { id: string }) {
 	}
 
 	return (
-		<div className="h-full w-full">
+		<div className="h-full w-full md:pr-10">
 			{isLoading ? (
 				<div className="m-auto flex h-full w-full justify-center text-white">
 					<LoadingIndicator />
 				</div>
 			) : (
-				<div className="flex max-h-coinsAndAssetsContainer flex-col gap-4 pt-5 text-left ">
-					<div className="flex w-full flex-col justify-between gap-y-3 border-b border-gray-45 pb-3 sm:flex-row">
+				<div className="flex h-full flex-col gap-4 overflow-auto text-left">
+					<div className="flex min-h-14 w-full flex-col justify-between gap-y-3 border-b border-gray-45 max-sm:pb-3 max-sm:pt-5 sm:flex-row sm:items-center">
 						<Heading color="steel-darker" variant="heading4/semibold">
 							{balances.allBalances.length} Coins
 						</Heading>
@@ -123,7 +123,7 @@ export function OwnedCoins({ id }: { id: string }) {
 						</div>
 					</div>
 					{filterValue === COIN_FILTERS.UNRECOGNIZED && (
-						<div className="flex items-center gap-2 rounded-full border border-gray-45 p-2 text-steel-darker">
+						<div className="flex items-center gap-2 rounded-2xl border border-gray-45 p-2 text-steel-darker">
 							<div>
 								<Info16 width="16px" />
 							</div>
@@ -133,7 +133,7 @@ export function OwnedCoins({ id }: { id: string }) {
 						</div>
 					)}
 
-					<div className="flex flex-col overflow-auto">
+					<div className="flex max-h-coinsAndAssetsContainer flex-col overflow-auto md:max-h-full">
 						<div className="mb-2.5 flex uppercase tracking-wider text-gray-80">
 							<div className="w-[45%] pl-3">
 								<Text variant="caption/medium" color="steel-dark">

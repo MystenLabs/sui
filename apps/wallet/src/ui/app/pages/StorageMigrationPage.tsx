@@ -38,6 +38,7 @@ export function StorageMigrationPage() {
 							await migrationMutation.mutateAsync({ password });
 						}}
 						title="Please insert your wallet password"
+						legacyAccounts
 					/>
 				) : (
 					<div className="flex flex-1 items-center">

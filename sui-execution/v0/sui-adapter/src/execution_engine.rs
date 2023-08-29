@@ -6,6 +6,11 @@ pub use checked::*;
 #[sui_macros::with_checked_arithmetic]
 mod checked {
 
+    use crate::gas_charger::GasCharger;
+    use crate::programmable_transactions;
+    use crate::temporary_store::TemporaryStore;
+    use crate::type_layout_resolver::TypeLayoutResolver;
+    use move_binary_format::access::ModuleAccess;
     use move_binary_format::CompiledModule;
     use move_vm_runtime::move_vm::MoveVM;
     use once_cell::sync::Lazy;
@@ -13,34 +18,28 @@ mod checked {
         collections::{BTreeSet, HashSet},
         sync::Arc,
     };
+    use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
     use sui_types::balance::{
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
         BALANCE_MODULE_NAME,
     };
-    use sui_types::execution_mode::{self, ExecutionMode};
-    use sui_types::gas_coin::GAS;
-    use sui_types::metrics::LimitsMetrics;
-    use sui_types::object::OBJECT_START_VERSION;
-    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-    use tracing::{info, instrument, trace, warn};
-
-    use crate::programmable_transactions;
-    use crate::type_layout_resolver::TypeLayoutResolver;
-    use move_binary_format::access::ModuleAccess;
-    use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
     use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
     use sui_types::committee::EpochId;
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
+    use sui_types::execution_mode::{self, ExecutionMode};
     use sui_types::execution_status::ExecutionStatus;
-    use sui_types::gas::{GasCharger, GasCostSummary};
+    use sui_types::gas::GasCostSummary;
+    use sui_types::gas_coin::GAS;
+    use sui_types::inner_temporary_store::InnerTemporaryStore;
     use sui_types::messages_consensus::ConsensusCommitPrologue;
+    use sui_types::metrics::LimitsMetrics;
+    use sui_types::object::OBJECT_START_VERSION;
+    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
     use sui_types::storage::WriteKind;
     #[cfg(msim)]
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
     use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
-    use sui_types::temporary_store::InnerTemporaryStore;
-    use sui_types::temporary_store::TemporaryStore;
     use sui_types::transaction::{
         Argument, CallArg, ChangeEpoch, Command, GenesisTransaction, ProgrammableTransaction,
         TransactionKind,
@@ -52,6 +51,7 @@ mod checked {
         SUI_FRAMEWORK_ADDRESS,
     };
     use sui_types::{SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID};
+    use tracing::{info, instrument, trace, warn};
 
     /// If a transaction digest shows up in this list, when executing such transaction,
     /// we will always return `ExecutionError::CertificateDenied` without executing it (but still do
@@ -317,7 +317,6 @@ mod checked {
         });
 
         let cost_summary = gas_charger.charge_gas(temporary_store, &mut result);
-        // === begin SUI conservation checks ===
         // For advance epoch transaction, we need to provide epoch rewards and rebates as extra
         // information provided to check_sui_conserved, because we mint rewards, and burn
         // the rebates. We also need to pass in the unmetered_storage_rebate because storage
@@ -326,6 +325,8 @@ mod checked {
         // Put all the storage rebate accumulated in the system transaction
         // to the 0x5 object so that it's not lost.
         temporary_store.conserve_unmetered_storage_rebate(gas_charger.unmetered_storage_rebate());
+
+        // === begin SUI conservation checks ===
         if !is_genesis_tx && !Mode::allow_arbitrary_values() {
             // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
             let conservation_result = {

@@ -10,14 +10,13 @@ import {
 import { fromB64, toB64 } from '@mysten/sui.js/utils';
 import { computeZkAddress, zkBcs } from '@mysten/zklogin';
 import { blake2b } from '@noble/hashes/blake2b';
-import { toBigIntBE } from 'bigint-buffer';
 import { decodeJwt } from 'jose';
 import { getCurrentEpoch } from './current-epoch';
 import { type ZkProvider } from './providers';
 import {
 	type PartialZkSignature,
 	createPartialZKSignature,
-	fetchPin,
+	fetchSalt,
 	prepareZKLogin,
 	zkLogin,
 } from './utils';
@@ -55,9 +54,9 @@ export interface ZkAccountSerialized extends SerializedAccount {
 	type: 'zk';
 	provider: ZkProvider;
 	/**
-	 * the pin used to create the account obfuscated
+	 * the salt used to create the account obfuscated
 	 */
-	pin: string;
+	salt: string;
 	/**
 	 * obfuscated data that contains user info as it was in jwt
 	 */
@@ -68,6 +67,7 @@ export interface ZkAccountSerializedUI extends SerializedUIAccount {
 	type: 'zk';
 	email: string;
 	picture: string | null;
+	provider: ZkProvider;
 }
 
 export function isZkAccountSerializedUI(
@@ -89,7 +89,7 @@ export class ZkAccount
 		provider: ZkProvider;
 	}): Promise<Omit<ZkAccountSerialized, 'id'>> {
 		const jwt = await zkLogin({ provider, prompt: 'select_account' });
-		const { pin } = await fetchPin(jwt);
+		const salt = await fetchSalt(jwt);
 		const decodedJWT = decodeJwt(jwt);
 		if (
 			!decodedJWT.sub ||
@@ -121,10 +121,10 @@ export class ZkAccount
 				claimValue: decodedJWT.sub,
 				iss: decodedJWT.iss,
 				aud,
-				userPin: BigInt(pin),
+				userSalt: BigInt(salt),
 			}),
 			claims: await obfuscate(claims),
-			pin: await obfuscate(pin),
+			salt: await obfuscate(salt),
 			provider,
 			publicKey: null,
 			lastUnlockedOn: null,
@@ -163,8 +163,8 @@ export class ZkAccount
 	}
 
 	async unlock() {
-		const { provider, claims, pin: obfuscatedPin } = await this.getStoredData();
-		const pin = await deobfuscate<string>(obfuscatedPin);
+		const { provider, claims, salt: obfuscatedSalt } = await this.getStoredData();
+		const salt = await deobfuscate<string>(obfuscatedSalt);
 		const { email, sub, aud, iss } = await deobfuscate<JwtSerializedClaims>(claims);
 		const epoch = await getCurrentEpoch();
 		const { ephemeralKeyPair, nonce, randomness, maxEpoch } = prepareZKLogin(Number(epoch));
@@ -180,8 +180,8 @@ export class ZkAccount
 		}
 		const proofs = await createPartialZKSignature({
 			jwt,
-			ephemeralPublicKey: toBigIntBE(Buffer.from(ephemeralKeyPair.getPublicKey().toRawBytes())),
-			userPin: BigInt(pin),
+			ephemeralPublicKey: ephemeralKeyPair.getPublicKey(),
+			userSalt: BigInt(salt),
 			jwtRandomness: randomness,
 			keyClaimName: 'sub',
 			maxEpoch,
@@ -197,7 +197,7 @@ export class ZkAccount
 	}
 
 	async toUISerialized(): Promise<ZkAccountSerializedUI> {
-		const { address, publicKey, type, claims, selected } = await this.getStoredData();
+		const { address, publicKey, type, claims, selected, provider } = await this.getStoredData();
 		const { email, picture } = await deobfuscate<JwtSerializedClaims>(claims);
 		return {
 			id: this.id,
@@ -209,6 +209,8 @@ export class ZkAccount
 			email,
 			picture,
 			selected,
+			isPasswordUnlockable: false,
+			provider,
 		};
 	}
 

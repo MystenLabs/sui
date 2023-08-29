@@ -124,9 +124,9 @@ impl ObjectStoreConfig {
         if let Some(secret) = &self.aws_secret_access_key {
             builder = builder.with_secret_access_key(secret);
         }
-        if let Some(profile) = &self.aws_profile {
-            builder = builder.with_profile(profile);
-        }
+        // if let Some(profile) = &self.aws_profile {
+        //     builder = builder.with_profile(profile);
+        // }
         Ok(Arc::new(LimitStore::new(
             builder.build().context("Invalid s3 config")?,
             self.object_store_connection_limit,

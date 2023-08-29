@@ -295,14 +295,20 @@ export class BackgroundClient {
 		);
 	}
 
-	public verifyPassword(password: string) {
+	public verifyPassword(password: string, legacyAccounts: boolean = false) {
 		return lastValueFrom(
 			this.sendMessage(
-				createMessage<KeyringPayload<'verifyPassword'>>({
-					type: 'keyring',
-					method: 'verifyPassword',
-					args: { password },
-				}),
+				legacyAccounts
+					? createMessage<KeyringPayload<'verifyPassword'>>({
+							type: 'keyring',
+							method: 'verifyPassword',
+							args: { password },
+					  })
+					: createMessage<MethodPayload<'verifyPassword'>>({
+							type: 'method-payload',
+							method: 'verifyPassword',
+							args: { password },
+					  }),
 			).pipe(take(1)),
 		);
 	}

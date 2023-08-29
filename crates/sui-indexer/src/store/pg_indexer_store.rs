@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -859,6 +859,17 @@ impl PgIndexerStore {
         ))
     }
 
+    fn get_recipients_data_by_checkpoint(&self, seq: u64) -> Result<Vec<Recipient>, IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            recipients::dsl::recipients
+                .filter(recipients::dsl::checkpoint_sequence_number.eq(seq as i64))
+                .load::<Recipient>(conn)
+        })
+        .context(&format!(
+            "Failed reading recipients with checkpoint sequence number {seq}"
+        ))
+    }
+
     fn get_all_transaction_page(
         &self,
         start_sequence: Option<i64>,
@@ -1270,16 +1281,13 @@ impl PgIndexerStore {
     ) -> Result<(), IndexerError> {
         let mutated_objects: Vec<Object> = tx_object_changes
             .iter()
-            .flat_map(|changes| changes.changed_objects.iter().cloned())
+            .flat_map(|changes| changes.changed_objects.iter())
+            .map(|changed_object| (changed_object.object_id.as_str(), changed_object))
+            .collect::<HashMap<_, _>>()
+            .into_values()
+            .map(|changed_object| changed_object.to_owned())
             .collect();
-        let deleted_changes = tx_object_changes
-            .iter()
-            .flat_map(|changes| changes.deleted_objects.iter().cloned())
-            .collect::<Vec<_>>();
-        let deleted_objects: Vec<Object> = deleted_changes
-            .iter()
-            .map(|deleted_object| deleted_object.clone().into())
-            .collect();
+
         transactional_blocking!(&self.blocking_cp, |conn| {
             persist_object_mutations(
                 conn,
@@ -1289,6 +1297,16 @@ impl PgIndexerStore {
             )?;
             Ok::<(), IndexerError>(())
         })?;
+
+        let deleted_objects: Vec<Object> = tx_object_changes
+            .iter()
+            .flat_map(|changes| changes.deleted_objects.iter())
+            .map(|deleted_object| (deleted_object.object_id.as_str(), deleted_object))
+            .collect::<HashMap<_, _>>()
+            .into_values()
+            .map(|deleted_object| deleted_object.to_owned().into())
+            .collect();
+
         // commit object deletions after mutations b/c objects cannot be mutated after deletion,
         // otherwise object mutations might override object deletions.
         transactional_blocking!(&self.blocking_cp, |conn| {
@@ -2230,6 +2248,14 @@ impl IndexerStore for PgIndexerStore {
             this.get_recipient_sequence_by_digest(tx_digest, is_descending)
         })
         .await
+    }
+
+    async fn get_recipients_data_by_checkpoint(
+        &self,
+        seq: u64,
+    ) -> Result<Vec<Recipient>, IndexerError> {
+        self.spawn_blocking(move |this| this.get_recipients_data_by_checkpoint(seq))
+            .await
     }
 
     async fn get_network_metrics(&self) -> Result<NetworkMetrics, IndexerError> {

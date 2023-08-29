@@ -32,7 +32,9 @@ export function TopPackagesTable({ data, isLoading }: TopPackagesTableProps) {
 				package: <ObjectLink objectId={item.package} />,
 				count: (
 					<div className="text-right">
-						<Text variant="body/medium">{Number(count).toLocaleString()}</Text>
+						<Text mono variant="body/medium">
+							{Number(count).toLocaleString()}
+						</Text>
 					</div>
 				),
 			})),

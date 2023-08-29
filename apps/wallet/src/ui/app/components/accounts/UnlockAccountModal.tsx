@@ -25,7 +25,7 @@ type FormValues = z.infer<typeof formSchema>;
 
 type UnlockAccountModalProps = {
 	onClose: () => void;
-	onSuccess: () => void;
+	onSuccess: (password: string) => void;
 };
 
 export function UnlockAccountModal({ onClose, onSuccess }: UnlockAccountModalProps) {
@@ -45,7 +45,7 @@ export function UnlockAccountModal({ onClose, onSuccess }: UnlockAccountModalPro
 	const onSubmit = async (formValues: FormValues) => {
 		try {
 			await backgroundService.verifyPassword(formValues.password);
-			await onSuccess();
+			await onSuccess(formValues.password);
 		} catch (e) {
 			toast.error((e as Error).message || 'Wrong password');
 			setError('password', { message: 'Incorrect password' }, { shouldFocus: true });
