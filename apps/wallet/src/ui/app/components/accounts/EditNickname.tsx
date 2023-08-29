@@ -42,7 +42,7 @@ export function EditNickname() {
 	} = form;
 
 	const close = () => navigate('/accounts/manage');
-	const onSubmit = async ({ nickname }: { nickname: string }) => {
+	const onSubmit = ({ nickname }: { nickname: string }) => {
 		if (account && accountID) {
 			try {
 				return backgroundClient.setAccountNickname({ id: accountID, nickname }).then(() => close());
