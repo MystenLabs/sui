@@ -161,7 +161,7 @@ type NameServiceEdge {
 type Object implements ObjectOwner {
 	version: Int!
 	digest: String!
-	storageRebate: Int
+	storageRebate: BigInt
 	bcs: Base64
 	previousTransactionBlock: TransactionBlock
 	kind: ObjectKind

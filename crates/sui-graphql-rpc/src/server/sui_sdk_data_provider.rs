@@ -220,7 +220,7 @@ fn convert_obj(s: &sui_json_rpc_types::SuiObjectData) -> Object {
     Object {
         version: s.version.into(),
         digest: s.digest.to_string(),
-        storage_rebate: s.storage_rebate,
+        storage_rebate: s.storage_rebate.map(BigInt::from),
         address: SuiAddress::from_array(**s.object_id),
         owner: s
             .owner
