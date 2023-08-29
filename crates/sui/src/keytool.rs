@@ -106,9 +106,9 @@ pub enum KeyToolCommand {
     MultiSigAddress {
         #[clap(long)]
         threshold: ThresholdUnit,
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, multiple_values = true)]
         pks: Vec<PublicKey>,
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, multiple_values = true)]
         weights: Vec<WeightUnit>,
     },
     /// Provides a list of participating signatures (`flag || sig || pk` encoded in Base64),
@@ -121,21 +121,21 @@ pub enum KeyToolCommand {
     /// e.g. for [pk1, pk2, pk3, pk4, pk5], [sig1, sig2, sig5] is valid, but
     /// [sig2, sig1, sig5] is invalid.
     MultiSigCombinePartialSig {
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, multiple_values = true)]
         sigs: Vec<Signature>,
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, multiple_values = true)]
         pks: Vec<PublicKey>,
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, multiple_values = true)]
         weights: Vec<WeightUnit>,
         #[clap(long)]
         threshold: ThresholdUnit,
     },
     MultiSigCombinePartialSigLegacy {
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, multiple_values = true)]
         sigs: Vec<Signature>,
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, multiple_values = true)]
         pks: Vec<PublicKey>,
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, multiple_values = true)]
         weights: Vec<WeightUnit>,
         #[clap(long)]
         threshold: ThresholdUnit,
@@ -150,7 +150,7 @@ pub enum KeyToolCommand {
     /// of the BCS serialized transaction bytes itself and its intent. If intent is absent,
     /// default will be used.
     Sign {
-        #[clap(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long, value_parser = decode_bytes_hex::<SuiAddress>)]
         address: SuiAddress,
         #[clap(long)]
         data: String,
@@ -183,7 +183,7 @@ pub enum KeyToolCommand {
     ZkLoginSignAndExecuteTx {
         #[clap(long)]
         max_epoch: EpochId,
-        #[clap(long, parse(try_from_str), default_value = "false")]
+        #[clap(long, default_value = "false")]
         fixed: bool,
     },
 
