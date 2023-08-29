@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use anyhow::Result;
 use axum::{
@@ -77,20 +80,7 @@ pub async fn get_full_checkpoint(
         .zip(events)
         .collect::<HashMap<_, _>>();
 
-    let object_keys = effects
-        .iter()
-        .flat_map(|fx| fx.all_changed_objects())
-        .map(|(object_ref, _owner, _kind)| ObjectKey::from(object_ref))
-        .collect::<Vec<_>>();
-
-    let objects = state
-        .database
-        .multi_get_object_by_key(&object_keys)?
-        .into_iter()
-        .map(|maybe_object| maybe_object.ok_or_else(|| anyhow::anyhow!("missing object")))
-        .collect::<Result<Vec<_>>>()?;
-
-    let mut transactions_effects_and_events = Vec::with_capacity(transactions.len());
+    let mut full_transactions = Vec::with_capacity(transactions.len());
     for (tx, fx) in transactions.into_iter().zip(effects) {
         let events = fx.events_digest().map(|event_digest| {
             events
@@ -99,14 +89,54 @@ pub async fn get_full_checkpoint(
                 .expect("event was already checked to be present")
         });
 
-        transactions_effects_and_events.push((tx.into(), fx, events));
+        let input_object_keys = fx
+            .input_shared_objects()
+            .into_iter()
+            .map(|(object_ref, _kind)| ObjectKey::from(object_ref))
+            .chain(
+                fx.modified_at_versions()
+                    .into_iter()
+                    .map(|(object_id, version)| ObjectKey(object_id, version)),
+            )
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+
+        let input_objects = state
+            .database
+            .multi_get_object_by_key(&input_object_keys)?
+            .into_iter()
+            .map(|maybe_object| maybe_object.ok_or_else(|| anyhow::anyhow!("missing object")))
+            .collect::<Result<Vec<_>>>()?;
+
+        let output_object_keys = fx
+            .all_changed_objects()
+            .into_iter()
+            .map(|(object_ref, _owner, _kind)| ObjectKey::from(object_ref))
+            .collect::<Vec<_>>();
+
+        let output_objects = state
+            .database
+            .multi_get_object_by_key(&output_object_keys)?
+            .into_iter()
+            .map(|maybe_object| maybe_object.ok_or_else(|| anyhow::anyhow!("missing object")))
+            .collect::<Result<Vec<_>>>()?;
+
+        let full_transaction = CheckpointTransaction {
+            transaction: tx.into(),
+            effects: fx,
+            events,
+            input_objects,
+            output_objects,
+        };
+
+        full_transactions.push(full_transaction);
     }
 
     Ok(Bcs(CheckpointData {
         checkpoint_summary: verified_summary.into(),
         checkpoint_contents,
-        transactions: transactions_effects_and_events,
-        objects,
+        transactions: full_transactions,
     }))
 }
 
@@ -114,8 +144,16 @@ pub async fn get_full_checkpoint(
 pub struct CheckpointData {
     pub checkpoint_summary: CertifiedCheckpointSummary,
     pub checkpoint_contents: CheckpointContents,
-    pub transactions: Vec<(Transaction, TransactionEffects, Option<TransactionEvents>)>,
-    pub objects: Vec<Object>,
+    pub transactions: Vec<CheckpointTransaction>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CheckpointTransaction {
+    pub transaction: Transaction,
+    pub effects: TransactionEffects,
+    pub events: Option<TransactionEvents>,
+    pub input_objects: Vec<Object>,
+    pub output_objects: Vec<Object>,
 }
 
 pub async fn get_latest_checkpoint(
