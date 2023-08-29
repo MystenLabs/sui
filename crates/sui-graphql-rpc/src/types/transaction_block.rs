@@ -25,12 +25,28 @@ pub(crate) struct TransactionBlockEffects {
     pub digest: String,
     pub gas_effects: Option<GasEffects>,
     pub epoch: Option<Epoch>,
+    pub status: Option<ExecutionStatus>,
+    pub errors: Option<String>,
+    // pub transaction_block: TransactionBlock,
+    // pub dependencies: Vec<TransactionBlock>,
+    // pub lamport_version: Option<u64>,
+    // pub object_reads: Vec<Object>,
+    // pub object_changes: Vec<ObjectChange>,
+    // pub balance_changes: Vec<BalanceChange>,
+    // pub epoch: Epoch
+    // pub checkpoint: Checkpoint
 }
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum TransactionBlockKindInput {
     ProgrammableTx,
     SystemTx,
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub enum ExecutionStatus {
+    Success,
+    Failure,
 }
 
 #[derive(InputObject)]
