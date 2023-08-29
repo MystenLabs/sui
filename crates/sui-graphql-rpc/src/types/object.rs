@@ -3,6 +3,7 @@
 
 use async_graphql::{connection::Connection, *};
 
+use super::big_int::BigInt;
 use super::name_service::NameService;
 use super::{
     balance::Balance, coin::Coin, owner::Owner, stake::Stake, sui_address::SuiAddress,
@@ -15,7 +16,7 @@ pub(crate) struct Object {
     pub address: SuiAddress,
     pub version: u64,
     pub digest: String,
-    pub storage_rebate: Option<u64>,
+    pub storage_rebate: Option<BigInt>,
     pub owner: Option<SuiAddress>,
     pub bcs: Option<Base64>,
     pub previous_transaction: Option<String>,
@@ -59,8 +60,8 @@ impl Object {
         self.digest.clone()
     }
 
-    async fn storage_rebate(&self) -> Option<u64> {
-        self.storage_rebate
+    async fn storage_rebate(&self) -> Option<BigInt> {
+        self.storage_rebate.clone()
     }
 
     async fn bcs(&self) -> Option<Base64> {

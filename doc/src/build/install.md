@@ -287,6 +287,14 @@ cargo install --git https://github.com/move-language/move move-analyzer --branch
 
 See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [Awesome Move](https://github.com/MystenLabs/awesome-move) documentation.
 
+## Upgrade Sui binaries
+
+If you previously installed the Sui binaries, you can update them to the most recent release with the same command you used to install them:
+
+```shell
+cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devnet sui
+```
+
 ## SUI tokens
 
 You need SUI tokens to perform transactions on a Sui network. You can get test tokens from the Sui faucet in Discord, or directly in the [Sui Wallet](https://github.com/MystenLabs/mysten-app-docs/blob/main/mysten-sui-wallet.md).

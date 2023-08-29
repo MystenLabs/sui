@@ -59,9 +59,8 @@ pub struct UnitTestingConfig {
         name = "dependencies",
         long = "dependencies",
         short = 'd',
-        takes_value(true),
-        multiple_values(true),
-        multiple_occurrences(true)
+        num_args(1..),
+        action = clap::ArgAction::Append,
     )]
     pub dep_files: Vec<String>,
 
@@ -89,16 +88,15 @@ pub struct UnitTestingConfig {
         name = "NAMED_ADDRESSES",
         short = 'a',
         long = "addresses",
-        parse(try_from_str = shared::parse_named_address)
+        value_parser = shared::parse_named_address,
     )]
     pub named_address_values: Vec<(String, NumericalAddress)>,
 
     /// Source files
     #[clap(
         name = "sources",
-        takes_value(true),
-        multiple_values(true),
-        multiple_occurrences(true)
+        num_args(1..),
+        action = clap::ArgAction::Append,
     )]
     pub source_files: Vec<String>,
 

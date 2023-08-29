@@ -151,19 +151,19 @@ enum Action {
 }
 
 #[derive(Debug, Parser)]
-#[clap(
+#[command(
     name = "Narwhal format generator",
     about = "Trace serde (de)serialization to generate format descriptions for Narwhal types"
 )]
 struct Options {
-    #[clap(value_enum, default_value = "Print", case_insensitive = true)]
+    #[arg(value_enum, default_value = "Print", ignore_case = true)]
     action: Action,
 }
 
 const FILE_PATH: &str = "node/tests/staged/narwhal.yaml";
 
 fn main() {
-    let options = Options::from_args();
+    let options = Options::parse();
     let registry = get_registry().unwrap();
     match options.action {
         Action::Print => {

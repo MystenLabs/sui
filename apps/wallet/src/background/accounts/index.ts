@@ -175,6 +175,15 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 			return true;
 		}
 	}
+	if (isMethodPayload(payload, 'setAccountNickname')) {
+		const { id, nickname } = payload.args;
+		const account = await getAccountByID(id);
+		if (account) {
+			await account.setNickname(nickname);
+			await uiConnection.send(createMessage({ type: 'done' }, msg.id));
+			return true;
+		}
+	}
 	if (isMethodPayload(payload, 'unlockAccountSourceOrAccount')) {
 		const { id, password } = payload.args;
 		const account = await getAccountByID(id);

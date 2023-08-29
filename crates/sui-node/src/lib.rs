@@ -164,7 +164,7 @@ pub struct SuiNode {
     /// Broadcast channel to notify state-sync for new validator peers.
     trusted_peer_change_tx: watch::Sender<TrustedPeerChangeEvent>,
 
-    _db_checkpoint_handle: Option<oneshot::Sender<()>>,
+    _db_checkpoint_handle: Option<tokio::sync::broadcast::Sender<()>>,
 
     #[cfg(msim)]
     sim_state: SimState,
@@ -722,7 +722,10 @@ impl SuiNode {
         config: &NodeConfig,
         prometheus_registry: &Registry,
         state_snapshot_enabled: bool,
-    ) -> Result<(DBCheckpointConfig, Option<oneshot::Sender<()>>)> {
+    ) -> Result<(
+        DBCheckpointConfig,
+        Option<tokio::sync::broadcast::Sender<()>>,
+    )> {
         let db_checkpoint_config = if config.db_checkpoint_config.checkpoint_path.is_none() {
             DBCheckpointConfig {
                 checkpoint_path: Some(config.db_checkpoint_path()),
@@ -750,7 +753,10 @@ impl SuiNode {
                     prometheus_registry,
                     state_snapshot_enabled,
                 )?;
-                Ok((db_checkpoint_config, Some(handler.start())))
+                Ok((
+                    db_checkpoint_config,
+                    Some(DBCheckpointHandler::start(handler)),
+                ))
             }
             None => Ok((db_checkpoint_config, None)),
         }

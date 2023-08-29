@@ -11,7 +11,6 @@ use bytes::Bytes;
 use futures::future::try_join_all;
 use object_store::path::Path;
 use object_store::DynObjectStore;
-use oneshot::channel;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::fs;
 use std::num::NonZeroUsize;
@@ -25,8 +24,6 @@ use sui_storage::object_store::util::{
     path_to_filesystem, put,
 };
 use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
-use tokio::sync::oneshot;
-use tokio::sync::oneshot::Sender;
 use tracing::{debug, error, info};
 use typed_store::rocks::MetricConf;
 
@@ -83,7 +80,7 @@ impl DBCheckpointHandler {
         pruning_config: AuthorityStorePruningConfig,
         registry: &Registry,
         state_snapshot_enabled: bool,
-    ) -> Result<Self> {
+    ) -> Result<Arc<Self>> {
         let input_store_config = ObjectStoreConfig {
             object_store: Some(ObjectStoreType::File),
             directory: Some(input_path.to_path_buf()),
@@ -93,7 +90,7 @@ impl DBCheckpointHandler {
         if state_snapshot_enabled {
             gc_markers.push(STATE_SNAPSHOT_COMPLETED_MARKER.to_string());
         }
-        Ok(DBCheckpointHandler {
+        Ok(Arc::new(DBCheckpointHandler {
             input_object_store: input_store_config.make()?,
             input_root_path: input_path.to_path_buf(),
             output_object_store: output_object_store_config.make()?,
@@ -103,15 +100,15 @@ impl DBCheckpointHandler {
             indirect_objects_threshold,
             pruning_config,
             metrics: DBCheckpointMetrics::new(registry),
-        })
+        }))
     }
     pub fn new_for_test(
         input_object_store_config: &ObjectStoreConfig,
         output_object_store_config: &ObjectStoreConfig,
         interval_s: u64,
         prune_and_compact_before_upload: bool,
-    ) -> Result<Self> {
-        Ok(DBCheckpointHandler {
+    ) -> Result<Arc<Self>> {
+        Ok(Arc::new(DBCheckpointHandler {
             input_object_store: input_object_store_config.make()?,
             input_root_path: input_object_store_config
                 .directory
@@ -125,38 +122,63 @@ impl DBCheckpointHandler {
             indirect_objects_threshold: 0,
             pruning_config: AuthorityStorePruningConfig::default(),
             metrics: DBCheckpointMetrics::new(&Registry::default()),
-        })
+        }))
     }
-    pub fn start(self) -> Sender<()> {
-        let (sender, mut recv) = channel::<()>();
+    pub fn start(self: Arc<Self>) -> tokio::sync::broadcast::Sender<()> {
+        let (kill_sender, _kill_receiver) = tokio::sync::broadcast::channel::<()>(1);
+        tokio::task::spawn(Self::run_db_checkpoint_upload_loop(
+            self.clone(),
+            kill_sender.subscribe(),
+        ));
+        tokio::task::spawn(Self::run_db_checkpoint_gc_loop(
+            self,
+            kill_sender.subscribe(),
+        ));
+        kill_sender
+    }
+    async fn run_db_checkpoint_upload_loop(
+        self: Arc<Self>,
+        mut recv: tokio::sync::broadcast::Receiver<()>,
+    ) -> Result<()> {
         let mut interval = tokio::time::interval(self.interval);
-        let mut gc_interval = tokio::time::interval(Duration::from_secs(30));
-        tokio::task::spawn(async move {
-            info!("DB checkpoint handler loop started");
-            loop {
-                tokio::select! {
-                    _now = interval.tick() => {
-                        if let Ok(epochs) = find_missing_epochs_dirs(&self.output_object_store, SUCCESS_MARKER).await {
-                            self.metrics.first_missing_db_checkpoint_epoch.set(epochs.first().cloned().unwrap_or(0) as i64);
-                            if let Err(err) = self.upload_db_checkpoints_to_object_store(epochs).await {
-                                error!("Failed to upload db checkpoint to remote store with err: {:?}", err);
-                            }
-                        } else {
-                            error!("Failed to find missing db checkpoints in remote store");
+        info!("DB checkpoint upload loop started");
+        loop {
+            tokio::select! {
+                _now = interval.tick() => {
+                    if let Ok(epochs) = find_missing_epochs_dirs(&self.output_object_store, SUCCESS_MARKER).await {
+                        self.metrics.first_missing_db_checkpoint_epoch.set(epochs.first().cloned().unwrap_or(0) as i64);
+                        if let Err(err) = self.upload_db_checkpoints_to_object_store(epochs).await {
+                            error!("Failed to upload db checkpoint to remote store with err: {:?}", err);
                         }
-                    },
-                    _ = gc_interval.tick() => {
-                        if let Ok(deleted) = self.garbage_collect_old_db_checkpoints().await {
-                            if !deleted.is_empty() {
-                                info!("Garbage collected local db checkpoints: {:?}", deleted);
-                            }
-                        }
-                    },
-                    _ = &mut recv => break,
-                }
+                    } else {
+                        error!("Failed to find missing db checkpoints in remote store");
+                    }
+
+                },
+                 _ = recv.recv() => break,
             }
-        });
-        sender
+        }
+        Ok(())
+    }
+    async fn run_db_checkpoint_gc_loop(
+        self: Arc<Self>,
+        mut recv: tokio::sync::broadcast::Receiver<()>,
+    ) -> Result<()> {
+        let mut gc_interval = tokio::time::interval(Duration::from_secs(30));
+        info!("DB checkpoint garbage collection loop started");
+        loop {
+            tokio::select! {
+                _now = gc_interval.tick() => {
+                    if let Ok(deleted) = self.garbage_collect_old_db_checkpoints().await {
+                        if !deleted.is_empty() {
+                            info!("Garbage collected local db checkpoints: {:?}", deleted);
+                        }
+                    }
+                },
+                 _ = recv.recv() => break,
+            }
+        }
+        Ok(())
     }
     async fn prune_and_compact(&self, db_path: PathBuf, epoch: u64) -> Result<()> {
         let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));

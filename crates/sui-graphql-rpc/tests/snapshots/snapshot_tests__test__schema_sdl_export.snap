@@ -93,6 +93,18 @@ type CoinEdge {
 	cursor: String!
 }
 
+type Epoch {
+	epochId: Int!
+	systemStateVersion: BigInt
+	protocolConfigs: ProtocolConfigs
+	referenceGasPrice: BigInt
+	systemParameters: SystemParameters
+	stakeSubsidy: StakeSubsidy
+	validatorSet: ValidatorSet
+	storageFund: StorageFund
+	safeMode: SafeMode
+}
+
 enum ExecutionStatus {
 	SUCCESS
 	FAILURE
@@ -154,7 +166,7 @@ type NameServiceEdge {
 type Object implements ObjectOwner {
 	version: Int!
 	digest: String!
-	storageRebate: Int
+	storageRebate: BigInt
 	bcs: Base64
 	previousTransactionBlock: TransactionBlock
 	kind: ObjectKind
@@ -291,6 +303,11 @@ type Query {
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
 }
 
+type SafeMode {
+	enabled: Boolean
+	gasSummary: GasCostSummary
+}
+
 type Stake {
 	id: ID!
 }
@@ -324,8 +341,32 @@ type StakeEdge {
 	cursor: String!
 }
 
+type StakeSubsidy {
+	balance: BigInt
+	distributionCounter: Int
+	currentDistributionAmount: BigInt
+	periodLength: Int
+	decreaseRate: Int
+}
+
+type StorageFund {
+	totalObjectStorageRebates: BigInt
+	nonRefundableBalance: BigInt
+}
+
 
 scalar SuiAddress
+
+type SystemParameters {
+	durationMs: BigInt
+	stakeSubsidyStartEpoch: Int
+	minValidatorCount: Int
+	maxValidatorCount: Int
+	minValidatorJoiningStake: BigInt
+	validatorLowStakeThreshold: BigInt
+	validatorVeryLowStakeThreshold: BigInt
+	validatorLowStakeGracePeriod: BigInt
+}
 
 type TransactionBlock {
 	digest: String!
@@ -333,6 +374,7 @@ type TransactionBlock {
 	sender: Address
 	bcs: Base64
 	gasInput: GasInput
+	expiration: Epoch
 }
 
 type TransactionBlockConnection {
@@ -366,7 +408,8 @@ type TransactionBlockEdge {
 
 type TransactionBlockEffects {
 	digest: String!
-	gasEffects: GasEffects!
+	gasEffects: GasEffects
+	epoch: Epoch
 	status: ExecutionStatus
 	errors: String
 }
@@ -388,6 +431,51 @@ input TransactionBlockFilter {
 enum TransactionBlockKindInput {
 	PROGRAMMABLE_TX
 	SYSTEM_TX
+}
+
+type Validator {
+	address: Address!
+	credentials: ValidatorCredentials
+	nextEpochCredentials: ValidatorCredentials
+	name: String
+	description: String
+	imageUrl: String
+	projectUrl: String
+	exchangeRatesSize: Int
+	stakingPoolActivationEpoch: Int
+	stakingPoolSuiBalance: BigInt
+	rewardsPool: BigInt
+	poolTokenBalance: BigInt
+	pendingStake: BigInt
+	pendingTotalSuiWithdraw: BigInt
+	pendingPoolTokenWithdraw: BigInt
+	votingPower: Int
+	gasPrice: BigInt
+	commissionRate: Int
+	nextEpochStake: BigInt
+	nextEpochGasPrice: BigInt
+	nextEpochCommissionRate: Int
+}
+
+type ValidatorCredentials {
+	protocolPubKey: Base64
+	networkPubKey: Base64
+	workerPubKey: Base64
+	proofOfPossession: Base64
+	netAddress: String
+	p2PAddress: String
+	primaryAddress: String
+	workerAddress: String
+}
+
+type ValidatorSet {
+	totalStake: BigInt
+	activeValidators: [Validator!]
+	pendingRemovals: [Int!]
+	pendingActiveValidatorsSize: Int
+	stakePoolMappingsSize: Int
+	inactivePoolsSize: Int
+	validatorCandidatesSize: Int
 }
 
 schema {

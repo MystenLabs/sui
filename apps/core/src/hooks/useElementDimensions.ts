@@ -3,15 +3,26 @@
 
 import { RefObject, useEffect, useState } from 'react';
 
-export function useElementHeight(elementRef: RefObject<HTMLElement>, defaultHeight: number) {
+export function useElementDimensions(
+	elementRef: RefObject<HTMLElement>,
+	defaultHeight: number = 0,
+	defaultWidth: number = 0,
+) {
 	const [height, setHeight] = useState(defaultHeight);
+	const [width, setWidth] = useState(defaultWidth);
 
 	useEffect(() => {
 		const resizeObserver = new ResizeObserver((entries) => {
 			for (const entry of entries) {
 				const entryHeight = entry.contentRect.height;
+				const entryWidth = entry.contentRect.width;
+
 				if (entryHeight !== height) {
-					setHeight(entry.contentRect.height);
+					setHeight(entryHeight);
+				}
+
+				if (entryWidth !== width) {
+					setWidth(entryWidth);
 				}
 			}
 		});
@@ -27,7 +38,7 @@ export function useElementHeight(elementRef: RefObject<HTMLElement>, defaultHeig
 				resizeObserver.unobserve(headerCurrentRef);
 			}
 		};
-	}, [elementRef, height]);
+	}, [elementRef, height, width]);
 
-	return height;
+	return [height, width];
 }

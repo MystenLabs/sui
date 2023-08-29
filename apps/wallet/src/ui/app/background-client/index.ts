@@ -518,6 +518,18 @@ export class BackgroundClient {
 		);
 	}
 
+	public setAccountNickname({ id, nickname }: MethodPayload<'setAccountNickname'>['args']) {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'setAccountNickname'>>({
+					type: 'method-payload',
+					method: 'setAccountNickname',
+					args: { id, nickname },
+				}),
+			).pipe(take(1)),
+		);
+	}
+
 	public getStorageMigrationStatus() {
 		return lastValueFrom(
 			this.sendMessage(

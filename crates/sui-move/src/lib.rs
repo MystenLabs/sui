@@ -31,7 +31,7 @@ pub enum Command {
     Disassemble(disassemble::Disassemble),
     New(new::New),
     #[cfg(feature = "prove")]
-    Prove(prove::Prove),
+    Prove(prove::Prover),
     #[cfg(feature = "unit_test")]
     Test(unit_test::Test),
 }

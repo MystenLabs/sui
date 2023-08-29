@@ -3,7 +3,7 @@
 
 import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 import clsx from 'clsx';
-import { type ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 
 import { Signatures } from './Signatures';
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
@@ -26,6 +26,7 @@ function TabsContentContainer({ value, children }: { value: string; children: Re
 
 export function TransactionView({ transaction }: { transaction: SuiTransactionBlockResponse }) {
 	const isMediumOrAbove = useBreakpoint('md');
+	const [isCollapsed, setIsCollapsed] = useState(false);
 
 	const hasEvents = !!transaction.events?.length;
 
@@ -66,7 +67,12 @@ export function TransactionView({ transaction }: { transaction: SuiTransactionBl
 
 	const rightPane = {
 		panel: (
-			<div className="h-full w-full overflow-y-auto md:overflow-y-hidden">
+			<div
+				className={clsx(
+					'h-full w-full overflow-y-auto md:overflow-y-hidden',
+					isCollapsed && isMediumOrAbove && 'pl-2',
+				)}
+			>
 				<TransactionData transaction={transaction} />
 			</div>
 		),
@@ -78,6 +84,8 @@ export function TransactionView({ transaction }: { transaction: SuiTransactionBl
 		<div className={clsx(styles.txdetailsbg)}>
 			<div className="h-screen md:h-full">
 				<SplitPanes
+					onCollapse={setIsCollapsed}
+					dividerSize={isMediumOrAbove ? 'md' : 'lg'}
 					splitPanels={[leftPane, rightPane]}
 					direction={isMediumOrAbove ? 'horizontal' : 'vertical'}
 				/>

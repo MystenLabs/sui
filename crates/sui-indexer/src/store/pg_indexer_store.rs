@@ -859,6 +859,17 @@ impl PgIndexerStore {
         ))
     }
 
+    fn get_recipients_data_by_checkpoint(&self, seq: u64) -> Result<Vec<Recipient>, IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            recipients::dsl::recipients
+                .filter(recipients::dsl::checkpoint_sequence_number.eq(seq as i64))
+                .load::<Recipient>(conn)
+        })
+        .context(&format!(
+            "Failed reading recipients with checkpoint sequence number {seq}"
+        ))
+    }
+
     fn get_all_transaction_page(
         &self,
         start_sequence: Option<i64>,
@@ -1196,7 +1207,13 @@ impl PgIndexerStore {
 
     fn get_move_call_metrics(&self) -> Result<MoveCallMetrics, IndexerError> {
         let metrics = read_only_blocking!(&self.blocking_cp, |conn| {
-            diesel::sql_query("SELECT * FROM epoch_move_call_metrics;")
+            diesel::sql_query("SELECT
+                day,
+                move_package,
+                move_module,
+                move_function,
+                count
+            FROM epoch_move_call_metrics WHERE epoch = (SELECT MAX(epoch) FROM epoch_move_call_metrics);")
                 .get_results::<DBMoveCallMetrics>(conn)
         })?;
 
@@ -2237,6 +2254,14 @@ impl IndexerStore for PgIndexerStore {
             this.get_recipient_sequence_by_digest(tx_digest, is_descending)
         })
         .await
+    }
+
+    async fn get_recipients_data_by_checkpoint(
+        &self,
+        seq: u64,
+    ) -> Result<Vec<Recipient>, IndexerError> {
+        self.spawn_blocking(move |this| this.get_recipients_data_by_checkpoint(seq))
+            .await
     }
 
     async fn get_network_metrics(&self) -> Result<NetworkMetrics, IndexerError> {

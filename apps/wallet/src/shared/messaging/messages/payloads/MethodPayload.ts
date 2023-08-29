@@ -45,6 +45,7 @@ type MethodPayloads = {
 	storageMigrationStatus: { status: Status };
 	doStorageMigration: { password: string };
 	switchAccount: { accountID: string };
+	setAccountNickname: { id: string; nickname: string };
 	verifyPassword: { password: string };
 };
 
