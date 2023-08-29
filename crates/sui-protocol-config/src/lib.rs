@@ -739,6 +739,8 @@ pub struct ProtocolConfig {
     // swapped when creating the consensus schedule. The values should be of the range [0 - 33]. Anything
     // above 33 (f) will not be allowed.
     consensus_bad_nodes_stake_threshold: Option<u64>,
+
+    max_jwk_votes_per_validator_per_epoch: Option<u64>,
 }
 
 // feature flags
@@ -1227,7 +1229,10 @@ impl ProtocolConfig {
 
                 max_event_emit_size_total: None,
 
-                consensus_bad_nodes_stake_threshold: None
+                consensus_bad_nodes_stake_threshold: None,
+
+                max_jwk_votes_per_validator_per_epoch: None,
+
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },

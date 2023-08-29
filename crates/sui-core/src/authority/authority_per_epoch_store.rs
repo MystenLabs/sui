@@ -7,7 +7,6 @@ use futures::future::{join_all, select, Either};
 use futures::FutureExt;
 use itertools::izip;
 use narwhal_executor::ExecutionIndices;
-use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard, RwLockWriteGuard};
 use rocksdb::Options;
@@ -190,7 +189,7 @@ pub struct AuthorityPerEpochStore {
     chain_identifier: ChainIdentifier,
 
     /// aggregator for JWK votes
-    jwk_aggregator: OnceCell<Arc<Mutex<JwkAggregator>>>,
+    jwk_aggregator: Mutex<JwkAggregator>,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -505,6 +504,14 @@ impl AuthorityPerEpochStore {
                 .contains(&EpochFlag::InMemoryCheckpointRoots));
         }
 
+        let mut jwk_aggregator = JwkAggregator::new(committee.clone());
+
+        for ((authority, id, jwk), _) in tables.pending_jwks.unbounded_iter().seek_to_first() {
+            jwk_aggregator.insert(authority, (id, jwk));
+        }
+
+        let jwk_aggregator = Mutex::new(jwk_aggregator);
+
         let s = Arc::new(Self {
             committee,
             protocol_config,
@@ -527,7 +534,7 @@ impl AuthorityPerEpochStore {
             epoch_start_configuration,
             execution_component,
             chain_identifier,
-            jwk_aggregator: Default::default(),
+            jwk_aggregator,
         });
         s.update_buffer_stake_metric();
         s
@@ -1239,15 +1246,28 @@ impl AuthorityPerEpochStore {
         id: &JwkId,
         jwk: &JWK,
     ) -> SuiResult {
-        let jwk_aggregator = self.get_or_recover_jwk_aggregator();
-        let mut jwk_aggregator = jwk_aggregator.lock();
-
         info!(
             "received jwk vote from {:?} for jwk ({:?}, {:?})",
             authority.concise(),
             id,
             jwk
         );
+
+        let mut jwk_aggregator = self.jwk_aggregator.lock();
+
+        let votes = jwk_aggregator.votes_for_authority(authority);
+        if votes
+            >= self
+                .protocol_config()
+                .max_jwk_votes_per_validator_per_epoch()
+        {
+            warn!(
+                "validator {:?} has already voted {} times this epoch, ignoring vote",
+                authority, votes,
+            );
+            return Ok(());
+        }
+
         batch.insert_batch(
             &self.tables.pending_jwks,
             std::iter::once(((authority, id.clone(), jwk.clone()), ())),
@@ -1277,22 +1297,6 @@ impl AuthorityPerEpochStore {
                 ActiveJwk { jwk_id, jwk, epoch }
             })
             .collect())
-    }
-
-    fn get_or_recover_jwk_aggregator(&self) -> Arc<Mutex<JwkAggregator>> {
-        self.jwk_aggregator
-            .get_or_init(|| {
-                let mut jwk_aggregator = JwkAggregator::new(self.committee.clone());
-
-                for ((authority, id, jwk), _) in
-                    self.tables.pending_jwks.unbounded_iter().seek_to_first()
-                {
-                    jwk_aggregator.insert(authority, (id, jwk));
-                }
-
-                Arc::new(Mutex::new(jwk_aggregator))
-            })
-            .clone()
     }
 
     /// Caller is responsible to call consensus_message_processed before this method
