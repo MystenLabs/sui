@@ -2,8 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type SuiClient } from '@mysten/sui.js/src/client';
-import { getOwnedKiosks } from '../query/kiosk';
-import { KioskItem, KioskOwnerCap, ObjectArgument, OwnedKiosks } from '../types';
+import { fetchKiosk, getOwnedKiosks } from '../query/kiosk';
+import {
+	type FetchKioskOptions,
+	KioskData,
+	KioskItem,
+	KioskOwnerCap,
+	ObjectArgument,
+	OwnedKiosks,
+} from '../types';
 import { TransactionArgument, TransactionBlock } from '@mysten/sui.js/transactions';
 import * as kioskTx from '../tx/kiosk';
 import { TransferPolicyRule, personalKioskAddress, rules } from '../constants';
@@ -84,9 +91,31 @@ export class KioskClient {
 	}
 
 	/**
+	 * Fetches the kiosk contents.
+	 * @param kioskId
+	 * @param options
+	 * @returns
+	 */
+	async fetchKiosk(kioskId: string, options: FetchKioskOptions): Promise<KioskData> {
+		return (
+			await fetchKiosk(
+				this.client,
+				kioskId,
+				{
+					limit: 1000,
+				},
+				options,
+			)
+		).data;
+	}
+
+	/**
 	 * A function to purchase and resolve a transfer policy.
+	 * If the transfer policy has the `lock` rule, the item is locked in the kiosk.
+	 * Otherwise, the item is placed in the kiosk.
 	 * @param tx The Transaction Block
 	 * @param item The item {type, objectId, price}
+	 * @param options Currently has `extraArgs`, which can be used for custom rule resolvers.
 	 */
 	async purchaseAndResolve(
 		tx: TransactionBlock,
@@ -304,12 +333,6 @@ export class KioskClient {
 
 		return [capObject, promise];
 	}
-
-	// TODO: Add all `add rule` calls here. We'll not export them directly, since we're passing the packageId based on environment.
-	// addRoyaltiesRule()
-	// addLockRule()
-	// addPersonalKioskRule()
-	// addFloorPriceRule()
 
 	/**
 	 * A function to return the `kioskOwnerCap` back to `PersonalKiosk` wrapper.

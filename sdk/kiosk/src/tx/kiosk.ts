@@ -3,19 +3,8 @@
 
 import { TransactionBlock, TransactionArgument } from '@mysten/sui.js/transactions';
 
-import { getTypeWithoutPackageAddress, objArg } from '../utils';
-import { confirmRequest, resolveKioskLockRule, resolveRoyaltyRule } from './transfer-policy';
-import {
-	KIOSK_LOCK_RULE,
-	KIOSK_MODULE,
-	KIOSK_TYPE,
-	ObjectArgument,
-	PurchaseAndResolvePoliciesResponse,
-	PurchaseOptionalParams,
-	ROYALTY_RULE,
-	RulesEnvironmentParam,
-	TransferPolicy,
-} from '../types';
+import { objArg } from '../utils';
+import { KIOSK_MODULE, KIOSK_TYPE, ObjectArgument } from '../types';
 
 /**
  * Create a new shared Kiosk and returns the [kiosk, kioskOwnerCap] tuple.
@@ -256,73 +245,73 @@ export function returnValue(
 	});
 }
 
-/**
- * Completes the full purchase flow that includes:
- * 1. Purchasing the item.
- * 2. Resolving all the transfer policies (if any).
- * 3. Returns the item and whether the user can transfer it or not.
- *
- * If the item can be transferred, there's an extra transaction required by the user
- * to transfer it to an address or place it in their kiosk.
- */
-export function purchaseAndResolvePolicies(
-	tx: TransactionBlock,
-	itemType: string,
-	price: string,
-	kiosk: ObjectArgument,
-	itemId: string,
-	policy: TransferPolicy,
-	environment: RulesEnvironmentParam,
-	extraParams?: PurchaseOptionalParams,
-): PurchaseAndResolvePoliciesResponse {
-	// if we don't pass the listing or the listing doens't have a price, return.
-	if (price === undefined || typeof price !== 'string')
-		throw new Error(`Price of the listing is not supplied.`);
+// /**
+//  * Completes the full purchase flow that includes:
+//  * 1. Purchasing the item.
+//  * 2. Resolving all the transfer policies (if any).
+//  * 3. Returns the item and whether the user can transfer it or not.
+//  *
+//  * If the item can be transferred, there's an extra transaction required by the user
+//  * to transfer it to an address or place it in their kiosk.
+//  */
+// export function purchaseAndResolvePolicies(
+// 	tx: TransactionBlock,
+// 	itemType: string,
+// 	price: string,
+// 	kiosk: ObjectArgument,
+// 	itemId: string,
+// 	policy: TransferPolicy,
+// 	environment: RulesEnvironmentParam,
+// 	extraParams?: PurchaseOptionalParams,
+// ): PurchaseAndResolvePoliciesResponse {
+// 	// if we don't pass the listing or the listing doens't have a price, return.
+// 	if (price === undefined || typeof price !== 'string')
+// 		throw new Error(`Price of the listing is not supplied.`);
 
-	// Split the coin for the amount of the listing.
-	const coin = tx.splitCoins(tx.gas, [tx.pure(price, 'u64')]);
+// 	// Split the coin for the amount of the listing.
+// 	const coin = tx.splitCoins(tx.gas, [tx.pure(price, 'u64')]);
 
-	// initialize the purchase `kiosk::purchase`
-	const [purchasedItem, transferRequest] = purchase(tx, itemType, kiosk, itemId, coin);
+// 	// initialize the purchase `kiosk::purchase`
+// 	const [purchasedItem, transferRequest] = purchase(tx, itemType, kiosk, itemId, coin);
 
-	// Start resolving rules.
-	// Right now we support `kiosk_lock_rule` and `royalty_rule`.
-	let hasKioskLockRule = false;
+// 	// Start resolving rules.
+// 	// Right now we support `kiosk_lock_rule` and `royalty_rule`.
+// 	let hasKioskLockRule = false;
 
-	for (let rule of policy.rules) {
-		const ruleWithoutAddr = getTypeWithoutPackageAddress(rule);
+// 	for (let rule of policy.rules) {
+// 		const ruleWithoutAddr = getTypeWithoutPackageAddress(rule);
 
-		switch (ruleWithoutAddr) {
-			case ROYALTY_RULE:
-				resolveRoyaltyRule(tx, itemType, price, policy.id, transferRequest, environment);
-				break;
-			case KIOSK_LOCK_RULE:
-				if (!extraParams?.ownedKiosk || !extraParams?.ownedKioskCap)
-					throw new Error(
-						`This item type ${itemType} has a 'kiosk_lock_rule', but function call is missing user's kiosk and kioskCap params`,
-					);
-				hasKioskLockRule = true;
-				resolveKioskLockRule(
-					tx,
-					itemType,
-					purchasedItem,
-					extraParams.ownedKiosk,
-					extraParams.ownedKioskCap,
-					policy.id,
-					transferRequest,
-					environment,
-				);
-				break;
-			default:
-				break;
-		}
-	}
+// 		switch (ruleWithoutAddr) {
+// 			case ROYALTY_RULE:
+// 				resolveRoyaltyRule(tx, itemType, price, policy.id, transferRequest, environment);
+// 				break;
+// 			case KIOSK_LOCK_RULE:
+// 				if (!extraParams?.ownedKiosk || !extraParams?.ownedKioskCap)
+// 					throw new Error(
+// 						`This item type ${itemType} has a 'kiosk_lock_rule', but function call is missing user's kiosk and kioskCap params`,
+// 					);
+// 				hasKioskLockRule = true;
+// 				resolveKioskLockRule(
+// 					tx,
+// 					itemType,
+// 					purchasedItem,
+// 					extraParams.ownedKiosk,
+// 					extraParams.ownedKioskCap,
+// 					policy.id,
+// 					transferRequest,
+// 					environment,
+// 				);
+// 				break;
+// 			default:
+// 				break;
+// 		}
+// 	}
 
-	// confirm the Transfer Policy request.
-	confirmRequest(tx, itemType, policy.id, transferRequest);
+// 	// confirm the Transfer Policy request.
+// 	confirmRequest(tx, itemType, policy.id, transferRequest);
 
-	return {
-		item: purchasedItem,
-		canTransfer: !hasKioskLockRule,
-	};
-}
+// 	return {
+// 		item: purchasedItem,
+// 		canTransfer: !hasKioskLockRule,
+// 	};
+// }

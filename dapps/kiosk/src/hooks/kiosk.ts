@@ -19,7 +19,6 @@ import {
 	KioskListing,
 	KioskOwnerCap,
 	Network,
-	fetchKiosk,
 	getKioskObject,
 } from '@mysten/kiosk';
 import { parseObjectDisplays, processKioskListings } from '../utils/utils';
@@ -51,7 +50,6 @@ export function useOwnedKiosk(address: string | undefined) {
 			if (!address) return null;
 
 			const { kioskOwnerCaps, kioskIds } = await kioskClient.getOwnedKiosks(address);
-			// const { kioskOwnerCaps, kioskIds } = await getOwnedKiosks(provider, address);
 
 			return {
 				caps: kioskOwnerCaps,
@@ -75,15 +73,10 @@ export function useKiosk(kioskId: string | undefined | null) {
 			items: SuiObjectResponse[];
 		}> => {
 			if (!kioskId) return { kioskData: null, items: [] };
-			const { data: res } = await fetchKiosk(
-				provider,
-				kioskId,
-				{ limit: 1000 },
-				{
-					withKioskFields: true,
-					withListingPrices: true,
-				},
-			);
+			const res = await kioskClient.fetchKiosk(kioskId, {
+				withKioskFields: true,
+				withListingPrices: true,
+			});
 
 			// get the items from rpc.
 			const items = await provider.multiGetObjects({

@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ObjectOwner } from '@mysten/sui.js/client';
+import { TransactionArgument, type TransactionBlock } from '@mysten/sui.js/transactions';
+import { type ObjectOwner } from '@mysten/sui.js/client';
+import { KioskItem } from './kiosk';
+import { ObjectArgument } from '.';
 
 /** The Transfer Policy module. */
 export const TRANSFER_POLICY_MODULE = '0x2::transfer_policy';
@@ -11,6 +14,9 @@ export const TRANSFER_POLICY_CREATED_EVENT = `${TRANSFER_POLICY_MODULE}::Transfe
 
 /** The Transfer Policy Type */
 export const TRANSFER_POLICY_TYPE = `${TRANSFER_POLICY_MODULE}::TransferPolicy`;
+
+/** The Transfer Policy Cap Type */
+export const TRANSFER_POLICY_CAP_TYPE = `${TRANSFER_POLICY_MODULE}::TransferPolicyCap`;
 
 /** The Kiosk Lock Rule */
 export const KIOSK_LOCK_RULE = 'kiosk_lock_rule::Rule';
@@ -30,4 +36,21 @@ export type TransferPolicy = {
 /** Event emitted when a TransferPolicy is created. */
 export type TransferPolicyCreated = {
 	id: string;
+};
+
+// The object a Rule resolving function accepts
+// It can accept a set of fixed fields, that are part of every purchase flow as well any extra arguments to resolve custom policies!
+// Each rule resolving function should check that the key it's seeking is in the object
+// e.g. `if(!'my_key' in ruleParams!) throw new Error("Can't resolve that rule!")`
+export type RuleResolvingParams = {
+	tx: TransactionBlock;
+	item: KioskItem; // Not sure I want this to be the type `KioskItem`. Need some extra thinking here.
+	policyId: ObjectArgument;
+	kiosk: ObjectArgument;
+	ownedKiosk: ObjectArgument;
+	ownedKioskCap: ObjectArgument;
+	transferRequest: TransactionArgument;
+	purchasedItem: TransactionArgument;
+	packageId: string;
+	extraArgs?: Record<string, ObjectArgument>; // extraParams contains more possible {key, values} to pass for custom rules.
 };

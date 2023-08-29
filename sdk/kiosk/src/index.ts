@@ -2,12 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 export * from './tx/kiosk';
-export * from './tx/transfer-policy';
-export * from './tx/rules';
-export * from './query/kiosk';
-export * from './bcs';
 export * from './utils';
 export * from './query/transfer-policy';
 export * from './types';
 export * from './constants';
 export * from './client/kiosk-client';
+export * from './client/tp-client';

@@ -6,19 +6,8 @@ import { SuiObjectRef, SuiObjectResponse } from '@mysten/sui.js/client';
 import { TransactionBlock, TransactionArgument } from '@mysten/sui.js/transactions';
 import { type DynamicFieldInfo } from '@mysten/sui.js/client';
 import { bcs } from './bcs';
-import { KIOSK_TYPE, Kiosk, KioskData, KioskListing, RulesEnvironmentParam } from './types';
-import { MAINNET_RULES_PACKAGE_ADDRESS, TESTNET_RULES_PACKAGE_ADDRESS } from './constants';
+import { KIOSK_TYPE, Kiosk, KioskData, KioskListing } from './types';
 import { SuiClient, PaginationArguments } from '@mysten/sui.js/client';
-
-/**
- * @deprecated Deprecated in favor of `KioskClient`, will be removed in next versions.
- */
-export const rulesPackageAddresses = {
-	mainnet: MAINNET_RULES_PACKAGE_ADDRESS,
-	testnet: TESTNET_RULES_PACKAGE_ADDRESS,
-	devnet: '',
-	custom: null,
-};
 
 /**
  * Convert any valid input into a TransactionArgument.
@@ -157,20 +146,6 @@ export function attachLockedItems(kioskData: KioskData, lockedItemIds: string[])
 	kioskData.items.forEach((item) => {
 		item.isLocked = lockedStatuses[item.objectId] || false;
 	});
-}
-
-/**
- * A helper to get a rule's environment address.
- * @deprecated Deprecated in favor of `KioskClient` approach. Will be removed in future versions.
- */
-export function getRulePackageAddress(environment: RulesEnvironmentParam): string {
-	// if we have custom environment, we return it.
-	if (environment.env === 'custom') {
-		if (!environment.address)
-			throw new Error('Please supply the custom package address for rules.');
-		return environment.address;
-	}
-	return rulesPackageAddresses[environment.env];
 }
 
 /**
