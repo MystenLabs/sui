@@ -10,22 +10,22 @@ use crate::types::base64::Base64;
 use crate::types::big_int::BigInt;
 use crate::types::checkpoint::Checkpoint;
 use crate::types::committee_member::CommitteeMember;
+use crate::types::date_time::DateTime;
 use crate::types::end_of_epoch_data::EndOfEpochData;
 use crate::types::epoch::Epoch;
-use crate::types::object::ObjectFilter;
-use crate::types::object::ObjectKind;
-use crate::types::protocol_config::ProtocolConfigAttr;
-use crate::types::protocol_config::ProtocolConfigFeatureFlag;
-use crate::types::protocol_config::ProtocolConfigs;
+use crate::types::object::{Object, ObjectFilter, ObjectKind};
+use crate::types::protocol_config::{
+    ProtocolConfigAttr, ProtocolConfigFeatureFlag, ProtocolConfigs,
+};
 use crate::types::safe_mode::SafeMode;
 use crate::types::stake_subsidy::StakeSubsidy;
 use crate::types::storage_fund::StorageFund;
+use crate::types::sui_address::SuiAddress;
 use crate::types::system_parameters::SystemParameters;
 use crate::types::transaction_block::{ExecutionStatus, TransactionBlock, TransactionBlockEffects};
 use crate::types::validator::Validator;
 use crate::types::validator_credentials::ValidatorCredentials;
 use crate::types::validator_set::ValidatorSet;
-use crate::types::{object::Object, sui_address::SuiAddress};
 
 use crate::types::gas::{GasCostSummary, GasEffects, GasInput};
 use async_graphql::connection::{Connection, Edge};
@@ -467,6 +467,20 @@ pub(crate) fn convert_to_epoch(
     let gas_summary = convert_to_gas_cost_summary(gcs)?;
     let active_validators = convert_to_validators(system_state.active_validators.clone())?;
 
+    let start_timestamp = i64::try_from(system_state.epoch_start_timestamp_ms).map_err(|_| {
+        Error::Internal(format!(
+            "Cannot convert start timestamp u64 ({}) of epoch ({epoch_id}) into i64 required by DateTime",
+            system_state.epoch_start_timestamp_ms
+        ))
+    })?;
+
+    let start_timestamp = DateTime::from_ms(start_timestamp).ok_or_else(|| {
+        Error::Internal(format!(
+            "Cannot convert start timestamp ({}) of epoch ({epoch_id}) into a DateTime",
+            start_timestamp
+        ))
+    })?;
+
     Ok(Epoch {
         epoch_id,
         system_state_version: Some(BigInt::from(system_state.system_state_version)),
@@ -520,6 +534,7 @@ pub(crate) fn convert_to_epoch(
             gas_summary: Some(gas_summary),
         }),
         protocol_configs: Some(protocol_configs.clone()),
+        start_timestamp: Some(start_timestamp),
     })
 }
 
