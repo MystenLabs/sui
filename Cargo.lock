@@ -181,7 +181,7 @@ dependencies = [
  "anemo-build",
  "anemo-tower",
  "anyhow",
- "clap 4.3.3",
+ "clap 4.4.1",
  "mysten-network",
  "rand 0.8.5",
  "sui-types",
@@ -210,7 +210,7 @@ dependencies = [
  "anemo",
  "anemo-tower",
  "bytes",
- "clap 4.3.3",
+ "clap 4.4.1",
  "dashmap",
  "rand 0.8.5",
  "tokio",
@@ -260,9 +260,23 @@ dependencies = [
  "anstyle",
  "anstyle-parse",
  "anstyle-query",
- "anstyle-wincon",
+ "anstyle-wincon 1.0.2",
  "colorchoice",
  "is-terminal",
+ "utf8parse",
+]
+
+[[package]]
+name = "anstream"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f58811cfac344940f1a400b6e6231ce35171f614f26439e80f8c1465c5cc0c"
+dependencies = [
+ "anstyle",
+ "anstyle-parse",
+ "anstyle-query",
+ "anstyle-wincon 2.1.0",
+ "colorchoice",
  "utf8parse",
 ]
 
@@ -292,9 +306,19 @@ dependencies = [
 
 [[package]]
 name = "anstyle-wincon"
-version = "1.0.1"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "180abfa45703aebe0093f79badacc01b8fd4ea2e35118747e5811127f926e188"
+checksum = "c677ab05e09154296dd37acecd46420c17b9713e8366facafa8fc0885167cf4c"
+dependencies = [
+ "anstyle",
+ "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "anstyle-wincon"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58f54d10c6dfa51283a066ceab3ec1ab78d13fae00aa49243a45e4571fb79dfd"
 dependencies = [
  "anstyle",
  "windows-sys 0.48.0",
@@ -1998,13 +2022,13 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.2.23"
+version = "3.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71655c45cb9845d3270c9d6df84ebe72b4dad3c2ba3f7023ad47c144e4e473a5"
+checksum = "4ea181bf566f71cb9a5d17a59e1871af638180a18fb0035c92ae62b705207123"
 dependencies = [
  "atty",
  "bitflags 1.3.2",
- "clap_derive 3.2.18",
+ "clap_derive 3.2.25",
  "clap_lex 0.2.4",
  "indexmap",
  "once_cell",
@@ -2015,33 +2039,32 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.3.3"
+version = "4.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca8f255e4b8027970e78db75e78831229c9815fdbfa67eb1a1b777a62e24b4a0"
+checksum = "7c8d502cbaec4595d2e7d5f61e318f05417bd2b66fdc3809498f0d3fdf0bea27"
 dependencies = [
  "clap_builder",
- "clap_derive 4.3.2",
+ "clap_derive 4.4.0",
  "once_cell",
 ]
 
 [[package]]
 name = "clap_builder"
-version = "4.3.3"
+version = "4.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "acd4f3c17c83b0ba34ffbc4f8bbd74f079413f747f84a6f89292f138057e36ab"
+checksum = "5891c7bc0edb3e1c2204fc5e94009affabeb1821c9e5fdc3959536c5c0bb984d"
 dependencies = [
- "anstream",
+ "anstream 0.5.0",
  "anstyle",
- "bitflags 1.3.2",
  "clap_lex 0.5.0",
  "strsim",
 ]
 
 [[package]]
 name = "clap_derive"
-version = "3.2.18"
+version = "3.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea0c8bce528c4be4da13ea6fead8965e95b6073585a2f05204bd8f4119f82a65"
+checksum = "ae6371b8bdc8b7d3959e9cf7b22d4435ef3e79e138688421ec654acf8c81b008"
 dependencies = [
  "heck 0.4.1",
  "proc-macro-error",
@@ -2052,9 +2075,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.3.2"
+version = "4.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8cd2b2a819ad6eec39e8f1d6b53001af1e5469f8c177579cdaeb313115b825f"
+checksum = "c9fd1a5729c4548118d7d70ff234a44868d00489a4b6597b0b020918a0e91a1a"
 dependencies = [
  "heck 0.4.1",
  "proc-macro2 1.0.58",
@@ -2132,13 +2155,13 @@ checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
 
 [[package]]
 name = "colored"
-version = "2.0.0"
+version = "2.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3616f750b84d8f0de8a58bda93e08e2a81ad3f523089b05f1dffecab48c6cbd"
+checksum = "2674ec482fbc38012cf31e6c42ba0177b431a0cb6f15fe40efa5aab1bda516f6"
 dependencies = [
- "atty",
+ "is-terminal",
  "lazy_static",
- "winapi",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -2326,7 +2349,7 @@ dependencies = [
  "anes",
  "cast",
  "ciborium",
- "clap 4.3.3",
+ "clap 4.4.1",
  "criterion-plot",
  "futures",
  "is-terminal",
@@ -2357,9 +2380,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-channel"
-version = "0.5.6"
+version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2dd04ddaf88237dc3b8d8f9a3c1004b506b54b3313403944054d23c0870c521"
+checksum = "a33c2bf77f2df06183c3aa30d1e96c0695a313d4f9c453cc3762a6db39f99200"
 dependencies = [
  "cfg-if",
  "crossbeam-utils",
@@ -4069,9 +4092,9 @@ dependencies = [
 
 [[package]]
 name = "hermit-abi"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fed44880c466736ef9a5c5b5facefb5ed0785676d0c02d612db14e54f0d84286"
+checksum = "443144c8cdadd93ebf52ddb4056d257f5b52c04d3c804e657d19eb73fc33668b"
 
 [[package]]
 name = "hex"
@@ -4414,9 +4437,9 @@ dependencies = [
 
 [[package]]
 name = "inquire"
-version = "0.6.0"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd079157ad94a32f7511b2e13037f3ae417ad80a6a9b0de29154d48b86f5d6c8"
+checksum = "c33e7c1ddeb15c9abcbfef6029d8e29f69b52b6d6c891031b88ed91b5065803b"
 dependencies = [
  "bitflags 1.3.2",
  "crossterm 0.25.0",
@@ -4503,7 +4526,7 @@ version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adcf93614601c8129ddf72e2d5633df827ba6551541c6d8c59520a371475be1f"
 dependencies = [
- "hermit-abi 0.3.1",
+ "hermit-abi 0.3.2",
  "io-lifetimes",
  "rustix 0.37.7",
  "windows-sys 0.48.0",
@@ -4807,7 +4830,7 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "79529479c298f5af41375b0c1a77ef670d450b4c9cd7949d2b43af08121b20ec"
 dependencies = [
- "clap 3.2.23",
+ "clap 3.2.25",
  "termcolor",
  "threadpool",
 ]
@@ -5219,7 +5242,7 @@ name = "move-bytecode-viewer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 3.2.23",
+ "clap 3.2.25",
  "crossterm 0.21.0",
  "move-binary-format",
  "move-bytecode-source-map",
@@ -5236,7 +5259,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.2.23",
+ "clap 3.2.25",
  "codespan-reporting",
  "colored",
  "difference",
@@ -5298,7 +5321,7 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.2.23",
+ "clap 3.2.25",
  "codespan-reporting",
  "difference",
  "hex",
@@ -5350,7 +5373,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.2.23",
+ "clap 3.2.25",
  "codespan",
  "colored",
  "move-binary-format",
@@ -5368,7 +5391,7 @@ name = "move-disassembler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 3.2.23",
+ "clap 3.2.25",
  "colored",
  "hex",
  "move-binary-format",
@@ -5417,7 +5440,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.2.23",
+ "clap 3.2.25",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-verifier",
@@ -5503,7 +5526,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.2.23",
+ "clap 3.2.25",
  "colored",
  "dirs-next",
  "itertools",
@@ -5549,7 +5572,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "atty",
- "clap 3.2.23",
+ "clap 3.2.25",
  "codespan",
  "codespan-reporting",
  "futures",
@@ -5663,7 +5686,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytecode-interpreter-crypto",
- "clap 3.2.23",
+ "clap 3.2.25",
  "codespan-reporting",
  "itertools",
  "move-binary-format",
@@ -5752,7 +5775,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "clap 3.2.23",
+ "clap 3.2.25",
  "colored",
  "move-binary-format",
  "move-bytecode-source-map",
@@ -5786,7 +5809,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "better_any",
- "clap 3.2.23",
+ "clap 3.2.25",
  "codespan-reporting",
  "colored",
  "itertools",
@@ -6281,7 +6304,7 @@ dependencies = [
  "axum",
  "bytes",
  "cfg-if",
- "clap 3.2.23",
+ "clap 3.2.25",
  "eyre",
  "fastcrypto",
  "futures",
@@ -6892,9 +6915,9 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "os_str_bytes"
-version = "6.4.1"
+version = "6.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b7820b9daea5457c9f21c69448905d723fbd21136ccf521748f23fd49e723ee"
+checksum = "4d5d9eb14b174ee9aa2ef96dc2b94637a2d4b6e7cb873c7e171f0c20c6cf3eac"
 
 [[package]]
 name = "ouroboros"
@@ -9309,7 +9332,7 @@ dependencies = [
  "bcs",
  "bip32",
  "camino",
- "clap 3.2.23",
+ "clap 3.2.25",
  "colored",
  "const-str",
  "csv",
@@ -9515,7 +9538,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
- "clap 3.2.23",
+ "clap 3.2.25",
  "comfy-table",
  "duration-str",
  "fastcrypto",
@@ -9569,7 +9592,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
- "clap 3.2.23",
+ "clap 3.2.25",
  "fastcrypto",
  "futures",
  "jsonrpsee",
@@ -9644,7 +9667,7 @@ dependencies = [
  "bcs",
  "bytes",
  "chrono",
- "clap 3.2.23",
+ "clap 3.2.25",
  "criterion",
  "dashmap",
  "either",
@@ -9754,7 +9777,7 @@ dependencies = [
  "assert_cmd",
  "async-trait",
  "bcs",
- "clap 3.2.23",
+ "clap 3.2.25",
  "expect-test",
  "fastcrypto",
  "fs_extra",
@@ -9838,7 +9861,7 @@ name = "sui-execution-cut"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 4.3.3",
+ "clap 4.4.1",
  "expect-test",
  "tempfile",
  "thiserror",
@@ -9855,7 +9878,7 @@ dependencies = [
  "async-recursion",
  "async-trait",
  "axum",
- "clap 3.2.23",
+ "clap 3.2.25",
  "eyre",
  "futures",
  "http",
@@ -9986,7 +10009,7 @@ dependencies = [
  "axum",
  "bcs",
  "chrono",
- "clap 3.2.23",
+ "clap 3.2.25",
  "env_logger 0.10.0",
  "expect-test",
  "fastcrypto",
@@ -10018,7 +10041,7 @@ dependencies = [
  "bcs",
  "cached",
  "chrono",
- "clap 3.2.23",
+ "clap 3.2.25",
  "criterion",
  "diesel",
  "diesel-derive-enum",
@@ -10260,7 +10283,7 @@ dependencies = [
  "backoff",
  "base64 0.21.2",
  "chrono",
- "clap 4.3.3",
+ "clap 4.4.1",
  "humantime",
  "once_cell",
  "prometheus-http-query",
@@ -10280,7 +10303,7 @@ version = "1.9.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
- "clap 3.2.23",
+ "clap 3.2.25",
  "colored",
  "const-str",
  "fastcrypto",
@@ -10447,7 +10470,7 @@ dependencies = [
  "anyhow",
  "arc-swap",
  "axum",
- "clap 3.2.23",
+ "clap 3.2.25",
  "const-str",
  "fastcrypto",
  "fastcrypto-zkp",
@@ -10493,7 +10516,7 @@ version = "1.9.0"
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.2.23",
+ "clap 3.2.25",
  "fastcrypto",
  "move-core-types",
  "pretty_assertions",
@@ -10533,7 +10556,7 @@ dependencies = [
  "axum",
  "bcs",
  "chrono",
- "clap 3.2.23",
+ "clap 3.2.25",
  "futures",
  "jsonpath_lib",
  "move-core-types",
@@ -10600,7 +10623,7 @@ dependencies = [
  "axum",
  "axum-server",
  "bytes",
- "clap 3.2.23",
+ "clap 3.2.25",
  "const-str",
  "fastcrypto",
  "git-version",
@@ -10642,7 +10665,7 @@ dependencies = [
  "async-recursion",
  "async-trait",
  "bcs",
- "clap 4.3.3",
+ "clap 4.4.1",
  "colored",
  "futures",
  "http",
@@ -10707,7 +10730,7 @@ dependencies = [
  "axum-extra",
  "bcs",
  "chrono",
- "clap 3.2.23",
+ "clap 3.2.25",
  "eyre",
  "fastcrypto",
  "futures",
@@ -10751,7 +10774,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
- "clap 3.2.23",
+ "clap 3.2.25",
  "dashmap",
  "dirs",
  "eyre",
@@ -10801,7 +10824,7 @@ dependencies = [
  "async-recursion",
  "async-trait",
  "bcs",
- "clap 3.2.23",
+ "clap 3.2.25",
  "colored",
  "dirs",
  "fastcrypto",
@@ -10914,7 +10937,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
- "clap 3.2.23",
+ "clap 3.2.25",
  "expect-test",
  "fs_extra",
  "hyper",
@@ -10955,7 +10978,7 @@ dependencies = [
  "bcs",
  "byteorder",
  "bytes",
- "clap 4.3.3",
+ "clap 4.4.1",
  "criterion",
  "eyre",
  "fastcrypto",
@@ -11002,7 +11025,7 @@ version = "1.9.0"
 dependencies = [
  "async-trait",
  "bcs",
- "clap 3.2.23",
+ "clap 3.2.25",
  "futures",
  "indexmap",
  "move-binary-format",
@@ -11121,7 +11144,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "axum",
- "clap 3.2.23",
+ "clap 3.2.25",
  "http",
  "sui-cluster-test",
  "sui-faucet",
@@ -11162,7 +11185,7 @@ dependencies = [
  "anemo-cli",
  "anyhow",
  "bcs",
- "clap 4.3.3",
+ "clap 4.4.1",
  "colored",
  "comfy-table",
  "eyre",
@@ -11231,7 +11254,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "bimap",
- "clap 3.2.23",
+ "clap 3.2.25",
  "fastcrypto",
  "move-binary-format",
  "move-bytecode-utils",
@@ -13134,11 +13157,11 @@ dependencies = [
  "anemo-tower",
  "anes",
  "ansi_term",
- "anstream",
+ "anstream 0.3.2",
  "anstyle",
  "anstyle-parse",
  "anstyle-query",
- "anstyle-wincon",
+ "anstyle-wincon 1.0.2",
  "anyhow",
  "arbitrary",
  "arc-swap",
@@ -13275,11 +13298,11 @@ dependencies = [
  "ciborium-ll",
  "cipher",
  "clang-sys",
- "clap 3.2.23",
- "clap 4.3.3",
+ "clap 3.2.25",
+ "clap 4.4.1",
  "clap_builder",
- "clap_derive 3.2.18",
- "clap_derive 4.3.2",
+ "clap_derive 3.2.25",
+ "clap_derive 4.4.0",
  "clap_lex 0.2.4",
  "clap_lex 0.5.0",
  "clear_on_drop",
@@ -14012,7 +14035,7 @@ name = "x"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 3.2.23",
+ "clap 3.2.25",
  "nexlint",
  "nexlint-lints",
 ]
