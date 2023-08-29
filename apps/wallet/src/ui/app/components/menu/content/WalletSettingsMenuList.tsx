@@ -43,18 +43,9 @@ function MenuList() {
 					<MenuListItem
 						to={passwordProtectUrl}
 						icon={<LockedLockIcon />}
-						title={
-							<div className="flex flex-col justify-start gap-1.5 items-center">
-								<div>Password Protect Accounts</div>
-								{/* <div>Not setup yet</div> */}
-							</div>
-						}
+						title={'Password Protect Accounts'}
 					/>
-					<MenuListItem
-						icon={<ClipboardIcon />}
-						title={<div className="flex gap-1.5 items-center">FAQ</div>}
-						href={FAQ_LINK}
-					/>
+					<MenuListItem icon={<ClipboardIcon />} title={'FAQ'} href={FAQ_LINK} />
 					<MenuListItem
 						icon={<MoreIcon className="text-steel-darker" />}
 						title="More options"
