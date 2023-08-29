@@ -369,13 +369,6 @@ mod checked {
                     });
                 }
             }
-            // Catch any attempt to refer to these objects with incorrect starting versions.
-            InputObjectKind::SharedMoveObject {
-                id: SUI_CLOCK_OBJECT_ID | SUI_AUTHENTICATOR_STATE_OBJECT_ID,
-                ..
-            } => {
-                return Err(UserInputError::SharedObjectStartingVersionMismatch);
-            }
             InputObjectKind::SharedMoveObject {
                 initial_shared_version: input_initial_shared_version,
                 ..

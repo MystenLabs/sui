@@ -238,7 +238,7 @@ impl SuiNode {
                                     tokio::time::sleep(Duration::from_secs(30)).await;
                                 }
                                 Ok(mut keys) => {
-                                    keys.retain(|(id, _)| !seen.insert(id.clone()));
+                                    keys.retain(|(id, _)| seen.insert(id.clone()));
 
                                     // prevent oauth providers from sending too many keys,
                                     // inadvertently or otherwise
@@ -1023,7 +1023,7 @@ impl SuiNode {
             )
             .await;
 
-        if epoch_store.protocol_config().zklogin_auth() {
+        if epoch_store.protocol_config().enable_jwk_consensus_updates() {
             Self::start_jwk_updater(epoch_store.clone(), consensus_adapter.clone());
         }
 

@@ -487,13 +487,15 @@ impl AuthorityPerEpochStore {
             zklogin_env,
         );
 
-        let authenticator_state =
-            get_authenticator_state(&store).expect("Failed to load authenticator state");
+        if protocol_config.enable_jwk_consensus_updates() {
+            let authenticator_state =
+                get_authenticator_state(&store).expect("Failed to load authenticator state");
 
-        for active_jwk in &authenticator_state.active_jwks {
-            let ActiveJwk { jwk_id, jwk, epoch } = active_jwk;
-            assert!(epoch <= &epoch_id);
-            signature_verifier.insert_jwk(jwk_id, jwk);
+            for active_jwk in &authenticator_state.active_jwks {
+                let ActiveJwk { jwk_id, jwk, epoch } = active_jwk;
+                assert!(epoch <= &epoch_id);
+                signature_verifier.insert_jwk(jwk_id, jwk);
+            }
         }
 
         let is_validator = committee.authority_index(&name).is_some();
