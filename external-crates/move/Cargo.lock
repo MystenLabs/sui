@@ -1288,7 +1288,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.2.23",
+ "clap 4.4.1",
  "datatest-stable",
  "diem-framework-natives",
  "move-cli",
