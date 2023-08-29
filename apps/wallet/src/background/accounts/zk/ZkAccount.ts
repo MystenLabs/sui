@@ -129,6 +129,7 @@ export class ZkAccount
 			publicKey: null,
 			lastUnlockedOn: null,
 			selected: false,
+			nickname: claims.email || '',
 		};
 	}
 
@@ -197,7 +198,8 @@ export class ZkAccount
 	}
 
 	async toUISerialized(): Promise<ZkAccountSerializedUI> {
-		const { address, publicKey, type, claims, selected, provider } = await this.getStoredData();
+		const { address, publicKey, type, claims, selected, provider, nickname } =
+			await this.getStoredData();
 		const { email, picture } = await deobfuscate<JwtSerializedClaims>(claims);
 		return {
 			id: this.id,
@@ -209,6 +211,7 @@ export class ZkAccount
 			email,
 			picture,
 			selected,
+			nickname,
 			isPasswordUnlockable: false,
 			provider,
 		};

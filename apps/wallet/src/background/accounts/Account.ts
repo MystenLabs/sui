@@ -106,6 +106,11 @@ export abstract class Account<
 		await (await getDB()).accounts.update(this.id, { lastUnlockedOn: null });
 		accountsEvents.emit('accountStatusChanged', { accountID: this.id });
 	}
+
+	public async setNickname(nickname: string) {
+		await (await getDB()).accounts.update(this.id, { nickname });
+		accountsEvents.emit('accountStatusChanged', { accountID: this.id });
+	}
 }
 
 export interface SerializedAccount {
@@ -118,6 +123,7 @@ export interface SerializedAccount {
 	 * indicates if it's the selected account in the UI (active account)
 	 */
 	readonly selected: boolean;
+	readonly nickname: string | null;
 }
 
 export interface SerializedUIAccount {
@@ -139,6 +145,7 @@ export interface SerializedUIAccount {
 	 * indicates if it's the selected account in the UI (active account)
 	 */
 	readonly selected: boolean;
+	readonly nickname: string | null;
 	readonly isPasswordUnlockable: boolean;
 }
 

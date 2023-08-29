@@ -116,6 +116,7 @@ async function makeQredoAccounts(password: string) {
 				lastUnlockedOn: null,
 				sourceID: aQredoSource.id,
 				selected: false,
+				nickname: '',
 			});
 		}
 	}

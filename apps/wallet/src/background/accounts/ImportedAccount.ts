@@ -54,6 +54,7 @@ export class ImportedAccount
 			encrypted: await encrypt(inputs.password, dataToEncrypt),
 			lastUnlockedOn: null,
 			selected: false,
+			nickname: '',
 		};
 	}
 
@@ -75,7 +76,7 @@ export class ImportedAccount
 	}
 
 	async toUISerialized(): Promise<ImportedAccountSerializedUI> {
-		const { address, publicKey, type, selected } = await this.getStoredData();
+		const { address, publicKey, type, selected, nickname } = await this.getStoredData();
 		return {
 			id: this.id,
 			type,
@@ -84,6 +85,7 @@ export class ImportedAccount
 			isLocked: await this.isLocked(),
 			lastUnlockedOn: await this.lastUnlockedOn,
 			selected,
+			nickname,
 			isPasswordUnlockable: true,
 		};
 	}
