@@ -123,7 +123,6 @@ const App = () => {
 					if (publicKeysToStore.length) {
 						await backgroundClient.storeLedgerAccountsPublicKeys({ publicKeysToStore });
 					}
-					console.log({ publicKeysToStore });
 				} catch (e) {
 					// do nothing
 				}

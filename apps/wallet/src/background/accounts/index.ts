@@ -292,8 +292,14 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 		throw new Error('No password protected account found');
 	}
 	if (isMethodPayload(payload, 'storeLedgerAccountsPublicKeys')) {
-		console.log('store ledger public keys', payload.args);
-		// TODO: implement
+		const { publicKeysToStore } = payload.args;
+		const db = await getDB();
+		// TODO: seems bulkUpdate is supported from v4.0.1-alpha.6 change to it when available
+		await db.transaction('rw', db.accounts, async () => {
+			for (const { accountID, publicKey } of publicKeysToStore) {
+				await db.accounts.update(accountID, { publicKey });
+			}
+		});
 		return true;
 	}
 	return false;
