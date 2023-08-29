@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// # Game
 ///
 /// The `game` module is the entrypoint for Turnip Town.  On publish,
@@ -8,7 +11,7 @@
 /// uses to progress the simulation of the game on a given field
 /// (identified by its ID).
 module turnip_town::game {
-    use sui::object::{Self, ID, UID};
+    use sui::object::{Self, UID};
     use sui::table::{Self, Table};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -19,11 +22,14 @@ module turnip_town::game {
 
     struct Game has key, store {
         id: UID,
-        fields: Table<ID, Field>,
+        fields: Table<address, Field>,
     }
 
     /// No corresponding field for the deed.
     const ENoSuchField: u64 = 0;
+
+    /// Admin does not have permissions to update the game.
+    const ENotAuthorized: u64 = 1;
 
     /// How much water a field gets when watered by a player.
     const WATER_INCREMENT: u64 = 1000;
@@ -46,7 +52,7 @@ module turnip_town::game {
     /// (no plants, no water).  Returns the deed that gives a player
     /// control of that field.
     public fun new(game: &mut Game, ctx: &mut TxContext): Deed {
-        let (deed, field) = field::mint(ctx);
+        let (deed, field) = field::new(ctx);
 
         table::add(
             &mut game.fields,
@@ -62,10 +68,10 @@ module turnip_town::game {
     /// Fails if that field is not empty, or if the field has somehow
     /// already been deleted.
     public fun burn(deed: Deed, game: &mut Game) {
-        let fid = field::deed_field(&deed);
-        assert!(table::contains(&game.fields, fid), ENoSuchField);
+        let faddr = field::deed_field(&deed);
+        assert!(table::contains(&game.fields, faddr), ENoSuchField);
 
-        let field = table::remove(&mut game.fields, fid);
+        let field = table::remove(&mut game.fields, faddr);
         field::burn_field(field);
         field::burn_deed(deed);
     }
@@ -82,10 +88,10 @@ module turnip_town::game {
         j: u64,
         ctx: &mut TxContext,
     ) {
-        let fid = field::deed_field(deed);
-        assert!(table::contains(&game.fields, fid), ENoSuchField);
+        let faddr = field::deed_field(deed);
+        assert!(table::contains(&game.fields, faddr), ENoSuchField);
 
-        let field = table::borrow_mut(&mut game.fields, fid);
+        let field = table::borrow_mut(&mut game.fields, faddr);
         field::sow(field, i, j, ctx);
     }
 
@@ -93,10 +99,10 @@ module turnip_town::game {
     ///
     /// Fails if the field does not exist for this `deed`.
     public fun water(deed: &Deed, game: &mut Game) {
-        let fid = field::deed_field(deed);
-        assert!(table::contains(&game.fields, fid), ENoSuchField);
+        let faddr = field::deed_field(deed);
+        assert!(table::contains(&game.fields, faddr), ENoSuchField);
 
-        let field = table::borrow_mut(&mut game.fields, fid);
+        let field = table::borrow_mut(&mut game.fields, faddr);
         field::water(field, WATER_INCREMENT);
     }
 
@@ -107,10 +113,10 @@ module turnip_town::game {
     /// turnip to harvest at this position or that turnip is too small
     /// to harvest.
     public fun harvest(deed: &Deed, game: &mut Game, i: u64, j: u64): Turnip {
-        let fid = field::deed_field(deed);
-        assert!(table::contains(&game.fields, fid), ENoSuchField);
+        let faddr = field::deed_field(deed);
+        assert!(table::contains(&game.fields, faddr), ENoSuchField);
 
-        let field = table::borrow_mut(&mut game.fields, fid);
+        let field = table::borrow_mut(&mut game.fields, faddr);
         field::harvest(field, i, j)
     }
 
@@ -138,19 +144,19 @@ module turnip_town::game {
     /// If freshness drops to zero, the turnip has died and will be
     /// removed.
     ///
-    /// Fails if the field (represented by its ID in the game's table)
+    /// Fails if the field (represented by its address in the game's table)
     /// does not exist.
     public fun simulate_weather(
         admin: &AdminCap,
         game: &mut Game,
         rain_amount: u64,
         is_sunny: bool,
-        fid: ID,
+        faddr: address,
     ) {
-        admin::authorize(admin, object::id(game));
-        assert!(table::contains(&game.fields, fid), ENoSuchField);
+        assert!(admin::is_authorized(admin, object::id(game)), ENotAuthorized);
+        assert!(table::contains(&game.fields, faddr), ENoSuchField);
 
-        let field = table::borrow_mut(&mut game.fields, fid);
+        let field = table::borrow_mut(&mut game.fields, faddr);
         field::water(field, rain_amount);
         field::simulate_growth(field, is_sunny);
     }

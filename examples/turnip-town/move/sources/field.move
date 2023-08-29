@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// # Field
 ///
 /// Defines the `Field` type, which is responsible for one instance of
@@ -5,8 +8,9 @@
 /// and a `Deed` is created that gives its owner access to that
 /// `Field` through the `Game`.
 ///
-/// Although `Field` is not an object, an `ID` is generated for it, to
-/// identify it in the `Game`.  This `ID` is also stored in the `Deed`.
+/// Although `Field` is not an object, an `address` is generated for
+/// it, to identify it in the `Game`.  This `address` is also stored
+/// in its `Deed`.
 ///
 /// Any field owner can sow or harvest turnips from the field, but
 /// simulating growth and watering can only be done via the `Game`
@@ -16,8 +20,8 @@ module turnip_town::field {
     use std::option::{Self, Option};
     use std::vector;
     use sui::math;
-    use sui::object::{Self, ID, UID};
-    use sui::tx_context::TxContext;
+    use sui::object::{Self, UID};
+    use sui::tx_context::{Self, TxContext};
 
     use turnip_town::turnip::{Self, Turnip};
 
@@ -31,7 +35,7 @@ module turnip_town::field {
     /// Deed of ownership for a particular field in the game.
     struct Deed has key, store {
         id: UID,
-        field: ID,
+        field: address,
     }
 
     /// Trying to plant in a non-existent slot.
@@ -46,10 +50,13 @@ module turnip_town::field {
     /// Field being destroyed contains a turnip.
     const ENotEmpty: u64 = 3;
 
+    /// Turnip is too small to harvest
+    const ETooSmall: u64 = 4;
+
     const WIDTH: u64 = 4;
     const HEIGHT: u64 = 4;
 
-    public fun deed_field(deed: &Deed): ID {
+    public fun deed_field(deed: &Deed): address {
         deed.field
     }
 
@@ -76,10 +83,11 @@ module turnip_town::field {
 
         let ix = i + j * HEIGHT;
         let slot = vector::borrow_mut(&mut field.slots, ix);
-
         assert!(option::is_some(slot), ENotFilled);
+
         let turnip = option::extract(slot);
-        turnip::assert_harvest(&turnip);
+        assert!(turnip::can_harvest(&turnip), ETooSmall);
+
         turnip
     }
 
@@ -87,10 +95,8 @@ module turnip_town::field {
 
     /// Create a brand new field.  Protected to prevent `Field`s being
     /// created but not attached to a game.
-    public(friend) fun mint(ctx: &mut TxContext): (Deed, Field) {
-        let uid = object::new(ctx);
-        let field = object::uid_to_inner(&uid);
-        object::delete(uid);
+    public(friend) fun new(ctx: &mut TxContext): (Deed, Field) {
+        let field = tx_context::fresh_object_address(ctx);
 
         let slots = vector[];
         let total = WIDTH * HEIGHT;
@@ -237,7 +243,7 @@ module turnip_town::field {
             let slot = vector::borrow_mut(slots, i);
             if (option::is_some(slot)) {
                 if (!turnip::is_fresh(option::borrow(slot))) {
-                    turnip::burn(option::extract(slot))
+                    turnip::consume(option::extract(slot))
                 }
             };
             i = i + 1;
@@ -255,7 +261,7 @@ module turnip_town::field {
     #[test]
     fun test_burn() {
         let ts = ts::begin(@0xA);
-        let (deed, field) = mint(ts::ctx(&mut ts));
+        let (deed, field) = new(ts::ctx(&mut ts));
 
         burn_field(field);
         burn_deed(deed);
@@ -266,7 +272,7 @@ module turnip_town::field {
     #[expected_failure(abort_code = ENotEmpty)]
     fun test_burn_failure() {
         let ts = ts::begin(@0xA);
-        let (deed, field) = mint(ts::ctx(&mut ts));
+        let (deed, field) = new(ts::ctx(&mut ts));
 
         // Sow a turnip, now the field is not empty.
         sow(&mut field, 0, 0, ts::ctx(&mut ts));
@@ -279,7 +285,7 @@ module turnip_town::field {
     #[test]
     fun test_sow_and_harvest() {
         let ts = ts::begin(@0xA);
-        let (deed, field) = mint(ts::ctx(&mut ts));
+        let (deed, field) = new(ts::ctx(&mut ts));
 
         sow(&mut field, 0, 0, ts::ctx(&mut ts));
 
@@ -287,7 +293,7 @@ module turnip_town::field {
         turnip::prepare_for_harvest(borrow_mut(&mut field, 0, 0));
 
         let turnip = harvest(&mut field, 0, 0);
-        turnip::burn(turnip);
+        turnip::consume(turnip);
 
         burn_field(field);
         burn_deed(deed);
@@ -298,7 +304,7 @@ module turnip_town::field {
     #[expected_failure(abort_code = EOutOfBounds)]
     fun test_sow_out_of_bounds() {
         let ts = ts::begin(@0xA);
-        let (_deed, field) = mint(ts::ctx(&mut ts));
+        let (_deed, field) = new(ts::ctx(&mut ts));
 
         sow(&mut field, WIDTH + 1, 0, ts::ctx(&mut ts));
         abort 1337
@@ -308,7 +314,7 @@ module turnip_town::field {
     #[expected_failure(abort_code = EAlreadyFilled)]
     fun test_sow_overlap() {
         let ts = ts::begin(@0xA);
-        let (_deed, field) = mint(ts::ctx(&mut ts));
+        let (_deed, field) = new(ts::ctx(&mut ts));
 
         sow(&mut field, 0, 0, ts::ctx(&mut ts));
         sow(&mut field, 0, 0, ts::ctx(&mut ts));
@@ -319,17 +325,17 @@ module turnip_town::field {
     #[expected_failure(abort_code = EOutOfBounds)]
     fun test_harvest_out_of_bounds() {
         let ts = ts::begin(@0xA);
-        let (_deed, field) = mint(ts::ctx(&mut ts));
+        let (_deed, field) = new(ts::ctx(&mut ts));
 
         let _turnip = harvest(&mut field, WIDTH + 1, 0);
         abort 1337
     }
 
     #[test]
-    #[expected_failure(abort_code = turnip::ETooSmall)]
+    #[expected_failure(abort_code = ETooSmall)]
     fun test_harvest_too_small() {
         let ts = ts::begin(@0xA);
-        let (_deed, field) = mint(ts::ctx(&mut ts));
+        let (_deed, field) = new(ts::ctx(&mut ts));
 
         sow(&mut field, 0, 0, ts::ctx(&mut ts));
         let _turnip = harvest(&mut field, 0, 0);
@@ -340,7 +346,7 @@ module turnip_town::field {
     #[expected_failure(abort_code = ENotFilled)]
     fun test_harvest_non_existent() {
         let ts = ts::begin(@0xA);
-        let (_deed, field) = mint(ts::ctx(&mut ts));
+        let (_deed, field) = new(ts::ctx(&mut ts));
 
         let _turnip = harvest(&mut field, 0, 0);
         abort 1337
@@ -349,7 +355,7 @@ module turnip_town::field {
     #[test]
     fun test_simulation_growth() {
         let ts = ts::begin(@0xA);
-        let (deed, field) = mint(ts::ctx(&mut ts));
+        let (deed, field) = new(ts::ctx(&mut ts));
 
         sow(&mut field, 0, 0, ts::ctx(&mut ts));
 
@@ -371,7 +377,7 @@ module turnip_town::field {
         // Turnip grows by half its excess water usage.
         assert!(turnip::size(&turnip) == size + 5, 0);
 
-        turnip::burn(turnip);
+        turnip::consume(turnip);
         burn_field(field);
         burn_deed(deed);
         ts::end(ts);
@@ -380,7 +386,7 @@ module turnip_town::field {
     #[test]
     fun test_simulation_dry() {
         let ts = ts::begin(@0xA);
-        let (deed, field) = mint(ts::ctx(&mut ts));
+        let (deed, field) = new(ts::ctx(&mut ts));
 
         sow(&mut field, 0, 0, ts::ctx(&mut ts));
 
@@ -404,7 +410,7 @@ module turnip_town::field {
         assert!(turnip::size(&turnip) == size, 0);
         assert!(turnip::freshness(&turnip) == 50_00, 0);
 
-        turnip::burn(turnip);
+        turnip::consume(turnip);
         burn_field(field);
         burn_deed(deed);
         ts::end(ts);
@@ -413,7 +419,7 @@ module turnip_town::field {
     #[test]
     fun test_simulation_rot() {
         let ts = ts::begin(@0xA);
-        let (deed, field) = mint(ts::ctx(&mut ts));
+        let (deed, field) = new(ts::ctx(&mut ts));
 
         sow(&mut field, 0, 0, ts::ctx(&mut ts));
 
@@ -437,7 +443,7 @@ module turnip_town::field {
         assert!(turnip::size(&turnip) == size, 0);
         assert!(turnip::freshness(&turnip) == 50_00, 0);
 
-        turnip::burn(turnip);
+        turnip::consume(turnip);
         burn_field(field);
         burn_deed(deed);
         ts::end(ts);
@@ -446,7 +452,7 @@ module turnip_town::field {
     #[test]
     fun test_simulation_not_sunny() {
         let ts = ts::begin(@0xA);
-        let (deed, field) = mint(ts::ctx(&mut ts));
+        let (deed, field) = new(ts::ctx(&mut ts));
 
         sow(&mut field, 0, 0, ts::ctx(&mut ts));
 
@@ -470,7 +476,7 @@ module turnip_town::field {
         assert!(turnip::size(&turnip) == size, 0);
         assert!(turnip::freshness(&turnip) == 50_00, 0);
 
-        turnip::burn(turnip);
+        turnip::consume(turnip);
         burn_field(field);
         burn_deed(deed);
         ts::end(ts);
@@ -479,7 +485,7 @@ module turnip_town::field {
     #[test]
     fun test_simulation_multi() {
         let ts = ts::begin(@0xA);
-        let (deed, field) = mint(ts::ctx(&mut ts));
+        let (deed, field) = new(ts::ctx(&mut ts));
 
         sow(&mut field, 0, 0, ts::ctx(&mut ts));
         sow(&mut field, 1, 0, ts::ctx(&mut ts));
@@ -510,8 +516,8 @@ module turnip_town::field {
         assert!(turnip::size(&t0) == s0 + 2, 0);
         assert!(turnip::size(&t1) == s1 + 2, 0);
 
-        turnip::burn(t0);
-        turnip::burn(t1);
+        turnip::consume(t0);
+        turnip::consume(t1);
 
         burn_field(field);
         burn_deed(deed);
@@ -521,7 +527,7 @@ module turnip_town::field {
     #[test]
     fun test_simulation_cleanup() {
         let ts = ts::begin(@0xA);
-        let (deed, field) = mint(ts::ctx(&mut ts));
+        let (deed, field) = new(ts::ctx(&mut ts));
 
         sow(&mut field, 0, 0, ts::ctx(&mut ts));
         turnip::prepare_for_harvest(borrow_mut(&mut field, 0, 0));

@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// # Admin
 ///
 /// Module defining `AdminCap`, the capability held by the game admin,
@@ -16,9 +19,6 @@ module turnip_town::admin {
         game: ID,
     }
 
-    /// AdminCap does not have permissions to update the game.
-    const ENotAuthorized: u64 = 0;
-
     /// Only the `game` module can create brand new `AdminCap`s.
     public(friend) fun mint(game: ID, ctx: &mut TxContext): AdminCap {
         AdminCap { id: object::new(ctx), game }
@@ -31,8 +31,8 @@ module turnip_town::admin {
         AdminCap { id: object::new(ctx), game: cap.game }
     }
 
-    public fun authorize(cap: &AdminCap, game: ID) {
-        assert!(cap.game == game, ENotAuthorized)
+    public fun is_authorized(cap: &AdminCap, game: ID): bool {
+        cap.game == game
     }
 
     public fun burn(cap: AdminCap) {

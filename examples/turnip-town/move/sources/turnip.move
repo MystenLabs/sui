@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// # Turnip
 ///
 /// This module defines the `Turnip` NFT, and a transfer policy
@@ -26,9 +29,6 @@ module turnip_town::turnip {
         freshness: u16,
     }
 
-    /// Turnip is too small to harvest
-    const ETooSmall: u64 = 0;
-
     /// 1% commission, in basis points
     const COMMISSION_BP: u16 = 1_00;
 
@@ -53,8 +53,8 @@ module turnip_town::turnip {
     }
 
     /// Turnips that are below the minimum size cannot be harvested.
-    public fun assert_harvest(turnip: &Turnip) {
-        assert!(turnip.size >= MIN_SIZE, ETooSmall)
+    public fun can_harvest(turnip: &Turnip): bool {
+        turnip.size >= MIN_SIZE
     }
 
     public fun size(turnip: &Turnip): u64 {
@@ -69,7 +69,7 @@ module turnip_town::turnip {
         turnip.freshness > 0
     }
 
-    public fun burn(turnip: Turnip) {
+    public fun consume(turnip: Turnip) {
         let Turnip { id, size: _, freshness: _ } = turnip;
         object::delete(id);
     }
