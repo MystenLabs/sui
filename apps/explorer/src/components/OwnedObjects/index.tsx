@@ -5,7 +5,7 @@ import { useGetKioskContents, useGetOwnedObjects, useLocalStorage } from '@myste
 import { ViewList16, ViewSmallThumbnails16 } from '@mysten/icons';
 import { Heading, IconButton, RadioGroup, RadioGroupItem, Text } from '@mysten/ui';
 import clsx from 'clsx';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { ListView } from '~/components/OwnedObjects/ListView';
 import { SmallThumbNailsView } from '~/components/OwnedObjects/SmallThumbNailsView';
@@ -41,7 +41,7 @@ function getShowPagination(itemsLength: number, currentPage: number, isFetching:
 }
 
 export function OwnedObjects({ id }: { id: string }) {
-	const [filter, setFilter] = useState('all');
+	const [filter, setFilter] = useState<string | undefined>(undefined);
 	const [limit, setLimit] = useState(PAGE_SIZES[4]);
 	const [viewMode, setViewMode] = useLocalStorage(
 		OWNED_OBJECTS_LOCAL_STORAGE_VIEW_MODE,
@@ -55,9 +55,21 @@ export function OwnedObjects({ id }: { id: string }) {
 		},
 		limit,
 	);
-	const { data: kioskData } = useGetKioskContents(id);
+	const { data: kioskData, isFetching: kioskDataFetching } = useGetKioskContents(id);
 
 	const { data, isError, isFetching, pagination } = useCursorPagination(ownedObjects);
+
+	const isLoading = isFetching || kioskDataFetching;
+
+	useEffect(() => {
+		if (!isLoading) {
+			if (kioskData?.list?.length) {
+				setFilter(FILTER_OPTIONS[1].value);
+			} else {
+				setFilter(FILTER_OPTIONS[0].value);
+			}
+		}
+	}, [isLoading, kioskData?.list?.length]);
 
 	const filteredData = useMemo(
 		() => (filter === 'all' ? data?.data : kioskData?.list),
@@ -148,7 +160,7 @@ export function OwnedObjects({ id }: { id: string }) {
 									key={filter.value}
 									value={filter.value}
 									label={filter.label}
-									disabled={filter.value === 'kiosks' && !kioskData?.list?.length}
+									disabled={(filter.value === 'kiosks' && !kioskData?.list?.length) || isLoading}
 								/>
 							))}
 						</RadioGroup>
@@ -156,16 +168,16 @@ export function OwnedObjects({ id }: { id: string }) {
 				</div>
 
 				{viewMode === OBJECT_VIEW_MODES.LIST && (
-					<ListView loading={isFetching} data={sortedDataByDisplayImages} />
+					<ListView loading={isLoading} data={sortedDataByDisplayImages} />
 				)}
 				{viewMode === OBJECT_VIEW_MODES.SMALL_THUMBNAILS && (
-					<SmallThumbNailsView loading={isFetching} data={sortedDataByDisplayImages} />
+					<SmallThumbNailsView loading={isLoading} data={sortedDataByDisplayImages} />
 				)}
 				{showPagination && (
 					<div className="mt-auto flex flex-row flex-wrap gap-2 md:mb-5">
 						<Pagination {...pagination} />
 						<div className="ml-auto flex items-center">
-							{!isFetching && (
+							{!isLoading && (
 								<Text variant="body/medium" color="steel">
 									Showing {start} - {end}
 								</Text>
