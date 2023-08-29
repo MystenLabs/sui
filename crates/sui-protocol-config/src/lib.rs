@@ -1453,8 +1453,11 @@ impl ProtocolConfig {
     pub fn set_commit_root_state_digest_supported(&mut self, val: bool) {
         self.feature_flags.commit_root_state_digest = val
     }
-    pub fn set_zklogin_auth(&mut self, val: bool) {
+    pub fn set_zklogin_auth_for_testing(&mut self, val: bool) {
         self.feature_flags.zklogin_auth = val
+    }
+    pub fn set_enable_jwk_consensus_updates_for_testing(&mut self, val: bool) {
+        self.feature_flags.enable_jwk_consensus_updates = val
     }
 
     pub fn set_upgraded_multisig_for_testing(&mut self, val: bool) {
