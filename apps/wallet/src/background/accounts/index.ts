@@ -179,7 +179,7 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 		const { id, nickname } = payload.args;
 		const account = await getAccountByID(id);
 		if (account) {
-			account.setNickname(nickname);
+			await account.setNickname(nickname);
 			await uiConnection.send(createMessage({ type: 'done' }, msg.id));
 			return true;
 		}

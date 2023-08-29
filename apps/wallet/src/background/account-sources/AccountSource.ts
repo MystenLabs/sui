@@ -46,10 +46,6 @@ export abstract class AccountSource<
 	protected clearEphemeralValue() {
 		return clearEphemeralValue(this.id);
 	}
-
-	public async setNickname(nickname: string) {
-		await (await getDB()).accounts.update(this.id, { nickname });
-	}
 }
 
 export interface AccountSourceSerialized {
