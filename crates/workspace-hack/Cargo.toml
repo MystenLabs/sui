@@ -154,9 +154,9 @@ ciborium = { version = "0.2" }
 ciborium-io = { version = "0.2", default-features = false, features = ["std"] }
 ciborium-ll = { version = "0.2", default-features = false }
 cipher = { version = "0.4", default-features = false, features = ["block-padding", "std"] }
-clap-164d15cefe24d7eb = { package = "clap", version = "4", features = ["derive"] }
-clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["cargo", "derive"] }
-clap_builder = { version = "4", default-features = false, features = ["color", "help", "std", "suggestions", "usage"] }
+clap-164d15cefe24d7eb = { package = "clap", version = "4", features = ["derive", "wrap_help"] }
+clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["derive"] }
+clap_builder = { version = "4", default-features = false, features = ["color", "std", "suggestions", "usage", "wrap_help"] }
 clap_lex-6f8ce4dd05d13bba = { package = "clap_lex", version = "0.2", default-features = false }
 clap_lex-d8f496e17d97b5cb = { package = "clap_lex", version = "0.5", default-features = false }
 clear_on_drop = { version = "0.2", default-features = false }
@@ -625,6 +625,7 @@ tempfile = { version = "3", default-features = false }
 tera = { version = "1" }
 term = { version = "0.7" }
 termcolor = { version = "1", default-features = false }
+terminal_size = { version = "0.2", default-features = false }
 termtree = { version = "0.4", default-features = false }
 test-fuzz = { version = "3", default-features = false }
 test-fuzz-internal = { version = "3", default-features = false }
@@ -884,9 +885,9 @@ ciborium-io = { version = "0.2", default-features = false, features = ["std"] }
 ciborium-ll = { version = "0.2", default-features = false }
 cipher = { version = "0.4", default-features = false, features = ["block-padding", "std"] }
 clang-sys = { version = "1", default-features = false, features = ["clang_6_0", "runtime"] }
-clap-164d15cefe24d7eb = { package = "clap", version = "4", features = ["derive"] }
-clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["cargo", "derive"] }
-clap_builder = { version = "4", default-features = false, features = ["color", "help", "std", "suggestions", "usage"] }
+clap-164d15cefe24d7eb = { package = "clap", version = "4", features = ["derive", "wrap_help"] }
+clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["derive"] }
+clap_builder = { version = "4", default-features = false, features = ["color", "std", "suggestions", "usage", "wrap_help"] }
 clap_derive-164d15cefe24d7eb = { package = "clap_derive", version = "4" }
 clap_derive-7b89eefb6aaa9bf3 = { package = "clap_derive", version = "3" }
 clap_lex-6f8ce4dd05d13bba = { package = "clap_lex", version = "0.2", default-features = false }
@@ -1439,6 +1440,7 @@ tempfile = { version = "3", default-features = false }
 tera = { version = "1" }
 term = { version = "0.7" }
 termcolor = { version = "1", default-features = false }
+terminal_size = { version = "0.2", default-features = false }
 termtree = { version = "0.4", default-features = false }
 test-fuzz = { version = "3", default-features = false }
 test-fuzz-internal = { version = "3", default-features = false }

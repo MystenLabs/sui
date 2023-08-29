@@ -55,7 +55,7 @@ struct Args {
     epoch_duration_ms: u64,
 
     /// if we should run indexer
-    #[clap(long, takes_value = false)]
+    #[clap(long)]
     pub with_indexer: bool,
 
     /// TODO(gegao): remove this after indexer migration is complete.

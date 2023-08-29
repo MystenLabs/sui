@@ -38,13 +38,13 @@ pub struct SuiPublishArgs {
     pub sender: Option<String>,
     #[clap(long = "upgradeable", action = clap::ArgAction::SetTrue)]
     pub upgradeable: bool,
-    #[clap(long = "dependencies", multiple_values(true))]
+    #[clap(long = "dependencies", num_args(1..))]
     pub dependencies: Vec<String>,
 }
 
 #[derive(Debug, clap::Parser)]
 pub struct SuiInitArgs {
-    #[clap(long = "accounts", multiple_values(true))]
+    #[clap(long = "accounts", num_args(1..))]
     pub accounts: Option<Vec<String>>,
     #[clap(long = "protocol-version")]
     pub protocol_version: Option<u64>,
@@ -89,8 +89,7 @@ pub struct ProgrammableTransactionCommand {
     #[clap(
         long = "inputs",
         value_parser = ParsedValue::<SuiExtraValueArgs>::parse,
-        takes_value(true),
-        multiple_values(true),
+        num_args(1..),
         action = clap::ArgAction::Append,
     )]
     pub inputs: Vec<ParsedValue<SuiExtraValueArgs>>,
@@ -102,7 +101,7 @@ pub struct UpgradePackageCommand {
     pub package: String,
     #[clap(long = "upgrade-capability", value_parser = parse_fake_id)]
     pub upgrade_capability: FakeID,
-    #[clap(long = "dependencies", multiple_values(true))]
+    #[clap(long = "dependencies", num_args(1..))]
     pub dependencies: Vec<String>,
     #[clap(long = "sender")]
     pub sender: String,
@@ -118,7 +117,7 @@ pub struct UpgradePackageCommand {
 pub struct StagePackageCommand {
     #[clap(long = "syntax")]
     pub syntax: Option<SyntaxChoice>,
-    #[clap(long = "dependencies", multiple_values(true))]
+    #[clap(long = "dependencies", num_args(1..))]
     pub dependencies: Vec<String>,
 }
 

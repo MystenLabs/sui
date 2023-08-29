@@ -43,7 +43,7 @@ pub fn mutate(args: &[String]) {
                 .short('a')
                 .action(clap::ArgAction::Append)
                 .number_of_values(1)
-                .takes_value(true)
+                .num_args(1)
                 .value_name("ADDRESS")
                 .help("Address specified for the move prover"),
         )
@@ -51,7 +51,7 @@ pub fn mutate(args: &[String]) {
             Arg::new("config")
                 .short('c')
                 .long("config")
-                .takes_value(true)
+                .num_args(1)
                 .action(clap::ArgAction::Append)
                 .number_of_values(1)
                 .value_name("CONFIG_PATH")
@@ -67,7 +67,7 @@ pub fn mutate(args: &[String]) {
                 .short('d')
                 .action(clap::ArgAction::Append)
                 .number_of_values(1)
-                .takes_value(true)
+                .num_args(1)
                 .value_name("PATH_TO_DEPENDENCY")
                 .help(
                     "path to a Move file, or a directory which will be searched for \
@@ -78,7 +78,7 @@ pub fn mutate(args: &[String]) {
             Arg::new("sources")
                 .action(clap::ArgAction::Append)
                 .value_name("PATH_TO_SOURCE_FILE")
-                .min_values(1)
+                .num_args(1..)
                 .help("the source files to verify"),
         );
     let matches = cmd_line_parser.get_matches_from(args);

@@ -49,7 +49,7 @@ pub struct Opts {
     pub local: bool,
     /// Required in remote benchmark, namely when local = false
     /// Multiple fullnodes can be specified.
-    #[clap(long, multiple_values = true, value_delimiter = ',', global = true)]
+    #[clap(long, num_args(1..), value_delimiter = ',', global = true)]
     pub fullnode_rpc_addresses: Vec<String>,
     /// Whether to submit transactions to a fullnode.
     /// If true, use FullNodeProxy.

@@ -50,8 +50,7 @@ pub struct InterpreterOptions {
     #[clap(
         long = "signers",
         value_parser = AccountAddress::from_hex_literal,
-        takes_value(true),
-        multiple_values(true),
+        num_args(1..),
         action = clap::ArgAction::Append,
     )]
     pub signers: Vec<AccountAddress>,
@@ -59,8 +58,7 @@ pub struct InterpreterOptions {
     #[clap(
         long = "args",
         value_parser = parse_transaction_argument,
-        takes_value(true),
-        multiple_values(true),
+        num_args(1..),
         action = clap::ArgAction::Append,
     )]
     pub args: Vec<TransactionArgument>,
@@ -69,8 +67,7 @@ pub struct InterpreterOptions {
     #[clap(
         long = "ty-args",
         value_parser = parse_type_tag,
-        takes_value(true),
-        multiple_values(true),
+        num_args(1..),
         action = clap::ArgAction::Append,
     )]
     pub ty_args: Vec<TypeTag>,

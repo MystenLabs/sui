@@ -43,8 +43,7 @@ pub enum SandboxCommand {
         /// Manually specify the publishing order of modules.
         #[clap(
             long = "override-ordering",
-            takes_value(true),
-            multiple_values(true),
+            num_args(1..),
             action = clap::ArgAction::Append,
         )]
         override_ordering: Option<Vec<String>>,
@@ -65,8 +64,7 @@ pub enum SandboxCommand {
         /// `main(&account: signer)`). Must match the number of signers expected by `script_file`.
         #[clap(
             long = "signers",
-            takes_value(true),
-            multiple_values(true),
+            num_args(1..),
             action = clap::ArgAction::Append,
         )]
         signers: Vec<String>,
@@ -81,8 +79,7 @@ pub enum SandboxCommand {
         #[clap(
             long = "args",
             value_parser = parser::parse_transaction_argument,
-            takes_value(true),
-            multiple_values(true),
+            num_args(1..),
             action = clap::ArgAction::Append,
         )]
         args: Vec<TransactionArgument>,
@@ -91,8 +88,7 @@ pub enum SandboxCommand {
         #[clap(
             long = "type-args",
             value_parser = parser::parse_type_tag,
-            takes_value(true),
-            multiple_values(true),
+            num_args(1..),
             action = clap::ArgAction::Append,
         )]
         type_args: Vec<TypeTag>,
@@ -164,8 +160,6 @@ pub struct StructLayoutOptions {
         long = "type-args",
         value_parser = parser::parse_type_tag,
         requires="struct",
-        takes_value(true),
-        multiple_values(true),
         action = clap::ArgAction::Append,
     )]
     type_args: Option<Vec<TypeTag>>,
