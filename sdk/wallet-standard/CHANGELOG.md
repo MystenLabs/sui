@@ -1,5 +1,13 @@
 # @mysten/wallet-standard
 
+## 0.7.1
+
+### Patch Changes
+
+- 189e02aba: Fix broken documentation link for the wallet-standard SDK
+- Updated dependencies [24c21e1f0]
+  - @mysten/sui.js@0.41.1
+
 ## 0.7.0
 
 ### Minor Changes
