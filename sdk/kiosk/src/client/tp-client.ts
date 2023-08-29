@@ -17,6 +17,12 @@ import {
 import { ObjectArgument, TRANSFER_POLICY_CAP_TYPE } from '../types';
 import { queryTransferPolicy } from '../query/transfer-policy';
 import { SuiClient } from '@mysten/sui.js/src/client';
+import {
+	floorPriceRuleAddress,
+	kioskLockRuleAddress,
+	personalKioskAddress,
+	royaltyRuleAddress,
+} from '../constants';
 
 export class TransferPolicyClient {
 	client: SuiClient;
@@ -42,7 +48,7 @@ export class TransferPolicyClient {
 	 * @param publisher The Publisher Object Id.
 	 * @param address Address to save the `TransferPolicyCap` object to.
 	 */
-	async createTransferPolicy(
+	async create(
 		tx: TransactionBlock,
 		itemType: string,
 		publisher: ObjectArgument,
@@ -153,9 +159,7 @@ export class TransferPolicyClient {
 			this.policyCap!,
 			percentageBps,
 			minAmount,
-			this.network === Network.MAINNET
-				? ''
-				: 'bd8fc1947cf119350184107a3087e2dc27efefa0dd82e25a1f699069fe81a585',
+			royaltyRuleAddress[this.network],
 		);
 	}
 
@@ -173,9 +177,7 @@ export class TransferPolicyClient {
 			this.itemType!,
 			this.policyId!,
 			this.policyCap!,
-			this.network === Network.MAINNET
-				? ''
-				: 'bd8fc1947cf119350184107a3087e2dc27efefa0dd82e25a1f699069fe81a585',
+			kioskLockRuleAddress[this.network],
 		);
 	}
 
@@ -191,9 +193,7 @@ export class TransferPolicyClient {
 			this.itemType!,
 			this.policyId!,
 			this.policyCap!,
-			this.network === Network.MAINNET
-				? ''
-				: '0x06f6bdd3f2e2e759d8a4b9c252f379f7a05e72dfe4c0b9311cdac27b8eb791b1',
+			personalKioskAddress[this.network],
 		);
 	}
 
@@ -210,19 +210,14 @@ export class TransferPolicyClient {
 			this.policyId!,
 			this.policyCap!,
 			minPrice,
-			this.network === Network.MAINNET
-				? ''
-				: '0x06f6bdd3f2e2e759d8a4b9c252f379f7a05e72dfe4c0b9311cdac27b8eb791b1',
+			floorPriceRuleAddress[this.network],
 		);
 	}
 
 	removeLockRule(tx: TransactionBlock) {
 		this.#validateInputs();
 
-		let packageId =
-			this.network === Network.MAINNET
-				? ''
-				: '0xbd8fc1947cf119350184107a3087e2dc27efefa0dd82e25a1f699069fe81a585';
+		let packageId = kioskLockRuleAddress[this.network];
 
 		removeTransferPolicyRule(
 			tx,
@@ -237,10 +232,7 @@ export class TransferPolicyClient {
 	removeRoyaltyRule(tx: TransactionBlock) {
 		this.#validateInputs();
 
-		let packageId =
-			this.network === Network.MAINNET
-				? ''
-				: '0xbd8fc1947cf119350184107a3087e2dc27efefa0dd82e25a1f699069fe81a585';
+		let packageId = royaltyRuleAddress[this.network];
 
 		removeTransferPolicyRule(
 			tx,
@@ -255,10 +247,7 @@ export class TransferPolicyClient {
 	removePersonalKioskRule(tx: TransactionBlock) {
 		this.#validateInputs();
 
-		let packageId =
-			this.network === Network.MAINNET
-				? ''
-				: '0x06f6bdd3f2e2e759d8a4b9c252f379f7a05e72dfe4c0b9311cdac27b8eb791b1';
+		let packageId = personalKioskAddress[this.network];
 
 		removeTransferPolicyRule(
 			tx,
@@ -273,10 +262,7 @@ export class TransferPolicyClient {
 	removeFloorPriceRule(tx: TransactionBlock) {
 		this.#validateInputs();
 
-		let packageId =
-			this.network === Network.MAINNET
-				? ''
-				: '0x06f6bdd3f2e2e759d8a4b9c252f379f7a05e72dfe4c0b9311cdac27b8eb791b1';
+		let packageId = floorPriceRuleAddress[this.network];
 
 		removeTransferPolicyRule(
 			tx,

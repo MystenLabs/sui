@@ -11,21 +11,6 @@ import {
 import { type ObjectArgument, type RuleResolvingParams } from './types';
 
 /**
- * The Transer Policy Rules package address on testnet
- *  * @deprecated Deprecated due to package upgrades. New `KioskClient` manages rules in a different way.
- *  */
-export const TESTNET_RULES_PACKAGE_ADDRESS =
-	'bd8fc1947cf119350184107a3087e2dc27efefa0dd82e25a1f699069fe81a585';
-
-/**
- * The transfer policy rules package address on mainnet
- * **
- * @deprecated Deprecated due to package upgrades. New `KioskClient` manages rules in a different way.
- */
-export const MAINNET_RULES_PACKAGE_ADDRESS =
-	'0x434b5bd8f6a7b05fede0ff46c6e511d71ea326ed38056e3bcd681d2d7c2a7879';
-
-/**
  * The Transfer Policy rule.
  */
 export type TransferPolicyRule = {
@@ -36,6 +21,21 @@ export type TransferPolicyRule = {
 	hasLockingRule?: boolean;
 };
 
+export const royaltyRuleAddress: Record<Network, string> = {
+	[Network.TESTNET]: 'bd8fc1947cf119350184107a3087e2dc27efefa0dd82e25a1f699069fe81a585',
+	[Network.MAINNET]: '0x434b5bd8f6a7b05fede0ff46c6e511d71ea326ed38056e3bcd681d2d7c2a7879',
+};
+
+export const kioskLockRuleAddress: Record<Network, string> = {
+	[Network.TESTNET]: 'bd8fc1947cf119350184107a3087e2dc27efefa0dd82e25a1f699069fe81a585',
+	[Network.MAINNET]: '0x434b5bd8f6a7b05fede0ff46c6e511d71ea326ed38056e3bcd681d2d7c2a7879',
+};
+
+export const floorPriceRuleAddress: Record<Network, string> = {
+	[Network.TESTNET]: '0x06f6bdd3f2e2e759d8a4b9c252f379f7a05e72dfe4c0b9311cdac27b8eb791b1',
+	[Network.MAINNET]: '',
+};
+
 export const personalKioskAddress: Record<Network, string> = {
 	[Network.TESTNET]: '0x06f6bdd3f2e2e759d8a4b9c252f379f7a05e72dfe4c0b9311cdac27b8eb791b1',
 	[Network.MAINNET]: '',
@@ -43,28 +43,28 @@ export const personalKioskAddress: Record<Network, string> = {
 
 export const testnetRules: TransferPolicyRule[] = [
 	{
-		rule: 'bd8fc1947cf119350184107a3087e2dc27efefa0dd82e25a1f699069fe81a585::royalty_rule::Rule',
+		rule: `${royaltyRuleAddress[Network.TESTNET]}::royalty_rule::Rule`,
 		network: Network.TESTNET,
-		packageId: 'bd8fc1947cf119350184107a3087e2dc27efefa0dd82e25a1f699069fe81a585',
+		packageId: royaltyRuleAddress[Network.TESTNET],
 		resolveRuleFunction: resolveRoyaltyRule,
 	},
 	{
-		rule: 'bd8fc1947cf119350184107a3087e2dc27efefa0dd82e25a1f699069fe81a585::kiosk_lock_rule::Rule',
+		rule: `${kioskLockRuleAddress[Network.TESTNET]}::kiosk_lock_rule::Rule`,
 		network: Network.TESTNET,
-		packageId: 'bd8fc1947cf119350184107a3087e2dc27efefa0dd82e25a1f699069fe81a585',
+		packageId: kioskLockRuleAddress[Network.TESTNET],
 		resolveRuleFunction: resolveKioskLockRule,
 		hasLockingRule: true,
 	},
 	{
-		rule: `0x06f6bdd3f2e2e759d8a4b9c252f379f7a05e72dfe4c0b9311cdac27b8eb791b1::personal_kiosk_rule::Rule`,
+		rule: `${personalKioskAddress[Network.TESTNET]}::personal_kiosk_rule::Rule`,
 		network: Network.TESTNET,
-		packageId: '0x06f6bdd3f2e2e759d8a4b9c252f379f7a05e72dfe4c0b9311cdac27b8eb791b1',
+		packageId: personalKioskAddress[Network.TESTNET],
 		resolveRuleFunction: resolvePersonalKioskRule,
 	},
 	{
-		rule: `0x06f6bdd3f2e2e759d8a4b9c252f379f7a05e72dfe4c0b9311cdac27b8eb791b1::floor_price_rule::Rule`,
+		rule: `${floorPriceRuleAddress[Network.TESTNET]}::floor_price_rule::Rule`,
 		network: Network.TESTNET,
-		packageId: '0x06f6bdd3f2e2e759d8a4b9c252f379f7a05e72dfe4c0b9311cdac27b8eb791b1',
+		packageId: floorPriceRuleAddress[Network.TESTNET],
 		resolveRuleFunction: resolveFloorPriceRule,
 	},
 ];
