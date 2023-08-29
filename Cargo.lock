@@ -181,7 +181,7 @@ dependencies = [
  "anemo-build",
  "anemo-tower",
  "anyhow",
- "clap 4.4.1",
+ "clap",
  "mysten-network",
  "rand 0.8.5",
  "sui-types",
@@ -210,7 +210,7 @@ dependencies = [
  "anemo",
  "anemo-tower",
  "bytes",
- "clap 4.4.1",
+ "clap",
  "dashmap",
  "rand 0.8.5",
  "tokio",
@@ -1997,29 +1997,12 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.2.23"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71655c45cb9845d3270c9d6df84ebe72b4dad3c2ba3f7023ad47c144e4e473a5"
-dependencies = [
- "atty",
- "bitflags 1.3.2",
- "clap_derive 3.2.18",
- "clap_lex 0.2.4",
- "indexmap",
- "once_cell",
- "strsim",
- "termcolor",
- "textwrap",
-]
-
-[[package]]
-name = "clap"
 version = "4.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c8d502cbaec4595d2e7d5f61e318f05417bd2b66fdc3809498f0d3fdf0bea27"
 dependencies = [
  "clap_builder",
- "clap_derive 4.4.0",
+ "clap_derive",
  "once_cell",
 ]
 
@@ -2031,22 +2014,9 @@ checksum = "5891c7bc0edb3e1c2204fc5e94009affabeb1821c9e5fdc3959536c5c0bb984d"
 dependencies = [
  "anstream",
  "anstyle",
- "clap_lex 0.5.0",
+ "clap_lex",
  "strsim",
  "terminal_size",
-]
-
-[[package]]
-name = "clap_derive"
-version = "3.2.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea0c8bce528c4be4da13ea6fead8965e95b6073585a2f05204bd8f4119f82a65"
-dependencies = [
- "heck 0.4.1",
- "proc-macro-error",
- "proc-macro2 1.0.58",
- "quote 1.0.26",
- "syn 1.0.107",
 ]
 
 [[package]]
@@ -2059,15 +2029,6 @@ dependencies = [
  "proc-macro2 1.0.58",
  "quote 1.0.26",
  "syn 2.0.16",
-]
-
-[[package]]
-name = "clap_lex"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2850f2f5a82cbf437dd5af4d49848fbdfc27c157c3d010345776f952765261c5"
-dependencies = [
- "os_str_bytes",
 ]
 
 [[package]]
@@ -2325,7 +2286,7 @@ dependencies = [
  "anes",
  "cast",
  "ciborium",
- "clap 4.4.1",
+ "clap",
  "criterion-plot",
  "futures",
  "is-terminal",
@@ -2703,8 +2664,7 @@ dependencies = [
 [[package]]
 name = "datatest-stable"
 version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4eaf86e44e9f0a21f6e42d8e7f83c9ee049f081745eeed1c6f47a613c76e5977"
+source = "git+https://github.com/nextest-rs/datatest-stable.git?rev=72db7f6d1bbe36a5407e96b9488a581f763e106f#72db7f6d1bbe36a5407e96b9488a581f763e106f"
 dependencies = [
  "libtest-mimic",
  "regex",
@@ -4789,11 +4749,11 @@ dependencies = [
 
 [[package]]
 name = "libtest-mimic"
-version = "0.5.2"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79529479c298f5af41375b0c1a77ef670d450b4c9cd7949d2b43af08121b20ec"
+checksum = "6d8de370f98a6cb8a4606618e53e802f93b094ddec0f96988eaec2c27e6e9ce7"
 dependencies = [
- "clap 3.2.23",
+ "clap",
  "termcolor",
  "threadpool",
 ]
@@ -5205,7 +5165,7 @@ name = "move-bytecode-viewer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 4.4.1",
+ "clap",
  "crossterm 0.21.0",
  "move-binary-format",
  "move-bytecode-source-map",
@@ -5222,7 +5182,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
- "clap 4.4.1",
+ "clap",
  "codespan-reporting",
  "colored",
  "difference",
@@ -5284,7 +5244,7 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "bcs",
- "clap 4.4.1",
+ "clap",
  "codespan-reporting",
  "difference",
  "hex",
@@ -5336,7 +5296,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
- "clap 4.4.1",
+ "clap",
  "codespan",
  "colored",
  "move-binary-format",
@@ -5354,7 +5314,7 @@ name = "move-disassembler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 4.4.1",
+ "clap",
  "colored",
  "hex",
  "move-binary-format",
@@ -5403,7 +5363,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
- "clap 4.4.1",
+ "clap",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-verifier",
@@ -5489,7 +5449,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
- "clap 4.4.1",
+ "clap",
  "colored",
  "dirs-next",
  "itertools",
@@ -5535,7 +5495,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "atty",
- "clap 4.4.1",
+ "clap",
  "codespan",
  "codespan-reporting",
  "futures",
@@ -5649,7 +5609,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytecode-interpreter-crypto",
- "clap 4.4.1",
+ "clap",
  "codespan-reporting",
  "itertools",
  "move-binary-format",
@@ -5738,7 +5698,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "clap 4.4.1",
+ "clap",
  "colored",
  "move-binary-format",
  "move-bytecode-source-map",
@@ -5772,7 +5732,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "better_any",
- "clap 4.4.1",
+ "clap",
  "codespan-reporting",
  "colored",
  "itertools",
@@ -6267,7 +6227,7 @@ dependencies = [
  "axum",
  "bytes",
  "cfg-if",
- "clap 4.4.1",
+ "clap",
  "eyre",
  "fastcrypto",
  "futures",
@@ -6875,12 +6835,6 @@ name = "openssl-probe"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
-
-[[package]]
-name = "os_str_bytes"
-version = "6.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b7820b9daea5457c9f21c69448905d723fbd21136ccf521748f23fd49e723ee"
 
 [[package]]
 name = "ouroboros"
@@ -9295,7 +9249,7 @@ dependencies = [
  "bcs",
  "bip32",
  "camino",
- "clap 4.4.1",
+ "clap",
  "colored",
  "const-str",
  "csv",
@@ -9501,7 +9455,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
- "clap 4.4.1",
+ "clap",
  "comfy-table",
  "duration-str",
  "fastcrypto",
@@ -9555,7 +9509,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
- "clap 4.4.1",
+ "clap",
  "fastcrypto",
  "futures",
  "jsonrpsee",
@@ -9630,7 +9584,7 @@ dependencies = [
  "bcs",
  "bytes",
  "chrono",
- "clap 4.4.1",
+ "clap",
  "criterion",
  "dashmap",
  "either",
@@ -9740,7 +9694,7 @@ dependencies = [
  "assert_cmd",
  "async-trait",
  "bcs",
- "clap 4.4.1",
+ "clap",
  "expect-test",
  "fastcrypto",
  "fs_extra",
@@ -9824,7 +9778,7 @@ name = "sui-execution-cut"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 4.4.1",
+ "clap",
  "expect-test",
  "tempfile",
  "thiserror",
@@ -9841,7 +9795,7 @@ dependencies = [
  "async-recursion",
  "async-trait",
  "axum",
- "clap 4.4.1",
+ "clap",
  "eyre",
  "futures",
  "http",
@@ -9972,7 +9926,7 @@ dependencies = [
  "axum",
  "bcs",
  "chrono",
- "clap 4.4.1",
+ "clap",
  "expect-test",
  "fastcrypto",
  "hex",
@@ -10000,7 +9954,7 @@ dependencies = [
  "bcs",
  "cached",
  "chrono",
- "clap 4.4.1",
+ "clap",
  "criterion",
  "diesel",
  "diesel-derive-enum",
@@ -10242,7 +10196,7 @@ dependencies = [
  "backoff",
  "base64 0.21.2",
  "chrono",
- "clap 4.4.1",
+ "clap",
  "humantime",
  "once_cell",
  "prometheus-http-query",
@@ -10262,7 +10216,7 @@ version = "1.9.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
- "clap 4.4.1",
+ "clap",
  "colored",
  "const-str",
  "fastcrypto",
@@ -10429,7 +10383,7 @@ dependencies = [
  "anyhow",
  "arc-swap",
  "axum",
- "clap 4.4.1",
+ "clap",
  "const-str",
  "fastcrypto",
  "fastcrypto-zkp",
@@ -10475,7 +10429,7 @@ version = "1.9.0"
 dependencies = [
  "anyhow",
  "bcs",
- "clap 4.4.1",
+ "clap",
  "fastcrypto",
  "move-core-types",
  "pretty_assertions",
@@ -10515,7 +10469,7 @@ dependencies = [
  "axum",
  "bcs",
  "chrono",
- "clap 4.4.1",
+ "clap",
  "futures",
  "jsonpath_lib",
  "move-core-types",
@@ -10582,7 +10536,7 @@ dependencies = [
  "axum",
  "axum-server",
  "bytes",
- "clap 4.4.1",
+ "clap",
  "const-str",
  "fastcrypto",
  "git-version",
@@ -10624,7 +10578,7 @@ dependencies = [
  "async-recursion",
  "async-trait",
  "bcs",
- "clap 4.4.1",
+ "clap",
  "colored",
  "futures",
  "http",
@@ -10689,7 +10643,7 @@ dependencies = [
  "axum-extra",
  "bcs",
  "chrono",
- "clap 4.4.1",
+ "clap",
  "eyre",
  "fastcrypto",
  "futures",
@@ -10733,7 +10687,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
- "clap 4.4.1",
+ "clap",
  "dashmap",
  "dirs",
  "eyre",
@@ -10783,7 +10737,7 @@ dependencies = [
  "async-recursion",
  "async-trait",
  "bcs",
- "clap 4.4.1",
+ "clap",
  "colored",
  "dirs",
  "fastcrypto",
@@ -10896,7 +10850,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
- "clap 4.4.1",
+ "clap",
  "expect-test",
  "fs_extra",
  "hyper",
@@ -10937,7 +10891,7 @@ dependencies = [
  "bcs",
  "byteorder",
  "bytes",
- "clap 4.4.1",
+ "clap",
  "criterion",
  "eyre",
  "fastcrypto",
@@ -10984,7 +10938,7 @@ version = "1.9.0"
 dependencies = [
  "async-trait",
  "bcs",
- "clap 4.4.1",
+ "clap",
  "futures",
  "indexmap",
  "move-binary-format",
@@ -11103,7 +11057,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "axum",
- "clap 4.4.1",
+ "clap",
  "http",
  "sui-cluster-test",
  "sui-faucet",
@@ -11144,7 +11098,7 @@ dependencies = [
  "anemo-cli",
  "anyhow",
  "bcs",
- "clap 4.4.1",
+ "clap",
  "colored",
  "comfy-table",
  "eyre",
@@ -11213,7 +11167,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "bimap",
- "clap 4.4.1",
+ "clap",
  "fastcrypto",
  "move-binary-format",
  "move-bytecode-utils",
@@ -11700,12 +11654,6 @@ dependencies = [
  "sha-1 0.10.1",
  "test-fuzz-internal",
 ]
-
-[[package]]
-name = "textwrap"
-version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "222a222a5bfe1bba4a77b45ec488a741b3cb8872e5e499451fd7d0129c9c7c3d"
 
 [[package]]
 name = "thiserror"
@@ -13267,13 +13215,10 @@ dependencies = [
  "ciborium-ll",
  "cipher",
  "clang-sys",
- "clap 3.2.23",
- "clap 4.4.1",
+ "clap",
  "clap_builder",
- "clap_derive 3.2.18",
- "clap_derive 4.4.0",
- "clap_lex 0.2.4",
- "clap_lex 0.5.0",
+ "clap_derive",
+ "clap_lex",
  "clear_on_drop",
  "clipboard-win",
  "codespan",
@@ -13630,7 +13575,6 @@ dependencies = [
  "oorandom",
  "opaque-debug",
  "openssl-probe",
- "os_str_bytes",
  "ouroboros",
  "ouroboros_macro",
  "output_vt100",
@@ -13873,7 +13817,6 @@ dependencies = [
  "test-fuzz-internal",
  "test-fuzz-macro",
  "test-fuzz-runtime",
- "textwrap",
  "thiserror",
  "thiserror-impl",
  "thread_local",
@@ -14005,7 +13948,7 @@ name = "x"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 4.4.1",
+ "clap",
  "nexlint",
  "nexlint-lints",
 ]
