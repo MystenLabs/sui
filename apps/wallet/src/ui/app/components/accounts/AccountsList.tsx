@@ -3,10 +3,9 @@
 
 import { Filter16, Plus12 } from '@mysten/icons';
 import * as ToggleGroup from '@radix-ui/react-toggle-group';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { AccountListItem } from './AccountListItem';
 import { FooterLink } from './FooterLink';
-import { UnlockAccountModal } from './UnlockAccountModal';
 import { useActiveAccount } from '../../hooks/useActiveAccount';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { Heading } from '../../shared/heading';
@@ -25,14 +24,6 @@ export function AccountsList() {
 		() => accounts?.filter((a) => a.id !== activeAccount?.id) || [],
 		[accounts, activeAccount?.id],
 	);
-
-	// todo: replace this with a real flow
-	const [unlockModalOpen, setUnlockModalOpen] = useState(false);
-	const handleUnlockAccount = () => {
-		setUnlockModalOpen(true);
-	};
-
-	const close = () => setUnlockModalOpen(false);
 
 	const handleSelectAccount = async (accountID: string) => {
 		const account = accounts?.find((a) => a.id === accountID);
@@ -63,10 +54,7 @@ export function AccountsList() {
 					<Collapsible title="Current" defaultOpen shade="darker">
 						<ToggleGroup.Item asChild value={activeAccount.id}>
 							<div>
-								<AccountListItem
-									address={activeAccount.address}
-									handleUnlockAccount={handleUnlockAccount}
-								/>
+								<AccountListItem address={activeAccount.address} />
 							</div>
 						</ToggleGroup.Item>
 					</Collapsible>
@@ -78,10 +66,7 @@ export function AccountsList() {
 									return (
 										<ToggleGroup.Item asChild key={account.id} value={account.id}>
 											<div>
-												<AccountListItem
-													address={account.address}
-													handleUnlockAccount={handleUnlockAccount}
-												/>
+												<AccountListItem address={account.address} />
 											</div>
 										</ToggleGroup.Item>
 									);
@@ -96,7 +81,6 @@ export function AccountsList() {
 				<FooterLink color="steelDarker" icon={<Filter16 />} to="/accounts/manage" text="Manage" />
 				<FooterLink color="steelDarker" icon={<Plus12 />} to="/accounts/add-account" text="Add" />
 			</div>
-			{unlockModalOpen ? <UnlockAccountModal onClose={close} onSuccess={close} /> : null}
 		</div>
 	);
 }
