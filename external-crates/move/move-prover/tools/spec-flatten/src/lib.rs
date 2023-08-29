@@ -49,8 +49,7 @@ pub struct FlattenOptions {
         short = 'f',
         long = "flatten",
         takes_value(true),
-        multiple_values(true),
-        multiple_occurrences(true)
+        multiple_values(true)
     )]
     pub flattening_pipeline: Vec<FlattenPass>,
 

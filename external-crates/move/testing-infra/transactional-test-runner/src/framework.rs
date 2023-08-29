@@ -109,7 +109,7 @@ fn merge_output(left: Option<String>, right: Option<String>) -> Option<String> {
 #[async_trait]
 pub trait MoveTestAdapter<'a>: Sized + Send {
     type ExtraPublishArgs: Send + Parser;
-    type ExtraValueArgs: ParsableValue;
+    type ExtraValueArgs: ParsableValue + Clone;
     type ExtraRunArgs: Send + Parser;
     type Subcommand: Send + Parser;
     type ExtraInitArgs: Send + Parser;
