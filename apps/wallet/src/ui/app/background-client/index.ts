@@ -550,7 +550,7 @@ export class BackgroundClient {
 	}
 
 	/**
-	 * Wallet was storing the public key of ledger accounts, but we need it to send it to the dapps.
+	 * Wallet wasn't storing the public key of ledger accounts, but we need it to send it to the dapps.
 	 * Use this function to update the public keys whenever wallet has access to them.
 	 */
 	public storeLedgerAccountsPublicKeys(
