@@ -24,25 +24,11 @@ const formSchema = z.object({
 });
 
 export function EditNickname() {
-	const { address } = useParams();
+	const { accountID } = useParams();
 	const navigate = useNavigate();
 	const backgroundClient = useBackgroundClient();
 	const { data: accounts } = useAccounts();
-	const account = accounts?.find((account) => account.address === address);
-
-	const setAccountNickname = useCallback(
-		async (id: string, nickname: string) => {
-			const account = accounts?.find((account) => account.id === id);
-			if (account) {
-				try {
-					await backgroundClient.setAccountNickname({ id, nickname });
-				} catch (e) {
-					toast.error((e as Error).message || 'Failed to set nickname');
-				}
-			}
-		},
-		[backgroundClient, accounts],
-	);
+	const account = accounts?.find((account) => account.id === accountID);
 
 	const form = useZodForm({
 		mode: 'all',
@@ -57,9 +43,16 @@ export function EditNickname() {
 	} = form;
 
 	const close = () => navigate('/accounts/manage');
-	const onSubmit = ({ nickname }: { nickname: string }) => {
-		account && setAccountNickname(account.id, nickname);
-		close();
+	const onSubmit = async ({ nickname }: { nickname: string }) => {
+		if (account && accountID) {
+			try {
+				await backgroundClient.setAccountNickname({ id: accountID, nickname });
+				close();
+			} catch (e) {
+				toast.error((e as Error).message || 'Failed to set nickname');
+			}
+		}
+		return;
 	};
 
 	return (

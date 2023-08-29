@@ -36,12 +36,12 @@ function FooterLink({ children, to, ...props }: ButtonOrLinkProps) {
 }
 
 // todo: this is slightly different than the account footer in the AccountsList - look to consolidate :(
-function AccountFooter({ address }: { address: string }) {
+function AccountFooter({ accountID }: { accountID: string }) {
 	return (
 		<div className="flex flex-shrink-0 w-full">
 			<div className="flex gap-3">
 				<div className="w-4" />
-				<FooterLink to={`/accounts/edit/${address}`}>Edit Nickname</FooterLink>
+				<FooterLink to={`/accounts/edit/${accountID}`}>Edit Nickname</FooterLink>
 				<FooterLink to="/remove">Remove</FooterLink>
 			</div>
 		</div>
@@ -88,7 +88,7 @@ export function AccountGroup({
 									key={account.id}
 									background="gradient"
 									address={account.address}
-									after={<AccountFooter address={account.address} />}
+									after={<AccountFooter accountID={account.id} />}
 								/>
 							);
 						})}

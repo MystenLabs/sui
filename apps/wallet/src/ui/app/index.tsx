@@ -176,7 +176,7 @@ const App = () => {
 				<Route path="import-passphrase" element={<ImportPassphrasePage />} />
 				<Route path="import-private-key" element={<ImportPrivateKeyPage />} />
 				<Route path="manage" element={<ManageAccountsPage />} />
-				<Route path="edit/:address" element={<EditNickname />} />
+				<Route path="edit/:accountID" element={<EditNickname />} />
 				<Route path="protect-account" element={<ProtectAccountPage />} />
 			</Route>
 
