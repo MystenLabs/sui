@@ -10,6 +10,8 @@ import {
 	KioskOwnerCap,
 	ObjectArgument,
 	OwnedKiosks,
+	Network,
+	type KioskClientOptions,
 } from '../types';
 import { TransactionArgument, TransactionBlock } from '@mysten/sui.js/transactions';
 import * as kioskTx from '../tx/kiosk';
@@ -21,16 +23,6 @@ import { objArg } from '../utils';
 
 export type PurchaseOptions = {
 	extraArgs: Record<string, ObjectArgument>;
-};
-
-export enum Network {
-	MAINNET,
-	TESTNET,
-}
-
-export type KioskClientOptions = {
-	client: SuiClient;
-	network: Network;
 };
 
 /**

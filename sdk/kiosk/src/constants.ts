@@ -1,14 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Network } from './client/kiosk-client';
 import {
 	resolveFloorPriceRule,
 	resolveKioskLockRule,
 	resolvePersonalKioskRule,
 	resolveRoyaltyRule,
 } from './tx/rules//resolve';
-import { type ObjectArgument, type RuleResolvingParams } from './types';
+import { Network, type ObjectArgument, type RuleResolvingParams } from './types';
 
 /**
  * The Transfer Policy rule.
@@ -71,4 +70,21 @@ export const testnetRules: TransferPolicyRule[] = [
 
 // TODO: Create mainnet rules equivalent array.
 
-export const rules: TransferPolicyRule[] = [...testnetRules];
+export const mainnetRules: TransferPolicyRule[] = [
+	{
+		rule: `${royaltyRuleAddress[Network.MAINNET]}::royalty_rule::Rule`,
+		network: Network.MAINNET,
+		packageId: royaltyRuleAddress[Network.MAINNET],
+		resolveRuleFunction: resolveRoyaltyRule,
+	},
+	{
+		rule: `${kioskLockRuleAddress[Network.MAINNET]}::kiosk_lock_rule::Rule`,
+		network: Network.MAINNET,
+		packageId: kioskLockRuleAddress[Network.MAINNET],
+		resolveRuleFunction: resolveKioskLockRule,
+		hasLockingRule: true,
+	},
+	// TODO: Add 2 more rules once we do the package upgrade on mainnet.
+];
+
+export const rules: TransferPolicyRule[] = [...testnetRules, ...mainnetRules];

@@ -8,13 +8,17 @@ import {
 	attachPersonalKioskRuleTx,
 	attachRoyaltyRuleTx,
 } from '../tx/rules/attach';
-import { Network, KioskClientOptions } from './kiosk-client';
 import {
 	createTransferPolicy,
 	removeTransferPolicyRule,
 	withdrawFromPolicy,
 } from '../tx/transfer-policy';
-import { ObjectArgument, TRANSFER_POLICY_CAP_TYPE } from '../types';
+import {
+	type KioskClientOptions,
+	type Network,
+	type ObjectArgument,
+	TRANSFER_POLICY_CAP_TYPE,
+} from '../types';
 import { queryTransferPolicy } from '../query/transfer-policy';
 import { SuiClient } from '@mysten/sui.js/src/client';
 import {
