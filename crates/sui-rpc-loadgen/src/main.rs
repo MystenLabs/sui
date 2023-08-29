@@ -35,7 +35,7 @@ struct Opts {
     pub num_threads: usize,
     #[clap(long, default_value_t = true)]
     pub cross_validate: bool,
-    #[clap(long, multiple_values = true, default_value = "http://127.0.0.1:9000")]
+    #[clap(long, num_args(1..), default_value = "http://127.0.0.1:9000")]
     pub urls: Vec<String>,
     /// the path to log file directory
     #[clap(long, default_value = "~/.sui/sui_config/logs")]

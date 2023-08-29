@@ -12,7 +12,7 @@ anyhow = "1.0.52"
 codespan-reporting = "0.11.1"
 hex = "0.4.3"
 regex = "1.5.5"
-clap = { version = "3.1.8", features = ["derive"] }
+clap.workspace = true
 difference = "2.0.0"
 petgraph = "0.5.1"
 walkdir = "2.3.1"

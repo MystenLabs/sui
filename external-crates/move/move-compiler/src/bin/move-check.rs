@@ -22,8 +22,7 @@ pub struct Options {
     /// The source files to check
     #[clap(
         name = "PATH_TO_SOURCE_FILE",
-        takes_value(true),
-        multiple_values(true),
+        num_args(1..),
         action = clap::ArgAction::Append,
     )]
     pub source_files: Vec<String>,

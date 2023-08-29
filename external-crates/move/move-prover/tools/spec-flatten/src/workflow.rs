@@ -30,8 +30,7 @@ pub struct WorkflowOptions {
     #[clap(
         short = 'd',
         long = "dependency",
-        takes_value(true),
-        multiple_values(true)
+        num_args(1..),
     )]
     pub deps: Vec<String>,
 
@@ -48,8 +47,7 @@ pub struct WorkflowOptions {
         short = 'a',
         long = "address",
         value_parser = parse_named_address,
-        takes_value(true),
-        multiple_values(true),
+        num_args(1..),
     )]
     pub named_addresses_extra: Option<Vec<(String, NumericalAddress)>>,
 
@@ -57,8 +55,7 @@ pub struct WorkflowOptions {
     #[clap(
         short = 's',
         long = "simplify",
-        takes_value(true),
-        multiple_values(true)
+        num_args(1..),
     )]
     pub simplification_pipeline: Vec<SimplificationPass>,
 

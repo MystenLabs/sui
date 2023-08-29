@@ -48,8 +48,7 @@ pub struct FlattenOptions {
     #[clap(
         short = 'f',
         long = "flatten",
-        takes_value(true),
-        multiple_values(true)
+        num_args(1..),
     )]
     pub flattening_pipeline: Vec<FlattenPass>,
 

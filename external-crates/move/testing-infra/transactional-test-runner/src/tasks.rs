@@ -201,7 +201,7 @@ pub enum SyntaxChoice {
 }
 
 /// When printing bytecode, the input program must either be a script or a module.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum PrintBytecodeInputChoice {
     Script,
     Module,
@@ -221,8 +221,7 @@ pub struct InitCommand {
     #[clap(
         long = "addresses",
         value_parser = move_compiler::shared::parse_named_address,
-        takes_value(true),
-        multiple_values(true),
+        num_args(1..),
     )]
     pub named_addresses: Vec<(String, NumericalAddress)>,
 }
@@ -240,22 +239,19 @@ pub struct RunCommand<ExtraValueArgs: ParsableValue> {
     #[clap(
         long = "signers",
         value_parser = ParsedAddress::parse,
-        takes_value(true),
-        multiple_values(true),
+        num_args(1..),
     )]
     pub signers: Vec<ParsedAddress>,
     #[clap(
         long = "args",
         value_parser = ParsedValue::<ExtraValueArgs>::parse,
-        takes_value(true),
-        multiple_values(true),
+        num_args(1..),
     )]
     pub args: Vec<ParsedValue<ExtraValueArgs>>,
     #[clap(
         long = "type-args",
         value_parser = ParsedType::parse,
-        takes_value(true),
-        multiple_values(true),
+        num_args(1..),
     )]
     pub type_args: Vec<ParsedType>,
     #[clap(long = "gas-budget")]
@@ -338,7 +334,7 @@ impl<
     > CommandFactory
     for TaskCommand<ExtraInitArgs, ExtraPublishArgs, ExtraValueArgs, ExtraRunArgs, SubCommands>
 {
-    fn into_app<'help>() -> Command<'help> {
+    fn command() -> Command {
         SubCommands::command()
             .name("Task Command")
             .subcommand(InitCommand::augment_args(ExtraInitArgs::command()).name("init"))
@@ -350,7 +346,7 @@ impl<
             .subcommand(ViewCommand::command().name("view"))
     }
 
-    fn into_app_for_update<'help>() -> Command<'help> {
+    fn command_for_update() -> Command {
         todo!()
     }
 }
