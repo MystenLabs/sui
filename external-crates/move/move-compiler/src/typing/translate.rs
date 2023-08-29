@@ -59,70 +59,42 @@ fn modules(
     context: &mut Context,
     modules: UniqueMap<ModuleIdent, N::ModuleDefinition>,
 ) -> UniqueMap<ModuleIdent, T::ModuleDefinition> {
-    let mut friends: UniqueMap<ModuleIdent, Vec<(ModuleIdent, Loc)>> = UniqueMap::new();
-
-    let typed_modules: UniqueMap<ModuleIdent, T::ModuleDefinition> = modules.map(|ident, mdef| {
-        let (module_defn, new_friends) = module(context, ident, mdef);
-        for ((module_ident, friend_ident), loc) in new_friends {
-            if !friends.contains_key(&module_ident) {
-                friends
-                    .add(module_ident, vec![(friend_ident, loc)])
-                    .expect("ICE added module ident after seeing it wasn't there");
-            } else {
-                friends
-                    .get_mut(&module_ident)
-                    .unwrap()
-                    .push((friend_ident, loc));
-            }
+    let mut all_new_friends = BTreeMap::new();
+    let mut typed_modules = modules.map(|ident, mdef| {
+        let (typed_mdef, new_friends) = module(context, ident, mdef);
+        for (pub_package_module, loc) in new_friends {
+            all_new_friends
+                .entry(pub_package_module)
+                .or_insert_with(BTreeMap::new)
+                .insert(
+                    ident,
+                    Friend {
+                        attributes: UniqueMap::new(),
+                        loc,
+                    },
+                );
         }
-        module_defn
+        typed_mdef
     });
 
-    typed_modules.map(|ident, typed_mdef| match friends.get(&ident) {
-        None => typed_mdef,
-        Some(module_friends) =>
+    for (mident, friends) in all_new_friends {
+        let mdef = typed_modules.get_mut(&mident).unwrap();
         // point of interest: if we have any new friends, we know there can't be any
         // "current" friends becahse all thew new friends are generated off of
         // `public(package)` usage, which disallows other friends.
-        {
-            T::ModuleDefinition {
-                friends: make_friend_map(module_friends),
-                ..typed_mdef
-            }
-        }
-    })
-}
-
-fn make_friend_map(friends: &Vec<(ModuleIdent, Loc)>) -> UniqueMap<ModuleIdent, Friend> {
-    let mut result: UniqueMap<ModuleIdent, Friend> = UniqueMap::new();
-    for (ident, loc) in friends {
-        if !result.contains_key(ident) {
-            // don't re-add friend
-            // Currently we don't support attributes accruing here. It's conceivable we would want
-            // each `public(package)` usage to report its attributes and aggregate them here, but
-            // for now we don't do this.
-            result
-                .add(
-                    *ident,
-                    Friend {
-                        attributes: UniqueMap::new(),
-                        loc: *loc,
-                    },
-                )
-                .expect("ICE added module ident after seeing it wasn't there");
-        }
+        mdef.friends = friends
+            .into_iter()
+            .collect::<UniqueMap<ModuleIdent, Friend>>();
     }
-    result
+
+    typed_modules
 }
 
 fn module(
     context: &mut Context,
     ident: ModuleIdent,
     mdef: N::ModuleDefinition,
-) -> (
-    T::ModuleDefinition,
-    BTreeMap<(ModuleIdent, ModuleIdent), Loc>,
-) {
+) -> (T::ModuleDefinition, BTreeSet<(ModuleIdent, Loc)>) {
     assert!(context.current_script_constants.is_none());
     assert!(context.called_fns.is_empty());
     assert!(context.new_friends.is_empty());
@@ -160,8 +132,7 @@ fn module(
     };
     gen_unused_warnings(context, &typed_module);
     // get the list of new friends and reset the list.
-    let new_friends = context.new_friends.clone();
-    context.new_friends.clear();
+    let new_friends = std::mem::take(&mut context.new_friends);
     // reset called functions set so that it's ready to be be populated with values from
     // a single module only
     context.called_fns.clear();

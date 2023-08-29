@@ -52,8 +52,8 @@ pub struct ConstantInfo {
 }
 
 pub struct ModuleInfo {
-    pub friends: UniqueMap<ModuleIdent, Loc>,
     pub package: Option<Symbol>,
+    pub friends: UniqueMap<ModuleIdent, Loc>,
     pub structs: UniqueMap<StructName, StructDefinition>,
     pub functions: UniqueMap<FunctionName, FunctionInfo>,
     pub constants: UniqueMap<ConstantName, ConstantInfo>,
@@ -93,7 +93,7 @@ pub struct Context<'env> {
     /// structured as (defining module, new friend, location) where `new friend` is usually the
     /// context's current module. Note there may be more than one location in practice, but
     /// tracking a single one is sufficient for error reporting.
-    pub new_friends: BTreeMap<(ModuleIdent, ModuleIdent), Loc>,
+    pub new_friends: BTreeSet<(ModuleIdent, Loc)>,
 }
 
 macro_rules! program_info {
@@ -121,8 +121,8 @@ macro_rules! program_info {
                 signature: cdef.signature.clone(),
             });
             let minfo = ModuleInfo {
-                friends: mdef.friends.ref_map(|_, friend| friend.loc),
                 package: mdef.package_name,
+                friends: mdef.friends.ref_map(|_, friend| friend.loc),
                 structs,
                 functions,
                 constants,
@@ -215,7 +215,7 @@ impl<'env> Context<'env> {
             modules,
             env,
             called_fns: BTreeSet::new(),
-            new_friends: BTreeMap::new(),
+            new_friends: BTreeSet::new(),
         }
     }
 
@@ -322,20 +322,17 @@ impl<'env> Context<'env> {
     fn record_current_module_as_friend(&mut self, m: &ModuleIdent, loc: Loc) {
         match &self.current_module {
             Some(current_mident) if m != current_mident => {
-                self.new_friends.insert((*m, *current_mident), loc);
+                self.new_friends.insert((*m, loc));
             }
             _ => {}
         }
     }
 
     fn current_module_shares_package_and_address(&self, m: &ModuleIdent) -> bool {
-        match &self.current_module {
-            None => false,
-            Some(current_mident) => {
-                m.value.address == current_mident.value.address
-                    && self.module_info(m).package == self.module_info(current_mident).package
-            }
-        }
+        self.current_module.is_some_and(|current_mident| {
+            m.value.address == current_mident.value.address
+                && self.module_info(m).package == self.module_info(&current_mident).package
+        })
     }
 
     fn current_module_is_a_friend_of(&self, m: &ModuleIdent) -> bool {
@@ -882,17 +879,24 @@ pub fn make_function_type(
         }
         Visibility::Package(vis_loc) => {
             let internal_msg = format!(
-                "This function can only be called from the same address and package as module '{}' (package: '{}'). \
-                This call is at address '{}', package '{}'",
+                "A '{}' function can only be called from the same address and package as the \
+                module '{}' in package: '{}'. This call is from address '{}' in package '{}'",
+                Visibility::PACKAGE,
                 m,
-                context.module_info(m).package.map(|pkg_name| format!("{}", pkg_name)).unwrap_or("<no package>".to_string()),
+                context
+                    .module_info(m)
+                    .package
+                    .map(|pkg_name| format!("{}", pkg_name))
+                    .unwrap_or("<unknown package>".to_string()),
                 &context
-                    .current_module.map(|cur_module| cur_module.value.address.to_string()).unwrap_or("<no_addr>".to_string()),
+                    .current_module
+                    .map(|cur_module| cur_module.value.address.to_string())
+                    .unwrap_or("<unknown addr>".to_string()),
                 &context
                     .current_module
                     .and_then(|cur_module| context.module_info(&cur_module).package)
                     .map(|pkg_name| format!("{}", pkg_name))
-                    .unwrap_or("<no package>".to_string())
+                    .unwrap_or("<unknown package>".to_string())
             );
             context.env.add_diag(diag!(
                 TypeSafety::Visibility,

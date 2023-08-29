@@ -723,8 +723,10 @@ impl AbilitySet {
 
 impl Visibility {
     pub const FRIEND: &'static str = P::Visibility::FRIEND;
+    pub const FRIEND_IDENT: &'static str = P::Visibility::FRIEND_IDENT;
     pub const INTERNAL: &'static str = P::Visibility::INTERNAL;
     pub const PACKAGE: &'static str = P::Visibility::PACKAGE;
+    pub const PACKAGE_IDENT: &'static str = P::Visibility::PACKAGE_IDENT;
     pub const PUBLIC: &'static str = P::Visibility::PUBLIC;
 
     pub fn loc(&self) -> Option<Loc> {

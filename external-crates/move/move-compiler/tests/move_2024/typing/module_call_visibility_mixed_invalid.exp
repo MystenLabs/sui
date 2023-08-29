@@ -2,9 +2,9 @@ error[E02016]: invalid visibility modifier
    ┌─ tests/move_2024/typing/module_call_visibility_mixed_invalid.move:10:5
    │
 10 │     public(package) fun f_package_call_package() { mod_0::f_pkg_public() }
-   │     ^^^^^^^^^^^^^^^ Incompatible visibility 'public(package)' in module 'mod_1'
+   │     ^^^^^^^^^^^^^^^ Cannot mix 'package' and 'friend' visibilities in the same module
 11 │     public(friend) fun f_friend_call_package() { mod_0::f_pkg_public() }
-   │     -------------- 'public(friend)' visibility used here
+   │     -------------- 'friend' visibility used here
 
 error[E02016]: invalid visibility modifier
    ┌─ tests/move_2024/typing/module_call_visibility_mixed_invalid.move:11:5
@@ -12,13 +12,13 @@ error[E02016]: invalid visibility modifier
 10 │     public(package) fun f_package_call_package() { mod_0::f_pkg_public() }
    │     --------------- 'public(package)' visibility used here
 11 │     public(friend) fun f_friend_call_package() { mod_0::f_pkg_public() }
-   │     ^^^^^^^^^^^^^^ Incompatible visibility 'public(friend)' in module 'mod_1'
+   │     ^^^^^^^^^^^^^^ Cannot mix 'friend' and 'package' visibilities in the same module
 
 error[E02016]: invalid visibility modifier
    ┌─ tests/move_2024/typing/module_call_visibility_mixed_invalid.move:17:5
    │
 17 │     friend 0x42::mod_1;
-   │     ^^^^^^^^^^^^^^^^^^^ Incompatible friend definition in module 'mod_2' that uses 'public(package)'
+   │     ^^^^^^^^^^^^^^^^^^^ Cannot define 'friend' modules and use 'public(package)' visibility in the same module
 18 │ 
 19 │     public(package) fun f_package_call_package(): u64 { 0 }
    │     --------------- 'public(package)' visibility used here
@@ -27,8 +27,8 @@ error[E02016]: invalid visibility modifier
    ┌─ tests/move_2024/typing/module_call_visibility_mixed_invalid.move:19:5
    │
 17 │     friend 0x42::mod_1;
-   │     ------------------- Friend module defined here
+   │     ------------------- 'friend' visibility used here
 18 │ 
 19 │     public(package) fun f_package_call_package(): u64 { 0 }
-   │     ^^^^^^^^^^^^^^^ Incompatible visibility 'public(package)' in module 'mod_2'
+   │     ^^^^^^^^^^^^^^^ Cannot mix 'package' and 'friend' visibilities in the same module
 

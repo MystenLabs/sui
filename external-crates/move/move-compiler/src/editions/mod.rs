@@ -69,7 +69,7 @@ pub fn valid_editions_for_feature(feature: &FeatureGate) -> Vec<Edition> {
     Edition::ALL
         .iter()
         .filter(|e| e.supports(feature))
-        .cloned()
+        .copied()
         .collect()
 }
 

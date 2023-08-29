@@ -19,12 +19,4 @@ address 0x42 {
     }
 }
 
-
-//# run
-script {
-use 0x42::Y;
-
-fun main() {
-    Y::foo();
-}
-}
+//# run 0x42::y::foo

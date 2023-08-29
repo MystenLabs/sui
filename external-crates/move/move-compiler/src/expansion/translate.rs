@@ -472,7 +472,7 @@ fn module_(
         }
     }
 
-    check_visibility_modifiers(context, &functions, &friends, name, package_name);
+    check_visibility_modifiers(context, &functions, &friends, package_name);
 
     context.set_to_outer_scope(old_aliases);
 
@@ -499,19 +499,14 @@ fn check_visibility_modifiers(
     context: &mut Context,
     functions: &UniqueMap<FunctionName, E::Function>,
     friends: &UniqueMap<ModuleIdent, E::Friend>,
-    module_name: ModuleName,
     package_name: Option<Symbol>,
 ) {
-    let mut friend_definition = None;
-    for (_, _, friend) in friends {
-        friend_definition = Some(friend.loc);
-    }
-    let mut public_friend_usage = None;
+    let mut friend_usage = friends.iter().next().map(|(_, _, friend)| friend.loc);
     let mut public_package_usage = None;
     for (_, _, function) in functions {
         match function.visibility {
-            E::Visibility::Friend(loc) => {
-                public_friend_usage = Some(loc);
+            E::Visibility::Friend(loc) if friend_usage.is_none() => {
+                friend_usage = Some(loc);
             }
             E::Visibility::Package(loc) => {
                 context
@@ -519,17 +514,14 @@ fn check_visibility_modifiers(
                     .check_feature(&FeatureGate::PublicPackage, package_name, loc);
                 public_package_usage = Some(loc);
             }
-            _ => {}
+            _ => (),
         }
     }
 
     // Emit any errors.
-    if public_package_usage.is_some()
-        && (public_friend_usage.is_some() || friend_definition.is_some())
-    {
+    if public_package_usage.is_some() && friend_usage.is_some() {
         let friend_error_msg = format!(
-            "Incompatible friend definition in module '{}' that uses '{}'",
-            module_name,
+            "Cannot define 'friend' modules and use '{}' visibility in the same module",
             E::Visibility::PACKAGE
         );
         let package_definition_msg = format!("'{}' visibility used here", E::Visibility::PACKAGE);
@@ -544,14 +536,14 @@ fn check_visibility_modifiers(
             ));
         }
         let package_error_msg = format!(
-            "Incompatible visibility '{}' in module '{}'",
-            E::Visibility::PACKAGE,
-            module_name
+            "Cannot mix '{}' and '{}' visibilities in the same module",
+            E::Visibility::PACKAGE_IDENT,
+            E::Visibility::FRIEND_IDENT
         );
         let friend_error_msg = format!(
-            "Incompatible visibility '{}' in module '{}'",
-            E::Visibility::FRIEND,
-            module_name
+            "Cannot mix '{}' and '{}' visibilities in the same module",
+            E::Visibility::FRIEND_IDENT,
+            E::Visibility::PACKAGE_IDENT
         );
         for (_, _, function) in functions {
             match function.visibility {
@@ -565,33 +557,13 @@ fn check_visibility_modifiers(
                         )
                     ));
                 }
-                E::Visibility::Package(loc)
-                    if friend_definition.is_some() && public_friend_usage.is_some() =>
-                {
-                    context.env.add_diag(diag!(
-                        Declarations::InvalidVisibilityModifier,
-                        (loc, package_error_msg.clone()),
-                        (friend_definition.unwrap(), "Friend module defined here"),
-                        (
-                            public_friend_usage.unwrap(),
-                            &format!("'{}' visibility used here", E::Visibility::FRIEND)
-                        )
-                    ));
-                }
-                E::Visibility::Package(loc) if friend_definition.is_some() => {
-                    context.env.add_diag(diag!(
-                        Declarations::InvalidVisibilityModifier,
-                        (loc, package_error_msg.clone()),
-                        (friend_definition.unwrap(), "Friend module defined here")
-                    ));
-                }
                 E::Visibility::Package(loc) => {
                     context.env.add_diag(diag!(
                         Declarations::InvalidVisibilityModifier,
                         (loc, package_error_msg.clone()),
                         (
-                            public_friend_usage.unwrap(),
-                            &format!("'{}' visibility used here", E::Visibility::FRIEND)
+                            friend_usage.unwrap(),
+                            &format!("'{}' visibility used here", E::Visibility::FRIEND_IDENT)
                         )
                     ));
                 }

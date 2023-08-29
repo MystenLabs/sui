@@ -890,6 +890,7 @@ impl BinOp_ {
 
 impl Visibility {
     pub const FRIEND: &'static str = "public(friend)";
+    pub const FRIEND_IDENT: &'static str = "friend";
     pub const INTERNAL: &'static str = "";
     pub const PACKAGE: &'static str = "public(package)";
     pub const PACKAGE_IDENT: &'static str = "package";
