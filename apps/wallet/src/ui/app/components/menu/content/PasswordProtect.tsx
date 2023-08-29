@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useNavigate } from 'react-router-dom';
+import { ProtectAccountForm } from '../../accounts/ProtectAccountForm';
 import Overlay from '../../overlay';
 import { useNextMenuUrl } from '_components/menu/hooks';
-import { ProtectAccountForm } from '../../accounts/ProtectAccountForm';
 
 export function PasswordProtect() {
 	const mainMenuUrl = useNextMenuUrl(true, '/');
