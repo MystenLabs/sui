@@ -51,7 +51,6 @@ export function EditNickname() {
 				toast.error((e as Error).message || 'Failed to set nickname');
 			}
 		}
-		return;
 	};
 
 	return (
