@@ -89,6 +89,11 @@ export class MnemonicAccount
 		await this.onUnlocked();
 	}
 
+	async verifyPassword(password: string): Promise<void> {
+		const mnemonicSource = await this.#getMnemonicSource();
+		await mnemonicSource.verifyPassword(password);
+	}
+
 	async toUISerialized(): Promise<MnemonicSerializedUiAccount> {
 		const { id, type, address, derivationPath, publicKey, sourceID, selected, nickname } =
 			await this.getStoredData();
@@ -103,6 +108,7 @@ export class MnemonicAccount
 			lastUnlockedOn: await this.lastUnlockedOn,
 			selected,
 			nickname,
+			isPasswordUnlockable: true,
 		};
 	}
 

@@ -25,6 +25,7 @@ FROM
   tps_data
 WHERE 
   time_diff IS NOT NULL;
+CREATE UNIQUE INDEX epoch_network_metrics_tps ON epoch_network_metrics(tps_30_days);
 
 CREATE TABLE epochs
 (
@@ -66,7 +67,7 @@ BEGIN
         LOOP
             BEGIN
                 attempts := attempts + 1;
-                REFRESH MATERIALIZED VIEW epoch_network_metrics;
+                REFRESH MATERIALIZED VIEW CONCURRENTLY epoch_network_metrics;
                 REFRESH MATERIALIZED VIEW epoch_move_call_metrics;
                 EXIT;
             EXCEPTION

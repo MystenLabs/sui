@@ -67,6 +67,7 @@ export interface ZkAccountSerializedUI extends SerializedUIAccount {
 	type: 'zk';
 	email: string;
 	picture: string | null;
+	provider: ZkProvider;
 }
 
 export function isZkAccountSerializedUI(
@@ -197,7 +198,8 @@ export class ZkAccount
 	}
 
 	async toUISerialized(): Promise<ZkAccountSerializedUI> {
-		const { address, publicKey, type, claims, selected, nickname } = await this.getStoredData();
+		const { address, publicKey, type, claims, selected, provider, nickname } =
+			await this.getStoredData();
 		const { email, picture } = await deobfuscate<JwtSerializedClaims>(claims);
 		return {
 			id: this.id,
@@ -210,6 +212,8 @@ export class ZkAccount
 			picture,
 			selected,
 			nickname,
+			isPasswordUnlockable: false,
+			provider,
 		};
 	}
 

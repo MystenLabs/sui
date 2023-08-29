@@ -24,6 +24,7 @@ CREATE TABLE recipients (
 CREATE INDEX recipients_transaction_digest ON recipients (transaction_digest);
 CREATE INDEX recipients_sender ON recipients (sender);
 CREATE INDEX recipients_recipient ON recipients (recipient);
+CREATE INDEX recipients_checkpoint ON recipients (checkpoint_sequence_number);
 
 CREATE TABLE input_objects (
     id                          BIGSERIAL       PRIMARY KEY,

@@ -209,6 +209,10 @@ pub trait IndexerStore {
         tx_digest: Option<String>,
         is_descending: bool,
     ) -> Result<Option<i64>, IndexerError>;
+    async fn get_recipients_data_by_checkpoint(
+        &self,
+        seq: u64,
+    ) -> Result<Vec<Recipient>, IndexerError>;
 
     async fn get_network_metrics(&self) -> Result<NetworkMetrics, IndexerError>;
     async fn get_move_call_metrics(&self) -> Result<MoveCallMetrics, IndexerError>;

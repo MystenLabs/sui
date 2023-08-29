@@ -86,6 +86,7 @@ export class ImportedAccount
 			lastUnlockedOn: await this.lastUnlockedOn,
 			selected,
 			nickname,
+			isPasswordUnlockable: true,
 		};
 	}
 
@@ -94,6 +95,11 @@ export class ImportedAccount
 		const { keyPair } = await decrypt<EncryptedData>(password, encrypted);
 		await this.setEphemeralValue({ keyPair });
 		await this.onUnlocked();
+	}
+
+	async verifyPassword(password: string): Promise<void> {
+		const { encrypted } = await this.getStoredData();
+		await decrypt<EncryptedData>(password, encrypted);
 	}
 
 	async signData(data: Uint8Array): Promise<string> {

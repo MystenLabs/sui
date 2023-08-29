@@ -146,11 +146,13 @@ export interface SerializedUIAccount {
 	 */
 	readonly selected: boolean;
 	readonly nickname: string | null;
+	readonly isPasswordUnlockable: boolean;
 }
 
 export interface PasswordUnlockableAccount {
 	readonly unlockType: 'password';
 	passwordUnlock(password: string): Promise<void>;
+	verifyPassword(password: string): Promise<void>;
 }
 
 export function isPasswordUnLockable(account: unknown): account is PasswordUnlockableAccount {

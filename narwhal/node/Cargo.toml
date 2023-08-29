@@ -11,7 +11,7 @@ arc-swap.workspace = true
 async-trait.workspace = true
 bytes.workspace = true
 cfg-if.workspace = true
-clap = "2.34"
+clap.workspace = true
 futures.workspace = true
 rand.workspace = true
 thiserror.workspace = true
@@ -50,7 +50,6 @@ reqwest.workspace = true
 pretty_assertions.workspace = true
 serde-reflection.workspace = true
 serde_yaml.workspace = true
-structopt.workspace = true
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 
 [features]

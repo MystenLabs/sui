@@ -4,6 +4,7 @@
 use super::{
     address::Address,
     base64::Base64,
+    epoch::Epoch,
     gas::{GasEffects, GasInput},
     sui_address::SuiAddress,
 };
@@ -16,12 +17,14 @@ pub(crate) struct TransactionBlock {
     pub sender: Option<Address>,
     pub bcs: Option<Base64>,
     pub gas_input: Option<GasInput>,
+    pub expiration: Option<Epoch>,
 }
 
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
 pub(crate) struct TransactionBlockEffects {
     pub digest: String,
-    pub gas_effects: GasEffects,
+    pub gas_effects: Option<GasEffects>,
+    pub epoch: Option<Epoch>,
 }
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
