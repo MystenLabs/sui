@@ -73,7 +73,7 @@ impl Debug for ConsensusTransactionKey {
                 name.concise(),
                 generation
             ),
-            Self::NewJWKFetched(id) => write!(f, "NewJWKFetched({:?})", id),
+            Self::NewJWKFetched(id, jwk) => write!(f, "NewJWKFetched({:?}, {:?})", id, jwk),
         }
     }
 }

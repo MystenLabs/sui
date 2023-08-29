@@ -1600,11 +1600,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         if self.gas_owner() == self.sender() {
             return Ok(());
         }
-        let allow_sponsored_tx = match &self.kind {
-            TransactionKind::ProgrammableTransaction(_) => true,
-            _ => false,
-        };
-        if allow_sponsored_tx {
+        if matches!(&self.kind, TransactionKind::ProgrammableTransaction(_)) {
             return Ok(());
         }
         Err(UserInputError::UnsupportedSponsoredTransactionKind)

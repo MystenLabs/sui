@@ -16,7 +16,6 @@ use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use fastcrypto::hash::Hash as _Hash;
 use fastcrypto::traits::ToFromBytes;
-use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
 use lru::LruCache;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use narwhal_config::Committee;

@@ -493,7 +493,7 @@ impl AuthorityPerEpochStore {
         for active_jwk in &authenticator_state.active_jwks {
             let ActiveJwk { jwk_id, jwk, epoch } = active_jwk;
             assert!(epoch <= &epoch_id);
-            signature_verifier.insert_oauth_jwk(jwk_id, jwk);
+            signature_verifier.insert_jwk(jwk_id, jwk);
         }
 
         let is_validator = committee.authority_index(&name).is_some();
@@ -1256,10 +1256,7 @@ impl AuthorityPerEpochStore {
         let insert_result = jwk_aggregator.insert(authority, key.clone());
 
         if !previously_active && insert_result.is_quorum_reached() {
-            info!(
-                "jwk {:?} became active at round {:?}",
-                key, insert_result.quorum_reached_at_round
-            );
+            info!("jwk {:?} became active at round {:?}", key, round);
             batch.insert_batch(&self.tables.active_jwks, std::iter::once((round, key)))?;
         }
 
