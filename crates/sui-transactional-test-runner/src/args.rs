@@ -38,17 +38,13 @@ pub struct SuiPublishArgs {
     pub sender: Option<String>,
     #[clap(long = "upgradeable", action = clap::ArgAction::SetTrue)]
     pub upgradeable: bool,
-    #[clap(
-        long = "dependencies",
-        multiple_values(true),
-        multiple_occurrences(false)
-    )]
+    #[clap(long = "dependencies", multiple_values(true))]
     pub dependencies: Vec<String>,
 }
 
 #[derive(Debug, clap::Parser)]
 pub struct SuiInitArgs {
-    #[clap(long = "accounts", multiple_values(true), multiple_occurrences(false))]
+    #[clap(long = "accounts", multiple_values(true))]
     pub accounts: Option<Vec<String>>,
     #[clap(long = "protocol-version")]
     pub protocol_version: Option<u64>,
@@ -58,13 +54,13 @@ pub struct SuiInitArgs {
 
 #[derive(Debug, clap::Parser)]
 pub struct ViewObjectCommand {
-    #[clap(parse(try_from_str = parse_fake_id))]
+    #[clap(value_parser = parse_fake_id)]
     pub id: FakeID,
 }
 
 #[derive(Debug, clap::Parser)]
 pub struct TransferObjectCommand {
-    #[clap(parse(try_from_str = parse_fake_id))]
+    #[clap(value_parser = parse_fake_id)]
     pub id: FakeID,
     #[clap(long = "recipient")]
     pub recipient: String,
@@ -92,10 +88,10 @@ pub struct ProgrammableTransactionCommand {
     pub dev_inspect: bool,
     #[clap(
         long = "inputs",
-        parse(try_from_str = ParsedValue::parse),
+        value_parser = ParsedValue::<SuiExtraValueArgs>::parse,
         takes_value(true),
         multiple_values(true),
-        multiple_occurrences(true)
+        action = clap::ArgAction::Append,
     )]
     pub inputs: Vec<ParsedValue<SuiExtraValueArgs>>,
 }
@@ -104,13 +100,9 @@ pub struct ProgrammableTransactionCommand {
 pub struct UpgradePackageCommand {
     #[clap(long = "package")]
     pub package: String,
-    #[clap(long = "upgrade-capability", parse(try_from_str = parse_fake_id))]
+    #[clap(long = "upgrade-capability", value_parser = parse_fake_id)]
     pub upgrade_capability: FakeID,
-    #[clap(
-        long = "dependencies",
-        multiple_values(true),
-        multiple_occurrences(false)
-    )]
+    #[clap(long = "dependencies", multiple_values(true))]
     pub dependencies: Vec<String>,
     #[clap(long = "sender")]
     pub sender: String,
@@ -118,7 +110,7 @@ pub struct UpgradePackageCommand {
     pub gas_budget: Option<u64>,
     #[clap(long = "syntax")]
     pub syntax: Option<SyntaxChoice>,
-    #[clap(long = "policy", default_value="compatible", parse(try_from_str = parse_policy))]
+    #[clap(long = "policy", default_value="compatible", value_parser = parse_policy)]
     pub policy: u8,
 }
 
@@ -126,18 +118,14 @@ pub struct UpgradePackageCommand {
 pub struct StagePackageCommand {
     #[clap(long = "syntax")]
     pub syntax: Option<SyntaxChoice>,
-    #[clap(
-        long = "dependencies",
-        multiple_values(true),
-        multiple_occurrences(false)
-    )]
+    #[clap(long = "dependencies", multiple_values(true))]
     pub dependencies: Vec<String>,
 }
 
 #[derive(Debug, clap::Parser)]
 pub struct SetAddressCommand {
     pub address: String,
-    #[clap(parse(try_from_str = ParsedValue::parse))]
+    #[clap(value_parser = ParsedValue::<SuiExtraValueArgs>::parse)]
     pub input: ParsedValue<SuiExtraValueArgs>,
 }
 
@@ -159,7 +147,7 @@ pub enum SuiSubcommand {
     SetAddress(SetAddressCommand),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum SuiExtraValueArgs {
     Object(FakeID, Option<SequenceNumber>),
     Digest(String),
