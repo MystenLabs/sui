@@ -60,8 +60,10 @@ async fn graphiql() -> impl axum::response::IntoResponse {
 }
 
 pub async fn start_example_server(config: Option<ServerConfig>) {
-    env_logger::init();
     let config = config.unwrap_or_default();
+    let _guard = telemetry_subscribers::TelemetryConfig::new()
+        .with_env()
+        .init();
 
     let sui_sdk_client_v0 = sui_sdk::SuiClientBuilder::default()
         .request_timeout(RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD)

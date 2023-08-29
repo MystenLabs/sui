@@ -14,11 +14,11 @@ async-trait.workspace = true
 axum.workspace = true
 chrono.workspace = true
 clap.workspace = true
-env_logger = { version = "0.10.0" }
 fastcrypto = { workspace = true, features = ["copy_key"] }
 futures-util = {version = "0.3.17"}
 hex.workspace = true
 serde.workspace = true
+telemetry-subscribers.workspace = true
 tracing.workspace = true
 tokio.workspace = true
 thiserror.workspace = true
