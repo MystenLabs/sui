@@ -69,7 +69,6 @@ pub fn run(args: Args) -> crate::Result<()> {
         allow: vec![
             // TODO spend the time to de-dup these direct dependencies
             "base64".to_owned(),
-            "clap".to_owned(),
             "serde_yaml".to_owned(),
             "syn".to_owned(),
         ],
