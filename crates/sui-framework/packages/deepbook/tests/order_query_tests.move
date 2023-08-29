@@ -3,9 +3,10 @@
 
 #[test_only]
 module deepbook::order_query_tests {
-
-    use std::option::{none, some};
+    use std::option;
+    use std::option::{none, some, Option};
     use std::vector;
+    use sui::clock;
     use deepbook::order_query;
     use deepbook::order_query::iter_bids;
     use deepbook::custodian_v2;
@@ -30,6 +31,7 @@ module deepbook::order_query_tests {
     #[test]
     fun test_order_query_pagination() {
         let scenario = prepare_scenario();
+        add_orders(200, TIMESTAMP_INF, none(), &mut scenario);
         let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut scenario);
         let page1 = iter_bids(&pool, none(), none(), none(), none());
         assert!(vector::length(order_query::orders(&page1)) == 100, 0);
@@ -39,6 +41,7 @@ module deepbook::order_query_tests {
         let first_order = vector::borrow(orders, 0);
         assert!(order_query::order_id(first_order) == 1, 0);
         let last_order = vector::borrow(orders, vector::length(orders) - 1);
+
         assert!(order_query::order_id(last_order) == 100, 0);
 
         let page2 = iter_bids(
@@ -64,6 +67,7 @@ module deepbook::order_query_tests {
     #[test]
     fun test_order_query_start_order_id() {
         let scenario = prepare_scenario();
+        add_orders(200, TIMESTAMP_INF, none(), &mut scenario);
         let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut scenario);
         // test start order id
         let page = iter_bids(&pool, none(), some(51), none<u64>(), none<u64>());
@@ -97,6 +101,122 @@ module deepbook::order_query_tests {
         end(scenario);
     }
 
+    #[test]
+    fun test_order_query_with_expiry() {
+        let scenario = prepare_scenario();
+        add_orders(20, TIMESTAMP_INF, none(), &mut scenario);
+
+        let clock = test_scenario::take_shared<Clock>(&mut scenario);
+        let expired_timestamp = clock::timestamp_ms(&clock) + 10000;
+        test_scenario::return_shared(clock);
+        next_tx(&mut scenario, ALICE);
+
+        add_orders(50, expired_timestamp, none(), &mut scenario);
+
+        let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut scenario);
+
+        // test get all order excluding expired orders
+        let page = iter_bids(&pool, none(), none(), some(expired_timestamp + 1), none());
+        assert!(vector::length(order_query::orders(&page)) == 20, 0);
+        assert!(!order_query::has_next_page(&page), 0);
+
+        let orders = order_query::orders(&page);
+        let first_order = vector::borrow(orders, 0);
+        assert!(order_query::order_id(first_order) == 1, 0);
+        let last_order = vector::borrow(orders, vector::length(orders) - 1);
+        assert!(order_query::order_id(last_order) == 20, 0);
+
+        test_scenario::return_shared(pool);
+        end(scenario);
+    }
+
+    #[test]
+    fun test_order_query_with_max_id() {
+        let scenario = prepare_scenario();
+        add_orders(70, TIMESTAMP_INF, none(), &mut scenario);
+
+        let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut scenario);
+
+        // test get all order with id < 50
+        let page = iter_bids(&pool, none(), none(), none(), some(50));
+        assert!(vector::length(order_query::orders(&page)) == 50, 0);
+        assert!(!order_query::has_next_page(&page), 0);
+
+        let orders = order_query::orders(&page);
+        let first_order = vector::borrow(orders, 0);
+        assert!(order_query::order_id(first_order) == 1, 0);
+        let last_order = vector::borrow(orders, vector::length(orders) - 1);
+        assert!(order_query::order_id(last_order) == 50, 0);
+
+        // test get all order with id between 20 and 50
+        let page = iter_bids(&pool, none(), some(20), none(), some(50));
+
+        assert!(vector::length(order_query::orders(&page)) == 31, 0);
+        assert!(!order_query::has_next_page(&page), 0);
+
+        let orders = order_query::orders(&page);
+        let first_order = vector::borrow(orders, 0);
+        assert!(order_query::order_id(first_order) == 20, 0);
+        let last_order = vector::borrow(orders, vector::length(orders) - 1);
+        assert!(order_query::order_id(last_order) == 50, 0);
+
+        test_scenario::return_shared(pool);
+        end(scenario);
+    }
+
+    #[test]
+    fun test_order_query_pagination_multiple_orders_same_tick_level() {
+        let scenario = prepare_scenario();
+        // orders with same tick level repeated 4 times
+        add_orders(50, TIMESTAMP_INF, none(), &mut scenario);
+        add_orders(50, TIMESTAMP_INF, none(), &mut scenario);
+        add_orders(50, TIMESTAMP_INF, none(), &mut scenario);
+        add_orders(50, TIMESTAMP_INF, none(), &mut scenario);
+
+        let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut scenario);
+        let page1 = iter_bids(&pool, none(), none(), none(), none());
+        assert!(vector::length(order_query::orders(&page1)) == 100, 0);
+        assert!(order_query::has_next_page(&page1), 0);
+
+        let orders = order_query::orders(&page1);
+        let first_order = vector::borrow(orders, 0);
+        assert!(order_query::order_id(first_order) == 1, 0);
+        let last_order = vector::borrow(orders, vector::length(orders) - 1);
+        assert!(order_query::order_id(last_order) == 175, 0);
+
+        let page2 = iter_bids(
+            &pool,
+            order_query::next_tick_level(&page1),
+            order_query::next_order_id(&page1),
+            none(),
+            none()
+        );
+        assert!(vector::length(order_query::orders(&page2)) == 100, 0);
+        assert!(!order_query::has_next_page(&page2), 0);
+
+        let orders = order_query::orders(&page2);
+        let first_order = vector::borrow(orders, 0);
+        assert!(order_query::order_id(first_order) == 26, 0);
+        let last_order = vector::borrow(orders, vector::length(orders) - 1);
+        assert!(order_query::order_id(last_order) == 200, 0);
+
+        // Query order with tick level > 40 * FLOAT_SCALING
+        let page = iter_bids(&pool, some(40 * FLOAT_SCALING), none(), none(), none());
+
+        // should only contain orders with tick level > 40 - 50, 44 orders in total
+        assert!(vector::length(order_query::orders(&page)) == 44, 0);
+        assert!(!order_query::has_next_page(&page), 0);
+
+        let orders = order_query::orders(&page);
+        let first_order = vector::borrow(orders, 0);
+        assert!(order_query::order_id(first_order) == 40, 0);
+        let last_order = vector::borrow(orders, vector::length(orders) - 1);
+        assert!(order_query::order_id(last_order) == 200, 0);
+
+        test_scenario::return_shared(pool);
+        end(scenario);
+    }
+
     fun prepare_scenario(): Scenario {
         let scenario = test_scenario::begin(@0x1);
         next_tx(&mut scenario, OWNER);
@@ -108,49 +228,52 @@ module deepbook::order_query_tests {
         mint_account_cap_transfer(BOB, test_scenario::ctx(&mut scenario));
         next_tx(&mut scenario, ALICE);
 
-        {
-            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut scenario);
-            let account_cap = test_scenario::take_from_sender<AccountCap>(&scenario);
-            let account_cap_user = account_owner(&account_cap);
-            let (base_custodian, quote_custodian) = clob_v2::borrow_mut_custodian(&mut pool);
-            custodian_v2::deposit(base_custodian, mint_for_testing<SUI>(1000000, ctx(&mut scenario)), account_cap_user);
-            custodian_v2::deposit(
-                quote_custodian,
-                mint_for_testing<USD>(10000000, ctx(&mut scenario)),
-                account_cap_user
-            );
-            test_scenario::return_shared(pool);
-            test_scenario::return_to_sender<AccountCap>(&scenario, account_cap);
-        };
-
-        // alice places limit orders
+        let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut scenario);
+        let account_cap = test_scenario::take_from_sender<AccountCap>(&scenario);
+        let account_cap_user = account_owner(&account_cap);
+        let (base_custodian, quote_custodian) = clob_v2::borrow_mut_custodian(&mut pool);
+        custodian_v2::deposit(base_custodian, mint_for_testing<SUI>(1000000, ctx(&mut scenario)), account_cap_user);
+        custodian_v2::deposit(
+            quote_custodian,
+            mint_for_testing<USD>(10000000, ctx(&mut scenario)),
+            account_cap_user
+        );
+        test_scenario::return_shared(pool);
+        test_scenario::return_to_sender<AccountCap>(&scenario, account_cap);
         next_tx(&mut scenario, ALICE);
-        {
-            let n = 1;
-            while (n <= 200) {
-                let account_cap = test_scenario::take_from_sender<AccountCap>(&scenario);
-                let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut scenario);
-                let clock = test_scenario::take_shared<Clock>(&mut scenario);
-                clob_v2::place_limit_order<SUI, USD>(
-                    &mut pool,
-                    CLIENT_ID_ALICE,
-                    n * FLOAT_SCALING,
-                    200,
-                    CANCEL_OLDEST,
-                    true,
-                    TIMESTAMP_INF,
-                    0,
-                    &clock,
-                    &account_cap,
-                    ctx(&mut scenario)
-                );
-                n = n + 1;
-                test_scenario::return_shared(clock);
-                test_scenario::return_shared(pool);
-                test_scenario::return_to_address<AccountCap>(ALICE, account_cap);
-                next_tx(&mut scenario, ALICE);
-            };
-        };
         scenario
+    }
+
+    fun add_orders(order_count: u64, timestamp: u64, price: Option<u64>, scenario: &mut Scenario) {
+        let n = 1;
+        while (n <= order_count) {
+            let price = if (option::is_some(&price)) {
+                option::destroy_some(price) * FLOAT_SCALING
+            } else {
+                n * FLOAT_SCALING
+            };
+
+            let account_cap = test_scenario::take_from_sender<AccountCap>(scenario);
+            let pool = test_scenario::take_shared<Pool<SUI, USD>>(scenario);
+            let clock = test_scenario::take_shared<Clock>(scenario);
+            clob_v2::place_limit_order<SUI, USD>(
+                &mut pool,
+                CLIENT_ID_ALICE,
+                price,
+                200,
+                CANCEL_OLDEST,
+                true,
+                timestamp,
+                0,
+                &clock,
+                &account_cap,
+                ctx(scenario)
+            );
+            n = n + 1;
+            test_scenario::return_shared(clock);
+            test_scenario::return_shared(pool);
+            test_scenario::return_to_address<AccountCap>(ALICE, account_cap);
+            next_tx(scenario, ALICE);
+        };
     }
 }

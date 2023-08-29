@@ -86,7 +86,7 @@ module deepbook::order_query {
                 if (!linked_table::contains(open_orders, key)) {
                     let (next_leaf, _) = critbit::next_leaf(bids, tick_level_key);
                     tick_level_key = next_leaf;
-                    continue;
+                    continue
                 };
                 start_order_id = option::none();
                 some(key)
@@ -100,22 +100,20 @@ module deepbook::order_query {
 
                 // if the order id is greater than max_id, we stop.
                 if (option::is_some(&max_id) && key > option::destroy_some(max_id)) {
-                    return orders;
-                };
-
-                // if expire timestamp is set, and if the order is expired, we skip it.
-                if (option::is_some(&min_expire_timestamp)
-                    && clob_v2::expire_timestamp(order) < option::destroy_some(min_expire_timestamp)) {
-                    continue ;
+                    return orders
                 };
 
                 next_order_key = *linked_table::next(open_orders, key);
-                vector::push_back(&mut orders, *order);
+
+                // if expire timestamp is set, and if the order is expired, we skip it.
+                if (option::is_none(&min_expire_timestamp) ||
+                    clob_v2::expire_timestamp(order) > option::destroy_some(min_expire_timestamp)) {
+                    vector::push_back(&mut orders, *order);
+                };
             };
             let (next_leaf, _) = critbit::next_leaf(bids, tick_level_key);
             tick_level_key = next_leaf;
         };
-
         orders
     }
 
