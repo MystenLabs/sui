@@ -15,7 +15,6 @@ axum.workspace = true
 chrono.workspace = true
 clap.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
-futures-util = {version = "0.3.17"}
 hex.workspace = true
 serde.workspace = true
 telemetry-subscribers.workspace = true

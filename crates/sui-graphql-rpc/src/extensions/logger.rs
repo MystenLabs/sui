@@ -9,8 +9,8 @@ use async_graphql::{
     parser::types::{ExecutableDocument, OperationType, Selection},
     PathSegment, Response, ServerError, ServerResult, ValidationResult, Variables,
 };
-use futures_util::lock::Mutex;
 use std::{fmt::Write, sync::Arc};
+use tokio::sync::Mutex;
 use tracing::{error, info};
 use uuid::Uuid;
 

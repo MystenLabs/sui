@@ -9894,7 +9894,6 @@ dependencies = [
  "clap",
  "expect-test",
  "fastcrypto",
- "futures-util",
  "hex",
  "hyper",
  "insta",
