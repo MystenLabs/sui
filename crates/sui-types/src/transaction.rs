@@ -87,6 +87,11 @@ impl CallArg {
         initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
         mutable: true,
     });
+    pub const AUTHENTICATOR_STATE_MUT: Self = Self::Object(ObjectArg::SharedObject {
+        id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+        initial_shared_version: SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
+        mutable: true,
+    });
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
@@ -869,17 +874,18 @@ impl TransactionKind {
     /// It covers both Call and ChangeEpoch transaction kind, because both makes Move calls.
     pub fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
         match &self {
-            Self::ChangeEpoch(_) => {
-                Either::Left(Either::Left(iter::once(SharedInputObject::SUI_SYSTEM_OBJ)))
-            }
+            Self::ChangeEpoch(_) => Either::Left(iter::once(SharedInputObject::SUI_SYSTEM_OBJ)),
 
-            Self::ConsensusCommitPrologue(_) => {
-                Either::Left(Either::Right(iter::once(SharedInputObject {
-                    id: SUI_CLOCK_OBJECT_ID,
-                    initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-                    mutable: true,
-                })))
-            }
+            Self::ConsensusCommitPrologue(_) => Either::Left(iter::once(SharedInputObject {
+                id: SUI_CLOCK_OBJECT_ID,
+                initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+                mutable: true,
+            })),
+            Self::AuthenticatorStateUpdate(_) => Either::Left(iter::once(SharedInputObject {
+                id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                initial_shared_version: SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
+                mutable: true,
+            })),
             Self::ProgrammableTransaction(pt) => {
                 Either::Right(Either::Left(pt.shared_input_objects()))
             }
