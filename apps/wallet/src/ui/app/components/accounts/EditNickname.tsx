@@ -19,7 +19,7 @@ import {
 } from '_src/ui/app/shared/Dialog';
 
 const formSchema = z.object({
-	nickname: z.string().nonempty('Required'),
+	nickname: z.string().trim().nonempty('Required'),
 });
 
 export function EditNickname() {
@@ -33,7 +33,7 @@ export function EditNickname() {
 		mode: 'all',
 		schema: formSchema,
 		defaultValues: {
-			nickname: '',
+			nickname: account?.nickname ?? '',
 		},
 	});
 	const {
