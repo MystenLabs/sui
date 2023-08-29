@@ -45,8 +45,7 @@ export function EditNickname() {
 	const onSubmit = async ({ nickname }: { nickname: string }) => {
 		if (account && accountID) {
 			try {
-				await backgroundClient.setAccountNickname({ id: accountID, nickname });
-				close();
+				return backgroundClient.setAccountNickname({ id: accountID, nickname }).then(() => close());
 			} catch (e) {
 				toast.error((e as Error).message || 'Failed to set nickname');
 			}
