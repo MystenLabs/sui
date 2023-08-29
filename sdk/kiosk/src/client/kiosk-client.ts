@@ -58,8 +58,7 @@ export class KioskClient {
 
 	/**
 	 * Wraps a kiosk transaction that depends on `kioskOwnerCap`.
-	 * @param tx Th
-	 * @param tx The transaction block.
+	 * @param tx The Transaction Block
 	 * @param ownerCap The `ownerCap` object as returned from the `getOwnedKiosk` function
 	 * @param callback The function you want to execute with the ownerCap.
 	 */
@@ -201,7 +200,7 @@ export class KioskClient {
 
 	/**
 	 * A function to withdraw from kiosk
-	 * @param tx The Transaction for which we're executing it
+	 * @param tx The Transaction Block
 	 * @param ownerCap The KioskOwnerCap object that we have received from the SDK `getOwnedKiosks` call.
 	 * @param amount The amount we aim to withdraw.
 	 */
@@ -216,7 +215,7 @@ export class KioskClient {
 
 	/**
 	 * A function to place an item in the kiosk.
-	 * @param tx The transaction block for this transaction
+	 * @param tx The Transaction Block
 	 * @param item The item {type, objectId} we want to delist
 	 * @param kioskId the Kiosk Id, ideally passed from the `ownedKioskTx` callback function!
 	 * @param kioskCap the KioskCap, ideally passed from the `ownedKioskTx` callback function!
@@ -233,7 +232,7 @@ export class KioskClient {
 
 	/**
 	 * A function to place an item in the kiosk and list it for sale in one transaction.
-	 * @param tx The transaction block for this transaction
+	 * @param tx The Transaction Block
 	 * @param item The item {type, objectId} we want to delist
 	 * @param price The price in MIST
 	 * @param kioskId the Kiosk Id, ideally passed from the `ownedKioskTx` callback function!
@@ -252,7 +251,7 @@ export class KioskClient {
 
 	/**
 	 * A function to list an item in the kiosk.
-	 * @param tx The transaction block for this transaction
+	 * @param tx The Transaction Block
 	 * @param item The item {type, objectId} we want to delist
 	 * @param price The price in MIST
 	 * @param kiosk the Kiosk, ideally passed from the `ownedKioskTx` callback function!
@@ -271,7 +270,7 @@ export class KioskClient {
 
 	/**
 	 * A function to delist an item from the kiosk.
-	 * @param tx The transaction block for this transaction
+	 * @param tx The Transaction Block
 	 * @param item The item {type, objectId} we want to delist
 	 * @param kiosk the Kiosk, ideally passed from the `ownedKioskTx` callback function!
 	 * @param kioskCap the KioskCap, ideally passed from the `ownedKioskTx` callback function!
@@ -288,7 +287,7 @@ export class KioskClient {
 
 	/**
 	 * A function to take an item from the kiosk. The transaction won't succeed if the item is listed or locked.
-	 * @param tx The transaction block for this transaction
+	 * @param tx The Transaction Block
 	 * @param item The item {type, objectId} we want to delist
 	 * @param kiosk the Kiosk Id, ideally passed from the `ownedKioskTx` callback function!
 	 * @param kioskCap the KioskCap, ideally passed from the `ownedKioskTx` callback function!
@@ -305,7 +304,7 @@ export class KioskClient {
 
 	/**
 	 * Converts a kiosk to a Personal (Soulbound) Kiosk.
-	 * @param tx The transaction block
+	 * @param tx The Transaction Block
 	 * @param kiosk The Kiosk Id
 	 * @param ownerCap The Kiosk Owner Cap Object
 	 * @param address The address to transfer the cap.
@@ -316,7 +315,7 @@ export class KioskClient {
 
 	/**
 	 * A function to get a transaction parameter for the kiosk.
-	 * @param tx The transaction for which we're getting the cap.
+	 * @param tx The Transaction Block
 	 * @param ownerCap The KioskOwnerCap object that we have received from the SDK `getOwnedKiosks` call.
 	 * @returns An array [kioskOwnerCap, promise]. If there's a promise, you need to call `returnOwnerCap` after using the cap.
 	 */
@@ -336,7 +335,7 @@ export class KioskClient {
 
 	/**
 	 * A function to return the `kioskOwnerCap` back to `PersonalKiosk` wrapper.
-	 * @param tx The transaction Block
+	 * @param tx The Transaction Block
 	 * @param ownerCap The original ownerCap as returned from SDK, to find the wrapper's object id.
 	 * @param capObject The borrowed `KioskOwnerCap`
 	 * @param promise The promise that the cap would return

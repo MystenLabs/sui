@@ -132,7 +132,7 @@ export class TransferPolicyClient {
 	 * 	You can pass 0 in either value if you want only percentage royalty, or a fixed amount fee.
 	 * 	(but you should define at least one of them for the rule to make sense).
 	 *
-	 * 	@param tx The Transaction Block.
+	 * @param tx The Transaction Block
 	 * 	@param percentageBps The royalty percentage in basis points. Use `percentageToBasisPoints` helper to convert from percentage [0,100].
 	 * 	@param minAmount The minimum royalty amount per request in MIST.
 	 */

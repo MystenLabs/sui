@@ -12,7 +12,7 @@ import { SuiClient, PaginationArguments } from '@mysten/sui.js/client';
 /**
  * Convert any valid input into a TransactionArgument.
  *
- * @param tx The transaction to use for creating the argument.
+ * @param tx The Transaction Block
  * @param arg The argument to convert.
  * @returns The converted TransactionArgument.
  */
