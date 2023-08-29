@@ -35,6 +35,12 @@ module deepbook::order_query_tests {
         assert!(vector::length(order_query::orders(&page1)) == 100, 0);
         assert!(order_query::has_next_page(&page1), 0);
 
+        let orders = order_query::orders(&page1);
+        let first_order = vector::borrow(orders, 0);
+        assert!(order_query::order_id(first_order) == 1, 0);
+        let last_order = vector::borrow(orders, vector::length(orders) - 1);
+        assert!(order_query::order_id(last_order) == 100, 0);
+
         let page2 = iter_bids(
             &pool,
             order_query::next_tick_level(&page1),
@@ -44,6 +50,12 @@ module deepbook::order_query_tests {
         );
         assert!(vector::length(order_query::orders(&page2)) == 100, 0);
         assert!(!order_query::has_next_page(&page2), 0);
+
+        let orders = order_query::orders(&page2);
+        let first_order = vector::borrow(orders, 0);
+        assert!(order_query::order_id(first_order) == 101, 0);
+        let last_order = vector::borrow(orders, vector::length(orders) - 1);
+        assert!(order_query::order_id(last_order) == 200, 0);
 
         test_scenario::return_shared(pool);
         end(scenario);
@@ -58,6 +70,12 @@ module deepbook::order_query_tests {
         assert!(vector::length(order_query::orders(&page)) == 100, 0);
         assert!(order_query::has_next_page(&page), 0);
 
+        let orders = order_query::orders(&page);
+        let first_order = vector::borrow(orders, 0);
+        assert!(order_query::order_id(first_order) == 51, 0);
+        let last_order = vector::borrow(orders, vector::length(orders) - 1);
+        assert!(order_query::order_id(last_order) == 150, 0);
+
         let page2 = iter_bids(
             &pool,
             order_query::next_tick_level(&page),
@@ -67,6 +85,13 @@ module deepbook::order_query_tests {
         );
         assert!(vector::length(order_query::orders(&page2)) == 50, 0);
         assert!(!order_query::has_next_page(&page2), 0);
+
+        let orders = order_query::orders(&page2);
+
+        let first_order = vector::borrow(orders, 0);
+        assert!(order_query::order_id(first_order) == 151, 0);
+        let last_order = vector::borrow(orders, vector::length(orders) - 1);
+        assert!(order_query::order_id(last_order) == 200, 0);
 
         test_scenario::return_shared(pool);
         end(scenario);

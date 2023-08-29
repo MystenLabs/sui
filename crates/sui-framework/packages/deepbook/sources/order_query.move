@@ -135,6 +135,14 @@ module deepbook::order_query {
     public fun next_order_id(page: &OrderPage): Option<u64> {
         page.next_order_id
     }
+
+    public fun order_id(order: &Order): u64 {
+        clob_v2::order_id(order)
+    }
+
+    public fun tick_level(order: &Order): u64 {
+        clob_v2::tick_level(order)
+    }
 }
 
 
