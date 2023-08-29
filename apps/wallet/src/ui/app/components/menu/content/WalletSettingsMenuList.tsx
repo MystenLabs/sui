@@ -8,7 +8,6 @@ import {
 	More24 as MoreIcon,
 	Clipboard16 as ClipboardIcon,
 } from '@mysten/icons';
-// import { useState } from 'react';
 import Browser from 'webextension-polyfill';
 
 import { MenuLayout } from './MenuLayout';

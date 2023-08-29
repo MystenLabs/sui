@@ -1,40 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useZodForm } from '@mysten/core';
-import { type SubmitHandler } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
-import { z } from 'zod';
 import Overlay from '../../overlay';
-import { Button } from '_app/shared/ButtonUI';
 import { useNextMenuUrl } from '_components/menu/hooks';
-import { CheckboxField } from '_src/ui/app/shared/forms/CheckboxField';
-import { Form } from '_src/ui/app/shared/forms/Form';
-import { SelectField } from '_src/ui/app/shared/forms/SelectField';
-import { TextField } from '_src/ui/app/shared/forms/TextField';
 import { ProtectAccountForm } from '../../accounts/ProtectAccountForm';
-
-const LOCK_INTERVALS = ['Hour', 'Minute', 'Second'];
-
-const formSchema = z.object({
-	password: z.string().nonempty('Required'),
-	confirmedPassword: z.string().nonempty('Required'),
-	enabledAutolock: z.boolean(),
-	autoLockTimer: z.preprocess(
-		(a) => parseInt(z.string().parse(a), 10),
-		z.number().gte(0, 'Must be greater than 0'),
-	),
-	autoLockInterval: z.enum(['Hour', 'Minute', 'Second']),
-});
-
-type FormValues = z.infer<typeof formSchema>;
-
-type ProtectAccountFormProps = {
-	submitButtonText: string;
-	cancelButtonText?: string;
-	onSubmit: SubmitHandler<FormValues>;
-	displayToS?: boolean;
-};
 
 export function PasswordProtect() {
 	const mainMenuUrl = useNextMenuUrl(true, '/');
