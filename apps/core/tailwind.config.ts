@@ -174,6 +174,7 @@ export default {
 			},
 			maxHeight: {
 				coinsAndAssetsContainer: '31.25rem',
+				ownCoinsPanel: '14.375rem',
 			},
 			width: {
 				31.5: '7.5rem',
