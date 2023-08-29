@@ -41,8 +41,8 @@ pub enum Flavor {
 //**************************************************************************************************
 
 pub fn check_feature(env: &mut CompilationEnv, edition: Edition, feature: &FeatureGate, loc: Loc) {
-    if !edition.supports(&feature) {
-        let valid_editions = valid_editions_for_feature(&feature)
+    if !edition.supports(feature) {
+        let valid_editions = valid_editions_for_feature(feature)
             .into_iter()
             .map(|e| e.to_string())
             .collect::<Vec<_>>()
@@ -68,7 +68,6 @@ pub fn check_feature(env: &mut CompilationEnv, edition: Edition, feature: &Featu
 pub fn valid_editions_for_feature(feature: &FeatureGate) -> Vec<Edition> {
     Edition::ALL
         .iter()
-        .into_iter()
         .filter(|e| e.supports(feature))
         .cloned()
         .collect()

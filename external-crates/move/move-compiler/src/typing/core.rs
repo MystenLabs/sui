@@ -885,7 +885,7 @@ pub fn make_function_type(
                 "This function can only be called from the same address and package as module '{}' (package: '{}'). \
                 This call is at address '{}', package '{}'",
                 m,
-                context.module_info(&m).package.map(|pkg_name| format!("{}", pkg_name)).unwrap_or("<no package>".to_string()),
+                context.module_info(m).package.map(|pkg_name| format!("{}", pkg_name)).unwrap_or("<no package>".to_string()),
                 &context
                     .current_module.map(|cur_module| cur_module.value.address.to_string()).unwrap_or("<no_addr>".to_string()),
                 &context

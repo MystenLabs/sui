@@ -96,7 +96,7 @@ fn modules(
 fn make_friend_map(friends: &Vec<(ModuleIdent, Loc)>) -> UniqueMap<ModuleIdent, Friend> {
     let mut result: UniqueMap<ModuleIdent, Friend> = UniqueMap::new();
     for (ident, loc) in friends {
-        if !result.contains_key(&ident) {
+        if !result.contains_key(ident) {
             // don't re-add friend
             // Currently we don't support attributes accruing here. It's conceivable we would want
             // each `public(package)` usage to report its attributes and aggregate them here, but
