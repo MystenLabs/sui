@@ -51,9 +51,9 @@ export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 			<div
 				ref={ref}
 				className={cn(
-					'flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl border border-solid border-hero/10 cursor-pointer bg-white/40 hover:bg-white/80 group',
+					'flex flex-nowrap items-center gap-3 px-4 py-3 rounded-xl border border-solid border-hero/10 cursor-pointer bg-white/40 hover:bg-white/80 group',
 					{ 'bg-white/80 shadow-card-soft': selected },
-					{ 'bg-hero/10 border-none hover:bg-white/40 shadow-none pointer-events-none': disabled },
+					{ 'bg-hero/10 border-none hover:bg-white/40 shadow-none': disabled },
 					{ 'bg-gradients-graph-cards': background === 'gradient' },
 				)}
 				{...props}
