@@ -22,6 +22,7 @@ use sui_types::type_resolver::LayoutResolver;
 use sui_types::{
     base_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
+        VersionDigest,
     },
     error::{ExecutionError, SuiError, SuiResult},
     event::Event,
@@ -48,7 +49,7 @@ pub struct TemporaryStore<'backing> {
     input_objects: BTreeMap<ObjectID, Object>,
     /// The version to assign to all objects written by the transaction using this store.
     lamport_timestamp: SequenceNumber,
-    mutable_input_refs: Vec<ObjectRef>, // Inputs that are mutable
+    mutable_input_refs: BTreeMap<ObjectID, VersionDigest>, // Inputs that are mutable
     // When an object is being written, we need to ensure that a few invariants hold.
     // It's critical that we always call write_object to update `written`, instead of writing
     // into written directly.
@@ -76,7 +77,7 @@ impl<'backing> TemporaryStore<'backing> {
         tx_digest: TransactionDigest,
         protocol_config: &ProtocolConfig,
     ) -> Self {
-        let mutable_inputs = input_objects.mutable_inputs();
+        let mutable_input_refs = input_objects.mutable_inputs();
         let lamport_timestamp = input_objects.lamport_timestamp();
         let objects = input_objects.into_object_map();
         Self {
@@ -84,7 +85,7 @@ impl<'backing> TemporaryStore<'backing> {
             tx_digest,
             input_objects: objects,
             lamport_timestamp,
-            mutable_input_refs: mutable_inputs,
+            mutable_input_refs,
             written: BTreeMap::new(),
             deleted: BTreeMap::new(),
             events: Vec::new(),
@@ -178,7 +179,7 @@ impl<'backing> TemporaryStore<'backing> {
     /// sequence number. This is required to achieve safety.
     fn ensure_active_inputs_mutated(&mut self) {
         let mut to_be_updated = vec![];
-        for (id, _seq, _) in &self.mutable_input_refs {
+        for id in self.mutable_input_refs.keys() {
             if !self.written.contains_key(id) && !self.deleted.contains_key(id) {
                 // We cannot update here but have to push to `to_be_updated` and update later
                 // because the for loop is holding a reference to `self`, and calling
@@ -309,9 +310,7 @@ impl<'backing> TemporaryStore<'backing> {
                 self.written.iter().all(|(elt, _)| used.insert(elt));
                 self.deleted.iter().all(|elt| used.insert(elt.0));
 
-                self.mutable_input_refs
-                    .iter()
-                    .all(|elt| !used.insert(&elt.0))
+                self.mutable_input_refs.keys().all(|elt| !used.insert(elt))
             },
             "Mutable input neither written nor deleted."
         );

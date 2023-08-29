@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::base_types::VersionDigest;
 use crate::effects::TransactionEvents;
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
@@ -23,7 +24,7 @@ pub type TxCoins = (ObjectMap, WrittenObjects);
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct InnerTemporaryStore {
     pub objects: ObjectMap,
-    pub mutable_inputs: Vec<ObjectRef>,
+    pub mutable_inputs: BTreeMap<ObjectID, VersionDigest>,
     // All the written objects' sequence number should have been updated to the lamport version.
     pub written: WrittenObjects,
     // deleted or wrapped or unwrap-then-delete. The sequence number should have been updated to

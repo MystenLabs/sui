@@ -1024,9 +1024,14 @@ impl AuthorityStore {
                "batch_update_objects: temp store written");
 
         let owned_inputs: Vec<_> = active_inputs
-            .iter()
-            .filter(|(id, _, _)| objects.get(id).unwrap().is_address_owned())
-            .cloned()
+            .into_iter()
+            .filter_map(|(id, (version, digest))| {
+                objects
+                    .get(&id)
+                    .unwrap()
+                    .is_address_owned()
+                    .then_some((id, version, digest))
+            })
             .collect();
 
         write_batch.insert_batch(
