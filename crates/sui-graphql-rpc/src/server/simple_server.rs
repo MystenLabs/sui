@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::extensions::logger::Logger;
 use crate::{
     server::{
         data_provider::DataProvider,
@@ -11,6 +12,7 @@ use crate::{
 use async_graphql::{EmptyMutation, EmptySubscription};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::middleware;
+use std::default::Default;
 use std::time::Duration;
 
 pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
@@ -59,6 +61,9 @@ async fn graphiql() -> impl axum::response::IntoResponse {
 
 pub async fn start_example_server(config: Option<ServerConfig>) {
     let config = config.unwrap_or_default();
+    let _guard = telemetry_subscribers::TelemetryConfig::new()
+        .with_env()
+        .init();
 
     let sui_sdk_client_v0 = sui_sdk::SuiClientBuilder::default()
         .request_timeout(RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD)
@@ -71,6 +76,7 @@ pub async fn start_example_server(config: Option<ServerConfig>) {
 
     let schema = async_graphql::Schema::build(Query, EmptyMutation, EmptySubscription)
         .data(data_provider)
+        .extension(Logger::default())
         .finish();
 
     let app = axum::Router::new()

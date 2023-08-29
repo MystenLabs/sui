@@ -9902,9 +9902,12 @@ dependencies = [
  "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-sdk",
+ "telemetry-subscribers",
  "thiserror",
  "tokio",
  "tower",
+ "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
