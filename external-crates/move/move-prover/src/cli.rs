@@ -166,6 +166,7 @@ impl Options {
             .arg(
                 Arg::new("print-config")
                     .long("print-config")
+                    .action(clap::ArgAction::SetTrue)
                     .help("prints the effective toml configuration, then exits")
             )
             .arg(
@@ -196,6 +197,7 @@ impl Options {
                 Arg::new("generate-only")
                     .long("generate-only")
                     .short('g')
+                    .action(clap::ArgAction::SetTrue)
                     .help("only generates boogie file but does not call boogie"),
             )
             .arg(
@@ -210,27 +212,32 @@ impl Options {
                 Arg::new("trace")
                     .long("trace")
                     .short('t')
+                    .action(clap::ArgAction::SetTrue)
                     .help("enables automatic tracing of expressions in prover errors")
             )
             .arg(
                 Arg::new("keep")
                     .long("keep")
                     .short('k')
+                    .action(clap::ArgAction::SetTrue)
                     .help("keeps intermediate artifacts of the backend around")
             )
             .arg(
                 Arg::new("boogie-poly")
                     .long("boogie-poly")
+                    .action(clap::ArgAction::SetTrue)
                     .help("whether to use the old polymorphic Boogie backend")
             )
             .arg(
                 Arg::new("inv-v1")
                     .long("inv-v1")
+                    .action(clap::ArgAction::SetTrue)
                     .help("whether to use the old v1 invariant processing (without disabled invariants)")
             )
             .arg(
                 Arg::new("negative")
                     .long("negative")
+                    .action(clap::ArgAction::SetTrue)
                     .help("runs negative verification checks")
             ).arg(
                 Arg::new("seed")
@@ -264,12 +271,14 @@ impl Options {
             .arg(
                 Arg::new("ignore-pragma-opaque-when-possible")
                     .long("ignore-pragma-opaque-when-possible")
+                    .action(clap::ArgAction::SetTrue)
                     .help("Ignore the \"opaque\" pragma on specs of \
                     all functions when possible"),
             )
             .arg(
                 Arg::new("ignore-pragma-opaque-internal-only")
                     .long("ignore-pragma-opaque-internal-only")
+                    .action(clap::ArgAction::SetTrue)
                     .help("Ignore the \"opaque\" pragma on specs of \
                     internal functions when possible"),
             )
@@ -285,6 +294,7 @@ impl Options {
             .arg(
                 Arg::new("docgen")
                     .long("docgen")
+                    .action(clap::ArgAction::SetTrue)
                     .help("runs the documentation generator instead of the prover. \
                     Generated docs will be written into the directory `./doc` unless configured otherwise via toml"),
             )
@@ -298,28 +308,33 @@ impl Options {
             .arg(
                 Arg::new("abigen")
                     .long("abigen")
+                    .action(clap::ArgAction::SetTrue)
                     .help("runs the ABI generator instead of the prover. \
                     Generated ABIs will be written into the directory `./abi` unless configured otherwise via toml"),
             )
             .arg(
                 Arg::new("errmapgen")
                     .long("errmapgen")
+                    .action(clap::ArgAction::SetTrue)
                     .help("runs the error map generator instead of the prover. \
                     The generated error map will be written to `errmap` unless configured otherwise"),
             )
             .arg(
                 Arg::new("packedtypesgen")
                     .long("packedtypesgen")
+                    .action(clap::ArgAction::SetTrue)
                     .help("runs the packed types generator instead of the prover.")
             )
             .arg(
                 Arg::new("escape")
                     .long("escape")
+                    .action(clap::ArgAction::SetTrue)
                     .help("runs the escape analysis instead of the prover.")
             )
             .arg(
                 Arg::new("read-write-set")
                     .long("read-write-set")
+                    .action(clap::ArgAction::SetTrue)
                     .help("runs the read/write set analysis instead of the prover.")
             )
             .arg(
@@ -344,6 +359,7 @@ impl Options {
             .arg(
                 Arg::new("mutation")
                     .long("mutation")
+                    .action(clap::ArgAction::SetTrue)
                     .help(
                         "Specifies to use the mutation pass",
                     ),
@@ -437,11 +453,13 @@ impl Options {
             .arg(
                 Arg::new("dump-bytecode")
                     .long("dump-bytecode")
+                    .action(clap::ArgAction::SetTrue)
                     .help("whether to dump the transformed bytecode to a file")
             )
             .arg(
                 Arg::new("dump-cfg")
                     .long("dump-cfg")
+                    .action(clap::ArgAction::SetTrue)
                     .requires("dump-bytecode")
                     .help("whether to dump the per-function control-flow graphs (in dot format) to files")
             )
@@ -456,11 +474,13 @@ impl Options {
             .arg(
                 Arg::new("sequential")
                     .long("sequential")
+                    .action(clap::ArgAction::SetTrue)
                     .help("whether to run the Boogie instances sequentially")
             )
             .arg(
                 Arg::new("stable-test-output")
                     .long("stable-test-output")
+                    .action(clap::ArgAction::SetTrue)
                     .help("instruct the prover to produce output in diagnosis which is stable \
                      and suitable for baseline tests. This redacts values in diagnosis which might\
                      be non-deterministic, and may do other things to keep output stable.")
@@ -468,42 +488,50 @@ impl Options {
             .arg(
                 Arg::new("use-cvc5")
                     .long("use-cvc5")
+                    .action(clap::ArgAction::SetTrue)
                     .help("uses cvc5 solver instead of z3")
             )
             .arg(
                 Arg::new("use-exp-boogie")
                     .long("use-exp-boogie")
+                    .action(clap::ArgAction::SetTrue)
                     .help("uses experimental boogie expected in EXP_BOOGIE_EXE")
             )
             .arg(
                 Arg::new("generate-smt")
                     .long("generate-smt")
+                    .action(clap::ArgAction::SetTrue)
                     .help("instructs boogie to log smtlib files for verified functions")
             )
             .arg(
                 Arg::new("experimental-pipeline")
                     .long("experimental-pipeline")
                     .short('e')
+                    .action(clap::ArgAction::SetTrue)
                     .help("whether to run experimental pipeline")
             )
             .arg(
                 Arg::new("weak-edges")
                     .long("weak-edges")
+                    .action(clap::ArgAction::SetTrue)
                     .help("whether to use exclusively weak edges in borrow analysis")
             )
             .arg(
                 Arg::new("exp_mut_param")
                     .long("exp-mut-param")
+                    .action(clap::ArgAction::SetTrue)
                     .help("exp_mut_param experiment")
             )
             .arg(
                 Arg::new("check-inconsistency")
                     .long("check-inconsistency")
+                    .action(clap::ArgAction::SetTrue)
                     .help("checks whether there is any inconsistency")
             )
             .arg(
                 Arg::new("unconditional-abort-as-inconsistency")
                     .long("unconditional-abort-as-inconsistency")
+                    .action(clap::ArgAction::SetTrue)
                     .help("treat functions that do not return (i.e., abort unconditionally) \
                     as inconsistency violations")
             )
@@ -527,12 +555,14 @@ impl Options {
             .arg(
                 Arg::new("script-reach")
                     .long("script-reach")
+                    .action(clap::ArgAction::SetTrue)
                     .help("For each script function which is verification target, \
                     print out the names of all called functions, directly or indirectly.")
             )
             .arg(
                 Arg::new("ban-int-2-bv")
                     .long("ban-int-2-bv")
+                    .action(clap::ArgAction::SetTrue)
                     .long("whether allow converting int to bit vector when generating the boogie file")
             )
             .after_help("More options available via `--config file` or `--config-str str`. \
@@ -601,7 +631,7 @@ impl Options {
                 }
         }
 
-        if matches.contains_id("generate-only") {
+        if matches.get_flag("generate-only") {
             options.prover.generate_only = true;
         }
         if let Some(m) = matches.get_many::<String>("sources") {
@@ -613,7 +643,7 @@ impl Options {
         if let Some(m) = matches.get_many::<String>("named-addresses") {
             options.move_named_address_values = m.cloned().collect();
         }
-        if matches.contains_id("mutation") {
+        if matches.get_flag("mutation") {
             options.prover.mutation = true;
         }
         if matches.contains_id("mutation-add-sub") {
@@ -655,20 +685,20 @@ impl Options {
                 .unwrap()
                 .parse::<usize>()?;
         }
-        if matches.contains_id("ignore-pragma-opaque-when-possible") {
+        if matches.get_flag("ignore-pragma-opaque-when-possible") {
             options.model_builder.ignore_pragma_opaque_when_possible = true;
         }
-        if matches.contains_id("ignore-pragma-opaque-internal-only") {
+        if matches.get_flag("ignore-pragma-opaque-internal-only") {
             options.model_builder.ignore_pragma_opaque_internal_only = true;
         }
         if let Some(m) = matches.get_many::<String>("simplification-pipeline") {
             for name in m {
-                let pass = SimplificationPass::from_str(name)
+                let pass = SimplificationPass::from_str(&name)
                     .map_err(|e| anyhow!("Unknown simplification pass: {}", e))?;
                 options.model_builder.simplification_pipeline.push(pass);
             }
         }
-        if matches.contains_id("docgen") {
+        if matches.get_flag("docgen") {
             options.run_docgen = true;
         }
         if matches.contains_id("docgen-template") {
@@ -678,25 +708,25 @@ impl Options {
                 .map(|s| s.to_string())
                 .unwrap()]
         }
-        if matches.contains_id("abigen") {
+        if matches.get_flag("abigen") {
             options.run_abigen = true;
         }
-        if matches.contains_id("errmapgen") {
+        if matches.get_flag("errmapgen") {
             options.run_errmapgen = true;
         }
-        if matches.contains_id("read-write-set") {
+        if matches.get_flag("read-write-set") {
             options.run_read_write_set = true;
         }
-        if matches.contains_id("escape") {
+        if matches.get_flag("escape") {
             options.run_escape = true;
         }
-        if matches.contains_id("trace") {
+        if matches.get_flag("trace") {
             options.prover.auto_trace_level = AutoTraceLevel::VerifiedFunction;
         }
-        if matches.contains_id("dump-bytecode") {
+        if matches.get_flag("dump-bytecode") {
             options.prover.dump_bytecode = true;
         }
-        if matches.contains_id("dump-cfg") {
+        if matches.get_flag("dump-cfg") {
             options.prover.dump_cfg = true;
         }
         if matches.contains_id("num-instances") {
@@ -706,17 +736,17 @@ impl Options {
                 .parse::<usize>()?;
             options.backend.num_instances = std::cmp::max(num_instances, 1); // at least one instance
         }
-        if matches.contains_id("sequential") {
+        if matches.get_flag("sequential") {
             options.prover.sequential_task = true;
         }
-        if matches.contains_id("stable-test-output") {
+        if matches.get_flag("stable-test-output") {
             //options.prover.stable_test_output = true;
             options.backend.stable_test_output = true;
         }
-        if matches.contains_id("keep") {
+        if matches.get_flag("keep") {
             options.backend.keep_artifacts = true;
         }
-        if matches.contains_id("boogie-poly") {
+        if matches.get_flag("boogie-poly") {
             options.prover.boogie_poly = true;
         }
         if matches.contains_id("seed") {
@@ -725,7 +755,7 @@ impl Options {
                 .unwrap()
                 .parse::<usize>()?;
         }
-        if matches.contains_id("experimental-pipeline") {
+        if matches.get_flag("experimental-pipeline") {
             options.experimental_pipeline = true;
         }
         if matches.contains_id("timeout") {
@@ -752,20 +782,20 @@ impl Options {
                 .unwrap()
                 .parse::<usize>()?;
         }
-        if matches.contains_id("use-cvc5") {
+        if matches.get_flag("use-cvc5") {
             options.backend.use_cvc5 = true;
         }
-        if matches.contains_id("use-exp-boogie") {
+        if matches.get_flag("use-exp-boogie") {
             options.backend.use_exp_boogie = true;
         }
-        if matches.contains_id("generate-smt") {
+        if matches.get_flag("generate-smt") {
             options.backend.generate_smt = true;
         }
 
-        if matches.contains_id("check-inconsistency") {
+        if matches.get_flag("check-inconsistency") {
             options.prover.check_inconsistency = true;
         }
-        if matches.contains_id("unconditional-abort-as-inconsistency") {
+        if matches.get_flag("unconditional-abort-as-inconsistency") {
             options.prover.unconditional_abort_as_inconsistency = true;
         }
 
@@ -787,17 +817,17 @@ impl Options {
             options.backend.z3_trace_file = Some(format!("{}.z3log", fun_name));
         }
 
-        if matches.contains_id("script-reach") {
+        if matches.get_flag("script-reach") {
             options.script_reach = true;
         }
 
-        if matches.contains_id("ban-int-2-bv") {
+        if matches.get_flag("ban-int-2-bv") {
             options.prover.ban_int_2_bv = true;
         }
 
         options.backend.derive_options();
 
-        if matches.contains_id("print-config") {
+        if matches.get_flag("print-config") {
             println!("{}", toml::to_string(&options).unwrap());
             Err(anyhow!("exiting"))
         } else {

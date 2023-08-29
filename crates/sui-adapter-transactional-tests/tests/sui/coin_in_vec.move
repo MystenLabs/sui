@@ -35,6 +35,6 @@ module test::coin_in_vec {
 //> SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))
 
-//# run test::coin_in_vec::deposit --args --args object(1,0) object(2,0) --sender A
+//# run test::coin_in_vec::deposit --args object(1,0) object(2,0) --sender A
 
 //# run test::coin_in_vec::withdraw --args object(1,0) --sender A
