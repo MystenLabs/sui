@@ -12,6 +12,7 @@ CREATE INDEX move_calls_transaction_digest ON move_calls (transaction_digest);
 CREATE INDEX move_calls_move_package ON move_calls (move_package);
 CREATE INDEX move_calls_move_module ON move_calls (move_module);
 CREATE INDEX move_calls_move_function ON move_calls (move_function);
+CREATE INDEX move_calls_epoch ON move_calls (epoch);
 
 CREATE TABLE recipients (
     id                          BIGSERIAL       PRIMARY KEY,
