@@ -883,6 +883,11 @@ impl ProtocolConfig {
     pub fn simple_conservation_checks(&self) -> bool {
         self.feature_flags.simple_conservation_checks
     }
+
+    // this function only exists for readability in the genesis code.
+    pub fn create_authenticator_state_in_genesis(&self) -> bool {
+        self.enable_jwk_consensus_updates()
+    }
 }
 
 #[cfg(not(msim))]

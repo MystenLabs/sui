@@ -205,6 +205,7 @@ impl SuiNode {
     }
 
     fn start_jwk_updater(
+        authority: AuthorityName,
         epoch_store: Arc<AuthorityPerEpochStore>,
         consensus_adapter: Arc<ConsensusAdapter>,
     ) {
@@ -255,7 +256,7 @@ impl SuiNode {
                                 for (id, jwk) in keys.into_iter() {
                                     info!("Submitting JWK to consensus: {:?}", id);
 
-                                    let txn = ConsensusTransaction::new_jwk_fetched(id, jwk);
+                                    let txn = ConsensusTransaction::new_jwk_fetched(authority, id, jwk);
                                     consensus_adapter.submit(txn, None, &epoch_store)
                                         .tap_err(|e| warn!("Error when submitting JWKs to consensus {:?}", e))
                                         .ok();
@@ -1024,7 +1025,7 @@ impl SuiNode {
             .await;
 
         if epoch_store.protocol_config().enable_jwk_consensus_updates() {
-            Self::start_jwk_updater(epoch_store.clone(), consensus_adapter.clone());
+            Self::start_jwk_updater(state.name, epoch_store.clone(), consensus_adapter.clone());
         }
 
         Ok(ValidatorComponents {

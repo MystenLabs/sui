@@ -201,6 +201,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             .expect("Unrecoverable error in consensus handler");
 
         if !new_jwks.is_empty() {
+            debug!("adding AuthenticatorStateUpdate tx: {:?}", new_jwks);
             let authenticator_state_update_transaction =
                 self.authenticator_state_update_transaction(round, new_jwks);
 
@@ -514,7 +515,7 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
         ConsensusTransactionKind::CheckpointSignature(_) => "checkpoint_signature",
         ConsensusTransactionKind::EndOfPublish(_) => "end_of_publish",
         ConsensusTransactionKind::CapabilityNotification(_) => "capability_notification",
-        ConsensusTransactionKind::NewJWKFetched(_, _) => "new_jwk_fetched",
+        ConsensusTransactionKind::NewJWKFetched(_, _, _) => "new_jwk_fetched",
     }
 }
 

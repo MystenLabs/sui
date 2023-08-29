@@ -886,10 +886,12 @@ impl CheckpointBuilder {
             {
                 let (transaction, size) = transaction_and_size
                     .unwrap_or_else(|| panic!("Could not find executed transaction {:?}", effects));
-                // ConsensusCommitPrologue is guaranteed to be processed before we reach here
+                // ConsensusCommitPrologue and AuthenticatorStateUpdate are guaranteed to be
+                // processed before we reach here
                 if !matches!(
                     transaction.inner().transaction_data().kind(),
                     TransactionKind::ConsensusCommitPrologue(_)
+                        | TransactionKind::AuthenticatorStateUpdate(_)
                 ) {
                     transaction_keys.push(SequencedConsensusTransactionKey::External(
                         ConsensusTransactionKey::Certificate(*effects.transaction_digest()),

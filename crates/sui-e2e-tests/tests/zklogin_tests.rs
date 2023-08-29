@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeSet;
+use tokio::time::{sleep, Duration};
 
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::error::{SuiError, SuiResult};
@@ -42,7 +43,6 @@ async fn test_zklogin_feature_deny() {
     assert!(matches!(err, SuiError::UnsupportedFeatureError { .. }));
 }
 
-#[ignore("re-enable after JWK management is finished")]
 #[sim_test]
 async fn test_zklogin_provider_not_supported() {
     use sui_protocol_config::ProtocolConfig;
@@ -63,7 +63,6 @@ async fn test_zklogin_provider_not_supported() {
     assert!(matches!(err, SuiError::InvalidSignature { .. }));
 }
 
-#[ignore("re-enable after JWK management is finished")]
 #[sim_test]
 async fn test_zklogin_feature_allow() {
     use sui_protocol_config::ProtocolConfig;
@@ -82,7 +81,6 @@ async fn test_zklogin_feature_allow() {
     assert!(matches!(err, SuiError::UserInputError { .. }));
 }
 
-#[ignore("re-enable after JWK management is finished")]
 #[sim_test]
 async fn zklogin_end_to_end_test() {
     use sui_protocol_config::ProtocolConfig;
@@ -94,6 +92,10 @@ async fn zklogin_end_to_end_test() {
     });
 
     let mut test_cluster = TestClusterBuilder::new().build().await;
+
+    // wait for JWKs to be fetched and sequenced.
+    sleep(Duration::from_secs(15)).await;
+
     let rgp = test_cluster.get_reference_gas_price().await;
     let sender = test_cluster.get_address_0();
 

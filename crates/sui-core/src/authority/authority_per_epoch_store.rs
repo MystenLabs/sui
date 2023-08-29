@@ -1291,7 +1291,7 @@ impl AuthorityPerEpochStore {
         Ok(self
             .tables
             .active_jwks
-            .iter_with_bounds(Some(round), Some(round))
+            .iter_with_bounds(Some(round), Some(round + 1))
             .map(|(r, (jwk_id, jwk))| {
                 debug_assert!(round == r);
                 ActiveJwk { jwk_id, jwk, epoch }
@@ -1639,9 +1639,17 @@ impl AuthorityPerEpochStore {
                 }
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::NewJWKFetched(id, jwk),
+                kind: ConsensusTransactionKind::NewJWKFetched(authority, id, jwk),
                 ..
             }) => {
+                if transaction.sender_authority() != *authority {
+                    warn!(
+                        "NewJWKFetched authority {} does not match narwhal certificate source {}",
+                        authority,
+                        transaction.certificate.origin()
+                    );
+                    return Err(());
+                }
                 if !check_total_jwk_size(id, jwk) {
                     warn!(
                         "{:?} sent jwk that exceeded max size",
@@ -1998,16 +2006,26 @@ impl AuthorityPerEpochStore {
                 Ok(ConsensusCertificateResult::ConsensusMessage)
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::NewJWKFetched(jwk_id, jwk),
+                kind: ConsensusTransactionKind::NewJWKFetched(authority, jwk_id, jwk),
                 ..
             }) => {
-                self.record_jwk_vote(
-                    batch,
-                    consensus_index.index.last_committed_round,
-                    *certificate_author,
-                    jwk_id,
-                    jwk,
-                )?;
+                if self
+                    .get_reconfig_state_read_lock_guard()
+                    .should_accept_consensus_certs()
+                {
+                    self.record_jwk_vote(
+                        batch,
+                        consensus_index.index.last_committed_round,
+                        *authority,
+                        jwk_id,
+                        jwk,
+                    )?;
+                } else {
+                    debug!(
+                        "Ignoring NewJWKFetched from {:?} because of end of epoch",
+                        authority.concise()
+                    );
+                }
                 Ok(ConsensusCertificateResult::ConsensusMessage)
             }
             SequencedConsensusTransactionKind::System(system_transaction) => {
@@ -2283,6 +2301,7 @@ impl AuthorityPerEpochStore {
     }
 
     pub(crate) fn update_authenticator_state(&self, update: &AuthenticatorStateUpdate) {
+        info!("Updating authenticator state: {:?}", update);
         for active_jwk in &update.new_active_jwks {
             let ActiveJwk { jwk_id, jwk, .. } = active_jwk;
             self.signature_verifier.insert_jwk(jwk_id, jwk);
