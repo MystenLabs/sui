@@ -6,14 +6,14 @@ use anyhow::{anyhow, Result};
 use mysten_metrics::spawn_monitored_task;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::collections::HashSet;
-use std::iter::repeat;
+// use std::iter::repeat;
 use std::time::Duration;
 use sui_config::node::TransactionKeyValueStoreWriteConfig;
 use sui_core::storage::RocksDbStore;
-use sui_storage::http_key_value_store::TaggedKey;
-use sui_types::effects::TransactionEffectsAPI;
+// use sui_storage::http_key_value_store::TaggedKey;
+// use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::storage::ReadStore;
+use sui_types::storage::{ObjectKey, ReadStore};
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tracing::info;
@@ -59,7 +59,7 @@ async fn upload_to_kv_store(
     store: RocksDbStore,
     mut receiver: oneshot::Receiver<()>,
     config: TransactionKeyValueStoreWriteConfig,
-    metrics: KVStoreMetrics,
+    _metrics: KVStoreMetrics,
 ) -> Result<()> {
     let mut updates: HashSet<u64> = HashSet::new();
     let mut client = DynamoDbClient::new(&config).await;
@@ -107,9 +107,9 @@ async fn upload_to_kv_store(
                         checkpoint_number += 1;
                     }
                     client.update_state(checkpoint_number).await?;
-                    metrics
-                        .latest_checkpoint_uploaded_to_kv_store
-                        .set(checkpoint_number as i64);
+                    // metrics
+                        // .latest_checkpoint_uploaded_to_kv_store
+                        // .set(checkpoint_number as i64);
                 }
             }
         }
@@ -117,18 +117,14 @@ async fn upload_to_kv_store(
     Ok(())
 }
 
-pub async fn uploader<S>(
+pub async fn uploader(
     shard_id: u64,
     mut checkpoint_number: CheckpointSequenceNumber,
-    store: S,
+    store: RocksDbStore,
     config: TransactionKeyValueStoreWriteConfig,
     progress_sender: mpsc::Sender<u64>,
     mut receiver: oneshot::Receiver<()>,
-) -> Result<()>
-where
-    S: ReadStore + Send,
-    <S as ReadStore>::Error: Send,
-{
+) -> Result<()> {
     let mut client = DynamoDbClient::new(&config).await;
     while receiver.try_recv().is_err() {
         if let Some(checkpoint_summary) = store
@@ -139,56 +135,74 @@ where
                 .get_full_checkpoint_contents(&checkpoint_summary.content_digest)
                 .map_err(|_| anyhow!("Failed to read checkpoint content from store"))?
             {
-                let mut transactions = vec![];
-                let mut effects = vec![];
-                let mut events = vec![];
+                // let mut transactions = vec![];
+                // let mut effects = vec![];
+                // let mut events = vec![];
+                let mut objects = vec![];
 
                 for content in contents.iter() {
-                    let transaction_digest = content.transaction.digest().into_inner().to_vec();
-                    effects.push((transaction_digest.clone(), content.effects.clone()));
-                    transactions.push((transaction_digest, content.transaction.clone()));
-
-                    if let Some(event_digest) = content.effects.events_digest() {
-                        if let Some(tx_events) = store
-                            .get_transaction_events(event_digest)
-                            .map_err(|_| anyhow!("Failed to fetch events from the store"))?
-                        {
-                            events.push((event_digest.into_inner().to_vec(), tx_events));
-                        }
+                    let object_keys: Vec<_> = content
+                        .effects
+                        .all_changed_objects()
+                        .iter()
+                        .map(|((obj_id, version, _), _, _)| ObjectKey(*obj_id, *version))
+                        .collect();
+                    let object_values = store.get_objects(&object_keys)?;
+                    for (object_key, value) in
+                        object_keys.into_iter().zip(object_values.into_iter())
+                    {
+                        objects.push((
+                            bcs::to_bytes(&object_key)?,
+                            value.expect("kv store: missing object"),
+                        ));
                     }
-                }
-                client
-                    .multi_set(KVTable::Transactions, transactions)
-                    .await?;
-                client.multi_set(KVTable::Effects, effects).await?;
-                client.multi_set(KVTable::Events, events).await?;
 
-                let serialized_checkpoint_number = bcs::to_bytes(
-                    &TaggedKey::CheckpointSequenceNumber(checkpoint_summary.sequence_number),
-                )?;
-                client
-                    .multi_set(
-                        KVTable::CheckpointSummary,
-                        [
-                            serialized_checkpoint_number.clone(),
-                            checkpoint_summary.digest().into_inner().to_vec(),
-                        ]
-                        .into_iter()
-                        .zip(repeat(checkpoint_summary.inner())),
-                    )
-                    .await?;
-                for key in [
-                    serialized_checkpoint_number,
-                    checkpoint_summary.content_digest.into_inner().to_vec(),
-                ] {
-                    client
-                        .upload_blob(
-                            KVTable::CheckpointContent,
-                            key,
-                            contents.checkpoint_contents(),
-                        )
-                        .await?;
+                    //     let transaction_digest = content.transaction.digest().into_inner().to_vec();
+                    //     effects.push((transaction_digest.clone(), content.effects.clone()));
+                    //     transactions.push((transaction_digest, content.transaction.clone()));
+
+                    //     if let Some(event_digest) = content.effects.events_digest() {
+                    //         if let Some(tx_events) = store
+                    //             .get_transaction_events(event_digest)
+                    //             .map_err(|_| anyhow!("Failed to fetch events from the store"))?
+                    //         {
+                    //             events.push((event_digest.into_inner().to_vec(), tx_events));
+                    //         }
+                    //     }
                 }
+                // client
+                //     .multi_set(KVTable::Transactions, transactions)
+                //     .await?;
+                // client.multi_set(KVTable::Effects, effects).await?;
+                // client.multi_set(KVTable::Events, events).await?;
+                client.multi_set(KVTable::Objects, objects).await?;
+
+                // let serialized_checkpoint_number = bcs::to_bytes(
+                //     &TaggedKey::CheckpointSequenceNumber(checkpoint_summary.sequence_number),
+                // )?;
+                // client
+                //     .multi_set(
+                //         KVTable::CheckpointSummary,
+                //         [
+                //             serialized_checkpoint_number.clone(),
+                //             checkpoint_summary.digest().into_inner().to_vec(),
+                //         ]
+                //         .into_iter()
+                //         .zip(repeat(checkpoint_summary.inner())),
+                //     )
+                //     .await?;
+                // for key in [
+                //     serialized_checkpoint_number,
+                //     checkpoint_summary.content_digest.into_inner().to_vec(),
+                // ] {
+                //     client
+                //         .upload_blob(
+                //             KVTable::CheckpointContent,
+                //             key,
+                //             contents.checkpoint_contents(),
+                //         )
+                //         .await?;
+                // }
                 progress_sender.send(checkpoint_number + shard_id).await?;
                 checkpoint_number += config.concurrency as u64;
                 continue;

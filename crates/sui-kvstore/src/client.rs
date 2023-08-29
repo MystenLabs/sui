@@ -19,10 +19,11 @@ pub enum KVTable {
     Events,
     CheckpointContent,
     CheckpointSummary,
+    Objects,
     State,
 }
 
-const UPLOAD_PROGRESS_KEY: [u8; 1] = [0];
+const UPLOAD_PROGRESS_KEY: [u8; 6] = [111, 98, 106, 101, 99, 116];
 
 #[async_trait]
 pub trait KVWriteClient {
@@ -83,6 +84,7 @@ impl DynamoDbClient {
             KVTable::Transactions => "tx",
             KVTable::Effects => "fx",
             KVTable::Events => "ev",
+            KVTable::Objects => "ob",
             KVTable::State => "state",
             KVTable::CheckpointContent => "cc",
             KVTable::CheckpointSummary => "cs",
