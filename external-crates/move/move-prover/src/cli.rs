@@ -8,6 +8,7 @@
 
 use std::{
     collections::BTreeMap,
+    io::IsTerminal,
     str::FromStr,
     sync::atomic::{AtomicBool, Ordering},
 };
@@ -848,7 +849,7 @@ impl Options {
             .set_time_level(LevelFilter::Debug)
             .set_level_padding(LevelPadding::Off)
             .build();
-        let logger = if atty::is(atty::Stream::Stderr) && atty::is(atty::Stream::Stdout) {
+        let logger = if std::io::stderr().is_terminal() && std::io::stdout().is_terminal() {
             CombinedLogger::init(vec![TermLogger::new(
                 self.verbosity_level,
                 config,
