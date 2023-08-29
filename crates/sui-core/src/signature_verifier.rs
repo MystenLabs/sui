@@ -308,6 +308,7 @@ impl SignatureVerifier {
     /// been inserted.
     pub(crate) fn insert_jwk(&self, jwk_id: &JwkId, jwk: &JWK) {
         let mut jwks = self.jwks.write();
+        tracing::debug!("Inserting JWK with kid {:?}", jwk_id);
         jwks.insert(jwk_id.clone(), jwk.clone());
     }
 

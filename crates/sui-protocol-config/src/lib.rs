@@ -891,6 +891,11 @@ impl ProtocolConfig {
     pub fn loaded_child_object_format_type(&self) -> bool {
         self.feature_flags.loaded_child_object_format_type
     }
+
+    // this function only exists for readability in the genesis code.
+    pub fn create_authenticator_state_in_genesis(&self) -> bool {
+        self.enable_jwk_consensus_updates()
+    }
 }
 
 #[cfg(not(msim))]

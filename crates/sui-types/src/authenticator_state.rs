@@ -12,11 +12,16 @@ use crate::{id::UID, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS};
 
 pub const AUTHENTICATOR_STATE_MODULE_NAME: &IdentStr = ident_str!("authenticator_state");
 pub const AUTHENTICATOR_STATE_STRUCT_NAME: &IdentStr = ident_str!("AuthenticatorState");
+pub const AUTHENTICATOR_STATE_UPDATE_FUNCTION_NAME: &IdentStr =
+    ident_str!("update_authenticator_state");
 pub const RESOLVED_SUI_AUTHENTICATOR_STATE: (&AccountAddress, &IdentStr, &IdentStr) = (
     &SUI_FRAMEWORK_ADDRESS,
     AUTHENTICATOR_STATE_MODULE_NAME,
     AUTHENTICATOR_STATE_STRUCT_NAME,
 );
+
+/// Current latest version of the authenticator state object.
+pub const AUTHENTICATOR_STATE_VERSION: u64 = 1;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AuthenticatorState {
@@ -58,7 +63,7 @@ pub fn get_authenticator_state(
         .map_err(|err| SuiError::SuiSystemStateReadError(err.to_string()))?;
 
     // No other versions exist yet.
-    assert_eq!(outer.version, 1);
+    assert_eq!(outer.version, AUTHENTICATOR_STATE_VERSION);
 
     let id = outer.id.id.bytes;
     let inner: AuthenticatorStateInner =
