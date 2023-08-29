@@ -68,7 +68,36 @@ BEGIN
             BEGIN
                 attempts := attempts + 1;
                 REFRESH MATERIALIZED VIEW CONCURRENTLY epoch_network_metrics;
-                REFRESH MATERIALIZED VIEW epoch_move_call_metrics;
+                INSERT INTO epoch_move_call_metrics
+                  SELECT max(epoch), 3::BIGINT AS day, move_package, move_module, move_function, COUNT(*) AS count
+                   FROM move_calls
+                   WHERE epoch >=
+                         (SELECT MIN(epoch)
+                          FROM epochs
+                          WHERE epoch_start_timestamp > ((EXTRACT(EPOCH FROM CURRENT_TIMESTAMP - '3 days'::INTERVAL)) * 1000)::BIGINT)
+                   GROUP BY move_package, move_module, move_function
+                   ORDER BY count DESC
+                   LIMIT 10;
+                INSERT INTO epoch_move_call_metrics
+                  SELECT max(epoch), 7::BIGINT AS day, move_package, move_module, move_function, COUNT(*) AS count
+                   FROM move_calls
+                   WHERE epoch >=
+                         (SELECT MIN(epoch)
+                          FROM epochs
+                          WHERE epoch_start_timestamp > ((EXTRACT(EPOCH FROM CURRENT_TIMESTAMP - '7 days'::INTERVAL)) * 1000)::BIGINT)
+                   GROUP BY move_package, move_module, move_function
+                   ORDER BY count DESC
+                   LIMIT 10;
+                INSERT INTO epoch_move_call_metrics
+                  SELECT max(epoch), 30::BIGINT AS day, move_package, move_module, move_function, COUNT(*) AS count
+                   FROM move_calls
+                   WHERE epoch >=
+                         (SELECT MIN(epoch)
+                          FROM epochs
+                          WHERE epoch_start_timestamp > ((EXTRACT(EPOCH FROM CURRENT_TIMESTAMP - '30 days'::INTERVAL)) * 1000)::BIGINT)
+                   GROUP BY move_package, move_module, move_function
+                   ORDER BY count DESC
+                   LIMIT 10;
                 EXIT;
             EXCEPTION
                 WHEN OTHERS THEN
@@ -109,33 +138,12 @@ CREATE TRIGGER refresh_view
     FOR EACH ROW
 EXECUTE PROCEDURE refresh_view_func();
 
-CREATE MATERIALIZED VIEW epoch_move_call_metrics AS
-(SELECT 3::BIGINT AS day, move_package, move_module, move_function, COUNT(*) AS count
- FROM move_calls
- WHERE epoch >=
-       (SELECT MIN(epoch)
-        FROM epochs
-        WHERE epoch_start_timestamp > ((EXTRACT(EPOCH FROM CURRENT_TIMESTAMP - '3 days'::INTERVAL)) * 1000)::BIGINT)
- GROUP BY move_package, move_module, move_function
- ORDER BY count DESC
- LIMIT 10)
-UNION ALL
-(SELECT 7::BIGINT AS day, move_package, move_module, move_function, COUNT(*) AS count
- FROM move_calls
- WHERE epoch >=
-       (SELECT MIN(epoch)
-        FROM epochs
-        WHERE epoch_start_timestamp > ((EXTRACT(EPOCH FROM CURRENT_TIMESTAMP - '7 days'::INTERVAL)) * 1000)::BIGINT)
- GROUP BY move_package, move_module, move_function
- ORDER BY count DESC
- LIMIT 10)
-UNION ALL
-(SELECT 30::BIGINT AS day, move_package, move_module, move_function, COUNT(*) AS count
- FROM move_calls
- WHERE epoch >=
-       (SELECT MIN(epoch)
-        FROM epochs
-        WHERE epoch_start_timestamp > ((EXTRACT(EPOCH FROM CURRENT_TIMESTAMP - '30 days'::INTERVAL)) * 1000)::BIGINT)
- GROUP BY move_package, move_module, move_function
- ORDER BY count DESC
- LIMIT 10);
+CREATE TABLE epoch_move_call_metrics (
+    epoch         bigint NOT NULL,
+    day           bigint NOT NULL,
+    move_package  text NOT NULL,
+    move_module   text NOT NULL,
+    move_function text NOT NULL,
+    count         bigint NOT NULL
+);
+CREATE INDEX move_calls_metics_epoch ON epoch_move_call_metrics (epoch);

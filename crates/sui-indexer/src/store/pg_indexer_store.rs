@@ -1207,7 +1207,13 @@ impl PgIndexerStore {
 
     fn get_move_call_metrics(&self) -> Result<MoveCallMetrics, IndexerError> {
         let metrics = read_only_blocking!(&self.blocking_cp, |conn| {
-            diesel::sql_query("SELECT * FROM epoch_move_call_metrics;")
+            diesel::sql_query("SELECT
+                day,
+                move_package,
+                move_module,
+                move_function,
+                count
+            FROM epoch_move_call_metrics WHERE epoch = (SELECT MAX(epoch) FROM epoch_move_call_metrics);")
                 .get_results::<DBMoveCallMetrics>(conn)
         })?;
 
