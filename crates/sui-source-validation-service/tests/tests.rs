@@ -6,6 +6,7 @@ use reqwest::Client;
 use std::fs;
 use std::io::Read;
 use std::os::unix::fs::FileExt;
+use std::sync::Arc;
 use std::{collections::BTreeMap, path::PathBuf};
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
@@ -274,7 +275,8 @@ async fn test_api_route() -> anyhow::Result<()> {
     );
     let mut sources = NetworkLookup::new();
     sources.insert(Network::Localnet, test_lookup);
-    tokio::spawn(serve(AppState { sources }).expect("Cannot start service."));
+    let app_state = Arc::new(AppState { sources });
+    tokio::spawn(serve(app_state).expect("Cannot start service."));
 
     let client = Client::new();
 

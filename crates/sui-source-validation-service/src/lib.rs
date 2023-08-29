@@ -394,16 +394,19 @@ pub struct AppState {
     pub sources: NetworkLookup,
 }
 
-pub fn serve(app_state: AppState) -> anyhow::Result<Server<AddrIncoming, IntoMakeService<Router>>> {
+pub fn serve(
+    app_state: Arc<AppState>,
+) -> anyhow::Result<Server<AddrIncoming, IntoMakeService<Router>>> {
     let app = Router::new()
-        .route("/api", get(api_route).with_state(Arc::new(app_state)))
+        .route("/api", get(api_route))
         .layer(
             ServiceBuilder::new().layer(
                 tower_http::cors::CorsLayer::new()
                     .allow_methods([Method::GET])
                     .allow_origin(tower_http::cors::Any),
             ),
-        );
+        )
+        .with_state(app_state);
     let listener = TcpListener::bind(host_port())?;
     Ok(Server::from_tcp(listener)?.serve(app.into_make_service()))
 }
