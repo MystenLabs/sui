@@ -4,13 +4,51 @@
 import type { UseMutationOptions } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
 import { useWalletContext } from 'dapp-kit/src/components/wallet-provider/WalletProvider';
-import { WalletNotConnectedError } from 'dapp-kit/src/errors/walletErrors';
+import { WalletNotFoundError } from 'dapp-kit/src/errors/walletErrors';
+
+type SwitchAccountArgs = {
+	account: WalletAccount;
+};
+
+type SwitchAccountResult = StandardConnectOutput;
+
+type UseSwitchAccountMutationOptions = Omit<
+	UseMutationOptions<SwitchAccountResult, Error, SwitchAccountArgs, unknown>,
+	'mutationKey' | 'mutationFn'
+>;
+
+// TODO: Figure out the query/mutation key story and whether or not we want to expose
+// key factories from dapp-kit
+function mutationKey(args: SwitchAccountArgs) {
+	return [{ scope: 'wallet', entity: 'connect-wallet', ...args }] as const;
+}
 
 /**
- * Mutation hook for prompting the user to sign a message.
+ * Mutation hook for establishing a connection to a specific wallet.
  */
-export function useSwitchAccount(account: WalletAccount) {
-	const { currentWallet, dispatch } = useWalletContext();
+export function useSwitchAccount({
+	account,
+	...mutationOptions
+}: SwitchAccountArgs & UseSwitchAccountMutationOptions) {
+	const { wallets, storageAdapter, storageKey, dispatch } = useWalletContext();
 
-	dispatch('');
+	return useMutation({
+		mutationKey: mutationKey({ walletName, silent }),
+		mutationFn: async ({ walletName, ...standardConnectInput }) => {
+			const wallet = wallets.find((wallet) => wallet.name === walletName);
+			if (!wallet) {
+				throw new WalletNotFoundError(
+					`Failed to connect to wallet with name ${walletName}. Double check that the name provided is correct and that a wallet with that name is registered.`,
+				);
+			}
+			try {
+				await storageAdapter.set(storageKey, `${wallet.name}-${0}`);
+			} catch {
+				/* ignore error */
+			}
+
+			return connectResult;
+		},
+		...mutationOptions,
+	});
 }

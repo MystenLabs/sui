@@ -41,7 +41,7 @@ export function registerUnsafeBurnerWallet(
 
 	if (registeredWallets.find((wallet) => wallet.name === WALLET_NAME)) {
 		console.warn(
-			'registerUnsafeBurnerWallet: Unsafe Burner Wallet already registered, skipping duplicate registration',
+			'registerUnsafeBurnerWallet: Unsafe Burner Wallet already registered, skipping duplicate registration.',
 		);
 		return;
 	}

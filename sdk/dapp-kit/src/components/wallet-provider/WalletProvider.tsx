@@ -54,14 +54,13 @@ export function WalletProvider({
 	enableUnsafeBurner = false,
 	children,
 }: WalletProviderProps) {
-	const registeredWalletsApi = getWallets();
-	const registeredWallets = registeredWalletsApi.get();
+	const walletsApi = getWallets();
+	const registeredWallets = walletsApi.get();
 	const [walletState, dispatch] = useReducer(walletReducer, {
 		wallets: sortWallets(registeredWallets, preferredWallets, requiredFeatures),
 		currentWallet: null,
 		accounts: [],
 		currentAccount: null,
-		status: 'disconnected',
 	});
 
 	useUnsafeBurnerWallet(enableUnsafeBurner);
@@ -82,10 +81,22 @@ export function WalletProvider({
 	});
 
 	useEffect(() => {
-		if (autoConnect) {
-			console.log('a');
+		if (!autoConnect || walletState.currentWallet) {
+			return;
 		}
-	}, [autoConnect]);
+
+		(async function autoConnectToWallet() {
+			try {
+				const lastWalletAccount = await storageAdapter.get(storageKey);
+				const [walletName, accountAddress] = lastWalletAccount?.split('-') ?? [];
+				if (walletName && accountAddress) {
+					// connectWallet({ silent: true });
+				}
+			} catch {
+				/* ignore error */
+			}
+		})();
+	}, [autoConnect, storageAdapter, storageKey, walletState.currentWallet]);
 
 	const contextValue = useMemo(() => {
 		return { ...walletState, storageAdapter, storageKey, dispatch };

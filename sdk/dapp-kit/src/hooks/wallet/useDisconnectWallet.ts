@@ -20,6 +20,11 @@ const mutationKey = [{ scope: 'wallet', entity: 'disconnect-wallet' }] as const;
 
 /**
  * Mutation hook for disconnecting from an active wallet connection, if currently connected.
+ * 
+ * We haven't taken
+ * Most wallets in the Sui ecosystem don't currently implement the disconnect feature for
+ * historical reasons (we haven't taken a firm stance on whether or not disconnecting
+ * your wallet from a dApp should a)
  */
 export function useDisconnectWallet(mutationOptions: UseDisconnectWalletMutationOptions) {
 	const { currentWallet, storageAdapter, storageKey, dispatch } = useWalletContext();
@@ -31,15 +36,11 @@ export function useDisconnectWallet(mutationOptions: UseDisconnectWalletMutation
 				throw new WalletNotConnectedError('No wallet is connected.');
 			}
 
+			// TODO: Once we decide to
 			const disconnectFeature = currentWallet.features['standard:disconnect'];
-			if (!disconnectFeature) {
-				throw new WalletFeatureNotSupportedError(
-					"This wallet doesn't support the `disconnect` feature.",
-				);
-			}
+			await disconnectFeature?.disconnect();
 
-			await disconnectFeature.disconnect();
-			dispatch({ type: 'wallet-disconnected', payload: undefined });
+			dispatch({ type: 'wallet-disconnected' });
 
 			try {
 				await storageAdapter.remove(storageKey);

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // TODO: This is currently only used for storing wallet information, but we should
-// also use/modify this functionality to support react-query persistence when we
-// have more of the base infrastructure setup.
+// figure out how this functionality ties into supporting react-query persistence
+// when we have more of the base infrastructure setup.
 export interface StorageAdapter {
 	set(key: string, value: string): Promise<void>;
 	remove(key: string): Promise<void>;

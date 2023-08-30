@@ -9,14 +9,12 @@ export type WalletState = {
 	currentWallet: WalletWithSuiFeatures | null;
 	accounts: readonly WalletAccount[];
 	currentAccount: WalletAccount | null;
-	status: 'disconnected' | 'connecting' | 'connected' | 'error';
 };
 
 export type WalletAction =
 	| { type: 'wallet-connected'; payload: WalletWithSuiFeatures }
 	| { type: 'wallet-disconnected'; payload?: never }
-	| { type: 'wallet-properties-changed'; payload: { updatedAccounts: WalletAccount[] } }
-	| { type: 'update-status'; payload: WalletState['status'] };
+	| { type: 'wallet-properties-changed'; payload: { updatedAccounts: WalletAccount[] } };
 
 export function walletReducer(
 	walletState: WalletState,
@@ -29,7 +27,6 @@ export function walletReducer(
 				currentWallet: payload,
 				accounts: payload.accounts,
 				currentAccount: payload.accounts[0] ?? null,
-				status: 'connected',
 			};
 		case 'wallet-disconnected': {
 			return {
@@ -37,7 +34,6 @@ export function walletReducer(
 				currentWallet: null,
 				accounts: [],
 				currentAccount: null,
-				status: 'disconnected',
 			};
 		}
 		case 'wallet-properties-changed': {
@@ -47,11 +43,6 @@ export function walletReducer(
 				currentAccount: null,
 			};
 		}
-		case 'update-status':
-			return {
-				...walletState,
-				status: payload,
-			};
 		default:
 			assertUnreachable(type);
 	}

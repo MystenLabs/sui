@@ -4,6 +4,8 @@
 import type { Wallet, WalletWithSuiFeatures } from '@mysten/wallet-standard';
 import { isWalletWithSuiFeatures } from '@mysten/wallet-standard';
 
+export type WalletAccountStorageKey = `${string}-${string}`;
+
 export function sortWallets(
 	wallets: readonly Wallet[],
 	preferredWallets: string[],
