@@ -7,6 +7,9 @@ import type {
 	StandardEventsChangeProperties,
 } from '@mysten/wallet-standard';
 
+/**
+ * Internal hook for easily handling various changes in properties for a wallet.
+ */
 export function useWalletPropertiesChanged(
 	currentWallet: WalletWithSuiFeatures | null,
 	onChange: (updatedProperties: StandardEventsChangeProperties) => void,

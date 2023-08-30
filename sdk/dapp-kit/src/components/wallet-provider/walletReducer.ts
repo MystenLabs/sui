@@ -14,9 +14,8 @@ export type WalletState = {
 export type WalletAction =
 	| { type: 'wallet-connected'; payload: WalletWithSuiFeatures }
 	| { type: 'wallet-disconnected'; payload?: never }
-	| { type: 'wallet-properties-changed'; payload: { updatedAccounts: WalletAccount[] } };
-	| { type: 'wallets-changed'; payload: { updatedAccounts: WalletAccount[] } };
-
+	| { type: 'wallet-properties-changed'; payload: { updatedAccounts: WalletAccount[] } }
+	| { type: 'wallets-changed'; payload: WalletWithSuiFeatures[] };
 
 export function walletReducer(
 	walletState: WalletState,
@@ -48,8 +47,9 @@ export function walletReducer(
 		case 'wallets-changed': {
 			return {
 				...walletState,
-				wallets: get
-			}
+				wallets: payload,
+				// TODO: if the current wallet is un-registered... we should reset our state?
+			};
 		}
 		default:
 			assertUnreachable(type);

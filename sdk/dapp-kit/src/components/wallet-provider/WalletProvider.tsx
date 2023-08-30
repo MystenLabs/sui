@@ -65,7 +65,10 @@ export function WalletProvider({
 	});
 
 	useWalletsChanged(() => {
-		dispatch();
+		dispatch({
+			type: 'wallets-changed',
+			payload: sortWallets(walletsApi.get(), preferredWallets, requiredFeatures),
+		});
 	});
 
 	useUnsafeBurnerWallet(enableUnsafeBurner);
