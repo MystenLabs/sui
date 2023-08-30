@@ -6,6 +6,8 @@ use diesel::pg::sql_types::Bytea;
 use anyhow::anyhow;
 use std::sync::Arc;
 use std::process::exit;
+use std::str::FromStr;
+use once_cell::sync::Lazy;
 
 use sui_types::object::MoveObject;
 use sui_types::object::ObjectFormatOptions;
@@ -118,18 +120,21 @@ impl ModuleResolver for GrootModuleResolver {
     }
 }
 
-const DEEPBOOK: AccountAddress =
+static DEEPBOOK: Lazy<AccountAddress> = Lazy::new(|| {
     AccountAddress::from_str("000000000000000000000000000000000000000000000000000000000000dee9")
         .unwrap();
+});
+
 fn is_deepbook(address: &AccountAddress) -> bool {
     address == &DEEPBOOK
 }
 
-const TYPUS_LATEST: AccountAddress =
+static TYPUS_LATEST: Lazy<AccountAddress> = Lazy::new(|| {
     AccountAddress::from_str("ec2cc88cc1ba1da7a936ece33417634e18618e6898e496a3493d8f58d97e705b")
         .unwrap();
+});
 
-const TYPUS_ADDRESS_SET: HashSet<AccountAddress> = {
+static TYPUS_ADDRESS_SET: Lazy<HashSet<AccountAddress>> = Lazy::new(|| {
     let mut set = HashSet::new();
     set.insert(
         AccountAddress::from_str("a76499eda1d37751473de5f30e106f35943ada2f6ea764861243e7f5aa5bcc97")
@@ -164,7 +169,7 @@ const TYPUS_ADDRESS_SET: HashSet<AccountAddress> = {
             .unwrap()
     );
     set
-};
+});
 
 fn map_typus_address(address: &AccountAddress) -> AccountAddress {
     if TYPUS_ADDRESS_SET.contains(address) {
