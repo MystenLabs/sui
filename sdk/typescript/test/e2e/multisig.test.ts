@@ -3,7 +3,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 // import { setupSuiClient, executeTransactionBlock } from './setup';
-import { fromB64, toB58, toB64 } from '@mysten/bcs';
+import { fromB64, toB58 } from '@mysten/bcs';
 // import { setup, TestToolbox } from './utils/setup';
 import { SignatureWithBytes } from '../../src/cryptography/keypair';
 import { parseSerializedSignature } from '../../src/cryptography';
@@ -14,7 +14,11 @@ import {
 	decodeMultiSig,
 } from '../../src/cryptography/multisig';
 import { PublicKey } from '../../src/cryptography/publickey';
-import { MultiSigPublicKey, parsePartialSignatures, MultiSigStruct } from '../../src/multisig/publickey';
+import {
+	MultiSigPublicKey,
+	parsePartialSignatures,
+	MultiSigStruct,
+} from '../../src/multisig/publickey';
 import { Ed25519Keypair, Ed25519PublicKey } from '../../src/keypairs/ed25519';
 import { Secp256k1Keypair } from '../../src/keypairs/secp256k1';
 import { Secp256r1Keypair } from '../../src/keypairs/secp256r1';
@@ -258,7 +262,6 @@ describe('Multisig scenarios', () => {
 		const pk2 = k2.getPublicKey();
 
 		const k3 = new Secp256r1Keypair();
-		const pk3 = k3.getPublicKey();
 
 		const pubkeyWeightPairs: PubkeyWeightPair[] = [
 			{
@@ -314,9 +317,6 @@ describe('Multisig scenarios', () => {
 		const k2 = new Secp256k1Keypair();
 		const pk2 = k2.getPublicKey();
 
-		const k3 = new Secp256r1Keypair();
-		const pk3 = k3.getPublicKey();
-
 		const pubkeyWeightPairs: PubkeyWeightPair[] = [
 			{
 				pubKey: pk1,
@@ -340,7 +340,6 @@ describe('Multisig scenarios', () => {
 		const signData = new TextEncoder().encode('hello world');
 		const sig1 = await k1.signPersonalMessage(signData);
 		const sig2 = await k2.signPersonalMessage(signData);
-		const sig3 = await k3.signPersonalMessage(signData);
 
 		const isValidSig1 = await k1.getPublicKey().verifyPersonalMessage(signData, sig1.signature);
 		const isValidSig2 = await k2.getPublicKey().verifyPersonalMessage(signData, sig2.signature);
@@ -370,9 +369,6 @@ describe('Multisig scenarios', () => {
 
 		const k2 = new Secp256k1Keypair();
 		const pk2 = k2.getPublicKey();
-
-		const k3 = new Secp256r1Keypair();
-		const pk3 = k3.getPublicKey();
 
 		const pubkeyWeightPairs: PubkeyWeightPair[] = [
 			{
@@ -423,9 +419,6 @@ describe('Multisig scenarios', () => {
 
 		const k2 = new Secp256k1Keypair();
 		const pk2 = k2.getPublicKey();
-
-		const k3 = new Secp256r1Keypair();
-		const pk3 = k3.getPublicKey();
 
 		const pubkeyWeightPairs: PubkeyWeightPair[] = [
 			{
@@ -478,9 +471,6 @@ describe('Multisig scenarios', () => {
 		const k2 = new Secp256k1Keypair();
 		const pk2 = k2.getPublicKey();
 
-		const k3 = new Secp256r1Keypair();
-		const pk3 = k3.getPublicKey();
-
 		const pubkeyWeightPairs: PubkeyWeightPair[] = [
 			{
 				pubKey: pk1,
@@ -532,9 +522,6 @@ describe('Multisig scenarios', () => {
 		const k2 = new Secp256k1Keypair();
 		const pk2 = k2.getPublicKey();
 
-		const k3 = new Secp256r1Keypair();
-		const pk3 = k3.getPublicKey();
-
 		const pubkeyWeightPairs: PubkeyWeightPair[] = [
 			{
 				pubKey: pk1,
@@ -583,9 +570,12 @@ describe('Multisig scenarios', () => {
 });
 
 describe('Multisig address creation:', () => {
-	let k1: Ed25519Keypair, pk1: Ed25519PublicKey,
-		k2: Secp256k1Keypair, pk2: PublicKey,
-		k3: Secp256r1Keypair, pk3: PublicKey;
+	let k1: Ed25519Keypair,
+		pk1: Ed25519PublicKey,
+		k2: Secp256k1Keypair,
+		pk2: PublicKey,
+		k3: Secp256r1Keypair,
+		pk3: PublicKey;
 
 	beforeAll(() => {
 		k1 = new Ed25519Keypair();
