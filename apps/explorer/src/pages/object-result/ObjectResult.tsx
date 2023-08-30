@@ -4,24 +4,19 @@
 import { useGetObject } from '@mysten/core';
 import { ObjectDetailsHeader } from '@mysten/icons';
 import { LoadingIndicator } from '@mysten/ui';
+import clsx from 'clsx';
 import { useParams } from 'react-router-dom';
 
 import { translate, type DataType } from './ObjectResultType';
 import PkgView from './views/PkgView';
 import { TokenView } from './views/TokenView';
-import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import { PageLayout } from '~/components/Layout/PageLayout';
+import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import { ObjectView } from '~/pages/object-result/views/ObjectView';
 import { Banner } from '~/ui/Banner';
 import { PageHeader } from '~/ui/PageHeader';
 
 const PACKAGE_TYPE_NAME = 'Move Package';
-
-function ObjectPageHeader({ title }: { title: string }) {
-	return (
-		<PageHeader type="Object" title={title} before={<ObjectDetailsHeader className="h-6 w-6" />} />
-	);
-}
 
 function Fail({ objID }: { objID: string | undefined }) {
 	return (
@@ -72,7 +67,11 @@ export function ObjectResult() {
 							size: 'md',
 							content: (
 								<div>
-									<ObjectPageHeader title={resp.id} />
+									<PageHeader
+										type="Object"
+										title={resp.id}
+										before={<ObjectDetailsHeader className="h-6 w-6" />}
+									/>
 
 									<ErrorBoundary>
 										<div className="mt-5">
@@ -85,9 +84,9 @@ export function ObjectResult() {
 			}
 			content={
 				<div className="mb-10">
-					<PageHeader type={isPackage ? 'Package' : 'Object'} title={resp.id} />
+					{isPackage && <PageHeader type="Package" title={resp.id} />}
 					<ErrorBoundary>
-						<div className="mt-10">
+						<div className={clsx(isPackage && 'mt-10')}>
 							{isPackage ? <PkgView data={resp} /> : <TokenView data={data} />}
 						</div>
 					</ErrorBoundary>

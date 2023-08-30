@@ -3,14 +3,12 @@
 
 import { CoinFormat, useFormatCoin } from '@mysten/core';
 import { ArrowUpRight16 } from '@mysten/icons';
-import { normalizeSuiAddress } from '@mysten/sui.js';
-import { type DisplayFieldsResponse, type SuiObjectResponse } from '@mysten/sui.js/client';
+import { type SuiObjectResponse } from '@mysten/sui.js/client';
 import { parseStructTag, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { Heading, Text } from '@mysten/ui';
 import { type ReactNode, useEffect, useState } from 'react';
 
 import { useResolveVideo } from '~/hooks/useResolveVideo';
-import { LinkOrTextDescriptionItem } from '~/pages/object-result/LinkOrTextDescriptionItem';
 import { Card } from '~/ui/Card';
 import { Divider } from '~/ui/Divider';
 import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
@@ -60,7 +58,7 @@ function ObjectViewItem({ title, children }: { title: string; children: ReactNod
 
 function ObjectViewCard({ children }: { children: ReactNode }) {
 	return (
-		<div className="mb-6 h-full min-w-[50%] basis-1/2 pr-6">
+		<div>
 			<Card bg="white/80" spacing="lg" height="full">
 				<div className="flex flex-col gap-4">{children}</div>
 			</Card>
@@ -99,22 +97,9 @@ export function ObjectView({ data }: ObjectViewProps) {
 	const objOwner = data.data?.owner;
 	const storageRebate = data.data?.storageRebate;
 
-	const linkUrl = getDisplayUrl(display?.link);
-	const projectUrl = getDisplayUrl(display?.project_url);
+	const [storageRebateFormatted] = useFormatCoin(storageRebate, SUI_TYPE_ARG, CoinFormat.FULL);
 
-	const [storageRebateFormatted, symbol] = useFormatCoin(
-		storageRebate,
-		SUI_TYPE_ARG,
-		CoinFormat.FULL,
-	);
-
-	const { address, module, name: parseStructTagName } = parseStructTag(objectType);
-
-	const genhref = (objType: string) => {
-		const metadataarr = objType.split('::');
-		const address = normalizeSuiAddress(metadataarr[0]);
-		return `/object/${address}?module=${metadataarr[1]}`;
-	};
+	const { address, module } = parseStructTag(objectType);
 
 	useEffect(() => {
 		const controller = new AbortController();
@@ -139,78 +124,86 @@ export function ObjectView({ data }: ObjectViewProps) {
 				/>
 			)}
 
-			<div className="flex h-full w-full flex-row flex-wrap">
-				<ObjectViewCard>
-					<Heading variant="heading4/semibold" color="steel-darker">
-						{name || display?.description}
-					</Heading>
-					{name && display && (
-						<Text variant="pBody/normal" color="steel-darker">
-							{display.description}
-						</Text>
+			<div className="flex h-full w-full flex-row gap-6">
+				<div className="flex min-w-[50%] basis-1/2 flex-col gap-4">
+					<ObjectViewCard>
+						<Heading variant="heading4/semibold" color="steel-darker">
+							{name || display?.description}
+						</Heading>
+						{name && display && (
+							<Text variant="pBody/normal" color="steel-darker">
+								{display.description}
+							</Text>
+						)}
+
+						<Divider />
+
+						<ObjectViewItem title="Object ID">
+							<ObjectLink objectId={data.data?.objectId!} />
+						</ObjectViewItem>
+
+						<ObjectViewItem title="Type">
+							<ObjectLink
+								label={<div className="text-right">{trimStdLibPrefix(objectType)}</div>}
+								objectId={`${address}?module=${module}`}
+							/>
+						</ObjectViewItem>
+					</ObjectViewCard>
+
+					<ObjectViewCard>
+						<ObjectViewItem title="Version">
+							<Text variant="pBodySmall/medium" color="gray-90">
+								{data.data?.version}
+							</Text>
+						</ObjectViewItem>
+
+						<ObjectViewItem title="Last Transaction Block Digest">
+							<TransactionLink digest={data.data?.previousTransaction!} />
+						</ObjectViewItem>
+					</ObjectViewCard>
+				</div>
+
+				<div className="flex min-w-[50%] basis-1/2 flex-col gap-4">
+					{objOwner && (
+						<ObjectViewCard>
+							<ObjectViewItem title="Owner">
+								{objOwner === 'Immutable' ? (
+									'Immutable'
+								) : 'Shared' in objOwner ? (
+									'Shared'
+								) : 'ObjectOwner' in objOwner ? (
+									<ObjectLink objectId={objOwner.ObjectOwner} />
+								) : (
+									<AddressLink address={objOwner.AddressOwner} />
+								)}
+							</ObjectViewItem>
+						</ObjectViewCard>
 					)}
 
-					<Divider />
-
-					<ObjectViewItem title="Object ID">
-						<ObjectLink objectId={data.data?.objectId!} />
-					</ObjectViewItem>
-
-					<ObjectViewItem title="Type">
-						<ObjectLink
-							label={<div className="text-right">{trimStdLibPrefix(objectType)}</div>}
-							objectId={`${address}?module=${module}`}
-						/>
-					</ObjectViewItem>
-				</ObjectViewCard>
-
-				{objOwner && (
-					<ObjectViewCard>
-						<ObjectViewItem title="Owner">
-							{objOwner === 'Immutable' ? (
-								'Immutable'
-							) : 'Shared' in objOwner ? (
-								'Shared'
-							) : 'ObjectOwner' in objOwner ? (
-								<ObjectLink objectId={objOwner.ObjectOwner} />
-							) : (
-								<AddressLink address={objOwner.AddressOwner} />
+					{display && (display.link || display.project_url) && (
+						<ObjectViewCard>
+							{display.link && (
+								<ObjectViewItem title="Link">
+									<LinkWebsite value={display.link} />
+								</ObjectViewItem>
 							)}
-						</ObjectViewItem>
-					</ObjectViewCard>
-				)}
 
-				<ObjectViewCard>
-					<ObjectViewItem title="Version">
-						<Text variant="pBodySmall/medium" color="gray-90">
-							{data.data?.version}
-						</Text>
-					</ObjectViewItem>
+							{display.project_url && (
+								<ObjectViewItem title="Website">
+									<LinkWebsite value={display.project_url} />
+								</ObjectViewItem>
+							)}
+						</ObjectViewCard>
+					)}
 
-					<ObjectViewItem title="Last Transaction Block Digest">
-						<TransactionLink digest={data.data?.previousTransaction!} />
-					</ObjectViewItem>
-				</ObjectViewCard>
-
-				{display && (
 					<ObjectViewCard>
-						<ObjectViewItem title="Link">
-							<LinkWebsite value={display.link} />
-						</ObjectViewItem>
-
-						<ObjectViewItem title="Website">
-							<LinkWebsite value={display.project_url} />
+						<ObjectViewItem title="Storage Rebate">
+							<Text variant="pBodySmall/medium" color="steel-darker">
+								-{storageRebateFormatted}
+							</Text>
 						</ObjectViewItem>
 					</ObjectViewCard>
-				)}
-
-				<ObjectViewCard>
-					<ObjectViewItem title="Storage Rebate">
-						<Text variant="pBodySmall/medium" color="steel-darker">
-							-{storageRebateFormatted}
-						</Text>
-					</ObjectViewItem>
-				</ObjectViewCard>
+				</div>
 			</div>
 		</div>
 	);
