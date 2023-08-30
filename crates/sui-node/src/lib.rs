@@ -109,7 +109,9 @@ use sui_types::base_types::{AuthorityName, EpochId};
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages_consensus::{AuthorityCapabilities, ConsensusTransaction};
+use sui_types::messages_consensus::{
+    check_total_jwk_size, AuthorityCapabilities, ConsensusTransaction,
+};
 use sui_types::quorum_driver_types::QuorumDriverEffectsQueueResult;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
@@ -239,6 +241,7 @@ impl SuiNode {
                                 }
                                 Ok(mut keys) => {
                                     keys.retain(|(id, jwk)| {
+                                        check_total_jwk_size(id, jwk) &&
                                         !epoch_store.has_jwk(id, jwk) &&
                                         seen.insert((id.clone(), jwk.clone()))
                                     });

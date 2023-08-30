@@ -70,8 +70,8 @@ use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
 };
 use sui_types::messages_consensus::{
-    AuthenticatorStateUpdate, AuthorityCapabilities, ConsensusTransaction, ConsensusTransactionKey,
-    ConsensusTransactionKind,
+    check_total_jwk_size, AuthenticatorStateUpdate, AuthorityCapabilities, ConsensusTransaction,
+    ConsensusTransactionKey, ConsensusTransactionKind,
 };
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
@@ -1639,9 +1639,17 @@ impl AuthorityPerEpochStore {
                 }
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::NewJWKFetched(_, _),
+                kind: ConsensusTransactionKind::NewJWKFetched(id, jwk),
                 ..
-            }) => {}
+            }) => {
+                if !check_total_jwk_size(id, jwk) {
+                    warn!(
+                        "{:?} sent jwk that exceeded max size",
+                        transaction.sender_authority().concise()
+                    );
+                    return Err(());
+                }
+            }
             SequencedConsensusTransactionKind::System(_) => {}
         }
         Ok(VerifiedSequencedConsensusTransaction(transaction))

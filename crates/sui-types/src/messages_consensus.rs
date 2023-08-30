@@ -40,6 +40,15 @@ pub struct AuthenticatorStateUpdate {
     // TransactionKind.
 }
 
+// In practice, JWKs are about 500 bytes of json each, plus a bit more for the ID.
+// 4096 should give us plenty of space for any imaginable JWK while preventing DoSes.
+static MAX_TOTAL_JWK_SIZE: usize = 4096;
+
+pub fn check_total_jwk_size(id: &JwkId, jwk: &JWK) -> bool {
+    id.iss.len() + id.kid.len() + jwk.kty.len() + jwk.alg.len() + jwk.e.len() + jwk.n.len()
+        <= MAX_TOTAL_JWK_SIZE
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ConsensusTransaction {
     /// Encodes an u64 unique tracking id to allow us trace a message between Sui and Narwhal.
