@@ -283,9 +283,8 @@ const DEAD_ERR_EXP: &str = "Invalid use of a divergent expression. The code foll
                             evaluation of this expression will be dead and should be removed.";
 
 fn dead_code_error(diags: &mut Diagnostics, block: &BasicBlock) {
-    match build_dead_code_error(block) {
-        Some(diag) => diags.add(diag),
-        None => (),
+    if let Some(diag) = build_dead_code_error(block) {
+        diags.add(diag);
     }
 }
 

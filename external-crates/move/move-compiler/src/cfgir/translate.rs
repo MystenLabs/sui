@@ -471,7 +471,7 @@ type BlockList = Vec<(Label, BasicBlock)>;
 
 fn block(context: &mut Context, stmts: H::Block) -> BlockList {
     let (start_block, blocks) = block_(context, stmts);
-    vec![(context.new_label(), start_block)]
+    [(context.new_label(), start_block)]
         .into_iter()
         .chain(blocks)
         .collect()
@@ -509,12 +509,12 @@ fn finalize_blocks(
         label
     };
 
-    for (lbl, _) in blocks.iter() {
+    for (lbl, _) in &blocks {
         label_map.insert(*lbl, next_label());
     }
 
     let mut block_info: Vec<(Label, BlockInfo)> = vec![];
-    for (lbl, _) in blocks.iter() {
+    for (lbl, _) in &blocks {
         let info = match context.loop_bounds.get(&lbl) {
             None => BlockInfo::Other,
             Some(LoopInfo {
@@ -576,12 +576,12 @@ fn statement(
                 with_last(else_block, make_jump(sloc, phi_label, false)),
             );
 
-            let new_blocks = vec![(true_label, true_entry_block)]
+            let new_blocks = [(true_label, true_entry_block)]
                 .into_iter()
                 .chain(true_blocks.into_iter())
-                .chain(vec![(false_label, false_entry_block)])
+                .chain([(false_label, false_entry_block)])
                 .chain(false_blocks.into_iter())
-                .chain(vec![(phi_label, current_block)])
+                .chain([(phi_label, current_block)])
                 .collect::<BlockList>();
 
             (test_block, new_blocks)
@@ -615,12 +615,12 @@ fn statement(
 
             context.end_loop();
 
-            let new_blocks = vec![(start_label, initial_test_block)]
+            let new_blocks = [(start_label, initial_test_block)]
                 .into_iter()
                 .chain(test_blocks.into_iter())
-                .chain(vec![(body_label, body_entry_block)])
+                .chain([(body_label, body_entry_block)])
                 .chain(body_blocks.into_iter())
-                .chain(vec![(end_label, current_block)])
+                .chain([(end_label, current_block)])
                 .collect::<BlockList>();
 
             (entry_block, new_blocks)
@@ -640,10 +640,10 @@ fn statement(
 
             context.end_loop();
 
-            let new_blocks = vec![(start_label, body_entry_block)]
+            let new_blocks = [(start_label, body_entry_block)]
                 .into_iter()
                 .chain(body_blocks.into_iter())
-                .chain(vec![(end_label, current_block)])
+                .chain([(end_label, current_block)])
                 .collect::<BlockList>();
 
             (entry_block, new_blocks)
@@ -651,14 +651,8 @@ fn statement(
         S::Command(sp!(cloc, C::Break)) => {
             // Discard the current block because it's dead code.
             dead_code_error(context, &current_block);
-            (
-                VecDeque::from([make_jump(
-                    cloc,
-                    context.loop_env.as_ref().unwrap().end_label,
-                    true,
-                )]),
-                vec![],
-            )
+            let break_jump = make_jump(cloc, context.loop_env.as_ref().unwrap().end_label, true);
+            (VecDeque::from([break_jump]), vec![])
         }
         S::Command(sp!(cloc, C::Continue)) => {
             // Discard the current block because it's dead code.
