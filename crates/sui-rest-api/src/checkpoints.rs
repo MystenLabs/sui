@@ -72,7 +72,7 @@ pub async fn get_full_checkpoint(
         .map(|maybe_event| maybe_event.ok_or_else(|| anyhow::anyhow!("missing event")))
         .collect::<Result<Vec<_>>>()?;
 
-    let mut events = event_digests
+    let events = event_digests
         .into_iter()
         .zip(events)
         .collect::<HashMap<_, _>>();
@@ -94,7 +94,8 @@ pub async fn get_full_checkpoint(
     for (tx, fx) in transactions.into_iter().zip(effects) {
         let events = fx.events_digest().map(|event_digest| {
             events
-                .remove(event_digest)
+                .get(event_digest)
+                .cloned()
                 .expect("event was already checked to be present")
         });
 
