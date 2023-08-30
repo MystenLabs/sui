@@ -45,7 +45,7 @@ pub struct Opts {
     /// Whether to run local or remote benchmark
     /// NOTE: For running remote benchmark we must have the following
     /// genesis_blob_path, keypair_path and primary_gas_id
-    #[clap(long, default_value = "true", global = true)]
+    #[clap(long, action = clap::ArgAction::Set, default_value = "true", global = true)]
     pub local: bool,
     /// Required in remote benchmark, namely when local = false
     /// Multiple fullnodes can be specified.
@@ -56,11 +56,11 @@ pub struct Opts {
     /// Otherwise, use LocalValidatorAggregatorProxy.
     /// This param only matters when local = false, namely local runs always
     /// use a LocalValidatorAggregatorProxy.
-    #[clap(long, default_value = "false", global = true)]
+    #[clap(long, action = clap::ArgAction::Set, default_value = "false", global = true)]
     pub use_fullnode_for_execution: bool,
     /// True to use FullNodeReconfigObserver,
     /// Otherwise use EmbeddedReconfigObserver,
-    #[clap(long, default_value = "false", global = true)]
+    #[clap(long, action = clap::ArgAction::Set, default_value = "false", global = true)]
     pub use_fullnode_for_reconfig: bool,
     /// Default workload is 100% transfer object
     #[clap(subcommand)]
