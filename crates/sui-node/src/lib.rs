@@ -238,7 +238,10 @@ impl SuiNode {
                                     tokio::time::sleep(Duration::from_secs(30)).await;
                                 }
                                 Ok(mut keys) => {
-                                    keys.retain(|(id, _)| seen.insert(id.clone()));
+                                    keys.retain(|(id, jwk)| {
+                                        !epoch_store.has_jwk(id, jwk) &&
+                                        seen.insert((id.clone(), jwk.clone()))
+                                    });
 
                                     // prevent oauth providers from sending too many keys,
                                     // inadvertently or otherwise

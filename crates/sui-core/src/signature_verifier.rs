@@ -311,6 +311,11 @@ impl SignatureVerifier {
         jwks.insert(jwk_id.clone(), jwk.clone());
     }
 
+    pub fn has_jwk(&self, jwk_id: &JwkId, jwk: &JWK) -> bool {
+        let jwks = self.jwks.read();
+        jwks.get(jwk_id) == Some(jwk)
+    }
+
     pub fn verify_tx(&self, signed_tx: &SenderSignedData) -> SuiResult {
         self.signed_data_cache
             .is_verified(signed_tx.full_message_digest(), || {

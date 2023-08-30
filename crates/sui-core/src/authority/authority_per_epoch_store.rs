@@ -1285,7 +1285,7 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn get_new_jwks(&self, round: u64) -> SuiResult<Vec<ActiveJwk>> {
+    pub(crate) fn get_new_jwks(&self, round: u64) -> SuiResult<Vec<ActiveJwk>> {
         let epoch = self.epoch();
         // TODO: use a safe iterator
         Ok(self
@@ -1297,6 +1297,10 @@ impl AuthorityPerEpochStore {
                 ActiveJwk { jwk_id, jwk, epoch }
             })
             .collect())
+    }
+
+    pub fn has_jwk(&self, jwk_id: &JwkId, jwk: &JWK) -> bool {
+        self.signature_verifier.has_jwk(jwk_id, jwk)
     }
 
     /// Caller is responsible to call consensus_message_processed before this method
