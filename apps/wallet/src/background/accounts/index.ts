@@ -76,11 +76,9 @@ export async function getAccountsStatusData(
 	accountsFilter?: string[],
 ): Promise<Required<WalletStatusChange>['accounts']> {
 	const allAccounts = await (await getDB()).accounts.toArray();
-	let filteredAccounts = allAccounts;
-	if (accountsFilter?.length) {
-		filteredAccounts = allAccounts.filter(({ address }) => accountsFilter.includes(address));
-	}
-	return filteredAccounts.map(({ address, publicKey }) => ({ address, publicKey }));
+	return allAccounts
+		.filter(({ address }) => !accountsFilter?.length || accountsFilter.includes(address))
+		.map(({ address, publicKey }) => ({ address, publicKey }));
 }
 
 export async function changeActiveAccount(accountID: string) {

@@ -11,7 +11,7 @@ import { type Status } from '_src/background/storage-migration';
 import type { Payload } from './Payload';
 
 export type UIAccessibleEntityType = 'accountSources' | 'accounts';
-export type LedgerAccountsPublicKeysToStore = {
+export type LedgerAccountsPublicKeys = {
 	accountID: string;
 	publicKey: string;
 }[];
@@ -51,7 +51,7 @@ type MethodPayloads = {
 	switchAccount: { accountID: string };
 	setAccountNickname: { id: string; nickname: string };
 	verifyPassword: { password: string };
-	storeLedgerAccountsPublicKeys: { publicKeysToStore: LedgerAccountsPublicKeysToStore };
+	storeLedgerAccountsPublicKeys: { publicKeysToStore: LedgerAccountsPublicKeys };
 };
 
 type Methods = keyof MethodPayloads;
