@@ -125,7 +125,6 @@ export function WelcomePage() {
 							size="tall"
 							variant="secondary"
 							text="More Options"
-							disabled
 						/>
 					</div>
 				</div>

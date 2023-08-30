@@ -54,7 +54,7 @@ export class ImportedAccount
 			encrypted: await encrypt(inputs.password, dataToEncrypt),
 			lastUnlockedOn: null,
 			selected: false,
-			nickname: '',
+			nickname: null,
 		};
 	}
 

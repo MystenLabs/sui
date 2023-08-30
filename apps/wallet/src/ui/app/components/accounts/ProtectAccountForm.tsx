@@ -27,7 +27,7 @@ const formSchema = z.object({
 	autoLockInterval: z.enum(['Hour', 'Minute', 'Second']),
 });
 
-type FormValues = z.infer<typeof formSchema>;
+export type FormValues = z.infer<typeof formSchema>;
 
 type ProtectAccountFormProps = {
 	submitButtonText: string;
