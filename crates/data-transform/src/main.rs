@@ -121,51 +121,51 @@ impl ModuleResolver for GrootModuleResolver {
 }
 
 static DEEPBOOK: Lazy<AccountAddress> = Lazy::new(|| {
-    AccountAddress::from_str("000000000000000000000000000000000000000000000000000000000000dee9")
-        .unwrap();
+    AccountAddress::from_str("0x000000000000000000000000000000000000000000000000000000000000dee9")
+        .unwrap()
 });
 
 fn is_deepbook(address: &AccountAddress) -> bool {
-    address == &DEEPBOOK
+    address == &*DEEPBOOK
 }
 
 static TYPUS_LATEST: Lazy<AccountAddress> = Lazy::new(|| {
-    AccountAddress::from_str("ec2cc88cc1ba1da7a936ece33417634e18618e6898e496a3493d8f58d97e705b")
-        .unwrap();
+    AccountAddress::from_str("0xec2cc88cc1ba1da7a936ece33417634e18618e6898e496a3493d8f58d97e705b")
+        .unwrap()
 });
 
 static TYPUS_ADDRESS_SET: Lazy<HashSet<AccountAddress>> = Lazy::new(|| {
     let mut set = HashSet::new();
     set.insert(
-        AccountAddress::from_str("a76499eda1d37751473de5f30e106f35943ada2f6ea764861243e7f5aa5bcc97")
+        AccountAddress::from_str("0xa76499eda1d37751473de5f30e106f35943ada2f6ea764861243e7f5aa5bcc97")
             .unwrap()
     );
     set.insert(
-        AccountAddress::from_str("fbdf925b067055a8a3ddac9739a56e61aea41f38345926b6034aa5645f5f7068")
+        AccountAddress::from_str("0xfbdf925b067055a8a3ddac9739a56e61aea41f38345926b6034aa5645f5f7068")
             .unwrap()
     );
     set.insert(
-        AccountAddress::from_str("4db258013df88d79fde54eb0ecdec2bb1865c4585a897d7c1c9d20b6b768a71b")
+        AccountAddress::from_str("0x4db258013df88d79fde54eb0ecdec2bb1865c4585a897d7c1c9d20b6b768a71b")
             .unwrap()
     );
     set.insert(
-        AccountAddress::from_str("f84c82986dad0b89731ced890226639c8c1859f5b61f12394548c48706bcf04c")
+        AccountAddress::from_str("0xf84c82986dad0b89731ced890226639c8c1859f5b61f12394548c48706bcf04c")
             .unwrap()
     );
     set.insert(
-        AccountAddress::from_str("a390965beb1f120a469183ac10ccbac83e78dd7f505e9dcc803a93c7a079d9fd")
+        AccountAddress::from_str("0xa390965beb1f120a469183ac10ccbac83e78dd7f505e9dcc803a93c7a079d9fd")
             .unwrap()
     );
     set.insert(
-        AccountAddress::from_str("f0ba0f41946081992325cbc52a73ded90aa969b868ce9f907dd60d5e7ad8698")
+        AccountAddress::from_str("0xf0ba0f41946081992325cbc52a73ded90aa969b868ce9f907dd60d5e7ad8698")
             .unwrap()
     );
     set.insert(
-        AccountAddress::from_str("5a8d167ae1279043c73a8a0d383c6a07f20c5dc3c1309ba560f89028447dc284")
+        AccountAddress::from_str("0x5a8d167ae1279043c73a8a0d383c6a07f20c5dc3c1309ba560f89028447dc284")
             .unwrap()
     );
     set.insert(
-        AccountAddress::from_str("d95d83e5fdef4a5c042270e4a97e1284658bf0057f00f4989f9c13f56b7afed4")
+        AccountAddress::from_str("0xd95d83e5fdef4a5c042270e4a97e1284658bf0057f00f4989f9c13f56b7afed4")
             .unwrap()
     );
     set
@@ -173,7 +173,7 @@ static TYPUS_ADDRESS_SET: Lazy<HashSet<AccountAddress>> = Lazy::new(|| {
 
 fn map_typus_address(address: &AccountAddress) -> AccountAddress {
     if TYPUS_ADDRESS_SET.contains(address) {
-        TYPUS_LATEST
+        *TYPUS_LATEST
     } else {
         *address
     }
