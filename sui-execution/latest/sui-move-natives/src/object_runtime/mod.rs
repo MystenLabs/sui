@@ -108,31 +108,31 @@ pub(crate) struct LocalProtocolConfig {
     pub(crate) object_runtime_max_num_cached_objects_system_tx: u64,
     pub(crate) object_runtime_max_num_store_entries: u64,
     pub(crate) object_runtime_max_num_store_entries_system_tx: u64,
+    pub(crate) loaded_child_object_format: bool,
 }
 
 impl LocalProtocolConfig {
-    fn new(constants: &ProtocolConfig) -> Self {
+    fn new(config: &ProtocolConfig) -> Self {
         Self {
-            max_num_deleted_move_object_ids: constants.max_num_deleted_move_object_ids(),
-            max_num_event_emit: constants.max_num_event_emit(),
-            max_num_new_move_object_ids: constants.max_num_new_move_object_ids(),
-            max_num_transferred_move_object_ids: constants.max_num_transferred_move_object_ids(),
-            max_event_emit_size: constants.max_event_emit_size(),
-            max_event_emit_size_total: constants.max_event_emit_size_total_as_option(),
-            max_num_deleted_move_object_ids_system_tx: constants
+            max_num_deleted_move_object_ids: config.max_num_deleted_move_object_ids(),
+            max_num_event_emit: config.max_num_event_emit(),
+            max_num_new_move_object_ids: config.max_num_new_move_object_ids(),
+            max_num_transferred_move_object_ids: config.max_num_transferred_move_object_ids(),
+            max_event_emit_size: config.max_event_emit_size(),
+            max_event_emit_size_total: config.max_event_emit_size_total_as_option(),
+            max_num_deleted_move_object_ids_system_tx: config
                 .max_num_deleted_move_object_ids_system_tx(),
-            max_num_new_move_object_ids_system_tx: constants
-                .max_num_new_move_object_ids_system_tx(),
-            max_num_transferred_move_object_ids_system_tx: constants
+            max_num_new_move_object_ids_system_tx: config.max_num_new_move_object_ids_system_tx(),
+            max_num_transferred_move_object_ids_system_tx: config
                 .max_num_transferred_move_object_ids_system_tx(),
 
-            object_runtime_max_num_cached_objects: constants
-                .object_runtime_max_num_cached_objects(),
-            object_runtime_max_num_cached_objects_system_tx: constants
+            object_runtime_max_num_cached_objects: config.object_runtime_max_num_cached_objects(),
+            object_runtime_max_num_cached_objects_system_tx: config
                 .object_runtime_max_num_cached_objects_system_tx(),
-            object_runtime_max_num_store_entries: constants.object_runtime_max_num_store_entries(),
-            object_runtime_max_num_store_entries_system_tx: constants
+            object_runtime_max_num_store_entries: config.object_runtime_max_num_store_entries(),
+            object_runtime_max_num_store_entries_system_tx: config
                 .object_runtime_max_num_store_entries_system_tx(),
+            loaded_child_object_format: config.loaded_child_object_format(),
         }
     }
 }
@@ -147,7 +147,7 @@ pub struct ObjectRuntime<'a> {
     // whether or not this TX is gas metered
     is_metered: bool,
 
-    pub(crate) constants: LocalProtocolConfig,
+    pub(crate) local_config: LocalProtocolConfig,
     pub(crate) metrics: Arc<LimitsMetrics>,
 }
 
@@ -209,7 +209,7 @@ impl<'a> ObjectRuntime<'a> {
                 total_events_size: 0,
             },
             is_metered,
-            constants: LocalProtocolConfig::new(protocol_config),
+            local_config: LocalProtocolConfig::new(protocol_config),
             metrics,
         }
     }
@@ -220,8 +220,8 @@ impl<'a> ObjectRuntime<'a> {
         if let LimitThresholdCrossed::Hard(_, lim) = check_limit_by_meter!(
             self.is_metered,
             self.state.new_ids.len(),
-            self.constants.max_num_new_move_object_ids,
-            self.constants.max_num_new_move_object_ids_system_tx,
+            self.local_config.max_num_new_move_object_ids,
+            self.local_config.max_num_new_move_object_ids_system_tx,
             self.metrics.excessive_new_move_object_ids
         ) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
@@ -249,8 +249,8 @@ impl<'a> ObjectRuntime<'a> {
         if let LimitThresholdCrossed::Hard(_, lim) = check_limit_by_meter!(
             self.is_metered,
             self.state.deleted_ids.len(),
-            self.constants.max_num_deleted_move_object_ids,
-            self.constants.max_num_deleted_move_object_ids_system_tx,
+            self.local_config.max_num_deleted_move_object_ids,
+            self.local_config.max_num_deleted_move_object_ids_system_tx,
             self.metrics.excessive_deleted_move_object_ids
         ) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
@@ -301,8 +301,9 @@ impl<'a> ObjectRuntime<'a> {
             // TODO: is this not redundant? Metered TX implies framework obj cannot be transferred
             self.is_metered && !is_framework_obj, // We have higher limits for unmetered transactions and framework obj
             self.state.transfers.len(),
-            self.constants.max_num_transferred_move_object_ids,
-            self.constants.max_num_transferred_move_object_ids_system_tx,
+            self.local_config.max_num_transferred_move_object_ids,
+            self.local_config
+                .max_num_transferred_move_object_ids_system_tx,
             self.metrics.excessive_transferred_move_object_ids
         ) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
@@ -317,8 +318,8 @@ impl<'a> ObjectRuntime<'a> {
     }
 
     pub fn emit_event(&mut self, ty: Type, tag: StructTag, event: Value) -> PartialVMResult<()> {
-        if self.state.events.len() >= (self.constants.max_num_event_emit as usize) {
-            return Err(max_event_error(self.constants.max_num_event_emit));
+        if self.state.events.len() >= (self.local_config.max_num_event_emit as usize) {
+            return Err(max_event_error(self.local_config.max_num_event_emit));
         }
         self.state.events.push((ty, tag, event));
         Ok(())
