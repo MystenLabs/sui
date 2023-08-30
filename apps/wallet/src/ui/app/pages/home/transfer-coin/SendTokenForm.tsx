@@ -28,6 +28,7 @@ import Alert from '_components/alert';
 import Loading from '_components/loading';
 import { parseAmount } from '_helpers';
 import { useGetAllCoins } from '_hooks';
+import { AccountLockedStateSwitch } from '_src/ui/app/components/accounts/AccountLockStateSwitch';
 import { UnlockAccountButton } from '_src/ui/app/components/accounts/UnlockAccountButton';
 import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
 import { GAS_SYMBOL } from '_src/ui/app/redux/slices/sui-objects/Coin';
@@ -146,7 +147,6 @@ export function SendTokenForm({
 	const client = useSuiClient();
 	const activeAccount = useActiveAccount();
 	const activeAddress = activeAccount?.address;
-	const isAccountWriteLocked = !activeAccount || activeAccount.isLocked;
 	// Get all coins of the type
 	const { data: coinsData, isLoading: coinsIsLoading } = useGetAllCoins(coinType, activeAddress!);
 
@@ -294,22 +294,24 @@ export function SendTokenForm({
 								</Form>
 							</Content>
 							<Menu stuckClass="sendCoin-cta" className="w-full px-0 pb-0 mx-0 gap-2.5">
-								{isAccountWriteLocked ? (
-									<UnlockAccountButton account={activeAccount!} />
-								) : (
-									<Button
-										type="submit"
-										onClick={submitForm}
-										variant="primary"
-										loading={isSubmitting}
-										disabled={
-											!isValid || isSubmitting || !hasEnoughBalance || values.gasBudgetEst === ''
-										}
-										size="tall"
-										text="Review"
-										after={<ArrowRight16 />}
-									/>
-								)}
+								<AccountLockedStateSwitch
+									account={activeAccount}
+									writeLockedLayout={<UnlockAccountButton account={activeAccount!} />}
+									elseLayout={
+										<Button
+											type="submit"
+											onClick={submitForm}
+											variant="primary"
+											loading={isSubmitting}
+											disabled={
+												!isValid || isSubmitting || !hasEnoughBalance || values.gasBudgetEst === ''
+											}
+											size="tall"
+											text="Review"
+											after={<ArrowRight16 />}
+										/>
+									}
+								/>
 							</Menu>
 						</BottomMenuLayout>
 					);

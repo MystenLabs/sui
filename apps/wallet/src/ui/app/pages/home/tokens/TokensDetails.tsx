@@ -37,10 +37,10 @@ import { useAppSelector, useCoinsReFetchingConfig } from '_hooks';
 import { ampli } from '_src/shared/analytics/ampli';
 import { API_ENV } from '_src/shared/api-env';
 import { FEATURES } from '_src/shared/experimentation/features';
+import { AccountLockedStateSwitch } from '_src/ui/app/components/accounts/AccountLockStateSwitch';
 import { AccountsList } from '_src/ui/app/components/accounts/AccountsList';
 import { UnlockAccountButton } from '_src/ui/app/components/accounts/UnlockAccountButton';
 import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
-import { useIsAccountReadLocked } from '_src/ui/app/hooks/useIsAccountReadLocked';
 import { usePinnedCoinTypes } from '_src/ui/app/hooks/usePinnedCoinTypes';
 import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
 import PageTitle from '_src/ui/app/shared/PageTitle';
@@ -170,7 +170,6 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	const activeCoinType = coinType || SUI_TYPE_ARG;
 	const activeAccount = useActiveAccount();
 	const activeAccountAddress = activeAccount?.address;
-	const isAccountLocked = useIsAccountReadLocked(activeAccount);
 	const { data: domainName } = useResolveSuiNSName(activeAccountAddress);
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
 	const {
@@ -269,85 +268,91 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 						<PortfolioName
 							name={activeAccount.nickname ?? domainName ?? formatAddress(activeAccountAddress)}
 						/>
-						{isAccountLocked ? null : (
-							<>
-								<div
-									data-testid="coin-balance"
-									className="bg-sui/10 rounded-2xl py-5 px-4 flex flex-col w-full gap-3 items-center mt-4"
-								>
-									{accountHasSui ? (
-										<CoinBalance amount={BigInt(tokenBalance)} type={activeCoinType} />
-									) : (
-										<div className="flex flex-col gap-5">
-											<div className="flex flex-col flex-nowrap justify-center items-center text-center px-2.5">
-												<SvgSuiTokensStack className="h-14 w-14 text-steel" />
-												<div className="flex flex-col gap-2 justify-center">
-													<Text variant="pBodySmall" color="gray-80" weight="normal">
-														To conduct transactions on the Sui network, you need SUI in your wallet.
-													</Text>
+						<AccountLockedStateSwitch
+							account={activeAccount}
+							readLayout={
+								<>
+									<div
+										data-testid="coin-balance"
+										className="bg-sui/10 rounded-2xl py-5 px-4 flex flex-col w-full gap-3 items-center mt-4"
+									>
+										{accountHasSui ? (
+											<CoinBalance amount={BigInt(tokenBalance)} type={activeCoinType} />
+										) : (
+											<div className="flex flex-col gap-5">
+												<div className="flex flex-col flex-nowrap justify-center items-center text-center px-2.5">
+													<SvgSuiTokensStack className="h-14 w-14 text-steel" />
+													<div className="flex flex-col gap-2 justify-center">
+														<Text variant="pBodySmall" color="gray-80" weight="normal">
+															To conduct transactions on the Sui network, you need SUI in your
+															wallet.
+														</Text>
+													</div>
 												</div>
+												<FaucetRequestButton />
 											</div>
-											<FaucetRequestButton />
-										</div>
-									)}
-									{isError ? (
-										<Alert>
-											<div>
-												<strong>Error updating balance</strong>
-											</div>
-										</Alert>
-									) : null}
-									<div className="grid grid-cols-3 gap-3 w-full">
-										<LargeButton
-											center
-											to="/onramp"
-											disabled={(coinType && coinType !== SUI_TYPE_ARG) || !providers?.length}
-											top={<WalletActionBuy24 />}
-										>
-											Buy
-										</LargeButton>
-
-										<LargeButton
-											center
-											data-testid="send-coin-button"
-											to={`/send${
-												coinBalance?.coinType
-													? `?${new URLSearchParams({
-															type: coinBalance.coinType,
-													  }).toString()}`
-													: ''
-											}`}
-											disabled={!tokenBalance}
-											top={<WalletActionSend24 />}
-										>
-											Send
-										</LargeButton>
-
-										<LargeButton center to="/" disabled top={<Swap16 />}>
-											Swap
-										</LargeButton>
-									</div>
-									<div className="w-full">
-										{activeCoinType === SUI_TYPE_ARG ? (
-											<TokenIconLink
-												disabled={!tokenBalance}
-												accountAddress={activeAccountAddress}
-											/>
+										)}
+										{isError ? (
+											<Alert>
+												<div>
+													<strong>Error updating balance</strong>
+												</div>
+											</Alert>
 										) : null}
+										<div className="grid grid-cols-3 gap-3 w-full">
+											<LargeButton
+												center
+												to="/onramp"
+												disabled={(coinType && coinType !== SUI_TYPE_ARG) || !providers?.length}
+												top={<WalletActionBuy24 />}
+											>
+												Buy
+											</LargeButton>
+
+											<LargeButton
+												center
+												data-testid="send-coin-button"
+												to={`/send${
+													coinBalance?.coinType
+														? `?${new URLSearchParams({
+																type: coinBalance.coinType,
+														  }).toString()}`
+														: ''
+												}`}
+												disabled={!tokenBalance}
+												top={<WalletActionSend24 />}
+											>
+												Send
+											</LargeButton>
+
+											<LargeButton center to="/" disabled top={<Swap16 />}>
+												Swap
+											</LargeButton>
+										</div>
+										<div className="w-full">
+											{activeCoinType === SUI_TYPE_ARG ? (
+												<TokenIconLink
+													disabled={!tokenBalance}
+													accountAddress={activeAccountAddress}
+												/>
+											) : null}
+										</div>
 									</div>
-								</div>
-							</>
-						)}
-					</div>
-					{isAccountLocked ? (
-						<UnlockAccountButton account={activeAccount} />
-					) : (
-						<MyTokens
-							coinBalances={coinBalances ?? []}
-							isLoading={coinBalancesLoading}
-							isFetched={coinBalancesFetched}
+								</>
+							}
 						/>
-					)}
+					</div>
+					<AccountLockedStateSwitch
+						account={activeAccount}
+						readLayout={
+							<MyTokens
+								coinBalances={coinBalances ?? []}
+								isLoading={coinBalancesLoading}
+								isFetched={coinBalancesFetched}
+							/>
+						}
+						elseLayout={<UnlockAccountButton account={activeAccount} />}
+					/>
 				</div>
 			</Loading>
 		</>

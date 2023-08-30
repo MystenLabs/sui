@@ -19,6 +19,7 @@ import { ValidatorFormDetail } from './ValidatorFormDetail';
 import { createStakeTransaction, createUnstakeTransaction } from './utils/transaction';
 import { createValidationSchema } from './utils/validation';
 import { QredoActionIgnoredByUser } from '../../QredoSigner';
+import { AccountLockedStateSwitch } from '../../components/accounts/AccountLockStateSwitch';
 import { UnlockAccountButton } from '../../components/accounts/UnlockAccountButton';
 import Alert from '../../components/alert';
 import { getSignerOperationErrorMessage } from '../../helpers/errorMessages';
@@ -53,7 +54,6 @@ function StakingCard() {
 	const coinType = SUI_TYPE_ARG;
 	const activeAccount = useActiveAccount();
 	const accountAddress = activeAccount?.address;
-	const isAccountWriteLocked = !activeAccount || activeAccount.isLocked;
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
 	const { data: suiBalance, isLoading: loadingSuiBalances } = useBalance(
 		{ coinType: SUI_TYPE_ARG, owner: accountAddress! },
@@ -326,30 +326,34 @@ function StakingCard() {
 							</Content>
 
 							<Menu stuckClass="staked-cta" className="w-full px-0 pb-0 mx-0">
-								{isAccountWriteLocked ? (
-									<div className="w-full mb-0.5">
-										<UnlockAccountButton account={activeAccount!} />
-									</div>
-								) : (
-									<>
-										<Button
-											size="tall"
-											variant="secondary"
-											to="/stake"
-											disabled={isSubmitting}
-											before={<ArrowLeft16 />}
-											text="Back"
-										/>
-										<Button
-											size="tall"
-											variant="primary"
-											onClick={submitForm}
-											disabled={!isValid || isSubmitting || (unstake && !delegationId)}
-											loading={isSubmitting}
-											text={unstake ? 'Unstake Now' : 'Stake Now'}
-										/>
-									</>
-								)}
+								<AccountLockedStateSwitch
+									account={activeAccount}
+									writeLockedLayout={
+										<div className="w-full mb-0.5">
+											<UnlockAccountButton account={activeAccount!} />
+										</div>
+									}
+									elseLayout={
+										<>
+											<Button
+												size="tall"
+												variant="secondary"
+												to="/stake"
+												disabled={isSubmitting}
+												before={<ArrowLeft16 />}
+												text="Back"
+											/>
+											<Button
+												size="tall"
+												variant="primary"
+												onClick={submitForm}
+												disabled={!isValid || isSubmitting || (unstake && !delegationId)}
+												loading={isSubmitting}
+												text={unstake ? 'Unstake Now' : 'Stake Now'}
+											/>
+										</>
+									}
+								/>
 							</Menu>
 						</BottomMenuLayout>
 					)}
