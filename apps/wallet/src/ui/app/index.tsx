@@ -56,8 +56,8 @@ import { useAppDispatch, useAppSelector } from '_hooks';
 
 import { setNavVisibility } from '_redux/slices/app';
 import { isLedgerAccountSerializedUI } from '_src/background/accounts/LedgerAccount';
-import { type AccountsPublicInfoUpdates } from '_src/background/keyring/accounts';
 import { persistableStorage } from '_src/shared/analytics/amplitude';
+import { type LedgerAccountsPublicKeys } from '_src/shared/messaging/messages/payloads/MethodPayload';
 
 const HIDDEN_MENU_PATHS = [
 	'/nft-details',
@@ -106,24 +106,22 @@ const App = () => {
 						await connectToLedger();
 						return;
 					}
-					const updates: AccountsPublicInfoUpdates = [];
-					for (const { derivationPath, address } of allLedgerWithoutPublicKey) {
+					const publicKeysToStore: LedgerAccountsPublicKeys = [];
+					for (const { derivationPath, id } of allLedgerWithoutPublicKey) {
 						if (derivationPath) {
 							try {
 								const { publicKey } = await suiLedgerClient.getPublicKey(derivationPath);
-								updates.push({
-									accountAddress: address,
-									changes: {
-										publicKey: toB64(publicKey),
-									},
+								publicKeysToStore.push({
+									accountID: id,
+									publicKey: toB64(publicKey),
 								});
 							} catch (e) {
 								// do nothing
 							}
 						}
 					}
-					if (updates.length) {
-						await backgroundClient.updateAccountsPublicInfo(updates);
+					if (publicKeysToStore.length) {
+						await backgroundClient.storeLedgerAccountsPublicKeys({ publicKeysToStore });
 					}
 				} catch (e) {
 					// do nothing
