@@ -1,0 +1,163 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+import type { Dispatch, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useReducer } from 'react';
+import { localStorageAdapter } from '../../utils/storageAdapters.js';
+import type { StorageAdapter } from '../../utils/storageAdapters.js';
+import { getWallets } from '@mysten/wallet-standard';
+import type { WalletAccount, WalletWithSuiFeatures } from '@mysten/wallet-standard';
+import { useUnsafeBurnerWallet } from '../../hooks/wallet/useUnsafeBurnerWallet.js';
+import { sortWallets } from './walletUtils.js';
+import { useWalletEventSubscriber } from 'dapp-kit/src/hooks/wallet/useWalletEventSubscriber.js';
+import { assertUnreachable } from 'dapp-kit/src/utils/assertUnreachable.js';
+
+interface WalletProviderProps {
+	/** A list of wallets that are sorted to the top of the wallet list, if they are available to connect to. By default, wallets are sorted by the order they are loaded in. */
+	preferredWallets?: string[];
+
+	/** Configures how the most recently connected to wallet is stored. Defaults to using localStorage. */
+	storageAdapter?: StorageAdapter;
+
+	/** The key to use to store the most recently connected wallet account. */
+	storageKey?: string;
+
+	/** A list of features that are required for the dApp to function. This filters the list of wallets presented to users when selecting a wallet to connect from, ensuring that only wallets that meet the dApps requirements can connect. */
+	requiredFeatures?: string[];
+
+	/** Enables automatically reconnecting to the most recently used wallet account upon mounting. */
+	autoConnect?: boolean;
+
+	/** Enables the development-only unsafe burner wallet, which can be useful for testing. */
+	enableUnsafeBurner?: boolean;
+
+	children: ReactNode;
+}
+
+interface InternalWalletProviderState {
+	wallets: WalletWithSuiFeatures[];
+	currentWallet: WalletWithSuiFeatures | null;
+	accounts: readonly WalletAccount[];
+	currentAccount: WalletAccount | null;
+	status: 'disconnected' | 'connecting' | 'connected' | 'error';
+}
+
+interface WalletProviderContext extends InternalWalletProviderState {
+	dispatch: Dispatch<WalletAction>;
+	storageAdapter: StorageAdapter;
+	storageKey: string;
+}
+
+const DEFAULT_FEATURES: (keyof WalletWithSuiFeatures['features'])[] = [
+	'sui:signAndExecuteTransactionBlock',
+];
+
+const SUI_WALLET_NAME = 'Sui Wallet';
+
+// todo: update this default
+const DEFAULT_STORAGE_KEY = 'wallet-kit:last-wallet';
+
+const WalletContext = createContext<WalletProviderContext | null>(null);
+
+export function WalletProvider({
+	preferredWallets = [SUI_WALLET_NAME],
+	requiredFeatures = DEFAULT_FEATURES,
+	storageAdapter = localStorageAdapter,
+	storageKey = DEFAULT_STORAGE_KEY,
+	autoConnect = false,
+	enableUnsafeBurner = false,
+	children,
+}: WalletProviderProps) {
+	const registeredWalletsApi = getWallets();
+	const registeredWallets = registeredWalletsApi.get();
+	const [walletState, dispatch] = useReducer(walletReducer, {
+		wallets: sortWallets(registeredWallets, preferredWallets, requiredFeatures),
+		currentWallet: null,
+		accounts: [],
+		currentAccount: null,
+		status: 'disconnected',
+	});
+
+	useUnsafeBurnerWallet(enableUnsafeBurner);
+
+	useWalletEventSubscriber(walletState.currentWallet, ({ accounts }) => {
+		console.log('CHANGE', accounts);
+	});
+
+	// dispatch({
+	// 	type: 'wallet-properties-changed',
+	// 	payload: {
+	// 		accounts,
+	// 		currentAccount:
+	// 			walletState.currentAccount &&
+	// 			!accounts.find(({ address }) => address === walletState.currentAccount?.address)
+	// 				? accounts[0]
+	// 				: walletState.currentAccount,
+	// 	},
+	// });
+
+	useEffect(() => {
+		if (autoConnect) {
+			console.log('a');
+		}
+	}, [autoConnect]);
+
+	const contextValue = useMemo(() => {
+		return { ...walletState, storageAdapter, storageKey, dispatch };
+	}, [storageAdapter, storageKey, walletState]);
+
+	return <WalletContext.Provider value={contextValue}>{children}</WalletContext.Provider>;
+}
+
+export function useWalletContext() {
+	const context = useContext(WalletContext);
+	if (!context) {
+		throw new Error('Could not find WalletContext. Ensure that you have set up the WalletProvider');
+	}
+	return context;
+}
+
+type WalletAction =
+	| { type: 'wallet-connected'; payload: WalletWithSuiFeatures }
+	| { type: 'wallet-disconnected'; payload?: never }
+	| { type: 'wallet-properties-changed'; payload: { updatedAccounts: WalletAccount[] } }
+	| { type: 'update-status'; payload: InternalWalletProviderState['status'] };
+
+function walletReducer(
+	walletState: InternalWalletProviderState,
+	{ type, payload }: WalletAction,
+): InternalWalletProviderState {
+	switch (type) {
+		case 'wallet-connected':
+			return {
+				...walletState,
+				currentWallet: payload,
+				accounts: payload.accounts,
+				currentAccount: payload.accounts[0] ?? null,
+				status: 'connected',
+			};
+		case 'wallet-disconnected': {
+			return {
+				wallets: [],
+				currentWallet: null,
+				accounts: [],
+				currentAccount: null,
+				status: 'disconnected',
+			};
+		}
+		case 'wallet-properties-changed': {
+			return {
+				...walletState,
+				accounts: [],
+				currentAccount: null,
+			};
+		}
+		case 'update-status':
+			return {
+				...walletState,
+				status: payload,
+			};
+		default:
+			assertUnreachable(type);
+	}
+}
