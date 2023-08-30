@@ -209,72 +209,65 @@ impl SuiNode {
         consensus_adapter: Arc<ConsensusAdapter>,
     ) {
         let epoch = epoch_store.epoch();
-        tokio::task::spawn(async move {
-            let supported_providers = epoch_store
-                .protocol_config()
-                .zklogin_supported_providers()
-                .iter()
-                .map(|s| OIDCProvider::from_str(s).expect("Invalid provider string"))
-                .collect::<Vec<_>>();
+        let supported_providers = epoch_store
+            .protocol_config()
+            .zklogin_supported_providers()
+            .iter()
+            .map(|s| OIDCProvider::from_str(s).expect("Invalid provider string"))
+            .collect::<Vec<_>>();
 
-            info!(
-                "Starting JWK updater task with supported providers: {:?}",
-                supported_providers
-            );
+        info!(
+            "Starting JWK updater tasks with supported providers: {:?}",
+            supported_providers
+        );
 
-            let mut join_set = tokio::task::JoinSet::new();
-            for p in supported_providers.into_iter() {
-                let epoch_store = epoch_store.clone();
-                let consensus_adapter = consensus_adapter.clone();
-                join_set.spawn(
-                    async move {
-                        // note: restart-safe de-duplication happens after consensus, this is
-                        // just best-effort to reduce unneeded submissions.
-                        let mut seen = HashSet::new();
-                        loop {
-                            info!("fetching JWK for provider {:?}", p);
-                            match Self::fetch_jwks(&p).await {
-                                Err(e) => {
-                                    warn!("Error when fetching JWK {:?}", e);
-                                    // Retry in 30 seconds
-                                    tokio::time::sleep(Duration::from_secs(30)).await;
+        for p in supported_providers.into_iter() {
+            let epoch_store = epoch_store.clone();
+            let consensus_adapter = consensus_adapter.clone();
+            spawn_monitored_task!(epoch_store.clone().within_alive_epoch(
+                async move {
+                    // note: restart-safe de-duplication happens after consensus, this is
+                    // just best-effort to reduce unneeded submissions.
+                    let mut seen = HashSet::new();
+                    loop {
+                        info!("fetching JWK for provider {:?}", p);
+                        match Self::fetch_jwks(&p).await {
+                            Err(e) => {
+                                warn!("Error when fetching JWK {:?}", e);
+                                // Retry in 30 seconds
+                                tokio::time::sleep(Duration::from_secs(30)).await;
+                            }
+                            Ok(mut keys) => {
+                                keys.retain(|(id, jwk)| {
+                                    check_total_jwk_size(id, jwk) &&
+                                    !epoch_store.has_jwk(id, jwk) &&
+                                    seen.insert((id.clone(), jwk.clone()))
+                                });
+
+                                // prevent oauth providers from sending too many keys,
+                                // inadvertently or otherwise
+                                if keys.len() > MAX_JWK_KEYS_PER_FETCH {
+                                    warn!("Provider {:?} sent too many JWKs, only the first {} will be used", p, MAX_JWK_KEYS_PER_FETCH);
+                                    keys.truncate(MAX_JWK_KEYS_PER_FETCH);
                                 }
-                                Ok(mut keys) => {
-                                    keys.retain(|(id, jwk)| {
-                                        check_total_jwk_size(id, jwk) &&
-                                        !epoch_store.has_jwk(id, jwk) &&
-                                        seen.insert((id.clone(), jwk.clone()))
-                                    });
 
-                                    // prevent oauth providers from sending too many keys,
-                                    // inadvertently or otherwise
-                                    if keys.len() > MAX_JWK_KEYS_PER_FETCH {
-                                        warn!("Provider {:?} sent too many JWKs, only the first {} will be used", p, MAX_JWK_KEYS_PER_FETCH);
-                                        keys.truncate(MAX_JWK_KEYS_PER_FETCH);
-                                    }
+                                for (id, jwk) in keys.into_iter() {
+                                    info!("Submitting JWK to consensus: {:?}", id);
 
-                                    for (id, jwk) in keys.into_iter() {
-                                        info!("Submitting JWK to consensus: {:?}", id);
-
-                                        let txn = ConsensusTransaction::new_jwk_fetched(id, jwk);
-                                        consensus_adapter.submit(txn, None, &epoch_store)
-                                            .tap_err(|e| warn!("Error when submitting JWKs to consensus {:?}", e))
-                                            .ok();
-                                    }
+                                    let txn = ConsensusTransaction::new_jwk_fetched(id, jwk);
+                                    consensus_adapter.submit(txn, None, &epoch_store)
+                                        .tap_err(|e| warn!("Error when submitting JWKs to consensus {:?}", e))
+                                        .ok();
                                 }
                             }
-                            // Sleep for 1 hour
-                            tokio::time::sleep(Duration::from_secs(3600)).await;
                         }
+                        // Sleep for 1 hour
+                        tokio::time::sleep(Duration::from_secs(3600)).await;
                     }
-                    .instrument(error_span!("jwk_updater_task", epoch)),
-                );
-            }
-
-            epoch_store.wait_epoch_terminated().await;
-            info!("JWK updater task terminated");
-            // dropping join_set will abort all sub-tasks
-        });
+                }
+                .instrument(error_span!("jwk_updater_task", epoch)),
+            ));
+        }
     }
 
     #[cfg(not(msim))]
