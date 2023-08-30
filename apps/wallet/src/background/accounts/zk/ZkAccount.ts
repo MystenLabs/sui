@@ -4,11 +4,9 @@
 import {
 	type SerializedSignature,
 	type ExportedKeypair,
-	SIGNATURE_SCHEME_TO_FLAG,
 	toSerializedSignature,
 } from '@mysten/sui.js/cryptography';
-import { fromB64, toB64 } from '@mysten/sui.js/utils';
-import { computeZkAddress, zkBcs } from '@mysten/zklogin';
+import { computeZkAddress, getZkSignature } from '@mysten/zklogin';
 import { blake2b } from '@noble/hashes/blake2b';
 import { decodeJwt } from 'jose';
 import { getCurrentEpoch } from './current-epoch';
@@ -230,25 +228,13 @@ export class ZkAccount
 		}
 		const { ephemeralKeyPair, proofs, maxEpoch } = credentials;
 		const keyPair = fromExportedKeypair(ephemeralKeyPair);
+
 		const userSignature = toSerializedSignature({
 			signature: await keyPair.sign(digest),
 			signatureScheme: keyPair.getKeyScheme(),
 			publicKey: keyPair.getPublicKey(),
 		});
-		const bytes = zkBcs
-			.ser(
-				'ZkSignature',
-				{
-					inputs: proofs,
-					max_epoch: maxEpoch,
-					user_signature: fromB64(userSignature),
-				},
-				{ maxSize: 2048 },
-			)
-			.toBytes();
-		const signatureBytes = new Uint8Array(bytes.length + 1);
-		signatureBytes.set([SIGNATURE_SCHEME_TO_FLAG['Zk']]);
-		signatureBytes.set(bytes, 1);
-		return toB64(signatureBytes);
+
+		return getZkSignature({ inputs: proofs, maxEpoch, userSignature });
 	}
 }

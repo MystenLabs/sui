@@ -11,13 +11,7 @@ import { genAddressSeed, toBufferBE } from './utils.js';
 
 export function jwtToAddress(jwt: string, userSalt: bigint) {
 	const decodedJWT = decodeJwt(jwt);
-	if (
-		!decodedJWT.sub ||
-		!decodedJWT.iss ||
-		!decodedJWT.aud ||
-		!decodedJWT.email ||
-		typeof decodedJWT.email !== 'string'
-	) {
+	if (!decodedJWT.sub || !decodedJWT.iss || !decodedJWT.aud) {
 		throw new Error('Missing jwt data');
 	}
 
