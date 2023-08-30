@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::*;
+use async_graphql::{connection::Connection, *};
 
 use super::{
-    address::Address, object::Object, owner::ObjectOwner, protocol_config::ProtocolConfigs,
-    sui_address::SuiAddress,
+    address::Address, checkpoint::Checkpoint, object::Object, owner::ObjectOwner,
+    protocol_config::ProtocolConfigs, sui_address::SuiAddress,
 };
 use crate::server::context_ext::DataProviderContextExt;
 
@@ -38,6 +38,19 @@ impl Query {
 
     async fn address(&self, address: SuiAddress) -> Option<Address> {
         Some(Address { address })
+    }
+
+    async fn checkpoint_connection(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+    ) -> Result<Connection<String, Checkpoint>> {
+        ctx.data_provider()
+            .fetch_checkpoint_connection(first, after, last, before)
+            .await
     }
 
     async fn protocol_config(

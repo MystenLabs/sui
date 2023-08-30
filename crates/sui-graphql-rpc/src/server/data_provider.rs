@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::types::balance::Balance;
+use crate::types::checkpoint::Checkpoint;
 use crate::types::object::ObjectFilter;
 use crate::types::protocol_config::ProtocolConfigs;
 use crate::types::transaction_block::TransactionBlock;
@@ -34,6 +35,14 @@ pub(crate) trait DataProvider: Send + Sync {
         last: Option<u64>,
         before: Option<String>,
     ) -> Result<Connection<String, Balance>>;
+
+    async fn fetch_checkpoint_connection(
+        &self,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+    ) -> Result<Connection<String, Checkpoint>>;
 
     async fn fetch_tx(&self, digest: &str) -> Result<Option<TransactionBlock>>;
 

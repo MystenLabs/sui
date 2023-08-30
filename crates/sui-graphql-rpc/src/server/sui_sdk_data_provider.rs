@@ -8,6 +8,9 @@ use crate::types::address::Address;
 use crate::types::balance::Balance;
 use crate::types::base64::Base64;
 use crate::types::big_int::BigInt;
+use crate::types::checkpoint::Checkpoint;
+use crate::types::committee_member::CommitteeMember;
+use crate::types::end_of_epoch_data::EndOfEpochData;
 use crate::types::epoch::Epoch;
 use crate::types::object::ObjectFilter;
 use crate::types::object::ObjectKind;
@@ -28,19 +31,22 @@ use crate::types::gas::{GasCostSummary, GasEffects, GasInput};
 use async_graphql::connection::{Connection, Edge};
 use async_graphql::*;
 use async_trait::async_trait;
+use fastcrypto::traits::EncodeDecodeBase64;
 use std::str::FromStr;
 use sui_json_rpc_types::{
     OwnedObjectRef, SuiExecutionStatus, SuiGasData, SuiObjectDataOptions, SuiObjectResponseQuery,
     SuiPastObjectResponse, SuiRawData, SuiTransactionBlockDataAPI, SuiTransactionBlockEffectsAPI,
     SuiTransactionBlockResponseOptions,
 };
-use sui_sdk::types::sui_system_state::sui_system_state_summary::SuiValidatorSummary;
+use sui_sdk::types::sui_serde::BigInt as SerdeBigInt;
+use sui_sdk::types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_sdk::{
     types::{
         base_types::{ObjectID as NativeObjectID, SuiAddress as NativeSuiAddress},
         digests::TransactionDigest,
         gas::GasCostSummary as NativeGasCostSummary,
         object::Owner as NativeOwner,
+        sui_system_state::sui_system_state_summary::SuiValidatorSummary,
     },
     SuiClient,
 };
@@ -175,6 +181,56 @@ impl DataProvider for SuiClient {
         Ok(connection)
     }
 
+    // TODO: support backward pagination as fetching checkpoints
+    // API allows for it
+    async fn fetch_checkpoint_connection(
+        &self,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+    ) -> Result<Connection<String, Checkpoint>> {
+        ensure_forward_pagination(&first, &after, &last, &before)?;
+
+        let count = first.map(|q| q as usize);
+        let after = after
+            .map(|x| x.parse::<u64>())
+            .transpose()
+            .map_err(|_| {
+                Error::InvalidCursor(
+                    "Cannot convert after parameter into u64 in the checkpoint connection"
+                        .to_string(),
+                )
+            })?
+            .map(SerdeBigInt::from);
+
+        let pg = self.read_api().get_checkpoints(after, count, false).await?;
+        let system_state = self.governance_api().get_latest_sui_system_state().await?;
+        let protocol_configs = self.fetch_protocol_config(None).await?;
+
+        let data: Result<Vec<_>, _> = pg
+            .data
+            .iter()
+            .map(|c| convert_json_rpc_checkpoint(c, &system_state, &protocol_configs))
+            .collect();
+
+        let checkpoints = data.map_err(|e| {
+            Error::Internal(format!(
+                "Cannot convert the JSON RPC checkpoint into GraphQL checkpoint type: {}",
+                e.message
+            ))
+        })?;
+
+        let mut connection = Connection::new(false, pg.has_next_page);
+        connection.edges.extend(
+            checkpoints
+                .iter()
+                .map(|x| Edge::new(x.sequence_number.to_string(), x.clone())),
+        );
+
+        Ok(connection)
+    }
+
     async fn fetch_tx(&self, digest: &str) -> Result<Option<TransactionBlock>> {
         let tx_digest = TransactionDigest::from_str(digest)?;
         let tx = self
@@ -192,8 +248,9 @@ impl DataProvider for SuiClient {
             convert_to_gas_effects(self, tx_effects.gas_cost_summary(), tx_effects.gas_object())
                 .await?;
         let gcs = tx_effects.gas_cost_summary();
-
-        let epoch = convert_to_epoch(self, gcs).await?;
+        let system_state = self.governance_api().get_latest_sui_system_state().await?;
+        let protocol_configs = self.fetch_protocol_config(None).await?;
+        let epoch = convert_to_epoch(gcs, &system_state, &protocol_configs)?;
         let expiration = epoch.clone();
         Ok(Some(TransactionBlock {
             digest: digest.to_string(),
@@ -254,6 +311,63 @@ impl DataProvider for SuiClient {
             protocol_version: cfg.protocol_version.as_u64(),
         })
     }
+}
+
+pub(crate) fn convert_json_rpc_checkpoint(
+    c: &sui_json_rpc_types::Checkpoint,
+    system_state: &SuiSystemStateSummary,
+    protocol_configs: &ProtocolConfigs,
+) -> Result<Checkpoint> {
+    let digest = c.digest.to_string();
+    let sequence_number = c.sequence_number;
+
+    let validator_signature = c.validator_signature.encode_base64();
+    let validator_signature = Some(Base64::from(validator_signature.into_bytes()));
+
+    let previous_checkpoint_digest = c.previous_digest.map(|x| x.to_string());
+    let network_total_transactions = Some(c.network_total_transactions);
+    let rolling_gas_summary = convert_to_gas_cost_summary(&c.epoch_rolling_gas_cost_summary).ok();
+    let epoch = convert_to_epoch(
+        &c.epoch_rolling_gas_cost_summary,
+        system_state,
+        protocol_configs,
+    )
+    .ok();
+
+    let end_of_epoch_data = &c.end_of_epoch_data;
+    let end_of_epoch = end_of_epoch_data.clone().map(|e| {
+        let committees = e.next_epoch_committee;
+        let new_committee = if committees.is_empty() {
+            None
+        } else {
+            Some(
+                committees
+                    .iter()
+                    .map(|c| CommitteeMember {
+                        authority_name: Some(c.0.into_concise().to_string()),
+                        stake_unit: Some(c.1),
+                    })
+                    .collect::<Vec<_>>(),
+            )
+        };
+
+        EndOfEpochData {
+            new_committee,
+            next_protocol_version: Some(e.next_epoch_protocol_version.as_u64()),
+        }
+    });
+
+    Ok(Checkpoint {
+        digest,
+        sequence_number,
+        validator_signature,
+        previous_checkpoint_digest,
+        live_object_set_digest: None, // TODO fix this
+        network_total_transactions,
+        rolling_gas_summary,
+        epoch,
+        end_of_epoch,
+    })
 }
 
 fn convert_obj(s: &sui_json_rpc_types::SuiObjectData) -> Object {
@@ -344,12 +458,14 @@ pub(crate) async fn convert_to_gas_effects(
     })
 }
 
-pub(crate) async fn convert_to_epoch(cl: &SuiClient, gcs: &NativeGasCostSummary) -> Result<Epoch> {
-    let system_state = cl.governance_api().get_latest_sui_system_state().await?;
+pub(crate) fn convert_to_epoch(
+    gcs: &NativeGasCostSummary,
+    system_state: &SuiSystemStateSummary,
+    protocol_configs: &ProtocolConfigs,
+) -> Result<Epoch> {
     let epoch_id = system_state.epoch;
-    let protocol_configs = DataProvider::fetch_protocol_config(cl, None).await?;
     let gas_summary = convert_to_gas_cost_summary(gcs)?;
-    let active_validators = convert_to_validators(system_state.active_validators)?;
+    let active_validators = convert_to_validators(system_state.active_validators.clone())?;
 
     Ok(Epoch {
         epoch_id,
@@ -385,7 +501,7 @@ pub(crate) async fn convert_to_epoch(cl: &SuiClient, gcs: &NativeGasCostSummary)
         validator_set: Some(ValidatorSet {
             total_stake: Some(BigInt::from(system_state.total_stake)),
             active_validators: Some(active_validators),
-            pending_removals: Some(system_state.pending_removals),
+            pending_removals: Some(system_state.pending_removals.clone()),
             pending_active_validators_size: Some(system_state.pending_active_validators_size),
             stake_pool_mappings_size: Some(system_state.staking_pool_mappings_size),
             inactive_pools_size: Some(system_state.inactive_pools_size),
@@ -403,7 +519,7 @@ pub(crate) async fn convert_to_epoch(cl: &SuiClient, gcs: &NativeGasCostSummary)
             enabled: Some(system_state.safe_mode),
             gas_summary: Some(gas_summary),
         }),
-        protocol_configs: Some(protocol_configs),
+        protocol_configs: Some(protocol_configs.clone()),
     })
 }
 

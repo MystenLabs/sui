@@ -6,6 +6,6 @@ use async_graphql::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
 pub(crate) struct EndOfEpochData {
-    new_committee: Option<Vec<CommitteeMember>>,
-    next_protocol_version: Option<u64>,
+    pub new_committee: Option<Vec<CommitteeMember>>,
+    pub next_protocol_version: Option<u64>,
 }
