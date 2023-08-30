@@ -5,7 +5,7 @@ use std::{str::FromStr, time::Duration};
 
 use benchmark::{BenchmarkParametersGenerator, LoadType};
 use clap::Parser;
-use client::{aws::AwsClient, vultr::VultrClient, ServerProviderClient};
+use client::{aws::AwsClient, ServerProviderClient};
 use eyre::{Context, Result};
 use faults::FaultsType;
 use measurement::MeasurementsCollection;
@@ -207,16 +207,6 @@ async fn main() -> Result<()> {
         CloudProvider::Aws => {
             // Create the client for the cloud provider.
             let client = AwsClient::new(settings.clone()).await;
-
-            // Execute the command.
-            run(settings, client, opts).await
-        }
-        CloudProvider::Vultr => {
-            // Create the client for the cloud provider.
-            let token = settings
-                .load_token()
-                .wrap_err("Failed to load cloud provider's token")?;
-            let client = VultrClient::new(token, settings.clone());
 
             // Execute the command.
             run(settings, client, opts).await

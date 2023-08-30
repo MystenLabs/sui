@@ -44,8 +44,6 @@ where
 pub enum CloudProvider {
     #[serde(alias = "aws")]
     Aws,
-    #[serde(alias = "vultr")]
-    Vultr,
 }
 
 /// The testbed settings. Those are topically specified in a file.

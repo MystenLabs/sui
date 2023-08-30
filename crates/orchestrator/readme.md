@@ -2,20 +2,11 @@
 
 The Orchestrator crate provides facilities for quickly deploying and benchmarking this codebase in a geo-distributed environment. Please note that it is not intended for production deployments or as an indicator of production engineering best practices. Its purpose is to facilitate research projects by allowing benchmarking of (variants of) the codebase and analyzing performance.
 
-This guide provides a step-by-step explanation of how to run geo-distributed benchmarks on either [Vultr](http://vultr.com) or [Amazon Web Services (AWS)](http://aws.amazon.com).
+This guide provides a step-by-step explanation of how to run geo-distributed benchmarks on [Amazon Web Services (AWS)](http://aws.amazon.com).
 
 ## Step 1. Set up cloud provider credentials
 
 To enable programmatic access to your cloud provider account from your local machine, you need to set up your cloud provider credentials. These credentials authorize your machine to create, delete, and edit instances programmatically on your account.
-
-### Setting up Vultr credentials
-
-1. Find your ['Vultr token'](https://www.vultr.com/docs/).
-2. Create a file `~/.vultr` and add your access token as the file's content:
-
-```text
-YOUR_ACCESS_TOKEN
-```
 
 ### Setting up AWS credentials
 

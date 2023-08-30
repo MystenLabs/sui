@@ -11,7 +11,6 @@ use serde::{Deserialize, Serialize};
 use super::error::CloudProviderResult;
 
 pub mod aws;
-pub mod vultr;
 
 /// Represents a cloud provider instance.
 #[derive(Debug, Deserialize, Clone, Eq, PartialEq, Hash)]
