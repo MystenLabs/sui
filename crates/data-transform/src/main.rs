@@ -288,7 +288,7 @@ fn main() {
                 */
 
                 let layout = MoveObject::get_layout_from_struct_tag(
-                    type_,
+                    type_.clone(),
                     ObjectFormatOptions::default(),
                     &module_cache,
                     );
@@ -315,13 +315,13 @@ fn main() {
 
                             }|
                             Err(e) => {
-                                println!("error in deserialize:{}", e);
+                                println!("error in deserialize:{} {}", e, type_);
                                 continue;
                             }
                         }
                     }
                     Err(err) => {
-                        println!("error in get_layout: {}", err);
+                        println!("error in get_layout: {} {}", err, type_);
                         continue;
                     }
                 }
