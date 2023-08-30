@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { WalletWithSuiFeatures, WalletAccount } from '@mysten/wallet-standard';
+import { type WalletWithSuiFeatures, type WalletAccount } from '@mysten/wallet-standard';
 import { assertUnreachable } from 'dapp-kit/src/utils/assertUnreachable';
 
 export type WalletState = {
@@ -15,6 +15,8 @@ export type WalletAction =
 	| { type: 'wallet-connected'; payload: WalletWithSuiFeatures }
 	| { type: 'wallet-disconnected'; payload?: never }
 	| { type: 'wallet-properties-changed'; payload: { updatedAccounts: WalletAccount[] } };
+	| { type: 'wallets-changed'; payload: { updatedAccounts: WalletAccount[] } };
+
 
 export function walletReducer(
 	walletState: WalletState,
@@ -42,6 +44,12 @@ export function walletReducer(
 				accounts: [],
 				currentAccount: null,
 			};
+		}
+		case 'wallets-changed': {
+			return {
+				...walletState,
+				wallets: get
+			}
 		}
 		default:
 			assertUnreachable(type);

@@ -8,9 +8,10 @@ import type { StorageAdapter } from '../../utils/storageAdapters.js';
 import { getWallets } from '@mysten/wallet-standard';
 import { useUnsafeBurnerWallet } from '../../hooks/wallet/useUnsafeBurnerWallet.js';
 import { sortWallets } from './walletUtils.js';
-import { useWalletEventSubscriber } from 'dapp-kit/src/hooks/wallet/useWalletEventSubscriber.js';
+import { useWalletPropertiesChanged } from 'dapp-kit/src/hooks/wallet/useWalletPropertiesChanged.js';
 import type { WalletState, WalletAction } from './walletReducer.js';
 import { walletReducer } from './walletReducer.js';
+import { useWalletsChanged } from 'dapp-kit/src/hooks/wallet/useWalletsChanged.js';
 
 interface WalletProviderProps {
 	/** A list of wallets that are sorted to the top of the wallet list, if they are available to connect to. By default, wallets are sorted by the order they are loaded in. */
@@ -63,9 +64,13 @@ export function WalletProvider({
 		currentAccount: null,
 	});
 
+	useWalletsChanged(() => {
+		dispatch();
+	});
+
 	useUnsafeBurnerWallet(enableUnsafeBurner);
 
-	useWalletEventSubscriber(walletState.currentWallet, ({ accounts }) => {
+	useWalletPropertiesChanged(walletState.currentWallet, ({ accounts }) => {
 		console.log('CHANGE', accounts);
 		// dispatch({
 		// 	type: 'wallet-properties-changed',
