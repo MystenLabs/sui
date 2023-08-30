@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetKioskContents, useGetOwnedObjects, useLocalStorage } from '@mysten/core';
-import { ViewList16, ViewSmallThumbnails16 } from '@mysten/icons';
+import { ThumbnailsOnly16, ViewList16, ViewSmallThumbnails16 } from '@mysten/icons';
 import { Heading, IconButton, RadioGroup, RadioGroupItem, Text } from '@mysten/ui';
 import clsx from 'clsx';
 import { useEffect, useMemo, useState } from 'react';
 
 import { ListView } from '~/components/OwnedObjects/ListView';
-import { SmallThumbNailsView } from '~/components/OwnedObjects/SmallThumbNailsView';
+import { SmallThumbnailsView } from '~/components/OwnedObjects/SmallThumbnailsView';
+import { ThumbnailsView } from '~/components/OwnedObjects/ThumbnailsView';
 import { OBJECT_VIEW_MODES } from '~/components/OwnedObjects/utils';
 import { Pagination, useCursorPagination } from '~/ui/Pagination';
 
@@ -16,14 +17,20 @@ const PAGE_SIZES = [10, 20, 30, 40, 50];
 const SHOW_PAGINATION_MAX_ITEMS = 9;
 const OWNED_OBJECTS_LOCAL_STORAGE_VIEW_MODE = 'owned-objects-viewMode';
 
+enum FILTER_VALUES {
+	ALL = 'all',
+	KIOSKS = 'kiosks',
+}
+
 const FILTER_OPTIONS = [
-	{ label: 'NFTS', value: 'all' },
-	{ label: 'KIOSKS', value: 'kiosks' },
+	{ label: 'NFTS', value: FILTER_VALUES.ALL },
+	{ label: 'KIOSKS', value: FILTER_VALUES.KIOSKS },
 ];
 
 const VIEW_MODES = [
 	{ icon: <ViewList16 />, value: OBJECT_VIEW_MODES.LIST },
 	{ icon: <ViewSmallThumbnails16 />, value: OBJECT_VIEW_MODES.SMALL_THUMBNAILS },
+	{ icon: <ThumbnailsOnly16 />, value: OBJECT_VIEW_MODES.THUMBNAILS },
 ];
 
 function getItemsRangeFromCurrentPage(currentPage: number, itemsPerPage: number) {
@@ -32,7 +39,16 @@ function getItemsRangeFromCurrentPage(currentPage: number, itemsPerPage: number)
 	return { start, end };
 }
 
-function getShowPagination(itemsLength: number, currentPage: number, isFetching: boolean) {
+function getShowPagination(
+	filter: string | undefined,
+	itemsLength: number,
+	currentPage: number,
+	isFetching: boolean,
+) {
+	if (filter === FILTER_VALUES.KIOSKS) {
+		return false;
+	}
+
 	if (isFetching) {
 		return true;
 	}
@@ -42,10 +58,10 @@ function getShowPagination(itemsLength: number, currentPage: number, isFetching:
 
 export function OwnedObjects({ id }: { id: string }) {
 	const [filter, setFilter] = useState<string | undefined>(undefined);
-	const [limit, setLimit] = useState(PAGE_SIZES[4]);
+	const [limit, setLimit] = useState(50);
 	const [viewMode, setViewMode] = useLocalStorage(
 		OWNED_OBJECTS_LOCAL_STORAGE_VIEW_MODE,
-		OBJECT_VIEW_MODES.SMALL_THUMBNAILS,
+		OBJECT_VIEW_MODES.THUMBNAILS,
 	);
 
 	const ownedObjects = useGetOwnedObjects(
@@ -62,17 +78,17 @@ export function OwnedObjects({ id }: { id: string }) {
 	const isLoading = isFetching || kioskDataFetching;
 
 	useEffect(() => {
-		if (!isLoading) {
+		if (!isLoading && !filter) {
 			if (kioskData?.list?.length) {
-				setFilter(FILTER_OPTIONS[1].value);
+				setFilter(FILTER_VALUES.KIOSKS);
 			} else {
-				setFilter(FILTER_OPTIONS[0].value);
+				setFilter(FILTER_VALUES.ALL);
 			}
 		}
-	}, [isLoading, kioskData?.list?.length]);
+	}, [filter, isLoading, kioskData?.list?.length]);
 
 	const filteredData = useMemo(
-		() => (filter === 'all' ? data?.data : kioskData?.list),
+		() => (filter === FILTER_VALUES.ALL ? data?.data : kioskData?.list),
 		[filter, data, kioskData],
 	);
 
@@ -104,6 +120,7 @@ export function OwnedObjects({ id }: { id: string }) {
 	}, [filteredData]);
 
 	const showPagination = getShowPagination(
+		filter,
 		filteredData?.length || 0,
 		pagination.currentPage,
 		isFetching,
@@ -114,7 +131,7 @@ export function OwnedObjects({ id }: { id: string }) {
 	}
 
 	return (
-		<div className="flex h-full overflow-hidden md:pl-10">
+		<div className={clsx('flex h-full overflow-hidden md:pl-10', !showPagination && 'pb-2')}>
 			<div className="flex h-full w-full flex-col gap-4">
 				<div className="flex w-full flex-col items-start gap-3 border-b border-gray-45 max-sm:pb-3 sm:h-14 sm:min-h-14 sm:flex-row sm:items-center">
 					<Heading color="steel-darker" variant="heading4/semibold">
@@ -160,7 +177,9 @@ export function OwnedObjects({ id }: { id: string }) {
 									key={filter.value}
 									value={filter.value}
 									label={filter.label}
-									disabled={(filter.value === 'kiosks' && !kioskData?.list?.length) || isLoading}
+									disabled={
+										(filter.value === FILTER_VALUES.KIOSKS && !kioskData?.list?.length) || isLoading
+									}
 								/>
 							))}
 						</RadioGroup>
@@ -171,7 +190,10 @@ export function OwnedObjects({ id }: { id: string }) {
 					<ListView loading={isLoading} data={sortedDataByDisplayImages} />
 				)}
 				{viewMode === OBJECT_VIEW_MODES.SMALL_THUMBNAILS && (
-					<SmallThumbNailsView loading={isLoading} data={sortedDataByDisplayImages} />
+					<SmallThumbnailsView loading={isLoading} data={sortedDataByDisplayImages} limit={limit} />
+				)}
+				{viewMode === OBJECT_VIEW_MODES.THUMBNAILS && (
+					<ThumbnailsView loading={isLoading} data={sortedDataByDisplayImages} limit={limit} />
 				)}
 				{showPagination && (
 					<div className="mt-auto flex flex-row flex-wrap gap-2 md:mb-5">

@@ -196,8 +196,8 @@ export default {
 				18: '4.5rem',
 				50: '12.5rem',
 				transactionColumn: '31.875rem',
-				ownObjectContainer: '13.125rem',
-				ownObjectContainerMobile: '9.375rem',
+				smallThumbNailsViewContainer: '13.125rem',
+				smallThumbNailsViewContainerMobile: '9.375rem',
 				coinItemContainer: '15.625rem',
 			},
 			minHeight: {
