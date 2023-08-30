@@ -11,7 +11,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 21;
+const MAX_PROTOCOL_VERSION: u64 = 22;
 
 // Record history of protocol version allocations here:
 //
@@ -257,6 +257,10 @@ struct FeatureFlags {
     // A list of supported OIDC providers that can be used for zklogin.
     #[serde(skip_serializing_if = "is_empty")]
     zklogin_supported_providers: BTreeSet<String>,
+
+    // If true, use the new child object format
+    #[serde(skip_serializing_if = "is_false")]
+    loaded_child_object_format: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -849,6 +853,10 @@ impl ProtocolConfig {
     pub fn narwhal_new_leader_election_schedule(&self) -> bool {
         self.feature_flags.narwhal_new_leader_election_schedule
     }
+
+    pub fn loaded_child_object_format(&self) -> bool {
+        self.feature_flags.loaded_child_object_format
+    }
 }
 
 #[cfg(not(msim))]
@@ -1385,6 +1393,11 @@ impl ProtocolConfig {
                         "Twitch".to_string(),
                     ]);
                 }
+                cfg
+            }
+            22 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.feature_flags.loaded_child_object_format = true;
                 cfg
             }
             // Use this template when making changes:
