@@ -17,12 +17,6 @@ describe('Intent', () => {
 		expect(intentMessage[0]).toEqual(IntentScope.PersonalMessage);
 		expect(intentMessage[1]).toEqual(IntentVersion.V0);
 		expect(intentMessage[2]).toEqual(AppId.Sui);
-
-		const intent = new Uint8Array([IntentScope.PersonalMessage, IntentVersion.V0, AppId.Sui]);
-		const expectedData = new Uint8Array(data.length + 3);
-		expectedData.set(intent);
-		expectedData.set(data, intent.length);
-
-		expect(intentMessage).toEqual(expectedData);
+		expect(intentMessage.slice(3)).toEqual(data);
 	});
 });

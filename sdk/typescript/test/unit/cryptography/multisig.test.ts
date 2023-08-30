@@ -105,9 +105,12 @@ describe('multisig address and combine sigs', () => {
 });
 
 describe('Multisig', () => {
-	let k1: Ed25519Keypair, pk1: Ed25519PublicKey,
-		k2: Secp256k1Keypair, pk2: PublicKey,
-		k3: Secp256r1Keypair, pk3: PublicKey;
+	let k1: Ed25519Keypair,
+		pk1: Ed25519PublicKey,
+		k2: Secp256k1Keypair,
+		pk2: PublicKey,
+		k3: Secp256r1Keypair,
+		pk3: PublicKey;
 
 	beforeAll(() => {
 		const VALID_SECP256K1_SECRET_KEY = [
@@ -152,7 +155,7 @@ describe('Multisig', () => {
 		const multisigAddress = toMultiSigAddress(pubkeyWeightPairs, 3);
 
 		expect(multisigAddress).toEqual(
-			'0x8ee027fe556a3f6c0a23df64f090d2429fec0bb21f55594783476e81de2dec27'
+			'0x8ee027fe556a3f6c0a23df64f090d2429fec0bb21f55594783476e81de2dec27',
 		);
 	});
 

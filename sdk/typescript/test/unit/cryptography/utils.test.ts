@@ -2,13 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import {
-	parseSerializedSignature,
-} from '../../../src/cryptography/signature';
-import {
-	PubkeyWeightPair,
-	combinePartialSigs,
-} from '../../../src/cryptography/multisig';
+import { parseSerializedSignature } from '../../../src/cryptography/signature';
+import { PubkeyWeightPair, combinePartialSigs } from '../../../src/cryptography/multisig';
 import { fromB64, toB64 } from '@mysten/bcs';
 import {
 	toParsedSignaturePubkeyPair,
@@ -23,9 +18,12 @@ import { Secp256k1Keypair } from '../../../src/keypairs/secp256k1';
 import { Secp256r1Keypair } from '../../../src/keypairs/secp256r1';
 
 describe('Utils', () => {
-	let k1: Ed25519Keypair, pk1: Ed25519PublicKey,
-		k2: Secp256k1Keypair, pk2: PublicKey,
-		k3: Secp256r1Keypair, pk3: PublicKey;
+	let k1: Ed25519Keypair,
+		pk1: Ed25519PublicKey,
+		k2: Secp256k1Keypair,
+		pk2: PublicKey,
+		k3: Secp256r1Keypair,
+		pk3: PublicKey;
 
 	beforeAll(() => {
 		const VALID_SECP256K1_SECRET_KEY = [

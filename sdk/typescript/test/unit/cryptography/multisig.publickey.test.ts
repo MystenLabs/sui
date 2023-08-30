@@ -26,9 +26,12 @@ import { builder } from '../../../src/builder/bcs.js';
 import { fromB64 } from '@mysten/bcs';
 
 describe('Publickey', () => {
-	let k1: Ed25519Keypair, pk1: Ed25519PublicKey,
-		k2: Secp256k1Keypair, pk2: PublicKey,
-		k3: Secp256r1Keypair, pk3: PublicKey;
+	let k1: Ed25519Keypair,
+		pk1: Ed25519PublicKey,
+		k2: Secp256k1Keypair,
+		pk2: PublicKey,
+		k3: Secp256r1Keypair,
+		pk3: PublicKey;
 
 	beforeAll(() => {
 		const VALID_SECP256K1_SECRET_KEY = [
@@ -180,7 +183,18 @@ describe('Publickey', () => {
 		const multisig = multiSigPublicKey.combinePartialSignatures([sig1.signature, sig2.signature]);
 		const rawBytes = fromB64(multisig).slice(134);
 
-		expect(multiSigPublicKey.toRawBytes()).toEqual(rawBytes);
+		expect(multiSigPublicKey.toRawBytes())
+			.toEqual(rawBytes)
+			.toEqual(
+				new Uint8Array([
+					3, 0, 90, 226, 32, 180, 178, 246, 94, 151, 124, 18, 237, 230, 21, 121, 255, 81, 112, 182,
+					194, 44, 0, 97, 104, 195, 123, 94, 124, 97, 175, 1, 128, 131, 1, 1, 2, 29, 21, 35, 7, 198,
+					183, 43, 14, 208, 65, 139, 14, 112, 205, 128, 231, 245, 41, 91, 141, 134, 245, 114, 45,
+					63, 82, 19, 251, 210, 57, 79, 54, 2, 2, 2, 39, 50, 43, 58, 137, 26, 10, 40, 13, 107, 193,
+					251, 44, 187, 35, 210, 143, 84, 144, 111, 214, 64, 127, 95, 116, 31, 109, 239, 87, 98, 96,
+					154, 3, 3, 0,
+				]),
+			);
 	});
 
 	it('`getPublicKeys()` should return correct publickeys', async () => {
@@ -225,7 +239,9 @@ describe('Publickey', () => {
 			bytesToHex(blake2b(tmp.slice(0, i), { dkLen: 32 })),
 		);
 
-		expect(multiSigPublicKey.toSuiAddress()).toEqual(multisigSuiAddress);
+		expect(multiSigPublicKey.toSuiAddress())
+			.toEqual(multisigSuiAddress)
+			.toEqual('0x8ee027fe556a3f6c0a23df64f090d2429fec0bb21f55594783476e81de2dec27');
 	});
 
 	it('`flag()` should return correct signature scheme', async () => {
