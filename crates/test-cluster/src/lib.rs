@@ -657,15 +657,18 @@ impl TestClusterBuilder {
     }
 
     pub fn with_enable_snapshot_writer(mut self, remote_path: PathBuf) -> Self {
+        info!("DEBUGGING -- TEST_CLUSTER_BUILDER (1)");
         let object_store_config = ObjectStoreConfig {
             object_store: Some(ObjectStoreType::File),
             directory: Some(remote_path),
             ..Default::default()
         };
+        info!("DEBUGGING -- TEST_CLUSTER_BUILDER (2)");
         self.state_snapshot_write_config = StateSnapshotConfig {
             object_store_config: Some(object_store_config),
             concurrency: 3,
         };
+        info!("DEBUGGING -- TEST_CLUSTER_BUILDER (3)");
         self
     }
 
@@ -757,14 +760,19 @@ impl TestClusterBuilder {
     pub async fn build(mut self) -> TestCluster {
         let swarm = self.start_swarm().await.unwrap();
         let working_dir = swarm.dir();
+        info!("DEBUGGING -- TEST_CLUSTER_BUILDER (9)");
 
         let mut wallet_conf: SuiClientConfig =
             PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG)).unwrap();
 
+        info!("DEBUGGING -- TEST_CLUSTER_BUILDER (9.1)");
         let fullnode = swarm.fullnodes().next().unwrap();
+        info!("DEBUGGING -- TEST_CLUSTER_BUILDER (9.2)");
         let json_rpc_address = fullnode.config.json_rpc_address;
         let fullnode_handle =
             FullNodeHandle::new(fullnode.get_node_handle().unwrap(), json_rpc_address).await;
+
+        info!("DEBUGGING -- TEST_CLUSTER_BUILDER (10)");
 
         wallet_conf.envs.push(SuiEnv {
             alias: "localnet".to_string(),
@@ -773,6 +781,7 @@ impl TestClusterBuilder {
         });
         wallet_conf.active_env = Some("localnet".to_string());
 
+        info!("DEBUGGING -- TEST_CLUSTER_BUILDER (11)");
         wallet_conf
             .persisted(&working_dir.join(SUI_CLIENT_CONFIG))
             .save()
@@ -780,6 +789,7 @@ impl TestClusterBuilder {
 
         let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
         let wallet = WalletContext::new(&wallet_conf, None, None).await.unwrap();
+        info!("DEBUGGING -- TEST_CLUSTER_BUILDER (12)");
 
         TestCluster {
             swarm,
@@ -809,6 +819,8 @@ impl TestClusterBuilder {
             .with_state_snapshot_write_config(self.state_snapshot_write_config.clone())
             .with_state_archive_write_config(self.state_archive_write_config.clone());
 
+        info!("DEBUGGING -- TEST_CLUSTER_BUILDER (4)");
+
         if let Some(genesis_config) = self.genesis_config.take() {
             builder = builder.with_genesis_config(genesis_config);
         }
@@ -828,8 +840,11 @@ impl TestClusterBuilder {
             builder = builder.dir(config_dir);
         }
 
+        info!("DEBUGGING -- TEST_CLUSTER_BUILDER (5)");
         let mut swarm = builder.build();
+        info!("DEBUGGING -- TEST_CLUSTER_BUILDER (6)");
         swarm.launch().await?;
+        info!("DEBUGGING -- TEST_CLUSTER_BUILDER (7)");
 
         let dir = swarm.dir();
 
@@ -844,6 +859,7 @@ impl TestClusterBuilder {
         }
 
         let active_address = keystore.addresses().first().cloned();
+        info!("DEBUGGING -- TEST_CLUSTER_BUILDER (8)");
 
         // Create wallet config with stated authorities port
         SuiClientConfig {

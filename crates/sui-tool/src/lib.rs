@@ -630,6 +630,7 @@ pub async fn restore_from_formal_snapshot(
     concurrency: Option<NonZeroUsize>,
     disable_verification: Option<bool>,
 ) -> anyhow::Result<()> {
+    info!("DEBUGGING -- (1)");
     // first ensure that target db is empty
     if !AuthorityPerpetualTables::open(&parent_db_path.join("store").join("perpetual"), None)
         .database_is_empty()
@@ -660,6 +661,7 @@ pub async fn restore_from_formal_snapshot(
         &Registry::default(),
     )
     .await?;
+    info!("DEBUGGING -- (2)");
 
     let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
         parent_db_path.join("checkpoints"),
@@ -678,6 +680,8 @@ pub async fn restore_from_formal_snapshot(
         checkpoint_store.update_highest_synced_checkpoint(&genesis.checkpoint())?;
     }
 
+    info!("DEBUGGING -- (3)");
+
     let state_sync_store = RocksDbStore::new(store, committee_store, checkpoint_store);
 
     let archive_reader_config = ArchiveReaderConfig {
@@ -689,6 +693,8 @@ pub async fn restore_from_formal_snapshot(
     let archive_reader = Arc::new(ArchiveReader::new(archive_reader_config, &metrics)?);
     archive_reader.sync_manifest_once().await?;
 
+    info!("DEBUGGING -- (4)");
+
     let restorer = SnapshotRestorer::new(
         archive_reader,
         parent_db_path.clone(),
@@ -699,6 +705,8 @@ pub async fn restore_from_formal_snapshot(
     )
     .await?;
     info!("Restoring from snapshot");
+
+    info!("DEBUGGING -- (5)");
 
     restorer
         .run(

@@ -260,6 +260,7 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             .map(|config| (config.protocol_public_key(), Node::new(config.to_owned())))
             .collect();
 
+        tracing::info!("DEBUGGING -- TEST_CLUSTER_BUILDER (5.1)");
         let mut fullnode_config_builder = FullnodeConfigBuilder::new()
             .with_config_directory(dir.as_ref().into())
             .with_db_checkpoint_config(self.db_checkpoint_config.clone())
@@ -330,6 +331,7 @@ impl Swarm {
     /// Start all nodes associated with this Swarm
     pub async fn launch(&mut self) -> Result<()> {
         try_join_all(self.nodes_iter_mut().map(|node| node.start())).await?;
+        panic!();
         tracing::info!("Successfully launched Swarm");
         Ok(())
     }

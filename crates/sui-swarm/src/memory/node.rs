@@ -78,11 +78,19 @@ impl Node {
     }
 
     pub fn get_node_handle(&self) -> Option<SuiNodeHandle> {
-        self.container
-            .lock()
-            .unwrap()
-            .as_ref()
-            .and_then(|c| c.get_node_handle())
+        // TODO(william) are we deadlocking here?
+        if let Ok(container) = self.container.try_lock() {
+            info!("DEBUGGING -- LOCKED CONTAINER");
+            container.as_ref().and_then(|c| c.get_node_handle())
+        } else {
+            panic!("DEBUGGING -- UNABLE TO LOCK CONTAINER");
+        }
+
+        // self.container
+        //     .lock()
+        //     .unwrap()
+        //     .as_ref()
+        //     .and_then(|c| c.get_node_handle())
     }
 
     /// Perform a health check on this Node by:

@@ -1100,6 +1100,7 @@ async fn sync_checkpoint_contents_from_archive<S>(
             {
                 let txn_counter = Arc::new(AtomicU64::new(0));
                 let checkpoint_counter = Arc::new(AtomicU64::new(0));
+                info!("DEBUGGING -- About to sync checkpoints from archive...");
                 if let Err(err) = archive_reader
                     .read(
                         store.clone(),

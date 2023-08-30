@@ -426,8 +426,15 @@ impl SuiNode {
         .await?;
 
         // Start archiving local state to remote store
+        info!("DEBUGGING -- ABOUT TO START ARCHIVAL");
         let state_archive_handle =
             Self::start_state_archival(&config, &prometheus_registry, state_sync_store).await?;
+
+        if state_archive_handle.is_some() {
+            info!("DEBUGGING -- STARTED ARCHIVAL");
+        } else {
+            info!("DEBUGGING -- DID NOT START ARCHIVAL");
+        }
 
         // Start uploading state snapshot to remote store
         let state_snapshot_handle = Self::start_state_snapshot(&config, &prometheus_registry)?;
@@ -460,6 +467,7 @@ impl SuiNode {
             archive_readers,
         )
         .await;
+
         // ensure genesis txn was executed
         if epoch_store.epoch() == 0 {
             let txn = &genesis.transaction();
@@ -536,6 +544,8 @@ impl SuiNode {
                 None,
             );
 
+        info!("DEBUGGING -- BLOCK MARKER");
+
         let connection_monitor_status = ConnectionMonitorStatus {
             connection_statuses,
             authority_names_to_peer_ids,
@@ -603,6 +613,9 @@ impl SuiNode {
         node_once_cell
             .set(node)
             .expect("Failed to set Arc<Node> in node_once_cell");
+        info!("DEBUGGING -- got to the end");
+        tokio::time::sleep(Duration::from_secs(15)).await;
+        panic!();
         Ok(())
     }
 
@@ -1220,7 +1233,12 @@ impl SuiNode {
                     .submit(transaction, None, &cur_epoch_store)?;
             }
 
+            info!(
+                "DEBUGGING -- starting checkpoint executor on epoch {}",
+                cur_epoch_store.epoch()
+            );
             checkpoint_executor.run_epoch(cur_epoch_store.clone()).await;
+            info!("DEBUGGING -- checkpoint executor returned for end of epoch");
             let latest_system_state = self
                 .state
                 .get_sui_system_state_object_during_reconfig()

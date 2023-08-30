@@ -34,7 +34,7 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::debug;
+use tracing::{debug, info};
 
 /// LiveObjectSetWriterV1 writes live object set. It creates multiple *.obj files and one REFERENCE file
 struct LiveObjectSetWriterV1 {
@@ -374,6 +374,7 @@ impl StateSnapshotWriterV1 {
     where
         F: Fn(&LiveObject) -> u32,
     {
+        info!("Writing live object set for epoch: {}", epoch);
         let mut object_writers: HashMap<u32, LiveObjectSetWriterV1> = HashMap::new();
         let local_staging_dir_path =
             path_to_filesystem(self.local_staging_dir.clone(), &self.epoch_dir(epoch))?;
@@ -397,6 +398,7 @@ impl StateSnapshotWriterV1 {
             files.extend(writer.done()?);
         }
         self.write_manifest(epoch, files)?;
+        info!("Finished writing live object set for epoch: {}", epoch);
         Ok(())
     }
 

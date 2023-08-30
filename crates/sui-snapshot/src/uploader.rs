@@ -114,11 +114,13 @@ impl StateSnapshotUploader {
     }
 
     async fn upload_state_snapshot_to_object_store(&self, missing_epochs: Vec<u64>) -> Result<()> {
+        info!("DEBUGGING -- About to upload state snapshots. Missing epochs: {missing_epochs:?}");
         let last_missing_epoch = missing_epochs.last().cloned().unwrap_or(0);
         let local_checkpoints_by_epoch =
             find_all_dirs_with_epoch_prefix(&self.db_checkpoint_store).await?;
         let mut dirs: Vec<_> = local_checkpoints_by_epoch.iter().collect();
         dirs.sort_by_key(|(epoch_num, _path)| *epoch_num);
+        info!("DEBUGGING -- About to upload state snapshots. Dirs: {dirs:?}");
         for (epoch, db_path) in dirs {
             if missing_epochs.contains(epoch) || *epoch >= last_missing_epoch {
                 let state_snapshot_writer = StateSnapshotWriterV1::new_from_store(

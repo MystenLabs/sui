@@ -1216,8 +1216,9 @@ async fn test_full_node_bootstrap_from_db_snapshot() -> Result<(), anyhow::Error
     Ok(())
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_full_node_bootstrap_from_formal_snapshot() -> Result<(), anyhow::Error> {
+    info!("DEBUGGING -- SIMTEST (1)");
     telemetry_subscribers::init_for_testing();
     let snapshot_dir = tempfile::tempdir()
         .unwrap()
@@ -1227,33 +1228,61 @@ async fn test_full_node_bootstrap_from_formal_snapshot() -> Result<(), anyhow::E
         .unwrap()
         .into_path()
         .join("archive_store");
+    info!("DEBUGGING -- SIMTEST (1.2)");
     let mut test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10_000)
-        .with_enable_snapshot_writer(snapshot_dir.clone())
+        // .with_enable_db_checkpoints_fullnodes()
+        // .with_enable_snapshot_writer(snapshot_dir.clone())
         .with_enable_archive_writer(archive_dir)
+        .with_num_unpruned_validators(2) // TODO(william) remove
         .build()
         .await;
+    info!("DEBUGGING -- SIMTEST (1.3)");
     let config = test_cluster
         .fullnode_config_builder()
         .build(&mut OsRng, test_cluster.swarm.config());
+
+    // TODO(william) REMOVE
+    assert!(false);
+    info!("DEBUGGING -- SIMTEST (2)");
+
     let epoch_0_db_path = config.db_path().join("store").join("epoch_0");
     let _ = transfer_coin(&test_cluster.wallet).await?;
     let _ = transfer_coin(&test_cluster.wallet).await?;
     let (_transferred_object, _, _, digest, ..) = transfer_coin(&test_cluster.wallet).await?;
+    info!("DEBUGGING -- SIMTEST (3)");
 
     // Skip the first epoch change from epoch 0 to epoch 1, but wait for the second
     // epoch change from epoch 1 to epoch 2 at which point during reconfiguration we will write
     // the formal snapshot for epoch 1
-    loop {
+    for i in 0..8 {
         if snapshot_dir.join("epoch_1").exists() {
             break;
         }
-        sleep(Duration::from_millis(500)).await;
+
+        {
+            // DEBUGGING
+            info!("DEBUGGING -- SIMTEST LOOP (4)");
+            let paths = std::fs::read_dir(snapshot_dir.clone()).unwrap();
+
+            for path in paths {
+                info!(
+                    "DEBUGGING -- SNAPSHOT DIR CONTENTS: Name: {}",
+                    path.unwrap().path().display()
+                );
+            }
+        }
+
+        sleep(Duration::from_secs(2)).await;
 
         // TODO figure out better way to wait for the proper checkpoint
         // to be written to archival storage. Since we don't know the
         // number of checkpoints in an epoch, the simplest thing for
         // now it to just sleep for a reasonable amount of time.
+
+        if i == 7 {
+            panic!("Failed to find snapshot for epoch 1");
+        }
     }
 
     let local = tempdir()?.into_path().join("local_dir");

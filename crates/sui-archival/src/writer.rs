@@ -410,10 +410,18 @@ impl ArchiveWriter {
         info!("Starting checkpoint tailing from sequence number: {checkpoint_sequence_number}");
 
         while kill.try_recv().is_err() {
+            info!(
+                "DEBUGGING -- in archival checkpoint tail loop. About to retrieve seq num: {:?}",
+                checkpoint_sequence_number
+            );
             if let Some(checkpoint_summary) = store
                 .get_checkpoint_by_sequence_number(checkpoint_sequence_number)
                 .map_err(|_| anyhow!("Failed to read checkpoint summary from store"))?
             {
+                info!(
+                    "DEBUGGING -- in archival checkpoint tail loop. Retrieved seq num: {:?}",
+                    checkpoint_sequence_number
+                );
                 if let Some(checkpoint_contents) = store
                     .get_full_checkpoint_contents(&checkpoint_summary.content_digest)
                     .map_err(|_| anyhow!("Failed to read checkpoint content from store"))?
