@@ -56,7 +56,7 @@ export class LedgerAccount
 			derivationPath,
 			lastUnlockedOn: null,
 			selected: false,
-			nickname: '',
+			nickname: null,
 		};
 	}
 

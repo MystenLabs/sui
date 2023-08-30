@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Sui } from '@mysten/icons';
+import { useResolveSuiNSName } from '@mysten/core';
 import { formatAddress } from '@mysten/sui.js/utils';
 
 import cn from 'classnames';
 import { forwardRef, type ReactNode } from 'react';
 import { useAccounts } from '../../hooks/useAccounts';
-import { AddressLink } from '../explorer-link';
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { Text } from '_src/ui/app/shared/text';
 
 interface AccountItemProps {
@@ -22,36 +22,23 @@ interface AccountItemProps {
 	background?: 'gradient';
 }
 
-// todo: remove this when we have real account icons
-function PlaceholderRoundedSui() {
-	return (
-		<div className="bg-sui-primaryBlue2023 rounded-full text-white h-4 w-4 flex items-center justify-center">
-			<Sui />
-		</div>
-	);
-}
-
 export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
-	(
-		{
-			background,
-			selected,
-			disabled,
-			icon = <PlaceholderRoundedSui />,
-			name,
-			address,
-			after,
-			...props
-		},
-		ref,
-	) => {
+	({ background, selected, disabled, icon, name, address, after, ...props }, ref) => {
 		const { data: accounts } = useAccounts();
+		const { data: domainName } = useResolveSuiNSName(address);
 		const account = accounts?.find((account) => account.address === address);
+		const accountName = account?.nickname ?? domainName ?? formatAddress(address);
+		const copyAddress = useCopyToClipboard(account?.address!, {
+			copySuccessMessage: 'Address copied',
+		});
+
+		if (!account) return null;
+
 		return (
 			<div
 				ref={ref}
 				className={cn(
-					'flex flex-nowrap items-center gap-3 px-4 py-3 rounded-xl border border-solid border-hero/10 cursor-pointer bg-white/40 hover:bg-white/80 group',
+					'flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl border border-solid border-hero/10 cursor-pointer bg-white/40 hover:bg-white/80 group',
 					{ 'bg-white/80 shadow-card-soft': selected },
 					{ 'bg-hero/10 border-none hover:bg-white/40 shadow-none': disabled },
 					{ 'bg-gradients-graph-cards': background === 'gradient' },
@@ -59,11 +46,20 @@ export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 				{...props}
 			>
 				{icon}
-				<div className="flex flex-col gap-1 overflow-hidden">
+				<div className="flex flex-col gap-1 overflow-hidden items-start">
 					<Text variant="pBody" weight="semibold" color="steel-darker" truncate>
-						{account?.nickname || name || formatAddress(address)}
+						{accountName}
 					</Text>
-					<AddressLink address={address} />
+					<button
+						className="appearance-none outline-0 bg-transparent border-0 p-0 cursor-pointer text-steel-dark hover:text-steel-darker"
+						onClick={copyAddress}
+					>
+						<Text variant="subtitle" weight="semibold" truncate>
+							{formatAddress(account.address)}
+						</Text>
+					</button>
+					{/* TODO: replacing the link to Explorer with copy to clipboard for now - remove or restore this if needed */}
+					{/* <AddressLink address={address} /> */}
 				</div>
 				{after}
 			</div>

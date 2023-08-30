@@ -15,6 +15,7 @@ export type AccountItemProps = {
 	onAccountSelected: (account: SerializedUIAccount) => void;
 };
 
+/** @deprecated - use AccountListItem from the `accounts` folder **/
 export function AccountListItem({ account, onAccountSelected }: AccountItemProps) {
 	const { address, type, selected } = account;
 	const copy = useCopyToClipboard(address, {

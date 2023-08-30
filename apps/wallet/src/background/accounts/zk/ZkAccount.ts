@@ -129,7 +129,7 @@ export class ZkAccount
 			publicKey: null,
 			lastUnlockedOn: null,
 			selected: false,
-			nickname: claims.email || '',
+			nickname: claims.email || null,
 		};
 	}
 

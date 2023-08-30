@@ -62,7 +62,7 @@ export class MnemonicAccount
 			publicKey: keyPair.getPublicKey().toBase64(),
 			lastUnlockedOn: null,
 			selected: false,
-			nickname: '',
+			nickname: null,
 		};
 	}
 

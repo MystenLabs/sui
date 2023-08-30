@@ -35,9 +35,8 @@ export function AccountsList() {
 			await backgroundClient.selectAccount(accountID);
 		}
 	};
-	if (!accounts || !activeAccount) {
-		return null;
-	}
+	if (!accounts || !activeAccount) return null;
+
 	return (
 		<div className="bg-gradients-graph-cards flex flex-col rounded-xl p-4 gap-5 border border-solid border-hero/10 w-full">
 			<Heading variant="heading5" weight="semibold" color="steel-darker">
@@ -54,7 +53,7 @@ export function AccountsList() {
 					<Collapsible title="Current" defaultOpen shade="darker">
 						<ToggleGroup.Item asChild value={activeAccount.id}>
 							<div>
-								<AccountListItem address={activeAccount.address} />
+								<AccountListItem account={activeAccount} />
 							</div>
 						</ToggleGroup.Item>
 					</Collapsible>
@@ -66,7 +65,7 @@ export function AccountsList() {
 									return (
 										<ToggleGroup.Item asChild key={account.id} value={account.id}>
 											<div>
-												<AccountListItem address={account.address} />
+												<AccountListItem account={account} />
 											</div>
 										</ToggleGroup.Item>
 									);

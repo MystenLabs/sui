@@ -111,7 +111,7 @@ export abstract class Account<
 		accountsEvents.emit('accountStatusChanged', { accountID: this.id });
 	}
 
-	public async setNickname(nickname: string) {
+	public async setNickname(nickname: string | null) {
 		await (await getDB()).accounts.update(this.id, { nickname });
 		accountsEvents.emit('accountStatusChanged', { accountID: this.id });
 	}
