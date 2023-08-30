@@ -707,49 +707,26 @@ impl<'backing> TemporaryStore<'backing> {
     /// `SuiGasStatus` `storage_rebate` and `storage_gas_units` track the transaction
     /// overall storage rebate and cost.
     pub(crate) fn collect_storage_and_rebate(&mut self, gas_charger: &mut GasCharger) {
-        let mut objects_to_update = vec![];
-        for (object_id, (object, write_kind)) in &mut self.written {
-            // get the object storage_rebate in input for mutated objects
-            let old_storage_rebate = match write_kind {
+        // Use two loops because we cannot mut iterate written while calling get_input_storage_rebate.
+        let old_storage_rebates: Vec<_> = self
+            .written
+            .iter()
+            .map(|(object_id, (object, write_kind))| match write_kind {
                 WriteKind::Create | WriteKind::Unwrap => 0,
-                WriteKind::Mutate => {
-                    if let Some(old_obj) = self.input_objects.get(object_id) {
-                        old_obj.storage_rebate
-                    } else {
-                        // else, this is a dynamic field, not an input object
-                        let expected_version = object.version();
-                        if let Ok(Some(old_obj)) =
-                            self.store.get_object_by_key(object_id, expected_version)
-                        {
-                            old_obj.storage_rebate
-                        } else {
-                            // not a lot we can do safely and under this condition everything is broken
-                            panic!(
-                                "Looking up storage rebate of mutated object {:?} should not fail",
-                                (object_id, expected_version)
-                            );
-                        }
-                    }
-                }
-            };
+                WriteKind::Mutate => self.get_input_storage_rebate(object_id, object.version()),
+            })
+            .collect();
+        for ((object, _), old_storage_rebate) in self.written.values_mut().zip(old_storage_rebates)
+        {
             // new object size
             let new_object_size = object.object_size_for_gas_metering();
             // track changes and compute the new object `storage_rebate`
             let new_storage_rebate =
                 gas_charger.track_storage_mutation(new_object_size, old_storage_rebate);
             object.storage_rebate = new_storage_rebate;
-            if !object.is_immutable() {
-                objects_to_update.push((object.clone(), *write_kind));
-            }
         }
 
         self.collect_rebate(gas_charger);
-
-        // Write all objects at the end only if all previous gas charges succeeded.
-        // This avoids polluting the temporary store state if this function failed.
-        for (object, write_kind) in objects_to_update {
-            self.write_object(object, write_kind);
-        }
     }
 
     pub(crate) fn collect_rebate(&self, gas_charger: &mut GasCharger) {
