@@ -53,6 +53,7 @@
 -  [Function `bids`](#0xdee9_clob_v2_bids)
 -  [Function `open_orders`](#0xdee9_clob_v2_open_orders)
 -  [Function `order_id`](#0xdee9_clob_v2_order_id)
+-  [Function `tick_level`](#0xdee9_clob_v2_tick_level)
 -  [Function `expire_timestamp`](#0xdee9_clob_v2_expire_timestamp)
 
 
@@ -3320,6 +3321,30 @@ internal func to retrive single depth of a tick price
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_order_id">order_id</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>): u64 {
     order.order_id
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_clob_v2_tick_level"></a>
+
+## Function `tick_level`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_tick_level">tick_level</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_tick_level">tick_level</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>): u64 {
+    order.price
 }
 </code></pre>
 

@@ -189,7 +189,7 @@ module deepbook::clob_v2 {
     }
     // <<<<<<<<<<<<<<<<<<<<<<<< Events <<<<<<<<<<<<<<<<<<<<<<<<
 
-    struct Order has copy, store, drop {
+    struct Order has store, drop {
         // For each pool, order id is incremental and unique for each opening order.
         // Orders that are submitted earlier has lower order ids.
         // 64 bits are sufficient for order ids whereas 32 bits are not.
@@ -1749,6 +1749,20 @@ module deepbook::clob_v2 {
 
     public(friend) fun expire_timestamp(order: &Order): u64 {
         order.expire_timestamp
+    }
+
+    public(friend) fun clone_order(order: &Order): Order {
+        Order {
+            order_id: order.order_id,
+            client_order_id: order.client_order_id,
+            price: order.price,
+            original_quantity: order.original_quantity,
+            quantity: order.quantity,
+            is_bid: order.is_bid,
+            owner: order.owner,
+            expire_timestamp: order.expire_timestamp,
+            self_matching_prevention: order.self_matching_prevention
+        }
     }
 
     // Note that open orders and quotes can be directly accessed by loading in the entire Pool.

@@ -5,10 +5,11 @@ module deepbook::order_query {
     use std::option;
     use std::option::{Option, some, none};
     use std::vector;
+    use deepbook::critbit::CritbitTree;
     use sui::linked_table;
     use deepbook::critbit;
     use deepbook::clob_v2;
-    use deepbook::clob_v2::{Order, Pool};
+    use deepbook::clob_v2::{Order, Pool, TickLevel};
 
     const PAGE_LIMIT: u64 = 100;
 
@@ -38,7 +39,8 @@ module deepbook::order_query {
         // i.e., orders added later than this one
         max_id: Option<u64>,
     ): OrderPage {
-        let orders = iter_bids_internal(pool, start_tick_level, start_order_id, min_expire_timestamp, max_id);
+        let bids = clob_v2::bids(pool);
+        let orders = iter_ticks_internal(bids, start_tick_level, start_order_id, min_expire_timestamp, max_id);
         let (orders, has_next_page, next_tick_level, next_order_id) = if (vector::length(&orders) > PAGE_LIMIT) {
             let last_order = vector::pop_back(&mut orders);
             (orders, true, some(clob_v2::tick_level(&last_order)), some(clob_v2::order_id(&last_order)))
@@ -54,7 +56,7 @@ module deepbook::order_query {
         }
     }
 
-    fun iter_bids_internal<T1, T2>(
+    public fun iter_asks<T1, T2>(
         pool: &Pool<T1, T2>,
         // tick level to start from
         start_tick_level: Option<u64>,
@@ -66,25 +68,54 @@ module deepbook::order_query {
         // do not show orders with an ID larger than max_id--
         // i.e., orders added later than this one
         max_id: Option<u64>,
+    ): OrderPage {
+        let asks = clob_v2::asks(pool);
+        let orders = iter_ticks_internal(asks, start_tick_level, start_order_id, min_expire_timestamp, max_id);
+        let (orders, has_next_page, next_tick_level, next_order_id) = if (vector::length(&orders) > PAGE_LIMIT) {
+            let last_order = vector::pop_back(&mut orders);
+            (orders, true, some(clob_v2::tick_level(&last_order)), some(clob_v2::order_id(&last_order)))
+        } else {
+            (orders, false, none(), none())
+        };
+
+        OrderPage {
+            orders,
+            has_next_page,
+            next_tick_level,
+            next_order_id
+        }
+    }
+
+    fun iter_ticks_internal(
+        ticks: &CritbitTree<TickLevel>,
+        // tick level to start from
+        start_tick_level: Option<u64>,
+        // order id within that tick level to start from
+        start_order_id: Option<u64>,
+        // if provided, do not include orders with an expire timestamp less than the provided value (expired order),
+        // value is in microseconds
+        min_expire_timestamp: Option<u64>,
+        // do not show orders with an ID larger than max_id--
+        // i.e., orders added later than this one
+        max_id: Option<u64>,
     ): vector<Order> {
-        let bids = clob_v2::bids(pool);
         let tick_level_key = if (option::is_some(&start_tick_level)) {
             option::destroy_some(start_tick_level)
         } else {
-            let (key, _) = critbit::min_leaf(bids);
+            let (key, _) = critbit::min_leaf(ticks);
             key
         };
 
         let orders = vector[];
 
         while (tick_level_key != 0 && vector::length(&orders) < PAGE_LIMIT + 1) {
-            let tick_level = critbit::borrow_leaf_by_key(bids, tick_level_key);
+            let tick_level = critbit::borrow_leaf_by_key(ticks, tick_level_key);
             let open_orders = clob_v2::open_orders(tick_level);
 
             let next_order_key = if (option::is_some(&start_order_id)) {
                 let key = option::destroy_some(start_order_id);
                 if (!linked_table::contains(open_orders, key)) {
-                    let (next_leaf, _) = critbit::next_leaf(bids, tick_level_key);
+                    let (next_leaf, _) = critbit::next_leaf(ticks, tick_level_key);
                     tick_level_key = next_leaf;
                     continue
                 };
@@ -108,15 +139,14 @@ module deepbook::order_query {
                 // if expire timestamp is set, and if the order is expired, we skip it.
                 if (option::is_none(&min_expire_timestamp) ||
                     clob_v2::expire_timestamp(order) > option::destroy_some(min_expire_timestamp)) {
-                    vector::push_back(&mut orders, *order);
+                    vector::push_back(&mut orders, clob_v2::clone_order(order));
                 };
             };
-            let (next_leaf, _) = critbit::next_leaf(bids, tick_level_key);
+            let (next_leaf, _) = critbit::next_leaf(ticks, tick_level_key);
             tick_level_key = next_leaf;
         };
         orders
     }
-
 
     public fun orders(page: &OrderPage): &vector<Order> {
         &page.orders
