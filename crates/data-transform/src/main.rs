@@ -209,7 +209,8 @@ fn main() {
 
     println!("start id = {}", start_id);
 
-    let mut end_id: i64 = start_id +1;
+    //let mut end_id: i64 = start_id +1;
+    let end_id: i64 = 800000000;
 
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let connection = &mut establish_connection();
@@ -239,10 +240,12 @@ fn main() {
                 let text = String::from_utf8_lossy(&event.event_bcs);
                 debug!("bcs in text = {:#?}", text);
 
+                /*
                 if event.package != "0x000000000000000000000000000000000000000000000000000000000000dee9" {
                     println!("not deepbook skipping...");
                     continue;
                 }
+                */
 
                 // check for the previous record in events_json
                 let eventj = events_json
@@ -267,10 +270,11 @@ fn main() {
 
                 // JSON parsing starts here
                 let type_ = parse_sui_struct_tag(&event.event_type).expect("cannot load StructTag");
-                let module_id = ModuleId::new(type_.address, type_.module.clone());
-                println!("module id = {}", module_id);
 
-                let newmodule = module_cache.get_module_by_id(&module_id).expect("Module {module_id} must load").unwrap();
+                //let module_id = ModuleId::new(type_.address, type_.module.clone());
+                //println!("module id = {}", module_id);
+
+                //let newmodule = module_cache.get_module_by_id(&module_id).expect("Module {module_id} must load").unwrap();
                 //println!("new module = {newmodule:#?}");
 
                 /*
@@ -312,18 +316,18 @@ fn main() {
                             }|
                             Err(e) => {
                                 println!("error in deserialize:{}", e);
-                                exit(0);
+                                continue;
                             }
                         }
                     }
                     Err(err) => {
                         println!("error in get_layout: {}", err);
-                        exit(0);
+                        continue;
                     }
                 }
             }
             Ok(None) => {
-                println!("Unable to find event {}", target_id);
+                println!("error unable to find event {}", target_id);
                 exit(0);
             }
             Err(_) => {
