@@ -15,6 +15,7 @@ const imageStyles = cva(['z-0 flex-shrink-0 relative'], {
 			small: 'h-16 w-16',
 			medium: 'md:h-31.5 md:w-31.5 h-16 w-16',
 			large: 'h-50 w-50',
+			xl: 'h-90 w-90',
 		},
 		disablePreview: {
 			true: '',

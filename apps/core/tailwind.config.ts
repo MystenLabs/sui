@@ -180,6 +180,7 @@ export default {
 			height: {
 				12.5: '3.125rem',
 				31.5: '7.5rem',
+				90: '22.5rem',
 				120: '30rem',
 				300: '75rem',
 				coinsAndAssetsContainer: '31.25rem',
@@ -191,6 +192,7 @@ export default {
 			width: {
 				12.5: '3.125rem',
 				31.5: '7.5rem',
+				90: '22.5rem',
 				walletLogo: '4.813rem',
 			},
 			maxWidth: {

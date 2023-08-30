@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetObject } from '@mysten/core';
+import { ObjectDetailsHeader } from '@mysten/icons';
 import { LoadingIndicator } from '@mysten/ui';
 import { useParams } from 'react-router-dom';
 
@@ -10,10 +11,17 @@ import PkgView from './views/PkgView';
 import { TokenView } from './views/TokenView';
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import { PageLayout } from '~/components/Layout/PageLayout';
+import { ObjectView } from '~/pages/object-result/views/ObjectView';
 import { Banner } from '~/ui/Banner';
 import { PageHeader } from '~/ui/PageHeader';
 
 const PACKAGE_TYPE_NAME = 'Move Package';
+
+function ObjectPageHeader({ title }: { title: string }) {
+	return (
+		<PageHeader type="Object" title={title} before={<ObjectDetailsHeader className="h-6 w-6" />} />
+	);
+}
 
 function Fail({ objID }: { objID: string | undefined }) {
 	return (
@@ -57,6 +65,24 @@ export function ObjectResult() {
 
 	return (
 		<PageLayout
+			gradient={
+				isPackage
+					? undefined
+					: {
+							size: 'md',
+							content: (
+								<div>
+									<ObjectPageHeader title={resp.id} />
+
+									<ErrorBoundary>
+										<div className="mt-5">
+											<ObjectView data={data} />
+										</div>
+									</ErrorBoundary>
+								</div>
+							),
+					  }
+			}
 			content={
 				<div className="mb-10">
 					<PageHeader type={isPackage ? 'Package' : 'Object'} title={resp.id} />
