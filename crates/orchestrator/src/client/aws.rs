@@ -7,13 +7,15 @@ use std::{
 };
 
 use aws_config::profile::profile_file::{ProfileFileKind, ProfileFiles};
+use aws_sdk_ec2::primitives::Blob;
 use aws_sdk_ec2::{
-    model::{
-        block_device_mapping, ebs_block_device, filter, tag, tag_specification,
-        EphemeralNvmeSupport, ResourceType, VolumeType,
+    config::Region,
+    types::{
+        BlockDeviceMapping, EbsBlockDevice, EphemeralNvmeSupport, Filter, ResourceType, Tag,
+        TagSpecification, VolumeType,
     },
-    types::{Blob, SdkError},
 };
+use aws_smithy_http::result::SdkError;
 use serde::Serialize;
 
 use crate::{
@@ -24,11 +26,12 @@ use crate::{
 use super::{Instance, ServerProviderClient};
 
 // Make a request error from an AWS error message.
-impl<T> From<SdkError<T>> for CloudProviderError
+impl<T> From<SdkError<T, aws_smithy_runtime_api::client::orchestrator::HttpResponse>>
+    for CloudProviderError
 where
     T: Debug + std::error::Error + Send + Sync + 'static,
 {
-    fn from(e: SdkError<T>) -> Self {
+    fn from(e: SdkError<T, aws_smithy_runtime_api::client::orchestrator::HttpResponse>) -> Self {
         Self::RequestError(format!("{:?}", e.into_source()))
     }
 }
@@ -43,7 +46,7 @@ pub struct AwsClient {
 
 impl Display for AwsClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "AWS EC2 client v{}", aws_sdk_ec2::PKG_VERSION)
+        write!(f, "AWS EC2 client v{}", aws_sdk_ec2::meta::PKG_VERSION)
     }
 }
 
@@ -61,7 +64,7 @@ impl AwsClient {
         let mut clients = HashMap::new();
         for region in settings.regions.clone() {
             let sdk_config = aws_config::from_env()
-                .region(aws_sdk_ec2::Region::new(region.clone()))
+                .region(Region::new(region.clone()))
                 .profile_files(profile_files.clone())
                 .load()
                 .await;
@@ -74,7 +77,10 @@ impl AwsClient {
 
     /// Parse an AWS response and ignore errors if they mean a request is a duplicate.
     fn check_but_ignore_duplicates<T, E>(
-        response: Result<T, SdkError<E>>,
+        response: Result<
+            T,
+            SdkError<E, aws_smithy_runtime_api::client::orchestrator::HttpResponse>,
+        >,
     ) -> CloudProviderResult<()>
     where
         E: Debug + std::error::Error + Send + Sync + 'static,
@@ -92,7 +98,7 @@ impl AwsClient {
     fn make_instance(
         &self,
         region: String,
-        aws_instance: &aws_sdk_ec2::model::Instance,
+        aws_instance: &aws_sdk_ec2::types::Instance,
     ) -> Instance {
         Instance {
             id: aws_instance
@@ -128,7 +134,7 @@ impl AwsClient {
     async fn find_image_id(&self, client: &aws_sdk_ec2::Client) -> CloudProviderResult<String> {
         // Query all images that match the description.
         let request = client.describe_images().filters(
-            filter::Builder::default()
+            Filter::builder()
                 .name("description")
                 .values(Self::OS_IMAGE)
                 .build(),
@@ -229,7 +235,7 @@ impl ServerProviderClient for AwsClient {
     const USERNAME: &'static str = "ubuntu";
 
     async fn list_instances(&self) -> CloudProviderResult<Vec<Instance>> {
-        let filter = filter::Builder::default()
+        let filter = Filter::builder()
             .name("tag:Name")
             .values(self.settings.testbed_id.clone())
             .build();
@@ -315,20 +321,15 @@ impl ServerProviderClient for AwsClient {
         let image_id = self.find_image_id(client).await?;
 
         // Create a new instance.
-        let tags = tag_specification::Builder::default()
+        let tags = TagSpecification::builder()
             .resource_type(ResourceType::Instance)
-            .tags(
-                tag::Builder::default()
-                    .key("Name")
-                    .value(testbed_id)
-                    .build(),
-            )
+            .tags(Tag::builder().key("Name").value(testbed_id).build())
             .build();
 
-        let storage = block_device_mapping::Builder::default()
+        let storage = BlockDeviceMapping::builder()
             .device_name("/dev/sda1")
             .ebs(
-                ebs_block_device::Builder::default()
+                EbsBlockDevice::builder()
                     .delete_on_termination(true)
                     .volume_size(500)
                     .volume_type(VolumeType::Gp2)
