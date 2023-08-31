@@ -48,11 +48,11 @@ function FooterLink({ children, to, ...props }: ButtonOrLinkProps) {
 function AccountFooter({ accountID }: { accountID: string }) {
 	return (
 		<div className="flex flex-shrink-0 w-full">
-			<div className="flex gap-3">
+			<div className="flex gap-3 items-center">
 				<div className="w-4" />
 				<NicknameDialog accountID={accountID} trigger={<FooterLink>Edit Nickname</FooterLink>} />
 				<FooterLink to="/remove">
-					<div className="pt-[1px]">Remove</div>
+					<div>Remove</div>
 				</FooterLink>
 			</div>
 		</div>
