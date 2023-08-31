@@ -171,10 +171,17 @@ impl From<Error> for RpcError {
                         })
                         .collect();
 
-                    assert!(
-                        !new_errors.is_empty(),
-                        "NonRecoverableTransactionError should have at least one non-retryable error"
-                    );
+                    if new_errors.is_empty() {
+                        tracing::error!("NonRecoverableTransactionError should have at least one non-retryable error");
+                    }
+
+                    // TODO(wlmyng) verify that this is a valid condition to assert since we've
+                    // seen this trigger out in the wild
+                    //
+                    // assert!(
+                    //     !new_errors.is_empty(),
+                    //     "NonRecoverableTransactionError should have at least one non-retryable error"
+                    // );
 
                     let error_list = new_errors.join(", ");
                     let error_msg = format!("Transaction execution failed due to issues with transaction inputs, please review the errors and try again: {}.", error_list);
@@ -395,40 +402,43 @@ mod tests {
             expected_message.assert_eq(error_object.message());
         }
 
-        #[test]
-        #[should_panic(
-            expected = "NonRecoverableTransactionError should have at least one non-retryable error"
-        )]
-        fn test_non_recoverable_transaction_error_with_transient_errors() {
-            let quorum_driver_error = QuorumDriverError::NonRecoverableTransactionError {
-                errors: vec![
-                    (
-                        SuiError::UserInputError {
-                            error: UserInputError::ObjectNotFound {
-                                object_id: test_object_ref().0,
-                                version: None,
-                            },
-                        },
-                        0,
-                        vec![],
-                    ),
-                    (
-                        SuiError::RpcError("Hello".to_string(), "Testing".to_string()),
-                        0,
-                        vec![],
-                    ),
-                ],
-            };
+        // TODO(wlmyng) verify that this is a valid condition to assert since we've
+        // seen this trigger out in the wild
+        //
+        // #[test]
+        // #[should_panic(
+        //     expected = "NonRecoverableTransactionError should have at least one non-retryable error"
+        // )]
+        // fn test_non_recoverable_transaction_error_with_transient_errors() {
+        //     let quorum_driver_error = QuorumDriverError::NonRecoverableTransactionError {
+        //         errors: vec![
+        //             (
+        //                 SuiError::UserInputError {
+        //                     error: UserInputError::ObjectNotFound {
+        //                         object_id: test_object_ref().0,
+        //                         version: None,
+        //                     },
+        //                 },
+        //                 0,
+        //                 vec![],
+        //             ),
+        //             (
+        //                 SuiError::RpcError("Hello".to_string(), "Testing".to_string()),
+        //                 0,
+        //                 vec![],
+        //             ),
+        //         ],
+        //     };
 
-            let rpc_error: RpcError = Error::QuorumDriverError(quorum_driver_error).into();
+        //     let rpc_error: RpcError = Error::QuorumDriverError(quorum_driver_error).into();
 
-            let error_object: ErrorObjectOwned = rpc_error.into();
-            let expected_code = expect!["-32001"];
-            expected_code.assert_eq(&error_object.code().to_string());
-            let expected_message =
-                expect!["Transaction execution failed due to transient errors, please try again."];
-            expected_message.assert_eq(error_object.message());
-        }
+        //     let error_object: ErrorObjectOwned = rpc_error.into();
+        //     let expected_code = expect!["-32001"];
+        //     expected_code.assert_eq(&error_object.code().to_string());
+        //     let expected_message =
+        //         expect!["Transaction execution failed due to transient errors, please try again."];
+        //     expected_message.assert_eq(error_object.message());
+        // }
 
         #[test]
         fn test_quorum_driver_internal_error() {
