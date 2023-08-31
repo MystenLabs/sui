@@ -857,7 +857,7 @@ describe('Multisig address creation:', () => {
 		const pubkeyWeightPairs: PubkeyWeightPair[] = [];
 
 		expect(() => toMultiSigAddress(pubkeyWeightPairs, 10)).toThrow(
-			new Error('Min number of signers in a multisig is 2'),
+			new Error('Min number of signers in a multisig is 1'),
 		);
 
 		expect(() =>
