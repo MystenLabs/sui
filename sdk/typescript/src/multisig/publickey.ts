@@ -87,10 +87,6 @@ export class MultiSigPublicKey extends PublicKey {
 			throw new Error('Invalid threshold');
 		}
 
-		if (this.multisigPublicKey.threshold < 1) {
-			throw new Error('Invalid threshold');
-		}
-
 		const seenPublicKeys = new Set<string>();
 
 		this.publicKeys = this.multisigPublicKey.pk_map.map(({ pubKey, weight }) => {
@@ -98,7 +94,7 @@ export class MultiSigPublicKey extends PublicKey {
 			const publicKeyStr = Uint8Array.from(bytes).toString();
 
 			if (seenPublicKeys.has(publicKeyStr)) {
-				throw new Error(`Duplicate publicKey detected: ${publicKeyStr}`);
+				throw new Error(`Multisig does not support duplicate public keys`);
 			}
 			seenPublicKeys.add(publicKeyStr);
 
