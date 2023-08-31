@@ -206,8 +206,8 @@ describe('Publickey', () => {
 		const multisig = multiSigPublicKey.combinePartialSignatures([sig1.signature, sig2.signature]);
 		const rawBytes = fromB64(multisig).slice(134);
 
+		expect(multiSigPublicKey.toRawBytes()).toEqual(rawBytes);
 		expect(multiSigPublicKey.toRawBytes())
-			.toEqual(rawBytes)
 			.toEqual(
 				new Uint8Array([
 					3, 0, 90, 226, 32, 180, 178, 246, 94, 151, 124, 18, 237, 230, 21, 121, 255, 81, 112, 182,
@@ -262,8 +262,8 @@ describe('Publickey', () => {
 			bytesToHex(blake2b(tmp.slice(0, i), { dkLen: 32 })),
 		);
 
+		expect(multiSigPublicKey.toSuiAddress()).toEqual(multisigSuiAddress);
 		expect(multiSigPublicKey.toSuiAddress())
-			.toEqual(multisigSuiAddress)
 			.toEqual('0x8ee027fe556a3f6c0a23df64f090d2429fec0bb21f55594783476e81de2dec27');
 	});
 
@@ -277,7 +277,8 @@ describe('Publickey', () => {
 			],
 		});
 
-		expect(multiSigPublicKey.flag()).toEqual(3).toEqual(SIGNATURE_SCHEME_TO_FLAG['MultiSig']);
+		expect(multiSigPublicKey.flag()).toEqual(3);
+		expect(multiSigPublicKey.flag()).toEqual(SIGNATURE_SCHEME_TO_FLAG['MultiSig']);
 	});
 
 	it('`verify()` should verify the signature correctly', async () => {
