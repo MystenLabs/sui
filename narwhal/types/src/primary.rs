@@ -1160,12 +1160,13 @@ impl CertificateV1 {
             DagError::CertificateRequiresQuorum
         );
 
+        // TEST(arun): Temporarily disable sig verification to see the impact on catchup
         // Verify the signatures
-        let certificate_digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(self.digest());
-        AggregateSignature::try_from(&self.aggregated_signature)
-            .map_err(|_| DagError::InvalidSignature)?
-            .verify_secure(&to_intent_message(certificate_digest), &pks[..])
-            .map_err(|_| DagError::InvalidSignature)?;
+        // let certificate_digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(self.digest());
+        // AggregateSignature::try_from(&self.aggregated_signature)
+        //     .map_err(|_| DagError::InvalidSignature)?
+        //     .verify_secure(&to_intent_message(certificate_digest), &pks[..])
+        //     .map_err(|_| DagError::InvalidSignature)?;
 
         Ok(())
     }
