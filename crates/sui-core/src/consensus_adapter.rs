@@ -651,6 +651,7 @@ impl ConsensusAdapter {
             ConsensusTransactionKind::EndOfPublish(_)
                 | ConsensusTransactionKind::CapabilityNotification(_)
         ) {
+            let transaction_key = transaction_key.clone();
             Some(CancelOnDrop(spawn_monitored_task!(async {
                 let mut i = 0u64;
                 loop {
@@ -658,14 +659,17 @@ impl ConsensusAdapter {
                     const WARN_DELAY_S: u64 = 30;
                     tokio::time::sleep(Duration::from_secs(WARN_DELAY_S)).await;
                     let total_wait = i * WARN_DELAY_S;
-                    warn!("Still waiting {total_wait} seconds for transaction {transaction_key:?} to commit in narwhal");
+                    warn!(
+                        "Still waiting {} seconds for transaction {:?} to commit in narwhal",
+                        total_wait, transaction_key
+                    );
                 }
             })))
         } else {
             None
         };
         if let Some(processed_waiter) = processed_waiter {
-            debug!("Submitting {transaction_key:?} to consensus");
+            debug!("Submitting {:?} to consensus", transaction_key);
 
             // populate the position only when this authority submits the transaction
             // to consensus

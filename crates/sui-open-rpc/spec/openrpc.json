@@ -1358,6 +1358,7 @@
                 "disable_invariant_violation_check_in_swap_loc": false,
                 "disallow_adding_abilities_on_upgrade": false,
                 "disallow_change_struct_type_params_on_upgrade": false,
+                "enable_jwk_consensus_updates": false,
                 "loaded_child_object_format": false,
                 "loaded_child_objects_fixed": true,
                 "missing_type_is_compatibility_error": true,
@@ -1671,6 +1672,7 @@
                 "max_input_objects": {
                   "u64": "2048"
                 },
+                "max_jwk_votes_per_validator_per_epoch": null,
                 "max_loop_depth": {
                   "u64": "5"
                 },
@@ -7986,6 +7988,25 @@
           }
         }
       },
+      "SuiActiveJwk": {
+        "type": "object",
+        "required": [
+          "epoch",
+          "jwk",
+          "jwk_id"
+        ],
+        "properties": {
+          "epoch": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          },
+          "jwk": {
+            "$ref": "#/components/schemas/SuiJWK"
+          },
+          "jwk_id": {
+            "$ref": "#/components/schemas/SuiJwkId"
+          }
+        }
+      },
       "SuiAddress": {
         "$ref": "#/components/schemas/Hex"
       },
@@ -8254,7 +8275,45 @@
           }
         }
       },
+      "SuiJWK": {
+        "type": "object",
+        "required": [
+          "alg",
+          "e",
+          "kty",
+          "n"
+        ],
+        "properties": {
+          "alg": {
+            "type": "string"
+          },
+          "e": {
+            "type": "string"
+          },
+          "kty": {
+            "type": "string"
+          },
+          "n": {
+            "type": "string"
+          }
+        }
+      },
       "SuiJsonValue": {},
+      "SuiJwkId": {
+        "type": "object",
+        "required": [
+          "iss",
+          "kid"
+        ],
+        "properties": {
+          "iss": {
+            "type": "string"
+          },
+          "kid": {
+            "type": "string"
+          }
+        }
+      },
       "SuiMoveAbility": {
         "type": "string",
         "enum": [
@@ -9928,6 +9987,36 @@
                 "items": {
                   "$ref": "#/components/schemas/SuiTransaction"
                 }
+              }
+            }
+          },
+          {
+            "description": "An transaction which updates global authenticator state",
+            "type": "object",
+            "required": [
+              "epoch",
+              "kind",
+              "new_active_jwks",
+              "round"
+            ],
+            "properties": {
+              "epoch": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "AuthenticatorStateUpdate"
+                ]
+              },
+              "new_active_jwks": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SuiActiveJwk"
+                }
+              },
+              "round": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
               }
             }
           }

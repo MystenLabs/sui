@@ -17,6 +17,7 @@ Sui object identifiers
 -  [Function `id_from_address`](#0x2_object_id_from_address)
 -  [Function `sui_system_state`](#0x2_object_sui_system_state)
 -  [Function `clock`](#0x2_object_clock)
+-  [Function `authenticator_state`](#0x2_object_authenticator_state)
 -  [Function `uid_as_inner`](#0x2_object_uid_as_inner)
 -  [Function `uid_to_inner`](#0x2_object_uid_to_inner)
 -  [Function `uid_to_bytes`](#0x2_object_uid_to_bytes)
@@ -180,6 +181,16 @@ Sender is not @0x0 the system address.
 
 
 <pre><code><b>const</b> <a href="object.md#0x2_object_ENotSystemAddress">ENotSystemAddress</a>: u64 = 0;
+</code></pre>
+
+
+
+<a name="0x2_object_SUI_AUTHENTICATOR_STATE_ID"></a>
+
+The hardcoded ID for the singleton AuthenticatorState Object.
+
+
+<pre><code><b>const</b> <a href="object.md#0x2_object_SUI_AUTHENTICATOR_STATE_ID">SUI_AUTHENTICATOR_STATE_ID</a>: <b>address</b> = 7;
 </code></pre>
 
 
@@ -353,6 +364,34 @@ This should only be called once from <code><a href="clock.md#0x2_clock">clock</a
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clock.md#0x2_clock">clock</a>(): <a href="object.md#0x2_object_UID">UID</a> {
     <a href="object.md#0x2_object_UID">UID</a> {
         id: <a href="object.md#0x2_object_ID">ID</a> { bytes: <a href="object.md#0x2_object_SUI_CLOCK_OBJECT_ID">SUI_CLOCK_OBJECT_ID</a> }
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_object_authenticator_state"></a>
+
+## Function `authenticator_state`
+
+Create the <code><a href="object.md#0x2_object_UID">UID</a></code> for the singleton <code>AuthenticatorState</code> object.
+This should only be called once from <code><a href="authenticator_state.md#0x2_authenticator_state">authenticator_state</a></code>.
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state">authenticator_state</a>(): <a href="object.md#0x2_object_UID">object::UID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state">authenticator_state</a>(): <a href="object.md#0x2_object_UID">UID</a> {
+    <a href="object.md#0x2_object_UID">UID</a> {
+        id: <a href="object.md#0x2_object_ID">ID</a> { bytes: <a href="object.md#0x2_object_SUI_AUTHENTICATOR_STATE_ID">SUI_AUTHENTICATOR_STATE_ID</a> }
     }
 }
 </code></pre>

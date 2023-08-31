@@ -12,6 +12,13 @@ AccountAddress:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
+ActiveJwk:
+  STRUCT:
+    - jwk_id:
+        TYPENAME: JwkId
+    - jwk:
+        TYPENAME: JWK
+    - epoch: U64
 Argument:
   ENUM:
     0:
@@ -27,6 +34,13 @@ Argument:
         TUPLE:
           - U16
           - U16
+AuthenticatorStateUpdate:
+  STRUCT:
+    - epoch: U64
+    - round: U64
+    - new_active_jwks:
+        SEQ:
+          TYPENAME: ActiveJwk
 AuthorityPublicKeyBytes:
   NEWTYPESTRUCT: BYTES
 CallArg:
@@ -432,6 +446,16 @@ IntentMessage:
         TYPENAME: Intent
     - value:
         TYPENAME: TransactionData
+JWK:
+  STRUCT:
+    - kty: STR
+    - e: STR
+    - n: STR
+    - alg: STR
+JwkId:
+  STRUCT:
+    - iss: STR
+    - kid: STR
 ModuleId:
   STRUCT:
     - address:
@@ -846,6 +870,10 @@ TransactionKind:
       ConsensusCommitPrologue:
         NEWTYPE:
           TYPENAME: ConsensusCommitPrologue
+    4:
+      AuthenticatorStateUpdate:
+        NEWTYPE:
+          TYPENAME: AuthenticatorStateUpdate
 TypeArgumentError:
   ENUM:
     0:

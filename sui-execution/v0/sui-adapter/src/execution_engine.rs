@@ -437,6 +437,9 @@ mod checked {
                     pt,
                 )
             }
+            TransactionKind::AuthenticatorStateUpdate(_) => {
+                panic!("AuthenticatorStateUpdate should not exist in v0");
+            }
         }
     }
 
