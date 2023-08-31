@@ -10,7 +10,7 @@ import { isZkAccountSerializedUI } from '_src/background/accounts/zk/ZkAccount';
 import { type ZkProvider } from '_src/background/accounts/zk/providers';
 import { AccountIcon } from '_src/ui/app/components/accounts/AccountIcon';
 import { AccountItem } from '_src/ui/app/components/accounts/AccountItem';
-import { NicknameDialog } from '_src/ui/app/components/accounts/EditNickname';
+import { NicknameDialog } from '_src/ui/app/components/accounts/NicknameDialog';
 import { useCreateAccountsMutation } from '_src/ui/app/hooks/useCreateAccountMutation';
 import { Heading } from '_src/ui/app/shared/heading';
 import { Text } from '_src/ui/app/shared/text';
@@ -30,7 +30,7 @@ const providerToLabel: Record<ZkProvider, string> = {
 
 // todo: we probbaly have some duplication here with the various FooterLink / ButtonOrLink
 // components - we should look to add these to base components somewhere
-function FooterLink({ children, to, ...props }: ButtonOrLinkProps) {
+export function FooterLink({ children, to, ...props }: ButtonOrLinkProps) {
 	return (
 		<ButtonOrLink
 			className="text-hero-darkest/40 no-underline uppercase hover:text-hero outline-none border-none bg-transparent hover:cursor-pointer"
@@ -45,12 +45,12 @@ function FooterLink({ children, to, ...props }: ButtonOrLinkProps) {
 }
 
 // todo: this is slightly different than the account footer in the AccountsList - look to consolidate :(
-function AccountFooter({ openNicknameDialog }: { openNicknameDialog: () => void }) {
+function AccountFooter({ accountID }: { accountID: string }) {
 	return (
 		<div className="flex flex-shrink-0 w-full">
 			<div className="flex gap-3">
 				<div className="w-4" />
-				<FooterLink onClick={() => openNicknameDialog()}>Edit Nickname</FooterLink>
+				<NicknameDialog accountID={accountID} trigger={<FooterLink>Edit Nickname</FooterLink>} />
 				<FooterLink to="/remove">
 					<div className="pt-[1px]">Remove</div>
 				</FooterLink>
@@ -68,23 +68,8 @@ export function AccountGroup({
 	type: AccountType;
 	accountSource?: string;
 }) {
-	const [isNicknameDialogOpen, setIsNicknameDialogOpen] = useState(false);
-	const [clickedNickname, setClickedNickname] = useState<string>();
 	const createAccountMutation = useCreateAccountsMutation();
 	const showCreateNewButton = type === 'mnemonic-derived';
-
-	if (isNicknameDialogOpen && clickedNickname) {
-		return (
-			<NicknameDialog
-				accountID={clickedNickname}
-				open={isNicknameDialogOpen}
-				close={() => {
-					setClickedNickname('');
-					setIsNicknameDialogOpen(false);
-				}}
-			/>
-		);
-	}
 	return (
 		<CollapsiblePrimitive.Root defaultOpen={true} asChild>
 			<div className="flex flex-col gap-4 h-full w-full ">
@@ -133,14 +118,7 @@ export function AccountGroup({
 									background="gradient"
 									address={account.address}
 									icon={<AccountIcon account={account} />}
-									after={
-										<AccountFooter
-											openNicknameDialog={() => {
-												setIsNicknameDialogOpen(true);
-												setClickedNickname(account.id);
-											}}
-										/>
-									}
+									after={<AccountFooter accountID={account.id} />}
 								/>
 							);
 						})}

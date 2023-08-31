@@ -15,19 +15,21 @@ import {
 	DialogHeader,
 	DialogTitle,
 	DialogDescription,
+	DialogTrigger,
 } from '_src/ui/app/shared/Dialog';
+import { useState } from 'react';
 
 const formSchema = z.object({
 	nickname: z.string().trim(),
 });
 
 interface NicknameDialogProps {
-	open: boolean;
 	accountID: string;
-	close: () => void;
+	trigger: JSX.Element;
 }
 
-export function NicknameDialog({ open, accountID, close }: NicknameDialogProps) {
+export function NicknameDialog({ accountID, trigger }: NicknameDialogProps) {
+	const [open, setOpen] = useState(false);
 	const backgroundClient = useBackgroundClient();
 	const { data: accounts } = useAccounts();
 	const account = accounts?.find((account) => account.id === accountID);
@@ -51,7 +53,7 @@ export function NicknameDialog({ open, accountID, close }: NicknameDialogProps) 
 					id: accountID,
 					nickname: nickname || null,
 				});
-				close();
+				setOpen(false);
 			} catch (e) {
 				toast.error((e as Error).message || 'Failed to set nickname');
 			}
@@ -59,7 +61,8 @@ export function NicknameDialog({ open, accountID, close }: NicknameDialogProps) 
 	};
 
 	return (
-		<Dialog open={Boolean(open)}>
+		<Dialog open={open} onOpenChange={setOpen}>
+			<DialogTrigger asChild>{trigger}</DialogTrigger>
 			<DialogContent onPointerDownOutside={(e: Event) => e.preventDefault()}>
 				<DialogHeader>
 					<DialogTitle>Account Nickname</DialogTitle>
@@ -70,7 +73,7 @@ export function NicknameDialog({ open, accountID, close }: NicknameDialogProps) 
 				<Form className="flex flex-col gap-6 h-full" form={form} onSubmit={onSubmit}>
 					<TextField label="Personalize account with a nickname." {...register('nickname')} />
 					<div className="flex gap-2.5">
-						<Button variant="outline" size="tall" text="Cancel" onClick={close} />
+						<Button variant="outline" size="tall" text="Cancel" onClick={() => setOpen(false)} />
 						<Button
 							type="submit"
 							disabled={isSubmitting || !isValid}
