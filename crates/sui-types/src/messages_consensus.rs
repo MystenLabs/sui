@@ -268,7 +268,7 @@ fn test_jwk_compatibility() {
         kid: "def".to_string(),
     };
 
-    let expected_id_bytes = vec![1, 97, 1, 98, 1, 99, 1, 100];
+    let expected_id_bytes = vec![3, 97, 98, 99, 3, 100, 101, 102];
     let id_bcs = bcs::to_bytes(&id).unwrap();
     assert_eq!(id_bcs, expected_id_bytes);
 }
