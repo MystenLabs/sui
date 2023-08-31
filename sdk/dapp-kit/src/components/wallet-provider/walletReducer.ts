@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { WalletWithSuiFeatures, WalletAccount } from '@mysten/wallet-standard';
+import type { WalletWithSuiFeatures, WalletAccount, Wallet } from '@mysten/wallet-standard';
 import { assertUnreachable } from 'dapp-kit/src/utils/assertUnreachable';
 
 type WalletConnectedAction = {
@@ -25,11 +25,18 @@ type WalletPropertiesChangedAction = {
 	};
 };
 
-type WalletsChangedAction = {
-	type: 'wallets-changed';
+type WalletRegisteredAction = {
+	type: 'wallet-registered';
 	payload: {
-		wallets: WalletWithSuiFeatures[];
-		currentWallet: WalletWithSuiFeatures;
+		updatedWallets: WalletWithSuiFeatures[];
+	};
+};
+
+type WalletUnregisteredAction = {
+	type: 'wallet-unregistered';
+	payload: {
+		updatedWallets: WalletWithSuiFeatures[];
+		unregisteredWallet: Wallet;
 	};
 };
 
@@ -44,7 +51,8 @@ export type WalletAction =
 	| WalletConnectedAction
 	| WalletDisconnectedAction
 	| WalletPropertiesChangedAction
-	| WalletsChangedAction;
+	| WalletRegisteredAction
+	| WalletUnregisteredAction;
 
 export function walletReducer(
 	walletState: WalletState,
@@ -73,11 +81,24 @@ export function walletReducer(
 				currentAccount: payload.currentAccount,
 			};
 		}
-		case 'wallets-changed': {
+		case 'wallet-registered': {
 			return {
 				...walletState,
-				wallets: payload.wallets,
-				currentWallet: payload.currentWallet,
+				wallets: payload.updatedWallets,
+			};
+		}
+		case 'wallet-unregistered': {
+			if (walletState.currentWallet?.name === payload.unregisteredWallet.name) {
+				return {
+					...walletState,
+					currentWallet: null,
+					accounts: [],
+					currentAccount: null,
+				};
+			}
+			return {
+				...walletState,
+				wallets: payload.updatedWallets,
 			};
 		}
 		default:

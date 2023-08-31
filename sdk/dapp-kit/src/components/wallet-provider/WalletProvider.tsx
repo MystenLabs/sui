@@ -64,14 +64,24 @@ export function WalletProvider({
 		currentAccount: null,
 	});
 
-	useWalletsChanged(() => {
-		dispatch({
-			type: 'wallets-changed',
-			payload: {
-				wallets: sortWallets(walletsApi.get(), preferredWallets, requiredFeatures),
-				currentWallet: null, // fixme
-			},
-		});
+	useWalletsChanged({
+		onWalletRegistered() {
+			dispatch({
+				type: 'wallet-registered',
+				payload: {
+					updatedWallets: sortWallets(walletsApi.get(), preferredWallets, requiredFeatures),
+				},
+			});
+		},
+		onWalletUnregistered(wallet) {
+			dispatch({
+				type: 'wallet-unregistered',
+				payload: {
+					updatedWallets: sortWallets(walletsApi.get(), preferredWallets, requiredFeatures),
+					unregisteredWallet: wallet,
+				},
+			});
+		},
 	});
 
 	useUnsafeBurnerWallet(enableUnsafeBurner);
