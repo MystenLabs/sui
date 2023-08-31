@@ -6,6 +6,11 @@ import { useMutation } from '@tanstack/react-query';
 import type { StandardConnectInput, StandardConnectOutput } from '@mysten/wallet-standard';
 import { useWalletContext } from 'dapp-kit/src/components/wallet-provider/WalletProvider';
 import { WalletNotFoundError } from 'dapp-kit/src/errors/walletErrors';
+import { StorageAdapter } from 'dapp-kit/src/utils/storageAdapters';
+import {
+	getMostRecentWalletConnectionInfo,
+	setMostRecentWalletConnectionInfo,
+} from 'dapp-kit/src/components/wallet-provider/walletUtils';
 
 type ConnectWalletArgs = {
 	/** The name of the wallet as defined by the wallet standard to connect to. */
@@ -46,13 +51,27 @@ export function useConnectWallet({
 			}
 
 			const connectResult = await wallet.features['standard:connect'].connect(standardConnectInput);
-			dispatch({ type: 'wallet-connected', payload: wallet });
+			const { walletName: mostRecentWalletName, accountAddress: mostRecentAccountAddress } =
+				await getMostRecentWalletConnectionInfo(storageAdapter, storageKey);
 
-			try {
-				await storageAdapter.set(storageKey, `${wallet.name}-${0}`);
-			} catch {
-				/* ignore error */
-			}
+			// When connecting to a wallet, we want to connect to the most recently used wallet account if
+			// that information is present. This allows for a more intuitive connection experience!
+			const selectedAccount =
+				mostRecentWalletName === wallet.name
+					? connectResult.accounts.find((account) => account.address === mostRecentAccountAddress)
+					: connectResult.accounts[0];
+
+			dispatch({
+				type: 'wallet-connected',
+				payload: { wallet, selectedAccount: selectedAccount ?? null },
+			});
+
+			await setMostRecentWalletConnectionInfo({
+				storageAdapter,
+				storageKey,
+				walletName,
+				selectedAccount: selectedAccount?.address,
+			});
 
 			return connectResult;
 		},

@@ -7,7 +7,7 @@ import { localStorageAdapter } from '../../utils/storageAdapters.js';
 import type { StorageAdapter } from '../../utils/storageAdapters.js';
 import { getWallets } from '@mysten/wallet-standard';
 import { useUnsafeBurnerWallet } from '../../hooks/wallet/useUnsafeBurnerWallet.js';
-import { sortWallets } from './walletUtils.js';
+import { getMostRecentWalletConnectionInfo, sortWallets } from './walletUtils.js';
 import { useWalletPropertiesChanged } from 'dapp-kit/src/hooks/wallet/useWalletPropertiesChanged.js';
 import type { WalletState, WalletAction } from './walletReducer.js';
 import { walletReducer } from './walletReducer.js';
@@ -94,15 +94,10 @@ export function WalletProvider({
 		}
 
 		(async function autoConnectToWallet() {
-			try {
-				const lastWalletAccount = await storageAdapter.get(storageKey);
-				const [walletName, accountAddress] = lastWalletAccount?.split('-') ?? [];
-				if (walletName && accountAddress) {
-					// connectWallet({ silent: true });
-				}
-			} catch {
-				/* ignore error */
-			}
+			const mostRecentWalletInfo = await getMostRecentWalletConnectionInfo(
+				storageAdapter,
+				storageKey,
+			);
 		})();
 	}, [autoConnect, storageAdapter, storageKey, walletState.currentWallet]);
 

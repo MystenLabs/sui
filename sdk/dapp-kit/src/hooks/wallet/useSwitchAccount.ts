@@ -44,7 +44,7 @@ export function useSwitchAccount({
 			try {
 				await storageAdapter.set(storageKey, `${wallet.name}-${0}`);
 			} catch {
-				/* ignore error */
+				// Ignore error
 			}
 
 			return connectResult;

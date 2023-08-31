@@ -7,7 +7,6 @@ import { useEffect } from 'react';
 
 /**
  * Internal hook for easily handling the addition and removal of wallets.
- * @param onWalletsChanged
  */
 export function useWalletsChanged(onWalletsChanged: (wallet: Wallet) => void) {
 	useEffect(() => {

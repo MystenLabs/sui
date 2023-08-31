@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type WalletWithSuiFeatures, type WalletAccount } from '@mysten/wallet-standard';
+import type { WalletWithSuiFeatures, WalletAccount } from '@mysten/wallet-standard';
 import { assertUnreachable } from 'dapp-kit/src/utils/assertUnreachable';
 
 export type WalletState = {
@@ -12,7 +12,10 @@ export type WalletState = {
 };
 
 export type WalletAction =
-	| { type: 'wallet-connected'; payload: WalletWithSuiFeatures }
+	| {
+			type: 'wallet-connected';
+			payload: { wallet: WalletWithSuiFeatures; selectedAccount: WalletAccount | null };
+	  }
 	| { type: 'wallet-disconnected'; payload?: never }
 	| { type: 'wallet-properties-changed'; payload: { updatedAccounts: WalletAccount[] } }
 	| { type: 'wallets-changed'; payload: WalletWithSuiFeatures[] };
@@ -25,13 +28,13 @@ export function walletReducer(
 		case 'wallet-connected':
 			return {
 				...walletState,
-				currentWallet: payload,
-				accounts: payload.accounts,
-				currentAccount: payload.accounts[0] ?? null,
+				currentWallet: payload.wallet,
+				accounts: payload.wallet.accounts,
+				currentAccount: payload.selectedAccount,
 			};
 		case 'wallet-disconnected': {
 			return {
-				wallets: [],
+				...walletState,
 				currentWallet: null,
 				accounts: [],
 				currentAccount: null,
