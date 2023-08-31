@@ -29,7 +29,7 @@ export type SuiRpcMethods = {
 };
 
 export type UseSuiClientQueryOptions<T extends keyof SuiRpcMethods> = Omit<
-	UseQueryOptions<SuiRpcMethods[T]['result'], unknown, SuiRpcMethods[T]['result'], unknown[]>,
+	UseQueryOptions<SuiRpcMethods[T]['result'], Error, SuiRpcMethods[T]['result'], unknown[]>,
 	'queryFn'
 >;
 
@@ -41,12 +41,7 @@ export function useSuiClientQuery<T extends keyof SuiRpcMethods>(
 		method: T;
 		params: SuiRpcMethods[T]['params'];
 	},
-	{
-		queryKey,
-
-		enabled = !!params,
-		...options
-	}: UseSuiClientQueryOptions<T> = {},
+	{ queryKey, enabled = !!params, ...options }: UseSuiClientQueryOptions<T> = {},
 ) {
 	const suiContext = useSuiClientContext();
 

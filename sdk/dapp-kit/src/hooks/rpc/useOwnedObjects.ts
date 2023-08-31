@@ -12,13 +12,28 @@
 
 import type { GetOwnedObjectsParams } from '@mysten/sui.js/client';
 import type { UseSuiClientQueryOptions } from '../useSuiClientQuery.js';
+import type { UseSuiClientInfiniteQueryOptions } from '../useSuiClientInfiniteQuery.js';
 import { useSuiClientQuery } from '../useSuiClientQuery.js';
+import { useSuiClientInfiniteQuery } from '../useSuiClientInfiniteQuery.js';
 
 export function useOwnedObjects(
 	params: GetOwnedObjectsParams,
 	options?: UseSuiClientQueryOptions<'getOwnedObjects'>,
 ) {
 	return useSuiClientQuery(
+		{
+			method: 'getOwnedObjects',
+			params,
+		},
+		options,
+	);
+}
+
+export function useOwnedObjectsInfinite(
+	params: GetOwnedObjectsParams,
+	options?: UseSuiClientInfiniteQueryOptions<'getOwnedObjects'>,
+) {
+	return useSuiClientInfiniteQuery(
 		{
 			method: 'getOwnedObjects',
 			params,
