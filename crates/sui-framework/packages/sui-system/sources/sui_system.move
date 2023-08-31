@@ -51,11 +51,12 @@ module sui_system::sui_system {
     use sui::table::Table;
     use sui_system::validator::Validator;
     use sui_system::validator_cap::UnverifiedValidatorOperationCap;
-    use sui_system::sui_system_state_inner::{Self, SystemParameters, SuiSystemStateInnerV2};
+    use sui_system::sui_system_state_inner::{Self, SystemParameters, SuiSystemStateInnerV2, protocol_version};
     use sui_system::stake_subsidy::StakeSubsidy;
     use sui_system::staking_pool::PoolTokenExchangeRate;
     use std::option;
     use sui::dynamic_field;
+    use sui::authenticator_state;
 
     #[test_only] use sui::balance;
     #[test_only] use sui_system::validator_set::ValidatorSet;
@@ -76,6 +77,9 @@ module sui_system::sui_system {
 
     const ENotSystemAddress: u64 = 0;
     const EWrongInnerVersion: u64 = 1;
+
+    // First protocol version in which the AuthenticatorState system object is used.
+    const AuthenticatorStateFirstProtocolVersion: u64 = 23;
 
     // ==== functions that can only be called by genesis ====
 
@@ -555,6 +559,16 @@ module sui_system::sui_system {
         ctx: &mut TxContext,
     ) : Balance<SUI> {
         let self = load_system_state_mut(wrapper);
+
+        let previous_protocol_version = protocol_version(self);
+
+        // If we are moving from a version in which the AuthenticatorState object did not exist,
+        // to one where it does, create it!
+        if (previous_protocol_version < AuthenticatorStateFirstProtocolVersion
+            && next_protocol_version >= AuthenticatorStateFirstProtocolVersion) {
+            authenticator_state::create(ctx);
+        };
+
         // Validator will make a special system call with sender set as 0x0.
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
         let storage_rebate = sui_system_state_inner::advance_epoch(
