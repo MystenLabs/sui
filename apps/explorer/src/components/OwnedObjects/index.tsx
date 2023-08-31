@@ -126,65 +126,78 @@ export function OwnedObjects({ id }: { id: string }) {
 		isFetching,
 	);
 
+	const hasAssets = sortedDataByDisplayImages.length > 0;
+
 	if (isError) {
 		return <div className="pt-2 font-sans font-semibold text-issue-dark">Failed to load NFTs</div>;
 	}
 
 	return (
 		<div className={clsx('flex h-full overflow-hidden md:pl-10', !showPagination && 'pb-2')}>
-			<div className="flex h-full w-full flex-col gap-4">
+			<div className="relative flex h-full w-full flex-col gap-4">
 				<div className="flex w-full flex-col items-start gap-3 border-b border-gray-45 max-sm:pb-3 sm:h-14 sm:min-h-14 sm:flex-row sm:items-center">
 					<Heading color="steel-darker" variant="heading4/semibold">
 						Assets
 					</Heading>
 
-					<div className="flex w-full flex-row-reverse justify-between sm:flex-row">
-						<div className="flex items-center gap-1">
-							{VIEW_MODES.map((mode) => {
-								const selected = mode.value === viewMode;
-								return (
-									<div
-										key={mode.value}
-										className={clsx(
-											'flex h-6 w-6 items-center justify-center',
-											selected ? 'text-white' : 'text-steel',
-										)}
-									>
-										<IconButton
+					{hasAssets && (
+						<div className="flex w-full flex-row-reverse justify-between sm:flex-row">
+							<div className="flex items-center gap-1">
+								{VIEW_MODES.map((mode) => {
+									const selected = mode.value === viewMode;
+									return (
+										<div
+											key={mode.value}
 											className={clsx(
-												'flex h-full w-full items-center justify-center rounded',
-												selected ? 'bg-steel' : 'bg-white',
+												'flex h-6 w-6 items-center justify-center',
+												selected ? 'text-white' : 'text-steel',
 											)}
-											aria-label="view-filter"
-											onClick={() => {
-												setViewMode(mode.value);
-											}}
 										>
-											{mode.icon}
-										</IconButton>
-									</div>
-								);
-							})}
-						</div>
+											<IconButton
+												className={clsx(
+													'flex h-full w-full items-center justify-center rounded',
+													selected ? 'bg-steel' : 'bg-white',
+												)}
+												aria-label="view-filter"
+												onClick={() => {
+													setViewMode(mode.value);
+												}}
+											>
+												{mode.icon}
+											</IconButton>
+										</div>
+									);
+								})}
+							</div>
 
-						<RadioGroup
-							aria-label="View transactions by a specific filter"
-							value={filter}
-							onValueChange={setFilter}
-						>
-							{FILTER_OPTIONS.map((filter) => (
-								<RadioGroupItem
-									key={filter.value}
-									value={filter.value}
-									label={filter.label}
-									disabled={
-										(filter.value === FILTER_VALUES.KIOSKS && !kioskData?.list?.length) || isLoading
-									}
-								/>
-							))}
-						</RadioGroup>
-					</div>
+							<RadioGroup
+								aria-label="View transactions by a specific filter"
+								value={filter}
+								onValueChange={setFilter}
+							>
+								{FILTER_OPTIONS.map((filter) => (
+									<RadioGroupItem
+										key={filter.value}
+										value={filter.value}
+										label={filter.label}
+										disabled={
+											(filter.value === FILTER_VALUES.KIOSKS && !kioskData?.list?.length) ||
+											isLoading
+										}
+									/>
+								))}
+							</RadioGroup>
+						</div>
+					)}
 				</div>
+
+				{!hasAssets && !isLoading && (
+					<div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+						<Text variant="body/medium" color="steel-dark">
+							No Assets owned
+						</Text>
+					</div>
+				)}
 
 				{viewMode === OBJECT_VIEW_MODES.LIST && (
 					<ListView loading={isLoading} data={sortedDataByDisplayImages} />

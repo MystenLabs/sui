@@ -87,7 +87,7 @@ function AddressResult({ address }: { address: string }) {
 				</TabsList>
 
 				<ErrorBoundary>
-					<div data-testid="tx" className="mt-4 h-full overflow-auto">
+					<div data-testid="tx" className="relative mt-4 h-full min-h-14 overflow-auto">
 						<TransactionsForAddress address={address} type="address" />
 					</div>
 				</ErrorBoundary>

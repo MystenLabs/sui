@@ -34,7 +34,7 @@ function Thumbnail({ obj }: { obj: SuiObjectResponse }) {
 							video={video}
 							variant="medium"
 						/>
-						<div className="absolute bottom-2 left-1/2 hidden w-10/12 -translate-x-1/2 justify-center rounded-lg bg-white/80 p-1 backdrop-blur-xl group-hover:flex">
+						<div className="absolute bottom-2 left-1/2 hidden w-10/12 -translate-x-1/2 justify-center rounded-lg bg-white/80 p-1 backdrop-blur group-hover:flex">
 							<Text variant="subtitle/medium" color="steel-dark">
 								{formatAddress(id!)}
 							</Text>

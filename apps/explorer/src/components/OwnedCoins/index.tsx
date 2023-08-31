@@ -88,8 +88,8 @@ export function OwnedCoins({ id }: { id: string }) {
 	);
 
 	const displayedBalances = useMemo(() => balances[filterValue], [balances, filterValue]);
-	const hasCoinsOwned = balances.allBalances.length > 0;
-	const coinBalanceHeader = hasCoinsOwned ? `${balances.allBalances.length} Coins` : 'Coins';
+	const hasCoinsBalance = balances.allBalances.length > 0;
+	const coinBalanceHeader = hasCoinsBalance ? `${balances.allBalances.length} Coins` : 'Coins';
 
 	if (isError) {
 		return <div className="pt-2 font-sans font-semibold text-issue-dark">Failed to load Coins</div>;
@@ -107,7 +107,7 @@ export function OwnedCoins({ id }: { id: string }) {
 						<Heading color="steel-darker" variant="heading4/semibold">
 							{coinBalanceHeader}
 						</Heading>
-						{hasCoinsOwned && (
+						{hasCoinsBalance && (
 							<div>
 								<RadioGroup
 									aria-label="transaction filter"
@@ -137,7 +137,7 @@ export function OwnedCoins({ id }: { id: string }) {
 						</div>
 					)}
 
-					{hasCoinsOwned ? (
+					{hasCoinsBalance && (
 						<>
 							<div className="flex max-h-coinsAndAssetsContainer flex-col overflow-auto md:max-h-full">
 								<div className="mb-2.5 flex uppercase tracking-wider text-gray-80">
@@ -198,7 +198,9 @@ export function OwnedCoins({ id }: { id: string }) {
 								</div>
 							)}
 						</>
-					) : (
+					)}
+
+					{!hasCoinsBalance && (
 						<div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
 							<Text variant="body/medium" color="steel-dark">
 								No Coins owned
