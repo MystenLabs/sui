@@ -103,18 +103,137 @@ macro_rules! serialize_or_execute {
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
 pub enum SuiClientCommands {
-    /// Switch active address and network(e.g., devnet, local rpc server)
-    #[clap(name = "switch")]
-    Switch {
-        /// An Sui address to be used as the active address for subsequent
-        /// commands.
+    /// Default address used for commands when none specified
+    #[clap(name = "active-address")]
+    ActiveAddress,
+    /// Default environment used for commands when none specified
+    #[clap(name = "active-env")]
+    ActiveEnv,
+    /// Obtain the Addresses managed by the client.
+    #[clap(name = "addresses")]
+    Addresses,
+
+    /// Call Move function
+    #[clap(name = "call")]
+    Call {
+        /// Object ID of the package, which contains the module
         #[clap(long)]
-        address: Option<SuiAddress>,
-        /// The RPC server URL (e.g., local rpc server, devnet rpc server, etc) to be
-        /// used for subsequent commands.
+        package: ObjectID,
+        /// The name of the module in the package
         #[clap(long)]
-        env: Option<String>,
+        module: String,
+        /// Function name in module
+        #[clap(long)]
+        function: String,
+        /// Function name in module
+        #[clap(
+            long,
+            value_parser = parse_sui_type_tag,
+            num_args(1..),
+        )]
+        type_args: Vec<TypeTag>,
+        /// Simplified ordered args like in the function syntax
+        /// ObjectIDs, Addresses must be hex strings
+        #[clap(long, num_args(1..))]
+        args: Vec<SuiJsonValue>,
+        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        #[clap(long)]
+        /// If not provided, a gas object with at least gas_budget value will be selected
+        #[clap(long)]
+        gas: Option<ObjectID>,
+        /// Gas budget for this call
+        #[clap(long)]
+        gas_budget: u64,
+
+        /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
+        /// (TransactionData) using base64 encoding, and print out the string.
+        #[clap(long, required = false)]
+        serialize_unsigned_transaction: bool,
+
+        /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
+        /// (SenderSignedData) using base64 encoding, and print out the string.
+        #[clap(long, required = false)]
+        serialize_signed_transaction: bool,
     },
+
+    /// Query the chain identifier from the rpc endpoint.
+    #[clap(name = "chain-identifier")]
+    ChainIdentifier,
+
+    /// Query a dynamic field by its address.
+    #[clap(name = "dynamic-field")]
+    DynamicFieldQuery {
+        ///The ID of the parent object
+        #[clap(name = "object_id")]
+        id: ObjectID,
+        /// Optional paging cursor
+        #[clap(long)]
+        cursor: Option<ObjectID>,
+        /// Maximum item returned per page
+        #[clap(long, default_value = "50")]
+        limit: usize,
+    },
+
+    /// List all Sui environments
+    Envs,
+
+    /// Execute a Signed Transaction. This is useful when the user prefers to sign elsewhere and use this command to execute.
+    ExecuteSignedTx {
+        /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
+        #[clap(long)]
+        tx_bytes: String,
+
+        /// A list of Base64 encoded signatures `flag || signature || pubkey`.
+        #[clap(long)]
+        signatures: Vec<String>,
+    },
+
+    /// Obtain all gas objects owned by the address.
+    #[clap(name = "gas")]
+    Gas {
+        /// Address owning the objects
+        #[clap(name = "owner_address")]
+        address: Option<SuiAddress>,
+    },
+
+    /// Merge two coin objects into one coin
+    MergeCoin {
+        /// Coin to merge into, in 20 bytes Hex string
+        #[clap(long)]
+        primary_coin: ObjectID,
+        /// Coin to be merged, in 20 bytes Hex string
+        #[clap(long)]
+        coin_to_merge: ObjectID,
+        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        /// If not provided, a gas object with at least gas_budget value will be selected
+        #[clap(long)]
+        gas: Option<ObjectID>,
+        /// Gas budget for this call
+        #[clap(long)]
+        gas_budget: u64,
+
+        /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
+        /// (TransactionData) using base64 encoding, and print out the string.
+        #[clap(long, required = false)]
+        serialize_unsigned_transaction: bool,
+
+        /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
+        /// (SenderSignedData) using base64 encoding, and print out the string.
+        #[clap(long, required = false)]
+        serialize_signed_transaction: bool,
+    },
+
+    /// Generate new address and keypair with keypair scheme flag {ed25519 | secp256k1 | secp256r1}
+    /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or
+    /// m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1. Word length can be
+    /// { word12 | word15 | word18 | word21 | word24} default to word12 if not specified.
+    #[clap(name = "new-address")]
+    NewAddress {
+        key_scheme: SignatureScheme,
+        word_length: Option<String>,
+        derivation_path: Option<DerivationPath>,
+    },
+
     /// Add new Sui environment.
     #[clap(name = "new-env")]
     NewEnv {
@@ -125,16 +244,6 @@ pub enum SuiClientCommands {
         #[clap(long, value_hint = ValueHint::Url)]
         ws: Option<String>,
     },
-    /// List all Sui environments
-    Envs,
-
-    /// Default address used for commands when none specified
-    #[clap(name = "active-address")]
-    ActiveAddress,
-
-    /// Default environment used for commands when none specified
-    #[clap(name = "active-env")]
-    ActiveEnv,
 
     /// Get object info
     #[clap(name = "object")]
@@ -147,13 +256,105 @@ pub enum SuiClientCommands {
         #[clap(long)]
         bcs: bool,
     },
+    /// Obtain all objects owned by the address
+    #[clap(name = "objects")]
+    Objects {
+        /// Address owning the objects
+        /// Shows all objects owned by `sui client active-address` if no argument is passed
+        #[clap(name = "owner_address")]
+        address: Option<SuiAddress>,
+    },
+    /// Pay coins to recipients following specified amounts, with input coins.
+    /// Length of recipients must be the same as that of amounts.
+    #[clap(name = "pay")]
+    Pay {
+        /// The input coins to be used for pay recipients, following the specified amounts.
+        #[clap(long, num_args(1..))]
+        input_coins: Vec<ObjectID>,
 
-    /// Get the effects of executing the given transaction block
-    #[clap(name = "tx-block")]
-    TransactionBlock {
-        /// Digest of the transaction block
-        #[clap(name = "digest")]
-        digest: TransactionDigest,
+        /// The recipient addresses, must be of same length as amounts
+        #[clap(long, num_args(1..))]
+        recipients: Vec<SuiAddress>,
+
+        /// The amounts to be paid, following the order of recipients.
+        #[clap(long, num_args(1..))]
+        amounts: Vec<u64>,
+
+        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        /// If not provided, a gas object with at least gas_budget value will be selected
+        #[clap(long)]
+        gas: Option<ObjectID>,
+
+        /// Gas budget for this transaction
+        #[clap(long)]
+        gas_budget: u64,
+
+        /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
+        /// (TransactionData) using base64 encoding, and print out the string.
+        #[clap(long, required = false)]
+        serialize_unsigned_transaction: bool,
+
+        /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
+        /// (SenderSignedData) using base64 encoding, and print out the string.
+        #[clap(long, required = false)]
+        serialize_signed_transaction: bool,
+    },
+
+    /// Pay all residual SUI coins to the recipient with input coins, after deducting the gas cost.
+    /// The input coins also include the coin for gas payment, so no extra gas coin is required.
+    PayAllSui {
+        /// The input coins to be used for pay recipients, including the gas coin.
+        #[clap(long, num_args(1..))]
+        input_coins: Vec<ObjectID>,
+
+        /// The recipient address.
+        #[clap(long)]
+        recipient: SuiAddress,
+
+        /// Gas budget for this transaction
+        #[clap(long)]
+        gas_budget: u64,
+
+        /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
+        /// (TransactionData) using base64 encoding, and print out the string.
+        #[clap(long, required = false)]
+        serialize_unsigned_transaction: bool,
+
+        /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
+        /// (SenderSignedData) using base64 encoding, and print out the string.
+        #[clap(long, required = false)]
+        serialize_signed_transaction: bool,
+    },
+
+    /// Pay SUI coins to recipients following following specified amounts, with input coins.
+    /// Length of recipients must be the same as that of amounts.
+    /// The input coins also include the coin for gas payment, so no extra gas coin is required.
+    PaySui {
+        /// The input coins to be used for pay recipients, including the gas coin.
+        #[clap(long, num_args(1..))]
+        input_coins: Vec<ObjectID>,
+
+        /// The recipient addresses, must be of same length as amounts.
+        #[clap(long, num_args(1..))]
+        recipients: Vec<SuiAddress>,
+
+        /// The amounts to be paid, following the order of recipients.
+        #[clap(long, num_args(1..))]
+        amounts: Vec<u64>,
+
+        /// Gas budget for this transaction
+        #[clap(long)]
+        gas_budget: u64,
+
+        /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
+        /// (TransactionData) using base64 encoding, and print out the string.
+        #[clap(long, required = false)]
+        serialize_unsigned_transaction: bool,
+
+        /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
+        /// (SenderSignedData) using base64 encoding, and print out the string.
+        #[clap(long, required = false)]
+        serialize_signed_transaction: bool,
     },
 
     /// Publish Move modules
@@ -200,16 +401,119 @@ pub enum SuiClientCommands {
         lint: bool,
     },
 
-    /// Run the bytecode verifier on the package
-    #[clap(name = "verify-bytecode-meter")]
-    VerifyBytecodeMeter {
-        /// Path to directory containing a Move package
-        #[clap(name = "package_path", global = true, default_value = ".")]
-        package_path: PathBuf,
+    /// Split a coin object into multiple coins.
+    #[clap(group(ArgGroup::new("split").required(true).args(&["amounts", "count"])))]
+    SplitCoin {
+        /// Coin to Split, in 20 bytes Hex string
+        #[clap(long)]
+        coin_id: ObjectID,
+        /// Specific amounts to split out from the coin
+        #[clap(long, num_args(1..))]
+        amounts: Option<Vec<u64>>,
+        /// Count of equal-size coins to split into
+        #[clap(long)]
+        count: Option<u64>,
+        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        /// If not provided, a gas object with at least gas_budget value will be selected
+        #[clap(long)]
+        gas: Option<ObjectID>,
+        /// Gas budget for this call
+        #[clap(long)]
+        gas_budget: u64,
 
-        /// Package build options
-        #[clap(flatten)]
-        build_config: MoveBuildConfig,
+        /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
+        /// (TransactionData) using base64 encoding, and print out the string.
+        #[clap(long, required = false)]
+        serialize_unsigned_transaction: bool,
+
+        /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
+        /// (SenderSignedData) using base64 encoding, and print out the string.
+        #[clap(long, required = false)]
+        serialize_signed_transaction: bool,
+    },
+
+    /// Switch active address and network(e.g., devnet, local rpc server)
+    #[clap(name = "switch")]
+    Switch {
+        /// An Sui address to be used as the active address for subsequent
+        /// commands.
+        #[clap(long)]
+        address: Option<SuiAddress>,
+        /// The RPC server URL (e.g., local rpc server, devnet rpc server, etc) to be
+        /// used for subsequent commands.
+        #[clap(long)]
+        env: Option<String>,
+    },
+
+    /// Get the effects of executing the given transaction block
+    #[clap(name = "tx-block")]
+    TransactionBlock {
+        /// Digest of the transaction block
+        #[clap(name = "digest")]
+        digest: TransactionDigest,
+    },
+
+    /// Transfer object
+    #[clap(name = "transfer")]
+    Transfer {
+        /// Recipient address
+        #[clap(long)]
+        to: SuiAddress,
+
+        /// Object to transfer, in 20 bytes Hex string
+        #[clap(long)]
+        object_id: ObjectID,
+
+        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        /// If not provided, a gas object with at least gas_budget value will be selected
+        #[clap(long)]
+        gas: Option<ObjectID>,
+
+        /// Gas budget for this transfer
+        #[clap(long)]
+        gas_budget: u64,
+
+        /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
+        /// (TransactionData) using base64 encoding, and print out the string.
+        #[clap(long, required = false)]
+        serialize_unsigned_transaction: bool,
+
+        /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
+        /// (SenderSignedData) using base64 encoding, and print out the string.
+        #[clap(long, required = false)]
+        serialize_signed_transaction: bool,
+    },
+
+    /// Transfer SUI, and pay gas with the same SUI coin object.
+    /// If amount is specified, only the amount is transferred; otherwise the entire object
+    /// is transferred.
+    #[clap(name = "transfer-sui")]
+    TransferSui {
+        /// Recipient address
+        #[clap(long)]
+        to: SuiAddress,
+
+        /// Sui coin object to transfer, ID in 20 bytes Hex string. This is also the gas object.
+        #[clap(long)]
+        sui_coin_object_id: ObjectID,
+
+        /// Gas budget for this transfer
+        #[clap(long)]
+        gas_budget: u64,
+
+        /// The amount to transfer, if not specified, the entire coin object will be transferred.
+        #[clap(long)]
+        amount: Option<u64>,
+
+        /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
+        /// (TransactionData) using base64 encoding, and print out the string.
+        #[clap(long, required = false)]
+        serialize_unsigned_transaction: bool,
+
+        /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
+        /// (SenderSignedData) using base64 encoding, and print out the string.
+        #[clap(long, required = false)]
+        serialize_signed_transaction: bool,
     },
 
     /// Upgrade Move modules
@@ -260,6 +564,18 @@ pub enum SuiClientCommands {
         lint: bool,
     },
 
+    /// Run the bytecode verifier on the package
+    #[clap(name = "verify-bytecode-meter")]
+    VerifyBytecodeMeter {
+        /// Path to directory containing a Move package
+        #[clap(name = "package_path", global = true, default_value = ".")]
+        package_path: PathBuf,
+
+        /// Package build options
+        #[clap(flatten)]
+        build_config: MoveBuildConfig,
+    },
+
     /// Verify local Move packages against on-chain packages, and optionally their dependencies.
     #[clap(name = "verify-source")]
     VerifySource {
@@ -284,322 +600,6 @@ pub enum SuiClientCommands {
         #[clap(long)]
         address_override: Option<ObjectID>,
     },
-
-    /// Call Move function
-    #[clap(name = "call")]
-    Call {
-        /// Object ID of the package, which contains the module
-        #[clap(long)]
-        package: ObjectID,
-        /// The name of the module in the package
-        #[clap(long)]
-        module: String,
-        /// Function name in module
-        #[clap(long)]
-        function: String,
-        /// Function name in module
-        #[clap(
-            long,
-            value_parser = parse_sui_type_tag,
-            num_args(1..),
-        )]
-        type_args: Vec<TypeTag>,
-        /// Simplified ordered args like in the function syntax
-        /// ObjectIDs, Addresses must be hex strings
-        #[clap(long, num_args(1..))]
-        args: Vec<SuiJsonValue>,
-        /// ID of the gas object for gas payment, in 20 bytes Hex string
-        #[clap(long)]
-        /// If not provided, a gas object with at least gas_budget value will be selected
-        #[clap(long)]
-        gas: Option<ObjectID>,
-        /// Gas budget for this call
-        #[clap(long)]
-        gas_budget: u64,
-
-        /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
-        #[clap(long, required = false)]
-        serialize_unsigned_transaction: bool,
-
-        /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
-        #[clap(long, required = false)]
-        serialize_signed_transaction: bool,
-    },
-
-    /// Transfer object
-    #[clap(name = "transfer")]
-    Transfer {
-        /// Recipient address
-        #[clap(long)]
-        to: SuiAddress,
-
-        /// Object to transfer, in 20 bytes Hex string
-        #[clap(long)]
-        object_id: ObjectID,
-
-        /// ID of the gas object for gas payment, in 20 bytes Hex string
-        /// If not provided, a gas object with at least gas_budget value will be selected
-        #[clap(long)]
-        gas: Option<ObjectID>,
-
-        /// Gas budget for this transfer
-        #[clap(long)]
-        gas_budget: u64,
-
-        /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
-        #[clap(long, required = false)]
-        serialize_unsigned_transaction: bool,
-
-        /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
-        #[clap(long, required = false)]
-        serialize_signed_transaction: bool,
-    },
-    /// Transfer SUI, and pay gas with the same SUI coin object.
-    /// If amount is specified, only the amount is transferred; otherwise the entire object
-    /// is transferred.
-    #[clap(name = "transfer-sui")]
-    TransferSui {
-        /// Recipient address
-        #[clap(long)]
-        to: SuiAddress,
-
-        /// Sui coin object to transfer, ID in 20 bytes Hex string. This is also the gas object.
-        #[clap(long)]
-        sui_coin_object_id: ObjectID,
-
-        /// Gas budget for this transfer
-        #[clap(long)]
-        gas_budget: u64,
-
-        /// The amount to transfer, if not specified, the entire coin object will be transferred.
-        #[clap(long)]
-        amount: Option<u64>,
-
-        /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
-        #[clap(long, required = false)]
-        serialize_unsigned_transaction: bool,
-
-        /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
-        #[clap(long, required = false)]
-        serialize_signed_transaction: bool,
-    },
-    /// Pay coins to recipients following specified amounts, with input coins.
-    /// Length of recipients must be the same as that of amounts.
-    #[clap(name = "pay")]
-    Pay {
-        /// The input coins to be used for pay recipients, following the specified amounts.
-        #[clap(long, num_args(1..))]
-        input_coins: Vec<ObjectID>,
-
-        /// The recipient addresses, must be of same length as amounts
-        #[clap(long, num_args(1..))]
-        recipients: Vec<SuiAddress>,
-
-        /// The amounts to be paid, following the order of recipients.
-        #[clap(long, num_args(1..))]
-        amounts: Vec<u64>,
-
-        /// ID of the gas object for gas payment, in 20 bytes Hex string
-        /// If not provided, a gas object with at least gas_budget value will be selected
-        #[clap(long)]
-        gas: Option<ObjectID>,
-
-        /// Gas budget for this transaction
-        #[clap(long)]
-        gas_budget: u64,
-
-        /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
-        #[clap(long, required = false)]
-        serialize_unsigned_transaction: bool,
-
-        /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
-        #[clap(long, required = false)]
-        serialize_signed_transaction: bool,
-    },
-
-    /// Pay SUI coins to recipients following following specified amounts, with input coins.
-    /// Length of recipients must be the same as that of amounts.
-    /// The input coins also include the coin for gas payment, so no extra gas coin is required.
-    PaySui {
-        /// The input coins to be used for pay recipients, including the gas coin.
-        #[clap(long, num_args(1..))]
-        input_coins: Vec<ObjectID>,
-
-        /// The recipient addresses, must be of same length as amounts.
-        #[clap(long, num_args(1..))]
-        recipients: Vec<SuiAddress>,
-
-        /// The amounts to be paid, following the order of recipients.
-        #[clap(long, num_args(1..))]
-        amounts: Vec<u64>,
-
-        /// Gas budget for this transaction
-        #[clap(long)]
-        gas_budget: u64,
-
-        /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
-        #[clap(long, required = false)]
-        serialize_unsigned_transaction: bool,
-
-        /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
-        #[clap(long, required = false)]
-        serialize_signed_transaction: bool,
-    },
-
-    /// Pay all residual SUI coins to the recipient with input coins, after deducting the gas cost.
-    /// The input coins also include the coin for gas payment, so no extra gas coin is required.
-    PayAllSui {
-        /// The input coins to be used for pay recipients, including the gas coin.
-        #[clap(long, num_args(1..))]
-        input_coins: Vec<ObjectID>,
-
-        /// The recipient address.
-        #[clap(long)]
-        recipient: SuiAddress,
-
-        /// Gas budget for this transaction
-        #[clap(long)]
-        gas_budget: u64,
-
-        /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
-        #[clap(long, required = false)]
-        serialize_unsigned_transaction: bool,
-
-        /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
-        #[clap(long, required = false)]
-        serialize_signed_transaction: bool,
-    },
-
-    /// Obtain the Addresses managed by the client.
-    #[clap(name = "addresses")]
-    Addresses,
-
-    /// Generate new address and keypair with keypair scheme flag {ed25519 | secp256k1 | secp256r1}
-    /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or
-    /// m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1. Word length can be
-    /// { word12 | word15 | word18 | word21 | word24} default to word12 if not specified.
-    #[clap(name = "new-address")]
-    NewAddress {
-        key_scheme: SignatureScheme,
-        word_length: Option<String>,
-        derivation_path: Option<DerivationPath>,
-    },
-
-    /// Obtain all objects owned by the address
-    #[clap(name = "objects")]
-    Objects {
-        /// Address owning the objects
-        /// Shows all objects owned by `sui client active-address` if no argument is passed
-        #[clap(name = "owner_address")]
-        address: Option<SuiAddress>,
-    },
-
-    /// Obtain all gas objects owned by the address.
-    #[clap(name = "gas")]
-    Gas {
-        /// Address owning the objects
-        #[clap(name = "owner_address")]
-        address: Option<SuiAddress>,
-    },
-
-    /// Query a dynamic field by its address.
-    #[clap(name = "dynamic-field")]
-    DynamicFieldQuery {
-        ///The ID of the parent object
-        #[clap(name = "object_id")]
-        id: ObjectID,
-        /// Optional paging cursor
-        #[clap(long)]
-        cursor: Option<ObjectID>,
-        /// Maximum item returned per page
-        #[clap(long, default_value = "50")]
-        limit: usize,
-    },
-
-    /// Split a coin object into multiple coins.
-    #[clap(group(ArgGroup::new("split").required(true).args(&["amounts", "count"])))]
-    SplitCoin {
-        /// Coin to Split, in 20 bytes Hex string
-        #[clap(long)]
-        coin_id: ObjectID,
-        /// Specific amounts to split out from the coin
-        #[clap(long, num_args(1..))]
-        amounts: Option<Vec<u64>>,
-        /// Count of equal-size coins to split into
-        #[clap(long)]
-        count: Option<u64>,
-        /// ID of the gas object for gas payment, in 20 bytes Hex string
-        /// If not provided, a gas object with at least gas_budget value will be selected
-        #[clap(long)]
-        gas: Option<ObjectID>,
-        /// Gas budget for this call
-        #[clap(long)]
-        gas_budget: u64,
-
-        /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
-        #[clap(long, required = false)]
-        serialize_unsigned_transaction: bool,
-
-        /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
-        #[clap(long, required = false)]
-        serialize_signed_transaction: bool,
-    },
-
-    /// Merge two coin objects into one coin
-    MergeCoin {
-        /// Coin to merge into, in 20 bytes Hex string
-        #[clap(long)]
-        primary_coin: ObjectID,
-        /// Coin to be merged, in 20 bytes Hex string
-        #[clap(long)]
-        coin_to_merge: ObjectID,
-        /// ID of the gas object for gas payment, in 20 bytes Hex string
-        /// If not provided, a gas object with at least gas_budget value will be selected
-        #[clap(long)]
-        gas: Option<ObjectID>,
-        /// Gas budget for this call
-        #[clap(long)]
-        gas_budget: u64,
-
-        /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
-        #[clap(long, required = false)]
-        serialize_unsigned_transaction: bool,
-
-        /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
-        #[clap(long, required = false)]
-        serialize_signed_transaction: bool,
-    },
-
-    /// Execute a Signed Transaction. This is useful when the user prefers to sign elsewhere and use this command to execute.
-    ExecuteSignedTx {
-        /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
-        #[clap(long)]
-        tx_bytes: String,
-
-        /// A list of Base64 encoded signatures `flag || signature || pubkey`.
-        #[clap(long)]
-        signatures: Vec<String>,
-    },
-
-    /// Query the chain identifier from the rpc endpoint.
-    #[clap(name = "chain-identifier")]
-    ChainIdentifier,
 }
 
 impl SuiClientCommands {
@@ -1698,6 +1698,15 @@ fn unwrap_err_to_string<T: Display, F: FnOnce() -> Result<T, anyhow::Error>>(fun
 }
 
 impl SuiClientCommandResult {
+    pub fn objects_response(&self) -> Option<Vec<SuiObjectResponse>> {
+        use SuiClientCommandResult::*;
+        match self {
+            Object(o) | RawObject(o) => Some(vec![o.clone()]),
+            Objects(o) => Some(o.clone()),
+            _ => None,
+        }
+    }
+
     pub fn print(&self, pretty: bool) {
         let line = if pretty {
             format!("{self}")
@@ -1721,22 +1730,39 @@ impl SuiClientCommandResult {
             _ => None,
         }
     }
-
-    pub fn objects_response(&self) -> Option<Vec<SuiObjectResponse>> {
-        use SuiClientCommandResult::*;
-        match self {
-            Object(o) | RawObject(o) => Some(vec![o.clone()]),
-            Objects(o) => Some(o.clone()),
-            _ => None,
-        }
-    }
 }
 
 #[derive(Serialize)]
 #[serde(untagged)]
 pub enum SuiClientCommandResult {
-    Upgrade(SuiTransactionBlockResponse),
+    ActiveAddress(Option<SuiAddress>),
+    ActiveEnv(Option<String>),
+    Addresses(Vec<SuiAddress>, Option<SuiAddress>),
+    Call(SuiTransactionBlockResponse),
+    ChainIdentifier(String),
+    DynamicFieldQuery(DynamicFieldPage),
+    Envs(Vec<SuiEnv>, Option<String>),
+    ExecuteSignedTx(SuiTransactionBlockResponse),
+    Gas(Vec<GasCoin>),
+    MergeCoin(SuiTransactionBlockResponse),
+    NewAddress((SuiAddress, String, SignatureScheme)),
+    NewEnv(SuiEnv),
+    Object(SuiObjectResponse),
+    Objects(Vec<SuiObjectResponse>),
+    Pay(SuiTransactionBlockResponse),
+    PayAllSui(SuiTransactionBlockResponse),
+    PaySui(SuiTransactionBlockResponse),
     Publish(SuiTransactionBlockResponse),
+    RawObject(SuiObjectResponse),
+    SerializedSignedTransaction(SenderSignedData),
+    SerializedUnsignedTransaction(TransactionData),
+    SplitCoin(SuiTransactionBlockResponse),
+    Switch(SwitchResponse),
+    SyncClientState,
+    TransactionBlock(SuiTransactionBlockResponse),
+    Transfer(SuiTransactionBlockResponse),
+    TransferSui(SuiTransactionBlockResponse),
+    Upgrade(SuiTransactionBlockResponse),
     VerifyBytecodeMeter {
         max_module_ticks: u128,
         max_function_ticks: u128,
@@ -1744,32 +1770,6 @@ pub enum SuiClientCommandResult {
         used_module_ticks: u128,
     },
     VerifySource,
-    Object(SuiObjectResponse),
-    RawObject(SuiObjectResponse),
-    TransactionBlock(SuiTransactionBlockResponse),
-    Call(SuiTransactionBlockResponse),
-    SerializedUnsignedTransaction(TransactionData),
-    SerializedSignedTransaction(SenderSignedData),
-    Transfer(SuiTransactionBlockResponse),
-    TransferSui(SuiTransactionBlockResponse),
-    Pay(SuiTransactionBlockResponse),
-    PaySui(SuiTransactionBlockResponse),
-    PayAllSui(SuiTransactionBlockResponse),
-    Addresses(Vec<SuiAddress>, Option<SuiAddress>),
-    Objects(Vec<SuiObjectResponse>),
-    DynamicFieldQuery(DynamicFieldPage),
-    SyncClientState,
-    NewAddress((SuiAddress, String, SignatureScheme)),
-    Gas(Vec<GasCoin>),
-    ChainIdentifier(String),
-    SplitCoin(SuiTransactionBlockResponse),
-    MergeCoin(SuiTransactionBlockResponse),
-    Switch(SwitchResponse),
-    ActiveAddress(Option<SuiAddress>),
-    ActiveEnv(Option<String>),
-    Envs(Vec<SuiEnv>, Option<String>),
-    ExecuteSignedTx(SuiTransactionBlockResponse),
-    NewEnv(SuiEnv),
 }
 
 #[derive(Serialize, Clone, Debug)]
