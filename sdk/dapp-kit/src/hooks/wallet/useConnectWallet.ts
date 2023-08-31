@@ -63,14 +63,14 @@ export function useConnectWallet({
 
 			dispatch({
 				type: 'wallet-connected',
-				payload: { wallet, selectedAccount: selectedAccount ?? null },
+				payload: { wallet, currentAccount: selectedAccount ?? null },
 			});
 
 			await setMostRecentWalletConnectionInfo({
 				storageAdapter,
 				storageKey,
 				walletName,
-				selectedAccount: selectedAccount?.address,
+				currentAccount: selectedAccount?.address,
 			});
 
 			return connectResult;

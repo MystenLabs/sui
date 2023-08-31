@@ -8,7 +8,7 @@ type WalletConnectedAction = {
 	type: 'wallet-connected';
 	payload: {
 		wallet: WalletWithSuiFeatures;
-		selectedAccount: WalletAccount | null;
+		currentAccount: WalletAccount | null;
 	};
 };
 
@@ -19,7 +19,10 @@ type WalletDisconnectedAction = {
 
 type WalletPropertiesChangedAction = {
 	type: 'wallet-properties-changed';
-	payload: { updatedAccounts: WalletAccount[] };
+	payload: {
+		updatedAccounts: readonly WalletAccount[];
+		currentAccount: WalletAccount | null;
+	};
 };
 
 type WalletsChangedAction = {

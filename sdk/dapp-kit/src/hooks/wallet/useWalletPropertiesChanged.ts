@@ -11,11 +11,11 @@ import type {
  * Internal hook for easily handling various changes in properties for a wallet.
  */
 export function useWalletPropertiesChanged(
-	currentWallet: WalletWithSuiFeatures | null,
+	wallet: WalletWithSuiFeatures | null,
 	onChange: (updatedProperties: StandardEventsChangeProperties) => void,
 ) {
 	useEffect(() => {
-		const unsubscribeFromEvents = currentWallet?.features['standard:events'].on('change', onChange);
+		const unsubscribeFromEvents = wallet?.features['standard:events'].on('change', onChange);
 		return unsubscribeFromEvents;
-	}, [currentWallet, onChange]);
+	}, [wallet, onChange]);
 }

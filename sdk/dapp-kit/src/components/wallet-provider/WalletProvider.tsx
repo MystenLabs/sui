@@ -42,7 +42,7 @@ interface WalletProviderContext extends WalletState {
 }
 
 const SUI_WALLET_NAME = 'Sui Wallet';
-const DEFAULT_STORAGE_KEY = 'dapp-kit:last-wallet-account';
+const DEFAULT_STORAGE_KEY = 'dapp-kit:most-recent-wallet-connection-info';
 
 const WalletContext = createContext<WalletProviderContext | null>(null);
 
@@ -74,18 +74,21 @@ export function WalletProvider({
 	useUnsafeBurnerWallet(enableUnsafeBurner);
 
 	useWalletPropertiesChanged(walletState.currentWallet, ({ accounts }) => {
-		console.log('CHANGE', accounts);
-		// dispatch({
-		// 	type: 'wallet-properties-changed',
-		// 	payload: {
-		// 		accounts,
-		// 		currentAccount:
-		// 			walletState.currentAccount &&
-		// 			!accounts.find(({ address }) => address === walletState.currentAccount?.address)
-		// 				? accounts[0]
-		// 				: walletState.currentAccount,
-		// 	},
-		// });
+		if (accounts) {
+			const isCurrentAccountStillAuthorized = accounts.find(
+				({ address }) => address === walletState.currentAccount?.address,
+			);
+
+			dispatch({
+				type: 'wallet-properties-changed',
+				payload: {
+					updatedAccounts: accounts,
+					currentAccount: isCurrentAccountStillAuthorized
+						? walletState.currentAccount
+						: accounts[0],
+				},
+			});
+		}
 	});
 
 	useEffect(() => {
@@ -98,12 +101,17 @@ export function WalletProvider({
 				storageAdapter,
 				storageKey,
 			);
+
+			if (mostRecentWalletInfo) {
+				// do smth here
+			}
 		})();
 	}, [autoConnect, storageAdapter, storageKey, walletState.currentWallet]);
 
-	const contextValue = useMemo(() => {
-		return { ...walletState, storageAdapter, storageKey, dispatch };
-	}, [storageAdapter, storageKey, walletState]);
+	const contextValue = useMemo(
+		() => ({ ...walletState, storageAdapter, storageKey, dispatch }),
+		[storageAdapter, storageKey, walletState],
+	);
 
 	return <WalletContext.Provider value={contextValue}>{children}</WalletContext.Provider>;
 }
