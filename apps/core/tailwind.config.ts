@@ -83,8 +83,13 @@ export default {
 			scale: {
 				'101': '1.01',
 			},
+			// backdrop-blur values that are found in the design:
 			backdropBlur: {
-				networkSwitcher: '20px',
+				sm: '8px',
+				md: '12px',
+				DEFAULT: '20px',
+				lg: '24px',
+				xl: '32px',
 			},
 			colors: {
 				'gradient-blue-start': '#589AEA',

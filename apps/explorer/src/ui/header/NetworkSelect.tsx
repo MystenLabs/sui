@@ -250,7 +250,7 @@ export function NetworkSelect({
 										scale: 0.95,
 									}}
 									transition={{ duration: 0.15 }}
-									className="z-20 flex w-52 flex-col gap-2 rounded-lg bg-white/80 px-3 py-4 shadow-lg backdrop-blur-networkSwitcher focus:outline-none"
+									className="z-20 flex w-52 flex-col gap-2 rounded-lg bg-white/80 px-3 py-4 shadow-lg backdrop-blur focus:outline-none"
 									style={{
 										position: strategy,
 										top: y ?? 0,
