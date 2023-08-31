@@ -3,7 +3,6 @@
 
 import { useZodForm } from '@mysten/core';
 import toast from 'react-hot-toast';
-import { useNavigate, useParams } from 'react-router-dom';
 import { z } from 'zod';
 import { useAccounts } from '../../hooks/useAccounts';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
@@ -22,9 +21,13 @@ const formSchema = z.object({
 	nickname: z.string().trim(),
 });
 
-export function EditNickname() {
-	const { accountID } = useParams();
-	const navigate = useNavigate();
+interface NicknameDialogProps {
+	open: boolean;
+	accountID: string;
+	close: () => void;
+}
+
+export function NicknameDialog({ open, accountID, close }: NicknameDialogProps) {
 	const backgroundClient = useBackgroundClient();
 	const { data: accounts } = useAccounts();
 	const account = accounts?.find((account) => account.id === accountID);
@@ -41,7 +44,6 @@ export function EditNickname() {
 		formState: { isSubmitting, isValid },
 	} = form;
 
-	const close = () => navigate('/accounts/manage');
 	const onSubmit = async ({ nickname }: { nickname: string }) => {
 		if (account && accountID) {
 			try {
@@ -57,7 +59,7 @@ export function EditNickname() {
 	};
 
 	return (
-		<Dialog defaultOpen>
+		<Dialog open={Boolean(open)}>
 			<DialogContent onPointerDownOutside={(e: Event) => e.preventDefault()}>
 				<DialogHeader>
 					<DialogTitle>Account Nickname</DialogTitle>

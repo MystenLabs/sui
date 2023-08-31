@@ -5,7 +5,6 @@ import { toB64 } from '@mysten/sui.js/utils';
 import { useEffect, useMemo } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
-import { EditNickname } from './components/accounts/EditNickname';
 import { useSuiLedgerClient } from './components/ledger/SuiLedgerClientProvider';
 import { useAccounts } from './hooks/useAccounts';
 import { useBackgroundClient } from './hooks/useBackgroundClient';
@@ -174,7 +173,6 @@ const App = () => {
 				<Route path="import-passphrase" element={<ImportPassphrasePage />} />
 				<Route path="import-private-key" element={<ImportPrivateKeyPage />} />
 				<Route path="manage" element={<ManageAccountsPage />} />
-				<Route path="edit/:accountID" element={<EditNickname />} />
 				<Route path="protect-account" element={<ProtectAccountPage />} />
 			</Route>
 
