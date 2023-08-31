@@ -30,7 +30,9 @@
 ///
 module axelar::gateway {
     use std::string;
+    use std::string::String;
     use std::vector;
+    use axelar::approved_call::ApprovedCall;
 
     use sui::bcs;
 
@@ -128,6 +130,17 @@ module axelar::gateway {
         };
     }
 
+    public fun take_approved_call(
+        axelar: &mut AxelarValidators,
+        cmd_id: address,
+        source_chain: String,
+        source_address: String,
+        target_id: address,
+        payload: vector<u8>
+    ): ApprovedCall {
+        validators::take_approved_call(axelar, cmd_id, source_chain, source_address, target_id, payload)
+    }
+
     #[test_only]
     use axelar::utils::operators_hash;
     #[test_only]
@@ -166,7 +179,10 @@ module axelar::gateway {
         );
 
         process_commands(&mut validators, CALL_APPROVAL);
-        validators::delete(validators);
+
+        validators::remove_approval_for_test(&mut validators, @0x1);
+        validators::remove_approval_for_test(&mut validators, @0x2);
+        validators::drop_for_test(validators);
         ts::end(test);
     }
 
@@ -193,7 +209,7 @@ module axelar::gateway {
         process_commands(&mut validators, TRANSFER_OPERATORSHIP_APPROVAL);
         assert!(validators::epoch(&validators) == 2, 0);
 
-        validators::delete(validators);
+        validators::drop_for_test(validators);
         ts::end(test);
     }
 }

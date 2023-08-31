@@ -5,6 +5,7 @@ module axelar::approved_call {
     use std::string::String;
 
     friend axelar::validators;
+    friend axelar::channel;
 
     struct ApprovedCall {
         /// ID of the call approval, guaranteed to be unique by Axelar.
@@ -16,8 +17,6 @@ module axelar::approved_call {
         /// Address of the source chain (vector used for compatibility).
         /// UTF8 / ASCII encoded string (for 0x0... eth address gonna be 42 bytes with 0x)
         source_address: String,
-        /// Hash of the full payload (including source_* fields).
-        payload_hash: vector<u8>,
         /// Payload of the command.
         payload: vector<u8>,
     }
@@ -27,7 +26,6 @@ module axelar::approved_call {
         source_chain: String,
         source_address: String,
         target_id: address,
-        payload_hash: vector<u8>,
         payload: vector<u8>,
     ): ApprovedCall {
         ApprovedCall {
@@ -35,7 +33,6 @@ module axelar::approved_call {
             source_chain,
             source_address,
             target_id,
-            payload_hash,
             payload
         }
     }
@@ -56,24 +53,23 @@ module axelar::approved_call {
         msg.source_address
     }
 
-    public fun payload_hash(msg: &ApprovedCall): vector<u8> {
-        msg.payload_hash
-    }
-
     public fun payload(msg: &ApprovedCall): vector<u8> {
         msg.payload
     }
 
-    #[test_only]
-    /// Handy method for burning `vector<CallApproval>` returned by the `execute` function.
-    public fun delete_for_test(approved_call: ApprovedCall) {
+    public(friend) fun consume(approved_call: ApprovedCall) {
         let ApprovedCall {
             cmd_id: _,
             target_id: _,
             source_chain: _,
             source_address: _,
-            payload_hash: _,
             payload: _,
         } = approved_call;
+    }
+
+    #[test_only]
+    /// Handy method for burning `vector<CallApproval>` returned by the `execute` function.
+    public fun delete_for_test(approved_call: ApprovedCall) {
+        consume(approved_call);
     }
 }

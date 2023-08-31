@@ -2,8 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module axelar::validators {
+    use std::string;
     use std::string::String;
     use std::vector;
+    use sui::table;
+    use sui::table::Table;
+    use sui::address;
 
     use sui::bcs;
     use sui::dynamic_field as df;
@@ -18,7 +22,6 @@ module axelar::validators {
     use axelar::utils::{normalize_signature, operators_hash};
 
     friend axelar::gateway;
-    friend axelar::channel;
 
     const EInvalidWeights: u64 = 0;
     const EInvalidThreshold: u64 = 1;
@@ -37,6 +40,7 @@ module axelar::validators {
     /// The central piece in managing call approval creation and signature verification.
     struct AxelarValidators has key {
         id: UID,
+        approvals: Table<address, Approval>
     }
 
     struct AxelarValidatorsV1 has store {
@@ -49,22 +53,15 @@ module axelar::validators {
     /// CallApproval struct which can consumed only by a `Channel` object.
     /// Does not require additional generic field to operate as linking
     /// by `id_bytes` is more than enough.
-    ///
     struct Approval has store {
-        /// The target Channel's UID.
-        target_id: address,
-        /// Name of the chain where this approval came from.
-        source_chain: String,
-        /// Address of the source chain (vector used for compatibility).
-        /// UTF8 / ASCII encoded string (for 0x0... eth address gonna be 42 bytes with 0x)
-        source_address: String,
-        /// Hash of the full payload (including source_* fields).
-        payload_hash: vector<u8>,
+        /// Hash of the cmd_id, target_id, source_chain, source_address, payload_hash
+        approval_hash: vector<u8>,
     }
 
     fun init(ctx: &mut TxContext) {
         let validators = AxelarValidators {
             id: object::new(ctx),
+            approvals: table::new(ctx)
         };
         df::add(&mut validators.id, 1, AxelarValidatorsV1 {
             epoch: 0,
@@ -169,34 +166,49 @@ module axelar::validators {
         target_id: address,
         payload_hash: vector<u8>
     ) {
-        df::add(&mut axelar.id, cmd_id, Approval {
-            target_id,
-            source_chain,
-            source_address,
-            payload_hash,
+        let data = vector[];
+        vector::append(&mut data, address::to_bytes(cmd_id));
+        vector::append(&mut data, address::to_bytes(target_id));
+        vector::append(&mut data, *string::bytes(&source_chain));
+        vector::append(&mut data, *string::bytes(&source_address));
+        vector::append(&mut data, payload_hash);
+
+        table::add(&mut axelar.approvals, cmd_id, Approval {
+            approval_hash: hash::keccak256(&data),
         });
     }
 
+    /// Most common scenario would be to target a shared object, however this
+    /// messaging system allows sending private messages which can be consumed
+    /// by single-owner targets.
+    ///
+    /// The hot potato approvel call object is returned.
     public(friend) fun take_approved_call(
         axelar: &mut AxelarValidators,
         cmd_id: address,
+        source_chain: String,
+        source_address: String,
+        target_id: address,
         payload: vector<u8>
     ): ApprovedCall {
         let Approval {
-            target_id,
-            source_chain,
-            source_address,
-            payload_hash,
-        } = df::remove<address, Approval>(&mut axelar.id, cmd_id);
+            approval_hash,
+        } = table::remove(&mut axelar.approvals, cmd_id);
 
-        assert!(hash::keccak256(&payload) == payload_hash, EPayloadHashMismatch);
+        let data = vector[];
+        vector::append(&mut data, address::to_bytes(cmd_id));
+        vector::append(&mut data, address::to_bytes(target_id));
+        vector::append(&mut data, *string::bytes(&source_chain));
+        vector::append(&mut data, *string::bytes(&source_address));
+        vector::append(&mut data, hash::keccak256(&payload));
+
+        assert!(hash::keccak256(&data) == approval_hash, EPayloadHashMismatch);
 
         approved_call::create(
             cmd_id,
             source_chain,
             source_address,
             target_id,
-            payload_hash,
             payload,
         )
     }
@@ -218,9 +230,15 @@ module axelar::validators {
     }
 
     #[test_only]
+    public fun remove_approval_for_test(self: &mut AxelarValidators, cmd_id: address) {
+        let Approval { approval_hash: _ } = table::remove(&mut self.approvals, cmd_id);
+    }
+
+    #[test_only]
     public fun new(epoch: u64, epoch_for_hash: VecMap<vector<u8>, u64>, ctx: &mut TxContext): AxelarValidators {
         let base = AxelarValidators {
             id: object::new(ctx),
+            approvals: table::new(ctx)
         };
         df::add(&mut base.id, 1u8, AxelarValidatorsV1 {
             epoch,
@@ -233,9 +251,10 @@ module axelar::validators {
     use axelar::utils::to_sui_signed;
 
     #[test_only]
-    public fun delete(self: AxelarValidators) {
+    public fun drop_for_test(self: AxelarValidators) {
         // validator cleanup
-        let AxelarValidators { id } = self;
+        let AxelarValidators { id, approvals } = self;
+        table::destroy_empty(approvals);
         object::delete(id);
     }
 

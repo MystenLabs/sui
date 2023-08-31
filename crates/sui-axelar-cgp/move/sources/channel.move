@@ -2,17 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module axelar::channel {
+    use sui::linked_table;
+    use sui::linked_table::LinkedTable;
     use sui::bcs;
     use sui::object;
     use sui::object::UID;
     use sui::tx_context::TxContext;
-    use sui::vec_set;
-    use sui::vec_set::VecSet;
 
     use axelar::approved_call;
     use axelar::approved_call::ApprovedCall;
-    use axelar::validators;
-    use axelar::validators::AxelarValidators;
 
     /// Generic target for the messaging system.
     ///
@@ -48,6 +46,8 @@ module axelar::channel {
     /// For when message has already been processed and submitted twice.
     const EDuplicateMessage: u64 = 2;
 
+    const MAX_PROCESSED_APPROVAL_HISTORY: u64 = 100;
+
     struct Channel<T: store> has store {
         /// Unique ID of the target object which allows message targeting
         /// by comparing against `id_bytes`.
@@ -55,9 +55,7 @@ module axelar::channel {
         /// Messages processed by this object for the current axelar epoch. To make system less
         /// centralized, and spread the storage + io costs across multiple
         /// destinations, we can track every `Channel`'s messages.
-        processed_call_approvals: VecSet<address>,
-        /// epoch of the last processed approval.
-        last_processed_approval_epoch: u64,
+        processed_call_approvals: LinkedTable<address, bool>,
         /// Additional field to optionally use as metadata for the Channel
         /// object improving identification and uniqueness of data.
         /// Can store any struct that has `store` ability (including other
@@ -80,8 +78,7 @@ module axelar::channel {
     public fun create_channel<T: store>(t: T, ctx: &mut TxContext): Channel<T> {
         Channel {
             id: object::new(ctx),
-            processed_call_approvals: vec_set::empty(),
-            last_processed_approval_epoch: 0,
+            processed_call_approvals: linked_table::new(ctx),
             data: t
         }
     }
@@ -89,7 +86,11 @@ module axelar::channel {
     /// Destroy a `Channel<T>` releasing the T. Not constrained and can be performed
     /// by any party as long as they own a Channel.
     public fun destroy_channel<T: store>(self: Channel<T>): T {
-        let Channel { id, processed_call_approvals: _, last_processed_approval_epoch: _, data } = self;
+        let Channel { id, processed_call_approvals, data } = self;
+        while (!linked_table::is_empty(&processed_call_approvals)) {
+            linked_table::pop_back(&mut processed_call_approvals);
+        };
+        linked_table::destroy_empty(processed_call_approvals);
         object::delete(id);
         data
     }
@@ -113,33 +114,22 @@ module axelar::channel {
         })
     }
 
-    /// By using &mut here we make sure that the object is not in the freeze
-    /// state and the owner has full access to the target.
-    ///
-    /// Most common scenario would be to target a shared object, however this
-    /// messaging system allows sending private messages which can be consumed
-    /// by single-owner targets.
-    ///
-    /// For Capability-locking, a mutable reference to the `Channel.data` field is
-    /// returned; plus the hot potato message object.
-    public fun take_approved_call<T: store>(
-        axelar: &mut AxelarValidators,
-        t: &mut Channel<T>,
-        cmd_id: address,
-        payload: vector<u8>
-    ): (&mut T, ApprovedCall) {
-        let approved_call = validators::take_approved_call(axelar, cmd_id, payload);
-        let current_epoch = validators::epoch(axelar);
+    /// Consume a approved call hot potato object sent to this `Channel` from another chain.
+    /// For Capability-locking, a mutable reference to the `Channel.data` field is returned.
+    public fun consume_approved_call<T: store>(t: &mut Channel<T>, approved_call: ApprovedCall): &mut T {
+        let cmd_id = approved_call::cmd_id(&approved_call);
+        let target_id = approved_call::target_id(&approved_call);
+        // Check if the message has already been processed.
+        assert!(!linked_table::contains(&t.processed_call_approvals, cmd_id), EDuplicateMessage);
+        // Check if the message is sent to the correct destination.
+        assert!(target_id == object::uid_to_address(&t.id), EWrongDestination);
 
-        if (t.last_processed_approval_epoch != current_epoch) {
-            t.processed_call_approvals = vec_set::empty();
-            t.last_processed_approval_epoch = current_epoch;
+        linked_table::push_back(&mut t.processed_call_approvals, cmd_id, true);
+        if (linked_table::length(&t.processed_call_approvals) > MAX_PROCESSED_APPROVAL_HISTORY) {
+            linked_table::pop_front(&mut t.processed_call_approvals);
         };
 
-        assert!(!vec_set::contains(&t.processed_call_approvals, &cmd_id), EDuplicateMessage);
-        assert!(approved_call::target_id(&approved_call) == object::uid_to_address(&t.id), EWrongDestination);
-
-        vec_set::insert(&mut t.processed_call_approvals, cmd_id);
-        (&mut t.data, approved_call)
+        approved_call::consume(approved_call);
+        &mut t.data
     }
 }
