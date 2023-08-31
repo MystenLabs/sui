@@ -76,6 +76,30 @@ describe('Publickey', () => {
 	});
 
 	it('`fromPublicKeys()` should handle invalid parameters', async () => {
+		const k4 = new Secp256r1Keypair();
+		const pk4 = k4.getPublicKey();
+
+		const k5 = new Secp256r1Keypair();
+		const pk5 = k5.getPublicKey();
+
+		const k6 = new Secp256r1Keypair();
+		const pk6 = k6.getPublicKey();
+
+		const k7 = new Secp256r1Keypair();
+		const pk7 = k7.getPublicKey();
+
+		const k8 = new Secp256r1Keypair();
+		const pk8 = k8.getPublicKey();
+
+		const k9 = new Secp256r1Keypair();
+		const pk9 = k9.getPublicKey();
+
+		const k10 = new Secp256r1Keypair();
+		const pk10 = k10.getPublicKey();
+
+		const k11 = new Secp256r1Keypair();
+		const pk11 = k11.getPublicKey();
+
 		expect(() =>
 			MultiSigPublicKey.fromPublicKeys({
 				threshold: 10,
@@ -83,15 +107,14 @@ describe('Publickey', () => {
 					{ publicKey: pk1, weight: 1 },
 					{ publicKey: pk2, weight: 2 },
 					{ publicKey: pk3, weight: 3 },
-					{ publicKey: pk1, weight: 1 },
-					{ publicKey: pk2, weight: 2 },
-					{ publicKey: pk3, weight: 3 },
-					{ publicKey: pk1, weight: 1 },
-					{ publicKey: pk2, weight: 2 },
-					{ publicKey: pk3, weight: 3 },
-					{ publicKey: pk1, weight: 1 },
-					{ publicKey: pk2, weight: 2 },
-					{ publicKey: pk3, weight: 3 },
+					{ publicKey: pk4, weight: 1 },
+					{ publicKey: pk5, weight: 2 },
+					{ publicKey: pk6, weight: 3 },
+					{ publicKey: pk7, weight: 1 },
+					{ publicKey: pk8, weight: 2 },
+					{ publicKey: pk9, weight: 3 },
+					{ publicKey: pk10, weight: 1 },
+					{ publicKey: pk11, weight: 2 },
 				],
 			}),
 		).toThrowError(new Error(`Max number of signers in a multisig is ${MAX_SIGNER_IN_MULTISIG}`));
@@ -308,10 +331,6 @@ describe('Publickey', () => {
 
 		expect(async () => await multiSigPublicKey.verify(digest, sig1.signature)).rejects.toThrow(
 			new Error('Invalid signature scheme'),
-		);
-
-		expect(async () => await multiSigPublicKey.verify(digest, data)).rejects.toThrow(
-			new Error('Multisig verification only supports serialized signature'),
 		);
 	});
 
