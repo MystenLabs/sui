@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useZodForm } from '@mysten/core';
+import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { z } from 'zod';
 import { useAccounts } from '../../hooks/useAccounts';
@@ -17,7 +18,6 @@ import {
 	DialogDescription,
 	DialogTrigger,
 } from '_src/ui/app/shared/Dialog';
-import { useState } from 'react';
 
 const formSchema = z.object({
 	nickname: z.string().trim(),
