@@ -30,7 +30,7 @@ const providerToLabel: Record<ZkProvider, string> = {
 
 // todo: we probbaly have some duplication here with the various FooterLink / ButtonOrLink
 // components - we should look to add these to base components somewhere
-export function FooterLink({ children, to, ...props }: ButtonOrLinkProps) {
+function FooterLink({ children, to, ...props }: ButtonOrLinkProps) {
 	return (
 		<ButtonOrLink
 			className="text-hero-darkest/40 no-underline uppercase hover:text-hero outline-none border-none bg-transparent hover:cursor-pointer"
