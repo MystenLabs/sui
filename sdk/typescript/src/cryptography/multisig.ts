@@ -49,7 +49,7 @@ export type MultiSig = {
 };
 
 export const MAX_SIGNER_IN_MULTISIG = 10;
-export const MIN_SIGNER_IN_MULTISIG = 2;
+export const MIN_SIGNER_IN_MULTISIG = 1;
 
 /// Derives a multisig address from a list of pk and weights and threshold.
 // It is the 32-byte Blake2b hash of the serializd bytes of `flag_MultiSig || threshold || flag_1 || pk_1 || weight_1
