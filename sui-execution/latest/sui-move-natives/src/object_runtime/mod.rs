@@ -28,7 +28,7 @@ use sui_types::{
     metrics::LimitsMetrics,
     object::{MoveObject, Owner},
     storage::ChildObjectResolver,
-    SUI_CLOCK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
 pub(crate) mod object_store;
@@ -281,7 +281,12 @@ impl<'a> ObjectRuntime<'a> {
         // - Otherwise, check the input objects for the previous owner
         // - If it was not in the input objects, it must have been wrapped or must have been a
         //   child object
-        let is_framework_obj = [SUI_SYSTEM_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID].contains(&id);
+        let is_framework_obj = [
+            SUI_SYSTEM_STATE_OBJECT_ID,
+            SUI_CLOCK_OBJECT_ID,
+            SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+        ]
+        .contains(&id);
         let transfer_result = if self.state.new_ids.contains_key(&id) || is_framework_obj {
             TransferResult::New
         } else if let Some(prev_owner) = self.state.input_objects.get(&id) {
