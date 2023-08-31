@@ -28,7 +28,7 @@ export function Search({
 }: SearchProps) {
 	return (
 		<Combobox value={queryValue} onValueChange={onChange}>
-			<div className="relative flex items-center">
+			<div className="relative flex h-10 items-center">
 				<div className="absolute left-0 ml-3 block items-center text-2xl text-hero-darkest/80">
 					<Search16 />
 				</div>
