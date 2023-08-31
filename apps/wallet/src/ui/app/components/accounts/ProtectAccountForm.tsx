@@ -5,11 +5,11 @@ import { useZodForm } from '@mysten/core';
 import { type SubmitHandler } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
+import { Link } from '../../shared/Link';
 import { CheckboxField } from '../../shared/forms/CheckboxField';
 import { Form } from '../../shared/forms/Form';
 import { SelectField } from '../../shared/forms/SelectField';
 import { TextField } from '../../shared/forms/TextField';
-import ExternalLink from '../external-link';
 import { Button } from '_app/shared/ButtonUI';
 import { ToS_LINK } from '_src/shared/constants';
 
@@ -85,12 +85,13 @@ export function ProtectAccountForm({
 					<CheckboxField
 						name="acceptedTos"
 						label={
-							<>
-								I read and agreed to the{' '}
-								<ExternalLink href={ToS_LINK} className="text-[#1F6493] no-underline">
-									Terms of Services
-								</ExternalLink>
-							</>
+							<Link
+								href={ToS_LINK}
+								beforeColor="steelDarker"
+								color="suiDark"
+								text="Terms of Services"
+								before="I read and agreed to the"
+							/>
 						}
 					/>
 				) : null}

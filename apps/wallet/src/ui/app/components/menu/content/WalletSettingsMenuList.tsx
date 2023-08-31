@@ -52,10 +52,10 @@ function MenuList() {
 						to={moreOptionsUrl}
 					/>
 				</div>
+				<div className="flex-1" />
 				<div className="flex flex-col items-stretch mt-2.5">
 					<FaucetRequestButton variant="outline" />
 				</div>
-				<div className="flex-1" />
 				<div className="px-2.5 flex flex-col items-center justify-center no-underline gap-3.75 mt-3.75">
 					<Link
 						href={ToS_LINK}
