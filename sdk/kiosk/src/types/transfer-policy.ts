@@ -3,7 +3,6 @@
 
 import { TransactionArgument, type TransactionBlock } from '@mysten/sui.js/transactions';
 import { type ObjectOwner } from '@mysten/sui.js/client';
-import { KioskItem } from './kiosk';
 import { ObjectArgument } from '.';
 
 /** The Transfer Policy module. */
@@ -44,7 +43,9 @@ export type TransferPolicyCreated = {
 // e.g. `if(!'my_key' in ruleParams!) throw new Error("Can't resolve that rule!")`
 export type RuleResolvingParams = {
 	tx: TransactionBlock;
-	item: KioskItem; // Not sure I want this to be the type `KioskItem`. Need some extra thinking here.
+	itemType: string;
+	itemId: string;
+	price: string;
 	policyId: ObjectArgument;
 	kiosk: ObjectArgument;
 	ownedKiosk: ObjectArgument;

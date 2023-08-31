@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type TransactionBlock } from '@mysten/sui.js/transactions';
+import { TransactionArgument, type TransactionBlock } from '@mysten/sui.js/transactions';
 import {
 	attachFloorPriceRuleTx,
 	attachKioskLockRuleTx,
@@ -10,7 +10,9 @@ import {
 } from '../tx/rules/attach';
 import {
 	createTransferPolicy,
+	createTransferPolicyWithoutSharing,
 	removeTransferPolicyRule,
+	shareTransferPolicy,
 	withdrawFromPolicy,
 } from '../tx/transfer-policy';
 import {
@@ -28,11 +30,11 @@ import {
 	royaltyRuleAddress,
 } from '../constants';
 
-export class TransferPolicyClient {
+export class TransferPolicyManager {
 	client: SuiClient;
 	network: Network;
-	policyId?: string;
-	policyCap?: string;
+	policyId?: ObjectArgument;
+	policyCap?: ObjectArgument;
 	itemType?: string;
 
 	constructor(options: KioskClientOptions) {
@@ -52,7 +54,7 @@ export class TransferPolicyClient {
 	 * @param publisher The Publisher Object Id.
 	 * @param address Address to save the `TransferPolicyCap` object to.
 	 */
-	async create(
+	async createAndShare(
 		tx: TransactionBlock,
 		itemType: string,
 		publisher: ObjectArgument,
@@ -69,6 +71,50 @@ export class TransferPolicyClient {
 		tx.transferObjects([cap], tx.pure(address, 'address'));
 	}
 
+	/**
+	 * A convenient function to create a Transfer Policy and attach some rules
+	 * before sharing it (so you can prepare it in a single PTB)
+	 * @param tx The Transaction Block
+	 * @param itemType The Type (`T`) for which we're creating the transfer policy.
+	 * @param publisher The Publisher Object Id.
+	 * @param address Address to save the `TransferPolicyCap` object to.
+	 */
+	async create(
+		tx: TransactionBlock,
+		itemType: string,
+		publisher: ObjectArgument,
+		options?: {
+			skipCheck?: boolean;
+		},
+	): Promise<TransferPolicyManager> {
+		if (!options || !options.skipCheck) {
+			let policies = await queryTransferPolicy(this.client, itemType);
+			if (policies.length > 0) throw new Error("There's already transfer policy for this Type.");
+		}
+		const [transferPolicy, cap] = createTransferPolicyWithoutSharing(tx, itemType, publisher);
+
+		this.setPolicy(transferPolicy, cap, itemType); // sets the client's TP to the newly created one.
+		return this;
+	}
+
+	/**
+	 * This can be called after calling the `create` function to share the `TransferPolicy`,
+	 * and transfer the `TransferPolicyCap` to the specified address
+	 */
+	shareAndTransferCap(tx: TransactionBlock, address: string) {
+		if (!this.itemType || !this.policyCap || !this.policyId)
+			throw new Error('This function can only be called after `transferPolicyManager.create`');
+
+		shareTransferPolicy(tx, this.itemType, this.policyId as TransactionArgument);
+		tx.transferObjects([this.policyCap as TransactionArgument], tx.pure(address, 'address'));
+
+		this.resetPolicy();
+	}
+
+	resetPolicy() {
+		this.policyCap = undefined;
+		this.policyId = undefined;
+	}
 	/**
 	 * Setup the TransferPolicy object by passing just the policyCapId.
 	 * It automatically finds the policyId, as well as it's type.
@@ -99,21 +145,21 @@ export class TransferPolicyClient {
 	/**
 	 * Set Policy by passing the types / ids manually.
 	 * Use `setPolicyAsync` to automatically fetch them by just passing the Cap's object Id.
-	 * @param policyId The `TransferPolicy` Object ID
-	 * @param policyCap The `TransferPolicyCap` Object ID
+	 * @param policyId The `TransferPolicy` Object ID (or object ref)
+	 * @param policyCap The `TransferPolicyCap` Object ID (or object ref)
 	 * @param type The `T` (type) for the `TransferPolicy`
 	 */
-	setPolicy(policyId: string, policyCap: string, type: string) {
+	setPolicy(policyId: ObjectArgument, policyCap: ObjectArgument, type: string) {
 		this.setPolicyId(policyId);
 		this.setPolicyCap(policyCap);
 		this.setPolicyType(type);
 	}
 
-	setPolicyId(id: string) {
+	setPolicyId(id: ObjectArgument) {
 		this.policyId = id;
 	}
 
-	setPolicyCap(capId: string) {
+	setPolicyCap(capId: ObjectArgument) {
 		this.policyCap = capId;
 	}
 
@@ -165,6 +211,7 @@ export class TransferPolicyClient {
 			minAmount,
 			royaltyRuleAddress[this.network],
 		);
+		return this;
 	}
 
 	/**
@@ -183,6 +230,7 @@ export class TransferPolicyClient {
 			this.policyCap!,
 			kioskLockRuleAddress[this.network],
 		);
+		return this;
 	}
 
 	/**
@@ -199,6 +247,7 @@ export class TransferPolicyClient {
 			this.policyCap!,
 			personalKioskAddress[this.network],
 		);
+		return this;
 	}
 
 	/**
@@ -216,6 +265,7 @@ export class TransferPolicyClient {
 			minPrice,
 			floorPriceRuleAddress[this.network],
 		);
+		return this;
 	}
 
 	removeLockRule(tx: TransactionBlock) {
@@ -231,6 +281,7 @@ export class TransferPolicyClient {
 			this.policyId!,
 			this.policyCap!,
 		);
+		return this;
 	}
 
 	removeRoyaltyRule(tx: TransactionBlock) {
@@ -246,6 +297,7 @@ export class TransferPolicyClient {
 			this.policyId!,
 			this.policyCap!,
 		);
+		return this;
 	}
 
 	removePersonalKioskRule(tx: TransactionBlock) {
@@ -261,6 +313,7 @@ export class TransferPolicyClient {
 			this.policyId!,
 			this.policyCap!,
 		);
+		return this;
 	}
 
 	removeFloorPriceRule(tx: TransactionBlock) {
@@ -276,6 +329,7 @@ export class TransferPolicyClient {
 			this.policyId!,
 			this.policyCap!,
 		);
+		return this;
 	}
 
 	// Internal function that that the policy's Id + Cap + type have been set.

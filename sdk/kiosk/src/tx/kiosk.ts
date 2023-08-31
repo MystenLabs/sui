@@ -185,17 +185,16 @@ export function withdrawFromKiosk(
 	tx: TransactionBlock,
 	kiosk: ObjectArgument,
 	kioskCap: ObjectArgument,
-	amount: string | bigint | null,
+	amount?: string | bigint | null,
 ): TransactionArgument {
-	let amountArg =
-		amount !== null
-			? tx.pure(
-					{
-						Some: amount,
-					},
-					'Option<u64>',
-			  )
-			: tx.pure({ None: true }, 'Option<u64>');
+	let amountArg = amount
+		? tx.pure(
+				{
+					Some: amount,
+				},
+				'Option<u64>',
+		  )
+		: tx.pure({ None: true }, 'Option<u64>');
 
 	let [coin] = tx.moveCall({
 		target: `${KIOSK_MODULE}::withdraw`,

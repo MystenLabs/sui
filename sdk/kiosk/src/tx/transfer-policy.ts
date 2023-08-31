@@ -14,19 +14,47 @@ export function createTransferPolicy(
 	itemType: string,
 	publisher: ObjectArgument,
 ): TransactionArgument {
+	let [transferPolicy, transferPolicyCap] = createTransferPolicyWithoutSharing(
+		tx,
+		itemType,
+		publisher,
+	);
+
+	shareTransferPolicy(tx, itemType, transferPolicy);
+
+	return transferPolicyCap;
+}
+
+/**
+ * Creates a transfer Policy and returns both the Policy and the Cap.
+ * Used if we want to use the policy before making it a shared object.
+ */
+export function createTransferPolicyWithoutSharing(
+	tx: TransactionBlock,
+	itemType: string,
+	publisher: ObjectArgument,
+): [TransactionArgument, TransactionArgument] {
 	let [transferPolicy, transferPolicyCap] = tx.moveCall({
 		target: `${TRANSFER_POLICY_MODULE}::new`,
 		typeArguments: [itemType],
 		arguments: [objArg(tx, publisher)],
 	});
 
+	return [transferPolicy, transferPolicyCap];
+}
+/**
+ * Converts Transfer Policy to a shared object.
+ */
+export function shareTransferPolicy(
+	tx: TransactionBlock,
+	itemType: string,
+	transferPolicy: TransactionArgument,
+) {
 	tx.moveCall({
 		target: `0x2::transfer::public_share_object`,
 		typeArguments: [`${TRANSFER_POLICY_TYPE}<${itemType}>`],
 		arguments: [transferPolicy],
 	});
-
-	return transferPolicyCap;
 }
 
 /**

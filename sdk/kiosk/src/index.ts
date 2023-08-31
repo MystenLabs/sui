@@ -7,4 +7,4 @@ export * from './query/transfer-policy';
 export * from './types';
 export * from './constants';
 export * from './client/kiosk-client';
-export * from './client/tp-client';
+export * from './client/tp-manager';

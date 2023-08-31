@@ -22,7 +22,7 @@ export enum Network {
 }
 
 /**
- * The Client Options for Both KioskClient & TransferPolicyClient.
+ * The Client Options for Both KioskClient & TransferPolicyManager.
  */
 export type KioskClientOptions = {
 	client: SuiClient;

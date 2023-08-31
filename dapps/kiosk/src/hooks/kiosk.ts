@@ -9,20 +9,18 @@ import {
 	TANSTACK_OWNED_KIOSK_KEY,
 } from '../utils/constants';
 import { useRpc } from '../context/RpcClientContext';
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
 import { SuiObjectResponse } from '@mysten/sui.js/client';
 import {
 	Kiosk,
-	KioskClient,
 	KioskData,
 	KioskItem,
 	KioskListing,
 	KioskOwnerCap,
-	Network,
 	getKioskObject,
 } from '@mysten/kiosk';
 import { parseObjectDisplays, processKioskListings } from '../utils/utils';
 import { OwnedObjectType } from '../components/Inventory/OwnedObjects';
+import { useKioskClient } from '../context/KioskClientContext';
 
 export type KioskFnType = (item: OwnedObjectType, price?: string) => Promise<void> | void;
 
@@ -30,14 +28,9 @@ export type KioskFnType = (item: OwnedObjectType, price?: string) => Promise<voi
  * A helper to get user's kiosks.
  * If the user doesn't have a kiosk, the return is an object with null values.
  */
-const kioskClient = new KioskClient({
-	client: new SuiClient({
-		url: getFullnodeUrl('testnet'),
-	}),
-	network: Network.TESTNET,
-});
-
 export function useOwnedKiosk(address: string | undefined) {
+	const kioskClient = useKioskClient();
+
 	return useQuery({
 		queryKey: [TANSTACK_OWNED_KIOSK_KEY, address],
 		refetchOnMount: false,
@@ -65,6 +58,7 @@ export function useOwnedKiosk(address: string | undefined) {
  */
 export function useKiosk(kioskId: string | undefined | null) {
 	const provider = useRpc();
+	const kioskClient = useKioskClient();
 
 	return useQuery({
 		queryKey: [TANSTACK_KIOSK_KEY, kioskId],
@@ -73,7 +67,7 @@ export function useKiosk(kioskId: string | undefined | null) {
 			items: SuiObjectResponse[];
 		}> => {
 			if (!kioskId) return { kioskData: null, items: [] };
-			const res = await kioskClient.fetchKiosk(kioskId, {
+			const res = await kioskClient.getKiosk(kioskId, {
 				withKioskFields: true,
 				withListingPrices: true,
 			});
