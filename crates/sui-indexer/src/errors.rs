@@ -36,6 +36,9 @@ pub enum IndexerError {
     #[error("Fullnode returns unexpected responses, which may block indexers from proceeding, with error: `{0}`")]
     UnexpectedFullnodeResponseError(String),
 
+    #[error("Indexer failed to transform data with error: `{0}`")]
+    DataTransformationError(String),
+
     #[error("Indexer failed to read fullnode with error: `{0}`")]
     FullNodeReadingError(String),
 
@@ -75,11 +78,17 @@ pub enum IndexerError {
     #[error("Indexer does not support the feature with error: `{0}`")]
     NotSupportedError(String),
 
+    #[error("Indexer read corrupted/incompatible data from persistent storage: `{0}`")]
+    PersistentStorageDataCorruptionError(String),
+
     #[error(transparent)]
     UncategorizedError(#[from] anyhow::Error),
 
     #[error(transparent)]
     ObjectIdParseError(#[from] ObjectIDParseError),
+
+    #[error("Invalid transaction digest with error: `{0}`")]
+    InvalidTransactionDigestError(String),
 
     #[error(transparent)]
     SuiError(#[from] SuiError),
@@ -92,6 +101,9 @@ pub enum IndexerError {
 
     #[error(transparent)]
     UserInputError(#[from] UserInputError),
+
+    #[error("Indexer failed to resolve module with error: `{0}`")]
+    ModuleResolutionError(String),
 
     #[error(transparent)]
     ObjectResponseError(#[from] SuiObjectResponseError),

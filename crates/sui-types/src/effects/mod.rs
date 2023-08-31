@@ -100,6 +100,7 @@ impl Default for TransactionEffects {
     }
 }
 
+#[derive(Debug)]
 pub enum ObjectRemoveKind {
     Delete,
     Wrap,
