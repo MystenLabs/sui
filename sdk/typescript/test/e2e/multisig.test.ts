@@ -144,8 +144,8 @@ describe('Multisig scenarios', () => {
 		//Comparison
 		expect(combinedM).toEqual(combinedP);
 
+		expect(decodedM).toEqual(decodedP);
 		expect(decodedM)
-			.toEqual(decodedP)
 			.toEqual([
 				{
 					signature: parseSerializedSignature((await k1.signPersonalMessage(signData)).signature)
