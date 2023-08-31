@@ -1,0 +1,47 @@
+# The `@msyten/sui.js/utils` package
+
+This package contains some utilities that simplify common operations when working with the Sui
+typescript SDK.
+
+## Constants
+
+A number of constants exported for common uses cases:
+
+- `MIST_PER_SUI`: The conversion rate for mist to sui (1,000,000,000)
+- `SUI_DECIMALS`: The number of decimals places that a mist value needs to be shifted to be
+  converted to sui (9)
+- `SUI_ADDRESS_LENGTH: The number of bytes in a sui address (32)
+- `MOVE_STDLIB_ADDRESS`: The address for teh move standard library
+- `SUI_FRAMEWORK_ADDRESS`: The address for the sui framework
+- `SUI_SYSTEM_ADDRESS`: The address for the sui system module
+- `SUI_CLOCK_OBJECT_ID`: The address for the `sui::clock::Clock` object
+- `SUI_SYSTEM_STATE_OBJECT_ID`: The address for the `SuiSystemState` object
+
+## Formatters
+
+The following helpers can be used for formatting various values:
+
+- `formatAddress`
+- `formatDigest`
+- `normalizeStructTag`
+- `normalizeSuiAddress`
+- `normalizeSuiObjectId`
+
+## Validators
+
+The following helpers can be used to validate the format of various values (this only validates that
+the value is in the correct format, but does not validate the value is valid for a specific use
+case, or exists on chain).
+
+- `isValidSuiAddress`
+- `isValidSuiObjectId`
+- `isValidTransactionDigest`
+
+## Encoding
+
+The following methods are re-exported to help with converting between commonly used encodings
+
+- `fromHEX`: Serializes a Uint8Array to a hex string
+- `toHEX`: Deserializes a hex string to a Uint8Array
+- `fromB64`: Serializes a Uint8Array to a base64 string
+- `toB64`: Deserializes a base64 string to a Uint8Array

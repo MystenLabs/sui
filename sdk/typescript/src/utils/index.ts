@@ -13,7 +13,7 @@ import {
 	SUI_ADDRESS_LENGTH,
 } from './sui-types.js';
 
-export { fromB64, toB64 } from '@mysten/bcs';
+export { fromB64, toB64, fromHEX, toHEX } from '@mysten/bcs';
 export { is, assert } from 'superstruct';
 
 export {

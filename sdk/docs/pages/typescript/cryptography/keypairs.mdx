@@ -125,3 +125,49 @@ const exampleMnemonic = 'result crisp session latin ...';
 
 const keyPair = Ed25519Keypair.deriveKeypair(exampleMnemonic);
 ```
+
+## Exporting and importing Keypairs
+
+Keypairs implement an `export` function that can be used to export a keypair in a standard format.
+The return value is an object with a `scheme` property that indicates the what type of keypair was
+exported, and a `privateKey` which can be used to derive the keypair again.
+
+```typescript
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+import { Secp256k1Keypair } from '@mysten/sui.js/keypairs/Secp256k1';
+import { Secp256r1Keypair } from '@mysten/sui.js/keypairs/Secp256r1';
+import { Keypair, ExportedKeypair } from '@mysten/sui.js/cryptography';
+import { fromB64 } from '@mysten/sui.js/utils';
+
+const keypair = new Ed25519Keypair();
+const exported = keypair.export();
+const imported = fromExportedKeypair(exported);
+
+export function fromExportedKeypair(keypair: ExportedKeypair): Keypair {
+	const secretKey = fromB64(keypair.privateKey);
+	switch (keypair.schema) {
+		case 'ED25519':
+			return Ed25519Keypair.fromSecretKey(pureSecretKey);
+		case 'Secp256k1':
+			return Secp256k1Keypair.fromSecretKey(secretKey);
+		case 'Secp256r1':
+			return Secp256r1Keypair.fromSecretKey(secretKey);
+		default:
+			throw new Error(`Invalid keypair schema ${keypair.schema}`);
+	}
+}
+```
+
+## Deriving a keypair from a hex encoded secret key
+
+If you have an existing secret key formatted as a hex encoded string, you can derive a keypair by
+converting the secret key to a Uint8Array and passing it to the `fromSecretKey` method of a Keypair
+class.
+
+```typescript
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+import { fromHex } from '@mysten/sui.js/utils';
+
+const secret = '0x...';
+const keypair = Ed25519Keypair.fromSecretKey(fromHex(secret));
+```
