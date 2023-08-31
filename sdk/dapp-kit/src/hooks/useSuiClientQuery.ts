@@ -6,13 +6,13 @@ import { useQuery } from '@tanstack/react-query';
 import { useSuiClientContext } from './useSuiClient.js';
 import type { SuiClient } from '@mysten/sui.js/client';
 
-type SuiRpcMethodName = {
+export type SuiRpcMethodName = {
 	[K in keyof SuiClient]: SuiClient[K] extends ((input: any) => Promise<any>) | (() => Promise<any>)
 		? K
 		: never;
 }[keyof SuiClient];
 
-type Methods = {
+export type SuiRpcMethods = {
 	[K in SuiRpcMethodName]: SuiClient[K] extends (input: infer P) => Promise<infer R>
 		? {
 				name: K;
@@ -28,18 +28,18 @@ type Methods = {
 		: never;
 };
 
-export type UseSuiClientQueryOptions<T extends keyof Methods> = Omit<
-	UseQueryOptions<Methods[T]['result'], unknown, Methods[T]['result'], unknown[]>,
+export type UseSuiClientQueryOptions<T extends keyof SuiRpcMethods> = Omit<
+	UseQueryOptions<SuiRpcMethods[T]['result'], unknown, SuiRpcMethods[T]['result'], unknown[]>,
 	'queryFn'
 >;
 
-export function useSuiClientQuery<T extends keyof Methods>(
+export function useSuiClientQuery<T extends keyof SuiRpcMethods>(
 	{
 		method,
 		params,
 	}: {
 		method: T;
-		params: Methods[T]['params'];
+		params: SuiRpcMethods[T]['params'];
 	},
 	{
 		queryKey,
