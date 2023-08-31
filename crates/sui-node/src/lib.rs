@@ -991,6 +991,9 @@ impl SuiNode {
         let new_epoch_start_state = epoch_store.epoch_start_state();
         let committee = new_epoch_start_state.get_narwhal_committee();
 
+        let authenticator_state_obj_start_version =
+            state.get_authenticator_state_start_version()?;
+
         let consensus_handler = Arc::new(ConsensusHandler::new(
             epoch_store.clone(),
             checkpoint_service.clone(),
@@ -999,6 +1002,7 @@ impl SuiNode {
             low_scoring_authorities,
             authority_names_to_hostnames,
             committee,
+            authenticator_state_obj_start_version,
             state.metrics.clone(),
         ));
 

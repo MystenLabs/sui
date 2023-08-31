@@ -20,9 +20,8 @@ use crate::object::{MoveObject, Object, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
 use crate::{
-    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
-    SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID,
-    SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
+    SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{encoding::Base64, hash::HashFunction};
@@ -85,11 +84,6 @@ impl CallArg {
     pub const CLOCK_MUT: Self = Self::Object(ObjectArg::SharedObject {
         id: SUI_CLOCK_OBJECT_ID,
         initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-        mutable: true,
-    });
-    pub const AUTHENTICATOR_STATE_MUT: Self = Self::Object(ObjectArg::SharedObject {
-        id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
-        initial_shared_version: SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
         mutable: true,
     });
 }
@@ -881,9 +875,9 @@ impl TransactionKind {
                 initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
                 mutable: true,
             })),
-            Self::AuthenticatorStateUpdate(_) => Either::Left(iter::once(SharedInputObject {
+            Self::AuthenticatorStateUpdate(update) => Either::Left(iter::once(SharedInputObject {
                 id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
-                initial_shared_version: SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
+                initial_shared_version: update.authenticator_state_obj_start_version,
                 mutable: true,
             })),
             Self::ProgrammableTransaction(pt) => {
@@ -923,10 +917,10 @@ impl TransactionKind {
                     mutable: true,
                 }]
             }
-            Self::AuthenticatorStateUpdate(_) => {
+            Self::AuthenticatorStateUpdate(update) => {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
-                    initial_shared_version: SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
+                    initial_shared_version: update.authenticator_state_obj_start_version,
                     mutable: true,
                 }]
             }
@@ -1989,11 +1983,13 @@ impl VerifiedTransaction {
     pub fn new_authenticator_state_update(
         epoch: u64,
         round: u64,
+        authenticator_state_obj_start_version: SequenceNumber,
         new_active_jwks: Vec<ActiveJwk>,
     ) -> Self {
         AuthenticatorStateUpdate {
             epoch,
             round,
+            authenticator_state_obj_start_version,
             new_active_jwks,
         }
         .pipe(TransactionKind::AuthenticatorStateUpdate)

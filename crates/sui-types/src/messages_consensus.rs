@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authenticator_state::ActiveJwk;
-use crate::base_types::{AuthorityName, ObjectRef, TransactionDigest};
+use crate::base_types::{AuthorityName, ObjectRef, SequenceNumber, TransactionDigest};
 use crate::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointTimestamp,
 };
@@ -34,6 +34,8 @@ pub struct AuthenticatorStateUpdate {
     pub epoch: u64,
     /// Consensus round of the authenticator state update
     pub round: u64,
+    /// Start version of the authenticator state object
+    pub authenticator_state_obj_start_version: SequenceNumber,
     /// newly active jwks
     pub new_active_jwks: Vec<ActiveJwk>,
     // to version this struct, do not add new fields. Instead, add a AuthenticatorStateUpdateV2 to

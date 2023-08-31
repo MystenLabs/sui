@@ -45,8 +45,8 @@ mod checked {
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
     use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
     use sui_types::transaction::{
-        Argument, CallArg, ChangeEpoch, Command, GenesisTransaction, ProgrammableTransaction,
-        TransactionKind,
+        Argument, CallArg, ChangeEpoch, Command, GenesisTransaction, ObjectArg,
+        ProgrammableTransaction, TransactionKind,
     };
     use sui_types::{
         base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
@@ -54,7 +54,9 @@ mod checked {
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
         SUI_FRAMEWORK_ADDRESS,
     };
-    use sui_types::{SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID};
+    use sui_types::{
+        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
+    };
 
     /// If a transaction digest shows up in this list, when executing such transaction,
     /// we will always return `ExecutionError::CertificateDenied` without executing it (but still do
@@ -861,7 +863,11 @@ mod checked {
                 AUTHENTICATOR_STATE_UPDATE_FUNCTION_NAME.to_owned(),
                 vec![],
                 vec![
-                    CallArg::AUTHENTICATOR_STATE_MUT,
+                    CallArg::Object(ObjectArg::SharedObject {
+                        id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                        initial_shared_version: update.authenticator_state_obj_start_version,
+                        mutable: true,
+                    }),
                     CallArg::Pure(bcs::to_bytes(&update.new_active_jwks).unwrap()),
                 ],
             );
