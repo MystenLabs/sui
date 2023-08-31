@@ -23,7 +23,7 @@ const queryClient = new QueryClient({
 ReactDOM.createRoot(document.getElementById('root')!).render(
 	<React.StrictMode>
 		<QueryClientProvider client={queryClient}>
-			<WalletProvider enableUnsafeBurner={import.meta.env.DEV}>
+			<WalletProvider enableUnsafeBurner={import.meta.env.DEV} autoConnect>
 				<RouterProvider router={router} />
 			</WalletProvider>
 		</QueryClientProvider>

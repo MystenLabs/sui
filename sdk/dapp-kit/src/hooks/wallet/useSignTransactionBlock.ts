@@ -21,7 +21,7 @@ type UseSignTransactionBlockMutationOptions = Omit<
 
 // TODO: Figure out the query/mutation key story and whether or not we want to expose
 // key factories from dapp-kit
-function mutationKey(args: UseSignTransactionBlockArgs) {
+function mutationKey(args: Partial<UseSignTransactionBlockArgs>) {
 	return [{ scope: 'wallet', entity: 'sign-transaction-block', ...args }] as const;
 }
 
@@ -33,7 +33,7 @@ export function useSignTransactionBlock({
 	chain,
 	transactionBlock,
 	...mutationOptions
-}: UseSignTransactionBlockArgs & UseSignTransactionBlockMutationOptions) {
+}: Partial<UseSignTransactionBlockArgs> & UseSignTransactionBlockMutationOptions) {
 	const { currentWallet } = useWalletContext();
 
 	return useMutation({

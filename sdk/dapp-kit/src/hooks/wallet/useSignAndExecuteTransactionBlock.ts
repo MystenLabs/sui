@@ -26,7 +26,7 @@ type UseSignAndExecuteTransactionBlockMutationOptions = Omit<
 
 // TODO: Figure out the query/mutation key story and whether or not we want to expose
 // key factories from dapp-kit
-function mutationKey(args: UseSignAndExecuteTransactionBlockArgs) {
+function mutationKey(args: Partial<UseSignAndExecuteTransactionBlockArgs>) {
 	return [{ scope: 'wallet', entity: 'sign-and-execute-transaction-block', ...args }] as const;
 }
 
@@ -38,7 +38,8 @@ export function useSignAndExecuteTransactionBlock({
 	chain,
 	transactionBlock,
 	...mutationOptions
-}: UseSignAndExecuteTransactionBlockArgs & UseSignAndExecuteTransactionBlockMutationOptions) {
+}: Partial<UseSignAndExecuteTransactionBlockArgs> &
+	UseSignAndExecuteTransactionBlockMutationOptions) {
 	const { currentWallet } = useWalletContext();
 
 	return useMutation({

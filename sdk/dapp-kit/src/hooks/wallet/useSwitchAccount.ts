@@ -1,15 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiAddress } from '@mysten/sui.js';
 import type { UseMutationOptions } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
 import { useWalletContext } from 'dapp-kit/src/components/wallet-provider/WalletProvider';
 import { setMostRecentWalletConnectionInfo } from 'dapp-kit/src/components/wallet-provider/walletUtils';
-import { WalletNotFoundError } from 'dapp-kit/src/errors/walletErrors';
+import { WalletNotConnectedError, WalletNotFoundError } from 'dapp-kit/src/errors/walletErrors';
 
 type SwitchAccountArgs = {
-	accountAddress: SuiAddress;
+	accountAddress: string;
 };
 
 type SwitchAccountResult = void;
@@ -29,27 +28,24 @@ function mutationKey(args: SwitchAccountArgs) {
  * Mutation hook for establishing a connection to a specific wallet.
  */
 export function useSwitchAccount({
-	account,
+	accountAddress,
 	...mutationOptions
 }: SwitchAccountArgs & UseSwitchAccountMutationOptions) {
-	const { wallets, storageAdapter, storageKey, dispatch } = useWalletContext();
+	const { wallets, storageAdapter, storageKey, currentWallet, dispatch } = useWalletContext();
 
 	return useMutation({
-		mutationKey: mutationKey({ walletName, silent }),
-		mutationFn: async ({ walletName, ...standardConnectInput }) => {
-			const wallet = wallets.find((wallet) => wallet.name === walletName);
-			if (!wallet) {
-				throw new WalletNotFoundError(
-					`Failed to connect to wallet with name ${walletName}. Double check that the name provided is correct and that a wallet with that name is registered.`,
-				);
-			}
-			try {
-				await storageAdapter.set(storageKey, `${wallet.name}-${0}`);
-			} catch {
-				// Ignore error
+		mutationKey: mutationKey({ accountAddress }),
+		mutationFn: async ({ accountAddress }) => {
+			if (!currentWallet) {
+				throw new WalletNotConnectedError('No wallet is connected.');
 			}
 
-			await setMostRecentWalletConnectionInfo({storageAdapter, storageKey, walletName: currentWallet.name, accountAddress: })
+			await setMostRecentWalletConnectionInfo({
+				storageAdapter,
+				storageKey,
+				walletName: currentWallet.name,
+				accountAddress: accountAddress,
+			});
 		},
 		...mutationOptions,
 	});

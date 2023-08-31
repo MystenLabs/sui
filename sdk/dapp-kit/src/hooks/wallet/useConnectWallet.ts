@@ -25,7 +25,7 @@ type UseConnectWalletMutationOptions = Omit<
 
 // TODO: Figure out the query/mutation key story and whether or not we want to expose
 // key factories from dapp-kit
-function mutationKey(args: ConnectWalletArgs) {
+function mutationKey(args: Partial<ConnectWalletArgs>) {
 	return [{ scope: 'wallet', entity: 'connect-wallet', ...args }] as const;
 }
 
@@ -36,7 +36,7 @@ export function useConnectWallet({
 	walletName,
 	silent,
 	...mutationOptions
-}: ConnectWalletArgs & UseConnectWalletMutationOptions) {
+}: Partial<ConnectWalletArgs> & UseConnectWalletMutationOptions = {}) {
 	const { wallets, storageAdapter, storageKey, dispatch } = useWalletContext();
 
 	return useMutation({

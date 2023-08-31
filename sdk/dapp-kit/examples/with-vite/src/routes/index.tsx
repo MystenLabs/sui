@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
+import { createBrowserRouter, Outlet } from 'react-router-dom';
+import { WalletPage } from './WalletPage.js';
 
 export const router = createBrowserRouter([
 	{
@@ -10,7 +11,7 @@ export const router = createBrowserRouter([
 		children: [
 			{
 				path: '/',
-				element: <Navigate to="offline-signer" replace />,
+				element: <WalletPage />,
 			},
 		],
 	},

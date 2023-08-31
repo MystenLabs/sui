@@ -21,7 +21,7 @@ type UseSignPersonalMessageMutationOptions = Omit<
 
 // TODO: Figure out the query/mutation key story and whether or not we want to expose
 // key factories from dapp-kit
-function mutationKey(args: UseSignPersonalMessageArgs) {
+function mutationKey(args: Partial<UseSignPersonalMessageArgs>) {
 	return [{ scope: 'wallet', entity: 'sign-personal-message', ...args }] as const;
 }
 
@@ -32,7 +32,7 @@ export function useSignPersonalMessage({
 	message,
 	account,
 	...mutationOptions
-}: UseSignPersonalMessageArgs & UseSignPersonalMessageMutationOptions) {
+}: Partial<UseSignPersonalMessageArgs> & UseSignPersonalMessageMutationOptions) {
 	const { currentWallet } = useWalletContext();
 
 	return useMutation({
