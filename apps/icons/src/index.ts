@@ -79,6 +79,7 @@ export { default as Flag16 } from './Flag16';
 export { default as FlagFill16 } from './FlagFill16';
 export { default as Globe16 } from './Globe16';
 export { default as HamburgerOpen24 } from './HamburgerOpen24';
+export { default as HamburgerRest16 } from './HamburgerRest16';
 export { default as HamburgerRest24 } from './HamburgerRest24';
 export { default as History24 } from './History24';
 export { default as History32 } from './History32';

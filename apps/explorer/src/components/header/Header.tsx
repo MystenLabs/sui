@@ -37,10 +37,12 @@ function Header() {
 					<Sui className="h-[26px] w-5" />
 					<SuiLogoTxt className="h-[17px] w-[27px]" />
 				</LinkWithQuery>
-				<div className="flex-1">
-					<Search />
+				<div className="flex w-full gap-2">
+					<div className="flex-1">
+						<Search />
+					</div>
+					<NetworkSelect />
 				</div>
-				<NetworkSelect />
 			</div>
 		</header>
 	);
