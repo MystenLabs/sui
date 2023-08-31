@@ -53,6 +53,7 @@ export { default as ChevronRight12 } from './ChevronRight12';
 export { default as ChevronRight16 } from './ChevronRight16';
 export { default as ChevronUp12 } from './ChevronUp12';
 export { default as ChevronUp16 } from './ChevronUp16';
+export { default as Clipboard16 } from './Clipboard16';
 export { default as Code16 } from './Code16';
 export { default as Coins16 } from './Coins16';
 export { default as Coins24 } from './Coins24';

@@ -4,13 +4,10 @@
 import { useCallback } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
-import { AccountsSettings } from './AccountsSettings';
-import { AutoLockSettings } from './AutoLockSettings';
-import { ExportAccount } from './ExportAccount';
-import { ImportPrivateKey } from './ImportPrivateKey';
-import MenuList from './MenuList';
+import { MoreOptions } from './MoreOptions';
 import { NetworkSettings } from './NetworkSettings';
-import { ConnectLedgerModalContainer } from '../../ledger/ConnectLedgerModalContainer';
+import { PasswordProtect } from './PasswordProtect';
+import WalletSettingsMenuList from './WalletSettingsMenuList';
 import { ErrorBoundary } from '_components/error-boundary';
 import {
 	MainLocationContext,
@@ -18,10 +15,8 @@ import {
 	useMenuUrl,
 	useNextMenuUrl,
 } from '_components/menu/hooks';
-import { RecoveryPassphrase } from '_components/recovery-passphrase/RecoveryPassphrase';
 import { useOnKeyboardEvent } from '_hooks';
 
-import { ImportLedgerAccountsPage } from '_src/ui/app/pages/accounts/ImportLedgerAccountsPage';
 import type { MouseEvent } from 'react';
 
 const CLOSE_KEY_CODES: string[] = ['Escape'];
@@ -42,6 +37,7 @@ function MenuContent() {
 		},
 		[isOpen, navigate, closeMenuUrl],
 	);
+
 	useOnKeyboardEvent('keydown', CLOSE_KEY_CODES, handleOnCloseMenu, isOpen);
 	if (!isOpen) {
 		return null;
@@ -52,17 +48,11 @@ function MenuContent() {
 			<ErrorBoundary>
 				<MainLocationContext.Provider value={mainLocation}>
 					<Routes location={menuUrl || ''}>
-						<Route path="/" element={<MenuList />} />
-						<Route path="/accounts" element={<AccountsSettings />}>
-							<Route path="connect-ledger-modal" element={<ConnectLedgerModalContainer />} />
-						</Route>
-						<Route path="/export/:account" element={<ExportAccount />} />
-						<Route path="/import-private-key" element={<ImportPrivateKey />} />
+						<Route path="/" element={<WalletSettingsMenuList />} />
 						<Route path="/network" element={<NetworkSettings />} />
-						<Route path="/auto-lock" element={<AutoLockSettings />} />
+						<Route path="/password-protect" element={<PasswordProtect />} />
+						<Route path="/more-options" element={<MoreOptions />} />
 						<Route path="*" element={<Navigate to={menuHomeUrl} replace={true} />} />
-						<Route path="/import-ledger-accounts" element={<ImportLedgerAccountsPage />} />
-						<Route path="/recovery-passphrase" element={<RecoveryPassphrase />} />
 					</Routes>
 				</MainLocationContext.Provider>
 			</ErrorBoundary>
