@@ -7,7 +7,7 @@ import { useSuiClientContext } from './useSuiClient.js';
 import type { SuiRpcMethods } from './useSuiClientQuery.js';
 
 export type UseSuiClientMutationOptions<T extends keyof SuiRpcMethods> = Omit<
-	UseMutationOptions<SuiRpcMethods[T]['result'], unknown, SuiRpcMethods[T]['result'], unknown[]>,
+	UseMutationOptions<SuiRpcMethods[T]['result'], Error, SuiRpcMethods[T]['result'], unknown[]>,
 	'mutationFn'
 >;
 

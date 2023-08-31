@@ -12,13 +12,28 @@
 
 import type { QueryTransactionBlocksParams } from '@mysten/sui.js/client';
 import type { UseSuiClientQueryOptions } from '../useSuiClientQuery.js';
+import type { UseSuiClientInfiniteQueryOptions } from '../useSuiClientInfiniteQuery.js';
 import { useSuiClientQuery } from '../useSuiClientQuery.js';
+import { useSuiClientInfiniteQuery } from '../useSuiClientInfiniteQuery.js';
 
-export function useTransactionBlocksQuery(
+export function useQueryTransactionBlocks(
 	params: QueryTransactionBlocksParams,
 	options?: UseSuiClientQueryOptions<'queryTransactionBlocks'>,
 ) {
 	return useSuiClientQuery(
+		{
+			method: 'queryTransactionBlocks',
+			params,
+		},
+		options,
+	);
+}
+
+export function useQueryTransactionBlocksInfinite(
+	params: QueryTransactionBlocksParams,
+	options?: UseSuiClientInfiniteQueryOptions<'queryTransactionBlocks'>,
+) {
+	return useSuiClientInfiniteQuery(
 		{
 			method: 'queryTransactionBlocks',
 			params,

@@ -12,13 +12,28 @@
 
 import type { ResolveNameServiceNamesParams } from '@mysten/sui.js/client';
 import type { UseSuiClientQueryOptions } from '../useSuiClientQuery.js';
+import type { UseSuiClientInfiniteQueryOptions } from '../useSuiClientInfiniteQuery.js';
 import { useSuiClientQuery } from '../useSuiClientQuery.js';
+import { useSuiClientInfiniteQuery } from '../useSuiClientInfiniteQuery.js';
 
 export function useResolveNameServiceNames(
 	params: ResolveNameServiceNamesParams,
 	options?: UseSuiClientQueryOptions<'resolveNameServiceNames'>,
 ) {
 	return useSuiClientQuery(
+		{
+			method: 'resolveNameServiceNames',
+			params,
+		},
+		options,
+	);
+}
+
+export function useResolveNameServiceNamesInfinite(
+	params: ResolveNameServiceNamesParams,
+	options?: UseSuiClientInfiniteQueryOptions<'resolveNameServiceNames'>,
+) {
+	return useSuiClientInfiniteQuery(
 		{
 			method: 'resolveNameServiceNames',
 			params,
