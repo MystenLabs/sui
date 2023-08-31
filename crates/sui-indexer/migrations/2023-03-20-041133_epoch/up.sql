@@ -69,7 +69,7 @@ BEGIN
                 attempts := attempts + 1;
                 REFRESH MATERIALIZED VIEW CONCURRENTLY epoch_network_metrics;
                 INSERT INTO epoch_move_call_metrics
-                  SELECT max(epoch), 3::BIGINT AS day, move_package, move_module, move_function, COUNT(*) AS count
+                  SELECT (SELECT MAX(epoch) FROM epochs) AS epoch, 3::BIGINT AS day, move_package, move_module, move_function, COUNT(*) AS count
                    FROM move_calls
                    WHERE epoch >=
                          (SELECT MIN(epoch)
@@ -79,7 +79,7 @@ BEGIN
                    ORDER BY count DESC
                    LIMIT 10;
                 INSERT INTO epoch_move_call_metrics
-                  SELECT max(epoch), 7::BIGINT AS day, move_package, move_module, move_function, COUNT(*) AS count
+                  SELECT (SELECT MAX(epoch) FROM epochs) AS epoch, 7::BIGINT AS day, move_package, move_module, move_function, COUNT(*) AS count
                    FROM move_calls
                    WHERE epoch >=
                          (SELECT MIN(epoch)
@@ -89,7 +89,7 @@ BEGIN
                    ORDER BY count DESC
                    LIMIT 10;
                 INSERT INTO epoch_move_call_metrics
-                  SELECT max(epoch), 30::BIGINT AS day, move_package, move_module, move_function, COUNT(*) AS count
+                  SELECT (SELECT MAX(epoch) FROM epochs) AS epoch, 30::BIGINT AS day, move_package, move_module, move_function, COUNT(*) AS count
                    FROM move_calls
                    WHERE epoch >=
                          (SELECT MIN(epoch)
