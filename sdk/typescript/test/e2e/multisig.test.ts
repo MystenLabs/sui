@@ -115,14 +115,28 @@ describe('Multisig scenarios', () => {
 		});
 
 		const signData = new TextEncoder().encode('hello world');
-		const { signature } = await k3.signPersonalMessage(signData);
-		const isValid = await k3.getPublicKey().verifyPersonalMessage(signData, signature);
-		expect(isValid).toBe(true);
+		const sig1 = await k1.signPersonalMessage(signData);
+		const sig2 = await k2.signPersonalMessage(signData);
+		const sig3 = await k3.signPersonalMessage(signData);
+		const isValid1 = await k1.getPublicKey().verifyPersonalMessage(signData, sig1.signature);
+		expect(isValid1).toBe(true);
+		const isValid2 = await k2.getPublicKey().verifyPersonalMessage(signData, sig2.signature);
+		expect(isValid2).toBe(true);
+		const isValid3 = await k3.getPublicKey().verifyPersonalMessage(signData, sig3.signature);
+		expect(isValid3).toBe(true);
 
 		// multisig.ts
-		const combinedM = combinePartialSigs([signature], pubkeyWeightPairs, 3);
+		const combinedM = combinePartialSigs(
+			[sig1.signature, sig2.signature, sig3.signature],
+			pubkeyWeightPairs,
+			3,
+		);
 		// publickey.ts
-		const combinedP = multiSigPublicKey.combinePartialSignatures([signature]);
+		const combinedP = multiSigPublicKey.combinePartialSignatures([
+			sig1.signature,
+			sig2.signature,
+			sig3.signature,
+		]);
 
 		let decodedM = decodeMultiSig(combinedM);
 		let decodedP = decodeMultiSig(combinedP);
@@ -133,6 +147,20 @@ describe('Multisig scenarios', () => {
 		expect(decodedM)
 			.toEqual(decodedP)
 			.toEqual([
+				{
+					signature: parseSerializedSignature((await k1.signPersonalMessage(signData)).signature)
+						.signature,
+					signatureScheme: k1.getKeyScheme(),
+					pubKey: pk1,
+					weight: 1,
+				},
+				{
+					signature: parseSerializedSignature((await k2.signPersonalMessage(signData)).signature)
+						.signature,
+					signatureScheme: k2.getKeyScheme(),
+					pubKey: pk2,
+					weight: 2,
+				},
 				{
 					signature: parseSerializedSignature((await k3.signPersonalMessage(signData)).signature)
 						.signature,
@@ -407,10 +435,14 @@ describe('Multisig scenarios', () => {
 		expect(isValidSig2).toBe(true);
 
 		// multisig.ts
-		expect(() => combinePartialSigs([sig3.signature], pubkeyWeightPairs, 3)).toThrow();
+		expect(() => combinePartialSigs([sig3.signature], pubkeyWeightPairs, 3)).toThrow(
+			new Error(`Cannot read properties of undefined (reading 'SIZE')`),
+		);
 
 		// publickey.ts
-		expect(() => multiSigPublicKey.combinePartialSignatures([sig3.signature])).toThrow();
+		expect(() => multiSigPublicKey.combinePartialSignatures([sig3.signature])).toThrow(
+			new Error(`Unsupported signature scheme`),
+		);
 	});
 
 	it('providing signatures with invalid order', async () => {
@@ -588,7 +620,6 @@ describe('Multisig address creation:', () => {
 		pk3 = k3.getPublicKey();
 	});
 
-	// Currently failing.
 	it('with unreachable threshold', async () => {
 		const pubkeyWeightPairs: PubkeyWeightPair[] = [
 			{
@@ -605,20 +636,20 @@ describe('Multisig address creation:', () => {
 			},
 		];
 
-		// Should throw an error in future releases.
-		expect(() => toMultiSigAddress(pubkeyWeightPairs, 10000)).toThrow();
+		expect(() => toMultiSigAddress(pubkeyWeightPairs, 7)).toThrow(
+			new Error('Unreachable threshold'),
+		);
 
-		// Should throw an error in future releases.
 		expect(() =>
 			MultiSigPublicKey.fromPublicKeys({
-				threshold: 10000,
+				threshold: 7,
 				publicKeys: [
 					{ publicKey: pk1, weight: 1 },
 					{ publicKey: pk2, weight: 2 },
 					{ publicKey: pk3, weight: 3 },
 				],
 			}),
-		).toThrow();
+		).toThrow(new Error('Unreachable threshold'));
 	});
 
 	it('with more public keys than limited number', async () => {
@@ -721,44 +752,45 @@ describe('Multisig address creation:', () => {
 		const pubkeyWeightPairs: PubkeyWeightPair[] = [
 			{
 				pubKey: pk1,
-				weight: Number.MAX_VALUE,
+				weight: 256,
 			},
 			{
 				pubKey: pk2,
-				weight: Number.MAX_VALUE,
+				weight: 2,
 			},
 			{
 				pubKey: pk3,
-				weight: Number.MAX_VALUE,
+				weight: 3,
 			},
 		];
 
-		expect(() => toMultiSigAddress(pubkeyWeightPairs, Number.MAX_VALUE)).toThrow();
+		expect(() => toMultiSigAddress(pubkeyWeightPairs, 65536)).toThrow(
+			new Error('Invalid threshold'),
+		);
 
-		// Should throw an error in future releases.
-		expect(() => toMultiSigAddress(pubkeyWeightPairs, 65535)).toThrow();
+		expect(() => toMultiSigAddress(pubkeyWeightPairs, 65535)).toThrow(new Error('Invalid weight'));
 
 		expect(() =>
 			MultiSigPublicKey.fromPublicKeys({
 				threshold: 65535,
 				publicKeys: [
-					{ publicKey: pk1, weight: Number.MAX_VALUE },
-					{ publicKey: pk2, weight: Number.MAX_VALUE },
-					{ publicKey: pk3, weight: Number.MAX_VALUE },
+					{ publicKey: pk1, weight: 1 },
+					{ publicKey: pk2, weight: 256 },
+					{ publicKey: pk3, weight: 3 },
 				],
 			}),
-		).toThrow();
+		).toThrow(new Error('Validation failed for type u8, data: 256'));
 
 		expect(() =>
 			MultiSigPublicKey.fromPublicKeys({
-				threshold: Number.MAX_VALUE,
+				threshold: 65536,
 				publicKeys: [
 					{ publicKey: pk1, weight: 1 },
 					{ publicKey: pk2, weight: 2 },
 					{ publicKey: pk3, weight: 3 },
 				],
 			}),
-		).toThrow();
+		).toThrow(new Error('Validation failed for type u16, data: 65536'));
 	});
 
 	it('with zero weight value', async () => {
@@ -769,28 +801,26 @@ describe('Multisig address creation:', () => {
 			},
 			{
 				pubKey: pk2,
-				weight: 0,
+				weight: 6,
 			},
 			{
 				pubKey: pk3,
-				weight: 0,
+				weight: 10,
 			},
 		];
 
-		// Should throw an error in future releases.
-		expect(() => toMultiSigAddress(pubkeyWeightPairs, 10)).toThrow();
+		expect(() => toMultiSigAddress(pubkeyWeightPairs, 10)).toThrow(new Error('Invalid weight'));
 
-		// Should throw an error in future releases.
 		expect(() =>
 			MultiSigPublicKey.fromPublicKeys({
 				threshold: 10,
 				publicKeys: [
 					{ publicKey: pk1, weight: 0 },
-					{ publicKey: pk2, weight: 0 },
-					{ publicKey: pk3, weight: 0 },
+					{ publicKey: pk2, weight: 6 },
+					{ publicKey: pk3, weight: 10 },
 				],
 			}),
-		).toThrow();
+		).toThrow(new Error('Invalid weight'));
 	});
 
 	it('with zero threshold value', async () => {
@@ -809,10 +839,8 @@ describe('Multisig address creation:', () => {
 			},
 		];
 
-		// Should throw an error in future releases.
-		expect(() => toMultiSigAddress(pubkeyWeightPairs, 0)).toThrow();
+		expect(() => toMultiSigAddress(pubkeyWeightPairs, 0)).toThrow(new Error('Invalid threshold'));
 
-		// Should throw an error in future releases.
 		expect(() =>
 			MultiSigPublicKey.fromPublicKeys({
 				threshold: 0,
@@ -822,21 +850,53 @@ describe('Multisig address creation:', () => {
 					{ publicKey: pk3, weight: 3 },
 				],
 			}),
-		).toThrow();
+		).toThrow(new Error('Invalid threshold'));
 	});
 
 	it('with empty values', async () => {
 		const pubkeyWeightPairs: PubkeyWeightPair[] = [];
 
-		// Should throw an error in future releases.
-		expect(() => toMultiSigAddress(pubkeyWeightPairs, 10)).toThrow();
+		expect(() => toMultiSigAddress(pubkeyWeightPairs, 10)).toThrow(
+			new Error('Min number of signers in a multisig is 2'),
+		);
 
-		// Should throw an error in future releases.
 		expect(() =>
 			MultiSigPublicKey.fromPublicKeys({
-				threshold: 0,
+				threshold: 2,
 				publicKeys: [],
 			}),
-		).toThrow();
+		).toThrow(new Error('Unreachable threshold'));
+	});
+
+	it('with duplicated publickeys', async () => {
+		const pubkeyWeightPairs: PubkeyWeightPair[] = [
+			{
+				pubKey: pk1,
+				weight: 1,
+			},
+			{
+				pubKey: pk1,
+				weight: 2,
+			},
+			{
+				pubKey: pk3,
+				weight: 3,
+			},
+		];
+
+		expect(() => toMultiSigAddress(pubkeyWeightPairs, 4)).toThrow(
+			new Error('Multisig does not support duplicate public keys'),
+		);
+
+		expect(() =>
+			MultiSigPublicKey.fromPublicKeys({
+				threshold: 4,
+				publicKeys: [
+					{ publicKey: pk1, weight: 1 },
+					{ publicKey: pk1, weight: 2 },
+					{ publicKey: pk3, weight: 3 },
+				],
+			}),
+		).toThrow(new Error('Multisig does not support duplicate public keys'));
 	});
 });
