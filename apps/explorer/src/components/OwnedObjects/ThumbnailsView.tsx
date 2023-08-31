@@ -15,9 +15,10 @@ function Thumbnail({ obj }: { obj: SuiObjectResponse }) {
 	const video = useResolveVideo(obj);
 	const displayMeta = obj.data?.display?.data;
 	const src = displayMeta?.image_url || '';
-	const name = displayMeta?.name ?? displayMeta?.description ?? '--';
+	const name = displayMeta?.name ?? displayMeta?.description;
 	const type = trimStdLibPrefix(parseObjectType(obj));
 	const id = obj.data?.objectId;
+	const displayName = name || formatAddress(id!);
 
 	return (
 		<div>
@@ -28,15 +29,15 @@ function Thumbnail({ obj }: { obj: SuiObjectResponse }) {
 					<div className="group relative">
 						<ObjectVideoImage
 							disablePreview
-							title={name}
+							title={name || '--'}
 							subtitle={type}
 							src={src}
 							video={video}
 							variant="medium"
 						/>
-						<div className="absolute bottom-2 left-1/2 hidden w-10/12 -translate-x-1/2 justify-center rounded-lg bg-white/80 p-1 backdrop-blur group-hover:flex">
-							<Text variant="subtitle/medium" color="steel-dark">
-								{formatAddress(id!)}
+						<div className="absolute bottom-2 left-1/2 hidden w-10/12 -translate-x-1/2 justify-center rounded-lg bg-white/80 px-2 py-1 backdrop-blur group-hover:flex">
+							<Text variant="subtitle/medium" color="steel-dark" truncate>
+								{displayName}
 							</Text>
 						</div>
 					</div>

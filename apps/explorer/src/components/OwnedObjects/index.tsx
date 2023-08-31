@@ -15,7 +15,8 @@ import { Pagination, useCursorPagination } from '~/ui/Pagination';
 
 const PAGE_SIZES = [10, 20, 30, 40, 50];
 const SHOW_PAGINATION_MAX_ITEMS = 9;
-const OWNED_OBJECTS_LOCAL_STORAGE_VIEW_MODE = 'owned-objects-viewMode';
+const OWNED_OBJECTS_LOCAL_STORAGE_VIEW_MODE = 'owned-objects/viewMode';
+const OWNED_OBJECTS_LOCAL_STORAGE_FILTER = 'owned-objects/filter';
 
 enum FILTER_VALUES {
 	ALL = 'all',
@@ -57,8 +58,11 @@ function getShowPagination(
 }
 
 export function OwnedObjects({ id }: { id: string }) {
-	const [filter, setFilter] = useState<string | undefined>(undefined);
 	const [limit, setLimit] = useState(50);
+	const [filter, setFilter] = useLocalStorage<string | undefined>(
+		OWNED_OBJECTS_LOCAL_STORAGE_FILTER,
+		undefined,
+	);
 	const [viewMode, setViewMode] = useLocalStorage(
 		OWNED_OBJECTS_LOCAL_STORAGE_VIEW_MODE,
 		OBJECT_VIEW_MODES.THUMBNAILS,
@@ -85,7 +89,7 @@ export function OwnedObjects({ id }: { id: string }) {
 				setFilter(FILTER_VALUES.ALL);
 			}
 		}
-	}, [filter, isLoading, kioskData?.list?.length]);
+	}, [filter, isLoading, kioskData?.list?.length, setFilter]);
 
 	const filteredData = useMemo(
 		() => (filter === FILTER_VALUES.ALL ? data?.data : kioskData?.list),
