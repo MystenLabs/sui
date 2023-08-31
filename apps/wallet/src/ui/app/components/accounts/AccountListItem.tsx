@@ -33,7 +33,9 @@ export function AccountListItem({ account }: AccountListItemProps) {
 						<LockUnlockButton
 							isLocked={account.isLocked}
 							isLoading={isLoading}
-							onClick={() => {
+							onClick={(e) => {
+								// prevent the account from being selected when clicking the lock button
+								e.stopPropagation();
 								if (account.isLocked) {
 									unlockAccount(account);
 								} else {
