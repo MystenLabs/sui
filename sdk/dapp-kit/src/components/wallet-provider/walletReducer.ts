@@ -4,6 +4,29 @@
 import type { WalletWithSuiFeatures, WalletAccount } from '@mysten/wallet-standard';
 import { assertUnreachable } from 'dapp-kit/src/utils/assertUnreachable';
 
+type WalletConnectedAction = {
+	type: 'wallet-connected';
+	payload: {
+		wallet: WalletWithSuiFeatures;
+		selectedAccount: WalletAccount | null;
+	};
+};
+
+type WalletDisconnectedAction = {
+	type: 'wallet-disconnected';
+	payload?: never;
+};
+
+type WalletPropertiesChangedAction = {
+	type: 'wallet-properties-changed';
+	payload: { updatedAccounts: WalletAccount[] };
+};
+
+type WalletsChangedAction = {
+	type: 'wallets-changed';
+	payload: WalletWithSuiFeatures[];
+};
+
 export type WalletState = {
 	wallets: WalletWithSuiFeatures[];
 	currentWallet: WalletWithSuiFeatures | null;
@@ -12,13 +35,10 @@ export type WalletState = {
 };
 
 export type WalletAction =
-	| {
-			type: 'wallet-connected';
-			payload: { wallet: WalletWithSuiFeatures; selectedAccount: WalletAccount | null };
-	  }
-	| { type: 'wallet-disconnected'; payload?: never }
-	| { type: 'wallet-properties-changed'; payload: { updatedAccounts: WalletAccount[] } }
-	| { type: 'wallets-changed'; payload: WalletWithSuiFeatures[] };
+	| WalletConnectedAction
+	| WalletDisconnectedAction
+	| WalletPropertiesChangedAction
+	| WalletsChangedAction;
 
 export function walletReducer(
 	walletState: WalletState,
