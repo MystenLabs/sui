@@ -208,25 +208,27 @@ impl BatchFetcher {
             drop(request_guard);
             match response {
                 Ok(remote_batches) => {
+                    let remote_batch_count = remote_batches.len() as u64;
                     self.metrics
                         .worker_batch_fetch
                         .with_label_values(&["remote", "success"])
-                        .inc();
-                    debug!("Found {} batches remotely", remote_batches.len());
+                        .inc_by(remote_batch_count);
+                    debug!("Found {remote_batch_count} batches remotely");
                     return remote_batches;
                 }
                 Err(err) => {
+                    let remote_batch_count = digests.len() as u64;
                     if err.to_string().contains("Timeout") {
                         self.metrics
                             .worker_batch_fetch
                             .with_label_values(&["remote", "timeout"])
-                            .inc();
+                            .inc_by(remote_batch_count);
                         debug!("Timed out retrieving payloads {digests:?} from {worker} attempt {attempt}: {err}");
                     } else if err.to_string().contains("[Protocol violation]") {
                         self.metrics
                             .worker_batch_fetch
                             .with_label_values(&["remote", "fail"])
-                            .inc();
+                            .inc_by(remote_batch_count);
                         debug!("Failed retrieving payloads {digests:?} from possibly byzantine {worker} attempt {attempt}: {err}");
                         // Do not bother retrying if the remote worker is byzantine.
                         return HashMap::new();
@@ -234,7 +236,7 @@ impl BatchFetcher {
                         self.metrics
                             .worker_batch_fetch
                             .with_label_values(&["remote", "fail"])
-                            .inc();
+                            .inc_by(remote_batch_count);
                         debug!("Error retrieving payloads {digests:?} from {worker} attempt {attempt}: {err}");
                     }
                 }
