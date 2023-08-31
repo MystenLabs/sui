@@ -27,7 +27,10 @@ type WalletPropertiesChangedAction = {
 
 type WalletsChangedAction = {
 	type: 'wallets-changed';
-	payload: WalletWithSuiFeatures[];
+	payload: {
+		wallets: WalletWithSuiFeatures[];
+		currentWallet: WalletWithSuiFeatures;
+	};
 };
 
 export type WalletState = {
@@ -53,7 +56,7 @@ export function walletReducer(
 				...walletState,
 				currentWallet: payload.wallet,
 				accounts: payload.wallet.accounts,
-				currentAccount: payload.selectedAccount,
+				currentAccount: payload.currentAccount,
 			};
 		case 'wallet-disconnected': {
 			return {
@@ -66,15 +69,15 @@ export function walletReducer(
 		case 'wallet-properties-changed': {
 			return {
 				...walletState,
-				accounts: [],
-				currentAccount: null,
+				accounts: payload.updatedAccounts,
+				currentAccount: payload.currentAccount,
 			};
 		}
 		case 'wallets-changed': {
 			return {
 				...walletState,
-				wallets: payload,
-				// TODO: if the current wallet is un-registered... we should reset our state?
+				wallets: payload.wallets,
+				currentWallet: payload.currentWallet,
 			};
 		}
 		default:

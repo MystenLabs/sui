@@ -6,7 +6,6 @@ import { useMutation } from '@tanstack/react-query';
 import type { StandardConnectInput, StandardConnectOutput } from '@mysten/wallet-standard';
 import { useWalletContext } from 'dapp-kit/src/components/wallet-provider/WalletProvider';
 import { WalletNotFoundError } from 'dapp-kit/src/errors/walletErrors';
-import { StorageAdapter } from 'dapp-kit/src/utils/storageAdapters';
 import {
 	getMostRecentWalletConnectionInfo,
 	setMostRecentWalletConnectionInfo,
@@ -70,7 +69,7 @@ export function useConnectWallet({
 				storageAdapter,
 				storageKey,
 				walletName,
-				currentAccount: selectedAccount?.address,
+				accountAddress: selectedAccount?.address ?? 'fixme',
 			});
 
 			return connectResult;

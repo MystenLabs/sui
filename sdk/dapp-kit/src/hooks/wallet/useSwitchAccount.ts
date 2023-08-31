@@ -1,16 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SuiAddress } from '@mysten/sui.js';
 import type { UseMutationOptions } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
 import { useWalletContext } from 'dapp-kit/src/components/wallet-provider/WalletProvider';
+import { setMostRecentWalletConnectionInfo } from 'dapp-kit/src/components/wallet-provider/walletUtils';
 import { WalletNotFoundError } from 'dapp-kit/src/errors/walletErrors';
 
 type SwitchAccountArgs = {
-	account: WalletAccount;
+	accountAddress: SuiAddress;
 };
 
-type SwitchAccountResult = StandardConnectOutput;
+type SwitchAccountResult = void;
 
 type UseSwitchAccountMutationOptions = Omit<
 	UseMutationOptions<SwitchAccountResult, Error, SwitchAccountArgs, unknown>,
@@ -20,7 +22,7 @@ type UseSwitchAccountMutationOptions = Omit<
 // TODO: Figure out the query/mutation key story and whether or not we want to expose
 // key factories from dapp-kit
 function mutationKey(args: SwitchAccountArgs) {
-	return [{ scope: 'wallet', entity: 'connect-wallet', ...args }] as const;
+	return [{ scope: 'wallet', entity: 'switch-account', ...args }] as const;
 }
 
 /**
@@ -47,7 +49,7 @@ export function useSwitchAccount({
 				// Ignore error
 			}
 
-			return connectResult;
+			await setMostRecentWalletConnectionInfo({storageAdapter, storageKey, walletName: currentWallet.name, accountAddress: })
 		},
 		...mutationOptions,
 	});

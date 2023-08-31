@@ -67,7 +67,10 @@ export function WalletProvider({
 	useWalletsChanged(() => {
 		dispatch({
 			type: 'wallets-changed',
-			payload: sortWallets(walletsApi.get(), preferredWallets, requiredFeatures),
+			payload: {
+				wallets: sortWallets(walletsApi.get(), preferredWallets, requiredFeatures),
+				currentWallet: null, // fixme
+			},
 		});
 	});
 

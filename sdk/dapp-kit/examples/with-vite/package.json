@@ -1,0 +1,33 @@
+{
+	"name": "with-vite",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"preview": "vite preview",
+		"build": "vite build",
+		"prettier:check": "prettier -c --ignore-unknown .",
+		"prettier:fix": "prettier -w --ignore-unknown .",
+		"eslint:check": "eslint --max-warnings=0 .",
+		"eslint:fix": "pnpm run eslint:check --fix",
+		"lint": "pnpm run eslint:check && pnpm run prettier:check",
+		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
+	},
+	"dependencies": {
+		"@tanstack/react-query": "^4.29.25",
+		"react": "^18.2.0",
+		"react-dom": "^18.2.0",
+		"react-router-dom": "^6.14.2",
+		"vite-tsconfig-paths": "^4.2.0"
+	},
+	"devDependencies": {
+		"@mysten/sui.js": "workspace:*",
+		"@mysten/dapp-kit": "workspace:*",
+		"@types/react": "^18.2.15",
+		"@types/react-dom": "^18.2.7",
+		"@vitejs/plugin-react": "^4.0.3",
+		"typescript": "^5.1.6",
+		"vite": "^4.4.4"
+	}
+}

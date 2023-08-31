@@ -1202,6 +1202,46 @@ importers:
         specifier: ^0.33.0
         version: 0.33.0(@vitest/ui@0.33.0)(happy-dom@10.5.1)
 
+  sdk/dapp-kit/examples/with-vite:
+    dependencies:
+      '@tanstack/react-query':
+        specifier: ^4.29.25
+        version: 4.29.25(react-dom@18.2.0)(react@18.2.0)
+      react:
+        specifier: ^18.2.0
+        version: 18.2.0
+      react-dom:
+        specifier: ^18.2.0
+        version: 18.2.0(react@18.2.0)
+      react-router-dom:
+        specifier: ^6.14.2
+        version: 6.14.2(react-dom@18.2.0)(react@18.2.0)
+      vite-tsconfig-paths:
+        specifier: ^4.2.0
+        version: 4.2.0(typescript@5.1.6)(vite@4.4.4)
+    devDependencies:
+      '@mysten/dapp-kit':
+        specifier: workspace:*
+        version: link:../..
+      '@mysten/sui.js':
+        specifier: workspace:*
+        version: link:../../../typescript
+      '@types/react':
+        specifier: ^18.2.15
+        version: 18.2.15
+      '@types/react-dom':
+        specifier: ^18.2.7
+        version: 18.2.7
+      '@vitejs/plugin-react':
+        specifier: ^4.0.3
+        version: 4.0.3(vite@4.4.4)
+      typescript:
+        specifier: ^5.1.6
+        version: 5.1.6
+      vite:
+        specifier: ^4.4.4
+        version: 4.4.4(@types/node@20.4.2)(sass@1.63.6)
+
   sdk/deepbook:
     dependencies:
       '@mysten/sui.js':
@@ -8803,7 +8843,7 @@ packages:
   /@types/hoist-non-react-statics@3.3.1:
     resolution: {integrity: sha512-iMIqiko6ooLrTh1joXodJK5X9xeEALT1kM5G3ZLhD3hszxBdIEd5C75U834D9mLcINgD4OyZf5uQXjkuYydWvA==}
     dependencies:
-      '@types/react': 18.2.15
+      '@types/react': 18.2.20
       hoist-non-react-statics: 3.3.2
     dev: false
 
@@ -8972,7 +9012,7 @@ packages:
   /@types/react-dom@18.2.7:
     resolution: {integrity: sha512-GRaAEriuT4zp9N4p1i8BDBYmEyfo+xQ3yHjJU4eiK5NDa1RmUZG+unZABUTK4/Ox/M+GaHwb6Ow8rUITrtjszA==}
     dependencies:
-      '@types/react': 18.2.15
+      '@types/react': 18.2.20
 
   /@types/react@18.2.15:
     resolution: {integrity: sha512-oEjE7TQt1fFTFSbf8kkNuc798ahTUzn3Le67/PWjE8MAfYAD/qB7O8hSTcromLFqHCt9bcdOg5GXMokzTjJ5SA==}
@@ -9537,7 +9577,7 @@ packages:
       react: ^16.0.0-0 || ^17.0.0-0 || ^18.0.0-0
       react-dom: ^16.0.0-0 || ^17.0.0-0 || ^18.0.0-0
     dependencies:
-      '@types/react': 18.2.15
+      '@types/react': 18.2.20
       '@types/react-dom': 18.2.7
       prop-types: 15.8.1
       react: 18.2.0
@@ -9578,7 +9618,7 @@ packages:
     peerDependencies:
       react: ^16.0.0-0 || ^17.0.0-0 || ^18.0.0-0
     dependencies:
-      '@types/react': 18.2.15
+      '@types/react': 18.2.20
       classnames: 2.3.2
       prop-types: 15.8.1
       react: 18.2.0
@@ -9656,7 +9696,7 @@ packages:
       react: ^16.3.0-0 || ^17.0.0-0 || ^18.0.0-0
     dependencies:
       '@types/lodash': 4.14.195
-      '@types/react': 18.2.15
+      '@types/react': 18.2.20
       classnames: 2.3.2
       lodash: 4.17.21
       prop-types: 15.8.1
