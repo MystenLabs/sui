@@ -28,8 +28,7 @@ mod checked {
         object::{Object, Owner},
     };
     use sui_types::{
-        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
-        SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
+        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
     };
     use tracing::instrument;
 
@@ -358,7 +357,6 @@ mod checked {
             }
             InputObjectKind::SharedMoveObject {
                 id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
-                initial_shared_version: SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
                 ..
             } => {
                 if system_transaction {

@@ -60,7 +60,8 @@ module sui::authenticator_state {
     #[allow(unused_function)]
     /// Create and share the AuthenticatorState object. This function is call exactly once, when
     /// the authenticator state object is first created.
-    fun create(ctx: &TxContext) {
+    /// Can only be called by genesis or change_epoch transactions.
+    public fun create(ctx: &TxContext) {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
 
         let version = CurrentVersion;

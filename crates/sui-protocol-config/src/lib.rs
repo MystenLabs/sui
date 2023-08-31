@@ -1441,6 +1441,15 @@ impl ProtocolConfig {
                 cfg.max_publish_or_upgrade_per_ptb = Some(5);
                 cfg
             }
+            24 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                if chain != Chain::Mainnet {
+                    cfg.feature_flags.enable_jwk_consensus_updates = true;
+                    // Max of 100 votes per hour
+                    cfg.max_jwk_votes_per_validator_per_epoch = Some(2400);
+                }
+                cfg
+            }
             // Use this template when making changes:
             //
             //     // modify an existing constant.

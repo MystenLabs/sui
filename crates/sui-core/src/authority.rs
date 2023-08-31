@@ -120,7 +120,7 @@ use sui_types::{
     fp_ensure,
     object::{Object, ObjectFormatOptions, ObjectRead},
     transaction::*,
-    SUI_SYSTEM_ADDRESS,
+    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_SYSTEM_ADDRESS,
 };
 use sui_types::{is_system_package, TypeTag};
 use typed_store::Map;
@@ -2397,6 +2397,30 @@ impl AuthorityState {
             .await?
             .expect("framework object should always exist")
             .compute_object_reference())
+    }
+
+    pub fn get_authenticator_state_start_version(&self) -> SuiResult<Option<SequenceNumber>> {
+        // should not be called if we have not reached the protocol version where this object
+        // exists
+        if self
+            .load_epoch_store_one_call_per_task()
+            .protocol_config()
+            .enable_jwk_consensus_updates()
+        {
+            let obj = self
+                .database
+                .get_object(&SUI_AUTHENTICATOR_STATE_OBJECT_ID)?
+                .expect("Authenticator state object must exist");
+
+            match obj.owner {
+                Owner::Shared {
+                    initial_shared_version,
+                } => Ok(Some(initial_shared_version)),
+                _ => panic!("Authenticator state object must be a shared object"),
+            }
+        } else {
+            Ok(None)
+        }
     }
 
     /// This function should be called once and exactly once during reconfiguration.
