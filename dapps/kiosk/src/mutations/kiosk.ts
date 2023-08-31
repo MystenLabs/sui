@@ -6,7 +6,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useOwnedKiosk } from '../hooks/kiosk';
 import { OwnedObjectType } from '../components/Inventory/OwnedObjects';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { Kiosk, createKioskAndShare } from '@mysten/kiosk';
+import { Kiosk } from '@mysten/kiosk';
 import { useTransactionExecution } from '../hooks/useTransactionExecution';
 import { useWalletKit } from '@mysten/wallet-kit';
 // import { useRpc } from '../context/RpcClientContext';
@@ -30,13 +30,13 @@ const defaultOnError = (e: Error) => {
 export function useCreateKioskMutation({ onSuccess, onError }: MutationParams) {
 	const { currentAccount } = useWalletKit();
 	const { signAndExecute } = useTransactionExecution();
+	const kc = useKioskClient();
 
 	return useMutation({
 		mutationFn: () => {
 			if (!currentAccount?.address) throw new Error('You need to connect your wallet!');
 			const tx = new TransactionBlock();
-			const kiosk_cap = createKioskAndShare(tx);
-			tx.transferObjects([kiosk_cap], tx.pure(currentAccount.address, 'address'));
+			kc.createAndShare(tx, currentAccount?.address);
 			return signAndExecute({ tx });
 		},
 		onSuccess,
@@ -74,9 +74,9 @@ export function usePlaceAndListMutation({ onSuccess, onError }: MutationParams) 
 
 			const tx = new TransactionBlock();
 
-			await kioskClient.ownedKioskTx(tx, async (capObject) => {
-				if (shouldPlace) kioskClient.placeAndList(tx, item.type, item.objectId, price, capObject);
-				else kioskClient.list(tx, item.type, item.objectId, price, capObject);
+			await kioskClient.ownedKioskTx(tx, async (kiosk, cap) => {
+				if (shouldPlace) kioskClient.placeAndList(tx, item.type, item.objectId, price, kiosk, cap);
+				else kioskClient.list(tx, item.type, item.objectId, price, kiosk, cap);
 			});
 
 			return signAndExecute({ tx });
@@ -105,8 +105,8 @@ export function usePlaceMutation({ onSuccess, onError }: MutationParams) {
 
 			const tx = new TransactionBlock();
 
-			await kioskClient.ownedKioskTx(tx, async (capObject) => {
-				kioskClient.place(tx, item.type, item.objectId, capObject);
+			await kioskClient.ownedKioskTx(tx, async (kiosk, cap) => {
+				kioskClient.place(tx, item.type, item.objectId, kiosk, cap);
 			});
 
 			return signAndExecute({ tx });
@@ -134,8 +134,8 @@ export function useWithdrawMutation({ onError, onSuccess }: MutationParams) {
 			kioskClient.setSelectedCap(cap);
 			const tx = new TransactionBlock();
 
-			await kioskClient.ownedKioskTx(tx, async (capObject) => {
-				const coin = kioskClient.withdraw(tx, capObject, kiosk.profits);
+			await kioskClient.ownedKioskTx(tx, async (kioskObj, capObject) => {
+				const coin = kioskClient.withdraw(tx, kioskObj, capObject, kiosk.profits);
 
 				tx.transferObjects([coin], tx.pure(currentAccount.address, 'address'));
 			});
@@ -166,8 +166,8 @@ export function useTakeMutation({ onSuccess, onError }: MutationParams) {
 			kioskClient.setSelectedCap(cap);
 			const tx = new TransactionBlock();
 
-			await kioskClient.ownedKioskTx(tx, async (capObject) => {
-				const obj = kioskClient.take(tx, item.type, item.objectId, capObject);
+			await kioskClient.ownedKioskTx(tx, async (kiosk, cap) => {
+				const obj = kioskClient.take(tx, item.type, item.objectId, kiosk, cap);
 				tx.transferObjects([obj], tx.pure(currentAccount?.address));
 			});
 
@@ -198,8 +198,8 @@ export function useDelistMutation({ onSuccess, onError }: MutationParams) {
 
 			const tx = new TransactionBlock();
 
-			await kioskClient.ownedKioskTx(tx, async (capObject) => {
-				kioskClient.delist(tx, item.type, item.objectId, capObject);
+			await kioskClient.ownedKioskTx(tx, async (kiosk, cap) => {
+				kioskClient.delist(tx, item.type, item.objectId, kiosk, cap);
 			});
 
 			return signAndExecute({ tx });
@@ -236,14 +236,15 @@ export function usePurchaseItemMutation({ onSuccess, onError }: MutationParams) 
 			kioskClient.setSelectedCap(cap);
 			const tx = new TransactionBlock();
 
-			await kioskClient.ownedKioskTx(tx, async (capObject) => {
+			await kioskClient.ownedKioskTx(tx, async (kiosk, cap) => {
 				await kioskClient.purchaseAndResolve(
 					tx,
 					item.type,
 					item.objectId,
 					item.listing!.price!,
 					kioskId,
-					capObject,
+					kiosk,
+					cap,
 				);
 			});
 

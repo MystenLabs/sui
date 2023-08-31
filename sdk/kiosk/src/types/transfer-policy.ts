@@ -53,5 +53,5 @@ export type RuleResolvingParams = {
 	transferRequest: TransactionArgument;
 	purchasedItem: TransactionArgument;
 	packageId: string;
-	extraArgs?: Record<string, ObjectArgument>; // extraParams contains more possible {key, values} to pass for custom rules.
+	extraArgs?: Record<string, any>; // extraParams contains more possible {key, values} to pass for custom rules.
 };

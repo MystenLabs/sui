@@ -21,7 +21,7 @@ import {
 	type ObjectArgument,
 	TRANSFER_POLICY_CAP_TYPE,
 } from '../types';
-import { queryTransferPolicy } from '../query/transfer-policy';
+import { queryOwnedTransferPolicyCap, queryTransferPolicy } from '../query/transfer-policy';
 import { SuiClient } from '@mysten/sui.js/src/client';
 import {
 	floorPriceRuleAddress,
@@ -115,6 +115,30 @@ export class TransferPolicyManager {
 		this.policyCap = undefined;
 		this.policyId = undefined;
 	}
+
+	/**
+	 * Find the Policy Cap Object for a specified address.
+	 * Returns null if the address doesn't own it.
+	 */
+	async getPolicyCapId(itemType: string, address: string) {
+		return queryOwnedTransferPolicyCap(this.client, address, itemType);
+	}
+
+	/**
+	 * Setup the TransferPolicy object by passing the itemType and the owner address.
+	 * @param itemType The Type for which we're managing the transfer policy
+	 * @param address The owner of the Cap.
+	 */
+	async setPolicyByTypeAsync(itemType: string, address: string) {
+		let cap = await this.getPolicyCapId(itemType, address);
+		if (!cap)
+			throw new Error(
+				`Couldn't find a TransferPolicyCap for type ${itemType} owned by address ${address}`,
+			);
+
+		return this.setPolicyAsync(cap);
+	}
+
 	/**
 	 * Setup the TransferPolicy object by passing just the policyCapId.
 	 * It automatically finds the policyId, as well as it's type.
@@ -188,7 +212,7 @@ export class TransferPolicyManager {
 	 * 	You can pass 0 in either value if you want only percentage royalty, or a fixed amount fee.
 	 * 	(but you should define at least one of them for the rule to make sense).
 	 *
-	 * @param tx The Transaction Block
+	 * 	@param tx The Transaction Block
 	 * 	@param percentageBps The royalty percentage in basis points. Use `percentageToBasisPoints` helper to convert from percentage [0,100].
 	 * 	@param minAmount The minimum royalty amount per request in MIST.
 	 */

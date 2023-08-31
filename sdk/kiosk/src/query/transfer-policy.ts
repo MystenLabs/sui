@@ -3,7 +3,13 @@
 
 import { SuiClient } from '@mysten/sui.js/client';
 import { bcs } from '../bcs';
-import { TRANSFER_POLICY_CREATED_EVENT, TRANSFER_POLICY_TYPE, TransferPolicy } from '../types';
+import {
+	TRANSFER_POLICY_CAP_TYPE,
+	TRANSFER_POLICY_CREATED_EVENT,
+	TRANSFER_POLICY_TYPE,
+	TransferPolicy,
+} from '../types';
+import { isValidSuiAddress } from '@mysten/sui.js/utils';
 
 /**
  * Searches the `TransferPolicy`-s for the given type. The seach is performed via
@@ -50,4 +56,39 @@ export async function queryTransferPolicy(
 				balance: parsed.balance,
 			} as TransferPolicy;
 		});
+}
+
+/**
+ * A function to fetch all the user's kiosk Caps
+ * And a list of the kiosk address ids.
+ * Returns a list of `kioskOwnerCapIds` and `kioskIds`.
+ * Extra options allow pagination.
+ * @returns TransferPolicyCap Object ID | undefined if not found.
+ */
+export async function queryOwnedTransferPolicyCap(
+	client: SuiClient,
+	address: string,
+	itemType: string,
+): Promise<string | undefined> {
+	if (!isValidSuiAddress(address)) return;
+
+	// fetch owned kiosk caps, paginated.
+	const { data } = await client.getOwnedObjects({
+		owner: address,
+		filter: {
+			MatchAll: [
+				{
+					StructType: `${TRANSFER_POLICY_CAP_TYPE}<${itemType}>`,
+				},
+			],
+		},
+		options: {
+			showContent: true,
+			showType: true,
+		},
+	});
+
+	if (data.length === 0) return;
+
+	return data[0].data?.objectId;
 }

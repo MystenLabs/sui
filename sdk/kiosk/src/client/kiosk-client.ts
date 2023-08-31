@@ -21,7 +21,7 @@ import { confirmRequest } from '../tx/transfer-policy';
 import { objArg } from '../utils';
 
 export type PurchaseOptions = {
-	extraArgs?: Record<string, ObjectArgument>;
+	extraArgs?: Record<string, any>;
 };
 
 /**
@@ -57,6 +57,37 @@ export class KioskClient {
 	}
 
 	/**
+	 * Creates a kiosk and returns both `Kiosk` and `KioskOwnerCap`.
+	 * Helpful if we want to chain some actions before sharing + transferring the cap to the specified address.
+	 */
+	create(txb: TransactionBlock): [TransactionArgument, TransactionArgument] {
+		let [kiosk, cap] = kioskTx.createKiosk(txb);
+		return [kiosk, cap];
+	}
+
+	/**
+	 * Single function way to create a kiosk, share it and transfer the cap to the specified address.
+	 */
+	createAndShare(txb: TransactionBlock, address: string) {
+		let cap = kioskTx.createKioskAndShare(txb);
+		txb.transferObjects([cap], txb.pure(address, 'address'));
+	}
+
+	/**
+	 * Should be called only after `create` is called.
+	 * It shares the kiosk & transfers the cap to the specified address.
+	 */
+	shareAndTransferCap(
+		txb: TransactionBlock,
+		kiosk: TransactionArgument,
+		cap: TransactionArgument,
+		address: string,
+	) {
+		kioskTx.shareKiosk(txb, kiosk);
+		txb.transferObjects([cap], txb.pure(address, 'address'));
+	}
+
+	/**
 	 * Wraps a kiosk transaction that depends on `kioskOwnerCap`.
 	 * @param tx The Transaction Block
 	 * @param ownerCap The `ownerCap` object as returned from the `getOwnedKiosk` function
@@ -64,20 +95,16 @@ export class KioskClient {
 	 */
 	async ownedKioskTx(
 		tx: TransactionBlock,
-		callback: (capObject: TransactionArgument) => Promise<void>,
+		callback: (kiosk: TransactionArgument, capObject: TransactionArgument) => Promise<void>,
 	): Promise<void> {
 		this.#verifyCapIsSet();
-		let [capObject, returnPromise] = this.getOwnerCap(tx);
+		let [kiosk, capObject, returnPromise] = this.getOwnerCap(tx);
 
-		await callback(capObject);
+		await callback(kiosk, capObject);
 
 		this.returnOwnerCap(tx, capObject, returnPromise);
 	}
 
-	#verifyCapIsSet() {
-		if (!this.selectedCap)
-			throw new Error('You need to call `setSelectedCap` before calling this function.');
-	}
 	/**
 	 * Get an addresses's owned kiosks.
 	 * @param address The address for which we want to retrieve the kiosks.
@@ -130,6 +157,7 @@ export class KioskClient {
 		itemId: string,
 		price: string,
 		kiosk: ObjectArgument,
+		ownedKiosk: ObjectArgument,
 		ownedKioskCap: ObjectArgument,
 		options?: PurchaseOptions,
 	): Promise<void> {
@@ -170,7 +198,7 @@ export class KioskClient {
 				policyId: policy.id,
 				transferRequest,
 				purchasedItem,
-				ownedKiosk: this.selectedCap!.kioskId,
+				ownedKiosk,
 				ownedKioskCap,
 				extraArgs: options?.extraArgs,
 			});
@@ -178,7 +206,7 @@ export class KioskClient {
 
 		confirmRequest(tx, itemType, policy.id, transferRequest);
 
-		if (canTransferOutsideKiosk) this.place(tx, itemType, purchasedItem, ownedKioskCap);
+		if (canTransferOutsideKiosk) this.place(tx, itemType, purchasedItem, ownedKiosk, ownedKioskCap);
 	}
 
 	/**
@@ -189,20 +217,14 @@ export class KioskClient {
 		tx: TransactionBlock,
 		itemType: string,
 		itemId: string,
+		kiosk: ObjectArgument,
 		ownerCap: TransactionArgument,
 		callback: (item: TransactionArgument) => Promise<void>,
 	) {
-		this.#verifyCapIsSet();
-		let [itemObj, promise] = kioskTx.borrowValue(
-			tx,
-			itemType,
-			this.selectedCap!.kioskId,
-			ownerCap,
-			itemId,
-		);
+		let [itemObj, promise] = kioskTx.borrowValue(tx, itemType, kiosk, ownerCap, itemId);
 
 		callback(itemObj).finally(() => {
-			kioskTx.returnValue(tx, itemType, this.selectedCap!.kioskId, itemObj, promise);
+			kioskTx.returnValue(tx, itemType, kiosk, itemObj, promise);
 		});
 	}
 
@@ -216,16 +238,10 @@ export class KioskClient {
 		tx: TransactionBlock,
 		itemType: string,
 		itemId: string,
+		kiosk: ObjectArgument,
 		ownerCap: TransactionArgument,
 	): [TransactionArgument, TransactionArgument] {
-		this.#verifyCapIsSet();
-		let [itemObj, promise] = kioskTx.borrowValue(
-			tx,
-			itemType,
-			this.selectedCap!.kioskId,
-			ownerCap,
-			itemId,
-		);
+		let [itemObj, promise] = kioskTx.borrowValue(tx, itemType, kiosk, ownerCap, itemId);
 
 		return [itemObj, promise];
 	}
@@ -236,12 +252,12 @@ export class KioskClient {
 	 */
 	return(
 		tx: TransactionBlock,
+		kiosk: ObjectArgument,
 		itemType: string,
 		itemObj: TransactionArgument,
 		promise: TransactionArgument,
 	) {
-		this.#verifyCapIsSet();
-		kioskTx.returnValue(tx, itemType, this.selectedCap!.kioskId, itemObj, promise);
+		kioskTx.returnValue(tx, itemType, kiosk, itemObj, promise);
 	}
 
 	/**
@@ -252,11 +268,11 @@ export class KioskClient {
 	 */
 	withdraw(
 		tx: TransactionBlock,
+		kiosk: ObjectArgument,
 		ownerCap: TransactionArgument,
-		amount?: string | bigint | null,
+		amount?: string | bigint | number,
 	): TransactionArgument {
-		this.#verifyCapIsSet();
-		return kioskTx.withdrawFromKiosk(tx, this.selectedCap!.kioskId, ownerCap, amount);
+		return kioskTx.withdrawFromKiosk(tx, kiosk, ownerCap, amount);
 	}
 
 	/**
@@ -265,9 +281,14 @@ export class KioskClient {
 	 * @param item The item {type, objectId} we want to delist
 	 * @param kioskCap the capObject, as returned from the `getOwnerCap` function.
 	 */
-	place(tx: TransactionBlock, itemType: string, item: ObjectArgument, kioskCap: ObjectArgument) {
-		this.#verifyCapIsSet();
-		kioskTx.place(tx, itemType, this.selectedCap!.kioskId, kioskCap, item);
+	place(
+		tx: TransactionBlock,
+		itemType: string,
+		item: ObjectArgument,
+		kiosk: ObjectArgument,
+		kioskCap: ObjectArgument,
+	) {
+		kioskTx.place(tx, itemType, kiosk, kioskCap, item);
 	}
 
 	/**
@@ -281,10 +302,10 @@ export class KioskClient {
 		itemType: string,
 		item: ObjectArgument,
 		price: string | bigint,
+		kiosk: ObjectArgument,
 		kioskCap: ObjectArgument,
-	): void {
-		this.#verifyCapIsSet();
-		kioskTx.placeAndList(tx, itemType, this.selectedCap!.kioskId, kioskCap, item, price);
+	) {
+		kioskTx.placeAndList(tx, itemType, kiosk, kioskCap, item, price);
 	}
 
 	/**
@@ -299,10 +320,10 @@ export class KioskClient {
 		itemType: string,
 		itemId: string,
 		price: string | bigint,
+		kiosk: ObjectArgument,
 		kioskCap: ObjectArgument,
-	): void {
-		this.#verifyCapIsSet();
-		kioskTx.list(tx, itemType, this.selectedCap!.kioskId, kioskCap, itemId, price);
+	) {
+		kioskTx.list(tx, itemType, kiosk, kioskCap, itemId, price);
 	}
 
 	/**
@@ -312,54 +333,71 @@ export class KioskClient {
 	 * @param kiosk the Kiosk, ideally passed from the `ownedKioskTx` callback function!
 	 * @param kioskCap the KioskCap, ideally passed from the `ownedKioskTx` callback function!
 	 */
-	delist(tx: TransactionBlock, itemType: string, itemId: string, kioskCap: ObjectArgument): void {
-		this.#verifyCapIsSet();
-		kioskTx.delist(tx, itemType, this.selectedCap!.kioskId, kioskCap, itemId);
+	delist(
+		tx: TransactionBlock,
+		itemType: string,
+		itemId: string,
+		kiosk: ObjectArgument,
+		kioskCap: ObjectArgument,
+	) {
+		kioskTx.delist(tx, itemType, kiosk, kioskCap, itemId);
 	}
 
 	/**
 	 * A function to take an item from the kiosk. The transaction won't succeed if the item is listed or locked.
 	 * @param tx The Transaction Block
 	 * @param item The item {type, objectId} we want to delist
-	 * @param kiosk the Kiosk Id, ideally passed from the `ownedKioskTx` callback function!
+	 * @param kiosk the Kiosk Object, ideally passed from the `ownedKioskTx` callback function!
 	 * @param kioskCap the KioskCap, ideally passed from the `ownedKioskTx` callback function!
 	 */
 	take(
 		tx: TransactionBlock,
 		itemType: string,
 		itemId: string,
+		kiosk: ObjectArgument,
 		kioskCap: ObjectArgument,
 	): TransactionArgument {
-		this.#verifyCapIsSet();
-		return kioskTx.take(tx, itemType, this.selectedCap!.kioskId, kioskCap, itemId);
+		return kioskTx.take(tx, itemType, kiosk, kioskCap, itemId);
 	}
 
 	/**
 	 * Converts a kiosk to a Personal (Soulbound) Kiosk.
 	 * @param tx The Transaction Block
-	 * @param kiosk The Kiosk Id
-	 * @param ownerCap The Kiosk Owner Cap Object
-	 * @param address The address to transfer the cap.
+	 * @param kiosk (Optional) The Kiosk Id or Object
+	 * @param ownerCap (Optional) The Kiosk Owner Cap Object. If not passed, it will use the selectedCap's one.
 	 */
-	convertToPersonal(tx: TransactionBlock, kiosk: ObjectArgument, ownerCap: ObjectArgument): void {
-		convertToPersonalTx(tx, kiosk, ownerCap, personalKioskAddress[this.network]);
+	convertToPersonal(tx: TransactionBlock, kiosk?: ObjectArgument, ownerCap?: ObjectArgument) {
+		if (!kiosk || !ownerCap) this.#verifyCapIsSet();
+		convertToPersonalTx(
+			tx,
+			kiosk || this.selectedCap!.kioskId,
+			ownerCap || this.selectedCap!.objectId,
+			personalKioskAddress[this.network],
+		);
 	}
 
 	/**
 	 * A function to get a transaction parameter for the kiosk.
-	 * @param tx The Transaction Block
+	 * @param txb The Transaction Block
 	 * @returns An array [kioskOwnerCap, promise]. If there's a promise, you need to call `returnOwnerCap` after using the cap.
 	 */
-	getOwnerCap(tx: TransactionBlock): [TransactionArgument, TransactionArgument | undefined] {
+	getOwnerCap(
+		txb: TransactionBlock,
+	): [TransactionArgument, TransactionArgument, TransactionArgument | undefined] {
 		this.#verifyCapIsSet();
-		if (!this.selectedCap!.isPersonal) return [tx.object(this.selectedCap!.objectId), undefined];
+		if (!this.selectedCap!.isPersonal)
+			return [
+				objArg(txb, this.selectedCap!.kioskId),
+				objArg(txb, this.selectedCap!.objectId),
+				undefined,
+			];
 
-		const [capObject, promise] = tx.moveCall({
+		const [capObject, promise] = txb.moveCall({
 			target: `${personalKioskAddress[this.network]}::personal_kiosk::borrow_val`,
-			arguments: [tx.object(this.selectedCap!.objectId)],
+			arguments: [txb.object(this.selectedCap!.objectId)],
 		});
 
-		return [capObject, promise];
+		return [objArg(txb, this.selectedCap!.kioskId), capObject, promise];
 	}
 
 	/**
@@ -372,7 +410,7 @@ export class KioskClient {
 		tx: TransactionBlock,
 		capObject: ObjectArgument,
 		promise?: TransactionArgument | undefined,
-	): void {
+	) {
 		this.#verifyCapIsSet();
 		if (!this.selectedCap!.isPersonal || !promise) return;
 
@@ -380,5 +418,13 @@ export class KioskClient {
 			target: `${personalKioskAddress[this.network]}::personal_kiosk::return_val`,
 			arguments: [tx.object(this.selectedCap!.objectId), objArg(tx, capObject), promise],
 		});
+	}
+
+	/**
+	 * This helps check whether we have the `selectedCap` set.
+	 */
+	#verifyCapIsSet() {
+		if (!this.selectedCap)
+			throw new Error('You need to call `setSelectedCap` before calling this function.');
 	}
 }
