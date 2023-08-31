@@ -9,22 +9,22 @@ import { type RuleResolvingParams } from '../../types';
  * A helper to resolve the royalty rule.
  */
 export function resolveRoyaltyRule(params: RuleResolvingParams) {
-	const { tx, itemType, price, packageId, transferRequest, policyId } = params;
+	const { txb, itemType, price, packageId, transferRequest, policyId } = params;
 
-	const policyObj = objArg(tx, policyId);
+	const policyObj = objArg(txb, policyId);
 
 	// calculates the amount
-	const [amount] = tx.moveCall({
+	const [amount] = txb.moveCall({
 		target: `${packageId}::royalty_rule::fee_amount`,
 		typeArguments: [itemType],
-		arguments: [policyObj, objArg(tx, price ?? '')],
+		arguments: [policyObj, objArg(txb, price ?? '')],
 	});
 
 	// splits the coin.
-	const feeCoin = tx.splitCoins(tx.gas, [amount]);
+	const feeCoin = txb.splitCoins(txb.gas, [amount]);
 
 	// pays the policy
-	tx.moveCall({
+	txb.moveCall({
 		target: `${packageId}::royalty_rule::pay`,
 		typeArguments: [itemType],
 		arguments: [policyObj, transferRequest, feeCoin],
@@ -33,7 +33,7 @@ export function resolveRoyaltyRule(params: RuleResolvingParams) {
 
 export function resolveKioskLockRule(params: RuleResolvingParams) {
 	const {
-		tx,
+		txb,
 		packageId,
 		itemType,
 		ownedKiosk,
@@ -45,13 +45,13 @@ export function resolveKioskLockRule(params: RuleResolvingParams) {
 
 	if (!ownedKiosk || !ownedKioskCap) throw new Error('Missing Owned Kiosk or Owned Kiosk Cap');
 
-	lock(tx, itemType, ownedKiosk, ownedKioskCap, policyId, purchasedItem);
+	lock(txb, itemType, ownedKiosk, ownedKioskCap, policyId, purchasedItem);
 
 	// proves that the item is locked in the kiosk to the TP.
-	tx.moveCall({
+	txb.moveCall({
 		target: `${packageId}::kiosk_lock_rule::prove`,
 		typeArguments: [itemType],
-		arguments: [transferRequest, objArg(tx, ownedKiosk)],
+		arguments: [transferRequest, objArg(txb, ownedKiosk)],
 	});
 }
 
@@ -60,15 +60,15 @@ export function resolveKioskLockRule(params: RuleResolvingParams) {
  * @param params
  */
 export function resolvePersonalKioskRule(params: RuleResolvingParams) {
-	const { tx, packageId, itemType, ownedKiosk, transferRequest } = params;
+	const { txb, packageId, itemType, ownedKiosk, transferRequest } = params;
 
 	if (!ownedKiosk) throw new Error('Missing owned Kiosk.');
 
 	// proves that the destination kiosk is personal.
-	tx.moveCall({
+	txb.moveCall({
 		target: `${packageId}::kiosk_lock_rule::prove`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, ownedKiosk), transferRequest],
+		arguments: [objArg(txb, ownedKiosk), transferRequest],
 	});
 }
 
@@ -76,12 +76,12 @@ export function resolvePersonalKioskRule(params: RuleResolvingParams) {
  * Resolves the floor price rule.
  */
 export function resolveFloorPriceRule(params: RuleResolvingParams) {
-	const { tx, packageId, itemType, policyId, transferRequest } = params;
+	const { txb, packageId, itemType, policyId, transferRequest } = params;
 
 	// proves that the destination kiosk is personal
-	tx.moveCall({
+	txb.moveCall({
 		target: `${packageId}::floor_price_rule::prove`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, policyId), transferRequest],
+		arguments: [objArg(txb, policyId), transferRequest],
 	});
 }

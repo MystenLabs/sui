@@ -42,7 +42,7 @@ export type TransferPolicyCreated = {
 // Each rule resolving function should check that the key it's seeking is in the object
 // e.g. `if(!'my_key' in ruleParams!) throw new Error("Can't resolve that rule!")`
 export type RuleResolvingParams = {
-	tx: TransactionBlock;
+	txb: TransactionBlock;
 	itemType: string;
 	itemId: string;
 	price: string;
@@ -53,5 +53,5 @@ export type RuleResolvingParams = {
 	transferRequest: TransactionArgument;
 	purchasedItem: TransactionArgument;
 	packageId: string;
-	extraArgs?: Record<string, any>; // extraParams contains more possible {key, values} to pass for custom rules.
+	extraArgs: Record<string, any>; // extraParams contains more possible {key, values} to pass for custom rules.
 };
