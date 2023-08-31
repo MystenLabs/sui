@@ -65,7 +65,7 @@ pub enum ConsensusTransactionKey {
     CapabilityNotification(AuthorityName, u64 /* generation */),
     // Key must include both id and jwk, because honest validators could be given multiple jwks for
     // the same id by malfunctioning providers.
-    NewJWKFetched(AuthorityName, JwkId, JWK),
+    NewJWKFetched(Box<(AuthorityName, JwkId, JWK)>),
 }
 
 impl Debug for ConsensusTransactionKey {
@@ -82,13 +82,16 @@ impl Debug for ConsensusTransactionKey {
                 name.concise(),
                 generation
             ),
-            Self::NewJWKFetched(authority, id, jwk) => write!(
-                f,
-                "NewJWKFetched({:?}, {:?}, {:?})",
-                authority.concise(),
-                id,
-                jwk
-            ),
+            Self::NewJWKFetched(key) => {
+                let (authority, id, jwk) = &**key;
+                write!(
+                    f,
+                    "NewJWKFetched({:?}, {:?}, {:?})",
+                    authority.concise(),
+                    id,
+                    jwk
+                )
+            }
         }
     }
 }
@@ -238,7 +241,11 @@ impl ConsensusTransaction {
                 ConsensusTransactionKey::CapabilityNotification(cap.authority, cap.generation)
             }
             ConsensusTransactionKind::NewJWKFetched(authority, id, key) => {
-                ConsensusTransactionKey::NewJWKFetched(*authority, id.clone(), key.clone())
+                ConsensusTransactionKey::NewJWKFetched(Box::new((
+                    *authority,
+                    id.clone(),
+                    key.clone(),
+                )))
             }
         }
     }
