@@ -208,11 +208,12 @@ impl BatchFetcher {
             drop(request_guard);
             match response {
                 Ok(remote_batches) => {
+                    let remote_batch_count = remote_batches.len() as u64;
                     self.metrics
                         .worker_batch_fetch
                         .with_label_values(&["remote", "success"])
-                        .inc();
-                    debug!("Found {} batches remotely", remote_batches.len());
+                        .inc_by(remote_batch_count);
+                    debug!("Found {remote_batch_count} batches remotely");
                     return remote_batches;
                 }
                 Err(err) => {
