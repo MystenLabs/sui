@@ -3,7 +3,6 @@
 
 import { ArrowBgFill16, Plus12 } from '@mysten/icons';
 import * as CollapsiblePrimitive from '@radix-ui/react-collapsible';
-import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { type AccountType, type SerializedUIAccount } from '_src/background/accounts/Account';
 import { isZkAccountSerializedUI } from '_src/background/accounts/zk/ZkAccount';
