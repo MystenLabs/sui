@@ -45,7 +45,7 @@ function MenuList() {
 						icon={<LockedLockIcon />}
 						title={'Password Protect Accounts'}
 					/>
-					<MenuListItem icon={<ClipboardIcon />} title={'FAQ'} href={FAQ_LINK} />
+					<MenuListItem icon={<ClipboardIcon />} title="FAQ" href={FAQ_LINK} />
 					<MenuListItem
 						icon={<MoreIcon className="text-steel-darker" />}
 						title="More options"
