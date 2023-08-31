@@ -236,6 +236,7 @@ impl SuiNode {
                                 warn!("Error when fetching JWK {:?}", e);
                                 // Retry in 30 seconds
                                 tokio::time::sleep(Duration::from_secs(30)).await;
+                                continue;
                             }
                             Ok(mut keys) => {
                                 keys.retain(|(id, jwk)| {
