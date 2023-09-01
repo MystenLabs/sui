@@ -139,6 +139,8 @@ type CommitteeMember {
 	stakeUnit: Int
 }
 
+scalar DateTime
+
 type EndOfEpochData {
 	newCommittee: [CommitteeMember!]
 	nextProtocolVersion: Int
@@ -154,6 +156,7 @@ type Epoch {
 	validatorSet: ValidatorSet
 	storageFund: StorageFund
 	safeMode: SafeMode
+	startTimestamp: DateTime
 }
 
 enum ExecutionStatus {

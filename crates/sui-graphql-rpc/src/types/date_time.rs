@@ -5,13 +5,14 @@ use std::str::FromStr;
 
 use async_graphql::*;
 use chrono::{
-    prelude::{DateTime as ChronoDateTime, Utc as ChronoUtc},
+    prelude::{DateTime as ChronoDateTime, TimeZone, Utc as ChronoUtc},
     ParseError as ChronoParseError,
 };
 
 // ISO-8601 Date and Time: RFC3339 in UTC
 // YYYY-MM-DDTHH:MM:SS.mmmZ
-struct DateTime(ChronoDateTime<ChronoUtc>);
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct DateTime(ChronoDateTime<ChronoUtc>);
 
 #[Scalar]
 impl ScalarType for DateTime {
@@ -26,6 +27,15 @@ impl ScalarType for DateTime {
     fn to_value(&self) -> Value {
         // Debug format for chrono::DateTime is YYYY-MM-DDTHH:MM:SS.mmmZ
         Value::String(format!("{:?}", self.0))
+    }
+}
+
+impl DateTime {
+    pub fn from_ms(timestamp_ms: i64) -> Option<Self> {
+        ChronoUtc
+            .timestamp_millis_opt(timestamp_ms)
+            .single()
+            .map(Self)
     }
 }
 
