@@ -88,6 +88,13 @@ async fn accept_certificates() {
     }
 
     // Ensure the Synchronizer sends the parents of the certificates to the proposer.
+    //
+    // The first messages are the Synchronizer letting us know about the round of parent certificates
+    for _i in 0..3 {
+        let received = rx_parents.recv().await.unwrap();
+        assert_eq!(received, (vec![], 0, 0));
+    }
+    // the next message actually contains the parents
     let received = rx_parents.recv().await.unwrap();
     assert_eq!(received, (certificates.clone(), 1, 0));
 
@@ -433,6 +440,11 @@ async fn synchronizer_recover_partial_certs() {
     }
     tokio::time::sleep(Duration::from_secs(5)).await;
 
+    for _ in 0..2 {
+        let received = rx_parents.recv().await.unwrap();
+        assert_eq!(received, (vec![], 0, 0));
+    }
+
     // the recovery flow sends message that contains the parents
     let received = rx_parents.recv().await.unwrap();
     assert_eq!(received.1, 1);
@@ -493,7 +505,7 @@ async fn synchronizer_recover_previous_round() {
         .unwrap();
     client.set_primary_network(network.clone());
 
-    // Create 3 certificates per round.
+    // Send 3 certificates from round 1, and 2 certificates from round 2 to Synchronizer.
     let genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
@@ -511,7 +523,6 @@ async fn synchronizer_recover_previous_round() {
         &latest_protocol_version(),
         &keys,
     );
-    // Send 3 certificates from round 1, and 2 certificates from round 2 to Synchronizer.
     let all_certificates: Vec<_> = all_certificates.into_iter().collect();
     let round_1_certificates = all_certificates[0..3].to_vec();
     let round_2_certificates = all_certificates[3..5].to_vec();
