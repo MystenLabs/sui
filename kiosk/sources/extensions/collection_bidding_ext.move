@@ -47,6 +47,8 @@ module kiosk::collection_bidding_ext {
     const EBidNotFound: u64 = 5;
     /// Trying to place a bid with no coins.
     const ENoCoinsPassed: u64 = 6;
+    /// Trying to access the extension without installing it.
+    const EExtensionNotInstalled: u64 = 7;
 
     /// A key for Extension storage - a single bid on an item of type `T` on a `Market`.
     struct Bid<phantom T, phantom Market> has copy, store, drop {}
@@ -64,6 +66,7 @@ module kiosk::collection_bidding_ext {
     struct BidAccepted<phantom T, phantom Market> has copy, drop {
         kiosk_id: ID,
         item_id: ID,
+        amount: u64,
         source_kiosk_owner: Option<address>,
         destination_kiosk_owner: Option<address>,
     }
@@ -99,6 +102,7 @@ module kiosk::collection_bidding_ext {
     ) {
         assert!(vector::length(&bids) > 0, ENoCoinsPassed);
         assert!(kiosk::has_access(self, cap), ENotAuthorized);
+        assert!(ext::is_installed<Extension>(self), EExtensionNotInstalled);
 
         let amounts = vector[];
         let (i, count) = (0, vector::length(&bids));
@@ -120,6 +124,7 @@ module kiosk::collection_bidding_ext {
     public fun cancel_all<T: key + store, Market>(
         self: &mut Kiosk, cap: &KioskOwnerCap, ctx: &mut TxContext
     ): Coin<SUI> {
+        assert!(ext::is_installed<Extension>(self), EExtensionNotInstalled);
         assert!(kiosk::has_access(self, cap), ENotAuthorized);
 
         event::emit(BidCanceled<T, Market> {
@@ -136,13 +141,18 @@ module kiosk::collection_bidding_ext {
     /// Accept the bid and make a purchase on in the `Kiosk`.
     ///
     /// 1. The seller creates a `MarketPurchaseCap` using the Marketplace adapter,
-    /// and passes the Cap to this function.
+    /// and passes the Cap to this function. The `min_price` value is the expectation
+    /// of the seller. It protects them from race conditions in case the next bid
+    /// is smaller than the current one and someone frontrunned the seller.
+    /// See `EBidDoesntMatchExpectation` for more details on this scenario.
     ///
-    /// 2. The `bid` is taken from the extension storage and is used to purchase
-    /// the item with the `MarketPurchaseCap`. Proceeds go to the seller's Kiosk.
+    /// 2. The `bid` is taken from the `source` Kiosk's extension storage and is
+    /// used to purchase the item with the `MarketPurchaseCap`. Proceeds go to
+    /// the seller's Kiosk.
     ///
-    /// 3. The item is placed in the seller's Kiosk using the `place` or `lock`
-    /// functions (see `PERMISSIONS`).
+    /// 3. The item is placed in the `destination` Kiosk using the `place` or `lock`
+    /// functions (see `PERMISSIONS`). The extension must be installed and enabled
+    /// for this to work.
     public fun accept_market_bid<T: key + store, Market>(
         destination: &mut Kiosk,
         source: &mut Kiosk,
@@ -152,38 +162,43 @@ module kiosk::collection_bidding_ext {
         _lock: bool,
         ctx: &mut TxContext
     ): (TransferRequest<T>, TransferRequest<Market>) {
-        let storage = ext::storage_mut(Extension {}, destination);
+        assert!(ext::is_installed<Extension>(source), EExtensionNotInstalled);
+        let storage = ext::storage_mut(Extension {}, source);
         assert!(bag::contains(storage, Bid<T, Market> {}), EBidNotFound);
 
-        // Take 1 Coin from the bag - this is our bid (bids can't be empty, we make sure of it).
+        // Take 1 Coin from the bag - this is our bid (bids can't be empty, we
+        // make sure of it).
         let bid = vector::pop_back(bag::borrow_mut(storage, Bid<T, Market> {}));
 
         // If there are no bids left, remove the bag and the key from the storage.
-        if (bid_count<T, Market>(destination) == 0) {
+        if (bid_count<T, Market>(source) == 0) {
             vector::destroy_empty<Coin<SUI>>(
                 bag::remove(
-                    ext::storage_mut(Extension {}, destination),
+                    ext::storage_mut(Extension {}, source),
                     Bid<T, Market> {}
                 )
             );
         };
 
+        let amount = coin::value(&bid);
+
         assert!(ext::is_enabled<Extension>(destination), EExtensionDisabled);
         assert!(mkt::kiosk(&mkt_cap) == object::id(source), EIncorrectKiosk);
-        assert!(mkt::min_price(&mkt_cap) <= coin::value(&bid), EBidDoesntMatchExpectation);
+        assert!(mkt::min_price(&mkt_cap) <= amount, EBidDoesntMatchExpectation);
         assert!(type_name::get<Market>() != type_name::get<NoMarket>(), EIncorrectMarketArg);
 
         // Perform the purchase operation in the seller's Kiosk using the `Bid`.
         let (item, request, market_request) = mkt::purchase(source, mkt_cap, bid, ctx);
 
         event::emit(BidAccepted<T, Market> {
-            kiosk_id: object::id(destination),
+            amount,
             item_id: object::id(&item),
+            kiosk_id: object::id(destination),
             destination_kiosk_owner: personal_kiosk::try_owner(destination),
             source_kiosk_owner: personal_kiosk::try_owner(source)
         });
 
-        // Place of lock the item in the Buyer's Kiosk.
+        // Place or lock the item in the `destination` Kiosk.
         place_or_lock(destination, item, policy);
 
         (request, market_request)

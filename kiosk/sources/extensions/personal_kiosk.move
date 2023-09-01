@@ -36,6 +36,10 @@ module kiosk::personal_kiosk {
     /// checks through the Kiosk).
     struct OwnerMarker has copy, store, drop {}
 
+    /// Event that is emitted when a new PersonalKioskCap is created. The sender
+    /// of the transaction is always the new Kiosk Owner.
+    struct NewPersonalKiosk has copy, drop { kiosk_id: ID }
+
     /// The default setup for the PersonalKioskCap.
     entry fun default(kiosk: &mut Kiosk, cap: KioskOwnerCap, ctx: &mut TxContext) {
         transfer_to_sender(new(kiosk, cap, ctx), ctx);
@@ -61,6 +65,10 @@ module kiosk::personal_kiosk {
             OwnerMarker {},
             owner
         );
+
+        sui::event::emit(NewPersonalKiosk {
+            kiosk_id: object::id(kiosk)
+        });
 
         // wrap the Cap in the `PersonalKioskCap`
         PersonalKioskCap {
