@@ -16,11 +16,10 @@ use fastcrypto::{
     encoding::{Base64, Encoding},
     traits::ToFromBytes,
 };
+use json_to_table::json_to_table;
 use move_bytecode_verifier::meter::Scope;
 use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
-use prettytable::Table;
-use prettytable::{row, table};
 use prometheus::Registry;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -28,8 +27,8 @@ use sui_adapter::adapter::{default_verifier_config, run_metered_move_bytecode_ve
 use sui_move::build::resolve_lock_file_path;
 use sui_protocol_config::ProtocolConfig;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
-use sui_types::error::SuiError;
 use sui_types::{digests::TransactionDigest, metrics::BytecodeVerifierMetrics};
+use sui_types::{dynamic_field::DynamicFieldInfo, error::SuiError};
 use sui_verifier::meter::SuiVerifierMeter;
 
 use shared_crypto::intent::Intent;
@@ -48,7 +47,6 @@ use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
 use sui_types::crypto::SignatureScheme;
-use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::move_package::UpgradeCap;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::{SenderSignedData, TransactionData, TransactionDataAPI};
@@ -59,6 +57,8 @@ use sui_types::{
     parse_sui_type_tag,
     transaction::Transaction,
 };
+
+use tabled::settings::Style as TableStyle;
 use tracing::info;
 
 macro_rules! serialize_or_execute {
@@ -608,6 +608,24 @@ impl SuiClientCommands {
         context: &mut WalletContext,
     ) -> Result<SuiClientCommandResult, anyhow::Error> {
         let ret = Ok(match self {
+            SuiClientCommands::Addresses => {
+                let active_address = context.active_address()?;
+                let addresses = context.config.keystore.addresses();
+                SuiClientCommandResult::Addresses(AddressesOutput {
+                    addresses,
+                    active_address,
+                })
+            }
+
+            SuiClientCommands::DynamicFieldQuery { id, cursor, limit } => {
+                let client = context.get_client().await?;
+                let df_read = client
+                    .read_api()
+                    .get_dynamic_fields(id, cursor, Some(limit))
+                    .await?;
+                SuiClientCommandResult::DynamicFieldQuery(df_read)
+            }
+
             SuiClientCommands::Upgrade {
                 package_path,
                 upgrade_capability,
@@ -656,7 +674,9 @@ impl SuiClientCommands {
                     .await?;
 
                 let Some(data) = resp.data else {
-                    return Err(anyhow!("Could not find upgrade capability at {upgrade_capability}"))
+                    return Err(anyhow!(
+                        "Could not find upgrade capability at {upgrade_capability}"
+                    ));
                 };
 
                 let upgrade_cap: UpgradeCap = data
@@ -814,15 +834,6 @@ impl SuiClientCommands {
                     )
                     .await?;
                 SuiClientCommandResult::TransactionBlock(tx_read)
-            }
-
-            SuiClientCommands::DynamicFieldQuery { id, cursor, limit } => {
-                let client = context.get_client().await?;
-                let df_read = client
-                    .read_api()
-                    .get_dynamic_fields(id, cursor, Some(limit))
-                    .await?;
-                SuiClientCommandResult::DynamicFieldQuery(df_read)
             }
 
             SuiClientCommands::Call {
@@ -1001,11 +1012,6 @@ impl SuiClientCommands {
                     PayAllSui
                 )
             }
-
-            SuiClientCommands::Addresses => SuiClientCommandResult::Addresses(
-                context.config.keystore.addresses(),
-                context.active_address().ok(),
-            ),
 
             SuiClientCommands::Objects { address } => {
                 let address = address.unwrap_or(context.active_address()?);
@@ -1359,6 +1365,26 @@ impl Display for SuiClientCommandResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
         match self {
+            SuiClientCommandResult::Addresses(addresses) => {
+                let json_obj = json!(addresses);
+                let mut table = json_to_table(&json_obj);
+                let style = TableStyle::rounded().horizontals([]);
+                table.with(style);
+                write!(f, "{}", table)?
+            }
+            SuiClientCommandResult::DynamicFieldQuery(df_refs) => {
+                let df_refs = DynamicFieldOutput {
+                    has_next_page: df_refs.has_next_page,
+                    next_cursor: df_refs.next_cursor,
+                    data: df_refs.data.clone(),
+                };
+
+                let json_obj = json!(df_refs);
+                let mut table = json_to_table(&json_obj);
+                let style = TableStyle::rounded().horizontals([]);
+                table.with(style);
+                write!(f, "{}", table)?
+            }
             SuiClientCommandResult::Upgrade(response)
             | SuiClientCommandResult::Publish(response) => {
                 write!(writer, "{}", write_transaction_response(response)?)?;
@@ -1423,16 +1449,6 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::PayAllSui(response) => {
                 write!(writer, "{}", write_transaction_response(response)?)?;
             }
-            SuiClientCommandResult::Addresses(addresses, active_address) => {
-                writeln!(writer, "Showing {} results.", addresses.len())?;
-                for address in addresses {
-                    if *active_address == Some(*address) {
-                        writeln!(writer, "{} <=", address)?;
-                    } else {
-                        writeln!(writer, "{}", address)?;
-                    }
-                }
-            }
             SuiClientCommandResult::Objects(object_refs) => {
                 writeln!(
                     writer,
@@ -1466,35 +1482,6 @@ impl Display for SuiClientCommandResult {
                     }
                 }
                 writeln!(writer, "Showing {} results.", object_refs.len())?;
-            }
-            SuiClientCommandResult::DynamicFieldQuery(df_refs) => {
-                let mut table: Table = table!([
-                    "Name",
-                    "Type",
-                    "Object Type",
-                    "Object Id",
-                    "Version",
-                    "Digest"
-                ]);
-                for df_ref in df_refs.data.iter() {
-                    let df_type = match df_ref.type_ {
-                        DynamicFieldType::DynamicField => "DynamicField",
-                        DynamicFieldType::DynamicObject => "DynamicObject",
-                    };
-                    table.add_row(row![
-                        df_ref.name,
-                        df_type,
-                        df_ref.object_type,
-                        df_ref.object_id,
-                        df_ref.version.value(),
-                        Base64::encode(df_ref.digest)
-                    ]);
-                }
-                write!(writer, "{table}")?;
-                writeln!(writer, "Showing {} results.", df_refs.data.len())?;
-                if let Some(cursor) = df_refs.next_cursor {
-                    writeln!(writer, "Next cursor: {cursor}")?;
-                }
             }
             SuiClientCommandResult::SyncClientState => {
                 writeln!(writer, "Client state sync complete.")?;
@@ -1733,11 +1720,26 @@ impl SuiClientCommandResult {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddressesOutput {
+    pub active_address: SuiAddress,
+    pub addresses: Vec<SuiAddress>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DynamicFieldOutput {
+    pub has_next_page: bool,
+    pub next_cursor: Option<ObjectID>,
+    pub data: Vec<DynamicFieldInfo>,
+}
+
+#[derive(Serialize)]
 #[serde(untagged)]
 pub enum SuiClientCommandResult {
     ActiveAddress(Option<SuiAddress>),
     ActiveEnv(Option<String>),
-    Addresses(Vec<SuiAddress>, Option<SuiAddress>),
+    Addresses(AddressesOutput),
     Call(SuiTransactionBlockResponse),
     ChainIdentifier(String),
     DynamicFieldQuery(DynamicFieldPage),
