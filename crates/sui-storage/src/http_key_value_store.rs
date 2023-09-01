@@ -72,6 +72,7 @@ pub enum Key {
     CheckpointSummary(CheckpointSequenceNumber),
     CheckpointContentsByDigest(CheckpointContentsDigest),
     CheckpointSummaryByDigest(CheckpointDigest),
+    TxToCheckpoint(TransactionDigest),
 }
 
 #[derive(Clone, Debug)]
@@ -81,6 +82,7 @@ enum Value {
     Events(Box<TransactionEvents>),
     CheckpointContents(Box<CheckpointContents>),
     CheckpointSummary(Box<CertifiedCheckpointSummary>),
+    TxToCheckpoint(CheckpointSequenceNumber),
 }
 
 fn key_to_path_elements(key: &Key) -> SuiResult<(String, &'static str)> {
@@ -98,6 +100,7 @@ fn key_to_path_elements(key: &Key) -> SuiResult<(String, &'static str)> {
         )),
         Key::CheckpointContentsByDigest(digest) => Ok((encode_digest(digest), "cc")),
         Key::CheckpointSummaryByDigest(digest) => Ok((encode_digest(digest), "cs")),
+        Key::TxToCheckpoint(digest) => Ok((encode_digest(digest), "ts2c")),
     }
 }
 
@@ -405,5 +408,15 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
             summaries_by_digest_results,
             contents_by_digest_results,
         ))
+    }
+
+    async fn deprecated_get_transaction_checkpoint(
+        &self,
+        digest: TransactionDigest,
+    ) -> SuiResult<Option<CheckpointSequenceNumber>> {
+        let key = Key::TxToCheckpoint(digest);
+        self.fetch(key).await.map(|maybe| {
+            maybe.and_then(|bytes| deser::<_, CheckpointSequenceNumber>(&key, bytes.as_ref()))
+        })
     }
 }

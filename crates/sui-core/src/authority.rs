@@ -4062,6 +4062,15 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
 
         Ok((summaries, contents, summaries_by_digest, contents_by_digest))
     }
+
+    async fn deprecated_get_transaction_checkpoint(
+        &self,
+        digest: TransactionDigest,
+    ) -> SuiResult<Option<CheckpointSequenceNumber>> {
+        self.database
+            .deprecated_get_transaction_checkpoint(&digest)
+            .map(|maybe| maybe.map(|(_epoch, checkpoint)| checkpoint))
+    }
 }
 
 #[cfg(msim)]
