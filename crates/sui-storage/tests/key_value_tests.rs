@@ -52,6 +52,7 @@ struct MockTxStore {
     checkpoint_contents: HashMap<CheckpointSequenceNumber, CheckpointContents>,
     checkpoint_summaries_by_digest: HashMap<CheckpointDigest, CertifiedCheckpointSummary>,
     checkpoint_contents_by_digest: HashMap<CheckpointContentsDigest, CheckpointContents>,
+    tx_to_checkpoint: HashMap<TransactionDigest, CheckpointSequenceNumber>,
 
     next_seq_number: u64,
 }
@@ -207,6 +208,13 @@ impl TransactionKeyValueStoreTrait for MockTxStore {
         }
 
         Ok((summaries, contents, summaries_by_digest, contents_by_digest))
+    }
+
+    async fn deprecated_get_transaction_checkpoint(
+        &self,
+        digest: TransactionDigest,
+    ) -> SuiResult<Option<CheckpointSequenceNumber>> {
+        Ok(self.tx_to_checkpoint.get(&digest).cloned())
     }
 }
 
