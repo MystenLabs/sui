@@ -5,7 +5,7 @@ import type { UseMutationOptions } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
 import type { StandardConnectInput, StandardConnectOutput } from '@mysten/wallet-standard';
 import { useWalletContext } from 'dapp-kit/src/components/wallet-provider/WalletProvider';
-import { WalletNotFoundError } from 'dapp-kit/src/errors/walletErrors';
+import { WalletAlreadyConnectedError, WalletNotFoundError } from 'dapp-kit/src/errors/walletErrors';
 import {
 	getMostRecentWalletConnectionInfo,
 	setMostRecentWalletConnectionInfo,

@@ -12,6 +12,7 @@ import { useWalletPropertiesChanged } from 'dapp-kit/src/hooks/wallet/useWalletP
 import type { WalletState, WalletAction } from './walletReducer.js';
 import { walletReducer } from './walletReducer.js';
 import { useWalletsChanged } from 'dapp-kit/src/hooks/wallet/useWalletsChanged.js';
+import { useConnectWallet } from 'dapp-kit/src/hooks/wallet/useConnectWallet.js';
 
 interface WalletProviderProps {
 	/** A list of wallets that are sorted to the top of the wallet list, if they are available to connect to. By default, wallets are sorted by the order they are loaded in. */
@@ -104,29 +105,37 @@ export function WalletProvider({
 		}
 	});
 
-	useEffect(() => {
-		if (!autoConnect || walletState.currentWallet) {
-			return;
-		}
-
-		(async function autoConnectToWallet() {
-			const mostRecentWalletInfo = await getMostRecentWalletConnectionInfo(
-				storageAdapter,
-				storageKey,
-			);
-
-			if (mostRecentWalletInfo) {
-				// do smth here
-			}
-		})();
-	}, [autoConnect, storageAdapter, storageKey, walletState.currentWallet]);
-
+	// Memo-ize the context value so we don't trigger un-necessary re-renders from
+	// ancestor components higher in the component tree.
 	const contextValue = useMemo(
 		() => ({ ...walletState, storageAdapter, storageKey, dispatch }),
 		[storageAdapter, storageKey, walletState],
 	);
+	return (
+		<WalletContext.Provider value={contextValue}>
+			{autoConnect && !walletState.currentWallet ? (
+				<AutoConnectWalletContainer>{children}</AutoConnectWalletContainer>
+			) : (
+				children
+			)}
+		</WalletContext.Provider>
+	);
+}
 
-	return <WalletContext.Provider value={contextValue}>{children}</WalletContext.Provider>;
+function AutoConnectWalletContainer({ children }: { children: ReactNode }) {
+	const { mutate: connectWallet } = useConnectWallet({ silent: true });
+	const { storageAdapter, storageKey } = useWalletContext();
+
+	useEffect(() => {
+		(async function autoConnectWallet() {
+			const { walletName } = await getMostRecentWalletConnectionInfo(storageAdapter, storageKey);
+			if (walletName) {
+				connectWallet({ walletName, silent: true });
+			}
+		})();
+	}, [connectWallet, storageAdapter, storageKey]);
+
+	return <>{children}</>;
 }
 
 export function useWalletContext() {
