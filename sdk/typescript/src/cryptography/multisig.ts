@@ -17,6 +17,8 @@ import { Secp256r1PublicKey } from '../keypairs/secp256r1/publickey.js';
 import { builder } from '../builder/bcs.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import { MAX_SIGNER_IN_MULTISIG, MIN_SIGNER_IN_MULTISIG } from '../multisig/publickey.js';
+export { MAX_SIGNER_IN_MULTISIG, MIN_SIGNER_IN_MULTISIG } from '../multisig/publickey.js';
+
 export type PubkeyWeightPair = {
 	pubKey: PublicKey;
 	weight: number;
