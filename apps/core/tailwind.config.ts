@@ -181,6 +181,7 @@ export default {
 				12.5: '3.125rem',
 				31.5: '7.5rem',
 				90: '22.5rem',
+				100: '25rem',
 				120: '30rem',
 				300: '75rem',
 				coinsAndAssetsContainer: '31.25rem',
@@ -223,6 +224,7 @@ export default {
 					'linear-gradient(90deg, #ecf1f4 -24.18%, rgba(237 242 245 / 40%) 73.61%, #f3f7f9 114.81%, #ecf1f4 114.82%)',
 				'gradients-graph-cards': 'linear-gradient(176deg, #D2EBFA 51.68%, #D5F7EE 100%)',
 				'gradients-failure': 'linear-gradient(166deg, #FBF0FF 0%, #FFF0F0 100%)',
+				objectCard: 'linear-gradient(166deg, #F0F9FF 9.97%, #FEF7FF 94.97%)',
 			},
 			rotate: {
 				135: '135deg',

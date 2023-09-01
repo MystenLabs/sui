@@ -10,6 +10,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 
 import { useResolveVideo } from '~/hooks/useResolveVideo';
 import { Card } from '~/ui/Card';
+import { DescriptionItem } from '~/ui/DescriptionList';
 import { Divider } from '~/ui/Divider';
 import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
 import { Link } from '~/ui/Link';
@@ -47,12 +48,17 @@ function HeroVideoImage({ title, subtitle, src, video, variant }: HeroVideoImage
 
 function ObjectViewItem({ title, children }: { title: string; children: ReactNode }) {
 	return (
-		<div className="flex justify-between gap-40">
-			<Text variant="pBodySmall/medium" color="steel-dark">
-				{title}
-			</Text>
+		<DescriptionItem
+			descriptionJustify="end"
+			labelWidth="lg"
+			title={
+				<Text variant="pBodySmall/medium" color="steel-dark">
+					{title}
+				</Text>
+			}
+		>
 			{children}
-		</div>
+		</DescriptionItem>
 	);
 }
 

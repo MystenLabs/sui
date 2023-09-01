@@ -32,6 +32,8 @@ export function DynamicFieldsCard({ id }: { id: string }) {
 		);
 	}
 
+	console.log('data', data);
+
 	// show the dynamic fields tab if there are pages and the first page has data
 	const hasPages = !!data?.pages?.[0].data.length;
 

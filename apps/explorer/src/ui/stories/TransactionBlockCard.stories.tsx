@@ -3,17 +3,14 @@
 
 import { type Meta, type StoryObj } from '@storybook/react';
 
-import {
-	TransactionBlockCard,
-	type TransactionBlockCardProps,
-	TransactionBlockCardSection,
-} from '~/ui/TransactionBlockCard';
+import { CollapsibleCard, type CollapsibleCardProps } from '~/ui/collapsible/CollapsibleCard';
+import { CollapsibleSection } from '~/ui/collapsible/CollapsibleSection';
 
 export default {
-	component: TransactionBlockCard,
+	component: CollapsibleCard,
 } as Meta;
 
-export const Default: StoryObj<TransactionBlockCardProps> = {
+export const Default: StoryObj<CollapsibleCardProps> = {
 	render: (props) => {
 		const sections = Array(5)
 			.fill(true)
@@ -21,19 +18,19 @@ export const Default: StoryObj<TransactionBlockCardProps> = {
 
 		return (
 			<div className="h-[1000px]">
-				<TransactionBlockCard collapsible title="Card Title" {...props}>
+				<CollapsibleCard collapsible title="Card Title" {...props}>
 					{sections.map((section, index) => (
-						<TransactionBlockCardSection key={index} title={`Section Title ${index}`}>
+						<CollapsibleSection key={index} title={`Section Title ${index}`}>
 							{section}
-						</TransactionBlockCardSection>
+						</CollapsibleSection>
 					))}
-				</TransactionBlockCard>
+				</CollapsibleCard>
 			</div>
 		);
 	},
 };
 
-export const Small: StoryObj<TransactionBlockCardProps> = {
+export const Small: StoryObj<CollapsibleCardProps> = {
 	...Default,
 	args: { size: 'sm' },
 };
