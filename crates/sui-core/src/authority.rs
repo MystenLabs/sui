@@ -1878,35 +1878,6 @@ impl AuthorityState {
         })
     }
 
-    pub fn load_fastpath_input_objects(
-        &self,
-        effects: &TransactionEffects,
-    ) -> SuiResult<Vec<Object>> {
-        // Note: any future addition to the returned object list needs cautions
-        // to make sure not to mess up object pruning.
-
-        let clock_ref = effects
-            .input_shared_objects()
-            .into_iter()
-            .find(|(obj_ref, _)| obj_ref.0.is_clock())
-            .map(|(obj_ref, _)| obj_ref);
-
-        if let Some((id, version, digest)) = clock_ref {
-            let clock_obj = self.database.get_object_by_key(&id, version)?;
-            debug_assert!(clock_obj.is_some());
-            debug_assert_eq!(
-                clock_obj.as_ref().unwrap().compute_object_reference().2,
-                digest
-            );
-            Ok(clock_obj
-                .tap_none(|| error!("Clock object not found: {:?}", clock_ref))
-                .into_iter()
-                .collect())
-        } else {
-            Ok(vec![])
-        }
-    }
-
     fn check_protocol_version(
         supported_protocol_versions: SupportedProtocolVersions,
         current_version: ProtocolVersion,
