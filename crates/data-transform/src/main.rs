@@ -210,7 +210,6 @@ fn main() {
     println!("start id = {}", start_id);
 
     //let mut end_id: i64 = start_id +1;
-    let end_id: i64 = 800000000;
 
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let connection = &mut establish_connection();
@@ -220,7 +219,7 @@ fn main() {
     //
     let module_cache = Arc::new(SyncModuleCache::new(GrootModuleResolver::new(blocking_cp.expect("REASON").clone())));
 
-    for target_id in start_id..end_id {
+    for target_id in start_id.. {
 
         let event = events
             .find(target_id)
