@@ -14,6 +14,7 @@ use sui_types::{
     error::ExecutionError,
     is_object, is_object_vector, is_primitive,
     move_package::{is_test_fun, FnInfoMap},
+    transfer::Receiving,
     SUI_FRAMEWORK_ADDRESS,
 };
 
@@ -236,6 +237,7 @@ fn verify_param_type(
     if is_primitive(view, function_type_args, param)
         || is_object(view, function_type_args, param)?
         || is_object_vector(view, function_type_args, param)?
+        || Receiving::is_valid(view, param)
     {
         Ok(())
     } else {

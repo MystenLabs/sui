@@ -3,7 +3,6 @@
 
 pub use checked::*;
 
-#[sui_macros::with_checked_arithmetic]
 mod checked {
     use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
     use crate::authority::AuthorityStore;
@@ -12,7 +11,7 @@ mod checked {
     use std::sync::Arc;
     use sui_config::transaction_deny_config::TransactionDenyConfig;
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::base_types::ObjectRef;
+    use sui_types::base_types::{ObjectID, ObjectRef};
     use sui_types::error::{UserInputError, UserInputResult};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::metrics::BytecodeVerifierMetrics;
@@ -27,7 +26,7 @@ mod checked {
         gas::SuiGasStatus,
         object::{Object, Owner},
     };
-    use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
+    use sui_types::{storage::ObjectStore, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
     use tracing::instrument;
 
     // Entry point for all checks related to gas.
@@ -79,7 +78,7 @@ mod checked {
         let objects = store.check_input_objects(&input_objects, epoch_store.protocol_config())?;
         let gas_status =
             get_gas_status(&objects, transaction.gas(), epoch_store, transaction).await?;
-        let input_objects = check_objects(transaction, input_objects, objects)?;
+        let input_objects = check_objects(store, epoch_store, transaction, input_objects, objects)?;
         Ok((gas_status, input_objects))
     }
 
@@ -107,7 +106,7 @@ mod checked {
 
         let gas_status =
             get_gas_status(&objects, &[gas_object_ref], epoch_store, transaction).await?;
-        let input_objects = check_objects(transaction, input_objects, objects)?;
+        let input_objects = check_objects(store, epoch_store, transaction, input_objects, objects)?;
         Ok((gas_status, input_objects))
     }
 
@@ -182,7 +181,13 @@ mod checked {
         };
         let gas_status =
             get_gas_status(&input_object_data, tx_data.gas(), epoch_store, tx_data).await?;
-        let input_objects = check_objects(tx_data, input_object_kinds, input_object_data)?;
+        let input_objects = check_objects(
+            store,
+            epoch_store,
+            tx_data,
+            input_object_kinds,
+            input_object_data,
+        )?;
         Ok((gas_status, input_objects))
     }
 
@@ -226,6 +231,8 @@ mod checked {
     /// that they are all the correct version and number.
     #[instrument(level = "trace", skip_all)]
     pub fn check_objects(
+        store: &AuthorityStore,
+        epoch_store: &AuthorityPerEpochStore,
         transaction: &TransactionData,
         input_objects: Vec<InputObjectKind>,
         objects: Vec<Object>,
@@ -243,8 +250,23 @@ mod checked {
             }
         }
 
+        // Get all objects owned by this transaction's sender.
+        let mut object_roots: HashSet<ObjectID> = input_objects
+            .iter()
+            .zip(objects.iter())
+            .filter_map(|(obj_kind, obj)| match (obj_kind, obj.owner) {
+                (InputObjectKind::ImmOrOwnedMoveObject(obj_ref), Owner::AddressOwner(a))
+                    if a == transaction.sender() =>
+                {
+                    Some(obj_ref.0)
+                }
+                _ => None,
+            })
+            .collect();
+
         // Gather all objects and errors.
         let mut all_objects = Vec::with_capacity(input_objects.len());
+        let mut num_loaded_objects = input_objects.len() as u64;
 
         for (object_kind, object) in input_objects.into_iter().zip(objects) {
             // For Gas Object, we check the object is owned by gas owner
@@ -261,9 +283,19 @@ mod checked {
             // Check if the object contents match the type of lock we need for
             // this object.
             let system_transaction = transaction.is_system_tx();
-            check_one_object(&owner_address, object_kind, &object, system_transaction)?;
+            check_one_object(
+                store,
+                epoch_store,
+                &owner_address,
+                object_kind,
+                &object,
+                system_transaction,
+                &mut object_roots,
+                &mut num_loaded_objects,
+            )?;
             all_objects.push((object_kind, object));
         }
+
         if !transaction.is_genesis_tx() && all_objects.is_empty() {
             return Err(UserInputError::ObjectInputArityViolation);
         }
@@ -273,10 +305,14 @@ mod checked {
 
     /// Check one object against a reference
     fn check_one_object(
+        store: &AuthorityStore,
+        epoch_store: &AuthorityPerEpochStore,
         owner: &SuiAddress,
         object_kind: InputObjectKind,
         object: &Object,
         system_transaction: bool,
+        object_roots: &mut HashSet<ObjectID>,
+        num_loaded_objects: &mut u64,
     ) -> UserInputResult {
         match object_kind {
             InputObjectKind::MovePackage(package_id) => {
@@ -299,13 +335,13 @@ mod checked {
 
                 // This is an invariant - we just load the object with the given ID and version.
                 assert_eq!(
-                object.version(),
-                sequence_number,
-                "The fetched object version {} does not match the requested version {}, object id: {}",
-                object.version(),
-                sequence_number,
-                object.id(),
-            );
+                    object.version(),
+                    sequence_number,
+                    "The fetched object version {} does not match the requested version {}, object id: {}",
+                    object.version(),
+                    sequence_number,
+                    object.id(),
+                );
 
                 // Check the digest matches - user could give a mismatched ObjectDigest
                 let expected_digest = object.digest();
@@ -382,7 +418,125 @@ mod checked {
                     }
                 }
             }
+            InputObjectKind::Receiving((object_id, sequence_number, object_digest)) => {
+                fp_ensure!(
+                    !object.is_package(),
+                    UserInputError::MovePackageAsObject { object_id }
+                );
+                fp_ensure!(
+                    sequence_number < SequenceNumber::MAX,
+                    UserInputError::InvalidSequenceNumber
+                );
+
+                // This is an invariant - we just load the object with the given ID and version.
+                assert_eq!(
+                    object.version(),
+                    sequence_number,
+                    "The fetched object version {} does not match the requested version {}, object id: {}",
+                    object.version(),
+                    sequence_number,
+                    object.id(),
+                );
+
+                // Check the digest matches - user could give a mismatched ObjectDigest
+                let expected_digest = object.digest();
+                fp_ensure!(
+                    expected_digest == object_digest,
+                    UserInputError::InvalidObjectDigest {
+                        object_id,
+                        expected_digest
+                    }
+                );
+
+                let object_owner_id: ObjectID = match object.owner {
+                    Owner::Immutable | Owner::Shared { .. } | Owner::ObjectOwner(_) => {
+                        return Err(UserInputError::InvalidReceivingObjectInput { object_id });
+                    }
+                    Owner::AddressOwner(actual_owner) => actual_owner.into(),
+                };
+
+                let mut seen = HashSet::new();
+                check_has_valid_receiving_path(
+                    store,
+                    epoch_store,
+                    object_owner_id,
+                    object_roots,
+                    &mut seen,
+                    num_loaded_objects,
+                )?;
+                object_roots.extend(seen);
+            }
         };
+        Ok(())
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    fn check_has_valid_receiving_path(
+        store: &AuthorityStore,
+        epoch_store: &AuthorityPerEpochStore,
+        owner: ObjectID,
+        object_roots: &mut HashSet<ObjectID>,
+        seen: &mut HashSet<ObjectID>,
+        num_loaded_objects: &mut u64,
+    ) -> UserInputResult<()> {
+        let mut outer_owner = Some(owner);
+        while let Some(inner_owner) = outer_owner {
+            // Have traversed to a root -- no need to load the object (it may not exist -- could be
+            // a root address).
+            if object_roots.contains(&inner_owner) {
+                return Ok(());
+            }
+
+            // Make sure we don't load more than max_input_objects number of objects.
+            *num_loaded_objects += 1;
+            if *num_loaded_objects > epoch_store.protocol_config().max_input_objects() {
+                return Err(UserInputError::SizeLimitExceeded {
+                    limit: "maximum input objects in a transaction".to_string(),
+                    value: epoch_store
+                        .protocol_config()
+                        .max_input_objects()
+                        .to_string(),
+                });
+            }
+
+            // If we can't load it for some reason declare that it's not found and return.
+            let object =
+                store
+                    .get_object(&inner_owner)
+                    .map_err(|_| UserInputError::ObjectNotFound {
+                        object_id: inner_owner,
+                        version: None,
+                    })?;
+
+            match object.map(|o| o.owner) {
+                // In the future we will look up in the wrapped table at this point.
+                None => {
+                    return Err(UserInputError::ObjectNotFound {
+                        object_id: inner_owner,
+                        version: None,
+                    })
+                }
+                Some(Owner::AddressOwner(address)) if seen.contains(&address.into()) => {
+                    return Err(UserInputError::CyclicObjectDependency {
+                        object_id: inner_owner,
+                    });
+                }
+                Some(Owner::AddressOwner(address) | Owner::ObjectOwner(address)) => {
+                    seen.insert(address.into());
+                    outer_owner = Some(address.into());
+                }
+                Some(Owner::Shared { .. }) => {
+                    return Err(UserInputError::Unsupported(
+                        "Receiving on shared objects is not supported yet".to_string(),
+                    ))
+                }
+                Some(Owner::Immutable) => {
+                    return Err(UserInputError::MovePackageAsObject {
+                        object_id: inner_owner,
+                    })
+                }
+            }
+        }
         Ok(())
     }
 

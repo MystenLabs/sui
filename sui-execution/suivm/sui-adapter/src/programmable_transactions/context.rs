@@ -648,6 +648,8 @@ mod checked {
                                     ));
                                 }
                             }
+                            // Receiving arguments can be dropped without being received.
+                            Some(Value::Receiving { .. }) => (),
                         }
                     }
                 }
@@ -1198,6 +1200,16 @@ mod checked {
                 /* imm override */ !mutable,
                 id,
             ),
+            ObjectArg::Receiving((id, _, _)) => {
+                load_object(
+                    vm,
+                    state_view,
+                    session,
+                    input_object_map,
+                    /* imm override */ false,
+                    id,
+                )
+            }
         }
     }
 

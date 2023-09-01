@@ -96,6 +96,8 @@ pub enum ObjectArg {
         initial_shared_version: SequenceNumber,
         mutable: bool,
     },
+    // A Move object that can be received in this transaction.
+    Receiving(ObjectRef),
 }
 
 fn type_tag_validity_check(
@@ -222,6 +224,9 @@ impl CallArg {
     fn input_objects(&self) -> Vec<InputObjectKind> {
         match self {
             CallArg::Pure(_) => vec![],
+            CallArg::Object(ObjectArg::Receiving(object_ref)) => {
+                vec![InputObjectKind::Receiving(*object_ref)]
+            }
             CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)) => {
                 vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)]
             }
@@ -323,7 +328,9 @@ impl ObjectArg {
 
     pub fn id(&self) -> ObjectID {
         match self {
-            ObjectArg::ImmOrOwnedObject((id, _, _)) | ObjectArg::SharedObject { id, .. } => *id,
+            ObjectArg::ImmOrOwnedObject((id, _, _))
+            | ObjectArg::SharedObject { id, .. }
+            | ObjectArg::Receiving((id, _, _)) => *id,
         }
     }
 }
@@ -657,7 +664,9 @@ impl ProgrammableTransaction {
         self.inputs
             .iter()
             .filter_map(|arg| match arg {
-                CallArg::Pure(_) | CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => None,
+                CallArg::Pure(_)
+                | CallArg::Object(ObjectArg::ImmOrOwnedObject(_))
+                | CallArg::Object(ObjectArg::Receiving(_)) => None,
                 CallArg::Object(ObjectArg::SharedObject {
                     id,
                     initial_shared_version,
@@ -2029,6 +2038,7 @@ pub enum InputObjectKind {
         initial_shared_version: SequenceNumber,
         mutable: bool,
     },
+    Receiving(ObjectRef),
 }
 
 impl InputObjectKind {
@@ -2037,6 +2047,7 @@ impl InputObjectKind {
             Self::MovePackage(id) => *id,
             Self::ImmOrOwnedMoveObject((id, _, _)) => *id,
             Self::SharedMoveObject { id, .. } => *id,
+            Self::Receiving((id, _, _)) => *id,
         }
     }
 
@@ -2045,6 +2056,7 @@ impl InputObjectKind {
             Self::MovePackage(..) => None,
             Self::ImmOrOwnedMoveObject((_, version, _)) => Some(*version),
             Self::SharedMoveObject { .. } => None,
+            Self::Receiving((_, version, _)) => Some(*version),
         }
     }
 
@@ -2060,6 +2072,10 @@ impl InputObjectKind {
             Self::SharedMoveObject { id, .. } => UserInputError::ObjectNotFound {
                 object_id: id,
                 version: None,
+            },
+            Self::Receiving((object_id, version, _)) => UserInputError::ObjectNotFound {
+                object_id,
+                version: Some(version),
             },
         }
     }
@@ -2100,6 +2116,7 @@ impl InputObjects {
                         Some(*object_ref)
                     }
                 }
+                InputObjectKind::Receiving(object_ref) => Some(*object_ref),
                 InputObjectKind::SharedMoveObject { .. } => None,
             })
             .collect();
@@ -2139,6 +2156,7 @@ impl InputObjects {
                         Some(*object_ref)
                     }
                 }
+                InputObjectKind::Receiving(object_ref) => Some(*object_ref),
                 InputObjectKind::SharedMoveObject { mutable, .. } => {
                     if *mutable {
                         Some(object.compute_object_reference())

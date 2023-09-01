@@ -851,6 +851,8 @@ impl From<CallArg> for BenchMoveCallArg {
         match ca {
             CallArg::Pure(p) => BenchMoveCallArg::Pure(p),
             CallArg::Object(obj) => match obj {
+                // TODO(tzakian)[tto]
+                ObjectArg::Receiving(_) => std::todo!(),
                 ObjectArg::ImmOrOwnedObject(imo) => BenchMoveCallArg::ImmOrOwnedObject(imo),
                 ObjectArg::SharedObject {
                     id,

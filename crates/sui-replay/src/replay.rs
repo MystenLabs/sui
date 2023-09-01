@@ -1501,6 +1501,7 @@ impl LocalExec {
         let mut package_inputs = vec![];
         let mut imm_owned_inputs = vec![];
         let mut shared_inputs = vec![];
+        let mut receiving_inputs = vec![];
 
         tx_info
             .input_objects
@@ -1530,11 +1531,16 @@ impl LocalExec {
                         })
                     }
                 }
+                InputObjectKind::Receiving(o_ref) => {
+                    receiving_inputs.push((o_ref.0, o_ref.1));
+                    Ok(())
+                }
             })
             .collect::<Result<Vec<_>, _>>()?;
 
         // Download the imm and owned objects
         let mut in_objs = self.multi_download_and_store(&imm_owned_inputs).await?;
+        in_objs.extend(self.multi_download_and_store(&receiving_inputs).await?);
 
         // For packages, download latest if non framework
         // If framework, download relevant for the current protocol version
@@ -1591,6 +1597,16 @@ impl LocalExec {
                         self.storage.live_objects_store.get(id).unwrap().clone(),
                     )
                 }
+                InputObjectKind::Receiving(o_ref) => (
+                    *kind,
+                    self.storage
+                        .object_version_cache
+                        .lock()
+                        .expect("Cannot lock")
+                        .get(&(o_ref.0, o_ref.1))
+                        .unwrap()
+                        .clone(),
+                ),
             })
             .collect();
 

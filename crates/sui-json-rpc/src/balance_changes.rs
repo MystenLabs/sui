@@ -52,6 +52,7 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
         .filter_map(|k| match k {
             InputObjectKind::ImmOrOwnedMoveObject(o) => Some((o.0, o.2)),
             InputObjectKind::MovePackage(_) | InputObjectKind::SharedMoveObject { .. } => None,
+            InputObjectKind::Receiving(o) => Some((o.0, o.2)),
         })
         .collect::<HashMap<ObjectID, ObjectDigest>>();
     let unwrapped_then_deleted = effects

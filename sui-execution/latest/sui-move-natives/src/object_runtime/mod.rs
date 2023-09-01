@@ -26,7 +26,7 @@ use sui_types::{
     execution::LoadedChildObjectMetadata,
     id::UID,
     metrics::LimitsMetrics,
-    object::{MoveObject, Owner},
+    object::{Data, MoveObject, Object, Owner},
     storage::ChildObjectResolver,
     SUI_CLOCK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
@@ -76,6 +76,7 @@ pub struct RuntimeResults {
     pub loaded_child_objects: BTreeMap<ObjectID, LoadedRuntimeObject>,
     pub created_object_ids: Set<ObjectID>,
     pub deleted_object_ids: Set<ObjectID>,
+    pub unreceived_objects: BTreeMap<ObjectID, Object>,
 }
 
 #[derive(Default)]
@@ -91,6 +92,7 @@ pub(crate) struct ObjectRuntimeState {
     events: Vec<(Type, StructTag, Value)>,
     // total size of events emitted so far
     total_events_size: u64,
+    receivable_objects: BTreeMap<ObjectID, Object>,
 }
 
 #[derive(Clone)]
@@ -173,6 +175,7 @@ impl<'a> ObjectRuntime<'a> {
     pub fn new(
         object_resolver: &'a dyn ChildObjectResolver,
         input_objects: BTreeMap<ObjectID, InputObject>,
+        receivable_objects: BTreeMap<ObjectID, Object>,
         is_metered: bool,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -207,6 +210,7 @@ impl<'a> ObjectRuntime<'a> {
                 transfers: LinkedHashMap::new(),
                 events: vec![],
                 total_events_size: 0,
+                receivable_objects,
             },
             is_metered,
             constants: LocalProtocolConfig::new(protocol_config),
@@ -265,6 +269,60 @@ impl<'a> ObjectRuntime<'a> {
             self.state.deleted_ids.insert(id, ());
         }
         Ok(())
+    }
+
+    pub(super) fn receive_object(
+        &mut self,
+        parent: ObjectID,
+        child: ObjectID,
+        child_version: SequenceNumber,
+        child_layout: &MoveTypeLayout,
+        child_move_type: MoveObjectType,
+    ) -> PartialVMResult<Option<ObjectResult<Value>>> {
+        let object = self
+            .state
+            .receivable_objects
+            .remove(&child)
+            .ok_or_else(|| {
+                PartialVMError::new(StatusCode::MISSING_DATA)
+                    .with_message(format!("Object {} not found", child))
+            })?;
+        if object.version() != child_version {
+            return Err(
+                PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!(
+                    "Bad version for {child}. \
+                    Expected version {child_version} but found version {}",
+                    object.version()
+                )),
+            );
+        }
+        match object.owner {
+            Owner::AddressOwner(object_owner) if object_owner == parent.into() => (),
+            owner => {
+                return Err(
+                    PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!(
+                        "Bad owner for {child}. \
+                        Expected owner {parent} but found owner {owner}",
+                    )),
+                )
+            }
+        }
+        let move_obj = match object.data {
+            Data::Package(_) => {
+                return Err(
+                    PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!(
+                        "Mismatched object type for {child}. \
+                            Expected a Move object but found a Move package"
+                    )),
+                )
+            }
+            Data::Move(mo @ MoveObject { .. }) => mo,
+        };
+        Ok(Some(deserialize_move_object(
+            &move_obj,
+            child_layout,
+            child_move_type,
+        )?))
     }
 
     pub fn transfer(
@@ -501,6 +559,7 @@ impl ObjectRuntimeState {
             transfers,
             events: user_events,
             total_events_size: _,
+            receivable_objects,
         } = self;
         // Check new owners from transfers, reports an error on cycles.
         // TODO can we have cycles in the new system?
@@ -521,6 +580,10 @@ impl ObjectRuntimeState {
             loaded_child_objects,
             created_object_ids: new_ids,
             deleted_object_ids: deleted_ids,
+            // We remove from the `receivable_objects` table whenever we receive an object. So any
+            // remaining objects are unreceived in the transaction, but we will need to mutate them so
+            // return them back out.
+            unreceived_objects: receivable_objects,
         })
     }
 
@@ -613,4 +676,27 @@ fn get_all_uids_in_value(
         }
     }
     Ok(())
+}
+
+fn deserialize_move_object(
+    obj: &MoveObject,
+    child_ty_layout: &MoveTypeLayout,
+    child_move_type: MoveObjectType,
+) -> PartialVMResult<ObjectResult<Value>> {
+    let child_id = obj.id();
+    // object exists, but the type does not match
+    if obj.type_() != &child_move_type {
+        return Ok(ObjectResult::MismatchedType);
+    }
+    let value = match Value::simple_deserialize(obj.contents(), child_ty_layout) {
+        Some(v) => v,
+        None => {
+            return Err(
+                PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_RESOURCE).with_message(
+                    format!("Failed to deserialize object {child_id} with type {child_move_type}",),
+                ),
+            )
+        }
+    };
+    Ok(ObjectResult::Loaded(value))
 }

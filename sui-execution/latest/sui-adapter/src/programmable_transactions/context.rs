@@ -125,11 +125,13 @@ mod checked {
                 linkage,
                 state_view.as_child_resolver(),
                 BTreeMap::new(),
+                BTreeMap::new(),
                 !gas_charger.is_unmetered(),
                 protocol_config,
                 metrics.clone(),
             );
             let mut input_object_map = BTreeMap::new();
+            let mut receiving_objects_map = BTreeMap::new();
             let inputs = inputs
                 .into_iter()
                 .map(|call_arg| {
@@ -138,6 +140,7 @@ mod checked {
                         state_view,
                         &mut tmp_session,
                         &mut input_object_map,
+                        &mut receiving_objects_map,
                         call_arg,
                     )
                 })
@@ -150,7 +153,8 @@ mod checked {
                     &mut input_object_map,
                     /* imm override */ false,
                     gas_coin,
-                )?;
+                )?
+                .0;
                 // subtract the max gas budget. This amount is off limits in the programmable transaction,
                 // so to mimic this "off limits" behavior, we act as if the coin has less balance than
                 // it really does
@@ -191,6 +195,7 @@ mod checked {
                 linkage,
                 state_view.as_child_resolver(),
                 input_object_map,
+                receiving_objects_map,
                 !gas_charger.is_unmetered(),
                 protocol_config,
                 metrics.clone(),
@@ -648,6 +653,8 @@ mod checked {
                                     ));
                                 }
                             }
+                            // Receiving arguments can be dropped without being received.
+                            Some(Value::Receiving { .. }) => (),
                         }
                     }
                 }
@@ -679,6 +686,7 @@ mod checked {
                 loaded_child_objects,
                 mut created_object_ids,
                 deleted_object_ids,
+                unreceived_objects,
             } = object_runtime.finish()?;
             assert_invariant!(
                 remaining_events.is_empty(),
@@ -688,11 +696,18 @@ mod checked {
             loaded_runtime_objects.extend(loaded_child_objects);
 
             let mut written_objects = BTreeMap::new();
+
+            // We bump the version for any receiving arguments that were not received.
+            for (id, unreceived_object) in unreceived_objects {
+                written_objects.insert(id, unreceived_object);
+            }
+
             for package in new_packages {
                 let id = package.id();
                 created_object_ids.insert(id, ());
                 written_objects.insert(id, package);
             }
+
             // we need a new session just for deserializing and fetching abilities. Which is sad
             // TODO remove this
             let tmp_session = new_session(
@@ -700,10 +715,12 @@ mod checked {
                 linkage,
                 state_view.as_child_resolver(),
                 BTreeMap::new(),
+                BTreeMap::new(),
                 !gas_charger.is_unmetered(),
                 protocol_config,
                 metrics,
             );
+
             for (id, additional_write) in additional_writes {
                 let AdditionalWrite {
                     recipient,
@@ -901,6 +918,7 @@ mod checked {
         linkage: LinkageView<'state>,
         child_resolver: &'state dyn ChildObjectResolver,
         input_objects: BTreeMap<ObjectID, object_runtime::InputObject>,
+        receiving_objects_map: BTreeMap<ObjectID, Object>,
         is_metered: bool,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -910,6 +928,7 @@ mod checked {
             new_native_extensions(
                 child_resolver,
                 input_objects,
+                receiving_objects_map,
                 is_metered,
                 protocol_config,
                 metrics,
@@ -1103,7 +1122,7 @@ mod checked {
         input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
         override_as_immutable: bool,
         id: ObjectID,
-    ) -> Result<InputValue, ExecutionError> {
+    ) -> Result<(InputValue, Object), ExecutionError> {
         let Some(obj) = state_view.read_object(&id) else {
         // protected by transaction input checker
         invariant_violation!("Object {} does not exist yet", id);
@@ -1154,7 +1173,10 @@ mod checked {
         let prev = input_object_map.insert(id, runtime_input);
         // protected by transaction input checker
         assert_invariant!(prev.is_none(), "Duplicate input object {}", id);
-        Ok(InputValue::new_object(object_metadata, obj_value))
+        Ok((
+            InputValue::new_object(object_metadata, obj_value),
+            obj.clone(),
+        ))
     }
 
     /// Load an a CallArg, either an object or a raw set of BCS bytes
@@ -1163,13 +1185,19 @@ mod checked {
         state_view: &'state dyn ExecutionState,
         session: &mut Session<'state, 'vm, LinkageView<'state>>,
         input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
+        receiving_objects_map: &mut BTreeMap<ObjectID, Object>,
         call_arg: CallArg,
     ) -> Result<InputValue, ExecutionError> {
         Ok(match call_arg {
             CallArg::Pure(bytes) => InputValue::new_raw(RawValueType::Any, bytes),
-            CallArg::Object(obj_arg) => {
-                load_object_arg(vm, state_view, session, input_object_map, obj_arg)?
-            }
+            CallArg::Object(obj_arg) => load_object_arg(
+                vm,
+                state_view,
+                session,
+                input_object_map,
+                receiving_objects_map,
+                obj_arg,
+            )?,
         })
     }
 
@@ -1179,25 +1207,49 @@ mod checked {
         state_view: &'state dyn ExecutionState,
         session: &mut Session<'state, 'vm, LinkageView<'state>>,
         input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
+        receiving_objects_map: &mut BTreeMap<ObjectID, Object>,
         obj_arg: ObjectArg,
     ) -> Result<InputValue, ExecutionError> {
         match obj_arg {
-            ObjectArg::ImmOrOwnedObject((id, _, _)) => load_object(
+            ObjectArg::ImmOrOwnedObject((id, _, _)) => Ok(load_object(
                 vm,
                 state_view,
                 session,
                 input_object_map,
                 /* imm override */ false,
                 id,
-            ),
-            ObjectArg::SharedObject { id, mutable, .. } => load_object(
+            )?
+            .0),
+            ObjectArg::SharedObject { id, mutable, .. } => Ok(load_object(
                 vm,
                 state_view,
                 session,
                 input_object_map,
                 /* imm override */ !mutable,
                 id,
-            ),
+            )?
+            .0),
+            ObjectArg::Receiving((id, _, _)) => {
+                let (loaded_object, object) = load_object(
+                    vm,
+                    state_view,
+                    session,
+                    input_object_map,
+                    /* imm override */ false,
+                    id,
+                )?;
+                let Owner::AddressOwner(parent_address) = object.owner else {
+                    invariant_violation!("Receiving object {} is not owned by an address", id)
+                };
+                receiving_objects_map.insert(id, object);
+                let receiving_object_input_value = InputValue::new_receiving(
+                    parent_address.into(),
+                    loaded_object
+                        .object_metadata
+                        .expect("Receiving object will have metadata"),
+                );
+                Ok(receiving_object_input_value)
+            }
         }
     }
 

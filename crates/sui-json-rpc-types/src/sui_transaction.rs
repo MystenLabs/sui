@@ -1397,6 +1397,8 @@ impl From<InputObjectKind> for SuiInputObjectKind {
                 initial_shared_version,
                 mutable,
             },
+            // TODO(tzakian)[tto]: Implement this
+            InputObjectKind::Receiving(_) => std::todo!(),
         }
     }
 }
@@ -1535,6 +1537,8 @@ impl SuiCallArg {
                 initial_shared_version,
                 mutable,
             }),
+            // TODO(tzakian)[tto]: Implement this
+            CallArg::Object(ObjectArg::Receiving(_)) => std::todo!(),
         })
     }
 

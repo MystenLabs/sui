@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::object_runtime::{ObjectRuntime, TransferResult};
-use crate::NativesCostTable;
+use crate::{get_tag_and_layouts, object_runtime::object_store::ObjectResult, NativesCostTable};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
@@ -14,9 +14,65 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
-use sui_types::{base_types::SequenceNumber, object::Owner};
+use sui_types::{
+    base_types::{MoveObjectType, ObjectID, SequenceNumber},
+    object::Owner,
+};
 
 const E_SHARED_NON_NEW_OBJECT: u64 = 0;
+const E_BCS_SERIALIZATION_FAILURE: u64 = 1;
+const E_RECEIVING_OBJECT_TYPE_MISMATCH: u64 = 2;
+// Represents both the case where the object does not exist and the case where the object is not
+// able to be accessed through the parent that is passed-in.
+const E_UNABLE_TO_RECEIVE_OBJECT: u64 = 3;
+
+// TODO(tzakian)[tto] Add proper gas charging to this.
+pub fn receive_object_internal(
+    context: &mut NativeContext,
+    mut ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 3);
+    let child_ty = ty_args.pop().unwrap();
+    let child_sequence_number: SequenceNumber = pop_arg!(args, u64).into();
+    let child_object_id: ObjectID = pop_arg!(args, AccountAddress).into();
+    let parent_object_id: ObjectID = pop_arg!(args, AccountAddress).into();
+    assert!(args.is_empty());
+    assert!(ty_args.is_empty());
+    let Some((tag, layout, _)) = get_tag_and_layouts(context, &child_ty)?  else {
+        return Ok(NativeResult::err(
+                context.gas_used(),
+                E_BCS_SERIALIZATION_FAILURE,
+        ))
+    };
+    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let child = match object_runtime.receive_object(
+        parent_object_id,
+        child_object_id,
+        child_sequence_number,
+        &layout,
+        MoveObjectType::from(tag),
+    ) {
+        // NB: Loaded and doesn't exist and inauthenticated read should lead to the exact same error
+        Ok(None) => {
+            return Ok(NativeResult::err(
+                context.gas_used(),
+                E_UNABLE_TO_RECEIVE_OBJECT,
+            ))
+        }
+        Ok(Some(ObjectResult::Loaded(gv))) => gv,
+        Ok(Some(ObjectResult::MismatchedType)) => {
+            return Ok(NativeResult::err(
+                context.gas_used(),
+                E_RECEIVING_OBJECT_TYPE_MISMATCH,
+            ))
+        }
+        Err(x) => return Err(x),
+    };
+
+    Ok(NativeResult::ok(context.gas_used(), smallvec![child]))
+}
 
 #[derive(Clone, Debug)]
 pub struct TransferInternalCostParams {

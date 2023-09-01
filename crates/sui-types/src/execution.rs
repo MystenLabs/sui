@@ -20,6 +20,7 @@ use crate::{
     execution_status::CommandArgumentError,
     object::{Object, Owner},
     storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, StorageView},
+    transfer::Receiving,
 };
 
 pub trait SuiResolver:
@@ -143,6 +144,11 @@ pub enum UsageKind {
 pub enum Value {
     Object(ObjectValue),
     Raw(RawValueType, Vec<u8>),
+    Receiving {
+        parent_id: ObjectID,
+        receiving_id: ObjectID,
+        version: SequenceNumber,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -195,6 +201,18 @@ impl InputValue {
         }
     }
 
+    pub fn new_receiving(parent_id: ObjectID, object_metadata: InputObjectMetadata) -> Self {
+        let receiving_value = Value::Receiving {
+            parent_id,
+            receiving_id: object_metadata.id,
+            version: object_metadata.version,
+        };
+        InputValue {
+            object_metadata: Some(object_metadata),
+            inner: ResultValue::new(receiving_value),
+        }
+    }
+
     pub fn new_raw(ty: RawValueType, value: Vec<u8>) -> Self {
         InputValue {
             object_metadata: None,
@@ -218,6 +236,7 @@ impl Value {
             Value::Object(_) => false,
             Value::Raw(RawValueType::Any, _) => true,
             Value::Raw(RawValueType::Loaded { abilities, .. }, _) => abilities.has_copy(),
+            Value::Receiving { .. } => false,
         }
     }
 
@@ -225,6 +244,13 @@ impl Value {
         match self {
             Value::Object(obj_value) => obj_value.write_bcs_bytes(buf),
             Value::Raw(_, bytes) => buf.extend(bytes),
+            Value::Receiving {
+                parent_id,
+                receiving_id,
+                version,
+            } => {
+                buf.extend(&Receiving::new(*parent_id, *receiving_id, *version).to_bcs_bytes());
+            }
         }
     }
 
@@ -241,6 +267,9 @@ impl Value {
                 },
                 _,
             ) => *used_in_non_entry_move_call,
+            // Only thing you can do with a `Receiving<T>` is consume it, so once it's used it
+            // can't be used again.
+            Value::Receiving { .. } => false,
         }
     }
 }
@@ -288,6 +317,7 @@ impl TryFromValue for ObjectValue {
             Value::Object(o) => Ok(o),
             Value::Raw(RawValueType::Any, _) => Err(CommandArgumentError::TypeMismatch),
             Value::Raw(RawValueType::Loaded { .. }, _) => Err(CommandArgumentError::TypeMismatch),
+            Value::Receiving { .. } => Err(CommandArgumentError::TypeMismatch),
         }
     }
 }
@@ -319,5 +349,6 @@ fn try_from_value_prim<'a, T: Deserialize<'a>>(
             }
             bcs::from_bytes(bytes).map_err(|_| CommandArgumentError::InvalidBCSBytes)
         }
+        Value::Receiving { .. } => Err(CommandArgumentError::TypeMismatch),
     }
 }

@@ -521,7 +521,7 @@ impl<'backing> TemporaryStore<'backing> {
     /// returns lists of (objects whose owner we must authenticate, objects whose owner has already been authenticated)
     fn get_objects_to_authenticate(
         &self,
-        sender: &SuiAddress,
+        _sender: &SuiAddress,
         gas_charger: &mut GasCharger,
         is_epoch_change: bool,
     ) -> SuiResult<(Vec<ObjectID>, HashSet<ObjectID>)> {
@@ -537,8 +537,8 @@ impl<'backing> TemporaryStore<'backing> {
                 continue;
             }
             match &obj.owner {
-                Owner::AddressOwner(a) => {
-                    assert!(sender == a, "Input object not owned by sender");
+                // Authenticated as part of transaction input checking
+                Owner::AddressOwner(_) => {
                     authenticated_objs.insert(*id);
                 }
                 Owner::Shared { .. } => {

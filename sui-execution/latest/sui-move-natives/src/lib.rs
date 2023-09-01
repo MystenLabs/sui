@@ -35,10 +35,17 @@ use self::{
 };
 use better_any::{Tid, TidAble};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{gas_algebra::InternalGas, identifier::Identifier};
+use move_core_types::{
+    gas_algebra::InternalGas,
+    identifier::Identifier,
+    language_storage::{StructTag, TypeTag},
+    value::MoveTypeLayout,
+    vm_status::StatusCode,
+};
 use move_stdlib::natives::{GasParameters, NurseryGasParameters};
-use move_vm_runtime::native_functions::{NativeFunction, NativeFunctionTable};
+use move_vm_runtime::native_functions::{NativeContext, NativeFunction, NativeFunctionTable};
 use move_vm_types::{
+    loaded_data::runtime_types::Type,
     natives::function::NativeResult,
     values::{Struct, Value},
 };
@@ -642,6 +649,11 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             make_native!(transfer::share_object),
         ),
         (
+            "transfer",
+            "receive_impl",
+            make_native!(transfer::receive_object_internal),
+        ),
+        (
             "tx_context",
             "derive_id",
             make_native!(tx_context::derive_id),
@@ -719,6 +731,29 @@ pub fn get_nested_struct_field(mut v: Value, offsets: &[usize]) -> Result<Value,
 pub fn get_nth_struct_field(v: Value, n: usize) -> Result<Value, PartialVMError> {
     let mut itr = v.value_as::<Struct>()?.unpack()?;
     Ok(itr.nth(n).unwrap())
+}
+
+/// Returns the struct tag, non-annotated type layout, and fully annotated type layout of `ty`.
+pub(crate) fn get_tag_and_layouts(
+    context: &NativeContext,
+    ty: &Type,
+) -> PartialVMResult<Option<(StructTag, MoveTypeLayout, MoveTypeLayout)>> {
+    let tag = match context.type_to_type_tag(ty)? {
+        TypeTag::Struct(s) => s,
+        _ => {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("Sui verifier guarantees this is a struct".to_string()),
+            )
+        }
+    };
+    let Some(layout) = context.type_to_type_layout(ty)? else {
+        return Ok(None)
+    };
+    let Some(annotated_layout) = context.type_to_fully_annotated_layout(ty)? else {
+        return Ok(None)
+    };
+    Ok(Some((*tag, layout, annotated_layout)))
 }
 
 #[macro_export]

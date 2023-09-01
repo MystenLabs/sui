@@ -5,6 +5,7 @@
 
 
 
+-  [Struct `Receiving`](#0x2_transfer_Receiving)
 -  [Constants](#@Constants_0)
 -  [Function `transfer`](#0x2_transfer_transfer)
 -  [Function `public_transfer`](#0x2_transfer_public_transfer)
@@ -12,18 +13,69 @@
 -  [Function `public_freeze_object`](#0x2_transfer_public_freeze_object)
 -  [Function `share_object`](#0x2_transfer_share_object)
 -  [Function `public_share_object`](#0x2_transfer_public_share_object)
+-  [Function `receive`](#0x2_transfer_receive)
+-  [Function `receive_impl`](#0x2_transfer_receive_impl)
 -  [Function `freeze_object_impl`](#0x2_transfer_freeze_object_impl)
 -  [Function `share_object_impl`](#0x2_transfer_share_object_impl)
 -  [Function `transfer_impl`](#0x2_transfer_transfer_impl)
 
 
-<pre><code></code></pre>
+<pre><code><b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
+</code></pre>
 
 
+
+<a name="0x2_transfer_Receiving"></a>
+
+## Struct `Receiving`
+
+
+
+<pre><code><b>struct</b> <a href="transfer.md#0x2_transfer_Receiving">Receiving</a>&lt;T: key&gt; <b>has</b> drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>parent: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>receiving: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>version: u64</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
 
 <a name="@Constants_0"></a>
 
 ## Constants
+
+
+<a name="0x2_transfer_EInvalidParentObject"></a>
+
+
+
+<pre><code><b>const</b> <a href="transfer.md#0x2_transfer_EInvalidParentObject">EInvalidParentObject</a>: u64 = 1;
+</code></pre>
+
 
 
 <a name="0x2_transfer_ESharedNonNewObject"></a>
@@ -207,6 +259,58 @@ The object must have <code>store</code> to be shared outside of its module.
 <pre><code><b>public</b> <b>fun</b> <a href="transfer.md#0x2_transfer_public_share_object">public_share_object</a>&lt;T: key + store&gt;(obj: T) {
     <a href="transfer.md#0x2_transfer_share_object_impl">share_object_impl</a>(obj)
 }
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_transfer_receive"></a>
+
+## Function `receive`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="transfer.md#0x2_transfer_receive">receive</a>&lt;T: key&gt;(parent_uid: &<b>mut</b> <a href="object.md#0x2_object_UID">object::UID</a>, to_receive: <a href="transfer.md#0x2_transfer_Receiving">transfer::Receiving</a>&lt;T&gt;): T
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="transfer.md#0x2_transfer_receive">receive</a>&lt;T: key&gt;(parent_uid: &<b>mut</b> UID, to_receive: <a href="transfer.md#0x2_transfer_Receiving">Receiving</a>&lt;T&gt;): T {
+    <b>let</b> <a href="transfer.md#0x2_transfer_Receiving">Receiving</a> {
+        parent,
+        receiving,
+        version,
+    } = to_receive;
+    <b>assert</b>!(<a href="object.md#0x2_object_uid_to_inner">object::uid_to_inner</a>(parent_uid) == parent, <a href="transfer.md#0x2_transfer_EInvalidParentObject">EInvalidParentObject</a>);
+    <a href="transfer.md#0x2_transfer_receive_impl">receive_impl</a>(<a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&parent), <a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&receiving), version)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_transfer_receive_impl"></a>
+
+## Function `receive_impl`
+
+
+
+<pre><code><b>fun</b> <a href="transfer.md#0x2_transfer_receive_impl">receive_impl</a>&lt;T: key&gt;(parent: <b>address</b>, receiving: <b>address</b>, version: u64): T
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>native</b> <b>fun</b> <a href="transfer.md#0x2_transfer_receive_impl">receive_impl</a>&lt;T: key&gt;(parent: <b>address</b>, receiving: <b>address</b>, version: u64): T;
 </code></pre>
 
 

@@ -125,6 +125,7 @@ fn new_testing_object_and_natives_cost_runtime(ext: &mut NativeContextExtensions
     ext.add(ObjectRuntime::new(
         store,
         BTreeMap::new(),
+        BTreeMap::new(),
         false,
         &ProtocolConfig::get_for_min_version(),
         metrics,

@@ -54,6 +54,7 @@ mod checked {
     use sui_types::{
         execution_mode::ExecutionMode,
         execution_status::{CommandArgumentError, PackageUpgradeError},
+        transfer::RESOLVED_RECEIVING_STRUCT,
     };
     use sui_verifier::{
         private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
@@ -1254,7 +1255,7 @@ mod checked {
         value: &Value,
         param_ty: &Type,
     ) -> Result<(), ExecutionError> {
-        let ty = match value {
+        match value {
             // For dev-spect, allow any BCS bytes. This does mean internal invariants for types can
             // be violated (like for string or Option)
             Value::Raw(RawValueType::Any, _) if Mode::allow_arbitrary_values() => return Ok(()),
@@ -1284,18 +1285,45 @@ mod checked {
                     Mode::allow_arbitrary_values() || !abilities.has_key(),
                     "Raw value should never be an object"
                 );
-                ty
+                if ty != param_ty {
+                    return Err(command_argument_error(
+                        CommandArgumentError::TypeMismatch,
+                        idx,
+                    ));
+                }
             }
-            Value::Object(obj) => &obj.type_,
-        };
-        if ty != param_ty {
-            Err(command_argument_error(
-                CommandArgumentError::TypeMismatch,
-                idx,
-            ))
-        } else {
-            Ok(())
+            Value::Object(obj) => {
+                let ty = &obj.type_;
+                if ty != param_ty {
+                    return Err(command_argument_error(
+                        CommandArgumentError::TypeMismatch,
+                        idx,
+                    ));
+                }
+            }
+            Value::Receiving { .. } => {
+                let Type::StructInstantiation(sidx, targs) = param_ty else {
+                return Err(command_argument_error(
+                    CommandArgumentError::TypeMismatch,
+                    idx,
+                ))
+            };
+                let Some(s) = context
+                .session
+                .get_struct_type(*sidx) else {
+                    invariant_violation!("sui::transfer::Receiving struct not found in session")
+                };
+                let resolved_struct = get_struct_ident(&s);
+
+                if resolved_struct != RESOLVED_RECEIVING_STRUCT || targs.len() != 1 {
+                    return Err(command_argument_error(
+                        CommandArgumentError::TypeMismatch,
+                        idx,
+                    ));
+                }
+            }
         }
+        Ok(())
     }
 
     fn get_struct_ident(s: &StructType) -> (&AccountAddress, &IdentStr, &IdentStr) {

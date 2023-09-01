@@ -1358,6 +1358,7 @@ mod checked {
                 ty
             }
             Value::Object(obj) => &obj.type_,
+            Value::Receiving { .. } => unimplemented!("Receiving not supported in v0"),
         };
         if ty != param_ty {
             Err(command_argument_error(

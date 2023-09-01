@@ -66,6 +66,7 @@ pub mod storage;
 pub mod sui_serde;
 pub mod sui_system_state;
 pub mod transaction;
+pub mod transfer;
 pub mod type_resolver;
 pub mod versioned;
 pub mod zk_login_authenticator;

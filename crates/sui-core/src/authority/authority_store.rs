@@ -564,6 +564,9 @@ impl AuthorityStore {
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
                     self.get_object_by_key(&objref.0, objref.1)?
                 }
+                InputObjectKind::Receiving(objref) => {
+                    self.get_object_by_key(&objref.0, objref.1)?
+                }
             }
             .ok_or_else(|| SuiError::from(kind.object_not_found_error()))?;
             result.push(obj);
@@ -614,6 +617,7 @@ impl AuthorityStore {
                     InputObjectKind::MovePackage(id) => (InputKey(*id, None), LockMode::Default),
                     // Cannot use ReadOnly lock because we do not know if the object is immutable.
                     InputObjectKind::ImmOrOwnedMoveObject(objref) => (InputKey(objref.0, Some(objref.1)), LockMode::Default),
+                    InputObjectKind::Receiving(objref) => (InputKey(objref.0, Some(objref.1)), LockMode::Default),
                 }
             })
             .collect()
@@ -721,6 +725,11 @@ impl AuthorityStore {
                     panic!("All dependencies of tx {:?} should have been executed now, but Move Package id: {} is absent", digest, id);
                 }),
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
+                    self.get_object_by_key(&objref.0, objref.1)?.unwrap_or_else(|| {
+                        panic!("All dependencies of tx {:?} should have been executed now, but Immutable or Owned Object id: {}, version: {} is absent", digest, objref.0, objref.1);
+                    })
+                }
+                InputObjectKind::Receiving(objref) => {
                     self.get_object_by_key(&objref.0, objref.1)?.unwrap_or_else(|| {
                         panic!("All dependencies of tx {:?} should have been executed now, but Immutable or Owned Object id: {}, version: {} is absent", digest, objref.0, objref.1);
                     })

@@ -3,16 +3,24 @@
 
 module sui::transfer {
 
-    use sui::object;
+    use sui::object::{Self, ID, UID};
     use sui::prover;
 
     #[test_only]
     friend sui::test_scenario;
 
 
+    struct Receiving<phantom T: key> has drop {
+        parent: ID,
+        receiving: ID,
+        version: u64,
+    }
+
     /// Shared an object that was previously created. Shared objects must currently
     /// be constructed in the transaction they are created.
     const ESharedNonNewObject: u64 = 0;
+
+    const EInvalidParentObject: u64 = 1;
 
     /// Transfer ownership of `obj` to `recipient`. `obj` must have the `key` attribute,
     /// which (in turn) ensures that `obj` has a globally unique ID. Note that if the recipient
@@ -69,6 +77,18 @@ module sui::transfer {
     public fun public_share_object<T: key + store>(obj: T) {
         share_object_impl(obj)
     }
+
+    public fun receive<T: key>(parent_uid: &mut UID, to_receive: Receiving<T>): T {
+        let Receiving {
+            parent,
+            receiving,
+            version,
+        } = to_receive;
+        assert!(object::uid_to_inner(parent_uid) == parent, EInvalidParentObject);
+        receive_impl(object::id_to_address(&parent), object::id_to_address(&receiving), version)
+    }
+
+    native fun receive_impl<T: key>(parent: address, receiving: address, version: u64): T;
 
     public(friend) native fun freeze_object_impl<T: key>(obj: T);
 

@@ -13,7 +13,7 @@ use move_symbol_pool::Symbol;
 use move_transactional_test_runner::tasks::SyntaxChoice;
 use sui_types::base_types::{SequenceNumber, SuiAddress};
 use sui_types::move_package::UpgradePolicy;
-use sui_types::object::Owner;
+use sui_types::object::{Object, Owner};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::storage::ObjectStore;
 use sui_types::transaction::{Argument, CallArg, ObjectArg};
@@ -163,6 +163,7 @@ pub enum SuiSubcommand {
 pub enum SuiExtraValueArgs {
     Object(FakeID, Option<SequenceNumber>),
     Digest(String),
+    Receiving(FakeID, Option<SequenceNumber>),
 }
 
 pub enum SuiValue {
@@ -170,14 +171,41 @@ pub enum SuiValue {
     Object(FakeID, Option<SequenceNumber>),
     ObjVec(Vec<(FakeID, Option<SequenceNumber>)>),
     Digest(String),
+    Receiving(FakeID, Option<SequenceNumber>),
 }
 
 impl SuiExtraValueArgs {
     fn parse_object_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
         parser: &mut MoveCLParser<'a, ValueToken, I>,
     ) -> anyhow::Result<Self> {
+        let (fake_id, version) = Self::parse_receiving_or_object_value(parser, "object")?;
+        Ok(SuiExtraValueArgs::Object(fake_id, version))
+    }
+
+    fn parse_receiving_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
+        parser: &mut MoveCLParser<'a, ValueToken, I>,
+    ) -> anyhow::Result<Self> {
+        let (fake_id, version) = Self::parse_receiving_or_object_value(parser, "receiving")?;
+        Ok(SuiExtraValueArgs::Receiving(fake_id, version))
+    }
+
+    fn parse_digest_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
+        parser: &mut MoveCLParser<'a, ValueToken, I>,
+    ) -> anyhow::Result<Self> {
         let contents = parser.advance(ValueToken::Ident)?;
-        ensure!(contents == "object");
+        ensure!(contents == "digest");
+        parser.advance(ValueToken::LParen)?;
+        let package = parser.advance(ValueToken::Ident)?;
+        parser.advance(ValueToken::RParen)?;
+        Ok(SuiExtraValueArgs::Digest(package.to_owned()))
+    }
+
+    fn parse_receiving_or_object_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
+        parser: &mut MoveCLParser<'a, ValueToken, I>,
+        ident_name: &str,
+    ) -> anyhow::Result<(FakeID, Option<SequenceNumber>)> {
+        let contents = parser.advance(ValueToken::Ident)?;
+        ensure!(contents == ident_name);
         parser.advance(ValueToken::LParen)?;
         let i_str = parser.advance(ValueToken::Number)?;
         let (i, _) = parse_u256(i_str)?;
@@ -204,18 +232,7 @@ impl SuiExtraValueArgs {
         } else {
             None
         };
-        Ok(SuiExtraValueArgs::Object(fake_id, version))
-    }
-
-    fn parse_digest_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
-        parser: &mut MoveCLParser<'a, ValueToken, I>,
-    ) -> anyhow::Result<Self> {
-        let contents = parser.advance(ValueToken::Ident)?;
-        ensure!(contents == "digest");
-        parser.advance(ValueToken::LParen)?;
-        let package = parser.advance(ValueToken::Ident)?;
-        parser.advance(ValueToken::RParen)?;
-        Ok(SuiExtraValueArgs::Digest(package.to_owned()))
+        Ok((fake_id, version))
     }
 }
 
@@ -226,6 +243,7 @@ impl SuiValue {
             SuiValue::Object(_, _) => panic!("unexpected nested Sui object in args"),
             SuiValue::ObjVec(_) => panic!("unexpected nested Sui object vector in args"),
             SuiValue::Digest(_) => panic!("unexpected nested Sui package digest in args"),
+            SuiValue::Receiving(_, _) => panic!("unexpected nested Sui receiving object in args"),
         }
     }
 
@@ -235,14 +253,15 @@ impl SuiValue {
             SuiValue::Object(id, version) => (id, version),
             SuiValue::ObjVec(_) => panic!("unexpected nested Sui object vector in args"),
             SuiValue::Digest(_) => panic!("unexpected nested Sui package digest in args"),
+            SuiValue::Receiving(_, _) => panic!("unexpected nested Sui receiving object in args"),
         }
     }
 
-    fn object_arg(
+    fn resolve_object(
         fake_id: FakeID,
         version: Option<SequenceNumber>,
         test_adapter: &SuiTestAdapter,
-    ) -> anyhow::Result<ObjectArg> {
+    ) -> anyhow::Result<Object> {
         let id = match test_adapter.fake_to_real_object_id(fake_id) {
             Some(id) => id,
             None => bail!("INVALID TEST. Unknown object, object({})", fake_id),
@@ -256,6 +275,25 @@ impl SuiValue {
             Ok(Some(obj)) => obj,
             Err(_) | Ok(None) => bail!("INVALID TEST. Could not load object argument {}", id),
         };
+        Ok(obj)
+    }
+
+    fn receiving_arg(
+        fake_id: FakeID,
+        version: Option<SequenceNumber>,
+        test_adapter: &SuiTestAdapter,
+    ) -> anyhow::Result<ObjectArg> {
+        let obj = Self::resolve_object(fake_id, version, test_adapter)?;
+        Ok(ObjectArg::Receiving(obj.compute_object_reference()))
+    }
+
+    fn object_arg(
+        fake_id: FakeID,
+        version: Option<SequenceNumber>,
+        test_adapter: &SuiTestAdapter,
+    ) -> anyhow::Result<ObjectArg> {
+        let obj = Self::resolve_object(fake_id, version, test_adapter)?;
+        let id = obj.id();
         match obj.owner {
             Owner::Shared {
                 initial_shared_version,
@@ -277,6 +315,9 @@ impl SuiValue {
                 CallArg::Object(Self::object_arg(fake_id, version, test_adapter)?)
             }
             SuiValue::MoveValue(v) => CallArg::Pure(v.simple_serialize().unwrap()),
+            SuiValue::Receiving(fake_id, version) => {
+                CallArg::Object(Self::receiving_arg(fake_id, version, test_adapter)?)
+            }
             SuiValue::ObjVec(_) => bail!("obj vec is not supported as an input"),
             SuiValue::Digest(pkg) => {
                 let pkg = Symbol::from(pkg);
@@ -316,6 +357,7 @@ impl ParsableValue for SuiExtraValueArgs {
         match parser.peek()? {
             (ValueToken::Ident, "object") => Some(Self::parse_object_value(parser)),
             (ValueToken::Ident, "digest") => Some(Self::parse_digest_value(parser)),
+            (ValueToken::Ident, "receiving") => Some(Self::parse_receiving_value(parser)),
             _ => None,
         }
     }
@@ -359,6 +401,7 @@ impl ParsableValue for SuiExtraValueArgs {
         match self {
             SuiExtraValueArgs::Object(id, version) => Ok(SuiValue::Object(id, version)),
             SuiExtraValueArgs::Digest(pkg) => Ok(SuiValue::Digest(pkg)),
+            SuiExtraValueArgs::Receiving(id, version) => Ok(SuiValue::Receiving(id, version)),
         }
     }
 }

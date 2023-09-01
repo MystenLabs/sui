@@ -906,6 +906,7 @@ pub fn transaction_input_object_keys(tx: &SenderSignedData) -> SuiResult<Vec<Obj
         .filter_map(|object| match object {
             I::MovePackage(_) | I::SharedMoveObject { .. } => None,
             I::ImmOrOwnedMoveObject(obj) => Some(obj.into()),
+            I::Receiving(obj) => Some(obj.into()),
         })
         .collect())
 }

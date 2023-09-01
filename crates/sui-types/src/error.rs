@@ -232,6 +232,12 @@ pub enum UserInputError {
 
     #[error("Transaction {0} not found")]
     TransactionCursorNotFound(u64),
+
+    #[error("Cyclic object dependency detected for object {object_id}")]
+    CyclicObjectDependency { object_id: ObjectID },
+
+    #[error("Invalid ownership for receiving object {object_id}")]
+    InvalidReceivingObjectInput { object_id: ObjectID },
 }
 
 #[derive(

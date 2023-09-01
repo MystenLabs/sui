@@ -649,6 +649,9 @@ mod checked {
                                     ));
                                 }
                             }
+                            Some(Value::Receiving { .. }) => {
+                                unimplemented!("Receiving not supported in v0")
+                            }
                         }
                     }
                 }
@@ -1248,6 +1251,7 @@ mod checked {
                 /* imm override */ !mutable,
                 id,
             ),
+            ObjectArg::Receiving(_) => unimplemented!("Receiving not supported in v0"),
         }
     }
 

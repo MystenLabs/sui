@@ -73,6 +73,7 @@ pub fn end_transaction(
         loaded_child_objects: _,
         created_object_ids,
         deleted_object_ids,
+        unreceived_objects: _,
     } = match results {
         Ok(res) => res,
         Err(_) => {
