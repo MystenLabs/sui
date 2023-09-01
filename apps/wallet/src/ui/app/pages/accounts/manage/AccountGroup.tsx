@@ -70,8 +70,8 @@ export function AccountGroup({
 	const createAccountMutation = useCreateAccountsMutation();
 	const showCreateNewButton = type === 'mnemonic-derived';
 	return (
-		<CollapsiblePrimitive.Root defaultOpen={true} asChild>
-			<div className="flex flex-col gap-4 h-full w-full ">
+		<CollapsiblePrimitive.Root defaultOpen asChild>
+			<div className="flex flex-col gap-4 w-full">
 				<CollapsiblePrimitive.Trigger asChild>
 					<div className="flex gap-2 w-full items-center justify-center cursor-pointer flex-shrink-0 group [&>*]:select-none">
 						<ArrowBgFill16 className="h-4 w-4 group-data-[state=open]:rotate-90 text-hero-darkest/20" />
