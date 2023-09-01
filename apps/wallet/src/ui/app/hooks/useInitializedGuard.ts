@@ -15,7 +15,7 @@ export default function useInitializedGuard(initializedRequired: boolean) {
 	const guardAct = !restricted && !isLoading && initializedRequired !== isInitialized;
 	useEffect(() => {
 		if (guardAct) {
-			navigate(isInitialized ? '/' : '/welcome', { replace: true });
+			navigate(isInitialized ? '/' : '/accounts/welcome', { replace: true });
 		}
 	}, [guardAct, isInitialized, navigate]);
 	return isLoading || guardAct;

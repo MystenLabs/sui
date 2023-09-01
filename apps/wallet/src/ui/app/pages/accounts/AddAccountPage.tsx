@@ -5,6 +5,7 @@ import { LedgerLogo17 as LedgerLogo } from '@mysten/icons';
 import { useState, type ReactNode } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useAccountsFormContext } from '../../components/accounts/AccountsFormContext';
 import { ConnectLedgerModal } from '../../components/ledger/ConnectLedgerModal';
 import { getLedgerConnectionErrorMessage } from '../../helpers/errorMessages';
 import { SocialButton } from '../../shared/SocialButton';
@@ -19,6 +20,7 @@ export function AddAccountPage() {
 	const navigate = useNavigate();
 	const sourceFlow = searchParams.get('sourceFlow') || 'Unknown';
 	const showSocialSignInOptions = sourceFlow !== 'Onboarding';
+	const [, setAccountFormValues] = useAccountsFormContext();
 	return (
 		<Overlay showModal title="Add Account" closeOverlay={() => navigate('/')}>
 			<div className="w-full flex flex-col gap-8">
@@ -91,8 +93,9 @@ export function AddAccountPage() {
 						variant="outline"
 						size="tall"
 						text="Create a new Passphrase Account"
-						to="/accounts/protect-account"
+						to="/accounts/protect-account?accountType=new-mnemonic"
 						onClick={() => {
+							setAccountFormValues({ type: 'new-mnemonic' });
 							ampli.clickedCreateNewAccount({ sourceFlow });
 						}}
 					/>

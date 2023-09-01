@@ -9,6 +9,7 @@ import { isZkAccountSerializedUI } from '_src/background/accounts/zk/ZkAccount';
 import { type ZkProvider } from '_src/background/accounts/zk/providers';
 import { AccountIcon } from '_src/ui/app/components/accounts/AccountIcon';
 import { AccountItem } from '_src/ui/app/components/accounts/AccountItem';
+import { useAccountsFormContext } from '_src/ui/app/components/accounts/AccountsFormContext';
 import { NicknameDialog } from '_src/ui/app/components/accounts/NicknameDialog';
 import { useCreateAccountsMutation } from '_src/ui/app/hooks/useCreateAccountMutation';
 import { Heading } from '_src/ui/app/shared/heading';
@@ -25,6 +26,9 @@ const accountTypeToLabel: Record<AccountType, string> = {
 
 const providerToLabel: Record<ZkProvider, string> = {
 	google: 'Google',
+	twitch: 'Twitch',
+	facebook: 'Facebook',
+	microsoft: 'Microsoft',
 };
 
 // todo: we probbaly have some duplication here with the various FooterLink / ButtonOrLink
@@ -69,6 +73,7 @@ export function AccountGroup({
 }) {
 	const createAccountMutation = useCreateAccountsMutation();
 	const showCreateNewButton = type === 'mnemonic-derived';
+	const [, setAccountsFromValues] = useAccountsFormContext();
 	return (
 		<CollapsiblePrimitive.Root defaultOpen asChild>
 			<div className="flex flex-col gap-4 w-full">
@@ -89,8 +94,9 @@ export function AccountGroup({
 									e.stopPropagation();
 									try {
 										if (type === 'mnemonic-derived' && accountSource) {
+											// TODO: get user's password
+											setAccountsFromValues({ type: 'mnemonic-derived', sourceID: accountSource });
 											await createAccountMutation.mutateAsync({
-												sourceID: accountSource,
 												type: 'mnemonic-derived',
 											});
 										}

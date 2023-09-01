@@ -14,7 +14,6 @@ import { useStorageMigrationStatus } from './hooks/useStorageMigrationStatus';
 import { AccountsDev } from './pages/AccountsDevPage';
 import { StorageMigrationPage } from './pages/StorageMigrationPage';
 
-import { WelcomePage } from './pages/WelcomePage';
 import { AccountsPage } from './pages/accounts/AccountsPage';
 import { AddAccountPage } from './pages/accounts/AddAccountPage';
 import { ForgotPasswordPage } from './pages/accounts/ForgotPasswordPage';
@@ -22,6 +21,7 @@ import { ImportLedgerAccountsPage } from './pages/accounts/ImportLedgerAccountsP
 import { ImportPassphrasePage } from './pages/accounts/ImportPassphrasePage';
 import { ImportPrivateKeyPage } from './pages/accounts/ImportPrivateKeyPage';
 import { ProtectAccountPage } from './pages/accounts/ProtectAccountPage';
+import { WelcomePage } from './pages/accounts/WelcomePage';
 import { ManageAccountsPage } from './pages/accounts/manage/ManageAccountsPage';
 
 import { ApprovalRequestPage } from './pages/approval-request';
@@ -138,7 +138,6 @@ const App = () => {
 	}
 	return (
 		<Routes>
-			<Route path="/welcome" element={<WelcomePage />} />
 			<Route path="forgot-password" element={<ForgotPasswordPage />} />
 			<Route path="restricted" element={<RestrictedPage />} />
 			{/* 
@@ -146,7 +145,6 @@ const App = () => {
 				<Route path="select" element={<SelectPage />} />
 				<Route path="create" element={<CreatePage />} />
 				<Route path="import" element={<ImportPage />} />
-				<Route path="backup" element={<BackupPage />} />
 				<Route path="backup-imported" element={<BackupPage mode="imported" />} />
 			</Route> */}
 
@@ -167,12 +165,14 @@ const App = () => {
 			</Route>
 
 			<Route path="accounts/*" element={<AccountsPage />}>
+				<Route path="welcome" element={<WelcomePage />} />
 				<Route path="add-account" element={<AddAccountPage />} />
 				<Route path="import-ledger-accounts" element={<ImportLedgerAccountsPage />} />
 				<Route path="import-passphrase" element={<ImportPassphrasePage />} />
 				<Route path="import-private-key" element={<ImportPrivateKeyPage />} />
 				<Route path="manage" element={<ManageAccountsPage />} />
 				<Route path="protect-account" element={<ProtectAccountPage />} />
+				<Route path="backup" element={<BackupPage />} />
 			</Route>
 
 			<Route path="/account">

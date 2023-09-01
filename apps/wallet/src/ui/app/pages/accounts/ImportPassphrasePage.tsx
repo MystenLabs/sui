@@ -7,6 +7,7 @@ import { useAccountsFormContext } from '../../components/accounts/AccountsFormCo
 import { ImportRecoveryPhraseForm } from '../../components/accounts/ImportRecoveryPhraseForm';
 import { Heading } from '../../shared/heading';
 import { Text } from '_app/shared/text';
+import { entropyToSerialized, mnemonicToEntropy } from '_src/shared/utils/bip39';
 
 export function ImportPassphrasePage() {
 	const navigate = useNavigate();
@@ -30,9 +31,12 @@ export function ImportPassphrasePage() {
 				<ImportRecoveryPhraseForm
 					cancelButtonText="Cancel"
 					submitButtonText="Add Account"
-					onSubmit={(formValues) => {
-						setFormValues({ ...formValues });
-						navigate('/accounts/protect-account');
+					onSubmit={({ recoveryPhrase }) => {
+						setFormValues({
+							type: 'import-mnemonic',
+							entropy: entropyToSerialized(mnemonicToEntropy(recoveryPhrase.join(' '))),
+						});
+						navigate('/accounts/protect-account?accountType=import-mnemonic');
 					}}
 				/>
 			</div>

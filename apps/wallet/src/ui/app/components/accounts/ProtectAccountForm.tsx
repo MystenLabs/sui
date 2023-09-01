@@ -5,33 +5,51 @@ import { useZodForm } from '@mysten/core';
 import { type SubmitHandler } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
+import zxcvbn from 'zxcvbn';
 import { Link } from '../../shared/Link';
 import { CheckboxField } from '../../shared/forms/CheckboxField';
 import { Form } from '../../shared/forms/Form';
 import { SelectField } from '../../shared/forms/SelectField';
 import { TextField } from '../../shared/forms/TextField';
+import { addDot } from '../../shared/input/password/validation';
 import { Button } from '_app/shared/ButtonUI';
 import { ToS_LINK } from '_src/shared/constants';
 
-const LOCK_INTERVALS = ['Hour', 'Minute', 'Second'];
+const LOCK_INTERVALS = ['Hour', 'Minute'];
 
-const formSchema = z
-	.object({
-		password: z.string().nonempty('Required'),
-		confirmedPassword: z.string().nonempty('Required'),
-		acceptedTos: z.literal<boolean>(true),
-		enabledAutolock: z.boolean(),
-		autoLockTimer: z.preprocess(
-			(a) => parseInt(z.string().parse(a), 10),
-			z.number().gte(0, 'Must be greater than 0'),
-		),
-		autoLockInterval: z.enum(['Hour', 'Minute', 'Second']),
-	})
-	.refine(
-		({ password, confirmedPassword }) =>
-			password && confirmedPassword && password !== confirmedPassword,
-		{ message: "Password's don't match", path: ['password', 'confirmedPassword'] },
-	);
+const formSchema = z.object({
+	password: z
+		.object({
+			input: z
+				.string()
+				.nonempty('Required')
+				.superRefine((val, ctx) => {
+					const {
+						score,
+						feedback: { warning, suggestions },
+					} = zxcvbn(val);
+					if (score <= 2) {
+						ctx.addIssue({
+							code: z.ZodIssueCode.custom,
+							message: `${addDot(warning) || 'Password is not strong enough.'}${
+								suggestions ? ` ${suggestions.join(' ')}` : ''
+							}`,
+						});
+					}
+				}),
+			confirmation: z.string().nonempty('Required'),
+		})
+		.refine(({ input, confirmation }) => input && confirmation && input === confirmation, {
+			path: ['confirmation'],
+			message: "Passwords don't match",
+		}),
+	acceptedTos: z.literal<boolean>(true, {
+		errorMap: () => ({ message: 'Please accept Terms of Service to continue' }),
+	}),
+	enabledAutolock: z.boolean(),
+	autoLockTimer: z.coerce.number().gt(0, 'Must be greater than 0'),
+	autoLockInterval: z.enum(['Hour', 'Minute']),
+});
 
 export type FormValues = z.infer<typeof formSchema>;
 
@@ -52,8 +70,7 @@ export function ProtectAccountForm({
 		mode: 'all',
 		schema: formSchema,
 		defaultValues: {
-			password: '',
-			confirmedPassword: '',
+			password: { input: '', confirmation: '' },
 			acceptedTos: !displayToS,
 			enabledAutolock: false,
 			autoLockTimer: 1,
@@ -63,9 +80,7 @@ export function ProtectAccountForm({
 	const {
 		register,
 		formState: { isSubmitting, isValid },
-		control,
 	} = form;
-	console.log(control);
 	const navigate = useNavigate();
 	return (
 		<Form className="flex flex-col gap-6 h-full" form={form} onSubmit={onSubmit}>
@@ -73,18 +88,18 @@ export function ProtectAccountForm({
 				autoFocus
 				type="password"
 				label="Create Account Password"
-				{...register('password')}
+				{...register('password.input')}
 			/>
 			<TextField
 				type="password"
 				label="Confirm Account Password"
-				{...register('confirmedPassword')}
+				{...register('password.confirmation')}
 			/>
 			<div className="flex flex-col gap-4">
 				<CheckboxField name="enabledAutolock" label="Auto-lock after I am inactive for" disabled />
 				<div className="flex items-start justify-between gap-2">
 					<TextField disabled type="number" {...register('autoLockTimer')} />
-					<SelectField name="autoLockInterval" options={LOCK_INTERVALS} />
+					<SelectField disabled name="autoLockInterval" options={LOCK_INTERVALS} />
 				</div>
 			</div>
 
@@ -114,6 +129,11 @@ export function ProtectAccountForm({
 					) : null}
 					<Button
 						type="submit"
+						/* 
+							it seems refine for the password confirmation only triggers after all fields are complete or on submit
+							but after that seem to show the error fine
+							so allow users to submit once and then do it based on the form validation
+						*/
 						disabled={isSubmitting || !isValid}
 						variant="primary"
 						size="tall"
