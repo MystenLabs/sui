@@ -72,6 +72,7 @@ impl TransactionValidator for SuiTxValidator {
         validate_batch_version(b, protocol_config)
             .map_err(|err| eyre::eyre!(format!("Invalid Batch: {err}")))?;
 
+        let filter_tx_scope = monitored_scope("ValidateBatch-FilterTx");
         let txs = b
             .transactions()
             .iter()
@@ -101,7 +102,9 @@ impl TransactionValidator for SuiTxValidator {
                 | ConsensusTransactionKind::NewJWKFetched(_, _) => {}
             }
         }
+        drop(filter_tx_scope);
 
+        let verify_sig_scope = monitored_scope("ValidateBatch-VerifySignatures");
         // verify the certificate signatures as a batch
         let cert_count = cert_batch.len();
         let ckpt_count = ckpt_batch.len();
@@ -115,12 +118,15 @@ impl TransactionValidator for SuiTxValidator {
                     .wrap_err("Malformed batch (failed to verify)")
             })
             .await??;
+        drop(verify_sig_scope);
 
+        let notify_chkp_sig_scope = monitored_scope("ValidateBatch-NotifyCheckpointSignature");
         // All checkpoint sigs have been verified, forward them to the checkpoint service
         for ckpt in ckpt_messages {
             self.checkpoint_service
                 .notify_checkpoint_signature(&self.epoch_store, &ckpt)?;
         }
+        drop(notify_chkp_sig_scope);
 
         self.metrics
             .certificate_signatures_verified
