@@ -7,11 +7,14 @@
 // This module is not currently accessible from user contracts, and is used only to record the JWK
 // state to the chain for auditability + restore from snapshot purposes.
 module sui::authenticator_state {
+    use std::string;
+    use std::vector;
     use sui::dynamic_field;
-    use std::string::String;
+    use std::string::{String, utf8};
     use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
+    use sui::math;
 
     /// Sender is not @0x0 the system address.
     const ENotSystemAddress: u64 = 0;
@@ -57,6 +60,85 @@ module sui::authenticator_state {
         epoch: u64,
     }
 
+    #[test_only]
+    fun create_active_jwk(kid: &String, kty: &String, epoch: u64): ActiveJwk {
+        ActiveJwk {
+            jwk_id: JwkId {
+                iss: utf8(b"test"),
+                kid: *kid,
+            },
+            jwk: JWK {
+                kty: *kty,
+                e: utf8(b"AQAB"),
+                n: utf8(b"test"),
+                alg: utf8(b"RS256"),
+            },
+            epoch,
+        }
+    }
+
+    fun jwk_equal(a: &ActiveJwk, b: &ActiveJwk): bool {
+        // note: epoch is ignored
+        if ((&a.jwk.kty == &b.jwk.kty) &&
+           (&a.jwk.e == &b.jwk.e) &&
+           (&a.jwk.n == &b.jwk.n) &&
+           (&a.jwk.alg == &b.jwk.alg) &&
+           (&a.jwk_id.iss == &b.jwk_id.iss) &&
+           (&a.jwk_id.kid == &b.jwk_id.kid)) {
+            true
+        } else {
+            false
+        }
+    }
+
+    // Compare the underlying byte arrays lexicographically. Since the strings may be utf8 this
+    // ordering is not necessarily the same as the string ordering, but we just need some
+    // canonical that is cheap to compute.
+    fun string_bytes_lt(a: &String, b: &String): bool {
+        let a_bytes = string::bytes(a);
+        let b_bytes = string::bytes(b);
+
+        if (vector::length(a_bytes) < vector::length(b_bytes)) {
+            true
+        } else if (vector::length(a_bytes) > vector::length(b_bytes)) {
+            false
+        } else {
+            let i = 0;
+            while (i < vector::length(a_bytes)) {
+                let a_byte = *vector::borrow(a_bytes, i);
+                let b_byte = *vector::borrow(b_bytes, i);
+                if (a_byte < b_byte) {
+                    return true;
+                } else if (a_byte > b_byte) {
+                    return false;
+                };
+                i = i + 1;
+            };
+            // all bytes are equal
+            false
+        }
+    }
+
+    fun jwk_lt(a: &ActiveJwk, b: &ActiveJwk): bool {
+        // note: epoch is ignored
+        if (&a.jwk_id.iss != &b.jwk_id.iss) {
+            return string_bytes_lt(&a.jwk_id.iss, &b.jwk_id.iss);
+        };
+        if (&a.jwk_id.kid != &b.jwk_id.kid) {
+            return string_bytes_lt(&a.jwk_id.kid, &b.jwk_id.kid);
+        };
+        if (&a.jwk.kty != &b.jwk.kty) {
+            return string_bytes_lt(&a.jwk.kty, &b.jwk.kty);
+        };
+        if (&a.jwk.e != &b.jwk.e) {
+            return string_bytes_lt(&a.jwk.e, &b.jwk.e);
+        };
+        if (&a.jwk.n != &b.jwk.n) {
+            return string_bytes_lt(&a.jwk.n, &b.jwk.n);
+        };
+        string_bytes_lt(&a.jwk.alg, &b.jwk.alg)
+    }
+
     #[allow(unused_function)]
     /// Create and share the AuthenticatorState object. This function is call exactly once, when
     /// the authenticator state object is first created.
@@ -80,27 +162,109 @@ module sui::authenticator_state {
         transfer::share_object(self);
     }
 
-    #[allow(unused_function)]
-    /// Record a new set of active_jwks. Called when executing the AuthenticatorStateUpdate system
-    /// transaction.
-    fun update_authenticator_state(
+    fun load_inner_mut(
         self: &mut AuthenticatorState,
-        active_jwks: vector<ActiveJwk>,
-        ctx: &TxContext,
-    ) {
-        // Validator will make a special system call with sender set as 0x0.
-        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
-
+    ): &mut AuthenticatorStateInner {
         let version = self.version;
 
-        // replace this with an update function when we add a new version of the inner object.
+        // replace this with a lazy update function when we add a new version of the inner object.
         assert!(version == CurrentVersion, EWrongInnerVersion);
 
         let inner: &mut AuthenticatorStateInner = dynamic_field::borrow_mut(&mut self.id, self.version);
 
         assert!(inner.version == version, EWrongInnerVersion);
+        inner
+    }
 
-        inner.active_jwks = active_jwks;
+    fun load_inner(
+        self: &AuthenticatorState,
+    ): &AuthenticatorStateInner {
+        let version = self.version;
+
+        // replace this with a lazy update function when we add a new version of the inner object.
+        assert!(version == CurrentVersion, EWrongInnerVersion);
+
+        let inner: &AuthenticatorStateInner = dynamic_field::borrow(&self.id, self.version);
+
+        assert!(inner.version == version, EWrongInnerVersion);
+        inner
+    }
+
+    #[allow(unused_function)]
+    /// Record a new set of active_jwks. Called when executing the AuthenticatorStateUpdate system
+    /// transaction. The new input vector must be sorted and must not contain duplicates.
+    /// If a new JWK is already present, but with a previous epoch, then the epoch is updated to
+    /// indicate that the JWK has been validated in the current epoch and should not be expired.
+    fun update_authenticator_state(
+        self: &mut AuthenticatorState,
+        new_active_jwks: vector<ActiveJwk>,
+        ctx: &TxContext,
+    ) {
+        // Validator will make a special system call with sender set as 0x0.
+        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+
+        let inner = load_inner_mut(self);
+
+        let res = vector[];
+        let i = 0;
+        let j = 0;
+        let active_jwks_len = vector::length(&inner.active_jwks);
+        let new_active_jwks_len = vector::length(&new_active_jwks);
+
+        while (i < active_jwks_len && j < new_active_jwks_len) {
+            let old_jwk = vector::borrow(&inner.active_jwks, i);
+            let new_jwk = vector::borrow(&new_active_jwks, j);
+
+            // when they are equal, push only one, but use the max epoch of the two
+            if (jwk_equal(old_jwk, new_jwk)) {
+                let jwk = *old_jwk;
+                jwk.epoch = math::max(old_jwk.epoch, new_jwk.epoch);
+                vector::push_back(&mut res, jwk);
+                i = i + 1;
+                j = j + 1;
+            } else if (jwk_lt(old_jwk, new_jwk)) {
+                vector::push_back(&mut res, *old_jwk);
+                i = i + 1;
+            } else {
+                vector::push_back(&mut res, *new_jwk);
+                j = j + 1;
+            }
+        };
+
+        while (i < active_jwks_len) {
+            vector::push_back(&mut res, *vector::borrow(&inner.active_jwks, i));
+            i = i + 1;
+        };
+        while (j < new_active_jwks_len) {
+            vector::push_back(&mut res, *vector::borrow(&new_active_jwks, j));
+            j = j + 1;
+        };
+
+        inner.active_jwks = res;
+    }
+
+    #[allow(unused_function)]
+    // Called directly by rust when constructing the ChangeEpoch transaction.
+    fun expire_jwks(
+        self: &mut AuthenticatorState,
+        // any jwk below this epoch is not retained
+        min_epoch: u64,
+        ctx: &TxContext) {
+        // This will only be called by sui_system::advance_epoch
+        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+
+        let inner = load_inner_mut(self);
+
+        let new_active_jwks: vector<ActiveJwk> = vector[];
+        let len = vector::length(&inner.active_jwks);
+        let i = 0;
+        while (i < len) {
+            let jwk = vector::borrow(&inner.active_jwks, i);
+            if (jwk.epoch >= min_epoch) {
+                vector::push_back(&mut new_active_jwks, *jwk);
+            }
+        };
+        inner.active_jwks = new_active_jwks;
     }
 
     #[allow(unused_function)]
@@ -111,13 +275,32 @@ module sui::authenticator_state {
         ctx: &TxContext,
     ): vector<ActiveJwk> {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+        load_inner(self).active_jwks
+    }
 
-        let version = self.version;
-        assert!(version == CurrentVersion, EWrongInnerVersion);
+    #[test_only]
+    public fun update_authenticator_state_for_testing(
+        self: &mut AuthenticatorState,
+        new_active_jwks: vector<ActiveJwk>,
+        ctx: &TxContext,
+    ) {
+        update_authenticator_state(self, new_active_jwks, ctx);
+    }
 
-        let inner: &AuthenticatorStateInner = dynamic_field::borrow(&self.id, version);
-        assert!(inner.version == version, EWrongInnerVersion);
+    #[test_only]
+    public fun expire_jwks_for_testing(
+        self: &mut AuthenticatorState,
+        min_epoch: u64,
+        ctx: &TxContext,
+    ) {
+        expire_jwks(self, min_epoch, ctx);
+    }
 
-        inner.active_jwks
+    #[test_only]
+    public fun get_active_jwks_for_testing(
+        self: &AuthenticatorState,
+        ctx: &TxContext,
+    ): vector<ActiveJwk> {
+        get_active_jwks(self, ctx)
     }
 }
