@@ -238,6 +238,13 @@ pub enum UserInputError {
         object_id
     )]
     InaccessibleSystemObject { object_id: ObjectID },
+    #[error(
+        "{max_publish_commands} max publish/upgrade commands allowed, {publish_count} provided"
+    )]
+    MaxPublishCountExceeded {
+        max_publish_commands: u64,
+        publish_count: u64,
+    },
 }
 
 #[derive(

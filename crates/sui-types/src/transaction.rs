@@ -658,8 +658,22 @@ impl ProgrammableTransaction {
         for input in inputs {
             input.validity_check(config)?
         }
+        let mut publish_count = 0u64;
         for command in commands {
-            command.validity_check(config)?
+            command.validity_check(config)?;
+            match command {
+                Command::Publish(_, _) | Command::Upgrade(_, _, _, _) => publish_count += 1,
+                _ => (),
+            }
+        }
+        if let Some(max_publish_commands) = config.max_publish_or_upgrade_per_ptb_as_option() {
+            fp_ensure!(
+                publish_count <= max_publish_commands,
+                UserInputError::MaxPublishCountExceeded {
+                    max_publish_commands,
+                    publish_count,
+                }
+            );
         }
         Ok(())
     }
