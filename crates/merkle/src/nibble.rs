@@ -1,10 +1,8 @@
 //! `Nibble` represents a four-bit unsigned integer.
 
+use proptest::{collection::vec, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::fmt;
-
-// /// The hardcoded maximum height of a state merkle tree in nibbles.
-// pub const ROOT_NIBBLE_HEIGHT: usize = HashValue::LENGTH * 2;
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct Nibble(u8);
@@ -28,6 +26,15 @@ impl fmt::LowerHex for Nibble {
     }
 }
 
+impl Arbitrary for Nibble {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
+        (0..16u8).prop_map(Self::from).boxed()
+    }
+}
+
 /// NibblePath defines a path in a Merkle tree in the unit of nibble (4 bits).
 #[derive(Clone, Hash, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct NibblePath {
@@ -39,7 +46,7 @@ pub struct NibblePath {
     /// The underlying bytes that stores the path, 2 nibbles per byte. If the number of nibbles is
     /// odd, the second half of the last byte must be 0.
     bytes: [u8; Self::MAX_BYTE_PATH_LENGTH],
-    // invariant num_nibbles <= ROOT_NIBBLE_HEIGHT
+    // invariant len <= Self::MAX_NIBBLE_PATH_LENGTH
 }
 
 /// Supports debug format by concatenating nibbles literally. For example, [0x12, 0xa0] with 3
@@ -85,7 +92,11 @@ impl NibblePath {
         let bytes = bytes.as_ref();
 
         assert!(bytes.len() <= Self::MAX_BYTE_PATH_LENGTH);
-        assert_eq!(bytes.last().unwrap() & 0x0F, 0, "Last nibble must be 0.");
+        assert_eq!(
+            bytes.last().expect("Should have odd number of nibbles.") & 0x0F,
+            0,
+            "Last nibble must be 0."
+        );
 
         let num_nibbles = bytes.len() * 2 - 1;
 
@@ -109,7 +120,7 @@ impl NibblePath {
             assert!(bytes.len() >= num_bytes);
 
             let mut buf = [0; Self::MAX_BYTE_PATH_LENGTH];
-            buf[..num_bytes].copy_from_slice(bytes);
+            buf[..num_bytes].copy_from_slice(&bytes[..num_bytes]);
             // make sure to pad the last nibble with 0s.
             let last_byte_padded = bytes[num_bytes - 1] & 0xF0;
             buf[num_bytes - 1] = last_byte_padded;
@@ -192,7 +203,7 @@ impl NibblePath {
 
     /// Get the i-th bit.
     fn get_bit(&self, i: usize) -> bool {
-        assert!(i < self.num_nibbles * 4);
+        assert!(i < self.len() * 4);
         let pos = i / 8;
         let bit = 7 - i % 8;
         ((self.bytes[pos] >> bit) & 1) != 0
@@ -202,13 +213,13 @@ impl NibblePath {
     pub fn bits(&self) -> BitIterator {
         BitIterator {
             nibble_path: self,
-            pos: (0..self.num_nibbles * 4),
+            pos: (0..self.len() * 4),
         }
     }
 
     /// Get a nibble iterator iterates over the whole nibble path.
     pub fn nibbles(&self) -> NibbleIterator {
-        NibbleIterator::new(self, 0, self.num_nibbles)
+        NibbleIterator::new(self, 0, self.len())
     }
 
     /// Get the underlying bytes storing nibbles.
@@ -217,21 +228,55 @@ impl NibblePath {
     }
 
     pub fn truncate(&mut self, len: usize) {
-        assert!(len <= self.num_nibbles);
-        self.num_nibbles = len;
-        self.bytes.truncate((len + 1) / 2);
-        if len % 2 != 0 {
-            *self.bytes.last_mut().expect("must exist.") &= 0xF0;
+        assert!(len <= self.len());
+        self.len = len as u8;
+        for i in len..Self::MAX_NIBBLE_PATH_LENGTH {
+            self.set_internal(Nibble::from(0), i);
         }
     }
 
     // Returns the shard_id of the NibblePath, or None if it is root.
     pub fn get_shard_id(&self) -> Option<u8> {
-        if self.num_nibbles() > 0 {
+        if self.len() > 0 {
             Some(u8::from(self.get_nibble(0)))
         } else {
             None
         }
+    }
+}
+
+impl Arbitrary for NibblePath {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
+        arb_nibble_path().boxed()
+    }
+}
+
+prop_compose! {
+    fn arb_nibble_path()(
+        mut bytes in vec(any::<u8>(), 0..=NibblePath::MAX_BYTE_PATH_LENGTH),
+        is_odd in any::<bool>()
+    ) -> NibblePath {
+        if let Some(last_byte) = bytes.last_mut() {
+            if is_odd {
+                *last_byte &= 0xf0;
+                return NibblePath::new_odd(bytes);
+            }
+        }
+        NibblePath::new_even(bytes)
+    }
+}
+
+prop_compose! {
+    fn arb_internal_nibble_path()(
+        nibble_path in arb_nibble_path().prop_filter(
+            "Filter out leaf paths.",
+            |p| p.len() < NibblePath::MAX_NIBBLE_PATH_LENGTH,
+        )
+    ) -> NibblePath {
+        nibble_path
     }
 }
 
@@ -289,7 +334,7 @@ pub struct NibbleIterator<'a> {
     start: usize,
     // invariant self.start <= self.pos.start;
     // invariant self.pos.start <= self.pos.end;
-    // invariant self.pos.end <= ROOT_NIBBLE_HEIGHT;
+    // invariant self.pos.end <= NibblePath::MAX_NIBBLE_PATH_LENGTH
 }
 
 /// NibbleIterator spits out a byte each time. Each byte must be in range [0, 16).
@@ -315,8 +360,8 @@ impl<'a> Peekable for NibbleIterator<'a> {
 impl<'a> NibbleIterator<'a> {
     fn new(nibble_path: &'a NibblePath, start: usize, end: usize) -> Self {
         assert!(start <= end);
-        assert!(start <= ROOT_NIBBLE_HEIGHT);
-        assert!(end <= ROOT_NIBBLE_HEIGHT);
+        assert!(start <= NibblePath::MAX_NIBBLE_PATH_LENGTH);
+        assert!(end <= NibblePath::MAX_NIBBLE_PATH_LENGTH);
         Self {
             nibble_path,
             pos: (start..end),
@@ -385,4 +430,261 @@ where
         y.next();
     }
     count
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_nibble_path_fmt() {
+        let nibble_path = NibblePath::new_even(vec![0x12, 0x34, 0x56]);
+        assert_eq!(format!("{:?}", nibble_path), "123456");
+
+        let nibble_path = NibblePath::new_even(vec![0x12, 0x34, 0x50]);
+        assert_eq!(format!("{:?}", nibble_path), "123450");
+
+        let nibble_path = NibblePath::new_odd(vec![0x12, 0x34, 0x50]);
+        assert_eq!(format!("{:?}", nibble_path), "12345");
+    }
+
+    #[test]
+    fn test_create_nibble_path_success() {
+        let nibble_path = NibblePath::new_even(vec![0x12, 0x34, 0x56]);
+        assert_eq!(nibble_path.len(), 6);
+
+        let nibble_path = NibblePath::new_even(vec![0x12, 0x34, 0x50]);
+        assert_eq!(nibble_path.len(), 6);
+
+        let nibble_path = NibblePath::new_odd(vec![0x12, 0x34, 0x50]);
+        assert_eq!(nibble_path.len(), 5);
+
+        let nibble_path = NibblePath::new_even(vec![]);
+        assert_eq!(nibble_path.len(), 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "Last nibble must be 0.")]
+    fn test_create_nibble_path_failure() {
+        let bytes = vec![0x12, 0x34, 0x56];
+        let _nibble_path = NibblePath::new_odd(bytes);
+    }
+
+    #[test]
+    #[should_panic(expected = "Should have odd number of nibbles.")]
+    fn test_empty_nibble_path() {
+        NibblePath::new_odd(vec![]);
+    }
+
+    #[test]
+    fn test_get_nibble() {
+        let bytes = vec![0x12, 0x34];
+        let nibble_path = NibblePath::new_even(bytes);
+        assert_eq!(nibble_path.get_nibble(0), Nibble::from(0x01));
+        assert_eq!(nibble_path.get_nibble(1), Nibble::from(0x02));
+        assert_eq!(nibble_path.get_nibble(2), Nibble::from(0x03));
+        assert_eq!(nibble_path.get_nibble(3), Nibble::from(0x04));
+    }
+
+    #[test]
+    fn test_get_nibble_from_byte_array() {
+        let bytes = vec![0x12, 0x34, 0x56, 0x78];
+        let nibble_path = NibblePath::new_from_byte_array(bytes.as_slice(), 4);
+        assert_eq!(nibble_path.len(), 4);
+        assert_eq!(nibble_path.get_nibble(0), Nibble::from(0x01));
+        assert_eq!(nibble_path.get_nibble(1), Nibble::from(0x02));
+        assert_eq!(nibble_path.get_nibble(2), Nibble::from(0x03));
+        assert_eq!(nibble_path.get_nibble(3), Nibble::from(0x04));
+
+        let nibble_path = NibblePath::new_from_byte_array(bytes.as_slice(), 3);
+        assert_eq!(nibble_path.len(), 3);
+        assert_eq!(nibble_path.get_nibble(0), Nibble::from(0x01));
+        assert_eq!(nibble_path.get_nibble(1), Nibble::from(0x02));
+        assert_eq!(nibble_path.get_nibble(2), Nibble::from(0x03));
+    }
+
+    #[test]
+    fn test_nibble_iterator() {
+        let bytes = vec![0x12, 0x30];
+        let nibble_path = NibblePath::new_odd(bytes);
+        let mut iter = nibble_path.nibbles();
+        assert_eq!(iter.next().unwrap(), Nibble::from(0x01));
+        assert_eq!(iter.next().unwrap(), Nibble::from(0x02));
+        assert_eq!(iter.next().unwrap(), Nibble::from(0x03));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn test_get_bit() {
+        let bytes = vec![0x01, 0x02];
+        let nibble_path = NibblePath::new_even(bytes);
+        assert!(!nibble_path.get_bit(0));
+        assert!(!nibble_path.get_bit(1));
+        assert!(!nibble_path.get_bit(2));
+        assert!(nibble_path.get_bit(7));
+        assert!(!nibble_path.get_bit(8));
+        assert!(nibble_path.get_bit(14));
+    }
+
+    #[test]
+    fn test_bit_iter() {
+        let bytes = vec![0xC3, 0xA0];
+        let nibble_path = NibblePath::new_odd(bytes);
+        let mut iter = nibble_path.bits();
+        // c: 0b1100
+        assert_eq!(iter.next(), Some(true));
+        assert_eq!(iter.next(), Some(true));
+        assert_eq!(iter.next(), Some(false));
+        assert_eq!(iter.next(), Some(false));
+        // 3: 0b0011
+        assert_eq!(iter.next(), Some(false));
+        assert_eq!(iter.next(), Some(false));
+        assert_eq!(iter.next(), Some(true));
+        assert_eq!(iter.next(), Some(true));
+        // a: 0b1010
+        assert_eq!(iter.next_back(), Some(false));
+        assert_eq!(iter.next_back(), Some(true));
+        assert_eq!(iter.next_back(), Some(false));
+        assert_eq!(iter.next_back(), Some(true));
+
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn test_visited_nibble_iter() {
+        let bytes = vec![0x12, 0x34, 0x56];
+        let nibble_path = NibblePath::new_even(bytes);
+        let mut iter = nibble_path.nibbles();
+        assert_eq!(iter.next().unwrap(), 0x01.into());
+        assert_eq!(iter.next().unwrap(), 0x02.into());
+        assert_eq!(iter.next().unwrap(), 0x03.into());
+        let mut visited_nibble_iter = iter.visited_nibbles();
+        assert_eq!(visited_nibble_iter.next().unwrap(), 0x01.into());
+        assert_eq!(visited_nibble_iter.next().unwrap(), 0x02.into());
+        assert_eq!(visited_nibble_iter.next().unwrap(), 0x03.into());
+    }
+
+    #[test]
+    fn test_skip_common_prefix() {
+        {
+            let nibble_path1 = NibblePath::new_even(vec![0x12, 0x34, 0x56]);
+            let nibble_path2 = NibblePath::new_even(vec![0x12, 0x34, 0x56]);
+            let mut iter1 = nibble_path1.nibbles();
+            let mut iter2 = nibble_path2.nibbles();
+            assert_eq!(skip_common_prefix(&mut iter1, &mut iter2), 6);
+            assert!(iter1.is_finished());
+            assert!(iter2.is_finished());
+        }
+        {
+            let nibble_path1 = NibblePath::new_even(vec![0x12, 0x35]);
+            let nibble_path2 = NibblePath::new_even(vec![0x12, 0x34, 0x56]);
+            let mut iter1 = nibble_path1.nibbles();
+            let mut iter2 = nibble_path2.nibbles();
+            assert_eq!(skip_common_prefix(&mut iter1, &mut iter2), 3);
+            assert_eq!(
+                iter1.visited_nibbles().get_nibble_path(),
+                iter2.visited_nibbles().get_nibble_path()
+            );
+            assert_eq!(
+                iter1.remaining_nibbles().get_nibble_path(),
+                NibblePath::new_odd(vec![0x50])
+            );
+            assert_eq!(
+                iter2.remaining_nibbles().get_nibble_path(),
+                NibblePath::new_odd(vec![0x45, 0x60])
+            );
+        }
+        {
+            let nibble_path1 = NibblePath::new_even(vec![0x12, 0x34, 0x56]);
+            let nibble_path2 = NibblePath::new_odd(vec![0x12, 0x30]);
+            let mut iter1 = nibble_path1.nibbles();
+            let mut iter2 = nibble_path2.nibbles();
+            assert_eq!(skip_common_prefix(&mut iter1, &mut iter2), 3);
+            assert_eq!(
+                iter1.visited_nibbles().get_nibble_path(),
+                iter2.visited_nibbles().get_nibble_path()
+            );
+            assert_eq!(
+                iter1.remaining_nibbles().get_nibble_path(),
+                NibblePath::new_odd(vec![0x45, 0x60])
+            );
+            assert!(iter2.is_finished());
+        }
+    }
+
+    prop_compose! {
+        fn arb_nibble_path_and_current()(nibble_path in any::<NibblePath>())
+            (current in 0..=nibble_path.len(),
+             nibble_path in Just(nibble_path)) -> (usize, NibblePath) {
+            (current, nibble_path)
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn test_push(
+            nibble_path in arb_internal_nibble_path(),
+            nibble in any::<Nibble>()
+        ) {
+            let mut new_nibble_path = nibble_path.clone();
+            new_nibble_path.push(nibble);
+            let mut nibbles: Vec<Nibble> = nibble_path.nibbles().collect();
+            nibbles.push(nibble);
+            let nibble_path2 = nibbles.into_iter().collect();
+            prop_assert_eq!(new_nibble_path, nibble_path2);
+        }
+
+        #[test]
+        fn test_pop(mut nibble_path in any::<NibblePath>()) {
+            let mut nibbles: Vec<Nibble> = nibble_path.nibbles().collect();
+            let nibble_from_nibbles = nibbles.pop();
+            let nibble_from_nibble_path = nibble_path.pop();
+            let nibble_path2 = nibbles.into_iter().collect();
+            prop_assert_eq!(nibble_path, nibble_path2);
+            prop_assert_eq!(nibble_from_nibbles, nibble_from_nibble_path);
+        }
+
+        #[test]
+        fn test_last(mut nibble_path in any::<NibblePath>()) {
+            let nibble1 = nibble_path.last();
+            let nibble2 = nibble_path.pop();
+            prop_assert_eq!(nibble1, nibble2);
+        }
+
+        #[test]
+        fn test_nibble_iter_roundtrip(nibble_path in any::<NibblePath>()) {
+            let nibbles = nibble_path.nibbles();
+            let nibble_path2 = nibbles.collect();
+            prop_assert_eq!(nibble_path, nibble_path2);
+        }
+
+        #[test]
+        fn test_visited_and_remaining_nibbles((current, nibble_path) in arb_nibble_path_and_current()) {
+            let mut nibble_iter = nibble_path.nibbles();
+            let mut visited_nibbles = vec![];
+            for _ in 0..current {
+                visited_nibbles.push(nibble_iter.next().unwrap());
+            }
+            let visited_nibble_path = nibble_iter.visited_nibbles().get_nibble_path();
+            let remaining_nibble_path = nibble_iter.remaining_nibbles().get_nibble_path();
+            let visited_iter = visited_nibble_path.nibbles();
+            let remaining_iter = remaining_nibble_path.nibbles();
+            prop_assert_eq!(visited_nibbles, visited_iter.collect::<Vec<Nibble>>());
+            prop_assert_eq!(nibble_iter.collect::<Vec<Nibble>>(), remaining_iter.collect::<Vec<_>>());
+       }
+
+       #[test]
+        fn test_nibble_iter_to_bit_iter((current, nibble_path) in arb_nibble_path_and_current()) {
+            let mut nibble_iter = nibble_path.nibbles();
+            (0..current)
+                .for_each(|_| {
+                    nibble_iter.next().unwrap();
+                }
+            );
+            let remaining_nibble_path = nibble_iter.remaining_nibbles().get_nibble_path();
+            let remaining_bit_iter = remaining_nibble_path.bits();
+            let bit_iter = nibble_iter.bits();
+            prop_assert_eq!(remaining_bit_iter.collect::<Vec<bool>>(), bit_iter.collect::<Vec<_>>());
+        }
+    }
 }
