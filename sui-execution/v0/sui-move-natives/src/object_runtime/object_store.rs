@@ -353,14 +353,6 @@ impl<'a> ObjectStore<'a> {
         child_move_type: MoveObjectType,
         child_value: Value,
     ) -> PartialVMResult<()> {
-        let mut child_object = ChildObject {
-            owner: parent,
-            ty: child_ty.clone(),
-            move_type: child_move_type,
-            value: GlobalValue::none(),
-        };
-        child_object.value.move_to(child_value).unwrap();
-
         if let LimitThresholdCrossed::Hard(_, lim) = check_limit_by_meter!(
             self.is_metered,
             self.store.len(),
@@ -379,8 +371,8 @@ impl<'a> ObjectStore<'a> {
                 ));
         };
 
-        if let Some(prev) = self.store.insert(child, child_object) {
-            if prev.value.exists()? {
+        let mut value = if let Some(ChildObject { ty, value, .. }) = self.store.remove(&child) {
+            if value.exists()? {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message(
@@ -392,7 +384,32 @@ impl<'a> ObjectStore<'a> {
                         ),
                 );
             }
+            // double check format did not change
+            if child_ty != &ty {
+                let msg = format!("Type changed for child {child} when setting the value back");
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(msg),
+                );
+            }
+            value
+        } else {
+            GlobalValue::none()
+        };
+        if let Err((e, _)) = value.move_to(child_value) {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!("Unable to set value for child {child}, with error {e}",),
+                ),
+            );
         }
+        let child_object = ChildObject {
+            owner: parent,
+            ty: child_ty.clone(),
+            move_type: child_move_type,
+            value,
+        };
+        self.store.insert(child, child_object);
         Ok(())
     }
 
