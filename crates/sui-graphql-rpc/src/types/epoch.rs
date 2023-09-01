@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::big_int::BigInt;
+use super::date_time::DateTime;
 use super::protocol_config::ProtocolConfigs;
 use super::safe_mode::SafeMode;
 use super::stake_subsidy::StakeSubsidy;
@@ -21,6 +22,6 @@ pub(crate) struct Epoch {
     pub validator_set: Option<ValidatorSet>,
     pub storage_fund: Option<StorageFund>,
     pub safe_mode: Option<SafeMode>,
-    // start_timestamp: todo!(),
-    // end_timestamp: todo!(),
+    pub start_timestamp: Option<DateTime>,
+    // pub end_timestamp: Option<DateTime>, //TODO decide if we want this data exposed or not
 }
