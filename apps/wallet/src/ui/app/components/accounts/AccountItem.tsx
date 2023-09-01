@@ -2,12 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useResolveSuiNSName } from '@mysten/core';
+import { ArrowUpRight12, Copy12 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js/utils';
 
 import cn from 'classnames';
 import { forwardRef, type ReactNode } from 'react';
 import { useAccounts } from '../../hooks/useAccounts';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
+import { useExplorerLink } from '../../hooks/useExplorerLink';
+import { IconButton } from '../IconButton';
+import { ExplorerLinkType } from '../explorer-link/ExplorerLinkType';
 import { Text } from '_src/ui/app/shared/text';
 
 interface AccountItemProps {
@@ -17,13 +21,16 @@ interface AccountItemProps {
 	after?: ReactNode;
 	disabled?: boolean;
 	gradient?: boolean;
-	selected?: boolean;
-	// todo: extract into variants if possible
+	selected?: boolean; // whether the account is selected in the context of a multi-select
+	isActiveAccount?: boolean; // whether the account is the active account in the context of the account list
 	background?: 'gradient';
 }
 
 export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
-	({ background, selected, disabled, icon, name, address, after, ...props }, ref) => {
+	(
+		{ background, selected, isActiveAccount, disabled, icon, name, address, after, ...props },
+		ref,
+	) => {
 		const { data: accounts } = useAccounts();
 		const { data: domainName } = useResolveSuiNSName(address);
 		const account = accounts?.find((account) => account.address === address);
@@ -31,16 +38,21 @@ export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 		const copyAddress = useCopyToClipboard(account?.address!, {
 			copySuccessMessage: 'Address copied',
 		});
-
+		const explorerHref = useExplorerLink({
+			type: ExplorerLinkType.address,
+			address: account?.address,
+		});
 		if (!account) return null;
 
 		return (
 			<div
 				ref={ref}
 				className={cn(
-					'flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl border border-solid border-hero/10 cursor-pointer bg-white/40 hover:bg-white/80 group',
-					{ 'bg-white/80 shadow-card-soft': selected },
+					'flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl border border-solid border-hero/10 cursor-pointer bg-white/40 group',
+					'hover:bg-white/80',
+					{ 'bg-white/80 shadow-card-soft cursor-auto': selected },
 					{ 'bg-hero/10 border-none hover:bg-white/40 shadow-none': disabled },
+					{ 'bg-white/80': isActiveAccount },
 					{ 'bg-gradients-graph-cards': background === 'gradient' },
 				)}
 				{...props}
@@ -50,16 +62,21 @@ export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 					<Text variant="pBody" weight="semibold" color="steel-darker" truncate>
 						{accountName}
 					</Text>
-					<button
-						className="appearance-none outline-0 bg-transparent border-0 p-0 cursor-pointer text-steel-dark hover:text-steel-darker"
-						onClick={copyAddress}
-					>
+					<div className="text-steel-dark flex gap-1.5 leading-none">
 						<Text variant="subtitle" weight="semibold" truncate>
 							{formatAddress(account.address)}
 						</Text>
-					</button>
-					{/* TODO: replacing the link to Explorer with copy to clipboard for now - remove or restore this if needed */}
-					{/* <AddressLink address={address} /> */}
+						<div className="opacity-0 group-hover:opacity-100 flex gap-1 duration-100">
+							<IconButton icon={<Copy12 />} onClick={copyAddress} />
+							{explorerHref ? (
+								<IconButton
+									title="View on Explorer"
+									href={explorerHref}
+									icon={<ArrowUpRight12 />}
+								/>
+							) : null}
+						</div>
+					</div>
 				</div>
 				{after}
 			</div>

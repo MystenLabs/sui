@@ -21,7 +21,6 @@ export function AccountMultiSelectItem({ account, state }: AccountMultiSelectIte
 		<ToggleGroup.Item asChild value={account.id}>
 			<AccountItem
 				name={account.nickname ?? domainName ?? formatAddress(account.address)}
-				/* todo: implement account icon */
 				address={account.address}
 				disabled={state === 'disabled'}
 				selected={state === 'selected'}

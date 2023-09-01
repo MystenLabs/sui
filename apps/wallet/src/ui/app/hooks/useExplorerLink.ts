@@ -16,7 +16,7 @@ import { ExplorerLinkType } from '../components/explorer-link/ExplorerLinkType';
 export type ExplorerLinkConfig =
 	| {
 			type: ExplorerLinkType.address;
-			address: string;
+			address?: string;
 			useActiveAddress?: false;
 	  }
 	| {
@@ -48,6 +48,7 @@ export function useExplorerLink(linkConfig: ExplorerLinkConfig) {
 	// fallback to localhost if customRPC is not set
 	const customRPCUrl = customRPC || 'http://localhost:3000/';
 	return useMemo(() => {
+		if (!address) return null;
 		switch (type) {
 			case ExplorerLinkType.address:
 				return address && getAddressUrl(address, selectedApiEnv, customRPCUrl);

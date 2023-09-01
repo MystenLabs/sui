@@ -26,7 +26,7 @@ export function AccountListItem({ account }: AccountListItemProps) {
 		<AccountItem
 			icon={<AccountIcon account={account} />}
 			name={account.nickname || domainName || formatAddress(account.address)}
-			selected={account.address === activeAccount?.address}
+			isActiveAccount={account.address === activeAccount?.address}
 			after={
 				<div className="ml-auto">
 					<div className="flex items-center justify-center">
