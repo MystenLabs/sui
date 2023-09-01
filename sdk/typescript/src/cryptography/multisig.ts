@@ -16,7 +16,7 @@ import { Secp256k1PublicKey } from '../keypairs/secp256k1/publickey.js';
 import { Secp256r1PublicKey } from '../keypairs/secp256r1/publickey.js';
 import { builder } from '../builder/bcs.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
-
+import { MAX_SIGNER_IN_MULTISIG, MIN_SIGNER_IN_MULTISIG } from '../multisig/publickey.js';
 export type PubkeyWeightPair = {
 	pubKey: PublicKey;
 	weight: number;
@@ -47,9 +47,6 @@ export type MultiSig = {
 	bitmap: number;
 	multisig_pk: MultiSigPublicKey;
 };
-
-export const MAX_SIGNER_IN_MULTISIG = 10;
-export const MIN_SIGNER_IN_MULTISIG = 1;
 
 /// Derives a multisig address from a list of pk and weights and threshold.
 // It is the 32-byte Blake2b hash of the serializd bytes of `flag_MultiSig || threshold || flag_1 || pk_1 || weight_1
