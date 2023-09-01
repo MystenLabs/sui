@@ -2,11 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module axelar::validators {
-    use std::string;
-    use std::string::String;
+    use std::string::{Self, String};
     use std::vector;
-    use sui::table;
-    use sui::table::Table;
+    use sui::table::{Self, Table};
     use sui::address;
 
     use sui::bcs;
@@ -18,7 +16,7 @@ module axelar::validators {
     use sui::tx_context::TxContext;
     use sui::vec_map:: {Self, VecMap};
 
-    use axelar::approved_call::{ Self, ApprovedCall };
+    use axelar::channel::{Self, ApprovedCall};
     use axelar::utils::{normalize_signature, operators_hash};
 
     friend axelar::gateway;
@@ -30,7 +28,7 @@ module axelar::validators {
     const EDuplicateOperators: u64 = 3;
     /// For when number of signatures for the call approvals is below the threshold.
     const ELowSignaturesWeight: u64 = 4;
-
+    /// Trying to `take_approved_call` with a wrong payload.
     const EPayloadHashMismatch: u64 = 5;
 
     /// Used for a check in `validate_proof` function.
@@ -204,7 +202,8 @@ module axelar::validators {
 
         assert!(hash::keccak256(&data) == approval_hash, EPayloadHashMismatch);
 
-        approved_call::create(
+        // Friend only.
+        channel::create_approved_call(
             cmd_id,
             source_chain,
             source_address,
@@ -212,6 +211,8 @@ module axelar::validators {
             payload,
         )
     }
+
+    // === Getters ===
 
     fun epoch_for_hash(axelar: &AxelarValidators): &VecMap<vector<u8>, u64> {
         &df::borrow<u8, AxelarValidatorsV1>(&axelar.id, 1).epoch_for_hash
@@ -228,6 +229,8 @@ module axelar::validators {
     public fun epoch(axelar: &AxelarValidators): u64 {
         df::borrow<u8, AxelarValidatorsV1>(&axelar.id, 1).epoch
     }
+
+    // === Testing ===
 
     #[test_only]
     public fun remove_approval_for_test(self: &mut AxelarValidators, cmd_id: address) {

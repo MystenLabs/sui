@@ -29,16 +29,14 @@
 ///  - CallApproval is checked to match the `Channel`.id
 ///
 module axelar::gateway {
-    use std::string;
-    use std::string::String;
+    use std::string::{Self, String};
     use std::vector;
-    use axelar::approved_call::ApprovedCall;
 
     use sui::bcs;
 
     use axelar::utils::to_sui_signed;
-    use axelar::validators;
-    use axelar::validators::{AxelarValidators, validate_proof};
+    use axelar::channel::{Self, Channel, ApprovedCall};
+    use axelar::validators::{Self, AxelarValidators, validate_proof};
 
     /// For when approval signatures failed verification.
     const ESignatureInvalid: u64 = 1;
@@ -53,6 +51,14 @@ module axelar::gateway {
     const SELECTOR_APPROVE_CONTRACT_CALL: vector<u8> = b"approveContractCall";
     const SELECTOR_TRANSFER_OPERATORSHIP: vector<u8> = b"transferOperatorship";
 
+    /// Emitted when a new message is sent from the SUI network.
+    struct ContractCall has copy, drop {
+        source: vector<u8>,
+        destination: vector<u8>,
+        destination_address: vector<u8>,
+        payload: vector<u8>,
+    }
+
     /// The main entrypoint for the external approval processing.
     /// Parses data and attaches call approvals to the Axelar object to be
     /// later picked up and consumed by their corresponding Channel.
@@ -61,7 +67,7 @@ module axelar::gateway {
     /// supported by the current implementation of the protocol.
     ///
     /// Input data must be serialized with BCS (see specification here: https://github.com/diem/bcs).
-    public entry fun process_commands(
+    entry fun process_commands(
         validators: &mut AxelarValidators,
         input: vector<u8>
     ) {
@@ -130,6 +136,8 @@ module axelar::gateway {
         };
     }
 
+    /// Creates a new `ApprovedCall` object which must be delivered to the
+    /// matching `Channel`.
     public fun take_approved_call(
         axelar: &mut AxelarValidators,
         cmd_id: address,
@@ -138,7 +146,28 @@ module axelar::gateway {
         target_id: address,
         payload: vector<u8>
     ): ApprovedCall {
-        validators::take_approved_call(axelar, cmd_id, source_chain, source_address, target_id, payload)
+        validators::take_approved_call(
+            axelar, cmd_id, source_chain, source_address, target_id, payload
+        )
+    }
+
+    /// Call a contract on the destination chain by sending an event from an
+    /// authorized Channel. Currently we require Channel to be mutable to prevent
+    /// frozen object scenario or when someone exposes the Channel to the outer
+    /// world. However, this restriction may be lifted in the future, and having
+    /// an immutable reference should be enough.
+    public fun call_contract<T: store>(
+        channel: &mut Channel<T>,
+        destination: vector<u8>,
+        destination_address: vector<u8>,
+        payload: vector<u8>
+    ) {
+        sui::event::emit(ContractCall {
+            source: channel::source_id(channel),
+            destination,
+            destination_address,
+            payload,
+        })
     }
 
     #[test_only]

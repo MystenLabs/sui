@@ -2,15 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module axelar::channel {
-    use sui::linked_table;
-    use sui::linked_table::LinkedTable;
-    use sui::bcs;
-    use sui::object;
-    use sui::object::UID;
+    use std::string::String;
+    use sui::linked_table::{Self, LinkedTable};
+    use sui::object::{Self, UID};
     use sui::tx_context::TxContext;
 
-    use axelar::approved_call;
-    use axelar::approved_call::ApprovedCall;
+    friend axelar::validators;
 
     /// Generic target for the messaging system.
     ///
@@ -48,6 +45,13 @@ module axelar::channel {
 
     const MAX_PROCESSED_APPROVAL_HISTORY: u64 = 100;
 
+    /// The Channel object. Acts as a destination for the messages sent through
+    /// the bridge. The `target_id` is compared against the `id` of the `Channel`
+    /// during the message consumption.
+    ///
+    /// The `T` parameter allows wrapping a Capability or a piece of data into
+    /// the channel to be used when the message is consumed (eg authorize a
+    /// `mint` call using a stored `AdminCap`).
     struct Channel<T: store> has store {
         /// Unique ID of the target object which allows message targeting
         /// by comparing against `id_bytes`.
@@ -63,11 +67,19 @@ module axelar::channel {
         data: T
     }
 
-    /// Emitted when a new message is sent from the SUI network.
-    struct ContractCall has copy, drop {
-        source: vector<u8>,
-        destination: vector<u8>,
-        destination_address: vector<u8>,
+    /// A HotPotato - call received from the Gateway. Must be delivered to the
+    /// matching Channel, otherwise the TX fails.
+    struct ApprovedCall {
+        /// ID of the call approval, guaranteed to be unique by Axelar.
+        cmd_id: address,
+        /// The target Channel's UID.
+        target_id: address,
+        /// Name of the chain where this approval came from.
+        source_chain: String,
+        /// Address of the source chain (vector used for compatibility).
+        /// UTF8 / ASCII encoded string (for 0x0... eth address gonna be 42 bytes with 0x)
+        source_address: String,
+        /// Payload of the command.
         payload: vector<u8>,
     }
 
@@ -95,30 +107,41 @@ module axelar::channel {
         data
     }
 
-    /// Send a message to another chain. Supply the event data and the
-    /// destination chain.
-    ///
-    /// Event data is collected from the Channel (eg ID of the source and
-    /// source_chain is a constant).
-    public fun call_contract<T: store>(
-        t: &mut Channel<T>,
-        destination: vector<u8>,
-        destination_address: vector<u8>,
-        payload: vector<u8>
-    ) {
-        sui::event::emit(ContractCall {
-            source: bcs::to_bytes(&t.id),
-            destination,
-            destination_address,
-            payload,
-        })
+    /// Create a new `ApprovedCall` object to be sent to another chain. Is called
+    /// by the gateway when a message is "picked up" by the relayer.
+    public(friend) fun create_approved_call(
+        cmd_id: address,
+        source_chain: String,
+        source_address: String,
+        target_id: address,
+        payload: vector<u8>,
+    ): ApprovedCall {
+        ApprovedCall {
+            cmd_id,
+            source_chain,
+            source_address,
+            target_id,
+            payload
+        }
     }
 
     /// Consume a approved call hot potato object sent to this `Channel` from another chain.
     /// For Capability-locking, a mutable reference to the `Channel.data` field is returned.
-    public fun consume_approved_call<T: store>(t: &mut Channel<T>, approved_call: ApprovedCall): &mut T {
-        let cmd_id = approved_call::cmd_id(&approved_call);
-        let target_id = approved_call::target_id(&approved_call);
+    ///
+    /// Returns a mutable reference to the locked T, the `source_chain`, the `source_address`
+    /// and the `payload` to be used by the consuming application.
+    public fun consume_approved_call<T: store>(
+        t: &mut Channel<T>,
+        approved_call: ApprovedCall
+    ): (&mut T, String, String, vector<u8>) {
+        let ApprovedCall {
+            cmd_id,
+            target_id,
+            source_chain,
+            source_address,
+            payload,
+        } = approved_call;
+
         // Check if the message has already been processed.
         assert!(!linked_table::contains(&t.processed_call_approvals, cmd_id), EDuplicateMessage);
         // Check if the message is sent to the correct destination.
@@ -129,7 +152,29 @@ module axelar::channel {
             linked_table::pop_front(&mut t.processed_call_approvals);
         };
 
-        approved_call::consume(approved_call);
-        &mut t.data
+        (
+            &mut t.data,
+            source_chain,
+            source_address,
+            payload,
+        )
+    }
+
+    /// Get the bytes of the Channel address
+    public fun source_id<T: store>(self: &Channel<T>): vector<u8> {
+        sui::bcs::to_bytes(&self.id)
+    }
+
+    // === Testing ===
+
+    #[test_only]
+    public fun burn_approved_call_for_testing(call: ApprovedCall) {
+        let ApprovedCall {
+            cmd_id: _,
+            target_id: _,
+            source_chain: _,
+            source_address: _,
+            payload: _,
+        } = call;
     }
 }
