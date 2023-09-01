@@ -1795,6 +1795,7 @@ impl PgIndexerStore {
         transactional_blocking!(&self.blocking_cp, |conn| {
             diesel::insert_into(checkpoint_metrics::dsl::checkpoint_metrics)
                 .values(checkpoint_metrics)
+                .on_conflict_do_nothing()
                 .execute(conn)
         })
         .context("Failed persisting checkpoint metrics to PostgresDB")?;
