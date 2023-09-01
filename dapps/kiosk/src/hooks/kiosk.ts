@@ -57,7 +57,6 @@ export function useOwnedKiosk(address: string | undefined) {
  * A hook to fetch a kiosk (items, listings, etc) by its id.
  */
 export function useKiosk(kioskId: string | undefined | null) {
-	const provider = useRpc();
 	const kioskClient = useKioskClient();
 
 	return useQuery({
@@ -70,17 +69,12 @@ export function useKiosk(kioskId: string | undefined | null) {
 			const res = await kioskClient.getKiosk(kioskId, {
 				withKioskFields: true,
 				withListingPrices: true,
-			});
-
-			// get the items from rpc.
-			const items = await provider.multiGetObjects({
-				ids: res.itemIds,
-				options: { showDisplay: true, showType: true },
+				withObjects: true,
 			});
 
 			return {
 				kioskData: res,
-				items,
+				items: res.items.map((x) => ({ data: x.data })),
 			};
 		},
 		retry: false,

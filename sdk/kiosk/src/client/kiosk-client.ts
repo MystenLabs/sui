@@ -111,8 +111,11 @@ export class KioskClient {
 	 * @returns An Object containing all the `kioskOwnerCap` objects as well as the kioskIds.
 	 */
 	async getOwnedKiosks(address: string): Promise<OwnedKiosks> {
+		let personalPackageId = personalKioskAddress[this.network];
 		return getOwnedKiosks(this.client, address, {
-			personalKioskType: `${personalKioskAddress[this.network]}::personal_kiosk::PersonalKioskCap`,
+			personalKioskType: personalPackageId
+				? `${personalPackageId}::personal_kiosk::PersonalKioskCap`
+				: '',
 		});
 	}
 

@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { PaginatedObjectsResponse } from '@mysten/sui.js/client';
+import {
+	PaginatedObjectsResponse,
+	SuiObjectData,
+	SuiObjectDataOptions,
+} from '@mysten/sui.js/client';
 import { TransactionArgument } from '@mysten/sui.js/transactions';
 import { ObjectArgument } from '.';
 
@@ -98,6 +102,10 @@ export type KioskItem = {
 	isLocked: boolean;
 	/** Optional listing */
 	listing?: KioskListing;
+	/** The ID of the kiosk the item is placed in */
+	kioskId: string;
+	/** Optional Kiosk Data */
+	data?: SuiObjectData;
 };
 /**
  * Aggregated data from the Kiosk.
@@ -119,6 +127,8 @@ export type PagedKioskData = {
 export type FetchKioskOptions = {
 	withKioskFields?: boolean;
 	withListingPrices?: boolean;
+	withObjects?: boolean;
+	objectOptions?: SuiObjectDataOptions;
 };
 
 export type OwnedKiosks = {

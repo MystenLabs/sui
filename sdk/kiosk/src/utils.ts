@@ -2,12 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SharedObjectRef } from '@mysten/sui.js/bcs';
-import { SuiObjectRef, SuiObjectResponse } from '@mysten/sui.js/client';
+import {
+	SuiObjectData,
+	SuiObjectDataOptions,
+	SuiObjectRef,
+	SuiObjectResponse,
+} from '@mysten/sui.js/client';
 import { TransactionBlock, TransactionArgument } from '@mysten/sui.js/transactions';
 import { type DynamicFieldInfo } from '@mysten/sui.js/client';
 import { bcs } from './bcs';
 import { KIOSK_TYPE, Kiosk, KioskData, KioskListing } from './types';
 import { SuiClient, PaginationArguments } from '@mysten/sui.js/client';
+
+const DEFAULT_QUERY_LIMIT = 50;
 
 /**
  * Convert any valid input into a TransactionArgument.
@@ -58,6 +65,7 @@ export function extractKioskData(
 	data: DynamicFieldInfo[],
 	listings: KioskListing[],
 	lockedItemIds: string[],
+	kioskId: string,
 ): KioskData {
 	return data.reduce<KioskData>(
 		(acc: KioskData, val: DynamicFieldInfo) => {
@@ -70,6 +78,7 @@ export function extractKioskData(
 						objectId: val.objectId,
 						type: val.objectType,
 						isLocked: false,
+						kioskId,
 					});
 					break;
 				case 'kiosk::Listing':
@@ -130,6 +139,23 @@ export function attachListingsAndPrices(
 }
 
 /**
+ * A helper that attaches the listing prices to kiosk listings.
+ */
+export function attachObjects(kioskData: KioskData, objects: SuiObjectData[]) {
+	const mapping = objects.reduce<Record<string, SuiObjectData>>(
+		(acc: Record<string, SuiObjectData>, obj) => {
+			acc[obj.objectId] = obj;
+			return acc;
+		},
+		{},
+	);
+
+	kioskData.items.forEach((item) => {
+		item.data = mapping[item.objectId] || undefined;
+	});
+}
+
+/**
  * A Helper to attach locked state to items in Kiosk Data.
  */
 export function attachLockedItems(kioskData: KioskData, lockedItemIds: string[]) {
@@ -174,6 +200,33 @@ export async function getAllDynamicFields(
 	}
 
 	return data;
+}
+
+/**
+ * A helper to fetch all objects that works with pagination.
+ * It will fetch all objects in the array, and limit it to 50/request.
+ * Requests are sent using `Promise.all`.
+ */
+export async function getAllObjects(
+	client: SuiClient,
+	ids: string[],
+	options: SuiObjectDataOptions,
+	limit: number = DEFAULT_QUERY_LIMIT,
+) {
+	let chunks = Array.from({ length: Math.ceil(ids.length / limit) }, (_, index) =>
+		ids.slice(index * limit, index * limit + limit),
+	);
+
+	let results = await Promise.all(
+		chunks.map((chunk) => {
+			return client.multiGetObjects({
+				ids: chunk,
+				options,
+			});
+		}),
+	);
+
+	return results.flat();
 }
 
 /**

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { KIOSK_ITEM, KioskItem, fetchKiosk, getOwnedKiosks } from '@mysten/kiosk';
+import { KIOSK_ITEM, KioskClient, KioskItem, Network } from '@mysten/kiosk';
 import { useQuery } from '@tanstack/react-query';
 import { ORIGINBYTE_KIOSK_OWNER_TOKEN, getKioskIdFromOwnerCap } from '../utils/kiosk';
 import { SuiClient, SuiObjectResponse } from '@mysten/sui.js/src/client';
@@ -74,22 +74,24 @@ async function getOriginByteKioskContents(address: string, client: SuiClient) {
 }
 
 async function getSuiKioskContents(address: string, client: SuiClient) {
-	const ownedKiosks = await getOwnedKiosks(client, address!);
+	const kioskClient = new KioskClient({
+		client,
+		// TODO: We need to find a way to derive the correct network. Maybe from `SuiClient`?
+		// Otherwise, we won't be able to discover `Personal Kiosks` on testnet.
+		network: Network.MAINNET,
+	});
+
+	const ownedKiosks = await kioskClient.getOwnedKiosks(address);
 
 	const contents = await Promise.all(
-		ownedKiosks.kioskIds.map(async (id) => {
-			const kiosk = await fetchKiosk(client, id, { limit: 1000 }, {});
-			const contents = await client.multiGetObjects({
-				ids: kiosk.data.itemIds,
-				options: { showDisplay: true, showContent: true },
-			});
-			const items = contents.map((object) => {
-				const kioskData = kiosk.data.items.find((item) => item.objectId === object.data?.objectId);
-				return { ...object, ...kioskData, kioskId: id };
+		ownedKiosks.kioskIds.map(async (id: string) => {
+			const kiosk = await kioskClient.getKiosk(id, {
+				withObjects: true,
+				objectOptions: { showDisplay: true, showContent: true },
 			});
 			return {
-				itemIds: kiosk.data.itemIds,
-				items,
+				itemIds: kiosk.itemIds,
+				items: kiosk.items,
 				kioskId: id,
 				type: KioskTypes.SUI,
 				ownerCap: ownedKiosks.kioskOwnerCaps.find((k) => k.kioskId === id)?.objectId,
