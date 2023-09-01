@@ -128,5 +128,25 @@ export async function accountSourcesHandleUIMessage(msg: Message, uiConnection: 
 			return true;
 		}
 	}
+	if (isMethodPayload(payload, 'getAccountSourceEntropy')) {
+		const accountSource = await getAccountSourceByID(payload.args.accountSourceID);
+		if (!accountSource) {
+			throw new Error('Account source not found');
+		}
+		if (!(accountSource instanceof MnemonicAccountSource)) {
+			throw new Error('Invalid account source type');
+		}
+		await uiConnection.send(
+			createMessage<MethodPayload<'getAccountSourceEntropyResponse'>>(
+				{
+					type: 'method-payload',
+					method: 'getAccountSourceEntropyResponse',
+					args: { entropy: await accountSource.getEntropy() },
+				},
+				msg.id,
+			),
+		);
+		return true;
+	}
 	return false;
 }

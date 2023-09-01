@@ -13,6 +13,7 @@ export type CreateType = NonNullable<AccountsFormValues>['type'];
 function validateAccountFormValues<T extends CreateType>(
 	createType: T,
 	values: AccountsFormValues,
+	password?: string,
 ): values is Extract<AccountsFormValues, { type: T }> {
 	if (!values) {
 		throw new Error('Missing account data values');
@@ -20,7 +21,7 @@ function validateAccountFormValues<T extends CreateType>(
 	if (values.type !== createType) {
 		throw new Error('Account data values type mismatch');
 	}
-	if (values.type !== 'zk' && !values.password) {
+	if (values.type !== 'zk' && !password) {
 		throw new Error('Missing password');
 	}
 	return true;
@@ -29,21 +30,19 @@ function validateAccountFormValues<T extends CreateType>(
 export function useCreateAccountsMutation() {
 	const backgroundClient = useBackgroundClient();
 	const [accountsFormValues, setAccountFormValues] = useAccountsFormContext();
-	console.log(accountsFormValues);
 	return useMutation({
 		mutationKey: ['create accounts'],
-		mutationFn: async ({ type }: { type: CreateType }) => {
+		mutationFn: async ({ type, password }: { type: CreateType; password?: string }) => {
 			let createdAccounts;
 			if (type === 'zk' && validateAccountFormValues(type, accountsFormValues)) {
 				createdAccounts = await backgroundClient.createAccounts(accountsFormValues);
 			} else if (
 				(type === 'new-mnemonic' || type === 'import-mnemonic') &&
-				validateAccountFormValues(type, accountsFormValues)
+				validateAccountFormValues(type, accountsFormValues, password)
 			) {
-				// validateAccountFormValues checks the password
-				const password = accountsFormValues.password!;
 				const accountSource = await backgroundClient.createMnemonicAccountSource({
-					password,
+					// validateAccountFormValues checks the password
+					password: password!,
 					entropy: 'entropy' in accountsFormValues ? accountsFormValues.entropy : undefined,
 				});
 				await backgroundClient.unlockAccountSourceOrAccount({
@@ -56,10 +55,8 @@ export function useCreateAccountsMutation() {
 				});
 			} else if (
 				type === 'mnemonic-derived' &&
-				validateAccountFormValues(type, accountsFormValues)
+				validateAccountFormValues(type, accountsFormValues, password)
 			) {
-				// validateAccountFormValues checks the password
-				const password = accountsFormValues.password!;
 				await backgroundClient.unlockAccountSourceOrAccount({
 					password,
 					id: accountsFormValues.sourceID,
@@ -76,7 +73,7 @@ export function useCreateAccountsMutation() {
 				for (const aCreatedAccount of createdAccounts) {
 					await backgroundClient.unlockAccountSourceOrAccount({
 						id: aCreatedAccount.id,
-						password: 'password' in accountsFormValues ? accountsFormValues.password : undefined,
+						password,
 					});
 				}
 			}

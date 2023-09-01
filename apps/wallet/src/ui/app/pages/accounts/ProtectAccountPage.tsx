@@ -5,7 +5,6 @@ import { useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
-import { useAccountsFormContext } from '../../components/accounts/AccountsFormContext';
 import { ProtectAccountForm } from '../../components/accounts/ProtectAccountForm';
 import { useAccounts } from '../../hooks/useAccounts';
 import { type CreateType, useCreateAccountsMutation } from '../../hooks/useCreateAccountMutation';
@@ -33,7 +32,6 @@ export function ProtectAccountPage() {
 	const navigate = useNavigate();
 	const { data: accounts } = useAccounts();
 	const createMutation = useCreateAccountsMutation();
-	const [accountsFormValues, setAccountFormValues] = useAccountsFormContext();
 	useEffect(() => {
 		// don't show this page if other password accounts exist (we should show the verify password instead)
 		if (
@@ -63,23 +61,26 @@ export function ProtectAccountPage() {
 					cancelButtonText="Back"
 					submitButtonText="Create Wallet"
 					onSubmit={async (formValues) => {
-						if (accountsFormValues && accountsFormValues.type !== 'zk') {
-							setAccountFormValues({ ...accountsFormValues, password: formValues.password.input });
-							try {
-								const createdAccounts = await createMutation.mutateAsync({ type: accountType });
-								if (
-									accountType === 'new-mnemonic' &&
-									isMnemonicSerializedUiAccount(createdAccounts[0])
-								) {
-									navigate(`/accounts/backup/${createdAccounts[0].sourceID}`, { replace: true });
-								} else {
-									navigate('/tokens', { replace: true });
-								}
-							} catch (e) {
-								toast.error((e as Error).message ?? 'Failed to create account');
+						try {
+							const createdAccounts = await createMutation.mutateAsync({
+								type: accountType,
+								password: formValues.password.input,
+							});
+							if (
+								accountType === 'new-mnemonic' &&
+								isMnemonicSerializedUiAccount(createdAccounts[0])
+							) {
+								navigate(`/accounts/backup/${createdAccounts[0].sourceID}`, {
+									replace: true,
+									state: {
+										onboarding: true,
+									},
+								});
+							} else {
+								navigate('/tokens', { replace: true });
 							}
-						} else {
-							throw new Error('Invalid account data');
+						} catch (e) {
+							toast.error((e as Error).message ?? 'Failed to create account');
 						}
 					}}
 				/>

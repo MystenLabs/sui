@@ -14,16 +14,14 @@ import { type ZkProvider } from '_src/background/accounts/zk/providers';
 
 export type AccountsFormValues =
 	| { type: 'zk'; provider: ZkProvider }
-	| ((
-			| { type: 'new-mnemonic' }
-			| { type: 'import-mnemonic'; entropy: string }
-			| { type: 'mnemonic-derived'; sourceID: string }
-			| { type: 'imported'; keyPair: ExportedKeypair }
-			| {
-					type: 'ledger';
-					accounts: { publicKey: string; derivationPath: string; address: string }[];
-			  }
-	  ) & { password?: string }) // TODO: qredo?
+	| { type: 'new-mnemonic' }
+	| { type: 'import-mnemonic'; entropy: string }
+	| { type: 'mnemonic-derived'; sourceID: string }
+	| { type: 'imported'; keyPair: ExportedKeypair }
+	| {
+			type: 'ledger';
+			accounts: { publicKey: string; derivationPath: string; address: string }[];
+	  }
 	| null;
 
 type AccountsFormContextType = [AccountsFormValues, Dispatch<SetStateAction<AccountsFormValues>>];

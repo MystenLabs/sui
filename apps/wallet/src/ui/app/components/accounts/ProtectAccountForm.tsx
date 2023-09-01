@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useZodForm } from '@mysten/core';
+import { useEffect } from 'react';
 import { type SubmitHandler } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
@@ -78,10 +79,21 @@ export function ProtectAccountForm({
 		},
 	});
 	const {
+		watch,
 		register,
 		formState: { isSubmitting, isValid },
+		trigger,
+		getValues,
 	} = form;
 	const navigate = useNavigate();
+	useEffect(() => {
+		const { unsubscribe } = watch((_, { name, type }) => {
+			if (name === 'password.input' && type === 'change' && getValues('password.confirmation')) {
+				trigger('password.confirmation');
+			}
+		});
+		return unsubscribe;
+	}, [watch, trigger, getValues]);
 	return (
 		<Form className="flex flex-col gap-6 h-full" form={form} onSubmit={onSubmit}>
 			<TextField
@@ -129,11 +141,6 @@ export function ProtectAccountForm({
 					) : null}
 					<Button
 						type="submit"
-						/* 
-							it seems refine for the password confirmation only triggers after all fields are complete or on submit
-							but after that seem to show the error fine
-							so allow users to submit once and then do it based on the form validation
-						*/
 						disabled={isSubmitting || !isValid}
 						variant="primary"
 						size="tall"
