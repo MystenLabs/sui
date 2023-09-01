@@ -16,6 +16,8 @@ import { Secp256k1PublicKey } from '../keypairs/secp256k1/publickey.js';
 import { Secp256r1PublicKey } from '../keypairs/secp256r1/publickey.js';
 import { builder } from '../builder/bcs.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
+import { MAX_SIGNER_IN_MULTISIG, MIN_SIGNER_IN_MULTISIG } from '../multisig/publickey.js';
+export { MAX_SIGNER_IN_MULTISIG, MIN_SIGNER_IN_MULTISIG } from '../multisig/publickey.js';
 
 export type PubkeyWeightPair = {
 	pubKey: PublicKey;
@@ -48,8 +50,6 @@ export type MultiSig = {
 	multisig_pk: MultiSigPublicKey;
 };
 
-export const MAX_SIGNER_IN_MULTISIG = 10;
-
 /// Derives a multisig address from a list of pk and weights and threshold.
 // It is the 32-byte Blake2b hash of the serializd bytes of `flag_MultiSig || threshold || flag_1 || pk_1 || weight_1
 /// || ... || flag_n || pk_n || weight_n`
@@ -57,6 +57,11 @@ export function toMultiSigAddress(pks: PubkeyWeightPair[], threshold: number): s
 	if (pks.length > MAX_SIGNER_IN_MULTISIG) {
 		throw new Error(`Max number of signers in a multisig is ${MAX_SIGNER_IN_MULTISIG}`);
 	}
+
+	if (pks.length < MIN_SIGNER_IN_MULTISIG) {
+		throw new Error(`Min number of signers in a multisig is ${MIN_SIGNER_IN_MULTISIG}`);
+	}
+
 	// max length = 1 flag byte + (max pk size + max weight size (u8)) * max signer size + 2 threshold bytes (u16)
 	let maxLength = 1 + (64 + 1) * MAX_SIGNER_IN_MULTISIG + 2;
 	let tmp = new Uint8Array(maxLength);
@@ -64,12 +69,28 @@ export function toMultiSigAddress(pks: PubkeyWeightPair[], threshold: number): s
 
 	let arr = to_uint8array(threshold);
 	tmp.set(arr, 1);
+	// The initial value 3 ensures that following data will be after the flag byte and threshold bytes
 	let i = 3;
+	let totalWeight = 0;
+	const seenPubKeys = new Set<PublicKey>();
+
 	for (const pk of pks) {
+		if (pk.weight < 1 || pk.weight > 255) {
+			throw new Error(`Invalid weight`);
+		}
+		if (seenPubKeys.has(pk.pubKey)) {
+			throw new Error(`Multisig does not support duplicate public keys`);
+		}
+		seenPubKeys.add(pk.pubKey);
+
+		totalWeight += pk.weight;
 		tmp.set([pk.pubKey.flag()], i);
 		tmp.set(pk.pubKey.toRawBytes(), i + 1);
 		tmp.set([pk.weight], i + 1 + pk.pubKey.toRawBytes().length);
 		i += pk.pubKey.toRawBytes().length + 2;
+	}
+	if (threshold > totalWeight) {
+		throw new Error(`Unreachable threshold`);
 	}
 	return normalizeSuiAddress(bytesToHex(blake2b(tmp.slice(0, i), { dkLen: 32 })));
 }
@@ -83,6 +104,10 @@ export function combinePartialSigs(
 	pks: PubkeyWeightPair[],
 	threshold: number,
 ): SerializedSignature {
+	if (sigs.length > MAX_SIGNER_IN_MULTISIG) {
+		throw new Error(`Max number of signatures in a multisig is ${MAX_SIGNER_IN_MULTISIG}`);
+	}
+
 	let multisig_pk: MultiSigPublicKey = {
 		pk_map: pks.map((x) => toPkWeightPair(x)),
 		threshold: threshold,
@@ -187,7 +212,7 @@ function toPkWeightPair(pair: PubkeyWeightPair): PubkeyEnumWeightPair {
 
 /// Convert u16 to Uint8Array of length 2 in little endian.
 function to_uint8array(threshold: number): Uint8Array {
-	if (threshold < 0 || threshold > 65535) {
+	if (threshold < 1 || threshold > 65535) {
 		throw new Error('Invalid threshold');
 	}
 	let arr = new Uint8Array(2);
