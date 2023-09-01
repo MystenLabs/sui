@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type SuiObjectResponse } from '@mysten/sui.js/client';
+import { formatAddress } from '@mysten/sui.js/utils';
 import { Placeholder, Text } from '@mysten/ui';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode } from 'react';
 
+import { OwnedObjectsText } from '~/components/OwnedObjects/OwnedObjectsText';
 import { useResolveVideo } from '~/hooks/useResolveVideo';
 import { ObjectLink } from '~/ui/InternalLink';
 import { ObjectVideoImage } from '~/ui/ObjectVideoImage';
@@ -12,40 +14,42 @@ import { parseObjectType } from '~/utils/objectUtils';
 import { trimStdLibPrefix } from '~/utils/stringUtils';
 
 function ListViewItem({
-	asset,
-	type,
+	assetCell,
+	typeCell,
+	objectIdCell,
 	objectId,
 	loading,
-	onClick,
 }: {
-	asset?: ReactNode;
-	type?: ReactNode;
-	objectId?: ReactNode;
+	assetCell?: ReactNode;
+	typeCell?: ReactNode;
+	objectIdCell?: ReactNode;
+	objectId: string;
 	loading?: boolean;
-	onClick?: () => void;
 }) {
-	return (
-		<div
-			onClick={onClick}
-			className="group mb-2 flex items-center justify-between rounded-lg p-1 hover:bg-hero/5"
-		>
+	const listViewItemContent = (
+		<div className="group mb-2 flex items-center justify-between rounded-lg p-1 hover:bg-hero/5">
 			<div className="flex max-w-[66%] basis-8/12 items-center gap-3 md:max-w-[25%] md:basis-3/12 md:pr-5">
-				{loading ? <Placeholder rounded="lg" width="540px" height="20px" /> : asset}
+				{loading ? <Placeholder rounded="lg" width="540px" height="20px" /> : assetCell}
 			</div>
 
 			<div className="hidden max-w-[50%] basis-6/12 pr-5 md:flex">
-				{loading ? <Placeholder rounded="lg" width="540px" height="20px" /> : type}
+				{loading ? <Placeholder rounded="lg" width="540px" height="20px" /> : typeCell}
 			</div>
 
 			<div className="flex max-w-[34%] basis-3/12">
-				{loading ? <Placeholder rounded="lg" width="540px" height="20px" /> : objectId}
+				{loading ? <Placeholder rounded="lg" width="540px" height="20px" /> : objectIdCell}
 			</div>
 		</div>
 	);
+
+	if (loading) {
+		return listViewItemContent;
+	}
+
+	return <ObjectLink objectId={objectId} display="block" label={listViewItemContent} />;
 }
 
 function ListViewItemContainer({ obj }: { obj: SuiObjectResponse }) {
-	const [open, setOpen] = useState(false);
 	const video = useResolveVideo(obj);
 	const displayMeta = obj.data?.display?.data;
 	const name = displayMeta?.name ?? displayMeta?.description ?? '';
@@ -54,21 +58,21 @@ function ListViewItemContainer({ obj }: { obj: SuiObjectResponse }) {
 
 	return (
 		<ListViewItem
-			asset={
+			objectId={objectId!}
+			assetCell={
 				<>
 					<ObjectVideoImage
+						disablePreview
 						title={name}
 						subtitle={type}
 						src={displayMeta?.image_url || ''}
 						video={video}
 						variant="xs"
-						open={open}
-						setOpen={setOpen}
 					/>
 					<div className="flex flex-col overflow-hidden">
-						<Text variant="subtitle/semibold" color="steel-darker" truncate>
+						<OwnedObjectsText color="steel-darker" font="semibold">
 							{name || '--'}
-						</Text>
+						</OwnedObjectsText>
 						<div className="block md:hidden">
 							<Text variant="pSubtitle/normal" color="steel-dark" truncate>
 								{type}
@@ -77,15 +81,15 @@ function ListViewItemContainer({ obj }: { obj: SuiObjectResponse }) {
 					</div>
 				</>
 			}
-			type={
-				<Text variant="bodySmall/medium" color="steel-dark" truncate>
+			typeCell={
+				<OwnedObjectsText color="steel-dark" font="normal">
 					{type}
-				</Text>
+				</OwnedObjectsText>
 			}
-			objectId={
-				<Text variant="bodySmall/medium" color="steel-dark" truncate>
-					{objectId && <ObjectLink objectId={objectId} />}
-				</Text>
+			objectIdCell={
+				<OwnedObjectsText color="steel-dark" font="medium">
+					{formatAddress(objectId!)}
+				</OwnedObjectsText>
 			}
 		/>
 	);
@@ -116,7 +120,10 @@ export function ListView({ data, loading }: ListViewProps) {
 					</Text>
 				</div>
 			</div>
-			{loading && new Array(10).fill(0).map((_, index) => <ListViewItem key={index} loading />)}
+			{loading &&
+				new Array(10)
+					.fill(0)
+					.map((_, index) => <ListViewItem key={index} objectId={String(index)} loading />)}
 
 			<div className="flex h-full w-full flex-col overflow-auto">
 				{data?.map((obj) => {

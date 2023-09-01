@@ -157,6 +157,7 @@ export { default as ThumbUpFill24 } from './ThumbUpFill24';
 export { default as ThumbUpFill32 } from './ThumbUpFill32';
 export { default as ThumbUpStroke24 } from './ThumbUpStroke24';
 export { default as ThumbUpStroke32 } from './ThumbUpStroke32';
+export { default as ThumbnailsOnly16 } from './ThumbnailsOnly16';
 export { default as Tokens32 } from './Tokens32';
 export { default as TransferObject16 } from './TransferObject16';
 export { default as TransferSui16 } from './TransferSui16';
