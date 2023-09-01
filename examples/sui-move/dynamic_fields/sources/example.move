@@ -19,6 +19,17 @@ module dynamic_fields::example {
         ofield::add(&mut parent.id, b"child", child);
     }
 
+    /// If `child` is a dynamic field of some `Parent`, then this
+    /// function cannot be called directly, because `child` must be
+    /// accessed via its parent.
+    ///
+    /// Use this function as a transaction entry-point if `child` is
+    /// address-owned or shared, and use `mutate_child_via_parent` if
+    /// it is a dynamic field of a `Parent`.
+    ///
+    /// This restriction only applies on transaction entry.  Within
+    /// Move, if you have borrowed a `Child` that is a dynamic field
+    /// of a `Parent`, it is possible to call `mutate_child` on it.
     public fun mutate_child(child: &mut Child) {
         child.count = child.count + 1;
     }
