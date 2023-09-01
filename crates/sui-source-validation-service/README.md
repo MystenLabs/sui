@@ -1,8 +1,8 @@
 # Sui Source Validation Service
 
-This document describes the Sui Source Validation Service. It is engineering documentation primarily for MystenLabs engineers who may want to build, extend, configure, or understand the service.
+This document describes the Sui Source Validation Service. It is engineering documentation primarily for Mysten Labs engineers who may want to build, extend, configure, or understand the service.
 
-The Source Validation Service is a server that returns Move source code associated with on-chain Move bytecode. It fetches and builds Move source code for for a repository, and then verifies that the built artifact matches the on-chain bytecode. 
+The Source Validation Service is a server that returns Move source code associated with on-chain Move bytecode. It fetches and builds Move source code for a repository, and then verifies that the built artifact matches the on-chain bytecode. 
 
 The default configuration limits scope to Sui framework packages in `crates/sui-framework/packages`:
 
@@ -16,14 +16,10 @@ See examples below for requesting source from the server.
 ## Build and Run
 
 ```
-cargo build --release --bin sui-source-validation-service
+cargo run --release --bin sui-source-validation-service crates/sui-source-validation-service/config.toml 
 ```
 
-```
-cargo run --bin sui-source-validation-service crates/sui-source-validation-service/config.toml 
-```
-
-See [`config.toml` in this directory](./sui-source-validation-service/config.toml).
+See [`config.toml` in this directory](config.toml).
 
 ## Configuring
 
@@ -48,7 +44,7 @@ It specifies the `repository` and `branch` for one or more move `packages`. `net
 
 A package `path` specifies the path of the package in the repository (where the `Move.toml` is).
 The `watch` field is optional, and specifies the address of an object that the server should monitor for on-chain changes if a package is upgraded. For example, Sui framework packages mutate their on-chain address when upgraded. 
-Non-framework packages may mutate an `UpgradeCap` (in which case, `watch` should be set to the `UpgradeCap` Object ID).
+Non-framework packages may mutate an `UpgradeCap` or an object wrapping the `UpgradeCap` (in which case, `watch` should be set to the `UpgradeCap` object ID or wrapped object ID respectively).
 
 Currently the `watch` field intends only to invalidate and evict the source code if on-chain code changes via upgrades. Due to current limitations, it does not automatically attempt to find and reprocess the latest source code. To reprocess the latest source code, restart the server, which will download and verify the source code afresh.
 
@@ -70,7 +66,7 @@ The URL parameters `address`, `module`, and `network` are required.
 
 Although not required, it is good practice to set the `X-Sui-Source-Validation-Version` header.
 
-## MystenLabs documentation
+## Mysten Labs documentation
 
 Refer to the [Notion doc](https://www.notion.so/mystenlabs/Move-Source-Provider-Service-91ec291be3b94c0f8133e981b76988c0) for internal details.
 
