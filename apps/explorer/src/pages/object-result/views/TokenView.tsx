@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/ui/Tabs';
 
 function FieldsContainer({ children }: { children: ReactNode }) {
 	return (
-		<div className="mt-4 flex flex-col gap-5 overflow-auto rounded-xl border border-gray-45 bg-objectCard py-6 pl-6 pr-4">
+		<div className="mt-4 flex flex-col gap-5 rounded-xl border border-gray-45 bg-objectCard py-6 pl-6 pr-4">
 			{children}
 		</div>
 	);
@@ -64,7 +64,6 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
 					</TabsContent>
 				)}
 			</Tabs>
-			<DynamicFieldsCard id={objectId} />
 
 			<TransactionBlocksForAddress address={objectId} isObject />
 		</div>

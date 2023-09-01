@@ -4,22 +4,15 @@
 import { useGetObject } from '@mysten/core';
 import { useNormalizedMoveStruct } from '@mysten/dapp-kit';
 import { Search24 } from '@mysten/icons';
-import { type SuiMoveNormalizedType } from '@mysten/sui.js/client';
-import { Text, LoadingIndicator, Combobox, ComboboxInput, ComboboxList, Button } from '@mysten/ui';
-import clsx from 'clsx';
-import { type ReactNode, useEffect, useState } from 'react';
+import { Text, LoadingIndicator, Combobox, ComboboxInput, ComboboxList } from '@mysten/ui';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { FieldItem } from './FieldItem';
 import { ScrollToViewCard } from './ScrollToViewCard';
 import { getFieldTypeValue } from './utils';
-import { FieldsCollapsible } from '~/components/Object/FieldsCollapsible';
+import { FieldsCard, FieldCollapsible, FieldsContainer } from '~/components/Object/FieldsUtils';
 import { Banner } from '~/ui/Banner';
-import { Card } from '~/ui/Card';
 import { DescriptionItem } from '~/ui/DescriptionList';
-import { DisclosureBox } from '~/ui/DisclosureBox';
-import { TabHeader } from '~/ui/Tabs';
-import { ListItem, VerticalList } from '~/ui/VerticalList';
-import { CollapsibleSection } from '~/ui/collapsible/CollapsibleSection';
 
 interface ObjectFieldsProps {
 	id: string;
@@ -30,6 +23,10 @@ export function ObjectFieldsCard({ id, setCount }: ObjectFieldsProps) {
 	const { data, isLoading, isError } = useGetObject(id);
 	const [query, setQuery] = useState('');
 	const [activeFieldName, setActiveFieldName] = useState('');
+	const [openFieldsName, setOpenFieldsName] = useState<{
+		[name: string]: boolean;
+	}>({});
+
 	const objectType =
 		data?.data?.type ?? data?.data?.content?.dataType === 'package'
 			? data.data.type
@@ -37,6 +34,7 @@ export function ObjectFieldsCard({ id, setCount }: ObjectFieldsProps) {
 
 	// Get the packageId, moduleName, functionName from the objectType
 	const [packageId, moduleName, functionName] = objectType?.split('<')[0]?.split('::') || [];
+	const containerRef = useRef<HTMLDivElement>(null);
 
 	// Get the normalized struct for the object
 	const {
@@ -57,6 +55,38 @@ export function ObjectFieldsCard({ id, setCount }: ObjectFieldsProps) {
 				}
 			},
 		},
+	);
+
+	useEffect(() => {
+		if (normalizedStruct?.fields) {
+			setOpenFieldsName(
+				normalizedStruct.fields.reduce(
+					(acc, { name }) => {
+						acc[name] = false;
+						return acc;
+					},
+					{} as { [name: string]: boolean },
+				),
+			);
+		}
+	}, [normalizedStruct?.fields]);
+
+	const onSetOpenFieldsName = useCallback(
+		(name: string) => (open: boolean) => {
+			setOpenFieldsName((prev) => ({
+				...prev,
+				[name]: open,
+			}));
+		},
+		[],
+	);
+
+	const onFieldsNameClick = useCallback(
+		(name: string) => {
+			setActiveFieldName(name);
+			onSetOpenFieldsName(name)(true);
+		},
+		[onSetOpenFieldsName],
 	);
 
 	useEffect(() => {
@@ -98,7 +128,7 @@ export function ObjectFieldsCard({ id, setCount }: ObjectFieldsProps) {
 	}
 
 	return (
-		<div className="flex flex-col gap-10 md:flex-row md:flex-nowrap">
+		<FieldsContainer>
 			<div className="w-full md:w-1/5">
 				<Combobox value={query} onValueChange={setQuery}>
 					<div className="flex w-full justify-between rounded-lg border border-white/50 bg-white py-1 pl-3 shadow-dropdownContent">
@@ -118,47 +148,50 @@ export function ObjectFieldsCard({ id, setCount }: ObjectFieldsProps) {
 						}}
 					/>
 				</Combobox>
-				<div className="max-h-600 overflow-y-auto overflow-x-clip py-4.5">
-					<VerticalList>
-						<div className="flex flex-col gap-4 pl-3">
-							{normalizedStruct?.fields?.map(({ name, type }) => (
-								<button
-									type="button"
-									key={name}
-									className="mt-0.5"
-									onClick={() => setActiveFieldName(name)}
-								>
-									<DescriptionItem
-										descriptionJustify="end"
-										labelWidth="md"
-										title={
-											<Text variant="body/medium" color="steel-darker">
-												{name}
-											</Text>
-										}
-									>
-										<Text uppercase variant="subtitle/normal" color="steel" truncate>
-											{getFieldTypeValue(type, objectType).displayName}
-										</Text>
-									</DescriptionItem>
-								</button>
-							))}
-						</div>
-					</VerticalList>
+				<div className="mt-4 flex h-80 flex-col gap-4 overflow-y-auto pl-3 pr-2">
+					{normalizedStruct?.fields?.map(({ name, type }) => (
+						<button
+							type="button"
+							key={name}
+							className="mt-0.5"
+							onClick={() => onFieldsNameClick(name)}
+						>
+							<DescriptionItem
+								descriptionJustify="end"
+								labelWidth="md"
+								title={
+									<Text variant="body/medium" color="steel-darker">
+										{name}
+									</Text>
+								}
+							>
+								<Text uppercase variant="subtitle/normal" color="steel" truncate>
+									{getFieldTypeValue(type, objectType).displayName}
+								</Text>
+							</DescriptionItem>
+						</button>
+					))}
 				</div>
 			</div>
 
-			<div className="h-100 w-full overflow-auto rounded-xl border-transparent bg-transparent px-2">
-				<Card shadow bg="white">
-					{normalizedStruct?.fields.map(({ name, type }) => (
-						<ScrollToViewCard key={name} inView={name === activeFieldName}>
-							<FieldsCollapsible name={name}>
-								<FieldItem value={fieldsData[name]} objectType={objectType} type={type} />
-							</FieldsCollapsible>
-						</ScrollToViewCard>
-					))}
-				</Card>
-			</div>
-		</div>
+			<FieldsCard ref={containerRef}>
+				{normalizedStruct?.fields.map(({ name, type }, index) => (
+					<ScrollToViewCard
+						key={name}
+						inView={name === activeFieldName}
+						containerRef={containerRef}
+					>
+						<FieldCollapsible
+							open={openFieldsName[name]}
+							setOpen={onSetOpenFieldsName(name)}
+							name={name}
+							noMarginBottom={index === normalizedStruct?.fields.length - 1}
+						>
+							<FieldItem value={fieldsData[name]} objectType={objectType} type={type} />
+						</FieldCollapsible>
+					</ScrollToViewCard>
+				))}
+			</FieldsCard>
+		</FieldsContainer>
 	);
 }

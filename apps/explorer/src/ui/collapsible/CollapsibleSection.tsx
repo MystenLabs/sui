@@ -4,7 +4,7 @@ import { ChevronRight12 } from '@mysten/icons';
 import { Text } from '@mysten/ui';
 import * as Collapsible from '@radix-ui/react-collapsible';
 import clsx from 'clsx';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 
 import { Divider } from '~/ui/Divider';
 
@@ -12,28 +12,30 @@ export interface CollapsibleSectionProps {
 	children: ReactNode;
 	defaultOpen?: boolean;
 	title?: string | ReactNode;
-	onOpenChange?: (open: boolean) => void;
+	externalControl?: {
+		open: boolean;
+		setOpen: (open: boolean) => void;
+	};
 }
 
 export function CollapsibleSection({
 	title,
 	defaultOpen = true,
-	onOpenChange,
+	externalControl,
 	children,
 }: CollapsibleSectionProps) {
 	const [open, setOpen] = useState(defaultOpen);
+	const [isOpen, setOpenState] = useMemo(() => {
+		const isOpen = externalControl ? externalControl.open : open;
+		const setOpenState = externalControl ? externalControl.setOpen : setOpen;
 
-	const handleSetOpen = (open: boolean) => {
-		setOpen(open);
-		if (onOpenChange) {
-			onOpenChange(open);
-		}
-	};
+		return [isOpen, setOpenState];
+	}, [externalControl, open]);
 
 	return (
 		<Collapsible.Root
-			open={open}
-			onOpenChange={handleSetOpen}
+			open={isOpen}
+			onOpenChange={setOpenState}
 			className="flex w-full flex-col gap-3"
 		>
 			{title && (
@@ -48,7 +50,7 @@ export function CollapsibleSection({
 						)}
 						<Divider />
 						<ChevronRight12
-							className={clsx('h-4 w-4 cursor-pointer text-gray-45', open && 'rotate-90')}
+							className={clsx('h-4 w-4 cursor-pointer text-gray-45', isOpen && 'rotate-90')}
 						/>
 					</div>
 				</Collapsible.Trigger>

@@ -10,8 +10,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 
 import { useResolveVideo } from '~/hooks/useResolveVideo';
 import { Card } from '~/ui/Card';
-import { DescriptionItem } from '~/ui/DescriptionList';
-import { Divider } from '~/ui/Divider';
+import { DescriptionItem, type DescriptionItemProps } from '~/ui/DescriptionList';
 import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
 import { Link } from '~/ui/Link';
 import { ObjectVideoImage } from '~/ui/ObjectVideoImage';
@@ -46,11 +45,20 @@ function HeroVideoImage({ title, subtitle, src, video, variant }: HeroVideoImage
 	);
 }
 
-function ObjectViewItem({ title, children }: { title: string; children: ReactNode }) {
+function ObjectViewItem({
+	title,
+	align,
+	children,
+}: {
+	title: string;
+	children: ReactNode;
+	align?: DescriptionItemProps['align'];
+}) {
 	return (
 		<DescriptionItem
 			descriptionJustify="end"
 			labelWidth="lg"
+			align={align}
 			title={
 				<Text variant="pBodySmall/medium" color="steel-dark">
 					{title}
@@ -133,22 +141,22 @@ export function ObjectView({ data }: ObjectViewProps) {
 			<div className="flex h-full w-full flex-row gap-6">
 				<div className="flex min-w-[50%] basis-1/2 flex-col gap-4">
 					<ObjectViewCard>
-						<Heading variant="heading4/semibold" color="steel-darker">
-							{name || display?.description}
-						</Heading>
-						{name && display && (
+						{name && (
+							<Heading variant="heading4/semibold" color="steel-darker">
+								{name}
+							</Heading>
+						)}
+						{display?.description && (
 							<Text variant="pBody/normal" color="steel-darker">
 								{display.description}
 							</Text>
 						)}
 
-						<Divider />
-
 						<ObjectViewItem title="Object ID">
 							<ObjectLink objectId={data.data?.objectId!} />
 						</ObjectViewItem>
 
-						<ObjectViewItem title="Type">
+						<ObjectViewItem title="Type" align="start">
 							<ObjectLink
 								label={<div className="text-right">{trimStdLibPrefix(objectType)}</div>}
 								objectId={`${address}?module=${module}`}

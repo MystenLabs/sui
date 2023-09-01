@@ -6,7 +6,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import clsx from 'clsx';
 
 import { ObjectModal } from '~/ui/Modal/ObjectModal';
-import { Image } from '~/ui/image/Image';
+import { Image, type ImageProps } from '~/ui/image/Image';
 
 const imageStyles = cva(['z-0 flex-shrink-0 relative'], {
 	variants: {
@@ -36,6 +36,7 @@ interface Props extends ImageStylesProps {
 	open?: boolean;
 	setOpen?: (open: boolean) => void;
 	video?: string | null;
+	rounded?: ImageProps['rounded'];
 	disablePreview?: boolean;
 	fadeIn?: boolean;
 }
