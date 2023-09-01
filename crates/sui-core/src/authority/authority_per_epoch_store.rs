@@ -1299,8 +1299,9 @@ impl AuthorityPerEpochStore {
             .collect())
     }
 
-    pub fn has_jwk(&self, jwk_id: &JwkId, jwk: &JWK) -> bool {
-        self.signature_verifier.has_jwk(jwk_id, jwk)
+    pub fn jwk_active_in_current_epoch(&self, jwk_id: &JwkId, jwk: &JWK) -> bool {
+        let jwk_aggregator = self.jwk_aggregator.lock();
+        jwk_aggregator.has_quorum_for_key(&(jwk_id.clone(), jwk.clone()))
     }
 
     /// Caller is responsible to call consensus_message_processed before this method

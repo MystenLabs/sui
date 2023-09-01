@@ -20,7 +20,7 @@ mod checked {
     use sui_types::execution_mode::{self, ExecutionMode};
     use sui_types::gas_coin::GAS;
     use sui_types::metrics::LimitsMetrics;
-    use sui_types::object::OBJECT_START_VERSION;
+    use sui_types::object::{Owner, OBJECT_START_VERSION};
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
     use tracing::{info, instrument, trace, warn};
 
@@ -30,7 +30,8 @@ mod checked {
     use move_binary_format::access::ModuleAccess;
     use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
     use sui_types::authenticator_state::{
-        AUTHENTICATOR_STATE_MODULE_NAME, AUTHENTICATOR_STATE_UPDATE_FUNCTION_NAME,
+        AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME, AUTHENTICATOR_STATE_MODULE_NAME,
+        AUTHENTICATOR_STATE_UPDATE_FUNCTION_NAME,
     };
     use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
     use sui_types::committee::EpochId;
@@ -579,6 +580,8 @@ mod checked {
 
     pub fn construct_advance_epoch_pt(
         params: &AdvanceEpochParams,
+        protocol_config: &ProtocolConfig,
+        temporary_store: &TemporaryStore<'_>,
     ) -> Result<ProgrammableTransaction, ExecutionError> {
         let mut builder = ProgrammableTransactionBuilder::new();
         // Step 1: Create storage and computation rewards.
@@ -625,6 +628,43 @@ mod checked {
             vec![GAS::type_tag()],
             vec![storage_rebates],
         );
+
+        // Step 4: Expire JWKs if the authenticator state object exists.
+        if protocol_config.enable_jwk_consensus_updates() {
+            if let Some(auth_state) = temporary_store
+                .objects()
+                .get(&SUI_AUTHENTICATOR_STATE_OBJECT_ID)
+            {
+                let Owner::Shared { initial_shared_version } = auth_state.owner else {
+                    panic!("Authenticator state object should be shared!");
+                };
+
+                // params.epoch is the new epoch
+                let min_epoch = params
+                    .epoch
+                    .saturating_sub(protocol_config.max_age_of_jwk_in_epochs());
+
+                let res = builder.move_call(
+                    SUI_FRAMEWORK_ADDRESS.into(),
+                    AUTHENTICATOR_STATE_MODULE_NAME.to_owned(),
+                    AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME.to_owned(),
+                    vec![],
+                    vec![
+                        CallArg::Object(ObjectArg::SharedObject {
+                            id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                            initial_shared_version,
+                            mutable: true,
+                        }),
+                        CallArg::Pure(bcs::to_bytes(&min_epoch).unwrap()),
+                    ],
+                );
+                assert_invariant!(
+                    res.is_ok(),
+                    "Unable to generate authenticator_state::expire_jwks transaction!"
+                );
+            }
+        }
+
         Ok(builder.finish())
     }
 
@@ -698,7 +738,8 @@ mod checked {
             reward_slashing_rate: protocol_config.reward_slashing_rate(),
             epoch_start_timestamp_ms: change_epoch.epoch_start_timestamp_ms,
         };
-        let advance_epoch_pt = construct_advance_epoch_pt(&params)?;
+        let advance_epoch_pt =
+            construct_advance_epoch_pt(&params, protocol_config, temporary_store)?;
         let result = programmable_transactions::execution::execute::<execution_mode::System>(
             protocol_config,
             metrics.clone(),

@@ -754,6 +754,10 @@ pub struct ProtocolConfig {
     consensus_bad_nodes_stake_threshold: Option<u64>,
 
     max_jwk_votes_per_validator_per_epoch: Option<u64>,
+    // The maximum age of a JWK in epochs before it is removed from the AuthenticatorState object.
+    // Applied at the end of an epoch as a delta from the new epoch value, so setting this to 1
+    // will cause the new epoch to start with JWKs from the previous epoch still valid.
+    max_age_of_jwk_in_epochs: Option<u64>,
 }
 
 // feature flags
@@ -1256,6 +1260,8 @@ impl ProtocolConfig {
 
                 max_jwk_votes_per_validator_per_epoch: None,
 
+                max_age_of_jwk_in_epochs: None,
+
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
@@ -1447,6 +1453,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.enable_jwk_consensus_updates = true;
                     // Max of 100 votes per hour
                     cfg.max_jwk_votes_per_validator_per_epoch = Some(2400);
+                    cfg.max_age_of_jwk_in_epochs = Some(1);
                 }
                 cfg
             }

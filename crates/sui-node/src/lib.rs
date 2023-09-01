@@ -242,7 +242,7 @@ impl SuiNode {
                             Ok(mut keys) => {
                                 keys.retain(|(id, jwk)| {
                                     check_total_jwk_size(id, jwk) &&
-                                    !epoch_store.has_jwk(id, jwk) &&
+                                    !epoch_store.jwk_active_in_current_epoch(id, jwk) &&
                                     seen.insert((id.clone(), jwk.clone()))
                                 });
 
