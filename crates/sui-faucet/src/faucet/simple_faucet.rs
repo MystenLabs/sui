@@ -513,10 +513,17 @@ impl SimpleFaucet {
             }
 
             GasCoinResponse::UnknownGasCoin(coin_id) => {
-                self.recycle_gas_coin(coin_id, uuid).await;
-                Err(FaucetError::FullnodeReadingError(format!(
-                    "unknown gas coin {coin_id:?}"
-                )))
+                warn!(
+                    ?uuid,
+                    ?coin_id,
+                    "Unknown gas coin full node reading error, removing from pool"
+                );
+                self.metrics.total_discarded_coins.inc();
+                self.transfer_gases(amounts, recipient, uuid).await
+                // self.recycle_gas_coin(coin_id, uuid).await;
+                // Err(FaucetError::FullnodeReadingError(format!(
+                //     "unknown gas coin {coin_id:?}"
+                // )))
             }
 
             GasCoinResponse::GasCoinWithInsufficientBalance(coin_id) => {
