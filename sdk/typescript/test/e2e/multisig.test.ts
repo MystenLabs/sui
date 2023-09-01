@@ -145,30 +145,29 @@ describe('Multisig scenarios', () => {
 		expect(combinedM).toEqual(combinedP);
 
 		expect(decodedM).toEqual(decodedP);
-		expect(decodedM)
-			.toEqual([
-				{
-					signature: parseSerializedSignature((await k1.signPersonalMessage(signData)).signature)
-						.signature,
-					signatureScheme: k1.getKeyScheme(),
-					pubKey: pk1,
-					weight: 1,
-				},
-				{
-					signature: parseSerializedSignature((await k2.signPersonalMessage(signData)).signature)
-						.signature,
-					signatureScheme: k2.getKeyScheme(),
-					pubKey: pk2,
-					weight: 2,
-				},
-				{
-					signature: parseSerializedSignature((await k3.signPersonalMessage(signData)).signature)
-						.signature,
-					signatureScheme: k3.getKeyScheme(),
-					pubKey: pk3,
-					weight: 3,
-				},
-			]);
+		expect(decodedM).toEqual([
+			{
+				signature: parseSerializedSignature((await k1.signPersonalMessage(signData)).signature)
+					.signature,
+				signatureScheme: k1.getKeyScheme(),
+				pubKey: pk1,
+				weight: 1,
+			},
+			{
+				signature: parseSerializedSignature((await k2.signPersonalMessage(signData)).signature)
+					.signature,
+				signatureScheme: k2.getKeyScheme(),
+				pubKey: pk2,
+				weight: 2,
+			},
+			{
+				signature: parseSerializedSignature((await k3.signPersonalMessage(signData)).signature)
+					.signature,
+				signatureScheme: k3.getKeyScheme(),
+				pubKey: pk3,
+				weight: 3,
+			},
+		]);
 	});
 
 	it('comparison of decoded/parsed multisig provided via different methods', async () => {

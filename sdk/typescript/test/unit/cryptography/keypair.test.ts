@@ -125,15 +125,18 @@ describe('Keypair', () => {
 
 	it('`toSuiAddress()` should return a valid sui address', async () => {
 		expect(k1.toSuiAddress()).toEqual(pk1.toSuiAddress());
-		expect(k1.toSuiAddress())
-			.toEqual('0xafedf3bc60bd296aa6830d7c48ca44e0f7a32478ae4bd7b9a6ac1dc81ff7b29b');
-		
+		expect(k1.toSuiAddress()).toEqual(
+			'0xafedf3bc60bd296aa6830d7c48ca44e0f7a32478ae4bd7b9a6ac1dc81ff7b29b',
+		);
+
 		expect(k2.toSuiAddress()).toEqual(pk2.toSuiAddress());
-		expect(k2.toSuiAddress())
-			.toEqual('0x7e4f9a35bf3b5383802d990956d6f3c93e6184ebbbcf0820c124ab3a59ef77ac');
-		
+		expect(k2.toSuiAddress()).toEqual(
+			'0x7e4f9a35bf3b5383802d990956d6f3c93e6184ebbbcf0820c124ab3a59ef77ac',
+		);
+
 		expect(k3.toSuiAddress()).toEqual(pk3.toSuiAddress());
-		expect(k3.toSuiAddress())
-			.toEqual('0x318f591092f10b67a81963954fb9539ea3919444417726be4e1b95ce44fe2fc0');
+		expect(k3.toSuiAddress()).toEqual(
+			'0x318f591092f10b67a81963954fb9539ea3919444417726be4e1b95ce44fe2fc0',
+		);
 	});
 });
