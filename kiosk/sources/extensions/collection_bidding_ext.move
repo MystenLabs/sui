@@ -35,8 +35,12 @@ module kiosk::collection_bidding_ext {
     const EExtensionDisabled: u64 = 1;
     /// A `PurchaseCap` was created in a different Kiosk.
     const EIncorrectKiosk: u64 = 2;
-    /// The bid amount is less than the minimum price.
-    const EIncorrectAmount: u64 = 3;
+    /// The bid amount is less than the minimum price. This check makes sure
+    /// the seller does not lose due to a race condition. By specifying the
+    /// `min_price` in the `MarketPurchaseCap` the seller sets the minimum price
+    /// for the item. And if there's a race, and someone frontruns the seller,
+    /// the seller does not accidentally take the bid for lower than they expected.
+    const EBidDoesntMatchExpectation: u64 = 3;
     /// Trying to accept a bid using a wrong function.
     const EIncorrectMarketArg: u64 = 4;
     /// Trying to accept a bid that does not exist.
@@ -166,7 +170,7 @@ module kiosk::collection_bidding_ext {
 
         assert!(ext::is_enabled<Extension>(destination), EExtensionDisabled);
         assert!(mkt::kiosk(&mkt_cap) == object::id(source), EIncorrectKiosk);
-        assert!(mkt::min_price(&mkt_cap) <= coin::value(&bid), EIncorrectAmount);
+        assert!(mkt::min_price(&mkt_cap) <= coin::value(&bid), EBidDoesntMatchExpectation);
         assert!(type_name::get<Market>() != type_name::get<NoMarket>(), EIncorrectMarketArg);
 
         // Perform the purchase operation in the seller's Kiosk using the `Bid`.
