@@ -148,7 +148,7 @@ module kiosk::collection_bidding_ext {
     ///
     /// 2. The `bid` is taken from the `source` Kiosk's extension storage and is
     /// used to purchase the item with the `MarketPurchaseCap`. Proceeds go to
-    /// the seller's Kiosk.
+    /// the `destination` Kiosk, as this Kiosk offers the `T`.
     ///
     /// 3. The item is placed in the `destination` Kiosk using the `place` or `lock`
     /// functions (see `PERMISSIONS`). The extension must be installed and enabled

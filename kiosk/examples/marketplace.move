@@ -16,13 +16,13 @@ module kiosk::marketplace_example {
     struct MARKETPLACE_EXAMPLE has drop {}
 
     /// A type identifying the Marketplace.
-    struct Walmart has drop {}
+    struct MyMarket has drop {}
 
     /// As easy as creating a Publisher; for simplicity's sake we also create
     /// the `TransferPolicy` but this action can be performed offline in a PTB.
     fun init(otw: MARKETPLACE_EXAMPLE, ctx: &mut TxContext) {
         let publisher = sui::package::claim(otw, ctx);
-        let (policy, policy_cap) = policy::new<Walmart>(&publisher, ctx);
+        let (policy, policy_cap) = policy::new<MyMarket>(&publisher, ctx);
 
         transfer::public_share_object(policy);
         transfer::public_transfer(policy_cap, sender(ctx));
