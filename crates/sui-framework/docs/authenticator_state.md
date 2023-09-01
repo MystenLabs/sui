@@ -11,13 +11,20 @@
 -  [Struct `JwkId`](#0x2_authenticator_state_JwkId)
 -  [Struct `ActiveJwk`](#0x2_authenticator_state_ActiveJwk)
 -  [Constants](#@Constants_0)
+-  [Function `jwk_equal`](#0x2_authenticator_state_jwk_equal)
+-  [Function `string_bytes_lt`](#0x2_authenticator_state_string_bytes_lt)
+-  [Function `jwk_lt`](#0x2_authenticator_state_jwk_lt)
 -  [Function `create`](#0x2_authenticator_state_create)
+-  [Function `load_inner_mut`](#0x2_authenticator_state_load_inner_mut)
+-  [Function `load_inner`](#0x2_authenticator_state_load_inner)
 -  [Function `update_authenticator_state`](#0x2_authenticator_state_update_authenticator_state)
+-  [Function `expire_jwks`](#0x2_authenticator_state_expire_jwks)
 -  [Function `get_active_jwks`](#0x2_authenticator_state_get_active_jwks)
 
 
 <pre><code><b>use</b> <a href="">0x1::string</a>;
 <b>use</b> <a href="dynamic_field.md#0x2_dynamic_field">0x2::dynamic_field</a>;
+<b>use</b> <a href="math.md#0x2_math">0x2::math</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
@@ -246,6 +253,125 @@ Sender is not @0x0 the system address.
 
 
 
+<a name="0x2_authenticator_state_jwk_equal"></a>
+
+## Function `jwk_equal`
+
+
+
+<pre><code><b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state_jwk_equal">jwk_equal</a>(a: &<a href="authenticator_state.md#0x2_authenticator_state_ActiveJwk">authenticator_state::ActiveJwk</a>, b: &<a href="authenticator_state.md#0x2_authenticator_state_ActiveJwk">authenticator_state::ActiveJwk</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state_jwk_equal">jwk_equal</a>(a: &<a href="authenticator_state.md#0x2_authenticator_state_ActiveJwk">ActiveJwk</a>, b: &<a href="authenticator_state.md#0x2_authenticator_state_ActiveJwk">ActiveJwk</a>): bool {
+    // note: epoch is ignored
+    <b>if</b> ((&a.jwk.kty == &b.jwk.kty) &&
+       (&a.jwk.e == &b.jwk.e) &&
+       (&a.jwk.n == &b.jwk.n) &&
+       (&a.jwk.alg == &b.jwk.alg) &&
+       (&a.jwk_id.iss == &b.jwk_id.iss) &&
+       (&a.jwk_id.kid == &b.jwk_id.kid)) {
+        <b>true</b>
+    } <b>else</b> {
+        <b>false</b>
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_authenticator_state_string_bytes_lt"></a>
+
+## Function `string_bytes_lt`
+
+
+
+<pre><code><b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state_string_bytes_lt">string_bytes_lt</a>(a: &<a href="_String">string::String</a>, b: &<a href="_String">string::String</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state_string_bytes_lt">string_bytes_lt</a>(a: &String, b: &String): bool {
+    <b>let</b> a_bytes = <a href="_bytes">string::bytes</a>(a);
+    <b>let</b> b_bytes = <a href="_bytes">string::bytes</a>(b);
+
+    <b>if</b> (<a href="_length">vector::length</a>(a_bytes) &lt; <a href="_length">vector::length</a>(b_bytes)) {
+        <b>true</b>
+    } <b>else</b> <b>if</b> (<a href="_length">vector::length</a>(a_bytes) &gt; <a href="_length">vector::length</a>(b_bytes)) {
+        <b>false</b>
+    } <b>else</b> {
+        <b>let</b> i = 0;
+        <b>while</b> (i &lt; <a href="_length">vector::length</a>(a_bytes)) {
+            <b>let</b> a_byte = *<a href="_borrow">vector::borrow</a>(a_bytes, i);
+            <b>let</b> b_byte = *<a href="_borrow">vector::borrow</a>(b_bytes, i);
+            <b>if</b> (a_byte &lt; b_byte) {
+                <b>return</b> <b>true</b>;
+            } <b>else</b> <b>if</b> (a_byte &gt; b_byte) {
+                <b>return</b> <b>false</b>;
+            };
+            i = i + 1;
+        };
+        // all bytes are equal
+        <b>false</b>
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_authenticator_state_jwk_lt"></a>
+
+## Function `jwk_lt`
+
+
+
+<pre><code><b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state_jwk_lt">jwk_lt</a>(a: &<a href="authenticator_state.md#0x2_authenticator_state_ActiveJwk">authenticator_state::ActiveJwk</a>, b: &<a href="authenticator_state.md#0x2_authenticator_state_ActiveJwk">authenticator_state::ActiveJwk</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state_jwk_lt">jwk_lt</a>(a: &<a href="authenticator_state.md#0x2_authenticator_state_ActiveJwk">ActiveJwk</a>, b: &<a href="authenticator_state.md#0x2_authenticator_state_ActiveJwk">ActiveJwk</a>): bool {
+    // note: epoch is ignored
+    <b>if</b> (&a.jwk_id.iss != &b.jwk_id.iss) {
+        <b>return</b> <a href="authenticator_state.md#0x2_authenticator_state_string_bytes_lt">string_bytes_lt</a>(&a.jwk_id.iss, &b.jwk_id.iss);
+    };
+    <b>if</b> (&a.jwk_id.kid != &b.jwk_id.kid) {
+        <b>return</b> <a href="authenticator_state.md#0x2_authenticator_state_string_bytes_lt">string_bytes_lt</a>(&a.jwk_id.kid, &b.jwk_id.kid);
+    };
+    <b>if</b> (&a.jwk.kty != &b.jwk.kty) {
+        <b>return</b> <a href="authenticator_state.md#0x2_authenticator_state_string_bytes_lt">string_bytes_lt</a>(&a.jwk.kty, &b.jwk.kty);
+    };
+    <b>if</b> (&a.jwk.e != &b.jwk.e) {
+        <b>return</b> <a href="authenticator_state.md#0x2_authenticator_state_string_bytes_lt">string_bytes_lt</a>(&a.jwk.e, &b.jwk.e);
+    };
+    <b>if</b> (&a.jwk.n != &b.jwk.n) {
+        <b>return</b> <a href="authenticator_state.md#0x2_authenticator_state_string_bytes_lt">string_bytes_lt</a>(&a.jwk.n, &b.jwk.n);
+    };
+    <a href="authenticator_state.md#0x2_authenticator_state_string_bytes_lt">string_bytes_lt</a>(&a.jwk.alg, &b.jwk.alg)
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_authenticator_state_create"></a>
 
 ## Function `create`
@@ -288,6 +414,74 @@ Can only be called by genesis or change_epoch transactions.
 
 </details>
 
+<a name="0x2_authenticator_state_load_inner_mut"></a>
+
+## Function `load_inner_mut`
+
+
+
+<pre><code><b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state_load_inner_mut">load_inner_mut</a>(self: &<b>mut</b> <a href="authenticator_state.md#0x2_authenticator_state_AuthenticatorState">authenticator_state::AuthenticatorState</a>): &<b>mut</b> <a href="authenticator_state.md#0x2_authenticator_state_AuthenticatorStateInner">authenticator_state::AuthenticatorStateInner</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state_load_inner_mut">load_inner_mut</a>(
+    self: &<b>mut</b> <a href="authenticator_state.md#0x2_authenticator_state_AuthenticatorState">AuthenticatorState</a>,
+): &<b>mut</b> <a href="authenticator_state.md#0x2_authenticator_state_AuthenticatorStateInner">AuthenticatorStateInner</a> {
+    <b>let</b> version = self.version;
+
+    // replace this <b>with</b> a lazy <b>update</b> function when we add a new version of the inner <a href="object.md#0x2_object">object</a>.
+    <b>assert</b>!(version == <a href="authenticator_state.md#0x2_authenticator_state_CurrentVersion">CurrentVersion</a>, <a href="authenticator_state.md#0x2_authenticator_state_EWrongInnerVersion">EWrongInnerVersion</a>);
+
+    <b>let</b> inner: &<b>mut</b> <a href="authenticator_state.md#0x2_authenticator_state_AuthenticatorStateInner">AuthenticatorStateInner</a> = <a href="dynamic_field.md#0x2_dynamic_field_borrow_mut">dynamic_field::borrow_mut</a>(&<b>mut</b> self.id, self.version);
+
+    <b>assert</b>!(inner.version == version, <a href="authenticator_state.md#0x2_authenticator_state_EWrongInnerVersion">EWrongInnerVersion</a>);
+    inner
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_authenticator_state_load_inner"></a>
+
+## Function `load_inner`
+
+
+
+<pre><code><b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state_load_inner">load_inner</a>(self: &<a href="authenticator_state.md#0x2_authenticator_state_AuthenticatorState">authenticator_state::AuthenticatorState</a>): &<a href="authenticator_state.md#0x2_authenticator_state_AuthenticatorStateInner">authenticator_state::AuthenticatorStateInner</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state_load_inner">load_inner</a>(
+    self: &<a href="authenticator_state.md#0x2_authenticator_state_AuthenticatorState">AuthenticatorState</a>,
+): &<a href="authenticator_state.md#0x2_authenticator_state_AuthenticatorStateInner">AuthenticatorStateInner</a> {
+    <b>let</b> version = self.version;
+
+    // replace this <b>with</b> a lazy <b>update</b> function when we add a new version of the inner <a href="object.md#0x2_object">object</a>.
+    <b>assert</b>!(version == <a href="authenticator_state.md#0x2_authenticator_state_CurrentVersion">CurrentVersion</a>, <a href="authenticator_state.md#0x2_authenticator_state_EWrongInnerVersion">EWrongInnerVersion</a>);
+
+    <b>let</b> inner: &<a href="authenticator_state.md#0x2_authenticator_state_AuthenticatorStateInner">AuthenticatorStateInner</a> = <a href="dynamic_field.md#0x2_dynamic_field_borrow">dynamic_field::borrow</a>(&self.id, self.version);
+
+    <b>assert</b>!(inner.version == version, <a href="authenticator_state.md#0x2_authenticator_state_EWrongInnerVersion">EWrongInnerVersion</a>);
+    inner
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_authenticator_state_update_authenticator_state"></a>
 
 ## Function `update_authenticator_state`
@@ -296,7 +490,7 @@ Record a new set of active_jwks. Called when executing the AuthenticatorStateUpd
 transaction.
 
 
-<pre><code><b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state_update_authenticator_state">update_authenticator_state</a>(self: &<b>mut</b> <a href="authenticator_state.md#0x2_authenticator_state_AuthenticatorState">authenticator_state::AuthenticatorState</a>, active_jwks: <a href="">vector</a>&lt;<a href="authenticator_state.md#0x2_authenticator_state_ActiveJwk">authenticator_state::ActiveJwk</a>&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state_update_authenticator_state">update_authenticator_state</a>(self: &<b>mut</b> <a href="authenticator_state.md#0x2_authenticator_state_AuthenticatorState">authenticator_state::AuthenticatorState</a>, new_active_jwks: <a href="">vector</a>&lt;<a href="authenticator_state.md#0x2_authenticator_state_ActiveJwk">authenticator_state::ActiveJwk</a>&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -307,22 +501,92 @@ transaction.
 
 <pre><code><b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state_update_authenticator_state">update_authenticator_state</a>(
     self: &<b>mut</b> <a href="authenticator_state.md#0x2_authenticator_state_AuthenticatorState">AuthenticatorState</a>,
-    active_jwks: <a href="">vector</a>&lt;<a href="authenticator_state.md#0x2_authenticator_state_ActiveJwk">ActiveJwk</a>&gt;,
+    new_active_jwks: <a href="">vector</a>&lt;<a href="authenticator_state.md#0x2_authenticator_state_ActiveJwk">ActiveJwk</a>&gt;,
     ctx: &TxContext,
 ) {
     // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
     <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="authenticator_state.md#0x2_authenticator_state_ENotSystemAddress">ENotSystemAddress</a>);
 
-    <b>let</b> version = self.version;
+    <b>let</b> inner = <a href="authenticator_state.md#0x2_authenticator_state_load_inner_mut">load_inner_mut</a>(self);
 
-    // replace this <b>with</b> an <b>update</b> function when we add a new version of the inner <a href="object.md#0x2_object">object</a>.
-    <b>assert</b>!(version == <a href="authenticator_state.md#0x2_authenticator_state_CurrentVersion">CurrentVersion</a>, <a href="authenticator_state.md#0x2_authenticator_state_EWrongInnerVersion">EWrongInnerVersion</a>);
+    <b>let</b> res = <a href="">vector</a>[];
+    <b>let</b> i = 0;
+    <b>let</b> j = 0;
+    <b>let</b> active_jwks_len = <a href="_length">vector::length</a>(&inner.active_jwks);
+    <b>let</b> new_active_jwks_len = <a href="_length">vector::length</a>(&new_active_jwks);
 
-    <b>let</b> inner: &<b>mut</b> <a href="authenticator_state.md#0x2_authenticator_state_AuthenticatorStateInner">AuthenticatorStateInner</a> = <a href="dynamic_field.md#0x2_dynamic_field_borrow_mut">dynamic_field::borrow_mut</a>(&<b>mut</b> self.id, self.version);
+    <b>while</b> (i &lt; active_jwks_len && j &lt; new_active_jwks_len) {
+        <b>let</b> old_jwk = <a href="_borrow">vector::borrow</a>(&inner.active_jwks, i);
+        <b>let</b> new_jwk = <a href="_borrow">vector::borrow</a>(&new_active_jwks, j);
 
-    <b>assert</b>!(inner.version == version, <a href="authenticator_state.md#0x2_authenticator_state_EWrongInnerVersion">EWrongInnerVersion</a>);
+        // when they are equal, push only one, but <b>use</b> the max epoch of the two
+        <b>if</b> (<a href="authenticator_state.md#0x2_authenticator_state_jwk_equal">jwk_equal</a>(old_jwk, new_jwk)) {
+            <b>let</b> jwk = *old_jwk;
+            jwk.epoch = <a href="math.md#0x2_math_max">math::max</a>(old_jwk.epoch, new_jwk.epoch);
+            <a href="_push_back">vector::push_back</a>(&<b>mut</b> res, jwk);
+            i = i + 1;
+            j = j + 1;
+        } <b>else</b> <b>if</b> (<a href="authenticator_state.md#0x2_authenticator_state_jwk_lt">jwk_lt</a>(old_jwk, new_jwk)) {
+            <a href="_push_back">vector::push_back</a>(&<b>mut</b> res, *old_jwk);
+            i = i + 1;
+        } <b>else</b> {
+            <a href="_push_back">vector::push_back</a>(&<b>mut</b> res, *new_jwk);
+            j = j + 1;
+        }
+    };
 
-    inner.active_jwks = active_jwks;
+    <b>while</b> (i &lt; active_jwks_len) {
+        <a href="_push_back">vector::push_back</a>(&<b>mut</b> res, *<a href="_borrow">vector::borrow</a>(&inner.active_jwks, i));
+        i = i + 1;
+    };
+    <b>while</b> (j &lt; new_active_jwks_len) {
+        <a href="_push_back">vector::push_back</a>(&<b>mut</b> res, *<a href="_borrow">vector::borrow</a>(&new_active_jwks, j));
+        j = j + 1;
+    };
+
+    inner.active_jwks = res;
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_authenticator_state_expire_jwks"></a>
+
+## Function `expire_jwks`
+
+
+
+<pre><code><b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state_expire_jwks">expire_jwks</a>(self: &<b>mut</b> <a href="authenticator_state.md#0x2_authenticator_state_AuthenticatorState">authenticator_state::AuthenticatorState</a>, min_epoch: u64, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state_expire_jwks">expire_jwks</a>(
+    self: &<b>mut</b> <a href="authenticator_state.md#0x2_authenticator_state_AuthenticatorState">AuthenticatorState</a>,
+    // any jwk below this epoch is not retained
+    min_epoch: u64,
+    ctx: &TxContext) {
+    // This will only be called by sui_system::advance_epoch
+    <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="authenticator_state.md#0x2_authenticator_state_ENotSystemAddress">ENotSystemAddress</a>);
+
+    <b>let</b> inner = <a href="authenticator_state.md#0x2_authenticator_state_load_inner_mut">load_inner_mut</a>(self);
+
+    <b>let</b> new_active_jwks: <a href="">vector</a>&lt;<a href="authenticator_state.md#0x2_authenticator_state_ActiveJwk">ActiveJwk</a>&gt; = <a href="">vector</a>[];
+    <b>let</b> len = <a href="_length">vector::length</a>(&inner.active_jwks);
+    <b>let</b> i = 0;
+    <b>while</b> (i &lt; len) {
+        <b>let</b> jwk = <a href="_borrow">vector::borrow</a>(&inner.active_jwks, i);
+        <b>if</b> (jwk.epoch &gt;= min_epoch) {
+            <a href="_push_back">vector::push_back</a>(&<b>mut</b> new_active_jwks, *jwk);
+        }
+    };
+    inner.active_jwks = new_active_jwks;
 }
 </code></pre>
 
@@ -352,14 +616,7 @@ JWK state from the chain.
     ctx: &TxContext,
 ): <a href="">vector</a>&lt;<a href="authenticator_state.md#0x2_authenticator_state_ActiveJwk">ActiveJwk</a>&gt; {
     <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="authenticator_state.md#0x2_authenticator_state_ENotSystemAddress">ENotSystemAddress</a>);
-
-    <b>let</b> version = self.version;
-    <b>assert</b>!(version == <a href="authenticator_state.md#0x2_authenticator_state_CurrentVersion">CurrentVersion</a>, <a href="authenticator_state.md#0x2_authenticator_state_EWrongInnerVersion">EWrongInnerVersion</a>);
-
-    <b>let</b> inner: &<a href="authenticator_state.md#0x2_authenticator_state_AuthenticatorStateInner">AuthenticatorStateInner</a> = <a href="dynamic_field.md#0x2_dynamic_field_borrow">dynamic_field::borrow</a>(&self.id, version);
-    <b>assert</b>!(inner.version == version, <a href="authenticator_state.md#0x2_authenticator_state_EWrongInnerVersion">EWrongInnerVersion</a>);
-
-    inner.active_jwks
+    <a href="authenticator_state.md#0x2_authenticator_state_load_inner">load_inner</a>(self).active_jwks
 }
 </code></pre>
 
