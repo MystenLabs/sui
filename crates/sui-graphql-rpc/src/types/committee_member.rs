@@ -5,6 +5,6 @@ use async_graphql::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
 pub(crate) struct CommitteeMember {
-    authority_name: Option<String>,
-    stake_unit: Option<u64>,
+    pub authority_name: Option<String>,
+    pub stake_unit: Option<u64>,
 }

@@ -60,6 +60,47 @@ scalar Base64
 scalar BigInt
 
 
+type Checkpoint {
+	digest: String!
+	sequenceNumber: Int!
+	validatorSignature: Base64
+	previousCheckpointDigest: String
+	liveObjectSetDigest: String
+	networkTotalTransactions: Int
+	rollingGasSummary: GasCostSummary
+	epoch: Epoch
+	endOfEpoch: EndOfEpochData
+}
+
+type CheckpointConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [CheckpointEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Checkpoint!]!
+}
+
+"""
+An edge in a connection.
+"""
+type CheckpointEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Checkpoint!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 type Coin {
 	id: ID!
 }
@@ -91,6 +132,16 @@ type CoinEdge {
 	A cursor for use in pagination
 	"""
 	cursor: String!
+}
+
+type CommitteeMember {
+	authorityName: String
+	stakeUnit: Int
+}
+
+type EndOfEpochData {
+	newCommittee: [CommitteeMember!]
+	nextProtocolVersion: Int
 }
 
 type Epoch {
@@ -300,6 +351,7 @@ type Query {
 	owner(address: SuiAddress!): ObjectOwner
 	object(address: SuiAddress!, version: Int): Object
 	address(address: SuiAddress!): Address
+	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection!
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
 }
 
