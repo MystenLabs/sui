@@ -444,6 +444,11 @@ mod tests {
                 checkpoint_summaries_by_digest: &[CheckpointDigest],
                 checkpoint_contents_by_digest: &[CheckpointContentsDigest],
             ) -> SuiResult<KVStoreCheckpointData>;
+
+            async fn deprecated_get_transaction_checkpoint(
+                &self,
+                digest: TransactionDigest,
+            ) -> SuiResult<Option<CheckpointSequenceNumber>>;
         }
     }
 
