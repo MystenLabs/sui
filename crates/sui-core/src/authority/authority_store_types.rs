@@ -272,10 +272,10 @@ pub(crate) fn try_construct_object(
         }
     };
 
-    Ok(Object {
+    Ok(Object::new(
         data,
-        owner: store_object.owner,
-        previous_transaction: store_object.previous_transaction,
-        storage_rebate: store_object.storage_rebate,
-    })
+        store_object.owner,
+        store_object.previous_transaction,
+        store_object.storage_rebate,
+    ))
 }

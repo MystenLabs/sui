@@ -303,12 +303,12 @@ impl TryFrom<Object> for sui_types::object::Object {
                     BTreeMap::new(),
                 )
                 .unwrap();
-                sui_types::object::Object {
-                    data: Data::Package(package),
+                sui_types::object::Object::new(
+                    Data::Package(package),
                     owner,
                     previous_transaction,
-                    storage_rebate: o.storage_rebate as u64,
-                }
+                    o.storage_rebate as u64,
+                )
             }
             // Reconstructing MoveObject form database table, move VM safety concern is irrelevant here.
             ObjectType::Struct(object_type) => unsafe {
@@ -328,12 +328,12 @@ impl TryFrom<Object> for sui_types::object::Object {
                 )
                 .unwrap();
 
-                sui_types::object::Object {
-                    data: Data::Move(object),
+                sui_types::object::Object::new(
+                    Data::Move(object),
                     owner,
                     previous_transaction,
-                    storage_rebate: o.storage_rebate as u64,
-                }
+                    o.storage_rebate as u64,
+                )
             },
         })
     }
@@ -386,8 +386,8 @@ pub fn compose_object_bulk_insert_update_query(objects: &[Object]) -> String {
         .trim_matches(';')
         .to_string();
     let insert_update_query = format!(
-        "{} ON CONFLICT (object_id) 
-        DO UPDATE SET 
+        "{} ON CONFLICT (object_id)
+        DO UPDATE SET
             epoch = EXCLUDED.epoch,
             checkpoint = EXCLUDED.checkpoint,
             version = EXCLUDED.version,
@@ -462,7 +462,7 @@ pub fn compose_object_bulk_insert_query(objects: &[Object]) -> String {
                 .collect::<Vec<_>>()
                 .join(", ");
             format!(
-                "ROW({}::BIGINT, {}::BIGINT, '{}'::address, {}::BIGINT, '{}'::base58digest, '{}'::owner_type, 
+                "ROW({}::BIGINT, {}::BIGINT, '{}'::address, {}::BIGINT, '{}'::base58digest, '{}'::owner_type,
                      '{}'::address, {}::BIGINT, '{}'::base58digest, '{}'::VARCHAR, '{}'::object_status,
                      {}::BOOLEAN, {}::BIGINT, ARRAY[{}]::bcs_bytes[])",
                 epoch,
@@ -495,7 +495,7 @@ pub fn compose_object_bulk_insert_query(objects: &[Object]) -> String {
         "INSERT INTO objects
             (epoch, checkpoint, object_id, version, object_digest, owner_type, owner_address, initial_shared_version, previous_transaction, object_type, object_status, has_public_transfer, storage_rebate, bcs)
         SELECT (unnest_arr).*
-        FROM unnest(ARRAY[{}]::record[]) 
+        FROM unnest(ARRAY[{}]::record[])
         AS unnest_arr(epoch BIGINT, checkpoint BIGINT, object_id address, version BIGINT, object_digest base58digest, owner_type owner_type, owner_address address, initial_shared_version BIGINT, previous_transaction base58digest, object_type VARCHAR, object_status object_status, has_public_transfer BOOLEAN, storage_rebate BIGINT, bcs bcs_bytes[]);",
         rows_query
     );
@@ -503,7 +503,7 @@ pub fn compose_object_bulk_insert_query(objects: &[Object]) -> String {
 }
 
 pub fn filter_latest_objects(objects: Vec<Object>) -> Vec<Object> {
-    // Transactions in checkpoint are ordered by causal depedencies.
+    // Transactions in checkpoint are ordered by causal dependencies.
     // But HashMap is not a lot more costly than HashSet, and it
     // may be good to still keep the relative order of objects in
     // the checkpoint.

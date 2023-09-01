@@ -6,16 +6,19 @@ use std::convert::TryFrom;
 use std::fmt::{Debug, Display, Formatter};
 use std::mem::size_of;
 
+use derivative::Derivative;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::layout::TypeLayoutBuilder;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveTypeLayout, MoveValue};
+use once_cell::sync::OnceCell;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
+use sui_protocol_config::ProtocolConfig;
 
 use crate::balance::Balance;
 use crate::base_types::{MoveObjectType, ObjectIDParseError};
@@ -33,7 +36,6 @@ use crate::{
     },
     gas_coin::GasCoin,
 };
-use sui_protocol_config::ProtocolConfig;
 
 pub const GAS_VALUE_FOR_TESTING: u64 = 300_000_000_000_000;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
@@ -621,7 +623,8 @@ impl Display for Owner {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+#[derive(Derivative, Deserialize, Serialize)]
+#[derivative(Eq, PartialEq, Debug, Clone, Hash)]
 pub struct Object {
     /// The meat of the object
     pub data: Data,
@@ -633,17 +636,31 @@ pub struct Object {
     /// This number is re-calculated each time the object is mutated based on
     /// the present storage gas price.
     pub storage_rebate: u64,
+
+    #[serde(skip)]
+    #[derivative(Debug = "ignore", PartialEq = "ignore", Hash = "ignore")]
+    digest: OnceCell<ObjectDigest>,
 }
 
 impl Object {
-    /// Create a new Move object
-    pub fn new_move(o: MoveObject, owner: Owner, previous_transaction: TransactionDigest) -> Self {
+    pub fn new(
+        data: Data,
+        owner: Owner,
+        previous_transaction: TransactionDigest,
+        storage_rebate: u64,
+    ) -> Self {
         Object {
-            data: Data::Move(o),
+            data,
             owner,
             previous_transaction,
-            storage_rebate: 0,
+            storage_rebate,
+            digest: OnceCell::new(),
         }
+    }
+
+    /// Create a new Move object
+    pub fn new_move(o: MoveObject, owner: Owner, previous_transaction: TransactionDigest) -> Self {
+        Self::new(Data::Move(o), owner, previous_transaction, 0)
     }
 
     /// Returns true if the object is a system package.
@@ -671,12 +688,7 @@ impl Object {
     }
 
     pub fn new_package_from_data(data: Data, previous_transaction: TransactionDigest) -> Self {
-        Object {
-            data,
-            owner: Owner::Immutable,
-            previous_transaction,
-            storage_rebate: 0,
-        }
+        Self::new(data, Owner::Immutable, previous_transaction, 0)
     }
 
     // Note: this will panic if `modules` is empty
@@ -791,7 +803,9 @@ impl Object {
     }
 
     pub fn digest(&self) -> ObjectDigest {
-        ObjectDigest::new(default_hash(self))
+        *self
+            .digest
+            .get_or_init(|| ObjectDigest::new(default_hash(self)))
     }
 
     pub fn is_coin(&self) -> bool {
@@ -891,18 +905,13 @@ impl Object {
     }
 
     pub fn immutable_with_id_for_testing(id: ObjectID) -> Self {
-        let data = Data::Move(MoveObject {
+        let move_object = MoveObject {
             type_: GasCoin::type_().into(),
             has_public_transfer: true,
             version: OBJECT_START_VERSION,
             contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
-        });
-        Self {
-            owner: Owner::Immutable,
-            data,
-            previous_transaction: TransactionDigest::genesis(),
-            storage_rebate: 0,
-        }
+        };
+        Self::new_move(move_object, Owner::Immutable, TransactionDigest::genesis())
     }
 
     pub fn immutable_for_testing() -> Self {
@@ -928,63 +937,47 @@ impl Object {
     }
 
     pub fn with_id_owner_gas_for_testing(id: ObjectID, owner: SuiAddress, gas: u64) -> Self {
-        let data = Data::Move(MoveObject {
+        let o = MoveObject {
             type_: GasCoin::type_().into(),
             has_public_transfer: true,
             version: OBJECT_START_VERSION,
             contents: GasCoin::new(id, gas).to_bcs_bytes(),
-        });
-        Self {
-            owner: Owner::AddressOwner(owner),
-            data,
-            previous_transaction: TransactionDigest::genesis(),
-            storage_rebate: 0,
-        }
+        };
+        Self::new_move(o, Owner::AddressOwner(owner), TransactionDigest::genesis())
     }
 
     pub fn treasury_cap_for_testing(struct_tag: StructTag, treasury_cap: TreasuryCap) -> Self {
-        let data = Data::Move(MoveObject {
+        let o = MoveObject {
             type_: TreasuryCap::type_(struct_tag).into(),
             has_public_transfer: true,
             version: OBJECT_START_VERSION,
             contents: bcs::to_bytes(&treasury_cap).expect("Failed to serialize"),
-        });
-        Self {
-            owner: Owner::Immutable,
-            data,
-            previous_transaction: TransactionDigest::genesis(),
-            storage_rebate: 0,
-        }
+        };
+        Self::new_move(o, Owner::Immutable, TransactionDigest::genesis())
     }
 
     pub fn coin_metadata_for_testing(struct_tag: StructTag, metadata: CoinMetadata) -> Self {
-        let data = Data::Move(MoveObject {
+        let o = MoveObject {
             type_: CoinMetadata::type_(struct_tag).into(),
             has_public_transfer: true,
             version: OBJECT_START_VERSION,
             contents: bcs::to_bytes(&metadata).expect("Failed to serialize"),
-        });
-        Self {
-            owner: Owner::Immutable,
-            data,
-            previous_transaction: TransactionDigest::genesis(),
-            storage_rebate: 0,
-        }
+        };
+        Self::new_move(o, Owner::Immutable, TransactionDigest::genesis())
     }
 
     pub fn with_object_owner_for_testing(id: ObjectID, owner: ObjectID) -> Self {
-        let data = Data::Move(MoveObject {
+        let o = MoveObject {
             type_: GasCoin::type_().into(),
             has_public_transfer: true,
             version: OBJECT_START_VERSION,
             contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
-        });
-        Self {
-            owner: Owner::ObjectOwner(owner.into()),
-            data,
-            previous_transaction: TransactionDigest::genesis(),
-            storage_rebate: 0,
-        }
+        };
+        Self::new_move(
+            o,
+            Owner::ObjectOwner(owner.into()),
+            TransactionDigest::genesis(),
+        )
     }
 
     pub fn with_id_owner_for_testing(id: ObjectID, owner: SuiAddress) -> Self {
@@ -997,18 +990,13 @@ impl Object {
         version: SequenceNumber,
         owner: SuiAddress,
     ) -> Self {
-        let data = Data::Move(MoveObject {
+        let o = MoveObject {
             type_: GasCoin::type_().into(),
             has_public_transfer: true,
             version,
             contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
-        });
-        Self {
-            owner: Owner::AddressOwner(owner),
-            data,
-            previous_transaction: TransactionDigest::genesis(),
-            storage_rebate: 0,
-        }
+        };
+        Self::new_move(o, Owner::AddressOwner(owner), TransactionDigest::genesis())
     }
 
     pub fn with_owner_for_testing(owner: SuiAddress) -> Self {

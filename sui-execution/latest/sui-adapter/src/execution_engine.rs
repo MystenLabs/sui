@@ -466,12 +466,7 @@ mod checked {
                 for genesis_object in objects {
                     match genesis_object {
                         sui_types::transaction::GenesisObject::RawObject { data, owner } => {
-                            let object = Object {
-                                data,
-                                owner,
-                                previous_transaction: tx_ctx.digest(),
-                                storage_rebate: 0,
-                            };
+                            let object = Object::new(data, owner, tx_ctx.digest(), 0);
                             temporary_store.write_object(object, WriteKind::Create);
                         }
                     }

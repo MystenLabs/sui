@@ -638,18 +638,17 @@ impl TryInto<Object> for SuiObjectData {
                 "BCS data is required to convert SuiObjectData to Object"
             ))?,
         };
-        Ok(Object {
+        Ok(Object::new(
             data,
-            owner: self
-                .owner
+            self.owner
                 .ok_or_else(|| anyhow!("Owner is required to convert SuiObjectData to Object"))?,
-            previous_transaction: self.previous_transaction.ok_or_else(|| {
+            self.previous_transaction.ok_or_else(|| {
                 anyhow!("previous_transaction is required to convert SuiObjectData to Object")
             })?,
-            storage_rebate: self.storage_rebate.ok_or_else(|| {
+            self.storage_rebate.ok_or_else(|| {
                 anyhow!("storage_rebate is required to convert SuiObjectData to Object")
             })?,
-        })
+        ))
     }
 }
 
