@@ -189,8 +189,6 @@ export class KioskClient {
 			if (!ruleDefinition) throw new Error(`No resolver for the following rule: ${rule}.`);
 			if (ruleDefinition.hasLockingRule) canTransferOutsideKiosk = false;
 
-			console.log('Trying to resolve... ' + rule);
-
 			ruleDefinition.resolveRuleFunction({
 				packageId: ruleDefinition.packageId,
 				txb,
@@ -267,22 +265,25 @@ export class KioskClient {
 	/**
 	 * A function to withdraw from kiosk
 	 * @param tx The Transaction Block
-	 * @param ownerCap The KioskOwnerCap object that we have received from the SDK `getOwnedKiosks` call.
+	 * @param kiosk the Kiosk Object, ideally passed from the `ownedKioskTx` callback function!
+	 * @param kioskCap the capObject, as returned from the `getOwnerCap` function.
 	 * @param amount The amount we aim to withdraw.
 	 */
 	withdraw(
 		txb: TransactionBlock,
 		kiosk: ObjectArgument,
-		ownerCap: TransactionArgument,
+		kioskCap: TransactionArgument,
 		amount?: string | bigint | number,
 	): TransactionArgument {
-		return kioskTx.withdrawFromKiosk(txb, kiosk, ownerCap, amount);
+		return kioskTx.withdrawFromKiosk(txb, kiosk, kioskCap, amount);
 	}
 
 	/**
 	 * A function to place an item in the kiosk.
 	 * @param tx The Transaction Block
-	 * @param item The item {type, objectId} we want to delist
+	 * @param itemType The type `T` of the item
+	 * @param item The ID or Transaction Argument of the item
+	 * @param kiosk the Kiosk Object, ideally passed from the `ownedKioskTx` callback function!
 	 * @param kioskCap the capObject, as returned from the `getOwnerCap` function.
 	 */
 	place(
@@ -298,7 +299,10 @@ export class KioskClient {
 	/**
 	 * A function to place an item in the kiosk and list it for sale in one transaction.
 	 * @param tx The Transaction Block
+	 * @param itemType The type `T` of the item
+	 * @param item The ID or Transaction Argument of the item
 	 * @param price The price in MIST
+	 * @param kiosk the Kiosk Object, ideally passed from the `ownedKioskTx` callback function!
 	 * @param kioskCap the capObject, as returned from the `getOwnerCap` function.
 	 */
 	placeAndList(
@@ -315,8 +319,10 @@ export class KioskClient {
 	/**
 	 * A function to list an item in the kiosk.
 	 * @param tx The Transaction Block
-	 * @param item The item {type, objectId} we want to delist
+	 * @param itemType The type `T` of the item
+	 * @param itemId The ID of the item
 	 * @param price The price in MIST
+	 * @param kiosk the Kiosk Object, ideally passed from the `ownedKioskTx` callback function!
 	 * @param kioskCap the capObject, as returned from the `getOwnerCap` function.
 	 */
 	list(
@@ -333,7 +339,8 @@ export class KioskClient {
 	/**
 	 * A function to delist an item from the kiosk.
 	 * @param tx The Transaction Block
-	 * @param item The item {type, objectId} we want to delist
+	 * @param itemType The type `T` of the item
+	 * @param itemId The ID of the item
 	 * @param kiosk the Kiosk, ideally passed from the `ownedKioskTx` callback function!
 	 * @param kioskCap the KioskCap, ideally passed from the `ownedKioskTx` callback function!
 	 */
@@ -350,7 +357,8 @@ export class KioskClient {
 	/**
 	 * A function to take an item from the kiosk. The transaction won't succeed if the item is listed or locked.
 	 * @param tx The Transaction Block
-	 * @param item The item {type, objectId} we want to delist
+	 * @param itemType The type `T` of the item
+	 * @param itemId The ID of the item
 	 * @param kiosk the Kiosk Object, ideally passed from the `ownedKioskTx` callback function!
 	 * @param kioskCap the KioskCap, ideally passed from the `ownedKioskTx` callback function!
 	 */
@@ -362,6 +370,26 @@ export class KioskClient {
 		kioskCap: ObjectArgument,
 	): TransactionArgument {
 		return kioskTx.take(txb, itemType, kiosk, kioskCap, itemId);
+	}
+
+	/**
+	 * A function to take lock an item in the kiosk.
+	 * @param tx The Transaction Block
+	 * @param itemType The type `T` of the item
+	 * @param itemId The ID of the item
+	 * @param policy The Policy ID or Transaction Argument for item T
+	 * @param kiosk the Kiosk Object, ideally passed from the `ownedKioskTx` callback function!
+	 * @param kioskCap the KioskCap, ideally passed from the `ownedKioskTx` callback function!
+	 */
+	lock(
+		txb: TransactionBlock,
+		itemType: string,
+		itemId: string,
+		policy: ObjectArgument,
+		kiosk: ObjectArgument,
+		kioskCap: ObjectArgument,
+	) {
+		kioskTx.lock(txb, itemType, kiosk, kioskCap, policy, itemId);
 	}
 
 	/**
