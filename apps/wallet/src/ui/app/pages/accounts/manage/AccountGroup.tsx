@@ -9,6 +9,7 @@ import { isZkAccountSerializedUI } from '_src/background/accounts/zk/ZkAccount';
 import { type ZkProvider } from '_src/background/accounts/zk/providers';
 import { AccountIcon } from '_src/ui/app/components/accounts/AccountIcon';
 import { AccountItem } from '_src/ui/app/components/accounts/AccountItem';
+import { NicknameDialog } from '_src/ui/app/components/accounts/NicknameDialog';
 import { useCreateAccountsMutation } from '_src/ui/app/hooks/useCreateAccountMutation';
 import { Heading } from '_src/ui/app/shared/heading';
 import { Text } from '_src/ui/app/shared/text';
@@ -31,7 +32,7 @@ const providerToLabel: Record<ZkProvider, string> = {
 function FooterLink({ children, to, ...props }: ButtonOrLinkProps) {
 	return (
 		<ButtonOrLink
-			className="text-hero-darkest/40 no-underline uppercase hover:text-hero"
+			className="text-hero-darkest/40 no-underline uppercase hover:text-hero outline-none border-none bg-transparent hover:cursor-pointer"
 			to={to}
 			{...props}
 		>
@@ -46,10 +47,12 @@ function FooterLink({ children, to, ...props }: ButtonOrLinkProps) {
 function AccountFooter({ accountID }: { accountID: string }) {
 	return (
 		<div className="flex flex-shrink-0 w-full">
-			<div className="flex gap-3">
+			<div className="flex gap-3 items-center">
 				<div className="w-4" />
-				<FooterLink to={`/accounts/edit/${accountID}`}>Edit Nickname</FooterLink>
-				<FooterLink to="/remove">Remove</FooterLink>
+				<NicknameDialog accountID={accountID} trigger={<FooterLink>Edit Nickname</FooterLink>} />
+				<FooterLink to="/remove">
+					<div>Remove</div>
+				</FooterLink>
 			</div>
 		</div>
 	);
