@@ -1,0 +1,24 @@
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/feature_gate/dot_call.move:11:9
+   │
+11 │         s.imm();
+   │         ^^^^^^^ method style syntax not supported by current edition 'legacy', only '2024.alpha' support this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/feature_gate/dot_call.move:12:9
+   │
+12 │         s.mut();
+   │         ^^^^^^^ method style syntax not supported by current edition 'legacy', only '2024.alpha' support this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/feature_gate/dot_call.move:13:9
+   │
+13 │         s.val();
+   │         ^^^^^^^ method style syntax not supported by current edition 'legacy', only '2024.alpha' support this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+

@@ -1,4 +1,4 @@
-//#init --edition 2024.alpha
+//# init --edition 2024.alpha
 
 //# publish
 address 0x42 {

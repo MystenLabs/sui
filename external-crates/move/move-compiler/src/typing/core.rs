@@ -799,6 +799,53 @@ pub fn make_constant_type(
 // Functions
 //**************************************************************************************************
 
+pub fn make_method_call_type(
+    context: &mut Context,
+    loc: Loc,
+    lhs_ty: &Type,
+    m: &ModuleIdent,
+    f: Name,
+    ty_args_opt: Option<Vec<Type>>,
+) -> Option<(
+    Loc,
+    Vec<Type>,
+    Vec<(Var, Type)>,
+    BTreeMap<StructName, Loc>,
+    Type,
+)> {
+    let function_name = FunctionName(f);
+    if !context
+        .module_info(m)
+        .functions
+        .contains_key(&function_name)
+    {
+        let tstr = error_format(lhs_ty, &context.subst);
+        let msg = format!(
+            "Unable to resolve method call syntax for type {tstr}. \
+            Unbound function '{f}' in module '{m}'"
+        );
+        context
+            .env
+            .add_diag(diag!(NameResolution::UnboundModuleMember, (loc, msg)));
+        return None;
+    }
+
+    let (defined_loc, ty_args, params, acquires, return_ty) =
+        make_function_type(context, loc, m, &function_name, ty_args_opt);
+
+    if params.is_empty() {
+        let msg = format!("Expected function '{}' to have at least one parameter", &f);
+        context.env.add_diag(diag!(
+            TypeSafety::InvalidMethodCall,
+            (loc, "Invalid method style syntax usage"),
+            (defined_loc, msg),
+        ));
+        return None;
+    }
+
+    Some((defined_loc, ty_args, params, acquires, return_ty))
+}
+
 pub fn make_function_type(
     context: &mut Context,
     loc: Loc,

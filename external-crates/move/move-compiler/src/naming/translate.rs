@@ -1214,6 +1214,17 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
                 },
             }
         }
+        EE::MethodCall(edot, n, tys_opt, rhs) => match dotted(context, *edot) {
+            None => {
+                assert!(context.env.has_errors());
+                NE::UnresolvedError
+            }
+            Some(d) => {
+                let ty_args = tys_opt.map(|tys| types(context, tys));
+                let nes = call_args(context, rhs);
+                NE::MethodCall(d, n, ty_args, nes)
+            }
+        },
         EE::Vector(vec_loc, tys_opt, rhs) => {
             let ty_args = tys_opt.map(|tys| types(context, tys));
             let nes = call_args(context, rhs);
@@ -1275,7 +1286,7 @@ fn dotted(context: &mut Context, edot: E::ExpDotted) -> Option<N::ExpDotted> {
     let sp!(loc, edot_) = edot;
     let nedot_ = match edot_ {
         E::ExpDotted_::Exp(e) => {
-            let ne = exp(context, e);
+            let ne = exp(context, *e);
             match &ne.value {
                 N::Exp_::UnresolvedError => return None,
                 _ => N::ExpDotted_::Exp(ne),
@@ -1638,6 +1649,12 @@ fn remove_unused_bindings_exp(
                 remove_unused_bindings_exp(context, used, e)
             }
         }
+        N::Exp_::MethodCall(ed, _, _, sp!(_, es)) => {
+            remove_unused_bindings_exp_dotted(context, used, ed);
+            for e in es {
+                remove_unused_bindings_exp(context, used, e)
+            }
+        }
 
         N::Exp_::DerefBorrow(ed) | N::Exp_::Borrow(_, ed) => {
             remove_unused_bindings_exp_dotted(context, used, ed)
@@ -1862,6 +1879,15 @@ fn spec_exp(used: &mut BTreeSet<(ModuleIdent, Neighbor)>, sp!(_, e_): &E::Exp) {
             spec_module_access(used, ma);
             if let Some(tys) = tys_opt {
                 spec_types(used, tys)
+            }
+        }
+        E::Exp_::MethodCall(edotted, _, tys_opt, sp!(_, args_)) => {
+            spec_exp_dotted(used, edotted);
+            if let Some(tys) = tys_opt {
+                spec_types(used, tys)
+            }
+            for arg in args_ {
+                spec_exp(used, arg)
             }
         }
         E::Exp_::Call(ma, _, tys_opt, sp!(_, args_)) => {

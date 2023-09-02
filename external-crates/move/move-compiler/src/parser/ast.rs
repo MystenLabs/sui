@@ -639,6 +639,8 @@ pub enum Exp_ {
 
     // e.f
     Dot(Box<Exp>, Name),
+    // e.f(earg,*)
+    DotCall(Box<Exp>, Name, Option<Vec<Type>>, Spanned<Vec<Exp>>),
     // e[e']
     Index(Box<Exp>, Box<Exp>), // spec only
 
@@ -1841,6 +1843,18 @@ impl AstDebug for Exp_ {
             E::Dot(e, n) => {
                 e.ast_debug(w);
                 w.write(&format!(".{}", n));
+            }
+            E::DotCall(e, n, tys_opt, sp!(_, rhs)) => {
+                e.ast_debug(w);
+                w.write(&format!(".{}", n));
+                if let Some(ss) = tys_opt {
+                    w.write("<");
+                    ss.ast_debug(w);
+                    w.write(">");
+                }
+                w.write("(");
+                w.comma(rhs, |w, e| e.ast_debug(w));
+                w.write(")");
             }
             E::Cast(e, ty) => {
                 w.write("(");

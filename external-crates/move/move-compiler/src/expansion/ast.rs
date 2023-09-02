@@ -378,7 +378,7 @@ pub type LValueWithRangeList = Spanned<LValueWithRangeList_>;
 #[derive(Debug, Clone, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum ExpDotted_ {
-    Exp(Exp),
+    Exp(Box<Exp>),
     Dot(Box<ExpDotted>, Name),
 }
 pub type ExpDotted = Spanned<ExpDotted_>;
@@ -422,6 +422,7 @@ pub enum Exp_ {
         Option<Vec<Type>>,
         Spanned<Vec<Exp>>,
     ),
+    MethodCall(Box<ExpDotted>, Name, Option<Vec<Type>>, Spanned<Vec<Exp>>),
     Pack(ModuleAccess, Option<Vec<Type>>, Fields<Exp>),
     Vector(Loc, Option<Vec<Type>>, Spanned<Vec<Exp>>),
 
@@ -1502,6 +1503,18 @@ impl AstDebug for Exp_ {
                 if *is_macro {
                     w.write("!");
                 }
+                if let Some(ss) = tys_opt {
+                    w.write("<");
+                    ss.ast_debug(w);
+                    w.write(">");
+                }
+                w.write("(");
+                w.comma(rhs, |w, e| e.ast_debug(w));
+                w.write(")");
+            }
+            E::MethodCall(e, f, tys_opt, sp!(_, rhs)) => {
+                e.ast_debug(w);
+                w.write(&format!(".{}", f));
                 if let Some(ss) = tys_opt {
                     w.write("<");
                     ss.ast_debug(w);

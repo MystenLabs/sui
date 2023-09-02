@@ -1,0 +1,18 @@
+error[E04023]: invalid method style call
+  ┌─ tests/move_2024/typing/dot_call_no_parameters.move:9:5
+  │
+6 │ fun h() {}
+  │     - Expected function 'h' to have at least one parameter
+  ·
+9 │     x.h();
+  │     ^^^^^ Invalid method style syntax usage
+
+error[E04023]: invalid method style call
+   ┌─ tests/move_2024/typing/dot_call_no_parameters.move:13:5
+   │
+ 6 │ fun h() {}
+   │     - Expected function 'h' to have at least one parameter
+   ·
+13 │     y.x.h();
+   │     ^^^^^^^ Invalid method style syntax usage
+

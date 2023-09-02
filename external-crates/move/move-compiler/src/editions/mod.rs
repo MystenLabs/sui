@@ -28,6 +28,7 @@ pub struct Edition {
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
 pub enum FeatureGate {
     PublicPackage,
+    DotCall,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
@@ -115,7 +116,7 @@ impl Edition {
             Self::LEGACY => BTreeSet::new(),
             Self::E2024_ALPHA => {
                 let mut features = self.prev().unwrap().features();
-                features.extend([FeatureGate::PublicPackage]);
+                features.extend([FeatureGate::PublicPackage, FeatureGate::DotCall]);
                 features
             }
             _ => self.unknown_edition_panic(),
@@ -249,8 +250,11 @@ impl Serialize for Flavor {
 }
 
 impl Display for FeatureGate {
-    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Ok(())
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FeatureGate::PublicPackage => Ok(()),
+            FeatureGate::DotCall => write!(f, "method style syntax"),
+        }
     }
 }
 

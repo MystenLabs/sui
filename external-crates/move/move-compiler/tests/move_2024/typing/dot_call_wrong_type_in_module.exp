@@ -1,0 +1,34 @@
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/dot_call_wrong_type_in_module.move:10:5
+   │
+ 7 │ fun g(_self: Z) {}
+   │              - Expected: '0x42::t::Z'
+ 8 │ 
+ 9 │ public fun foo(x: &X) {
+   │                   -- Given: '&0x42::t::X'
+10 │     x.g();
+   │     ^^^^^ Invalid call of '0x42::t::g'. Invalid argument for parameter '_self'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/dot_call_wrong_type_in_module.move:14:5
+   │
+ 4 │ struct Y has drop { x: X }
+   │                        - Given: '0x42::t::X'
+   ·
+ 7 │ fun g(_self: Z) {}
+   │              - Expected: '0x42::t::Z'
+   ·
+14 │     y.x.g();
+   │     ^^^^^^^ Invalid call of '0x42::t::g'. Invalid argument for parameter '_self'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/dot_call_wrong_type_in_module.move:14:5
+   │
+ 3 │ struct X has drop {}
+   │        - To satisfy the constraint, the 'copy' ability would need to be added here
+ 4 │ struct Y has drop { x: X }
+   │                        - The type '0x42::t::X' does not have the ability 'copy'
+   ·
+14 │     y.x.g();
+   │     ^^^^^^^ Invalid implicit copy of field 'x' without the 'copy' ability
+
