@@ -155,6 +155,13 @@ impl CheckpointData {
             .collect()
     }
 
+    pub fn input_objects(&self) -> Vec<&Object> {
+        self.transactions
+            .iter()
+            .flat_map(|tx| &tx.input_objects)
+            .collect()
+    }
+
     pub fn all_objects(&self) -> Vec<&Object> {
         self.transactions
             .iter()
