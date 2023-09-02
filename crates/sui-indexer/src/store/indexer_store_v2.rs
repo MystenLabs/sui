@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::handlers::tx_processor::InMemObjectCache;
+use crate::handlers::tx_processor::{InMemObjectCache, InMemPackageCache};
 use crate::models_v2::transactions::StoredTransaction;
 use async_trait::async_trait;
 use move_binary_format::CompiledModule;
@@ -159,7 +159,7 @@ where
     GM: GetModule<Item = Arc<CompiledModule>, Error = anyhow::Error>,
 {
     backup: GM,
-    package_cache: Arc<Mutex<InMemObjectCache>>,
+    package_cache: Arc<Mutex<InMemPackageCache>>,
     metrics: IndexerMetrics,
 }
 
@@ -169,7 +169,7 @@ where
 {
     pub fn new(
         backup: GM,
-        package_cache: Arc<Mutex<InMemObjectCache>>,
+        package_cache: Arc<Mutex<InMemPackageCache>>,
         new_packages: &[IndexedPackage],
         checkpoint_seq: CheckpointSequenceNumber,
         metrics: IndexerMetrics,

@@ -4,10 +4,10 @@
 use async_trait::async_trait;
 use itertools::Itertools;
 use move_bytecode_utils::module_cache::GetModule;
+use crate::handlers::tx_processor::InMemPackageCache;
 use mysten_metrics::{get_metrics, spawn_monitored_task};
 use sui_rest_api::CheckpointData;
 use sui_rest_api::CheckpointTransaction;
-use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::ObjectRef;
 use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::dynamic_field::DynamicFieldName;
@@ -98,7 +98,8 @@ where
         metrics: metrics.clone(),
         indexed_checkpoint_sender,
         checkpoint_starting_tx_seq_numbers: HashMap::new(),
-        object_cache: InMemObjectCache::start(rx),
+        // object_cache: InMemObjectCache::start(rx),
+        package_cache: InMemPackageCache::start(rx),
         // sui_client: Arc::new(sui_client),
     };
 
@@ -111,7 +112,8 @@ pub struct CheckpointHandler<S> {
     indexed_checkpoint_sender: mysten_metrics::metered_channel::Sender<TemporaryCheckpointStoreV2>,
     // Map from checkpoint sequence number and its starting transaction sequence number
     checkpoint_starting_tx_seq_numbers: HashMap<CheckpointSequenceNumber, u64>,
-    object_cache: Arc<Mutex<InMemObjectCache>>,
+    // object_cache: Arc<Mutex<InMemObjectCache>>,
+    package_cache: Arc<Mutex<InMemPackageCache>>,
     // sui_client: Arc<SuiClient>,
 }
 
@@ -161,7 +163,7 @@ where
             &self.state,
             current_checkpoint_starting_tx_seq,
             checkpoint_data.clone(),
-            self.object_cache.clone(),
+            self.package_cache.clone(),
             // self.sui_client.clone(),
             &self.metrics,
         )
@@ -354,7 +356,8 @@ where
         state: &S,
         starting_tx_sequence_number: u64,
         data: CheckpointData,
-        object_cache: Arc<Mutex<InMemObjectCache>>,
+        // object_cache: Arc<Mutex<InMemObjectCache>>,
+        package_cache: Arc<Mutex<InMemPackageCache>>,
         // sui_client: Arc<SuiClient>,
         metrics: &IndexerMetrics,
     ) -> Result<TemporaryCheckpointStoreV2, IndexerError> {
@@ -413,7 +416,7 @@ where
                 let (balance_change, object_changes) = TxChangesProcessor::new(
                     // state,
                     &objects,
-                    object_cache.clone(),
+                    // object_cache.clone(),
                     // sui_client.clone(),
                     *checkpoint_seq,
                     metrics.clone(),
@@ -504,7 +507,7 @@ where
 
         // Index Objects
         let (object_changes, packages) =
-            Self::index_checkpoint(state, data, object_cache, metrics).await;
+            Self::index_checkpoint(state, data, package_cache, metrics).await;
 
         Ok(TemporaryCheckpointStoreV2 {
             checkpoint,
@@ -520,7 +523,7 @@ where
     async fn index_checkpoint(
         state: &S,
         data: CheckpointData,
-        package_cache: Arc<Mutex<InMemObjectCache>>,
+        package_cache: Arc<Mutex<InMemPackageCache>>,
         metrics: &IndexerMetrics,
     ) -> (TransactionObjectChangesV2, Vec<IndexedPackage>) {
         let checkpoint_seq = data.checkpoint_summary.sequence_number;
@@ -536,7 +539,7 @@ where
         state: &S,
         data: CheckpointData,
         packages: &[IndexedPackage],
-        package_cache: Arc<Mutex<InMemObjectCache>>,
+        package_cache: Arc<Mutex<InMemPackageCache>>,
         metrics: &IndexerMetrics,
     ) -> TransactionObjectChangesV2 {
         let _timer = metrics.indexing_objects_latency.start_timer();

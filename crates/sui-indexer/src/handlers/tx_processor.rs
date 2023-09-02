@@ -3,6 +3,7 @@
 
 use async_trait::async_trait;
 use move_binary_format::CompiledModule;
+use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
 use mysten_metrics::monitored_scope;
 use mysten_metrics::spawn_monitored_task;
@@ -35,20 +36,16 @@ use crate::store::IndexerStoreV2;
 use crate::types_v2::IndexedPackage;
 use crate::types_v2::{IndexedObjectChange, IndexerResult};
 
-pub struct InMemObjectCache {
-    id_map: HashMap<ObjectID, (Arc<Object>, CheckpointSequenceNumber)>,
-    seq_map: HashMap<(ObjectID, SequenceNumber), (Arc<Object>, CheckpointSequenceNumber)>,
+
+pub struct InMemPackageCache {
     packages: HashMap<(ObjectID, String), (Arc<CompiledModule>, CheckpointSequenceNumber)>,
 }
 
-impl InMemObjectCache {
-    // FIXME: rename and remoev arc<mutex<
+impl InMemPackageCache {
     pub fn start(
         commit_watcher: watch::Receiver<Option<CheckpointSequenceNumber>>,
     ) -> Arc<Mutex<Self>> {
         let cache = Arc::new(Mutex::new(Self {
-            id_map: HashMap::new(),
-            seq_map: HashMap::new(),
             packages: HashMap::new(),
         }));
         let cache_clone = cache.clone();
@@ -60,7 +57,6 @@ impl InMemObjectCache {
         cache: Arc<Mutex<Self>>,
         commit_watcher: watch::Receiver<Option<CheckpointSequenceNumber>>,
     ) {
-
         // GC every 10 minutes
         let mut interval = tokio::time::interval_at(Instant::now(), Duration::from_secs(600));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -83,13 +79,6 @@ impl InMemObjectCache {
                 cache.packages.remove(&id);
             }
         }
-    }
-
-    pub fn insert_object(&mut self, object: Object, checkpoint_seq: CheckpointSequenceNumber) {
-        let obj = Arc::new(object);
-        self.id_map.insert(obj.id(), (obj.clone(), checkpoint_seq));
-        self.seq_map
-            .insert((obj.id(), obj.version()), (obj, checkpoint_seq));
     }
 
     pub fn insert_packages(
@@ -115,14 +104,6 @@ impl InMemObjectCache {
         self.packages.extend(new_packages);
     }
 
-    pub fn get(&self, id: &ObjectID, version: Option<&SequenceNumber>) -> Option<&Object> {
-        if let Some(version) = version {
-            self.seq_map.get(&(*id, *version)).map(|o| o.0.as_ref())
-        } else {
-            self.id_map.get(id).map(|o| o.0.as_ref())
-        }
-    }
-
     pub fn get_module_by_id(&self, id: &ModuleId) -> Option<Arc<CompiledModule>> {
         let package_id = ObjectID::from(*id.address());
         let name = id.name().to_string();
@@ -133,9 +114,108 @@ impl InMemObjectCache {
     }
 }
 
+pub struct InMemObjectCache {
+    id_map: HashMap<ObjectID, (Arc<Object>, CheckpointSequenceNumber)>,
+    seq_map: HashMap<(ObjectID, SequenceNumber), (Arc<Object>, CheckpointSequenceNumber)>,
+    // packages: HashMap<(ObjectID, String), (Arc<CompiledModule>, CheckpointSequenceNumber)>,
+}
+
+impl InMemObjectCache {
+    // FIXME: rename and remoev arc<mutex<
+    pub fn new(
+        // commit_watcher: watch::Receiver<Option<CheckpointSequenceNumber>>,
+    // ) -> Arc<Mutex<Self>> {
+    ) -> Self {
+        let cache = Self {
+            id_map: HashMap::new(),
+            seq_map: HashMap::new(),
+            // packages: HashMap::new(),
+        };
+        // let cache_clone = cache.clone();
+        // spawn_monitored_task!(Self::remove_committed(cache_clone, commit_watcher));
+        cache
+    }
+
+    // pub async fn remove_committed(
+    //     cache: Arc<Mutex<Self>>,
+    //     commit_watcher: watch::Receiver<Option<CheckpointSequenceNumber>>,
+    // ) {
+
+    //     // GC every 10 minutes
+    //     let mut interval = tokio::time::interval_at(Instant::now(), Duration::from_secs(600));
+    //     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    //     loop {
+    //         interval.tick().await;
+    //         let _scope = monitored_scope("InMemObjectCache::remove_committed");
+    //         let Some(committed_checkpoint) = *commit_watcher.borrow() else {
+    //             continue;
+    //         };
+    //         debug!("About to GC packages older than: {committed_checkpoint}");
+
+    //         let mut cache = cache.lock().unwrap();
+    //         let mut to_remove = vec![];
+    //         for (id, (_, checkpoint_seq)) in cache.packages.iter() {
+    //             if *checkpoint_seq <= committed_checkpoint {
+    //                 to_remove.push(id.clone());
+    //             }
+    //         }
+    //         for id in to_remove {
+    //             cache.packages.remove(&id);
+    //         }
+    //     }
+    // }
+
+    pub fn insert_object(&mut self, object: Object, checkpoint_seq: CheckpointSequenceNumber) {
+        let obj = Arc::new(object);
+        self.id_map.insert(obj.id(), (obj.clone(), checkpoint_seq));
+        self.seq_map
+            .insert((obj.id(), obj.version()), (obj, checkpoint_seq));
+    }
+
+    // pub fn insert_packages(
+    //     &mut self,
+    //     new_packages: &[IndexedPackage],
+    //     checkpoint_seq: CheckpointSequenceNumber,
+    // ) {
+    //     let new_packages = new_packages
+    //         .iter()
+    //         .flat_map(|p| {
+    //             p.move_package
+    //                 .serialized_module_map()
+    //                 .iter()
+    //                 .map(|(module_name, bytes)| {
+    //                     let module = CompiledModule::deserialize_with_defaults(bytes).unwrap();
+    //                     (
+    //                         (p.package_id, module_name.clone()),
+    //                         (Arc::new(module), checkpoint_seq),
+    //                     )
+    //                 })
+    //         })
+    //         .collect::<HashMap<_, _>>();
+    //     self.packages.extend(new_packages);
+    // }
+
+    pub fn get(&self, id: &ObjectID, version: Option<&SequenceNumber>) -> Option<&Object> {
+        if let Some(version) = version {
+            self.seq_map.get(&(*id, *version)).map(|o| o.0.as_ref())
+        } else {
+            self.id_map.get(id).map(|o| o.0.as_ref())
+        }
+    }
+
+    // pub fn get_module_by_id(&self, id: &ModuleId) -> Option<Arc<CompiledModule>> {
+    //     let package_id = ObjectID::from(*id.address());
+    //     let name = id.name().to_string();
+    //     self.packages
+    //         .get(&(package_id, name))
+    //         .as_ref()
+    //         .map(|(m, _)| m.clone())
+    // }
+}
+
 pub struct TxChangesProcessor {
     // state: &'a S,
-    object_cache: Arc<Mutex<InMemObjectCache>>,
+    object_cache: InMemObjectCache,
     // sui_client: Arc<SuiClient>,
     metrics: IndexerMetrics,
 }
@@ -144,16 +224,15 @@ impl TxChangesProcessor {
     pub fn new(
         // state: &'a S,
         objects: &[&Object],
-        object_cache: Arc<Mutex<InMemObjectCache>>,
+        // mut object_cache: InMemObjectCache,
         // sui_client: Arc<SuiClient>,
         // FIXME remove this
         checkpoint_seq: CheckpointSequenceNumber,
         metrics: IndexerMetrics,
     ) -> Self {
+        let mut object_cache = InMemObjectCache::new();
         for obj in objects {
             object_cache
-                .lock()
-                .unwrap()
                 .insert_object(<&Object>::clone(obj).clone(), checkpoint_seq);
         }
         Self {
@@ -204,14 +283,14 @@ impl TxChangesProcessor {
     }
 }
 
-impl Drop for TxChangesProcessor {
-    fn drop(&mut self) {
-        let _scope = monitored_scope("TxChangesProcessor::drop");
-        let mut cache = self.object_cache.lock().unwrap();
-        cache.id_map.clear();
-        cache.seq_map.clear();
-    }
-}
+// impl Drop for TxChangesProcessor {
+//     fn drop(&mut self) {
+//         let _scope = monitored_scope("TxChangesProcessor::drop");
+//         let mut cache = self.object_cache.lock().unwrap();
+//         cache.id_map.clear();
+//         cache.seq_map.clear();
+//     }
+// }
 
 
 // Note: the implementation of `ObjectProvider` for `TxChangesProcessor`
@@ -229,8 +308,6 @@ impl ObjectProvider for TxChangesProcessor {
     ) -> Result<Object, Self::Error> {
         let object = self
             .object_cache
-            .lock()
-            .unwrap()
             .get(id, Some(version))
             .as_ref()
             .map(|o| <&Object>::clone(o).clone());
@@ -278,8 +355,6 @@ impl ObjectProvider for TxChangesProcessor {
         // First look up the exact version in object_cache.
         let object = self
             .object_cache
-            .lock()
-            .unwrap()
             .get(id, Some(version))
             .as_ref()
             .map(|o| <&Object>::clone(o).clone());
@@ -293,8 +368,6 @@ impl ObjectProvider for TxChangesProcessor {
         // is given.
         let object = self
             .object_cache
-            .lock()
-            .unwrap()
             .get(id, None)
             .as_ref()
             .map(|o| <&Object>::clone(o).clone());
