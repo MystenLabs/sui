@@ -108,16 +108,16 @@ impl TransactionValidator for SuiTxValidator {
         // verify the certificate signatures as a batch
         let cert_count = cert_batch.len();
         let ckpt_count = ckpt_batch.len();
-        let epoch_store = self.epoch_store.clone();
-        Handle::current()
-            .spawn_blocking(move || {
-                epoch_store
-                    .signature_verifier
-                    .verify_certs_and_checkpoints(cert_batch, ckpt_batch)
-                    .tap_err(|e| warn!("batch verification error: {}", e))
-                    .wrap_err("Malformed batch (failed to verify)")
-            })
-            .await??;
+        // let epoch_store = self.epoch_store.clone();
+        // Handle::current()
+        //     .spawn_blocking(move || {
+        //         epoch_store
+        //             .signature_verifier
+        //             .verify_certs_and_checkpoints(cert_batch, ckpt_batch)
+        //             .tap_err(|e| warn!("batch verification error: {}", e))
+        //             .wrap_err("Malformed batch (failed to verify)")
+        //     })
+        //     .await??;
         drop(verify_sig_scope);
 
         let notify_chkp_sig_scope = monitored_scope("ValidateBatch-NotifyCheckpointSignature");
