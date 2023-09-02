@@ -1009,7 +1009,12 @@ impl AuthorityState {
         // this function occur before we have written anything to the db, so we commit the tx
         // guard and rely on the client to retry the tx (if it was transient).
         let (inner_temporary_store, effects, execution_error_opt) = match self
-            .prepare_certificate(&execution_guard, certificate, epoch_store)
+            .prepare_certificate_and_tolerate_fork_once(
+                &execution_guard,
+                certificate,
+                expected_effects_digest,
+                epoch_store,
+            )
             .await
         {
             Err(e) => {
@@ -1076,6 +1081,46 @@ impl AuthorityState {
         }
 
         Ok((effects, execution_error_opt))
+    }
+
+    async fn prepare_certificate_and_tolerate_fork_once(
+        &self,
+        _execution_guard: &ExecutionLockReadGuard<'_>,
+        certificate: &VerifiedExecutableTransaction,
+        expected_effects_digest: Option<TransactionEffectsDigest>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<(
+        InnerTemporaryStore,
+        TransactionEffects,
+        Option<ExecutionError>,
+    )> {
+        let mut protocol_config = epoch_store.protocol_config().clone();
+        protocol_config.hack_unsafe_do_not_call_set_loaded_child_object_format(true);
+        let res = self
+            .prepare_certificate(_execution_guard, certificate, epoch_store, &protocol_config)
+            .await?;
+        if let Some(expected_effects_digest) = expected_effects_digest {
+            if res.1.digest() != expected_effects_digest {
+                protocol_config.hack_unsafe_do_not_call_set_loaded_child_object_format(false);
+                let new_res = self
+                    .prepare_certificate(
+                        _execution_guard,
+                        certificate,
+                        epoch_store,
+                        &protocol_config,
+                    )
+                    .await?;
+                error!(
+                    "Fork detected and retried on tx: {:?}",
+                    certificate.digest()
+                );
+                error!("Fork detected with forked tx effects: {:?}", res.1);
+
+                error!("Fork detected with expected tx effects: {:?}", new_res.1);
+                return Ok(new_res);
+            }
+        }
+        Ok(res)
     }
 
     async fn commit_cert_and_notify(
@@ -1163,6 +1208,7 @@ impl AuthorityState {
         _execution_guard: &ExecutionLockReadGuard<'_>,
         certificate: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        protocol_config: &ProtocolConfig,
     ) -> SuiResult<(
         InnerTemporaryStore,
         TransactionEffects,
@@ -1182,7 +1228,6 @@ impl AuthorityState {
         let owned_object_refs = input_objects.filter_owned_objects();
         self.check_owned_locks(&owned_object_refs).await?;
         let tx_digest = *certificate.digest();
-        let protocol_config = epoch_store.protocol_config();
         let shared_object_refs = input_objects.filter_shared_objects();
         let transaction_dependencies = input_objects.transaction_dependencies();
         let transaction_data = &certificate.data().intent_message().value;
@@ -3861,7 +3906,12 @@ impl AuthorityState {
             .execution_lock_for_executable_transaction(&executable_tx)
             .await?;
         let (temporary_store, effects, _execution_error_opt) = self
-            .prepare_certificate(&execution_guard, &executable_tx, epoch_store)
+            .prepare_certificate(
+                &execution_guard,
+                &executable_tx,
+                epoch_store,
+                epoch_store.protocol_config(),
+            )
             .await?;
         let system_obj = get_sui_system_state(&temporary_store.written)
             .expect("change epoch tx must write to system object");

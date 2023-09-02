@@ -863,6 +863,10 @@ impl ProtocolConfig {
         self.feature_flags.loaded_child_object_format
     }
 
+    pub fn hack_unsafe_do_not_call_set_loaded_child_object_format(&mut self, value: bool) {
+        self.feature_flags.loaded_child_object_format = value;
+    }
+
     pub fn enable_jwk_consensus_updates(&self) -> bool {
         self.feature_flags.enable_jwk_consensus_updates
     }

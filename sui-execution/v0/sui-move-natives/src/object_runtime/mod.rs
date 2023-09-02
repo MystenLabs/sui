@@ -97,6 +97,7 @@ pub(crate) struct LocalProtocolConfig {
     pub(crate) object_runtime_max_num_cached_objects_system_tx: u64,
     pub(crate) object_runtime_max_num_store_entries: u64,
     pub(crate) object_runtime_max_num_store_entries_system_tx: u64,
+    pub(crate) loaded_child_object_format: bool,
 }
 
 impl LocalProtocolConfig {
@@ -121,6 +122,7 @@ impl LocalProtocolConfig {
             object_runtime_max_num_store_entries: constants.object_runtime_max_num_store_entries(),
             object_runtime_max_num_store_entries_system_tx: constants
                 .object_runtime_max_num_store_entries_system_tx(),
+            loaded_child_object_format: constants.loaded_child_object_format(),
         }
     }
 }
