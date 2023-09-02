@@ -44,7 +44,7 @@ pub struct InMemObjectCache {
 impl InMemObjectCache {
     // FIXME: rename and remoev arc<mutex<
     pub fn start(
-        // commit_watcher: watch::Receiver<Option<CheckpointSequenceNumber>>,
+        commit_watcher: watch::Receiver<Option<CheckpointSequenceNumber>>,
     ) -> Arc<Mutex<Self>> {
         let cache = Arc::new(Mutex::new(Self {
             id_map: HashMap::new(),
@@ -52,55 +52,38 @@ impl InMemObjectCache {
             packages: HashMap::new(),
         }));
         let cache_clone = cache.clone();
-        // spawn_monitored_task!(Self::remove_committed(cache_clone, commit_watcher,));
+        spawn_monitored_task!(Self::remove_committed(cache_clone, commit_watcher));
         cache
     }
 
-    // pub async fn remove_committed(
-    //     cache: Arc<Mutex<Self>>,
-    //     commit_watcher: watch::Receiver<Option<CheckpointSequenceNumber>>,
-    // ) {
-    //     // GC every 10 minutes
-    //     let mut interval = tokio::time::interval_at(Instant::now(), Duration::from_secs(600));
-    //     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-    //     loop {
-    //         interval.tick().await;
-    //         let _scope = monitored_scope("InMemObjectCache::remove_committed");
-    //         let Some(committed_checkpoint) = *commit_watcher.borrow() else {
-    //             continue;
-    //         };
-    //         debug!("About to GC data older than: {committed_checkpoint}");
+    pub async fn remove_committed(
+        cache: Arc<Mutex<Self>>,
+        commit_watcher: watch::Receiver<Option<CheckpointSequenceNumber>>,
+    ) {
 
-    //         let mut cache = cache.lock().unwrap();
-    //         let mut to_remove = vec![];
-    //         for (id, (_obj, checkpoint_seq)) in cache.id_map.iter() {
-    //             if *checkpoint_seq <= committed_checkpoint {
-    //                 to_remove.push(*id);
-    //             }
-    //         }
-    //         for id in to_remove {
-    //             cache.id_map.remove(&id);
-    //         }
-    //         let mut to_remove = vec![];
-    //         for (id, (_obj, checkpoint_seq)) in cache.seq_map.iter() {
-    //             if *checkpoint_seq <= committed_checkpoint {
-    //                 to_remove.push(*id);
-    //             }
-    //         }
-    //         for id in to_remove {
-    //             cache.seq_map.remove(&id);
-    //         }
-    //         let mut to_remove = vec![];
-    //         for (id, (_, checkpoint_seq)) in cache.packages.iter() {
-    //             if *checkpoint_seq <= committed_checkpoint {
-    //                 to_remove.push(id.clone());
-    //             }
-    //         }
-    //         for id in to_remove {
-    //             cache.packages.remove(&id);
-    //         }
-    //     }
-    // }
+        // GC every 10 minutes
+        let mut interval = tokio::time::interval_at(Instant::now(), Duration::from_secs(600));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            interval.tick().await;
+            let _scope = monitored_scope("InMemObjectCache::remove_committed");
+            let Some(committed_checkpoint) = *commit_watcher.borrow() else {
+                continue;
+            };
+            debug!("About to GC packages older than: {committed_checkpoint}");
+
+            let mut cache = cache.lock().unwrap();
+            let mut to_remove = vec![];
+            for (id, (_, checkpoint_seq)) in cache.packages.iter() {
+                if *checkpoint_seq <= committed_checkpoint {
+                    to_remove.push(id.clone());
+                }
+            }
+            for id in to_remove {
+                cache.packages.remove(&id);
+            }
+        }
+    }
 
     pub fn insert_object(&mut self, object: Object, checkpoint_seq: CheckpointSequenceNumber) {
         let obj = Arc::new(object);
@@ -220,6 +203,16 @@ impl TxChangesProcessor {
         Ok((balance_change, object_change))
     }
 }
+
+impl Drop for TxChangesProcessor {
+    fn drop(&mut self) {
+        let _scope = monitored_scope("TxChangesProcessor::drop");
+        let mut cache = self.object_cache.lock().unwrap();
+        cache.id_map.clear();
+        cache.seq_map.clear();
+    }
+}
+
 
 // Note: the implementation of `ObjectProvider` for `TxChangesProcessor`
 // is NOT trivial. It needs to be a ObjectProvider to do

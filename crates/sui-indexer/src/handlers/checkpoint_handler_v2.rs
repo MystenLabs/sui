@@ -79,13 +79,13 @@ where
     let state_clone = state.clone();
     let metrics_clone = metrics.clone();
     let config_clone = config.clone();
-    // let (tx, rx) = watch::channel(None);
+    let (tx, rx) = watch::channel(None);
     spawn_monitored_task!(start_tx_checkpoint_commit_task(
         state_clone,
         metrics_clone,
         config_clone,
         indexed_checkpoint_receiver,
-        // tx,
+        tx,
     ));
 
     // let sui_client = SuiClientBuilder::default()
@@ -98,7 +98,7 @@ where
         metrics: metrics.clone(),
         indexed_checkpoint_sender,
         checkpoint_starting_tx_seq_numbers: HashMap::new(),
-        // object_cache: InMemObjectCache::start(rx),
+        object_cache: InMemObjectCache::start(rx),
         // sui_client: Arc::new(sui_client),
     };
 
@@ -111,7 +111,7 @@ pub struct CheckpointHandler<S> {
     indexed_checkpoint_sender: mysten_metrics::metered_channel::Sender<TemporaryCheckpointStoreV2>,
     // Map from checkpoint sequence number and its starting transaction sequence number
     checkpoint_starting_tx_seq_numbers: HashMap<CheckpointSequenceNumber, u64>,
-    // object_cache: Arc<Mutex<InMemObjectCache>>,
+    object_cache: Arc<Mutex<InMemObjectCache>>,
     // sui_client: Arc<SuiClient>,
 }
 
@@ -157,12 +157,11 @@ where
 
         // Index checkpoint data
         let index_timer = self.metrics.checkpoint_index_latency.start_timer();
-
         let checkpoint = Self::index_checkpoint_and_epoch(
             &self.state,
             current_checkpoint_starting_tx_seq,
             checkpoint_data.clone(),
-            // self.object_cache.clone(),
+            self.object_cache.clone(),
             // self.sui_client.clone(),
             &self.metrics,
         )
@@ -355,13 +354,12 @@ where
         state: &S,
         starting_tx_sequence_number: u64,
         data: CheckpointData,
-        // object_cache: Arc<Mutex<InMemObjectCache>>,
+        object_cache: Arc<Mutex<InMemObjectCache>>,
         // sui_client: Arc<SuiClient>,
         metrics: &IndexerMetrics,
     ) -> Result<TemporaryCheckpointStoreV2, IndexerError> {
-        error!("Input Objects: {:?}", data.input_objects().iter().map(|o| (o.id(), o.version())).collect::<Vec<_>>());
-        error!("Output Objects: {:?}", data.output_objects().iter().map(|o| (o.id(), o.version())).collect::<Vec<_>>());
-        let object_cache = InMemObjectCache::start();
+        // error!("Input Objects: {:?}", data.input_objects().iter().map(|o| (o.id(), o.version())).collect::<Vec<_>>());
+        // error!("Output Objects: {:?}", data.output_objects().iter().map(|o| (o.id(), o.version())).collect::<Vec<_>>());
         let (checkpoint, db_transactions, db_events, db_indices) = {
             let CheckpointData {
                 transactions,
@@ -522,14 +520,14 @@ where
     async fn index_checkpoint(
         state: &S,
         data: CheckpointData,
-        object_cache: Arc<Mutex<InMemObjectCache>>,
+        package_cache: Arc<Mutex<InMemObjectCache>>,
         metrics: &IndexerMetrics,
     ) -> (TransactionObjectChangesV2, Vec<IndexedPackage>) {
         let checkpoint_seq = data.checkpoint_summary.sequence_number;
         info!(checkpoint_seq, "Indexing checkpoint");
         let packages = Self::index_packages(&data, metrics);
 
-        let object_changes = Self::index_objects(state, data, &packages, object_cache, metrics);
+        let object_changes = Self::index_objects(state, data, &packages, package_cache, metrics);
 
         (object_changes, packages)
     }
@@ -538,16 +536,17 @@ where
         state: &S,
         data: CheckpointData,
         packages: &[IndexedPackage],
-        object_cache: Arc<Mutex<InMemObjectCache>>,
+        package_cache: Arc<Mutex<InMemObjectCache>>,
         metrics: &IndexerMetrics,
     ) -> TransactionObjectChangesV2 {
         let _timer = metrics.indexing_objects_latency.start_timer();
         let checkpoint_seq = data.checkpoint_summary.sequence_number;
         let module_resolver = InterimModuleResolver::new(
             state.module_cache(),
-            object_cache,
+            package_cache,
             packages,
             checkpoint_seq,
+            metrics.clone(),
         );
         let deleted_objects = data
             .transactions
@@ -633,7 +632,7 @@ pub async fn start_tx_checkpoint_commit_task<S>(
     metrics: IndexerMetrics,
     config: IndexerConfig,
     tx_indexing_receiver: mysten_metrics::metered_channel::Receiver<TemporaryCheckpointStoreV2>,
-    // commit_notifier: watch::Sender<Option<CheckpointSequenceNumber>>,
+    commit_notifier: watch::Sender<Option<CheckpointSequenceNumber>>,
 ) where
     S: IndexerStoreV2 + Clone + Sync + Send + 'static,
 {
@@ -738,9 +737,9 @@ pub async fn start_tx_checkpoint_commit_task<S>(
             .expect("Persisting data into DB should not fail.");
         let elapsed = guard.stop_and_record();
 
-        // commit_notifier
-        //     .send(Some(last_checkpoint_seq))
-        //     .expect("Commit watcher should not be closed");
+        commit_notifier
+            .send(Some(last_checkpoint_seq))
+            .expect("Commit watcher should not be closed");
 
         metrics
             .latest_tx_checkpoint_sequence_number

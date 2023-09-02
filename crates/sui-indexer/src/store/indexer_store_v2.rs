@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
+use tap::TapFallible;
 use std::sync::{Arc, Mutex};
 use sui_json_rpc_types::{
     Checkpoint as RpcCheckpoint, CheckpointId, EpochInfo, EventFilter, EventPage, SuiEvent,
@@ -158,7 +159,8 @@ where
     GM: GetModule<Item = Arc<CompiledModule>, Error = anyhow::Error>,
 {
     backup: GM,
-    object_cache: Arc<Mutex<InMemObjectCache>>,
+    package_cache: Arc<Mutex<InMemObjectCache>>,
+    metrics: IndexerMetrics,
 }
 
 impl<GM> InterimModuleResolver<GM>
@@ -167,17 +169,19 @@ where
 {
     pub fn new(
         backup: GM,
-        object_cache: Arc<Mutex<InMemObjectCache>>,
+        package_cache: Arc<Mutex<InMemObjectCache>>,
         new_packages: &[IndexedPackage],
         checkpoint_seq: CheckpointSequenceNumber,
+        metrics: IndexerMetrics,
     ) -> Self {
-        object_cache
+        package_cache
             .lock()
             .unwrap()
             .insert_packages(new_packages, checkpoint_seq);
         Self {
             backup,
-            object_cache,
+            package_cache,
+            metrics,
         }
     }
 }
@@ -190,7 +194,8 @@ where
     type Item = Arc<CompiledModule>;
 
     fn get_module_by_id(&self, id: &ModuleId) -> Result<Option<Arc<CompiledModule>>, Self::Error> {
-        if let Some(m) = self.object_cache.lock().unwrap().get_module_by_id(id) {
+        if let Some(m) = self.package_cache.lock().unwrap().get_module_by_id(id) {
+            self.metrics.indexing_module_resolver_in_mem_hit.inc();
             Ok(Some(m))
         } else {
             self.backup

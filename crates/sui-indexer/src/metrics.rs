@@ -42,7 +42,8 @@ pub struct IndexerMetrics {
     pub indexing_objects_latency: Histogram,
     pub indexing_get_object_in_mem_hit: IntCounter,
     pub indexing_get_object_db_hit: IntCounter,
-    pub indexing_get_object_remote_hit: IntCounter,
+    pub indexing_module_resolver_in_mem_hit: IntCounter,
+    pub indexing_module_resolver_in_mem_miss: IntCounter,
     pub indexing_packages_latency: Histogram,
     pub checkpoint_objects_index_latency: Histogram,
     pub checkpoint_db_commit_latency: Histogram,
@@ -221,9 +222,15 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
-            indexing_get_object_remote_hit: register_int_counter_with_registry!(
-                "indexing_get_object_remote_hit",
-                "Total number get object hit from remote",
+            indexing_module_resolver_in_mem_hit: register_int_counter_with_registry!(
+                "indexing_module_resolver_in_mem_hit",
+                "Total number module resolver hit in mem",
+                registry,
+            )
+            .unwrap(),
+            indexing_module_resolver_in_mem_miss: register_int_counter_with_registry!(
+                "indexing_module_resolver_in_mem_miss",
+                "Total number module resolver miss in mem",
                 registry,
             )
             .unwrap(),
