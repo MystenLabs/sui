@@ -38,6 +38,12 @@ pub struct IndexerMetrics {
     pub fullnode_transaction_download_latency: Histogram,
     pub fullnode_object_download_latency: Histogram,
     pub checkpoint_index_latency: Histogram,
+    pub indexing_tx_object_changes_latency: Histogram,
+    pub indexing_objects_latency: Histogram,
+    pub indexing_get_object_in_mem_hit: IntCounter,
+    pub indexing_get_object_db_hit: IntCounter,
+    pub indexing_get_object_remote_hit: IntCounter,
+    pub indexing_packages_latency: Histogram,
     pub checkpoint_objects_index_latency: Histogram,
     pub checkpoint_db_commit_latency: Histogram,
     // average latency of committing 1000 transactions.
@@ -179,6 +185,45 @@ impl IndexerMetrics {
                 "checkpoint_index_latency",
                 "Time spent in indexing a checkpoint",
                 LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            indexing_tx_object_changes_latency: register_histogram_with_registry!(
+                "indexing_tx_object_changes_latency",
+                "Time spent in indexing object changes for a transaction",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            indexing_objects_latency: register_histogram_with_registry!(
+                "indexing_objects_latency",
+                "Time spent in indexing objects",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            indexing_packages_latency: register_histogram_with_registry!(
+                "indexing_packages_latency",
+                "Time spent in indexing packages",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            indexing_get_object_in_mem_hit: register_int_counter_with_registry!(
+                "indexing_get_object_in_mem_hit",
+                "Total number get object hit in mem",
+                registry,
+            )
+            .unwrap(),
+            indexing_get_object_db_hit: register_int_counter_with_registry!(
+                "indexing_get_object_db_hit",
+                "Total number get object hit in db",
+                registry,
+            )
+            .unwrap(),
+            indexing_get_object_remote_hit: register_int_counter_with_registry!(
+                "indexing_get_object_remote_hit",
+                "Total number get object hit from remote",
                 registry,
             )
             .unwrap(),

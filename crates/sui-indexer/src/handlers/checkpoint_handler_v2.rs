@@ -6,6 +6,7 @@ use itertools::Itertools;
 use move_bytecode_utils::module_cache::GetModule;
 use mysten_metrics::{get_metrics, spawn_monitored_task};
 use sui_rest_api::CheckpointData;
+use sui_rest_api::CheckpointTransaction;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::ObjectRef;
 use sui_types::dynamic_field::DynamicFieldInfo;
@@ -163,6 +164,7 @@ where
             checkpoint_data.clone(),
             self.object_cache.clone(),
             self.sui_client.clone(),
+            &self.metrics,
         )
         .await
         .tap_err(|e| {
@@ -195,16 +197,33 @@ where
     }
 }
 
-struct CheckpointDataObjectStore<'a> {
-    objects: &'a [Object],
+// This is a struct that is used to extract SuiSystemState and its dynamic children
+// for end-of-epoch indexing.
+struct EpochEndIndexingDataStore<'a> {
+    // objects: &'a [Object],
+    objects: Vec<&'a Object>,
 }
 
-impl<'a> sui_types::storage::ObjectStore for CheckpointDataObjectStore<'a> {
+impl<'a> EpochEndIndexingDataStore<'a> {
+    pub fn new(data: &'a CheckpointData) -> Self {
+        // We only care about output objects for end-of-epoch indexing
+        Self {
+            objects: data.output_objects(),
+        }
+    }
+}
+
+impl<'a> sui_types::storage::ObjectStore for EpochEndIndexingDataStore<'a> {
     fn get_object(
         &self,
         object_id: &ObjectID,
     ) -> Result<Option<Object>, sui_types::error::SuiError> {
-        Ok(self.objects.iter().find(|o| o.id() == *object_id).cloned())
+        Ok(self
+            .objects
+            .iter()
+            .find(|o| o.id() == *object_id)
+            .cloned()
+            .cloned())
     }
 
     fn get_object_by_key(
@@ -216,6 +235,7 @@ impl<'a> sui_types::storage::ObjectStore for CheckpointDataObjectStore<'a> {
             .objects
             .iter()
             .find(|o| o.id() == *object_id && o.version() == version)
+            .cloned()
             .cloned())
     }
 }
@@ -230,14 +250,13 @@ where
         state: &S,
         data: &CheckpointData,
     ) -> Result<Option<TemporaryEpochStoreV2>, IndexerError> {
+        let checkpoint_object_store = EpochEndIndexingDataStore::new(data);
+
         let CheckpointData {
             transactions,
             checkpoint_summary,
             checkpoint_contents: _,
-            objects,
         } = data;
-
-        let checkpoint_object_store = CheckpointDataObjectStore { objects };
 
         // Genesis epoch
         if *checkpoint_summary.sequence_number() == 0 {
@@ -271,7 +290,7 @@ where
 
         let epoch_event = transactions
             .iter()
-            .flat_map(|(_, _, events)| events.as_ref().map(|e| &e.data))
+            .flat_map(|t| t.events.as_ref().map(|e| &e.data))
             .flatten()
             .find(|ev| ev.is_system_epoch_info_event())
             .unwrap_or_else(|| {
@@ -338,20 +357,29 @@ where
         data: CheckpointData,
         object_cache: Arc<Mutex<InMemObjectCache>>,
         sui_client: Arc<SuiClient>,
+        metrics: &IndexerMetrics,
     ) -> Result<TemporaryCheckpointStoreV2, IndexerError> {
         let (checkpoint, db_transactions, db_events, db_indices) = {
             let CheckpointData {
                 transactions,
                 checkpoint_summary,
                 checkpoint_contents,
-                objects,
+                // objects,
             } = &data;
             let checkpoint_seq = checkpoint_summary.sequence_number();
             let mut db_transactions = Vec::new();
             let mut db_events = Vec::new();
             let mut db_indices = Vec::new();
 
-            for (idx, (sender_signed_data, fx, events)) in transactions.iter().enumerate() {
+            // for (idx, (sender_signed_data, fx, events)) in transactions.iter().enumerate() {
+            for (idx, tx) in transactions.iter().enumerate() {
+                let CheckpointTransaction {
+                    transaction: sender_signed_data,
+                    effects: fx,
+                    events,
+                    input_objects,
+                    output_objects,
+                } = tx;
                 let tx_sequence_number = starting_tx_sequence_number + idx as u64;
                 let tx_digest = sender_signed_data.digest();
                 let tx = sender_signed_data.transaction_data();
@@ -376,12 +404,18 @@ where
                     )
                 }));
 
+                let objects = input_objects
+                    .iter()
+                    .chain(output_objects.iter())
+                    .collect::<Vec<_>>();
+
                 let (balance_change, object_changes) = TxChangesProcessor::new(
                     state,
-                    objects,
+                    &objects,
                     object_cache.clone(),
                     sui_client.clone(),
                     *checkpoint_seq,
+                    metrics.clone(),
                 )
                 .get_changes(tx, fx, tx_digest)
                 .await?;
@@ -468,7 +502,8 @@ where
         let epoch = Self::index_epoch(state, &data).await?;
 
         // Index Objects
-        let (object_changes, packages) = Self::index_checkpoint(state, data, object_cache).await;
+        let (object_changes, packages) =
+            Self::index_checkpoint(state, data, object_cache, metrics).await;
 
         Ok(TemporaryCheckpointStoreV2 {
             checkpoint,
@@ -485,21 +520,25 @@ where
         state: &S,
         data: CheckpointData,
         object_cache: Arc<Mutex<InMemObjectCache>>,
+        metrics: &IndexerMetrics,
     ) -> (TransactionObjectChangesV2, Vec<IndexedPackage>) {
         let checkpoint_seq = data.checkpoint_summary.sequence_number;
         info!(checkpoint_seq, "Indexing checkpoint");
-        let packages = Self::index_packages(&data);
-        let object_changes = Self::index_object_changes(state, data, &packages, object_cache);
+        let packages = Self::index_packages(&data, metrics);
+
+        let object_changes = Self::index_objects(state, data, &packages, object_cache, metrics);
 
         (object_changes, packages)
     }
 
-    fn index_object_changes(
+    fn index_objects(
         state: &S,
         data: CheckpointData,
         packages: &[IndexedPackage],
         object_cache: Arc<Mutex<InMemObjectCache>>,
+        metrics: &IndexerMetrics,
     ) -> TransactionObjectChangesV2 {
+        let _timer = metrics.indexing_objects_latency.start_timer();
         let checkpoint_seq = data.checkpoint_summary.sequence_number;
         let module_resolver = InterimModuleResolver::new(
             state.module_cache(),
@@ -510,7 +549,7 @@ where
         let deleted_objects = data
             .transactions
             .iter()
-            .flat_map(|(_, fx, _)| get_deleted_objects(fx))
+            .flat_map(|tx| get_deleted_objects(&tx.effects))
             .collect::<Vec<_>>();
 
         let deleted_object_ids = deleted_objects
@@ -518,16 +557,22 @@ where
             .map(|o| (o.0, o.1))
             .collect::<HashSet<_>>();
 
-        let (objects, discarded_versions) = get_latest_objects(data.objects);
+        let (objects, intermediate_versions) = get_latest_objects(data.output_objects());
 
         let changed_objects = data
             .transactions
             .iter()
-            .flat_map(|(tx, fx, _)| {
+            .flat_map(|tx| {
+                let CheckpointTransaction {
+                    transaction: tx,
+                    effects: fx,
+                    ..
+                } = tx;
                 fx.all_changed_objects()
                     .into_iter()
                     .filter_map(|(oref, _owner, _kind)| {
-                        if discarded_versions.contains(&(oref.0, oref.1))
+                        // We don't care about objects that are deleted or updated more than once
+                        if intermediate_versions.contains(&(oref.0, oref.1))
                             || deleted_object_ids.contains(&(oref.0, oref.1))
                         {
                             return None;
@@ -558,9 +603,13 @@ where
         }
     }
 
-    fn index_packages(checkpoint_data: &CheckpointData) -> Vec<IndexedPackage> {
+    fn index_packages(
+        checkpoint_data: &CheckpointData,
+        metrics: &IndexerMetrics,
+    ) -> Vec<IndexedPackage> {
+        let _timer = metrics.indexing_packages_latency.start_timer();
         checkpoint_data
-            .objects
+            .output_objects()
             .iter()
             .filter_map(|o| {
                 if let sui_types::object::Data::Package(p) = &o.data {
@@ -727,7 +776,7 @@ pub fn get_deleted_objects(effects: &TransactionEffects) -> Vec<ObjectRef> {
 }
 
 pub fn get_latest_objects(
-    objects: Vec<Object>,
+    objects: Vec<&Object>,
 ) -> (
     HashMap<ObjectID, Object>,
     HashSet<(ObjectID, SequenceNumber)>,
@@ -737,12 +786,12 @@ pub fn get_latest_objects(
     for object in objects {
         match latest_objects.entry(object.id()) {
             Entry::Vacant(e) => {
-                e.insert(object);
+                e.insert(object.clone());
             }
             Entry::Occupied(mut e) => {
                 if object.version() > e.get().version() {
                     discarded_versions.insert((e.get().id(), e.get().version()));
-                    e.insert(object);
+                    e.insert(object.clone());
                 }
             }
         }

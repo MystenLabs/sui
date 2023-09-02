@@ -29,6 +29,7 @@ use sui_types::base_types::ObjectID;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::errors::IndexerError;
+use crate::metrics::IndexerMetrics;
 use crate::store::IndexerStoreV2;
 
 use crate::types_v2::IndexedPackage;
@@ -152,6 +153,7 @@ pub struct TxChangesProcessor<'a, S> {
     state: &'a S,
     object_cache: Arc<Mutex<InMemObjectCache>>,
     sui_client: Arc<SuiClient>,
+    metrics: IndexerMetrics,
 }
 
 impl<'a, S> TxChangesProcessor<'a, S>
@@ -160,21 +162,23 @@ where
 {
     pub fn new(
         state: &'a S,
-        objects: &[Object],
+        objects: &[&Object],
         object_cache: Arc<Mutex<InMemObjectCache>>,
         sui_client: Arc<SuiClient>,
         checkpoint_seq: CheckpointSequenceNumber,
+        metrics: IndexerMetrics,
     ) -> Self {
         for obj in objects {
             object_cache
                 .lock()
                 .unwrap()
-                .insert_object(obj.clone(), checkpoint_seq);
+                .insert_object(<&Object>::clone(obj).clone(), checkpoint_seq);
         }
         Self {
             state,
             object_cache,
             sui_client,
+            metrics,
         }
     }
 
@@ -187,6 +191,10 @@ where
         Vec<sui_json_rpc_types::BalanceChange>,
         Vec<IndexedObjectChange>,
     )> {
+        let _timer = self
+            .metrics
+            .indexing_tx_object_changes_latency
+            .start_timer();
         let object_change: Vec<_> = get_object_changes(
             self,
             tx.sender(),
@@ -238,10 +246,12 @@ where
             .as_ref()
             .map(|o| <&Object>::clone(o).clone());
         if let Some(o) = object {
+            self.metrics.indexing_get_object_in_mem_hit.inc();
             return Ok(o);
         }
 
         if let Some(object) = self.state.get_object(*id, Some(*version)).await? {
+            self.metrics.indexing_get_object_db_hit.inc();
             return Ok(object);
         }
 
@@ -266,6 +276,7 @@ where
             .try_into()
             .map_err(|e: anyhow::Error| IndexerError::DataTransformationError(e.to_string()))?;
 
+        self.metrics.indexing_get_object_remote_hit.inc();
         Ok(object)
     }
 
@@ -284,6 +295,7 @@ where
             .as_ref()
             .map(|o| <&Object>::clone(o).clone());
         if let Some(o) = object {
+            self.metrics.indexing_get_object_in_mem_hit.inc();
             return Ok(Some(o));
         }
 
@@ -303,6 +315,7 @@ where
             // we may not find the version that lt_or_eq to the given version.
             // In this case, we default
             if o.version() <= *version {
+                self.metrics.indexing_get_object_in_mem_hit.inc();
                 return Ok(Some(o));
             }
         }
@@ -317,6 +330,7 @@ where
                 );
             }
             Some(object) => {
+                self.metrics.indexing_get_object_db_hit.inc();
                 assert!(object.version() <= *version);
                 Ok(Some(object))
             }
