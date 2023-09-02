@@ -39,7 +39,7 @@ use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, IntCounter, IntCounterVec, IntGauge, Registry,
 };
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::string::ToString;
 use std::sync::Arc;
 use std::time::Duration;
@@ -360,7 +360,7 @@ struct ProcessCertificateState {
     non_retryable_stake: StakeUnit,
     non_retryable_errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
     retryable_errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
-    object_map: HashMap<TransactionEffectsDigest, HashSet<Object>>,
+    object_map: HashMap<TransactionEffectsDigest, HashMap<ObjectID, Object>>,
     // As long as none of the exit criteria are met we consider the state retryable
     // 1) >= 2f+1 signatures
     // 2) >= f+1 non-retryable errors
@@ -1211,7 +1211,7 @@ where
                                 good_stake,
                                 most_staked_conflicting_tx_stake =? state.most_staked_conflicting_tx_stake,
                                 retryable_stake,
-                                "No chance for any tx to get quorum, exiting. Confliting_txes: {:?}",
+                                "No chance for any tx to get quorum, exiting. Conflicting_txes: {:?}",
                                 state.conflicting_tx_digests
                             );
                             // If there is no chance for any tx to get quorum, exit.
@@ -1754,7 +1754,7 @@ where
                             debug!(?tx_digest, "Got quorum for validators handle_certificate.");
                             let fastpath_input_objects =
                                 state.object_map.remove(&effects_digest).unwrap_or_default();
-                            Some((ct, events, fastpath_input_objects.into_iter().collect()))
+                            Some((ct, events, fastpath_input_objects.into_values().collect()))
                         })
                     }
                 };
@@ -1764,11 +1764,11 @@ where
                     // Therefore, as long as we have quorum on effects, we have quorum on objects.
                     // One thing to note is objects may be missing in some responses e.g. validators are on
                     // different code versions, but this is fine as long as their content is correct.
-                    state
-                        .object_map
-                        .entry(effects_digest)
-                        .or_default()
-                        .extend(fastpath_input_objects.into_iter());
+                    state.object_map.entry(effects_digest).or_default().extend(
+                        fastpath_input_objects
+                            .into_iter()
+                            .map(|obj| (obj.id(), obj)),
+                    );
                 }
                 result
             }
