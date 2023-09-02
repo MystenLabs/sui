@@ -8,6 +8,7 @@
 // state to the chain for auditability + restore from snapshot purposes.
 module sui::authenticator_state {
     use std::string;
+    use std::option::{Self, Option};
     use std::vector;
     use sui::dynamic_field;
     use std::string::{String, utf8};
@@ -19,6 +20,7 @@ module sui::authenticator_state {
     /// Sender is not @0x0 the system address.
     const ENotSystemAddress: u64 = 0;
     const EWrongInnerVersion: u64 = 1;
+    const EJwksNotSorted: u64 = 2;
 
     const CurrentVersion: u64 = 1;
 
@@ -61,14 +63,14 @@ module sui::authenticator_state {
     }
 
     #[test_only]
-    fun create_active_jwk(kid: &String, kty: &String, epoch: u64): ActiveJwk {
+    public fun create_active_jwk(iss: String, kid: String, kty: String, epoch: u64): ActiveJwk {
         ActiveJwk {
             jwk_id: JwkId {
-                iss: utf8(b"test"),
-                kid: *kid,
+                iss: iss,
+                kid: kid,
             },
             jwk: JWK {
-                kty: *kty,
+                kty: kty,
                 e: utf8(b"AQAB"),
                 n: utf8(b"test"),
                 alg: utf8(b"RS256"),
@@ -190,6 +192,16 @@ module sui::authenticator_state {
         inner
     }
 
+    fun check_sorted(new_active_jwks: &vector<ActiveJwk>) {
+        let i = 0;
+        while (i < vector::length(new_active_jwks) - 1) {
+            let a = vector::borrow(new_active_jwks, i);
+            let b = vector::borrow(new_active_jwks, i + 1);
+            assert!(jwk_lt(a, b), EJwksNotSorted);
+            i = i + 1;
+        };
+    }
+
     #[allow(unused_function)]
     /// Record a new set of active_jwks. Called when executing the AuthenticatorStateUpdate system
     /// transaction. The new input vector must be sorted and must not contain duplicates.
@@ -202,6 +214,8 @@ module sui::authenticator_state {
     ) {
         // Validator will make a special system call with sender set as 0x0.
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+
+        check_sorted(&new_active_jwks);
 
         let inner = load_inner_mut(self);
 
@@ -255,14 +269,58 @@ module sui::authenticator_state {
 
         let inner = load_inner_mut(self);
 
-        let new_active_jwks: vector<ActiveJwk> = vector[];
         let len = vector::length(&inner.active_jwks);
+
+        // first we count how many jwks from each issuer are above the min_epoch
+        // and store the counts in a vector that parallels the (sorted) active_jwks vector
+        let issuer_max_epochs = vector[];
         let i = 0;
+        let prev_issuer: Option<String> = option::none();
+
+        while (i < len) {
+            let cur = vector::borrow(&inner.active_jwks, i);
+            let cur_iss = &cur.jwk_id.iss;
+            if (option::is_none(&prev_issuer)) {
+                option::fill(&mut prev_issuer, *cur_iss);
+                vector::push_back(&mut issuer_max_epochs, cur.epoch);
+            } else {
+                if (cur_iss == option::borrow(&prev_issuer)) {
+                    let back = vector::length(&issuer_max_epochs) - 1;
+                    let prev_max_epoch = vector::borrow_mut(&mut issuer_max_epochs, back);
+                    *prev_max_epoch = math::max(*prev_max_epoch, cur.epoch);
+                } else {
+                    *option::borrow_mut(&mut prev_issuer) = *cur_iss;
+                    vector::push_back(&mut issuer_max_epochs, cur.epoch);
+                }
+            };
+            i = i + 1;
+        };
+
+        // Now, filter out any JWKs that are below the min_epoch, unless that issuer has no
+        // JWKs >= the min_epoch, in which case we keep all of them.
+        let new_active_jwks: vector<ActiveJwk> = vector[];
+        let prev_issuer: Option<String> = option::none();
+        let i = 0;
+        let j = 0;
         while (i < len) {
             let jwk = vector::borrow(&inner.active_jwks, i);
-            if (jwk.epoch >= min_epoch) {
+            let cur_iss = &jwk.jwk_id.iss;
+
+            if (option::is_none(&prev_issuer)) {
+                option::fill(&mut prev_issuer, *cur_iss);
+            } else if (cur_iss != option::borrow(&prev_issuer)) {
+                *option::borrow_mut(&mut prev_issuer) = *cur_iss;
+                j = j + 1;
+            };
+
+            let max_epoch_for_iss = vector::borrow(&issuer_max_epochs, j);
+
+            // TODO: if the iss for this jwk has *no* jwks that meet the minimum epoch,
+            // then expire nothing.
+            if (*max_epoch_for_iss < min_epoch || jwk.epoch >= min_epoch) {
                 vector::push_back(&mut new_active_jwks, *jwk);
-            }
+            };
+            i = i + 1;
         };
         inner.active_jwks = new_active_jwks;
     }

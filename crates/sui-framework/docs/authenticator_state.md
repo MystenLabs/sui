@@ -17,12 +17,14 @@
 -  [Function `create`](#0x2_authenticator_state_create)
 -  [Function `load_inner_mut`](#0x2_authenticator_state_load_inner_mut)
 -  [Function `load_inner`](#0x2_authenticator_state_load_inner)
+-  [Function `check_sorted`](#0x2_authenticator_state_check_sorted)
 -  [Function `update_authenticator_state`](#0x2_authenticator_state_update_authenticator_state)
 -  [Function `expire_jwks`](#0x2_authenticator_state_expire_jwks)
 -  [Function `get_active_jwks`](#0x2_authenticator_state_get_active_jwks)
 
 
-<pre><code><b>use</b> <a href="">0x1::string</a>;
+<pre><code><b>use</b> <a href="">0x1::option</a>;
+<b>use</b> <a href="">0x1::string</a>;
 <b>use</b> <a href="dynamic_field.md#0x2_dynamic_field">0x2::dynamic_field</a>;
 <b>use</b> <a href="math.md#0x2_math">0x2::math</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
@@ -240,6 +242,15 @@ Sender is not @0x0 the system address.
 
 
 <pre><code><b>const</b> <a href="authenticator_state.md#0x2_authenticator_state_CurrentVersion">CurrentVersion</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="0x2_authenticator_state_EJwksNotSorted"></a>
+
+
+
+<pre><code><b>const</b> <a href="authenticator_state.md#0x2_authenticator_state_EJwksNotSorted">EJwksNotSorted</a>: u64 = 2;
 </code></pre>
 
 
@@ -482,12 +493,44 @@ Can only be called by genesis or change_epoch transactions.
 
 </details>
 
+<a name="0x2_authenticator_state_check_sorted"></a>
+
+## Function `check_sorted`
+
+
+
+<pre><code><b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state_check_sorted">check_sorted</a>(new_active_jwks: &<a href="">vector</a>&lt;<a href="authenticator_state.md#0x2_authenticator_state_ActiveJwk">authenticator_state::ActiveJwk</a>&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state_check_sorted">check_sorted</a>(new_active_jwks: &<a href="">vector</a>&lt;<a href="authenticator_state.md#0x2_authenticator_state_ActiveJwk">ActiveJwk</a>&gt;) {
+    <b>let</b> i = 0;
+    <b>while</b> (i &lt; <a href="_length">vector::length</a>(new_active_jwks) - 1) {
+        <b>let</b> a = <a href="_borrow">vector::borrow</a>(new_active_jwks, i);
+        <b>let</b> b = <a href="_borrow">vector::borrow</a>(new_active_jwks, i + 1);
+        <b>assert</b>!(<a href="authenticator_state.md#0x2_authenticator_state_jwk_lt">jwk_lt</a>(a, b), <a href="authenticator_state.md#0x2_authenticator_state_EJwksNotSorted">EJwksNotSorted</a>);
+        i = i + 1;
+    };
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_authenticator_state_update_authenticator_state"></a>
 
 ## Function `update_authenticator_state`
 
 Record a new set of active_jwks. Called when executing the AuthenticatorStateUpdate system
-transaction.
+transaction. The new input vector must be sorted and must not contain duplicates.
+If a new JWK is already present, but with a previous epoch, then the epoch is updated to
+indicate that the JWK has been validated in the current epoch and should not be expired.
 
 
 <pre><code><b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state_update_authenticator_state">update_authenticator_state</a>(self: &<b>mut</b> <a href="authenticator_state.md#0x2_authenticator_state_AuthenticatorState">authenticator_state::AuthenticatorState</a>, new_active_jwks: <a href="">vector</a>&lt;<a href="authenticator_state.md#0x2_authenticator_state_ActiveJwk">authenticator_state::ActiveJwk</a>&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -506,6 +549,8 @@ transaction.
 ) {
     // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
     <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="authenticator_state.md#0x2_authenticator_state_ENotSystemAddress">ENotSystemAddress</a>);
+
+    <a href="authenticator_state.md#0x2_authenticator_state_check_sorted">check_sorted</a>(&new_active_jwks);
 
     <b>let</b> inner = <a href="authenticator_state.md#0x2_authenticator_state_load_inner_mut">load_inner_mut</a>(self);
 
@@ -577,14 +622,58 @@ transaction.
 
     <b>let</b> inner = <a href="authenticator_state.md#0x2_authenticator_state_load_inner_mut">load_inner_mut</a>(self);
 
-    <b>let</b> new_active_jwks: <a href="">vector</a>&lt;<a href="authenticator_state.md#0x2_authenticator_state_ActiveJwk">ActiveJwk</a>&gt; = <a href="">vector</a>[];
     <b>let</b> len = <a href="_length">vector::length</a>(&inner.active_jwks);
+
+    // first we count how many jwks from each issuer are above the min_epoch
+    // and store the counts in a <a href="">vector</a> that parallels the (sorted) active_jwks <a href="">vector</a>
+    <b>let</b> issuer_max_epochs = <a href="">vector</a>[];
     <b>let</b> i = 0;
+    <b>let</b> prev_issuer: Option&lt;String&gt; = <a href="_none">option::none</a>();
+
+    <b>while</b> (i &lt; len) {
+        <b>let</b> cur = <a href="_borrow">vector::borrow</a>(&inner.active_jwks, i);
+        <b>let</b> cur_iss = &cur.jwk_id.iss;
+        <b>if</b> (<a href="_is_none">option::is_none</a>(&prev_issuer)) {
+            <a href="_fill">option::fill</a>(&<b>mut</b> prev_issuer, *cur_iss);
+            <a href="_push_back">vector::push_back</a>(&<b>mut</b> issuer_max_epochs, cur.epoch);
+        } <b>else</b> {
+            <b>if</b> (cur_iss == <a href="_borrow">option::borrow</a>(&prev_issuer)) {
+                <b>let</b> back = <a href="_length">vector::length</a>(&issuer_max_epochs) - 1;
+                <b>let</b> prev_max_epoch = <a href="_borrow_mut">vector::borrow_mut</a>(&<b>mut</b> issuer_max_epochs, back);
+                *prev_max_epoch = <a href="math.md#0x2_math_max">math::max</a>(*prev_max_epoch, cur.epoch);
+            } <b>else</b> {
+                *<a href="_borrow_mut">option::borrow_mut</a>(&<b>mut</b> prev_issuer) = *cur_iss;
+                <a href="_push_back">vector::push_back</a>(&<b>mut</b> issuer_max_epochs, cur.epoch);
+            }
+        };
+        i = i + 1;
+    };
+
+    // Now, filter out any JWKs that are below the min_epoch, unless that issuer <b>has</b> no
+    // JWKs &gt;= the min_epoch, in which case we keep all of them.
+    <b>let</b> new_active_jwks: <a href="">vector</a>&lt;<a href="authenticator_state.md#0x2_authenticator_state_ActiveJwk">ActiveJwk</a>&gt; = <a href="">vector</a>[];
+    <b>let</b> prev_issuer: Option&lt;String&gt; = <a href="_none">option::none</a>();
+    <b>let</b> i = 0;
+    <b>let</b> j = 0;
     <b>while</b> (i &lt; len) {
         <b>let</b> jwk = <a href="_borrow">vector::borrow</a>(&inner.active_jwks, i);
-        <b>if</b> (jwk.epoch &gt;= min_epoch) {
+        <b>let</b> cur_iss = &jwk.jwk_id.iss;
+
+        <b>if</b> (<a href="_is_none">option::is_none</a>(&prev_issuer)) {
+            <a href="_fill">option::fill</a>(&<b>mut</b> prev_issuer, *cur_iss);
+        } <b>else</b> <b>if</b> (cur_iss != <a href="_borrow">option::borrow</a>(&prev_issuer)) {
+            *<a href="_borrow_mut">option::borrow_mut</a>(&<b>mut</b> prev_issuer) = *cur_iss;
+            j = j + 1;
+        };
+
+        <b>let</b> max_epoch_for_iss = <a href="_borrow">vector::borrow</a>(&issuer_max_epochs, j);
+
+        // TODO: <b>if</b> the iss for this jwk <b>has</b> *no* jwks that meet the minimum epoch,
+        // then expire nothing.
+        <b>if</b> (*max_epoch_for_iss &lt; min_epoch || jwk.epoch &gt;= min_epoch) {
             <a href="_push_back">vector::push_back</a>(&<b>mut</b> new_active_jwks, *jwk);
-        }
+        };
+        i = i + 1;
     };
     inner.active_jwks = new_active_jwks;
 }
