@@ -76,14 +76,14 @@ async fn test_recovery() {
     const GC_DEPTH: Round = 50;
     const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let bullshark = Bullshark::new(
+    let bullshark = Box::new(Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
         latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
         LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
-    );
+    ));
 
     let _consensus_handle = Consensus::spawn(
         committee,

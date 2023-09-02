@@ -14,6 +14,7 @@ pub mod consensus;
 pub mod consensus_utils;
 pub mod metrics;
 pub mod utils;
+pub mod whaleshark;
 
 pub use crate::consensus::Consensus;
 use store::StoreError;
