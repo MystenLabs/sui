@@ -1,8 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
-
+use crate::{
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
+    coin::Coin,
+    digests::{ObjectDigest, TransactionDigest},
+    error::{ExecutionError, ExecutionErrorKind, SuiError},
+    event::Event,
+    execution_status::CommandArgumentError,
+    object::{Data, Object, Owner},
+    storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, StorageView},
+};
 use move_binary_format::file_format::AbilitySet;
 use move_core_types::{
     identifier::IdentStr,
@@ -10,17 +18,7 @@ use move_core_types::{
 };
 use move_vm_types::loaded_data::runtime_types::Type;
 use serde::Deserialize;
-
-use crate::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress},
-    coin::Coin,
-    digests::ObjectDigest,
-    error::{ExecutionError, ExecutionErrorKind, SuiError},
-    event::Event,
-    execution_status::CommandArgumentError,
-    object::{Object, Owner},
-    storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, StorageView},
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 pub trait SuiResolver:
     ResourceResolver<Error = SuiError> + ModuleResolver<Error = SuiError> + BackingPackageStore
@@ -83,7 +81,7 @@ pub struct ExecutionResultsV1 {
 /// Used by sui-execution v1 and above, to capture the execution results from Move.
 /// The results represent the primitive information that can then be used to construct
 /// both transaction effects V1 and V2.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ExecutionResultsV2 {
     /// All objects written regardless of whether they were mutated, created, or unwrapped.
     pub written_objects: BTreeMap<ObjectID, Object>,
@@ -99,6 +97,72 @@ pub struct ExecutionResultsV2 {
     pub user_events: Vec<Event>,
 }
 
+impl ExecutionResultsV2 {
+    pub fn drop_writes(&mut self) {
+        self.written_objects.clear();
+        self.modified_objects.clear();
+        self.created_object_ids.clear();
+        self.deleted_object_ids.clear();
+        self.user_events.clear();
+    }
+
+    pub fn merge_results(&mut self, new_results: Self) {
+        self.written_objects.extend(new_results.written_objects);
+        self.modified_objects.extend(new_results.modified_objects);
+        self.created_object_ids
+            .extend(new_results.created_object_ids);
+        self.deleted_object_ids
+            .extend(new_results.deleted_object_ids);
+        self.user_events.extend(new_results.user_events);
+    }
+
+    pub fn update_version_and_previous_tx(
+        &mut self,
+        lamport_version: SequenceNumber,
+        prev_tx: TransactionDigest,
+    ) {
+        for (id, mut obj) in self.written_objects.iter_mut() {
+            // TODO: All of the following is no longer necessary and can be simplified.
+
+            // Update the version for the written object.
+            match &mut obj.data {
+                Data::Move(obj) => {
+                    // Move objects all get the transaction's lamport timestamp
+                    obj.increment_version_to(lamport_version);
+                }
+
+                Data::Package(pkg) => {
+                    // Modified packages get their version incremented (this is a special case that
+                    // only applies to system packages).  All other packages can only be created,
+                    // and they are left alone.
+                    if self.modified_objects.contains(id) {
+                        pkg.increment_version();
+                    }
+                }
+            }
+
+            // Record the version that the shared object was created at in its owner field.  Note,
+            // this only works because shared objects must be created as shared (not created as
+            // owned in one transaction and later converted to shared in another).
+            if let Owner::Shared {
+                initial_shared_version,
+            } = &mut obj.owner
+            {
+                if self.created_object_ids.contains(id) {
+                    assert_eq!(
+                        *initial_shared_version,
+                        SequenceNumber::new(),
+                        "Initial version should be blank before this point for {id:?}",
+                    );
+                    *initial_shared_version = lamport_version;
+                }
+            }
+
+            obj.previous_transaction = prev_tx;
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct InputObjectMetadata {
     pub id: ObjectID,
@@ -107,7 +171,7 @@ pub struct InputObjectMetadata {
     pub version: SequenceNumber,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoadedChildObjectMetadata {
     pub version: SequenceNumber,
     pub digest: ObjectDigest,

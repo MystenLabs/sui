@@ -1,12 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use crate::base_types::{random_object_ref, ExecutionDigests, ObjectID, ObjectRef, SequenceNumber};
 use crate::committee::EpochId;
 use crate::crypto::{
     default_hash, AuthoritySignInfo, AuthorityStrongQuorumSignInfo, EmptySignInfo,
 };
-use crate::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
+use crate::digests::{
+    ObjectDigest, TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest,
+};
 use crate::error::{SuiError, SuiResult};
 use crate::event::Event;
 use crate::execution_status::ExecutionStatus;
@@ -19,11 +23,13 @@ use crate::storage::WriteKind;
 use crate::transaction::{SenderSignedData, TransactionDataAPI, VersionedProtocolMessage};
 use effects_v1::TransactionEffectsV1;
 use enum_dispatch::enum_dispatch;
+pub use object_change::EffectsObjectChange;
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion, SupportedProtocolVersions};
 
 mod effects_v1;
+mod object_change;
 
 // Since `std::mem::size_of` may not be stable across platforms, we use rough constants
 // We need these for estimating effects sizes
@@ -108,7 +114,7 @@ pub enum ObjectRemoveKind {
 impl TransactionEffects {
     /// Creates a TransactionEffects message from the results of execution, choosing the correct
     /// format for the current protocol version.
-    pub fn new_from_execution(
+    pub fn new_from_execution_v1(
         _protocol_version: ProtocolVersion,
         status: ExecutionStatus,
         executed_epoch: EpochId,
@@ -126,8 +132,79 @@ impl TransactionEffects {
         events_digest: Option<TransactionEventsDigest>,
         dependencies: Vec<TransactionDigest>,
     ) -> Self {
-        // TODO: when there are multiple versions, use protocol_version to construct the
-        // appropriate one.
+        Self::V1(TransactionEffectsV1::new(
+            status,
+            executed_epoch,
+            gas_used,
+            modified_at_versions,
+            shared_objects,
+            transaction_digest,
+            created,
+            mutated,
+            unwrapped,
+            deleted,
+            unwrapped_then_deleted,
+            wrapped,
+            gas_object,
+            events_digest,
+            dependencies,
+        ))
+    }
+
+    /// Creates a TransactionEffects message from the results of execution, choosing the correct
+    /// format for the current protocol version.
+    pub fn new_from_execution_v2(
+        _protocol_version: ProtocolVersion,
+        status: ExecutionStatus,
+        executed_epoch: EpochId,
+        gas_used: GasCostSummary,
+        shared_objects: Vec<ObjectRef>,
+        transaction_digest: TransactionDigest,
+        lamport_version: SequenceNumber,
+        object_changes: BTreeMap<ObjectID, EffectsObjectChange>,
+        gas_object: (ObjectRef, Owner),
+        events_digest: Option<TransactionEventsDigest>,
+        dependencies: Vec<TransactionDigest>,
+    ) -> Self {
+        let mut created = vec![];
+        let mut mutated = vec![];
+        let mut unwrapped = vec![];
+        let mut deleted = vec![];
+        let mut unwrapped_then_deleted = vec![];
+        let mut wrapped = vec![];
+        let mut modified_at_versions = vec![];
+        let mut deleted_at_versions = vec![];
+        for (id, change) in object_changes {
+            if let Some(((version, digest), owner)) = change.get_written_object(lamport_version) {
+                if change.is_created() {
+                    created.push(((id, version, digest), owner));
+                } else if change.is_mutated() {
+                    mutated.push(((id, version, digest), owner));
+                    modified_at_versions.push((id, change.get_modified_at().unwrap().0 .0));
+                } else {
+                    assert!(change.is_unwrapped());
+                    unwrapped.push(((id, version, digest), owner));
+                }
+            } else if let Some(((version, _), _)) = change.get_modified_at() {
+                if change.is_deleted() {
+                    deleted.push((id, lamport_version, ObjectDigest::OBJECT_DIGEST_DELETED));
+                    deleted_at_versions.push((id, version));
+                } else {
+                    assert!(change.is_wrapped());
+                    wrapped.push((id, lamport_version, ObjectDigest::OBJECT_DIGEST_WRAPPED));
+                    deleted_at_versions.push((id, version));
+                }
+            } else if change.is_unwrapped_then_deleted() {
+                unwrapped_then_deleted.push((
+                    id,
+                    lamport_version,
+                    ObjectDigest::OBJECT_DIGEST_DELETED,
+                ));
+            } else {
+                assert!(change.is_created_then_wrapped());
+            }
+        }
+        modified_at_versions.extend(deleted_at_versions);
 
         Self::V1(TransactionEffectsV1::new(
             status,

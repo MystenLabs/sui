@@ -36,7 +36,6 @@ mod checked {
     use sui_types::inner_temporary_store::InnerTemporaryStore;
     use sui_types::messages_consensus::ConsensusCommitPrologue;
     use sui_types::storage::BackingStore;
-    use sui_types::storage::WriteKind;
     #[cfg(msim)]
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
     use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
@@ -524,7 +523,7 @@ mod checked {
                                 previous_transaction: tx_ctx.digest(),
                                 storage_rebate: 0,
                             };
-                            temporary_store.write_object(object, WriteKind::Create);
+                            temporary_store.create_object(object);
                         }
                     }
                 }
@@ -817,7 +816,7 @@ mod checked {
                     .decrement_version();
 
                 // upgrade of a previously existing framework module
-                temporary_store.write_object(new_package, WriteKind::Mutate);
+                temporary_store.upgrade_system_package(new_package);
             }
         }
 
