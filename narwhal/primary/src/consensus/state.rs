@@ -4,9 +4,8 @@
 
 #![allow(clippy::mutable_key_type)]
 
-use crate::consensus::bullshark::Bullshark;
 use crate::consensus::utils::gc_round;
-use crate::consensus::{metrics::ConsensusMetrics, ConsensusError};
+use crate::consensus::{metrics::ConsensusMetrics, ConsensusError, Outcome};
 use config::{AuthorityIdentifier, Committee};
 use fastcrypto::hash::Hash;
 use mysten_metrics::metered_channel;
@@ -310,7 +309,7 @@ pub struct Consensus {
     tx_sequence: metered_channel::Sender<CommittedSubDag>,
 
     /// The consensus protocol to run.
-    protocol: Bullshark,
+    protocol: Box<dyn Protocol + Send>,
 
     /// Metrics handler
     metrics: Arc<ConsensusMetrics>,
@@ -331,7 +330,7 @@ impl Consensus {
         tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
         tx_consensus_round_updates: watch::Sender<ConsensusRound>,
         tx_sequence: metered_channel::Sender<CommittedSubDag>,
-        protocol: Bullshark,
+        protocol: Box<dyn Protocol + Send>,
         metrics: Arc<ConsensusMetrics>,
     ) -> JoinHandle<()> {
         // The consensus state (everything else is immutable).
@@ -470,4 +469,12 @@ impl Consensus {
             }
         }
     }
+}
+
+pub trait Protocol {
+    fn process_certificate(
+        &mut self,
+        state: &mut ConsensusState,
+        certificate: Certificate,
+    ) -> Result<(Outcome, Vec<CommittedSubDag>), ConsensusError>;
 }

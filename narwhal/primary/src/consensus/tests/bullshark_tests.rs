@@ -484,14 +484,14 @@ async fn commit_one() {
     let cert_store = make_certificate_store(&test_utils::temp_dir());
     let gc_depth = 50;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let bullshark = Bullshark::new(
+    let bullshark = Box::new(Bullshark::new(
         committee.clone(),
         store.clone(),
         latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
         LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
-    );
+    ));
 
     let _consensus_handle = Consensus::spawn(
         committee,
@@ -571,14 +571,14 @@ async fn dead_node() {
     let cert_store = make_certificate_store(&test_utils::temp_dir());
     let gc_depth = 50;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let bullshark = Bullshark::new(
+    let bullshark = Box::new(Bullshark::new(
         committee.clone(),
         store.clone(),
         latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
         LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
-    );
+    ));
 
     let _consensus_handle = Consensus::spawn(
         committee,
@@ -771,14 +771,14 @@ async fn not_enough_support() {
     let cert_store = make_certificate_store(&test_utils::temp_dir());
     let gc_depth = 50;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let bullshark = Bullshark::new(
+    let bullshark = Box::new(Bullshark::new(
         committee.clone(),
         store.clone(),
         latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
         LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
-    );
+    ));
 
     let _consensus_handle = Consensus::spawn(
         committee,
@@ -910,14 +910,14 @@ async fn missing_leader() {
     let cert_store = make_certificate_store(&test_utils::temp_dir());
     let gc_depth = 50;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let bullshark = Bullshark::new(
+    let bullshark = Box::new(Bullshark::new(
         committee.clone(),
         store.clone(),
         latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
         LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
-    );
+    ));
 
     let _consensus_handle = Consensus::spawn(
         committee,
@@ -999,14 +999,14 @@ async fn committed_round_after_restart() {
         let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
         let gc_depth = 50;
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-        let bullshark = Bullshark::new(
+        let bullshark = Box::new(Bullshark::new(
             committee.clone(),
             store.clone(),
             latest_protocol_version(),
             metrics.clone(),
             NUM_SUB_DAGS_PER_SCHEDULE,
             LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
-        );
+        ));
 
         let handle = Consensus::spawn(
             committee.clone(),
@@ -1302,14 +1302,14 @@ async fn restart_with_new_committee() {
         let cert_store = make_certificate_store(&test_utils::temp_dir());
         let gc_depth = 50;
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-        let bullshark = Bullshark::new(
+        let bullshark = Box::new(Bullshark::new(
             committee.clone(),
             store.clone(),
             latest_protocol_version(),
             metrics.clone(),
             NUM_SUB_DAGS_PER_SCHEDULE,
             LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
-        );
+        ));
 
         let handle = Consensus::spawn(
             committee.clone(),

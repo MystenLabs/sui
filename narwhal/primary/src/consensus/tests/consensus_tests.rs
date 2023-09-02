@@ -69,14 +69,14 @@ async fn test_consensus_recovery_with_bullshark() {
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let leader_schedule =
         LeaderSchedule::from_store(committee.clone(), consensus_store.clone(), config.clone());
-    let bullshark = Bullshark::new(
+    let bullshark = Box::new(Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
         config.clone(),
         metrics.clone(),
         num_sub_dags_per_schedule,
         leader_schedule.clone(),
-    );
+    ));
 
     let consensus_handle = Consensus::spawn(
         committee.clone(),
@@ -168,14 +168,14 @@ async fn test_consensus_recovery_with_bullshark() {
 
     let leader_schedule =
         LeaderSchedule::from_store(committee.clone(), consensus_store.clone(), config.clone());
-    let bullshark = Bullshark::new(
+    let bullshark = Box::new(Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
         config.clone(),
         metrics.clone(),
         num_sub_dags_per_schedule,
         leader_schedule,
-    );
+    ));
 
     let consensus_handle = Consensus::spawn(
         committee.clone(),
@@ -239,14 +239,14 @@ async fn test_consensus_recovery_with_bullshark() {
     let (tx_consensus_round_updates, _rx_consensus_round_updates) =
         watch::channel(ConsensusRound::default());
 
-    let bullshark = Bullshark::new(
+    let bullshark = Box::new(Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
         config.clone(),
         metrics.clone(),
         num_sub_dags_per_schedule,
         LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
-    );
+    ));
 
     let _consensus_handle = Consensus::spawn(
         committee.clone(),

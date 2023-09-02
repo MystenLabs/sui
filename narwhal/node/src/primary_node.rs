@@ -334,14 +334,14 @@ impl PrimaryNodeInner {
         );
 
         // Spawn the consensus core who only sequences transactions.
-        let ordering_engine = Bullshark::new(
+        let ordering_engine = Box::new(Bullshark::new(
             committee.clone(),
             store.consensus_store.clone(),
             protocol_config.clone(),
             consensus_metrics.clone(),
             Self::CONSENSUS_SCHEDULE_CHANGE_SUB_DAGS,
             leader_schedule.clone(),
-        );
+        ));
         let consensus_handles = Consensus::spawn(
             committee.clone(),
             parameters.gc_depth,

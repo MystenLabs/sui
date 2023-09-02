@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::consensus::Protocol;
 use crate::consensus::{
     make_consensus_store, Bullshark, ConsensusMetrics, ConsensusState, LeaderSchedule,
     LeaderSwapTable,

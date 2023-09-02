@@ -6,7 +6,7 @@ use criterion::{
 };
 use fastcrypto::hash::Hash;
 use narwhal_primary::consensus::{
-    Bullshark, ConsensusMetrics, ConsensusState, LeaderSchedule, LeaderSwapTable,
+    Bullshark, ConsensusMetrics, ConsensusState, LeaderSchedule, LeaderSwapTable, Protocol,
 };
 use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc};
