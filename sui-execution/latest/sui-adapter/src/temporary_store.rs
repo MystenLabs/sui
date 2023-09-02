@@ -145,7 +145,7 @@ impl<'backing> TemporaryStore<'backing> {
     /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
     pub fn into_inner(self) -> InnerTemporaryStore {
         InnerTemporaryStore {
-            objects: self.input_objects,
+            input_objects: self.input_objects,
             mutable_inputs: self.mutable_input_refs,
             written: self
                 .written

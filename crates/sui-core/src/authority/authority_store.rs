@@ -1012,8 +1012,8 @@ impl AuthorityStore {
         _epoch_id: EpochId,
     ) -> SuiResult {
         let InnerTemporaryStore {
-            objects,
-            mutable_inputs: active_inputs,
+            input_objects,
+            mutable_inputs,
             written,
             events,
             max_binary_format_version: _,
@@ -1024,10 +1024,10 @@ impl AuthorityStore {
         trace!(written =? written.iter().map(|(obj_id, obj)| (obj_id, obj.version())).collect::<Vec<_>>(),
                "batch_update_objects: temp store written");
 
-        let owned_inputs: Vec<_> = active_inputs
+        let owned_inputs: Vec<_> = mutable_inputs
             .into_iter()
             .filter_map(|(id, (version, digest))| {
-                objects
+                input_objects
                     .get(&id)
                     .unwrap()
                     .is_address_owned()

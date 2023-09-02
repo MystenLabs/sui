@@ -22,7 +22,7 @@ pub type TxCoins = (ObjectMap, WrittenObjects);
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct InnerTemporaryStore {
-    pub objects: ObjectMap,
+    pub input_objects: ObjectMap,
     pub mutable_inputs: BTreeMap<ObjectID, VersionDigest>,
     // All the written objects' sequence number should have been updated to the lamport version.
     pub written: WrittenObjects,
