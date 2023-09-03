@@ -3,6 +3,7 @@
 
 use fastcrypto::error::FastCryptoError;
 use hyper::header::InvalidHeaderValue;
+use itertools::Itertools;
 use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::{CallError, INTERNAL_ERROR_CODE};
 use jsonrpsee::types::ErrorObject;
@@ -161,12 +162,28 @@ impl From<Error> for RpcError {
                 QuorumDriverError::NonRecoverableTransactionError { errors } => {
                     let new_errors: Vec<String> = errors
                         .into_iter()
-                        .filter(|(err, _, _)| !err.is_retryable().0) // consider retryable errors as transient errors
-                        .map(|(err, _, _)| {
-                            match err {
-                                // TODO(wlmyng): update SuiError display trait to render UserInputError with display
-                                SuiError::UserInputError { error } => error.to_string(),
-                                _ => err.to_string(),
+                        // sort by total stake, descending, so users see the most prominent one first
+                        .sorted_by(|(_, a, _), (_, b, _)| b.cmp(a))
+                        .filter_map(|(err, _, _)| {
+                            match &err {
+                                // Special handling of UserInputError:
+                                // ObjectNotFound and DependentPackageNotFound are considered
+                                // retryable errors but they have different treatment
+                                // in AuthorityAggregator.
+                                // The optimal fix would be to examine if the total stake
+                                // of ObjectNotFound/DependentPackageNotFound exceeds the
+                                // quorum threshold, but it takes a Committee here.
+                                // So, we take an easier route and consider them non-retryable
+                                // at all. Combining this with the sorting above, clients will
+                                // see the dominant error first.
+                                SuiError::UserInputError { error } => Some(error.to_string()),
+                                _ => {
+                                    if err.is_retryable().0 {
+                                        None
+                                    } else {
+                                        Some(err.to_string())
+                                    }
+                                }
                             }
                         })
                         .collect();
@@ -396,9 +413,6 @@ mod tests {
         }
 
         #[test]
-        #[should_panic(
-            expected = "NonRecoverableTransactionError should have at least one non-retryable error"
-        )]
         fn test_non_recoverable_transaction_error_with_transient_errors() {
             let quorum_driver_error = QuorumDriverError::NonRecoverableTransactionError {
                 errors: vec![
@@ -423,10 +437,10 @@ mod tests {
             let rpc_error: RpcError = Error::QuorumDriverError(quorum_driver_error).into();
 
             let error_object: ErrorObjectOwned = rpc_error.into();
-            let expected_code = expect!["-32001"];
+            let expected_code = expect!["-32002"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message =
-                expect!["Transaction execution failed due to transient errors, please try again."];
+                expect!["Transaction execution failed due to issues with transaction inputs, please review the errors and try again: Could not find the referenced object 0x0000000000000000000000000000000000000000000000000000000000000000 at version None.."];
             expected_message.assert_eq(error_object.message());
         }
 
