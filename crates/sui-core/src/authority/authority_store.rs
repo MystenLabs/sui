@@ -1898,7 +1898,10 @@ impl ChildObjectResolver for AuthorityStore {
 }
 
 impl ParentSync for AuthorityStore {
-    fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
+    fn get_latest_parent_entry_ref_deprecated(
+        &self,
+        object_id: ObjectID,
+    ) -> SuiResult<Option<ObjectRef>> {
         self.get_latest_object_ref_or_tombstone(object_id)
     }
 }

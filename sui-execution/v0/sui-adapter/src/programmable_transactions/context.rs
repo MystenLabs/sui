@@ -807,7 +807,9 @@ mod checked {
                         if protocol_config.simplified_unwrap_then_delete() {
                             DeleteKindWithOldVersion::UnwrapThenDelete
                         } else {
-                            let old_version = match state_view.get_latest_parent_entry_ref(id) {
+                            let old_version = match state_view
+                                .get_latest_parent_entry_ref_deprecated(id)
+                            {
                                 Ok(Some((_, previous_version, _))) => previous_version,
                                 // This object was not created this transaction but has never existed in
                                 // storage, skip it.
