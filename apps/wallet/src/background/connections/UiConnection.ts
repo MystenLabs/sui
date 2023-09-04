@@ -161,8 +161,16 @@ export class UiConnection extends Connection {
 					),
 				);
 			} else if (isQredoConnectPayload(payload, 'acceptQredoConnection')) {
-				await acceptQredoConnection(payload.args);
-				this.send(createMessage({ type: 'done' }, id));
+				this.send(
+					createMessage<QredoConnectPayload<'acceptQredoConnectionResponse'>>(
+						{
+							type: 'qredo-connect',
+							method: 'acceptQredoConnectionResponse',
+							args: { accounts: await acceptQredoConnection(payload.args) },
+						},
+						id,
+					),
+				);
 			} else if (isQredoConnectPayload(payload, 'rejectQredoConnection')) {
 				await rejectQredoConnection(payload.args);
 				this.send(createMessage({ type: 'done' }, id));
