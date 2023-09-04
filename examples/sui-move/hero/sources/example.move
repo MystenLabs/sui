@@ -340,7 +340,7 @@ module hero::example {
             let game: Game = ts::take_shared(&ts);
             let admin: Admin = ts::take_from_sender(&ts);
             let boar = new_boar(&mut admin, 9, 9, ts::ctx(&mut ts));
-            transfer::transfer(boar, @0xA);
+            transfer::public_transfer(boar, @0xA);
             ts::return_to_sender(&ts, admin);
             ts::return_shared(game);
         };
@@ -359,7 +359,7 @@ module hero::example {
             ts::next_tx(&mut ts, @0xAD);
             let admin: Admin = ts::take_from_sender(&ts);
             let potion = new_potion(&mut admin, 1, ts::ctx(&mut ts));
-            transfer::transfer(potion, @0xA);
+            transfer::public_transfer(potion, @0xA);
             ts::return_to_sender(&ts, admin);
         };
 
@@ -421,7 +421,7 @@ module hero::example {
             let coin = coin::mint_for_testing(MIN_SWORD_COST, ts::ctx(&mut ts));
             let sword = new_sword(&mut game, coin, ts::ctx(&mut ts));
             let hero = new_hero(sword, ts::ctx(&mut ts));
-            transfer::transfer(hero, @0xA);
+            transfer::public_transfer(hero, @0xA);
             ts::return_shared(game);
         };
 
@@ -430,7 +430,7 @@ module hero::example {
             ts::next_tx(&mut ts, @0xAD1);
             let admin: Admin = ts::take_from_sender(&ts);
             let potion = new_potion(&mut admin, 1, ts::ctx(&mut ts));
-            transfer::transfer(potion, @0xA);
+            transfer::public_transfer(potion, @0xA);
             ts::return_to_sender(&ts, admin);
         };
 
@@ -462,7 +462,7 @@ module hero::example {
             let game: Game = ts::take_shared(&ts);
             let admin: Admin = ts::take_from_sender(&ts);
             let boar = new_boar(&mut admin, 9, 9, ts::ctx(&mut ts));
-            transfer::transfer(boar, @0xA);
+            transfer::public_transfer(boar, @0xA);
             ts::return_to_sender(&ts, admin);
             ts::return_shared(game);
         };
@@ -496,7 +496,7 @@ module hero::example {
             let game: Game = ts::take_shared(&ts);
             let admin: Admin = ts::take_from_sender(&ts);
             let boar = new_boar(&mut admin, 9, 9, ts::ctx(&mut ts));
-            transfer::transfer(boar, @0xA);
+            transfer::public_transfer(boar, @0xA);
             ts::return_to_sender(&ts, admin);
             ts::return_shared(game);
         };
@@ -570,7 +570,7 @@ module hero::example {
     fun setup_game(admin: address, ts: &mut ts::Scenario) {
         ts::next_tx(ts, admin);
         let cap = new_game(ts::ctx(ts));
-        transfer::transfer(cap, admin);
+        transfer::public_transfer(cap, admin);
     }
 
     #[test_only]
@@ -580,7 +580,7 @@ module hero::example {
         let coin = coin::mint_for_testing(payment, ts::ctx(ts));
         let sword = new_sword(&mut game, coin, ts::ctx(ts));
         let hero = new_hero(sword, ts::ctx(ts));
-        transfer::transfer(hero, player);
+        transfer::public_transfer(hero, player);
         ts::return_shared(game);
     }
 }
