@@ -7045,39 +7045,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
-name = "orchestrator"
-version = "0.0.1"
-dependencies = [
- "async-trait",
- "aws-config",
- "aws-sdk-ec2",
- "aws-smithy-http",
- "aws-smithy-runtime-api",
- "clap",
- "color-eyre",
- "crossterm 0.25.0",
- "eyre",
- "futures",
- "glob",
- "prettytable-rs",
- "prometheus-parse",
- "rand 0.8.5",
- "reqwest",
- "russh",
- "russh-keys",
- "serde",
- "serde_json",
- "sui-config",
- "sui-node",
- "sui-swarm-config",
- "sui-types",
- "tempfile",
- "thiserror",
- "tokio",
- "workspace-hack",
-]
-
-[[package]]
 name = "ouroboros"
 version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9881,6 +9848,39 @@ dependencies = [
  "typed-store-derive",
  "workspace-hack",
  "zstd",
+]
+
+[[package]]
+name = "sui-aws-orchestrator"
+version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "aws-config",
+ "aws-sdk-ec2",
+ "aws-smithy-http",
+ "aws-smithy-runtime-api",
+ "clap",
+ "color-eyre",
+ "crossterm 0.25.0",
+ "eyre",
+ "futures",
+ "glob",
+ "prettytable-rs",
+ "prometheus-parse",
+ "rand 0.8.5",
+ "reqwest",
+ "russh",
+ "russh-keys",
+ "serde",
+ "serde_json",
+ "sui-config",
+ "sui-node",
+ "sui-swarm-config",
+ "sui-types",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "workspace-hack",
 ]
 
 [[package]]

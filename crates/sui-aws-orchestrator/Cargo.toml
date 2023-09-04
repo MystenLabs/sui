@@ -1,5 +1,5 @@
 [package]
-name = "orchestrator"
+name = "sui-aws-orchestrator"
 version = "0.0.1"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
@@ -40,5 +40,5 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 tempfile = "3.6.0"
 
 [[bin]]
-name = "orchestrator"
+name = "sui-aws-orchestrator"
 path = "src/main.rs"

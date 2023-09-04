@@ -19,7 +19,6 @@ use crate::{
 
 use super::{ProtocolCommands, ProtocolMetrics};
 
-/// The type of benchmarks supported by Mysticeti.
 #[derive(Serialize, Deserialize, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SuiBenchmarkType {
     /// Percentage of shared vs owned objects; 0 means only owned objects and 100 means
@@ -109,7 +108,7 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
         //     .map(|i| {
         //         (
         //             i,
-        //             "tail -f --pid=$(pidof mysticeti) -f /dev/null; tail -100 node.log".to_string(),
+        //             "tail -f --pid=$(pidof sui) -f /dev/null; tail -100 node.log".to_string(),
         //         )
         //     })
         //     .collect()

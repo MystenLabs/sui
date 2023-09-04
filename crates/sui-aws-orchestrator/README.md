@@ -27,7 +27,7 @@ Create a file called `settings.json` that contains all the configuration paramet
 
 ```json
 {
-  "testbed_id": "alberto-mysticeti",
+  "testbed_id": "alberto",
   "cloud_provider": "aws",
   "token_file": "/Users/alberto/.aws/credentials",
   "ssh_private_key_file": "/Users/alberto/.ssh/aws",
@@ -45,7 +45,7 @@ Create a file called `settings.json` that contains all the configuration paramet
   ],
   "specs": "m5d.8xlarge",
   "repository": {
-    "url": "http://github.com/mystenlabs/project-mysticeti.git",
+    "url": "https://github.com/MystenLabs/sui.git",
     "commit": "orchestrator"
   },
   "results_directory": "./results",
@@ -53,27 +53,27 @@ Create a file called `settings.json` that contains all the configuration paramet
 }
 ```
 
-The documentation of the `Settings` struct in `./src/settings.rs` provides detailed information about each field and indicates which ones are optional. If you're working with a private GitHub repository, you can include a [private access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) in the repository URL. For example, if your access token is `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`, the repository URL should be formatted as follows:
+The documentation of the `Settings` struct in `./src/settings.rs` provides detailed information about each field and indicates which ones are optional. If you're working with a private GitHub repository, you can include a [private access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) in the repository URL. For example, if your access token is `[your_token]`, the repository URL should be formatted as follows:
 
 ```json
 "repository": {
-  "url": "http://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@github.com/mystenlabs/project-mysticeti.git",
+  "url": "http://[your_token]@github.com/mystenlabs/sui.git",
   "commit": "orchestrator"
 }
 ```
 
 ## Step 3. Create a testbed
 
-The `orchestrator` binary provides various functionalities for creating, starting, stopping, and destroying instances. You can use the following command to boot 2 instances per region (if the settings file specifies 10 regions, as shown in the example above, a total of 20 instances will be created):
+The `sui-aws-orchestrator` binary provides various functionalities for creating, starting, stopping, and destroying instances. You can use the following command to boot 2 instances per region (if the settings file specifies 10 regions, as shown in the example above, a total of 20 instances will be created):
 
 ```bash
-cargo run --bin orchestrator -- testbed deploy --instances 2
+cargo run --bin sui-aws-orchestrator -- testbed deploy --instances 2
 ```
 
 To check the current status of the testbed instances, use the following command:
 
 ```bash
-cargo run --bin orchestrator testbed status
+cargo run --bin sui-aws-orchestrator testbed status
 ```
 
 Instances listed with a green number are available and ready for use, while instances listed with a red number are stopped.
@@ -83,7 +83,7 @@ Instances listed with a green number are available and ready for use, while inst
 Running benchmarks involves installing the specified version of the codebase on the remote machines and running one validator and one load generator per instance. For example, the following command benchmarks a committee of 10 validators under a constant load of 200 tx/s for 3 minutes:
 
 ```bash
-cargo run --bin orchestrator -- benchmark --committee 10 fixed-load --loads 200 --duration 180
+cargo run --bin sui-aws-orchestrator -- benchmark --committee 10 fixed-load --loads 200 --duration 180
 ```
 
 In a network of 10 validators, each with a corresponding load generator, each load generator submits a fixed load of 20 tx/s. Performance measurements are collected by regularly scraping the Prometheus metrics exposed by the load generators. The `orchestrator` binary provides additional commands to run a specific number of load generators on separate machines.
