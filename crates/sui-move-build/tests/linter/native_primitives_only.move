@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module 0x42::test1 {
-    //has copy needed because it's a vector
 
-    struct S1 has copy{}
-    
     struct Coolstruct has copy ,drop {
         a: bool,
         b: u64,
@@ -17,4 +14,9 @@ module 0x42::test1 {
     public entry fun main(){
         let (_x,_y) = returns_something(true,42,Coolstruct{a:true,b:42},&Coolstruct{a:true,b:42});
     }
+}
+
+module 0x42::test2 {
+    #[allow(unused_function)]
+    native fun should_not_complain(a:u64, b:bool, c:bool) : bool;
 }

@@ -54,9 +54,8 @@ fn check_native(env: &mut CompilationEnv, fname: Symbol, fun: &T::Function, sloc
                     let c = var.value.name;
                     let msg =
                         format!("The parameter '{c}' of '{fname}' is not native or a reference");
-                    let uid_msg = "Only native types or references are allowed";
-                    let mut d = diag!(NATIVE_PRIMITIVE_DIAG, (sloc, msg));
-                    d.add_note(uid_msg);
+                    let uid_msg = "- It is recommended when implementing native functions to only deal with primitives";
+                    let d = diag!(NATIVE_PRIMITIVE_DIAG, (var.loc, msg), (sloc, uid_msg));
                     env.add_diag(d);
 
                     // println!("Object in definition, time to shoot");
@@ -75,18 +74,29 @@ fn is_native_or_ref(element: &N::Type_) -> bool {
                 //Flash out that a struct should not be here!
                 return false;
             }
-            _ => {
+            N::TypeName_::Multiple(_) => {
                 return false;
             }
         },
-        N::Type_::Ref(_is_mutable, _referenced_element) => {
-            //I'm ok, it's a reference, I can't have && in move
-            return true;
-            // let el = referenced_element.as_ref().value.clone();
-            // is_native_or_ref(el);
+        N::Type_::Ref(_is_mutable, referenced_element) => {
+            //I have to check if it's a reference to a native type or not
+            let el = &referenced_element.value;
+            is_native_or_ref(el)
         }
-        _ => {}
+        N::Type_::Unit => {
+            return false;
+        }
+        N::Type_::Var(_) => {
+            return false;
+        }
+        N::Type_::Anything => {
+            return false;
+        }
+        N::Type_::UnresolvedError => {
+            return false;
+        }
+        N::Type_::Param(_) => {
+            return false;
+        }
     }
-
-    false
 }
