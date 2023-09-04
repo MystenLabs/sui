@@ -10,23 +10,22 @@
 ///    `Key`.  Each party can `unlock` their object, to preserve liveness if the
 ///    other party stalls before completing the second stage.
 ///
-/// 2. Both parties register an `Escrow` object with the custodian, holding
-///    their locked object and signaling their interest in the other party's
-///    object by referencing the key that's locking it.  They keep their
-///    respective keys.  The custodan is trusted to preserve liveness.
+/// 2. Both parties register an `Escrow` object with the custodian, this
+///    requires passing the locked object and its key.  The key is consumed to
+///    unlock the object, but its ID is remembered so the custodian can ensure
+///    the right objects being swapped.  The custodian is trusted to preserve
+///    liveness.
 ///
-/// 3. The custodian swaps the locked objects, but also swaps their keys,
-///    i.e. if party A with key K locking O successfully swaps with party B and
-///    key L locking P, then the custodian returns object P locked by K to A,
-///    and object O locked by key L to B.
+/// 3. The custodian swaps the locked objects as long as all conditions are met:
 ///
-///    A safe (successful) swap requires checking that the exchange key for O's
-///    escrow is L and vice versa for P and K.  If this is not true, it means
-///    the wrong objects are being swapped, either because the custodian paired
-///    the wrong escrows together, or because one of the parties tampered with
-///    their object after locking it.
+///    - The sender of one Escrow is the recipient of the other and vice versa.
+///      If this is not true, the custodian has incorrectly paired together.
 ///
-/// 4. Each party can unlock the other party's object with their own key.
+///    - The key of the desired object (`exchange_key`) matches the key the the
+///      other object was locked with (`escrowed_key`) and vice versa.  If this
+///      is not true, it means the wrong objects are being swapped, either
+///      because the custodian paired the wrong escrows together, or because one
+///      of the parties tampered with their object after locking it.
 module escrow::example {
     use sui::object::{Self, ID, UID};
     use sui::transfer;
@@ -39,7 +38,6 @@ module escrow::example {
     struct Locked<T: key + store> has key, store {
         id: UID,
         key: ID,
-        swapped: bool,
         obj: T,
     }
 
@@ -60,8 +58,12 @@ module escrow::example {
         /// from recipient.
         exchange_key: ID,
 
+        /// The ID of the key the locked the escrowed object, before it was
+        /// escrowed.
+        escrowed_key: ID,
+
         /// The escrowed object.
-        escrowed: Locked<T>,
+        escrowed: T,
     }
 
     // === Error codes ===
@@ -90,7 +92,6 @@ module escrow::example {
             id: object::new(ctx),
             key: object::id(&key),
             obj,
-            swapped: false,
         };
         (lock, key)
     }
@@ -102,16 +103,21 @@ module escrow::example {
         let Key { id } = key;
         object::delete(id);
 
-        let Locked { id, key: _, swapped: _, obj } = locked;
+        let Locked { id, key: _, obj } = locked;
         object::delete(id);
         obj
     }
 
     /// `tx_context::sender(ctx)` requests a swap with `recipient` of a locked
-    /// object `escrowed` in exchange for an object referred to by
-    /// `exchange_key`.  The swap is performed by a third-party, `custodian`,
-    /// that is trusted to maintain liveness, but not safety (the only actions
-    /// they can perform are to successfully progress the swap).
+    /// object `locked` in exchange for an object referred to by `exchange_key`.
+    /// The swap is performed by a third-party, `custodian`, that is trusted to
+    /// maintain liveness, but not safety (the only actions they can perform are
+    /// to successfully progress the swap).
+    ///
+    /// `locked` will be unlocked with its corresponding `key` before being sent
+    /// to the custodian, but the underlying object is still not accessible
+    /// until after the swap has executed successfully, or the custodian returns
+    /// the object.
     ///
     /// `exchange_key` is the ID of a `Key` that unlocks the sender's desired
     /// object.  Gating the swap on the key ensures that it will not succeed if
@@ -123,17 +129,17 @@ module escrow::example {
         recipient: address,
         custodian: address,
         exchange_key: ID,
-        escrowed: Locked<T>,
+        key: Key,
+        locked: Locked<T>,
         ctx: &mut TxContext,
     ) {
-        assert!(!escrowed.swapped, EAlreadySwapped);
-
         let escrow = Escrow {
             id: object::new(ctx),
             sender: tx_context::sender(ctx),
             recipient,
             exchange_key,
-            escrowed,
+            escrowed_key: object::id(&key),
+            escrowed: unlock(locked, key),
         };
 
         transfer::transfer(escrow, custodian);
@@ -151,6 +157,7 @@ module escrow::example {
             sender: sender1,
             recipient: recipient1,
             exchange_key: exchange_key1,
+            escrowed_key: escrowed_key1,
             escrowed: escrowed1,
         } = obj1;
 
@@ -159,6 +166,7 @@ module escrow::example {
             sender: sender2,
             recipient: recipient2,
             exchange_key: exchange_key2,
+            escrowed_key: escrowed_key2,
             escrowed: escrowed2,
         } = obj2;
 
@@ -171,18 +179,8 @@ module escrow::example {
 
         // Make sure the objects match each other and haven't been modified
         // (they remain locked).
-        assert!(escrowed1.key == exchange_key2, EMismatchedExchangeObject);
-        assert!(escrowed2.key == exchange_key1, EMismatchedExchangeObject);
-
-        // Swap keys on the locks so that each recipient can use the key they
-        // have to unlock the object they receive.
-        let tmp = escrowed1.key;
-        escrowed1.key = escrowed2.key;
-        escrowed2.key = tmp;
-
-        // Mark the locked objects as swapped so they don't get swapped again.
-        escrowed1.swapped = true;
-        escrowed2.swapped = true;
+        assert!(escrowed_key1 == exchange_key2, EMismatchedExchangeObject);
+        assert!(escrowed_key2 == exchange_key1, EMismatchedExchangeObject);
 
         // Do the actual swap
         transfer::public_transfer(escrowed1, recipient1);
@@ -197,6 +195,7 @@ module escrow::example {
             sender,
             recipient: _,
             exchange_key: _,
+            escrowed_key: _,
             escrowed,
         } = obj;
 
@@ -233,20 +232,22 @@ module escrow::example {
         let c1 = test_coin(&mut ts);
         let i1 = object::id(&c1);
         let (l1, k1) = lock(c1, ts::ctx(&mut ts));
+        let ik1 = object::id(&k1);
 
         // Party B locks their object as well.
         ts::next_tx(&mut ts, @0xB);
         let c2 = test_coin(&mut ts);
         let i2 = object::id(&c2);
         let (l2, k2) = lock(c2, ts::ctx(&mut ts));
+        let ik2 = object::id(&k2);
 
         // Party A gives Party C (the custodian) their object to hold in escrow.
         ts::next_tx(&mut ts, @0xA);
-        create(@0xB, @0xC, object::id(&k2), l1, ts::ctx(&mut ts));
+        create(@0xB, @0xC, ik2, k1, l1, ts::ctx(&mut ts));
 
         // Party B does the same.
         ts::next_tx(&mut ts, @0xB);
-        create(@0xA, @0xC, object::id(&k1), l2, ts::ctx(&mut ts));
+        create(@0xA, @0xC, ik1, k2, l2, ts::ctx(&mut ts));
 
         // The Custodian makes the swap
         ts::next_tx(&mut ts, @0xC);
@@ -257,12 +258,12 @@ module escrow::example {
 
         // Party A unlocks the object from B
         ts::next_tx(&mut ts, @0xA);
-        let c2 = unlock<Coin<SUI>>(ts::take_from_sender(&mut ts), k1);
+        let c2: Coin<SUI> = ts::take_from_sender(&mut ts);
         assert!(object::id(&c2) == i2, 0);
 
         // Party B unlocks the object from A
         ts::next_tx(&mut ts, @0xB);
-        let c1 = unlock<Coin<SUI>>(ts::take_from_sender(&mut ts), k2);
+        let c1: Coin<SUI> = ts::take_from_sender(&mut ts);
         assert!(object::id(&c1) == i1, 0);
 
         coin::burn_for_testing(c1);
@@ -276,18 +277,20 @@ module escrow::example {
         let ts = ts::begin(@0xA);
         let c1 = test_coin(&mut ts);
         let (l1, k1) = lock(c1, ts::ctx(&mut ts));
+        let ik1 = object::id(&k1);
 
         ts::next_tx(&mut ts, @0xB);
         let c2 = test_coin(&mut ts);
         let (l2, k2) = lock(c2, ts::ctx(&mut ts));
+        let ik2 = object::id(&k1);
 
         // A wants to trade with B.
         ts::next_tx(&mut ts, @0xA);
-        create(@0xB, @0xC, object::id(&k2), l1, ts::ctx(&mut ts));
+        create(@0xB, @0xC, ik2, k1, l1, ts::ctx(&mut ts));
 
         // But B wants to trade with F.
         ts::next_tx(&mut ts, @0xB);
-        create(@0xF, @0xC, object::id(&k1), l2, ts::ctx(&mut ts));
+        create(@0xF, @0xC, ik1, k2, l2, ts::ctx(&mut ts));
 
         // When the custodian tries to match up the swap, it will fail.
         ts::next_tx(&mut ts, @0xC);
@@ -305,18 +308,19 @@ module escrow::example {
         let ts = ts::begin(@0xA);
         let c1 = test_coin(&mut ts);
         let (l1, k1) = lock(c1, ts::ctx(&mut ts));
+        let ik1 = object::id(&k1);
 
         ts::next_tx(&mut ts, @0xB);
         let c2 = test_coin(&mut ts);
-        let (l2, _k2) = lock(c2, ts::ctx(&mut ts));
+        let (l2, k2) = lock(c2, ts::ctx(&mut ts));
 
         // A wants to trade with B, but A has asked for an object (via its
         // `exchange_key`) that B has not put up for the swap.
         ts::next_tx(&mut ts, @0xA);
-        create(@0xB, @0xC, object::id(&k1), l1, ts::ctx(&mut ts));
+        create(@0xB, @0xC, ik1, k1, l1, ts::ctx(&mut ts));
 
         ts::next_tx(&mut ts, @0xB);
-        create(@0xA, @0xC, object::id(&k1), l2, ts::ctx(&mut ts));
+        create(@0xA, @0xC, ik1, k2, l2, ts::ctx(&mut ts));
 
         // When the custodian tries to match up the swap, it will fail.
         ts::next_tx(&mut ts, @0xC);
@@ -335,15 +339,17 @@ module escrow::example {
         let ts = ts::begin(@0xA);
         let c1 = test_coin(&mut ts);
         let (l1, k1) = lock(c1, ts::ctx(&mut ts));
+        let ik1 = object::id(&k1);
 
         // Party B locks their object as well.
         ts::next_tx(&mut ts, @0xB);
         let c2 = test_coin(&mut ts);
         let (l2, k2) = lock(c2, ts::ctx(&mut ts));
+        let ik2 = object::id(&k2);
 
         // Party A gives Party C (the custodian) their object to hold in escrow.
         ts::next_tx(&mut ts, @0xA);
-        create(@0xB, @0xC, object::id(&k2), l1, ts::ctx(&mut ts));
+        create(@0xB, @0xC, ik2, k1, l1, ts::ctx(&mut ts));
 
         // Party B has a change of heart, so they unlock the object and tamper
         // with it.
@@ -352,63 +358,15 @@ module escrow::example {
         let _c = coin::split(&mut c2, 1, ts::ctx(&mut ts));
 
         // They try and hide their tracks be re-locking the same coin.
-        let (l2, _k) = lock(c2, ts::ctx(&mut ts));
-        create(@0xA, @0xC, object::id(&k1), l2, ts::ctx(&mut ts));
+        let (l2, k2) = lock(c2, ts::ctx(&mut ts));
+        create(@0xA, @0xC, ik1, k2, l2, ts::ctx(&mut ts));
 
-        // When the Custodian makes the swap, we detect B's nefarious behaviour.
+        // When the Custodian makes the swap, it detects B's nefarious behaviour.
         ts::next_tx(&mut ts, @0xC);
         swap<Coin<SUI>, Coin<SUI>>(
             ts::take_from_sender(&mut ts),
             ts::take_from_sender(&mut ts),
         );
-
-        abort 1337
-    }
-
-    #[test]
-    #[expected_failure(abort_code = EAlreadySwapped)]
-    fun test_double_swap() {
-        // Party A locks the object they want to trade
-        let ts = ts::begin(@0xA);
-        let c1 = test_coin(&mut ts);
-        let (l1, _k) = lock(c1, ts::ctx(&mut ts));
-
-        // Party B locks their object as well.
-        ts::next_tx(&mut ts, @0xB);
-        let c2 = test_coin(&mut ts);
-        let (l2, k2) = lock(c2, ts::ctx(&mut ts));
-
-        // Party A gives Party C (the custodian) their object to hold in escrow.
-        ts::next_tx(&mut ts, @0xA);
-        create(@0xB, @0xC, object::id(&k2), l1, ts::ctx(&mut ts));
-
-        // Party F is colluding with B, and locks a dud coin, and sends that to
-        // itself for "escrow".
-        ts::next_tx(&mut ts, @0xF);
-        let cz = coin::zero<SUI>(ts::ctx(&mut ts));
-        let (lz, kz) = lock(cz, ts::ctx(&mut ts));
-        create(@0xB, @0xF, object::id(&k2), lz, ts::ctx(&mut ts));
-
-        // Party B sends the object they promised to A, to F instead.
-        ts::next_tx(&mut ts, @0xB);
-        create(@0xF, @0xF, object::id(&kz), l2, ts::ctx(&mut ts));
-
-        // Party F pretends to be a custodian and swaps the dud coin with the
-        // coin that B promised for A.
-        ts::next_tx(&mut ts, @0xF);
-        swap<Coin<SUI>, Coin<SUI>>(
-            ts::take_from_sender(&mut ts),
-            ts::take_from_sender(&mut ts),
-        );
-
-        // Party B now has the dud coin, locked by the key that A originally
-        // referenced, so attempts to send that to the custodian, which will
-        // fail.
-        ts::next_tx(&mut ts, @0xB);
-        let l2: Locked<Coin<SUI>> = ts::take_from_sender(&mut ts);
-
-        assert!(coin::value(&l2.obj) == 0, 0);
-        create(@0xA, @0xC, object::id(&k2), l2, ts::ctx(&mut ts));
 
         abort 1337
     }
@@ -420,7 +378,7 @@ module escrow::example {
         let c1 = test_coin(&mut ts);
         let i1 = object::id(&c1);
         let (l1, k1) = lock(c1, ts::ctx(&mut ts));
-        create(@0xB, @0xC, object::id(&l1), l1, ts::ctx(&mut ts));
+        create(@0xB, @0xC, object::id(&l1), k1, l1, ts::ctx(&mut ts));
 
         // Custodian sends it back
         ts::next_tx(&mut ts, @0xC);
@@ -428,7 +386,7 @@ module escrow::example {
 
         // Party A can then unlock it.
         ts::next_tx(&mut ts, @0xA);
-        let c1 = unlock<Coin<SUI>>(ts::take_from_sender(&mut ts), k1);
+        let c1: Coin<SUI> = ts::take_from_sender(&mut ts);
         assert!(object::id(&c1) == i1, 0);
 
         coin::burn_for_testing(c1);
