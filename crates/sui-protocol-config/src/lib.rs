@@ -68,6 +68,7 @@ const MAX_PROTOCOL_VERSION: u64 = 23;
 // Version 21: ZKLogin known providers.
 // Version 22: Child object format change.
 // Version 23: Re-enable simple gas conservation checks.
+//             Package publish/upgrade number in a single transaction limited.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -276,9 +277,11 @@ struct FeatureFlags {
 fn is_false(b: &bool) -> bool {
     !b
 }
+
 fn is_empty(b: &BTreeSet<String>) -> bool {
     b.is_empty()
 }
+
 /// Ordering mechanism for transactions in one Narwhal consensus output.
 #[derive(Default, Copy, Clone, Serialize, Debug)]
 pub enum ConsensusTransactionOrdering {
@@ -383,6 +386,9 @@ pub struct ProtocolConfig {
     // TODO: Option<increase to 500 KB. currently, publishing a package > 500 KB exceeds the max computation gas cost
     /// Maximum size of a Move package object, in bytes. Enforced by the Sui adapter at the end of a publish transaction.
     max_move_package_size: Option<u64>,
+
+    /// Max number of publish or upgrade commands allowed in a programmable transaction block.
+    max_publish_or_upgrade_per_ptb: Option<u64>,
 
     /// Maximum number of gas units that a single MoveCall transaction can use. Enforced by the Sui adapter.
     max_tx_gas: Option<u64>,
@@ -1005,6 +1011,7 @@ impl ProtocolConfig {
                 move_binary_format_version: Some(6),
                 max_move_object_size: Some(250 * 1024),
                 max_move_package_size: Some(100 * 1024),
+                max_publish_or_upgrade_per_ptb: None,
                 max_tx_gas: Some(10_000_000_000),
                 max_gas_price: Some(100_000),
                 max_gas_computation_bucket: Some(5_000_000),
@@ -1426,6 +1433,7 @@ impl ProtocolConfig {
             23 => {
                 let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.simple_conservation_checks = true;
+                cfg.max_publish_or_upgrade_per_ptb = Some(5);
                 cfg
             }
             // Use this template when making changes:
