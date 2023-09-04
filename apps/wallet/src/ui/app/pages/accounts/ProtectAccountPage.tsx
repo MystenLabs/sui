@@ -29,6 +29,7 @@ function isAllowedAccountType(accountType: string): accountType is AllowedAccoun
 export function ProtectAccountPage() {
 	const [searchParams] = useSearchParams();
 	const accountType = searchParams.get('accountType') || '';
+	const successRedirect = searchParams.get('successRedirect') || '/tokens';
 	const navigate = useNavigate();
 	const { data: accounts } = useAccounts();
 	const createMutation = useCreateAccountsMutation();
@@ -77,7 +78,7 @@ export function ProtectAccountPage() {
 									},
 								});
 							} else {
-								navigate('/tokens', { replace: true });
+								navigate(successRedirect, { replace: true });
 							}
 						} catch (e) {
 							toast.error((e as Error).message ?? 'Failed to create account');
