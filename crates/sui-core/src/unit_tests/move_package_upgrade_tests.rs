@@ -16,11 +16,17 @@ use sui_types::{
 };
 
 use std::{collections::BTreeSet, path::PathBuf, str::FromStr, sync::Arc};
-use sui_types::effects::{TransactionEffects, TransactionEffectsV1};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEffectsV1};
+use sui_types::error::{SuiError, UserInputError};
 use sui_types::execution_status::{
-    CommandArgumentError, ExecutionFailureStatus, PackageUpgradeError,
+    CommandArgumentError, ExecutionFailureStatus, ExecutionStatus, PackageUpgradeError,
 };
 
+use crate::authority::authority_tests::init_state_with_ids;
+use crate::authority::move_integration_tests::{
+    build_multi_publish_txns, build_multi_upgrade_txns, build_package,
+    collect_packages_and_upgrade_caps, run_multi_txns, UpgradeData,
+};
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{
     authority_test_utils::build_test_modules_with_dep_addr,
@@ -1311,4 +1317,123 @@ async fn test_upgrade_cross_module_refs() {
 
     assert!(effects.status.is_ok(), "{:#?}", effects.status);
     assert_eq!(effects.created.len(), 6);
+}
+
+#[tokio::test]
+async fn test_upgrade_max_packages() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas_object_id)]).await;
+
+    //
+    // Build and publich max number of packages allowed
+    let (_, modules, dependencies) = build_package("move_upgrade/base", false);
+
+    // push max number of packages allowed to publish
+    let max_pub_cmd = authority
+        .epoch_store_for_testing()
+        .protocol_config()
+        .max_publish_or_upgrade_per_ptb_as_option()
+        .unwrap_or(0);
+    assert!(max_pub_cmd > 0);
+    let packages = vec![(modules, dependencies); max_pub_cmd as usize];
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    build_multi_publish_txns(&mut builder, sender, packages);
+    let result = run_multi_txns(&authority, sender, &sender_key, &gas_object_id, builder)
+        .await
+        .unwrap()
+        .1;
+    let effects = result.into_data();
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
+
+    // collect package and upgrade caps
+    let (digest, modules, dep_ids) = build_package("move_upgrade/base", false);
+    let packages_and_upgrades = collect_packages_and_upgrade_caps(&authority, &effects).await;
+    // (package id, upgrade cap ref, policy, digest, dep ids, modules)
+    let mut package_upgrades: Vec<UpgradeData> = vec![];
+    for (package_id, upgrade_cap) in packages_and_upgrades {
+        package_upgrades.push(UpgradeData {
+            package_id,
+            upgrade_cap,
+            policy: UpgradePolicy::COMPATIBLE,
+            digest: digest.clone(),
+            dep_ids: dep_ids.clone(),
+            modules: modules.clone(),
+        });
+    }
+
+    // Upgrade all packages
+    let mut builder = ProgrammableTransactionBuilder::new();
+    build_multi_upgrade_txns(&mut builder, package_upgrades);
+    let result = run_multi_txns(&authority, sender, &sender_key, &gas_object_id, builder)
+        .await
+        .unwrap()
+        .1;
+    let effects = result.into_data();
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
+}
+
+#[tokio::test]
+async fn test_upgrade_more_than_max_packages_error() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas_object_id)]).await;
+
+    //
+    // Build and publich max number of packages allowed
+    let (_, modules, dependencies) = build_package("move_upgrade/base", false);
+
+    // push max number of packages allowed to publish
+    let max_pub_cmd = authority
+        .epoch_store_for_testing()
+        .protocol_config()
+        .max_publish_or_upgrade_per_ptb_as_option()
+        .unwrap_or(0);
+    assert!(max_pub_cmd > 0);
+    let packages = vec![(modules, dependencies); max_pub_cmd as usize];
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    build_multi_publish_txns(&mut builder, sender, packages);
+    let result = run_multi_txns(&authority, sender, &sender_key, &gas_object_id, builder)
+        .await
+        .unwrap()
+        .1;
+    let effects = result.into_data();
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
+
+    // collect package and upgrade caps
+    let (digest, modules, dep_ids) = build_package("move_upgrade/base", false);
+    let packages_and_upgrades = collect_packages_and_upgrade_caps(&authority, &effects).await;
+    // (package id, upgrade cap ref, policy, digest, dep ids, modules)
+    let mut package_upgrades: Vec<UpgradeData> = vec![];
+    for (package_id, upgrade_cap) in packages_and_upgrades {
+        package_upgrades.push(UpgradeData {
+            package_id,
+            upgrade_cap,
+            policy: UpgradePolicy::COMPATIBLE,
+            digest: digest.clone(),
+            dep_ids: dep_ids.clone(),
+            modules: modules.clone(),
+        });
+    }
+    let (_, modules, dependencies) = build_package("object_basics", false);
+    let packages = vec![(modules, dependencies); 2];
+
+    // Upgrade all packages
+    let mut builder = ProgrammableTransactionBuilder::new();
+    build_multi_upgrade_txns(&mut builder, package_upgrades);
+    build_multi_publish_txns(&mut builder, sender, packages);
+    let err = run_multi_txns(&authority, sender, &sender_key, &gas_object_id, builder)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        err,
+        SuiError::UserInputError {
+            error: UserInputError::MaxPublishCountExceeded {
+                max_publish_commands: max_pub_cmd,
+                publish_count: max_pub_cmd + 2,
+            }
+        }
+    );
 }

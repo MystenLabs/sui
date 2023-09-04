@@ -1718,6 +1718,7 @@
                 "max_programmable_tx_commands": {
                   "u32": "1024"
                 },
+                "max_publish_or_upgrade_per_ptb": null,
                 "max_pure_argument_size": {
                   "u32": "16384"
                 },
