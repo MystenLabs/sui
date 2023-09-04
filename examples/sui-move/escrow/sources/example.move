@@ -47,7 +47,7 @@ module escrow::example {
     struct Key has key, store { id: UID }
 
     /// An object held in escrow
-    struct Escrow<T: key + store> has key, store {
+    struct Escrow<T: key + store> has key {
         id: UID,
 
         /// Owner of `escrowed`
