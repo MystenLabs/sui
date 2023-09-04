@@ -55,6 +55,7 @@
 -  [Function `order_id`](#0xdee9_clob_v2_order_id)
 -  [Function `tick_level`](#0xdee9_clob_v2_tick_level)
 -  [Function `expire_timestamp`](#0xdee9_clob_v2_expire_timestamp)
+-  [Function `clone_order`](#0xdee9_clob_v2_clone_order)
 
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
@@ -571,7 +572,7 @@ Emitted when user withdraw asset from custodian
 
 
 
-<pre><code><b>struct</b> <a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a> <b>has</b> <b>copy</b>, drop, store
+<pre><code><b>struct</b> <a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a> <b>has</b> drop, store
 </code></pre>
 
 
@@ -3369,6 +3370,40 @@ internal func to retrive single depth of a tick price
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_expire_timestamp">expire_timestamp</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>): u64 {
     order.expire_timestamp
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_clob_v2_clone_order"></a>
+
+## Function `clone_order`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_clone_order">clone_order</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): <a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_clone_order">clone_order</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>): <a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a> {
+    <a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a> {
+        order_id: order.order_id,
+        client_order_id: order.client_order_id,
+        price: order.price,
+        original_quantity: order.original_quantity,
+        quantity: order.quantity,
+        is_bid: order.is_bid,
+        owner: order.owner,
+        expire_timestamp: order.expire_timestamp,
+        self_matching_prevention: order.self_matching_prevention
+    }
 }
 </code></pre>
 
