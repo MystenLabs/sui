@@ -11,7 +11,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 22;
+const MAX_PROTOCOL_VERSION: u64 = 23;
 
 // Record history of protocol version allocations here:
 //
@@ -65,6 +65,9 @@ const MAX_PROTOCOL_VERSION: u64 = 22;
 // Version 20: Enabling the flag `narwhal_new_leader_election_schedule` for the new narwhal leader
 //             schedule algorithm for enhanced fault tolerance and sets the bad node stake threshold
 //             value. Both values are set for all the environments except mainnet.
+// Version 21: ZKLogin known providers.
+// Version 22: Child object format change.
+// Version 23: Re-enable simple gas conservation checks.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -264,6 +267,10 @@ struct FeatureFlags {
 
     #[serde(skip_serializing_if = "is_false")]
     enable_jwk_consensus_updates: bool,
+    // Perform simple conservation checks keeping into account out of gas scenarios
+    // while charging for storage.
+    #[serde(skip_serializing_if = "is_false")]
+    simple_conservation_checks: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -866,6 +873,10 @@ impl ProtocolConfig {
     pub fn enable_jwk_consensus_updates(&self) -> bool {
         self.feature_flags.enable_jwk_consensus_updates
     }
+
+    pub fn simple_conservation_checks(&self) -> bool {
+        self.feature_flags.simple_conservation_checks
+    }
 }
 
 #[cfg(not(msim))]
@@ -1410,6 +1421,11 @@ impl ProtocolConfig {
             22 => {
                 let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.loaded_child_object_format = true;
+                cfg
+            }
+            23 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.feature_flags.simple_conservation_checks = true;
                 cfg
             }
             // Use this template when making changes:
