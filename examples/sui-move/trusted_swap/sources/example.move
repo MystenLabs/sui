@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/// Executing a swap of two objects via a third party, using object wrapping to
+/// hand ownership of the objects to swap to the third party without giving them
+/// the ability to modify those objects.
 module trusted_swap::example {
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
@@ -62,7 +65,7 @@ module trusted_swap::example {
 
     /// When the service has two swap requests, it can execute them, sending the
     /// objects to the respective owners and taking its fee.
-    public fun execute_swap(s1: SwapRequest, s2: SwapRequest,): Balance<SUI> {
+    public fun execute_swap(s1: SwapRequest, s2: SwapRequest): Balance<SUI> {
         let SwapRequest {id: id1, owner: owner1, object: o1, fee: fee1} = s1;
         let SwapRequest {id: id2, owner: owner2, object: o2, fee: fee2} = s2;
 
@@ -120,6 +123,7 @@ module trusted_swap::example {
         let o1 = new(1, 0, ts::ctx(&mut ts));
         let c1 = coin::mint_for_testing<SUI>(MIN_FEE - 1, ts::ctx(&mut ts));
         request_swap(o1, c1, @0xC, ts::ctx(&mut ts));
+
         abort 1337
     }
 
@@ -137,10 +141,10 @@ module trusted_swap::example {
         request_swap(o2, c2, @0xC, ts::ctx(&mut ts));
 
         ts::next_tx(&mut ts, @0xC);
-
         let s1 = ts::take_from_sender<SwapRequest>(&mut ts);
         let s2 = ts::take_from_sender<SwapRequest>(&mut ts);
         let _fee = execute_swap(s1, s2);
+
         abort 1337
     }
 
@@ -158,10 +162,10 @@ module trusted_swap::example {
         request_swap(o2, c2, @0xC, ts::ctx(&mut ts));
 
         ts::next_tx(&mut ts, @0xC);
-
         let s1 = ts::take_from_sender<SwapRequest>(&mut ts);
         let s2 = ts::take_from_sender<SwapRequest>(&mut ts);
         let _fee = execute_swap(s1, s2);
+
         abort 1337
     }
 }
