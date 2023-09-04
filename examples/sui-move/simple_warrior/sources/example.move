@@ -12,10 +12,16 @@ module simple_warrior::example {
         strength: u8,
     }
 
-    struct Warrior has key {
+    struct Warrior has key, store {
         id: UID,
         sword: Option<Sword>,
     }
+
+    /// Warrior already has a Sword equipped.
+    const EAlreadyEquipped: u64 = 0;
+
+    /// Warrior does not have a sword equipped.
+    const ENotEquipped: u64 = 1;
 
     public fun new_sword(strength: u8, ctx: &mut TxContext): Sword {
         Sword { id: object::new(ctx), strength }
@@ -25,8 +31,14 @@ module simple_warrior::example {
         Warrior { id: object::new(ctx), sword: option::none() }
     }
 
-    public fun equip(warrior: &mut Warrior, sword: Sword): Option<Sword> {
-        option::swap_or_fill(&mut warrior.sword, sword)
+    public fun equip(warrior: &mut Warrior, sword: Sword) {
+        assert!(option::is_none(&warrior.sword), EAlreadyEquipped);
+        option::fill(&mut warrior.sword, sword);
+    }
+
+    public fun unequip(warrior: &mut Warrior): Sword {
+        assert!(option::is_some(&warrior.sword), ENotEquipped);
+        option::extract(&mut warrior.sword)
     }
 
     // === Tests ===
@@ -38,8 +50,7 @@ module simple_warrior::example {
         let s = new_sword(42, ts::ctx(&mut ts));
         let w = new_warrior(ts::ctx(&mut ts));
 
-        let prev = equip(&mut w, s);
-        option::destroy_none(prev);
+        equip(&mut w, s);
 
         let Warrior { id, sword } = w;
         object::delete(id);
@@ -51,19 +62,19 @@ module simple_warrior::example {
     }
 
     #[test]
-    fun test_equip_swap() {
+    fun test_equip_unequip() {
         let ts = ts::begin(@0xA);
         let s1 = new_sword(21, ts::ctx(&mut ts));
         let s2 = new_sword(42, ts::ctx(&mut ts));
         let w = new_warrior(ts::ctx(&mut ts));
 
-        let prev = equip(&mut w, s1);
-        option::destroy_none(prev);
+        equip(&mut w, s1);
 
-        let prev = equip(&mut w, s2);
-        let Sword { id, strength } = option::destroy_some(prev);
+        let Sword { id, strength } = unequip(&mut w);
         assert!(strength == 21, 0);
         object::delete(id);
+
+        equip(&mut w, s2);
 
         let Warrior { id, sword } = w;
         object::delete(id);
@@ -73,5 +84,28 @@ module simple_warrior::example {
         object::delete(id);
 
         ts::end(ts);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = ENotEquipped)]
+    fun test_unequip_empty() {
+        let ts = ts::begin(@0xA);
+        let w = new_warrior(ts::ctx(&mut ts));
+        let _s = unequip(&mut w);
+        abort 1337
+    }
+
+    #[test]
+    #[expected_failure(abort_code = EAlreadyEquipped)]
+    fun test_equip_already_equipped() {
+        let ts = ts::begin(@0xA);
+        let s1 = new_sword(21, ts::ctx(&mut ts));
+        let s2 = new_sword(42, ts::ctx(&mut ts));
+        let w = new_warrior(ts::ctx(&mut ts));
+
+        equip(&mut w, s1);
+        equip(&mut w, s2);
+
+        abort 1337
     }
 }
