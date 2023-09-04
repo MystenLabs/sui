@@ -268,7 +268,7 @@ pub mod checked {
             }
 
             // compute and collect storage charges
-            temporary_store.ensure_gas_and_input_mutated(self);
+            temporary_store.ensure_active_inputs_mutated();
             temporary_store.collect_storage_and_rebate(self);
 
             // system transactions (None smashed_gas_coin)  do not have gas and so do not charge
@@ -303,7 +303,7 @@ pub mod checked {
             if let Err(err) = self.gas_status.charge_storage_and_rebate() {
                 self.reset(temporary_store);
                 self.gas_status.adjust_computation_on_out_of_gas();
-                temporary_store.ensure_gas_and_input_mutated(self);
+                temporary_store.ensure_active_inputs_mutated();
                 temporary_store.collect_rebate(self);
                 if execution_result.is_ok() {
                     *execution_result = Err(err);
@@ -320,14 +320,14 @@ pub mod checked {
                 // we run out of gas charging storage, reset and try charging for storage again.
                 // Input objects are touched and so they have a storage cost
                 self.reset(temporary_store);
-                temporary_store.ensure_gas_and_input_mutated(self);
+                temporary_store.ensure_active_inputs_mutated();
                 temporary_store.collect_storage_and_rebate(self);
                 if let Err(err) = self.gas_status.charge_storage_and_rebate() {
                     // we run out of gas attempting to charge for the input objects exclusively,
                     // deal with this edge case by not charging for storage
                     self.reset(temporary_store);
                     self.gas_status.adjust_computation_on_out_of_gas();
-                    temporary_store.ensure_gas_and_input_mutated(self);
+                    temporary_store.ensure_active_inputs_mutated();
                     temporary_store.collect_rebate(self);
                     if execution_result.is_ok() {
                         *execution_result = Err(err);

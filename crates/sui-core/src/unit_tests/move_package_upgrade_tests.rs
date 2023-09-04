@@ -103,6 +103,7 @@ struct UpgradeStateRunner {
     pub authority_state: Arc<AuthorityState>,
     pub package: ObjectRef,
     pub upgrade_cap: ObjectRef,
+    pub rgp: u64,
 }
 
 impl UpgradeStateRunner {
@@ -117,6 +118,7 @@ impl UpgradeStateRunner {
         let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
         let authority_state = TestAuthorityBuilder::new().build().await;
         authority_state.insert_genesis_object(gas_object).await;
+        let rgp = authority_state.reference_gas_price_for_testing().unwrap();
 
         let (package, upgrade_cap) = build_and_publish_test_package_with_upgrade_cap(
             &authority_state,
@@ -135,6 +137,7 @@ impl UpgradeStateRunner {
             authority_state,
             package,
             upgrade_cap,
+            rgp,
         }
     }
 
@@ -213,7 +216,7 @@ impl UpgradeStateRunner {
             &self.sender,
             &self.sender_key,
             pt,
-            TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+            self.rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         )
         .await
         .unwrap();
