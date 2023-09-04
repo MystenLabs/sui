@@ -31,8 +31,7 @@ use sui_types::{
     object::Owner,
     object::{Data, Object},
     storage::{
-        BackingPackageStore, ChildObjectResolver, DeleteKind, ObjectChange, ParentSync, Storage,
-        WriteKind,
+        BackingPackageStore, ChildObjectResolver, ObjectChange, ParentSync, Storage, WriteKind,
     },
     transaction::InputObjects,
 };
@@ -100,17 +99,13 @@ impl<'backing> TemporaryStore<'backing> {
         &self.input_objects
     }
 
-    /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
-    pub fn into_inner(self) -> InnerTemporaryStore {
+    pub fn update_object_version_and_prev_tx(&mut self) {
         #[cfg(debug_assertions)]
         {
             self.check_invariants();
         }
 
-        let mut written = BTreeMap::new();
-        let mut deleted = BTreeMap::new();
-
-        for (id, (mut obj, kind)) in self.written {
+        for (id, (obj, kind)) in self.written.iter_mut() {
             // Update the version for the written object.
             match &mut obj.data {
                 Data::Move(obj) => {
@@ -122,7 +117,7 @@ impl<'backing> TemporaryStore<'backing> {
                     // Modified packages get their version incremented (this is a special case that
                     // only applies to system packages).  All other packages can only be created,
                     // and they are left alone.
-                    if kind == WriteKind::Mutate {
+                    if *kind == WriteKind::Mutate {
                         pkg.increment_version();
                     }
                 }
@@ -135,7 +130,7 @@ impl<'backing> TemporaryStore<'backing> {
                 initial_shared_version,
             } = &mut obj.owner
             {
-                if kind == WriteKind::Create {
+                if *kind == WriteKind::Create {
                     assert_eq!(
                         *initial_shared_version,
                         SequenceNumber::new(),
@@ -144,24 +139,19 @@ impl<'backing> TemporaryStore<'backing> {
                     *initial_shared_version = self.lamport_timestamp;
                 }
             }
-            written.insert(id, (obj.compute_object_reference(), obj, kind));
         }
+    }
 
-        for (id, kind) in self.deleted {
-            // Check invariant that version must increase.
-            if let Some(version) = kind.old_version() {
-                debug_assert!(version < self.lamport_timestamp);
-            }
-            deleted.insert(id, (self.lamport_timestamp, kind.to_delete_kind()));
-        }
-
-        // Combine object events with move events.
-
+    /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
+    pub fn into_inner(self) -> InnerTemporaryStore {
         InnerTemporaryStore {
             objects: self.input_objects,
             mutable_inputs: self.mutable_input_refs,
-            written,
-            deleted,
+            written: self
+                .written
+                .into_iter()
+                .map(|(id, (obj, _))| (id, obj))
+                .collect(),
             events: TransactionEvents { data: self.events },
             max_binary_format_version: self.protocol_config.move_binary_format_version(),
             loaded_child_objects: self
@@ -218,16 +208,40 @@ impl<'backing> TemporaryStore<'backing> {
             }
         });
 
-        let protocol_version = self.protocol_config.version;
-        let inner = self.into_inner();
+        self.update_object_version_and_prev_tx();
+
+        let mut deleted = vec![];
+        let mut wrapped = vec![];
+        let mut unwrapped_then_deleted = vec![];
+        for (id, kind) in &self.deleted {
+            match kind {
+                DeleteKindWithOldVersion::Normal(_) => deleted.push((
+                    *id,
+                    self.lamport_timestamp,
+                    ObjectDigest::OBJECT_DIGEST_DELETED,
+                )),
+                DeleteKindWithOldVersion::UnwrapThenDelete
+                | DeleteKindWithOldVersion::UnwrapThenDeleteDEPRECATED(_) => unwrapped_then_deleted
+                    .push((
+                        *id,
+                        self.lamport_timestamp,
+                        ObjectDigest::OBJECT_DIGEST_DELETED,
+                    )),
+                DeleteKindWithOldVersion::Wrap(_) => wrapped.push((
+                    *id,
+                    self.lamport_timestamp,
+                    ObjectDigest::OBJECT_DIGEST_WRAPPED,
+                )),
+            }
+        }
 
         // In the case of special transactions that don't require a gas object,
         // we don't really care about the effects to gas, just use the input for it.
         // Gas coins are guaranteed to be at least size 1 and if more than 1
         // the first coin is where all the others are merged.
         let updated_gas_object_info = if let Some(coin_id) = gas_charger.gas_coin() {
-            let (obj_ref, object, _kind) = &inner.written[&coin_id];
-            (*obj_ref, object.owner)
+            let object = &self.written[&coin_id].0;
+            (object.compute_object_reference(), object.owner)
         } else {
             (
                 (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
@@ -238,32 +252,18 @@ impl<'backing> TemporaryStore<'backing> {
         let mut mutated = vec![];
         let mut created = vec![];
         let mut unwrapped = vec![];
-        for (object_ref, object, kind) in inner.written.values() {
+        for (object, kind) in self.written.values() {
+            // TODO: We should cache the object ref when we update the object for the last time.
+            let object_ref = object.compute_object_reference();
             match kind {
-                WriteKind::Mutate => mutated.push((*object_ref, object.owner)),
-                WriteKind::Create => created.push((*object_ref, object.owner)),
-                WriteKind::Unwrap => unwrapped.push((*object_ref, object.owner)),
+                WriteKind::Mutate => mutated.push((object_ref, object.owner)),
+                WriteKind::Create => created.push((object_ref, object.owner)),
+                WriteKind::Unwrap => unwrapped.push((object_ref, object.owner)),
             }
         }
 
-        let mut deleted = vec![];
-        let mut wrapped = vec![];
-        let mut unwrapped_then_deleted = vec![];
-        for (id, (version, kind)) in &inner.deleted {
-            match kind {
-                DeleteKind::Normal => {
-                    deleted.push((*id, *version, ObjectDigest::OBJECT_DIGEST_DELETED))
-                }
-                DeleteKind::UnwrapThenDelete => unwrapped_then_deleted.push((
-                    *id,
-                    *version,
-                    ObjectDigest::OBJECT_DIGEST_DELETED,
-                )),
-                DeleteKind::Wrap => {
-                    wrapped.push((*id, *version, ObjectDigest::OBJECT_DIGEST_WRAPPED))
-                }
-            }
-        }
+        let protocol_version = self.protocol_config.version;
+        let inner = self.into_inner();
 
         let effects = TransactionEffects::new_from_execution(
             protocol_version,

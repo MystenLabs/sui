@@ -384,7 +384,7 @@ impl IndexStore {
         .iter()
         .filter_map(|((owner, obj_id), obj_info)| {
             // If it's in written_coins, then it's not a coin. Skip it.
-            let (_obj_ref, obj, _write_kind) = written_coins.get(obj_id)?;
+            let obj = written_coins.get(obj_id)?;
             let coin_type_tag = obj.coin_type_maybe().unwrap_or_else(|| {
                 panic!(
                     "object_id: {:?} in written_coins is not a coin type, written_coins: {:?}, tx_digest: {:?}",
@@ -1591,7 +1591,6 @@ mod tests {
     use sui_types::gas_coin::GAS;
     use sui_types::object;
     use sui_types::object::Owner;
-    use sui_types::storage::WriteKind;
 
     #[tokio::test]
     async fn test_index_cache() -> anyhow::Result<()> {
@@ -1622,10 +1621,7 @@ mod tests {
                 },
             ));
             object_map.insert(object.id(), object.clone());
-            written_objects.insert(
-                object.data.id(),
-                (object.compute_object_reference(), object, WriteKind::Mutate),
-            );
+            written_objects.insert(object.data.id(), object);
         }
         let object_index_changes = ObjectIndexChanges {
             deleted_owners: vec![],
@@ -1671,14 +1667,7 @@ mod tests {
         let mut deleted_objects = vec![];
         for (id, object) in object_map.iter().take(3) {
             deleted_objects.push((address, *id));
-            written_objects.insert(
-                object.data.id(),
-                (
-                    object.compute_object_reference(),
-                    object.clone(),
-                    WriteKind::Create,
-                ),
-            );
+            written_objects.insert(object.data.id(), object.clone());
         }
         let object_index_changes = ObjectIndexChanges {
             deleted_owners: deleted_objects,

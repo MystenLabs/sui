@@ -124,6 +124,8 @@ pub struct ObjectID(
     AccountAddress,
 );
 
+pub type VersionDigest = (SequenceNumber, ObjectDigest);
+
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 
 pub fn random_object_ref() -> ObjectRef {
