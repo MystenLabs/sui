@@ -7,14 +7,14 @@ publish = false
 edition = "2021"
 
 [dependencies]
-glob = "0.3.1"
-color-eyre = "0.6.2"
-russh = "0.38.0"
-russh-keys = "0.38.0"
-aws-sdk-ec2 = "0.29.0"
-aws-smithy-http = "0.56"
-aws-smithy-runtime-api = "0.56"
+aws-sdk-ec2.workspace = true
+aws-smithy-http.workspace = true
+aws-smithy-runtime-api.workspace = true
+russh.workspace = true
+russh-keys.workspace = true
 aws-config.workspace = true
+color-eyre.workspace = true
+glob.workspace = true
 clap.workspace = true
 eyre.workspace = true
 prettytable-rs.workspace = true
@@ -27,8 +27,7 @@ async-trait.workspace = true
 crossterm.workspace = true
 serde.workspace = true
 tokio = { workspace = true, features = ["full"] }
-
-prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db" }
+prometheus-parse.workspace = true
 
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
