@@ -90,29 +90,48 @@ module trusted_swap::example {
 
     #[test]
     fun successful_swap() {
-        let ts = ts::begin(@0xA);
-        let o1 = new(1, 0, ts::ctx(&mut ts));
-        let i1 = object::id(&o1);
-        let c1 = coin::mint_for_testing<SUI>(MIN_FEE, ts::ctx(&mut ts));
-        request_swap(o1, c1, @0xC, ts::ctx(&mut ts));
+        let ts = ts::begin(@0x0);
 
-        ts::next_tx(&mut ts, @0xB);
-        let o2 = new(1, 1, ts::ctx(&mut ts));
-        let i2 = object::id(&o2);
-        let c2 = coin::mint_for_testing<SUI>(MIN_FEE, ts::ctx(&mut ts));
-        request_swap(o2, c2, @0xC, ts::ctx(&mut ts));
+        let i1 = {
+            ts::next_tx(&mut ts, @0xA);
+            let o1 = new(1, 0, ts::ctx(&mut ts));
+            let c1 = coin::mint_for_testing<SUI>(MIN_FEE, ts::ctx(&mut ts));
+            let i = object::id(&o1);
+            request_swap(o1, c1, @0xC, ts::ctx(&mut ts));
+            i
+        };
 
-        ts::next_tx(&mut ts, @0xC);
-        let s1 = ts::take_from_sender<SwapRequest>(&mut ts);
-        let s2 = ts::take_from_sender<SwapRequest>(&mut ts);
-        let fee = execute_swap(s1, s2);
+        let i2 = {
+            ts::next_tx(&mut ts, @0xB);
+            let o2 = new(1, 1, ts::ctx(&mut ts));
+            let c2 = coin::mint_for_testing<SUI>(MIN_FEE, ts::ctx(&mut ts));
+            let i = object::id(&o2);
+            request_swap(o2, c2, @0xC, ts::ctx(&mut ts));
+            i
+        };
 
-        ts::next_tx(&mut ts, @0x0);
-        assert!(ts::ids_for_address<Object>(@0xA) == vector[i2], 0);
-        assert!(ts::ids_for_address<Object>(@0xB) == vector[i1], 0);
-        assert!(balance::value(&fee) == MIN_FEE * 2, 0);
+        {
+            ts::next_tx(&mut ts, @0xC);
+            let s1 = ts::take_from_sender<SwapRequest>(&mut ts);
+            let s2 = ts::take_from_sender<SwapRequest>(&mut ts);
 
-        balance::destroy_for_testing(fee);
+            let bal = execute_swap(s1, s2);
+            let fee = coin::from_balance(bal, ts::ctx(&mut ts));
+
+            transfer::public_transfer(fee, @0xC);
+        };
+
+        {
+            ts::next_tx(&mut ts, @0xC);
+            let fee: Coin<SUI> = ts::take_from_sender(&ts);
+
+            assert!(ts::ids_for_address<Object>(@0xA) == vector[i2], 0);
+            assert!(ts::ids_for_address<Object>(@0xB) == vector[i1], 0);
+            assert!(coin::value(&fee) == MIN_FEE * 2, 0);
+
+            ts::return_to_sender(&ts, fee);
+        };
+
         ts::end(ts);
     }
 
@@ -130,20 +149,28 @@ module trusted_swap::example {
     #[test]
     #[expected_failure(abort_code = EBadSwap)]
     fun swap_different_scarcity() {
-        let ts = ts::begin(@0xA);
-        let o1 = new(1, 0, ts::ctx(&mut ts));
-        let c1 = coin::mint_for_testing<SUI>(MIN_FEE, ts::ctx(&mut ts));
-        request_swap(o1, c1, @0xC, ts::ctx(&mut ts));
+        let ts = ts::begin(@0x0);
 
-        ts::next_tx(&mut ts, @0xB);
-        let o2 = new(0, 1, ts::ctx(&mut ts));
-        let c2 = coin::mint_for_testing<SUI>(MIN_FEE, ts::ctx(&mut ts));
-        request_swap(o2, c2, @0xC, ts::ctx(&mut ts));
+        {
+            ts::next_tx(&mut ts, @0xA);
+            let o1 = new(1, 0, ts::ctx(&mut ts));
+            let c1 = coin::mint_for_testing<SUI>(MIN_FEE, ts::ctx(&mut ts));
+            request_swap(o1, c1, @0xC, ts::ctx(&mut ts));
+        };
 
-        ts::next_tx(&mut ts, @0xC);
-        let s1 = ts::take_from_sender<SwapRequest>(&mut ts);
-        let s2 = ts::take_from_sender<SwapRequest>(&mut ts);
-        let _fee = execute_swap(s1, s2);
+        {
+            ts::next_tx(&mut ts, @0xB);
+            let o2 = new(0, 1, ts::ctx(&mut ts));
+            let c2 = coin::mint_for_testing<SUI>(MIN_FEE, ts::ctx(&mut ts));
+            request_swap(o2, c2, @0xC, ts::ctx(&mut ts));
+        };
+
+        {
+            ts::next_tx(&mut ts, @0xC);
+            let s1 = ts::take_from_sender<SwapRequest>(&mut ts);
+            let s2 = ts::take_from_sender<SwapRequest>(&mut ts);
+            let _fee = execute_swap(s1, s2);
+        };
 
         abort 1337
     }
@@ -151,20 +178,28 @@ module trusted_swap::example {
     #[test]
     #[expected_failure(abort_code = EBadSwap)]
     fun swap_same_style() {
-        let ts = ts::begin(@0xA);
-        let o1 = new(1, 0, ts::ctx(&mut ts));
-        let c1 = coin::mint_for_testing<SUI>(MIN_FEE, ts::ctx(&mut ts));
-        request_swap(o1, c1, @0xC, ts::ctx(&mut ts));
+        let ts = ts::begin(@0x0);
 
-        ts::next_tx(&mut ts, @0xB);
-        let o2 = new(1, 0, ts::ctx(&mut ts));
-        let c2 = coin::mint_for_testing<SUI>(MIN_FEE, ts::ctx(&mut ts));
-        request_swap(o2, c2, @0xC, ts::ctx(&mut ts));
+        {
+            ts::next_tx(&mut ts, @0xA);
+            let o1 = new(1, 0, ts::ctx(&mut ts));
+            let c1 = coin::mint_for_testing<SUI>(MIN_FEE, ts::ctx(&mut ts));
+            request_swap(o1, c1, @0xC, ts::ctx(&mut ts));
+        };
 
-        ts::next_tx(&mut ts, @0xC);
-        let s1 = ts::take_from_sender<SwapRequest>(&mut ts);
-        let s2 = ts::take_from_sender<SwapRequest>(&mut ts);
-        let _fee = execute_swap(s1, s2);
+        {
+            ts::next_tx(&mut ts, @0xB);
+            let o2 = new(1, 0, ts::ctx(&mut ts));
+            let c2 = coin::mint_for_testing<SUI>(MIN_FEE, ts::ctx(&mut ts));
+            request_swap(o2, c2, @0xC, ts::ctx(&mut ts));
+        };
+
+        {
+            ts::next_tx(&mut ts, @0xC);
+            let s1 = ts::take_from_sender<SwapRequest>(&mut ts);
+            let s2 = ts::take_from_sender<SwapRequest>(&mut ts);
+            let _fee = execute_swap(s1, s2);
+        };
 
         abort 1337
     }
