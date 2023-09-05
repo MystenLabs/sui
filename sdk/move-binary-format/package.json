@@ -13,8 +13,8 @@
   "author": "Mysten Labs <build@mystenlabs.com>",
   "license": "Apache-2.0",
   "devDependencies": {
+    "tsup": "^7.1.0",
     "typescript": "^5.1.6",
-    "vitest": "^0.33.0",
-    "tsup": "^7.1.0"
+    "vitest": "^0.33.0"
   }
 }
