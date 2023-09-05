@@ -49,7 +49,8 @@ pub struct IndexerMetrics {
     pub checkpoint_db_commit_latency: Histogram,
     pub checkpoint_db_commit_latency_step_1: Histogram,
     pub checkpoint_db_commit_latency_transactions: Histogram,
-    pub checkpoint_db_commit_latency_transactions_transformation: Histogram,
+    pub checkpoint_db_commit_latency_transactions_chunks: Histogram,
+    pub checkpoint_db_commit_latency_transactions_chunks_transformation: Histogram,
     pub checkpoint_db_commit_latency_events: Histogram,
     pub checkpoint_db_commit_latency_packages: Histogram,
     pub checkpoint_db_commit_latency_tx_indices: Histogram,
@@ -269,9 +270,16 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
-            checkpoint_db_commit_latency_transactions_transformation: register_histogram_with_registry!(
+            checkpoint_db_commit_latency_transactions_chunks: register_histogram_with_registry!(
+                "checkpoint_db_commit_latency_transactions_chunks",
+                "Time spent commiting transactions chunks",
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            checkpoint_db_commit_latency_transactions_chunks_transformation: register_histogram_with_registry!(
                 "checkpoint_db_commit_latency_transactions_transaformation",
-                "Time spent in transactions transformation prior to commit",
+                "Time spent in transactions chunks transformation prior to commit",
                 DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
