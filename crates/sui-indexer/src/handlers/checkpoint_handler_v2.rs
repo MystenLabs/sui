@@ -703,7 +703,7 @@ pub async fn start_tx_checkpoint_commit_task<S>(
 
         futures::future::join_all(vec![
             state.persist_transactions(tx_batch),
-            state.persist_tx_indices(tx_indices_batch),
+            // state.persist_tx_indices(tx_indices_batch),
             state.persist_events(events_batch),
             state.persist_packages(packages_batch),
         ])
