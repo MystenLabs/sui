@@ -40,11 +40,12 @@ const createTypeToAmpliAccount: Record<CreateType, AddedAccountsProperties['acco
 
 export function useCreateAccountsMutation() {
 	const backgroundClient = useBackgroundClient();
-	const [accountsFormValues, setAccountFormValues] = useAccountsFormContext();
+	const [accountsFormValuesRef, setAccountFormValues] = useAccountsFormContext();
 	return useMutation({
 		mutationKey: ['create accounts'],
 		mutationFn: async ({ type, password }: { type: CreateType; password?: string }) => {
 			let createdAccounts;
+			const accountsFormValues = accountsFormValuesRef.current;
 			if (type === 'zk' && validateAccountFormValues(type, accountsFormValues)) {
 				createdAccounts = await backgroundClient.createAccounts(accountsFormValues);
 			} else if (
