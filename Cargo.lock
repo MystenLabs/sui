@@ -9437,6 +9437,56 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-analytics-indexer"
+version = "1.10.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "backoff",
+ "bcs",
+ "cached",
+ "chrono",
+ "clap",
+ "criterion",
+ "csv",
+ "fastcrypto",
+ "futures",
+ "itertools",
+ "move-bytecode-utils",
+ "move-core-types",
+ "mysten-metrics",
+ "ntest",
+ "prometheus",
+ "regex",
+ "serde",
+ "serde_json",
+ "sui-config",
+ "sui-core",
+ "sui-indexer",
+ "sui-json",
+ "sui-json-rpc",
+ "sui-json-rpc-types",
+ "sui-keys",
+ "sui-move-build",
+ "sui-node",
+ "sui-open-rpc",
+ "sui-rest-api",
+ "sui-sdk",
+ "sui-test-transaction-builder",
+ "sui-types",
+ "tap",
+ "telemetry-subscribers",
+ "test-cluster",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-archival"
 version = "0.1.0"
 dependencies = [
