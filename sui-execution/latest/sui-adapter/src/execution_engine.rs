@@ -629,7 +629,27 @@ mod checked {
             vec![storage_rebates],
         );
 
-        // Step 4: Expire JWKs if the authenticator state object exists.
+        // Step 4: Create the authenticator state object if it does not exist. If it does exist,
+        // (and the feature is enabled) then it will already be an input to this transaction.
+        let should_create_authenticator_state = protocol_config.enable_jwk_consensus_updates()
+            && !temporary_store
+                .objects()
+                .contains_key(&SUI_AUTHENTICATOR_STATE_OBJECT_ID);
+
+        if should_create_authenticator_state {
+            let enable_jwk_consensus_updates_changing = !protocol_config
+                .enable_jwk_consensus_updates()
+                && ProtocolConfig::get_for_version(
+                    params.next_protocol_version,
+                    protocol_config.chain,
+                )
+                .enable_jwk_consensus_updates();
+
+            if enable_jwk_consensus_updates_changing {
+            }|
+        }
+
+        // Step 5: Expire JWKs if the authenticator state object exists.
         if protocol_config.enable_jwk_consensus_updates() {
             if let Some(auth_state) = temporary_store
                 .objects()

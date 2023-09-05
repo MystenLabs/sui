@@ -334,6 +334,10 @@ impl ConsensusTransactionOrdering {
 pub struct ProtocolConfig {
     pub version: ProtocolVersion,
 
+    /// The chain ID of the network for this config.
+    #[serde(skip)]
+    pub chain: Chain,
+
     feature_flags: FeatureFlags,
 
     // ==== Transaction input limits ====
@@ -1001,6 +1005,8 @@ impl ProtocolConfig {
             1 => Self {
                 // will be overwritten before being returned
                 version,
+
+                chain,
 
                 // All flags are disabled in V1
                 feature_flags: Default::default(),
