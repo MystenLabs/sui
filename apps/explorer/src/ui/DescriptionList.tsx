@@ -33,9 +33,9 @@ const descriptionItemLabelStyles = cva(
 	},
 );
 
-const descriptionItemDescriptionStyles = cva(['ml-0 min-w-0 flex-1 leading-none'], {
+const descriptionItemContentStyles = cva(['ml-0 min-w-0 flex-1 leading-none'], {
 	variants: {
-		descriptionJustify: {
+		contentJustify: {
 			end: 'flex justify-end',
 		},
 	},
@@ -43,12 +43,12 @@ const descriptionItemDescriptionStyles = cva(['ml-0 min-w-0 flex-1 leading-none'
 
 type DescriptionItemStylesProps = VariantProps<typeof descriptionItemStyles>;
 type DescriptionItemLabelStylesProps = VariantProps<typeof descriptionItemLabelStyles>;
-type DescriptionItemDescriptionStylesProps = VariantProps<typeof descriptionItemDescriptionStyles>;
+type DescriptionItemContentStylesProps = VariantProps<typeof descriptionItemContentStyles>;
 
 export interface DescriptionItemProps
 	extends DescriptionItemStylesProps,
 		DescriptionItemLabelStylesProps,
-		DescriptionItemDescriptionStylesProps {
+		DescriptionItemContentStylesProps {
 	title: string | ReactNode;
 	children: ReactNode;
 }
@@ -57,13 +57,13 @@ export function DescriptionItem({
 	title,
 	align,
 	labelWidth,
-	descriptionJustify,
+	contentJustify,
 	children,
 }: DescriptionItemProps) {
 	return (
 		<div className={descriptionItemStyles({ align })}>
 			<dt className={descriptionItemLabelStyles({ labelWidth })}>{title}</dt>
-			<dd className={descriptionItemDescriptionStyles({ descriptionJustify })}>{children}</dd>
+			<dd className={descriptionItemContentStyles({ contentJustify })}>{children}</dd>
 		</div>
 	);
 }

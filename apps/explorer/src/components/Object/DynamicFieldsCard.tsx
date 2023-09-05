@@ -21,12 +21,12 @@ function DynamicFieldRow({
 	noMarginBottom: boolean;
 	defaultOpen: boolean;
 }) {
-	const [open, setOpen] = useState(defaultOpen);
+	const [open, onOpenChange] = useState(defaultOpen);
 
 	return (
 		<FieldCollapsible
 			open={open}
-			setOpen={setOpen}
+			onOpenChange={onOpenChange}
 			noMarginBottom={noMarginBottom}
 			name={
 				<div className="flex items-center gap-1 truncate break-words text-body font-medium leading-relaxed text-steel-dark">

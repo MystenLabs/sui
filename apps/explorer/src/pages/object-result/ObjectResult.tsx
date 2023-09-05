@@ -18,18 +18,6 @@ import { PageHeader } from '~/ui/PageHeader';
 
 const PACKAGE_TYPE_NAME = 'Move Package';
 
-function Fail({ objID }: { objID: string | undefined }) {
-	return (
-		<PageLayout
-			content={
-				<Banner variant="error" spacing="lg" fullWidth>
-					Data could not be extracted on the following specified object ID: {objID}
-				</Banner>
-			}
-		/>
-	);
-}
-
 export function ObjectResult() {
 	const { id: objID } = useParams();
 	const { data, isLoading, isError, isFetched } = useGetObject(objID!);
@@ -46,20 +34,14 @@ export function ObjectResult() {
 		);
 	}
 
-	if (isError) {
-		return <Fail objID={objID} />;
-	}
+	const isPageError = isError || data.error || (isFetched && !data);
 
-	// TODO: Handle status better NotExists, Deleted, Other
-	if (data.error || (isFetched && !data)) {
-		return <Fail objID={objID} />;
-	}
-
-	const resp = translate(data);
-	const isPackage = resp.objType === PACKAGE_TYPE_NAME;
+	const resp = data ? translate(data) : null;
+	const isPackage = resp ? resp.objType === PACKAGE_TYPE_NAME : false;
 
 	return (
 		<PageLayout
+			isError={!!isPageError}
 			gradient={
 				isPackage
 					? undefined
@@ -69,28 +51,38 @@ export function ObjectResult() {
 								<div>
 									<PageHeader
 										type="Object"
-										title={resp.id}
+										title={resp?.id ?? ''}
 										before={<ObjectDetailsHeader className="h-6 w-6" />}
 									/>
 
 									<ErrorBoundary>
-										<div className="mt-5">
-											<ObjectView data={data} />
-										</div>
+										{data && (
+											<div className="mt-5">
+												<ObjectView data={data} />
+											</div>
+										)}
 									</ErrorBoundary>
 								</div>
 							),
 					  }
 			}
 			content={
-				<div className="mb-10">
-					{isPackage && <PageHeader type="Package" title={resp.id} />}
-					<ErrorBoundary>
-						<div className={clsx(isPackage && 'mt-10')}>
-							{isPackage ? <PkgView data={resp} /> : <TokenView data={data} />}
+				<>
+					{isPageError || !data || !resp ? (
+						<Banner variant="error" spacing="lg" fullWidth>
+							Data could not be extracted on the following specified object ID: {objID}
+						</Banner>
+					) : (
+						<div className="mb-10">
+							{isPackage && <PageHeader type="Package" title={resp.id} />}
+							<ErrorBoundary>
+								<div className={clsx(isPackage && 'mt-10')}>
+									{isPackage ? <PkgView data={resp} /> : <TokenView data={data} />}
+								</div>
+							</ErrorBoundary>
 						</div>
-					</ErrorBoundary>
-				</div>
+					)}
+				</>
 			}
 		/>
 	);

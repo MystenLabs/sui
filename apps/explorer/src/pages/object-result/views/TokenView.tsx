@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetDynamicFields } from '@mysten/core';
+import { useGetDynamicFields, useGetObject } from '@mysten/core';
+import { useNormalizedMoveStruct } from '@mysten/dapp-kit';
 import { type SuiObjectResponse } from '@mysten/sui.js/client';
 import { Heading } from '@mysten/ui';
 import { type ReactNode, useState } from 'react';
@@ -24,11 +25,56 @@ enum TABS_VALUES {
 	DYNAMIC_FIELDS = 'dynamicFields',
 }
 
+function useObjectFieldsCard(id: string) {
+	const { data: suiObjectResponseData, isLoading, isError } = useGetObject(id);
+
+	const objectType =
+		suiObjectResponseData?.data?.type ??
+		suiObjectResponseData?.data?.content?.dataType === 'package'
+			? suiObjectResponseData.data.type
+			: suiObjectResponseData?.data?.content?.type;
+
+	const [packageId, moduleName, functionName] = objectType?.split('<')[0]?.split('::') || [];
+
+	// Get the normalized struct for the object
+	const {
+		data: normalizedStructData,
+		isLoading: loadingNormalizedStruct,
+		isError: errorNormalizedMoveStruct,
+	} = useNormalizedMoveStruct(
+		{
+			package: packageId,
+			module: moduleName,
+			struct: functionName,
+		},
+		{
+			enabled: !!packageId && !!moduleName && !!functionName,
+		},
+	);
+
+	return {
+		loading: isLoading || loadingNormalizedStruct,
+		error: isError || errorNormalizedMoveStruct,
+		normalizedStructData,
+		suiObjectResponseData,
+		objectType,
+	};
+}
+
 export function TokenView({ data }: { data: SuiObjectResponse }) {
-	const [fieldsCount, setFieldsCount] = useState(0);
+	const objectId = data.data?.objectId!;
+
+	const {
+		normalizedStructData,
+		suiObjectResponseData,
+		objectType,
+		loading: objectFieldsCardLoading,
+		error: objectFieldsCardError,
+	} = useObjectFieldsCard(objectId);
+
+	const fieldsCount = normalizedStructData?.fields.length;
 
 	const [activeTab, setActiveTab] = useState<string>(TABS_VALUES.FIELDS);
-	const objectId = data.data?.objectId!;
 
 	const { data: dynamicFieldsData } = useGetDynamicFields(objectId);
 
@@ -38,11 +84,9 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
 		<div className="flex flex-col flex-nowrap gap-14">
 			<Tabs size="lg" value={activeTab} onValueChange={setActiveTab}>
 				<TabsList>
-					{!!fieldsCount && (
-						<TabsTrigger value={TABS_VALUES.FIELDS}>
-							<Heading variant="heading4/semibold">{fieldsCount} Fields</Heading>
-						</TabsTrigger>
-					)}
+					<TabsTrigger value={TABS_VALUES.FIELDS}>
+						<Heading variant="heading4/semibold">{fieldsCount} Fields</Heading>
+					</TabsTrigger>
 
 					{renderDynamicFields && (
 						<TabsTrigger value={TABS_VALUES.DYNAMIC_FIELDS}>
@@ -53,7 +97,14 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
 
 				<TabsContent value={TABS_VALUES.FIELDS}>
 					<FieldsContainer>
-						<ObjectFieldsCard id={objectId} setCount={setFieldsCount} />
+						<ObjectFieldsCard
+							objectType={objectType || ''}
+							normalizedStructData={normalizedStructData}
+							suiObjectResponseData={suiObjectResponseData}
+							loading={objectFieldsCardLoading}
+							error={objectFieldsCardError}
+							id={objectId}
+						/>
 					</FieldsContainer>
 				</TabsContent>
 				{renderDynamicFields && (

@@ -6,6 +6,7 @@ import { ArrowUpRight16 } from '@mysten/icons';
 import { type SuiObjectResponse } from '@mysten/sui.js/client';
 import { parseStructTag, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { Heading, Text } from '@mysten/ui';
+import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useEffect, useState } from 'react';
 
 import { useResolveVideo } from '~/hooks/useResolveVideo';
@@ -56,7 +57,7 @@ function ObjectViewItem({
 }) {
 	return (
 		<DescriptionItem
-			descriptionJustify="end"
+			contentJustify="end"
 			labelWidth="lg"
 			align={align}
 			title={
@@ -101,6 +102,7 @@ function LinkWebsite({ value }: { value: string }) {
 interface ObjectViewProps {
 	data: SuiObjectResponse;
 }
+
 export function ObjectView({ data }: ObjectViewProps) {
 	const [fileType, setFileType] = useState<undefined | string>(undefined);
 	const display = data.data?.display?.data;
@@ -115,16 +117,16 @@ export function ObjectView({ data }: ObjectViewProps) {
 
 	const { address, module } = parseStructTag(objectType);
 
-	useEffect(() => {
-		const controller = new AbortController();
-		genFileTypeMsg(imgUrl, controller.signal)
-			.then((result) => setFileType(result))
-			.catch((err) => console.log(err));
+	const { data: imageData } = useQuery({
+		queryKey: ['image-file-type', imgUrl],
+		queryFn: ({ signal }) => genFileTypeMsg(imgUrl, signal!),
+	});
 
-		return () => {
-			controller.abort();
-		};
-	}, [imgUrl]);
+	useEffect(() => {
+		if (imageData) {
+			setFileType(imageData);
+		}
+	}, [imageData]);
 
 	return (
 		<div className="flex gap-6">

@@ -1,27 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEffect, useRef, type ReactNode, type MutableRefObject } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 
 interface ScrollToViewCardProps {
 	children: ReactNode;
 	inView: boolean;
-	containerRef: MutableRefObject<HTMLDivElement | null>;
 }
 
-export function ScrollToViewCard({ children, inView, containerRef }: ScrollToViewCardProps) {
+export function ScrollToViewCard({ children, inView }: ScrollToViewCardProps) {
 	const scrollViewRef = useRef<HTMLDivElement | null>(null);
 
 	useEffect(() => {
-		if (!scrollViewRef?.current || !containerRef.current || !inView) return;
+		if (!scrollViewRef?.current || !inView) return;
 
-		const elementOffset = scrollViewRef.current.offsetTop - (containerRef.current.offsetTop || 0);
+		const parentNode = scrollViewRef.current.parentNode as HTMLDivElement;
+		const parentOffset = parentNode.offsetTop;
+		const currentOffset = scrollViewRef.current.offsetTop;
 
-		containerRef.current.scrollTo({
+		const elementOffset = currentOffset - parentOffset;
+
+		parentNode.scrollTo({
 			top: elementOffset,
 			behavior: 'smooth',
 		});
-	}, [containerRef, inView, scrollViewRef]);
+	}, [inView, scrollViewRef]);
 
 	return <div ref={scrollViewRef}>{children}</div>;
 }

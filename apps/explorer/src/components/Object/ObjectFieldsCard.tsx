@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetObject } from '@mysten/core';
-import { useNormalizedMoveStruct } from '@mysten/dapp-kit';
 import { Search24 } from '@mysten/icons';
+import { type SuiMoveNormalizedStruct, type SuiObjectResponse } from '@mysten/sui.js/client';
 import { Text, LoadingIndicator, Combobox, ComboboxInput, ComboboxList } from '@mysten/ui';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { FieldItem } from './FieldItem';
 import { ScrollToViewCard } from './ScrollToViewCard';
@@ -16,51 +15,31 @@ import { DescriptionItem } from '~/ui/DescriptionList';
 
 interface ObjectFieldsProps {
 	id: string;
-	setCount: (count: number) => void;
+	normalizedStructData?: SuiMoveNormalizedStruct;
+	suiObjectResponseData?: SuiObjectResponse;
+	loading: boolean;
+	error: boolean;
+	objectType?: string;
 }
 
-export function ObjectFieldsCard({ id, setCount }: ObjectFieldsProps) {
-	const { data, isLoading, isError } = useGetObject(id);
+export function ObjectFieldsCard({
+	id,
+	normalizedStructData,
+	suiObjectResponseData,
+	loading,
+	error,
+	objectType,
+}: ObjectFieldsProps) {
 	const [query, setQuery] = useState('');
 	const [activeFieldName, setActiveFieldName] = useState('');
 	const [openFieldsName, setOpenFieldsName] = useState<{
 		[name: string]: boolean;
 	}>({});
 
-	const objectType =
-		data?.data?.type ?? data?.data?.content?.dataType === 'package'
-			? data.data.type
-			: data?.data?.content?.type;
-
-	// Get the packageId, moduleName, functionName from the objectType
-	const [packageId, moduleName, functionName] = objectType?.split('<')[0]?.split('::') || [];
-	const containerRef = useRef<HTMLDivElement>(null);
-
-	// Get the normalized struct for the object
-	const {
-		data: normalizedStruct,
-		isLoading: loadingNormalizedStruct,
-		isError: errorNormalizedMoveStruct,
-	} = useNormalizedMoveStruct(
-		{
-			package: packageId,
-			module: moduleName,
-			struct: functionName,
-		},
-		{
-			enabled: !!packageId && !!moduleName && !!functionName,
-			onSuccess: (data) => {
-				if (data?.fields && activeFieldName === '') {
-					setActiveFieldName(data.fields[0].name);
-				}
-			},
-		},
-	);
-
 	useEffect(() => {
-		if (normalizedStruct?.fields) {
+		if (normalizedStructData?.fields) {
 			setOpenFieldsName(
-				normalizedStruct.fields.reduce(
+				normalizedStructData.fields.reduce(
 					(acc, { name }) => {
 						acc[name] = false;
 						return acc;
@@ -69,7 +48,7 @@ export function ObjectFieldsCard({ id, setCount }: ObjectFieldsProps) {
 				),
 			);
 		}
-	}, [normalizedStruct?.fields]);
+	}, [normalizedStructData?.fields]);
 
 	const onSetOpenFieldsName = useCallback(
 		(name: string) => (open: boolean) => {
@@ -89,20 +68,14 @@ export function ObjectFieldsCard({ id, setCount }: ObjectFieldsProps) {
 		[onSetOpenFieldsName],
 	);
 
-	useEffect(() => {
-		if (normalizedStruct?.fields) {
-			setCount(normalizedStruct.fields.length);
-		}
-	}, [normalizedStruct?.fields, setCount]);
-
-	if (isLoading || loadingNormalizedStruct) {
+	if (loading) {
 		return (
 			<div className="flex w-full justify-center">
 				<LoadingIndicator text="Loading data" />
 			</div>
 		);
 	}
-	if (isError || errorNormalizedMoveStruct) {
+	if (error) {
 		return (
 			<Banner variant="error" spacing="lg" fullWidth>
 				Failed to get field data for {id}
@@ -111,21 +84,21 @@ export function ObjectFieldsCard({ id, setCount }: ObjectFieldsProps) {
 	}
 
 	const fieldsData =
-		data.data?.content?.dataType === 'moveObject'
-			? (data.data?.content?.fields as Record<string, string | number | object>)
+		suiObjectResponseData?.data?.content?.dataType === 'moveObject'
+			? (suiObjectResponseData?.data?.content?.fields as Record<string, string | number | object>)
 			: null;
+
+	// Return null if there are no fields
+	if (!fieldsData || !normalizedStructData?.fields || !objectType) {
+		return null;
+	}
 
 	const filteredFieldNames =
 		query === ''
-			? normalizedStruct?.fields
-			: normalizedStruct?.fields.filter(({ name }) =>
+			? normalizedStructData?.fields
+			: normalizedStructData?.fields.filter(({ name }) =>
 					name.toLowerCase().includes(query.toLowerCase()),
 			  );
-
-	// Return null if there are no fields
-	if (!fieldsData || !normalizedStruct?.fields || !objectType) {
-		return null;
-	}
 
 	return (
 		<FieldsContainer>
@@ -149,7 +122,7 @@ export function ObjectFieldsCard({ id, setCount }: ObjectFieldsProps) {
 					/>
 				</Combobox>
 				<div className="mt-4 flex h-80 flex-col gap-4 overflow-y-auto pl-3 pr-2">
-					{normalizedStruct?.fields?.map(({ name, type }) => (
+					{normalizedStructData?.fields?.map(({ name, type }) => (
 						<button
 							type="button"
 							key={name}
@@ -157,7 +130,7 @@ export function ObjectFieldsCard({ id, setCount }: ObjectFieldsProps) {
 							onClick={() => onFieldsNameClick(name)}
 						>
 							<DescriptionItem
-								descriptionJustify="end"
+								contentJustify="end"
 								labelWidth="md"
 								title={
 									<Text variant="body/medium" color="steel-darker">
@@ -174,18 +147,14 @@ export function ObjectFieldsCard({ id, setCount }: ObjectFieldsProps) {
 				</div>
 			</div>
 
-			<FieldsCard ref={containerRef}>
-				{normalizedStruct?.fields.map(({ name, type }, index) => (
-					<ScrollToViewCard
-						key={name}
-						inView={name === activeFieldName}
-						containerRef={containerRef}
-					>
+			<FieldsCard>
+				{normalizedStructData?.fields.map(({ name, type }, index) => (
+					<ScrollToViewCard key={name} inView={name === activeFieldName}>
 						<FieldCollapsible
 							open={openFieldsName[name]}
-							setOpen={onSetOpenFieldsName(name)}
+							onOpenChange={onSetOpenFieldsName(name)}
 							name={name}
-							noMarginBottom={index === normalizedStruct?.fields.length - 1}
+							noMarginBottom={index === normalizedStructData?.fields.length - 1}
 						>
 							<FieldItem value={fieldsData[name]} objectType={objectType} type={type} />
 						</FieldCollapsible>
