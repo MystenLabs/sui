@@ -19,8 +19,10 @@ use sui_types::{
     sui_system_state::{
         sui_system_state_inner_v1::{UnverifiedValidatorOperationCapV1, ValidatorV1},
         sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary},
+	SUI_SYSTEM_MODULE_NAME,
     },
     SUI_SYSTEM_PACKAGE_ID,
+    SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use tap::tap::TapOptional;
 
@@ -36,7 +38,11 @@ use serde::Serialize;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    Page, SuiObjectResponse, SuiObjectResponseQuery, SuiObjectData,
+    SuiParsedMoveObject, SuiMoveValue, RPCTransactionRequestParams,
+    MoveCallParams, SuiData,
 };
+use sui_json::SuiJsonValue;
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::{
     key_derive::generate_new_key,
@@ -52,6 +58,10 @@ use sui_types::crypto::{
 };
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair, SignatureScheme, SuiKeyPair};
 use sui_types::transaction::{CallArg, ObjectArg, Transaction, TransactionData};
+use move_core_types::identifier::Identifier;
+use sui_types::governance::WITHDRAW_STAKE_FUN_NAME;
+use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
+use std::str::FromStr;
 
 #[path = "unit_tests/validator_tests.rs"]
 #[cfg(test)]
@@ -163,6 +173,13 @@ pub enum SuiValidatorCommand {
         #[clap(name = "gas-budget", long)]
         gas_budget: Option<u64>,
     },
+    /// Withdraw all staked sui
+    #[clap(name = "withdraw-all-staked-sui")]
+    WithdrawAllStakedSui {
+        /// Gas budget for this transaction.
+        #[clap(name = "gas-budget", long)]
+        gas_budget: Option<u64>,
+    },
 }
 
 #[derive(Serialize)]
@@ -181,6 +198,7 @@ pub enum SuiValidatorCommandResponse {
         data: TransactionData,
         serialized_data: String,
     },
+    WithdrawAllStakedSui(SuiTransactionBlockResponse),
 }
 
 fn make_key_files(
@@ -454,6 +472,17 @@ impl SuiValidatorCommand {
                     serialized_data,
                 }
             }
+            SuiValidatorCommand::WithdrawAllStakedSui {
+                gas_budget,
+            } => {
+                let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+                let resp = withdraw_all_staked_sui(
+                    context,
+                    gas_budget,
+                )
+                .await?;
+                SuiValidatorCommandResponse::WithdrawAllStakedSui(resp)
+            }
         });
         ret
     }
@@ -688,6 +717,9 @@ impl Display for SuiValidatorCommandResponse {
                     "Transaction: {:?}, \nSerialized transaction: {:?}",
                     data, serialized_data
                 )?;
+            }
+            SuiValidatorCommandResponse::WithdrawAllStakedSui(response) => {
+                write!(writer, "Withdraw payload: {}", write_transaction_response(response)?)?;
             }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
@@ -1036,4 +1068,143 @@ async fn check_status(
         return Ok(status);
     }
     bail!("Validator {validator_address} is {:?}, this operation is not supported in this tool or prohibited.", status)
+}
+
+async fn get_objects_(sui : &SuiClient, address : SuiAddress, cursor : Option<ObjectID>) -> Result<Page<SuiObjectResponse, ObjectID>, sui_sdk::error::Error> {
+    sui
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::full_content(),
+            )),
+            cursor,
+            None,
+        ).await
+}
+
+async fn get_all_objects(sui : &SuiClient, address : SuiAddress) -> Result<Vec<SuiObjectData>, sui_sdk::error::Error> {
+    let mut objects = Vec::new();
+    let mut cursor = None;
+    loop {
+        match get_objects_(sui,address,cursor).await {
+            Ok(objs) => {
+                for i in objs.data {
+                    match i.data {
+                        Some(d) => objects.push(d),
+                        None => ()
+                    }
+                };
+                match objs.has_next_page {
+                    true => cursor = objs.next_cursor,
+                    false => return Ok(objects),
+                }
+            }
+            Err (e) => {
+               return  Err(e)
+            }
+        };
+    };
+}
+
+fn get_principal(obj : &SuiParsedMoveObject) -> Option<i128> {
+    match obj.read_dynamic_field_value("principal") {
+        Some(SuiMoveValue::String(c)) => {
+            let v : i128 = i128::from_str(&c).unwrap();
+            Some(v)
+        },
+        _ => None
+    }
+}
+
+fn filter_staked_sui(objects : &Vec<SuiObjectData>) -> Vec<(ObjectID, i128)> {
+    let mut ret = Vec::new();
+    for i in objects {
+        match &i.content {
+            Some(c) => // SuiParsedData
+                match c.try_as_move() {
+                    Some(s) => { // SuiParsedMoveObject
+                        if s.type_.name == Identifier::from_str("StakedSui").unwrap() {
+                            let principal : i128 = get_principal(s).unwrap();
+                            ret.push((i.object_id, principal))
+                        }
+                    },
+                    None => ()
+                }
+
+            None => ()
+        }
+    }
+    ret
+}
+
+
+async fn get_staked_objects(sui : &SuiClient, address : SuiAddress) -> Result<(Vec<(ObjectID, i128)>, f64), sui_sdk::error::Error> {
+    let mobjs = get_all_objects(&sui, address).await.map(|a|{filter_staked_sui(&a)});
+    mobjs.map(|objs| {
+        let sum : i128= objs.iter().map(|(_,principal)|{principal}).sum();
+        let sumf : f64 = sum as f64;
+        (objs,sumf / 1e9)
+    })
+}
+
+fn get_unstake_transactions(objects : &Vec<(ObjectID, i128)>) -> Vec<RPCTransactionRequestParams> {
+    let mut ret = Vec::new();
+    for (i,_) in objects{
+        ret.push(
+            RPCTransactionRequestParams::MoveCallRequestParams(MoveCallParams {
+                package_object_id: SUI_SYSTEM_PACKAGE_ID,
+                module: SUI_SYSTEM_MODULE_NAME.to_string(),
+                function: WITHDRAW_STAKE_FUN_NAME.to_string(),
+                type_arguments: Vec::new(),
+                arguments: vec![
+                    SuiJsonValue::from_object_id(SUI_SYSTEM_STATE_OBJECT_ID),
+                    SuiJsonValue::from_object_id(i.clone()),
+                ],
+            }));
+    }
+    ret
+}
+
+async fn withdraw_all_staked_sui(
+    context: &mut WalletContext,
+    gas_budget: u64,
+) -> Result<SuiTransactionBlockResponse> {
+    let sender = context.active_address()?;
+    let sui_client = context.get_client().await?;
+    let (objects,sum)  = get_staked_objects(&sui_client, sender).await?;
+    println!("Stakedsui: (ObjectID, MIST(NanoSUI))");
+    for (obj,i) in &objects{
+	println!("Stakedsui: ({}, {})", obj, i);
+    };
+    println!("Total Rewards: {}SUI", sum);
+
+    println!("--------------------------------");
+    println!("Start to unstake all staked sui.");
+
+    let tx_data : sui_types::transaction::TransactionData = sui_client
+        .transaction_builder()
+        .batch_transaction(
+            sender,
+            get_unstake_transactions(&objects),
+            None,
+            gas_budget,
+        )
+        .await?;
+    let signature =
+        context
+            .config
+            .keystore
+            .sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+
+    // Execute the transaction
+    sui_client
+        .quorum_driver_api()
+        .execute_transaction_block(
+            Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature]),
+            SuiTransactionBlockResponseOptions::full_content(),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
+        .await
+        .map_err(|err| anyhow::anyhow!(err.to_string()))
 }
