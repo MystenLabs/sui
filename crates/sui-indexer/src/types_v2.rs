@@ -227,7 +227,7 @@ pub enum TransactionKind {
     ProgrammableTransaction = 1,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IndexedTransaction {
     pub tx_sequence_number: u64,
     pub tx_digest: TransactionDigest,

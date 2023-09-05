@@ -25,29 +25,29 @@ impl From<&IndexedTransaction> for StoredTransaction {
         StoredTransaction {
             tx_sequence_number: tx.tx_sequence_number as i64,
             transaction_digest: tx.tx_digest.into_inner().to_vec(),
-            raw_transaction: vec![],
-            raw_effects: vec![],
-            // raw_transaction: bcs::to_bytes(&tx.sender_signed_data).unwrap(),
-            // raw_effects: bcs::to_bytes(&tx.effects).unwrap(),
+            // raw_transaction: vec![],
+            // raw_effects: vec![],
+            raw_transaction: bcs::to_bytes(&tx.sender_signed_data).unwrap(),
+            raw_effects: bcs::to_bytes(&tx.effects).unwrap(),
             checkpoint_sequence_number: tx.checkpoint_sequence_number as i64,
-            object_changes: vec![],
-            balance_changes: vec![],
-            events: vec![],
-            // object_changes: tx
-            //     .object_changes
-            //     .iter()
-            //     .map(|oc| Some(bcs::to_bytes(&oc).unwrap()))
-            //     .collect(),
-            // balance_changes: tx
-            //     .balance_change
-            //     .iter()
-            //     .map(|bc| Some(bcs::to_bytes(&bc).unwrap()))
-            //     .collect(),
-            // events: tx
-            //     .events
-            //     .iter()
-            //     .map(|e| Some(bcs::to_bytes(&e).unwrap()))
-            //     .collect(),
+            // object_changes: vec![],
+            // balance_changes: vec![],
+            // events: vec![],
+            object_changes: tx
+                .object_changes
+                .iter()
+                .map(|oc| Some(bcs::to_bytes(&oc).unwrap()))
+                .collect(),
+            balance_changes: tx
+                .balance_change
+                .iter()
+                .map(|bc| Some(bcs::to_bytes(&bc).unwrap()))
+                .collect(),
+            events: tx
+                .events
+                .iter()
+                .map(|e| Some(bcs::to_bytes(&e).unwrap()))
+                .collect(),
             transaction_kind: tx.transaction_kind.clone() as i16,
             timestamp_ms: tx.timestamp_ms as i64,
         }

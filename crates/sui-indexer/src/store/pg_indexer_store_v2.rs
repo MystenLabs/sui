@@ -7,6 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use tap::Tap;
 
 use async_trait::async_trait;
 use diesel::dsl::max;
@@ -54,6 +55,7 @@ use crate::PgConnectionPool;
 use super::{IndexerStoreV2, TemporaryEpochStoreV2, TransactionObjectChangesV2};
 
 const PG_COMMIT_CHUNK_SIZE: usize = 1000;
+const PG_COMMIT_TX_CHUNK_SIZE: usize = 150;
 
 #[derive(Clone)]
 pub struct PgIndexerStoreV2 {
@@ -234,12 +236,12 @@ impl PgIndexerStoreV2 {
         )
     }
 
-    fn persist_transactions(
+    fn persist_transactions_chunk(
         &self,
         transactions: Vec<IndexedTransaction>,
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
-        let _guard = metrics
+        let guard = metrics
             .checkpoint_db_commit_latency_transactions
             .start_timer();
         let transformation_guard = metrics
@@ -250,6 +252,7 @@ impl PgIndexerStoreV2 {
             .map(StoredTransaction::from)
             .collect::<Vec<_>>();
         drop(transformation_guard);
+
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
@@ -265,7 +268,23 @@ impl PgIndexerStoreV2 {
             },
             Duration::from_secs(60)
         )
+        .tap(|_| {
+            let elapsed = guard.stop_and_record();
+            info!(elapsed, "Persisted {} transactions", transactions.len())
+        })
     }
+
+    // fn persist_transactions(
+    //     &self,
+    //     transactions: Vec<IndexedTransaction>,
+    //     metrics: IndexerMetrics,
+    // ) -> Result<(), IndexerError> {
+    //     let mut futures = vec![];
+    //     for transaction_chunk in transactions.chunks(PG_COMMIT_CHUNK_SIZE) {
+    //         futures.push(self.spawn_blocking(move |this| this.persist_transactions(transactions, metrics)))
+    //     }
+    //     futures::future::join_all(futures).await;
+    // }
 
     fn persist_events(
         &self,
@@ -556,8 +575,29 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         transactions: Vec<IndexedTransaction>,
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
-        self.spawn_blocking(move |this| this.persist_transactions(transactions, metrics))
+        let mut futures = vec![];
+        for transaction_chunk in transactions.chunks(PG_COMMIT_TX_CHUNK_SIZE) {
+            let chunk = transaction_chunk.to_vec();
+            let metrics_clone = metrics.clone();
+            futures.push(
+                self.spawn_blocking(move |this| {
+                    this.persist_transactions_chunk(chunk, metrics_clone)
+                }),
+            )
+        }
+        futures::future::join_all(futures)
             .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed to persist all transactions chunks: {:?}",
+                    e
+                ))
+            })?;
+        Ok(())
+        // self.spawn_blocking(move |this| this.persist_transactions(transactions, metrics))
+        //     .await
     }
 
     async fn persist_events(
