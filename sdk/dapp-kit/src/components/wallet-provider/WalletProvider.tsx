@@ -122,6 +122,16 @@ export function WalletProvider({
 	);
 }
 
+export function useWalletContext() {
+	const context = useContext(WalletContext);
+	if (!context) {
+		throw new Error(
+			'Could not find WalletContext. Ensure that you have set up the WalletProvider.',
+		);
+	}
+	return context;
+}
+
 function AutoConnectWalletContainer({ children }: { children: ReactNode }) {
 	const { mutate: connectWallet } = useConnectWallet();
 	const { storageAdapter, storageKey } = useWalletContext();
@@ -136,14 +146,4 @@ function AutoConnectWalletContainer({ children }: { children: ReactNode }) {
 	}, [connectWallet, storageAdapter, storageKey]);
 
 	return <>{children}</>;
-}
-
-export function useWalletContext() {
-	const context = useContext(WalletContext);
-	if (!context) {
-		throw new Error(
-			'Could not find WalletContext. Ensure that you have set up the WalletProvider.',
-		);
-	}
-	return context;
 }

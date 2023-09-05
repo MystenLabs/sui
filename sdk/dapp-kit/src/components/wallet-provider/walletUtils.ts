@@ -5,7 +5,7 @@ import type { Wallet, WalletWithSuiFeatures } from '@mysten/wallet-standard';
 import { isWalletWithSuiFeatures } from '@mysten/wallet-standard';
 import type { StorageAdapter } from 'dapp-kit/src/utils/storageAdapters';
 
-export type WalletAccountStorageKey = `${string}-${string}`;
+const noSelectedAccountStoragePlaceholder = 'no-selected-account';
 
 export function sortWallets(
 	wallets: readonly Wallet[],
@@ -39,7 +39,10 @@ export async function setMostRecentWalletConnectionInfo({
 	accountAddress?: string;
 }) {
 	try {
-		await storageAdapter.set(storageKey, `${walletName}-${accountAddress}`);
+		await storageAdapter.set(
+			storageKey,
+			`${walletName}-${accountAddress ?? 'noSelectedAccountStoragePlaceholder'}`,
+		);
 	} catch {
 		// Ignore error
 	}
@@ -55,7 +58,8 @@ export async function getMostRecentWalletConnectionInfo(
 			const [walletName, accountAddress] = lastWalletConnectionInfo.split('-');
 			return {
 				walletName,
-				accountAddress,
+				accountAddress:
+					accountAddress === noSelectedAccountStoragePlaceholder ? accountAddress : undefined,
 			};
 		}
 	} catch {

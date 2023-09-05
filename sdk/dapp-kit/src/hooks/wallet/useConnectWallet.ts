@@ -3,7 +3,11 @@
 
 import type { UseMutationOptions } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
-import type { StandardConnectInput, StandardConnectOutput } from '@mysten/wallet-standard';
+import type {
+	StandardConnectInput,
+	StandardConnectOutput,
+	WalletAccount,
+} from '@mysten/wallet-standard';
 import { useWalletContext } from 'dapp-kit/src/components/wallet-provider/WalletProvider';
 import { WalletAlreadyConnectedError, WalletNotFoundError } from 'dapp-kit/src/errors/walletErrors';
 import {
@@ -57,12 +61,12 @@ export function useConnectWallet({
 
 			// When connecting to a wallet, we want to connect to the most recently used wallet account if
 			// that information is present. This allows for a more intuitive connection experience!
+			const hasRecentWalletAccountToConnectTo =
+				mostRecentWalletName === wallet.name && !!mostRecentAccountAddress;
 			const selectedAccount =
-				connectResult.accounts.length > 0
-					? mostRecentWalletName === wallet.name
-						? connectResult.accounts.find((account) => account.address === mostRecentAccountAddress)
-						: connectResult.accounts[0]
-					: null;
+				connectResult.accounts.length > 0 && hasRecentWalletAccountToConnectTo
+					? connectResult.accounts.find((account) => account.address === mostRecentAccountAddress)
+					: connectResult.accounts[0];
 
 			// A wallet technically doesn't have to authorize any accounts
 			dispatch({
@@ -74,7 +78,7 @@ export function useConnectWallet({
 				storageAdapter,
 				storageKey,
 				walletName,
-				accountAddress: selectedAccount?.address ?? 'fixme',
+				accountAddress: selectedAccount?.address,
 			});
 
 			return connectResult;
