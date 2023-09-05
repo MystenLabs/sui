@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 45
     strategy:
       matrix:
-        os: [hosted-osx]
+        os: [studio-1]
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
