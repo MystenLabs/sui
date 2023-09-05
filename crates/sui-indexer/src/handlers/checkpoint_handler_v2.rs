@@ -14,6 +14,8 @@ use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::object::ObjectFormatOptions;
 use tokio::sync::watch;
 use tracing::debug;
+use tracing::info_span;
+use tracing::Instrument;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -703,10 +705,34 @@ pub async fn start_tx_checkpoint_commit_task<S>(
         {
             let _step_1_guard = metrics.checkpoint_db_commit_latency_step_1.start_timer();
             futures::future::join_all(vec![
-                state.persist_transactions(tx_batch, metrics.clone()),
-                state.persist_tx_indices(tx_indices_batch, metrics.clone()),
-                state.persist_events(events_batch, metrics.clone()),
-                state.persist_packages(packages_batch, metrics.clone()),
+                state
+                    .persist_transactions(tx_batch, metrics.clone())
+                    .instrument(info_span!(
+                        "persist_transactions for checkpoint {} - {}",
+                        first_checkpoint_seq,
+                        last_checkpoint_seq
+                    )),
+                state
+                    .persist_tx_indices(tx_indices_batch, metrics.clone())
+                    .instrument(info_span!(
+                        "persist_tx_indices for checkpoint {} - {}",
+                        first_checkpoint_seq,
+                        last_checkpoint_seq
+                    )),
+                state
+                    .persist_events(events_batch, metrics.clone())
+                    .instrument(info_span!(
+                        "persist_events for checkpoint {} - {}",
+                        first_checkpoint_seq,
+                        last_checkpoint_seq
+                    )),
+                state
+                    .persist_packages(packages_batch, metrics.clone())
+                    .instrument(info_span!(
+                        "persist_packages for checkpoint {} - {}",
+                        first_checkpoint_seq,
+                        last_checkpoint_seq
+                    )),
             ])
             .await
             .into_iter()

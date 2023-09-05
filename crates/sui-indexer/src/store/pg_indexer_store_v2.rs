@@ -253,6 +253,8 @@ impl PgIndexerStoreV2 {
             .collect::<Vec<_>>();
         drop(transformation_guard);
 
+        // FIXME
+        info!("About to persisting {} transactions", transactions.len());
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
@@ -455,7 +457,10 @@ impl PgIndexerStoreV2 {
             .and_then(std::convert::identity)
     }
 
-    fn spawn_blocking_task<F, R>(&self, f: F) -> tokio::task::JoinHandle<std::result::Result<R, IndexerError>>
+    fn spawn_blocking_task<F, R>(
+        &self,
+        f: F,
+    ) -> tokio::task::JoinHandle<std::result::Result<R, IndexerError>>
     where
         F: FnOnce(Self) -> Result<R, IndexerError> + Send + 'static,
         R: Send + 'static,
@@ -478,8 +483,10 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         &self,
         seq_num: CheckpointSequenceNumber,
     ) -> Result<Option<u64>, IndexerError> {
-        self.execute_in_blocking_worker(move |this| this.get_checkpoint_ending_tx_sequence_number(seq_num))
-            .await
+        self.execute_in_blocking_worker(move |this| {
+            this.get_checkpoint_ending_tx_sequence_number(seq_num)
+        })
+        .await
     }
 
     async fn get_checkpoint(
@@ -591,11 +598,9 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         for transaction_chunk in transactions.chunks(PG_COMMIT_TX_CHUNK_SIZE) {
             let chunk = transaction_chunk.to_vec();
             let metrics_clone = metrics.clone();
-            futures.push(
-                self.spawn_blocking_task(move |this| {
-                    this.persist_transactions_chunk(chunk, metrics_clone)
-                })
-            );
+            futures.push(self.spawn_blocking_task(move |this| {
+                this.persist_transactions_chunk(chunk, metrics_clone)
+            }));
         }
         futures::future::join_all(futures)
             .await
@@ -652,8 +657,10 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         &self,
         epoch: u64,
     ) -> Result<u64, IndexerError> {
-        self.execute_in_blocking_worker(move |this| this.get_network_total_transactions_previous_epoch(epoch))
-            .await
+        self.execute_in_blocking_worker(move |this| {
+            this.get_network_total_transactions_previous_epoch(epoch)
+        })
+        .await
     }
 
     async fn get_epochs(
@@ -662,8 +669,10 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         limit: usize,
         descending_order: Option<bool>,
     ) -> Result<Vec<EpochInfo>, IndexerError> {
-        self.execute_in_blocking_worker(move |this| this.get_epochs(cursor, limit, descending_order))
-            .await
+        self.execute_in_blocking_worker(move |this| {
+            this.get_epochs(cursor, limit, descending_order)
+        })
+        .await
     }
 
     async fn get_current_epoch(&self) -> Result<EpochInfo, IndexerError> {
