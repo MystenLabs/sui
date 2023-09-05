@@ -4927,8 +4927,20 @@ dependencies = [
 name = "merkle"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "bcs",
+ "eyre",
+ "fastcrypto",
+ "itertools",
  "proptest",
+ "rocksdb",
  "serde",
+ "sui-storage",
+ "sui-types",
+ "tempfile",
+ "tokio",
+ "typed-store",
+ "typed-store-derive",
 ]
 
 [[package]]

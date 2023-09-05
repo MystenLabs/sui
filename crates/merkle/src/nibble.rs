@@ -2,10 +2,16 @@
 
 use proptest::{collection::vec, prelude::*};
 use serde::{Deserialize, Serialize};
-use std::fmt;
+use std::{fmt, hash::Hash};
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct Nibble(u8);
+
+impl Nibble {
+    pub fn inner(self) -> u8 {
+        self.0
+    }
+}
 
 impl From<u8> for Nibble {
     fn from(nibble: u8) -> Self {
@@ -36,7 +42,7 @@ impl Arbitrary for Nibble {
 }
 
 /// NibblePath defines a path in a Merkle tree in the unit of nibble (4 bits).
-#[derive(Clone, Hash, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct NibblePath {
     /// Indicates the total number of nibbles in bytes. Either `bytes.len() * 2 - 1` or
     /// `bytes.len() * 2`.
@@ -47,6 +53,37 @@ pub struct NibblePath {
     /// odd, the second half of the last byte must be 0.
     bytes: [u8; Self::MAX_BYTE_PATH_LENGTH],
     // invariant len <= Self::MAX_NIBBLE_PATH_LENGTH
+}
+
+impl Eq for NibblePath {}
+
+impl PartialEq for NibblePath {
+    fn eq(&self, other: &Self) -> bool {
+        self.len == other.len && self.bytes() == other.bytes()
+    }
+}
+
+impl PartialOrd for NibblePath {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for NibblePath {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match self.len.cmp(&other.len) {
+            core::cmp::Ordering::Equal => {}
+            ord => return ord,
+        }
+        self.bytes().cmp(other.bytes())
+    }
+}
+
+impl Hash for NibblePath {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.len.hash(state);
+        self.bytes().hash(state);
+    }
 }
 
 /// Supports debug format by concatenating nibbles literally. For example, [0x12, 0xa0] with 3
@@ -71,6 +108,13 @@ impl FromIterator<Nibble> for NibblePath {
 impl NibblePath {
     const MAX_BYTE_PATH_LENGTH: usize = 32;
     const MAX_NIBBLE_PATH_LENGTH: usize = Self::MAX_BYTE_PATH_LENGTH * 2;
+
+    pub fn empty() -> Self {
+        Self {
+            len: 0,
+            bytes: [0; Self::MAX_BYTE_PATH_LENGTH],
+        }
+    }
 
     /// Creates a new `NibblePath` from a vector of bytes assuming each byte has 2 nibbles.
     pub fn new_even<T: AsRef<[u8]>>(bytes: T) -> Self {
@@ -224,7 +268,7 @@ impl NibblePath {
 
     /// Get the underlying bytes storing nibbles.
     pub fn bytes(&self) -> &[u8] {
-        &self.bytes
+        &self.bytes[..((self.len() + 1) / 2)]
     }
 
     pub fn truncate(&mut self, len: usize) {
@@ -372,6 +416,10 @@ impl<'a> NibbleIterator<'a> {
     /// Returns a nibble iterator that iterates all visited nibbles.
     pub fn visited_nibbles(&self) -> NibbleIterator<'a> {
         Self::new(self.nibble_path, self.start, self.pos.start)
+    }
+
+    pub fn visited_nibble_path(&self) -> NibblePath {
+        self.visited_nibbles().collect()
     }
 
     /// Returns a nibble iterator that iterates all remaining nibbles.
