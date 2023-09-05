@@ -156,7 +156,7 @@ impl PgIndexerStoreV2 {
         checkpoints: Vec<IndexedCheckpoint>,
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
-        let _guard = metrics
+        let guard = metrics
             .checkpoint_db_commit_latency_checkpoints_and_objects
             .start_timer();
         // If checkpoints is empty, object_changes must be empty too.
@@ -234,6 +234,10 @@ impl PgIndexerStoreV2 {
             },
             Duration::from_secs(60)
         )
+        .tap(|_| {
+            let elapsed = guard.stop_and_record();
+            info!(elapsed, "Persisted {} objects and {} checkpoints", mutated_objects.len() + deleted_objects.len(), checkpoints.len())
+        })
     }
 
     fn persist_transactions_chunk(
@@ -293,7 +297,7 @@ impl PgIndexerStoreV2 {
         events: Vec<IndexedEvent>,
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
-        let _guard = metrics.checkpoint_db_commit_latency_events.start_timer();
+        let guard = metrics.checkpoint_db_commit_latency_events.start_timer();
         let events = events
             .into_iter()
             .map(StoredEvent::from)
@@ -313,6 +317,10 @@ impl PgIndexerStoreV2 {
             },
             Duration::from_secs(60)
         )
+        .tap(|_| {
+            let elapsed = guard.stop_and_record();
+            info!(elapsed, "Persisted {} events", events.len())
+        })
     }
 
     fn persist_packages(
@@ -320,7 +328,7 @@ impl PgIndexerStoreV2 {
         packages: Vec<IndexedPackage>,
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
-        let _guard = metrics.checkpoint_db_commit_latency_packages.start_timer();
+        let guard = metrics.checkpoint_db_commit_latency_packages.start_timer();
         let packages = packages
             .into_iter()
             .map(StoredPackage::from)
@@ -340,6 +348,10 @@ impl PgIndexerStoreV2 {
             },
             Duration::from_secs(60)
         )
+        .tap(|_| {
+            let elapsed = guard.stop_and_record();
+            info!(elapsed, "Persisted {} packages", packages.len())
+        })
     }
 
     fn persist_tx_indices(
@@ -347,7 +359,7 @@ impl PgIndexerStoreV2 {
         indices: Vec<TxIndex>,
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
-        let _guard = metrics
+        let guard = metrics
             .checkpoint_db_commit_latency_tx_indices
             .start_timer();
         let indices = indices
@@ -369,6 +381,10 @@ impl PgIndexerStoreV2 {
             },
             Duration::from_secs(60)
         )
+        .tap(|_| {
+            let elapsed = guard.stop_and_record();
+            info!(elapsed, "Persisted {} tx_indices", indices.len())
+        })
     }
 
     fn get_network_total_transactions_previous_epoch(

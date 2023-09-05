@@ -594,7 +594,8 @@ where
                         assert_eq!(oref.1, object.version());
                         let df_info =
                             try_create_dynamic_field_info(object, &objects, &module_resolver)
-                                .expect("failed to create dynamic field info");
+                                .unwrap_or_else(|e| panic!("failed to create dynamic field info for obj: {:?}:{:?}. Err: {e}", object.id(), object.version()));
+                            
                         Some(IndexedObject::from_object(
                             checkpoint_seq,
                             object.clone(),
@@ -851,7 +852,11 @@ fn try_create_dynamic_field_info(
     }
 
     let move_struct =
-        move_object.to_move_struct_with_resolver(ObjectFormatOptions::default(), resolver)?;
+        move_object.to_move_struct_with_resolver(ObjectFormatOptions::default(), resolver)
+        // FIXME use a better error
+        .map_err(|e| IndexerError::GenericError(format!("Failed to create dynamic field info for obj {}:{}, type: {}. Error: {e}",
+            o.id(), o.version(), move_object.type_().to_string()
+    )))?;
 
     let (name_value, type_, object_id) =
         DynamicFieldInfo::parse_move_object(&move_struct).tap_err(|e| warn!("{e}"))?;

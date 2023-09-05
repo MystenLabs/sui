@@ -81,6 +81,9 @@ pub enum IndexerError {
     #[error("Indexer read corrupted/incompatible data from persistent storage: `{0}`")]
     PersistentStorageDataCorruptionError(String),
 
+    #[error("Indexer generic error: `{0}`")]
+    GenericError(String),
+
     #[error(transparent)]
     UncategorizedError(#[from] anyhow::Error),
 
