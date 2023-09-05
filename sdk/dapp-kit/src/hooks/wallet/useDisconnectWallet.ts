@@ -29,7 +29,8 @@ export function useDisconnectWallet({
 			}
 
 			// Wallets aren't required to implement the disconnect feature, so we'll
-			// reset the wallet state on the dApp side instead of throwing an error.
+			// optionally call the disconnect feature if it exists and reset the UI
+			// state on the frontend at a minimum.
 			await currentWallet.features['standard:disconnect']?.disconnect();
 			dispatch({ type: 'wallet-disconnected' });
 
