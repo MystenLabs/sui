@@ -123,7 +123,7 @@ export function WalletProvider({
 }
 
 function AutoConnectWalletContainer({ children }: { children: ReactNode }) {
-	const { mutate: connectWallet } = useConnectWallet({ silent: true });
+	const { mutate: connectWallet } = useConnectWallet();
 	const { storageAdapter, storageKey } = useWalletContext();
 
 	useEffect(() => {
