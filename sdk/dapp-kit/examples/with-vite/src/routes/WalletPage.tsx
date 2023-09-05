@@ -8,8 +8,6 @@ export function WalletPage() {
 	const { mutate: connectWallet, isSuccess, isLoading } = useConnectWallet();
 	const { mutate: disconnectWallet } = useDisconnectWallet();
 
-	console.log('RERENDER');
-
 	return (
 		<>
 			<div

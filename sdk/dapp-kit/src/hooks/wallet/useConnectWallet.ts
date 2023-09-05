@@ -10,6 +10,7 @@ import {
 	getMostRecentWalletConnectionInfo,
 	setMostRecentWalletConnectionInfo,
 } from 'dapp-kit/src/components/wallet-provider/walletUtils';
+import { walletMutationKeys } from 'dapp-kit/src/constants/walletMutationKeys';
 
 type ConnectWalletArgs = {
 	/** The name of the wallet as defined by the wallet standard to connect to. */
@@ -20,28 +21,29 @@ type ConnectWalletResult = StandardConnectOutput;
 
 type UseConnectWalletMutationOptions = Omit<
 	UseMutationOptions<ConnectWalletResult, Error, ConnectWalletArgs, unknown>,
-	'mutationKey' | 'mutationFn'
+	'mutationFn'
 >;
-
-// TODO: Figure out the query/mutation key story and whether or not we want to expose
-// key factories from dapp-kit
-function mutationKey(args: Partial<ConnectWalletArgs>) {
-	return [{ scope: 'wallet', entity: 'connect-wallet', ...args }] as const;
-}
 
 /**
  * Mutation hook for establishing a connection to a specific wallet.
  */
 export function useConnectWallet({
-	walletName,
-	silent,
+	mutationKey,
 	...mutationOptions
-}: Partial<ConnectWalletArgs> & UseConnectWalletMutationOptions = {}) {
-	const { wallets, storageAdapter, storageKey, dispatch } = useWalletContext();
+}: UseConnectWalletMutationOptions = {}) {
+	const { wallets, currentWallet, storageAdapter, storageKey, dispatch } = useWalletContext();
 
 	return useMutation({
-		mutationKey: mutationKey({ walletName, silent }),
+		mutationKey: walletMutationKeys.connectWallet(mutationKey),
 		mutationFn: async ({ walletName, ...standardConnectInput }) => {
+			if (currentWallet) {
+				throw new WalletAlreadyConnectedError(
+					currentWallet.name === walletName
+						? `The user is already connected to wallet ${walletName}.`
+						: "You must disconnect the wallet you're currently connected to before connecting to a new wallet.",
+				);
+			}
+
 			const wallet = wallets.find((wallet) => wallet.name === walletName);
 			if (!wallet) {
 				throw new WalletNotFoundError(
@@ -56,10 +58,13 @@ export function useConnectWallet({
 			// When connecting to a wallet, we want to connect to the most recently used wallet account if
 			// that information is present. This allows for a more intuitive connection experience!
 			const selectedAccount =
-				mostRecentWalletName === wallet.name
-					? connectResult.accounts.find((account) => account.address === mostRecentAccountAddress)
-					: connectResult.accounts[0];
+				connectResult.accounts.length > 0
+					? mostRecentWalletName === wallet.name
+						? connectResult.accounts.find((account) => account.address === mostRecentAccountAddress)
+						: connectResult.accounts[0]
+					: null;
 
+			// A wallet technically doesn't have to authorize any accounts
 			dispatch({
 				type: 'wallet-connected',
 				payload: { wallet, currentAccount: selectedAccount ?? null },

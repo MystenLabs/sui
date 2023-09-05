@@ -23,21 +23,9 @@ const queryClient = new QueryClient({
 ReactDOM.createRoot(document.getElementById('root')!).render(
 	<React.StrictMode>
 		<QueryClientProvider client={queryClient}>
-			<A />
-		</QueryClientProvider>
-	</React.StrictMode>,
-);
-
-function A() {
-	const [a, setA] = React.useState(0);
-	return (
-		<div>
-			<button onClick={() => setA((p) => p + 1)} type="button">
-				ELLO MATE {a}
-			</button>
 			<WalletProvider enableUnsafeBurner={import.meta.env.PROD} autoConnect>
 				<RouterProvider router={router} />
 			</WalletProvider>
-		</div>
-	);
-}
+		</QueryClientProvider>
+	</React.StrictMode>,
+);

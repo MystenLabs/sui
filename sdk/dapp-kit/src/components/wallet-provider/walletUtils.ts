@@ -36,7 +36,7 @@ export async function setMostRecentWalletConnectionInfo({
 	storageAdapter: StorageAdapter;
 	storageKey: string;
 	walletName: string;
-	accountAddress: string;
+	accountAddress?: string;
 }) {
 	try {
 		await storageAdapter.set(storageKey, `${walletName}-${accountAddress}`);

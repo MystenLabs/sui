@@ -4,25 +4,25 @@
 import type { UseMutationOptions } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
 import { useWalletContext } from 'dapp-kit/src/components/wallet-provider/WalletProvider';
+import { walletMutationKeys } from 'dapp-kit/src/constants/walletMutationKeys';
 import { WalletNotConnectedError } from 'dapp-kit/src/errors/walletErrors';
 
 type UseDisconnectWalletMutationOptions = Omit<
 	UseMutationOptions<void, Error, void, unknown>,
-	'mutationKey' | 'mutationFn'
+	'mutationFn'
 >;
-
-// TODO: Figure out the query/mutation key story and whether or not we want to expose
-// key factories from dapp-kit
-const mutationKey = [{ scope: 'wallet', entity: 'disconnect-wallet' }] as const;
 
 /**
  * Mutation hook for disconnecting from an active wallet connection, if currently connected.
  */
-export function useDisconnectWallet(mutationOptions?: UseDisconnectWalletMutationOptions) {
+export function useDisconnectWallet({
+	mutationKey,
+	...mutationOptions
+}: UseDisconnectWalletMutationOptions) {
 	const { currentWallet, storageAdapter, storageKey, dispatch } = useWalletContext();
 
 	return useMutation({
-		mutationKey,
+		mutationKey: walletMutationKeys.disconnectWallet(mutationKey),
 		mutationFn: async () => {
 			if (!currentWallet) {
 				throw new WalletNotConnectedError('No wallet is connected.');

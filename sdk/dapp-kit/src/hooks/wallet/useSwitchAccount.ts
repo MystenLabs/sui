@@ -18,20 +18,11 @@ type UseSwitchAccountMutationOptions = Omit<
 	'mutationKey' | 'mutationFn'
 >;
 
-// TODO: Figure out the query/mutation key story and whether or not we want to expose
-// key factories from dapp-kit
-function mutationKey(args: SwitchAccountArgs) {
-	return [{ scope: 'wallet', entity: 'switch-account', ...args }] as const;
-}
-
 /**
  * Mutation hook for establishing a connection to a specific wallet.
  */
-export function useSwitchAccount({
-	accountAddress,
-	...mutationOptions
-}: SwitchAccountArgs & UseSwitchAccountMutationOptions) {
-	const { wallets, storageAdapter, storageKey, currentWallet, dispatch } = useWalletContext();
+export function useSwitchAccount({ ...mutationOptions }: UseSwitchAccountMutationOptions) {
+	const { storageAdapter, storageKey, accounts, currentWallet, dispatch } = useWalletContext();
 
 	return useMutation({
 		mutationKey: mutationKey({ accountAddress }),
@@ -39,6 +30,16 @@ export function useSwitchAccount({
 			if (!currentWallet) {
 				throw new WalletNotConnectedError('No wallet is connected.');
 			}
+
+			const accountToSelect = currentWallet.accounts.find(
+				(account) => account.address === accountAddress,
+			);
+			if (!accountToSelect) {
+				// throw some custom error
+				throw new Error('');
+			}
+
+			dispatch({ type: 'wallet-account-switched', payload: accountAddress });
 
 			await setMostRecentWalletConnectionInfo({
 				storageAdapter,

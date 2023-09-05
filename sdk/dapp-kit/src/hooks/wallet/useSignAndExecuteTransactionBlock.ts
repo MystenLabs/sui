@@ -6,6 +6,7 @@ import type { SuiSignAndExecuteTransactionBlockOutput } from '@mysten/wallet-sta
 import type { UseMutationOptions } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
 import { useWalletContext } from 'dapp-kit/src/components/wallet-provider/WalletProvider';
+import { walletMutationKeys } from 'dapp-kit/src/constants/walletMutationKeys';
 import {
 	WalletFeatureNotSupportedError,
 	WalletNotConnectedError,
@@ -21,29 +22,20 @@ type UseSignAndExecuteTransactionBlockMutationOptions = Omit<
 		UseSignAndExecuteTransactionBlockArgs,
 		unknown
 	>,
-	'mutationKey' | 'mutationFn'
+	'mutationFn'
 >;
-
-// TODO: Figure out the query/mutation key story and whether or not we want to expose
-// key factories from dapp-kit
-function mutationKey(args: Partial<UseSignAndExecuteTransactionBlockArgs>) {
-	return [{ scope: 'wallet', entity: 'sign-and-execute-transaction-block', ...args }] as const;
-}
 
 /**
  * Mutation hook for prompting the user to sign and execute a transaction block.
  */
 export function useSignAndExecuteTransactionBlock({
-	account,
-	chain,
-	transactionBlock,
+	mutationKey,
 	...mutationOptions
-}: Partial<UseSignAndExecuteTransactionBlockArgs> &
-	UseSignAndExecuteTransactionBlockMutationOptions) {
+}: UseSignAndExecuteTransactionBlockMutationOptions) {
 	const { currentWallet } = useWalletContext();
 
 	return useMutation({
-		mutationKey: mutationKey({ account, chain, transactionBlock }),
+		mutationKey: walletMutationKeys.signAndExecuteTransactionBlock(mutationKey),
 		mutationFn: async (signAndExecuteTransactionBlockInput) => {
 			if (!currentWallet) {
 				throw new WalletNotConnectedError('No wallet is connected.');

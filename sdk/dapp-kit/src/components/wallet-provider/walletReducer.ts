@@ -40,6 +40,11 @@ type WalletUnregisteredAction = {
 	};
 };
 
+type WalletAccountSwitchedAction = {
+	type: 'wallet-account-switched';
+	payload: Account;
+};
+
 export type WalletState = {
 	wallets: WalletWithSuiFeatures[];
 	currentWallet: WalletWithSuiFeatures | null;
