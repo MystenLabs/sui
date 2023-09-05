@@ -3,11 +3,7 @@
 
 import type { UseMutationOptions } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
-import type {
-	StandardConnectInput,
-	StandardConnectOutput,
-	WalletAccount,
-} from '@mysten/wallet-standard';
+import type { StandardConnectInput, StandardConnectOutput } from '@mysten/wallet-standard';
 import { useWalletContext } from 'dapp-kit/src/components/wallet-provider/WalletProvider';
 import { WalletAlreadyConnectedError, WalletNotFoundError } from 'dapp-kit/src/errors/walletErrors';
 import {
