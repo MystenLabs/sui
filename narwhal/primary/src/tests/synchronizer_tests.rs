@@ -912,8 +912,5 @@ async fn gc_suspended_certificates() {
     }
     assert_eq!(expected_certificates, received_certificates);
     // Suspended and missing certificates are cleared.
-    assert_eq!(
-        synchronizer.get_suspended_stats().await,
-        (0, 0)
-    );
+    assert_eq!(synchronizer.get_suspended_stats().await, (0, 0));
 }

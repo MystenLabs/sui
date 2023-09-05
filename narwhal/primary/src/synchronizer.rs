@@ -1265,8 +1265,8 @@ impl State {
     /// It is the caller's responsibility to check if any children of the returned certificate
     /// can also be accepted.
     fn run_gc_once(&mut self, gc_round: Round) -> Option<SuspendedCertificate> {
-        // Accept suspended certificates at and below gc round + 1, because their parents will be
-        // rejected at validation time.
+        // Accept suspended certificates at and below gc round + 1, because their parents will not
+        // be accepted into the DAG store anymore, in sanitize_certificate().
         while let Some(((round, digest), _children)) = self.missing.first_key_value() {
             // Note that gc_round is the highest round where certificates are gc'ed, and which will
             // never be in a consensus commit.
@@ -1274,10 +1274,14 @@ impl State {
                 return None;
             }
             if let Some(mut suspended) = self.suspended.remove(digest) {
+                // Clear the missing_parents field to be consistent with other accepted
+                // certificates.
                 suspended.missing_parents.clear();
                 return Some(suspended);
             }
-            // GC the missing chilren info even if there is no corresponding suspended certificate.
+            // GC the missing children info even if there is no corresponding suspended certificate.
+            // NOTE: when there is a corresponding suspended certificate, the missing children info
+            // will be read and cleared in accept_children().
             self.missing.pop_first();
         }
         None
