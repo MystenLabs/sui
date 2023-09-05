@@ -180,7 +180,9 @@ mod tests {
 
     #[test]
     fn test_parse_invalid_length() {
-        let input = Value::String("0x0123456789abcdef0123456789abcdef01000023456789abcdef0123456789abcdef".to_string());
+        let input = Value::String(
+            "0x0123456789abcdef0123456789abcdef01000023456789abcdef0123456789abcdef".to_string(),
+        );
         let parsed = <SuiAddress as ScalarType>::parse(input);
         assert_input_value_error(parsed);
     }
