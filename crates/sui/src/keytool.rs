@@ -274,6 +274,13 @@ pub struct MultiSigOutput {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub enum ConvertOutput {
+    Base64(String),
+    Hex(String),
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PrivateKeyBase64 {
     base64: String,
 }
@@ -311,6 +318,7 @@ pub struct ZkLoginSignAndExecuteTx {
 #[derive(Serialize)]
 #[serde(untagged)]
 pub enum CommandOutput {
+    Convert(ConvertOutput),
     DecodeMultiSig(DecodedMultiSigOutput),
     DecodeTxBytes(TransactionData),
     Error(String),
@@ -334,7 +342,7 @@ impl KeyToolCommand {
         let cmd_result = Ok(match self {
             KeyToolCommand::Convert { value } => {
                 let result = convert_private_key_to_base64(value)?;
-                CommandOutput::PrivateKeyBase64(PrivateKeyBase64 { base64: result })
+                CommandOutput::Convert(result)
             }
 
             KeyToolCommand::DecodeMultiSig { multisig, tx_bytes } => {
@@ -884,13 +892,14 @@ impl Debug for CommandOutput {
     }
 }
 
-fn convert_private_key_to_base64(value: String) -> Result<String, anyhow::Error> {
+fn convert_private_key_to_base64(value: String) -> Result<ConvertOutput, anyhow::Error> {
     match Base64::decode(&value) {
         Ok(decoded) => {
             if decoded.len() != 33 {
                 return Err(anyhow!(format!("Private key is malformed and cannot base64 decode it. Fed 33 length but got {}", decoded.len())));
             }
-            Ok(Hex::encode(&decoded[1..]))
+            info!("Hex encode");
+            Ok(ConvertOutput::Hex(Hex::encode(&decoded[1..])))
         }
         Err(_) => match Hex::decode(&value) {
             Ok(decoded) => {
@@ -900,7 +909,8 @@ fn convert_private_key_to_base64(value: String) -> Result<String, anyhow::Error>
                 let mut res = Vec::new();
                 res.extend_from_slice(&[SignatureScheme::ED25519.flag()]);
                 res.extend_from_slice(&decoded);
-                Ok(Base64::encode(&res))
+                info!("Base64 encode");
+                Ok(ConvertOutput::Base64(Base64::encode(&res)))
             }
             Err(_) => Err(anyhow!("Invalid private key format".to_string())),
         },
