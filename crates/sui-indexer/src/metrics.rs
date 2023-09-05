@@ -270,7 +270,7 @@ impl IndexerMetrics {
             )
             .unwrap(),
             checkpoint_db_commit_latency_transactions_transformation: register_histogram_with_registry!(
-                "persist_transactions",
+                "checkpoint_db_commit_latency_transactions_transaformation",
                 "Time spent in transactions transformation prior to commit",
                 DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
