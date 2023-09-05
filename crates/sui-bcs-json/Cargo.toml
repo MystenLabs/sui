@@ -1,0 +1,23 @@
+[package]
+version = "0.0.0"
+name = "sui-bcs-json"
+edition = "2021"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+publish = false
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+anyhow.workspace = true
+bcs.workspace = true
+ffi_helpers.workspace = true
+move-core-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+shared-crypto.workspace = true
+sui-types = { workspace = true, features = ["test-utils"]}
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[build-dependencies]
+cbindgen = { version="0.24.0", default-features=false }
