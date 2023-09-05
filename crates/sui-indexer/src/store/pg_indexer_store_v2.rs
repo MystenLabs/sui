@@ -242,10 +242,14 @@ impl PgIndexerStoreV2 {
         let _guard = metrics
             .checkpoint_db_commit_latency_transactions
             .start_timer();
+        let transformation_guard = metrics
+            .checkpoint_db_commit_latency_transactions_transformation
+            .start_timer();
         let transactions = transactions
             .iter()
             .map(StoredTransaction::from)
             .collect::<Vec<_>>();
+        drop(transformation_guard);
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
