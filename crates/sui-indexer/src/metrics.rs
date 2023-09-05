@@ -47,6 +47,12 @@ pub struct IndexerMetrics {
     pub indexing_packages_latency: Histogram,
     pub checkpoint_objects_index_latency: Histogram,
     pub checkpoint_db_commit_latency: Histogram,
+    pub checkpoint_db_commit_latency_step_1: Histogram,
+    pub checkpoint_db_commit_latency_transactions: Histogram,
+    pub checkpoint_db_commit_latency_events: Histogram,
+    pub checkpoint_db_commit_latency_packages: Histogram,
+    pub checkpoint_db_commit_latency_tx_indices: Histogram,
+    pub checkpoint_db_commit_latency_checkpoints_and_objects: Histogram,
     // average latency of committing 1000 transactions.
     // 1000 is not necessarily the batch size, it's to roughly map average tx commit latency to [0.1, 1] seconds,
     // which is well covered by DB_COMMIT_LATENCY_SEC_BUCKETS.
@@ -244,6 +250,48 @@ impl IndexerMetrics {
             checkpoint_db_commit_latency: register_histogram_with_registry!(
                 "checkpoint_db_commit_latency",
                 "Time spent commiting a checkpoint to the db",
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            checkpoint_db_commit_latency_step_1: register_histogram_with_registry!(
+                "checkpoint_db_commit_latency_step_1",
+                "Time spent commiting a checkpoint to the db, step 1",
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            checkpoint_db_commit_latency_transactions: register_histogram_with_registry!(
+                "checkpoint_db_commit_latency_transactions",
+                "Time spent commiting transactions",
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            checkpoint_db_commit_latency_events: register_histogram_with_registry!(
+                "checkpoint_db_commit_latency_events",
+                "Time spent commiting events",
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            checkpoint_db_commit_latency_packages: register_histogram_with_registry!(
+                "checkpoint_db_commit_latency_packages",
+                "Time spent commiting packages",
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            checkpoint_db_commit_latency_tx_indices: register_histogram_with_registry!(
+                "checkpoint_db_commit_latency_tx_indices",
+                "Time spent commiting tx indices",
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            checkpoint_db_commit_latency_checkpoints_and_objects: register_histogram_with_registry!(
+                "checkpoint_db_commit_latency_checkpoints_and_objects",
+                "Time spent commiting checkpoints and objects",
                 DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )

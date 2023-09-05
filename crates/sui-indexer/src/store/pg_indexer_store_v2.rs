@@ -152,8 +152,11 @@ impl PgIndexerStoreV2 {
         &self,
         object_changes: Vec<TransactionObjectChangesV2>,
         checkpoints: Vec<IndexedCheckpoint>,
+        metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
-        let _scope = monitored_scope("pg_indexer_store_v2::persist_objects_and_checkpoints");
+        let _guard = metrics
+            .checkpoint_db_commit_latency_checkpoints_and_objects
+            .start_timer();
         // If checkpoints is empty, object_changes must be empty too.
         if checkpoints.is_empty() {
             return Ok(());
@@ -234,8 +237,11 @@ impl PgIndexerStoreV2 {
     fn persist_transactions(
         &self,
         transactions: Vec<IndexedTransaction>,
+        metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
-        let _scope = monitored_scope("pg_indexer_store_v2::persist_transactions");
+        let _guard = metrics
+            .checkpoint_db_commit_latency_transactions
+            .start_timer();
         let transactions = transactions
             .iter()
             .map(StoredTransaction::from)
@@ -257,8 +263,12 @@ impl PgIndexerStoreV2 {
         )
     }
 
-    fn persist_events(&self, events: Vec<IndexedEvent>) -> Result<(), IndexerError> {
-        let _scope = monitored_scope("pg_indexer_store_v2::persist_events");
+    fn persist_events(
+        &self,
+        events: Vec<IndexedEvent>,
+        metrics: IndexerMetrics,
+    ) -> Result<(), IndexerError> {
+        let _guard = metrics.checkpoint_db_commit_latency_events.start_timer();
         let events = events
             .into_iter()
             .map(StoredEvent::from)
@@ -280,8 +290,12 @@ impl PgIndexerStoreV2 {
         )
     }
 
-    fn persist_packages(&self, packages: Vec<IndexedPackage>) -> Result<(), IndexerError> {
-        let _scope = monitored_scope("pg_indexer_store_v2::persist_packages");
+    fn persist_packages(
+        &self,
+        packages: Vec<IndexedPackage>,
+        metrics: IndexerMetrics,
+    ) -> Result<(), IndexerError> {
+        let _guard = metrics.checkpoint_db_commit_latency_packages.start_timer();
         let packages = packages
             .into_iter()
             .map(StoredPackage::from)
@@ -303,8 +317,14 @@ impl PgIndexerStoreV2 {
         )
     }
 
-    fn persist_tx_indices(&self, indices: Vec<TxIndex>) -> Result<(), IndexerError> {
-        let _scope = monitored_scope("pg_indexer_store_v2::persist_tx_indices");
+    fn persist_tx_indices(
+        &self,
+        indices: Vec<TxIndex>,
+        metrics: IndexerMetrics,
+    ) -> Result<(), IndexerError> {
+        let _guard = metrics
+            .checkpoint_db_commit_latency_tx_indices
+            .start_timer();
         let indices = indices
             .into_iter()
             .map(StoredTxIndex::from)
@@ -341,7 +361,11 @@ impl PgIndexerStoreV2 {
         .map(|v| v as u64)
     }
 
-    fn persist_epoch(&self, data: &TemporaryEpochStoreV2) -> Result<(), IndexerError> {
+    fn persist_epoch(
+        &self,
+        data: &TemporaryEpochStoreV2,
+        metrics: IndexerMetrics,
+    ) -> Result<(), IndexerError> {
         let _scope = monitored_scope("pg_indexer_store_v2::persist_epoch");
         transactional_blocking_with_retry!(
             &self.blocking_cp,
@@ -515,9 +539,10 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         &self,
         object_changes: Vec<TransactionObjectChangesV2>,
         checkpoints: Vec<IndexedCheckpoint>,
+        metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
         self.spawn_blocking(move |this| {
-            this.persist_objects_and_checkpoints(object_changes, checkpoints)
+            this.persist_objects_and_checkpoints(object_changes, checkpoints, metrics)
         })
         .await
     }
@@ -525,28 +550,45 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
     async fn persist_transactions(
         &self,
         transactions: Vec<IndexedTransaction>,
+        metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
-        self.spawn_blocking(move |this| this.persist_transactions(transactions))
+        self.spawn_blocking(move |this| this.persist_transactions(transactions, metrics))
             .await
     }
 
-    async fn persist_events(&self, events: Vec<IndexedEvent>) -> Result<(), IndexerError> {
-        self.spawn_blocking(move |this| this.persist_events(events))
+    async fn persist_events(
+        &self,
+        events: Vec<IndexedEvent>,
+        metrics: IndexerMetrics,
+    ) -> Result<(), IndexerError> {
+        self.spawn_blocking(move |this| this.persist_events(events, metrics))
             .await
     }
 
-    async fn persist_packages(&self, packages: Vec<IndexedPackage>) -> Result<(), IndexerError> {
-        self.spawn_blocking(move |this| this.persist_packages(packages))
+    async fn persist_packages(
+        &self,
+        packages: Vec<IndexedPackage>,
+        metrics: IndexerMetrics,
+    ) -> Result<(), IndexerError> {
+        self.spawn_blocking(move |this| this.persist_packages(packages, metrics))
             .await
     }
 
-    async fn persist_tx_indices(&self, indices: Vec<TxIndex>) -> Result<(), IndexerError> {
-        self.spawn_blocking(move |this| this.persist_tx_indices(indices))
+    async fn persist_tx_indices(
+        &self,
+        indices: Vec<TxIndex>,
+        metrics: IndexerMetrics,
+    ) -> Result<(), IndexerError> {
+        self.spawn_blocking(move |this| this.persist_tx_indices(indices, metrics))
             .await
     }
 
-    async fn persist_epoch(&self, data: TemporaryEpochStoreV2) -> Result<(), IndexerError> {
-        self.spawn_blocking(move |this| this.persist_epoch(&data))
+    async fn persist_epoch(
+        &self,
+        data: TemporaryEpochStoreV2,
+        metrics: IndexerMetrics,
+    ) -> Result<(), IndexerError> {
+        self.spawn_blocking(move |this| this.persist_epoch(&data, metrics))
             .await
     }
 

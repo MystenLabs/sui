@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::handlers::tx_processor::InMemPackageCache;
 use async_trait::async_trait;
 use itertools::Itertools;
 use move_bytecode_utils::module_cache::GetModule;
-use crate::handlers::tx_processor::InMemPackageCache;
 use mysten_metrics::{get_metrics, spawn_monitored_task};
 use sui_rest_api::CheckpointData;
 use sui_rest_api::CheckpointTransaction;
@@ -700,23 +700,25 @@ pub async fn start_tx_checkpoint_commit_task<S>(
         let tx_count = tx_batch.len();
 
         // TODO: persist epoch
-
-        futures::future::join_all(vec![
-            state.persist_transactions(tx_batch),
-            // state.persist_tx_indices(tx_indices_batch),
-            state.persist_events(events_batch),
-            state.persist_packages(packages_batch),
-        ])
-        .await
-        .into_iter()
-        .map(|res| {
-            if res.is_err() {
-                error!("Failed to persist data with error: {:?}", res);
-            }
-            res
-        })
-        .collect::<IndexerResult<Vec<_>>>()
-        .expect("Persisting data into DB should not fail.");
+        {
+            let _step_1_guard = metrics.checkpoint_db_commit_latency_step_1.start_timer();
+            futures::future::join_all(vec![
+                state.persist_transactions(tx_batch, metrics.clone()),
+                state.persist_tx_indices(tx_indices_batch, metrics.clone()),
+                state.persist_events(events_batch, metrics.clone()),
+                state.persist_packages(packages_batch, metrics.clone()),
+            ])
+            .await
+            .into_iter()
+            .map(|res| {
+                if res.is_err() {
+                    error!("Failed to persist data with error: {:?}", res);
+                }
+                res
+            })
+            .collect::<IndexerResult<Vec<_>>>()
+            .expect("Persisting data into DB should not fail.");
+        }
 
         // Note: the reason that we persist object changes with checkpoint
         // atomically is that when we batch process checkpoints, some hot
@@ -729,7 +731,11 @@ pub async fn start_tx_checkpoint_commit_task<S>(
         // When we switch to also getting input objects from the data source,
         // we can largely remove this atomicity requirement.
         state
-            .persist_objects_and_checkpoints(object_changes_batch, checkpoint_batch)
+            .persist_objects_and_checkpoints(
+                object_changes_batch,
+                checkpoint_batch,
+                metrics.clone(),
+            )
             .await
             .tap_err(|e| {
                 error!(

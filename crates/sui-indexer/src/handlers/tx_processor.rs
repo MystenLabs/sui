@@ -36,7 +36,6 @@ use crate::store::IndexerStoreV2;
 use crate::types_v2::IndexedPackage;
 use crate::types_v2::{IndexedObjectChange, IndexerResult};
 
-
 pub struct InMemPackageCache {
     packages: HashMap<(ObjectID, String), (Arc<CompiledModule>, CheckpointSequenceNumber)>,
 }
@@ -122,8 +121,7 @@ pub struct InMemObjectCache {
 
 impl InMemObjectCache {
     // FIXME: rename and remoev arc<mutex<
-    pub fn new(
-        // commit_watcher: watch::Receiver<Option<CheckpointSequenceNumber>>,
+    pub fn new(// commit_watcher: watch::Receiver<Option<CheckpointSequenceNumber>>,
     // ) -> Arc<Mutex<Self>> {
     ) -> Self {
         let cache = Self {
@@ -232,8 +230,7 @@ impl TxChangesProcessor {
     ) -> Self {
         let mut object_cache = InMemObjectCache::new();
         for obj in objects {
-            object_cache
-                .insert_object(<&Object>::clone(obj).clone(), checkpoint_seq);
+            object_cache.insert_object(<&Object>::clone(obj).clone(), checkpoint_seq);
         }
         Self {
             // state,
@@ -292,7 +289,6 @@ impl TxChangesProcessor {
 //     }
 // }
 
-
 // Note: the implementation of `ObjectProvider` for `TxChangesProcessor`
 // is NOT trivial. It needs to be a ObjectProvider to do
 // `try_create_dynamic_field_info`. So the logic below is tailored towards that.
@@ -316,7 +312,10 @@ impl ObjectProvider for TxChangesProcessor {
             return Ok(o);
         }
 
-        panic!("Object {} is not found in TxChangesProcessor as an ObjectProvider (fn get_object)", id);
+        panic!(
+            "Object {} is not found in TxChangesProcessor as an ObjectProvider (fn get_object)",
+            id
+        );
         // if let Some(object) = self.state.get_object(*id, Some(*version)).await? {
         //     self.metrics.indexing_get_object_db_hit.inc();
         //     return Ok(object);
@@ -373,7 +372,12 @@ impl ObjectProvider for TxChangesProcessor {
             .map(|o| <&Object>::clone(o).clone());
         if let Some(o) = object {
             if o.version() > *version {
-                panic!("Found a higher version {} for object {}, expected lt_or_eq {}", o.version(), id, *version);
+                panic!(
+                    "Found a higher version {} for object {}, expected lt_or_eq {}",
+                    o.version(),
+                    id,
+                    *version
+                );
             }
             if o.version() <= *version {
                 self.metrics.indexing_get_object_in_mem_hit.inc();
