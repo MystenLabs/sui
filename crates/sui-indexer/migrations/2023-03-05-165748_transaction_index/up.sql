@@ -12,6 +12,7 @@ CREATE INDEX move_calls_transaction_digest ON move_calls (transaction_digest);
 CREATE INDEX move_calls_move_package ON move_calls (move_package);
 CREATE INDEX move_calls_move_module ON move_calls (move_module);
 CREATE INDEX move_calls_move_function ON move_calls (move_function);
+CREATE INDEX move_calls_epoch ON move_calls (epoch);
 
 CREATE TABLE recipients (
     id                          BIGSERIAL       PRIMARY KEY,
@@ -24,6 +25,7 @@ CREATE TABLE recipients (
 CREATE INDEX recipients_transaction_digest ON recipients (transaction_digest);
 CREATE INDEX recipients_sender ON recipients (sender);
 CREATE INDEX recipients_recipient ON recipients (recipient);
+CREATE INDEX recipients_checkpoint ON recipients (checkpoint_sequence_number);
 
 CREATE TABLE input_objects (
     id                          BIGSERIAL       PRIMARY KEY,

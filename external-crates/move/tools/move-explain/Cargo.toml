@@ -10,7 +10,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-clap = { version = "3.1.8", features = ["derive"] }
+clap.workspace = true
 move-command-line-common = { path = "../../move-command-line-common" }
 move-core-types = { path = "../../move-core/types" }
 

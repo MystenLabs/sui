@@ -126,6 +126,11 @@ export class MnemonicAccountSource extends AccountSource<
 		accountSourcesEvents.emit('accountSourceStatusUpdated', { accountSourceID: this.id });
 	}
 
+	async verifyPassword(password: string) {
+		const { encryptedData } = await this.getStoredData();
+		await decrypt<DataDecrypted>(password, encryptedData);
+	}
+
 	async lock() {
 		await this.clearEphemeralValue();
 		accountSourcesEvents.emit('accountSourceStatusUpdated', { accountSourceID: this.id });

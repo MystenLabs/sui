@@ -4,6 +4,7 @@
 import cl from 'classnames';
 import { memo } from 'react';
 
+import { UnlockAccountProvider } from '../../components/accounts/UnlockAccountContext';
 import Loading from '_components/loading';
 import { useAppSelector, useFullscreenGuard } from '_hooks';
 import { getNavIsVisible } from '_redux/slices/app';
@@ -23,17 +24,19 @@ function PageLayout({ forceFullscreen = false, children, className }: PageLayout
 	const isNavVisible = useAppSelector(getNavIsVisible);
 
 	return (
-		<Loading loading={guardLoading}>
-			<div
-				className={cl('w-popup-width h-popup-height', st.container, className, {
-					[st.navHidden]: !isNavVisible,
-				})}
-			>
-				{children}
-				<div id="overlay-portal-container"></div>
-				<div id="toaster-portal-container"></div>
-			</div>
-		</Loading>
+		<UnlockAccountProvider>
+			<Loading loading={guardLoading}>
+				<div
+					className={cl('w-popup-width h-popup-height', st.container, className, {
+						[st.navHidden]: !isNavVisible,
+					})}
+				>
+					{children}
+					<div id="overlay-portal-container"></div>
+					<div id="toaster-portal-container"></div>
+				</div>
+			</Loading>
+		</UnlockAccountProvider>
 	);
 }
 

@@ -65,12 +65,14 @@ use super::name_service::NameService;
         arg(name = "before", type = "Option<String>")
     )
 )]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub(crate) enum ObjectOwner {
     Address(Address),
     Owner(Owner),
     Object(Object),
 }
 
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub(crate) struct Owner {
     pub address: SuiAddress,
 }
@@ -120,12 +122,15 @@ impl Owner {
 
     pub async fn balance_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<Connection<String, Balance>> {
-        unimplemented!()
+    ) -> Result<Connection<String, Balance>> {
+        ctx.data_provider()
+            .fetch_balance_connection(&self.address, first, after, last, before)
+            .await
     }
 
     pub async fn coin_connection(

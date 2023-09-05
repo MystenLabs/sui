@@ -26,7 +26,6 @@ use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_core::authority::NodeStateDump;
-use sui_core::authority::TemporaryStore;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
@@ -45,13 +44,13 @@ use sui_types::digests::TransactionDigest;
 use sui_types::error::ExecutionError;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::gas::{GasCharger, SuiGasStatus};
+use sui_types::gas::SuiGasStatus;
+use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::metrics::LimitsMetrics;
 use sui_types::object::{Data, Object, Owner};
 use sui_types::storage::get_module_by_id;
 use sui_types::storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
-use sui_types::temporary_store::InnerTemporaryStore;
 use sui_types::transaction::{
     CertifiedTransaction, InputObjectKind, InputObjects, SenderSignedData, Transaction,
     TransactionData, TransactionDataAPI, TransactionKind, VerifiedCertificate, VerifiedTransaction,
@@ -124,9 +123,9 @@ pub struct ProtocolVersionSummary {
     /// The last epoch that uses this protocol version
     pub epoch_end: u64,
     /// The first checkpoint in this protocol v ersion
-    pub checkpoint_start: u64,
+    pub checkpoint_start: Option<u64>,
     /// The last checkpoint in this protocol version
-    pub checkpoint_end: u64,
+    pub checkpoint_end: Option<u64>,
     /// The transaction which triggered this epoch change
     pub epoch_change_tx: TransactionDigest,
 }
@@ -373,7 +372,7 @@ impl LocalExec {
                 }
             }
         }
-        error!("No more configs to attempt. Try specifing Full Node RPC URL directly or provide a config file with a valid URL");
+        error!("No more configs to attempt. Try specifying Full Node RPC URL directly or provide a config file with a valid URL");
         Err(ReplayEngineError::UnableToExecuteWithNetworkConfigs { cfgs: cfg })
     }
 
@@ -464,18 +463,6 @@ impl LocalExec {
             executor_version_override: None,
             protocol_version_override: None,
         })
-    }
-
-    #[allow(clippy::wrong_self_convention)]
-    pub fn to_temporary_store(
-        &mut self,
-        tx_digest: &TransactionDigest,
-        input_objects: InputObjects,
-        protocol_config: &ProtocolConfig,
-    ) -> TemporaryStore {
-        // Wrap `&mut self` in an `Arc` because of `TemporaryStore`'s interface, not because it will
-        // be shared across multiple threads
-        TemporaryStore::new(Arc::new(self), input_objects, *tx_digest, protocol_config)
     }
 
     pub async fn multi_download_and_store(
@@ -675,6 +662,13 @@ impl LocalExec {
         Ok((succeeded, num as u64))
     }
 
+    // TODO: Could we get rid of this strange self move?
+    #[allow(clippy::wrong_self_convention, clippy::redundant_allocation)]
+    fn to_backing_store(&mut self) -> Arc<&mut LocalExec> {
+        // Execution interface requires Arc for the store.
+        Arc::new(self)
+    }
+
     pub async fn execution_engine_execute_with_tx_info_impl(
         &mut self,
         tx_info: &OnChainTransactionInfo,
@@ -718,29 +712,28 @@ impl LocalExec {
 
         let ov = self.executor_version_override;
 
-        // Temp store for data
-        let temporary_store =
-            self.to_temporary_store(tx_digest, InputObjects::new(input_objects), protocol_config);
-
         // We could probably cache the executor per protocol config
         let executor = get_executor(ov, protocol_config, expensive_safety_check_config);
 
         // All prep done
         let expensive_checks = true;
         let certificate_deny_set = HashSet::new();
+        let store = self.to_backing_store();
         let res = if let Ok(gas_status) =
             SuiGasStatus::new(tx_info.gas_budget, tx_info.gas_price, rgp, protocol_config)
         {
             executor.execute_transaction_to_effects(
+                store,
                 protocol_config,
                 metrics,
                 expensive_checks,
                 &certificate_deny_set,
                 &tx_info.executed_epoch,
                 epoch_start_timestamp,
-                temporary_store,
+                InputObjects::new(input_objects),
                 tx_info.shared_object_refs.clone(),
-                &mut GasCharger::new(*tx_digest, tx_info.gas.clone(), gas_status, protocol_config),
+                tx_info.gas.clone(),
+                gas_status,
                 override_transaction_kind.unwrap_or(tx_info.kind.clone()),
                 tx_info.sender,
                 *tx_digest,
@@ -1083,7 +1076,8 @@ impl LocalExec {
             .expect("Genesis TX must be in first checkpoint");
         // Somehow the genesis TX did not emit any event, but we know it was the start of version 1
         // So we need to manually add this range
-        let (mut start_epoch, mut start_protocol_version, mut start_checkpoint) = (0, 1, 0u64);
+        let (mut start_epoch, mut start_protocol_version, mut start_checkpoint) =
+            (0, 1, Some(0u64));
 
         let (mut curr_epoch, mut curr_protocol_version, mut curr_checkpoint) =
             (start_epoch, start_protocol_version, start_checkpoint);
@@ -1109,8 +1103,7 @@ impl LocalExec {
                 .fetcher
                 .get_transaction(&event.id.tx_digest)
                 .await?
-                .checkpoint
-                .expect("Checkpoint should be present");
+                .checkpoint;
             // Insert the last range
             range_map.insert(
                 start_protocol_version,
@@ -1119,7 +1112,7 @@ impl LocalExec {
                     epoch_start: start_epoch,
                     epoch_end: curr_epoch - 1,
                     checkpoint_start: start_checkpoint,
-                    checkpoint_end: curr_checkpoint - 1,
+                    checkpoint_end: curr_checkpoint.map(|x| x - 1),
                     epoch_change_tx: tx_digest,
                 },
             );
@@ -1142,8 +1135,7 @@ impl LocalExec {
                     .fetcher
                     .get_transaction(&end_epoch_tx_digest)
                     .await?
-                    .checkpoint
-                    .expect("Checkpoint should be present"),
+                    .checkpoint,
                 epoch_change_tx: tx_digest,
             },
         );
@@ -1335,7 +1327,12 @@ impl LocalExec {
                     .get_transaction(&epoch_change_tx)
                     .await?
                     .checkpoint
-                    .expect("Checkpoint should be present"),
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Checkpoint for transaction {} not present. Could be due to pruning",
+                            epoch_change_tx
+                        )
+                    }),
                 idx,
             )
         };
@@ -1350,7 +1347,12 @@ impl LocalExec {
             .get_transaction(&next_epoch_change_tx)
             .await?
             .checkpoint
-            .expect("Checkpoint should be present");
+            .unwrap_or_else(|| {
+                panic!(
+                    "Checkpoint for transaction {} not present. Could be due to pruning",
+                    next_epoch_change_tx
+                )
+            });
 
         Ok((start_checkpoint, next_epoch_checkpoint - 1))
     }

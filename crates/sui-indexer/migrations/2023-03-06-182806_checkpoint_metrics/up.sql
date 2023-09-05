@@ -1,6 +1,6 @@
 CREATE TABLE checkpoint_metrics
 (
-    checkpoint                                     BIGINT PRIMARY KEY,
+    checkpoint                                          BIGINT PRIMARY KEY,
     epoch                                               BIGINT NOT NULL,   
     real_time_tps                                       FLOAT8 NOT NULL,
     peak_tps_30d                                        FLOAT8 NOT NULL, 

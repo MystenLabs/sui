@@ -6,14 +6,12 @@ import cl from 'classnames';
 import { memo } from 'react';
 import { NavLink } from 'react-router-dom';
 
+import { useActiveAccount } from '../../hooks/useActiveAccount';
+import { useIsAccountReadLocked } from '../../hooks/useIsAccountReadLocked';
 import { useAppSelector } from '_hooks';
 import { getNavIsVisible } from '_redux/slices/app';
 
 import st from './Navigation.module.scss';
-
-function makeLinkCls({ isActive }: { isActive: boolean }) {
-	return cl(st.link, { [st.active]: isActive });
-}
 
 export type NavigationProps = {
 	className?: string;
@@ -21,6 +19,12 @@ export type NavigationProps = {
 
 function Navigation({ className }: NavigationProps) {
 	const isVisible = useAppSelector(getNavIsVisible);
+	const activeAccount = useActiveAccount();
+	const isActiveAccountReadLocked = useIsAccountReadLocked(activeAccount);
+	const makeLinkCls = ({ isActive }: { isActive: boolean }) =>
+		cl(st.link, { [st.active]: isActive, [st.disabled]: isActiveAccountReadLocked });
+	const makeLinkClsNoDisabled = ({ isActive }: { isActive: boolean }) =>
+		cl(st.link, { [st.active]: isActive });
 	return (
 		<nav
 			className={cl('border-b-0 rounded-tl-md rounded-tr-md pt-2 pb-0', st.container, className, {
@@ -33,15 +37,38 @@ function Navigation({ className }: NavigationProps) {
 			></div>
 
 			<div className={st.navMenu}>
-				<NavLink data-testid="nav-tokens" to="./tokens" className={makeLinkCls} title="Tokens">
+				<NavLink
+					data-testid="nav-tokens"
+					to="./tokens"
+					className={makeLinkClsNoDisabled}
+					title="Tokens"
+				>
 					<Tokens32 className="w-8 h-8" />
 					<span className={st.title}>Coins</span>
 				</NavLink>
-				<NavLink to="./nfts" className={makeLinkCls} title="Assets">
+				<NavLink
+					to="./nfts"
+					className={makeLinkCls}
+					title="Assets"
+					onClick={(e) => {
+						if (isActiveAccountReadLocked) {
+							e.preventDefault();
+						}
+					}}
+				>
 					<Nft132 className="w-8 h-8" />
 					<span className={st.title}>Assets</span>
 				</NavLink>
-				<NavLink to="./apps" className={makeLinkCls} title="Apps">
+				<NavLink
+					to="./apps"
+					className={makeLinkCls}
+					title="Apps"
+					onClick={(e) => {
+						if (isActiveAccountReadLocked) {
+							e.preventDefault();
+						}
+					}}
+				>
 					<Apps32 className="w-8 h-8" />
 					<span className={st.title}>Apps</span>
 				</NavLink>
@@ -50,6 +77,11 @@ function Navigation({ className }: NavigationProps) {
 					to="./transactions"
 					className={makeLinkCls}
 					title="Transactions"
+					onClick={(e) => {
+						if (isActiveAccountReadLocked) {
+							e.preventDefault();
+						}
+					}}
 				>
 					<Activity32 className="w-8 h-8" />
 					<span className={st.title}>Activity</span>

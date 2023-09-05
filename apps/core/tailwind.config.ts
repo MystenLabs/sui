@@ -83,6 +83,14 @@ export default {
 			scale: {
 				'101': '1.01',
 			},
+			// backdrop-blur values that are found in the design:
+			backdropBlur: {
+				sm: '8px',
+				md: '12px',
+				DEFAULT: '20px',
+				lg: '24px',
+				xl: '32px',
+			},
 			colors: {
 				'gradient-blue-start': '#589AEA',
 				'gradient-blue-end': '#4C75A6',
@@ -169,10 +177,12 @@ export default {
 			height: {
 				31.5: '7.5rem',
 				120: '30rem',
+				300: '75rem',
 				coinsAndAssetsContainer: '31.25rem',
 			},
 			maxHeight: {
 				coinsAndAssetsContainer: '31.25rem',
+				ownCoinsPanel: '14.375rem',
 			},
 			width: {
 				31.5: '7.5rem',
@@ -186,8 +196,12 @@ export default {
 				18: '4.5rem',
 				50: '12.5rem',
 				transactionColumn: '31.875rem',
-				ownObjectContainer: '13.125rem',
-				ownObjectContainerMobile: '9.375rem',
+				smallThumbNailsViewContainer: '13.125rem',
+				smallThumbNailsViewContainerMobile: '9.375rem',
+				coinItemContainer: '15.625rem',
+			},
+			minHeight: {
+				14: '3.5rem',
 			},
 			transitionTimingFunction: {
 				'ease-in-out-cubic': 'cubic-bezier(0.65, 0, 0.35, 1)',
@@ -208,7 +222,6 @@ export default {
 			},
 			borderRadius: {
 				'2lg': '0.625rem',
-				full: '16px',
 			},
 		},
 	},

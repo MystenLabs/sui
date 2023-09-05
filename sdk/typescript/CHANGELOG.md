@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 0.41.1
+
+### Patch Changes
+
+- 24c21e1f0: Fix defaults not being applied correctly in websocket client
+
 ## 0.41.0
 
 ### Minor Changes

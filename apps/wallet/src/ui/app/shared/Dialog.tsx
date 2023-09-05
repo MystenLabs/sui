@@ -7,6 +7,7 @@ import * as React from 'react';
 
 const Dialog = RadixDialog.Root;
 const DialogTrigger = RadixDialog.Trigger;
+const DialogClose = RadixDialog.Close;
 
 const DialogOverlay = React.forwardRef<
 	React.ElementRef<typeof RadixDialog.Overlay>,
@@ -75,6 +76,7 @@ DialogDescription.displayName = RadixDialog.Description.displayName;
 
 export {
 	Dialog,
+	DialogClose,
 	DialogTrigger,
 	DialogContent,
 	DialogHeader,

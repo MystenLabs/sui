@@ -3,7 +3,6 @@
 
 use super::config::{ClusterTestOpt, Env};
 use async_trait::async_trait;
-use clap::*;
 use std::net::SocketAddr;
 use std::path::Path;
 use sui_config::Config;
