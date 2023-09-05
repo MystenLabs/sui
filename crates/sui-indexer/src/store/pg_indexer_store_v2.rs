@@ -339,7 +339,14 @@ impl PgIndexerStoreV2 {
                 for packages_chunk in packages.chunks(PG_COMMIT_CHUNK_SIZE) {
                     diesel::insert_into(packages::table)
                         .values(packages_chunk)
-                        .on_conflict_do_nothing()
+                        // .on_conflict_do_nothing()
+                        // System packages such as 0x2/0x9 will have their package_id
+                        // unchanged during upgrades. In this case, we override the modules
+                        .on_conflict(packages::package_id)
+                        .do_update()
+                        .set((
+                            packages::modules.eq(excluded(packages::modules)),
+                        ))
                         .execute(conn)
                         .map_err(IndexerError::from)
                         .context("Failed to write packages to PostgresDB")?;
