@@ -86,7 +86,7 @@ export default {
 			// backdrop-blur values that are found in the design:
 			backdropBlur: {
 				sm: '8px',
-				md: '12px',
+				md: '16px',
 				DEFAULT: '20px',
 				lg: '24px',
 				xl: '32px',
@@ -104,20 +104,23 @@ export default {
 				130: '1.3',
 			},
 			boxShadow: {
+				xs: '0px 1px 2px rgba(16, 24, 40, 0.05)',
+				sm: '0px 1px 2px 0px rgba(86, 104, 115, 0.08)',
+				md: '1px 2px 8px 2px rgba(86, 104, 115, 0.06)',
+				lg: '0px 0px 44px 0px rgba(86, 104, 115, 0.22)',
+				DEFAULT: '0px 0px 20px 0px rgba(86, 104, 115, 0.14)',
 				notification: '0px 0px 20px rgba(29, 55, 87, 0.11)',
 				moduleOption:
 					'0px 0px 29px rgba(0, 0, 0, 0.13), 0px 0px 44px rgba(0, 0, 0, 0.15), 0px 0px 0px rgba(0, 0, 0, 0.2)',
 				blurXl: '0 0 20px 0 rgba(0, 0, 0, 0.3)',
 				button: '0px 1px 2px rgba(16, 24, 40, 0.05)',
-				xs: '0px 1px 2px rgba(16, 24, 40, 0.05)',
-				DEFAULT: '0px 5px 30px rgba(86, 104, 115, 0.2), 0px 0px 0px 1px rgba(160, 182, 195, 0.08)',
 				glow: '0 0px 6px 4px rgba(213,247,238,1)',
 				drop: '0px 0px 10px rgba(111, 188, 240, 0.2)',
-				mistyEdge:
-					'0px 0px 0px 1px rgba(160, 182, 195, 0.08), 0px 5px 30px 0px rgba(86, 104, 115, 0.20)',
-				cardSoft: '1px 2px 8px 2px rgba(21, 82, 123, 0.05)',
+				'effect-ui-regular':
+					'0px 5px 30px 0px rgba(86, 104, 115, 0.20), 0px 0px 0px 1px rgba(86, 104, 115, 0.03)',
 				panel: '0px 2px 7px 0px rgba(160, 182, 195, 0.32)',
 				dropdownContent: '0px 1px 2px 0px rgba(21, 82, 123, 0.08)',
+				'effect-ui-wallet-content': '0px -5px 20px 5px rgba(111, 188, 240, 0.11)',
 			},
 			fontSize: {
 				// Text sizes:
