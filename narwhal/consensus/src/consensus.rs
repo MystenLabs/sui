@@ -285,6 +285,15 @@ impl LeaderSchedule {
         }
     }
 
+    pub fn leaders(&self, round: Round) -> Vec<Authority> {
+        // Elect the leader in a stake-weighted choice seeded by the round
+        let leaders = self.committee.leaders(round);
+        assert_eq!(leaders.len(), self.committee.size());
+        leaders
+        // let table = self.leader_swap_table.read();
+        // table.swap(&leader.id(), round).unwrap_or(leader)
+    }
+
     /// Returns the certificate originated by the leader of the specified round (if any). The Authority
     /// leader of the round is always returned and that's irrespective of whether the certificate exists
     /// as that's deterministically determined. The provided `leader_swap_table` is being used to determine

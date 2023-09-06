@@ -18,11 +18,12 @@ use types::{Certificate, CertificateAPI, CommittedSubDag, HeaderAPI, ReputationS
 pub struct Whaleshark {
     /// The committee information.
     pub committee: Committee,
-    /// The number of committed subdags that will trigger the schedule change and reputation
+    /// The number of committed rounds that will trigger the schedule change and reputation
     /// score reset.
-    pub num_sub_dags_per_schedule: u64,
+    pub num_rounds_per_schedule: u64,
     /// The leader election schedule to be used when need to find a round's leader
     pub leader_schedule: LeaderSchedule,
+    pub next_election: (Round, usize),
     /// The last time we had a successful leader election
     pub last_successful_leader_election_timestamp: Instant,
     /// Persistent storage to safe ensure crash-recovery.
@@ -34,15 +35,16 @@ impl Whaleshark {
     /// Create a new Bullshark consensus instance.
     pub fn new(
         committee: Committee,
-        num_sub_dags_per_schedule: u64,
+        num_rounds_per_schedule: u64,
         leader_schedule: LeaderSchedule,
         store: Arc<ConsensusStore>,
         metrics: Arc<ConsensusMetrics>,
     ) -> Self {
         Self {
             committee,
-            num_sub_dags_per_schedule,
+            num_rounds_per_schedule,
             leader_schedule,
+            next_election: 
             last_successful_leader_election_timestamp: Instant::now(),
             store,
             metrics,
@@ -54,9 +56,8 @@ impl Whaleshark {
     /// If the schedule has changed due to a commit and there are more leaders to commit, then this
     /// method will return the enum `ScheduleChanged` so the caller will know to retry for the uncommitted
     /// leaders with the updated schedule now.
-    fn commit_leader(
+    fn commit_leaders(
         &mut self,
-        leader_round: Round,
         state: &mut ConsensusState,
     ) -> Result<(Outcome, Vec<CommittedSubDag>), ConsensusError> {
         let leader = match self
@@ -317,23 +318,7 @@ impl Protocol for Whaleshark {
             return Ok((Outcome::CertificateBelowCommitRound, vec![]));
         }
 
-        // Try to order the dag to commit. Start from the highest round for which we have at least
-        // f+1 certificates. This is because we need them to provide
-        // enough support to the leader.
-        let leader_round = round - 1;
-        let mut committed_sub_dags = Vec::new();
-        let outcome = loop {
-            let (outcome, committed) = self.commit_leader(leader_round, state)?;
-
-            // always extend the returned sub dags
-            committed_sub_dags.extend(committed);
-
-            // break the loop and return the result as long as there is no schedule change.
-            // We want to retry if there is a schedule change.
-            if outcome != Outcome::ScheduleChanged {
-                break outcome;
-            }
-        };
+        let (outcome, committed_sub_dags) = self.commit_leaders(state)?;
 
         // If we have no sub dag to commit then we simply return the outcome directly.
         // Otherwise we let the rest of the method run.

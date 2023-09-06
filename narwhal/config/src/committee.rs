@@ -312,6 +312,22 @@ impl Committee {
             .clone()
     }
 
+    /// Returns leaders for a round as a weighted choice seeded by the provided integer
+    pub fn leaders(&self, round: u64) -> Vec<Authority> {
+        let mut seed_bytes = [0u8; 32];
+        seed_bytes[32 - 8..].copy_from_slice(&round.to_le_bytes());
+        let mut rng = StdRng::from_seed(seed_bytes);
+        let choices = self
+            .authorities
+            .values()
+            .map(|authority| (authority.clone(), authority.stake as f32))
+            .collect::<Vec<_>>();
+        choices
+            .choose_multiple_weighted(&mut rng, choices.len(), |item| item.1)
+            .expect("Weighted choice error: stake values incorrect!")
+            .map(|(a, _w)| a.clone()).collect::<Vec<_>>()
+    }
+
     /// Returns the primary address of the target primary.
     pub fn primary(&self, to: &PublicKey) -> Result<Multiaddr, ConfigError> {
         self.authorities
