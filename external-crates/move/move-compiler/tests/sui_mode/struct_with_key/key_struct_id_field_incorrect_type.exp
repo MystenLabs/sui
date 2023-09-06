@@ -6,5 +6,5 @@ error[Sui E02007]: invalid object declaration
 4 │         id: bool
   │         ^^  ---- But found type: 'bool'
   │         │    
-  │         Invalid object. Expected the 'id' field to have type 'sui::object::UID'
+  │         Invalid object 'S'. Structs with the 'key' ability must have 'id: sui::object::UID' as their first field
 

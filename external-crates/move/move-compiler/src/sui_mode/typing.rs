@@ -6,7 +6,7 @@ use move_symbol_pool::Symbol;
 
 use crate::{
     diag,
-    diagnostics::WarningFilters,
+    diagnostics::{Diagnostic, WarningFilters},
     editions::Flavor,
     expansion::ast::{AbilitySet, AttributeName_, Fields, ModuleIdent, Visibility},
     naming::ast::{
@@ -194,7 +194,6 @@ impl<'a> TypingVisitorContext for Context<'a> {
 //**************************************************************************************************
 
 fn struct_def(context: &mut Context, name: StructName, sdef: &N::StructDefinition) {
-    const KEY_MSG: &str = "The 'key' ability is used to declare objects in Sui";
     let N::StructDefinition {
         warning_filter: _,
         index: _,
@@ -213,55 +212,49 @@ fn struct_def(context: &mut Context, name: StructName, sdef: &N::StructDefinitio
         // no fields
         Some(name.loc())
     } else {
-        let (first_field_loc, first_field_name, _) =
-            fields.iter().find(|(_, _, (idx, _))| *idx == 0).unwrap();
-        if *first_field_name != ID_FIELD_NAME {
-            Some(first_field_loc)
-        } else {
-            None
-        }
+        fields
+            .iter()
+            .find(|(_, name, (idx, _))| *idx == 0 && **name != ID_FIELD_NAME)
+            .map(|(loc, _, _)| loc)
     };
     if let Some(loc) = invalid_first_field {
         // no fields or an invalid 'id' field
-        let msg = format!(
-            "Invalid object '{}'. \
-            Structs with the '{}' ability must have '{}: {}::{}::{}' as their first field",
-            name,
-            Ability_::Key,
-            ID_FIELD_NAME,
-            SUI_ADDR_NAME,
-            OBJECT_MODULE_NAME,
-            UID_TYPE_NAME
-        );
         context
             .env
-            .add_diag(diag!(OBJECT_DECL_DIAG, (loc, msg), (key_loc, KEY_MSG)));
+            .add_diag(invalid_object_id_field_diag(key_loc, loc, name));
+        return;
     };
 
-    let Some((_, id_field_type)) = fields.get_(&ID_FIELD_NAME) else {
-        // no id field, but that case is already indirectly covered above
-        return
-    };
+    let (_, id_field_type) = fields.get_(&ID_FIELD_NAME).unwrap();
     let id_field_loc = fields.get_loc_(&ID_FIELD_NAME).unwrap();
     if !id_field_type
         .value
         .is(SUI_ADDR_NAME, OBJECT_MODULE_NAME, UID_TYPE_NAME)
     {
-        let expected = format!(
-            "Invalid object. Expected the '{}' field to have type '{}::{}::{}'",
-            ID_FIELD_NAME, SUI_ADDR_NAME, OBJECT_MODULE_NAME, UID_TYPE_NAME
-        );
         let actual = format!(
             "But found type: {}",
             error_format(id_field_type, &Subst::empty())
         );
-        context.env.add_diag(diag!(
-            OBJECT_DECL_DIAG,
-            (*id_field_loc, expected),
-            (id_field_type.loc, actual),
-            (key_loc, KEY_MSG.to_string()),
-        ));
+        let mut diag = invalid_object_id_field_diag(key_loc, *id_field_loc, name);
+        diag.add_secondary_label((id_field_type.loc, actual));
+        context.env.add_diag(diag);
     }
+}
+
+fn invalid_object_id_field_diag(key_loc: Loc, loc: Loc, name: StructName) -> Diagnostic {
+    const KEY_MSG: &str = "The 'key' ability is used to declare objects in Sui";
+
+    let msg = format!(
+        "Invalid object '{}'. \
+        Structs with the '{}' ability must have '{}: {}::{}::{}' as their first field",
+        name,
+        Ability_::Key,
+        ID_FIELD_NAME,
+        SUI_ADDR_NAME,
+        OBJECT_MODULE_NAME,
+        UID_TYPE_NAME
+    );
+    diag!(OBJECT_DECL_DIAG, (loc, msg), (key_loc, KEY_MSG))
 }
 
 //**************************************************************************************************
@@ -294,7 +287,7 @@ fn function(context: &mut Context, name: FunctionName, fdef: &mut T::Function) {
         global_storage_error(
             context,
             *acquire_loc,
-            format!("Invalid usage of global storage acquires"),
+            format!("Global storage acquires are not supported in Sui"),
         )
     }
     if name.0.value == INIT_FUNCTION_NAME {
@@ -383,17 +376,17 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
             (last_loc, msg),
         ))
     }
-    let upper_module: Symbol = context.otw_name();
+    let otw_name: Symbol = context.otw_name();
     if parameters.len() == 1 && context.one_time_witness.is_some() {
         // if there is 1 parameter, and a OTW, this is an error since the OTW must be used
         let msg = format!(
             "Invalid first parameter to 'init'. \
-            Expected this module's one-time witness type '{}::{upper_module}'",
+            Expected this module's one-time witness type '{}::{otw_name}'",
             context.current_module(),
         );
         let otw_loc = context
             .info
-            .struct_declared_loc_(context.current_module(), &upper_module);
+            .struct_declared_loc_(context.current_module(), &otw_name);
         let otw_msg = "One-time witness declared here";
         let mut diag = diag!(
             INIT_FUN_DIAG,
@@ -408,12 +401,12 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
         let is_otw = matches!(
             first_ty.value.type_name(),
             Some(sp!(_, TypeName_::ModuleType(m, n)))
-                if m == context.current_module() && n.value() == upper_module
+                if m == context.current_module() && n.value() == otw_name
         );
         if !is_otw {
             let msg = format!(
                 "Invalid parameter '{}' of type {}. \
-                Expected a one-time witness type, '{}::{upper_module}",
+                Expected a one-time witness type, '{}::{otw_name}",
                 first_var.value.name,
                 error_format(first_ty, &Subst::empty()),
                 context.current_module(),
@@ -429,13 +422,13 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
             .info
             .module(context.current_module())
             .structs
-            .get_(&upper_module)
+            .get_(&otw_name)
         {
             let name = context
                 .info
                 .module(context.current_module())
                 .structs
-                .get_full_key_(&upper_module)
+                .get_full_key_(&otw_name)
                 .unwrap();
             check_otw_type(context, name, sdef, Some(first_ty.loc))
         }
@@ -895,7 +888,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
             | T::BuiltinFunction_::Exists(_) => global_storage_error(
                 context,
                 e.exp.loc,
-                format!("Invalid usage of global storage primitive '{}'", b),
+                format!("Global storage primitive '{}' is not supported in Sui", b),
             ),
             T::BuiltinFunction_::Freeze(_) | T::BuiltinFunction_::Assert(_) => (),
         },
@@ -937,13 +930,12 @@ fn check_event_emit(context: &mut Context, loc: Loc, mcall: &ModuleCall) {
     let is_defined_in_current_module = matches!(first_ty.value.type_name(), Some(sp!(_, TypeName_::ModuleType(m, _))) if m == current_module);
     if !is_defined_in_current_module {
         let msg = format!(
-            "Invalid event. The function '{}::{}' must be called with a type defined in the current module, '{}'",
-            module, name, current_module
+            "Invalid event. The function '{}::{}' must be called with a type defined in the current module",
+            module, name
         );
         let ty_msg = format!(
-            "The type {} is not declared in the current module, '{}'",
+            "The type {} is not declared in the current module",
             error_format(first_ty, &Subst::empty()),
-            current_module
         );
         context.env.add_diag(diag!(
             EVENT_EMIT_CALL_DIAG,
@@ -989,9 +981,8 @@ fn check_private_transfer(context: &mut Context, loc: Loc, mcall: &ModuleCall) {
             msg = format!("{}, '{}'", msg, first_ty_module);
         };
         let ty_msg = format!(
-            "The type {} is not declared in the current module, '{}'",
+            "The type {} is not declared in the current module",
             error_format(first_ty, &Subst::empty()),
-            current_module
         );
         let mut diag = diag!(
             PRIVATE_TRANSFER_CALL_DIAG,
@@ -1012,7 +1003,7 @@ fn check_private_transfer(context: &mut Context, loc: Loc, mcall: &ModuleCall) {
                 first_ty
                     .value
                     .abilities(first_ty.loc)
-                    .unwrap()
+                    .expect("ICE abilities should have been expanded")
                     .ability_loc_(Ability_::Store)
                     .unwrap()
             };

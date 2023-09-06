@@ -142,5 +142,5 @@ pub const GLOBAL_STORAGE_DIAG: DiagnosticInfo = custom(
     Severity::NonblockingError,
     /* category */ TYPING,
     /* code */ 9,
-    "invalid global storage usage",
+    "global storage is not supported in Sui",
 );
