@@ -69,6 +69,13 @@ export function useConnectWallet({
 						? connectResult.accounts.find((account) => account.address === mostRecentAccountAddress)
 						: connectResult.accounts[0];
 
+				console.log(
+					hasRecentWalletAccountToConnectTo,
+					selectedAccount,
+					connectResult,
+					mostRecentAccountAddress,
+				);
+
 				// A wallet technically doesn't have to authorize any accounts
 				dispatch({
 					type: 'wallet-connected',

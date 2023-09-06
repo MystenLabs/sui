@@ -26,7 +26,7 @@ type UseSignTransactionBlockMutationOptions = Omit<
 export function useSignTransactionBlock({
 	mutationKey,
 	...mutationOptions
-}: UseSignTransactionBlockMutationOptions) {
+}: UseSignTransactionBlockMutationOptions = {}) {
 	const { currentWallet } = useWalletContext();
 
 	return useMutation({

@@ -59,7 +59,7 @@ export async function getMostRecentWalletConnectionInfo(
 			return {
 				walletName,
 				accountAddress:
-					accountAddress === noSelectedAccountStoragePlaceholder ? accountAddress : undefined,
+					accountAddress === noSelectedAccountStoragePlaceholder ? undefined : accountAddress,
 			};
 		}
 	} catch {

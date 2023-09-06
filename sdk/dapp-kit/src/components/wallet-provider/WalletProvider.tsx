@@ -63,6 +63,7 @@ export function WalletProvider({
 		currentWallet: null,
 		accounts: [],
 		currentAccount: null,
+		connectionStatus: 'disconnected',
 	});
 
 	useWalletsChanged({

@@ -25,7 +25,7 @@ type UseSignPersonalMessageMutationOptions = Omit<
 export function useSignPersonalMessage({
 	mutationKey,
 	...mutationOptions
-}: UseSignPersonalMessageMutationOptions) {
+}: UseSignPersonalMessageMutationOptions = {}) {
 	const { currentWallet } = useWalletContext();
 
 	return useMutation({

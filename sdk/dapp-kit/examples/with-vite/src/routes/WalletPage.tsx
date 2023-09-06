@@ -1,23 +1,56 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useWallet, useConnectWallet, useDisconnectWallet } from '@mysten/dapp-kit';
+import {
+	useWallet,
+	useConnectWallet,
+	useDisconnectWallet,
+	useSwitchAccount,
+} from '@mysten/dapp-kit';
+import { Button } from '@/components/ui/button';
 
 export function WalletPage() {
-	const { wallets, currentWallet, currentAccount } = useWallet();
+	const { wallets, currentWallet, currentAccount, accounts, connectionStatus } = useWallet();
 	const { mutate: connectWallet } = useConnectWallet();
 	const { mutate: disconnectWallet } = useDisconnectWallet();
+	const { mutate: switchAccount } = useSwitchAccount();
+
+	const isWalletDisconnected = connectionStatus === 'disconnected';
 
 	return (
-		<div>
-			<button
-				onClick={() => {
-					connectWallet({ walletName: 'Sui Wallet' });
-				}}
-			>
-				Connect Wallet
-			</button>
-			<button onClick={() => disconnectWallet()}>Disconnect Wallet</button>
+		<div className="flex flex-col gap-4">
+			<div className="flex gap-4">
+				<Button
+					onClick={() => {
+						connectWallet({ walletName: 'Sui Wallet' });
+					}}
+					disabled={!isWalletDisconnected}
+				>
+					Connect Sui Wallet
+				</Button>
+				<Button onClick={() => disconnectWallet()} disabled={isWalletDisconnected}>
+					Disconnect Wallet
+				</Button>
+			</div>
+			<div className="">
+				<div className="">Connection status: {connectionStatus}</div>
+				<div className="">Connected wallet: {currentWallet?.name ?? 'N/A'}</div>
+				<div className="">Current account: {currentAccount?.address ?? 'N/A'}</div>
+				{accounts.length > 0 && (
+					<ul>
+						{accounts.map((account) => (
+							<li key={account.address}>
+								<Button
+									variant="link"
+									onClick={() => switchAccount({ accountAddress: account.address })}
+								>
+									{account.address}
+								</Button>
+							</li>
+						))}
+					</ul>
+				)}
+			</div>
 		</div>
 	);
 }

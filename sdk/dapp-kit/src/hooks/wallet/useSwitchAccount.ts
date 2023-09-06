@@ -28,7 +28,7 @@ type UseSwitchAccountMutationOptions = Omit<
 export function useSwitchAccount({
 	mutationKey,
 	...mutationOptions
-}: UseSwitchAccountMutationOptions) {
+}: UseSwitchAccountMutationOptions = {}) {
 	const { storageAdapter, storageKey, currentWallet, dispatch } = useWalletContext();
 
 	return useMutation({
@@ -47,7 +47,7 @@ export function useSwitchAccount({
 				);
 			}
 
-			dispatch({ type: 'wallet-account-switched', payload: accountAddress });
+			dispatch({ type: 'wallet-account-switched', payload: accountToSelect });
 
 			await setMostRecentWalletConnectionInfo({
 				storageAdapter,

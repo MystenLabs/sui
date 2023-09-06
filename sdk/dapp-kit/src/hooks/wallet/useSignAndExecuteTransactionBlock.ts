@@ -31,7 +31,7 @@ type UseSignAndExecuteTransactionBlockMutationOptions = Omit<
 export function useSignAndExecuteTransactionBlock({
 	mutationKey,
 	...mutationOptions
-}: UseSignAndExecuteTransactionBlockMutationOptions) {
+}: UseSignAndExecuteTransactionBlockMutationOptions = {}) {
 	const { currentWallet } = useWalletContext();
 
 	return useMutation({

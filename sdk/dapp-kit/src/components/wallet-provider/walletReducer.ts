@@ -124,6 +124,7 @@ export function walletReducer(
 		case 'wallet-account-switched':
 			return {
 				...walletState,
+				currentAccount: payload,
 			};
 		default:
 			assertUnreachable(type);
