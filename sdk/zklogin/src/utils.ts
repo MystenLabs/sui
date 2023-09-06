@@ -7,6 +7,7 @@ type bit = 0 | 1;
 
 const MAX_KEY_CLAIM_NAME_LENGTH = 40;
 const MAX_KEY_CLAIM_VALUE_LENGTH = 100;
+const MAX_AUD_VALUE_LENGTH = 150;
 const PACK_WIDTH = 248;
 
 // TODO: We need to rewrite this to not depend on Buffer.
@@ -73,12 +74,15 @@ export function genAddressSeed(
 	salt: bigint,
 	name: string,
 	value: string,
+	aud: string,
 	max_name_length = MAX_KEY_CLAIM_NAME_LENGTH,
 	max_value_length = MAX_KEY_CLAIM_VALUE_LENGTH,
+	max_aud_length = MAX_AUD_VALUE_LENGTH,
 ) {
 	return poseidonHash([
 		hashASCIIStrToField(name, max_name_length),
 		hashASCIIStrToField(value, max_value_length),
+		hashASCIIStrToField(aud, max_aud_length),
 		poseidonHash([salt]),
 	]);
 }
