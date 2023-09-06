@@ -10,6 +10,7 @@ mod checked {
     use move_core_types::{identifier::Identifier, language_storage::ModuleId};
     use move_vm_runtime::move_vm::MoveVM;
     use once_cell::sync::Lazy;
+    use std::str::FromStr;
     use std::{
         collections::{BTreeSet, HashSet},
         sync::Arc,
@@ -18,6 +19,7 @@ mod checked {
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
         BALANCE_MODULE_NAME,
     };
+    use sui_types::execution::ExecutionState;
     use sui_types::execution_mode::{self, ExecutionMode};
     use sui_types::gas_coin::GAS;
     use sui_types::metrics::LimitsMetrics;
@@ -26,13 +28,14 @@ mod checked {
     use tracing::{info, instrument, trace, warn};
 
     use crate::programmable_transactions;
+    use crate::programmable_transactions::linkage_view::LinkageView;
     use crate::type_layout_resolver::TypeLayoutResolver;
     use crate::{gas_charger::GasCharger, temporary_store::TemporaryStore};
     use move_binary_format::access::ModuleAccess;
     use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
     use sui_types::authenticator_state::{
-        AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME, AUTHENTICATOR_STATE_MODULE_NAME,
-        AUTHENTICATOR_STATE_UPDATE_FUNCTION_NAME,
+        AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME, AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME,
+        AUTHENTICATOR_STATE_MODULE_NAME, AUTHENTICATOR_STATE_UPDATE_FUNCTION_NAME,
     };
     use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
     use sui_types::committee::EpochId;
@@ -54,10 +57,8 @@ mod checked {
         base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
         object::Object,
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
-        SUI_FRAMEWORK_ADDRESS,
-    };
-    use sui_types::{
-        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
+        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
+        SUI_SYSTEM_PACKAGE_ID,
     };
 
     /// If a transaction digest shows up in this list, when executing such transaction,
@@ -579,20 +580,23 @@ mod checked {
         (storage_rewards, computation_rewards)
     }
 
-    fn authenticator_state_create_exists(
+    fn authenticator_state_module_exists(
         move_vm: &Arc<MoveVM>,
         temporary_store: &TemporaryStore<'_>,
     ) -> bool {
         let module_id = ModuleId::new(
-            SUI_AUTHENTICATOR_STATE_ADDRESS,
-            Identifier::from("sui::authenticator_state"),
+            SUI_FRAMEWORK_ADDRESS,
+            Identifier::from_str("authenticator_state").unwrap(),
         );
-        move_vm.load_module(&module_id, temporary_store).is_ok()
+
+        let linkage = LinkageView::new(Box::new(temporary_store.as_sui_resolver()));
+        move_vm.load_module(&module_id, linkage).is_ok()
     }
 
     pub fn construct_advance_epoch_pt(
         params: &AdvanceEpochParams,
         protocol_config: &ProtocolConfig,
+        move_vm: &Arc<MoveVM>,
         temporary_store: &TemporaryStore<'_>,
     ) -> Result<ProgrammableTransaction, ExecutionError> {
         let mut builder = ProgrammableTransactionBuilder::new();
@@ -641,18 +645,33 @@ mod checked {
             vec![storage_rebates],
         );
 
-        // Step 4: Create the authenticator state object if it does not exist. If it does exist,
+        let authenticator_state_object_exists = !temporary_store
+            .objects()
+            .contains_key(&SUI_AUTHENTICATOR_STATE_OBJECT_ID);
+
+        // Step 4: Create the authenticator state object if it does not exist, and if the framework
+        // has been upgraded to include the authenticator_state module. If it does exist,
         // (and the feature is enabled) then it will already be an input to this transaction.
         let should_create_authenticator_state = protocol_config.enable_jwk_consensus_updates()
-            && !temporary_store
-                .objects()
-                .contains_key(&SUI_AUTHENTICATOR_STATE_OBJECT_ID)
-            && authenticator_state_create_exists(move_vm, temporary_store);
+            && !dbg!(authenticator_state_object_exists)
+            && authenticator_state_module_exists(move_vm, temporary_store);
 
-        if should_create_authenticator_state {}
+        if should_create_authenticator_state {
+            let res = builder.move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                AUTHENTICATOR_STATE_MODULE_NAME.to_owned(),
+                AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME.to_owned(),
+                vec![],
+                vec![],
+            );
+            assert_invariant!(
+                res.is_ok(),
+                "Unable to generate authenticator_state::create call!"
+            );
+        }
 
         // Step 5: Expire JWKs if the authenticator state object exists.
-        if protocol_config.enable_jwk_consensus_updates() {
+        if protocol_config.enable_jwk_consensus_updates() && authenticator_state_object_exists {
             if let Some(auth_state) = temporary_store
                 .objects()
                 .get(&SUI_AUTHENTICATOR_STATE_OBJECT_ID)
@@ -761,7 +780,7 @@ mod checked {
             epoch_start_timestamp_ms: change_epoch.epoch_start_timestamp_ms,
         };
         let advance_epoch_pt =
-            construct_advance_epoch_pt(&params, protocol_config, temporary_store)?;
+            construct_advance_epoch_pt(&params, protocol_config, move_vm, temporary_store)?;
         let result = programmable_transactions::execution::execute::<execution_mode::System>(
             protocol_config,
             metrics.clone(),

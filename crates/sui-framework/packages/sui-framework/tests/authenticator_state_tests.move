@@ -23,7 +23,7 @@ module sui::authenticator_state_tests {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
-        authenticator_state::create(test_scenario::ctx(scenario));
+        authenticator_state::create_for_testing(test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, @0x0);
 
         let auth_state = test_scenario::take_shared<AuthenticatorState>(scenario);
@@ -69,7 +69,7 @@ module sui::authenticator_state_tests {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
-        authenticator_state::create(test_scenario::ctx(scenario));
+        authenticator_state::create_for_testing(test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, @0x0);
 
         let auth_state = test_scenario::take_shared<AuthenticatorState>(scenario);

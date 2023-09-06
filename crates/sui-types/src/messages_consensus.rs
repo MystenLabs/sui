@@ -38,6 +38,8 @@ pub struct AuthenticatorStateUpdate {
     pub authenticator_state_obj_start_version: SequenceNumber,
     /// newly active jwks
     pub new_active_jwks: Vec<ActiveJwk>,
+    /// if set, expire JWKs that have a lower epoch than this
+    pub expire_jwks: Option<u64>,
     // to version this struct, do not add new fields. Instead, add a AuthenticatorStateUpdateV2 to
     // TransactionKind.
 }

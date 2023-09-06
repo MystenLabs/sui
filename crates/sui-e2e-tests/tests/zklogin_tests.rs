@@ -156,7 +156,6 @@ async fn test_create_authenticator_state_object() {
 
     test_cluster.wait_for_protocol_version(23.into()).await;
 
-    // no node has the authenticator state object yet
     for h in &handles {
         h.with(|node| {
             let auth_state = node

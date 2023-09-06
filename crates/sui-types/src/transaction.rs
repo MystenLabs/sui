@@ -1988,9 +1988,26 @@ impl VerifiedTransaction {
     ) -> Self {
         AuthenticatorStateUpdate {
             epoch,
-            round,
+            round: Some(round),
             authenticator_state_obj_start_version,
             new_active_jwks,
+            min_epoch: None,
+        }
+        .pipe(TransactionKind::AuthenticatorStateUpdate)
+        .pipe(Self::new_system_transaction)
+    }
+
+    pub fn new_authenticator_state_expire(
+        epoch: u64,
+        authenticator_state_obj_start_version: SequenceNumber,
+        min_epoch: u64,
+    ) -> Self {
+        AuthenticatorStateUpdate {
+            epoch,
+            round: None,
+            authenticator_state_obj_start_version,
+            new_active_jwks: Vec::new(),
+            min_epoch: Some(min_epoch),
         }
         .pipe(TransactionKind::AuthenticatorStateUpdate)
         .pipe(Self::new_system_transaction)

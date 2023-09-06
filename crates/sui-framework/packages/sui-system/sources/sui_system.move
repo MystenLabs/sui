@@ -56,7 +56,6 @@ module sui_system::sui_system {
     use sui_system::staking_pool::PoolTokenExchangeRate;
     use std::option;
     use sui::dynamic_field;
-    use sui::authenticator_state;
 
     #[test_only] use sui::balance;
     #[test_only] use sui_system::validator_set::ValidatorSet;
@@ -559,15 +558,6 @@ module sui_system::sui_system {
         ctx: &mut TxContext,
     ) : Balance<SUI> {
         let self = load_system_state_mut(wrapper);
-
-        let previous_protocol_version = protocol_version(self);
-
-        // If we are moving from a version in which the AuthenticatorState object did not exist,
-        // to one where it does, create it!
-        if (previous_protocol_version < AuthenticatorStateFirstProtocolVersion
-            && next_protocol_version >= AuthenticatorStateFirstProtocolVersion) {
-            authenticator_state::create(ctx);
-        };
 
         // Validator will make a special system call with sender set as 0x0.
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);

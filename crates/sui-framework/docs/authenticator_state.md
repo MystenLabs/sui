@@ -392,7 +392,7 @@ the authenticator state object is first created.
 Can only be called by genesis or change_epoch transactions.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state_create">create</a>(ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state_create">create</a>(ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -401,7 +401,7 @@ Can only be called by genesis or change_epoch transactions.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state_create">create</a>(ctx: &TxContext) {
+<pre><code><b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state_create">create</a>(ctx: &TxContext) {
     <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="authenticator_state.md#0x2_authenticator_state_ENotSystemAddress">ENotSystemAddress</a>);
 
     <b>let</b> version = <a href="authenticator_state.md#0x2_authenticator_state_CurrentVersion">CurrentVersion</a>;

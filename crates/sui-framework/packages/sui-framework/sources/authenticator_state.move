@@ -145,7 +145,7 @@ module sui::authenticator_state {
     /// Create and share the AuthenticatorState object. This function is call exactly once, when
     /// the authenticator state object is first created.
     /// Can only be called by genesis or change_epoch transactions.
-    public fun create(ctx: &TxContext) {
+    fun create(ctx: &TxContext) {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
 
         let version = CurrentVersion;
@@ -334,6 +334,11 @@ module sui::authenticator_state {
     ): vector<ActiveJwk> {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
         load_inner(self).active_jwks
+    }
+
+    #[test_only]
+    public fun create_for_testing(ctx: &TxContext) {
+        create(ctx);
     }
 
     #[test_only]
