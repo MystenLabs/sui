@@ -139,7 +139,7 @@ module hero::example {
         assert!(value >= MIN_SWORD_COST, EInsufficientFunds);
 
         // pay the game for this sword
-        balance::join(&mut game.payments, coin::into_balance(payment));
+        coin::put(&mut game.payments, payment);
 
         // magic of the sword is proportional to the amount you paid, up to
         // a max. one can only imbue a sword with so much magic
@@ -211,7 +211,7 @@ module hero::example {
 
     /// Slay the `boar` with the `hero`'s sword, get experience.
     /// Aborts if the hero has 0 HP or is not strong enough to slay the boar
-    public entry fun slay(hero: &mut Hero, boar: Boar, ctx: &TxContext) {
+    public fun slay(hero: &mut Hero, boar: Boar, ctx: &TxContext) {
         assert!(hero.game_id == boar.game_id, EWrongGame);
 
         let Boar {
