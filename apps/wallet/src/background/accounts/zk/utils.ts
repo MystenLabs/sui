@@ -3,7 +3,7 @@
 
 import { type PublicKey } from '@mysten/sui.js/cryptography';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { generateNonce } from '@mysten/zklogin';
+import { generateNonce, generateRandomness } from '@mysten/zklogin';
 import { randomBytes } from '@noble/hashes/utils';
 import { toBigIntBE } from 'bigint-buffer';
 import { base64url } from 'jose';
@@ -14,7 +14,7 @@ import { fetchWithSentry } from '_src/shared/utils';
 export function prepareZKLogin(currentEpoch: number) {
 	const maxEpoch = currentEpoch + 2;
 	const ephemeralKeyPair = new Ed25519Keypair();
-	const randomness = toBigIntBE(Buffer.from(randomBytes(16)));
+	const randomness = generateRandomness();
 	const nonce = generateNonce(ephemeralKeyPair.getPublicKey(), maxEpoch, randomness);
 	return {
 		ephemeralKeyPair,
