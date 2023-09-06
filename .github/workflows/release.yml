@@ -82,7 +82,7 @@ jobs:
           source ~/.cargo/env && cargo build --release
 
       - name: Rename binaries for ${{ matrix.os }}
-        if: ${{ env.sui_tag != 'main' && (matrix.os == 'ubuntu-ghcloud' || matrix.os == 'macos-latest-xl') }}
+        if: ${{ env.sui_tag != 'main' && matrix.os != 'windows-ghcloud' }}
         shell: bash
         run: |
           export arch=$(uname -m)
