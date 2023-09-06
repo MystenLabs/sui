@@ -20,7 +20,7 @@ move-binary-format = { path = "../../move-binary-format" }
 move-coverage = { path = "../move-coverage" }
 move-compiler = { path = "../../move-compiler" }
 
-clap = { version = "3.1.8", features = ["derive"] }
+clap.workspace = true
 hex = "0.4.3"
 
 [features]

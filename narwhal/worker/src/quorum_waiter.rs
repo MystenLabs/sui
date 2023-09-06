@@ -141,7 +141,8 @@ impl QuorumWaiter {
                                 }
                             } else {
                                 // This should not happen unless shutting down, because
-                                // `broadcast()` is supposed to keep retrying.
+                                // `broadcast()` uses `send()` which keeps retrying on
+                                // failed responses.
                                 warn!("Batch dissemination ended without a quorum. Shutting down.");
                                 break;
                             }

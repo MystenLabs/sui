@@ -9,7 +9,7 @@ edition = "2021"
 [dependencies]
 axum.workspace = true
 anyhow = { version = "1.0.64", features = ["backtrace"] }
-clap = { version = "3.2.17", features = ["derive"] }
+clap.workspace = true
 prometheus = "0.13.3"
 tokio = { workspace = true, features = ["full"] }
 tracing = "0.1.36"

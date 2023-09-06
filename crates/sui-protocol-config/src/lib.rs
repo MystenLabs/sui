@@ -4,13 +4,14 @@
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::cell::RefCell;
+use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use sui_protocol_config_macros::{ProtocolConfigAccessors, ProtocolConfigFeatureFlagsGetters};
 use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 20;
+const MAX_PROTOCOL_VERSION: u64 = 23;
 
 // Record history of protocol version allocations here:
 //
@@ -64,6 +65,10 @@ const MAX_PROTOCOL_VERSION: u64 = 20;
 // Version 20: Enabling the flag `narwhal_new_leader_election_schedule` for the new narwhal leader
 //             schedule algorithm for enhanced fault tolerance and sets the bad node stake threshold
 //             value. Both values are set for all the environments except mainnet.
+// Version 21: ZKLogin known providers.
+// Version 22: Child object format change.
+// Version 23: Re-enable simple gas conservation checks.
+//             Package publish/upgrade number in a single transaction limited.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -252,10 +257,29 @@ struct FeatureFlags {
     // If true, then the new algorithm for the leader election schedule will be used
     #[serde(skip_serializing_if = "is_false")]
     narwhal_new_leader_election_schedule: bool,
+
+    // A list of supported OIDC providers that can be used for zklogin.
+    #[serde(skip_serializing_if = "is_empty")]
+    zklogin_supported_providers: BTreeSet<String>,
+
+    // If true, use the new child object format
+    #[serde(skip_serializing_if = "is_false")]
+    loaded_child_object_format: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
+    enable_jwk_consensus_updates: bool,
+    // Perform simple conservation checks keeping into account out of gas scenarios
+    // while charging for storage.
+    #[serde(skip_serializing_if = "is_false")]
+    simple_conservation_checks: bool,
 }
 
 fn is_false(b: &bool) -> bool {
     !b
+}
+
+fn is_empty(b: &BTreeSet<String>) -> bool {
+    b.is_empty()
 }
 
 /// Ordering mechanism for transactions in one Narwhal consensus output.
@@ -362,6 +386,9 @@ pub struct ProtocolConfig {
     // TODO: Option<increase to 500 KB. currently, publishing a package > 500 KB exceeds the max computation gas cost
     /// Maximum size of a Move package object, in bytes. Enforced by the Sui adapter at the end of a publish transaction.
     max_move_package_size: Option<u64>,
+
+    /// Max number of publish or upgrade commands allowed in a programmable transaction block.
+    max_publish_or_upgrade_per_ptb: Option<u64>,
 
     /// Maximum number of gas units that a single MoveCall transaction can use. Enforced by the Sui adapter.
     max_tx_gas: Option<u64>,
@@ -725,6 +752,8 @@ pub struct ProtocolConfig {
     // swapped when creating the consensus schedule. The values should be of the range [0 - 33]. Anything
     // above 33 (f) will not be allowed.
     consensus_bad_nodes_stake_threshold: Option<u64>,
+
+    max_jwk_votes_per_validator_per_epoch: Option<u64>,
 }
 
 // feature flags
@@ -819,6 +848,10 @@ impl ProtocolConfig {
         self.feature_flags.zklogin_auth
     }
 
+    pub fn zklogin_supported_providers(&self) -> &BTreeSet<String> {
+        &self.feature_flags.zklogin_supported_providers
+    }
+
     pub fn consensus_transaction_ordering(&self) -> ConsensusTransactionOrdering {
         self.feature_flags.consensus_transaction_ordering
     }
@@ -837,6 +870,18 @@ impl ProtocolConfig {
 
     pub fn narwhal_new_leader_election_schedule(&self) -> bool {
         self.feature_flags.narwhal_new_leader_election_schedule
+    }
+
+    pub fn loaded_child_object_format(&self) -> bool {
+        self.feature_flags.loaded_child_object_format
+    }
+
+    pub fn enable_jwk_consensus_updates(&self) -> bool {
+        self.feature_flags.enable_jwk_consensus_updates
+    }
+
+    pub fn simple_conservation_checks(&self) -> bool {
+        self.feature_flags.simple_conservation_checks
     }
 }
 
@@ -966,6 +1011,7 @@ impl ProtocolConfig {
                 move_binary_format_version: Some(6),
                 max_move_object_size: Some(250 * 1024),
                 max_move_package_size: Some(100 * 1024),
+                max_publish_or_upgrade_per_ptb: None,
                 max_tx_gas: Some(10_000_000_000),
                 max_gas_price: Some(100_000),
                 max_gas_computation_bucket: Some(5_000_000),
@@ -1201,7 +1247,10 @@ impl ProtocolConfig {
 
                 max_event_emit_size_total: None,
 
-                consensus_bad_nodes_stake_threshold: None
+                consensus_bad_nodes_stake_threshold: None,
+
+                max_jwk_votes_per_validator_per_epoch: None,
+
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
@@ -1364,6 +1413,29 @@ impl ProtocolConfig {
                 cfg
             }
 
+            21 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+
+                if chain != Chain::Mainnet {
+                    cfg.feature_flags.zklogin_supported_providers = BTreeSet::from([
+                        "Google".to_string(),
+                        "Facebook".to_string(),
+                        "Twitch".to_string(),
+                    ]);
+                }
+                cfg
+            }
+            22 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.feature_flags.loaded_child_object_format = true;
+                cfg
+            }
+            23 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.feature_flags.simple_conservation_checks = true;
+                cfg.max_publish_or_upgrade_per_ptb = Some(5);
+                cfg
+            }
             // Use this template when making changes:
             //
             //     // modify an existing constant.
@@ -1410,8 +1482,11 @@ impl ProtocolConfig {
     pub fn set_commit_root_state_digest_supported(&mut self, val: bool) {
         self.feature_flags.commit_root_state_digest = val
     }
-    pub fn set_zklogin_auth(&mut self, val: bool) {
+    pub fn set_zklogin_auth_for_testing(&mut self, val: bool) {
         self.feature_flags.zklogin_auth = val
+    }
+    pub fn set_enable_jwk_consensus_updates_for_testing(&mut self, val: bool) {
+        self.feature_flags.enable_jwk_consensus_updates = val
     }
 
     pub fn set_upgraded_multisig_for_testing(&mut self, val: bool) {
@@ -1427,6 +1502,9 @@ impl ProtocolConfig {
 
     pub fn set_consensus_bad_nodes_stake_threshold(&mut self, val: u64) {
         self.consensus_bad_nodes_stake_threshold = Some(val);
+    }
+    pub fn set_zklogin_supported_providers(&mut self, list: BTreeSet<String>) {
+        self.feature_flags.zklogin_supported_providers = list
     }
 }
 

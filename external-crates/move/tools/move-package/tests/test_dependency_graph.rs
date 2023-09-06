@@ -9,11 +9,9 @@ use std::{
 };
 
 use move_package::{
-    resolution::{
-        dependency_graph::{
-            DependencyGraph, DependencyGraphBuilder, DependencyGraphInfo, DependencyMode,
-        },
-        lock_file::LockFile,
+    lock_file::LockFile,
+    resolution::dependency_graph::{
+        DependencyGraph, DependencyGraphBuilder, DependencyGraphInfo, DependencyMode,
     },
     source_package::{
         manifest_parser::parse_move_manifest_from_file,

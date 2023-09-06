@@ -51,7 +51,7 @@ type ParsedPartialMultiSigSignature = {
 };
 
 export const MAX_SIGNER_IN_MULTISIG = 10;
-
+export const MIN_SIGNER_IN_MULTISIG = 1;
 /**
  * A MultiSig public key
  */
@@ -83,19 +83,48 @@ export class MultiSigPublicKey extends PublicKey {
 			this.multisigPublicKey = value;
 			this.rawBytes = builder.ser('MultiSigPublicKey', value).toBytes();
 		}
+		if (this.multisigPublicKey.threshold < 1) {
+			throw new Error('Invalid threshold');
+		}
+
+		const seenPublicKeys = new Set<string>();
 
 		this.publicKeys = this.multisigPublicKey.pk_map.map(({ pubKey, weight }) => {
 			const [scheme, bytes] = Object.entries(pubKey)[0] as [SignatureScheme, number[]];
+			const publicKeyStr = Uint8Array.from(bytes).toString();
+
+			if (seenPublicKeys.has(publicKeyStr)) {
+				throw new Error(`Multisig does not support duplicate public keys`);
+			}
+			seenPublicKeys.add(publicKeyStr);
+
+			if (weight < 1) {
+				throw new Error(`Invalid weight`);
+			}
+
 			return {
 				publicKey: publicKeyFromRawBytes(scheme, Uint8Array.from(bytes)),
 				weight,
 			};
 		});
 
+		const totalWeight = this.publicKeys.reduce((sum, { weight }) => sum + weight, 0);
+
+		if (this.multisigPublicKey.threshold > totalWeight) {
+			throw new Error(`Unreachable threshold`);
+		}
+
 		if (this.publicKeys.length > MAX_SIGNER_IN_MULTISIG) {
 			throw new Error(`Max number of signers in a multisig is ${MAX_SIGNER_IN_MULTISIG}`);
 		}
+
+		if (this.publicKeys.length < MIN_SIGNER_IN_MULTISIG) {
+			throw new Error(`Min number of signers in a multisig is ${MIN_SIGNER_IN_MULTISIG}`);
+		}
 	}
+	/**
+	 * 	A static method to create a new MultiSig publickey instance from a set of public keys and their associated weights pairs and threshold.
+	 */
 
 	static fromPublicKeys({
 		threshold,
@@ -145,6 +174,7 @@ export class MultiSigPublicKey extends PublicKey {
 		tmp.set([SIGNATURE_SCHEME_TO_FLAG['MultiSig']]);
 
 		tmp.set(builder.ser('u16', this.multisigPublicKey.threshold).toBytes(), 1);
+		// The initial value 3 ensures that following data will be after the flag byte and threshold bytes
 		let i = 3;
 		for (const { publicKey, weight } of this.publicKeys) {
 			const bytes = publicKey.toSuiBytes();
@@ -165,14 +195,8 @@ export class MultiSigPublicKey extends PublicKey {
 	/**
 	 * Verifies that the signature is valid for for the provided message
 	 */
-	async verify(
-		message: Uint8Array,
-		multisigSignature: Uint8Array | SerializedSignature,
-	): Promise<boolean> {
-		if (typeof multisigSignature !== 'string') {
-			throw new Error('Multisig verification only supports serialized signature');
-		}
-
+	async verify(message: Uint8Array, multisigSignature: SerializedSignature): Promise<boolean> {
+		// Multisig verification only supports serialized signature
 		const { signatureScheme, multisig } = parseSerializedSignature(multisigSignature);
 
 		if (signatureScheme !== 'MultiSig') {
@@ -201,7 +225,15 @@ export class MultiSigPublicKey extends PublicKey {
 		return signatureWeight >= this.multisigPublicKey.threshold;
 	}
 
+	/**
+	 * Combines multiple partial signatures into a single multisig, ensuring that each public key signs only once
+	 * and that all the public keys involved are known and valid, and then serializes multisig into the standard format
+	 */
 	combinePartialSignatures(signatures: SerializedSignature[]): SerializedSignature {
+		if (signatures.length > MAX_SIGNER_IN_MULTISIG) {
+			throw new Error(`Max number of signatures in a multisig is ${MAX_SIGNER_IN_MULTISIG}`);
+		}
+
 		let bitmap = 0;
 		const compressedSignatures: CompressedSignature[] = new Array(signatures.length);
 
@@ -255,6 +287,9 @@ export class MultiSigPublicKey extends PublicKey {
 	}
 }
 
+/**
+ * Parse multisig structure into an array of individual signatures: signature scheme, the actual individual signature, public key and its weight.
+ */
 export function parsePartialSignatures(multisig: MultiSigStruct): ParsedPartialMultiSigSignature[] {
 	let res: ParsedPartialMultiSigSignature[] = new Array(multisig.sigs.length);
 	for (let i = 0; i < multisig.sigs.length; i++) {

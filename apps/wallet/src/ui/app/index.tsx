@@ -3,7 +3,7 @@
 
 import { toB64 } from '@mysten/sui.js/utils';
 import { useEffect, useMemo } from 'react';
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 
 import { useSuiLedgerClient } from './components/ledger/SuiLedgerClientProvider';
 import { useAccounts } from './hooks/useAccounts';
@@ -11,17 +11,19 @@ import { useBackgroundClient } from './hooks/useBackgroundClient';
 import { useInitialPageView } from './hooks/useInitialPageView';
 
 import { useStorageMigrationStatus } from './hooks/useStorageMigrationStatus';
+import { AccountsDev } from './pages/AccountsDevPage';
 import { StorageMigrationPage } from './pages/StorageMigrationPage';
 
 import { AccountsPage } from './pages/accounts/AccountsPage';
 import { AddAccountPage } from './pages/accounts/AddAccountPage';
+import { BackupMnemonicPage } from './pages/accounts/BackupMnemonicPage';
 import { ForgotPasswordPage } from './pages/accounts/ForgotPasswordPage';
 import { ImportLedgerAccountsPage } from './pages/accounts/ImportLedgerAccountsPage';
 import { ImportPassphrasePage } from './pages/accounts/ImportPassphrasePage';
 import { ImportPrivateKeyPage } from './pages/accounts/ImportPrivateKeyPage';
 import { ProtectAccountPage } from './pages/accounts/ProtectAccountPage';
+import { WelcomePage } from './pages/accounts/WelcomePage';
 import { ManageAccountsPage } from './pages/accounts/manage/ManageAccountsPage';
-import { AccountsDev } from './pages/accounts-dev';
 
 import { ApprovalRequestPage } from './pages/approval-request';
 import HomePage, {
@@ -37,26 +39,21 @@ import HomePage, {
 	TransferCoinPage,
 } from './pages/home';
 import TokenDetailsPage from './pages/home/tokens/TokenDetailsPage';
-import InitializePage from './pages/initialize';
-import BackupPage from './pages/initialize/backup';
-import CreatePage from './pages/initialize/create';
-import { ImportPage } from './pages/initialize/import';
-import SelectPage from './pages/initialize/select';
 import { QredoConnectInfoPage } from './pages/qredo-connect/QredoConnectInfoPage';
 import { SelectQredoAccountsPage } from './pages/qredo-connect/SelectQredoAccountsPage';
 
 import { RestrictedPage } from './pages/restricted';
 import SiteConnectPage from './pages/site-connect';
-import WelcomePage from './pages/welcome';
 import { AppType } from './redux/slices/app/AppType';
+import PageMainLayout from './shared/page-main-layout';
 import { Staking } from './staking/home';
 
 import { useAppDispatch, useAppSelector } from '_hooks';
 
 import { setNavVisibility } from '_redux/slices/app';
 import { isLedgerAccountSerializedUI } from '_src/background/accounts/LedgerAccount';
-import { type AccountsPublicInfoUpdates } from '_src/background/keyring/accounts';
 import { persistableStorage } from '_src/shared/analytics/amplitude';
+import { type LedgerAccountsPublicKeys } from '_src/shared/messaging/messages/payloads/MethodPayload';
 
 const HIDDEN_MENU_PATHS = [
 	'/nft-details',
@@ -105,24 +102,22 @@ const App = () => {
 						await connectToLedger();
 						return;
 					}
-					const updates: AccountsPublicInfoUpdates = [];
-					for (const { derivationPath, address } of allLedgerWithoutPublicKey) {
+					const publicKeysToStore: LedgerAccountsPublicKeys = [];
+					for (const { derivationPath, id } of allLedgerWithoutPublicKey) {
 						if (derivationPath) {
 							try {
 								const { publicKey } = await suiLedgerClient.getPublicKey(derivationPath);
-								updates.push({
-									accountAddress: address,
-									changes: {
-										publicKey: toB64(publicKey),
-									},
+								publicKeysToStore.push({
+									accountID: id,
+									publicKey: toB64(publicKey),
 								});
 							} catch (e) {
 								// do nothing
 							}
 						}
 					}
-					if (updates.length) {
-						await backgroundClient.updateAccountsPublicInfo(updates);
+					if (publicKeysToStore.length) {
+						await backgroundClient.storeLedgerAccountsPublicKeys({ publicKeysToStore });
 					}
 				} catch (e) {
 					// do nothing
@@ -140,18 +135,8 @@ const App = () => {
 	}
 	return (
 		<Routes>
-			<Route path="/welcome" element={<WelcomePage />} />
 			<Route path="forgot-password" element={<ForgotPasswordPage />} />
 			<Route path="restricted" element={<RestrictedPage />} />
-
-			<Route path="/initialize" element={<InitializePage />}>
-				<Route path="select" element={<SelectPage />} />
-				<Route path="create" element={<CreatePage />} />
-				<Route path="import" element={<ImportPage />} />
-				<Route path="backup" element={<BackupPage />} />
-				<Route path="backup-imported" element={<BackupPage mode="imported" />} />
-			</Route>
-
 			<Route path="/*" element={<HomePage />}>
 				<Route path="apps/*" element={<AppsPage />} />
 				<Route path="kiosk" element={<KioskDetailsPage />} />
@@ -167,27 +152,34 @@ const App = () => {
 				<Route path="transactions/:status?" element={<TransactionBlocksPage />} />
 				<Route path="*" element={<Navigate to="/tokens" replace={true} />} />
 			</Route>
-
 			<Route path="accounts/*" element={<AccountsPage />}>
-				<Route path="add-account" element={<AddAccountPage />} />
+				<Route path="welcome" element={<WelcomePage />} />
 				<Route path="add-account" element={<AddAccountPage />} />
 				<Route path="import-ledger-accounts" element={<ImportLedgerAccountsPage />} />
 				<Route path="import-passphrase" element={<ImportPassphrasePage />} />
 				<Route path="import-private-key" element={<ImportPrivateKeyPage />} />
 				<Route path="manage" element={<ManageAccountsPage />} />
 				<Route path="protect-account" element={<ProtectAccountPage />} />
+				<Route path="backup/:accountSourceID" element={<BackupMnemonicPage />} />
+				<Route
+					path="qredo-connect/*"
+					element={
+						<PageMainLayout>
+							<Outlet />
+						</PageMainLayout>
+					}
+				>
+					<Route path=":requestID" element={<QredoConnectInfoPage />} />
+					<Route path=":id/select" element={<SelectQredoAccountsPage />} />
+				</Route>
 			</Route>
-
 			<Route path="/account">
 				<Route path="forgot-password" element={<ForgotPasswordPage />} />
 			</Route>
 			<Route path="/dapp/*" element={<HomePage disableNavigation />}>
 				<Route path="connect/:requestID" element={<SiteConnectPage />} />
 				<Route path="approve/:requestID" element={<ApprovalRequestPage />} />
-				<Route path="qredo-connect/:requestID" element={<QredoConnectInfoPage />} />
-				<Route path="qredo-connect/:id/select" element={<SelectQredoAccountsPage />} />
 			</Route>
-
 			{process.env.NODE_ENV === 'development' ? (
 				<Route path="/accounts-dev" element={<AccountsDev />} />
 			) : null}

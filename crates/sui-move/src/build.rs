@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
-use move_cli::base::{self, build};
+use move_cli::base;
 use move_package::BuildConfig as MoveBuildConfig;
 use serde_json::json;
 use std::{fs, path::PathBuf};
@@ -13,8 +13,6 @@ const STRUCT_LAYOUTS_FILENAME: &str = "struct_layouts.yaml";
 
 #[derive(Parser)]
 pub struct Build {
-    #[clap(flatten)]
-    pub build: build::Build,
     /// Include the contents of packages in dependencies that haven't been published (only relevant
     /// when dumping bytecode as base64)
     #[clap(long, global = true)]

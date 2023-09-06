@@ -3,6 +3,8 @@
 
 use async_graphql::{connection::Connection, *};
 
+use super::big_int::BigInt;
+use super::name_service::NameService;
 use super::{
     balance::Balance, coin::Coin, owner::Owner, stake::Stake, sui_address::SuiAddress,
     transaction_block::TransactionBlock,
@@ -14,7 +16,7 @@ pub(crate) struct Object {
     pub address: SuiAddress,
     pub version: u64,
     pub digest: String,
-    pub storage_rebate: Option<u64>,
+    pub storage_rebate: Option<BigInt>,
     pub owner: Option<SuiAddress>,
     pub bcs: Option<Base64>,
     pub previous_transaction: Option<String>,
@@ -58,8 +60,8 @@ impl Object {
         self.digest.clone()
     }
 
-    async fn storage_rebate(&self) -> Option<u64> {
-        self.storage_rebate
+    async fn storage_rebate(&self) -> Option<BigInt> {
+        self.storage_rebate.clone()
     }
 
     async fn bcs(&self) -> Option<Base64> {
@@ -113,12 +115,15 @@ impl Object {
 
     pub async fn balance_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<Connection<String, Balance>> {
-        unimplemented!()
+    ) -> Result<Connection<String, Balance>> {
+        ctx.data_provider()
+            .fetch_balance_connection(&self.address, first, after, last, before)
+            .await
     }
 
     pub async fn coin_connection(
@@ -152,7 +157,7 @@ impl Object {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<Connection<String, String>> {
+    ) -> Option<Connection<String, NameService>> {
         unimplemented!()
     }
 }

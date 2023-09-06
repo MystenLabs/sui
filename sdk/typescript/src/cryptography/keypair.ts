@@ -28,7 +28,10 @@ export interface SignatureWithBytes {
  */
 export abstract class BaseSigner {
 	abstract sign(bytes: Uint8Array): Promise<Uint8Array>;
-
+	/**
+	 * Sign messages with a specific intent. By combining the message bytes with the intent before hashing and signing,
+	 * it ensures that a signed message is tied to a specific purpose and domain separator is provided
+	 */
 	async signWithIntent(bytes: Uint8Array, intent: IntentScope): Promise<SignatureWithBytes> {
 		const intentMessage = messageWithIntent(intent, bytes);
 		const digest = blake2b(intentMessage, { dkLen: 32 });
@@ -44,11 +47,15 @@ export abstract class BaseSigner {
 			bytes: toB64(bytes),
 		};
 	}
-
+	/**
+	 * Signs provided transaction block by calling `signWithIntent()` with a `TransactionData` provided as intent scope
+	 */
 	async signTransactionBlock(bytes: Uint8Array) {
 		return this.signWithIntent(bytes, IntentScope.TransactionData);
 	}
-
+	/**
+	 * Signs provided personal message by calling `signWithIntent()` with a `PersonalMessage` provided as intent scope
+	 */
 	async signPersonalMessage(bytes: Uint8Array) {
 		return this.signWithIntent(
 			bcs.ser(['vector', 'u8'], bytes).toBytes(),

@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::path::PathBuf;
+use std::str::FromStr;
 #[cfg(msim)]
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -17,6 +18,8 @@ use anemo_tower::trace::TraceLayer;
 use anyhow::anyhow;
 use anyhow::Result;
 use arc_swap::ArcSwap;
+use fastcrypto_zkp::bn254::zk_login::JwkId;
+use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::TryFutureExt;
 use mysten_common::sync::async_once_cell::AsyncOnceCell;
 use prometheus::Registry;
@@ -37,6 +40,7 @@ use tracing::{debug, error, warn};
 use tracing::{error_span, info, Instrument};
 
 use checkpoint_executor::CheckpointExecutor;
+use fastcrypto_zkp::bn254::zk_login::JWK;
 pub use handle::SuiNodeHandle;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
 use mysten_network::server::ServerBuilder;
@@ -105,12 +109,13 @@ use sui_types::base_types::{AuthorityName, EpochId};
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages_consensus::{AuthorityCapabilities, ConsensusTransaction};
+use sui_types::messages_consensus::{
+    check_total_jwk_size, AuthorityCapabilities, ConsensusTransaction,
+};
 use sui_types::quorum_driver_types::QuorumDriverEffectsQueueResult;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::zk_login_util::{parse_jwks, OAuthProviderContent};
 use typed_store::rocks::default_db_options;
 use typed_store::DBMetrics;
 
@@ -161,7 +166,7 @@ pub struct SuiNode {
     /// Broadcast channel to notify state-sync for new validator peers.
     trusted_peer_change_tx: watch::Sender<TrustedPeerChangeEvent>,
 
-    _db_checkpoint_handle: Option<oneshot::Sender<()>>,
+    _db_checkpoint_handle: Option<tokio::sync::broadcast::Sender<()>>,
 
     #[cfg(msim)]
     sim_state: SimState,
@@ -180,6 +185,8 @@ impl fmt::Debug for SuiNode {
     }
 }
 
+static MAX_JWK_KEYS_PER_FETCH: usize = 100;
+
 impl SuiNode {
     pub async fn start(
         config: &NodeConfig,
@@ -197,65 +204,92 @@ impl SuiNode {
         Ok(node_one_cell.get().await)
     }
 
-    fn start_jwk_updater(epoch_store: Arc<AuthorityPerEpochStore>) {
+    fn start_jwk_updater(
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        consensus_adapter: Arc<ConsensusAdapter>,
+    ) {
         let epoch = epoch_store.epoch();
-        tokio::task::spawn(
-            async move {
-                info!("Starting JWK updater task");
-                loop {
-                    let epoch_store_ = epoch_store.clone();
-                    let fetch_and_sleep = async move {
-                        // Update the JWK value in the authority server
-                        info!("fetching new JWKs");
-                        match Self::fetch_jwk().await {
+        let supported_providers = epoch_store
+            .protocol_config()
+            .zklogin_supported_providers()
+            .iter()
+            .map(|s| OIDCProvider::from_str(s).expect("Invalid provider string"))
+            .collect::<Vec<_>>();
+
+        info!(
+            "Starting JWK updater tasks with supported providers: {:?}",
+            supported_providers
+        );
+
+        for p in supported_providers.into_iter() {
+            let epoch_store = epoch_store.clone();
+            let consensus_adapter = consensus_adapter.clone();
+            spawn_monitored_task!(epoch_store.clone().within_alive_epoch(
+                async move {
+                    // note: restart-safe de-duplication happens after consensus, this is
+                    // just best-effort to reduce unneeded submissions.
+                    let mut seen = HashSet::new();
+                    loop {
+                        info!("fetching JWK for provider {:?}", p);
+                        match Self::fetch_jwks(&p).await {
                             Err(e) => {
                                 warn!("Error when fetching JWK {:?}", e);
                                 // Retry in 30 seconds
                                 tokio::time::sleep(Duration::from_secs(30)).await;
+                                continue;
                             }
-                            Ok(keys) => {
-                                for (_, v) in keys {
-                                    epoch_store_.insert_oauth_jwk(&v);
+                            Ok(mut keys) => {
+                                keys.retain(|(id, jwk)| {
+                                    check_total_jwk_size(id, jwk) &&
+                                    !epoch_store.has_jwk(id, jwk) &&
+                                    seen.insert((id.clone(), jwk.clone()))
+                                });
+
+                                // prevent oauth providers from sending too many keys,
+                                // inadvertently or otherwise
+                                if keys.len() > MAX_JWK_KEYS_PER_FETCH {
+                                    warn!("Provider {:?} sent too many JWKs, only the first {} will be used", p, MAX_JWK_KEYS_PER_FETCH);
+                                    keys.truncate(MAX_JWK_KEYS_PER_FETCH);
                                 }
 
-                                // Sleep for 1 hour
-                                tokio::time::sleep(Duration::from_secs(3600)).await;
+                                for (id, jwk) in keys.into_iter() {
+                                    info!("Submitting JWK to consensus: {:?}", id);
+
+                                    let txn = ConsensusTransaction::new_jwk_fetched(id, jwk);
+                                    consensus_adapter.submit(txn, None, &epoch_store)
+                                        .tap_err(|e| warn!("Error when submitting JWKs to consensus {:?}", e))
+                                        .ok();
+                                }
                             }
                         }
-                    };
-
-                    tokio::select! {
-                        _ = fetch_and_sleep => {}
-                        _ = epoch_store.wait_epoch_terminated() => {
-                            break;
-                        }
+                        // Sleep for 1 hour
+                        tokio::time::sleep(Duration::from_secs(3600)).await;
                     }
                 }
-                info!("JWK updater task terminated");
-            }
-            .instrument(error_span!("jwk_updater_task", epoch)),
-        );
+                .instrument(error_span!("jwk_updater_task", epoch)),
+            ));
+        }
     }
 
     #[cfg(not(msim))]
-    async fn fetch_jwk() -> SuiResult<Vec<(String, OAuthProviderContent)>> {
+    async fn fetch_jwks(provider: &OIDCProvider) -> SuiResult<Vec<(JwkId, JWK)>> {
+        use fastcrypto_zkp::bn254::zk_login::fetch_jwks;
         let client = reqwest::Client::new();
-        let response = client
-            .get("https://www.googleapis.com/oauth2/v2/certs")
-            .send()
+        fetch_jwks(provider, &client)
             .await
-            .map_err(|_| SuiError::JWKRetrievalError)?;
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|_| SuiError::JWKRetrievalError)?;
-
-        parse_jwks(&bytes)
+            .map_err(|_| SuiError::JWKRetrievalError)
     }
 
     #[cfg(msim)]
-    async fn fetch_jwk() -> SuiResult<Vec<(String, OAuthProviderContent)>> {
-        parse_jwks(sui_types::zk_login_util::DEFAULT_JWK_BYTES)
+    #[allow(unused_variables)]
+    async fn fetch_jwks(provider: &OIDCProvider) -> SuiResult<Vec<(JwkId, JWK)>> {
+        use fastcrypto_zkp::bn254::zk_login::parse_jwks;
+        // Just load a default Twitch jwk for testing.
+        parse_jwks(
+            sui_types::zk_login_util::DEFAULT_JWK_BYTES,
+            &OIDCProvider::Twitch,
+        )
+        .map_err(|_| SuiError::JWKRetrievalError)
     }
 
     pub async fn start_async(
@@ -339,10 +373,6 @@ impl SuiNode {
             &config.expensive_safety_check_config,
             ChainIdentifier::from(*genesis.checkpoint().digest()),
         );
-
-        if epoch_store.protocol_config().zklogin_auth() {
-            Self::start_jwk_updater(epoch_store.clone());
-        }
 
         // the database is empty at genesis time
         if is_genesis {
@@ -709,7 +739,10 @@ impl SuiNode {
         config: &NodeConfig,
         prometheus_registry: &Registry,
         state_snapshot_enabled: bool,
-    ) -> Result<(DBCheckpointConfig, Option<oneshot::Sender<()>>)> {
+    ) -> Result<(
+        DBCheckpointConfig,
+        Option<tokio::sync::broadcast::Sender<()>>,
+    )> {
         let db_checkpoint_config = if config.db_checkpoint_config.checkpoint_path.is_none() {
             DBCheckpointConfig {
                 checkpoint_path: Some(config.db_checkpoint_path()),
@@ -737,7 +770,10 @@ impl SuiNode {
                     prometheus_registry,
                     state_snapshot_enabled,
                 )?;
-                Ok((db_checkpoint_config, Some(handler.start())))
+                Ok((
+                    db_checkpoint_config,
+                    Some(DBCheckpointHandler::start(handler)),
+                ))
             }
             None => Ok((db_checkpoint_config, None)),
         }
@@ -979,13 +1015,17 @@ impl SuiNode {
                 worker_cache,
                 consensus_handler,
                 SuiTxValidator::new(
-                    epoch_store,
+                    epoch_store.clone(),
                     checkpoint_service.clone(),
                     state.transaction_manager().clone(),
                     sui_tx_validator_metrics.clone(),
                 ),
             )
             .await;
+
+        if epoch_store.protocol_config().enable_jwk_consensus_updates() {
+            Self::start_jwk_updater(epoch_store.clone(), consensus_adapter.clone());
+        }
 
         Ok(ValidatorComponents {
             validator_server_handle,
@@ -1418,7 +1458,6 @@ impl SuiNode {
             new_epoch_store.epoch_start_config().flags(),
         );
 
-        Self::start_jwk_updater(new_epoch_store.clone());
         new_epoch_store
     }
 

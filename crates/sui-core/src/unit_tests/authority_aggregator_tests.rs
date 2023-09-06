@@ -88,7 +88,7 @@ pub fn create_object_move_transaction(
             Vec::new(),
             gas_object_ref,
             arguments,
-            TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * gas_price,
+            TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE * gas_price,
             gas_price,
         )
         .unwrap(),

@@ -69,6 +69,9 @@ static_symbols!(
     "tx_context",
     "TxContext",
     "ID",
+    "SUI",
+    "authenticator_state",
+    "AuthenticatorState",
 );
 
 /// The global, unique cache of strings.

@@ -11,6 +11,7 @@ use async_graphql::connection::Connection;
 use async_graphql::*;
 
 use super::address::Address;
+use super::name_service::NameService;
 
 #[derive(Interface)]
 #[graphql(
@@ -57,19 +58,21 @@ use super::address::Address;
     field(name = "default_name_service_name", type = "Option<String>"),
     field(
         name = "name_service_connection",
-        type = "Option<Connection<String, String>>",
+        type = "Option<Connection<String, NameService>>",
         arg(name = "first", type = "Option<u64>"),
         arg(name = "after", type = "Option<String>"),
         arg(name = "last", type = "Option<u64>"),
         arg(name = "before", type = "Option<String>")
     )
 )]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub(crate) enum ObjectOwner {
     Address(Address),
     Owner(Owner),
     Object(Object),
 }
 
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub(crate) struct Owner {
     pub address: SuiAddress,
 }
@@ -119,12 +122,15 @@ impl Owner {
 
     pub async fn balance_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<Connection<String, Balance>> {
-        unimplemented!()
+    ) -> Result<Connection<String, Balance>> {
+        ctx.data_provider()
+            .fetch_balance_connection(&self.address, first, after, last, before)
+            .await
     }
 
     pub async fn coin_connection(
@@ -158,7 +164,7 @@ impl Owner {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<Connection<String, String>> {
+    ) -> Option<Connection<String, NameService>> {
         unimplemented!()
     }
 }

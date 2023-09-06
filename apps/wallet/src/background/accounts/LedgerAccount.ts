@@ -56,6 +56,7 @@ export class LedgerAccount
 			derivationPath,
 			lastUnlockedOn: null,
 			selected: false,
+			nickname: null,
 		};
 	}
 
@@ -83,8 +84,14 @@ export class LedgerAccount
 		await this.onUnlocked();
 	}
 
+	async verifyPassword(password: string): Promise<void> {
+		const { encrypted } = await this.getStoredData();
+		await decrypt<string>(password, encrypted);
+	}
+
 	async toUISerialized(): Promise<LedgerAccountSerializedUI> {
-		const { address, type, publicKey, derivationPath, selected } = await this.getStoredData();
+		const { address, type, publicKey, derivationPath, selected, nickname } =
+			await this.getStoredData();
 		return {
 			id: this.id,
 			type,
@@ -94,6 +101,8 @@ export class LedgerAccount
 			derivationPath,
 			lastUnlockedOn: await this.lastUnlockedOn,
 			selected,
+			nickname,
+			isPasswordUnlockable: true,
 		};
 	}
 }

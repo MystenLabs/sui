@@ -26,6 +26,7 @@ mod checked {
 
     use crate::programmable_transactions;
     use crate::type_layout_resolver::TypeLayoutResolver;
+    use crate::{gas_charger::GasCharger, temporary_store::TemporaryStore};
     use move_binary_format::access::ModuleAccess;
     use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
     use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
@@ -33,14 +34,13 @@ mod checked {
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
     use sui_types::execution_status::ExecutionStatus;
-    use sui_types::gas::{GasCharger, GasCostSummary};
+    use sui_types::gas::GasCostSummary;
+    use sui_types::inner_temporary_store::InnerTemporaryStore;
     use sui_types::messages_consensus::ConsensusCommitPrologue;
     use sui_types::storage::WriteKind;
     #[cfg(msim)]
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
     use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
-    use sui_types::temporary_store::InnerTemporaryStore;
-    use sui_types::temporary_store::TemporaryStore;
     use sui_types::transaction::{
         Argument, CallArg, ChangeEpoch, Command, GenesisTransaction, ProgrammableTransaction,
         TransactionKind,
@@ -189,7 +189,7 @@ mod checked {
                 .unwrap()
         } // else, in dev inspect mode and anything goes--don't check
 
-        let (inner, effects) = temporary_store.to_effects(
+        let (inner, effects) = temporary_store.into_effects(
             shared_object_refs,
             &transaction_digest,
             transaction_dependencies.into_iter().collect(),
@@ -274,17 +274,27 @@ mod checked {
         });
 
         let cost_summary = gas_charger.charge_gas(temporary_store, &mut result);
+        // For advance epoch transaction, we need to provide epoch rewards and rebates as extra
+        // information provided to check_sui_conserved, because we mint rewards, and burn
+        // the rebates. We also need to pass in the unmetered_storage_rebate because storage
+        // rebate is not reflected in the storage_rebate of gas summary. This is a bit confusing.
+        // We could probably clean up the code a bit.
+        // Put all the storage rebate accumulated in the system transaction
+        // to the 0x5 object so that it's not lost.
+        temporary_store.conserve_unmetered_storage_rebate(gas_charger.unmetered_storage_rebate());
 
         if let Err(e) = run_conservation_checks::<Mode>(
             temporary_store,
             gas_charger,
             tx_ctx,
             move_vm,
+            protocol_config.simple_conservation_checks(),
             enable_expensive_checks,
             &cost_summary,
             is_genesis_tx,
             advance_epoch_gas_summary,
         ) {
+            // FIXME: we cannot fail the transaction if this is an epoch change transaction.
             result = Err(e);
         }
 
@@ -297,32 +307,32 @@ mod checked {
         gas_charger: &mut GasCharger,
         tx_ctx: &mut TxContext,
         move_vm: &Arc<MoveVM>,
+        simple_conservation_checks: bool,
         enable_expensive_checks: bool,
         cost_summary: &GasCostSummary,
         is_genesis_tx: bool,
         advance_epoch_gas_summary: Option<(u64, u64)>,
     ) -> Result<(), ExecutionError> {
-        // === begin SUI conservation checks ===
-        // For advance epoch transaction, we need to provide epoch rewards and rebates as extra
-        // information provided to check_sui_conserved, because we mint rewards, and burn
-        // the rebates. We also need to pass in the unmetered_storage_rebate because storage
-        // rebate is not reflected in the storage_rebate of gas summary. This is a bit confusing.
-        // We could probably clean up the code a bit.
-        // Put all the storage rebate accumulated in the system transaction
-        // to the 0x5 object so that it's not lost.
         let mut result: std::result::Result<(), sui_types::error::ExecutionError> = Ok(());
-        temporary_store.conserve_unmetered_storage_rebate(gas_charger.unmetered_storage_rebate());
         if !is_genesis_tx && !Mode::allow_arbitrary_values() {
             // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
             let conservation_result = {
-                let mut layout_resolver =
-                    TypeLayoutResolver::new(move_vm, Box::new(&*temporary_store));
-                temporary_store.check_sui_conserved(
-                    cost_summary,
-                    advance_epoch_gas_summary,
-                    &mut layout_resolver,
-                    enable_expensive_checks,
-                )
+                temporary_store
+                    .check_sui_conserved(simple_conservation_checks, cost_summary)
+                    .and_then(|()| {
+                        if enable_expensive_checks {
+                            // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
+                            let mut layout_resolver =
+                                TypeLayoutResolver::new(move_vm, Box::new(&*temporary_store));
+                            temporary_store.check_sui_conserved_expensive(
+                                cost_summary,
+                                advance_epoch_gas_summary,
+                                &mut layout_resolver,
+                            )
+                        } else {
+                            Ok(())
+                        }
+                    })
             };
             if let Err(conservation_err) = conservation_result {
                 // conservation violated. try to avoid panic by dumping all writes, charging for gas, re-checking
@@ -331,14 +341,24 @@ mod checked {
                 gas_charger.reset(temporary_store);
                 gas_charger.charge_gas(temporary_store, &mut result);
                 // check conservation once more more
-                let mut layout_resolver =
-                    TypeLayoutResolver::new(move_vm, Box::new(&*temporary_store));
-                if let Err(recovery_err) = temporary_store.check_sui_conserved(
-                    cost_summary,
-                    advance_epoch_gas_summary,
-                    &mut layout_resolver,
-                    enable_expensive_checks,
-                ) {
+                if let Err(recovery_err) = {
+                    temporary_store
+                        .check_sui_conserved(simple_conservation_checks, cost_summary)
+                        .and_then(|()| {
+                            if enable_expensive_checks {
+                                // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
+                                let mut layout_resolver =
+                                    TypeLayoutResolver::new(move_vm, Box::new(&*temporary_store));
+                                temporary_store.check_sui_conserved_expensive(
+                                    cost_summary,
+                                    advance_epoch_gas_summary,
+                                    &mut layout_resolver,
+                                )
+                            } else {
+                                Ok(())
+                            }
+                        })
+                } {
                     // if we still fail, it's a problem with gas
                     // charging that happens even in the "aborted" case--no other option but panic.
                     // we will create or destroy SUI otherwise
@@ -352,7 +372,6 @@ mod checked {
             }
         } // else, we're in the genesis transaction which mints the SUI supply, and hence does not satisfy SUI conservation, or
           // we're in the non-production dev inspect mode which allows us to violate conservation
-          // === end SUI conservation checks ===
         result
     }
 
@@ -502,6 +521,9 @@ mod checked {
                     gas_charger,
                     pt,
                 )
+            }
+            TransactionKind::AuthenticatorStateUpdate(_) => {
+                todo!()
             }
         }
     }
