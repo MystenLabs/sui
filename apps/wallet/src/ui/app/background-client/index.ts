@@ -191,9 +191,10 @@ export class BackgroundClient {
 	public clearWallet() {
 		return lastValueFrom(
 			this.sendMessage(
-				createMessage<KeyringPayload<'clear'>>({
-					type: 'keyring',
-					method: 'clear',
+				createMessage<MethodPayload<'clearWallet'>>({
+					type: 'method-payload',
+					method: 'clearWallet',
+					args: {},
 				}),
 			).pipe(take(1)),
 		);
