@@ -55,7 +55,7 @@ use crate::PgConnectionPool;
 use super::{IndexerStoreV2, TemporaryEpochStoreV2, TransactionObjectChangesV2};
 
 const PG_COMMIT_CHUNK_SIZE: usize = 1000;
-const PG_COMMIT_TX_CHUNK_SIZE: usize = 150;
+const PG_COMMIT_TX_CHUNK_SIZE: usize = 500;
 
 #[derive(Clone)]
 pub struct PgIndexerStoreV2 {
@@ -614,11 +614,13 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         transactions: Vec<IndexedTransaction>,
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
-        let _guard = metrics
+        let guard = metrics
             .checkpoint_db_commit_latency_transactions
             .start_timer();
         let mut futures = vec![];
-        for transaction_chunk in transactions.chunks(PG_COMMIT_TX_CHUNK_SIZE) {
+        // FIXME
+        let chunk_size = std::env::var("PG_COMMIT_TX_CHUNK_SIZE").unwrap_or_else(|e| PG_COMMIT_TX_CHUNK_SIZE.to_string()).parse::<usize>().unwrap();
+        for transaction_chunk in transactions.chunks(chunk_size) {
             let chunk = transaction_chunk.to_vec();
             let metrics_clone = metrics.clone();
             futures.push(self.spawn_blocking_task(move |this| {
