@@ -19,7 +19,6 @@ use parking_lot::Mutex;
 use std::{
     cmp::min,
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
-    iter,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -429,14 +428,13 @@ impl Synchronizer {
                         .retain(|k, _| k > &gc_round);
                     // Accept certificates at and below gc round + 1, if there is any.
                     let mut state = inner.state.lock().await;
-                    while let Some(suspended_cert) = state.run_gc_once(gc_round) {
-                        let suspended_children_certs = state.accept_children(
-                            suspended_cert.certificate.round(),
-                            suspended_cert.certificate.digest(),
-                        );
-                        // Iteration must be in causal order.
-                        for suspended in
-                            iter::once(suspended_cert).chain(suspended_children_certs.into_iter())
+                    while let Some(((round, digest), suspended_cert)) = state.run_gc_once(gc_round)
+                    {
+                        let suspended_children_certs = state.accept_children(round, digest);
+                        // Acceptance must be in causal order.
+                        for suspended in suspended_cert
+                            .into_iter()
+                            .chain(suspended_children_certs.into_iter())
                         {
                             match inner.accept_suspended_certificate(&state, suspended).await {
                                 Ok(()) => {}
@@ -1215,12 +1213,11 @@ impl State {
         round: Round,
         digest: CertificateDigest,
     ) -> Vec<SuspendedCertificate> {
-        // This validation is only triggered for fetched and own certificates.
-        // Certificates from other sources will find the suspended certificate and wait on its
-        // accept notification, so no parent check or validation is done.
+        // Validate that the parent certificate is no longer suspended.
         if let Some(suspended_cert) = self.suspended.remove(&digest) {
             panic!(
-                "Suspended certificate {digest:?} has no missing parent ({:?} exist in store)",
+                "Certificate {:?} should have no missing parent, but is still suspended (missing parents {:?})",
+                suspended_cert.certificate,
                 suspended_cert.missing_parents
             )
         }
@@ -1250,29 +1247,31 @@ impl State {
     /// Runs GC on the suspended certificates.
     /// Returns one certificate that can be GC'ed and accepted, or None.
     ///
-    /// It is the caller's responsibility to check if any children of the returned certificate
-    /// can also be accepted.
-    fn run_gc_once(&mut self, gc_round: Round) -> Option<SuspendedCertificate> {
+    /// If (round, digest) is returned, it is the caller's responsibility to check if any
+    /// of its children can also be accepted. If SuspendedCertificate is returned as well,
+    /// it should be accepted before any of its children.
+    fn run_gc_once(
+        &mut self,
+        gc_round: Round,
+    ) -> Option<((u64, CertificateDigest), Option<SuspendedCertificate>)> {
         // Accept suspended certificates at and below gc round + 1, because their parents will not
         // be accepted into the DAG store anymore, in sanitize_certificate().
-        while let Some(((round, digest), _children)) = self.missing.first_key_value() {
-            // Note that gc_round is the highest round where certificates are gc'ed, and which will
-            // never be in a consensus commit.
-            if *round > gc_round + 1 {
-                return None;
-            }
-            if let Some(mut suspended) = self.suspended.remove(digest) {
-                // Clear the missing_parents field to be consistent with other accepted
-                // certificates.
-                suspended.missing_parents.clear();
-                return Some(suspended);
-            }
-            // GC the missing children info even if there is no corresponding suspended certificate.
-            // NOTE: when there is a corresponding suspended certificate, the missing children info
-            // will be read and cleared in accept_children().
-            self.missing.pop_first();
+        let Some(((round, digest), _children)) = self.missing.first_key_value() else {
+            return None;
+        };
+        // Note that gc_round is the highest round where certificates are gc'ed, and which will
+        // never be in a consensus commit.
+        if *round > gc_round + 1 {
+            return None;
         }
-        None
+        let mut suspended = self.suspended.remove(digest);
+        if let Some(suspended) = suspended.as_mut() {
+            // Clear the missing_parents field to be consistent with other accepted
+            // certificates.
+            suspended.missing_parents.clear();
+        }
+        // The missing children info is needed for and will be cleared in accept_children() later.
+        Some(((*round, *digest), suspended))
     }
 
     fn num_suspended(&self) -> usize {
