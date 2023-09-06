@@ -9,6 +9,7 @@ import type { StorageAdapter } from '../utils/storageAdapters.js';
 import { walletReducer } from '../reducers/walletReducer.js';
 import type { WalletAction, WalletState } from '../reducers/walletReducer.js';
 import { sortWallets } from '../utils/walletUtils.js';
+import { useUnsafeBurnerWallet } from '../hooks/wallet/useUnsafeBurnerWallet.js';
 
 interface WalletProviderProps {
 	/** A list of wallets that are sorted to the top of the wallet list, if they are available to connect to. By default, wallets are sorted by the order they are loaded in. */
@@ -48,6 +49,7 @@ export function WalletProvider({
 	requiredFeatures = [],
 	storageAdapter = localStorageAdapter,
 	storageKey = DEFAULT_STORAGE_KEY,
+	enableUnsafeBurner = false,
 	children,
 }: WalletProviderProps) {
 	const walletsApi = getWallets();
@@ -59,6 +61,8 @@ export function WalletProvider({
 		currentAccount: null,
 		connectionStatus: 'disconnected',
 	});
+
+	useUnsafeBurnerWallet(enableUnsafeBurner);
 
 	// Memo-ize the context value so we don't trigger un-necessary re-renders from
 	// ancestor components higher in the component tree.
