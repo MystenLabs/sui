@@ -30,7 +30,7 @@ export function useUnsafeBurnerWallet(enabled: boolean) {
 	}, [enabled]);
 }
 
-export function registerUnsafeBurnerWallet(
+function registerUnsafeBurnerWallet(
 	client: SuiClient = new SuiClient({
 		url: getFullnodeUrl('localnet'),
 	}),
@@ -51,7 +51,6 @@ export function registerUnsafeBurnerWallet(
 	);
 
 	const keypair = new Ed25519Keypair();
-
 	const account = new ReadonlyWalletAccount({
 		address: keypair.getPublicKey().toSuiAddress(),
 		chains: ['sui:unknown'],
@@ -118,7 +117,7 @@ export function registerUnsafeBurnerWallet(
 				});
 			} catch (error) {
 				console.warn(
-					'Failed to request Sui from the faucet. This may prevent transactions from being submitted.',
+					'Failed to request SUI from the faucet. This may prevent transactions from being submitted.',
 				);
 				console.warn(error);
 			}
